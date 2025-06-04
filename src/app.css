@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import '@fontsource/ia-writer-mono';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+	font-family: 'DM Sans', sans-serif;
+	color: #ffffff;
+}
+
+*:focus {
+	outline: none;
+}
+
+.tab {
+	@apply flex h-full w-32 items-center justify-center gap-2 self-start border-4 border-white px-4 py-2 font-bold text-white;
+	border-style: outset;
+}
+
+.inset {
+	border-style: inset;
+}
+
+.outset {
+	border-style: outset;
+}
+
+@layer utilities {
+	.border-outset {
+		border-style: outset;
+	}
+}
+
+.card {
+	@apply border-outset flex  flex-col items-center gap-6 rounded-none border-4 border-white p-4 shadow-md;
+	border-style: outset;
+}
+
+.app-bg {
+	background-image: url('/src/lib/images/image.png');
+	background-repeat: no-repeat;
+	background-size: cover;
+	background-position: top center;
+}
