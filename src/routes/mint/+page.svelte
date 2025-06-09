@@ -3,200 +3,419 @@
 	import Input from "$lib/components/Input.svelte";
 	import Select from "$lib/components/Select.svelte";
 	import { createQuery } from '@tanstack/svelte-query';
+	import WalletConnect from '$lib/components/WalletConnect.svelte';
+	import Footer from '$lib/components/Footer.svelte';
 	import { signerAddress } from 'svelte-wagmi';
-	import { getVault } from "$lib/query";
+	import { getSfts } from "$lib/query";
+	import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from "$lib/network";
 
-    let activeTab = 0;
-    const tabs = ['Initiate Transfer', 'Transfer History', 'Terms & Conditions'];
-	let selectedTab = 'Initiate Transfer';
-	let selectedStockSymbol = 'TSLA';
+	let selectedStockSymbol = STOXs[0].symbol;
 	let selectedBrokerage = 'Interactive Brokers';
-
-	const address = "0x6696E32EbD293783bCb4b4f157Da02A65789e38e"
-	const subgraphUrl = "https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.0/gn"
+	let selectedName = '';
+	let selectedEmailAddress = '';
+	let quantity: string = '0';
 
 	$: vaultQuery = createQuery({
-		queryKey: ['getVault', address, subgraphUrl],
+		queryKey: ['getSfts'],
 		queryFn: () => {
-			return getVault(address, subgraphUrl as string);
+			return getSfts();
 		}
 	});
 
-	$: console.log("test : ", $vaultQuery.data);
+	const sendSft = () => {
+		const subject = `Mint Request - ${selectedStockSymbol}`;
+		const body = `
+Please process my mint request with the following details:
+
+Stock Symbol: ${selectedStockSymbol}
+Quantity: ${quantity.toString()}
+From Brokerage: ${selectedBrokerage}
+Wallet Address: ${$signerAddress}
+Full Name: ${selectedName}
+Email Address: ${selectedEmailAddress}
+
+This is a mint request.
+		`.trim();
+
+		const mailtoLink = `mailto:transfers@st0x.io?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+		window.location.href = mailtoLink;
+	}
+
+	const CARD_BASE_CLASSES =
+		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
+	const GRADIENT_HOVER_CLASSES =
+		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
+	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
+	const INPUT_CLASSES =
+		'w-full bg-gray-700/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-500/50 focus:outline-none transition-colors';
 </script>
 
-<div class="w-full max-w-8xl mx-auto px-4 py-8">
-	<div class="bg-gray-800/95 rounded-lg p-6 shadow-lg">
-		<div class="mb-8">
-			<div class="flex flex-wrap gap-2 border-b border-gray-700">
-				{#each tabs as tab}
-					<button
-						class="px-4 py-3 text-sm font-medium transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-gray-800 rounded-t-lg {selectedTab ===
-						tab
-							? 'text-yellow-400'
-							: 'text-gray-400 hover:text-yellow-400'}"
-						on:click={() => (selectedTab = tab)}
-						data-testid={tab === 'Initiate Transfer'
-							? 'tab-initiate-transfer'
-							: tab === 'Transfer History'
-								? 'tab-transfer-history'
-								: tab === 'Terms & Conditions'
-									? 'tab-terms-and-conditions'
-									: undefined}
-					>
-						{tab}   
-					</button>
-				{/each}
+<!-- Main Content -->
+<div>
+	<!-- Header -->
+	<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-4">
+				<div>
+					<h1 class="text-xl font-bold">Mint</h1>
+					<p class="text-sm text-gray-400">Convert U.S. equities to tokenized assets</p>
+				</div>
+			</div>
+
+			<div class="flex items-center gap-4">
+				<WalletConnect />
+			</div>
+		</div>
+	</div>
+
+	<!-- Mint Content -->
+	<div class="space-y-8 p-6">
+		<!-- Hero Section -->
+		<div class="relative overflow-hidden rounded-2xl">
+			<!-- Background with gradient and pattern -->
+			<div
+				class="absolute inset-0 bg-gradient-to-br from-green-600 via-blue-600 to-yellow-500 opacity-90"
+			/>
+			<div class="absolute inset-0 bg-gradient-to-r from-green-900/50 to-blue-900/50" />
+
+			<!-- Content -->
+			<div class="relative px-12 py-12 text-center">
+				<h1 class="mb-6 text-4xl font-bold leading-tight text-white md:text-5xl">
+					Mint Tokenized Assets
+				</h1>
+
+				<p class="mx-auto mb-8 max-w-3xl text-lg leading-relaxed text-green-100 md:text-xl">
+					Convert your U.S. equities into tokenized assets on-chain. Transfer your stocks from
+					Charles Schwab and receive corresponding tokens in your wallet.
+				</p>
+
+				<div
+					class="inline-block rounded-xl border border-white/30 bg-white/20 px-6 py-3 text-sm font-medium text-white backdrop-blur-sm"
+				>
+					<span class="text-yellow-400">⚠️</span> U.S. equities only • Charles Schwab required
+				</div>
 			</div>
 		</div>
 
-		<!-- Content Sections -->
-		<div class="mt-6">
-			{#if selectedTab === 'Initiate Transfer'}
-				<div class="space-y-6">
-					<!-- Step Header -->
-					<div class="flex items-center space-x-4">
-						<div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-700 text-white font-bold text-lg">1</div>
-						<div>
-							<div class="text-xl font-semibold text-white">Initiate Share Transfer</div>
-							<div class="text-gray-400 text-sm">Start the tokenization process</div>
-						</div>
-					</div>
+		<!-- Mint Process -->
+		<div class={SECTION_CLASSES}>
+			<div class="mb-8">
+				<h2
+					class="mb-4 bg-gradient-to-r from-yellow-500 to-green-500 bg-clip-text text-2xl font-bold text-transparent"
+				>
+					Mint Process
+				</h2>
+				<p class="text-gray-400">
+					To mint, you must be able to transfer <strong class="text-white"
+						>U.S. equities only</strong
+					> to our Charles Schwab account. The quickest and easiest way to do this is by having a Charles
+					Schwab account yourself.
+				</p>
+				<p class="mt-2 text-gray-400">
+					Please follow the steps below for transferring assets via Charles Schwab.
+				</p>
+			</div>
 
-					<!-- Transfer Process Description -->
-					<div class="bg-blue-900/90 rounded-lg p-6 text-gray-200 text-sm space-y-2 border border-blue-800">
-						<div class="font-semibold text-base text-white mb-1">Transfer Process Description</div>
-						<ul class="list-disc list-inside space-y-1">
-							<li>You initiate the transfer at your broker</li>
-							<li>Shares are transferred to SARKEX custody account</li>
-							<li>Transfer happens off-chain through traditional channels</li>
-							<li>Processing time: 1-3 business days</li>
-							<li><span class="font-bold text-white">Once processed, SARKEX will automatically transfer tokens to the wallet address you provide here</span></li>
-							<li><span class="font-bold text-white">Nothing further required from you</span></li>
-							<li>If the transfer fails, shares will be returned to your account</li>
-							<li>For any issues, please contact SARKEX customer support</li>
-						</ul>
-					</div>
-
-					<!-- Form Fields -->
-					<div class="space-y-5">
-						<div class="flex flex-col gap-2">
-							<span class="block text-gray-300 text-sm mb-1">Stock Symbol</span>
-							<Select
-								options={['TSLA', 'AAPL', 'MSFT']}
-								bind:selected={selectedStockSymbol}
-								getOptionLabel={(option) => option}
-							/>
-						</div>
-						<div class="flex flex-col gap-2">
-							<span class="block text-gray-300 text-sm mb-1">Quantity</span>
-							<Input
-								type="number"
-								class="h-8 w-full border-none bg-gray-800/95 text-white"
-							/>
-						</div>
-						<div class="flex flex-col gap-2">
-							<span class="block text-gray-300 text-sm mb-1">From Brokerage</span>
-							<Select
-								options={['Interactive Brokers', 'Charles Schwab', 'Fidelity']}
-								bind:selected={selectedBrokerage}
-								getOptionLabel={(option) => option}
-							/>
-						</div>
-						<div class="flex flex-col gap-2">
-							<span class="block text-gray-300 text-sm mb-1">Your Wallet Address : {$signerAddress}</span>
-						</div>
-						<button
-							class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold py-3 rounded mt-2 transition-colors duration-200"
+			<div class="space-y-6">
+				<!-- Process Step 1 -->
+				<div class="{CARD_BASE_CLASSES} p-6">
+					<div class={GRADIENT_HOVER_CLASSES} />
+					<div class="flex items-start gap-4">
+						<div
+							class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-700 text-sm font-bold"
 						>
-							Transfer
-						</button>
+							1
+						</div>
+						<div class="flex-1">
+							<h3 class="mb-3 text-lg font-semibold text-yellow-500">
+								Provide the following information to us
+							</h3>
+							<div class="space-y-3 text-gray-300">
+								<p>Regardless of the account type, please send us the following details:</p>
+
+								<div class="mt-4 space-y-2">
+									<div class="flex items-start gap-3">
+										<div class="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500" />
+										<span class="text-sm">Please highlight this is a mint</span>
+									</div>
+									<div class="flex items-start gap-3">
+										<div class="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500" />
+										<span class="text-sm">Your wallet address</span>
+									</div>
+									<div class="flex items-start gap-3">
+										<div class="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500" />
+										<span class="text-sm">Your full name</span>
+									</div>
+									<div class="flex items-start gap-3">
+										<div class="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500" />
+										<span class="text-sm">Name on the Schwab account</span>
+									</div>
+									<div class="flex items-start gap-3">
+										<div class="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500" />
+										<span class="text-sm">Your Schwab account number</span>
+									</div>
+									<div class="flex items-start gap-3">
+										<div class="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500" />
+										<span class="text-sm"
+											>The ticker symbol(s) of the asset(s) you are transferring</span
+										>
+									</div>
+									<div class="flex items-start gap-3">
+										<div class="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500" />
+										<span class="text-sm">The amount of each asset</span>
+									</div>
+								</div>
+
+								<div class="mt-4 rounded-lg border border-white/10 bg-gray-800/50 p-4">
+									<p class="text-sm italic text-gray-400">
+										You may include multiple ticker/amount combinations.
+									</p>
+								</div>
+
+								<div class="mt-4">
+									<p>
+										Please send this information to <span class="font-semibold text-yellow-500"
+											>transfers@st0x.io</span
+										>
+									</p>
+									<p class="mt-1 text-sm text-gray-400">
+										Once we receive this information, we will monitor your transfer.
+									</p>
+								</div>
+
+								<div class="space-y-5">
+									<div class="flex flex-col gap-2">
+										<span class="block text-gray-300 text-sm mb-1">Stock Symbol</span>
+										<Select
+											options={STOXs.map(s => s.symbol)}
+											bind:selected={selectedStockSymbol}
+											getOptionLabel={(option) => option}
+										/>
+									</div>
+									<div class="flex flex-col gap-2">
+										<span class="block text-gray-300 text-sm mb-1">Name</span>
+										<input
+											type="string"
+											placeholder="Name"
+											bind:value={selectedName}
+											class="h-8 w-full p-2 border border-white bg-gray-800/95 text-white"
+										/>
+									</div>
+									<div class="flex flex-col gap-2">
+										<span class="block text-gray-300 text-sm mb-1">Email Address</span>
+										<input
+											type="string"
+											placeholder="Email Address"
+											bind:value={selectedEmailAddress}
+											class="h-8 w-full p-2 border border-white bg-gray-800/95 text-white"
+										/>
+									</div>
+									
+									<div class="flex flex-col gap-2">
+										<span class="block text-gray-300 text-sm mb-1">Quantity</span>
+										<Input
+											type="number"
+											placeholder="0.0"
+											bind:amount={quantity}
+											class="h-8 w-full border-none bg-gray-800/95 text-white"
+										/>
+									</div>
+									<div class="flex flex-col gap-2">
+										<span class="block text-gray-300 text-sm mb-1">From Brokerage</span>
+										<Select
+											options={['Interactive Brokers', 'Charles Schwab', 'Fidelity']}
+											bind:selected={selectedBrokerage}
+											getOptionLabel={(option) => option}
+										/>
+									</div>
+									<div class="flex flex-col gap-2">
+										<span class="block text-gray-300 text-sm mb-1">Your Wallet Address : {$signerAddress}</span>
+									</div>
+									<Button
+										on:click={() => {
+											sendSft();
+										}}
+										class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold py-3 rounded mt-2 transition-colors duration-200"
+									>
+										Send
+									</Button>
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
-			{/if}
 
-			{#if selectedTab === 'Transfer History'}
-				<div class="space-y-6">
-					<h1 class="text-3xl font-bold text-white mb-6">Transfer History</h1>
-					{#if $vaultQuery.isLoading}
-						<div class="text-white">Loading...</div>
-					{:else if $vaultQuery.isError}
-						<div class="text-red-500">Error: {$vaultQuery.error.message}</div>
-					{:else}
-						{#each $vaultQuery.data.shareTransfers as transfer}
-							<div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6 flex flex-col gap-4 relative border border-gray-700">
-								<!-- Status Badge -->
-								<div class="absolute top-4 right-4">
-									{#if transfer.id}
-										<span class="bg-gray-600 text-green-300 px-3 py-1 rounded-full text-xs font-semibold">Completed</span>
+				<!-- Process Step 2 -->
+				<div class="{CARD_BASE_CLASSES} p-6">
+					<div class={GRADIENT_HOVER_CLASSES} />
+					<div class="flex items-start gap-4">
+						<div
+							class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-700 text-sm font-bold"
+						>
+							2
+						</div>
+						<div class="flex-1">
+							<h3 class="mb-3 text-lg font-semibold text-yellow-500">
+								Submit the Charles Schwab transfer form
+							</h3>
+							<div class="space-y-3 text-gray-300">
+								<p>
+									Next, fill out the <strong class="text-white"
+										>Move Assets from My Schwab Brokerage Account</strong
+									> form with your details.
+								</p>
+
+								<p class="mt-3">
+									Submit the completed form via the <strong class="text-white"
+										>Charles Schwab Message Center</strong
+									>.
+								</p>
+
+								<div class="mt-4 rounded-lg border border-green-500/30 bg-green-900/20 p-4">
+									<div class="flex items-start gap-3">
+										<div
+											class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-green-500"
+										>
+											<span class="text-xs font-bold text-gray-900">✓</span>
+										</div>
+										<p class="text-sm text-green-100">
+											Once the assets are received in our account, we will mint the corresponding
+											tokens and send them to your provided wallet address.
+										</p>
+									</div>
+								</div>
+
+								<div class="mt-4 rounded-lg border border-blue-500/30 bg-blue-900/20 p-4">
+									<p class="text-sm text-blue-100">
+										<strong>Using another brokerage?</strong> If you are using another brokerage firm,
+										please contact us for specific instructions on how to complete the transfer.
+									</p>
+								</div>
+								<div class="space-y-6">
+									<h1 class="text-3xl font-bold text-white mb-6">Transfer History</h1>
+									{#if $vaultQuery.isLoading}
+										<div class="text-white">Loading...</div>
+									{:else if $vaultQuery.isError}
+										<div class="text-red-500">Error: {$vaultQuery.error.message}</div>
 									{:else}
-										<span class="bg-gray-600 text-yellow-300 px-3 py-1 rounded-full text-xs font-semibold">Processing</span>
+										{#each $vaultQuery.data as sft}
+											{#each sft.shareTransfers.slice(0, 1) as transfer}
+											<div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6 flex flex-col gap-4 relative border border-gray-700">
+												<!-- Status Badge -->
+												<div class="absolute top-4 right-4">
+													{#if transfer.id}
+														<span class="bg-gray-600 text-green-300 px-3 py-1 rounded-full text-xs font-semibold">Completed</span>
+													{:else}
+														<span class="bg-gray-600 text-yellow-300 px-3 py-1 rounded-full text-xs font-semibold">Processing</span>
+													{/if}
+												</div>
+												<div class="flex items-center gap-4">
+													<!-- Avatar -->
+													<div class="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center text-2xl font-bold text-gray-200">
+														{sft.symbol?.slice(0,2) ?? '??'}
+													</div>
+													<div>
+														<div class="text-lg font-semibold text-white">{sft.name}</div>
+														<div class="text-gray-400 text-xs">Transfer ID: {transfer.id}</div>
+													</div>
+												</div>
+												<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
+													<div>
+														<div class="text-gray-400">From Brokerage</div>
+														<div class="text-white">{transfer.from.address.slice(0, 6)}...{transfer.from.address.slice(-4)}</div>
+													</div>
+													<div>
+														<div class="text-gray-400">Wallet Address</div>
+														<div class="text-white">{transfer.to.address.slice(0, 6)}...{transfer.to.address.slice(-4)}</div>
+													</div>
+													<div>
+														<div class="text-gray-400">Completed</div>
+														<div class="text-white">{transfer.timestamp ? new Date(transfer.timestamp * 1000).toLocaleString() : 'Pending'}</div>
+													</div>
+												</div>
+												<!-- Message Bar -->
+												{#if transfer.id}
+													<div class="bg-green-900 text-green-200 rounded px-4 py-2 mt-4 text-xs">
+														Tokens Transferred TX: {transfer.id}
+													</div>
+												{:else}
+													<div class="bg-blue-900 text-blue-200 rounded px-4 py-2 mt-4 text-xs">
+														Transfer in progress. Tokens will be automatically sent to your wallet once shares are received.
+													</div>
+												{/if}
+											</div>
+											{/each}
+										{/each}
 									{/if}
 								</div>
-								<div class="flex items-center gap-4">
-									<!-- Avatar -->
-									<div class="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center text-2xl font-bold text-gray-200">
-										{$vaultQuery.data.symbol?.slice(0,2) ?? '??'}
-									</div>
-									<div>
-										<div class="text-lg font-semibold text-white">{$vaultQuery.data.name}</div>
-										<div class="text-gray-400 text-xs">Transfer ID: {transfer.id}</div>
-									</div>
-								</div>
-								<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
-									<div>
-										<div class="text-gray-400">From Brokerage</div>
-										<div class="text-white">{transfer.from.address.slice(0, 6)}...{transfer.from.address.slice(-4)}</div>
-									</div>
-									<div>
-										<div class="text-gray-400">Wallet Address</div>
-										<div class="text-white">{transfer.to.address.slice(0, 6)}...{transfer.to.address.slice(-4)}</div>
-									</div>
-									<div>
-										<div class="text-gray-400">Completed</div>
-										<div class="text-white">{transfer.timestamp ? new Date(transfer.timestamp * 1000).toLocaleString() : 'Pending'}</div>
-									</div>
-								</div>
-								<!-- Message Bar -->
-								{#if transfer.id}
-									<div class="bg-green-900 text-green-200 rounded px-4 py-2 mt-4 text-xs">
-										Tokens Transferred TX: {transfer.id}
-									</div>
-								{:else}
-									<div class="bg-blue-900 text-blue-200 rounded px-4 py-2 mt-4 text-xs">
-										Transfer in progress. Tokens will be automatically sent to your wallet once shares are received.
-									</div>
-								{/if}
 							</div>
-						{/each}
-					{/if}
+						</div>
+					</div>
 				</div>
-			{/if}
+			</div>
+		</div>
 
-			{#if selectedTab === 'Terms & Conditions'}
-				<div class="space-y-6">
-					<h1 class="text-2xl font-bold text-white mb-2">Terms & Conditions - Share Transfer Process</h1>
-					<div class="text-gray-400 text-sm mb-4">Legal framework governing the tokenization process</div>
-					<div class="bg-yellow-900/80 border-l-4 border-yellow-400 p-4 mb-6 rounded">
-						<div class="font-semibold text-yellow-300 mb-1">Important Legal Notice</div>
-						<div class="text-yellow-100 text-sm">By initiating a share transfer, you agree to be bound by these terms and conditions. Please read carefully before proceeding.</div>
-					</div>
-					<div class="space-y-6 bg-gray-800/80 rounded-lg p-6 border border-gray-700">
-						<div>
-							<div class="font-bold text-white mb-1">1. Share Transfer Authorization and Process</div>
-							<div class="text-gray-200 text-sm">When you initiate a share transfer through the SARKEX platform, you are authorizing SARKEX Financial Ltd. to act as your agent for the purposes of facilitating the transfer of eligible securities from your designated brokerage account to SARKEX's institutional custody account.</div>
-						</div>
-						<div>
-							<div class="font-bold text-white mb-1">2. Custody and Safekeeping Arrangements</div>
-							<div class="text-gray-200 text-sm">Upon successful receipt of your transferred shares, SARKEX will hold such securities in a segregated custody account maintained with qualified institutional custodians.</div>
-						</div>
-						<div>
-							<div class="font-bold text-white mb-1">3. Token Issuance and Blockchain Settlement</div>
-							<div class="text-gray-200 text-sm">Following confirmation of successful share receipt and custody, SARKEX will automatically issue corresponding digital tokens to the blockchain wallet address you have specified.</div>
-						</div>
+		<!-- Important Notice -->
+		<div
+			class="rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-yellow-900/30 via-orange-900/30 to-red-900/20 p-6 backdrop-blur-sm"
+		>
+			<div class="flex items-start gap-4">
+				<div
+					class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-yellow-500"
+				>
+					<span class="text-xl font-bold text-gray-900">!</span>
+				</div>
+				<div>
+					<h3 class="mb-3 text-xl font-semibold text-yellow-500">Important Requirements</h3>
+					<div class="space-y-2 text-gray-300">
+						<p>• Only U.S. equities are accepted for minting</p>
+						<p>• Charles Schwab account strongly recommended for fastest processing</p>
+						<p>• All transfers must be completed through official brokerage channels</p>
+						<p>• Processing time may vary depending on your brokerage firm</p>
 					</div>
 				</div>
-			{/if}
+			</div>
+		</div>
+
+		<!-- Terms and Conditions Placeholder -->
+		<div class={SECTION_CLASSES}>
+			<h2 class="mb-4 text-xl font-semibold">Terms and Conditions</h2>
+			<div class="rounded-lg border border-white/10 bg-gray-700/30 p-6">
+				<p class="py-8 text-center text-gray-400">
+					Terms and Conditions content will be added here.
+					<br />
+					<span class="text-sm">Please check back later for detailed terms and conditions.</span>
+				</p>
+			</div>
+		</div>
+
+		<!-- Contact Information -->
+		<div class={SECTION_CLASSES}>
+			<h2 class="mb-4 text-xl font-semibold">Need Help?</h2>
+			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+				<div class="rounded-lg border border-white/10 bg-gray-700/30 p-6">
+					<h3 class="mb-2 font-semibold text-yellow-500">Transfer Support</h3>
+					<p class="mb-3 text-sm text-gray-400">For questions about asset transfers and minting</p>
+					<a
+						href="mailto:transfers@st0x.io"
+						class="text-blue-400 transition-colors hover:text-blue-300"
+					>
+						transfers@st0x.io
+					</a>
+				</div>
+				<div class="rounded-lg border border-white/10 bg-gray-700/30 p-6">
+					<h3 class="mb-2 font-semibold text-yellow-500">General Support</h3>
+					<p class="mb-3 text-sm text-gray-400">For general questions and assistance</p>
+					<a
+						href="mailto:hello@st0x.com"
+						class="text-blue-400 transition-colors hover:text-blue-300"
+					>
+						hello@st0x.com
+					</a>
+				</div>
+			</div>
 		</div>
 	</div>
+
+	<Footer />
 </div>

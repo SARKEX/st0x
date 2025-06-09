@@ -7,6 +7,7 @@
 	export let amount: string = '';
 	export let unit: string = '';
 	export let maxButton: boolean = false;
+	export let placeholder: string = '';
 
 	export let validate: ValidateFunction = () => undefined;
 
@@ -56,7 +57,7 @@
 			{...$$restProps}
 			on:input={handleInput}
 			min={0}
-			placeholder="0.0"
+			placeholder={placeholder}
 			step="0.1"
 			type="text"
 			value={displayValue}

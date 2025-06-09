@@ -149,7 +149,7 @@ const transactionStore = () => {
 		awaitWalletConfirmation,
 		awaitApprovalTx,
 		transactionSuccess,
-		transactionError,
+		transactionError
 		// handleDsfDeploy,
 		// handleDcaDeploy
 	};

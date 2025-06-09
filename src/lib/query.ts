@@ -1,10 +1,12 @@
-export const getVault = async (
-	vaultAddress: string,
-	subgraphUrl: string
+import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from "./network";
+
+export const getSfts = async (
 ): Promise<any> => {
 	const query = `
     {
- offchainAssetReceiptVault(id: "${vaultAddress.toLowerCase()}") {
+ offchainAssetReceiptVaults(where: {
+ id_in: [${STOXs.map(s => `"${s.address.toLowerCase()}"`).join(',')}]
+ }) {
 
     withdraws {
       id
@@ -210,13 +212,14 @@ export const getVault = async (
           }
     `;
 
-	const response = await fetch(subgraphUrl, {
+	const response = await fetch(ARBITRUM_SFT_SUBGRAPH_URL, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ query })
 	});
 
 	const json = await response.json();
+  console.log("json : ", json.data.offchainAssetReceiptVaults)
 
-	return json.data.offchainAssetReceiptVault;
+	return json.data.offchainAssetReceiptVaults;
 };
