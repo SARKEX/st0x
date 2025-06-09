@@ -1,5 +1,5 @@
 <script lang="ts">
-    let name = "Siddharth";
+    
 </script>
 
-<h1>Hello {name}</h1>
+<h1>Dashboard</h1>
