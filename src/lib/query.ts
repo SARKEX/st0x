@@ -1,11 +1,10 @@
-import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from "./network";
+import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from './network';
 
-export const getSfts = async (
-): Promise<any> => {
+export const getSfts = async (): Promise<any> => {
 	const query = `
     {
  offchainAssetReceiptVaults(where: {
- id_in: [${STOXs.map(s => `"${s.address.toLowerCase()}"`).join(',')}]
+ id_in: [${STOXs.map((s) => `"${s.address.toLowerCase()}"`).join(',')}]
  }) {
 
     withdraws {
@@ -219,7 +218,7 @@ export const getSfts = async (
 	});
 
 	const json = await response.json();
-  console.log("json : ", json.data.offchainAssetReceiptVaults)
+	console.log('json : ', json.data.offchainAssetReceiptVaults);
 
 	return json.data.offchainAssetReceiptVaults;
 };

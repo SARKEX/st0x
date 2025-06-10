@@ -3,17 +3,23 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { getPrice } from '$lib/getPrice';
 	import { arbitrum } from '@wagmi/core/chains';
-	import { getSfts } from "$lib/query";
+	import { getSfts } from '$lib/query';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Token } from 'sushi/currency';
 	import { USDC_TOKEN } from '$lib/network';
 	import { formatUnits } from 'viem';
-	
+
 	let viewMode = 'grid';
 	$: totalTokens = $query.data ? $query.data.length : 0;
-	$: totalMarketCap = $query.data ? $query.data.reduce((sum, token) => sum + parseFloat(token.marketCap), 0) : 0;
-	$: totalSupply = $query.data ? $query.data.reduce((sum, token) => sum + parseFloat(token.totalSupply), 0) : 0;
-	$: totalHolders = $query.data ? $query.data.reduce((sum, token) => sum + parseFloat(token.totalHolders), 0) : 0;
+	$: totalMarketCap = $query.data
+		? $query.data.reduce((sum, token) => sum + parseFloat(token.marketCap), 0)
+		: 0;
+	$: totalSupply = $query.data
+		? $query.data.reduce((sum, token) => sum + parseFloat(token.totalSupply), 0)
+		: 0;
+	$: totalHolders = $query.data
+		? $query.data.reduce((sum, token) => sum + parseFloat(token.totalHolders), 0)
+		: 0;
 
 	const query = createQuery({
 		queryKey: ['getSftsStocks'],
@@ -27,7 +33,9 @@
 						address: sft.id,
 						symbol: sft.symbol,
 						decimals: 6
-					}), USDC_TOKEN);
+					}),
+					USDC_TOKEN
+				);
 
 				tokens.push({
 					id: sft.id,
@@ -36,7 +44,10 @@
 					price: sftPrice,
 					totalHolders: sft.tokenHolders.length.toString(),
 					totalSupply: formatUnits(sft.totalShares, 18),
-					marketCap: formatUnits(BigInt(Math.floor(Number(sftPrice))) * BigInt(sft.totalShares), 18),
+					marketCap: formatUnits(
+						BigInt(Math.floor(Number(sftPrice))) * BigInt(sft.totalShares),
+						18
+					),
 					totalTransfers: sft.shareTransfers.length.toString(),
 					createdAt: sft.deployTimestamp
 				});
@@ -47,7 +58,7 @@
 </script>
 
 {#if $query.isLoading || $query.isFetching || $query.isRefetching}
-	<div class="min-h-[50vh] flex flex-col items-center justify-center">
+	<div class="flex min-h-[50vh] flex-col items-center justify-center">
 		<div
 			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600"
 		></div>
@@ -62,7 +73,9 @@
 	<!-- Main Content -->
 	<div>
 		<!-- Header -->
-		<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
+		<div
+			class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg"
+		>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-4">
 					<div>
@@ -96,7 +109,9 @@
 					<div
 						class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
 					/>
-					<div class="mb-2 text-xs uppercase tracking-wide text-gray-400">Approximate Market Cap</div>
+					<div class="mb-2 text-xs uppercase tracking-wide text-gray-400">
+						Approximate Market Cap
+					</div>
 					<div class="mb-1 text-2xl font-bold">${totalMarketCap.toLocaleString()}</div>
 				</div>
 
@@ -185,7 +200,6 @@
 
 									<div class="text-right">
 										<div class="text-lg font-bold">${token.price}</div>
-			
 									</div>
 								</div>
 
@@ -214,7 +228,7 @@
 									class="flex items-center justify-between border-t border-white/10 pt-3 text-xs text-gray-400"
 								>
 									<span
-										class="rounded px-2 py-1 text-xs font-medium bg-green-500/20 text-green-400"
+										class="rounded bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
 									>
 										Active
 									</span>
@@ -280,13 +294,17 @@
 										<td class="px-6 py-4 text-white">{token.totalHolders}</td>
 										<td class="px-6 py-4">
 											<span
-												class="rounded-full px-2 py-1 text-xs font-medium bg-green-500/20 text-green-400"
+												class="rounded-full bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
 											>
 												Active
 											</span>
 										</td>
 										<td class="px-6 py-4">
-											<a href={`https://stox.h20.market/token/${token.id}`} target="_blank" class="text-sm text-blue-400 hover:text-blue-300">
+											<a
+												href={`https://stox.h20.market/token/${token.id}`}
+												target="_blank"
+												class="text-sm text-blue-400 hover:text-blue-300"
+											>
 												View Details →
 											</a>
 										</td>
@@ -311,6 +329,4 @@
 				sans-serif;
 		}
 	</style>
-
 {/if}
-

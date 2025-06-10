@@ -20,8 +20,6 @@
 	// 	address: USDC_TOKEN.address
 	// });
 
-	
-
 	// Mock Order History Data
 	// const ORDER_HISTORY = [
 	// 	{

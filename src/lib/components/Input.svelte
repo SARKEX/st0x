@@ -57,7 +57,7 @@
 			{...$$restProps}
 			on:input={handleInput}
 			min={0}
-			placeholder={placeholder}
+			{placeholder}
 			step="0.1"
 			type="text"
 			value={displayValue}

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import Button from "$lib/components/Button.svelte";
-	import Input from "$lib/components/Input.svelte";
-	import Select from "$lib/components/Select.svelte";
+	import Button from '$lib/components/Button.svelte';
+	import Input from '$lib/components/Input.svelte';
+	import Select from '$lib/components/Select.svelte';
 	import { signerAddress } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
-	import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from "$lib/network";
+	import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from '$lib/network';
 
 	let selectedStockSymbol = STOXs[0].symbol;
 	let selectedName = '';
@@ -36,9 +36,11 @@ Full Name: ${selectedName}
 Email Address: ${selectedEmailAddress}
 		`.trim();
 
-		const mailtoLink = `mailto:transfers@st0x.io?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+		const mailtoLink = `mailto:transfers@st0x.io?subject=${encodeURIComponent(
+			subject
+		)}&body=${encodeURIComponent(body)}`;
 		window.location.href = mailtoLink;
-	}
+	};
 </script>
 
 <!-- Main Content -->
@@ -240,35 +242,35 @@ Email Address: ${selectedEmailAddress}
 									</div>
 								</div>
 							</div>
-							<div class="space-y-5 mt-4">
+							<div class="mt-4 space-y-5">
 								<div class="flex flex-col gap-2">
-									<span class="block text-gray-300 text-sm mb-1">Stock Symbol</span>
+									<span class="mb-1 block text-sm text-gray-300">Stock Symbol</span>
 									<Select
-										options={STOXs.map(s => s.symbol)}
+										options={STOXs.map((s) => s.symbol)}
 										bind:selected={selectedStockSymbol}
 										getOptionLabel={(option) => option}
 									/>
 								</div>
 								<div class="flex flex-col gap-2">
-									<span class="block text-gray-300 text-sm mb-1">Name</span>
+									<span class="mb-1 block text-sm text-gray-300">Name</span>
 									<input
 										type="string"
 										placeholder="Name"
 										bind:value={selectedName}
-										class="h-8 w-full p-2 border border-white bg-gray-800/95 text-white"
+										class="h-8 w-full border border-white bg-gray-800/95 p-2 text-white"
 									/>
 								</div>
 								<div class="flex flex-col gap-2">
-									<span class="block text-gray-300 text-sm mb-1">Email Address</span>
+									<span class="mb-1 block text-sm text-gray-300">Email Address</span>
 									<input
 										type="string"
 										placeholder="Email Address"
 										bind:value={selectedEmailAddress}
-										class="h-8 w-full p-2 border border-white bg-gray-800/95 text-white"
+										class="h-8 w-full border border-white bg-gray-800/95 p-2 text-white"
 									/>
 								</div>
 								<div class="flex flex-col gap-2">
-									<span class="block text-gray-300 text-sm mb-1">Quantity</span>
+									<span class="mb-1 block text-sm text-gray-300">Quantity</span>
 									<Input
 										type="number"
 										placeholder="0.0"
@@ -277,7 +279,7 @@ Email Address: ${selectedEmailAddress}
 									/>
 								</div>
 								<div class="flex flex-col gap-2">
-									<span class="block text-gray-300 text-sm mb-1">From Brokerage</span>
+									<span class="mb-1 block text-sm text-gray-300">From Brokerage</span>
 									<Select
 										options={['Interactive Brokers', 'Charles Schwab', 'Fidelity']}
 										bind:selected={selectedBrokerage}
@@ -285,20 +287,20 @@ Email Address: ${selectedEmailAddress}
 									/>
 								</div>
 								<div class="flex flex-col gap-2">
-									<span class="block text-gray-300 text-sm mb-1">Your Wallet Address : {$signerAddress}</span>
+									<span class="mb-1 block text-sm text-gray-300"
+										>Your Wallet Address : {$signerAddress}</span
+									>
 								</div>
 								<Button
 									on:click={() => {
 										sendBurn();
 									}}
-									class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded mt-2 transition-colors duration-200"
+									class="mt-2 w-full rounded bg-red-500 py-3 font-semibold text-white transition-colors duration-200 hover:bg-red-600"
 								>
 									Send
 								</Button>
 							</div>
-							
 						</div>
-						
 					</div>
 				</div>
 			</div>

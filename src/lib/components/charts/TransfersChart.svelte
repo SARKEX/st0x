@@ -80,7 +80,11 @@
 
 		for (let i = 0; i < howManyDays; i++) {
 			const currentDate = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-			const formattedDate = `${currentDate.getDate().toString().padStart(2, '0')}/${(currentDate.getMonth() + 1).toString().padStart(2, '0')}/${currentDate.getFullYear()}`;
+			const formattedDate = `${currentDate.getDate().toString().padStart(2, '0')}/${(
+				currentDate.getMonth() + 1
+			)
+				.toString()
+				.padStart(2, '0')}/${currentDate.getFullYear()}`;
 
 			const dayObject = {
 				date: formattedDate,
@@ -95,7 +99,11 @@
 			const activityDate = new Date(timestamp);
 
 			if (activityDate >= nDaysAgo) {
-				const formattedDate = `${activityDate.getDate().toString().padStart(2, '0')}/${(activityDate.getMonth() + 1).toString().padStart(2, '0')}/${activityDate.getFullYear()}`;
+				const formattedDate = `${activityDate.getDate().toString().padStart(2, '0')}/${(
+					activityDate.getMonth() + 1
+				)
+					.toString()
+					.padStart(2, '0')}/${activityDate.getFullYear()}`;
 
 				const dayObject = activitiesArray.find((day) => day.date === formattedDate);
 
@@ -196,7 +204,7 @@
 		// Responsively handle resizing
 		const handleResize = () => {
 			const isMobile = window.innerWidth < 640;
-			chart.applyOptions({ 
+			chart.applyOptions({
 				width: chartContainer.clientWidth,
 				height: isMobile ? 250 : 300,
 				layout: {
@@ -215,24 +223,36 @@
 	});
 </script>
 
-<div class="relative h-fit w-full px-2 sm:px-4 py-2 sm:py-4 rounded-xl border border-white/10" data-testid="chart-container">
+<div
+	class="relative h-fit w-full rounded-xl border border-white/10 px-2 py-2 sm:px-4 sm:py-4"
+	data-testid="chart-container"
+>
 	<!-- Legend above chart -->
-	<div class="mb-2 sm:mb-4 flex flex-row justify-start gap-3 sm:gap-6 text-xs sm:text-sm">
+	<div class="mb-2 flex flex-row justify-start gap-3 text-xs sm:mb-4 sm:gap-6 sm:text-sm">
 		<div class="flex items-center">
-			<span class="mr-1.5 sm:mr-2 h-2.5 sm:h-3.5 w-2.5 sm:w-3.5 rounded-full" style="background-color: #2196F3;"></span>
+			<span
+				class="mr-1.5 h-2.5 w-2.5 rounded-full sm:mr-2 sm:h-3.5 sm:w-3.5"
+				style="background-color: #2196F3;"
+			></span>
 			<span class="text-gray-200">Tokens transfers</span>
 		</div>
 	</div>
-	<div class="flex flex-row items-center justify-center w-full">
+	<div class="flex w-full flex-row items-center justify-center">
 		<!-- Y Axis Label -->
-		<span class="text-[10px] sm:text-xs font-medium text-gray-400 -rotate-90 whitespace-nowrap">Transfers</span>
+		<span class="-rotate-90 whitespace-nowrap text-[10px] font-medium text-gray-400 sm:text-xs"
+			>Transfers</span
+		>
 		<!-- Chart Area -->
 		<div class="flex-1 overflow-x-auto" style="max-width:100%;">
-			<div class="rounded-lg p-1 sm:p-2 w-full" style="max-width:100%;min-width:0;" bind:this={chartContainer}></div>
+			<div
+				class="w-full rounded-lg p-1 sm:p-2"
+				style="max-width:100%;min-width:0;"
+				bind:this={chartContainer}
+			></div>
 		</div>
 	</div>
 	<!-- X Axis Label -->
-	<div class="flex justify-center mt-1 sm:mt-2">
-		<span class="text-[10px] sm:text-xs font-medium text-gray-400">Days</span>
+	<div class="mt-1 flex justify-center sm:mt-2">
+		<span class="text-[10px] font-medium text-gray-400 sm:text-xs">Days</span>
 	</div>
 </div>

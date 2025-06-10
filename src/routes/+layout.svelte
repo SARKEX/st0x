@@ -8,9 +8,8 @@
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
-	import { onMount } from 'svelte'; 
+	import { onMount } from 'svelte';
 
-	
 	const queryClient = new QueryClient({
 		defaultOptions: {
 			queries: {

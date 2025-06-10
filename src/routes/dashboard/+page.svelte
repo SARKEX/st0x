@@ -6,8 +6,12 @@
 	import { formatUnits } from 'viem';
 	import DepositsVsWithdrawsChart from '$lib/components/charts/DepositsVsWithdrawsChart.svelte';
 	import TransfersChart from '$lib/components/charts/TransfersChart.svelte';
-	import { getSfts } from "$lib/query";
-	import type { Deposit, OffchainAssetReceiptVault, ShareTransfer } from '$lib/types/OffchainAssetReceiptVault';
+	import { getSfts } from '$lib/query';
+	import type {
+		Deposit,
+		OffchainAssetReceiptVault,
+		ShareTransfer
+	} from '$lib/types/OffchainAssetReceiptVault';
 	import { sfts } from '$lib/stores';
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 
@@ -28,48 +32,75 @@
 	$: if ($query.data) {
 		st0xVaults = $query.data;
 		sfts.set(st0xVaults);
-		
+
 		// Memoize deposits and transfers
-		recentDeposits = st0xVaults.map(sft => sft.deposits).flat();
-		allTransfers = st0xVaults.map(sft => sft.shareTransfers).flat();
-		
+		recentDeposits = st0xVaults.map((sft) => sft.deposits).flat();
+		allTransfers = st0xVaults.map((sft) => sft.shareTransfers).flat();
+
 		// Calculate all metrics in a single pass
-		const metrics = st0xVaults.reduce((acc, sft) => {
-			// Process deposits
-			const depositAmount = sft.deposits.reduce((sum, deposit) => 
-				sum + BigInt(formatUnits(BigInt(deposit.amount), 18)), BigInt(0));
-			
-			// Process withdraws
-			const withdrawAmount = sft.withdraws.reduce((sum, withdraw) => 
-				sum + BigInt(formatUnits(BigInt(withdraw.amount), 18)), BigInt(0));
-			
-			return {
-				totalDeposits: acc.totalDeposits + depositAmount,
-				totalRedeems: acc.totalRedeems + withdrawAmount,
-				totalTokenHolders: acc.totalTokenHolders + sft.tokenHolders.length,
-				totalAudits: acc.totalAudits + sft.certifications.length,
-				totalTransfers: acc.totalTransfers + sft.shareTransfers.length,
-				totalEvents: acc.totalEvents + sft.deposits.length + sft.withdraws.length + 
-					sft.shareTransfers.length + sft.certifications.length
-			};
-		}, {
-			totalDeposits: BigInt(0),
-			totalRedeems: BigInt(0),
-			totalTokenHolders: 0,
-			totalAudits: 0,
-			totalTransfers: 0,
-			totalEvents: 0
-		});
+		const metrics = st0xVaults.reduce(
+			(acc, sft) => {
+				// Process deposits
+				const depositAmount = sft.deposits.reduce(
+					(sum, deposit) => sum + BigInt(formatUnits(BigInt(deposit.amount), 18)),
+					BigInt(0)
+				);
+
+				// Process withdraws
+				const withdrawAmount = sft.withdraws.reduce(
+					(sum, withdraw) => sum + BigInt(formatUnits(BigInt(withdraw.amount), 18)),
+					BigInt(0)
+				);
+
+				return {
+					totalDeposits: acc.totalDeposits + depositAmount,
+					totalRedeems: acc.totalRedeems + withdrawAmount,
+					totalTokenHolders: acc.totalTokenHolders + sft.tokenHolders.length,
+					totalAudits: acc.totalAudits + sft.certifications.length,
+					totalTransfers: acc.totalTransfers + sft.shareTransfers.length,
+					totalEvents:
+						acc.totalEvents +
+						sft.deposits.length +
+						sft.withdraws.length +
+						sft.shareTransfers.length +
+						sft.certifications.length
+				};
+			},
+			{
+				totalDeposits: BigInt(0),
+				totalRedeems: BigInt(0),
+				totalTokenHolders: 0,
+				totalAudits: 0,
+				totalTransfers: 0,
+				totalEvents: 0
+			}
+		);
 
 		// Update platform stats
 		PLATFORM_STATS = [
 			{ label: 'Total Assets', value: st0xVaults.length.toString(), change: 'Live on arbitrum' },
 			{ label: 'Tokens Minted', value: metrics.totalDeposits.toString(), change: 'ST0Xs' },
-			{ label: 'Tokens Redeemed', value: metrics.totalRedeems.toString(), change: 'Recent transfers' },
-			{ label: 'Tokens Circulating', value: (metrics.totalDeposits - metrics.totalRedeems).toString(), change: 'Total ST0Xs' },
-			{ label: 'Token Holders', value: metrics.totalTokenHolders.toString(), change: 'Active addresses' },
+			{
+				label: 'Tokens Redeemed',
+				value: metrics.totalRedeems.toString(),
+				change: 'Recent transfers'
+			},
+			{
+				label: 'Tokens Circulating',
+				value: (metrics.totalDeposits - metrics.totalRedeems).toString(),
+				change: 'Total ST0Xs'
+			},
+			{
+				label: 'Token Holders',
+				value: metrics.totalTokenHolders.toString(),
+				change: 'Active addresses'
+			},
 			{ label: 'Total Audits', value: metrics.totalAudits.toString(), change: 'Verified proofs' },
-			{ label: 'Token Transfers', value: metrics.totalTransfers.toString(), change: 'Recent transfers' },
+			{
+				label: 'Token Transfers',
+				value: metrics.totalTransfers.toString(),
+				change: 'Recent transfers'
+			},
 			{ label: 'Total Events', value: metrics.totalEvents.toString(), change: 'All transactions' }
 		];
 
@@ -82,18 +113,16 @@
 		];
 
 		TRADE_SUMMARY_DATA = timeRanges.map(({ period, seconds }) => {
-			const transfers = allTransfers.filter(transfer => 
-				Number(transfer.timestamp) > now - seconds
+			const transfers = allTransfers.filter(
+				(transfer) => Number(transfer.timestamp) > now - seconds
 			);
 			return {
 				period,
-				volume: transfers.reduce((sum, transfer) => 
-					sum + Number(transfer.value), 0).toString(),
+				volume: transfers.reduce((sum, transfer) => sum + Number(transfer.value), 0).toString(),
 				trades: transfers.length.toString()
 			};
 		});
 	}
-
 
 	const DOCUMENTATION_ITEMS = [
 		{
@@ -122,7 +151,6 @@
 		}
 	];
 
-
 	// Utility Classes
 	const CARD_BASE_CLASSES =
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
@@ -133,14 +161,12 @@
 	function toggleDocumentation(index: number) {
 		DOCUMENTATION_ITEMS[index].isOpen = !DOCUMENTATION_ITEMS[index].isOpen;
 	}
-
 </script>
 
 <!-- Main Content -->
 
-
 {#if $query.isLoading || $query.isFetching || $query.isRefetching}
-	<div class="min-h-[50vh] flex flex-col items-center justify-center">
+	<div class="flex min-h-[50vh] flex-col items-center justify-center">
 		<div
 			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600"
 		></div>
@@ -154,7 +180,9 @@
 {:else if st0xVaults}
 	<div>
 		<!-- Header -->
-		<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
+		<div
+			class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg"
+		>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-4">
 					<div>
@@ -186,8 +214,8 @@
 					</h1>
 
 					<p class="mx-auto mb-8 max-w-3xl text-lg leading-relaxed text-blue-100 md:text-xl">
-						Trade tokenized stocks on-chain with full transparency, 24/7 availability, and fractional
-						ownership. The future of equities trading is here.
+						Trade tokenized stocks on-chain with full transparency, 24/7 availability, and
+						fractional ownership. The future of equities trading is here.
 					</p>
 
 					<button
@@ -258,10 +286,9 @@
 				</div>
 			</div>
 
-			
 			<div class={SECTION_CLASSES}>
-				<h3 class="mb-2 sm:mb-4 text-base sm:text-lg font-semibold">Token Transfers</h3>
-				<p class="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-400">
+				<h3 class="mb-2 text-base font-semibold sm:mb-4 sm:text-lg">Token Transfers</h3>
+				<p class="mb-4 text-xs text-gray-400 sm:mb-6 sm:text-sm">
 					Total value of daily token transfers over the last 30 days
 				</p>
 
@@ -269,47 +296,56 @@
 					<TransfersChart vaults={st0xVaults} />
 				</div>
 
-				<div class="grid grid-cols-2 gap-2 sm:gap-4 text-center">
+				<div class="grid grid-cols-2 gap-2 text-center sm:gap-4">
 					<div>
-						<div class="text-lg sm:text-xl font-bold">{totalTransfers}</div>
-						<div class="text-[10px] sm:text-xs text-gray-400">Total Transfers</div>
+						<div class="text-lg font-bold sm:text-xl">{totalTransfers}</div>
+						<div class="text-[10px] text-gray-400 sm:text-xs">Total Transfers</div>
 					</div>
 					<div>
-						<div class="text-lg sm:text-xl font-bold">{allTransfers.flat().reduce((sum, transfer) => sum + Number(transfer.value), Number(0)).toLocaleString()}</div>
-						<div class="text-[10px] sm:text-xs text-gray-400">Total Transfers Value</div>
+						<div class="text-lg font-bold sm:text-xl">
+							{allTransfers
+								.flat()
+								.reduce((sum, transfer) => sum + Number(transfer.value), Number(0))
+								.toLocaleString()}
+						</div>
+						<div class="text-[10px] text-gray-400 sm:text-xs">Total Transfers Value</div>
 					</div>
 				</div>
 			</div>
 
 			<div class={SECTION_CLASSES}>
-				<h3 class="mb-2 sm:mb-4 text-base sm:text-lg font-semibold">Deposits and Withdrawals</h3>
-				<p class="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-400">Number of deposit and withdrawal events</p>
+				<h3 class="mb-2 text-base font-semibold sm:mb-4 sm:text-lg">Deposits and Withdrawals</h3>
+				<p class="mb-4 text-xs text-gray-400 sm:mb-6 sm:text-sm">
+					Number of deposit and withdrawal events
+				</p>
 
-				<div class="mb-4 sm:mb-6 h-100">
+				<div class="h-100 mb-4 sm:mb-6">
 					<DepositsVsWithdrawsChart vaults={st0xVaults} />
 				</div>
 
-				<div class="grid grid-cols-2 gap-2 sm:gap-4 text-center">
+				<div class="grid grid-cols-2 gap-2 text-center sm:gap-4">
 					<div>
-						<div class="text-lg sm:text-xl font-bold">{st0xVaults.reduce((total, sft) => total + sft.deposits.length, 0)}</div>
-						<div class="text-[10px] sm:text-xs text-gray-400">Deposits</div>
+						<div class="text-lg font-bold sm:text-xl">
+							{st0xVaults.reduce((total, sft) => total + sft.deposits.length, 0)}
+						</div>
+						<div class="text-[10px] text-gray-400 sm:text-xs">Deposits</div>
 					</div>
 					<div>
-						<div class="text-lg sm:text-xl font-bold">{st0xVaults.reduce((total, sft) => total + sft.withdraws.length, 0)}</div>
-						<div class="text-[10px] sm:text-xs text-gray-400">Withdrawals</div>
+						<div class="text-lg font-bold sm:text-xl">
+							{st0xVaults.reduce((total, sft) => total + sft.withdraws.length, 0)}
+						</div>
+						<div class="text-[10px] text-gray-400 sm:text-xs">Withdrawals</div>
 					</div>
 				</div>
 			</div>
 
 			<!-- Charts Grid -->
 			<!-- <div class="grid grid-cols-2 gap-6"> -->
-				
-		
-				
-				<!-- Token Transfers -->
-				
-				<!-- Deposits and Withdrawals -->
-				
+
+			<!-- Token Transfers -->
+
+			<!-- Deposits and Withdrawals -->
+
 			<!-- </div> -->
 
 			<!-- Latest Proofs -->
@@ -323,23 +359,28 @@
 					</div>
 				</div>
 				<div class="space-y-3">
-						{#each recentDeposits.slice(0, 5) as proof}
+					{#each recentDeposits.slice(0, 5) as proof}
 						<!-- Proof Card -->
 						<div
 							class="rounded-xl border border-white/5 bg-black/30 p-4 transition-all hover:border-blue-500/30"
 						>
 							<div class="mb-2 flex items-center justify-between">
 								<div>
-									<h4 class="text-sm font-semibold">{proof.id.split('-')[0]} - {formatUnits(BigInt(proof.amount), 18)}</h4>
+									<h4 class="text-sm font-semibold">
+										{proof.id.split('-')[0]} - {formatUnits(BigInt(proof.amount), 18)}
+									</h4>
 									<p class="text-xs text-gray-400">
-										Depositor: {proof.emitter.address} • {new Date(Number(proof.timestamp) * 1000).toLocaleString()}
+										Depositor: {proof.emitter.address} • {new Date(
+											Number(proof.timestamp) * 1000
+										).toLocaleString()}
 									</p>
 								</div>
 								<div class="flex items-center gap-2">
-									<div
-										class="h-2 w-2 rounded-full bg-green-500"
-									/>
-									<a href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${proof.transaction.id}`} class="text-xs text-blue-400 transition-colors hover:text-blue-300">
+									<div class="h-2 w-2 rounded-full bg-green-500" />
+									<a
+										href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${proof.transaction.id}`}
+										class="text-xs text-blue-400 transition-colors hover:text-blue-300"
+									>
 										View Details
 									</a>
 								</div>

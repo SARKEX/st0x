@@ -7,7 +7,12 @@ import {
 	type DeploymentTransactionArgs
 } from '@rainlanguage/orderbook/js_api';
 import { wagmiConfig } from 'svelte-wagmi';
-import { getDcaDeploymentArgs, getLimitOrderDeploymentArgs, type DcaDeploymentArgs, type LimitOrderDeploymentArgs } from './getDeploymentArgs';
+import {
+	getDcaDeploymentArgs,
+	getLimitOrderDeploymentArgs,
+	type DcaDeploymentArgs,
+	type LimitOrderDeploymentArgs
+} from './getDeploymentArgs';
 import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from './network';
 // import {
 // 	getMarketMakingDeploymentArgs,
@@ -163,7 +168,6 @@ const transactionStore = () => {
 		handleDcaDeploy,
 		handleLimitDeploy
 		// handleDsfDeploy,
-		
 	};
 };
 

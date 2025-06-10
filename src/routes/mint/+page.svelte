@@ -1,13 +1,13 @@
 <script lang="ts">
-	import Button from "$lib/components/Button.svelte";
-	import Input from "$lib/components/Input.svelte";
-	import Select from "$lib/components/Select.svelte";
+	import Button from '$lib/components/Button.svelte';
+	import Input from '$lib/components/Input.svelte';
+	import Select from '$lib/components/Select.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import { signerAddress } from 'svelte-wagmi';
-	import { getSfts } from "$lib/query";
-	import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from "$lib/network";
+	import { getSfts } from '$lib/query';
+	import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from '$lib/network';
 
 	let selectedStockSymbol = STOXs[0].symbol;
 	let selectedBrokerage = 'Interactive Brokers';
@@ -37,9 +37,11 @@ Email Address: ${selectedEmailAddress}
 This is a mint request.
 		`.trim();
 
-		const mailtoLink = `mailto:transfers@st0x.io?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+		const mailtoLink = `mailto:transfers@st0x.io?subject=${encodeURIComponent(
+			subject
+		)}&body=${encodeURIComponent(body)}`;
 		window.location.href = mailtoLink;
-	}
+	};
 
 	const CARD_BASE_CLASSES =
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
@@ -185,34 +187,34 @@ This is a mint request.
 
 								<div class="space-y-5">
 									<div class="flex flex-col gap-2">
-										<span class="block text-gray-300 text-sm mb-1">Stock Symbol</span>
+										<span class="mb-1 block text-sm text-gray-300">Stock Symbol</span>
 										<Select
-											options={STOXs.map(s => s.symbol)}
+											options={STOXs.map((s) => s.symbol)}
 											bind:selected={selectedStockSymbol}
-											getOptionLabel={(option) => option}
+											getOptionLabel={(option) => `${option} - ${STOXs.find((s) => s.symbol === option)?.name}`}
 										/>
 									</div>
 									<div class="flex flex-col gap-2">
-										<span class="block text-gray-300 text-sm mb-1">Name</span>
+										<span class="mb-1 block text-sm text-gray-300">Name</span>
 										<input
 											type="string"
 											placeholder="Name"
 											bind:value={selectedName}
-											class="h-8 w-full p-2 border border-white bg-gray-800/95 text-white"
+											class="h-8 w-full border border-white bg-gray-800/95 p-2 text-white"
 										/>
 									</div>
 									<div class="flex flex-col gap-2">
-										<span class="block text-gray-300 text-sm mb-1">Email Address</span>
+										<span class="mb-1 block text-sm text-gray-300">Email Address</span>
 										<input
 											type="string"
 											placeholder="Email Address"
 											bind:value={selectedEmailAddress}
-											class="h-8 w-full p-2 border border-white bg-gray-800/95 text-white"
+											class="h-8 w-full border border-white bg-gray-800/95 p-2 text-white"
 										/>
 									</div>
-									
+
 									<div class="flex flex-col gap-2">
-										<span class="block text-gray-300 text-sm mb-1">Quantity</span>
+										<span class="mb-1 block text-sm text-gray-300">Quantity</span>
 										<Input
 											type="number"
 											placeholder="0.0"
@@ -221,7 +223,7 @@ This is a mint request.
 										/>
 									</div>
 									<div class="flex flex-col gap-2">
-										<span class="block text-gray-300 text-sm mb-1">From Brokerage</span>
+										<span class="mb-1 block text-sm text-gray-300">From Brokerage</span>
 										<Select
 											options={['Interactive Brokers', 'Charles Schwab', 'Fidelity']}
 											bind:selected={selectedBrokerage}
@@ -229,13 +231,15 @@ This is a mint request.
 										/>
 									</div>
 									<div class="flex flex-col gap-2">
-										<span class="block text-gray-300 text-sm mb-1">Your Wallet Address : {$signerAddress}</span>
+										<span class="mb-1 block text-sm text-gray-300"
+											>Your Wallet Address : {$signerAddress}</span
+										>
 									</div>
 									<Button
 										on:click={() => {
 											sendSft();
 										}}
-										class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold py-3 rounded mt-2 transition-colors duration-200"
+										class="mt-2 w-full rounded bg-yellow-400 py-3 font-semibold text-gray-900 transition-colors duration-200 hover:bg-yellow-500"
 									>
 										Send
 									</Button>
@@ -292,7 +296,7 @@ This is a mint request.
 									</p>
 								</div>
 								<div class="space-y-6">
-									<h1 class="text-3xl font-bold text-white mb-6">Transfer History</h1>
+									<h1 class="mb-6 text-3xl font-bold text-white">Transfer History</h1>
 									{#if $vaultQuery.isLoading}
 										<div class="text-white">Loading...</div>
 									{:else if $vaultQuery.isError}
@@ -300,50 +304,71 @@ This is a mint request.
 									{:else}
 										{#each $vaultQuery.data as sft}
 											{#each sft.shareTransfers.slice(0, 1) as transfer}
-											<div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6 flex flex-col gap-4 relative border border-gray-700">
-												<!-- Status Badge -->
-												<div class="absolute top-4 right-4">
+												<div
+													class="relative mb-6 flex flex-col gap-4 rounded-lg border border-gray-700 bg-gray-800 p-6 shadow-lg"
+												>
+													<!-- Status Badge -->
+													<div class="absolute right-4 top-4">
+														{#if transfer.id}
+															<span
+																class="rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-green-300"
+																>Completed</span
+															>
+														{:else}
+															<span
+																class="rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-yellow-300"
+																>Processing</span
+															>
+														{/if}
+													</div>
+													<div class="flex items-center gap-4">
+														<!-- Avatar -->
+														<div
+															class="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-700 text-2xl font-bold text-gray-200"
+														>
+															{sft.symbol?.slice(0, 2) ?? '??'}
+														</div>
+														<div>
+															<div class="text-lg font-semibold text-white">{sft.name}</div>
+															<div class="text-xs text-gray-400">Transfer ID: {transfer.id}</div>
+														</div>
+													</div>
+													<div class="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+														<div>
+															<div class="text-gray-400">From Brokerage</div>
+															<div class="text-white">
+																{transfer.from.address.slice(0, 6)}...{transfer.from.address.slice(
+																	-4
+																)}
+															</div>
+														</div>
+														<div>
+															<div class="text-gray-400">Wallet Address</div>
+															<div class="text-white">
+																{transfer.to.address.slice(0, 6)}...{transfer.to.address.slice(-4)}
+															</div>
+														</div>
+														<div>
+															<div class="text-gray-400">Completed</div>
+															<div class="text-white">
+																{transfer.timestamp
+																	? new Date(transfer.timestamp * 1000).toLocaleString()
+																	: 'Pending'}
+															</div>
+														</div>
+													</div>
+													<!-- Message Bar -->
 													{#if transfer.id}
-														<span class="bg-gray-600 text-green-300 px-3 py-1 rounded-full text-xs font-semibold">Completed</span>
+														<div class="mt-4 rounded bg-green-900 px-4 py-2 text-xs text-green-200">
+															Tokens Transferred TX: {transfer.id}
+														</div>
 													{:else}
-														<span class="bg-gray-600 text-yellow-300 px-3 py-1 rounded-full text-xs font-semibold">Processing</span>
+														<div class="mt-4 rounded bg-blue-900 px-4 py-2 text-xs text-blue-200">
+															Transfer in progress. Tokens will be automatically sent to your wallet
+															once shares are received.
+														</div>
 													{/if}
 												</div>
-												<div class="flex items-center gap-4">
-													<!-- Avatar -->
-													<div class="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center text-2xl font-bold text-gray-200">
-														{sft.symbol?.slice(0,2) ?? '??'}
-													</div>
-													<div>
-														<div class="text-lg font-semibold text-white">{sft.name}</div>
-														<div class="text-gray-400 text-xs">Transfer ID: {transfer.id}</div>
-													</div>
-												</div>
-												<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
-													<div>
-														<div class="text-gray-400">From Brokerage</div>
-														<div class="text-white">{transfer.from.address.slice(0, 6)}...{transfer.from.address.slice(-4)}</div>
-													</div>
-													<div>
-														<div class="text-gray-400">Wallet Address</div>
-														<div class="text-white">{transfer.to.address.slice(0, 6)}...{transfer.to.address.slice(-4)}</div>
-													</div>
-													<div>
-														<div class="text-gray-400">Completed</div>
-														<div class="text-white">{transfer.timestamp ? new Date(transfer.timestamp * 1000).toLocaleString() : 'Pending'}</div>
-													</div>
-												</div>
-												<!-- Message Bar -->
-												{#if transfer.id}
-													<div class="bg-green-900 text-green-200 rounded px-4 py-2 mt-4 text-xs">
-														Tokens Transferred TX: {transfer.id}
-													</div>
-												{:else}
-													<div class="bg-blue-900 text-blue-200 rounded px-4 py-2 mt-4 text-xs">
-														Transfer in progress. Tokens will be automatically sent to your wallet once shares are received.
-													</div>
-												{/if}
-											</div>
 											{/each}
 										{/each}
 									{/if}
