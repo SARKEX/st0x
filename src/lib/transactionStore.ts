@@ -7,6 +7,8 @@ import {
 	type DeploymentTransactionArgs
 } from '@rainlanguage/orderbook/js_api';
 import { wagmiConfig } from 'svelte-wagmi';
+import { getDcaDeploymentArgs, getLimitOrderDeploymentArgs, type DcaDeploymentArgs, type LimitOrderDeploymentArgs } from './getDeploymentArgs';
+import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from './network';
 // import {
 // 	getMarketMakingDeploymentArgs,
 // 	getDcaDeploymentArgs,
@@ -73,58 +75,58 @@ const transactionStore = () => {
 			hash: hash || ''
 		}));
 
-	// const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
-	// 	const config = get(wagmiConfig);
-	// 	if (!config) throw new Error('Wagmi config not found');
+	const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
 
-	// 	if (deploymentArgs.approvals.length > 0) {
-	// 		for (const approval of deploymentArgs.approvals) {
-	// 			try {
-	// 				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
-	// 				const hash = await sendTransaction(config, {
-	// 					data: approval.calldata as Hex,
-	// 					to: approval.token as `0x${string}`
-	// 				});
-	// 				await waitForTransactionReceipt(config, {
-	// 					hash: hash
-	// 				});
-	// 			} catch (error) {
-	// 				// @ts-expect-error Send transaction error
-	// 				return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
-	// 			}
-	// 		}
-	// 	}
-	// 	let hash: string;
-	// 	try {
-	// 		awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
+		if (deploymentArgs.approvals.length > 0) {
+			for (const approval of deploymentArgs.approvals) {
+				try {
+					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
+					const hash = await sendTransaction(config, {
+						data: approval.calldata as Hex,
+						to: approval.token as `0x${string}`
+					});
+					await waitForTransactionReceipt(config, {
+						hash: hash
+					});
+				} catch (error) {
+					// @ts-expect-error Send transaction error
+					return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+				}
+			}
+		}
+		let hash: string;
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
-	// 		hash = await sendTransaction(config, {
-	// 			data: deploymentArgs.deploymentCalldata as Hex,
-	// 			to: deploymentArgs.orderbookAddress as `0x${string}`
-	// 		});
-	// 	} catch (error) {
-	// 		// @ts-expect-error Send transaction error
-	// 		return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
-	// 	}
-	// 	// Poll for the order to be added to the orderbook
-	// 	const interval = setInterval(async () => {
-	// 		const orders = await getTransactionAddOrders(TARGET_NETWORK_SUBGRAPH_URL, hash);
-	// 		if (orders.length > 0) {
-	// 			clearInterval(interval);
-	// 			const orderHash = orders[0].order.orderHash;
-	// 			const link = `
-	// 			<a
-	// 							target="_blank"
-	// 							class="whitespace-pre-wrap break-words text-center hover:underline"
-	// 							href="https://v2.raindex.finance/orders/polygon-${orderHash}"
-	// 							data-testid="raindex-link">Manage your order on Raindex</a
-	// 						>
-	// 			`;
+			hash = await sendTransaction(config, {
+				data: deploymentArgs.deploymentCalldata as Hex,
+				to: deploymentArgs.orderbookAddress as `0x${string}`
+			});
+		} catch (error) {
+			// @ts-expect-error Send transaction error
+			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+		}
+		// Poll for the order to be added to the orderbook
+		const interval = setInterval(async () => {
+			const orders = await getTransactionAddOrders(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, hash);
+			if (orders.length > 0) {
+				clearInterval(interval);
+				const orderHash = orders[0].order.orderHash;
+				const link = `
+				<a
+								target="_blank"
+								class="whitespace-pre-wrap break-words text-center hover:underline"
+								href="https://v2.raindex.finance/orders/${TARGET_NETWORK}-${orderHash}"
+								data-testid="raindex-link">Manage your order on Raindex</a
+							>
+				`;
 
-	// 			return transactionSuccess(hash, link);
-	// 		}
-	// 	}, 2000);
-	// };
+				return transactionSuccess(hash, link);
+			}
+		}, 2000);
+	};
 
 	// const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
 	// 	const config = get(wagmiConfig);
@@ -134,13 +136,21 @@ const transactionStore = () => {
 	// 	await handleStrategyDeployment(deploymentArgs);
 	// };
 
-	// const handleDcaDeploy = async (args: DcaDeploymentArgs) => {
-	// 	const config = get(wagmiConfig);
-	// 	if (!config) throw new Error('Wagmi config not found');
-	// 	awaitWalletConfirmation(`Preparing strategy...`);
-	// 	const deploymentArgs = await getDcaDeploymentArgs(args);
-	// 	await handleStrategyDeployment(deploymentArgs);
-	// };
+	const handleDcaDeploy = async (args: DcaDeploymentArgs) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		awaitWalletConfirmation(`Preparing strategy...`);
+		const deploymentArgs = await getDcaDeploymentArgs(args);
+		await handleStrategyDeployment(deploymentArgs);
+	};
+
+	const handleLimitDeploy = async (args: LimitOrderDeploymentArgs) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		awaitWalletConfirmation(`Preparing strategy...`);
+		const deploymentArgs = await getLimitOrderDeploymentArgs(args);
+		await handleStrategyDeployment(deploymentArgs);
+	};
 
 	return {
 		subscribe,
@@ -149,9 +159,11 @@ const transactionStore = () => {
 		awaitWalletConfirmation,
 		awaitApprovalTx,
 		transactionSuccess,
-		transactionError
+		transactionError,
+		handleDcaDeploy,
+		handleLimitDeploy
 		// handleDsfDeploy,
-		// handleDcaDeploy
+		
 	};
 };
 

@@ -48,12 +48,12 @@
 	};
 </script>
 
-<div class="flex w-full flex-col gap-2 border border-gray-200">
+<div class="flex w-full flex-col gap-2">
 	<div
-		class="flex h-full w-full items-center justify-end rounded-sm border border-white text-lg text-gray-500 outline-none"
+		class="flex h-full w-full items-center justify-end rounded-lg border border-white/10 bg-gray-700/50 text-white transition-colors focus-within:border-yellow-500/50 focus-within:outline-none"
 	>
 		<input
-			class="mr-2 w-full min-w-0 rounded border-none bg-gray-900 px-2 py-0 text-left text-base text-gray-500 outline-none [appearance:textfield] focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+			class="mr-2 w-full min-w-0 rounded border-none bg-transparent px-4 py-3 text-left text-base text-white outline-none [appearance:textfield] focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
 			{...$$restProps}
 			on:input={handleInput}
 			min={0}
@@ -66,7 +66,7 @@
 		{#if unit}
 			<span
 				data-testid="unit"
-				class="h-full content-center self-center bg-gray-900 pr-2 text-left text-base text-gray-500 sm:text-lg"
+				class="h-full content-center self-center bg-transparent pr-4 text-left text-base text-white sm:text-lg"
 			>
 				{unit}</span
 			>
@@ -76,7 +76,7 @@
 				disabled={!$signerAddress}
 				data-testid={'set-val-to-max'}
 				on:click={setValueToMax}
-				class="flex cursor-pointer items-center self-stretch border-l border-gray-200 bg-gray-900 pl-3 pr-2 text-sm sm:text-base"
+				class="flex cursor-pointer items-center self-stretch border-l border-white/10 bg-transparent pl-3 pr-4 text-sm text-white transition-colors hover:bg-gray-600/50 sm:text-base"
 				>MAX</button
 			>
 		{/if}

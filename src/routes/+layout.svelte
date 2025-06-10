@@ -56,6 +56,7 @@
 			<Sidebar {sidebarExpanded} {toggleSidebar} />
 			<div class="transition-all duration-300 {sidebarExpanded ? 'ml-64' : 'ml-16'}">
 				<slot {sidebarExpanded} />
+				<TransactionModal />
 			</div>
 		</div>
 	{/if}

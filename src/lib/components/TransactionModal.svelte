@@ -4,6 +4,7 @@
 	import transactionStore from '$lib/transactionStore';
 	import { TransactionStatus } from '$lib/transactionStore';
 	import { TransactionErrorMessage } from '$lib/types/errors';
+	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 
 	const handleClose = () => {
 		return transactionStore.reset();
@@ -12,44 +13,44 @@
 
 <Modal
 	size="sm"
-	defaultClass="rounded-none border-4 inset"
-	class="bg-opacity-90 backdrop-blur-sm"
+	defaultClass="rounded-lg border border-white/10"
+	class="bg-gray-700/50 backdrop-blur-sm"
 	open={$transactionStore.status !== TransactionStatus.IDLE}
 	on:close={() => handleClose()}
 	data-testid="transaction-modal"
 >
 	{#if $transactionStore.status !== TransactionStatus.IDLE}
-		<div class="flex flex-col items-center justify-center gap-2 p-4">
+		<div class="flex flex-col items-center justify-center gap-2 p-4 text-white">
 			{#if $transactionStore.status === TransactionStatus.ERROR}
 				<div
-					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-400 bg-red-100 dark:bg-red-900"
+					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-400 bg-red-900/50"
 					data-testid="error-icon"
 				>
 					<h1 class="text-lg md:text-2xl">❌</h1>
 				</div>
 				<p
-					class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold text-gray-900 dark:text-white"
+					class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold"
 					data-testid="error-status"
 				>
 					{$transactionStore.status}
 				</p>
 				<p
-					class="w-full whitespace-pre-wrap break-words text-center font-normal text-gray-900 dark:text-white"
+					class="w-full whitespace-pre-wrap break-words text-center font-normal"
 					data-testid="error-message"
 				>
 					{$transactionStore.error}
 				</p>
 				{#if $transactionStore.error === TransactionErrorMessage.GENERIC}
 					<a
-						class="text-center hover:underline"
+						class="text-center text-white hover:text-yellow-500/50 hover:underline"
 						href="https://q2i2qetuwucfyfgcamqsi2h33fgmlz26o4jlt3hlndyd5xk3xo2a.arweave.net/hpGoEnS1BFwUwgMhJGj72UzF5153Erns62jwPt1bu7Q"
 						>Sarcophagus.io</a
 					>
 				{/if}
 				{#if $transactionStore.hash}
 					<a
-						class="whitespace-pre-wrap break-words text-center text-sm text-primary hover:underline"
-						href={`https://polygonscan.com/tx/${$transactionStore.hash}`}
+						class="whitespace-pre-wrap break-words text-center text-sm text-white hover:text-yellow-500/50 hover:underline"
+						href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${$transactionStore.hash}`}
 						data-testid="view-transaction-link">View transaction on PolygonScan</a
 					>
 				{/if}
@@ -58,21 +59,21 @@
 				>
 			{:else if $transactionStore.status === TransactionStatus.SUCCESS}
 				<div
-					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900"
+					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-900/50"
 					data-testid="success-icon"
 				>
 					<h1 class="text-lg md:text-2xl">✅</h1>
 				</div>
 				<div class="flex flex-col gap-4 text-center">
 					<p
-						class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold text-gray-900 dark:text-white"
+						class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold"
 						data-testid="success-status"
 					>
 						{$transactionStore.status}
 					</p>
 					{#if $transactionStore.message}
 						<p
-							class="w-full break-words text-center text-sm font-normal text-gray-900 dark:text-white"
+							class="w-full break-words text-center text-sm font-normal"
 							data-testid="success-message"
 						>
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -84,9 +85,9 @@
 						<div class="flex flex-col gap-2">
 							<a
 								target="_blank"
-								class="whitespace-pre-wrap break-words text-center hover:underline"
-								href={`https://polygonscan.com/tx/${$transactionStore.hash}`}
-								data-testid="view-transaction-link">View transaction on PolygonScan</a
+								class="whitespace-pre-wrap break-words text-center text-white hover:text-yellow-500/50 hover:underline"
+								href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${$transactionStore.hash}`}
+								data-testid="view-transaction-link">View transaction</a
 							>
 						</div>
 					{/if}
@@ -97,13 +98,13 @@
 				>
 			{:else if $transactionStore.status === TransactionStatus.CHECKING_ALLOWANCE || $transactionStore.status === TransactionStatus.PENDING_WALLET || $transactionStore.status === TransactionStatus.PENDING_APPROVAL}
 				<div
-					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900"
+					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-600/50"
 					data-testid="spinner"
 				>
-					<Spinner color="blue" size={10} />
+					<Spinner color="yellow" size={10} />
 				</div>
 				<p
-					class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold text-gray-900 dark:text-white"
+					class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold"
 					data-testid="pending-message"
 				>
 					{$transactionStore.message || $transactionStore.status}

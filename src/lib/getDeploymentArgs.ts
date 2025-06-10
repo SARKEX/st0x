@@ -5,6 +5,9 @@ import { Token } from 'sushi/currency';
 // import { getPrice } from './prices';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
+import { TARGET_NETWORK } from './network';
+import { getPeriodInSeconds } from './derivations';
+import { getPrice } from './getPrice';
 // import { TARGET_NETWORK } from './network';
 // import { getPeriodInSeconds } from './derivations';
 
@@ -27,7 +30,7 @@ import { formatUnits } from 'viem';
 // export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeploymentArgs) => {
 // 	const dsfStrategy = await (
 // 		await fetch(
-// 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/7739e7f789d719a7a5d1c526f6ba8cf2d4356520/src/dynamic-spread.rain'
+// 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/b0703df4179caa96f217fc0a03b463e29d67c262/src/dynamic-spread.rain'
 // 		)
 // 	).text();
 // 	const gui = await DotrainOrderGui.chooseDeployment(dsfStrategy, TARGET_NETWORK);
@@ -93,75 +96,125 @@ import { formatUnits } from 'viem';
 // 	return deploymentArgs;
 // };
 
-// export type DcaDeploymentArgs = {
-// 	outputToken: Token;
-// 	inputToken: Token;
-// 	budgetAmount: bigint;
-// 	selectedPeriod: string;
-// 	selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes';
-// 	baseline: string;
-// 	minTradeAmount: bigint;
-// 	maxTradeAmount: bigint;
-// 	inputVaultId: Hex | undefined;
-// 	outputVaultId: Hex | undefined;
-// 	depositAmount: bigint;
-// };
+export type DcaDeploymentArgs = {
+	outputToken: Token;
+	inputToken: Token;
+	budgetAmount: bigint;
+	selectedPeriod: string;
+	selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes';
+	kickoff: string;
+	baseline: string;
+	minTradeAmount: bigint;
+	maxTradeAmount: bigint;
+	inputVaultId: Hex | undefined;
+	outputVaultId: Hex | undefined;
+	depositAmount: bigint;
+};
 
-// export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
-// 	const dcaStrategy = await (
-// 		await fetch(
-// 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/7739e7f789d719a7a5d1c526f6ba8cf2d4356520/src/auction-dca.rain'
-// 		)
-// 	).text();
-// 	const gui = await DotrainOrderGui.chooseDeployment(dcaStrategy, TARGET_NETWORK);
+export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
+	const dcaStrategy = await (
+		await fetch(
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/b0703df4179caa96f217fc0a03b463e29d67c262/src/auction-dca.rain'
+		)
+	).text();
+	const gui = await DotrainOrderGui.chooseDeployment(dcaStrategy, TARGET_NETWORK);
 
-// 	await gui.saveSelectToken('output', args.outputToken.address);
-// 	await gui.saveSelectToken('input', args.inputToken.address);
+	await gui.saveSelectToken('output', args.outputToken.address);
+	await gui.saveSelectToken('input', args.inputToken.address);
 
-// 	gui.saveFieldValue('time-per-amount-epoch', {
-// 		value: getPeriodInSeconds(args.selectedPeriod, args.selectedPeriodUnit).toString(),
-// 		isPreset: false
-// 	});
+	gui.saveFieldValue('time-per-amount-epoch', {
+		value: getPeriodInSeconds(args.selectedPeriod, args.selectedPeriodUnit).toString(),
+		isPreset: false
+	});
 
-// 	gui.saveFieldValue('amount-per-epoch', {
-// 		value: formatUnits(args.budgetAmount, args.outputToken.decimals),
-// 		isPreset: false
-// 	});
+	gui.saveFieldValue('amount-per-epoch', {
+		value: formatUnits(args.budgetAmount, args.outputToken.decimals),
+		isPreset: false
+	});
 
-// 	gui.saveFieldValue('max-trade-amount', {
-// 		value: formatUnits(args.maxTradeAmount, args.outputToken.decimals),
-// 		isPreset: false
-// 	});
+	gui.saveFieldValue('max-trade-amount', {
+		value: formatUnits(args.maxTradeAmount, args.outputToken.decimals),
+		isPreset: false
+	});
 
-// 	gui.saveFieldValue('min-trade-amount', {
-// 		value: formatUnits(args.minTradeAmount, args.outputToken.decimals),
-// 		isPreset: false
-// 	});
+	gui.saveFieldValue('min-trade-amount', {
+		value: formatUnits(args.minTradeAmount, args.outputToken.decimals),
+		isPreset: false
+	});
 
-// 	const initialIO = await getPrice(args.outputToken, args.inputToken);
-// 	gui.saveFieldValue('baseline', {
-// 		value: args.baseline,
-// 		isPreset: false
-// 	});
-// 	gui.saveFieldValue('initial-io', {
-// 		value: initialIO,
-// 		isPreset: false
-// 	});
+	gui.saveFieldValue('baseline', {
+		value: args.baseline,
+		isPreset: false
+	});
 
-// 	gui.saveDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
+	gui.saveFieldValue('initial-io', {
+		value: args.kickoff,
+		isPreset: false
+	});
 
-// 	if (args.inputVaultId) {
-// 		gui.setVaultId(true, 0, args.inputVaultId);
-// 	}
+	gui.saveDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-// 	if (args.outputVaultId) {
-// 		gui.setVaultId(false, 0, args.outputVaultId);
-// 	}
+	if (args.inputVaultId) {
+		gui.setVaultId(true, 0, args.inputVaultId);
+	}
 
-// 	const $signerAddress = get(signerAddress);
-// 	if (!$signerAddress) throw new Error('Signer address not found');
+	if (args.outputVaultId) {
+		gui.setVaultId(false, 0, args.outputVaultId);
+	}
 
-// 	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+	const $signerAddress = get(signerAddress);
+	if (!$signerAddress) throw new Error('Signer address not found');
 
-// 	return deploymentArgs;
-// };
+	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+
+	return deploymentArgs;
+};
+
+export type LimitOrderDeploymentArgs = {
+	outputToken: Token;
+	inputToken: Token;
+	ioRatio: string;
+	depositAmount: bigint;
+	inputVaultId: Hex | undefined;
+	outputVaultId: Hex | undefined;
+};
+
+export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs) => {
+	try {
+		const dsfStrategy = await (
+			await fetch(
+				'https://raw.githubusercontent.com/rainlanguage/rain.strategies/b0703df4179caa96f217fc0a03b463e29d67c262/src/fixed-limit.rain'
+			)
+		).text();
+		const gui = await DotrainOrderGui.chooseDeployment(dsfStrategy, TARGET_NETWORK);
+
+		await gui.saveSelectToken('token1', args.inputToken.address);
+		await gui.saveSelectToken('token2', args.outputToken.address);
+
+		// Save field values using the selected strategy parameters
+		gui.saveFieldValue('fixed-io', {
+			value: args.ioRatio,
+			isPreset: false
+		});
+
+		gui.saveDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
+
+		if (args.inputVaultId) {
+			gui.setVaultId(true, 0, args.inputVaultId);
+		}
+
+		if (args.outputVaultId) {
+			gui.setVaultId(false, 0, args.outputVaultId);
+		}
+
+		const $signerAddress = get(signerAddress);
+		if (!$signerAddress) throw new Error('Signer address not found');
+
+		const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+
+		return deploymentArgs;
+	} catch (error) {
+		console.error(error);
+		throw error;
+	}
+};

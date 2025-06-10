@@ -10,7 +10,7 @@
 </script>
 
 <select
-	class="rounded border border-gray-300 bg-transparent px-2 py-1"
+	class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
 	bind:value={selected}
 	data-testid={dataTestId}
 >
