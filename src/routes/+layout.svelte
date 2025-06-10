@@ -30,7 +30,6 @@
 		await erckit.init();
 	};
 
-	let sidebarOpen = false;
 	let sidebarExpanded = true;
 	function toggleSidebar() {
 		sidebarExpanded = !sidebarExpanded;

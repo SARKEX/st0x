@@ -1,10 +1,19 @@
 import { Token } from 'sushi/currency';
-import { polygon } from '@wagmi/core/chains';
+import { arbitrum } from '@wagmi/core/chains';
 import type { Sft } from './types';
+
+export const USDC_TOKEN = new Token({
+	chainId: arbitrum.id,
+	address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+	symbol: 'USDC',
+	decimals: 6
+});
+
 
 export const ARBITRUM_SFT_SUBGRAPH_URL =
 	'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn';
 export const TARGET_NETWORK = 'arbitrum';
+export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io/';
 
 export const STOXs : Sft[] = [
 	{

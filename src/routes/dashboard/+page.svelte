@@ -1,0 +1,396 @@
+<script lang="ts">
+	import WalletConnect from '$lib/components/WalletConnect.svelte';
+	import { onMount } from 'svelte';
+	import Footer from '$lib/components/Footer.svelte';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { formatUnits } from 'viem';
+	import DepositsVsWithdrawsChart from '$lib/components/charts/DepositsVsWithdrawsChart.svelte';
+	import TransfersChart from '$lib/components/charts/TransfersChart.svelte';
+	import { getSfts } from "$lib/query";
+	import type { Deposit, OffchainAssetReceiptVault, ShareTransfer } from '$lib/types/OffchainAssetReceiptVault';
+	import { sfts } from '$lib/stores';
+	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+
+	let st0xVaults: OffchainAssetReceiptVault[] = [];
+	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
+	let TRADE_SUMMARY_DATA: { period: string; volume: string; trades: string }[] = [];
+	let totalTransfers = 0;
+	let allTransfers: ShareTransfer[] = [];
+	let recentDeposits: Deposit[] = [];
+
+	$: query = createQuery({
+		queryKey: ['getSfts'],
+		queryFn: () => {
+			return getSfts();
+		}
+	});
+
+	$: if ($query.data) {
+		st0xVaults = $query.data;
+		sfts.set(st0xVaults);
+		
+		// Memoize deposits and transfers
+		recentDeposits = st0xVaults.map(sft => sft.deposits).flat();
+		allTransfers = st0xVaults.map(sft => sft.shareTransfers).flat();
+		
+		// Calculate all metrics in a single pass
+		const metrics = st0xVaults.reduce((acc, sft) => {
+			// Process deposits
+			const depositAmount = sft.deposits.reduce((sum, deposit) => 
+				sum + BigInt(formatUnits(BigInt(deposit.amount), 18)), BigInt(0));
+			
+			// Process withdraws
+			const withdrawAmount = sft.withdraws.reduce((sum, withdraw) => 
+				sum + BigInt(formatUnits(BigInt(withdraw.amount), 18)), BigInt(0));
+			
+			return {
+				totalDeposits: acc.totalDeposits + depositAmount,
+				totalRedeems: acc.totalRedeems + withdrawAmount,
+				totalTokenHolders: acc.totalTokenHolders + sft.tokenHolders.length,
+				totalAudits: acc.totalAudits + sft.certifications.length,
+				totalTransfers: acc.totalTransfers + sft.shareTransfers.length,
+				totalEvents: acc.totalEvents + sft.deposits.length + sft.withdraws.length + 
+					sft.shareTransfers.length + sft.certifications.length
+			};
+		}, {
+			totalDeposits: BigInt(0),
+			totalRedeems: BigInt(0),
+			totalTokenHolders: 0,
+			totalAudits: 0,
+			totalTransfers: 0,
+			totalEvents: 0
+		});
+
+		// Update platform stats
+		PLATFORM_STATS = [
+			{ label: 'Total Assets', value: st0xVaults.length.toString(), change: 'Live on arbitrum' },
+			{ label: 'Tokens Minted', value: metrics.totalDeposits.toString(), change: 'ST0Xs' },
+			{ label: 'Tokens Redeemed', value: metrics.totalRedeems.toString(), change: 'Recent transfers' },
+			{ label: 'Tokens Circulating', value: (metrics.totalDeposits - metrics.totalRedeems).toString(), change: 'Total ST0Xs' },
+			{ label: 'Token Holders', value: metrics.totalTokenHolders.toString(), change: 'Active addresses' },
+			{ label: 'Total Audits', value: metrics.totalAudits.toString(), change: 'Verified proofs' },
+			{ label: 'Token Transfers', value: metrics.totalTransfers.toString(), change: 'Recent transfers' },
+			{ label: 'Total Events', value: metrics.totalEvents.toString(), change: 'All transactions' }
+		];
+
+		// Calculate trade summary data
+		const now = Date.now() / 1000;
+		const timeRanges = [
+			{ period: 'Last 24 Hours', seconds: 24 * 60 * 60 },
+			{ period: 'Last Week', seconds: 7 * 24 * 60 * 60 },
+			{ period: 'Last Month', seconds: 30 * 24 * 60 * 60 }
+		];
+
+		TRADE_SUMMARY_DATA = timeRanges.map(({ period, seconds }) => {
+			const transfers = allTransfers.filter(transfer => 
+				Number(transfer.timestamp) > now - seconds
+			);
+			return {
+				period,
+				volume: transfers.reduce((sum, transfer) => 
+					sum + Number(transfer.value), 0).toString(),
+				trades: transfers.length.toString()
+			};
+		});
+	}
+
+
+	const DOCUMENTATION_ITEMS = [
+		{
+			question: 'What is ST0x?',
+			answer: 'ST0x is an onchain equities platform that tokenizes real-world assets.',
+			link: '/docs/what-is-st0x',
+			isOpen: false
+		},
+		{
+			question: 'How does proof of reserves work?',
+			answer: 'All tokens are backed by verifiable real-world assets with immutable proofs.',
+			link: '/docs/proof-of-reserves',
+			isOpen: false
+		},
+		{
+			question: 'How to mint tokens?',
+			answer: 'Use our mint interface to create new tokens backed by verified deposits.',
+			link: '/docs/how-to-mint',
+			isOpen: false
+		},
+		{
+			question: 'What are the risks?',
+			answer: 'Review our comprehensive risk disclosures and legal framework.',
+			link: '/docs/risks',
+			isOpen: false
+		}
+	];
+
+
+	// Utility Classes
+	const CARD_BASE_CLASSES =
+		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
+	const GRADIENT_HOVER_CLASSES =
+		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
+	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
+
+	function toggleDocumentation(index: number) {
+		DOCUMENTATION_ITEMS[index].isOpen = !DOCUMENTATION_ITEMS[index].isOpen;
+	}
+
+</script>
+
+<!-- Main Content -->
+
+
+{#if $query.isLoading || $query.isFetching || $query.isRefetching}
+	<div class="min-h-[50vh] flex flex-col items-center justify-center">
+		<div
+			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600"
+		></div>
+		<p class="mt-3 text-lg font-medium text-gray-600">Loading...</p>
+	</div>
+{:else if $query.error}
+	<div data-testid="error">
+		An error has occurred:
+		{$query.error.message}
+	</div>
+{:else if st0xVaults}
+	<div>
+		<!-- Header -->
+		<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-4">
+					<div>
+						<h1 class="text-xl font-bold">Dashboard</h1>
+						<p class="text-sm text-gray-400">Welcome to ST0x</p>
+					</div>
+				</div>
+
+				<div class="flex items-center gap-4">
+					<WalletConnect />
+				</div>
+			</div>
+		</div>
+
+		<!-- Dashboard Content -->
+		<div class="space-y-8 p-6">
+			<!-- Hero Section -->
+			<div class="relative overflow-hidden rounded-2xl">
+				<!-- Background with gradient and pattern -->
+				<div
+					class="absolute inset-0 bg-gradient-to-br from-purple-600 via-blue-600 to-yellow-500 opacity-90"
+				/>
+				<div class="absolute inset-0 bg-gradient-to-r from-blue-900/50 to-purple-900/50" />
+
+				<!-- Content -->
+				<div class="relative px-12 py-12 text-center">
+					<h1 class="mb-6 text-4xl font-bold leading-tight text-white md:text-5xl">
+						Your gateway to onchain equities
+					</h1>
+
+					<p class="mx-auto mb-8 max-w-3xl text-lg leading-relaxed text-blue-100 md:text-xl">
+						Trade tokenized stocks on-chain with full transparency, 24/7 availability, and fractional
+						ownership. The future of equities trading is here.
+					</p>
+
+					<button
+						class="rounded-xl border border-white/30 bg-white/20 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-white/30"
+					>
+						Trade now
+					</button>
+				</div>
+			</div>
+
+			<!-- Platform Overview -->
+			<div class={SECTION_CLASSES}>
+				<div class="mb-6 flex items-center justify-between">
+					<h2
+						class="bg-gradient-to-r from-yellow-500 to-blue-500 bg-clip-text text-2xl font-bold text-transparent"
+					>
+						Platform Overview
+					</h2>
+				</div>
+				<div class="grid grid-cols-4 gap-4">
+					{#each PLATFORM_STATS as metric, index}
+						<!-- Metric Card -->
+						<div class="{CARD_BASE_CLASSES} p-5">
+							<div class={GRADIENT_HOVER_CLASSES} />
+							<div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
+								{metric.label}
+							</div>
+							<div class="mb-2">
+								<span class="block text-2xl font-bold">{metric.value}</span>
+							</div>
+							<div class="flex items-center gap-1 text-sm font-medium text-yellow-500">
+								<span>↗</span>
+								{metric.change}
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			<!-- Trade Summary -->
+			<div class={SECTION_CLASSES}>
+				<div class="mb-6 flex items-center justify-between">
+					<div>
+						<h2 class="text-xl font-semibold">Trade Summary</h2>
+						<p class="text-sm text-gray-400">Volume and trades across different time periods</p>
+					</div>
+				</div>
+				<div class="grid grid-cols-3 gap-6">
+					{#each TRADE_SUMMARY_DATA as data, index}
+						<!-- Trade Summary Card -->
+						<div class="{CARD_BASE_CLASSES} p-6">
+							<div class={GRADIENT_HOVER_CLASSES} />
+							<div class="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">
+								{data.period}
+							</div>
+							<div class="space-y-4">
+								<div>
+									<div class="mb-1 text-sm text-gray-400">Volume</div>
+									<div class="text-2xl font-bold">{data.volume}</div>
+								</div>
+								<div>
+									<div class="mb-1 text-sm text-gray-400">Trades</div>
+									<div class="text-xl font-semibold">{data.trades.toLocaleString()}</div>
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			
+			<div class={SECTION_CLASSES}>
+				<h3 class="mb-2 sm:mb-4 text-base sm:text-lg font-semibold">Token Transfers</h3>
+				<p class="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-400">
+					Total value of daily token transfers over the last 30 days
+				</p>
+
+				<div class="mb-4 sm:mb-6" style="min-height: 250px sm:min-height: 350px;">
+					<TransfersChart vaults={st0xVaults} />
+				</div>
+
+				<div class="grid grid-cols-2 gap-2 sm:gap-4 text-center">
+					<div>
+						<div class="text-lg sm:text-xl font-bold">{totalTransfers}</div>
+						<div class="text-[10px] sm:text-xs text-gray-400">Total Transfers</div>
+					</div>
+					<div>
+						<div class="text-lg sm:text-xl font-bold">{allTransfers.flat().reduce((sum, transfer) => sum + Number(transfer.value), Number(0)).toLocaleString()}</div>
+						<div class="text-[10px] sm:text-xs text-gray-400">Total Transfers Value</div>
+					</div>
+				</div>
+			</div>
+
+			<div class={SECTION_CLASSES}>
+				<h3 class="mb-2 sm:mb-4 text-base sm:text-lg font-semibold">Deposits and Withdrawals</h3>
+				<p class="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-400">Number of deposit and withdrawal events</p>
+
+				<div class="mb-4 sm:mb-6 h-100">
+					<DepositsVsWithdrawsChart vaults={st0xVaults} />
+				</div>
+
+				<div class="grid grid-cols-2 gap-2 sm:gap-4 text-center">
+					<div>
+						<div class="text-lg sm:text-xl font-bold">{st0xVaults.reduce((total, sft) => total + sft.deposits.length, 0)}</div>
+						<div class="text-[10px] sm:text-xs text-gray-400">Deposits</div>
+					</div>
+					<div>
+						<div class="text-lg sm:text-xl font-bold">{st0xVaults.reduce((total, sft) => total + sft.withdraws.length, 0)}</div>
+						<div class="text-[10px] sm:text-xs text-gray-400">Withdrawals</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Charts Grid -->
+			<!-- <div class="grid grid-cols-2 gap-6"> -->
+				
+		
+				
+				<!-- Token Transfers -->
+				
+				<!-- Deposits and Withdrawals -->
+				
+			<!-- </div> -->
+
+			<!-- Latest Proofs -->
+			<div
+				class="rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-yellow-900/20 p-6 backdrop-blur-sm"
+			>
+				<div class="mb-6 flex items-center justify-between">
+					<div>
+						<h2 class="text-xl font-semibold">Latest Deposits</h2>
+						<p class="text-sm text-gray-400">Most recent deposits</p>
+					</div>
+				</div>
+				<div class="space-y-3">
+						{#each recentDeposits.slice(0, 5) as proof}
+						<!-- Proof Card -->
+						<div
+							class="rounded-xl border border-white/5 bg-black/30 p-4 transition-all hover:border-blue-500/30"
+						>
+							<div class="mb-2 flex items-center justify-between">
+								<div>
+									<h4 class="text-sm font-semibold">{proof.id.split('-')[0]} - {formatUnits(BigInt(proof.amount), 18)}</h4>
+									<p class="text-xs text-gray-400">
+										Depositor: {proof.emitter.address} • {new Date(Number(proof.timestamp) * 1000).toLocaleString()}
+									</p>
+								</div>
+								<div class="flex items-center gap-2">
+									<div
+										class="h-2 w-2 rounded-full bg-green-500"
+									/>
+									<a href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${proof.transaction.id}`} class="text-xs text-blue-400 transition-colors hover:text-blue-300">
+										View Details
+									</a>
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			<!-- Documentation -->
+			<div class={SECTION_CLASSES}>
+				<div class="mb-6 flex items-center justify-between">
+					<div>
+						<h2 class="text-xl font-semibold">Documentation</h2>
+						<p class="text-sm text-gray-400">Links to all ST0x website explainers</p>
+					</div>
+					<button
+						class="rounded-lg border border-blue-500 bg-blue-500/20 px-4 py-2 text-sm font-medium text-blue-500 transition-all hover:bg-blue-500 hover:text-white"
+					>
+						View All Docs
+					</button>
+				</div>
+				<div class="space-y-2">
+					{#each DOCUMENTATION_ITEMS as item, index}
+						<!-- Documentation Item -->
+						<div class="overflow-hidden rounded-lg border border-white/10">
+							<button
+								on:click={() => toggleDocumentation(index)}
+								class="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-white/5"
+							>
+								<span class="font-medium">{item.question}</span>
+								<span class="transition-transform {item.isOpen ? 'rotate-180' : ''}"> ↓ </span>
+							</button>
+							{#if item.isOpen}
+								<div class="border-t border-white/10 px-6 pb-4">
+									<p class="mb-3 text-sm text-gray-400">{item.answer}</p>
+									<a
+										href={item.link}
+										class="text-sm text-yellow-500 transition-colors hover:text-yellow-400"
+									>
+										Learn more →
+									</a>
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</div>
+		</div>
+
+		<!-- Footer -->
+		<Footer />
+	</div>
+{/if}
