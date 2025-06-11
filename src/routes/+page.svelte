@@ -1,5 +1,8 @@
-<script lang="ts">
-    let name = "Siddharth";
-</script>
+<script>
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 
-<h1>Hello {name}</h1>
+	onMount(() => {
+		goto('/dashboard');
+	});
+</script>

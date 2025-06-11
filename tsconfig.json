@@ -9,10 +9,6 @@
 		"skipLibCheck": true,
 		"sourceMap": true,
 		"strict": true,
-		"types": ["vitest/globals", "@testing-library/jest-dom", "vitest/importMeta"],
-		"paths": {
-			"$lib": ["./src/lib"],
-			"$lib/*": ["./src/lib/*"]
-		}
+		"types": ["vitest/globals", "@testing-library/jest-dom", "vitest/importMeta"]
 	}
 }

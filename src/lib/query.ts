@@ -1,0 +1,226 @@
+import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from './network';
+
+// TODO: Add type for the response
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const getSfts = async (): Promise<any> => {
+	const query = `
+    {
+ offchainAssetReceiptVaults(where: {
+ id_in: [${STOXs.map((s) => `"${s.address.toLowerCase()}"`).join(',')}]
+ }) {
+
+    withdraws {
+      id
+       emitter {
+        address
+      }
+      transaction {
+        id
+      }
+      
+      receipt {
+        id
+        receiptId
+        receiptInformations {
+        payload
+          schema
+          information
+            payload
+            schema
+          emitter {
+            address
+          }
+        }
+      }
+      amount
+      caller {
+        address
+      }
+      timestamp
+    }
+    deposits {
+      id
+       emitter {
+        address
+      }
+      transaction {
+        id
+      }
+      receipt {
+        id
+        receiptId
+        receiptInformations {
+          payload
+          schema
+          information
+          emitter {
+            address
+          }
+        }
+      }
+      amount
+      caller {
+        address
+      }
+      timestamp
+    }
+    activeAuthorizer {
+      address
+      rolesGranted(orderBy: timestamp, orderDirection: desc) {
+        role {
+          roleName
+        }
+        sender {
+          address
+        }
+        account {
+          address
+        }
+        timestamp
+        transaction {
+          id
+        }
+      }
+      roleHolders {
+        role {
+          roleName
+          roleHash
+        }
+        account {
+          address
+        }
+      }
+      roles(orderBy: roleName) {
+        roleName
+        roleHolders {
+          account {
+            address
+          }
+        }
+        roleHash
+      }
+      roleRevokes {
+        role {
+          roleName
+        }
+        sender {
+          address
+        }
+        account {
+          address
+        }
+        timestamp
+        transaction {
+          id
+        }
+      }
+    }
+    
+    id
+    totalShares
+    address
+    deployer
+    admin
+    name
+    symbol
+    deployTimestamp
+    receiptContractAddress
+    shareHolders {
+      address
+    }
+    
+    tokenHolders {
+      address
+      balance
+    }
+    
+    shareTransfers {
+      id
+      timestamp
+      from {
+        address
+      }
+      to {
+        address
+      }
+      value
+    }
+    receiptBalances {
+      receipt {
+        shares
+        id
+        receiptId
+        balances {
+          valueExact
+          value
+          account {
+            address
+          }
+        }
+          deposits {
+          amount
+          receipt {
+            receiptId
+          }
+          timestamp
+        }
+        receiptInformations(orderDirection: desc, orderBy: timestamp) {
+          information
+          id
+          transaction {
+            blockNumber
+            id
+          }
+          timestamp
+          emitter {
+            address
+          }
+          receipt {
+            deposits {
+              amount
+            }
+          }
+        }
+      }
+    }
+    certifications(orderBy: timestamp, orderDirection: desc) {
+      timestamp
+      id
+      certifier {
+        address
+      }
+      certifiedUntil
+      totalShares
+      transaction {
+        id
+        blockNumber
+      }
+      data
+      information
+    }
+    receiptVaultInformations(orderBy: timestamp, orderDirection: desc) {
+      information
+      id
+      timestamp
+      caller {
+        address
+      }
+      transaction {
+        blockNumber
+      }
+    }
+  }
+          }
+    `;
+
+	const response = await fetch(ARBITRUM_SFT_SUBGRAPH_URL, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ query })
+	});
+
+	const json = await response.json();
+	console.log('json : ', json.data.offchainAssetReceiptVaults);
+
+	return json.data.offchainAssetReceiptVaults;
+};
