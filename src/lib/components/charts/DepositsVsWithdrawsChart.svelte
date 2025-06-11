@@ -141,8 +141,8 @@
 	$: if (howManyDays) {
 		lastNDaysActivities = getLastNDaysActivities(activities, howManyDays);
 		activitiesByDate = splitActivitiesByDate(lastNDaysActivities, howManyDays);
-		datesArray = activitiesByDate.map(key => key.date);
-		eventCountsArray = activitiesByDate.map(key => key.events.length);
+		datesArray = activitiesByDate.map((key) => key.date);
+		eventCountsArray = activitiesByDate.map((key) => key.events.length);
 	}
 
 	export let datesArray: string[] = [];

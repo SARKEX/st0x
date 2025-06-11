@@ -1,6 +1,5 @@
 import { Token } from 'sushi/currency';
 import { arbitrum } from '@wagmi/core/chains';
-import type { Sft } from './types';
 
 export const USDC_TOKEN = new Token({
 	chainId: arbitrum.id,

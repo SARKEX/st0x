@@ -3,7 +3,6 @@
 	import { defaultConfig, wagmiConfig } from 'svelte-wagmi';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
-	import { browser } from '$app/environment';
 	import { arbitrum } from '@wagmi/core/chains';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';

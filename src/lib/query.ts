@@ -1,5 +1,7 @@
 import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from './network';
 
+// TODO: Add type for the response
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const getSfts = async (): Promise<any> => {
 	const query = `
     {

@@ -340,4 +340,4 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
 
 	return deploymentArgs;
-}
+};

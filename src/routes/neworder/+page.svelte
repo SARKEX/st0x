@@ -14,8 +14,6 @@
 	];
 
 	let activeOrderType = 'limit';
-	
-
 </script>
 
 <!-- Main Content -->

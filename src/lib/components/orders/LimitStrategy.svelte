@@ -3,12 +3,7 @@
 	import Select from '$lib/components/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
-	import {
-		validateBaseline,
-		validateOverrideDepositAmount,
-		validatePeriod,
-		validateSelectedAmount
-	} from '$lib/validateDeploymentArgs';
+	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import Input from '$lib/components/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import { formatUnits } from 'viem';

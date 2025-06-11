@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-	import { targetNetwork, wrongNetwork } from '$lib/stores';
+	import { targetNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import WalletConnect from './WalletConnect.svelte';
-	import Button from './Button.svelte';
 
 	export let sidebarExpanded = true;
 	export let toggleSidebar = () => {};

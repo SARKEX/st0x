@@ -1,6 +1,5 @@
 <script lang="ts">
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
-	import { onMount } from 'svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
@@ -18,7 +17,6 @@
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
 	let TRADE_SUMMARY_DATA: { period: string; volume: string; trades: string }[] = [];
-	let totalTransfers = 0;
 	let allTransfers: ShareTransfer[] = [];
 	let recentDeposits: Deposit[] = [];
 
@@ -236,7 +234,7 @@
 					</h2>
 				</div>
 				<div class="grid grid-cols-4 gap-4">
-					{#each PLATFORM_STATS as metric, index}
+					{#each PLATFORM_STATS as metric}
 						<!-- Metric Card -->
 						<div class="{CARD_BASE_CLASSES} p-5">
 							<div class={GRADIENT_HOVER_CLASSES} />
@@ -264,7 +262,7 @@
 					</div>
 				</div>
 				<div class="grid grid-cols-3 gap-6">
-					{#each TRADE_SUMMARY_DATA as data, index}
+					{#each TRADE_SUMMARY_DATA as data}
 						<!-- Trade Summary Card -->
 						<div class="{CARD_BASE_CLASSES} p-6">
 							<div class={GRADIENT_HOVER_CLASSES} />

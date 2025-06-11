@@ -1,18 +1,17 @@
 <script lang="ts">
-    import WalletConnect from '$lib/components/WalletConnect.svelte';
+	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
-    import { getVaults } from '@rainlanguage/orderbook/js_api';
-    import { createInfiniteQuery } from '@tanstack/svelte-query';
-    import type { SgVaultWithSubgraphName } from '@rainlanguage/orderbook/js_api';
-	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, STOXs, TARGET_NETWORK, USDC_TOKEN } from '$lib/network';
-    import { signerAddress } from 'svelte-wagmi';
-	import type { Token } from 'sushi/currency';
+	import { getVaults } from '@rainlanguage/orderbook/js_api';
+	import { createInfiniteQuery } from '@tanstack/svelte-query';
+	import type { SgVaultWithSubgraphName } from '@rainlanguage/orderbook/js_api';
+	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from '$lib/network';
+	import { signerAddress } from 'svelte-wagmi';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
 
-    let hideEmptyVaults: boolean | undefined;
+	let hideEmptyVaults: boolean | undefined;
 	let showMyVaults: boolean | undefined;
 
-    $: vaultsQuery = createInfiniteQuery({
+	$: vaultsQuery = createInfiniteQuery({
 		queryKey: ['vaults', hideEmptyVaults, showMyVaults],
 		queryFn: async ({ pageParam }) => {
 			const allVaults: SgVaultWithSubgraphName[] = await getVaults(
@@ -39,7 +38,6 @@
 		},
 		enabled: true
 	});
-
 </script>
 
 <div>
@@ -60,17 +58,17 @@
 
 	<!-- Orders Content -->
 	<div class="space-y-8 p-6">
-        <div class="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
-            <label class="flex items-center gap-2 text-white">
-                <input type="checkbox" bind:checked={showMyVaults} class="accent-yellow-500" />
-                <span class="text-sm sm:text-base">Show my vaults</span>
-            </label>
-            <label class="flex items-center gap-2 text-white">
-                <input type="checkbox" bind:checked={hideEmptyVaults} class="accent-yellow-500" />
-                <span class="text-sm sm:text-base">Hide Empty Vaults</span>
-            </label>
-        </div>
-        <VaultListTable query={vaultsQuery} />
+		<div class="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
+			<label class="flex items-center gap-2 text-white">
+				<input type="checkbox" bind:checked={showMyVaults} class="accent-yellow-500" />
+				<span class="text-sm sm:text-base">Show my vaults</span>
+			</label>
+			<label class="flex items-center gap-2 text-white">
+				<input type="checkbox" bind:checked={hideEmptyVaults} class="accent-yellow-500" />
+				<span class="text-sm sm:text-base">Hide Empty Vaults</span>
+			</label>
+		</div>
+		<VaultListTable query={vaultsQuery} />
 	</div>
 
 	<!-- Footer -->

@@ -7,7 +7,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { signerAddress } from 'svelte-wagmi';
 	import { getSfts } from '$lib/query';
-	import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from '$lib/network';
+	import { STOXs } from '$lib/network';
 
 	let selectedStockSymbol = STOXs[0].symbol;
 	let selectedBrokerage = 'Interactive Brokers';
@@ -48,8 +48,6 @@ This is a mint request.
 	const GRADIENT_HOVER_CLASSES =
 		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
-	const INPUT_CLASSES =
-		'w-full bg-gray-700/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-500/50 focus:outline-none transition-colors';
 </script>
 
 <!-- Main Content -->
@@ -191,7 +189,8 @@ This is a mint request.
 										<Select
 											options={STOXs.map((s) => s.symbol)}
 											bind:selected={selectedStockSymbol}
-											getOptionLabel={(option) => `${option} - ${STOXs.find((s) => s.symbol === option)?.name}`}
+											getOptionLabel={(option) =>
+												`${option} - ${STOXs.find((s) => s.symbol === option)?.name}`}
 										/>
 									</div>
 									<div class="flex flex-col gap-2">
