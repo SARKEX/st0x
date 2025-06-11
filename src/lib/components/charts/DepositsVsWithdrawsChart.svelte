@@ -5,14 +5,22 @@
 		LineType,
 		type DeepPartial,
 		type IChartApi,
-		type PriceFormat
+		type PriceFormat,
+		type ColorType
 	} from 'lightweight-charts';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import moment from 'moment';
-	import type { Activity } from '$lib/types/ActivityTypes';
+
+	// Define Activity type
+	interface Activity {
+		type: 'deposit' | 'withdraw';
+		timestamp: number;
+		date: string;
+		alt: string;
+	}
 
 	let chartContainer: HTMLElement;
-	export let vaults;
+	export let vaults: OffchainAssetReceiptVault[];
 	let howManyDays = 30;
 
 	interface Withdraw {
@@ -35,22 +43,22 @@
 		return moment(parseInt(timestamp) * 1000).fromNow();
 	}
 
-	let depositEvents = [];
-	let withdrawEvents = [];
+	let depositEvents: Activity[] = [];
+	let withdrawEvents: Activity[] = [];
 
-	function aggregateEvents(vaults: OffchainAssetReceiptVault[]): unknown[] {
-		let events: unknown[] = [];
+	function aggregateEvents(vaults: OffchainAssetReceiptVault[]): Activity[] {
+		let events: Activity[] = [];
 
 		vaults.forEach((vault) => {
 			withdrawEvents = vault.withdraws.map((withdraw: Withdraw) => ({
-				type: 'withdraw',
+				type: 'withdraw' as const,
 				timestamp: +withdraw.timestamp,
 				date: formatDate(withdraw.timestamp),
 				alt: 'Withdraw image alt here'
 			}));
 
 			depositEvents = vault.deposits.map((deposit: Deposit) => ({
-				type: 'deposit',
+				type: 'deposit' as const,
 				timestamp: +deposit.timestamp,
 				date: formatDate(deposit.timestamp),
 				alt: 'Deposit image alt here'
@@ -59,31 +67,33 @@
 			events = events.concat(withdrawEvents, depositEvents);
 		});
 
-		return events.sort((a, b) => b.timestamp - a.timestamp);
+		return events.sort((a: Activity, b: Activity) => b.timestamp - a.timestamp);
 	}
 
-	function getLastNDaysActivities(activities: Activity[], n: number) {
+	function getLastNDaysActivities(activities: Activity[], n: number): Activity[] {
 		const today = new Date();
-		const nDaysAgo = new Date(today.getTime() - n * 24 * 60 * 60 * 1000); // Calculate date n days ago
+		const nDaysAgo = new Date(today.getTime() - n * 24 * 60 * 60 * 1000);
 
-		// Filter activities that occurred in the last n days
-		const lastNDaysActivities = activities.filter((activity) => {
-			const timestamp = activity.timestamp * 1000; // Convert timestamp to milliseconds
+		return activities.filter((activity) => {
+			const timestamp = activity.timestamp * 1000;
 			const activityDate = new Date(timestamp);
-			return activityDate >= nDaysAgo; // Check if the activity date is within the last n days
+			return activityDate >= nDaysAgo;
 		});
-
-		return lastNDaysActivities;
 	}
 
 	let activities = aggregateEvents(vaults);
 	let lastNDaysActivities = getLastNDaysActivities(activities, howManyDays);
 
-	function splitActivitiesByDate(activities, howManyDays: number) {
+	interface DayObject {
+		date: string;
+		events: Activity[];
+	}
+
+	function splitActivitiesByDate(activities: Activity[], howManyDays: number): DayObject[] {
 		const today = new Date();
 		const twentyOneDaysAgo = new Date(today.getTime() - howManyDays * 24 * 60 * 60 * 1000);
 
-		const activitiesArray = [];
+		const activitiesArray: DayObject[] = [];
 
 		for (let i = 0; i < howManyDays; i++) {
 			const currentDate = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
@@ -93,7 +103,7 @@
 				.toString()
 				.padStart(2, '0')}/${currentDate.getFullYear()}`;
 
-			const dayObject = {
+			const dayObject: DayObject = {
 				date: formattedDate,
 				events: []
 			};
@@ -101,22 +111,17 @@
 			activitiesArray.push(dayObject);
 		}
 
-		// Fill in activities for each day
 		activities.forEach((activity) => {
-			const timestamp = activity.timestamp * 1000; // Convert timestamp to milliseconds
+			const timestamp = activity.timestamp * 1000;
 			const activityDate = new Date(timestamp);
 
-			// Check if the activity date is within the last 21 days
 			if (activityDate >= twentyOneDaysAgo) {
-				// Format the activity date as "DD/MM/YYYY"
 				const formattedDate = `${activityDate.getDate().toString().padStart(2, '0')}/${(
 					activityDate.getMonth() + 1
 				)
 					.toString()
 					.padStart(2, '0')}/${activityDate.getFullYear()}`;
-				// Find the corresponding day object in the activities array
 				const dayObject = activitiesArray.find((day) => day.date === formattedDate);
-				// Push the activity to the events array of the corresponding day object
 				dayObject?.events?.push(activity);
 			}
 		});
@@ -136,12 +141,8 @@
 	$: if (howManyDays) {
 		lastNDaysActivities = getLastNDaysActivities(activities, howManyDays);
 		activitiesByDate = splitActivitiesByDate(lastNDaysActivities, howManyDays);
-		activitiesByDate.forEach((key) => {
-			datesArray.push(key.date);
-		});
-		activitiesByDate.forEach((key) => {
-			eventCountsArray.push(key.events.length);
-		});
+		datesArray = activitiesByDate.map(key => key.date);
+		eventCountsArray = activitiesByDate.map(key => key.events.length);
 	}
 
 	export let datesArray: string[] = [];
@@ -176,7 +177,7 @@
 			height: 300,
 			layout: {
 				textColor: '#fff',
-				background: { type: 'solid', color: '#181A20' }
+				background: { type: 'solid' as ColorType, color: '#181A20' }
 			},
 			grid: {
 				vertLines: {

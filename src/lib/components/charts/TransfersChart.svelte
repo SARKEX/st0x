@@ -155,7 +155,7 @@
 			height: window.innerWidth < 640 ? 250 : 300,
 			layout: {
 				textColor: '#fff',
-				background: { type: 'solid', color: '#181A20' },
+				background: { color: '#181A20' },
 				fontSize: window.innerWidth < 640 ? 10 : 12
 			},
 			grid: {

@@ -298,7 +298,7 @@
 
 				<div class="grid grid-cols-2 gap-2 text-center sm:gap-4">
 					<div>
-						<div class="text-lg font-bold sm:text-xl">{totalTransfers}</div>
+						<div class="text-lg font-bold sm:text-xl">{allTransfers.length}</div>
 						<div class="text-[10px] text-gray-400 sm:text-xs">Total Transfers</div>
 					</div>
 					<div>
