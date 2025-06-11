@@ -10,17 +10,14 @@ import { wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
+	getMarketMakingDeploymentArgs,
+	getFolioDeploymentArgs,
+	type FolioDeploymentArgs,
 	type DcaDeploymentArgs,
-	type LimitOrderDeploymentArgs
+	type LimitOrderDeploymentArgs,
+	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
 import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from './network';
-// import {
-// 	getMarketMakingDeploymentArgs,
-// 	getDcaDeploymentArgs,
-// 	type DcaDeploymentArgs,
-// 	type MarketMakingDeploymentArgs
-// } from './getDeploymentArgs';
-// import { TARGET_NETWORK_SUBGRAPH_URL } from './network';
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
 
@@ -133,13 +130,13 @@ const transactionStore = () => {
 		}, 2000);
 	};
 
-	// const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
-	// 	const config = get(wagmiConfig);
-	// 	if (!config) throw new Error('Wagmi config not found');
-	// 	awaitWalletConfirmation(`Preparing strategy...`);
-	// 	const deploymentArgs = await getMarketMakingDeploymentArgs(args);
-	// 	await handleStrategyDeployment(deploymentArgs);
-	// };
+	const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		awaitWalletConfirmation(`Preparing strategy...`);
+		const deploymentArgs = await getMarketMakingDeploymentArgs(args);
+		await handleStrategyDeployment(deploymentArgs);
+	};
 
 	const handleDcaDeploy = async (args: DcaDeploymentArgs) => {
 		const config = get(wagmiConfig);
@@ -157,6 +154,13 @@ const transactionStore = () => {
 		await handleStrategyDeployment(deploymentArgs);
 	};
 
+	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		awaitWalletConfirmation(`Preparing strategy...`);
+		const deploymentArgs = await getFolioDeploymentArgs(args);
+		await handleStrategyDeployment(deploymentArgs);
+	};
 	return {
 		subscribe,
 		reset,
@@ -166,8 +170,9 @@ const transactionStore = () => {
 		transactionSuccess,
 		transactionError,
 		handleDcaDeploy,
-		handleLimitDeploy
-		// handleDsfDeploy,
+		handleLimitDeploy,
+		handleDsfDeploy,
+		handleFolioDeploy
 	};
 };
 

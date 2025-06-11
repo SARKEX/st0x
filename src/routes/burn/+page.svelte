@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Input from '$lib/components/Input.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import { signerAddress } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
-	import { ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from '$lib/network';
+	import { STOXs } from '$lib/network';
 
 	let selectedStockSymbol = STOXs[0].symbol;
 	let selectedName = '';
@@ -248,7 +247,7 @@ Email Address: ${selectedEmailAddress}
 									<Select
 										options={STOXs.map((s) => s.symbol)}
 										bind:selected={selectedStockSymbol}
-										getOptionLabel={(option) => option}
+										getOptionLabel={(option) => `${option} (${STOXs.find((s) => s.symbol === option)?.name})`}
 									/>
 								</div>
 								<div class="flex flex-col gap-2">
