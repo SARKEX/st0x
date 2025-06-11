@@ -12,8 +12,8 @@ export const USDC_TOKEN = new Token({
 export const ARBITRUM_SFT_SUBGRAPH_URL =
 	'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn';
 export const ARBITRUM_ORDERBOOK_SUBGRAPH_URL =
-	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2024-12-13-7435/gn';
-export const TARGET_NETWORK = 'arbitrum';
+	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-06-04-f5a5/gn';
+export const TARGET_NETWORK = 'arbitrum2';
 export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io/';
 
 export const STOXs: Token[] = [
