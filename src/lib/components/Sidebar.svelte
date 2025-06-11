@@ -15,7 +15,8 @@
 		{ name: 'Burn', href: '/burn' },
 		{ name: 'Token List', href: '/tokens' },
 		{ name: 'New Order', href: '/neworder' },
-		{ name: 'Order List', href: '/orderlist' }
+		{ name: 'Order List', href: '/orderlist' },
+		{ name: 'Vault List', href: '/vaultlist' }
 	];
 
 	$: activePath = $page.url.pathname;
