@@ -46,7 +46,7 @@
 		<div class="flex items-center justify-between">
 			<div class="flex items-center gap-4">
 				<div>
-					<h1 class="text-xl font-bold">Orders List</h1>
+					<h1 class="text-xl font-bold">Vault List</h1>
 				</div>
 			</div>
 
