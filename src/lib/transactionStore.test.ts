@@ -121,7 +121,7 @@ describe('transactionStore tests', () => {
 				calldata: '0xapproval',
 				token: '0xtoken6',
 				symbol: 'TEST6'
-			},
+			}
 		],
 		chainId: 8453
 	};
@@ -508,7 +508,10 @@ describe('transactionStore tests', () => {
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, '0xtxhash');
+		expect(getTransactionAddOrders).toHaveBeenCalledWith(
+			ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
+			'0xtxhash'
+		);
 	});
 
 	it('should call transactionSuccess with the correct arguments handleDcaDeploy', async () => {
@@ -532,7 +535,10 @@ describe('transactionStore tests', () => {
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, '0xtxhash');
+		expect(getTransactionAddOrders).toHaveBeenCalledWith(
+			ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
+			'0xtxhash'
+		);
 	});
 
 	it('should call transactionSuccess with the correct arguments handleLimitOrderDeploy', async () => {
@@ -550,7 +556,10 @@ describe('transactionStore tests', () => {
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, '0xtxhash');
+		expect(getTransactionAddOrders).toHaveBeenCalledWith(
+			ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
+			'0xtxhash'
+		);
 	});
 
 	it('should call transactionSuccess with the correct arguments handleFolioDeploy', async () => {
@@ -592,6 +601,9 @@ describe('transactionStore tests', () => {
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, '0xtxhash');
+		expect(getTransactionAddOrders).toHaveBeenCalledWith(
+			ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
+			'0xtxhash'
+		);
 	});
 });

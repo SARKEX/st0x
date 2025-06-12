@@ -263,13 +263,34 @@ describe('getDeploymentArgs', () => {
 		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token6', STOXs[6].address);
 		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token7', STOXs[7].address);
 
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith('token1', formatUnits(1000000000000000000n, STOXs[1].decimals));
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith('token2', formatUnits(2000000000000000000n, STOXs[2].decimals));
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith('token3', formatUnits(3000000000000000000n, STOXs[3].decimals));
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith('token4', formatUnits(4000000000000000000n, STOXs[4].decimals));
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith('token5', formatUnits(5000000000000000000n, STOXs[5].decimals));
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith('token6', formatUnits(6000000000000000000n, STOXs[6].decimals));
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith('token7', formatUnits(7000000000000000000n, STOXs[7].decimals));
+		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+			'token1',
+			formatUnits(1000000000000000000n, STOXs[1].decimals)
+		);
+		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+			'token2',
+			formatUnits(2000000000000000000n, STOXs[2].decimals)
+		);
+		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+			'token3',
+			formatUnits(3000000000000000000n, STOXs[3].decimals)
+		);
+		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+			'token4',
+			formatUnits(4000000000000000000n, STOXs[4].decimals)
+		);
+		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+			'token5',
+			formatUnits(5000000000000000000n, STOXs[5].decimals)
+		);
+		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+			'token6',
+			formatUnits(6000000000000000000n, STOXs[6].decimals)
+		);
+		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+			'token7',
+			formatUnits(7000000000000000000n, STOXs[7].decimals)
+		);
 	});
 
 	it('should return getMarketMakingDeploymentArgs deployment args', async () => {
@@ -426,21 +447,23 @@ describe('getDeploymentArgs', () => {
 	it('should handle missing signer address', async () => {
 		vi.mocked(get).mockReturnValueOnce(undefined);
 
-		await expect(getMarketMakingDeploymentArgs({
-			token1: USDC_TOKEN,
-			token2: STOXs[0],
-			amountIsFastExit: true,
-			notAmountIsFastExit: false,
-			initialIo: '0.1',
-			maxAmount: 1000000000000000000n,
-			minAmount: 1000000000000000000n,
-			depositAmountToken1: 1000000000000000000n,
-			depositAmountToken2: 1000000000000000000n,
-			inputVaultIdToken1: undefined,
-			inputVaultIdToken2: undefined,
-			outputVaultIdToken1: undefined,
-			outputVaultIdToken2: undefined
-		})).rejects.toThrow('Signer address not found');
+		await expect(
+			getMarketMakingDeploymentArgs({
+				token1: USDC_TOKEN,
+				token2: STOXs[0],
+				amountIsFastExit: true,
+				notAmountIsFastExit: false,
+				initialIo: '0.1',
+				maxAmount: 1000000000000000000n,
+				minAmount: 1000000000000000000n,
+				depositAmountToken1: 1000000000000000000n,
+				depositAmountToken2: 1000000000000000000n,
+				inputVaultIdToken1: undefined,
+				inputVaultIdToken2: undefined,
+				outputVaultIdToken1: undefined,
+				outputVaultIdToken2: undefined
+			})
+		).rejects.toThrow('Signer address not found');
 	});
 
 	it('should handle optional parameters in getFolioDeploymentArgs', async () => {
