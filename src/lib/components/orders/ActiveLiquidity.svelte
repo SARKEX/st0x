@@ -26,15 +26,15 @@
 	let inputVaultId2: Hex | undefined;
 	let outputVaultId1: Hex | undefined;
 	let outputVaultId2: Hex | undefined;
-	let overrideDepositAmount1: bigint = 0n;
-	let overrideDepositAmount2: bigint = 0n;
-	let overrideMinTradeAmount: bigint = 0n;
-	let overrideMaxTradeAmount: bigint = 0n;
+	let depositAmount1: bigint = 0n;
+	let depositAmount2: bigint = 0n;
+	let minTradeAmount: bigint = 0n;
+	let maxTradeAmount: bigint = 0n;
 	let initialIo: string = '0';
 
 	// errors
-	let overrideMinTradeAmountError: boolean = false;
-	let overrideMaxTradeAmountError: boolean = false;
+	let minTradeAmountError: boolean = false;
+	let maxTradeAmountError: boolean = false;
 	let token1DepositAmountError: boolean = false;
 	let token2DepositAmountError: boolean = false;
 	let inputVaultId1Error: boolean = false;
@@ -50,14 +50,14 @@
 		!selectedToken1 ||
 		!selectedToken2 ||
 		!initialIo ||
-		!overrideMinTradeAmount ||
-		!overrideMaxTradeAmount ||
+		!minTradeAmount ||
+		!maxTradeAmount ||
 		inputVaultId1Error ||
 		inputVaultId2Error ||
 		outputVaultId1Error ||
 		outputVaultId2Error ||
-		overrideMinTradeAmountError ||
-		overrideMaxTradeAmountError ||
+		minTradeAmountError ||
+		maxTradeAmountError ||
 		token1DepositAmountError ||
 		token2DepositAmountError ||
 		initialIoError ||
@@ -71,10 +71,10 @@
 				amountIsFastExit: isToken1FastExit,
 				notAmountIsFastExit: isToken2FastExit,
 				initialIo: initialIo,
-				maxAmount: overrideMaxTradeAmount,
-				minAmount: overrideMinTradeAmount,
-				depositAmountToken1: overrideDepositAmount1,
-				depositAmountToken2: overrideDepositAmount2,
+				maxAmount: maxTradeAmount,
+				minAmount: minTradeAmount,
+				depositAmountToken1: depositAmount1,
+				depositAmountToken2: depositAmount2,
 				inputVaultIdToken1: inputVaultId1,
 				inputVaultIdToken2: inputVaultId2,
 				outputVaultIdToken1: outputVaultId1,
@@ -150,7 +150,7 @@
 						>
 						<TradeAmountInput
 							amountToken={selectedToken1}
-							bind:amount={overrideDepositAmount1}
+							bind:amount={depositAmount1}
 							validate={validateOverrideDepositAmount}
 							bind:isError={token1DepositAmountError}
 						/>
@@ -161,7 +161,7 @@
 						>
 						<TradeAmountInput
 							amountToken={selectedToken2}
-							bind:amount={overrideDepositAmount2}
+							bind:amount={depositAmount2}
 							validate={validateOverrideDepositAmount}
 							bind:isError={token2DepositAmountError}
 						/>
@@ -174,18 +174,18 @@
 						<span class="text-sm font-medium text-gray-300">Minimum Trade Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken1}
-							bind:amount={overrideMinTradeAmount}
+							bind:amount={minTradeAmount}
 							validate={validateSelectedAmount}
-							bind:isError={overrideMinTradeAmountError}
+							bind:isError={minTradeAmountError}
 						/>
 					</div>
 					<div class="relative">
 						<span class="text-sm font-medium text-gray-300">Maximum Trade Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken1}
-							bind:amount={overrideMaxTradeAmount}
+							bind:amount={maxTradeAmount}
 							validate={validateSelectedAmount}
-							bind:isError={overrideMaxTradeAmountError}
+							bind:isError={maxTradeAmountError}
 						/>
 					</div>
 				</div>
@@ -287,25 +287,25 @@
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">{selectedToken1.symbol} Deposit Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(overrideDepositAmount1 ?? 0n, selectedToken1.decimals)}</span
+						>{formatUnits(depositAmount1 ?? 0n, selectedToken1.decimals)}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">{selectedToken2.symbol} Deposit Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(overrideDepositAmount2 ?? 0n, selectedToken2.decimals)}</span
+						>{formatUnits(depositAmount2 ?? 0n, selectedToken2.decimals)}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Minimum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(overrideMinTradeAmount ?? 0n, selectedToken1.decimals)}</span
+						>{formatUnits(minTradeAmount ?? 0n, selectedToken1.decimals)}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Maximum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(overrideMaxTradeAmount ?? 0n, selectedToken1.decimals)}</span
+						>{formatUnits(maxTradeAmount ?? 0n, selectedToken1.decimals)}</span
 					>
 				</div>
 			</div>
