@@ -160,7 +160,7 @@
 					<Select
 						options={TOKENS}
 						bind:selected={selectedToken1}
-						getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
@@ -168,7 +168,7 @@
 					<Select
 						options={TOKENS}
 						bind:selected={selectedToken2}
-						getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
@@ -176,7 +176,7 @@
 					<Select
 						options={TOKENS}
 						bind:selected={selectedToken3}
-						getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
@@ -184,7 +184,7 @@
 					<Select
 						options={TOKENS}
 						bind:selected={selectedToken4}
-						getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
@@ -192,7 +192,7 @@
 					<Select
 						options={TOKENS}
 						bind:selected={selectedToken5}
-						getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
@@ -200,7 +200,7 @@
 					<Select
 						options={TOKENS}
 						bind:selected={selectedToken6}
-						getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
@@ -208,7 +208,7 @@
 					<Select
 						options={TOKENS}
 						bind:selected={selectedToken7}
-						getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 			</div>

@@ -56,19 +56,19 @@
 	<div class="space-y-6 lg:col-span-2">
 		<div class="grid grid-cols-2 gap-4">
 			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Base Token</span>
+				<span class="mb-2 block text-sm font-medium text-gray-300">Buy Token</span>
 				<Select
 					options={TOKENS}
 					bind:selected={selectedInputToken}
-					getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+					getOptionLabel={(token) => `${token.symbol ?? ''}`}
 				/>
 			</div>
 			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Quote Token</span>
+				<span class="mb-2 block text-sm font-medium text-gray-300">Sell Token</span>
 				<Select
 					options={TOKENS}
 					bind:selected={selectedOutputToken}
-					getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+					getOptionLabel={(token) => `${token.symbol ?? ''}`}
 				/>
 			</div>
 			{#if isInputTokenSameAsOutputToken}

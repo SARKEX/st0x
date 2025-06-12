@@ -92,7 +92,7 @@
 				<Select
 					options={TOKENS}
 					bind:selected={selectedToken1}
-					getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+					getOptionLabel={(token) => `${token.symbol ?? ''}`}
 				/>
 			</div>
 			<div>
@@ -100,7 +100,7 @@
 				<Select
 					options={TOKENS}
 					bind:selected={selectedToken2}
-					getOptionLabel={(token) => `${token.symbol ?? ''} ${token.name ?? ''}`}
+					getOptionLabel={(token) => `${token.symbol ?? ''}`}
 				/>
 			</div>
 		</div>
