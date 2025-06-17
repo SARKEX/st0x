@@ -236,4 +236,4 @@
 	<div class="mt-1 flex justify-center sm:mt-2">
 		<span class="text-[10px] font-medium text-gray-400 sm:text-xs">Days</span>
 	</div>
-</div> 
+</div>

@@ -9,6 +9,7 @@
 	import { SFT_EXPLORER_URL, USDC_TOKEN } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import TransfersChart from '$lib/components/charts/TransfersChart.svelte';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	let viewMode = 'grid';
 	$: totalTokens = $query.data ? $query.data.length : 0;
@@ -25,9 +26,9 @@
 	const query = createQuery({
 		queryKey: ['getSftsStocks'],
 		queryFn: async () => {
-			const sfts = $sfts;
+			const sftVaults: OffchainAssetReceiptVault[] = $sfts;
 			const tokens = [];
-			for (let sft of sfts) {
+			for (let sft of sftVaults) {
 				const sftPrice = await getPrice(
 					new Token({
 						chainId: arbitrum.id,
@@ -206,13 +207,12 @@
 												<a
 													href={`https://stox.h20.market/token/${token.id}`}
 													target="_blank"
-													class="text-sm text-blue-400 hover:text-blue-300 underline"
+													class="text-sm text-blue-400 underline hover:text-blue-300"
 												>
 													{token.id.slice(0, 6)}...{token.id.slice(-4)}
 												</a>
 											</p>
 										</div>
-										
 									</div>
 
 									<div class="text-right">
@@ -314,7 +314,7 @@
 											<a
 												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
 												target="_blank"
-												class="text-sm text-blue-400 hover:text-blue-300 underline"
+												class="text-sm text-blue-400 underline hover:text-blue-300"
 											>
 												{token.id.slice(0, 6)}...{token.id.slice(-4)}
 											</a>

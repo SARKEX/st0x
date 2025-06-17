@@ -19,10 +19,10 @@
 		balance: string;
 		vaultIds: string[];
 	}[] = [];
-	
+
 	$: vaultsQuery = createInfiniteQuery({
 		queryKey: ['vaults', hideEmptyVaults, showMyVaults, $signerAddress],
-		queryFn: async ({ pageParam }) => {	
+		queryFn: async ({ pageParam }) => {
 			const allVaults: SgVaultWithSubgraphName[] = await getVaults(
 				[
 					{
@@ -50,20 +50,23 @@
 
 	$: if ($vaultsQuery.data?.pages[0]?.vaults) {
 		// Create a map to aggregate balances by token address
-		const tokenBalances = new Map<string, {
-			token: SgErc20;
-			totalBalance: bigint;
-			vaultIds: string[];
-		}>();
+		const tokenBalances = new Map<
+			string,
+			{
+				token: SgErc20;
+				totalBalance: bigint;
+				vaultIds: string[];
+			}
+		>();
 
-		for(const {vault, subgraphName} of $vaultsQuery.data.pages[0].vaults) {
+		for (const { vault } of $vaultsQuery.data.pages[0].vaults) {
 			if (
 				vault.owner.toLowerCase() === $signerAddress?.toLowerCase() &&
 				BigInt(vault.balance) > 0n
 			) {
 				const tokenAddress = vault.token.id;
 				const existing = tokenBalances.get(tokenAddress);
-				
+
 				if (existing) {
 					existing.totalBalance += BigInt(vault.balance);
 					existing.vaultIds.push(vault.id);
@@ -78,11 +81,13 @@
 		}
 
 		// Convert map to array and format balances
-		myTokenBalance = Array.from(tokenBalances.values()).map(({token, totalBalance, vaultIds}) => ({
-			token,
-			balance: formatUnits(totalBalance, Number(token.decimals ?? 18)),
-			vaultIds
-		}));
+		myTokenBalance = Array.from(tokenBalances.values()).map(
+			({ token, totalBalance, vaultIds }) => ({
+				token,
+				balance: formatUnits(totalBalance, Number(token.decimals ?? 18)),
+				vaultIds
+			})
+		);
 	}
 </script>
 
@@ -106,21 +111,31 @@
 	<div class="space-y-8 p-6">
 		{#if myTokenBalance.length > 0}
 			<div class="mb-8">
-				<h2 class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-2xl font-bold text-transparent">
+				<h2
+					class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-2xl font-bold text-transparent"
+				>
 					My Portfolio
 				</h2>
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					{#each myTokenBalance as token}
-						<div class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-blue-500/30 hover:bg-gray-700/40">
-							<div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100" />
-							
+						<div
+							class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-blue-500/30 hover:bg-gray-700/40"
+						>
+							<div
+								class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
+							/>
+
 							<!-- Token Info -->
 							<div class="flex items-start gap-4">
-								<div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-700/20 text-xl font-bold text-white ring-1 ring-white/10 backdrop-blur-sm">
+								<div
+									class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-700/20 text-xl font-bold text-white ring-1 ring-white/10 backdrop-blur-sm"
+								>
 									{token.token.symbol?.slice(0, 2) ?? '??'}
 								</div>
 								<div class="flex-1">
-									<h3 class="text-lg font-semibold text-white">{token.token.name ?? 'Unknown Token'}</h3>
+									<h3 class="text-lg font-semibold text-white">
+										{token.token.name ?? 'Unknown Token'}
+									</h3>
 									<p class="text-sm text-gray-400">{token.token.symbol ?? '???'}</p>
 								</div>
 							</div>

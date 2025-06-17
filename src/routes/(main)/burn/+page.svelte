@@ -14,13 +14,15 @@
 	const BURN_ISSUERS = [
 		{
 			issuerName: 'Charles Schwab',
-			issuerInfo: 'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-			issuerLink: 'https://st0x.io/',
+			issuerInfo:
+				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+			issuerLink: 'https://st0x.io/'
 		},
 		{
 			issuerName: 'Interactive Brokers',
-			issuerInfo: 'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-			issuerLink: 'https://st0x.io/',
+			issuerInfo:
+				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+			issuerLink: 'https://st0x.io/'
 		}
 	];
 
@@ -85,20 +87,26 @@
 				<div class="{CARD_BASE_CLASSES} p-6">
 					<div class="space-y-6">
 						{#each BURN_ISSUERS as issuer}
-							<div class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-orange-500/30 hover:bg-gray-700/40">
-								<div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100" />
+							<div
+								class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-orange-500/30 hover:bg-gray-700/40"
+							>
+								<div
+									class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
+								/>
 								<div class="flex items-start gap-6">
-									<div class="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-2xl font-bold text-white ring-1 ring-white/10 backdrop-blur-sm">
+									<div
+										class="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-2xl font-bold text-white ring-1 ring-white/10 backdrop-blur-sm"
+									>
 										{issuer.issuerName.slice(0, 2).toUpperCase() ?? '??'}
 									</div>
 									<div class="flex-1 space-y-2">
 										<div class="flex items-center justify-between">
 											<h3 class="text-xl font-semibold text-white">{issuer.issuerName}</h3>
-											<a 
+											<a
 												href={issuer.issuerLink}
 												target="_blank"
 												rel="noopener noreferrer"
-												class="text-sm text-orange-500 hover:text-orange-400 transition-colors"
+												class="text-sm text-orange-500 transition-colors hover:text-orange-400"
 											>
 												<div class="flex items-center justify-center gap-2">
 													Link to Issuer
@@ -125,7 +133,9 @@
 								<div
 									class="group relative mb-6 flex flex-col gap-4 rounded-lg border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-orange-500/30 hover:bg-gray-700/40"
 								>
-									<div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100" />
+									<div
+										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
+									/>
 									<!-- Status Badge -->
 									<div class="absolute right-4 top-4 flex items-center gap-2">
 										{#if withdraw.id}
@@ -133,11 +143,15 @@
 												class="rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-orange-300"
 												>Completed</span
 											>
-											<button class="info-button inline-block text-orange-500 hover:text-orange-400 transition-colors" aria-label="Show strategy information" on:click={() => {
-												infoModalOpen.set(true);
-												selectedSft = sft;
-												selectedDeposit = withdraw;
-											}}>
+											<button
+												class="info-button inline-block text-orange-500 transition-colors hover:text-orange-400"
+												aria-label="Show strategy information"
+												on:click={() => {
+													infoModalOpen.set(true);
+													selectedSft = sft;
+													selectedDeposit = withdraw;
+												}}
+											>
 												<InfoCircleSolid />
 											</button>
 										{:else}
@@ -195,7 +209,7 @@
 </div>
 
 <BurnReceiptInfoModal
-	bind:showModal={$infoModalOpen} 
+	bind:showModal={$infoModalOpen}
 	on:close={() => infoModalOpen.set(false)}
 	sft={selectedSft}
 	withdraw={selectedDeposit}
