@@ -4,9 +4,12 @@
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
 	import { arbitrum } from '@wagmi/core/chains';
+	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { onMount } from 'svelte';
+	import { getSfts } from '$lib/query';
+	import { sfts } from '$lib/stores';
 
 	const initWallet = async () => {
 		const erckit = defaultConfig({
@@ -24,6 +27,15 @@
 		sidebarExpanded = !sidebarExpanded;
 	}
 
+	$: vaultQuery = createQuery({
+		queryKey: ['getSfts'],
+		queryFn: () => {
+			return getSfts();
+		}
+	});
+
+	$: sfts.set($vaultQuery.data);
+
 	onMount(() => {
 		initWallet();
 		return () => {
@@ -32,7 +44,25 @@
 	});
 </script>
 
-{#if $wagmiConfig}
+{#if $vaultQuery.isLoading}
+	<div class="flex h-screen items-center justify-center bg-gray-900">
+		<div class="relative">
+			<div
+				class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"
+			></div>
+			<div
+				class="relative h-32 w-32 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"
+			></div>
+			<div class="absolute inset-0 flex items-center justify-center">
+				<div class="h-24 w-24 rounded-full bg-gray-900"></div>
+			</div>
+		</div>
+	</div>
+{:else if $vaultQuery.isError}
+	<div class="flex h-screen items-center justify-center">
+		<div class="text-red-500">Error: {$vaultQuery.error.message}</div>
+	</div>
+{:else if $wagmiConfig}
 	<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
 		<!-- Background Pattern -->
 		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">

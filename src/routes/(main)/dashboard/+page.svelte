@@ -3,8 +3,6 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
-	import DepositsVsWithdrawsChart from '$lib/components/charts/DepositsVsWithdrawsChart.svelte';
-	import TransfersChart from '$lib/components/charts/TransfersChart.svelte';
 	import { getSfts } from '$lib/query';
 	import type {
 		Deposit,
@@ -283,69 +281,6 @@
 					{/each}
 				</div>
 			</div>
-
-			<div class={SECTION_CLASSES}>
-				<h3 class="mb-2 text-base font-semibold sm:mb-4 sm:text-lg">Token Transfers</h3>
-				<p class="mb-4 text-xs text-gray-400 sm:mb-6 sm:text-sm">
-					Total value of daily token transfers over the last 30 days
-				</p>
-
-				<div class="mb-4 sm:mb-6" style="min-height: 250px sm:min-height: 350px;">
-					<TransfersChart vaults={st0xVaults} />
-				</div>
-
-				<div class="grid grid-cols-2 gap-2 text-center sm:gap-4">
-					<div>
-						<div class="text-lg font-bold sm:text-xl">{allTransfers.length}</div>
-						<div class="text-[10px] text-gray-400 sm:text-xs">Total Transfers</div>
-					</div>
-					<div>
-						<div class="text-lg font-bold sm:text-xl">
-							{allTransfers
-								.flat()
-								.reduce((sum, transfer) => sum + Number(transfer.value), Number(0))
-								.toLocaleString()}
-						</div>
-						<div class="text-[10px] text-gray-400 sm:text-xs">Total Transfers Value</div>
-					</div>
-				</div>
-			</div>
-
-			<div class={SECTION_CLASSES}>
-				<h3 class="mb-2 text-base font-semibold sm:mb-4 sm:text-lg">Deposits and Withdrawals</h3>
-				<p class="mb-4 text-xs text-gray-400 sm:mb-6 sm:text-sm">
-					Number of deposit and withdrawal events
-				</p>
-
-				<div class="h-100 mb-4 sm:mb-6">
-					<DepositsVsWithdrawsChart vaults={st0xVaults} />
-				</div>
-
-				<div class="grid grid-cols-2 gap-2 text-center sm:gap-4">
-					<div>
-						<div class="text-lg font-bold sm:text-xl">
-							{st0xVaults.reduce((total, sft) => total + sft.deposits.length, 0)}
-						</div>
-						<div class="text-[10px] text-gray-400 sm:text-xs">Deposits</div>
-					</div>
-					<div>
-						<div class="text-lg font-bold sm:text-xl">
-							{st0xVaults.reduce((total, sft) => total + sft.withdraws.length, 0)}
-						</div>
-						<div class="text-[10px] text-gray-400 sm:text-xs">Withdrawals</div>
-					</div>
-				</div>
-			</div>
-
-			<!-- Charts Grid -->
-			<!-- <div class="grid grid-cols-2 gap-6"> -->
-
-			<!-- Token Transfers -->
-
-			<!-- Deposits and Withdrawals -->
-
-			<!-- </div> -->
-
 			<!-- Latest Proofs -->
 			<div
 				class="rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-yellow-900/20 p-6 backdrop-blur-sm"
@@ -387,7 +322,6 @@
 					{/each}
 				</div>
 			</div>
-
 			<!-- Documentation -->
 			<div class={SECTION_CLASSES}>
 				<div class="mb-6 flex items-center justify-between">

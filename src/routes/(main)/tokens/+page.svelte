@@ -3,11 +3,13 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { getPrice } from '$lib/getPrice';
 	import { arbitrum } from '@wagmi/core/chains';
-	import { getSfts } from '$lib/query';
+	import { sfts } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Token } from 'sushi/currency';
-	import { USDC_TOKEN } from '$lib/network';
+	import { SFT_EXPLORER_URL, USDC_TOKEN } from '$lib/network';
 	import { formatUnits } from 'viem';
+	import TransfersChart from '$lib/components/charts/TransfersChart.svelte';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	let viewMode = 'grid';
 	$: totalTokens = $query.data ? $query.data.length : 0;
@@ -24,9 +26,9 @@
 	const query = createQuery({
 		queryKey: ['getSftsStocks'],
 		queryFn: async () => {
-			const sfts = await getSfts();
+			const sftVaults: OffchainAssetReceiptVault[] = $sfts;
 			const tokens = [];
-			for (let sft of sfts) {
+			for (let sft of sftVaults) {
 				const sftPrice = await getPrice(
 					new Token({
 						chainId: arbitrum.id,
@@ -43,7 +45,7 @@
 					symbol: sft.symbol,
 					price: sftPrice,
 					totalHolders: sft.tokenHolders.length.toString(),
-					totalSupply: formatUnits(sft.totalShares, 18),
+					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
 					marketCap: formatUnits(
 						BigInt(Math.floor(Number(sftPrice))) * BigInt(sft.totalShares),
 						18
@@ -138,6 +140,10 @@
 				</div>
 			</div>
 
+			<div class="mb-4 sm:mb-6" style="min-height: 250px sm:min-height: 350px;">
+				<TransfersChart vaults={$sfts} />
+			</div>
+
 			<!-- Token List Section -->
 			<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
 				<div class="mb-6 flex items-center justify-between">
@@ -194,7 +200,18 @@
 										</div>
 										<div>
 											<h3 class="text-lg font-semibold">{token.symbol}</h3>
-											<p class="text-sm text-gray-400">{token.name}</p>
+											<p class="text-sm text-gray-400">
+												{token.name}
+											</p>
+											<p class="text-sm text-gray-400">
+												<a
+													href={`https://stox.h20.market/token/${token.id}`}
+													target="_blank"
+													class="text-sm text-blue-400 underline hover:text-blue-300"
+												>
+													{token.id.slice(0, 6)}...{token.id.slice(-4)}
+												</a>
+											</p>
 										</div>
 									</div>
 
@@ -232,7 +249,7 @@
 									>
 										Active
 									</span>
-									<span>{new Date(token.createdAt * 1000).toLocaleDateString()}</span>
+									<span>{new Date(Number(token.createdAt) * 1000).toLocaleDateString()}</span>
 								</div>
 							</div>
 						{/each}
@@ -247,6 +264,11 @@
 										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
 									>
 										Token
+									</th>
+									<th
+										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
+									>
+										Address
 									</th>
 									<th
 										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
@@ -288,6 +310,15 @@
 												</div>
 											</div>
 										</td>
+										<td class="px-6 py-4">
+											<a
+												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
+												target="_blank"
+												class="text-sm text-blue-400 underline hover:text-blue-300"
+											>
+												{token.id.slice(0, 6)}...{token.id.slice(-4)}
+											</a>
+										</td>
 										<td class="px-6 py-4 font-medium text-white">{token.price}</td>
 										<td class="px-6 py-4 text-white">{token.marketCap}</td>
 										<td class="px-6 py-4 text-white">{token.totalSupply}</td>
@@ -301,7 +332,7 @@
 										</td>
 										<td class="px-6 py-4">
 											<a
-												href={`https://stox.h20.market/token/${token.id}`}
+												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
 												target="_blank"
 												class="text-sm text-blue-400 hover:text-blue-300"
 											>

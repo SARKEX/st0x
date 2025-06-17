@@ -13,7 +13,8 @@ export const ARBITRUM_SFT_SUBGRAPH_URL =
 export const ARBITRUM_ORDERBOOK_SUBGRAPH_URL =
 	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-06-04-f5a5/gn';
 export const TARGET_NETWORK = 'arbitrum2';
-export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io/';
+export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io';
+export const SFT_EXPLORER_URL = 'https://stox.h20.market';
 
 export const STOXs: Token[] = [
 	new Token({
