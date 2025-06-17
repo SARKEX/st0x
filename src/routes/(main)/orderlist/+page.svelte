@@ -10,10 +10,11 @@
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 
 	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
+	const ORDER_LIST_PAGE_SIZE = 1000;
 
 	let ordersActiveFilter: boolean | undefined = false;
 	let orderHashFilter: string | undefined = undefined;
-	let showMyOrders = false;
+	let showMyOrders = true;
 
 	$: ordersQuery = createInfiniteQuery({
 		queryKey: ['orders', ordersActiveFilter, orderHashFilter, showMyOrders],
@@ -30,7 +31,7 @@
 					active: ordersActiveFilter ? undefined : true,
 					orderHash: orderHashFilter === '' ? undefined : orderHashFilter
 				},
-				{ page: pageParam + 1, pageSize: 10 }
+				{ page: pageParam + 1, pageSize: ORDER_LIST_PAGE_SIZE }
 			);
 
 			// Filter orders that have any token from forexTokenList in either inputs or outputs
@@ -45,7 +46,7 @@
 
 			return {
 				orders: filteredOrders,
-				hasMore: allOrders.length === 10
+				hasMore: allOrders.length === ORDER_LIST_PAGE_SIZE
 			};
 		},
 		initialPageParam: 0,
