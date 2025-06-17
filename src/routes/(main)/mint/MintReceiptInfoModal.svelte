@@ -71,7 +71,7 @@
                         <div class="text-sm text-gray-400">Transaction ID</div>
                         <div class="text-white font-mono">
                             <a 
-                                href={`${TARGET_NETWORK_EXPLORER_URL}tx/${deposit?.transaction.id}`} 
+                                href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${deposit?.transaction.id}`} 
                                 target="_blank" rel="noopener noreferrer"
                                 class="text-blue-500 hover:text-blue-400 underline"
                             >
