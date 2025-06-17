@@ -9,8 +9,6 @@
 			}
 		}
 	});
-
-
 </script>
 
 <QueryClientProvider client={queryClient}>
