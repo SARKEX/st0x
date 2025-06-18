@@ -1,3 +1,4 @@
+import type { SgTrade } from '@rainlanguage/orderbook/js_api';
 import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from './network';
 import axios from 'axios';
 
@@ -225,18 +226,17 @@ export const getSfts = async (): Promise<any> => {
 	return json.data.offchainAssetReceiptVaults;
 };
 
+export const getTrades = async (timestampGt: number, timestampLt: number): Promise<SgTrade[]> => {
+	// Validate input parameters
+	if (typeof timestampGt !== 'number' || typeof timestampLt !== 'number') {
+		throw new Error('Invalid timestamp parameters: timestampGt and timestampLt must be numbers');
+	}
 
-export const getTrades = async (timestampGt: number, timestampLt: number): Promise<any> => {
-  // Validate input parameters
-  if (typeof timestampGt !== 'number' || typeof timestampLt !== 'number') {
-    throw new Error('Invalid timestamp parameters: timestampGt and timestampLt must be numbers');
-  }
-  
-  if (timestampGt >= timestampLt) {
-    throw new Error('Invalid timestamp range: timestampGt must be less than timestampLt');
-  }
-  
-  const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
+	if (timestampGt >= timestampLt) {
+		throw new Error('Invalid timestamp range: timestampGt must be less than timestampLt');
+	}
+
+	const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
   trades(
     skip: $skip
     first: $first
@@ -325,19 +325,21 @@ export const getTrades = async (timestampGt: number, timestampLt: number): Promi
   }
 }`;
 
-  try {
-    let trades = await fetchAllPaginatedData(
-      ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
-      tradesQuery,
-      { timestampGt: timestampGt, timestampLt: timestampLt },
-      'trades'
-    );
+	try {
+		const trades = await fetchAllPaginatedData(
+			ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
+			tradesQuery,
+			{ timestampGt: timestampGt, timestampLt: timestampLt },
+			'trades'
+		);
 
-    return trades;
-  } catch (error) {
-    throw new Error(`Failed to fetch trades: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
+		return trades;
+	} catch (error) {
+		throw new Error(
+			`Failed to fetch trades: ${error instanceof Error ? error.message : 'Unknown error'}`
+		);
+	}
+};
 
 export async function fetchAllPaginatedData(
 	endpoint: string,
@@ -348,37 +350,33 @@ export async function fetchAllPaginatedData(
 	first = 1000
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
-	try {
-		const allItems = [];
-		let skip = 0;
-		let hasMore = true;
-		while (hasMore) {
-			// Prepare variables with updated pagination parameters
-			const paginatedVariables = { ...variables, skip, first };
-			// Fetch a batch of items
-			const response = await axios.post(endpoint, {
-				query,
-				variables: paginatedVariables
-			});
-			
-			// Check for GraphQL errors
-			if (response.data.errors) {
-				throw new Error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
-			}
-			
-			// Extract the items from the response
-			const items = response.data.data[itemsKey] || [];
-			allItems.push(...items); // Append items to the result array
-			// Check if fewer items are returned than the `first` limit
-			if (items.length < first) {
-				// All items fetched; exit the loop
-				hasMore = false;
-			}
-			// Increment skip for the next batch
-			skip += first;
+	const allItems = [];
+	let skip = 0;
+	let hasMore = true;
+	while (hasMore) {
+		// Prepare variables with updated pagination parameters
+		const paginatedVariables = { ...variables, skip, first };
+		// Fetch a batch of items
+		const response = await axios.post(endpoint, {
+			query,
+			variables: paginatedVariables
+		});
+
+		// Check for GraphQL errors
+		if (response.data.errors) {
+			throw new Error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
 		}
-		return allItems;
-	} catch (error) {
-		throw error;
+
+		// Extract the items from the response
+		const items = response.data.data[itemsKey] || [];
+		allItems.push(...items); // Append items to the result array
+		// Check if fewer items are returned than the `first` limit
+		if (items.length < first) {
+			// All items fetched; exit the loop
+			hasMore = false;
+		}
+		// Increment skip for the next batch
+		skip += first;
 	}
+	return allItems;
 }

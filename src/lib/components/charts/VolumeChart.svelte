@@ -9,7 +9,7 @@
 		type ColorType
 	} from 'lightweight-charts';
 	import moment from 'moment';
-    import type { SgTrade, SgErc20 } from '@rainlanguage/orderbook/js_api';
+	import type { SgTrade, SgErc20 } from '@rainlanguage/orderbook/js_api';
 
 	import Select from '$lib/components/Select.svelte';
 
@@ -20,40 +20,48 @@
 	// Get unique tokens from trades
 	function getUniqueTokens(trades: SgTrade[]): SgErc20[] {
 		const tokens = new Map<string, SgErc20>();
-		
-		trades.forEach(trade => {
+
+		trades.forEach((trade) => {
 			// Add input token
 			const inputToken = trade.inputVaultBalanceChange.vault.token;
 			tokens.set(inputToken.address, inputToken);
-			
+
 			// Add output token
 			const outputToken = trade.outputVaultBalanceChange.vault.token;
 			tokens.set(outputToken.address, outputToken);
 		});
-		
+
 		return Array.from(tokens.values());
 	}
 
 	const availableTokens = getUniqueTokens(trades);
-	let selectedToken: SgErc20 = availableTokens[0] || { address: '', symbol: '', name: '', decimals: '' };
+	let selectedToken: SgErc20 = availableTokens[0] || {
+		address: '',
+		symbol: '',
+		name: '',
+		decimals: ''
+	};
 
 	function getTokenLabel(token: SgErc20): string {
 		return token.symbol || '';
 	}
 
 	// Calculate volume for a specific token
-	function calculateTokenVolume(trades: SgTrade[], tokenAddress: string): { date: string; volume: number }[] {
+	function calculateTokenVolume(
+		trades: SgTrade[],
+		tokenAddress: string
+	): { date: string; volume: number }[] {
 		const volumeByDate = new Map<string, number>();
-		
-		trades.forEach(trade => {
+
+		trades.forEach((trade) => {
 			// Check if this trade involves the selected token
 			const inputToken = trade.inputVaultBalanceChange.vault.token;
 			const outputToken = trade.outputVaultBalanceChange.vault.token;
-			
+
 			let volume = 0;
 			let tradeDate = '';
 			let decimals = 0;
-			
+
 			if (inputToken.address === tokenAddress) {
 				const amount = Math.abs(parseInt(trade.inputVaultBalanceChange.amount) || 0);
 				decimals = parseInt(inputToken.decimals || '0') || 0;
@@ -66,13 +74,13 @@
 				volume = amount / Math.pow(10, decimals);
 				tradeDate = moment.unix(Number(trade.timestamp)).format('DD/MM/YYYY');
 			}
-			
+
 			if (volume > 0 && tradeDate) {
 				const existingVolume = volumeByDate.get(tradeDate) || 0;
 				volumeByDate.set(tradeDate, existingVolume + volume);
 			}
 		});
-		
+
 		return Array.from(volumeByDate.entries()).map(([date, volume]) => ({
 			date,
 			volume
@@ -81,7 +89,6 @@
 
 	function splitVolumeByDate(volumeData: { date: string; volume: number }[], howManyDays: number) {
 		const today = new Date();
-		const nDaysAgo = new Date(today.getTime() - howManyDays * 24 * 60 * 60 * 1000);
 
 		const volumeArray: { date: string; volume: number }[] = [];
 
@@ -93,7 +100,7 @@
 				.toString()
 				.padStart(2, '0')}/${currentDate.getFullYear()}`;
 
-			const volumeDataPoint = volumeData.find(v => v.date === formattedDate);
+			const volumeDataPoint = volumeData.find((v) => v.date === formattedDate);
 			volumeArray.push({
 				date: formattedDate,
 				volume: volumeDataPoint?.volume || 0
@@ -198,7 +205,7 @@
 	$: if (selectedToken && chartContainer && chart) {
 		const tokenVolumeData = calculateTokenVolume(trades, selectedToken.address);
 		volumeByDate = splitVolumeByDate(tokenVolumeData, howManyDays);
-		
+
 		const mappedVolumeData = volumeByDate.map((key) => {
 			return {
 				time: moment(key.date, 'DD/MM/YYYY').format('YYYY-MM-DD'),
@@ -276,12 +283,12 @@
 			/>
 		</div>
 	</div>
-	
+
 	<div class="rounded-lg bg-gray-800/50 p-4">
 		<div bind:this={chartContainer}></div>
 	</div>
-	
+
 	<div class="text-sm text-gray-400">
 		Showing volume for {selectedToken.symbol} over the last {howManyDays} days
 	</div>
-</div> 
+</div>

@@ -24,7 +24,7 @@
 		queryKey: ['getTrades'],
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
-			const sevenDaysAgo = now - (7 * 86400);
+			const sevenDaysAgo = now - 7 * 86400;
 			const trades = await getTrades(sevenDaysAgo, now);
 			return trades;
 		},
@@ -34,7 +34,6 @@
 
 	// Use the query data instead of the store
 	$: tradesData = $tradesQuery?.data || [];
-
 
 	$: if ($sfts) {
 		st0xVaults = $sfts;
@@ -283,29 +282,33 @@
 
 			<div class={SECTION_CLASSES}>
 				{#if $tradesQuery?.isLoading}
-					<div class="max-w-8xl p-8 bg-gray-800/50 rounded-lg">
+					<div class="max-w-8xl rounded-lg bg-gray-800/50 p-8">
 						<div class="flex items-center justify-center">
 							<div class="relative">
-								<div class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"></div>
-								<div class="relative h-16 w-16 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"></div>
+								<div
+									class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"
+								></div>
+								<div
+									class="relative h-16 w-16 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"
+								></div>
 								<div class="absolute inset-0 flex items-center justify-center">
 									<div class="h-12 w-12 rounded-full bg-gray-800"></div>
 								</div>
 							</div>
 						</div>
-						<h2 class="text-xl font-semibold text-white mb-4 text-center mt-4">Loading Trades Data...</h2>
-						<p class="text-gray-300 text-center">
-							Fetching trades...
-						</p>
+						<h2 class="mb-4 mt-4 text-center text-xl font-semibold text-white">
+							Loading Trades Data...
+						</h2>
+						<p class="text-center text-gray-300">Fetching trades...</p>
 					</div>
 				{:else if $tradesQuery?.isError}
-					<div class="max-w-8xl p-8 bg-gray-800/50 rounded-lg">
-						<h2 class="text-xl font-semibold text-red-400 mb-4">Error Loading Trades Data</h2>
-						<p class="text-gray-300 mb-2">
-							There was an error fetching the trades data:
-						</p>
-						<div class="mt-4 p-4 bg-red-900/20 rounded border border-red-500/30">
-							<p class="text-sm text-red-300">{$tradesQuery.error?.message || 'Unknown error occurred'}</p>
+					<div class="max-w-8xl rounded-lg bg-gray-800/50 p-8">
+						<h2 class="mb-4 text-xl font-semibold text-red-400">Error Loading Trades Data</h2>
+						<p class="mb-2 text-gray-300">There was an error fetching the trades data:</p>
+						<div class="mt-4 rounded border border-red-500/30 bg-red-900/20 p-4">
+							<p class="text-sm text-red-300">
+								{$tradesQuery.error?.message || 'Unknown error occurred'}
+							</p>
 						</div>
 					</div>
 				{:else if tradesData && Array.isArray(tradesData) && tradesData.length > 0}
@@ -313,7 +316,7 @@
 						<VolumeChart trades={tradesData} />
 					</div>
 				{:else}
-					<h2 class="text-xl font-semibold text-white mb-4">No Trades Data Available</h2>
+					<h2 class="mb-4 text-xl font-semibold text-white">No Trades Data Available</h2>
 				{/if}
 			</div>
 			<!-- Latest Proofs -->
