@@ -81,7 +81,7 @@
 								alt={token.symbol}
 								class="h-6 w-6 rounded-full"
 							/>
-						{/if}z
+						{/if}
 						<span class="font-medium">{token.symbol}</span>
 						{#if token.name && token.name !== token.symbol}
 							<span class="text-sm text-gray-400">({token.name})</span>
