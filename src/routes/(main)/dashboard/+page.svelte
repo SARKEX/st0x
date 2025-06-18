@@ -11,8 +11,9 @@
 		ShareTransfer
 	} from '$lib/types/OffchainAssetReceiptVault';
 	import { sfts } from '$lib/stores';
-	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { STOXs, TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 	import { getTrades } from '$lib/query';
+	import StoxPages from '$lib/components/StoxPages.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
@@ -166,6 +167,7 @@
 	function toggleDocumentation(index: number) {
 		DOCUMENTATION_ITEMS[index].isOpen = !DOCUMENTATION_ITEMS[index].isOpen;
 	}
+
 </script>
 
 <!-- Main Content -->
@@ -219,15 +221,12 @@
 					</button>
 				</div>
 			</div>
+			<StoxPages />
 
 			<!-- Platform Overview -->
 			<div class={SECTION_CLASSES}>
 				<div class="mb-6 flex items-center justify-between">
-					<h2
-						class="bg-gradient-to-r from-yellow-500 to-blue-500 bg-clip-text text-2xl font-bold text-transparent"
-					>
-						Platform Overview
-					</h2>
+					<h2 class="text-xl font-semibold">Platform Overview</h2>
 				</div>
 				<div class="grid grid-cols-4 gap-4">
 					{#each PLATFORM_STATS as metric}
@@ -243,37 +242,6 @@
 							<div class="flex items-center gap-1 text-sm font-medium text-yellow-500">
 								<span>↗</span>
 								{metric.change}
-							</div>
-						</div>
-					{/each}
-				</div>
-			</div>
-
-			<!-- Trade Summary -->
-			<div class={SECTION_CLASSES}>
-				<div class="mb-6 flex items-center justify-between">
-					<div>
-						<h2 class="text-xl font-semibold">Trade Summary</h2>
-						<p class="text-sm text-gray-400">Volume and trades across different time periods</p>
-					</div>
-				</div>
-				<div class="grid grid-cols-3 gap-6">
-					{#each TRADE_SUMMARY_DATA as data}
-						<!-- Trade Summary Card -->
-						<div class="{CARD_BASE_CLASSES} p-6">
-							<div class={GRADIENT_HOVER_CLASSES} />
-							<div class="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">
-								{data.period}
-							</div>
-							<div class="space-y-4">
-								<div>
-									<div class="mb-1 text-sm text-gray-400">Volume</div>
-									<div class="text-2xl font-bold">{data.volume}</div>
-								</div>
-								<div>
-									<div class="mb-1 text-sm text-gray-400">Trades</div>
-									<div class="text-xl font-semibold">{data.trades.toLocaleString()}</div>
-								</div>
 							</div>
 						</div>
 					{/each}
