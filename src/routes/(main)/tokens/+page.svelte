@@ -192,7 +192,12 @@
 										<div
 											class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-sm font-bold"
 										>
-											<img src={STOXs.find(s => s.address.toLowerCase() === token.id.toLowerCase())?.logoUrl} alt={token.symbol} class="w-10 h-10 rounded-full bg-gray-700" />
+											<img
+												src={STOXs.find((s) => s.address.toLowerCase() === token.id.toLowerCase())
+													?.logoUrl}
+												alt={token.symbol}
+												class="h-10 w-10 rounded-full bg-gray-700"
+											/>
 										</div>
 										<div>
 											<h3 class="text-lg font-semibold">{token.symbol}</h3>
@@ -298,7 +303,13 @@
 												<div
 													class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
 												>
-												<img src={STOXs.find(s => s.address.toLowerCase() === token.id.toLowerCase())?.logoUrl} alt={token.symbol} class="w-10 h-10 rounded-full bg-gray-700" />
+													<img
+														src={STOXs.find(
+															(s) => s.address.toLowerCase() === token.id.toLowerCase()
+														)?.logoUrl}
+														alt={token.symbol}
+														class="h-10 w-10 rounded-full bg-gray-700"
+													/>
 												</div>
 												<div>
 													<div class="font-medium">{token.symbol}</div>

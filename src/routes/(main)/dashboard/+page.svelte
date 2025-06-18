@@ -5,20 +5,14 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
-	import type {
-		Deposit,
-		OffchainAssetReceiptVault,
-		ShareTransfer
-	} from '$lib/types/OffchainAssetReceiptVault';
+	import type { Deposit, OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { sfts } from '$lib/stores';
-	import { STOXs, TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 	import { getTrades } from '$lib/query';
 	import StoxPages from '$lib/components/StoxPages.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
-	let TRADE_SUMMARY_DATA: { period: string; volume: string; trades: string }[] = [];
-	let allTransfers: ShareTransfer[] = [];
 	let recentDeposits: Deposit[] = [];
 
 	$: tradesQuery = createQuery({
@@ -41,7 +35,6 @@
 
 		// Memoize deposits and transfers
 		recentDeposits = st0xVaults.map((sft) => sft.deposits).flat();
-		allTransfers = st0xVaults.map((sft) => sft.shareTransfers).flat();
 
 		// Calculate all metrics in a single pass
 		const metrics = st0xVaults.reduce(
@@ -109,25 +102,6 @@
 			},
 			{ label: 'Total Events', value: metrics.totalEvents.toString(), change: 'All transactions' }
 		];
-
-		// Calculate trade summary data
-		const now = Date.now() / 1000;
-		const timeRanges = [
-			{ period: 'Last 24 Hours', seconds: 24 * 60 * 60 },
-			{ period: 'Last Week', seconds: 7 * 24 * 60 * 60 },
-			{ period: 'Last Month', seconds: 30 * 24 * 60 * 60 }
-		];
-
-		TRADE_SUMMARY_DATA = timeRanges.map(({ period, seconds }) => {
-			const transfers = allTransfers.filter(
-				(transfer) => Number(transfer.timestamp) > now - seconds
-			);
-			return {
-				period,
-				volume: transfers.reduce((sum, transfer) => sum + Number(transfer.value), 0).toString(),
-				trades: transfers.length.toString()
-			};
-		});
 	}
 
 	const DOCUMENTATION_ITEMS = [
@@ -167,7 +141,6 @@
 	function toggleDocumentation(index: number) {
 		DOCUMENTATION_ITEMS[index].isOpen = !DOCUMENTATION_ITEMS[index].isOpen;
 	}
-
 </script>
 
 <!-- Main Content -->
