@@ -1,9 +1,10 @@
 <script lang="ts">
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
-	import Footer from '$lib/components/Footer.svelte';
+	import VolumeChart from '$lib/components/charts/VolumeChart.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
+	import Footer from '$lib/components/Footer.svelte';
 	import { formatUnits } from 'viem';
-	import { getSfts } from '$lib/query';
+	import { goto } from '$app/navigation';
 	import type {
 		Deposit,
 		OffchainAssetReceiptVault,
@@ -11,6 +12,7 @@
 	} from '$lib/types/OffchainAssetReceiptVault';
 	import { sfts } from '$lib/stores';
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { getTrades } from '$lib/query';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
@@ -18,16 +20,24 @@
 	let allTransfers: ShareTransfer[] = [];
 	let recentDeposits: Deposit[] = [];
 
-	$: query = createQuery({
-		queryKey: ['getSfts'],
-		queryFn: () => {
-			return getSfts();
-		}
+	$: tradesQuery = createQuery({
+		queryKey: ['getTrades'],
+		queryFn: async () => {
+			const now = Math.floor(Date.now() / 1000);
+			const sevenDaysAgo = now - (7 * 86400);
+			const trades = await getTrades(sevenDaysAgo, now);
+			return trades;
+		},
+		retry: 3,
+		retryDelay: 1000
 	});
 
-	$: if ($query.data) {
-		st0xVaults = $query.data;
-		sfts.set(st0xVaults);
+	// Use the query data instead of the store
+	$: tradesData = $tradesQuery?.data || [];
+
+
+	$: if ($sfts) {
+		st0xVaults = $sfts;
 
 		// Memoize deposits and transfers
 		recentDeposits = st0xVaults.map((sft) => sft.deposits).flat();
@@ -161,19 +171,7 @@
 
 <!-- Main Content -->
 
-{#if $query.isLoading || $query.isFetching || $query.isRefetching}
-	<div class="flex min-h-[50vh] flex-col items-center justify-center">
-		<div
-			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600"
-		></div>
-		<p class="mt-3 text-lg font-medium text-gray-600">Loading...</p>
-	</div>
-{:else if $query.error}
-	<div data-testid="error">
-		An error has occurred:
-		{$query.error.message}
-	</div>
-{:else if st0xVaults}
+{#if $sfts.length > 0}
 	<div>
 		<!-- Header -->
 		<div
@@ -216,6 +214,7 @@
 
 					<button
 						class="rounded-xl border border-white/30 bg-white/20 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-white/30"
+						on:click={() => goto('/neworder')}
 					>
 						Trade now
 					</button>
@@ -280,6 +279,42 @@
 						</div>
 					{/each}
 				</div>
+			</div>
+
+			<div class={SECTION_CLASSES}>
+				{#if $tradesQuery?.isLoading}
+					<div class="max-w-8xl p-8 bg-gray-800/50 rounded-lg">
+						<div class="flex items-center justify-center">
+							<div class="relative">
+								<div class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"></div>
+								<div class="relative h-16 w-16 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"></div>
+								<div class="absolute inset-0 flex items-center justify-center">
+									<div class="h-12 w-12 rounded-full bg-gray-800"></div>
+								</div>
+							</div>
+						</div>
+						<h2 class="text-xl font-semibold text-white mb-4 text-center mt-4">Loading Trades Data...</h2>
+						<p class="text-gray-300 text-center">
+							Fetching trades...
+						</p>
+					</div>
+				{:else if $tradesQuery?.isError}
+					<div class="max-w-8xl p-8 bg-gray-800/50 rounded-lg">
+						<h2 class="text-xl font-semibold text-red-400 mb-4">Error Loading Trades Data</h2>
+						<p class="text-gray-300 mb-2">
+							There was an error fetching the trades data:
+						</p>
+						<div class="mt-4 p-4 bg-red-900/20 rounded border border-red-500/30">
+							<p class="text-sm text-red-300">{$tradesQuery.error?.message || 'Unknown error occurred'}</p>
+						</div>
+					</div>
+				{:else if tradesData && Array.isArray(tradesData) && tradesData.length > 0}
+					<div class="max-w-8xl">
+						<VolumeChart trades={tradesData} />
+					</div>
+				{:else}
+					<h2 class="text-xl font-semibold text-white mb-4">No Trades Data Available</h2>
+				{/if}
 			</div>
 			<!-- Latest Proofs -->
 			<div
