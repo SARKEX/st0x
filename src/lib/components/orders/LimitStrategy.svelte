@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { STOXs, USDC_TOKEN } from '$lib/network';
 	import Select from '$lib/components/Select.svelte';
+	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
 	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
@@ -10,10 +12,24 @@
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
 
+	export let passedInputToken: Token | undefined;
+	export let passedOutputToken: Token | undefined;
+
 	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
 
 	let selectedInputToken: Token = TOKENS[0];
 	let selectedOutputToken: Token = TOKENS[TOKENS.length - 1];
+
+	onMount(() => {
+		// Set initial values from props if provided
+		if (passedInputToken) {
+			selectedInputToken = passedInputToken;
+		}
+		if (passedOutputToken) {
+			selectedOutputToken = passedOutputToken;
+		}
+	});
+
 	let selectedInitialRatio: string = '';
 	let selectedAmount: bigint = 0n;
 	let inputVaultId: Hex | undefined;
@@ -57,18 +73,16 @@
 		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Buy Token</span>
-				<Select
+				<TokenSelect
 					options={TOKENS}
 					bind:selected={selectedInputToken}
-					getOptionLabel={(token) => `${token.symbol ?? ''}`}
 				/>
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Sell Token</span>
-				<Select
+				<TokenSelect
 					options={TOKENS}
 					bind:selected={selectedOutputToken}
-					getOptionLabel={(token) => `${token.symbol ?? ''}`}
 				/>
 			</div>
 			{#if isInputTokenSameAsOutputToken}
@@ -88,7 +102,7 @@
 				<div class="relative">
 					<Input
 						type="number"
-						unit={selectedInputToken.symbol}
+						unit={selectedInputToken?.symbol}
 						bind:amount={selectedInitialRatio}
 						validate={validateBaseline}
 						bind:isError={selectedInitialRatioError}
@@ -130,13 +144,13 @@
 				<div class="grid grid-cols-2 gap-4">
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
-							Input {selectedInputToken.symbol} Vault ID
+							Input {selectedInputToken?.symbol} Vault ID
 						</span>
 						<VaultIdInput bind:vaultId={inputVaultId} bind:isError={inputVaultIdError} />
 					</div>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
-							Output {selectedOutputToken.symbol} Vault ID
+							Output {selectedOutputToken?.symbol} Vault ID
 						</span>
 						<VaultIdInput bind:vaultId={outputVaultId} bind:isError={outputVaultIdError} />
 					</div>
@@ -160,14 +174,14 @@
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Initial Ratio</span>
 					<span class="font-medium text-white"
-						>{selectedInitialRatio} {selectedInputToken.symbol}/{selectedOutputToken.symbol}</span
+						>{selectedInitialRatio} {selectedInputToken?.symbol}/{selectedOutputToken?.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(selectedAmount ?? 0n, selectedOutputToken.decimals)}
-						{selectedOutputToken.symbol}</span
+						>{formatUnits(selectedAmount ?? 0n, selectedOutputToken?.decimals ?? 18)}
+						{selectedOutputToken?.symbol}</span
 					>
 				</div>
 			</div>

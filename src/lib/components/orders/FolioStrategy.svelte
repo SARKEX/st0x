@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { STOXs, USDC_TOKEN } from '$lib/network';
 	import Select from '$lib/components/Select.svelte';
+	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
 	import { validateOverrideDepositAmount } from '$lib/validateDeploymentArgs';
@@ -156,58 +157,51 @@
 			<div class="grid grid-cols-1 gap-4">
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 1</span>
-					<Select
+					<TokenSelect
 						options={TOKENS}
 						bind:selected={selectedToken1}
-						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 2</span>
-					<Select
+					<TokenSelect
 						options={TOKENS}
 						bind:selected={selectedToken2}
-						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 3</span>
-					<Select
+					<TokenSelect
 						options={TOKENS}
 						bind:selected={selectedToken3}
-						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 4</span>
-					<Select
+					<TokenSelect
 						options={TOKENS}
 						bind:selected={selectedToken4}
-						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 5</span>
-					<Select
+					<TokenSelect
 						options={TOKENS}
 						bind:selected={selectedToken5}
-						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 6</span>
-					<Select
+					<TokenSelect
 						options={TOKENS}
 						bind:selected={selectedToken6}
-						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 7</span>
-					<Select
+					<TokenSelect
 						options={TOKENS}
 						bind:selected={selectedToken7}
-						getOptionLabel={(token) => `${token.symbol ?? ''}`}
 					/>
 				</div>
 			</div>

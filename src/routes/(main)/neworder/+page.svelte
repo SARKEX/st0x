@@ -1,10 +1,13 @@
-<script>
+<script lang="ts">
+	import { onMount } from 'svelte';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import DcaStrategy from '$lib/components/orders/DcaStrategy.svelte';
 	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';
 	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
+	import { orderTokenStore } from '$lib/stores';
+	import type { Token } from 'sushi/currency';
 
 	const ORDER_TYPES = [
 		{ id: 'limit', name: 'Limit Orders' },
@@ -14,6 +17,32 @@
 	];
 
 	let activeOrderType = 'limit';
+	let inputToken: Token | undefined;
+	let outputToken: Token | undefined;
+
+	function handleOrderTypeChange(newType: string) {
+		activeOrderType = newType;
+		window.location.hash = newType;
+	}
+
+	onMount(() => {
+		// Check if we have data in the store
+		const unsubscribe = orderTokenStore.subscribe((storeData) => {
+			if (storeData.inputToken || storeData.outputToken || storeData.orderType) {
+				if (storeData.inputToken) inputToken = storeData.inputToken;
+				if (storeData.outputToken) outputToken = storeData.outputToken;
+				if (storeData.orderType) activeOrderType = storeData.orderType;
+				
+				// Clear the store after using the data
+				orderTokenStore.set({});
+			}
+		});
+
+		// Cleanup
+		return () => {
+			unsubscribe();
+		};
+	});
 </script>
 
 <!-- Main Content -->
@@ -40,7 +69,7 @@
 		<div class="mb-6 flex rounded-lg bg-white/5 p-1">
 			{#each ORDER_TYPES as type}
 				<button
-					on:click={() => (activeOrderType = type.id)}
+					on:click={() => handleOrderTypeChange(type.id)}
 					class="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all {activeOrderType ===
 					type.id
 						? 'bg-yellow-500/20 text-yellow-500'
@@ -53,7 +82,9 @@
 
 		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
 			{#if activeOrderType === 'limit'}
-				<LimitStrategy />
+				{#key [inputToken?.address, outputToken?.address]}
+					<LimitStrategy passedInputToken={inputToken} passedOutputToken={outputToken} />
+				{/key}
 			{:else if activeOrderType === 'dca'}
 				<DcaStrategy />
 			{:else if activeOrderType === 'activeliquidity'}

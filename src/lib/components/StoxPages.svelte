@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { STOXs } from '$lib/network';
+	import { STOXs, USDC_TOKEN } from '$lib/network';
 	import { goto } from '$app/navigation';
+	import { orderTokenStore } from '$lib/stores';
+	import type { Token } from 'sushi/currency';
 
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
 
@@ -21,6 +23,18 @@
 	}
 	function prevPage() {
 		if (currentPage > 0) currentPage -= 1;
+	}
+
+	function handleStoxClick(stox: Token) {
+		// Set the token data in the store
+		orderTokenStore.set({
+			inputToken: stox,
+			outputToken: USDC_TOKEN,
+			orderType: 'limit'
+		});
+		
+		// Navigate to the neworder page
+		goto('/neworder');
 	}
 </script>
 
@@ -52,7 +66,7 @@
 				<button
 					type="button"
 					class="relative flex w-full cursor-pointer flex-col rounded-2xl border border-white/10 bg-gray-800/80 p-5 text-left transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-700/80"
-					on:click={() => goto('/neworder')}
+					on:click={() => handleStoxClick(stox)}
 				>
 					<div class="flex flex-col gap-3">
 						<div class="flex items-center gap-3">
