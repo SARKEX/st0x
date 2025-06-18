@@ -6,12 +6,12 @@
 	import { sfts } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Token } from 'sushi/currency';
-	import { SFT_EXPLORER_URL, USDC_TOKEN } from '$lib/network';
+	import { SFT_EXPLORER_URL, STOXs, USDC_TOKEN } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import TransfersChart from '$lib/components/charts/TransfersChart.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
-	let viewMode = 'grid';
+	let viewMode = 'table';
 	$: totalTokens = $query.data ? $query.data.length : 0;
 	$: totalMarketCap = $query.data
 		? $query.data.reduce((sum, token) => sum + parseFloat(token.marketCap), 0)
@@ -148,11 +148,7 @@
 			<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
 				<div class="mb-6 flex items-center justify-between">
 					<div>
-						<h2
-							class="bg-gradient-to-r from-yellow-500 to-blue-500 bg-clip-text text-2xl font-bold text-transparent"
-						>
-							Available Tokens
-						</h2>
+						<h2 class="text-xl font-semibold">Available Tokens</h2>
 						<p class="text-gray-400">Explore all tokenized assets on the platform</p>
 					</div>
 				</div>
@@ -194,9 +190,14 @@
 								<div class="mb-4 flex items-center justify-between">
 									<div class="flex items-center gap-3">
 										<div
-											class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 text-sm font-bold"
+											class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-sm font-bold"
 										>
-											{token.symbol.substring(0, 2)}
+											<img
+												src={STOXs.find((s) => s.address.toLowerCase() === token.id.toLowerCase())
+													?.logoUrl}
+												alt={token.symbol}
+												class="h-10 w-10 rounded-full bg-gray-700"
+											/>
 										</div>
 										<div>
 											<h3 class="text-lg font-semibold">{token.symbol}</h3>
@@ -300,9 +301,15 @@
 										<td class="px-6 py-4">
 											<div class="flex items-center gap-3">
 												<div
-													class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 text-xs font-bold"
+													class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
 												>
-													{token.symbol.substring(0, 2)}
+													<img
+														src={STOXs.find(
+															(s) => s.address.toLowerCase() === token.id.toLowerCase()
+														)?.logoUrl}
+														alt={token.symbol}
+														class="h-10 w-10 rounded-full bg-gray-700"
+													/>
 												</div>
 												<div>
 													<div class="font-medium">{token.symbol}</div>

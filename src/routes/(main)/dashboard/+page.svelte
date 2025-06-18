@@ -1,37 +1,40 @@
 <script lang="ts">
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
-	import Footer from '$lib/components/Footer.svelte';
+	import VolumeChart from '$lib/components/charts/VolumeChart.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
+	import Footer from '$lib/components/Footer.svelte';
 	import { formatUnits } from 'viem';
-	import { getSfts } from '$lib/query';
-	import type {
-		Deposit,
-		OffchainAssetReceiptVault,
-		ShareTransfer
-	} from '$lib/types/OffchainAssetReceiptVault';
+	import { goto } from '$app/navigation';
+	import type { Deposit, OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { sfts } from '$lib/stores';
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { getTrades } from '$lib/query';
+	import StoxPages from '$lib/components/StoxPages.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
-	let TRADE_SUMMARY_DATA: { period: string; volume: string; trades: string }[] = [];
-	let allTransfers: ShareTransfer[] = [];
 	let recentDeposits: Deposit[] = [];
 
-	$: query = createQuery({
-		queryKey: ['getSfts'],
-		queryFn: () => {
-			return getSfts();
-		}
+	$: tradesQuery = createQuery({
+		queryKey: ['getTrades'],
+		queryFn: async () => {
+			const now = Math.floor(Date.now() / 1000);
+			const sevenDaysAgo = now - 7 * 86400;
+			const trades = await getTrades(sevenDaysAgo, now);
+			return trades;
+		},
+		retry: 3,
+		retryDelay: 1000
 	});
 
-	$: if ($query.data) {
-		st0xVaults = $query.data;
-		sfts.set(st0xVaults);
+	// Use the query data instead of the store
+	$: tradesData = $tradesQuery?.data || [];
+
+	$: if ($sfts) {
+		st0xVaults = $sfts;
 
 		// Memoize deposits and transfers
 		recentDeposits = st0xVaults.map((sft) => sft.deposits).flat();
-		allTransfers = st0xVaults.map((sft) => sft.shareTransfers).flat();
 
 		// Calculate all metrics in a single pass
 		const metrics = st0xVaults.reduce(
@@ -99,25 +102,6 @@
 			},
 			{ label: 'Total Events', value: metrics.totalEvents.toString(), change: 'All transactions' }
 		];
-
-		// Calculate trade summary data
-		const now = Date.now() / 1000;
-		const timeRanges = [
-			{ period: 'Last 24 Hours', seconds: 24 * 60 * 60 },
-			{ period: 'Last Week', seconds: 7 * 24 * 60 * 60 },
-			{ period: 'Last Month', seconds: 30 * 24 * 60 * 60 }
-		];
-
-		TRADE_SUMMARY_DATA = timeRanges.map(({ period, seconds }) => {
-			const transfers = allTransfers.filter(
-				(transfer) => Number(transfer.timestamp) > now - seconds
-			);
-			return {
-				period,
-				volume: transfers.reduce((sum, transfer) => sum + Number(transfer.value), 0).toString(),
-				trades: transfers.length.toString()
-			};
-		});
 	}
 
 	const DOCUMENTATION_ITEMS = [
@@ -161,19 +145,7 @@
 
 <!-- Main Content -->
 
-{#if $query.isLoading || $query.isFetching || $query.isRefetching}
-	<div class="flex min-h-[50vh] flex-col items-center justify-center">
-		<div
-			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600"
-		></div>
-		<p class="mt-3 text-lg font-medium text-gray-600">Loading...</p>
-	</div>
-{:else if $query.error}
-	<div data-testid="error">
-		An error has occurred:
-		{$query.error.message}
-	</div>
-{:else if st0xVaults}
+{#if $sfts.length > 0}
 	<div>
 		<!-- Header -->
 		<div
@@ -216,20 +188,18 @@
 
 					<button
 						class="rounded-xl border border-white/30 bg-white/20 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-white/30"
+						on:click={() => goto('/neworder')}
 					>
 						Trade now
 					</button>
 				</div>
 			</div>
+			<StoxPages />
 
 			<!-- Platform Overview -->
 			<div class={SECTION_CLASSES}>
 				<div class="mb-6 flex items-center justify-between">
-					<h2
-						class="bg-gradient-to-r from-yellow-500 to-blue-500 bg-clip-text text-2xl font-bold text-transparent"
-					>
-						Platform Overview
-					</h2>
+					<h2 class="text-xl font-semibold">Platform Overview</h2>
 				</div>
 				<div class="grid grid-cols-4 gap-4">
 					{#each PLATFORM_STATS as metric}
@@ -251,35 +221,44 @@
 				</div>
 			</div>
 
-			<!-- Trade Summary -->
 			<div class={SECTION_CLASSES}>
-				<div class="mb-6 flex items-center justify-between">
-					<div>
-						<h2 class="text-xl font-semibold">Trade Summary</h2>
-						<p class="text-sm text-gray-400">Volume and trades across different time periods</p>
-					</div>
-				</div>
-				<div class="grid grid-cols-3 gap-6">
-					{#each TRADE_SUMMARY_DATA as data}
-						<!-- Trade Summary Card -->
-						<div class="{CARD_BASE_CLASSES} p-6">
-							<div class={GRADIENT_HOVER_CLASSES} />
-							<div class="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">
-								{data.period}
-							</div>
-							<div class="space-y-4">
-								<div>
-									<div class="mb-1 text-sm text-gray-400">Volume</div>
-									<div class="text-2xl font-bold">{data.volume}</div>
-								</div>
-								<div>
-									<div class="mb-1 text-sm text-gray-400">Trades</div>
-									<div class="text-xl font-semibold">{data.trades.toLocaleString()}</div>
+				{#if $tradesQuery?.isLoading}
+					<div class="max-w-8xl rounded-lg bg-gray-800/50 p-8">
+						<div class="flex items-center justify-center">
+							<div class="relative">
+								<div
+									class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"
+								></div>
+								<div
+									class="relative h-16 w-16 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"
+								></div>
+								<div class="absolute inset-0 flex items-center justify-center">
+									<div class="h-12 w-12 rounded-full bg-gray-800"></div>
 								</div>
 							</div>
 						</div>
-					{/each}
-				</div>
+						<h2 class="mb-4 mt-4 text-center text-xl font-semibold text-white">
+							Loading Trades Data...
+						</h2>
+						<p class="text-center text-gray-300">Fetching trades...</p>
+					</div>
+				{:else if $tradesQuery?.isError}
+					<div class="max-w-8xl rounded-lg bg-gray-800/50 p-8">
+						<h2 class="mb-4 text-xl font-semibold text-red-400">Error Loading Trades Data</h2>
+						<p class="mb-2 text-gray-300">There was an error fetching the trades data:</p>
+						<div class="mt-4 rounded border border-red-500/30 bg-red-900/20 p-4">
+							<p class="text-sm text-red-300">
+								{$tradesQuery.error?.message || 'Unknown error occurred'}
+							</p>
+						</div>
+					</div>
+				{:else if tradesData && Array.isArray(tradesData) && tradesData.length > 0}
+					<div class="max-w-8xl">
+						<VolumeChart trades={tradesData} />
+					</div>
+				{:else}
+					<h2 class="mb-4 text-xl font-semibold text-white">No Trades Data Available</h2>
+				{/if}
 			</div>
 			<!-- Latest Proofs -->
 			<div

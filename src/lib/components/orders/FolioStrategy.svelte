@@ -110,7 +110,6 @@
 
 	const handleFolioDeploy = () => {
 		if ($connected) {
-			console.log('handleFolioDeploy');
 			transactionStore.handleFolioDeploy({
 				selectedToken1: selectedToken1,
 				selectedToken2: selectedToken2,
