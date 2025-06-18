@@ -32,7 +32,7 @@
 				if (storeData.inputToken) inputToken = storeData.inputToken;
 				if (storeData.outputToken) outputToken = storeData.outputToken;
 				if (storeData.orderType) activeOrderType = storeData.orderType;
-				
+
 				// Clear the store after using the data
 				orderTokenStore.set({});
 			}

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { STOXs, USDC_TOKEN } from '$lib/network';
-	import Select from '$lib/components/Select.svelte';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
@@ -73,17 +72,11 @@
 		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Buy Token</span>
-				<TokenSelect
-					options={TOKENS}
-					bind:selected={selectedInputToken}
-				/>
+				<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Sell Token</span>
-				<TokenSelect
-					options={TOKENS}
-					bind:selected={selectedOutputToken}
-				/>
+				<TokenSelect options={TOKENS} bind:selected={selectedOutputToken} />
 			</div>
 			{#if isInputTokenSameAsOutputToken}
 				<div class="mt-0 text-sm text-red-500">

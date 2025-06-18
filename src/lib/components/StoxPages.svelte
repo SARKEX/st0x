@@ -32,7 +32,7 @@
 			outputToken: USDC_TOKEN,
 			orderType: 'limit'
 		});
-		
+
 		// Navigate to the neworder page
 		goto('/neworder');
 	}
