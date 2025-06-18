@@ -6,7 +6,7 @@ export const USDC_TOKEN = new Token({
 	address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
 	symbol: 'USDC',
 	decimals: 6,
-	logoUrl: 'src/lib/components/images/USDC.png'
+	logoUrl: '/images/USDC.png'
 });
 
 export const ARBITRUM_SFT_SUBGRAPH_URL =
@@ -24,7 +24,7 @@ export const STOXs: Token[] = [
 		symbol: 'TSTOX',
 		decimals: 18,
 		name: 'Test St0x',
-		logoUrl: 'src/lib/components/images/TSTOX.png'
+		logoUrl: '/images/TSTOX.png'
 	}),
 	new Token({
 		chainId: arbitrum.id,
@@ -32,7 +32,7 @@ export const STOXs: Token[] = [
 		symbol: 'AAPLs1',
 		decimals: 18,
 		name: 'STx Apple 01',
-		logoUrl: 'src/lib/components/images/AAPL.png'
+		logoUrl: '/images/AAPL.png'
 	}),
 	new Token({
 		chainId: arbitrum.id,
@@ -40,7 +40,7 @@ export const STOXs: Token[] = [
 		symbol: 'AMZNs1',
 		decimals: 18,
 		name: 'STx Amazon 01',
-		logoUrl: 'src/lib/components/images/AMZN.png'
+		logoUrl: '/images/AMZN.png'
 	}),
 	new Token({
 		chainId: arbitrum.id,
@@ -48,7 +48,7 @@ export const STOXs: Token[] = [
 		symbol: 'GOOGLs1',
 		decimals: 18,
 		name: 'STx Alphabet 01',
-		logoUrl: 'src/lib/components/images/GOOGL.png'
+		logoUrl: '/images/GOOGL.png'
 	}),
 	new Token({
 		chainId: arbitrum.id,
@@ -56,7 +56,7 @@ export const STOXs: Token[] = [
 		symbol: 'METAs1',
 		decimals: 18,
 		name: 'STx Meta 01',
-		logoUrl: 'src/lib/components/images/META.png'
+		logoUrl: '/images/META.png'
 	}),
 	new Token({
 		chainId: arbitrum.id,
@@ -64,7 +64,7 @@ export const STOXs: Token[] = [
 		symbol: 'MSFTs1',
 		decimals: 18,
 		name: 'STx Microsoft 01',
-		logoUrl: 'src/lib/components/images/MSFT.png'
+		logoUrl: '/images/MSFT.png'
 	}),
 	new Token({
 		chainId: arbitrum.id,
@@ -72,7 +72,7 @@ export const STOXs: Token[] = [
 		symbol: 'TSLAs1',
 		decimals: 18,
 		name: 'STx Tesla 01',
-		logoUrl: 'src/lib/components/images/TSLA.png'
+		logoUrl: '/images/TSLA.png'
 	}),
 	new Token({
 		chainId: arbitrum.id,
@@ -80,6 +80,6 @@ export const STOXs: Token[] = [
 		symbol: 'NVDAs1',
 		decimals: 18,
 		name: 'STx Nvidia 01',
-		logoUrl: 'src/lib/components/images/NVDA.png'
+		logoUrl: '/images/NVDA.png'
 	})
 ];
