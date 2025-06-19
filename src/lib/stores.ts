@@ -15,6 +15,19 @@ export const sfts = writable<OffchainAssetReceiptVault[]>([]);
 export const trades = writable<SgTrade[]>([]);
 export const infoModalOpen = writable(false);
 
+// Store for Rainlang confirmation modal
+export const rainlangConfirmationModal = writable<{
+	show: boolean;
+	rainlangCode: string;
+	onDeploy: (() => void) | null;
+	onCancel: (() => void) | null;
+}>({
+	show: false,
+	rainlangCode: '',
+	onDeploy: null,
+	onCancel: null
+});
+
 // Store for order token selection
 export const orderTokenStore = writable<{
 	inputToken?: Token;

@@ -49,7 +49,8 @@ describe('getDeploymentArgs', () => {
 			to: '0x1234567890123456789012345678901234567890',
 			data: '0xabcdef',
 			value: 0n
-		})
+		}),
+		getComposedRainlang: vi.fn().mockResolvedValue('/* mock rainlang code */')
 	};
 
 	beforeEach(() => {
@@ -59,6 +60,7 @@ describe('getDeploymentArgs', () => {
 		vi.mocked(DotrainOrderGui.chooseDeployment).mockResolvedValue(
 			mockGui as unknown as DotrainOrderGui
 		);
+		
 		vi.mocked(getPrice).mockResolvedValue('1.5');
 	});
 
@@ -310,10 +312,14 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(result).toEqual({
-			to: '0x1234567890123456789012345678901234567890',
-			data: '0xabcdef',
-			value: 0n
+		expect(result).toEqual(
+		{	
+			composedRainlang: '/* mock rainlang code */',
+			deploymentArgs: {
+				to: '0x1234567890123456789012345678901234567890',
+				data: '0xabcdef',
+				value: 0n
+			}
 		});
 	});
 
@@ -334,9 +340,12 @@ describe('getDeploymentArgs', () => {
 		});
 
 		expect(result).toEqual({
-			to: '0x1234567890123456789012345678901234567890',
-			data: '0xabcdef',
-			value: 0n
+			composedRainlang: '/* mock rainlang code */',
+			deploymentArgs: {
+				to: '0x1234567890123456789012345678901234567890',
+				data: '0xabcdef',
+				value: 0n
+			}
 		});
 	});
 
@@ -351,9 +360,12 @@ describe('getDeploymentArgs', () => {
 		});
 
 		expect(result).toEqual({
-			to: '0x1234567890123456789012345678901234567890',
-			data: '0xabcdef',
-			value: 0n
+			composedRainlang: '/* mock rainlang code */',
+			deploymentArgs: {
+				to: '0x1234567890123456789012345678901234567890',
+				data: '0xabcdef',
+				value: 0n
+			}
 		});
 	});
 
@@ -392,9 +404,12 @@ describe('getDeploymentArgs', () => {
 		});
 
 		expect(result).toEqual({
-			to: '0x1234567890123456789012345678901234567890',
-			data: '0xabcdef',
-			value: 0n
+			composedRainlang: '/* mock rainlang code */',
+			deploymentArgs: {
+				to: '0x1234567890123456789012345678901234567890',
+				data: '0xabcdef',
+				value: 0n
+			}
 		});
 	});
 
