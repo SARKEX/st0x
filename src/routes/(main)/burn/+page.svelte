@@ -3,6 +3,7 @@
 	import { infoModalOpen } from '$lib/stores';
 	import Footer from '$lib/components/Footer.svelte';
 	import WithdrawChart from '$lib/components/charts/WithdrawChart.svelte';
+	import CumulativeSupplyChart from '$lib/components/charts/CumulativeSupplyChart.svelte';
 	import { sfts } from '$lib/stores';
 	import { ArrowRightToBracketOutline, InfoCircleSolid } from 'flowbite-svelte-icons';
 	import type { OffchainAssetReceiptVault, Withdraw } from '$lib/types/OffchainAssetReceiptVault';
@@ -67,6 +68,9 @@
 		</div>
 		<div class="h-100 mb-4 sm:mb-6">
 			<WithdrawChart vaults={$sfts} />
+		</div>
+		<div class="h-100 mb-4 sm:mb-6">
+			<CumulativeSupplyChart vaults={$sfts} />
 		</div>
 		<!-- Burn Process -->
 		<div class={SECTION_CLASSES}>

@@ -7,6 +7,7 @@
 	import { infoModalOpen } from '$lib/stores';
 	import type { OffchainAssetReceiptVault, Deposit } from '$lib/types/OffchainAssetReceiptVault';
 	import DepositChart from '$lib/components/charts/DepositChart.svelte';
+	import CumulativeSupplyChart from '$lib/components/charts/CumulativeSupplyChart.svelte';
 
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Deposit | null = null;
@@ -68,6 +69,9 @@
 		</div>
 		<div class="h-100 mb-4 sm:mb-6">
 			<DepositChart vaults={$sfts} />
+		</div>
+		<div class="h-100 mb-4 sm:mb-6">
+			<CumulativeSupplyChart vaults={$sfts} />
 		</div>
 		<!-- Mint Process -->
 		<div class={SECTION_CLASSES}>
