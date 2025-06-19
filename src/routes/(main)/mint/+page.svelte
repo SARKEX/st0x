@@ -17,12 +17,6 @@
 			issuerInfo:
 				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
 			issuerLink: 'https://st0x.io/'
-		},
-		{
-			issuerName: 'Interactive Brokers',
-			issuerInfo:
-				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-			issuerLink: 'https://st0x.io/'
 		}
 	];
 
