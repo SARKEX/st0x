@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { STOXs, USDC_TOKEN } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
+	import Select from '$lib/components/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
 	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
@@ -10,6 +11,7 @@
 	import { formatUnits } from 'viem';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
+	import { getBaseline } from '$lib/derivations';
 
 	export let passedInputToken: Token | undefined;
 	export let passedOutputToken: Token | undefined;
@@ -29,6 +31,7 @@
 		}
 	});
 
+	let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
 	let selectedInitialRatio: string = '';
 	let selectedAmount: bigint = 0n;
 	let inputVaultId: Hex | undefined;
@@ -57,25 +60,36 @@
 
 	const handleDeploy = async () => {
 		transactionStore.handleLimitDeploy({
-			outputToken: selectedOutputToken,
-			inputToken: selectedInputToken,
-			ioRatio: selectedInitialRatio,
+			outputToken: selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken,
+			inputToken: selectedOrderType === 'Buy' ? selectedInputToken : selectedOutputToken,
+			ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
 			depositAmount: selectedAmount,
-			inputVaultId: inputVaultId,
-			outputVaultId: outputVaultId
+			inputVaultId: selectedOrderType === 'Buy' ? inputVaultId : outputVaultId,
+			outputVaultId: selectedOrderType === 'Buy' ? outputVaultId : inputVaultId
 		});
 	};
 </script>
 
 <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-1 gap-4">
 			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Buy Token</span>
-				<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
+				<span class="mb-2 block text-sm font-medium text-gray-300">Order Type</span>
+				<Select
+					options={['Buy', 'Sell']}
+					bind:selected={selectedOrderType}
+					getOptionLabel={(option) => option}
+				/>
 			</div>
 			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Sell Token</span>
+				<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
+			</div>
+		</div>
+		<div class="grid grid-cols-1 gap-4">
+			<div>
+				<span class="mb-2 block text-sm font-medium text-gray-300"
+					>{selectedOrderType === 'Buy' ? 'With' : 'For'}</span
+				>
 				<TokenSelect options={TOKENS} bind:selected={selectedOutputToken} />
 			</div>
 			{#if isInputTokenSameAsOutputToken}
@@ -88,14 +102,14 @@
 		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">
-					Initial Ratio {selectedInputToken && selectedOutputToken
-						? `${selectedInputToken.symbol}/${selectedOutputToken.symbol}`
+					Price {selectedInputToken && selectedOutputToken
+						? `${selectedOutputToken.symbol}/${selectedInputToken.symbol}`
 						: ''}
 				</span>
 				<div class="relative">
 					<Input
 						type="number"
-						unit={selectedInputToken?.symbol}
+						unit={selectedOutputToken?.symbol}
 						bind:amount={selectedInitialRatio}
 						validate={validateBaseline}
 						bind:isError={selectedInitialRatioError}
@@ -105,12 +119,21 @@
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Amount</span>
 				<div class="relative">
-					<TradeAmountInput
-						amountToken={selectedOutputToken}
-						bind:amount={selectedAmount}
-						validate={validateSelectedAmount}
-						bind:isError={selectedAmountError}
-					/>
+					{#if selectedOrderType === 'Buy'}
+						<TradeAmountInput
+							amountToken={selectedOutputToken}
+							bind:amount={selectedAmount}
+							validate={validateSelectedAmount}
+							bind:isError={selectedAmountError}
+						/>
+					{:else}
+						<TradeAmountInput
+							amountToken={selectedInputToken}
+							bind:amount={selectedAmount}
+							validate={validateSelectedAmount}
+							bind:isError={selectedAmountError}
+						/>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -137,13 +160,13 @@
 				<div class="grid grid-cols-2 gap-4">
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
-							Input {selectedInputToken?.symbol} Vault ID
+							{selectedInputToken?.symbol} Vault ID
 						</span>
 						<VaultIdInput bind:vaultId={inputVaultId} bind:isError={inputVaultIdError} />
 					</div>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
-							Output {selectedOutputToken?.symbol} Vault ID
+							{selectedOutputToken?.symbol} Vault ID
 						</span>
 						<VaultIdInput bind:vaultId={outputVaultId} bind:isError={outputVaultIdError} />
 					</div>
@@ -165,9 +188,9 @@
 					>
 				</div>
 				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Initial Ratio</span>
+					<span class="text-gray-400">Price</span>
 					<span class="font-medium text-white"
-						>{selectedInitialRatio} {selectedInputToken?.symbol}/{selectedOutputToken?.symbol}</span
+						>{selectedInitialRatio} {selectedOutputToken?.symbol}/{selectedInputToken?.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">

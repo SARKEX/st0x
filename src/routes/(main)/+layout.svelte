@@ -6,10 +6,11 @@
 	import { arbitrum } from '@wagmi/core/chains';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
+	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { onMount } from 'svelte';
 	import { getSfts } from '$lib/query';
-	import { sfts } from '$lib/stores';
+	import { sfts, rainlangConfirmationModal } from '$lib/stores';
 
 	const initWallet = async () => {
 		const erckit = defaultConfig({
@@ -75,6 +76,12 @@
 		<div class="transition-all duration-300 {sidebarExpanded ? 'ml-64' : 'ml-16'}">
 			<slot {sidebarExpanded} />
 			<TransactionModal />
+			<RainlangConfirmationModal
+				show={$rainlangConfirmationModal.show}
+				rainlangCode={$rainlangConfirmationModal.rainlangCode}
+				onDeploy={$rainlangConfirmationModal.onDeploy || (() => {})}
+				onCancel={$rainlangConfirmationModal.onCancel || (() => {})}
+			/>
 		</div>
 	</div>
 {/if}

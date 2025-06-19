@@ -18,6 +18,8 @@ import {
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
 import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from './network';
+import { rainlangConfirmationModal } from './stores';
+
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
 
@@ -130,36 +132,68 @@ const transactionStore = () => {
 		}, 2000);
 	};
 
+	const showRainlangConfirmation = (
+		composedRainlang: string,
+		deploymentArgs: DeploymentTransactionArgs
+	) => {
+		rainlangConfirmationModal.set({
+			show: true,
+			rainlangCode: composedRainlang,
+			onDeploy: () => {
+				rainlangConfirmationModal.set({
+					show: false,
+					rainlangCode: '',
+					onDeploy: null,
+					onCancel: null
+				});
+				handleStrategyDeployment(deploymentArgs);
+			},
+			onCancel: () => {
+				rainlangConfirmationModal.set({
+					show: false,
+					rainlangCode: '',
+					onDeploy: null,
+					onCancel: null
+				});
+				reset();
+			}
+		});
+	};
+
 	const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const deploymentArgs = await getMarketMakingDeploymentArgs(args);
-		await handleStrategyDeployment(deploymentArgs);
+		const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(args);
+
+		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
 	const handleDcaDeploy = async (args: DcaDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const deploymentArgs = await getDcaDeploymentArgs(args);
-		await handleStrategyDeployment(deploymentArgs);
+		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(args);
+
+		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
 	const handleLimitDeploy = async (args: LimitOrderDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const deploymentArgs = await getLimitOrderDeploymentArgs(args);
-		await handleStrategyDeployment(deploymentArgs);
+		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(args);
+
+		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const deploymentArgs = await getFolioDeploymentArgs(args);
-		await handleStrategyDeployment(deploymentArgs);
+		const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(args);
+
+		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 	return {
 		subscribe,
