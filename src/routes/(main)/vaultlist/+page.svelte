@@ -8,6 +8,8 @@
 	import { signerAddress } from 'svelte-wagmi';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
 	import { formatUnits } from 'viem';
+	import Portfolio from '$lib/components/Portfolio.svelte';
+	import { sfts } from '$lib/stores';
 
 	const VAULT_LIST_PAGE_SIZE = 1000;
 
@@ -107,6 +109,10 @@
 		</div>
 	</div>
 
+	<div class="space-y-8 p-6">
+		<Portfolio vaults={$sfts} />
+	</div>
+
 	<!-- Orders Content -->
 	<div class="space-y-8 p-6">
 		{#if myTokenBalance.length > 0}
@@ -114,7 +120,7 @@
 				<h2
 					class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-2xl font-bold text-transparent"
 				>
-					My Portfolio
+					My Vaults
 				</h2>
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					{#each myTokenBalance as token}
