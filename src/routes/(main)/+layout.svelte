@@ -76,7 +76,7 @@
 		<div class="transition-all duration-300 {sidebarExpanded ? 'ml-64' : 'ml-16'}">
 			<slot {sidebarExpanded} />
 			<TransactionModal />
-			<RainlangConfirmationModal 
+			<RainlangConfirmationModal
 				show={$rainlangConfirmationModal.show}
 				rainlangCode={$rainlangConfirmationModal.rainlangCode}
 				onDeploy={$rainlangConfirmationModal.onDeploy || (() => {})}

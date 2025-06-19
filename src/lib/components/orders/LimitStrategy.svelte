@@ -75,20 +75,21 @@
 		<div class="grid grid-cols-1 gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Order Type</span>
-				<Select 
-					options={['Buy', 'Sell']} 
-					bind:selected={selectedOrderType} 
-					getOptionLabel={(option) => option} 
+				<Select
+					options={['Buy', 'Sell']}
+					bind:selected={selectedOrderType}
+					getOptionLabel={(option) => option}
 				/>
 			</div>
 			<div>
 				<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
 			</div>
-			
 		</div>
 		<div class="grid grid-cols-1 gap-4">
 			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">{selectedOrderType === 'Buy' ? 'With' : 'For'}</span>
+				<span class="mb-2 block text-sm font-medium text-gray-300"
+					>{selectedOrderType === 'Buy' ? 'With' : 'For'}</span
+				>
 				<TokenSelect options={TOKENS} bind:selected={selectedOutputToken} />
 			</div>
 			{#if isInputTokenSameAsOutputToken}
@@ -125,8 +126,7 @@
 							validate={validateSelectedAmount}
 							bind:isError={selectedAmountError}
 						/>
-					{/if}
-					{#if selectedOrderType === 'Sell'}
+					{:else}
 						<TradeAmountInput
 							amountToken={selectedInputToken}
 							bind:amount={selectedAmount}

@@ -132,16 +132,29 @@ const transactionStore = () => {
 		}, 2000);
 	};
 
-	const showRainlangConfirmation = (composedRainlang: string, deploymentArgs: DeploymentTransactionArgs) => {
+	const showRainlangConfirmation = (
+		composedRainlang: string,
+		deploymentArgs: DeploymentTransactionArgs
+	) => {
 		rainlangConfirmationModal.set({
 			show: true,
 			rainlangCode: composedRainlang,
 			onDeploy: () => {
-				rainlangConfirmationModal.set({ show: false, rainlangCode: '', onDeploy: null, onCancel: null });
+				rainlangConfirmationModal.set({
+					show: false,
+					rainlangCode: '',
+					onDeploy: null,
+					onCancel: null
+				});
 				handleStrategyDeployment(deploymentArgs);
 			},
 			onCancel: () => {
-				rainlangConfirmationModal.set({ show: false, rainlangCode: '', onDeploy: null, onCancel: null });
+				rainlangConfirmationModal.set({
+					show: false,
+					rainlangCode: '',
+					onDeploy: null,
+					onCancel: null
+				});
 				reset();
 			}
 		});
@@ -151,8 +164,8 @@ const transactionStore = () => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const {composedRainlang, deploymentArgs} = await getMarketMakingDeploymentArgs(args);
-		
+		const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(args);
+
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
@@ -160,8 +173,8 @@ const transactionStore = () => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const {composedRainlang, deploymentArgs} = await getDcaDeploymentArgs(args);
-		
+		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(args);
+
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
@@ -169,8 +182,8 @@ const transactionStore = () => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const {composedRainlang, deploymentArgs} = await getLimitOrderDeploymentArgs(args);
-		
+		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(args);
+
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
@@ -178,8 +191,8 @@ const transactionStore = () => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const {composedRainlang, deploymentArgs} = await getFolioDeploymentArgs(args);
-		
+		const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(args);
+
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 	return {

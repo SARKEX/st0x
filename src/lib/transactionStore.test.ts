@@ -33,7 +33,8 @@ vi.mock('@wagmi/core', () => ({
 }));
 
 vi.mock('svelte/store', async () => {
-	const actual = await vi.importActual('svelte/store') as any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const actual = (await vi.importActual('svelte/store')) as any;
 	return {
 		...actual,
 		get: vi.fn().mockImplementation((store) => {
@@ -62,20 +63,20 @@ describe('transactionStore tests', () => {
 					symbol: 'TEST1'
 				}
 			],
-			chainId: 8453	
+			chainId: 8453
 		}
 	};
 	const mockDeploymentArgsDca = {
 		composedRainlang: 'mock rainlang code for dca',
 		deploymentArgs: {
-		deploymentCalldata: '0xabcdef',
-		orderbookAddress: '0x1234',
-		approvals: [
-			{
-				calldata: '0xapproval',
-				token: '0xtoken',
-				symbol: 'TEST'
-			}
+			deploymentCalldata: '0xabcdef',
+			orderbookAddress: '0x1234',
+			approvals: [
+				{
+					calldata: '0xapproval',
+					token: '0xtoken',
+					symbol: 'TEST'
+				}
 			],
 			chainId: 8453
 		}
@@ -101,41 +102,41 @@ describe('transactionStore tests', () => {
 			deploymentCalldata: '0xabcdef',
 			orderbookAddress: '0x1234',
 			approvals: [
-			{
-				calldata: '0xapproval',
-				token: '0xtoken',
-				symbol: 'TEST'
-			},
-			{
-				calldata: '0xapproval',
-				token: '0xtoken1',
-				symbol: 'TEST1'
-			},
-			{
-				calldata: '0xapproval',
-				token: '0xtoken2',
-				symbol: 'TEST2'
-			},
-			{
-				calldata: '0xapproval',
-				token: '0xtoken3',
-				symbol: 'TEST3'
-			},
-			{
-				calldata: '0xapproval',
-				token: '0xtoken4',
-				symbol: 'TEST4'
-			},
-			{
-				calldata: '0xapproval',
-				token: '0xtoken5',
-				symbol: 'TEST5'
-			},
-			{
-				calldata: '0xapproval',
-				token: '0xtoken6',
-				symbol: 'TEST6'
-			}
+				{
+					calldata: '0xapproval',
+					token: '0xtoken',
+					symbol: 'TEST'
+				},
+				{
+					calldata: '0xapproval',
+					token: '0xtoken1',
+					symbol: 'TEST1'
+				},
+				{
+					calldata: '0xapproval',
+					token: '0xtoken2',
+					symbol: 'TEST2'
+				},
+				{
+					calldata: '0xapproval',
+					token: '0xtoken3',
+					symbol: 'TEST3'
+				},
+				{
+					calldata: '0xapproval',
+					token: '0xtoken4',
+					symbol: 'TEST4'
+				},
+				{
+					calldata: '0xapproval',
+					token: '0xtoken5',
+					symbol: 'TEST5'
+				},
+				{
+					calldata: '0xapproval',
+					token: '0xtoken6',
+					symbol: 'TEST6'
+				}
 			],
 			chainId: 8453
 		}
@@ -354,11 +355,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await deployPromise;
 
@@ -394,11 +395,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await deployPromise;
 
@@ -424,11 +425,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await deployPromise;
 
@@ -478,11 +479,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await deployPromise;
 
@@ -539,11 +540,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;
@@ -571,11 +572,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;
@@ -597,11 +598,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;
@@ -647,11 +648,11 @@ describe('transactionStore tests', () => {
 		});
 
 		await vi.runAllTimersAsync();
-		
+
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
-		
+
 		await vi.runAllTimersAsync();
 		await vi.advanceTimersByTimeAsync(2000);
 		await deployPromise;

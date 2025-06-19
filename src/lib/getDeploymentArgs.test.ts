@@ -60,7 +60,7 @@ describe('getDeploymentArgs', () => {
 		vi.mocked(DotrainOrderGui.chooseDeployment).mockResolvedValue(
 			mockGui as unknown as DotrainOrderGui
 		);
-		
+
 		vi.mocked(getPrice).mockResolvedValue('1.5');
 	});
 
@@ -312,8 +312,7 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(result).toEqual(
-		{	
+		expect(result).toEqual({
 			composedRainlang: '/* mock rainlang code */',
 			deploymentArgs: {
 				to: '0x1234567890123456789012345678901234567890',
