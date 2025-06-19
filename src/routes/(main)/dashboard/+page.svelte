@@ -19,8 +19,8 @@
 		queryKey: ['getTrades'],
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
-			const sevenDaysAgo = now - 7 * 86400;
-			const trades = await getTrades(sevenDaysAgo, now);
+			const monthAgo = now - 30 * 86400;
+			const trades = await getTrades(monthAgo, now);
 			return trades;
 		},
 		retry: 3,
