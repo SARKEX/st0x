@@ -64,13 +64,16 @@
 		});
 	}
 
-	function calculateCumulativeSupply(events: SupplyEvent[], howManyDays: number): Array<{ time: string; value: number }> {
+	function calculateCumulativeSupply(
+		events: SupplyEvent[],
+		howManyDays: number
+	): Array<{ time: string; value: number }> {
 		const today = new Date();
 		const nDaysAgo = new Date(today.getTime() - howManyDays * 24 * 60 * 60 * 1000);
-		
+
 		// Create daily buckets
 		const dailyData = new Map<string, number>();
-		
+
 		// Initialize all days with 0
 		for (let i = 0; i < howManyDays; i++) {
 			const currentDate = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
@@ -80,7 +83,7 @@
 
 		// Sort events by timestamp
 		const sortedEvents = events.sort((a, b) => a.timestamp - b.timestamp);
-		
+
 		let cumulativeSupply = 0;
 		const cumulativeData: Array<{ time: string; value: number }> = [];
 
@@ -90,7 +93,7 @@
 			if (eventDate >= nDaysAgo) {
 				cumulativeSupply += event.amount;
 				const formattedDate = moment(eventDate).format('YYYY-MM-DD');
-				
+
 				// Update the daily data
 				dailyData.set(formattedDate, cumulativeSupply);
 			}
@@ -99,7 +102,7 @@
 		// Convert to array and fill gaps
 		const sortedDates = Array.from(dailyData.keys()).sort();
 		let lastValue = 0;
-		
+
 		sortedDates.forEach((date) => {
 			const value = dailyData.get(date) || lastValue;
 			if (value > 0) {
@@ -234,4 +237,4 @@
 	<div class="mt-1 flex justify-center sm:mt-2">
 		<span class="text-[10px] font-medium text-gray-400 sm:text-xs">Time</span>
 	</div>
-</div> 
+</div>
