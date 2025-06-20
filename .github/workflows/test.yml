@@ -20,6 +20,7 @@ jobs:
       - run: nix develop -c npm run test
         env:
           PUBLIC_WALLETCONNECT_ID: ${{ secrets.PUBLIC_WALLETCONNECT_ID }}
+          PUBLIC_ALPHAVANTAGE_API_KEY: ${{ secrets.PUBLIC_ALPHAVANTAGE_API_KEY }}
               
   lint:
     runs-on: ubuntu-latest
@@ -38,3 +39,4 @@ jobs:
       - run: nix develop -c npm run svelte-lint-format-check
         env:
           PUBLIC_WALLETCONNECT_ID: ${{ secrets.PUBLIC_WALLETCONNECT_ID }}
+          PUBLIC_ALPHAVANTAGE_API_KEY: ${{ secrets.PUBLIC_ALPHAVANTAGE_API_KEY }}
