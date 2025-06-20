@@ -70,8 +70,6 @@
 		// Navigate to the neworder page
 		goto('/neworder');
 	}
-
-	$: console.log($tokenGlobalQuote);
 </script>
 
 <div class={SECTION_CLASSES}>

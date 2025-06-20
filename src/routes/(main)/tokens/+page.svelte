@@ -76,7 +76,6 @@
 
 		<!-- Token List Content -->
 		<div class="space-y-8 p-6">
-
 			<!-- Token List Section -->
 			<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
 				<div class="mb-6 flex items-center justify-between">

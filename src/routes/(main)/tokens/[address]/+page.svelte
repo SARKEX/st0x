@@ -13,7 +13,6 @@
 	$: priceQuery = createQuery({
 		queryKey: ['tokenPrice', symbol],
 		queryFn: async () => {
-			console.log('refetching price');
 			const response = await fetch(
 				`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 			);
