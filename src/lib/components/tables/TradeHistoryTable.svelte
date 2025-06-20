@@ -1,0 +1,110 @@
+<script lang="ts">
+	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import type { SgTrade } from '@rainlanguage/orderbook/js_api';
+	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
+	import { formatUnits } from 'viem';
+	import Button from '../Button.svelte';
+	import { Spinner } from 'flowbite-svelte';
+
+	export let query: CreateInfiniteQueryResult<InfiniteData<{ trades: SgTrade[] }, unknown>, Error>;
+
+	function formatTimestamp(timestamp: string): string {
+		return new Date(parseInt(timestamp) * 1000).toLocaleString();
+	}
+</script>
+
+{#if $query.isError}
+	<div class="mt-10 flex flex-col items-center justify-start">
+		<p class="text-lg font-medium text-red-400">Error loading trades: {$query.error?.message}</p>
+	</div>
+{:else if $query.isLoading}
+	<div class="mt-10 flex flex-col items-center justify-start">
+		<div
+			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-yellow-500"
+		></div>
+		<p class="mt-3 text-lg font-medium text-gray-300">Loading...</p>
+	</div>
+{:else if $query.data}
+	<div class="overflow-x-auto">
+		<table class="min-w-full divide-y divide-gray-700">
+			<thead class="bg-gray-800">
+				<tr>
+					<th
+						scope="col"
+						class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300"
+					>
+						Input Token
+					</th>
+					<th
+						scope="col"
+						class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300"
+					>
+						Output Token
+					</th>
+					<th
+						scope="col"
+						class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300"
+					>
+						Amount Traded
+					</th>
+					<th
+						scope="col"
+						class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300"
+					>
+						Timestamp
+					</th>
+					<th
+						scope="col"
+						class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-300"
+					>
+						Transaction
+					</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-gray-800 bg-gray-900">
+				{#each $query.data.pages as page}
+					{#each page.trades as trade}
+						<tr class="hover:bg-gray-800/50">
+							<td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-white">
+								{trade.inputVaultBalanceChange.vault.token.symbol}
+							</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+								{trade.outputVaultBalanceChange.vault.token.symbol}
+							</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+								{formatUnits(BigInt(trade.inputVaultBalanceChange.amount), 18)}
+							</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+								{formatTimestamp(trade.timestamp)}
+							</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-blue-400">
+								<a
+									href="{TARGET_NETWORK_EXPLORER_URL}/tx/{trade.tradeEvent.transaction.id}"
+									target="_blank"
+									rel="noopener noreferrer"
+									class="hover:underline"
+								>
+									View Transaction
+								</a>
+							</td>
+						</tr>
+					{/each}
+				{/each}
+			</tbody>
+		</table>
+		{#if $query.hasNextPage}
+			<div class="flex justify-center p-4">
+				<Button
+					on:click={() => $query.fetchNextPage()}
+					disabled={$query.isFetchingNextPage}
+					size="small"
+				>
+					{#if $query.isFetchingNextPage}
+						<Spinner class="mr-3" size="4" />
+					{/if}
+					Load More
+				</Button>
+			</div>
+		{/if}
+	</div>
+{/if}
