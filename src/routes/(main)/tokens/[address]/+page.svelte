@@ -80,19 +80,18 @@
 		enabled: !!$currentToken?.id
 	});
 
+	$: globalQuote = $priceQuery.data?.['Global Quote'];
+
 	$: marketCap =
-		$currentToken?.totalShares && $priceQuery.data?.['Global Quote']?.['05. price']
+		$currentToken?.totalShares && globalQuote?.['05. price']
 			? (BigInt($currentToken.totalShares) *
-					BigInt(Math.floor(parseFloat($priceQuery.data['Global Quote']['05. price']) * 100))) /
+					BigInt(Math.floor(parseFloat(globalQuote['05. price']) * 100))) /
 				BigInt(100)
 			: 0n;
 
-	$: priceChange = $priceQuery.data
-		? parseFloat($priceQuery.data['Global Quote']['09. change'])
-		: 0;
-	$: percentChange = $priceQuery.data
-		? parseFloat($priceQuery.data['Global Quote']['10. change percent'].replace('%', ''))
-		: 0;
+	$: priceChange = parseFloat(globalQuote?.['09. change']) || 0;
+
+	$: percentChange = parseFloat(globalQuote?.['10. change percent']?.replace('%', '')) || 0;
 
 	// Utility Classes (matching dashboard theme)
 	const CARD_BASE_CLASSES =
@@ -125,7 +124,7 @@
 								<LoadingSpinner variant="dot" text="Updating price..." />
 							{/if}
 							<span class="text-2xl font-bold text-green-400">
-								${parseFloat($priceQuery.data['Global Quote']['05. price']).toFixed(2)}
+								${(parseFloat(globalQuote?.['05. price']) || 0).toFixed(2)}
 							</span>
 						</div>
 					</div>
@@ -224,7 +223,7 @@
 			<p class="text-sm text-red-300">
 				{$priceQuery.error?.message ||
 					$overviewQuery.error?.message ||
-					$timeseriesQuery.error?.message ||
+					$timeseriesQuery.error?.message ||	
 					$tradesQuery.error?.message ||
 					'Unknown error occurred'}
 			</p>
