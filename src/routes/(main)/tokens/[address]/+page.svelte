@@ -119,10 +119,10 @@
 			</div>
 		</div>
 
-		<!-- Three Main Cards -->
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+		<!-- Bottom Row: Card 1 and Equity Chart -->
+		<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 			<!-- Card 1: Equity Price Information -->
-			<div class="{CARD_BASE_CLASSES} p-6">
+			<div class="{CARD_BASE_CLASSES} p-6 lg:col-span-1">
 				<div class={GRADIENT_HOVER_CLASSES}></div>
 				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">Equity Price</h3>
 				<div class="space-y-4">
@@ -158,11 +158,9 @@
 						</span>
 					</div>
 				</div>
-			</div>
 
-			<!-- Card 2: Equity Overview -->
-			<div class="{CARD_BASE_CLASSES} p-6">
-				<div class={GRADIENT_HOVER_CLASSES}></div>
+				<div class="my-6 border-t border-white/10"></div>
+
 				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
 					Equity Overview
 				</h3>
@@ -182,11 +180,9 @@
 						</span>
 					</div>
 				</div>
-			</div>
 
-			<!-- Card 3: ST0X Token Overview -->
-			<div class="{CARD_BASE_CLASSES} p-6">
-				<div class={GRADIENT_HOVER_CLASSES}></div>
+				<div class="my-6 border-t border-white/10"></div>
+
 				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">ST0X Token</h3>
 				<div class="space-y-4">
 					<div class="flex items-baseline justify-between">
@@ -209,12 +205,14 @@
 					</div>
 				</div>
 			</div>
-		</div>
 
-		<!-- Equity Chart Section -->
-		<div class={SECTION_CLASSES}>
-			<h3 class="mb-4 text-xl font-semibold">Price History</h3>
-			<EquityChart timeseriesData={$timeseriesQuery.data} />
+			<!-- Equity Chart Section -->
+			<div class="{SECTION_CLASSES} lg:col-span-2 flex flex-col">
+				<h3 class="mb-4 text-xl font-semibold">Price History</h3>
+				<div class="flex-grow">
+					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
+				</div>
+			</div>
 		</div>
 
 		<div class={SECTION_CLASSES}>
