@@ -95,47 +95,42 @@ export type LimitOrderDeploymentArgs = {
 };
 
 export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs) => {
-	try {
-		const limitStrategy = await (
-			await fetch(
-				'https://raw.githubusercontent.com/rainlanguage/rain.strategies/604d57cd27d620c84e35b94a218caab9e286f954/src/fixed-limit.rain'
-			)
-		).text();
-		const gui = await DotrainOrderGui.chooseDeployment(limitStrategy, TARGET_NETWORK);
+	const limitStrategy = await (
+		await fetch(
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/604d57cd27d620c84e35b94a218caab9e286f954/src/fixed-limit.rain'
+		)
+	).text();
+	const gui = await DotrainOrderGui.chooseDeployment(limitStrategy, TARGET_NETWORK);
 
-		await gui.saveSelectToken('token1', args.inputToken.address);
-		await gui.saveSelectToken('token2', args.outputToken.address);
+	await gui.saveSelectToken('token1', args.inputToken.address);
+	await gui.saveSelectToken('token2', args.outputToken.address);
 
-		// Save field values using the selected strategy parameters
-		gui.saveFieldValue('fixed-io', {
-			value: args.ioRatio,
-			isPreset: false
-		});
+	// Save field values using the selected strategy parameters
+	gui.saveFieldValue('fixed-io', {
+		value: args.ioRatio,
+		isPreset: false
+	});
 
-		gui.saveDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
+	gui.saveDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-		if (args.inputVaultId) {
-			gui.setVaultId(true, 0, args.inputVaultId);
-		}
-
-		if (args.outputVaultId) {
-			gui.setVaultId(false, 0, args.outputVaultId);
-		}
-
-		const $signerAddress = get(signerAddress);
-		if (!$signerAddress) throw new Error('Signer address not found');
-
-		const composedRainlang = await gui.getComposedRainlang();
-		const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
-
-		return {
-			composedRainlang,
-			deploymentArgs
-		};
-	} catch (error) {
-		console.error(error);
-		throw error;
+	if (args.inputVaultId) {
+		gui.setVaultId(true, 0, args.inputVaultId);
 	}
+
+	if (args.outputVaultId) {
+		gui.setVaultId(false, 0, args.outputVaultId);
+	}
+
+	const $signerAddress = get(signerAddress);
+	if (!$signerAddress) throw new Error('Signer address not found');
+
+	const composedRainlang = await gui.getComposedRainlang();
+	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+
+	return {
+		composedRainlang,
+		deploymentArgs
+	};
 };
 
 export type MarketMakingDeploymentArgs = {

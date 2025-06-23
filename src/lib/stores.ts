@@ -5,6 +5,7 @@ import { arbitrum } from '@wagmi/core/chains';
 import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
 import type { SgTrade } from '@rainlanguage/orderbook/common';
 import type { Token } from 'sushi/currency';
+import type { ApiStockQuote } from './types';
 
 export const targetNetwork = writable<Chain>(arbitrum);
 export const wrongNetwork = derived(
@@ -12,8 +13,15 @@ export const wrongNetwork = derived(
 	([$chainId, $signerAddress, $targetNetwork]) => $signerAddress && $chainId !== $targetNetwork.id
 );
 export const sfts = writable<OffchainAssetReceiptVault[]>([]);
+export const currentToken = writable<OffchainAssetReceiptVault | null>(null);
+export const currentTokenPrice = writable<{
+	price: number;
+	change: number;
+	changePercent: number;
+} | null>(null);
 export const trades = writable<SgTrade[]>([]);
 export const infoModalOpen = writable(false);
+export const tokenGlobalQuote = writable<ApiStockQuote[]>([]);
 
 // Store for Rainlang confirmation modal
 export const rainlangConfirmationModal = writable<{

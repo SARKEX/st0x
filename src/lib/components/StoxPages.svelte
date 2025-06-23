@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { STOXs, USDC_TOKEN } from '$lib/network';
 	import { goto } from '$app/navigation';
-	import { orderTokenStore } from '$lib/stores';
+	import { orderTokenStore, tokenGlobalQuote } from '$lib/stores';
 	import type { Token } from 'sushi/currency';
+	import type { ApiStockQuote } from '$lib/types';
 
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
 
@@ -17,6 +18,39 @@
 		currentPage * CARDS_PER_PAGE,
 		(currentPage + 1) * CARDS_PER_PAGE
 	);
+
+	// Helper function to get token data
+	function getTokenData(symbol: string) {
+		if (!$tokenGlobalQuote || $tokenGlobalQuote.length === 0) return null;
+
+		const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
+			(q) => q?.['Global Quote']?.['01. symbol'] === symbol?.split('s1')[0]
+		);
+
+		if (!quote || !quote['Global Quote']) return null;
+
+		const globalQuote = quote['Global Quote'];
+
+		// Check if essential data is present
+		if (
+			globalQuote['05. price'] == null ||
+			globalQuote['09. change'] == null ||
+			globalQuote['10. change percent'] == null
+		) {
+			return null;
+		}
+
+		const price = parseFloat(globalQuote['05. price']);
+		const change = parseFloat(globalQuote['09. change']);
+		const changePercent = parseFloat(globalQuote['10. change percent'].replace('%', ''));
+
+		// Check for parsing errors
+		if (isNaN(price) || isNaN(change) || isNaN(changePercent)) {
+			return null;
+		}
+
+		return { price, change, changePercent };
+	}
 
 	function nextPage() {
 		if (currentPage < totalPages - 1) currentPage += 1;
@@ -63,6 +97,7 @@
 	{#key currentPage}
 		<div class="grid w-full grid-cols-4 gap-6">
 			{#each paginatedTokens as stox}
+				{@const tokenData = getTokenData(stox.symbol ?? '')}
 				<button
 					type="button"
 					class="relative flex w-full cursor-pointer flex-col rounded-2xl border border-white/10 bg-gray-800/80 p-5 text-left transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-700/80"
@@ -82,7 +117,41 @@
 						</div>
 						<div class="flex items-center justify-between border-t border-white/5 pt-3">
 							<div class="text-sm text-gray-400">Price</div>
-							<div class="text-sm font-medium text-green-500">$11.00</div>
+							<div class="text-sm font-medium text-white">
+								{#if tokenData}
+									${tokenData.price.toFixed(2)}
+								{:else}
+									<div class="h-4 w-16 animate-pulse rounded bg-gray-600"></div>
+								{/if}
+							</div>
+						</div>
+						<div class="flex items-center justify-between">
+							<div class="text-sm text-gray-400">24h Change</div>
+							<div
+								class="text-sm font-medium"
+								class:text-green-500={tokenData ? tokenData.change >= 0 : true}
+								class:text-red-500={tokenData ? tokenData.change < 0 : false}
+							>
+								{#if tokenData}
+									${tokenData.change.toFixed(2)}
+								{:else}
+									<div class="h-4 w-16 animate-pulse rounded bg-gray-600"></div>
+								{/if}
+							</div>
+						</div>
+						<div class="flex items-center justify-between">
+							<div class="text-sm text-gray-400">Change %</div>
+							<div
+								class="text-sm font-medium"
+								class:text-green-500={tokenData ? tokenData.changePercent >= 0 : true}
+								class:text-red-500={tokenData ? tokenData.changePercent < 0 : false}
+							>
+								{#if tokenData}
+									{tokenData.changePercent.toFixed(2)}%
+								{:else}
+									<div class="h-4 w-16 animate-pulse rounded bg-gray-600"></div>
+								{/if}
+							</div>
 						</div>
 					</div>
 				</button>

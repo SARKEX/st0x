@@ -2,7 +2,7 @@
 	import '../../app.css';
 	import { defaultConfig, wagmiConfig } from 'svelte-wagmi';
 	import { injected, walletConnect } from '@wagmi/connectors';
-	import { PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
+	import { PUBLIC_ALPHAVANTAGE_API_KEY, PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
 	import { arbitrum } from '@wagmi/core/chains';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
@@ -10,7 +10,8 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { onMount } from 'svelte';
 	import { getSfts } from '$lib/query';
-	import { sfts, rainlangConfirmationModal } from '$lib/stores';
+	import { sfts, rainlangConfirmationModal, tokenGlobalQuote } from '$lib/stores';
+	import { STOXs } from '$lib/network';
 
 	const initWallet = async () => {
 		const erckit = defaultConfig({
@@ -35,7 +36,25 @@
 		}
 	});
 
+	$: tokenGlobalQuoteQuery = createQuery({
+		queryKey: ['tokenGlobalQuote'],
+		queryFn: async () => {
+			const tokenQuotes = [];
+			for (const stox of STOXs) {
+				const response = await fetch(
+					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${
+						stox.symbol?.split('s1')[0]
+					}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+				);
+				const data = await response.json();
+				tokenQuotes.push(data);
+			}
+			return tokenQuotes;
+		}
+	});
+
 	$: sfts.set($vaultQuery.data);
+	$: tokenGlobalQuote.set($tokenGlobalQuoteQuery.data ?? []);
 
 	onMount(() => {
 		initWallet();
@@ -45,7 +64,7 @@
 	});
 </script>
 
-{#if $vaultQuery.isLoading}
+{#if $vaultQuery.isLoading || $tokenGlobalQuoteQuery.isLoading}
 	<div class="flex h-screen items-center justify-center bg-gray-900">
 		<div class="relative">
 			<div
@@ -59,9 +78,11 @@
 			</div>
 		</div>
 	</div>
-{:else if $vaultQuery.isError}
+{:else if $vaultQuery.isError || $tokenGlobalQuoteQuery.isError}
 	<div class="flex h-screen items-center justify-center">
-		<div class="text-red-500">Error: {$vaultQuery.error.message}</div>
+		<div class="text-red-500">
+			Error: {$vaultQuery.error?.message || $tokenGlobalQuoteQuery.error?.message}
+		</div>
 	</div>
 {:else if $wagmiConfig}
 	<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">

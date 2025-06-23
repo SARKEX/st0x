@@ -1,44 +1,27 @@
 <script lang="ts">
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
-	import { getPrice } from '$lib/getPrice';
-	import { arbitrum } from '@wagmi/core/chains';
-	import { sfts } from '$lib/stores';
+	import { sfts, tokenGlobalQuote } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { Token } from 'sushi/currency';
-	import { SFT_EXPLORER_URL, STOXs, USDC_TOKEN } from '$lib/network';
+	import { SFT_EXPLORER_URL, STOXs } from '$lib/network';
 	import { formatUnits } from 'viem';
-	import TransfersChart from '$lib/components/charts/TransfersChart.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import { goto } from '$app/navigation';
+	import type { ApiStockQuote } from '$lib/types';
 
 	let viewMode = 'table';
-	$: totalTokens = $query.data ? $query.data.length : 0;
-	$: totalMarketCap = $query.data
-		? $query.data.reduce((sum, token) => sum + parseFloat(token.marketCap), 0)
-		: 0;
-	$: totalSupply = $query.data
-		? $query.data.reduce((sum, token) => sum + parseFloat(token.totalSupply), 0)
-		: 0;
-	$: totalHolders = $query.data
-		? $query.data.reduce((sum, token) => sum + parseFloat(token.totalHolders), 0)
-		: 0;
 
-	const query = createQuery({
-		queryKey: ['getSftsStocks'],
-		queryFn: async () => {
+	$: query = createQuery({
+		queryKey: ['getSftsStocks', $sfts?.length, $tokenGlobalQuote?.length],
+		enabled: !!($sfts && $sfts.length > 0 && $tokenGlobalQuote && $tokenGlobalQuote.length > 0),
+		queryFn: () => {
 			const sftVaults: OffchainAssetReceiptVault[] = $sfts;
 			const tokens = [];
 			for (let sft of sftVaults) {
-				const sftPrice = await getPrice(
-					new Token({
-						chainId: arbitrum.id,
-						address: sft.id,
-						symbol: sft.symbol,
-						decimals: 6
-					}),
-					USDC_TOKEN
+				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
+					(q) => q?.['Global Quote']?.['01. symbol'] === sft.symbol?.split('s1')[0]
 				);
-
+				const sftPrice = quote?.['Global Quote']?.['05. price'] ?? 0;
 				tokens.push({
 					id: sft.id,
 					name: sft.name,
@@ -93,57 +76,6 @@
 
 		<!-- Token List Content -->
 		<div class="space-y-8 p-6">
-			<!-- Stats Overview -->
-			<div class="mb-8 grid grid-cols-4 gap-6">
-				<div
-					class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-yellow-500/30"
-				>
-					<div
-						class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-					/>
-					<div class="mb-2 text-xs uppercase tracking-wide text-gray-400">Total Tokens</div>
-					<div class="mb-1 text-2xl font-bold">{totalTokens}</div>
-				</div>
-
-				<div
-					class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-yellow-500/30"
-				>
-					<div
-						class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-					/>
-					<div class="mb-2 text-xs uppercase tracking-wide text-gray-400">
-						Approximate Market Cap
-					</div>
-					<div class="mb-1 text-2xl font-bold">${totalMarketCap.toLocaleString()}</div>
-				</div>
-
-				<div
-					class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-yellow-500/30"
-				>
-					<div
-						class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-					/>
-					<div class="mb-2 text-xs uppercase tracking-wide text-gray-400">Total Supply</div>
-					<div class="mb-1 text-2xl font-bold">{totalSupply.toLocaleString()}</div>
-					<div class="text-sm text-blue-500">Circulating</div>
-				</div>
-
-				<div
-					class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-yellow-500/30"
-				>
-					<div
-						class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-					/>
-					<div class="mb-2 text-xs uppercase tracking-wide text-gray-400">Total Holders</div>
-					<div class="mb-1 text-2xl font-bold">{totalHolders}</div>
-					<div class="text-sm text-purple-500">Unique addresses</div>
-				</div>
-			</div>
-
-			<div class="mb-4 sm:mb-6" style="min-height: 250px sm:min-height: 350px;">
-				<TransfersChart vaults={$sfts} />
-			</div>
-
 			<!-- Token List Section -->
 			<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
 				<div class="mb-6 flex items-center justify-between">
@@ -202,7 +134,14 @@
 										<div>
 											<h3 class="text-lg font-semibold">{token.symbol}</h3>
 											<p class="text-sm text-gray-400">
-												{token.name}
+												<button
+													on:click={() => {
+														goto(`/tokens/${token.id}`);
+													}}
+													class="text-sm underline hover:text-blue-300"
+												>
+													{token.name}
+												</button>
 											</p>
 											<p class="text-sm text-gray-400">
 												<a
@@ -292,7 +231,8 @@
 										Holders
 									</th>
 									<th class="px-6 py-4 text-left font-medium text-gray-400">Status</th>
-									<th class="px-6 py-4 text-left font-medium text-gray-400">Actions</th>
+									<th class="px-6 py-4 text-left font-medium text-gray-400">View on Explorer</th>
+									<th class="px-6 py-4 text-left font-medium text-gray-400">Explorer</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -326,7 +266,7 @@
 												{token.id.slice(0, 6)}...{token.id.slice(-4)}
 											</a>
 										</td>
-										<td class="px-6 py-4 font-medium text-white">{token.price}</td>
+										<td class="px-6 py-4 font-medium text-white">${token.price}</td>
 										<td class="px-6 py-4 text-white">{token.marketCap}</td>
 										<td class="px-6 py-4 text-white">{token.totalSupply}</td>
 										<td class="px-6 py-4 text-white">{token.totalHolders}</td>
@@ -343,8 +283,17 @@
 												target="_blank"
 												class="text-sm text-blue-400 hover:text-blue-300"
 											>
-												View Details →
+												View on Explorer →
 											</a>
+										</td>
+										<td class="px-6 py-4">
+											<button
+												on:click={() => {
+													goto(`/tokens/${token.id}`);
+												}}
+											>
+												View Details →
+											</button>
 										</td>
 									</tr>
 								{/each}
