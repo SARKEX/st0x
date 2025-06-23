@@ -11,6 +11,8 @@
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import type { SgVaultWithSubgraphName } from '@rainlanguage/orderbook/js_api';
 	import { formatUnits } from 'viem';
+	import LoadingSpinner from './LoadingSpinner.svelte';
+
 	export let query: CreateInfiniteQueryResult<
 		InfiniteData<{ vaults: SgVaultWithSubgraphName[] }, unknown>,
 		Error
@@ -23,10 +25,7 @@
 	</div>
 {:else if $query.isLoading}
 	<div class="mt-10 flex flex-col items-center justify-start">
-		<div
-			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-yellow-500"
-		></div>
-		<p class="mt-3 text-lg font-medium text-gray-300">Loading...</p>
+		<LoadingSpinner variant="inline" size="md" text="Loading..." />
 	</div>
 {:else if $query.data}
 	<div class="space-y-4 rounded-lg border border-white/10 bg-gray-700/50 p-4">
@@ -114,12 +113,7 @@
 					disabled={$query.isFetchingNextPage}
 				>
 					{#if $query.isFetchingNextPage}
-						<div class="flex items-center gap-2">
-							<div
-								class="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-yellow-500"
-							></div>
-							Loading more...
-						</div>
+						<LoadingSpinner variant="button" size="sm" text="Loading more..." showText={true} />
 					{:else}
 						Load More
 					{/if}

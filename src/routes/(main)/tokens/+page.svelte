@@ -8,6 +8,7 @@
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { goto } from '$app/navigation';
 	import type { ApiStockQuote } from '$lib/types';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let viewMode = 'table';
 
@@ -43,11 +44,8 @@
 </script>
 
 {#if $query.isLoading || $query.isFetching || $query.isRefetching}
-	<div class="flex min-h-[50vh] flex-col items-center justify-center">
-		<div
-			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600"
-		></div>
-		<p class="mt-3 text-lg font-medium text-gray-600">Loading...</p>
+	<div class="flex flex-col items-center justify-center p-8">
+		<LoadingSpinner variant="inline" size="md" text="Loading..." />
 	</div>
 {:else if $query.error}
 	<div data-testid="error">

@@ -10,6 +10,7 @@
 	import { getPrice } from '$lib/getPrice';
 	import { Token } from 'sushi/currency';
 	import { arbitrum } from '@wagmi/core/chains';
+	import LoadingSpinner from './LoadingSpinner.svelte';
 
 	export let vaults: OffchainAssetReceiptVault[];
 
@@ -94,16 +95,8 @@
 	</h2>
 
 	{#if $balancesQuery.isLoading}
-		<div
-			class="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-gray-700/30 p-8 text-center"
-		>
-			<div class="mb-4 flex h-16 w-16 items-center justify-center">
-				<div
-					class="h-8 w-8 animate-spin rounded-full border-4 border-gray-600 border-t-yellow-500"
-				></div>
-			</div>
-			<h3 class="mb-2 text-lg font-semibold text-white">Loading Balances</h3>
-			<p class="text-gray-400">Fetching your token balances...</p>
+		<div class="flex flex-col items-center justify-center p-8">
+			<LoadingSpinner variant="inline" size="md" text="Loading Balances" />
 		</div>
 	{:else if $balancesQuery.isError}
 		<div

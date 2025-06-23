@@ -48,6 +48,13 @@
 			},
 			crosshair: {
 				mode: 1 // CrosshairMode.Magnet
+			},
+			handleScale: {
+				mouseWheel: false,
+				pinch: true
+			},
+			handleScroll: {
+				mouseWheel: false
 			}
 		};
 

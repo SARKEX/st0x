@@ -5,6 +5,7 @@
 	import EquityChart from '$lib/components/charts/EquityChart.svelte';
 	import { getTrades } from '$lib/query';
 	import TradeHistoryTable from '$lib/components/tables/TradeHistoryTable.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
@@ -33,13 +34,16 @@
 	});
 
 	$: timeseriesQuery = createQuery({
-		queryKey: ['tokenTimeseries', symbol],
+		queryKey: ['timeseries', $currentToken?.symbol],
 		queryFn: async () => {
 			const response = await fetch(
-				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${
+					$currentToken?.symbol?.split('s1')[0]
+				}&outputsize=full&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 			);
 			return await response.json();
-		}
+		},
+		enabled: !!$currentToken?.symbol
 	});
 
 	$: tradesQuery = createInfiniteQuery({
@@ -99,17 +103,7 @@
 
 {#if $priceQuery.isLoading || $overviewQuery.isLoading || $timeseriesQuery.isLoading || $tradesQuery.isLoading}
 	<div class="flex w-full items-center justify-center p-8">
-		<div class="relative">
-			<div
-				class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"
-			></div>
-			<div
-				class="relative h-16 w-16 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"
-			></div>
-			<div class="absolute inset-0 flex items-center justify-center">
-				<div class="h-12 w-12 rounded-full bg-gray-800"></div>
-			</div>
-		</div>
+		<LoadingSpinner variant="fullscreen" size="lg" text="Loading token data..." />
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
 	<div class="space-y-8 p-6">
@@ -136,10 +130,7 @@
 						<span class="text-gray-400">Current Price</span>
 						<div class="flex items-center gap-2">
 							{#if $priceQuery.isFetching && !$priceQuery.isLoading}
-								<div
-									class="h-2 w-2 animate-pulse rounded-full bg-yellow-400"
-									title="Updating price..."
-								></div>
+								<LoadingSpinner variant="dot" text="Updating price..." />
 							{/if}
 							<span class="text-2xl font-bold text-green-400">
 								${parseFloat($priceQuery.data['Global Quote']['05. price']).toFixed(2)}

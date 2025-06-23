@@ -10,6 +10,7 @@
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 	import { getTrades } from '$lib/query';
 	import StoxPages from '$lib/components/StoxPages.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
@@ -224,22 +225,7 @@
 			<div class={SECTION_CLASSES}>
 				{#if $tradesQuery?.isLoading}
 					<div class="max-w-8xl rounded-lg bg-gray-800/50 p-8">
-						<div class="flex items-center justify-center">
-							<div class="relative">
-								<div
-									class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"
-								></div>
-								<div
-									class="relative h-16 w-16 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"
-								></div>
-								<div class="absolute inset-0 flex items-center justify-center">
-									<div class="h-12 w-12 rounded-full bg-gray-800"></div>
-								</div>
-							</div>
-						</div>
-						<h2 class="mb-4 mt-4 text-center text-xl font-semibold text-white">
-							Loading Trades Data...
-						</h2>
+						<LoadingSpinner variant="inline" size="lg" text="Loading Trades Data..." />
 						<p class="text-center text-gray-300">Fetching trades...</p>
 					</div>
 				{:else if $tradesQuery?.isError}
