@@ -1,15 +1,17 @@
 <script lang="ts">
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import { sfts, tokenGlobalQuote } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { SFT_EXPLORER_URL, STOXs } from '$lib/network';
+	import { SFT_EXPLORER_URL, STOXs, ETFs, ST0NX } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { goto } from '$app/navigation';
 	import type { ApiStockQuote } from '$lib/types';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Header from '$lib/components/Header.svelte';
 
 	let viewMode = 'table';
+	let activeFilter = 'All';
 
 	$: query = createQuery({
 		queryKey: ['getSftsStocks', $sfts?.length, $tokenGlobalQuote?.length],
@@ -40,14 +42,25 @@
 			return tokens;
 		}
 	});
+
+	$: filteredData = ($query.data ?? []).filter((token) => {
+		if (activeFilter === 'All') return true;
+		if (activeFilter === 'STOXs') {
+			return STOXs.some((t) => t.address.toLowerCase() === token.id.toLowerCase());
+		}
+		if (activeFilter === 'ETFs') {
+			return ETFs.some((t) => t.address.toLowerCase() === token.id.toLowerCase());
+		}
+		if (activeFilter === 'ST0NX') {
+			return ST0NX.some((t) => t.address.toLowerCase() === token.id.toLowerCase());
+		}
+		return false;
+	});
 </script>
 
 {#if $query.isLoading || $query.isFetching || $query.isRefetching}
-	<div class="flex min-h-[50vh] flex-col items-center justify-center">
-		<div
-			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600"
-		></div>
-		<p class="mt-3 text-lg font-medium text-gray-600">Loading...</p>
+	<div class="flex flex-col items-center justify-center p-8">
+		<LoadingSpinner variant="inline" size="md" text="Loading..." />
 	</div>
 {:else if $query.error}
 	<div data-testid="error">
@@ -58,21 +71,7 @@
 	<!-- Main Content -->
 	<div>
 		<!-- Header -->
-		<div
-			class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg"
-		>
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-4">
-					<div>
-						<h1 class="text-xl font-bold">Tokens</h1>
-						<p class="text-sm text-gray-400">Browse all available tokenized assets</p>
-					</div>
-				</div>
-				<div class="flex items-center gap-4">
-					<WalletConnect />
-				</div>
-			</div>
-		</div>
+		<Header title="Tokens" description="Browse all available tokenized assets" />
 
 		<!-- Token List Content -->
 		<div class="space-y-8 p-6">
@@ -87,6 +86,20 @@
 
 				<!-- Filter Bar -->
 				<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+					<div class="flex gap-2 rounded-lg bg-white/5 p-1">
+						{#each ['All', 'STOXs', 'ETFs', 'ST0NX'] as filter}
+							<button
+								on:click={() => (activeFilter = filter)}
+								class="rounded-md px-3 py-1.5 text-sm font-medium transition-all {activeFilter ===
+								filter
+									? 'bg-yellow-500/20 text-yellow-500'
+									: 'text-gray-400 hover:text-white'}"
+							>
+								{filter}
+							</button>
+						{/each}
+					</div>
+
 					<div class="flex gap-2 rounded-lg bg-white/5 p-1">
 						<button
 							on:click={() => (viewMode = 'grid')}
@@ -110,9 +123,13 @@
 				{#if viewMode === 'grid'}
 					<!-- Grid View -->
 					<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-						{#each $query.data as token (token.id)}
+						{#each filteredData as token (token.id)}
 							<div
 								class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
+								role="link"
+								tabindex="0"
+								on:click={() => goto(`/tokens/${token.id}`)}
+								on:keydown={(e) => e.key === 'Enter' && goto(`/tokens/${token.id}`)}
 							>
 								<div
 									class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
@@ -134,20 +151,14 @@
 										<div>
 											<h3 class="text-lg font-semibold">{token.symbol}</h3>
 											<p class="text-sm text-gray-400">
-												<button
-													on:click={() => {
-														goto(`/tokens/${token.id}`);
-													}}
-													class="text-sm underline hover:text-blue-300"
-												>
-													{token.name}
-												</button>
+												{token.name}
 											</p>
 											<p class="text-sm text-gray-400">
 												<a
 													href={`https://stox.h20.market/token/${token.id}`}
 													target="_blank"
 													class="text-sm text-blue-400 underline hover:text-blue-300"
+													on:click|stopPropagation
 												>
 													{token.id.slice(0, 6)}...{token.id.slice(-4)}
 												</a>
@@ -156,7 +167,9 @@
 									</div>
 
 									<div class="text-right">
-										<div class="text-lg font-bold">${token.price}</div>
+										<div class="text-lg font-bold">
+											${parseFloat(token.price.toString()).toFixed(2)}
+										</div>
 									</div>
 								</div>
 
@@ -232,12 +245,14 @@
 									</th>
 									<th class="px-6 py-4 text-left font-medium text-gray-400">Status</th>
 									<th class="px-6 py-4 text-left font-medium text-gray-400">View on Explorer</th>
-									<th class="px-6 py-4 text-left font-medium text-gray-400">Explorer</th>
 								</tr>
 							</thead>
 							<tbody>
-								{#each $query.data as token (token.id)}
-									<tr class="border-b border-white/5 hover:bg-white/5">
+								{#each filteredData as token (token.id)}
+									<tr
+										class="cursor-pointer border-b border-white/5 hover:bg-white/5"
+										on:click={() => goto(`/tokens/${token.id}`)}
+									>
 										<td class="px-6 py-4">
 											<div class="flex items-center gap-3">
 												<div
@@ -262,6 +277,7 @@
 												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
 												target="_blank"
 												class="text-sm text-blue-400 underline hover:text-blue-300"
+												on:click|stopPropagation
 											>
 												{token.id.slice(0, 6)}...{token.id.slice(-4)}
 											</a>
@@ -282,18 +298,10 @@
 												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
 												target="_blank"
 												class="text-sm text-blue-400 hover:text-blue-300"
+												on:click|stopPropagation
 											>
 												View on Explorer →
 											</a>
-										</td>
-										<td class="px-6 py-4">
-											<button
-												on:click={() => {
-													goto(`/tokens/${token.id}`);
-												}}
-											>
-												View Details →
-											</button>
 										</td>
 									</tr>
 								{/each}

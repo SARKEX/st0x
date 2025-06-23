@@ -83,3 +83,25 @@ export const STOXs: Token[] = [
 		logoUrl: '/images/NVDA.png'
 	})
 ];
+
+export const ETFs: Token[] = [
+	new Token({
+		chainId: arbitrum.id,
+		address: '0x294afcc97cc03bd7e4dccf4addf2a1497d96d454',
+		symbol: 'AAPLs1',
+		decimals: 18,
+		name: 'STx Apple 01',
+		logoUrl: '/images/AAPL.png'
+	})
+];
+
+export const ST0NX: Token[] = [
+	new Token({
+		chainId: arbitrum.id,
+		address: '0x2e93b2c6cb3ac1b9993e784686c5637de28c2c2a',
+		symbol: 'AMZNs1',
+		decimals: 18,
+		name: 'STx Amazon 01',
+		logoUrl: '/images/AMZN.png'
+	})
+];

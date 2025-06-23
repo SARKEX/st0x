@@ -2,18 +2,19 @@
 	import { targetNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
+	import { WalletOutline } from 'flowbite-svelte-icons';
 
 	export let sidebarExpanded = true;
 	export let toggleSidebar = () => {};
 
 	const NAVIGATION_ITEMS = [
-		{ name: 'Dashboard', href: '/' },
-		{ name: 'Mint', href: '/mint' },
-		{ name: 'Burn', href: '/burn' },
-		{ name: 'Token List', href: '/tokens' },
-		{ name: 'New Order', href: '/neworder' },
-		{ name: 'Order List', href: '/orderlist' },
-		{ name: 'Vault List', href: '/vaultlist' }
+		{ name: 'Dashboard', href: '/', protected: false },
+		{ name: 'Mint', href: '/mint', protected: false },
+		{ name: 'Burn', href: '/burn', protected: false },
+		{ name: 'Token List', href: '/tokens', protected: false },
+		{ name: 'New Order', href: '/neworder', protected: true },
+		{ name: 'Order List', href: '/orderlist', protected: true },
+		{ name: 'Vault List', href: '/vaultlist', protected: true }
 	];
 
 	$: activePath = $page.url.pathname;
@@ -59,11 +60,15 @@
 				class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
 				item.href
 					? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
-					: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
+					: item.protected && !$connected
+						? 'text-blue-400/60 hover:text-blue-300'
+						: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
 			>
 				{#if sidebarExpanded}
-					{item.name}
-					{#if activePath === item.href}
+					<span>{item.name}</span>
+					{#if item.protected && !$connected}
+						<WalletOutline class="ml-auto h-5 w-5" />
+					{:else if activePath === item.href}
 						<div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
 					{/if}
 				{:else}

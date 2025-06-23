@@ -5,7 +5,9 @@
 	import EquityChart from '$lib/components/charts/EquityChart.svelte';
 	import { getTrades } from '$lib/query';
 	import TradeHistoryTable from '$lib/components/tables/TradeHistoryTable.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
+	import Header from '$lib/components/Header.svelte';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
@@ -33,13 +35,16 @@
 	});
 
 	$: timeseriesQuery = createQuery({
-		queryKey: ['tokenTimeseries', symbol],
+		queryKey: ['timeseries', $currentToken?.symbol],
 		queryFn: async () => {
 			const response = await fetch(
-				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${
+					$currentToken?.symbol?.split('s1')[0]
+				}&outputsize=full&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 			);
 			return await response.json();
-		}
+		},
+		enabled: !!$currentToken?.symbol
 	});
 
 	$: tradesQuery = createInfiniteQuery({
@@ -75,19 +80,18 @@
 		enabled: !!$currentToken?.id
 	});
 
+	$: globalQuote = $priceQuery.data?.['Global Quote'];
+
 	$: marketCap =
-		$currentToken?.totalShares && $priceQuery.data?.['Global Quote']?.['05. price']
+		$currentToken?.totalShares && globalQuote?.['05. price']
 			? (BigInt($currentToken.totalShares) *
-					BigInt(Math.floor(parseFloat($priceQuery.data['Global Quote']['05. price']) * 100))) /
+					BigInt(Math.floor(parseFloat(globalQuote['05. price']) * 100))) /
 				BigInt(100)
 			: 0n;
 
-	$: priceChange = $priceQuery.data
-		? parseFloat($priceQuery.data['Global Quote']['09. change'])
-		: 0;
-	$: percentChange = $priceQuery.data
-		? parseFloat($priceQuery.data['Global Quote']['10. change percent'].replace('%', ''))
-		: 0;
+	$: priceChange = parseFloat(globalQuote?.['09. change']) || 0;
+
+	$: percentChange = parseFloat(globalQuote?.['10. change percent']?.replace('%', '')) || 0;
 
 	// Utility Classes (matching dashboard theme)
 	const CARD_BASE_CLASSES =
@@ -99,36 +103,17 @@
 
 {#if $priceQuery.isLoading || $overviewQuery.isLoading || $timeseriesQuery.isLoading || $tradesQuery.isLoading}
 	<div class="flex w-full items-center justify-center p-8">
-		<div class="relative">
-			<div
-				class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"
-			></div>
-			<div
-				class="relative h-16 w-16 animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500"
-			></div>
-			<div class="absolute inset-0 flex items-center justify-center">
-				<div class="h-12 w-12 rounded-full bg-gray-800"></div>
-			</div>
-		</div>
+		<LoadingSpinner variant="fullscreen" size="lg" text="Loading token data..." />
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
 	<div class="space-y-8 p-6">
 		<!-- Header Section -->
-		<div
-			class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-800 to-purple-900"
-		>
-			<div class="px-8 py-6 text-center">
-				<h1 class="mb-2 text-3xl font-bold text-white">
-					{$currentToken?.name} - {$currentToken?.symbol}
-				</h1>
-				<p class="font-mono text-sm text-indigo-200">Token ID: {$currentToken?.id}</p>
-			</div>
-		</div>
+		<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
 
-		<!-- Three Main Cards -->
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+		<!-- Bottom Row: Card 1 and Equity Chart -->
+		<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 			<!-- Card 1: Equity Price Information -->
-			<div class="{CARD_BASE_CLASSES} p-6">
+			<div class="{CARD_BASE_CLASSES} p-6 lg:col-span-1">
 				<div class={GRADIENT_HOVER_CLASSES}></div>
 				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">Equity Price</h3>
 				<div class="space-y-4">
@@ -136,13 +121,10 @@
 						<span class="text-gray-400">Current Price</span>
 						<div class="flex items-center gap-2">
 							{#if $priceQuery.isFetching && !$priceQuery.isLoading}
-								<div
-									class="h-2 w-2 animate-pulse rounded-full bg-yellow-400"
-									title="Updating price..."
-								></div>
+								<LoadingSpinner variant="dot" text="Updating price..." />
 							{/if}
 							<span class="text-2xl font-bold text-green-400">
-								${parseFloat($priceQuery.data['Global Quote']['05. price']).toFixed(2)}
+								${(parseFloat(globalQuote?.['05. price']) || 0).toFixed(2)}
 							</span>
 						</div>
 					</div>
@@ -167,11 +149,9 @@
 						</span>
 					</div>
 				</div>
-			</div>
 
-			<!-- Card 2: Equity Overview -->
-			<div class="{CARD_BASE_CLASSES} p-6">
-				<div class={GRADIENT_HOVER_CLASSES}></div>
+				<div class="my-6 border-t border-white/10"></div>
+
 				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
 					Equity Overview
 				</h3>
@@ -191,11 +171,9 @@
 						</span>
 					</div>
 				</div>
-			</div>
 
-			<!-- Card 3: ST0X Token Overview -->
-			<div class="{CARD_BASE_CLASSES} p-6">
-				<div class={GRADIENT_HOVER_CLASSES}></div>
+				<div class="my-6 border-t border-white/10"></div>
+
 				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">ST0X Token</h3>
 				<div class="space-y-4">
 					<div class="flex items-baseline justify-between">
@@ -218,12 +196,14 @@
 					</div>
 				</div>
 			</div>
-		</div>
 
-		<!-- Equity Chart Section -->
-		<div class={SECTION_CLASSES}>
-			<h3 class="mb-4 text-xl font-semibold">Price History</h3>
-			<EquityChart timeseriesData={$timeseriesQuery.data} />
+			<!-- Equity Chart Section -->
+			<div class="{SECTION_CLASSES} flex flex-col lg:col-span-2">
+				<h3 class="mb-4 text-xl font-semibold">Price History</h3>
+				<div class="flex-grow">
+					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
+				</div>
+			</div>
 		</div>
 
 		<div class={SECTION_CLASSES}>

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import { getOrders } from '@rainlanguage/orderbook/js_api';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
@@ -8,6 +7,7 @@
 	import { signerAddress } from 'svelte-wagmi';
 	import type { Token } from 'sushi/currency';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
+	import Header from '$lib/components/Header.svelte';
 
 	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
 	const ORDER_LIST_PAGE_SIZE = 1000;
@@ -59,19 +59,7 @@
 
 <div>
 	<!-- Header -->
-	<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-4">
-				<div>
-					<h1 class="text-xl font-bold">Orders List</h1>
-				</div>
-			</div>
-
-			<div class="flex items-center gap-4">
-				<WalletConnect />
-			</div>
-		</div>
-	</div>
+	<Header title="Orders List" description="View all orders" />
 
 	<!-- Orders Content -->
 	<div class="space-y-8 p-6">

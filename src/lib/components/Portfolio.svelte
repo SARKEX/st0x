@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { USDC_TOKEN } from '$lib/network';
 	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
@@ -7,11 +6,13 @@
 	import { erc20Abi } from 'viem';
 	import type { Hex } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getPrice } from '$lib/getPrice';
 	import { Token } from 'sushi/currency';
 	import { arbitrum } from '@wagmi/core/chains';
+	import LoadingSpinner from './LoadingSpinner.svelte';
+	import type { ApiStockQuote } from '$lib/types';
 
 	export let vaults: OffchainAssetReceiptVault[];
+	export let tokenGlobalQuote: ApiStockQuote[];
 
 	type PortfolioToken = Token & {
 		balance: string;
@@ -46,9 +47,14 @@
 
 	// Query to get balances for all tokens
 	$: balancesQuery = createQuery({
-		queryKey: ['tokenBalances', uniqueTokens.map((t) => t.address), $signerAddress],
+		queryKey: [
+			'tokenBalances',
+			uniqueTokens.map((t) => t.address),
+			$signerAddress,
+			tokenGlobalQuote
+		],
 		queryFn: async (): Promise<PortfolioToken[]> => {
-			if (!$signerAddress || uniqueTokens.length === 0) return [];
+			if (!$signerAddress || uniqueTokens.length === 0 || !tokenGlobalQuote) return [];
 
 			const balancePromises = uniqueTokens.map(async (token): Promise<PortfolioToken> => {
 				try {
@@ -58,14 +64,19 @@
 						functionName: 'balanceOf',
 						args: [$signerAddress as Hex]
 					});
-					const sftPrice = await getPrice(token, USDC_TOKEN);
-					const estimatedValue = formatUnits(balance * BigInt(sftPrice), 18);
+
+					const quote = (tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
+						(q) => q?.['Global Quote']?.['01. symbol'] === token.symbol?.split('s1')[0]
+					);
+					const price = parseFloat(quote?.['Global Quote']?.['05. price'] ?? '0');
+					const formattedBalance = parseFloat(formatUnits(balance, 18));
+					const estimatedValue = (price * formattedBalance).toFixed(2);
 
 					return {
 						...token,
 						balance: balance.toString(),
-						formattedBalance: formatUnits(balance, 18), // Assuming 18 decimals
-						price: sftPrice,
+						formattedBalance: formattedBalance.toFixed(4), // Show more precision for balance
+						price: price.toFixed(2),
 						estimatedValue: estimatedValue
 					} as PortfolioToken;
 				} catch {
@@ -94,16 +105,8 @@
 	</h2>
 
 	{#if $balancesQuery.isLoading}
-		<div
-			class="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-gray-700/30 p-8 text-center"
-		>
-			<div class="mb-4 flex h-16 w-16 items-center justify-center">
-				<div
-					class="h-8 w-8 animate-spin rounded-full border-4 border-gray-600 border-t-yellow-500"
-				></div>
-			</div>
-			<h3 class="mb-2 text-lg font-semibold text-white">Loading Balances</h3>
-			<p class="text-gray-400">Fetching your token balances...</p>
+		<div class="flex flex-col items-center justify-center p-8">
+			<LoadingSpinner variant="inline" size="md" text="Loading Balances" />
 		</div>
 	{:else if $balancesQuery.isError}
 		<div

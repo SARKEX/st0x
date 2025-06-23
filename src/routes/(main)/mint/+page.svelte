@@ -1,5 +1,4 @@
 <script lang="ts">
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { ArrowRightToBracketOutline, InfoCircleSolid } from 'flowbite-svelte-icons';
 	import Footer from '$lib/components/Footer.svelte';
 	import { sfts } from '$lib/stores';
@@ -8,6 +7,7 @@
 	import type { OffchainAssetReceiptVault, Deposit } from '$lib/types/OffchainAssetReceiptVault';
 	import DepositChart from '$lib/components/charts/DepositChart.svelte';
 	import CumulativeSupplyChart from '$lib/components/charts/CumulativeSupplyChart.svelte';
+	import Header from '$lib/components/Header.svelte';
 
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Deposit | null = null;
@@ -31,42 +31,13 @@
 <!-- Main Content -->
 <div>
 	<!-- Header -->
-	<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-4">
-				<div>
-					<h1 class="text-xl font-bold">Mint</h1>
-					<p class="text-sm text-gray-400">Convert U.S. equities to tokenized assets</p>
-				</div>
-			</div>
-
-			<div class="flex items-center gap-4">
-				<WalletConnect />
-			</div>
-		</div>
-	</div>
+	<Header
+		title="Mint Tokenized Assets"
+		description="Convert your U.S. equities into tokenized assets on-chain."
+	/>
 
 	<!-- Mint Content -->
 	<div class="space-y-8 p-6">
-		<!-- Hero Section -->
-		<div class="relative overflow-hidden rounded-2xl">
-			<!-- Background with gradient and pattern -->
-			<div
-				class="absolute inset-0 bg-gradient-to-br from-green-600 via-blue-600 to-yellow-500 opacity-90"
-			/>
-			<div class="absolute inset-0 bg-gradient-to-r from-green-900/50 to-blue-900/50" />
-
-			<!-- Content -->
-			<div class="relative px-12 py-12 text-center">
-				<h1 class="mb-6 text-4xl font-bold leading-tight text-white md:text-5xl">
-					Mint Tokenized Assets
-				</h1>
-
-				<p class="mx-auto mb-8 max-w-3xl text-lg leading-relaxed text-green-100 md:text-xl">
-					Convert your U.S. equities into tokenized assets on-chain.
-				</p>
-			</div>
-		</div>
 		<div class="h-100 mb-4 sm:mb-6">
 			<DepositChart vaults={$sfts} />
 		</div>

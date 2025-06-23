@@ -5,6 +5,7 @@
 	import { formatUnits } from 'viem';
 	import Button from '../Button.svelte';
 	import { Spinner } from 'flowbite-svelte';
+	import LoadingSpinner from '../LoadingSpinner.svelte';
 
 	export let query: CreateInfiniteQueryResult<InfiniteData<{ trades: SgTrade[] }, unknown>, Error>;
 
@@ -19,10 +20,7 @@
 	</div>
 {:else if $query.isLoading}
 	<div class="mt-10 flex flex-col items-center justify-start">
-		<div
-			class="h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-yellow-500"
-		></div>
-		<p class="mt-3 text-lg font-medium text-gray-300">Loading...</p>
+		<LoadingSpinner variant="inline" size="md" text="Loading..." />
 	</div>
 {:else if $query.data}
 	<div class="overflow-x-auto">

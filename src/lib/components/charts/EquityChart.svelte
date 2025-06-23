@@ -26,6 +26,7 @@
 		};
 	}
 	export let timeseriesData: RawStockDailyAdjusted;
+	export let height = 'h-96';
 	let chartContainer: HTMLElement;
 
 	onMount(() => {
@@ -48,6 +49,13 @@
 			},
 			crosshair: {
 				mode: 1 // CrosshairMode.Magnet
+			},
+			handleScale: {
+				mouseWheel: true,
+				pinch: true
+			},
+			handleScroll: {
+				mouseWheel: true
 			}
 		};
 
@@ -85,4 +93,4 @@
 	});
 </script>
 
-<div bind:this={chartContainer} class="h-96 w-full" />
+<div bind:this={chartContainer} class="{height} w-full" />

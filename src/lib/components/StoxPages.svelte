@@ -7,7 +7,7 @@
 
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
 
-	const CARDS_PER_PAGE = 4;
+	const CARDS_PER_PAGE = 8;
 	let currentPage = 0;
 
 	// Calculate total pages
