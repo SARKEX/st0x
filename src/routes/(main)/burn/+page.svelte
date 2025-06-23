@@ -1,5 +1,4 @@
 <script lang="ts">
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { infoModalOpen } from '$lib/stores';
 	import Footer from '$lib/components/Footer.svelte';
 	import WithdrawChart from '$lib/components/charts/WithdrawChart.svelte';
@@ -35,25 +34,6 @@
 
 	<!-- Burn Content -->
 	<div class="space-y-8 p-6">
-		<!-- Hero Section -->
-		<div class="relative overflow-hidden rounded-2xl">
-			<!-- Background with gradient and pattern -->
-			<div
-				class="absolute inset-0 bg-gradient-to-br from-red-600 via-orange-600 to-yellow-500 opacity-90"
-			/>
-			<div class="absolute inset-0 bg-gradient-to-r from-red-900/50 to-orange-900/50" />
-
-			<!-- Content -->
-			<div class="relative px-12 py-12 text-center">
-				<h1 class="mb-6 text-4xl font-bold leading-tight text-white md:text-5xl">
-					Burn Tokenized Assets
-				</h1>
-
-				<p class="mx-auto mb-8 max-w-3xl text-lg leading-relaxed text-orange-100 md:text-xl">
-					Redeem your tokenized assets for underlying securities.
-				</p>
-			</div>
-		</div>
 		<div class="h-100 mb-4 sm:mb-6">
 			<WithdrawChart vaults={$sfts} />
 		</div>
