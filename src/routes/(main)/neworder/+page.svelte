@@ -8,6 +8,7 @@
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
 	import { orderTokenStore } from '$lib/stores';
 	import type { Token } from 'sushi/currency';
+	import Header from '$lib/components/Header.svelte';
 
 	const ORDER_TYPES = [
 		{ id: 'limit', name: 'Limit Orders' },
@@ -48,20 +49,7 @@
 <!-- Main Content -->
 <div>
 	<!-- Header -->
-	<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-4">
-				<div>
-					<h1 class="text-xl font-bold">Orders</h1>
-					<p class="text-sm text-gray-400">Manage your trading strategies</p>
-				</div>
-			</div>
-
-			<div class="flex items-center gap-4">
-				<WalletConnect />
-			</div>
-		</div>
-	</div>
+	<Header title="Orders" description="Manage your trading strategies" />
 
 	<!-- Orders Content -->
 	<div class="space-y-8 p-6">

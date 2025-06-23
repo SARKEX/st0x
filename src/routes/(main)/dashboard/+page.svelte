@@ -1,16 +1,15 @@
 <script lang="ts">
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import VolumeChart from '$lib/components/charts/VolumeChart.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import Footer from '$lib/components/Footer.svelte';
 	import { formatUnits } from 'viem';
-	import { goto } from '$app/navigation';
 	import type { Deposit, OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { sfts } from '$lib/stores';
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 	import { getTrades } from '$lib/query';
 	import StoxPages from '$lib/components/StoxPages.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Header from '$lib/components/Header.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
@@ -149,52 +148,10 @@
 {#if $sfts.length > 0}
 	<div>
 		<!-- Header -->
-		<div
-			class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg"
-		>
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-4">
-					<div>
-						<h1 class="text-xl font-bold">Dashboard</h1>
-						<p class="text-sm text-gray-400">Welcome to ST0x</p>
-					</div>
-				</div>
-
-				<div class="flex items-center gap-4">
-					<WalletConnect />
-				</div>
-			</div>
-		</div>
+		<Header title="Dashboard" description="Welcome to ST0x" />
 
 		<!-- Dashboard Content -->
 		<div class="space-y-8 p-6">
-			<!-- Hero Section -->
-			<div class="relative overflow-hidden rounded-2xl">
-				<!-- Background with gradient and pattern -->
-				<div
-					class="absolute inset-0 bg-gradient-to-br from-purple-600 via-blue-600 to-yellow-500 opacity-90"
-				/>
-				<div class="absolute inset-0 bg-gradient-to-r from-blue-900/50 to-purple-900/50" />
-
-				<!-- Content -->
-				<div class="relative px-12 py-12 text-center">
-					<h1 class="mb-6 text-4xl font-bold leading-tight text-white md:text-5xl">
-						Your gateway to onchain equities
-					</h1>
-
-					<p class="mx-auto mb-8 max-w-3xl text-lg leading-relaxed text-blue-100 md:text-xl">
-						Trade tokenized stocks on-chain with full transparency, 24/7 availability, and
-						fractional ownership. The future of equities trading is here.
-					</p>
-
-					<button
-						class="rounded-xl border border-white/30 bg-white/20 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-white/30"
-						on:click={() => goto('/neworder')}
-					>
-						Trade now
-					</button>
-				</div>
-			</div>
 			<StoxPages />
 
 			<!-- Platform Overview -->

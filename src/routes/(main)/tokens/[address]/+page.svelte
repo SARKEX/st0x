@@ -7,6 +7,7 @@
 	import TradeHistoryTable from '$lib/components/tables/TradeHistoryTable.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
+	import Header from '$lib/components/Header.svelte';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
@@ -108,16 +109,7 @@
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
 	<div class="space-y-8 p-6">
 		<!-- Header Section -->
-		<div
-			class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-800 to-purple-900"
-		>
-			<div class="px-8 py-6 text-center">
-				<h1 class="mb-2 text-3xl font-bold text-white">
-					{$currentToken?.name} - {$currentToken?.symbol}
-				</h1>
-				<p class="font-mono text-sm text-indigo-200">Token ID: {$currentToken?.id}</p>
-			</div>
-		</div>
+		<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
 
 		<!-- Bottom Row: Card 1 and Equity Chart -->
 		<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -10,6 +10,7 @@
 	import { formatUnits } from 'viem';
 	import Portfolio from '$lib/components/Portfolio.svelte';
 	import { sfts } from '$lib/stores';
+	import Header from '$lib/components/Header.svelte';
 
 	const VAULT_LIST_PAGE_SIZE = 1000;
 
@@ -95,19 +96,7 @@
 
 <div>
 	<!-- Header -->
-	<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-4">
-				<div>
-					<h1 class="text-xl font-bold">Vault List</h1>
-				</div>
-			</div>
-
-			<div class="flex items-center gap-4">
-				<WalletConnect />
-			</div>
-		</div>
-	</div>
+	<Header title="Vault List" description="View all vaults" />
 
 	<div class="space-y-8 p-6">
 		<Portfolio vaults={$sfts} />

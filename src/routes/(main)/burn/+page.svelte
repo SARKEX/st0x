@@ -8,6 +8,7 @@
 	import { ArrowRightToBracketOutline, InfoCircleSolid } from 'flowbite-svelte-icons';
 	import type { OffchainAssetReceiptVault, Withdraw } from '$lib/types/OffchainAssetReceiptVault';
 	import BurnReceiptInfoModal from './BurnReceiptInfoModal.svelte';
+	import Header from '$lib/components/Header.svelte';
 
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Withdraw | null = null;
@@ -30,20 +31,7 @@
 <!-- Main Content -->
 <div>
 	<!-- Header -->
-	<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 px-6 py-4 backdrop-blur-lg">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-4">
-				<div>
-					<h1 class="text-xl font-bold">Burn</h1>
-					<p class="text-sm text-gray-400">Redeem tokens for underlying securities</p>
-				</div>
-			</div>
-
-			<div class="flex items-center gap-4">
-				<WalletConnect />
-			</div>
-		</div>
-	</div>
+	<Header title="Burn" description="Redeem tokens for underlying securities" />
 
 	<!-- Burn Content -->
 	<div class="space-y-8 p-6">
