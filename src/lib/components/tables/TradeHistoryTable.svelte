@@ -7,10 +7,7 @@
 	import { Spinner } from 'flowbite-svelte';
 	import LoadingSpinner from '../LoadingSpinner.svelte';
 
-	export let query: CreateInfiniteQueryResult<
-		InfiniteData<{ trades: SgTrade[] }, unknown>,
-		Error
-	>;
+	export let query: CreateInfiniteQueryResult<InfiniteData<{ trades: SgTrade[] }, unknown>, Error>;
 
 	function formatTimestamp(timestamp: string): string {
 		return new Date(parseInt(timestamp) * 1000).toLocaleString();

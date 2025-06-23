@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import DcaStrategy from '$lib/components/orders/DcaStrategy.svelte';
 	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';

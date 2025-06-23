@@ -198,7 +198,7 @@
 			</div>
 
 			<!-- Equity Chart Section -->
-			<div class="{SECTION_CLASSES} lg:col-span-2 flex flex-col">
+			<div class="{SECTION_CLASSES} flex flex-col lg:col-span-2">
 				<h3 class="mb-4 text-xl font-semibold">Price History</h3>
 				<div class="flex-grow">
 					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
@@ -223,7 +223,7 @@
 			<p class="text-sm text-red-300">
 				{$priceQuery.error?.message ||
 					$overviewQuery.error?.message ||
-					$timeseriesQuery.error?.message ||	
+					$timeseriesQuery.error?.message ||
 					$tradesQuery.error?.message ||
 					'Unknown error occurred'}
 			</p>

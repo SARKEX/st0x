@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { USDC_TOKEN } from '$lib/network';
 	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
@@ -7,12 +6,10 @@
 	import { erc20Abi } from 'viem';
 	import type { Hex } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getPrice } from '$lib/getPrice';
 	import { Token } from 'sushi/currency';
 	import { arbitrum } from '@wagmi/core/chains';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 	import type { ApiStockQuote } from '$lib/types';
-	
 
 	export let vaults: OffchainAssetReceiptVault[];
 	export let tokenGlobalQuote: ApiStockQuote[];
@@ -50,7 +47,12 @@
 
 	// Query to get balances for all tokens
 	$: balancesQuery = createQuery({
-		queryKey: ['tokenBalances', uniqueTokens.map((t) => t.address), $signerAddress, tokenGlobalQuote],
+		queryKey: [
+			'tokenBalances',
+			uniqueTokens.map((t) => t.address),
+			$signerAddress,
+			tokenGlobalQuote
+		],
 		queryFn: async (): Promise<PortfolioToken[]> => {
 			if (!$signerAddress || uniqueTokens.length === 0 || !tokenGlobalQuote) return [];
 

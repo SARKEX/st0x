@@ -61,8 +61,8 @@
 				item.href
 					? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
 					: item.protected && !$connected
-					? 'text-blue-400/60 hover:text-blue-300'
-					: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
+						? 'text-blue-400/60 hover:text-blue-300'
+						: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
 			>
 				{#if sidebarExpanded}
 					<span>{item.name}</span>

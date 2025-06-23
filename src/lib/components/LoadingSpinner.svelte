@@ -52,10 +52,9 @@
 			<div class="relative {currentSize.spinner} {currentVariant.spinner}"></div>
 			<div class="absolute inset-0 flex items-center justify-center">
 				<div
-					class="h-{size === 'xl' ? '24' : '12'} w-{size === 'xl' ? '24' : '12'} rounded-full bg-gray-{size ===
-					'xl'
-						? '900'
-						: '800'}"
+					class="h-{size === 'xl' ? '24' : '12'} w-{size === 'xl'
+						? '24'
+						: '12'} rounded-full bg-gray-{size === 'xl' ? '900' : '800'}"
 				></div>
 			</div>
 		</div>
@@ -70,4 +69,4 @@
 			<div class="{currentSize.text} {currentVariant.text}">{text}</div>
 		{/if}
 	</div>
-{/if} 
+{/if}

@@ -9,7 +9,7 @@
 	import type { ApiStockQuote } from '$lib/types';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
-	
+
 	let viewMode = 'table';
 	let activeFilter = 'All';
 
@@ -167,7 +167,9 @@
 									</div>
 
 									<div class="text-right">
-										<div class="text-lg font-bold">${parseFloat(token.price.toString()).toFixed(2)}</div>
+										<div class="text-lg font-bold">
+											${parseFloat(token.price.toString()).toFixed(2)}
+										</div>
 									</div>
 								</div>
 
@@ -248,7 +250,7 @@
 							<tbody>
 								{#each filteredData as token (token.id)}
 									<tr
-										class="border-b border-white/5 cursor-pointer hover:bg-white/5"
+										class="cursor-pointer border-b border-white/5 hover:bg-white/5"
 										on:click={() => goto(`/tokens/${token.id}`)}
 									>
 										<td class="px-6 py-4">
