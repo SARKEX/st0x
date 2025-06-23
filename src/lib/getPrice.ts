@@ -2,9 +2,16 @@ import { Token } from 'sushi/currency';
 import { ethers } from 'ethers';
 import { EvmChainId, getSwap } from 'sushi';
 import { formatUnits } from 'viem';
+import { USDC_TOKEN } from './network';
 
 export const getPrice = async (baseToken: Token, quoteToken: Token): Promise<string> => {
 	try {
+		if (
+			baseToken.address.toLowerCase() === USDC_TOKEN.address.toLowerCase() &&
+			quoteToken.address.toLowerCase() === USDC_TOKEN.address.toLowerCase()
+		) {
+			return '1';
+		}
 		const recipientAddress = ethers.Wallet.createRandom().address;
 		const amountIn = 10n ** BigInt(baseToken.decimals);
 

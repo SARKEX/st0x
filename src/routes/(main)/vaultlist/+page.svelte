@@ -4,13 +4,18 @@
 	import { getVaults } from '@rainlanguage/orderbook/js_api';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import type { SgErc20, SgVaultWithSubgraphName } from '@rainlanguage/orderbook/js_api';
-	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from '$lib/network';
+	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK, USDC_TOKEN } from '$lib/network';
 	import { signerAddress } from 'svelte-wagmi';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
 	import { formatUnits } from 'viem';
 	import Portfolio from '$lib/components/Portfolio.svelte';
-	import { sfts } from '$lib/stores';
+	import { sfts, tokenGlobalQuote } from '$lib/stores';
+
 	import Header from '$lib/components/Header.svelte';
+	import type { ApiStockQuote } from '$lib/types';
+	import { getPrice } from '$lib/getPrice';
+	import { Token } from 'sushi/currency';
+	import { arbitrum } from '@wagmi/core/chains';
 
 	const VAULT_LIST_PAGE_SIZE = 1000;
 
@@ -21,6 +26,8 @@
 		token: SgErc20;
 		balance: string;
 		vaultIds: string[];
+		price: string;
+		estimatedValue: string;
 	}[] = [];
 
 	$: vaultsQuery = createInfiniteQuery({
@@ -84,13 +91,45 @@
 		}
 
 		// Convert map to array and format balances
-		myTokenBalance = Array.from(tokenBalances.values()).map(
-			({ token, totalBalance, vaultIds }) => ({
-				token,
-				balance: formatUnits(totalBalance, Number(token.decimals ?? 18)),
-				vaultIds
-			})
+		const balancePromises = Array.from(tokenBalances.values()).map(
+			async ({ token, totalBalance, vaultIds }) => {
+				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
+					(q) => q?.['Global Quote']?.['01. symbol'] === token.symbol?.split('s1')[0]
+				);
+
+				let price: number;
+				if (quote && quote['Global Quote']?.['05. price']) {
+					price = parseFloat(quote['Global Quote']['05. price']);
+				} else {
+					// Fallback to getPrice if not in global quote
+					const priceStr = await getPrice(
+						new Token({
+							chainId: arbitrum.id,
+							address: token.id,
+							symbol: token.symbol,
+							decimals: Number(token.decimals ?? 18),
+							name: token.name
+						}),
+						USDC_TOKEN
+					);
+					price = parseFloat(priceStr);
+				}
+
+				const balance = parseFloat(formatUnits(totalBalance, Number(token.decimals ?? 18)));
+				const estimatedValue = (price * balance).toFixed(2);
+
+				return {
+					token,
+					balance: balance.toFixed(4),
+					vaultIds,
+					price: price.toFixed(2),
+					estimatedValue
+				};
+			}
 		);
+		Promise.all(balancePromises).then((balances) => {
+			myTokenBalance = balances;
+		});
 	}
 </script>
 
@@ -99,7 +138,7 @@
 	<Header title="Vault List" description="View all vaults" />
 
 	<div class="space-y-8 p-6">
-		<Portfolio vaults={$sfts} />
+		<Portfolio vaults={$sfts} tokenGlobalQuote={$tokenGlobalQuote} />
 	</div>
 
 	<!-- Orders Content -->
@@ -140,6 +179,14 @@
 								<div class="flex items-center justify-between">
 									<span class="text-sm text-gray-400">Total Balance</span>
 									<span class="text-lg font-semibold text-white">{token.balance}</span>
+								</div>
+								<div class="flex items-center justify-between">
+									<span class="text-sm text-gray-400">Price</span>
+									<span class="text-sm text-gray-300">${token.price}</span>
+								</div>
+								<div class="flex items-center justify-between">
+									<span class="text-sm text-gray-400">Estimated Value</span>
+									<span class="text-sm font-medium text-green-400">${token.estimatedValue}</span>
 								</div>
 								<div class="flex items-center justify-between">
 									<span class="text-sm text-gray-400">Vaults</span>

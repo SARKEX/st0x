@@ -11,8 +11,11 @@
 	import { Token } from 'sushi/currency';
 	import { arbitrum } from '@wagmi/core/chains';
 	import LoadingSpinner from './LoadingSpinner.svelte';
+	import type { ApiStockQuote } from '$lib/types';
+	
 
 	export let vaults: OffchainAssetReceiptVault[];
+	export let tokenGlobalQuote: ApiStockQuote[];
 
 	type PortfolioToken = Token & {
 		balance: string;
@@ -47,9 +50,9 @@
 
 	// Query to get balances for all tokens
 	$: balancesQuery = createQuery({
-		queryKey: ['tokenBalances', uniqueTokens.map((t) => t.address), $signerAddress],
+		queryKey: ['tokenBalances', uniqueTokens.map((t) => t.address), $signerAddress, tokenGlobalQuote],
 		queryFn: async (): Promise<PortfolioToken[]> => {
-			if (!$signerAddress || uniqueTokens.length === 0) return [];
+			if (!$signerAddress || uniqueTokens.length === 0 || !tokenGlobalQuote) return [];
 
 			const balancePromises = uniqueTokens.map(async (token): Promise<PortfolioToken> => {
 				try {
@@ -59,14 +62,19 @@
 						functionName: 'balanceOf',
 						args: [$signerAddress as Hex]
 					});
-					const sftPrice = await getPrice(token, USDC_TOKEN);
-					const estimatedValue = formatUnits(balance * BigInt(sftPrice), 18);
+
+					const quote = (tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
+						(q) => q?.['Global Quote']?.['01. symbol'] === token.symbol?.split('s1')[0]
+					);
+					const price = parseFloat(quote?.['Global Quote']?.['05. price'] ?? '0');
+					const formattedBalance = parseFloat(formatUnits(balance, 18));
+					const estimatedValue = (price * formattedBalance).toFixed(2);
 
 					return {
 						...token,
 						balance: balance.toString(),
-						formattedBalance: formatUnits(balance, 18), // Assuming 18 decimals
-						price: sftPrice,
+						formattedBalance: formattedBalance.toFixed(4), // Show more precision for balance
+						price: price.toFixed(2),
 						estimatedValue: estimatedValue
 					} as PortfolioToken;
 				} catch {
