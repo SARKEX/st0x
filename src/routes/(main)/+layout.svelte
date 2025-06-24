@@ -1,9 +1,7 @@
 <script lang="ts">
 	import '../../app.css';
-	import { defaultConfig, wagmiConfig } from 'svelte-wagmi';
-	import { injected, walletConnect } from '@wagmi/connectors';
-	import { PUBLIC_ALPHAVANTAGE_API_KEY, PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
-	import { arbitrum } from '@wagmi/core/chains';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
@@ -13,8 +11,6 @@
 	import { getSfts } from '$lib/query';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote } from '$lib/stores';
 	import { STOXs } from '$lib/network';
-
-	
 
 	let sidebarExpanded = true;
 
@@ -44,8 +40,6 @@
 
 	$: sfts.set($vaultQuery.data);
 	$: tokenGlobalQuote.set($tokenGlobalQuoteQuery.data ?? []);
-
-	
 </script>
 
 {#if $vaultQuery.isLoading || $tokenGlobalQuoteQuery.isLoading}

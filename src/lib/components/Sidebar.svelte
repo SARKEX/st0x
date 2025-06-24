@@ -28,10 +28,17 @@
 	<div class="border-b border-white/10 p-4">
 		<div class="flex items-center gap-2 md:gap-3">
 			<a href="/dashboard">
-				<img src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75" alt="ST0x Logo" class="h-8 w-8 md:h-9 md:w-9 rounded-full" />
+				<img
+					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
+					alt="ST0x Logo"
+					class="h-8 w-8 rounded-full md:h-9 md:w-9"
+				/>
 			</a>
 			<a href="/dashboard">
-				<span class="text-base md:text-xl font-extrabold bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-transparent select-none tracking-tight">ST0X Liquidity</span>
+				<span
+					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
+					>ST0X Liquidity</span
+				>
 			</a>
 		</div>
 	</div>
@@ -63,7 +70,6 @@
 	</nav>
 
 	<!-- Bottom Section -->
-	
 
 	<!-- Bottom Section -->
 	<div class="absolute bottom-0 left-0 right-0 border-t border-white/10 p-4">
@@ -84,12 +90,20 @@
 			{/if}
 		</div>
 	</div>
-	<div class="mt-4 flex flex-col gap-1 p-4 border-t border-b border-white/10">
-		<a href="/docs" class="flex items-center gap-2 text-gray-300 font-normal text-base hover:text-white transition-colors py-2 px-3 rounded-lg hover:bg-white/5">
+	<div class="mt-4 flex flex-col gap-1 border-b border-t border-white/10 p-4">
+		<a
+			href="/docs"
+			class="flex items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+		>
 			<ArrowUpRightFromSquareSolid class="h-5 w-5" />
 			Docs
 		</a>
-		<a href="https://t.me/your_telegram_link" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 text-gray-300 font-normal text-base hover:text-white transition-colors py-2 px-3 rounded-lg hover:bg-white/5">
+		<a
+			href="https://t.me/your_telegram_link"
+			target="_blank"
+			rel="noopener noreferrer"
+			class="flex items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+		>
 			<img src={TelegramLogo} alt="Telegram" class="h-5 w-5" />
 			Telegram
 		</a>

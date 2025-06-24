@@ -1,8 +1,8 @@
 <script lang="ts">
 	import '../app.css';
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
-	import { PUBLIC_ALPHAVANTAGE_API_KEY, PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
-	import { defaultConfig, wagmiConfig } from 'svelte-wagmi';
+	import { PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
+	import { defaultConfig } from 'svelte-wagmi';
 	import { arbitrum } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
