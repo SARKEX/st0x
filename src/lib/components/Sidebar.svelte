@@ -6,7 +6,6 @@
 	import TelegramLogo from '$lib/images/telegram.svg';
 
 	export let sidebarExpanded = true;
-	export let toggleSidebar = () => {};
 
 	const NAVIGATION_ITEMS = [
 		{ name: 'Dashboard', href: '/', protected: false },

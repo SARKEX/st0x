@@ -5,6 +5,7 @@ published: true
 ---
 
 <script>
+    import liquidity from '$lib/images/liquidity.png'
 </script>
 ## Trust and safety is vital 
 
@@ -32,7 +33,7 @@ S1’s German entity acts as custodian, holding the underlying assets under a ri
 1. The trust verifies the burn.
 1. The trust transfers the corresponding shares to the user.
 
-![unnamed-4](https://hackmd.io/_uploads/Hy8xWey7el.png)
+<img src={liquidity} />
 
 ## Arbitrageurs: Aligning On-Chain and Off-Chain Prices
 

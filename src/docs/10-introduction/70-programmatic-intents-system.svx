@@ -4,6 +4,9 @@ published: true
 ---
 
 <script>
+    import orderbook from '$lib/images/orderbook.png'
+    import intentsystem from '$lib/images/intentsystem.png'
+
 </script>
 
 The Programmatic Intents System is an on-chain smart contract platform that allows users to deploy complex token trading strategies using dynamic algorithms. Tokens move between vaults based on strategies expressed in Rainlang, an adaptable, on-chain domain-specific language.
@@ -42,14 +45,14 @@ Strategies formulated using Rainlang must determine a maximum amount and a price
 
 Instead of granting token approvals, users deposit their tokens into vaults that function as virtual accounts within the orderbook. Orders reference input/output vaults, and each order can have multiple inputs and outputs. For instance, a user could accept a range of different stablecoins for WETH. Additionally, distinct orders can reference the same vaults, enabling the construction of even more sophisticated meta-strategies. 
 
-![unnamed-5](https://hackmd.io/_uploads/SyTmSlk7el.png)
+<img src={orderbook} /> 
 
 Strategies deployed on-chain remain active until filled or removed.				
 Order placers do not bear the gas costs associated with continuous strategy execution. Instead, the protocol fosters an ecosystem where fillers capitalize on arbitrage opportunities, guaranteeing active strategy execution without imposing burdens on the original order placer. Arbitrage can occur between two orders on the orderbook or between an order and external liquidity.
 
 As a result, the ST0x orderbook resembles an intent-driven system. 
 
-![unnamed-6](https://hackmd.io/_uploads/SybPBgJXxg.png)
+<img src={intentsystem} />
 
 ## Order Lifecycle
 

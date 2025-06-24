@@ -4,6 +4,7 @@ published: true
 ---
 
 <script>
+    import st0xinterface from '$lib/images/st0xinterface.png'
 </script>
 The ST0x interface serves as a window into the on-chain activities, providing users with a clear and organized view of the data to better understand and navigate the trading environment. It abstracts the complexities of on-chain transactions and organizes information into a user- friendly format that enhances the overall trading experience.
 
@@ -33,5 +34,5 @@ With this solution, users will be able to sign in using social logins, complete 
 
 This approach can be an attractive solution for Web2 Fintech companies that bridges a gap between traditional financial platforms and blockchain environments, providing seamless access to on-chain trading without compromising security. 
 
-![unnamed-7](https://hackmd.io/_uploads/ryAMIlk7ge.png)
+<img src={st0xinterface} />
 

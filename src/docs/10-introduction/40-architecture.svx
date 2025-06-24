@@ -4,6 +4,7 @@ published: true
 ---
 
 <script>
+    import architecture from '$lib/images/architecture.png'
 </script>
 ## Tech Components
 
@@ -20,4 +21,4 @@ ST0x technology infrastructure has 3 main components and works with the Issuer S
 4.  **Solvers:** Solvers are off-chain agents that monitor intent-based orders and compete to fulfil them by submitting optimal on-chain transactions. They enable efficient execution by sourcing liquidity, routing through protocols, or arbitraging across markets to maximise outcomes for users.
 5. **Interfaces:** The platform offers multiple interaction options, including a user-friendly web interface, a robust SDK for integration into third-party applications, and the ability for advanced users to interact directly with smart contracts. These interfaces simplify user engagement while maintaining flexibility for diverse use cases. 
 
-![unnamed-2](https://hackmd.io/_uploads/ryYtGyJ7xe.png)
+<img src={architecture} />

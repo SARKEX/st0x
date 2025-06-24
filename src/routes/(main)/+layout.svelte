@@ -17,9 +17,6 @@
 	
 
 	let sidebarExpanded = true;
-	function toggleSidebar() {
-		sidebarExpanded = !sidebarExpanded;
-	}
 
 	$: vaultQuery = createQuery({
 		queryKey: ['getSfts'],
@@ -68,7 +65,7 @@
 			/>
 		</div>
 
-		<Sidebar {sidebarExpanded} {toggleSidebar} />
+		<Sidebar {sidebarExpanded} />
 		<div class="transition-all duration-300 {sidebarExpanded ? 'ml-64' : 'ml-16'}">
 			<slot {sidebarExpanded} />
 			<TransactionModal />
