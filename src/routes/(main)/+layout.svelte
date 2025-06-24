@@ -9,21 +9,12 @@
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { onMount } from 'svelte';
+
 	import { getSfts } from '$lib/query';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote } from '$lib/stores';
 	import { STOXs } from '$lib/network';
 
-	const initWallet = async () => {
-		const erckit = defaultConfig({
-			autoConnect: true,
-			appName: 'st0x-liquidity',
-			walletConnectProjectId: PUBLIC_WALLETCONNECT_ID,
-			chains: [arbitrum],
-			connectors: [injected(), walletConnect({ projectId: PUBLIC_WALLETCONNECT_ID })]
-		});
-		await erckit.init();
-	};
+	
 
 	let sidebarExpanded = true;
 	function toggleSidebar() {
@@ -57,12 +48,7 @@
 	$: sfts.set($vaultQuery.data);
 	$: tokenGlobalQuote.set($tokenGlobalQuoteQuery.data ?? []);
 
-	onMount(() => {
-		initWallet();
-		return () => {
-			document.body.style.overflow = '';
-		};
-	});
+	
 </script>
 
 {#if $vaultQuery.isLoading || $tokenGlobalQuoteQuery.isLoading}

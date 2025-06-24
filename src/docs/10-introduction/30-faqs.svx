@@ -1,0 +1,28 @@
+---
+title: FAQs
+published: true
+---
+
+<script>
+</script>
+Q: Is ST0x the Issuer of the Equities?
+
+No, we work with an Issuer called S1. We provide an environment for trade for those assets
+
+Q: Are all assets backed?
+
+Yes, all assets are backed 1-1
+
+Q: Who custodys the offchain assets?
+
+S1 is partnered with Charles Schwab, the worlds largest broker
+
+Q: Is this a Synethtic?
+
+A: No, this is the real deal
+
+Q: Do I have to do KYC / AML?
+
+You do not have to do KYC, you are operating on a DEX. When you hold S1 issued assets your relationship is with S1.
+
+S1 does run AML scanners to ensure that anyone holding the Equity tokens is not engaging in money laundering, terrorist financing, or other illicit activities. If such activity is detected, you will be blacklisted and your holdings will be frozen.

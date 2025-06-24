@@ -1,0 +1,37 @@
+---
+title: ST0x Interface
+published: true
+---
+
+<script>
+</script>
+The ST0x interface serves as a window into the on-chain activities, providing users with a clear and organized view of the data to better understand and navigate the trading environment. It abstracts the complexities of on-chain transactions and organizes information into a user- friendly format that enhances the overall trading experience.
+
+- Tokenization Layer: the interface displays all records and transaction histories, allowing users to track their assets and past activities with ease.
+- Market View Display (“MVD”): The MVD allows users to view the order book, market depth and other relevant data that enable the monitoring of market conditions and support the identification of potential trading opportunities.	
+The interface also includes some Order Management System (“OMS”) functionalities, including an order entry interface with pre-set strategies, such as limit orders, market orders (which operate through an auction mechanism), stop-loss, and take-profit orders.		
+
+Importantly, the interface does not allow users to interact directly with another user's liquidity or manipulate existing orders. There is no direct route provided for users to take liquidity from other orders. Instead, each user adds their own strategy to the orderbook, which can only be executed when a solver fulfills the exact terms specified by the user.
+
+Users connect to the interface through their own wallets, maintaining full self-custody of their assets throughout the process. This ensures that all trades are conducted securely and independently, with each user maintaining control over their own funds and strategies.
+
+## SDK for Distributors
+
+ST0x has developed an SDK that enables distributors to easily connect to ST0x DEX. This SDK can be utilized by decentralized protocols looking to add additional functionality or by regulated institutions that wish to trade on our platform.
+
+- The SDK offers the code needed to perform the same functions as the ST0x interface but integrates them into the distributor’s own app or interface. 
+- It includes code for viewing trades directly within the distributor’s environment.
+- ST0x does not provide any infrastructure for taking orders directly or determining trade routes. The SDK only facilitates the addition of user strategies to the order book.
+
+## Account abstraction
+
+The SDK provides the essential components needed to interact with the DEX and execute trades. It can accommodate both self- and delegated custody models.
+ 							
+ST0x also intends to offer a self-custody solution to web2 partners that may not want users to manage their own wallets or lack the required custodial licenses. This service leverages Circle's signing methods, gas sponsorship, and smart contract accounts to simplify the user experience.	
+
+With this solution, users will be able to sign in using social logins, complete KYC, and trade without the need to manage gas fees or set up a traditional wallet. It is important to note that users utilizing this service will maintain full control over their assets.
+
+This approach can be an attractive solution for Web2 Fintech companies that bridges a gap between traditional financial platforms and blockchain environments, providing seamless access to on-chain trading without compromising security. 
+
+![unnamed-7](https://hackmd.io/_uploads/ryAMIlk7ge.png)
+

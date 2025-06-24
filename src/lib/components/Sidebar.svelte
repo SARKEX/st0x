@@ -2,7 +2,8 @@
 	import { targetNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { WalletOutline } from 'flowbite-svelte-icons';
+	import { WalletOutline, ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
+	import TelegramLogo from '$lib/images/telegram.svg';
 
 	export let sidebarExpanded = true;
 	export let toggleSidebar = () => {};
@@ -26,29 +27,13 @@
 		: 'w-16'}"
 >
 	<div class="border-b border-white/10 p-4">
-		<div class="flex items-center gap-3">
-			<button
-				on:click={toggleSidebar}
-				class="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-colors hover:bg-white/10"
-			>
-				<span class="text-xl">☰</span>
-			</button>
-			{#if sidebarExpanded}
-				<div class="flex items-center gap-3">
-					<div
-						class="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-purple-800 via-blue-600 to-yellow-500 text-sm font-bold shadow-lg shadow-yellow-500/30"
-					>
-						<span class="relative z-10">ST0x</span>
-						<div
-							class="absolute -left-1/2 -top-1/2 h-full w-full rotate-45 animate-pulse bg-gradient-to-br from-white/10 to-transparent"
-						/>
-					</div>
-					<div>
-						<div class="font-semibold">ST0x</div>
-						<div class="text-xs text-gray-400">Onchain Equities</div>
-					</div>
-				</div>
-			{/if}
+		<div class="flex items-center gap-2 md:gap-3">
+			<a href="/dashboard">
+				<img src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75" alt="ST0x Logo" class="h-8 w-8 md:h-9 md:w-9 rounded-full" />
+			</a>
+			<a href="/dashboard">
+				<span class="text-base md:text-xl font-extrabold bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-transparent select-none tracking-tight">ST0X Liquidity</span>
+			</a>
 		</div>
 	</div>
 
@@ -79,6 +64,9 @@
 	</nav>
 
 	<!-- Bottom Section -->
+	
+
+	<!-- Bottom Section -->
 	<div class="absolute bottom-0 left-0 right-0 border-t border-white/10 p-4">
 		<div class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
 			{#if sidebarExpanded}
@@ -96,5 +84,15 @@
 				<div class="mx-auto text-xs font-semibold text-yellow-500">{$targetNetwork.name}</div>
 			{/if}
 		</div>
+	</div>
+	<div class="mt-4 flex flex-col gap-1 p-4 border-t border-b border-white/10">
+		<a href="/docs" class="flex items-center gap-2 text-gray-300 font-normal text-base hover:text-white transition-colors py-2 px-3 rounded-lg hover:bg-white/5">
+			<ArrowUpRightFromSquareSolid class="h-5 w-5" />
+			Docs
+		</a>
+		<a href="https://t.me/your_telegram_link" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 text-gray-300 font-normal text-base hover:text-white transition-colors py-2 px-3 rounded-lg hover:bg-white/5">
+			<img src={TelegramLogo} alt="Telegram" class="h-5 w-5" />
+			Telegram
+		</a>
 	</div>
 </div>

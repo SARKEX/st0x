@@ -8,7 +8,7 @@
 	on:click={() => $web3Modal.open()}
 	tabindex={0}
 	data-testid="wallet-connect"
-	class="rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-105"
+	class="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-3 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-semibold transition-transform hover:scale-105 flex items-center justify-center"
 >
 	{#if $wrongNetwork || !$signerAddress || !$connected}
 		<div class="flex items-center gap-1.5" data-testid="not-connected">
