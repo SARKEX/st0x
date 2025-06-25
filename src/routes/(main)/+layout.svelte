@@ -1,34 +1,18 @@
 <script lang="ts">
 	import '../../app.css';
-	import { defaultConfig, wagmiConfig } from 'svelte-wagmi';
-	import { injected, walletConnect } from '@wagmi/connectors';
-	import { PUBLIC_ALPHAVANTAGE_API_KEY, PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
-	import { arbitrum } from '@wagmi/core/chains';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { onMount } from 'svelte';
+
 	import { getSfts } from '$lib/query';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote } from '$lib/stores';
 	import { STOXs } from '$lib/network';
 
-	const initWallet = async () => {
-		const erckit = defaultConfig({
-			autoConnect: true,
-			appName: 'st0x-liquidity',
-			walletConnectProjectId: PUBLIC_WALLETCONNECT_ID,
-			chains: [arbitrum],
-			connectors: [injected(), walletConnect({ projectId: PUBLIC_WALLETCONNECT_ID })]
-		});
-		await erckit.init();
-	};
-
 	let sidebarExpanded = true;
-	function toggleSidebar() {
-		sidebarExpanded = !sidebarExpanded;
-	}
 
 	$: vaultQuery = createQuery({
 		queryKey: ['getSfts'],
@@ -56,13 +40,6 @@
 
 	$: sfts.set($vaultQuery.data);
 	$: tokenGlobalQuote.set($tokenGlobalQuoteQuery.data ?? []);
-
-	onMount(() => {
-		initWallet();
-		return () => {
-			document.body.style.overflow = '';
-		};
-	});
 </script>
 
 {#if $vaultQuery.isLoading || $tokenGlobalQuoteQuery.isLoading}
@@ -82,7 +59,7 @@
 			/>
 		</div>
 
-		<Sidebar {sidebarExpanded} {toggleSidebar} />
+		<Sidebar {sidebarExpanded} />
 		<div class="transition-all duration-300 {sidebarExpanded ? 'ml-64' : 'ml-16'}">
 			<slot {sidebarExpanded} />
 			<TransactionModal />

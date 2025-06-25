@@ -1,0 +1,24 @@
+---
+title: Architecture
+published: true
+---
+
+<script>
+    import architecture from '$lib/images/architecture.png'
+</script>
+## Tech Components
+
+ST0x technology infrastructure has 3 main components and works with the Issuer S1 to add 2 components:
+
+**S1 Issuer:**
+
+1. **Tokenization Layer:** This layer transforms traditional assets into tokenized representations using advanced standards like semi-fungible tokens (SFTs). It embeds compliance rules, custom ownership structures, and audit capabilities directly into smart contracts, ensuring regulatory alignment and enabling secure, transparent asset management.
+2. **Liquidity Bridges:** A trust-based bridge enabling seamless 1:1 conversion between shares and tokens, with each token backed by a corresponding share held in custody. Independent arbitrageurs provide rapid liquidity and help align on-chain and off-chain prices, periodically rebalancing via the bridge to maintain market efficiency.
+
+**ST0x DEX:**
+
+3. **Programmatic Intents System:** A decentralized smart contract platform that facilitates complex, custom trading strategies. Utilizing Rainlang, an intuitive on-chain programming language, users can create and execute dynamic strategies with self- custody of funds, ensuring unparalleled control and adaptability.
+4.  **Solvers:** Solvers are off-chain agents that monitor intent-based orders and compete to fulfil them by submitting optimal on-chain transactions. They enable efficient execution by sourcing liquidity, routing through protocols, or arbitraging across markets to maximise outcomes for users.
+5. **Interfaces:** The platform offers multiple interaction options, including a user-friendly web interface, a robust SDK for integration into third-party applications, and the ability for advanced users to interact directly with smart contracts. These interfaces simplify user engagement while maintaining flexibility for diverse use cases. 
+
+<img src={architecture} />

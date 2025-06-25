@@ -1,0 +1,65 @@
+---
+title: Programmatic Intents Systems
+published: true
+---
+
+<script>
+    import orderbook from '$lib/images/orderbook.png'
+    import intentsystem from '$lib/images/intentsystem.png'
+
+</script>
+
+The Programmatic Intents System is an on-chain smart contract platform that allows users to deploy complex token trading strategies using dynamic algorithms. Tokens move between vaults based on strategies expressed in Rainlang, an adaptable, on-chain domain-specific language.
+
+## Key Features
+
+**Rainlang**	
+
+Rainlang is an on-chain smart contract language designed for creating trading orders. Its intuitive syntax makes it accessible, allowing users of all levels to understand the intent behind the code. Rainlang is open-source, permissionlessly extensible, and supports multiple interpreters to accommodate various versions.
+
+**Orders**		
+
+Orders written in Rainlang offer near-limitless flexibility in strategy design. Each order specifies a maximum trade amount and price ratio, and execution occurs only if these exact terms are met.		
+
+The logic used to reach the final agreement can originate from on-chain oracles and smart contract data, or from off-chain signed data provided by solvers. The strategy ensures the correctness of this data by verifying the signature. Any logic can then be implemented on top of this, offering highly flexible trading intent.
+
+**Strategies**	
+
+Strategies are a combination of conditions following custom logic that result in one or multiple Orders.	
+
+Strategies written in Rainlang can be deployed to achieve multiple objectives including On- chain market making, Treasury strategies, Portfolio / Fund strategies, Stablecoin arbitrage, Broker token arbitrage, DCA, Volatility-based strategies, Momentum-based strategies, Reversal-based strategies, Correlation arbitrage, DCF flows on fixed income products, buy side / sell side strategies		
+
+**Execution Model**	
+
+Strategies remain live on-chain until removed, without the need for ongoing execution fees from the order creator. Instead, the protocol incentivizes third-party solvers to fulfill orders by capitalizing on arbitrage opportunities, ensuring continuous execution.	
+
+**Vault System**		
+
+Tokens are deposited into vaults created by users that function as virtual accounts. Orders reference these vaults for inputs and outputs, allowing for complex and interconnected strategies. All vaults operate under a self-custody model, maintaining user control. Users deploy their own funds in and out of these vaults from their wallet.	
+
+## Order Book
+
+The ST0x orderbook is an on-chain smart contract that incorporate dynamic algorithms directing token transfers between vaults.	
+
+Strategies formulated using Rainlang must determine a maximum amount and a price ratio for but offer near-limitless flexibility beyond this. Furthermore, Rainlang itself is permissionless extensible – the protocol facilitates the integration of multiple interpreters supporting various versions of the language.
+
+Instead of granting token approvals, users deposit their tokens into vaults that function as virtual accounts within the orderbook. Orders reference input/output vaults, and each order can have multiple inputs and outputs. For instance, a user could accept a range of different stablecoins for WETH. Additionally, distinct orders can reference the same vaults, enabling the construction of even more sophisticated meta-strategies. 
+
+<img src={orderbook} /> 
+
+Strategies deployed on-chain remain active until filled or removed.				
+Order placers do not bear the gas costs associated with continuous strategy execution. Instead, the protocol fosters an ecosystem where fillers capitalize on arbitrage opportunities, guaranteeing active strategy execution without imposing burdens on the original order placer. Arbitrage can occur between two orders on the orderbook or between an order and external liquidity.
+
+As a result, the ST0x orderbook resembles an intent-driven system. 
+
+<img src={intentsystem} />
+
+## Order Lifecycle
+
+Strategy writing: A user formulates a strategy including target assets and trade logic.
+
+
+- Order deployment: User deposits required tokens into a Vault within the Rain orderbook and deploys the order on-chain. Vaults act like virtual accounts for the order. Once a strategy is deployed, it is visible to all participants who can interact with it.
+- Order execution: When a participant (also referred to as a "filler") finds an order they want to interact with and the strategy's conditions are met, they execute the order. This involves the specified tokens moving between the designated input and output vaults as per the order's strategy.
+- Order completion: The order lifecycle concludes with after successful execution and settlement. Depending on the design of the strategy, an order might be a one-time event or could remain live, waiting for the next execution that meets its conditions.
+- Order & token removal: A placer can remove an order from the orderbook at any time prior to execution. Similarly, users can initiate token withdrawals from their vault and into their EOA or wallet at any time.

@@ -1,0 +1,150 @@
+
+---
+title: Tokenization Layer
+published: true
+---
+
+<script>
+    import tokenization from '$lib/images/tokenization.png'
+</script>
+S1 leverages a Semi-Fungible Token (SFT) standard, integrating non-fungible ERC-1155 and ERC-20 tokens.
+
+The ERC-1155 token acts as a repository for essential data related to off-chain assets, including audit history, and is accessible by all users via IPFS. Users can then exchange the asset linked to the ERC-1155 token in a fungible manner using ERC-20 tokens.
+
+The framework includes various user roles that can govern, validate and audit interactions between multiple parties. These roles and rules can be flexibly deployed to achieve the desired market structure and respond to regulatory and compliance constraints. Each role possesses a set of capabilities and relationships within the predefined framework enabling the construction of strong and transparent decentralized power structures.					
+The S1 contract also oversees token transfers, minting, and burning through the RFQ issuance process, validating cryptographically signed coupons and maintaining accompanying record-keeping.	
+
+* “Connectors” - Participants that can create on-chain assets
+* “Disconnectors” - Participants that can remove on-chain assets
+* “Certifiers”- Participants that certify the validity of information contained in the tokenized asset contracts and the alignment between on-chain and off- chain assets at set intervals after tokenization
+* “Tierers” - Participants that enforce and verify the respect of AML/KYC rules
+* “Handlers” - Participants that can move assets during freezes
+* “Confiscators” - Participants that can freeze or seize tokenized asset holdings from users
+
+## Asset Issuance and Redemption
+
+The S1 contract operates as an interpreter contract, designed to analyze custom logic used to define all asset data and ownership guidelines for ERC-20 tokens. This mechanism requires all token transfers to adhere to these guidelines.
+
+Its customizable nature empowers issuers to incorporate bespoke requirements such as trading/ownership restrictions, counterparty verification etc. This ensures strong control over distribution, ownership and adherence to distinct jurisdictions and asset-level regulations.
+
+This creates assets that are programmable and self-governing massively reducing operational costs.
+
+The issuance and redemption operators of tokenised assets via the tokenisation layer will be restricted to approved third-party participants. Admission to perform these functions will be granted only after verification that the entity holds the necessary licences and has successfully completed all applicable AML and KYC checks.
+
+Upon admission, S1 assumes the role of a super admin and establishes the necessary blockchain permissions (including minting permissions). This effectively starts the market creation process.			
+
+### Issuance Process
+
+The issuance of tokens representing financial instruments will be subject to a strict and comprehensive process to ensure compliance with all relevant laws and regulations including national laws as appropriate and globally applicable regulations such as MIFID.
+
+With regards to equities, issuance will be subject to the following prior to tokenization and admission for trading:
+
+- Issuance of a stock certificate representing the primary asset; and
+- Publication of a prospectus in line with Regulation (EU) 2017/1129 (“Prospectus Regulation”).(Right now we are operating under prospectus exemption but will be obtaining Prospectuses in the coming months)
+
+Once these are completed, the relevant Connector (i.e. the issuer of the token) will encode all financial and non-financial data related to the primary asset and its GDR as well as information regarding the issuer itself, reference to its custodial arrangement etc into the token’s smart contract.
+
+An independent third party (“Tierer”) then verifies the completeness, veracity and validity of the information programmed by the Connector.
+
+The Connector is then granted authorization to mint and manage the associated ERC-1155 and ERC-20 tokens. This creates on-chain endpoints allowing users or solvers to interact with the connector’s liquidity.
+
+## Ownership and Security Considerations
+
+The ST0x SFT contracts (Offchain Asset Vault – ethgild repo) follow a standard OpenZeppelin ownership model. While the contracts are non-upgradeable, the owner can update the authoriser, which controls critical functions like minting and burning.
+This creates a major risk: if the mint function is compromised, an attacker can irreversibly drain supply within a single transaction, leaving no time to respond.
+
+To mitigate this, ownership is typically placed behind an M-of-N multisig (e.g. Gnosis Safe). However, as TVL increases, so does attacker sophistication. Multisigs have been breached via phishing, interface hijacks, and supply chain exploits. For example, ByBit’s Gnosis Safe was compromised by a state actor for $1.5B by targeting the front end used by its signers.
+In practice, increasing M and N offers diminishing returns due to operational overhead and signer correlation. The Ronin hack ($600M+) showed this clearly—4 of 5 compromised keys were controlled by the same entity, rendering the 5-of-9 setup ineffective.
+
+Multisig security is fragile at scale and requires a level of operational discipline that many organisations are not equipped to maintain.
+
+### Implications of an Infinite Mint
+
+An infinite mint—commonly known as a “rug”—is the worst-case scenario for any token. Its existence as a standard term highlights both its frequency and severity.
+
+The attack is straightforward: a compromised mint function allows an attacker to issue an unlimited number of tokens. Whether billions or trillions, the effect is the same—liquidity is rapidly drained across all sources. On-chain, this can happen in a single transaction, leaving zero time to respond.
+
+The damage is irreversible. While token holders can be restored via snapshot and reissuance, liquidity providers—especially on-chain LPs—suffer total and permanent loss. As automated market participants, they are wiped out instantly.
+
+Reputational fallout further damages the token’s viability. LPs are unlikely to support a reissued version (e.g. “Token 2.0”), severely impairing long-term liquidity and trust.
+
+This scenario also exposes the fragility of protocol “security modules” that rely on native token insurance. In a real exploit, the market collapses before any recovery process can be actioned, rendering such protections largely ineffective.
+
+### Implications of Other Forms of Compromise
+
+Beyond infinite minting, a compromised authoriser introduces several critical attack vectors. Since the authoriser governs core permissions, an attacker could:
+
+
+- (Un)certify SFTs to control transferability
+- Confiscate tokens from any holder
+- Burn confiscated tokens from any wallet
+
+
+These are either functionally equivalent to an infinite mint or constitute recoverable vandalism, addressable via snapshot and airdrop—provided the damage is limited to on-chain state.
+
+Crucially, since all real-world assets (RWAs) are held off-chain, an attacker cannot access their intrinsic value without also breaching institutional settlement processes—typically infeasible due to physical custody and multi-step controls.
+
+An edge case is the infinite freeze attack. While it yields no direct gain for the attacker, it can severely damage LPs. For instance, if tokens in a Uniswap pool are indefinitely frozen, LPs cannot withdraw their paired assets. Even with a recovery plan, the economic impact is similar to a full rug.
+
+Though less likely than a mint exploit, infinite freeze scenarios merit inclusion in comprehensive threat models.
+
+### Limitations of Straight Timelocks
+
+A common mitigation for ownership-level compromise is a simple timelock—e.g. enforcing a 24-hour delay between proposing and executing ownership changes. This can deter phishing-based attacks but provides little defence against full key compromise.
+
+If an attacker gains control of the signing keys, they can repeatedly repropose themselves as owner, turning the system into a war of attrition. The attacker only needs to succeed once, incentivised by the protocol’s full TVL, while defenders must respond successfully every time, with far fewer resources.
+
+<img src={tokenization} />
+
+This asymmetry is especially dangerous given that private key compromise accounted for an estimated 43–69% of all crypto thefts in 2024. While high-profile exploits like the ByBit hack drew attention, key theft remains the most frequent and effective attack vector.
+
+Once a compromise is visible on-chain, market confidence collapses. Token holders observing the conflict between attacker and defender typically exit immediately, regardless of the outcome. Even without a successful exploit, visible risk can cause irreversible reputational damage.
+
+Timelocks also introduce a secondary risk. Unlike an instant exploit, which allows for a clean pre-attack snapshot, trading often continues during the delay window. A post-event snapshot can then create unfair outcomes: sellers keep proceeds, while buyers are left with worthless tokens.
+
+In short, while timelocks add friction to some attacks, they fail to prevent the most common threats and can complicate recovery when a compromise becomes public.
+
+### Owner-Controlled Freeze Mechanism
+
+As an alternative to traditional timelocks, the ST0x framework introduces an owner-controlled freeze state for critical compromise mitigation. This operates alongside the certification freeze—both must be inactive for transfers to proceed.
+
+Unlike the certification freeze, the owner freeze:
+
+- Ignores override roles (e.g. confiscators, handlers)
+- Maintains its own allowlist for exempt senders and receivers
+
+The freeze can be triggered automatically during sensitive operations (e.g. ownership or authoriser changes) or manually in response to threats. In the event of an attack, the system can remain frozen while a migration is prepared.
+
+Although a compromised owner could alter freeze logic or exempt their own address, this does not grant additional tokens or access off-chain assets. Any malicious exemptions can be tracked and excluded during recovery. Governance processes should account for potential griefing scenarios, such as LPs being frozen intentionally.
+
+### Token Implementation
+
+The token contract introduces minimal but essential modifications to support this freeze logic, assuming the owner is a governance contract (not an EOA or basic multisig). Ownership remains a layer above the authoriser, though future consolidation may be considered.
+
+New onlyOwner methods:
+
+- ownerFreezeUntil(uint256 timestamp)
+- Sets the freeze until a specific time. Cannot be shortened by future calls.
+ownerFreezeAddSender(address sender) / RemoveSender(...)
+- Maintains an allowlist for senders exempt from the freeze.
+ownerFreezeAddReceiver(address receiver) / RemoveReceiver(...)
+- Maintains an allowlist for receivers exempt from the freeze.
+
+Freeze enforcement logic:
+
+If now is less than freezeUntil and neither sender nor receiver is exempt, all transfers revert, including mints, burns, and confiscations. Emitted data and events are unaffected.
+
+### Example Owner Contract: Governance Recommendations
+
+There is no universal owner contract. However, a minimally viable implementation should enforce the following:
+
+- Automatic freezes triggered by sensitive operations:
+    - Ownership changes
+    - Authoriser updates
+    - Modifications to freeze logic or exempt lists
+- Preset freeze duration, not attacker-controlled at runtime
+- Manual emergency freeze option for multisig-controlled governance
+- Timelocks on exemption removals to prevent instant griefing
+- Freeze duration sufficient to enable response in worst-case timing scenarios (e.g. holidays)
+- Governance structure capable of coordinating a token migration during a persistent freeze
+

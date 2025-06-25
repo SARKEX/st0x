@@ -1,0 +1,22 @@
+---
+title: How To
+published: true
+---
+
+<script>
+</script>
+In order to make a trade head to the 'New order' section in the website. Choose your Order type:
+
+Limit order
+DCA
+Active Liquidity
+Portfolio Strategy
+ST0x current does not support market orders, place limit orders that will be cleared against avilable liquidity.
+
+If liquidty is not avilable solvers will goto the S1 bridge to pull it through for your order.
+
+Once your order is deployed your assets will be held in your own vault, not your wallet.
+
+In order to change this order head to the 'Order list' section, click show my orders, click on your order and adjust it as you see fit.
+
+As your trade clears the asset you have swapped for will be sitting in your vault until you withdraw it.
