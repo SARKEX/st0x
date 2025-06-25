@@ -17,9 +17,9 @@
 			</div>
 		</div>
 
-		<div class="flex items-center gap-2 sm:gap-4">
+		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 w-full sm:w-auto">
 			<button
-				class="rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-3 py-2 text-xs font-semibold text-white transition-transform hover:scale-105 sm:px-5 sm:py-2.5 sm:text-sm"
+				class="hidden sm:inline-flex w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-4 py-3 text-sm font-semibold text-white shadow-md transition-transform hover:scale-105 sm:px-5 sm:py-2.5"
 				on:click={() => goto('/neworder')}
 			>
 				Trade now
