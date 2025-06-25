@@ -17,9 +17,9 @@
 			</div>
 		</div>
 
-		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 w-full sm:w-auto">
+		<div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
 			<button
-				class="hidden sm:inline-flex w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-4 py-3 text-sm font-semibold text-white shadow-md transition-transform hover:scale-105 sm:px-5 sm:py-2.5"
+				class="hidden w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-4 py-3 text-sm font-semibold text-white shadow-md transition-transform hover:scale-105 sm:inline-flex sm:w-auto sm:px-5 sm:py-2.5"
 				on:click={() => goto('/neworder')}
 			>
 				Trade now

@@ -57,7 +57,7 @@
 			{#each ORDER_TYPES as type}
 				<button
 					on:click={() => handleOrderTypeChange(type.id)}
-					class="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium transition-all {activeOrderType ===
+					class="flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-medium transition-all sm:py-3 sm:text-sm {activeOrderType ===
 					type.id
 						? 'bg-yellow-500/20 text-yellow-500'
 						: 'text-gray-400 hover:text-white'}"
@@ -67,7 +67,7 @@
 			{/each}
 		</div>
 
-		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 sm:p-6 backdrop-blur-sm">
+		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 backdrop-blur-sm sm:p-6">
 			{#if activeOrderType === 'limit'}
 				{#key [inputToken?.address, outputToken?.address]}
 					<LimitStrategy passedInputToken={inputToken} passedOutputToken={outputToken} />
