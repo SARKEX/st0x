@@ -15,13 +15,6 @@
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
 
-	// Close mobile sidebar when clicking outside
-	function handleOutsideClick() {
-		if (mobileSidebarOpen) {
-			mobileSidebarOpen = false;
-		}
-	}
-
 	$: vaultQuery = createQuery({
 		queryKey: ['getSfts'],
 		queryFn: () => {
@@ -68,7 +61,13 @@
 		</div>
 
 		<!-- Always render for transition, pass visible prop -->
-		<Sidebar visible={mobileSidebarOpen} desktop={false} on:close={() => (mobileSidebarOpen = false)} class="lg:hidden" />
+		<div class="lg:hidden">
+			<Sidebar
+				visible={mobileSidebarOpen}
+				desktop={false}
+				on:close={() => (mobileSidebarOpen = false)}
+			/>
+		</div>
 		<!-- Desktop sidebar -->
 		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
 			<Sidebar visible={true} desktop={true} />

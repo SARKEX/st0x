@@ -31,13 +31,15 @@
 		role="button"
 		tabindex="0"
 		on:click={() => dispatch('close')}
-		on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') dispatch('close'); }}
+		on:keydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') dispatch('close');
+		}}
 	/>
 {/if}
 
 <!-- Sidebar -->
 <div
-	class="fixed top-0 left-0 z-50 h-full w-64 transform border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-50 h-full w-64 transform border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
@@ -68,7 +70,8 @@
 				on:click={() => {
 					if (!desktop) dispatch('close');
 				}}
-				class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath === item.href
+				class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
+				item.href
 					? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
 					: item.protected && !$connected
 						? 'text-blue-400/60 hover:text-blue-300'

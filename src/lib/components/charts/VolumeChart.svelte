@@ -10,9 +10,6 @@
 	} from 'lightweight-charts';
 	import moment from 'moment';
 	import type { SgTrade, SgErc20 } from '@rainlanguage/orderbook/js_api';
-
-	import Select from '$lib/components/Select.svelte';
-
 	let chartContainer: HTMLElement;
 	export let trades: SgTrade[] = [];
 	let howManyDays = 30;
@@ -273,13 +270,15 @@
 
 <div class="space-y-4">
 	<!-- Token selection as horizontal buttons -->
-	<div class="flex flex-wrap gap-2 mb-2">
+	<div class="mb-2 flex flex-wrap gap-2">
 		{#each availableTokens as token}
 			<button
 				type="button"
-				class="px-3 py-1.5 rounded-lg border text-xs sm:text-sm font-medium transition-colors
-					{selectedToken === token ? 'bg-yellow-500/20 border-yellow-500 text-yellow-500' : 'bg-gray-700/50 border-white/10 text-gray-300 hover:bg-white/10'}"
-				on:click={() => selectedToken = token}
+				class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm
+					{selectedToken === token
+					? 'border-yellow-500 bg-yellow-500/20 text-yellow-500'
+					: 'border-white/10 bg-gray-700/50 text-gray-300 hover:bg-white/10'}"
+				on:click={() => (selectedToken = token)}
 			>
 				{getTokenLabel(token)}
 			</button>
@@ -290,7 +289,7 @@
 		<h3 class="text-base font-semibold text-white sm:text-lg">Trading Volume</h3>
 	</div>
 
-	<div class="rounded-lg bg-gray-800/50 p-2 sm:p-4 overflow-x-auto">
+	<div class="overflow-x-auto rounded-lg bg-gray-800/50 p-2 sm:p-4">
 		<div bind:this={chartContainer} class="w-full min-w-[320px] sm:min-w-0"></div>
 	</div>
 
