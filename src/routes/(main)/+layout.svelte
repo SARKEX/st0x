@@ -67,25 +67,12 @@
 			/>
 		</div>
 
-		<!-- Desktop Sidebar -->
+		<!-- Always render for transition, pass visible prop -->
+		<Sidebar visible={mobileSidebarOpen} desktop={false} on:close={() => (mobileSidebarOpen = false)} class="lg:hidden" />
+		<!-- Desktop sidebar -->
 		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
-			<Sidebar {sidebarExpanded} />
+			<Sidebar visible={true} desktop={true} />
 		</div>
-
-		<!-- Mobile Sidebar Overlay -->
-		{#if mobileSidebarOpen}
-			<div
-				class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
-				on:click={handleOutsideClick}
-				on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleOutsideClick()}
-				role="button"
-				tabindex="0"
-				aria-label="Close sidebar"
-			/>
-			<div class="fixed left-0 top-0 z-50 h-full lg:hidden">
-				<Sidebar {sidebarExpanded} />
-			</div>
-		{/if}
 
 		<!-- Main Content -->
 		<div

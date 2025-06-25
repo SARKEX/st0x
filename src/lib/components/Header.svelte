@@ -4,12 +4,6 @@
 
 	export let title: string;
 	export let description: string;
-
-	// Mobile menu state
-	let mobileMenuOpen = false;
-	function toggleMenu() {
-		mobileMenuOpen = !mobileMenuOpen;
-	}
 </script>
 
 <div
@@ -17,12 +11,6 @@
 >
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 		<div class="flex items-center gap-3 sm:gap-4">
-			<!-- Hamburger button (mobile only) -->
-			<button
-				class="mr-2 text-2xl text-white sm:hidden"
-				aria-label="Open menu"
-				on:click={toggleMenu}>☰</button
-			>
 			<div>
 				<h1 class="text-lg font-bold sm:text-xl">{title}</h1>
 				<p class="text-xs text-gray-400 sm:text-sm">{description}</p>
