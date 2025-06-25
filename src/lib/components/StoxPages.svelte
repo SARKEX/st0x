@@ -73,8 +73,8 @@
 </script>
 
 <div class={SECTION_CLASSES}>
-	<div class="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-		<h2 class="text-lg sm:text-xl font-semibold">Popular ST0Xs</h2>
+	<div class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+		<h2 class="text-lg font-semibold sm:text-xl">Popular ST0Xs</h2>
 		<div class="flex items-center gap-2">
 			<button
 				class="rounded bg-gray-700 p-2 disabled:opacity-50"
@@ -95,12 +95,12 @@
 		</div>
 	</div>
 	{#key currentPage}
-		<div class="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+		<div class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
 			{#each paginatedTokens as stox}
 				{@const tokenData = getTokenData(stox.symbol ?? '')}
 				<button
 					type="button"
-					class="relative flex w-full cursor-pointer flex-col rounded-2xl border border-white/10 bg-gray-800/80 p-3 sm:p-5 text-left transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-700/80"
+					class="relative flex w-full cursor-pointer flex-col rounded-2xl border border-white/10 bg-gray-800/80 p-3 text-left transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-700/80 sm:p-5"
 					on:click={() => handleStoxClick(stox)}
 				>
 					<div class="flex flex-col gap-2 sm:gap-3">
@@ -108,48 +108,50 @@
 							<img
 								src={stox.logoUrl}
 								alt={stox.symbol}
-								class="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gray-700"
+								class="h-8 w-8 rounded-full bg-gray-700 sm:h-10 sm:w-10"
 							/>
 							<div class="min-w-0 flex-1">
-								<div class="truncate text-sm sm:text-base font-semibold text-white">{stox.name}</div>
+								<div class="truncate text-sm font-semibold text-white sm:text-base">
+									{stox.name}
+								</div>
 								<div class="text-xs text-gray-400">{stox.symbol}</div>
 							</div>
 						</div>
 						<div class="flex items-center justify-between border-t border-white/5 pt-2 sm:pt-3">
-							<div class="text-xs sm:text-sm text-gray-400">Price</div>
-							<div class="text-xs sm:text-sm font-medium text-white">
+							<div class="text-xs text-gray-400 sm:text-sm">Price</div>
+							<div class="text-xs font-medium text-white sm:text-sm">
 								{#if tokenData}
 									${tokenData.price.toFixed(2)}
 								{:else}
-									<div class="h-3 sm:h-4 w-12 sm:w-16 animate-pulse rounded bg-gray-600"></div>
+									<div class="h-3 w-12 animate-pulse rounded bg-gray-600 sm:h-4 sm:w-16"></div>
 								{/if}
 							</div>
 						</div>
 						<div class="flex items-center justify-between">
-							<div class="text-xs sm:text-sm text-gray-400">24h Change</div>
+							<div class="text-xs text-gray-400 sm:text-sm">24h Change</div>
 							<div
-								class="text-xs sm:text-sm font-medium"
+								class="text-xs font-medium sm:text-sm"
 								class:text-green-500={tokenData ? tokenData.change >= 0 : true}
 								class:text-red-500={tokenData ? tokenData.change < 0 : false}
 							>
 								{#if tokenData}
 									${tokenData.change.toFixed(2)}
 								{:else}
-									<div class="h-3 sm:h-4 w-12 sm:w-16 animate-pulse rounded bg-gray-600"></div>
+									<div class="h-3 w-12 animate-pulse rounded bg-gray-600 sm:h-4 sm:w-16"></div>
 								{/if}
 							</div>
 						</div>
 						<div class="flex items-center justify-between">
-							<div class="text-xs sm:text-sm text-gray-400">Change %</div>
+							<div class="text-xs text-gray-400 sm:text-sm">Change %</div>
 							<div
-								class="text-xs sm:text-sm font-medium"
+								class="text-xs font-medium sm:text-sm"
 								class:text-green-500={tokenData ? tokenData.changePercent >= 0 : true}
 								class:text-red-500={tokenData ? tokenData.changePercent < 0 : false}
 							>
 								{#if tokenData}
 									{tokenData.changePercent.toFixed(2)}%
 								{:else}
-									<div class="h-3 sm:h-4 w-12 sm:w-16 animate-pulse rounded bg-gray-600"></div>
+									<div class="h-3 w-12 animate-pulse rounded bg-gray-600 sm:h-4 sm:w-16"></div>
 								{/if}
 							</div>
 						</div>

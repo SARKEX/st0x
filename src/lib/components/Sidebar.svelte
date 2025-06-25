@@ -71,12 +71,14 @@
 
 	<!-- Bottom Section -->
 	<div class="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-gray-800/95 p-4">
-		<div class="flex flex-col gap-3 w-full">
-			<div class="rounded-lg border border-white/10 bg-white/5 px-4 py-3 w-full">
-				<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
+		<div class="flex w-full flex-col gap-3">
+			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
 					<div class="text-sm font-semibold text-yellow-500">{$targetNetwork.name}</div>
 					{#if $connected}
-						<div class="text-xs text-gray-400 sm:ml-2">{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}</div>
+						<div class="text-xs text-gray-400 sm:ml-2">
+							{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}
+						</div>
 					{:else}
 						<div class="text-xs text-gray-400 sm:ml-2">Not Connected</div>
 					{/if}
@@ -84,7 +86,7 @@
 			</div>
 			<a
 				href="/docs"
-				class="flex items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white w-full"
+				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
 			>
 				<ArrowUpRightFromSquareSolid class="h-5 w-5" />
 				<span>Docs</span>
@@ -93,7 +95,7 @@
 				href="https://t.me/toby_meller"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="flex items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white w-full"
+				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
 			>
 				<img src={TelegramLogo} alt="Telegram" class="h-5 w-5" />
 				<span>Telegram</span>

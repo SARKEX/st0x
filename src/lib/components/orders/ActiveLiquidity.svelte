@@ -86,7 +86,7 @@
 
 <div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token 1</span>
 				<TokenSelect options={TOKENS} bind:selected={selectedToken1} />
@@ -97,7 +97,7 @@
 			</div>
 		</div>
 
-		<div class="flex flex-col sm:flex-row gap-3 sm:gap-6">
+		<div class="flex flex-col gap-3 sm:flex-row sm:gap-6">
 			<label class="flex items-center gap-2">
 				<input
 					type="checkbox"
@@ -133,7 +133,7 @@
 			</div>
 		</div>
 
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<div class="space-y-2">
 					<div class="relative">
@@ -205,7 +205,7 @@
 				<h4 class="text-sm font-medium text-gray-300">Advanced Options</h4>
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Enter Vault IDs</span>
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 						<div class="space-y-2">
 							<div class="relative">
 								<span class="text-sm font-medium text-gray-300"
@@ -241,7 +241,7 @@
 	</div>
 
 	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
-	<div class="space-y-4 mt-4 lg:mt-0">
+	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Active Liquidity Order Summary</h4>
 			<div class="space-y-2">

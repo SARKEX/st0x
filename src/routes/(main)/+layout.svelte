@@ -68,7 +68,7 @@
 		</div>
 
 		<!-- Desktop Sidebar -->
-		<div class="hidden lg:block fixed left-0 top-0 z-50 h-full">
+		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
 			<Sidebar {sidebarExpanded} />
 		</div>
 
@@ -88,18 +88,26 @@
 		{/if}
 
 		<!-- Main Content -->
-		<div class="transition-all duration-300"
+		<div
+			class="transition-all duration-300"
 			class:lg:ml-64={sidebarExpanded}
 			class:lg:ml-16={!sidebarExpanded}
 		>
 			<!-- Mobile Header with Menu Button -->
-			<div class="lg:hidden flex items-center justify-between p-4 border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
+			<div
+				class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
+			>
 				<button
-					on:click={() => mobileSidebarOpen = !mobileSidebarOpen}
-					class="p-2 rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
+					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+					class="rounded-lg border border-white/10 p-2 transition-colors hover:bg-white/5"
 				>
-					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M4 6h16M4 12h16M4 18h16"
+						/>
 					</svg>
 				</button>
 				<div class="flex items-center gap-2">
@@ -108,7 +116,9 @@
 						alt="ST0x Logo"
 						class="h-8 w-8 rounded-full"
 					/>
-					<span class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent">
+					<span
+						class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
+					>
 						ST0X
 					</span>
 				</div>
