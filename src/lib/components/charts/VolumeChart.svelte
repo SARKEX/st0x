@@ -272,9 +272,9 @@
 </script>
 
 <div class="space-y-4">
-	<div class="flex items-center justify-between">
-		<h3 class="text-lg font-semibold text-white">Trading Volume</h3>
-		<div class="w-48">
+	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+		<h3 class="text-base sm:text-lg font-semibold text-white">Trading Volume</h3>
+		<div class="w-full sm:w-48">
 			<Select
 				options={availableTokens}
 				bind:selected={selectedToken}
@@ -284,11 +284,11 @@
 		</div>
 	</div>
 
-	<div class="rounded-lg bg-gray-800/50 p-4">
-		<div bind:this={chartContainer}></div>
+	<div class="rounded-lg bg-gray-800/50 p-3 sm:p-4">
+		<div bind:this={chartContainer} class="w-full"></div>
 	</div>
 
-	<div class="text-sm text-gray-400">
+	<div class="text-xs sm:text-sm text-gray-400">
 		Showing volume for {selectedToken.symbol} over the last {howManyDays} days
 	</div>
 </div>
