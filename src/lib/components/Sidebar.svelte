@@ -39,7 +39,7 @@
 
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-50 h-full w-64 transform border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-50 h-full w-64 max-w-[80vw] transform border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out flex flex-col"
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
@@ -56,14 +56,14 @@
 			<a href="/dashboard">
 				<span
 					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
-					>ST0X Liquidity</span
+				>ST0X Liquidity</span
 				>
 			</a>
 		</div>
 	</div>
 
-	<!-- Navigation -->
-	<div class="space-y-2 p-4">
+	<!-- Navigation (scrollable) -->
+	<div class="flex-1 overflow-y-auto space-y-2 p-4">
 		{#each NAVIGATION_ITEMS as item}
 			<a
 				href={item.href}
@@ -88,7 +88,7 @@
 	</div>
 
 	<!-- Bottom Info -->
-	<div class="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-gray-800/95 p-4">
+	<div class="border-t border-white/10 bg-gray-800/95 p-4">
 		<div class="flex w-full flex-col gap-3">
 			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
 				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
