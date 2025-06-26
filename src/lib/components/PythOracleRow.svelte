@@ -1,27 +1,15 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import axios from 'axios';
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
-	import { HermesClient, type PriceUpdate } from '@pythnetwork/hermes-client';
 	import type { PythToken, ApiStockQuote } from '$lib/types';
 
 	export let token: PythToken;
 	export let tokenQuotes: ApiStockQuote[] = [];
 
-	let priceUpdatePromise: Promise<PriceUpdate>;
-	$: if (token && token.priceFeedId) {
-		const hermesClient = new HermesClient('https://hermes.pyth.network');
-		priceUpdatePromise = hermesClient.getLatestPriceUpdates([token.priceFeedId]);
-	}
-
-	function formatPythPrice(priceUpdate: PriceUpdate) {
-		if (!priceUpdate.parsed || priceUpdate.parsed.length === 0) {
-			return { price: 0, confidence: 0 };
-		}
-		const priceInfo = priceUpdate.parsed[0].price;
-		return {
-			price: Number(priceInfo.price) * Math.pow(10, priceInfo.expo),
-			confidence: Number(priceInfo.conf) * Math.pow(10, priceInfo.expo)
-		};
-	}
+	let priceData: { price: number; confidence: number } | null = null;
+	let error: string | null = null;
+	let loading = true;
 
 	$: quote = token?.symbol
 		? tokenQuotes.find(
@@ -29,14 +17,36 @@
 			)
 		: undefined;
 	$: quotePrice = quote?.['Global Quote']?.['05. price'];
+
+	onMount(async () => {
+		loading = true;
+		error = null;
+		priceData = null;
+		try {
+			const resp = await axios.get(
+				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${token.priceFeedId}`
+			);
+			const parsed = resp.data.parsed?.[0]?.price;
+			if (parsed) {
+				priceData = {
+					price: Number(parsed.price) * Math.pow(10, parsed.expo),
+					confidence: Number(parsed.conf) * Math.pow(10, parsed.expo)
+				};
+			}
+		} catch (e) {
+			error = 'Error loading pyth price';
+		}
+		loading = false;
+	});
 </script>
 
 <!-- Desktop Table Row -->
 <tr class="hidden sm:table-row">
-	{#await priceUpdatePromise}
+	{#if loading}
 		<td class="px-2 py-1" colspan="4">Loading...</td>
-	{:then priceUpdate}
-		{@const priceData = formatPythPrice(priceUpdate)}
+	{:else if error}
+		<td class="px-2 py-1 text-red-400" colspan="4">{error}</td>
+	{:else if priceData}
 		<td class="px-2 py-1">
 			<a
 				href={`${TARGET_NETWORK_EXPLORER_URL}/address/${token.address}`}
@@ -47,24 +57,23 @@
 			</a>
 		</td>
 		<td class="px-2 py-1 text-right">${priceData.price.toFixed(5)}</td>
-		<td class="px-2 py-1 text-right">± ${priceData.confidence.toFixed(5)}</td>
+		<td class="px-2 py-1 text-right">± {priceData.confidence.toFixed(5)}</td>
 		<td class="px-2 py-1 text-right text-gray-400">
 			{#if quotePrice}
 				${parseFloat(quotePrice).toFixed(5)}
 			{/if}
 		</td>
-	{:catch}
-		<td class="px-2 py-1 text-red-400" colspan="4">Error loading pyth price</td>
-	{/await}
+	{/if}
 </tr>
 
 <!-- Mobile Card Row -->
 <tr class="sm:hidden">
 	<td class="p-2" colspan="4">
-		{#await priceUpdatePromise}
+		{#if loading}
 			<div class="text-xs">Loading...</div>
-		{:then priceUpdate}
-			{@const priceData = formatPythPrice(priceUpdate)}
+		{:else if error}
+			<div class="p-2 text-red-400 text-xs">{error}</div>
+		{:else if priceData}
 			<div class="flex flex-col gap-1 text-xs">
 				<div>
 					<span class="font-semibold">Token: </span>
@@ -93,8 +102,6 @@
 					{/if}
 				</div>
 			</div>
-		{:catch}
-			<div class="p-2 text-xs text-red-400">Error loading pyth price</div>
-		{/await}
+		{/if}
 	</td>
 </tr>
