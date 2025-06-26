@@ -14,7 +14,10 @@
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
-
+	import { hasValidPriceFeedId } from '$lib/derivations';
+	import PythOracle from '../PythOracle.svelte';
+	import { tokenGlobalQuote } from '$lib/stores';
+	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
 
 	let showAdvancedOptions = false;
@@ -242,6 +245,68 @@
 
 	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
 	<div class="mt-4 space-y-4 lg:mt-0">
+
+		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
+			<div class="overflow-x-auto hidden sm:block">
+				<table class="min-w-full text-sm text-gray-200">
+					<thead>
+						<tr>
+							<th class="text-left px-2 py-1">Token</th>
+							<th class="text-right px-2 py-1">Pyth Price</th>
+							<th class="text-right px-2 py-1">Confidence</th>
+							<th class="text-right px-2 py-1">Live</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#if hasValidPriceFeedId(selectedToken1)}
+							<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken1?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedToken2)}
+							<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken2?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+							</tr>
+						{/if}
+					</tbody>
+				</table>
+			</div>
+			<!-- Mobile stacked cards -->
+			<div class="sm:hidden flex flex-col gap-2 mt-2">
+				{#if hasValidPriceFeedId(selectedToken1)}
+					<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
+				{:else}
+					<div class="rounded bg-gray-800/80 p-3 text-xs">
+						<div><span class="font-semibold">Token: </span>{selectedToken1?.symbol ?? '-'}</div>
+						<div><span class="font-semibold">Pyth Price: </span>-</div>
+						<div><span class="font-semibold">Confidence: </span>-</div>
+						<div><span class="font-semibold">Live: </span>-</div>
+					</div>
+				{/if}
+				{#if hasValidPriceFeedId(selectedToken2)}
+					<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
+				{:else}
+					<div class="rounded bg-gray-800/80 p-3 text-xs">
+						<div><span class="font-semibold">Token: </span>{selectedToken2?.symbol ?? '-'}</div>
+						<div><span class="font-semibold">Pyth Price: </span>-</div>
+						<div><span class="font-semibold">Confidence: </span>-</div>
+						<div><span class="font-semibold">Live: </span>-</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Active Liquidity Order Summary</h4>
 			<div class="space-y-2">

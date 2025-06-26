@@ -1,3 +1,5 @@
+import type { Token } from "sushi/currency";
+
 export interface Sft {
 	name: string;
 	symbol: string;
@@ -17,4 +19,8 @@ export interface ApiStockQuote {
 		'09. change': string;
 		'10. change percent': string;
 	};
+}
+
+export interface PythToken extends Token {
+	priceFeedId: string;
 }

@@ -16,7 +16,10 @@
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
-
+	import { hasValidPriceFeedId } from '$lib/derivations';
+	import PythOracle from '../PythOracle.svelte';
+	import { tokenGlobalQuote } from '$lib/stores';
+	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
 
 	let selectedInputToken: Token = TOKENS[0];
@@ -260,6 +263,65 @@
 
 	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
 	<div class="mt-4 space-y-4 lg:mt-0">
+		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
+			<div class="overflow-x-auto hidden sm:block">
+				<table class="min-w-full text-sm text-gray-200">
+					<thead>
+						<tr>
+							<th class="text-left px-2 py-1">Token</th>
+							<th class="text-right px-2 py-1">Pyth Price</th>
+							<th class="text-right px-2 py-1">Confidence</th>
+							<th class="text-right px-2 py-1">Live</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#if hasValidPriceFeedId(selectedInputToken)}
+							<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedInputToken?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedOutputToken)}
+							<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedOutputToken?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-center">-</td>
+							</tr>
+						{/if}
+					</tbody>
+				</table>
+			</div>
+			<div class="sm:hidden flex flex-col gap-2 mt-2">
+				{#if hasValidPriceFeedId(selectedInputToken)}
+					<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
+				{:else}
+					<div class="rounded bg-gray-800/80 p-3 text-xs">
+						<div><span class="font-semibold">Token: </span>{selectedInputToken?.symbol ?? '-'}</div>
+						<div><span class="font-semibold">Pyth Price: </span>-</div>
+						<div><span class="font-semibold">Confidence: </span>-</div>
+						<div><span class="font-semibold">Live: </span>-</div>
+					</div>
+				{/if}
+				{#if hasValidPriceFeedId(selectedOutputToken)}
+					<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
+				{:else}
+					<div class="rounded bg-gray-800/80 p-3 text-xs">
+						<div><span class="font-semibold">Token: </span>{selectedOutputToken?.symbol ?? '-'}</div>
+						<div><span class="font-semibold">Pyth Price: </span>-</div>
+						<div><span class="font-semibold">Confidence: </span>-</div>
+						<div><span class="font-semibold">Live: </span>-</div>
+					</div>
+				{/if}
+			</div>
+		</div>
 		<!-- Order Summary -->
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">DCA Order Summary</h4>

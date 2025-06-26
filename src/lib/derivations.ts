@@ -2,6 +2,7 @@ import type { Token } from 'sushi/currency';
 import { USDC_TOKEN } from './network';
 import { getPrice } from './getPrice';
 import { parseUnits } from 'viem';
+import type { PythToken } from './types';
 
 // Returns the period in seconds
 export const getPeriodInSeconds = (
@@ -48,4 +49,7 @@ export const getBaseline = (selectedBuyOrSell: 'Buy' | 'Sell', selectedBaseline:
 	const finalBaseline =
 		selectedBuyOrSell === 'Buy' ? (1 / +selectedBaseline).toString() : selectedBaseline;
 	return finalBaseline;
+};
+export const hasValidPriceFeedId = (token: Token): token is PythToken => {
+	return 'priceFeedId' in token && token.priceFeedId !== '0x0000000000000000000000000000000000000000000000000000000000000000';
 };
