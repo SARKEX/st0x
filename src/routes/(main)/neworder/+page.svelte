@@ -6,10 +6,9 @@
 	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
 	import { orderTokenStore } from '$lib/stores';
-	import type { Token } from 'sushi/currency';
 	import Header from '$lib/components/Header.svelte';
 	import type { PythToken } from '$lib/types';
-	
+
 	const ORDER_TYPES = [
 		{ id: 'limit', name: 'Limit Orders' },
 		{ id: 'dca', name: 'DCA' },

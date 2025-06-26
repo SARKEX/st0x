@@ -51,5 +51,8 @@ export const getBaseline = (selectedBuyOrSell: 'Buy' | 'Sell', selectedBaseline:
 	return finalBaseline;
 };
 export const hasValidPriceFeedId = (token: Token): token is PythToken => {
-	return 'priceFeedId' in token && token.priceFeedId !== '0x0000000000000000000000000000000000000000000000000000000000000000';
+	return (
+		'priceFeedId' in token &&
+		token.priceFeedId !== '0x0000000000000000000000000000000000000000000000000000000000000000'
+	);
 };

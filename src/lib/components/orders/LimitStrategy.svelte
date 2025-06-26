@@ -12,7 +12,6 @@
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
 	import { getBaseline, hasValidPriceFeedId } from '$lib/derivations';
-	import PythOracle from '$lib/components/PythOracle.svelte';
 	import { tokenGlobalQuote } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
@@ -72,7 +71,7 @@
 			inputVaultId: selectedOrderType === 'Buy' ? inputVaultId : outputVaultId,
 			outputVaultId: selectedOrderType === 'Buy' ? outputVaultId : inputVaultId
 		});
-	};	
+	};
 </script>
 
 <div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
@@ -188,14 +187,14 @@
 	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
-			<div class="overflow-x-auto hidden sm:block">
+			<div class="hidden overflow-x-auto sm:block">
 				<table class="min-w-full text-sm text-gray-200">
 					<thead>
 						<tr>
-							<th class="text-left px-2 py-1">Token</th>
-							<th class="text-right px-2 py-1">Pyth Price</th>
-							<th class="text-right px-2 py-1">Confidence</th>
-							<th class="text-right px-2 py-1">Live</th>
+							<th class="px-2 py-1 text-left">Token</th>
+							<th class="px-2 py-1 text-right">Pyth Price</th>
+							<th class="px-2 py-1 text-right">Confidence</th>
+							<th class="px-2 py-1 text-right">Live</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -223,7 +222,8 @@
 								<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
 							{:else}
 								<tr>
-									<td class="px-2 py-1">{selectedOutputToken ? selectedOutputToken.symbol : '-'}</td>
+									<td class="px-2 py-1">{selectedOutputToken ? selectedOutputToken.symbol : '-'}</td
+									>
 									<td class="px-2 py-1 text-center">-</td>
 									<td class="px-2 py-1 text-center">-</td>
 									<td class="px-2 py-1 text-center">-</td>
@@ -240,7 +240,7 @@
 					</tbody>
 				</table>
 			</div>
-			<div class="sm:hidden flex flex-col gap-2 mt-2">
+			<div class="mt-2 flex flex-col gap-2 sm:hidden">
 				{#if selectedInputToken}
 					{#if hasValidPriceFeedId(selectedInputToken)}
 						<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />

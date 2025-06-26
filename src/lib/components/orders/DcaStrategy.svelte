@@ -17,7 +17,6 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId } from '$lib/derivations';
-	import PythOracle from '../PythOracle.svelte';
 	import { tokenGlobalQuote } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
@@ -265,14 +264,14 @@
 	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
-			<div class="overflow-x-auto hidden sm:block">
+			<div class="hidden overflow-x-auto sm:block">
 				<table class="min-w-full text-sm text-gray-200">
 					<thead>
 						<tr>
-							<th class="text-left px-2 py-1">Token</th>
-							<th class="text-right px-2 py-1">Pyth Price</th>
-							<th class="text-right px-2 py-1">Confidence</th>
-							<th class="text-right px-2 py-1">Live</th>
+							<th class="px-2 py-1 text-left">Token</th>
+							<th class="px-2 py-1 text-right">Pyth Price</th>
+							<th class="px-2 py-1 text-right">Confidence</th>
+							<th class="px-2 py-1 text-right">Live</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -299,7 +298,7 @@
 					</tbody>
 				</table>
 			</div>
-			<div class="sm:hidden flex flex-col gap-2 mt-2">
+			<div class="mt-2 flex flex-col gap-2 sm:hidden">
 				{#if hasValidPriceFeedId(selectedInputToken)}
 					<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
@@ -314,7 +313,9 @@
 					<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>{selectedOutputToken?.symbol ?? '-'}</div>
+						<div>
+							<span class="font-semibold">Token: </span>{selectedOutputToken?.symbol ?? '-'}
+						</div>
 						<div><span class="font-semibold">Pyth Price: </span>-</div>
 						<div><span class="font-semibold">Confidence: </span>-</div>
 						<div><span class="font-semibold">Live: </span>-</div>
