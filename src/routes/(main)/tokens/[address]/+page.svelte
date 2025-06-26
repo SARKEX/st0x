@@ -11,7 +11,6 @@
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
-	// Query for price data - refetches every 60 seconds
 	$: priceQuery = createQuery({
 		queryKey: ['tokenPrice', symbol],
 		queryFn: async () => {
@@ -20,10 +19,9 @@
 			);
 			return await response.json();
 		},
-		refetchInterval: 60000 // Refetch every 60 seconds
+		refetchInterval: 60000
 	});
 
-	// Query for overview data - fetches only once
 	$: overviewQuery = createQuery({
 		queryKey: ['tokenOverview', symbol],
 		queryFn: async () => {
@@ -51,7 +49,7 @@
 		queryKey: ['trades', $currentToken?.id],
 		queryFn: async ({ pageParam = 0 }) => {
 			const now = Math.floor(Date.now() / 1000);
-			const monthAgo = now - 30 * 86400; // Example range, adjust as needed
+			const monthAgo = now - 30 * 86400;
 			const trades = await getTrades(monthAgo, now);
 
 			const filteredTrades = trades.filter(
@@ -62,7 +60,6 @@
 						$currentToken?.id.toLowerCase()
 			);
 
-			// Simple pagination - return a subset based on pageParam
 			const pageSize = 20;
 			const startIndex = pageParam * pageSize;
 			const endIndex = startIndex + pageSize;
@@ -81,7 +78,6 @@
 	});
 
 	$: globalQuote = $priceQuery.data?.['Global Quote'];
-
 	$: marketCap =
 		$currentToken?.totalShares && globalQuote?.['05. price']
 			? (BigInt($currentToken.totalShares) *
@@ -90,15 +86,13 @@
 			: 0n;
 
 	$: priceChange = parseFloat(globalQuote?.['09. change']) || 0;
-
 	$: percentChange = parseFloat(globalQuote?.['10. change percent']?.replace('%', '')) || 0;
 
-	// Utility Classes (matching dashboard theme)
 	const CARD_BASE_CLASSES =
-		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
+		'bg-gray-700/30 border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all h-full flex flex-col justify-between';
 	const GRADIENT_HOVER_CLASSES =
 		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
-	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
+	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm border border-white/10 h-full';
 </script>
 
 {#if $priceQuery.isLoading || $overviewQuery.isLoading || $timeseriesQuery.isLoading || $tradesQuery.isLoading}
@@ -106,15 +100,14 @@
 		<LoadingSpinner variant="fullscreen" size="lg" text="Loading token data..." />
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
-	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
-		<!-- Header Section -->
+	<div>
 		<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
 
-		<!-- Bottom Row: Card 1 and Equity Chart -->
-		<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
-			<!-- Card 1: Equity Price Information -->
+		<!-- Fix: items-stretch ensures equal height; h-full added in cards -->
+		<div class="grid grid-cols-1 lg:grid-cols-3 items-stretch">
 			<div class="{CARD_BASE_CLASSES} p-4 sm:p-6 lg:col-span-1">
 				<div class={GRADIENT_HOVER_CLASSES}></div>
+
 				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
 					Equity Price
 				</h3>
@@ -201,10 +194,10 @@
 				</div>
 			</div>
 
-			<!-- Equity Chart Section -->
-			<div class="{SECTION_CLASSES} flex flex-col p-4 sm:p-6 lg:col-span-2">
+			<!-- Price History Chart Card -->
+			<div class="{SECTION_CLASSES} flex flex-col sm:p-6 lg:col-span-2">
 				<h3 class="mb-4 text-base font-semibold sm:text-xl">Price History</h3>
-				<div class="w-full flex-grow">
+				<div class="w-full flex-grow h-full">
 					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
 				</div>
 			</div>
