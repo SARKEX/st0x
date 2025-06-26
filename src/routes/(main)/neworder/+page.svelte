@@ -8,6 +8,8 @@
 	import { orderTokenStore } from '$lib/stores';
 	import Header from '$lib/components/Header.svelte';
 	import type { PythToken } from '$lib/types';
+	import { connected } from 'svelte-wagmi';
+	import WalletConnect from '$lib/components/WalletConnect.svelte';
 
 	const ORDER_TYPES = [
 		{ id: 'limit', name: 'Limit Orders' },
@@ -68,16 +70,23 @@
 		</div>
 
 		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 backdrop-blur-sm sm:p-6">
-			{#if activeOrderType === 'limit'}
-				{#key [inputToken?.address, outputToken?.address]}
-					<LimitStrategy passedInputToken={inputToken} passedOutputToken={outputToken} />
-				{/key}
-			{:else if activeOrderType === 'dca'}
-				<DcaStrategy />
-			{:else if activeOrderType === 'activeliquidity'}
-				<ActiveLiquidity />
-			{:else if activeOrderType === 'portfolio'}
-				<FolioStrategy />
+			{#if $connected}
+				{#if activeOrderType === 'limit'}
+					{#key [inputToken?.address, outputToken?.address]}
+						<LimitStrategy passedInputToken={inputToken} passedOutputToken={outputToken} />
+					{/key}
+				{:else if activeOrderType === 'dca'}
+					<DcaStrategy />
+				{:else if activeOrderType === 'activeliquidity'}
+					<ActiveLiquidity />
+				{:else if activeOrderType === 'portfolio'}
+					<FolioStrategy />
+				{/if}
+			{:else}
+				<div class="flex flex-col items-center justify-center gap-4 py-8">
+					<WalletConnect />
+					<p class="text-center text-gray-400">Connect your wallet to use trading strategies.</p>
+				</div>
 			{/if}
 		</div>
 	</div>
