@@ -204,17 +204,17 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedInputToken ? selectedInputToken.symbol : '-'}</td>
-									<td class="px-2 py-1 text-center">-</td>
-									<td class="px-2 py-1 text-center">-</td>
-									<td class="px-2 py-1 text-center">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
 								</tr>
 							{/if}
 						{:else}
 							<tr>
 								<td class="px-2 py-1">-</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
 							</tr>
 						{/if}
 						{#if selectedOutputToken}
@@ -224,17 +224,17 @@
 								<tr>
 									<td class="px-2 py-1">{selectedOutputToken ? selectedOutputToken.symbol : '-'}</td
 									>
-									<td class="px-2 py-1 text-center">-</td>
-									<td class="px-2 py-1 text-center">-</td>
-									<td class="px-2 py-1 text-center">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
 								</tr>
 							{/if}
 						{:else}
 							<tr>
 								<td class="px-2 py-1">-</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
 							</tr>
 						{/if}
 					</tbody>

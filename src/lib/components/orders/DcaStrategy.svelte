@@ -280,9 +280,9 @@
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedInputToken?.symbol ?? '-'}</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
 							</tr>
 						{/if}
 						{#if hasValidPriceFeedId(selectedOutputToken)}
@@ -290,9 +290,9 @@
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedOutputToken?.symbol ?? '-'}</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
-								<td class="px-2 py-1 text-center">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
 							</tr>
 						{/if}
 					</tbody>

@@ -22,19 +22,15 @@
 		loading = true;
 		error = null;
 		priceData = null;
-		try {
-			const resp = await axios.get(
-				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${token.priceFeedId}`
-			);
-			const parsed = resp.data.parsed?.[0]?.price;
-			if (parsed) {
-				priceData = {
-					price: Number(parsed.price) * Math.pow(10, parsed.expo),
-					confidence: Number(parsed.conf) * Math.pow(10, parsed.expo)
-				};
-			}
-		} catch (e) {
-			error = 'Error loading pyth price';
+		const resp = await axios.get(
+			`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${token.priceFeedId}`
+		);
+		const parsed = resp.data.parsed?.[0]?.price;
+		if (parsed) {
+			priceData = {
+				price: Number(parsed.price) * Math.pow(10, parsed.expo),
+				confidence: Number(parsed.conf) * Math.pow(10, parsed.expo)
+			};
 		}
 		loading = false;
 	});
@@ -72,7 +68,7 @@
 		{#if loading}
 			<div class="text-xs">Loading...</div>
 		{:else if error}
-			<div class="p-2 text-red-400 text-xs">{error}</div>
+			<div class="p-2 text-xs text-red-400">{error}</div>
 		{:else if priceData}
 			<div class="flex flex-col gap-1 text-xs">
 				<div>
