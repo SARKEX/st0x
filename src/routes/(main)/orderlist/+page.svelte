@@ -62,21 +62,21 @@
 	<Header title="Orders List" description="View all orders" />
 
 	<!-- Orders Content -->
-	<div class="space-y-8 p-6">
-		<div class="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
+	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
+		<div class="mb-4 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-6">
 			<input
 				class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none sm:w-auto"
 				type="text"
 				placeholder="Order hash"
 				bind:value={orderHashFilter}
 			/>
-			<label class="flex items-center gap-2 text-white">
+			<label class="flex w-full items-center gap-2 text-white sm:w-auto">
 				<input type="checkbox" bind:checked={showMyOrders} class="accent-yellow-500" />
-				<span class="text-sm sm:text-base">Show my orders</span>
+				<span class="text-xs sm:text-base">Show my orders</span>
 			</label>
-			<label class="flex items-center gap-2 text-white">
+			<label class="flex w-full items-center gap-2 text-white sm:w-auto">
 				<input type="checkbox" bind:checked={ordersActiveFilter} class="accent-yellow-500" />
-				<span class="text-sm sm:text-base">Include Inactive orders</span>
+				<span class="text-xs sm:text-base">Include Inactive orders</span>
 			</label>
 		</div>
 		<OrderListTable query={ordersQuery} />

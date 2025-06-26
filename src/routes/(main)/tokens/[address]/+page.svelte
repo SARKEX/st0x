@@ -106,16 +106,18 @@
 		<LoadingSpinner variant="fullscreen" size="lg" text="Loading token data..." />
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
-	<div class="space-y-8 p-6">
+	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		<!-- Header Section -->
 		<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
 
 		<!-- Bottom Row: Card 1 and Equity Chart -->
-		<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+		<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
 			<!-- Card 1: Equity Price Information -->
-			<div class="{CARD_BASE_CLASSES} p-6 lg:col-span-1">
+			<div class="{CARD_BASE_CLASSES} p-4 sm:p-6 lg:col-span-1">
 				<div class={GRADIENT_HOVER_CLASSES}></div>
-				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">Equity Price</h3>
+				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
+					Equity Price
+				</h3>
 				<div class="space-y-4">
 					<div class="flex items-baseline justify-between">
 						<span class="text-gray-400">Current Price</span>
@@ -123,7 +125,7 @@
 							{#if $priceQuery.isFetching && !$priceQuery.isLoading}
 								<LoadingSpinner variant="dot" text="Updating price..." />
 							{/if}
-							<span class="text-2xl font-bold text-green-400">
+							<span class="text-xl font-bold text-green-400 sm:text-2xl">
 								${(parseFloat(globalQuote?.['05. price']) || 0).toFixed(2)}
 							</span>
 						</div>
@@ -152,7 +154,7 @@
 
 				<div class="my-6 border-t border-white/10"></div>
 
-				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
+				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
 					Equity Overview
 				</h3>
 				<div class="space-y-4">
@@ -174,7 +176,9 @@
 
 				<div class="my-6 border-t border-white/10"></div>
 
-				<h3 class="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">ST0X Token</h3>
+				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
+					ST0X Token
+				</h3>
 				<div class="space-y-4">
 					<div class="flex items-baseline justify-between">
 						<span class="text-gray-400">Name</span>
@@ -198,18 +202,20 @@
 			</div>
 
 			<!-- Equity Chart Section -->
-			<div class="{SECTION_CLASSES} flex flex-col lg:col-span-2">
-				<h3 class="mb-4 text-xl font-semibold">Price History</h3>
-				<div class="flex-grow">
+			<div class="{SECTION_CLASSES} flex flex-col p-4 sm:p-6 lg:col-span-2">
+				<h3 class="mb-4 text-base font-semibold sm:text-xl">Price History</h3>
+				<div class="w-full flex-grow">
 					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
 				</div>
 			</div>
 		</div>
 
-		<div class={SECTION_CLASSES}>
-			<h3 class="mb-4 text-xl font-semibold">Trade History</h3>
+		<div class="{SECTION_CLASSES} p-4 sm:p-6">
+			<h3 class="mb-4 text-base font-semibold sm:text-xl">Trade History</h3>
 			{#if $tradesQuery.data?.pages.flatMap((page) => page.trades).length > 0}
-				<TradeHistoryTable query={tradesQuery} />
+				<div class="overflow-x-auto">
+					<TradeHistoryTable query={tradesQuery} />
+				</div>
 			{:else}
 				<p class="text-center text-gray-400">No trades found for this token.</p>
 			{/if}

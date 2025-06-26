@@ -70,9 +70,9 @@
 	};
 </script>
 
-<div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
+<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
-		<div class="grid grid-cols-1 gap-4">
+		<div class="grid grid-cols-1 gap-3 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Order Type</span>
 				<Select
@@ -85,7 +85,7 @@
 				<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
 			</div>
 		</div>
-		<div class="grid grid-cols-1 gap-4">
+		<div class="grid grid-cols-1 gap-3 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300"
 					>{selectedOrderType === 'Buy' ? 'With' : 'For'}</span
@@ -99,7 +99,7 @@
 			{/if}
 		</div>
 
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">
 					Price {selectedInputToken && selectedOutputToken
@@ -157,7 +157,7 @@
 		{#if showAdvancedOptions}
 			<div class="space-y-4 rounded-lg border border-white/5 bg-gray-800/30 p-4">
 				<h4 class="text-sm font-medium text-gray-300">Advanced Options</h4>
-				<div class="grid grid-cols-2 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
 							{selectedInputToken?.symbol} Vault ID
@@ -175,7 +175,8 @@
 		{/if}
 	</div>
 
-	<div class="space-y-4">
+	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
+	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 			<div class="space-y-2">

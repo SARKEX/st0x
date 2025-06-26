@@ -25,6 +25,12 @@
 	const CARD_BASE_CLASSES =
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
+
+	function truncateId(id: string, start: number = 6, end: number = 4) {
+		if (!id) return '';
+		if (id.length <= start + end + 3) return id;
+		return `${id.slice(0, start)}....${id.slice(-end)}`;
+	}
 </script>
 
 <!-- Main Content -->
@@ -33,80 +39,86 @@
 	<Header title="Burn" description="Redeem tokens for underlying securities" />
 
 	<!-- Burn Content -->
-	<div class="space-y-8 p-6">
-		<div class="h-100 mb-4 sm:mb-6">
+	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
+		<div class="h-100 mb-4 w-full sm:mb-6">
 			<WithdrawChart vaults={$sfts} />
 		</div>
-		<div class="h-100 mb-4 sm:mb-6">
+		<div class="h-100 mb-4 w-full sm:mb-6">
 			<CumulativeSupplyChart vaults={$sfts} />
 		</div>
 		<!-- Burn Process -->
 		<div class={SECTION_CLASSES}>
-			<div class="mb-8">
+			<div class="mb-6 sm:mb-8">
 				<h2
-					class="mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-2xl font-bold text-transparent"
+					class="mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
 				>
 					Burn Partners
 				</h2>
 			</div>
-			<div class="space-y-6">
-				<div class="{CARD_BASE_CLASSES} p-6">
-					<div class="space-y-6">
+			<div class="space-y-4 sm:space-y-6">
+				<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
+					<div class="space-y-4 sm:space-y-6">
 						{#each BURN_ISSUERS as issuer}
 							<div
-								class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-orange-500/30 hover:bg-gray-700/40"
+								class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-orange-500/30 hover:bg-gray-700/40 sm:p-6"
 							>
 								<div
 									class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
 								/>
-								<div class="flex items-start gap-6">
+								<div class="flex flex-col items-start gap-4 sm:flex-row sm:gap-6">
 									<div
-										class="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-2xl font-bold text-white ring-1 ring-white/10 backdrop-blur-sm"
+										class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-14 sm:w-14 sm:text-2xl"
 									>
 										{issuer.issuerName.slice(0, 2).toUpperCase() ?? '??'}
 									</div>
 									<div class="flex-1 space-y-2">
-										<div class="flex items-center justify-between">
-											<h3 class="text-xl font-semibold text-white">{issuer.issuerName}</h3>
+										<div
+											class="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center"
+										>
+											<h3 class="text-lg font-semibold text-white sm:text-xl">
+												{issuer.issuerName}
+											</h3>
 											<a
 												href={issuer.issuerLink}
 												target="_blank"
 												rel="noopener noreferrer"
-												class="text-sm text-orange-500 transition-colors hover:text-orange-400"
+												class="text-xs text-orange-500 transition-colors hover:text-orange-400 sm:text-sm"
 											>
-												<div class="flex items-center justify-center gap-2">
+												<div class="flex items-center gap-1">
 													Link to Issuer
 													<ArrowRightToBracketOutline />
 												</div>
 											</a>
 										</div>
-										<p class="text-sm leading-relaxed text-gray-400">{issuer.issuerInfo}</p>
+										<p class="text-xs leading-relaxed text-gray-400 sm:text-sm">
+											{issuer.issuerInfo}
+										</p>
 									</div>
 								</div>
 							</div>
 						{/each}
 					</div>
 				</div>
-				<div class="{CARD_BASE_CLASSES} p-6">
-					<div class="space-y-6">
+				<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
+					<div class="space-y-4 sm:space-y-6">
 						<h2
-							class="mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-2xl font-bold text-transparent"
+							class="mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
 						>
 							Burn History
 						</h2>
 						{#each $sfts as sft}
 							{#each sft.withdraws.slice(0, 10) as withdraw}
 								<div
-									class="group relative mb-6 flex flex-col gap-4 rounded-lg border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-orange-500/30 hover:bg-gray-700/40"
+									class="group relative mb-6 flex flex-col gap-4 rounded-lg border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-orange-500/30 hover:bg-gray-700/40 sm:p-6"
 								>
 									<div
 										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
 									/>
 									<!-- Status Badge -->
-									<div class="absolute right-4 top-4 flex items-center gap-2">
+									<div class="static flex flex-row gap-2 sm:absolute sm:right-4 sm:top-4">
 										{#if withdraw.id}
 											<span
-												class="rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-orange-300"
+												class="rounded-full bg-gray-600 px-2 py-1 text-xs font-semibold text-orange-300 sm:px-3"
 												>Completed</span
 											>
 											<button
@@ -122,24 +134,28 @@
 											</button>
 										{:else}
 											<span
-												class="rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-orange-300"
+												class="rounded-full bg-gray-600 px-2 py-1 text-xs font-semibold text-orange-300 sm:px-3"
 												>Processing</span
 											>
 										{/if}
 									</div>
-									<div class="flex items-center gap-4">
+									<div class="flex items-center gap-3 sm:gap-4">
 										<!-- Avatar -->
 										<div
-											class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-2xl font-bold text-white ring-1 ring-white/10 backdrop-blur-sm"
+											class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-2xl"
 										>
 											{sft.symbol?.slice(0, 2) ?? '??'}
 										</div>
 										<div>
-											<div class="text-lg font-semibold text-white">{sft.name}</div>
-											<div class="text-xs text-gray-400">Transfer ID: {withdraw.id}</div>
+											<div class="text-base font-semibold text-white sm:text-lg">{sft.name}</div>
+											<div class="text-xs text-gray-400">
+												Transfer ID: {truncateId(withdraw.id)}
+											</div>
 										</div>
 									</div>
-									<div class="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+									<div
+										class="mt-2 grid grid-cols-1 gap-4 text-xs sm:text-sm md:grid-cols-2 md:grid-cols-4"
+									>
 										<div>
 											<div class="text-gray-400">From Brokerage</div>
 											<div class="text-white">
@@ -159,8 +175,10 @@
 									</div>
 									<!-- Message Bar -->
 									{#if withdraw.transaction.id}
-										<div class="mt-4 rounded bg-red-900/50 px-4 py-2 text-xs text-orange-200">
-											Tokens Burned TX: {withdraw.transaction.id}
+										<div
+											class="mt-4 overflow-x-auto rounded bg-red-900/50 px-4 py-2 text-xs text-orange-200"
+										>
+											Tokens Burned TX: {truncateId(withdraw.transaction.id)}
 										</div>
 									{/if}
 								</div>

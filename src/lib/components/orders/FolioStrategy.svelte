@@ -146,14 +146,14 @@
 	};
 </script>
 
-<div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
+<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
 		<div>
 			<h3 class="mb-4 text-lg font-semibold">Select Tokens</h3>
 			<p class="mb-6 text-sm text-gray-400">
 				Select the tokens that you want to use in your portfolio.
 			</p>
-			<div class="grid grid-cols-1 gap-4">
+			<div class="grid grid-cols-1 gap-3 sm:gap-4">
 				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Token 1</span>
 					<TokenSelect options={TOKENS} bind:selected={selectedToken1} />
@@ -203,7 +203,7 @@
 		{#if showAdvancedOptions}
 			<div class="space-y-4 rounded-lg border border-white/5 bg-gray-800/30 p-4">
 				<h4 class="text-sm font-medium text-gray-300">Advanced Options</h4>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Threshold</span>
 					<Input
 						type="text"
@@ -212,7 +212,7 @@
 						bind:isError={overrideThresholdError}
 					/>
 				</div>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Fee</span>
 					<Input
 						type="text"
@@ -222,7 +222,7 @@
 					/>
 				</div>
 
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 1 Deposit Amount</span>
 					<TradeAmountInput
 						amountToken={selectedToken1}
@@ -231,7 +231,7 @@
 						bind:isError={overrideDepositAmount1Error}
 					/>
 				</div>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 2 Deposit Amount</span>
 					<TradeAmountInput
 						amountToken={selectedToken2}
@@ -240,7 +240,7 @@
 						bind:isError={overrideDepositAmount2Error}
 					/>
 				</div>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 3 Deposit Amount</span>
 					<TradeAmountInput
 						amountToken={selectedToken3}
@@ -249,7 +249,7 @@
 						bind:isError={overrideDepositAmount3Error}
 					/>
 				</div>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 4 Deposit Amount</span>
 					<TradeAmountInput
 						amountToken={selectedToken4}
@@ -258,7 +258,7 @@
 						bind:isError={overrideDepositAmount4Error}
 					/>
 				</div>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 5 Deposit Amount</span>
 					<TradeAmountInput
 						amountToken={selectedToken5}
@@ -267,7 +267,7 @@
 						bind:isError={overrideDepositAmount5Error}
 					/>
 				</div>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 6 Deposit Amount</span>
 					<TradeAmountInput
 						amountToken={selectedToken6}
@@ -276,7 +276,7 @@
 						bind:isError={overrideDepositAmount6Error}
 					/>
 				</div>
-				<div class="grid grid-cols-1 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 7 Deposit Amount</span>
 					<TradeAmountInput
 						amountToken={selectedToken7}
@@ -285,7 +285,7 @@
 						bind:isError={overrideDepositAmount7Error}
 					/>
 				</div>
-				<div class="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4">
+				<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 1 Vault ID</span>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
@@ -300,7 +300,7 @@
 						<VaultIdInput bind:vaultId={outputVaultId1} bind:isError={outputVaultId1Error} />
 					</div>
 				</div>
-				<div class="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4">
+				<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 2 Vault ID</span>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
@@ -315,7 +315,7 @@
 						<VaultIdInput bind:vaultId={outputVaultId2} bind:isError={outputVaultId2Error} />
 					</div>
 				</div>
-				<div class="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4">
+				<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 3 Vault ID</span>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
@@ -330,7 +330,7 @@
 						<VaultIdInput bind:vaultId={outputVaultId3} bind:isError={outputVaultId3Error} />
 					</div>
 				</div>
-				<div class="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4">
+				<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 4 Vault ID</span>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
@@ -345,7 +345,7 @@
 						<VaultIdInput bind:vaultId={outputVaultId4} bind:isError={outputVaultId4Error} />
 					</div>
 				</div>
-				<div class="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4">
+				<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 5 Vault ID</span>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
@@ -360,7 +360,7 @@
 						<VaultIdInput bind:vaultId={outputVaultId5} bind:isError={outputVaultId5Error} />
 					</div>
 				</div>
-				<div class="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4">
+				<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 6 Vault ID</span>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
@@ -375,7 +375,7 @@
 						<VaultIdInput bind:vaultId={outputVaultId6} bind:isError={outputVaultId6Error} />
 					</div>
 				</div>
-				<div class="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4">
+				<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
 					<span class="block text-sm font-medium text-gray-300">Token 7 Vault ID</span>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
@@ -394,7 +394,8 @@
 		{/if}
 	</div>
 
-	<div class="space-y-4">
+	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
+	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Portfolio Order Summary</h4>
 			<div class="space-y-2">

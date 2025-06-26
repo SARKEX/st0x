@@ -136,60 +136,62 @@
 	<!-- Header -->
 	<Header title="Vault List" description="View all vaults" />
 
-	<div class="space-y-8 p-6">
+	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		<Portfolio vaults={$sfts} tokenGlobalQuote={$tokenGlobalQuote} />
 	</div>
 
 	<!-- Orders Content -->
-	<div class="space-y-8 p-6">
+	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		{#if myTokenBalance.length > 0}
-			<div class="mb-8">
+			<div class="mb-6 sm:mb-8">
 				<h2
-					class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-2xl font-bold text-transparent"
+					class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
 				>
 					My Vaults
 				</h2>
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
 					{#each myTokenBalance as token}
 						<div
-							class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-6 transition-all hover:border-blue-500/30 hover:bg-gray-700/40"
+							class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-blue-500/30 hover:bg-gray-700/40 sm:p-6"
 						>
 							<div
 								class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
 							/>
 
 							<!-- Token Info -->
-							<div class="flex items-start gap-4">
+							<div class="flex items-start gap-3 sm:gap-4">
 								<div
-									class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-700/20 text-xl font-bold text-white ring-1 ring-white/10 backdrop-blur-sm"
+									class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-xl"
 								>
 									{token.token.symbol?.slice(0, 2) ?? '??'}
 								</div>
 								<div class="flex-1">
-									<h3 class="text-lg font-semibold text-white">
+									<h3 class="text-base font-semibold text-white sm:text-lg">
 										{token.token.name ?? 'Unknown Token'}
 									</h3>
-									<p class="text-sm text-gray-400">{token.token.symbol ?? '???'}</p>
+									<p class="text-xs text-gray-400 sm:text-sm">{token.token.symbol ?? '???'}</p>
 								</div>
 							</div>
 
 							<!-- Balance Info -->
 							<div class="mt-4 space-y-2">
 								<div class="flex items-center justify-between">
-									<span class="text-sm text-gray-400">Total Balance</span>
-									<span class="text-lg font-semibold text-white">{token.balance}</span>
+									<span class="text-xs text-gray-400 sm:text-sm">Total Balance</span>
+									<span class="text-base font-semibold text-white sm:text-lg">{token.balance}</span>
 								</div>
 								<div class="flex items-center justify-between">
-									<span class="text-sm text-gray-400">Price</span>
-									<span class="text-sm text-gray-300">${token.price}</span>
+									<span class="text-xs text-gray-400 sm:text-sm">Price</span>
+									<span class="text-xs text-gray-300 sm:text-sm">${token.price}</span>
 								</div>
 								<div class="flex items-center justify-between">
-									<span class="text-sm text-gray-400">Estimated Value</span>
-									<span class="text-sm font-medium text-green-400">${token.estimatedValue}</span>
+									<span class="text-xs text-gray-400 sm:text-sm">Estimated Value</span>
+									<span class="text-xs font-medium text-green-400 sm:text-sm"
+										>${token.estimatedValue}</span
+									>
 								</div>
 								<div class="flex items-center justify-between">
-									<span class="text-sm text-gray-400">Vaults</span>
-									<span class="text-sm text-gray-300">{token.vaultIds.length}</span>
+									<span class="text-xs text-gray-400 sm:text-sm">Vaults</span>
+									<span class="text-xs text-gray-300 sm:text-sm">{token.vaultIds.length}</span>
 								</div>
 							</div>
 						</div>
@@ -198,20 +200,20 @@
 			</div>
 		{/if}
 
-		<div class="mb-6">
-			<label class="flex items-center gap-2">
+		<div class="mb-4 sm:mb-6">
+			<label class="flex w-full flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-2">
 				<input
 					type="checkbox"
 					bind:checked={showMyVaults}
 					class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
 				/>
-				<span class="text-sm text-gray-300">Show only my vaults</span>
+				<span class="text-xs text-gray-300 sm:text-sm">Show only my vaults</span>
 				<input
 					type="checkbox"
 					bind:checked={hideEmptyVaults}
 					class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
 				/>
-				<span class="text-sm text-gray-300">Hide empty vaults</span>
+				<span class="text-xs text-gray-300 sm:text-sm">Hide empty vaults</span>
 			</label>
 		</div>
 

@@ -56,6 +56,12 @@
 		}
 		return false;
 	});
+
+	function truncateId(id: string, start: number = 6, end: number = 4) {
+		if (!id) return '';
+		if (id.length <= start + end + 3) return id;
+		return `${id.slice(0, start)}...${id.slice(-end)}`;
+	}
 </script>
 
 {#if $query.isLoading || $query.isFetching || $query.isRefetching}
@@ -74,23 +80,29 @@
 		<Header title="Tokens" description="Browse all available tokenized assets" />
 
 		<!-- Token List Content -->
-		<div class="space-y-8 p-6">
+		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 			<!-- Token List Section -->
-			<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
-				<div class="mb-6 flex items-center justify-between">
+			<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-4 backdrop-blur-sm sm:p-6">
+				<div
+					class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between"
+				>
 					<div>
-						<h2 class="text-xl font-semibold">Available Tokens</h2>
-						<p class="text-gray-400">Explore all tokenized assets on the platform</p>
+						<h2 class="text-lg font-semibold sm:text-xl">Available Tokens</h2>
+						<p class="text-xs text-gray-400 sm:text-sm">
+							Explore all tokenized assets on the platform
+						</p>
 					</div>
 				</div>
 
 				<!-- Filter Bar -->
-				<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-					<div class="flex gap-2 rounded-lg bg-white/5 p-1">
+				<div
+					class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between"
+				>
+					<div class="flex w-full gap-2 rounded-lg bg-white/5 p-1 sm:w-auto">
 						{#each ['All', 'STOXs', 'ETFs', 'ST0NX'] as filter}
 							<button
 								on:click={() => (activeFilter = filter)}
-								class="rounded-md px-3 py-1.5 text-sm font-medium transition-all {activeFilter ===
+								class="rounded-md px-3 py-1.5 text-xs font-medium transition-all sm:text-sm {activeFilter ===
 								filter
 									? 'bg-yellow-500/20 text-yellow-500'
 									: 'text-gray-400 hover:text-white'}"
@@ -100,10 +112,11 @@
 						{/each}
 					</div>
 
-					<div class="flex gap-2 rounded-lg bg-white/5 p-1">
+					<div class="flex w-full gap-2 rounded-lg bg-white/5 p-1 sm:w-auto">
 						<button
 							on:click={() => (viewMode = 'grid')}
-							class="rounded-md px-3 py-1.5 text-sm font-medium transition-all {viewMode === 'grid'
+							class="rounded-md px-3 py-1.5 text-xs font-medium transition-all sm:text-sm {viewMode ===
+							'grid'
 								? 'bg-yellow-500/20 text-yellow-500'
 								: 'text-gray-400 hover:text-white'}"
 						>
@@ -111,7 +124,8 @@
 						</button>
 						<button
 							on:click={() => (viewMode = 'table')}
-							class="rounded-md px-3 py-1.5 text-sm font-medium transition-all {viewMode === 'table'
+							class="rounded-md px-3 py-1.5 text-xs font-medium transition-all sm:text-sm {viewMode ===
+							'table'
 								? 'bg-yellow-500/20 text-yellow-500'
 								: 'text-gray-400 hover:text-white'}"
 						>
@@ -122,7 +136,7 @@
 
 				{#if viewMode === 'grid'}
 					<!-- Grid View -->
-					<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					<div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 						{#each filteredData as token (token.id)}
 							<div
 								class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
@@ -136,10 +150,12 @@
 								/>
 
 								<!-- Header with token info and price -->
-								<div class="mb-4 flex items-center justify-between">
+								<div
+									class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+								>
 									<div class="flex items-center gap-3">
 										<div
-											class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-sm font-bold"
+											class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
 										>
 											<img
 												src={STOXs.find((s) => s.address.toLowerCase() === token.id.toLowerCase())
@@ -149,32 +165,30 @@
 											/>
 										</div>
 										<div>
-											<h3 class="text-lg font-semibold">{token.symbol}</h3>
-											<p class="text-sm text-gray-400">
-												{token.name}
-											</p>
-											<p class="text-sm text-gray-400">
+											<h3 class="text-base font-semibold sm:text-lg">{token.symbol}</h3>
+											<p class="text-xs text-gray-400 sm:text-sm">{token.name}</p>
+											<p class="text-xs text-gray-400 sm:text-sm">
 												<a
 													href={`https://stox.h20.market/token/${token.id}`}
 													target="_blank"
-													class="text-sm text-blue-400 underline hover:text-blue-300"
+													class="text-blue-400 underline hover:text-blue-300"
 													on:click|stopPropagation
 												>
-													{token.id.slice(0, 6)}...{token.id.slice(-4)}
+													{truncateId(token.id)}
 												</a>
 											</p>
 										</div>
 									</div>
 
 									<div class="text-right">
-										<div class="text-lg font-bold">
+										<div class="text-base font-bold sm:text-lg">
 											${parseFloat(token.price.toString()).toFixed(2)}
 										</div>
 									</div>
 								</div>
 
 								<!-- Simple metrics row -->
-								<div class="mb-3 flex justify-between text-sm">
+								<div class="mb-3 flex flex-wrap justify-between gap-2 text-xs sm:text-sm">
 									<div class="text-center">
 										<div class="text-gray-400">Supply</div>
 										<div class="font-medium text-white">{token.totalSupply}</div>
@@ -195,7 +209,7 @@
 
 								<!-- Status and last activity -->
 								<div
-									class="flex items-center justify-between border-t border-white/10 pt-3 text-xs text-gray-400"
+									class="flex flex-col gap-2 border-t border-white/10 pt-3 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between"
 								>
 									<span
 										class="rounded bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
@@ -210,41 +224,41 @@
 				{:else}
 					<!-- Table View -->
 					<div class="overflow-x-auto">
-						<table class="w-full">
+						<table class="w-full min-w-[600px]">
 							<thead>
 								<tr class="border-b border-white/10">
 									<th
-										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Token</th
 									>
-										Token
-									</th>
 									<th
-										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Address</th
 									>
-										Address
-									</th>
 									<th
-										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Price</th
 									>
-										Price
-									</th>
 									<th
-										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Market Cap</th
 									>
-										Market Cap
-									</th>
 									<th
-										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Supply</th
 									>
-										Supply
-									</th>
 									<th
-										class="cursor-pointer px-6 py-4 text-left font-medium text-gray-400 hover:text-white"
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Holders</th
 									>
-										Holders
-									</th>
-									<th class="px-6 py-4 text-left font-medium text-gray-400">Status</th>
-									<th class="px-6 py-4 text-left font-medium text-gray-400">View on Explorer</th>
+									<th
+										class="px-4 py-4 text-left text-xs font-medium text-gray-400 sm:px-6 sm:text-sm"
+										>Status</th
+									>
+									<th
+										class="px-4 py-4 text-left text-xs font-medium text-gray-400 sm:px-6 sm:text-sm"
+										>View on Explorer</th
+									>
 								</tr>
 							</thead>
 							<tbody>
@@ -253,7 +267,7 @@
 										class="cursor-pointer border-b border-white/5 hover:bg-white/5"
 										on:click={() => goto(`/tokens/${token.id}`)}
 									>
-										<td class="px-6 py-4">
+										<td class="px-4 py-4 sm:px-6">
 											<div class="flex items-center gap-3">
 												<div
 													class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
@@ -272,32 +286,32 @@
 												</div>
 											</div>
 										</td>
-										<td class="px-6 py-4">
+										<td class="px-4 py-4 sm:px-6">
 											<a
 												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
 												target="_blank"
-												class="text-sm text-blue-400 underline hover:text-blue-300"
+												class="text-xs text-blue-400 underline hover:text-blue-300 sm:text-sm"
 												on:click|stopPropagation
 											>
-												{token.id.slice(0, 6)}...{token.id.slice(-4)}
+												{truncateId(token.id)}
 											</a>
 										</td>
-										<td class="px-6 py-4 font-medium text-white">${token.price}</td>
-										<td class="px-6 py-4 text-white">{token.marketCap}</td>
-										<td class="px-6 py-4 text-white">{token.totalSupply}</td>
-										<td class="px-6 py-4 text-white">{token.totalHolders}</td>
-										<td class="px-6 py-4">
+										<td class="px-4 py-4 font-medium text-white sm:px-6">${token.price}</td>
+										<td class="px-4 py-4 text-white sm:px-6">{token.marketCap}</td>
+										<td class="px-4 py-4 text-white sm:px-6">{token.totalSupply}</td>
+										<td class="px-4 py-4 text-white sm:px-6">{token.totalHolders}</td>
+										<td class="px-4 py-4 sm:px-6">
 											<span
 												class="rounded-full bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
 											>
 												Active
 											</span>
 										</td>
-										<td class="px-6 py-4">
+										<td class="px-4 py-4 sm:px-6">
 											<a
 												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
 												target="_blank"
-												class="text-sm text-blue-400 hover:text-blue-300"
+												class="text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 												on:click|stopPropagation
 											>
 												View on Explorer →

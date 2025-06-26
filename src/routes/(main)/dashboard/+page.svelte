@@ -136,7 +136,8 @@
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
 	const GRADIENT_HOVER_CLASSES =
 		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
-	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
+	const SECTION_CLASSES =
+		'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-white/10';
 
 	function toggleDocumentation(index: number) {
 		DOCUMENTATION_ITEMS[index].isOpen = !DOCUMENTATION_ITEMS[index].isOpen;
@@ -151,28 +152,28 @@
 		<Header title="Dashboard" description="Welcome to ST0x" />
 
 		<!-- Dashboard Content -->
-		<div class="space-y-8 p-6">
+		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">
 			<StoxPages />
 
 			<!-- Platform Overview -->
 			<div class={SECTION_CLASSES}>
-				<div class="mb-6 flex items-center justify-between">
-					<h2 class="text-xl font-semibold">Platform Overview</h2>
+				<div class="mb-4 flex items-center justify-between sm:mb-6">
+					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Platform Overview</h2>
 				</div>
-				<div class="grid grid-cols-4 gap-4">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
 					{#each PLATFORM_STATS as metric}
 						<!-- Metric Card -->
-						<div class="{CARD_BASE_CLASSES} p-5">
+						<div class="{CARD_BASE_CLASSES} p-3 sm:p-4 lg:p-5">
 							<div class={GRADIENT_HOVER_CLASSES} />
 							<div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
 								{metric.label}
 							</div>
 							<div class="mb-2">
-								<span class="block text-2xl font-bold">{metric.value}</span>
+								<span class="block text-lg font-bold sm:text-xl lg:text-2xl">{metric.value}</span>
 							</div>
-							<div class="flex items-center gap-1 text-sm font-medium text-yellow-500">
+							<div class="flex items-center gap-1 text-xs font-medium text-yellow-500 sm:text-sm">
 								<span>↗</span>
-								{metric.change}
+								<span class="truncate">{metric.change}</span>
 							</div>
 						</div>
 					{/each}
@@ -181,60 +182,66 @@
 
 			<div class={SECTION_CLASSES}>
 				{#if $tradesQuery?.isLoading}
-					<div class="max-w-8xl rounded-lg bg-gray-800/50 p-8">
+					<div class="max-w-full rounded-lg bg-gray-800/50 p-4 sm:p-6 lg:p-8">
 						<LoadingSpinner variant="inline" size="lg" text="Loading Trades Data..." />
-						<p class="text-center text-gray-300">Fetching trades...</p>
+						<p class="text-center text-sm text-gray-300 sm:text-base">Fetching trades...</p>
 					</div>
 				{:else if $tradesQuery?.isError}
-					<div class="max-w-8xl rounded-lg bg-gray-800/50 p-8">
-						<h2 class="mb-4 text-xl font-semibold text-red-400">Error Loading Trades Data</h2>
-						<p class="mb-2 text-gray-300">There was an error fetching the trades data:</p>
-						<div class="mt-4 rounded border border-red-500/30 bg-red-900/20 p-4">
-							<p class="text-sm text-red-300">
+					<div class="max-w-full rounded-lg bg-gray-800/50 p-4 sm:p-6 lg:p-8">
+						<h2 class="mb-4 text-base font-semibold text-red-400 sm:text-lg lg:text-xl">
+							Error Loading Trades Data
+						</h2>
+						<p class="mb-2 text-xs text-gray-300 sm:text-sm lg:text-base">
+							There was an error fetching the trades data:
+						</p>
+						<div class="mt-4 rounded border border-red-500/30 bg-red-900/20 p-3 sm:p-4">
+							<p class="text-xs text-red-300 sm:text-sm">
 								{$tradesQuery.error?.message || 'Unknown error occurred'}
 							</p>
 						</div>
 					</div>
 				{:else if tradesData && Array.isArray(tradesData) && tradesData.length > 0}
-					<div class="max-w-8xl">
+					<div class="max-w-full overflow-x-auto">
 						<VolumeChart trades={tradesData} />
 					</div>
 				{:else}
-					<h2 class="mb-4 text-xl font-semibold text-white">No Trades Data Available</h2>
+					<h2 class="mb-4 text-base font-semibold text-white sm:text-lg lg:text-xl">
+						No Trades Data Available
+					</h2>
 				{/if}
 			</div>
 			<!-- Latest Proofs -->
 			<div
-				class="rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-yellow-900/20 p-6 backdrop-blur-sm"
+				class="rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-yellow-900/20 p-3 backdrop-blur-sm sm:p-4 lg:p-6"
 			>
-				<div class="mb-6 flex items-center justify-between">
+				<div class="mb-4 flex items-center justify-between sm:mb-6">
 					<div>
-						<h2 class="text-xl font-semibold">Latest Deposits</h2>
-						<p class="text-sm text-gray-400">Most recent deposits</p>
+						<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Latest Deposits</h2>
+						<p class="text-xs text-gray-400 sm:text-sm">Most recent deposits</p>
 					</div>
 				</div>
 				<div class="space-y-3">
 					{#each recentDeposits.slice(0, 5) as proof}
 						<!-- Proof Card -->
 						<div
-							class="rounded-xl border border-white/5 bg-black/30 p-4 transition-all hover:border-blue-500/30"
+							class="rounded-xl border border-white/5 bg-black/30 p-3 transition-all hover:border-blue-500/30 sm:p-4"
 						>
-							<div class="mb-2 flex items-center justify-between">
-								<div>
-									<h4 class="text-sm font-semibold">
+							<div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+								<div class="min-w-0 flex-1">
+									<h4 class="truncate text-xs font-semibold sm:text-sm">
 										{proof.id.split('-')[0]} - {formatUnits(BigInt(proof.amount), 18)}
 									</h4>
-									<p class="text-xs text-gray-400">
-										Depositor: {proof.emitter.address} • {new Date(
-											Number(proof.timestamp) * 1000
-										).toLocaleString()}
+									<p class="break-words text-xs text-gray-400">
+										Depositor: {proof.emitter.address.slice(0, 8)}...{proof.emitter.address.slice(
+											-6
+										)} • {new Date(Number(proof.timestamp) * 1000).toLocaleString()}
 									</p>
 								</div>
-								<div class="flex items-center gap-2">
+								<div class="flex flex-shrink-0 items-center gap-2">
 									<div class="h-2 w-2 rounded-full bg-green-500" />
 									<a
 										href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${proof.transaction.id}`}
-										class="text-xs text-blue-400 transition-colors hover:text-blue-300"
+										class="whitespace-nowrap text-xs text-blue-400 transition-colors hover:text-blue-300"
 									>
 										View Details
 									</a>
@@ -246,13 +253,15 @@
 			</div>
 			<!-- Documentation -->
 			<div class={SECTION_CLASSES}>
-				<div class="mb-6 flex items-center justify-between">
+				<div
+					class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between"
+				>
 					<div>
-						<h2 class="text-xl font-semibold">Documentation</h2>
-						<p class="text-sm text-gray-400">Links to all ST0x website explainers</p>
+						<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Documentation</h2>
+						<p class="text-xs text-gray-400 sm:text-sm">Links to all ST0x website explainers</p>
 					</div>
 					<button
-						class="rounded-lg border border-blue-500 bg-blue-500/20 px-4 py-2 text-sm font-medium text-blue-500 transition-all hover:bg-blue-500 hover:text-white"
+						class="w-full rounded-lg border border-blue-500 bg-blue-500/20 px-3 py-2 text-xs font-medium text-blue-500 transition-all hover:bg-blue-500 hover:text-white sm:w-auto sm:px-4 sm:text-sm"
 					>
 						View All Docs
 					</button>
@@ -263,17 +272,20 @@
 						<div class="overflow-hidden rounded-lg border border-white/10">
 							<button
 								on:click={() => toggleDocumentation(index)}
-								class="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-white/5"
+								class="flex w-full items-center justify-between px-3 py-3 text-left transition-colors hover:bg-white/5 sm:px-4 sm:py-4 lg:px-6"
 							>
-								<span class="font-medium">{item.question}</span>
-								<span class="transition-transform {item.isOpen ? 'rotate-180' : ''}"> ↓ </span>
+								<span class="pr-2 text-xs font-medium sm:text-sm lg:text-base">{item.question}</span
+								>
+								<span class="flex-shrink-0 transition-transform {item.isOpen ? 'rotate-180' : ''}">
+									↓
+								</span>
 							</button>
 							{#if item.isOpen}
-								<div class="border-t border-white/10 px-6 pb-4">
-									<p class="mb-3 text-sm text-gray-400">{item.answer}</p>
+								<div class="border-t border-white/10 px-3 pb-3 sm:px-4 sm:pb-4 lg:px-6">
+									<p class="mb-3 text-xs text-gray-400 sm:text-sm">{item.answer}</p>
 									<a
 										href={item.link}
-										class="text-sm text-yellow-500 transition-colors hover:text-yellow-400"
+										class="text-xs text-yellow-500 transition-colors hover:text-yellow-400 sm:text-sm"
 									>
 										Learn more →
 									</a>

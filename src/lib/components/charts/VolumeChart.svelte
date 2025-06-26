@@ -10,9 +10,6 @@
 	} from 'lightweight-charts';
 	import moment from 'moment';
 	import type { SgTrade, SgErc20 } from '@rainlanguage/orderbook/js_api';
-
-	import Select from '$lib/components/Select.svelte';
-
 	let chartContainer: HTMLElement;
 	export let trades: SgTrade[] = [];
 	let howManyDays = 30;
@@ -272,23 +269,31 @@
 </script>
 
 <div class="space-y-4">
-	<div class="flex items-center justify-between">
-		<h3 class="text-lg font-semibold text-white">Trading Volume</h3>
-		<div class="w-48">
-			<Select
-				options={availableTokens}
-				bind:selected={selectedToken}
-				getOptionLabel={getTokenLabel}
-				dataTestId="token-selector"
-			/>
-		</div>
+	<!-- Token selection as horizontal buttons -->
+	<div class="mb-2 flex flex-wrap gap-2">
+		{#each availableTokens as token}
+			<button
+				type="button"
+				class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm
+					{selectedToken === token
+					? 'border-yellow-500 bg-yellow-500/20 text-yellow-500'
+					: 'border-white/10 bg-gray-700/50 text-gray-300 hover:bg-white/10'}"
+				on:click={() => (selectedToken = token)}
+			>
+				{getTokenLabel(token)}
+			</button>
+		{/each}
 	</div>
 
-	<div class="rounded-lg bg-gray-800/50 p-4">
-		<div bind:this={chartContainer}></div>
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+		<h3 class="text-base font-semibold text-white sm:text-lg">Trading Volume</h3>
 	</div>
 
-	<div class="text-sm text-gray-400">
+	<div class="overflow-x-auto rounded-lg bg-gray-800/50 p-2 sm:p-4">
+		<div bind:this={chartContainer} class="w-full min-w-[320px] sm:min-w-0"></div>
+	</div>
+
+	<div class="text-xs text-gray-400 sm:text-sm">
 		Showing volume for {selectedToken.symbol} over the last {howManyDays} days
 	</div>
 </div>
