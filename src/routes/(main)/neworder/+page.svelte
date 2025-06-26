@@ -6,8 +6,8 @@
 	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
 	import { orderTokenStore } from '$lib/stores';
-	import type { Token } from 'sushi/currency';
 	import Header from '$lib/components/Header.svelte';
+	import type { PythToken } from '$lib/types';
 
 	const ORDER_TYPES = [
 		{ id: 'limit', name: 'Limit Orders' },
@@ -17,8 +17,8 @@
 	];
 
 	let activeOrderType = 'limit';
-	let inputToken: Token | undefined;
-	let outputToken: Token | undefined;
+	let inputToken: PythToken | undefined;
+	let outputToken: PythToken | undefined;
 
 	function handleOrderTypeChange(newType: string) {
 		activeOrderType = newType;
@@ -29,8 +29,8 @@
 		// Check if we have data in the store
 		const unsubscribe = orderTokenStore.subscribe((storeData) => {
 			if (storeData.inputToken || storeData.outputToken || storeData.orderType) {
-				if (storeData.inputToken) inputToken = storeData.inputToken;
-				if (storeData.outputToken) outputToken = storeData.outputToken;
+				if (storeData.inputToken) inputToken = storeData.inputToken as PythToken;
+				if (storeData.outputToken) outputToken = storeData.outputToken as PythToken;
 				if (storeData.orderType) activeOrderType = storeData.orderType;
 
 				// Clear the store after using the data

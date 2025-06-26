@@ -11,14 +11,17 @@
 	import { formatUnits } from 'viem';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
-	import { getBaseline } from '$lib/derivations';
+	import { getBaseline, hasValidPriceFeedId } from '$lib/derivations';
+	import { tokenGlobalQuote } from '$lib/stores';
+	import type { PythToken } from '$lib/types';
+	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 
-	export let passedInputToken: Token | undefined;
-	export let passedOutputToken: Token | undefined;
+	export let passedInputToken: PythToken | undefined;
+	export let passedOutputToken: PythToken | undefined;
 
-	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
+	const TOKENS: PythToken[] = STOXs.concat(USDC_TOKEN);
 
-	let selectedInputToken: Token = TOKENS[0];
+	let selectedInputToken: Token = TOKENS[3];
 	let selectedOutputToken: Token = TOKENS[TOKENS.length - 1];
 
 	onMount(() => {
@@ -38,7 +41,7 @@
 	let outputVaultId: Hex | undefined;
 
 	$: isInputTokenSameAsOutputToken =
-		selectedOutputToken.address.toLowerCase() === selectedInputToken.address.toLowerCase();
+		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
 
 	let showAdvancedOptions = false;
 	// errors
@@ -59,6 +62,7 @@
 		outputVaultIdError;
 
 	const handleDeploy = async () => {
+		if (!selectedInputToken || !selectedOutputToken) return;
 		transactionStore.handleLimitDeploy({
 			outputToken: selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken,
 			inputToken: selectedOrderType === 'Buy' ? selectedInputToken : selectedOutputToken,
@@ -82,7 +86,9 @@
 				/>
 			</div>
 			<div>
-				<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
+				{#if selectedInputToken}
+					<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
+				{/if}
 			</div>
 		</div>
 		<div class="grid grid-cols-1 gap-3 sm:gap-4">
@@ -90,7 +96,9 @@
 				<span class="mb-2 block text-sm font-medium text-gray-300"
 					>{selectedOrderType === 'Buy' ? 'With' : 'For'}</span
 				>
-				<TokenSelect options={TOKENS} bind:selected={selectedOutputToken} />
+				{#if selectedOutputToken}
+					<TokenSelect options={TOKENS} bind:selected={selectedOutputToken} />
+				{/if}
 			</div>
 			{#if isInputTokenSameAsOutputToken}
 				<div class="mt-0 text-sm text-red-500">
@@ -119,14 +127,14 @@
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Amount</span>
 				<div class="relative">
-					{#if selectedOrderType === 'Buy'}
+					{#if selectedOrderType === 'Buy' && selectedOutputToken}
 						<TradeAmountInput
 							amountToken={selectedOutputToken}
 							bind:amount={selectedAmount}
 							validate={validateSelectedAmount}
 							bind:isError={selectedAmountError}
 						/>
-					{:else}
+					{:else if selectedInputToken}
 						<TradeAmountInput
 							amountToken={selectedInputToken}
 							bind:amount={selectedAmount}
@@ -177,6 +185,102 @@
 
 	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
 	<div class="mt-4 space-y-4 lg:mt-0">
+		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
+			<div class="hidden overflow-x-auto sm:block">
+				<table class="min-w-full text-sm text-gray-200">
+					<thead>
+						<tr>
+							<th class="px-2 py-1 text-left">Token</th>
+							<th class="px-2 py-1 text-right">Pyth Price</th>
+							<th class="px-2 py-1 text-right">Confidence</th>
+							<th class="px-2 py-1 text-right">Live</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#if selectedInputToken}
+							{#if hasValidPriceFeedId(selectedInputToken)}
+								<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
+							{:else}
+								<tr>
+									<td class="px-2 py-1">{selectedInputToken ? selectedInputToken.symbol : '-'}</td>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+								</tr>
+							{/if}
+						{:else}
+							<tr>
+								<td class="px-2 py-1">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+						{#if selectedOutputToken}
+							{#if hasValidPriceFeedId(selectedOutputToken)}
+								<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
+							{:else}
+								<tr>
+									<td class="px-2 py-1">{selectedOutputToken ? selectedOutputToken.symbol : '-'}</td
+									>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+									<td class="px-2 py-1 text-right">-</td>
+								</tr>
+							{/if}
+						{:else}
+							<tr>
+								<td class="px-2 py-1">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+					</tbody>
+				</table>
+			</div>
+			<div class="mt-2 flex flex-col gap-2 sm:hidden">
+				{#if selectedInputToken}
+					{#if hasValidPriceFeedId(selectedInputToken)}
+						<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
+					{:else}
+						<div class="rounded bg-gray-800/80 p-3 text-xs">
+							<div><span class="font-semibold">Token: </span>{selectedInputToken.symbol}</div>
+							<div><span class="font-semibold">Pyth Price: </span>-</div>
+							<div><span class="font-semibold">Confidence: </span>-</div>
+							<div><span class="font-semibold">Live: </span>-</div>
+						</div>
+					{/if}
+				{:else}
+					<div class="rounded bg-gray-800/80 p-3 text-xs">
+						<div><span class="font-semibold">Token: </span>-</div>
+						<div><span class="font-semibold">Pyth Price: </span>-</div>
+						<div><span class="font-semibold">Confidence: </span>-</div>
+						<div><span class="font-semibold">Live: </span>-</div>
+					</div>
+				{/if}
+				{#if selectedOutputToken}
+					{#if hasValidPriceFeedId(selectedOutputToken)}
+						<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
+					{:else}
+						<div class="rounded bg-gray-800/80 p-3 text-xs">
+							<div><span class="font-semibold">Token: </span>{selectedOutputToken.symbol}</div>
+							<div><span class="font-semibold">Pyth Price: </span>-</div>
+							<div><span class="font-semibold">Confidence: </span>-</div>
+							<div><span class="font-semibold">Live: </span>-</div>
+						</div>
+					{/if}
+				{:else}
+					<div class="rounded bg-gray-800/80 p-3 text-xs">
+						<div><span class="font-semibold">Token: </span>-</div>
+						<div><span class="font-semibold">Pyth Price: </span>-</div>
+						<div><span class="font-semibold">Confidence: </span>-</div>
+						<div><span class="font-semibold">Live: </span>-</div>
+					</div>
+				{/if}
+			</div>
+		</div>
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 			<div class="space-y-2">

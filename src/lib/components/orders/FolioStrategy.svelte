@@ -10,7 +10,9 @@
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
-
+	import { hasValidPriceFeedId } from '$lib/derivations';
+	import { tokenGlobalQuote } from '$lib/stores';
+	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
 
 	// Selected Tokens
@@ -396,6 +398,108 @@
 
 	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
 	<div class="mt-4 space-y-4 lg:mt-0">
+		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
+			<div class="hidden overflow-x-auto sm:block">
+				<table class="min-w-full text-sm text-gray-200">
+					<thead>
+						<tr>
+							<th class="px-2 py-1 text-left">Token</th>
+							<th class="px-2 py-1 text-right">Pyth Price</th>
+							<th class="px-2 py-1 text-right">Confidence</th>
+							<th class="px-2 py-1 text-right">Live</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#if hasValidPriceFeedId(selectedToken1)}
+							<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken1?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedToken2)}
+							<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken2?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedToken3)}
+							<PythOracleRow token={selectedToken3} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken3?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedToken4)}
+							<PythOracleRow token={selectedToken4} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken4?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedToken5)}
+							<PythOracleRow token={selectedToken5} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken5?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedToken6)}
+							<PythOracleRow token={selectedToken6} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken6?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+						{#if hasValidPriceFeedId(selectedToken7)}
+							<PythOracleRow token={selectedToken7} tokenQuotes={$tokenGlobalQuote} />
+						{:else}
+							<tr>
+								<td class="px-2 py-1">{selectedToken7?.symbol ?? '-'}</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+								<td class="px-2 py-1 text-right">-</td>
+							</tr>
+						{/if}
+					</tbody>
+				</table>
+			</div>
+			<div class="mt-2 flex flex-col gap-2 sm:hidden">
+				{#each [selectedToken1, selectedToken2, selectedToken3, selectedToken4, selectedToken5, selectedToken6, selectedToken7] as token}
+					{#if hasValidPriceFeedId(token)}
+						<PythOracleRow {token} tokenQuotes={$tokenGlobalQuote} />
+					{:else}
+						<div class="rounded bg-gray-800/80 p-3 text-xs">
+							<div><span class="font-semibold">Token: </span>{token?.symbol ?? '-'}</div>
+							<div><span class="font-semibold">Pyth Price: </span>-</div>
+							<div><span class="font-semibold">Confidence: </span>-</div>
+							<div><span class="font-semibold">Live: </span>-</div>
+						</div>
+					{/if}
+				{/each}
+			</div>
+		</div>
+
 		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Portfolio Order Summary</h4>
 			<div class="space-y-2">
