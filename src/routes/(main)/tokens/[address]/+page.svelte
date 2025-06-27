@@ -11,6 +11,8 @@
 	import { goto } from '$app/navigation';
 	import { orderTokenStore } from '$lib/stores';
 	import { USDC_TOKEN, STOXs } from '$lib/network';
+	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
+	import { page } from '$app/stores';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
@@ -258,7 +260,17 @@
 
 			<!-- Equity Chart Section -->
 			<div class="{SECTION_CLASSES} flex flex-col p-4 sm:p-6 lg:col-span-2">
-				<h3 class="mb-4 text-base font-semibold sm:text-xl">Price History</h3>
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-base font-semibold sm:text-xl">Price History</h3>
+					<button
+						on:click={() => goto(`${$page.url.pathname}/chart`)}
+						class="ml-2 text-gray-400 hover:text-yellow-400 transition-colors"
+						title="Open interactive chart in new tab"
+						aria-label="Open interactive chart in new tab"
+					>
+						<ArrowUpRightFromSquareSolid />
+					</button>
+				</div>
 				<div class="w-full flex-grow">
 					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
 				</div>
