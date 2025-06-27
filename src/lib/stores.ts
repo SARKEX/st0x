@@ -40,5 +40,5 @@ export const rainlangConfirmationModal = writable<{
 export const orderTokenStore = writable<{
 	inputToken?: Token;
 	outputToken?: Token;
-	orderType?: string;
+	orderType?: 'Buy' | 'Sell';
 }>({});

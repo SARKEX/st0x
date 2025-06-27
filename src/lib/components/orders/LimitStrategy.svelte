@@ -18,6 +18,7 @@
 
 	export let passedInputToken: PythToken | undefined;
 	export let passedOutputToken: PythToken | undefined;
+	export let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
 	const TOKENS: PythToken[] = STOXs.concat(USDC_TOKEN);
 
@@ -31,6 +32,9 @@
 		}
 		if (passedOutputToken) {
 			selectedOutputToken = passedOutputToken;
+		}
+		if (passedOrderType) {
+			selectedOrderType = passedOrderType;
 		}
 	});
 

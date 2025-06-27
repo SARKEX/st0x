@@ -21,6 +21,7 @@
 	let activeOrderType = 'limit';
 	let inputToken: PythToken | undefined;
 	let outputToken: PythToken | undefined;
+	let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
 	function handleOrderTypeChange(newType: string) {
 		activeOrderType = newType;
@@ -33,7 +34,7 @@
 			if (storeData.inputToken || storeData.outputToken || storeData.orderType) {
 				if (storeData.inputToken) inputToken = storeData.inputToken as PythToken;
 				if (storeData.outputToken) outputToken = storeData.outputToken as PythToken;
-				if (storeData.orderType) activeOrderType = storeData.orderType;
+				if (storeData.orderType) passedOrderType = storeData.orderType;
 
 				// Clear the store after using the data
 				orderTokenStore.set({});
@@ -72,8 +73,12 @@
 		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 backdrop-blur-sm sm:p-6">
 			{#if $connected}
 				{#if activeOrderType === 'limit'}
-					{#key [inputToken?.address, outputToken?.address]}
-						<LimitStrategy passedInputToken={inputToken} passedOutputToken={outputToken} />
+					{#key [inputToken?.address, outputToken?.address, passedOrderType]}
+						<LimitStrategy
+							passedInputToken={inputToken}
+							passedOutputToken={outputToken}
+							passedOrderType={passedOrderType}
+						/>
 					{/key}
 				{:else if activeOrderType === 'dca'}
 					<DcaStrategy />

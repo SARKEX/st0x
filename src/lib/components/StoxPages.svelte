@@ -64,7 +64,7 @@
 		orderTokenStore.set({
 			inputToken: stox,
 			outputToken: USDC_TOKEN,
-			orderType: 'limit'
+			orderType: 'Buy'
 		});
 
 		// Navigate to the neworder page

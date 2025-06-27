@@ -8,9 +8,16 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
 	import Header from '$lib/components/Header.svelte';
+	import { goto } from '$app/navigation';
+	import { orderTokenStore } from '$lib/stores';
+	import { USDC_TOKEN, STOXs } from '$lib/network';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
+	// Find the corresponding PythToken from STOXs array
+	$: currentPythToken = STOXs.find(token => token.address.toLowerCase() === $currentToken?.address.toLowerCase());
+
+	// Query for price data - refetches every 60 seconds
 	$: priceQuery = createQuery({
 		queryKey: ['tokenPrice', symbol],
 		queryFn: async () => {
@@ -19,9 +26,10 @@
 			);
 			return await response.json();
 		},
-		refetchInterval: 60000
+		refetchInterval: 60000 // Refetch every 60 seconds
 	});
 
+	// Query for overview data - fetches only once
 	$: overviewQuery = createQuery({
 		queryKey: ['tokenOverview', symbol],
 		queryFn: async () => {
@@ -49,7 +57,7 @@
 		queryKey: ['trades', $currentToken?.id],
 		queryFn: async ({ pageParam = 0 }) => {
 			const now = Math.floor(Date.now() / 1000);
-			const monthAgo = now - 30 * 86400;
+			const monthAgo = now - 30 * 86400; // Example range, adjust as needed
 			const trades = await getTrades(monthAgo, now);
 
 			const filteredTrades = trades.filter(
@@ -60,6 +68,7 @@
 						$currentToken?.id.toLowerCase()
 			);
 
+			// Simple pagination - return a subset based on pageParam
 			const pageSize = 20;
 			const startIndex = pageParam * pageSize;
 			const endIndex = startIndex + pageSize;
@@ -78,6 +87,7 @@
 	});
 
 	$: globalQuote = $priceQuery.data?.['Global Quote'];
+
 	$: marketCap =
 		$currentToken?.totalShares && globalQuote?.['05. price']
 			? (BigInt($currentToken.totalShares) *
@@ -86,13 +96,43 @@
 			: 0n;
 
 	$: priceChange = parseFloat(globalQuote?.['09. change']) || 0;
+
 	$: percentChange = parseFloat(globalQuote?.['10. change percent']?.replace('%', '')) || 0;
 
+	// Utility Classes (matching dashboard theme)
 	const CARD_BASE_CLASSES =
-		'bg-gray-700/30 border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all h-full flex flex-col justify-between';
+		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
 	const GRADIENT_HOVER_CLASSES =
 		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
-	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm border border-white/10 h-full';
+	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
+
+	function handleBuyClick() {
+		if (currentPythToken) {
+			// Set the token data in the store for buying (USDC -> ST0X)
+			orderTokenStore.set({
+				inputToken: USDC_TOKEN,
+				outputToken: currentPythToken,
+				orderType: 'Buy'
+			});
+
+			// Navigate to the neworder page
+			goto('/neworder');
+		}
+	}
+
+	function handleSellClick() {
+		if (currentPythToken) {
+			// Set the token data in the store for selling (ST0X -> USDC)
+			orderTokenStore.set({
+				inputToken: currentPythToken,
+				outputToken: USDC_TOKEN,
+				orderType: 'Sell'
+			});
+
+			// Navigate to the neworder page
+			goto('/neworder');
+		}
+	}
 </script>
 
 {#if $priceQuery.isLoading || $overviewQuery.isLoading || $timeseriesQuery.isLoading || $tradesQuery.isLoading}
@@ -100,14 +140,12 @@
 		<LoadingSpinner variant="fullscreen" size="lg" text="Loading token data..." />
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
-	<div>
-		<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
-
-		<!-- Fix: items-stretch ensures equal height; h-full added in cards -->
-		<div class="grid grid-cols-1 lg:grid-cols-3 items-stretch">
+	<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
+	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
+		<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
+			<!-- Card 1: Equity Price Information -->
 			<div class="{CARD_BASE_CLASSES} p-4 sm:p-6 lg:col-span-1">
 				<div class={GRADIENT_HOVER_CLASSES}></div>
-
 				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
 					Equity Price
 				</h3>
@@ -167,37 +205,53 @@
 					</div>
 				</div>
 
-				<div class="my-6 border-t border-white/10"></div>
+				<div class="my-8 border-t border-white/20"></div>
 
-				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
-					ST0X Token
-				</h3>
+				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">ST0X Token</h3>
 				<div class="space-y-4">
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Name</span>
 						<span class="font-semibold">{$currentToken?.name}</span>
 					</div>
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Symbol</span>
 						<span class="font-semibold">{$currentToken?.symbol}</span>
 					</div>
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Total Shares</span>
 						<span class="font-semibold">
 							{formatUnits(BigInt($currentToken?.totalShares ?? 0n), 18)}
 						</span>
 					</div>
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Market Cap</span>
 						<span class="font-semibold">${formatUnits(marketCap, 18)}</span>
 					</div>
 				</div>
+
+				<div class="my-8 border-t border-white/20"></div>
+
+				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">Trade Actions</h3>
+				<div class="flex gap-3">
+					<button
+						on:click={handleBuyClick}
+						class="flex-1 rounded-lg bg-green-600/20 border border-green-500/30 px-4 py-3 text-sm font-semibold text-green-400 hover:bg-green-600/30 hover:border-green-500/50 transition-all duration-200"
+					>
+						Buy {symbol}
+					</button>
+					<button
+						on:click={handleSellClick}
+						class="flex-1 rounded-lg bg-red-600/20 border border-red-500/30 px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-600/30 hover:border-red-500/50 transition-all duration-200"
+					>
+						Sell {symbol}
+					</button>
+				</div>
 			</div>
 
-			<!-- Price History Chart Card -->
-			<div class="{SECTION_CLASSES} flex flex-col sm:p-6 lg:col-span-2">
+			<!-- Equity Chart Section -->
+			<div class="{SECTION_CLASSES} flex flex-col p-4 sm:p-6 lg:col-span-2">
 				<h3 class="mb-4 text-base font-semibold sm:text-xl">Price History</h3>
-				<div class="w-full flex-grow h-full">
+				<div class="w-full flex-grow">
 					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
 				</div>
 			</div>
