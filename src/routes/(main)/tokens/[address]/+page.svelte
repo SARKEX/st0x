@@ -8,8 +8,18 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
 	import Header from '$lib/components/Header.svelte';
+	import { goto } from '$app/navigation';
+	import { orderTokenStore } from '$lib/stores';
+	import { USDC_TOKEN, STOXs } from '$lib/network';
+	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
+	import { page } from '$app/stores';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
+
+	// Find the corresponding PythToken from STOXs array
+	$: currentPythToken = STOXs.find(
+		(token) => token.address.toLowerCase() === $currentToken?.address.toLowerCase()
+	);
 
 	// Query for price data - refetches every 60 seconds
 	$: priceQuery = createQuery({
@@ -99,6 +109,34 @@
 	const GRADIENT_HOVER_CLASSES =
 		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
+
+	function handleBuyClick() {
+		if (currentPythToken) {
+			// Set the token data in the store for buying (USDC -> ST0X)
+			orderTokenStore.set({
+				inputToken: USDC_TOKEN,
+				outputToken: currentPythToken,
+				orderType: 'Buy'
+			});
+
+			// Navigate to the neworder page
+			goto('/neworder');
+		}
+	}
+
+	function handleSellClick() {
+		if (currentPythToken) {
+			// Set the token data in the store for selling (ST0X -> USDC)
+			orderTokenStore.set({
+				inputToken: currentPythToken,
+				outputToken: USDC_TOKEN,
+				orderType: 'Sell'
+			});
+
+			// Navigate to the neworder page
+			goto('/neworder');
+		}
+	}
 </script>
 
 {#if $priceQuery.isLoading || $overviewQuery.isLoading || $timeseriesQuery.isLoading || $tradesQuery.isLoading}
@@ -106,11 +144,18 @@
 		<LoadingSpinner variant="fullscreen" size="lg" text="Loading token data..." />
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
-	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
-		<!-- Header Section -->
-		<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
+	<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
+	<div class="mx-6 mt-4 flex max-w-full justify-center">
+		<div
+			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
+		>
+			<div class="mb-1 text-xl font-bold tracking-wide text-white">
+				{$currentToken?.name} - {symbol} Token Details
+			</div>
+		</div>
+	</div>
 
-		<!-- Bottom Row: Card 1 and Equity Chart -->
+	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
 			<!-- Card 1: Equity Price Information -->
 			<div class="{CARD_BASE_CLASSES} p-4 sm:p-6 lg:col-span-1">
@@ -174,36 +219,62 @@
 					</div>
 				</div>
 
-				<div class="my-6 border-t border-white/10"></div>
+				<div class="my-8 border-t border-white/20"></div>
 
-				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
-					ST0X Token
-				</h3>
+				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">ST0X Token</h3>
 				<div class="space-y-4">
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Name</span>
 						<span class="font-semibold">{$currentToken?.name}</span>
 					</div>
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Symbol</span>
 						<span class="font-semibold">{$currentToken?.symbol}</span>
 					</div>
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Total Shares</span>
 						<span class="font-semibold">
 							{formatUnits(BigInt($currentToken?.totalShares ?? 0n), 18)}
 						</span>
 					</div>
-					<div class="flex items-baseline justify-between">
+					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Market Cap</span>
 						<span class="font-semibold">${formatUnits(marketCap, 18)}</span>
 					</div>
+				</div>
+
+				<div class="my-8 border-t border-white/20"></div>
+
+				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">Trade Now</h3>
+				<div class="flex gap-3">
+					<button
+						on:click={handleBuyClick}
+						class="flex-1 rounded-lg border border-green-500/30 bg-green-600/20 px-4 py-3 text-sm font-semibold text-green-400 transition-all duration-200 hover:border-green-500/50 hover:bg-green-600/30"
+					>
+						Buy {symbol}
+					</button>
+					<button
+						on:click={handleSellClick}
+						class="flex-1 rounded-lg border border-red-500/30 bg-red-600/20 px-4 py-3 text-sm font-semibold text-red-400 transition-all duration-200 hover:border-red-500/50 hover:bg-red-600/30"
+					>
+						Sell {symbol}
+					</button>
 				</div>
 			</div>
 
 			<!-- Equity Chart Section -->
 			<div class="{SECTION_CLASSES} flex flex-col p-4 sm:p-6 lg:col-span-2">
-				<h3 class="mb-4 text-base font-semibold sm:text-xl">Price History</h3>
+				<div class="mb-4 flex items-center justify-between">
+					<h3 class="text-base font-semibold sm:text-xl">Price History</h3>
+					<button
+						on:click={() => goto(`${$page.url.pathname}/chart`)}
+						class="ml-2 text-gray-400 transition-colors hover:text-yellow-400"
+						title="Open interactive chart in new tab"
+						aria-label="Open interactive chart in new tab"
+					>
+						<ArrowUpRightFromSquareSolid />
+					</button>
+				</div>
 				<div class="w-full flex-grow">
 					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
 				</div>

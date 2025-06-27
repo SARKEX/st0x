@@ -78,6 +78,16 @@
 	<div>
 		<!-- Header -->
 		<Header title="Tokens" description="Browse all available tokenized assets" />
+		<div class="mx-6 mt-4 flex max-w-full justify-center">
+			<div
+				class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
+			>
+				<div class="mb-1 text-xl font-bold tracking-wide text-white">Token List</div>
+				<div class="text-sm font-medium leading-relaxed text-gray-300">
+					Explore all tokenized assets on the platform.
+				</div>
+			</div>
+		</div>
 
 		<!-- Token List Content -->
 		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
@@ -257,7 +267,7 @@
 									>
 									<th
 										class="px-4 py-4 text-left text-xs font-medium text-gray-400 sm:px-6 sm:text-sm"
-										>View on Explorer</th
+										>Proof Of Reserves</th
 									>
 								</tr>
 							</thead>
@@ -314,7 +324,7 @@
 												class="text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 												on:click|stopPropagation
 											>
-												View on Explorer →
+												Proof Of Reserves →
 											</a>
 										</td>
 									</tr>

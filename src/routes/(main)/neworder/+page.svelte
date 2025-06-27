@@ -21,6 +21,7 @@
 	let activeOrderType = 'limit';
 	let inputToken: PythToken | undefined;
 	let outputToken: PythToken | undefined;
+	let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
 	function handleOrderTypeChange(newType: string) {
 		activeOrderType = newType;
@@ -33,7 +34,7 @@
 			if (storeData.inputToken || storeData.outputToken || storeData.orderType) {
 				if (storeData.inputToken) inputToken = storeData.inputToken as PythToken;
 				if (storeData.outputToken) outputToken = storeData.outputToken as PythToken;
-				if (storeData.orderType) activeOrderType = storeData.orderType;
+				if (storeData.orderType) passedOrderType = storeData.orderType;
 
 				// Clear the store after using the data
 				orderTokenStore.set({});
@@ -51,6 +52,16 @@
 <div>
 	<!-- Header -->
 	<Header title="Orders" description="Manage your trading strategies" />
+	<div class="mx-6 mt-4 flex max-w-full justify-center">
+		<div
+			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
+		>
+			<div class="mb-1 text-xl font-bold tracking-wide text-white">Trade ST0Xs</div>
+			<div class="text-sm font-medium leading-relaxed text-gray-300">
+				Trade ST0X on-chain with Raindex.
+			</div>
+		</div>
+	</div>
 
 	<!-- Orders Content -->
 	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
@@ -72,8 +83,12 @@
 		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 backdrop-blur-sm sm:p-6">
 			{#if $connected}
 				{#if activeOrderType === 'limit'}
-					{#key [inputToken?.address, outputToken?.address]}
-						<LimitStrategy passedInputToken={inputToken} passedOutputToken={outputToken} />
+					{#key [inputToken?.address, outputToken?.address, passedOrderType]}
+						<LimitStrategy
+							passedInputToken={inputToken}
+							passedOutputToken={outputToken}
+							{passedOrderType}
+						/>
 					{/key}
 				{:else if activeOrderType === 'dca'}
 					<DcaStrategy />
