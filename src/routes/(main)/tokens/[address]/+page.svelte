@@ -17,7 +17,9 @@
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
 	// Find the corresponding PythToken from STOXs array
-	$: currentPythToken = STOXs.find(token => token.address.toLowerCase() === $currentToken?.address.toLowerCase());
+	$: currentPythToken = STOXs.find(
+		(token) => token.address.toLowerCase() === $currentToken?.address.toLowerCase()
+	);
 
 	// Query for price data - refetches every 60 seconds
 	$: priceQuery = createQuery({
@@ -143,9 +145,11 @@
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
 	<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
-	<div class="flex justify-center max-w-full mx-6 mt-4">
-		<div class="w-full max-w-full border border-white/10 rounded-lg px-4 py-3 shadow flex flex-col items-start">
-			<div class="text-xl font-bold tracking-wide text-white mb-1">
+	<div class="mx-6 mt-4 flex max-w-full justify-center">
+		<div
+			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
+		>
+			<div class="mb-1 text-xl font-bold tracking-wide text-white">
 				{$currentToken?.name} - {symbol} Token Details
 			</div>
 		</div>
@@ -245,13 +249,13 @@
 				<div class="flex gap-3">
 					<button
 						on:click={handleBuyClick}
-						class="flex-1 rounded-lg bg-green-600/20 border border-green-500/30 px-4 py-3 text-sm font-semibold text-green-400 hover:bg-green-600/30 hover:border-green-500/50 transition-all duration-200"
+						class="flex-1 rounded-lg border border-green-500/30 bg-green-600/20 px-4 py-3 text-sm font-semibold text-green-400 transition-all duration-200 hover:border-green-500/50 hover:bg-green-600/30"
 					>
 						Buy {symbol}
 					</button>
 					<button
 						on:click={handleSellClick}
-						class="flex-1 rounded-lg bg-red-600/20 border border-red-500/30 px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-600/30 hover:border-red-500/50 transition-all duration-200"
+						class="flex-1 rounded-lg border border-red-500/30 bg-red-600/20 px-4 py-3 text-sm font-semibold text-red-400 transition-all duration-200 hover:border-red-500/50 hover:bg-red-600/30"
 					>
 						Sell {symbol}
 					</button>
@@ -260,11 +264,11 @@
 
 			<!-- Equity Chart Section -->
 			<div class="{SECTION_CLASSES} flex flex-col p-4 sm:p-6 lg:col-span-2">
-				<div class="flex items-center justify-between mb-4">
+				<div class="mb-4 flex items-center justify-between">
 					<h3 class="text-base font-semibold sm:text-xl">Price History</h3>
 					<button
 						on:click={() => goto(`${$page.url.pathname}/chart`)}
-						class="ml-2 text-gray-400 hover:text-yellow-400 transition-colors"
+						class="ml-2 text-gray-400 transition-colors hover:text-yellow-400"
 						title="Open interactive chart in new tab"
 						aria-label="Open interactive chart in new tab"
 					>

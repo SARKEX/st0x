@@ -39,7 +39,7 @@
 
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-50 flex h-full w-64 max-w-[80vw] transform flex-col border-r border-b border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-50 flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
