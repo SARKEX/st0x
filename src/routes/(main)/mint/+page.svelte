@@ -42,6 +42,17 @@
 		description="Convert your U.S. equities into tokenized assets on-chain."
 	/>
 
+	<div class="flex justify-center max-w-full mx-6 mt-4">
+		<div class="w-full max-w-full border border-white/10 rounded-lg px-4 py-3 shadow flex flex-col items-start">
+			<div class="text-xl font-bold tracking-wide text-white mb-1">
+				Mint ST0X
+			</div>
+			<div class="text-sm font-medium text-gray-300 leading-relaxed">
+				This section displays all tokens minted on ST0X. Each represents an equity-backed asset available for on-chain interaction.
+			</div>
+		</div>
+	</div>
+
 	<!-- Mint Content -->
 	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		<div class="h-100 mb-4 w-full sm:mb-6">

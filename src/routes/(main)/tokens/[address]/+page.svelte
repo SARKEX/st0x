@@ -141,6 +141,14 @@
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
 	<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
+	<div class="flex justify-center max-w-full mx-6 mt-4">
+		<div class="w-full max-w-full border border-white/10 rounded-lg px-4 py-3 shadow flex flex-col items-start">
+			<div class="text-xl font-bold tracking-wide text-white mb-1">
+				{$currentToken?.name} - {symbol} Token Details
+			</div>
+		</div>
+	</div>
+
 	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
 			<!-- Card 1: Equity Price Information -->
@@ -231,7 +239,7 @@
 
 				<div class="my-8 border-t border-white/20"></div>
 
-				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">Trade Actions</h3>
+				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">Trade Now</h3>
 				<div class="flex gap-3">
 					<button
 						on:click={handleBuyClick}

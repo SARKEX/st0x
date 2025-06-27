@@ -78,6 +78,16 @@
 	<div>
 		<!-- Header -->
 		<Header title="Tokens" description="Browse all available tokenized assets" />
+		<div class="flex justify-center max-w-full mx-6 mt-4">
+			<div class="w-full max-w-full border border-white/10 rounded-lg px-4 py-3 shadow flex flex-col items-start">
+				<div class="text-xl font-bold tracking-wide text-white mb-1">
+					Token List
+				</div>
+				<div class="text-sm font-medium text-gray-300 leading-relaxed">
+					Explore all tokenized assets on the platform.	
+				</div>
+			</div>
+		</div>
 
 		<!-- Token List Content -->
 		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">

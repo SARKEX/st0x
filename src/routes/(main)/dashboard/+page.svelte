@@ -150,6 +150,13 @@
 	<div>
 		<!-- Header -->
 		<Header title="Dashboard" description="Welcome to ST0x" />
+		<div class="flex justify-center max-w-full mx-6 mt-4">
+			<div class="w-full max-w-full border border-white/10 rounded-lg px-4 py-3 shadow flex flex-col items-start">
+				<div class="text-xl font-bold tracking-wide text-white mb-1">
+					Welcome to ST0X – your on-chain gateway to equities.
+				</div>
+			</div>
+		</div>
 
 		<!-- Dashboard Content -->
 		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">

@@ -37,6 +37,16 @@
 <div>
 	<!-- Header -->
 	<Header title="Burn" description="Redeem tokens for underlying securities" />
+	<div class="flex justify-center max-w-full mx-6 mt-4">
+		<div class="w-full max-w-full border border-white/10 rounded-lg px-4 py-3 shadow flex flex-col items-start">
+			<div class="text-xl font-bold tracking-wide text-white mb-1">
+				Burn ST0X
+			</div>
+			<div class="text-sm font-medium text-gray-300 leading-relaxed">
+				This section displays all tokens burnt on ST0X. Each represents an equity-backed asset available for on-chain interaction.
+			</div>
+		</div>
+	</div>
 
 	<!-- Burn Content -->
 	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
