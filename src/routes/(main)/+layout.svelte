@@ -11,7 +11,6 @@
 	import { getSfts } from '$lib/query';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote } from '$lib/stores';
 	import { STOXs } from '$lib/network';
-	import TickerTape from '$lib/components/TickerTape.svelte';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
