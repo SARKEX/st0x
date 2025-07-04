@@ -1,13 +1,13 @@
 <script lang="ts">
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { goto } from '$app/navigation';
-
+	import TickerTape from '$lib/components/TickerTape.svelte';
 	export let title: string;
 	export let description: string;
 </script>
 
 <div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
-	
+	<TickerTape />
 	<div class="px-4 py-1 sm:px-6 sm:py-2">
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 			<div class="flex items-center gap-3 sm:gap-4">
