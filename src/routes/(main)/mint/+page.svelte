@@ -48,7 +48,8 @@
 		>
 			<div class="mb-1 text-xl font-bold tracking-wide text-white">Mint St0x</div>
 			<div class="text-sm font-medium leading-relaxed text-gray-300">
-				This section displays all tokens minted on ST0x. Each represents an equity-backed asset available for on-chain interaction.
+				This section displays all tokens minted on ST0x. Each represents an equity-backed asset
+				available for on-chain interaction.
 			</div>
 		</div>
 	</div>

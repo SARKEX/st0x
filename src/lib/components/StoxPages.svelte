@@ -19,10 +19,10 @@
 		activeFilter === 'All'
 			? allTokens
 			: activeFilter === 'ST0x'
-			? (STOXs as Token[])
-			: activeFilter === 'ETFs'
-			? (ETFs as Token[])
-			: (ST0NX as Token[]);
+				? (STOXs as Token[])
+				: activeFilter === 'ETFs'
+					? (ETFs as Token[])
+					: (ST0NX as Token[]);
 
 	// Calculate total pages
 	$: totalPages = Math.ceil(filteredTokens.length / CARDS_PER_PAGE);
@@ -98,8 +98,10 @@
 			{#each FILTERS as filter}
 				<button
 					on:click={() => handleFilterChange(filter)}
-					class="px-4 py-1.5 rounded-md text-xs font-semibold transition-colors
-						{activeFilter === filter ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+					class="rounded-md px-4 py-1.5 text-xs font-semibold transition-colors
+						{activeFilter === filter
+						? 'bg-yellow-500/20 text-yellow-400'
+						: 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
 				>
 					{filter}
 				</button>

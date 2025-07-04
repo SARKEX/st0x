@@ -5,32 +5,21 @@
 	let container: HTMLDivElement;
 	let paused = false;
 	let tapTimeout: ReturnType<typeof setTimeout> | null = null;
+	let isMobile = false;
 
-	// Pause on tap for mobile, block navigation on first tap
-	function handleTap(event: TouchEvent) {
-		if (window.innerWidth < 640) {
-			if (!paused) {
-				paused = true;
-				event.preventDefault();
-				event.stopPropagation();
-				// Auto-unpause after 10 seconds
-				if (tapTimeout) clearTimeout(tapTimeout);
-				tapTimeout = setTimeout(() => (paused = false), 10000);
-			} else {
-				paused = false;
-				if (tapTimeout) clearTimeout(tapTimeout);
-			}
-		}
+	function checkMobile() {
+		isMobile = window.innerWidth < 640;
 	}
 
-	onDestroy(() => {
-		if (tapTimeout) clearTimeout(tapTimeout);
-	});
-
+	// On mobile, overlay is present by default
 	onMount(() => {
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+		if (isMobile) paused = true;
+
+		// Build the symbols array for all STOXs, with fallback for undefined symbol
 		if (container) {
-			// Build the symbols array for all STOXs, with fallback for undefined symbol
-			const symbols = STOXs.map(stox => {
+			const symbols = STOXs.map((stox) => {
 				const baseSymbol = stox.symbol ? stox.symbol.replace('s1', '') : '';
 				return {
 					proName: `NASDAQ:${baseSymbol}`,
@@ -51,7 +40,7 @@
 			script.async = true;
 			script.innerHTML = `{
 				"symbols": [
-					${symbols.map(s => `{ \"proName\": \"${s.proName}\", \"title\": \"${s.title}\" }`).join(',\n')}
+					${symbols.map((s) => `{ "proName": "${s.proName}", "title": "${s.title}" }`).join(',\n')}
 				],
 				"showSymbolLogo": true,
 				"colorTheme": "dark",
@@ -68,16 +57,34 @@
 			}
 		}
 	});
+
+	onDestroy(() => {
+		if (tapTimeout) clearTimeout(tapTimeout);
+		window.removeEventListener('resize', checkMobile);
+	});
+
+	// On mobile, tap overlay to unlock ticker for 10s
+	function handleOverlayTap() {
+		if (isMobile) {
+			paused = false;
+			if (tapTimeout) clearTimeout(tapTimeout);
+			tapTimeout = setTimeout(() => (paused = true), 10000);
+		}
+	}
 </script>
 
 <div class="ticker-tape-wrapper" style="position:relative; width:100%; max-width:100vw;">
 	<div
 		bind:this={container}
-		class="w-full ticker-tape-inner"
-		on:touchstart|preventDefault|stopPropagation={handleTap}
+		class="ticker-tape-inner w-full"
+		on:touchstart|preventDefault|stopPropagation={handleOverlayTap}
 	/>
 	{#if paused}
-		<div class="ticker-tape-overlay" on:touchstart|preventDefault|stopPropagation={() => {}}></div>
+		<div class="ticker-tape-overlay" on:touchstart|preventDefault|stopPropagation={handleOverlayTap}>
+			{#if isMobile}
+				<span class="ticker-tape-overlay-message">Tap to unlock ticker</span>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -86,7 +93,7 @@
 	:global(#ticker-tape-container) {
 		background: transparent !important;
 	}
-	
+
 	:global(#ticker-tape-container .tv-ticker-tape) {
 		background: transparent !important;
 	}
@@ -103,11 +110,25 @@
 	}
 	.ticker-tape-overlay {
 		position: absolute;
-		top: 0; left: 0; right: 0; bottom: 0;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
 		z-index: 10;
-		background: rgba(0,0,0,0.01); /* nearly transparent, just to block pointer events */
+		background: rgba(0, 0, 0, 0.01); /* nearly transparent, just to block pointer events */
 		cursor: not-allowed;
 		pointer-events: all;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.ticker-tape-overlay-message {
+		background: rgba(30,30,30,0.85);
+		color: #fff;
+		font-size: 0.95rem;
+		padding: 0.4em 1em;
+		border-radius: 1em;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.ticker-tape-wrapper:hover .ticker-tape-overlay {
@@ -124,4 +145,4 @@
 			padding-right: 0;
 		}
 	}
-</style> 
+</style>
