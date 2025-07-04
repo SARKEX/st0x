@@ -73,16 +73,18 @@
 	}
 </script>
 
-<div class="w-screen max-w-screen bg-[#23272f] border-b border-white/10 z-[100] relative overflow-x-auto min-h-[48px] sm:min-h-[48px] min-w-0" style="width:100vw;max-width:100vw;">
-	<div
-		bind:this={container}
-		class="w-full min-w-0"
-	/>
+<div
+	class="max-w-screen relative z-[100] min-h-[48px] w-screen min-w-0 overflow-x-auto border-b border-white/10 bg-[#23272f] sm:min-h-[48px]"
+	style="width:100vw;max-width:100vw;"
+>
+	<div bind:this={container} class="w-full min-w-0" />
 	{#if paused}
-		<div class="absolute inset-0 z-10 bg-black/5 cursor-not-allowed flex items-center justify-center pointer-events-auto min-h-[48px] sm:min-h-[48px] min-w-0"
-			on:touchstart|preventDefault|stopPropagation={handleOverlayTap}>
+		<div
+			class="pointer-events-auto absolute inset-0 z-10 flex min-h-[48px] min-w-0 cursor-not-allowed items-center justify-center bg-black/5 sm:min-h-[48px]"
+			on:touchstart|preventDefault|stopPropagation={handleOverlayTap}
+		>
 			{#if isMobile}
-				<span class="bg-black/80 text-white text-[0.95rem] px-4 py-2 rounded-xl shadow">
+				<span class="rounded-xl bg-black/80 px-4 py-2 text-[0.95rem] text-white shadow">
 					Tap to unlock ticker
 				</span>
 			{/if}
