@@ -18,7 +18,7 @@
 	}
 </script>
 
-<Modal {show} title="Composed Rainlang" onClose={onCancel}>
+<Modal {show} title="Deploy Strategy on chain" onClose={onCancel}>
 	<div class="space-y-4">
 		<div class="rounded-lg border border-white/10 bg-gray-900 p-4">
 			<pre class="overflow-x-auto whitespace-pre-wrap font-mono text-sm">

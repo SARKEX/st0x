@@ -78,7 +78,7 @@
 		// Update platform stats
 		PLATFORM_STATS = [
 			{ label: 'Total Assets', value: st0xVaults.length.toString(), change: 'Live on arbitrum' },
-			{ label: 'Tokens Minted', value: metrics.totalDeposits.toString(), change: 'ST0Xs' },
+			{ label: 'Tokens Minted', value: metrics.totalDeposits.toString(), change: 'St0xs' },
 			{
 				label: 'Tokens Redeemed',
 				value: metrics.totalRedeems.toString(),
@@ -87,7 +87,7 @@
 			{
 				label: 'Tokens Circulating',
 				value: (metrics.totalDeposits - metrics.totalRedeems).toString(),
-				change: 'Total ST0Xs'
+				change: 'Total St0xs'
 			},
 			{
 				label: 'Token Holders',
@@ -106,8 +106,8 @@
 
 	const DOCUMENTATION_ITEMS = [
 		{
-			question: 'What is ST0x?',
-			answer: 'ST0x is an onchain equities platform that tokenizes real-world assets.',
+			question: 'What is St0x?',
+			answer: 'St0x is an onchain equities platform that tokenizes real-world assets.',
 			link: '/docs/what-is-st0x',
 			isOpen: false
 		},
@@ -149,13 +149,13 @@
 {#if $sfts.length > 0}
 	<div>
 		<!-- Header -->
-		<Header title="Dashboard" description="Welcome to ST0x" />
+		<Header title="Dashboard" description="Welcome to St0x" />
 		<div class="mx-6 mt-4 flex max-w-full justify-center">
 			<div
 				class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
 			>
 				<div class="mb-1 text-xl font-bold tracking-wide text-white">
-					Welcome to ST0X – your on-chain gateway to equities.
+					ST0x – Your on-chain gateway to equities.
 				</div>
 			</div>
 		</div>
@@ -267,7 +267,7 @@
 				>
 					<div>
 						<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Documentation</h2>
-						<p class="text-xs text-gray-400 sm:text-sm">Links to all ST0x website explainers</p>
+						<p class="text-xs text-gray-400 sm:text-sm">Links to all St0x website explainers</p>
 					</div>
 					<button
 						class="w-full rounded-lg border border-blue-500 bg-blue-500/20 px-3 py-2 text-xs font-medium text-blue-500 transition-all hover:bg-blue-500 hover:text-white sm:w-auto sm:px-4 sm:text-sm"

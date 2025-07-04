@@ -196,9 +196,9 @@
 					<thead>
 						<tr>
 							<th class="px-2 py-1 text-left">Token</th>
-							<th class="px-2 py-1 text-right">Pyth Price</th>
-							<th class="px-2 py-1 text-right">Confidence</th>
-							<th class="px-2 py-1 text-right">Live</th>
+							<th class="px-2 py-1 text-right">Oracle Price</th>
+							<th class="px-2 py-1 text-right">Price Certainty</th>
+							<th class="px-2 py-1 text-right">Real-Time</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -251,17 +251,17 @@
 					{:else}
 						<div class="rounded bg-gray-800/80 p-3 text-xs">
 							<div><span class="font-semibold">Token: </span>{selectedInputToken.symbol}</div>
-							<div><span class="font-semibold">Pyth Price: </span>-</div>
-							<div><span class="font-semibold">Confidence: </span>-</div>
-							<div><span class="font-semibold">Live: </span>-</div>
+							<div><span class="font-semibold">Oracle Price: </span>-</div>
+							<div><span class="font-semibold">Price Certainty: </span>-</div>
+							<div><span class="font-semibold">Real-Time: </span>-</div>
 						</div>
 					{/if}
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
 						<div><span class="font-semibold">Token: </span>-</div>
-						<div><span class="font-semibold">Pyth Price: </span>-</div>
-						<div><span class="font-semibold">Confidence: </span>-</div>
-						<div><span class="font-semibold">Live: </span>-</div>
+						<div><span class="font-semibold">Oracle Price: </span>-</div>
+						<div><span class="font-semibold">Price Certainty: </span>-</div>
+						<div><span class="font-semibold">Real-Time: </span>-</div>
 					</div>
 				{/if}
 				{#if selectedOutputToken}
@@ -270,17 +270,17 @@
 					{:else}
 						<div class="rounded bg-gray-800/80 p-3 text-xs">
 							<div><span class="font-semibold">Token: </span>{selectedOutputToken.symbol}</div>
-							<div><span class="font-semibold">Pyth Price: </span>-</div>
-							<div><span class="font-semibold">Confidence: </span>-</div>
-							<div><span class="font-semibold">Live: </span>-</div>
+							<div><span class="font-semibold">Oracle Price: </span>-</div>
+							<div><span class="font-semibold">Price Certainty: </span>-</div>
+							<div><span class="font-semibold">Real-Time: </span>-</div>
 						</div>
 					{/if}
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
 						<div><span class="font-semibold">Token: </span>-</div>
-						<div><span class="font-semibold">Pyth Price: </span>-</div>
-						<div><span class="font-semibold">Confidence: </span>-</div>
-						<div><span class="font-semibold">Live: </span>-</div>
+						<div><span class="font-semibold">Oracle Price: </span>-</div>
+						<div><span class="font-semibold">Price Certainty: </span>-</div>
+						<div><span class="font-semibold">Real-Time: </span>-</div>
 					</div>
 				{/if}
 			</div>

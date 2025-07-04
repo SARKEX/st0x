@@ -86,7 +86,7 @@
 		<!-- Bottom Bar -->
 		<div class="border-t border-white/10 pt-6 sm:pt-8">
 			<div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
-				<div class="text-xs text-gray-400 sm:text-sm">© 2025 ST0x. All rights reserved.</div>
+				<div class="text-xs text-gray-400 sm:text-sm">© 2025 St0x. All rights reserved.</div>
 				<div class="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
 					<div class="flex items-center gap-2 text-xs text-gray-400 sm:text-sm">
 						{#if $connected}
@@ -112,7 +112,7 @@
 					<div class="text-xs text-gray-300 sm:text-sm">
 						<strong class="text-yellow-500">Investment Risk Warning:</strong> Trading tokenized assets
 						involves substantial risk of loss. Past performance does not guarantee future results. Please
-						read our risk disclaimers and ensure you understand the risks before trading. ST0x is not
+						read our risk disclaimers and ensure you understand the risks before trading. St0x is not
 						available to residents of certain jurisdictions.
 					</div>
 				</div>

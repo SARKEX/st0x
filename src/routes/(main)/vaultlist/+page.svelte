@@ -18,8 +18,8 @@
 
 	const VAULT_LIST_PAGE_SIZE = 1000;
 
-	let hideEmptyVaults: boolean | undefined = true;
-	let showMyVaults: boolean | undefined = true;
+	let hideEmptyVaults: boolean | undefined = false;
+	let showMyVaults: boolean | undefined = false;
 
 	let myTokenBalance: {
 		token: SgErc20;

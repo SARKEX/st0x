@@ -27,14 +27,14 @@
 			<a href="/dashboard">
 				<img
 					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
-					alt="ST0x Logo"
+					alt="St0x Logo"
 					class="h-8 w-8 rounded-full md:h-9 md:w-9"
 				/>
 			</a>
 			<a href="/dashboard">
 				<span
 					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
-					>ST0X Liquidity</span
+					>St0x Liquidity</span
 				>
 			</a>
 		</div>

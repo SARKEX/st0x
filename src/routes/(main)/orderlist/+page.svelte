@@ -66,7 +66,7 @@
 		>
 			<div class="mb-1 text-xl font-bold tracking-wide text-white">Order List</div>
 			<div class="text-sm font-medium leading-relaxed text-gray-300">
-				View all orders trading ST0X on Raindex.
+				View deployed orders
 			</div>
 		</div>
 	</div>

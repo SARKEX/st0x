@@ -82,15 +82,15 @@
 					</a>
 				</div>
 				<div>
-					<span class="font-semibold">Pyth Price: </span>
+					<span class="font-semibold">Oracle Price: </span>
 					{priceData.price.toFixed(5)}
 				</div>
 				<div>
-					<span class="font-semibold">Confidence: </span>
+					<span class="font-semibold">Price Certainty: </span>
 					± {priceData.confidence.toFixed(5)}
 				</div>
 				<div>
-					<span class="font-semibold">Live: </span>
+					<span class="font-semibold">Real-Time: </span>
 					{#if quotePrice}
 						${parseFloat(quotePrice).toFixed(5)}
 					{:else}

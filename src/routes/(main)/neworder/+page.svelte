@@ -58,7 +58,7 @@
 		>
 			<div class="mb-1 text-xl font-bold tracking-wide text-white">Trade ST0Xs</div>
 			<div class="text-sm font-medium leading-relaxed text-gray-300">
-				Trade ST0X on-chain with Raindex.
+				Buy and Sell Equities on Chain
 			</div>
 		</div>
 	</div>
