@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
-	import type { SgTrade } from '@rainlanguage/orderbook/js_api';
+	import type { SgTrade } from '@rainlanguage/orderbook';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import Button from '../Button.svelte';

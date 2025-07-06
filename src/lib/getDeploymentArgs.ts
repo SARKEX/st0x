@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { signerAddress } from 'svelte-wagmi';
-import { DotrainOrderGui } from '@rainlanguage/orderbook/js_api';
+import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { Token } from 'sushi/currency';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
@@ -28,40 +28,33 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/f51267ee7db24b5316e5c1a18b28c0a12e63b681/src/auction-dca.rain'
 		)
 	).text();
-	const gui = await DotrainOrderGui.chooseDeployment(dcaStrategy, TARGET_NETWORK);
+	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, TARGET_NETWORK))
+		.value as DotrainOrderGui;
 
 	await gui.saveSelectToken('output', args.outputToken.address);
 	await gui.saveSelectToken('input', args.inputToken.address);
 
-	gui.saveFieldValue('time-per-amount-epoch', {
-		value: getPeriodInSeconds(args.selectedPeriod, args.selectedPeriodUnit).toString(),
-		isPreset: false
-	});
+	const periodInSeconds = getPeriodInSeconds(args.selectedPeriod, args.selectedPeriodUnit);
+	gui.saveFieldValue('time-per-amount-epoch', periodInSeconds.toString());
+	gui.saveFieldValue('time-per-trade-epoch', '3600');
+	gui.saveFieldValue('next-trade-multiplier', '1.01');
+	gui.saveFieldValue('next-trade-baseline-multiplier', '0');
 
-	gui.saveFieldValue('amount-per-epoch', {
-		value: formatUnits(args.budgetAmount, args.outputToken.decimals),
-		isPreset: false
-	});
+	gui.saveFieldValue('amount-per-epoch', formatUnits(args.budgetAmount, args.outputToken.decimals));
 
-	gui.saveFieldValue('max-trade-amount', {
-		value: formatUnits(args.maxTradeAmount, args.outputToken.decimals),
-		isPreset: false
-	});
+	gui.saveFieldValue(
+		'max-trade-amount',
+		formatUnits(args.maxTradeAmount, args.outputToken.decimals)
+	);
 
-	gui.saveFieldValue('min-trade-amount', {
-		value: formatUnits(args.minTradeAmount, args.outputToken.decimals),
-		isPreset: false
-	});
+	gui.saveFieldValue(
+		'min-trade-amount',
+		formatUnits(args.minTradeAmount, args.outputToken.decimals)
+	);
 
-	gui.saveFieldValue('baseline', {
-		value: args.baseline,
-		isPreset: false
-	});
+	gui.saveFieldValue('baseline', args.baseline);
 
-	gui.saveFieldValue('initial-io', {
-		value: args.kickoff,
-		isPreset: false
-	});
+	gui.saveFieldValue('initial-io', args.kickoff);
 
 	gui.saveDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
@@ -76,8 +69,13 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
 
-	const composedRainlang = await gui.getComposedRainlang();
-	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+	const composedRainlangResult = await gui.getComposedRainlang();
+	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
+	const composedRainlang = composedRainlangResult.value;
+
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
+	const deploymentArgs = deploymentArgsResult.value;
 
 	return {
 		composedRainlang,
@@ -100,16 +98,15 @@ export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/f51267ee7db24b5316e5c1a18b28c0a12e63b681/src/fixed-limit.rain'
 		)
 	).text();
-	const gui = await DotrainOrderGui.chooseDeployment(limitStrategy, TARGET_NETWORK);
+	const guiResult = await DotrainOrderGui.newWithDeployment(limitStrategy, TARGET_NETWORK);
+	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
+	const gui = guiResult.value;
 
 	await gui.saveSelectToken('token1', args.inputToken.address);
 	await gui.saveSelectToken('token2', args.outputToken.address);
 
 	// Save field values using the selected strategy parameters
-	gui.saveFieldValue('fixed-io', {
-		value: args.ioRatio,
-		isPreset: false
-	});
+	gui.saveFieldValue('fixed-io', args.ioRatio);
 
 	gui.saveDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
 
@@ -124,8 +121,13 @@ export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
 
-	const composedRainlang = await gui.getComposedRainlang();
-	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+	const composedRainlangResult = await gui.getComposedRainlang();
+	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
+	const composedRainlang = composedRainlangResult.value;
+
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
+	const deploymentArgs = deploymentArgsResult.value;
 
 	return {
 		composedRainlang,
@@ -155,36 +157,28 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/f51267ee7db24b5316e5c1a18b28c0a12e63b681/src/dynamic-spread.rain'
 		)
 	).text();
-	const gui = await DotrainOrderGui.chooseDeployment(dsfStrategy, TARGET_NETWORK);
+	const guiResult = await DotrainOrderGui.newWithDeployment(dsfStrategy, TARGET_NETWORK);
+	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
+	const gui = guiResult.value;
 
 	await gui.saveSelectToken('token1', args.token1.address);
 	await gui.saveSelectToken('token2', args.token2.address);
 
 	// Save field values using the selected strategy parameters
-	gui.saveFieldValue('amount-is-fast-exit', {
-		value: args.amountIsFastExit ? '1' : '0',
-		isPreset: false
-	});
+	gui.saveFieldValue('amount-is-fast-exit', args.amountIsFastExit ? '1' : '0');
 
-	gui.saveFieldValue('not-amount-is-fast-exit', {
-		value: args.notAmountIsFastExit ? '1' : '0',
-		isPreset: false
-	});
+	gui.saveFieldValue('not-amount-is-fast-exit', args.notAmountIsFastExit ? '1' : '0');
 
-	gui.saveFieldValue('initial-io', {
-		value: args.initialIo,
-		isPreset: false
-	});
+	gui.saveFieldValue('initial-io', args.initialIo);
 
-	gui.saveFieldValue('max-amount', {
-		value: formatUnits(args.maxAmount, args.token1.decimals),
-		isPreset: false
-	});
+	gui.saveFieldValue('max-amount', formatUnits(args.maxAmount, args.token1.decimals));
 
-	gui.saveFieldValue('min-amount', {
-		value: formatUnits(args.minAmount, args.token1.decimals),
-		isPreset: false
-	});
+	gui.saveFieldValue('min-amount', formatUnits(args.minAmount, args.token1.decimals));
+
+	// Default Args
+	gui.saveFieldValue('next-trade-multiplier', '1.01');
+	gui.saveFieldValue('cost-basis-multiplier', '1');
+	gui.saveFieldValue('time-per-epoch', '3600');
 
 	gui.saveDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
 	gui.saveDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
@@ -205,8 +199,13 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
 
-	const composedRainlang = await gui.getComposedRainlang();
-	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+	const composedRainlangResult = await gui.getComposedRainlang();
+	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
+	const composedRainlang = composedRainlangResult.value;
+
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
+	const deploymentArgs = deploymentArgsResult.value;
 
 	return {
 		composedRainlang,
@@ -250,10 +249,12 @@ export type FolioDeploymentArgs = {
 export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	const folioStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/161fb82ff39ceb6b1ccacf8cbc3b97ef9977541f/src/folio.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/6bb0e30cc5c5716a7860c6960b3cd924e3d80843/src/folio.rain'
 		)
 	).text();
-	const gui = await DotrainOrderGui.chooseDeployment(folioStrategy, TARGET_NETWORK);
+	const guiResult = await DotrainOrderGui.newWithDeployment(folioStrategy, 'arbitrum');
+	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
+	const gui = guiResult.value;
 
 	await gui.saveSelectToken('token1', args.selectedToken1.address);
 	await gui.saveSelectToken('token2', args.selectedToken2.address);
@@ -264,17 +265,15 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	await gui.saveSelectToken('token7', args.selectedToken7.address);
 
 	if (args.overrideThreshold) {
-		gui.saveFieldValue('threshold', {
-			value: args.overrideThreshold,
-			isPreset: false
-		});
+		gui.saveFieldValue('threshold', args.overrideThreshold);
+	} else {
+		gui.saveFieldValue('threshold', '0.05');
 	}
 
 	if (args.overrideFee) {
-		gui.saveFieldValue('fee', {
-			value: args.overrideFee,
-			isPreset: false
-		});
+		gui.saveFieldValue('fee', args.overrideFee);
+	} else {
+		gui.saveFieldValue('fee', '0.003');
 	}
 
 	gui.saveDeposit('token1', formatUnits(args.depositAmount1, args.selectedToken1.decimals));
@@ -344,8 +343,13 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
 
-	const composedRainlang = await gui.getComposedRainlang();
-	const deploymentArgs = await gui.getDeploymentTransactionArgs($signerAddress);
+	const composedRainlangResult = await gui.getComposedRainlang();
+	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
+	const composedRainlang = composedRainlangResult.value;
+
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
+	const deploymentArgs = deploymentArgsResult.value;
 
 	return {
 		composedRainlang,

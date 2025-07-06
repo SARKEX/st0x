@@ -9,7 +9,7 @@
 		TableHead
 	} from 'flowbite-svelte';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
-	import type { SgVaultWithSubgraphName } from '@rainlanguage/orderbook/js_api';
+	import type { SgVaultWithSubgraphName } from '@rainlanguage/orderbook';
 	import { formatUnits } from 'viem';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 

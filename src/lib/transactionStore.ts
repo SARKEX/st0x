@@ -2,10 +2,7 @@ import { get, writable } from 'svelte/store';
 import type { Hex } from 'viem';
 import { sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { TransactionErrorMessage } from '$lib/types/errors';
-import {
-	getTransactionAddOrders,
-	type DeploymentTransactionArgs
-} from '@rainlanguage/orderbook/js_api';
+import { getTransactionAddOrders, type DeploymentTransactionArgs } from '@rainlanguage/orderbook';
 import { wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
@@ -108,14 +105,15 @@ const transactionStore = () => {
 				data: deploymentArgs.deploymentCalldata as Hex,
 				to: deploymentArgs.orderbookAddress as `0x${string}`
 			});
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 		} catch (error) {
 			// @ts-expect-error Send transaction error
 			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
 		}
 		// Poll for the order to be added to the orderbook
 		const interval = setInterval(async () => {
-			const orders = await getTransactionAddOrders(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, hash);
-			if (orders.length > 0) {
+			const orders = (await getTransactionAddOrders(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, hash)).value;
+			if (orders && orders.length > 0) {
 				clearInterval(interval);
 				const orderHash = orders[0].order.orderHash;
 				const link = `

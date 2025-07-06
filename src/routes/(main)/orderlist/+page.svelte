@@ -1,8 +1,8 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { getOrders } from '@rainlanguage/orderbook/js_api';
+	import { getOrders } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
-	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook/js_api';
+	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
 	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, STOXs, TARGET_NETWORK, USDC_TOKEN } from '$lib/network';
 	import { signerAddress } from 'svelte-wagmi';
 	import type { Token } from 'sushi/currency';
@@ -19,7 +19,7 @@
 	$: ordersQuery = createInfiniteQuery({
 		queryKey: ['orders', ordersActiveFilter, orderHashFilter, showMyOrders],
 		queryFn: async ({ pageParam }) => {
-			const allOrders: SgOrderWithSubgraphName[] = await getOrders(
+			const ordersResult = await getOrders(
 				[
 					{
 						url: ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
@@ -33,6 +33,8 @@
 				},
 				{ page: pageParam + 1, pageSize: ORDER_LIST_PAGE_SIZE }
 			);
+			if (ordersResult.error) throw new Error(ordersResult.error.readableMsg);
+			const allOrders: SgOrderWithSubgraphName[] = ordersResult.value;
 
 			// Filter orders that have any token from forexTokenList in either inputs or outputs
 			const filteredOrders = allOrders.filter(({ order }) => {

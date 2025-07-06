@@ -1,4 +1,4 @@
-import type { SgTrade } from '@rainlanguage/orderbook/js_api';
+import type { SgTrade } from '@rainlanguage/orderbook';
 import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from './network';
 import axios from 'axios';
 

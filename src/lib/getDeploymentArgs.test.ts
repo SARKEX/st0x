@@ -5,16 +5,16 @@ import {
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
 } from './getDeploymentArgs';
-import { DotrainOrderGui } from '@rainlanguage/orderbook/js_api';
+import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { getPrice } from './getPrice';
 import { formatUnits } from 'viem';
 import { STOXs, TARGET_NETWORK, USDC_TOKEN } from './network';
 import { get } from 'svelte/store';
 
 // Mock the DotrainOrderGui
-vi.mock('@rainlanguage/orderbook/js_api', () => ({
+vi.mock('@rainlanguage/orderbook', () => ({
 	DotrainOrderGui: {
-		chooseDeployment: vi.fn()
+		newWithDeployment: vi.fn()
 	}
 }));
 
@@ -46,25 +46,32 @@ describe('getDeploymentArgs', () => {
 		saveDeposit: vi.fn().mockResolvedValue(undefined),
 		setVaultId: vi.fn().mockResolvedValue(undefined),
 		getDeploymentTransactionArgs: vi.fn().mockResolvedValue({
-			to: '0x1234567890123456789012345678901234567890',
-			data: '0xabcdef',
-			value: 0n
+			value: {
+				to: '0x1234567890123456789012345678901234567890',
+				data: '0xabcdef',
+				value: 0n
+			},
+			error: undefined
 		}),
-		getComposedRainlang: vi.fn().mockResolvedValue('/* mock rainlang code */')
+		getComposedRainlang: vi.fn().mockResolvedValue({
+			value: '/* mock rainlang code */',
+			error: undefined
+		})
 	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 
 		// Setup mocks
-		vi.mocked(DotrainOrderGui.chooseDeployment).mockResolvedValue(
-			mockGui as unknown as DotrainOrderGui
-		);
+		vi.mocked(DotrainOrderGui.newWithDeployment).mockResolvedValue({
+			value: mockGui as unknown as DotrainOrderGui,
+			error: undefined
+		});
 
 		vi.mocked(getPrice).mockResolvedValue('1.5');
 	});
 
-	it('should call DotrainOrderGui.chooseDeployment with the correct arguments', async () => {
+	it('should call DotrainOrderGui.newWithDeployment with the correct arguments', async () => {
 		await getMarketMakingDeploymentArgs({
 			token1: USDC_TOKEN,
 			token2: STOXs[0],
@@ -81,7 +88,7 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(DotrainOrderGui.chooseDeployment).toHaveBeenCalledWith(
+		expect(DotrainOrderGui.newWithDeployment).toHaveBeenCalledWith(
 			expect.any(String),
 			TARGET_NETWORK
 		);
@@ -104,30 +111,27 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('amount-is-fast-exit', {
-			value: '1',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('amount-is-fast-exit', '1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('not-amount-is-fast-exit', {
-			value: '0',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('not-amount-is-fast-exit', '0');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('initial-io', {
-			value: '0.1',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('initial-io', '0.1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('max-amount', {
-			value: formatUnits(1000000000000000000n, USDC_TOKEN.decimals),
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'max-amount',
+			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('min-amount', {
-			value: formatUnits(1000000000000000000n, USDC_TOKEN.decimals),
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'min-amount',
+			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+		);
+
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('next-trade-multiplier', '1.01');
+
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('cost-basis-multiplier', '1');
+
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-epoch', '3600');
 
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token1',
@@ -156,35 +160,26 @@ describe('getDeploymentArgs', () => {
 			depositAmount: 4000000000000000000n
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', {
-			value: '86400',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '86400');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('amount-per-epoch', {
-			value: formatUnits(1000000000000000000n, USDC_TOKEN.decimals),
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'amount-per-epoch',
+			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('max-trade-amount', {
-			value: formatUnits(3000000000000000000n, USDC_TOKEN.decimals),
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'max-trade-amount',
+			formatUnits(3000000000000000000n, USDC_TOKEN.decimals)
+		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('min-trade-amount', {
-			value: formatUnits(2000000000000000000n, USDC_TOKEN.decimals),
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'min-trade-amount',
+			formatUnits(2000000000000000000n, USDC_TOKEN.decimals)
+		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('baseline', {
-			value: '0.9',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('baseline', '0.9');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('initial-io', {
-			value: '1.2',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('initial-io', '1.2');
 
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'output',
@@ -202,10 +197,7 @@ describe('getDeploymentArgs', () => {
 			outputVaultId: undefined
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fixed-io', {
-			value: '0.1',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fixed-io', '0.1');
 
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token2',
@@ -247,15 +239,9 @@ describe('getDeploymentArgs', () => {
 			outputVaultId7: undefined
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('threshold', {
-			value: '0.1',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('threshold', '0.1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fee', {
-			value: '0.1',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fee', '0.1');
 
 		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', STOXs[1].address);
 		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', STOXs[2].address);
@@ -452,10 +438,7 @@ describe('getDeploymentArgs', () => {
 			depositAmount: 4000000000000000000n
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', {
-			value: '60',
-			isPreset: false
-		});
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '60');
 	});
 
 	it('should handle missing signer address', async () => {
@@ -514,7 +497,7 @@ describe('getDeploymentArgs', () => {
 			outputVaultId7: undefined
 		});
 
-		expect(mockGui.saveFieldValue).not.toHaveBeenCalledWith('threshold', expect.any(Object));
-		expect(mockGui.saveFieldValue).not.toHaveBeenCalledWith('fee', expect.any(Object));
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('threshold', '0.05');
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fee', '0.003');
 	});
 });

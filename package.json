@@ -64,7 +64,7 @@
 	"dependencies": {
 		"@fontsource/ia-writer-mono": "^5.2.5",
 		"@graphql-codegen/typescript-document-nodes": "^4.0.12",
-		"@rainlanguage/orderbook": "=0.0.1-alpha.11",
+		"@rainlanguage/orderbook": "=0.0.1-alpha.136",
 		"@sveltejs/adapter-static": "3.0.6",
 		"@testing-library/user-event": "14.5.2",
 		"@wagmi/connectors": "5.3.5",

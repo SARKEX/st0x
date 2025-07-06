@@ -9,7 +9,7 @@
 		type ColorType
 	} from 'lightweight-charts';
 	import moment from 'moment';
-	import type { SgTrade, SgErc20 } from '@rainlanguage/orderbook/js_api';
+	import type { SgTrade, SgErc20 } from '@rainlanguage/orderbook';
 	let chartContainer: HTMLElement;
 	export let trades: SgTrade[] = [];
 	let howManyDays = 30;
