@@ -1,8 +1,8 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { getVaults } from '@rainlanguage/orderbook/js_api';
+	import { getVaults } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
-	import type { SgErc20, SgVaultWithSubgraphName } from '@rainlanguage/orderbook/js_api';
+	import type { SgErc20, SgVaultWithSubgraphName } from '@rainlanguage/orderbook';
 	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK, USDC_TOKEN } from '$lib/network';
 	import { signerAddress } from 'svelte-wagmi';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
@@ -32,7 +32,7 @@
 	$: vaultsQuery = createInfiniteQuery({
 		queryKey: ['vaults', hideEmptyVaults, showMyVaults, $signerAddress],
 		queryFn: async ({ pageParam }) => {
-			const allVaults: SgVaultWithSubgraphName[] = await getVaults(
+			const vaultsResult = await getVaults(
 				[
 					{
 						url: ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
@@ -45,6 +45,8 @@
 				},
 				{ page: pageParam + 1, pageSize: VAULT_LIST_PAGE_SIZE }
 			);
+			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
+			const allVaults: SgVaultWithSubgraphName[] = vaultsResult.value;
 			return {
 				vaults: allVaults,
 				hasMore: allVaults.length === VAULT_LIST_PAGE_SIZE

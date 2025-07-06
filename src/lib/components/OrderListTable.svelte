@@ -9,7 +9,7 @@
 		TableHead
 	} from 'flowbite-svelte';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
-	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook/js_api';
+	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 
 	export let query: CreateInfiniteQueryResult<

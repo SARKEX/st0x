@@ -1,8 +1,8 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { getOrders } from '@rainlanguage/orderbook/js_api';
+	import { getOrders } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
-	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook/js_api';
+	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
 	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, STOXs, TARGET_NETWORK, USDC_TOKEN } from '$lib/network';
 	import { signerAddress } from 'svelte-wagmi';
 	import type { Token } from 'sushi/currency';

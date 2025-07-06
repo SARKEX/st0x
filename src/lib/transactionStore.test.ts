@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import transactionStore from './transactionStore';
 import { sendTransaction } from '@wagmi/core';
-import { getTransactionAddOrders } from '@rainlanguage/orderbook/js_api';
+import { getTransactionAddOrders } from '@rainlanguage/orderbook';
 import { mockWagmiConfigStore } from '$lib/mocks/mockStores';
 import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, STOXs, USDC_TOKEN } from './network';
 import { rainlangConfirmationModal } from './stores';
@@ -23,7 +23,7 @@ vi.mock('./getDeploymentArgs', async (importOriginal) => {
 	};
 });
 
-vi.mock('@rainlanguage/orderbook/js_api', () => ({
+vi.mock('@rainlanguage/orderbook', () => ({
 	getTransactionAddOrders: vi.fn()
 }));
 
@@ -151,13 +151,34 @@ describe('transactionStore tests', () => {
 		vi.mocked(getLimitOrderDeploymentArgs).mockResolvedValue(mockDeploymentArgsLimitOrder);
 		vi.mocked(getFolioDeploymentArgs).mockResolvedValue(mockDeploymentArgsFolio);
 		vi.mocked(sendTransaction).mockResolvedValue('0xtxhash');
-		vi.mocked(getTransactionAddOrders).mockResolvedValue([
-			{
-				order: {
-					orderHash: '0xorderhash'
+		vi.mocked(getTransactionAddOrders).mockResolvedValue({
+			value: [
+				{
+					transaction: {
+						id: '0xtxid',
+						from: '0xfrom',
+						blockNumber: '123456',
+						timestamp: '1234567890'
+					},
+					order: {
+						id: '0xorderid',
+						orderBytes: '0xorderbytes',
+						orderHash: '0xorderhash',
+						owner: '0xowner',
+						outputs: [],
+						inputs: [],
+						orderbook: { id: '0xorderbook' },
+						active: true,
+						timestampAdded: '1234567890',
+						meta: undefined,
+						addEvents: [],
+						trades: [],
+						removeEvents: []
+					}
 				}
-			}
-		]);
+			],
+			error: undefined
+		});
 
 		// Mock setInterval and clearInterval
 		vi.useFakeTimers();
