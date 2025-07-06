@@ -65,9 +65,7 @@
 			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
 		>
 			<div class="mb-1 text-xl font-bold tracking-wide text-white">Order List</div>
-			<div class="text-sm font-medium leading-relaxed text-gray-300">
-				View all orders trading ST0X on Raindex.
-			</div>
+			<div class="text-sm font-medium leading-relaxed text-gray-300">View deployed orders</div>
 		</div>
 	</div>
 

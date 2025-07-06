@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { STOXs, USDC_TOKEN } from '$lib/network';
+	import { STOXs, ETFs, ST0NX, USDC_TOKEN } from '$lib/network';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore, tokenGlobalQuote } from '$lib/stores';
 	import type { Token } from 'sushi/currency';
@@ -10,11 +10,25 @@
 	const CARDS_PER_PAGE = 8;
 	let currentPage = 0;
 
+	const FILTERS = ['All', 'ST0x', 'ETFs', 'ST0NX'];
+	let activeFilter = 'All';
+
+	// Treat all tokens as Token[] for display
+	$: allTokens = ([] as Token[]).concat(STOXs as Token[], ETFs as Token[], ST0NX as Token[]);
+	$: filteredTokens =
+		activeFilter === 'All'
+			? allTokens
+			: activeFilter === 'ST0x'
+				? (STOXs as Token[])
+				: activeFilter === 'ETFs'
+					? (ETFs as Token[])
+					: (ST0NX as Token[]);
+
 	// Calculate total pages
-	$: totalPages = Math.ceil(STOXs.length / CARDS_PER_PAGE);
+	$: totalPages = Math.ceil(filteredTokens.length / CARDS_PER_PAGE);
 
 	// Get the tokens for the current page
-	$: paginatedTokens = STOXs.slice(
+	$: paginatedTokens = filteredTokens.slice(
 		currentPage * CARDS_PER_PAGE,
 		(currentPage + 1) * CARDS_PER_PAGE
 	);
@@ -70,11 +84,29 @@
 		// Navigate to the neworder page
 		goto('/neworder');
 	}
+
+	function handleFilterChange(filter: string) {
+		activeFilter = filter;
+		currentPage = 0;
+	}
 </script>
 
 <div class={SECTION_CLASSES}>
 	<div class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-		<h2 class="text-lg font-semibold sm:text-xl">Popular ST0Xs</h2>
+		<!-- Filter Tabs -->
+		<div class="flex gap-2">
+			{#each FILTERS as filter}
+				<button
+					on:click={() => handleFilterChange(filter)}
+					class="rounded-md px-4 py-1.5 text-xs font-semibold transition-colors
+						{activeFilter === filter
+						? 'bg-yellow-500/20 text-yellow-400'
+						: 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+				>
+					{filter}
+				</button>
+			{/each}
+		</div>
 		<div class="flex items-center gap-2">
 			<button
 				class="rounded bg-gray-700 p-2 disabled:opacity-50"

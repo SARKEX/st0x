@@ -41,9 +41,9 @@
 		<div
 			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
 		>
-			<div class="mb-1 text-xl font-bold tracking-wide text-white">Burn ST0X</div>
+			<div class="mb-1 text-xl font-bold tracking-wide text-white">Burn St0x</div>
 			<div class="text-sm font-medium leading-relaxed text-gray-300">
-				This section displays all tokens burnt on ST0X. Each represents an equity-backed asset
+				This section displays all tokens burnt on ST0x. Each represents an equity-backed asset
 				available for on-chain interaction.
 			</div>
 		</div>
