@@ -88,7 +88,10 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(DotrainOrderGui.newWithDeployment).toHaveBeenCalledWith(expect.any(String), 'arbitrum2');
+		expect(DotrainOrderGui.newWithDeployment).toHaveBeenCalledWith(
+			expect.any(String),
+			TARGET_NETWORK
+		);
 	});
 
 	it('should handle getMarketMakingDeploymentArgs strategy correctly', async () => {
