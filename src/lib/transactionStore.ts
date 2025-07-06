@@ -2,10 +2,7 @@ import { get, writable } from 'svelte/store';
 import type { Hex } from 'viem';
 import { sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { TransactionErrorMessage } from '$lib/types/errors';
-import {
-	getTransactionAddOrders,
-	type DeploymentTransactionArgs
-} from '@rainlanguage/orderbook';
+import { getTransactionAddOrders, type DeploymentTransactionArgs } from '@rainlanguage/orderbook';
 import { wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
@@ -167,7 +164,7 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing strategy...`);
 		const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(args);
 
-		showRainlangConfirmation(composedRainlang , deploymentArgs);
+		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
 	const handleDcaDeploy = async (args: DcaDeploymentArgs) => {

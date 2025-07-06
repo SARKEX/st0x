@@ -88,10 +88,7 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(DotrainOrderGui.newWithDeployment).toHaveBeenCalledWith(
-			expect.any(String),
-			"arbitrum2"
-		);
+		expect(DotrainOrderGui.newWithDeployment).toHaveBeenCalledWith(expect.any(String), 'arbitrum2');
 	});
 
 	it('should handle getMarketMakingDeploymentArgs strategy correctly', async () => {
@@ -117,14 +114,20 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('initial-io', '0.1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('max-amount', formatUnits(1000000000000000000n, USDC_TOKEN.decimals));
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'max-amount',
+			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('min-amount', formatUnits(1000000000000000000n, USDC_TOKEN.decimals));
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'min-amount',
+			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+		);
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('next-trade-multiplier', '1.01');
-		
+
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('cost-basis-multiplier', '1');
-		
+
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-epoch', '3600');
 
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
@@ -156,11 +159,20 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '86400');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('amount-per-epoch', formatUnits(1000000000000000000n, USDC_TOKEN.decimals));
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'amount-per-epoch',
+			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('max-trade-amount', formatUnits(3000000000000000000n, USDC_TOKEN.decimals));
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'max-trade-amount',
+			formatUnits(3000000000000000000n, USDC_TOKEN.decimals)
+		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('min-trade-amount', formatUnits(2000000000000000000n, USDC_TOKEN.decimals));
+		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+			'min-trade-amount',
+			formatUnits(2000000000000000000n, USDC_TOKEN.decimals)
+		);
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('baseline', '0.9');
 

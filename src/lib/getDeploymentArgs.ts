@@ -28,7 +28,8 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/f51267ee7db24b5316e5c1a18b28c0a12e63b681/src/auction-dca.rain'
 		)
 	).text();
-	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, TARGET_NETWORK)).value as DotrainOrderGui;
+	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, TARGET_NETWORK))
+		.value as DotrainOrderGui;
 
 	await gui.saveSelectToken('output', args.outputToken.address);
 	await gui.saveSelectToken('input', args.inputToken.address);
@@ -41,9 +42,15 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 
 	gui.saveFieldValue('amount-per-epoch', formatUnits(args.budgetAmount, args.outputToken.decimals));
 
-	gui.saveFieldValue('max-trade-amount', formatUnits(args.maxTradeAmount, args.outputToken.decimals));
+	gui.saveFieldValue(
+		'max-trade-amount',
+		formatUnits(args.maxTradeAmount, args.outputToken.decimals)
+	);
 
-	gui.saveFieldValue('min-trade-amount', formatUnits(args.minTradeAmount, args.outputToken.decimals));
+	gui.saveFieldValue(
+		'min-trade-amount',
+		formatUnits(args.minTradeAmount, args.outputToken.decimals)
+	);
 
 	gui.saveFieldValue('baseline', args.baseline);
 
@@ -245,7 +252,7 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/6bb0e30cc5c5716a7860c6960b3cd924e3d80843/src/folio.rain'
 		)
 	).text();
-	const guiResult = await DotrainOrderGui.newWithDeployment(folioStrategy, "arbitrum");
+	const guiResult = await DotrainOrderGui.newWithDeployment(folioStrategy, 'arbitrum');
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 
