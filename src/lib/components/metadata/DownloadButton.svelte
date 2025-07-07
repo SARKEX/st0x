@@ -23,7 +23,7 @@
 			link.click();
 			document.body.removeChild(link);
 			URL.revokeObjectURL(blobUrl);
-		} catch (error) {
+		} catch {
 			downloadError = true;
 		}
 	}

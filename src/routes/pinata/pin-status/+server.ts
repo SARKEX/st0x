@@ -38,6 +38,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	} catch (error) {
 		return json(
+			// @ts-expect-error - error.message is not defined
 			{ error: 'An error occurred while fetching pin status', details: error.message },
 			{ status: 500 }
 		);

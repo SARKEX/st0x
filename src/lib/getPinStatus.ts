@@ -29,6 +29,7 @@ export const getPinStatus = async (cid: string) => {
 
 		return pinataResult;
 	} catch (error) {
+		// @ts-expect-error - error.message is not defined
 		throw new Error(`An error occurred while fetching pin status: ${error.message}`);
 	}
 };

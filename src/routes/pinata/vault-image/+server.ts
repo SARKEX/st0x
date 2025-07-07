@@ -6,6 +6,7 @@ import { json } from '@sveltejs/kit';
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const formData = await request.formData();
+		// @ts-expect-error - 'get' does not exist on type 'FormData'
 		const uploadedFile = formData.get('file') as File;
 
 		if (!uploadedFile || uploadedFile.size === 0) {
@@ -31,7 +32,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				},
 				{ status: 200 }
 			);
-		} catch (error) {
+		} catch {
 			return json(
 				{
 					error: true,
@@ -40,7 +41,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				{ status: 500 }
 			);
 		}
-	} catch (error) {
+	} catch {
 		return json({ error: 'Internal Server Error' }, { status: 500 });
 	}
 };

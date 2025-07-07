@@ -17,7 +17,9 @@
 	let currentRenderedData: RenderedData = {};
 	let isSchemaPropsLoaded = false;
 
+	// eslint-disable-next-line  @typescript-eslint/no-unused-expressions
 	$: receiptInformation && getReceiptData();
+	// eslint-disable-next-line  @typescript-eslint/no-unused-expressions
 	$: schema && getSchemaFileProps();
 
 	async function getSchemaFileProps() {
@@ -51,7 +53,7 @@
 
 {#if isSchemaPropsLoaded && currentRenderedData && !currentRenderedData.error}
 	<div data-testid="metadata-card" class="max-w-full p-5">
-		<div class="mb-6 rounded-lg bg-gray-800/90 border border-white/10 shadow-lg">
+		<div class="mb-6 rounded-lg border border-white/10 bg-gray-800/90 shadow-lg">
 			<div class="flex items-start p-4">
 				<div class="mr-2 mt-1 text-blue-400">
 					<svg
@@ -72,7 +74,8 @@
 						Receipt Metadata: {schema?.displayName}
 					</h4>
 					<p class="mt-1 text-base text-gray-300">
-						The receipt metadata for the token, which is stored on IPFS and pinned on the metaboard contract.
+						The receipt metadata for the token, which is stored on IPFS and pinned on the metaboard
+						contract.
 					</p>
 				</div>
 			</div>
@@ -101,7 +104,7 @@
 		</div>
 	</div>
 {:else if currentRenderedData.error}
-	<div class="rounded-lg bg-red-900/80 border border-red-500/30 p-4 shadow-md">
+	<div class="rounded-lg border border-red-500/30 bg-red-900/80 p-4 shadow-md">
 		<div class="flex items-start">
 			<div class="mr-2 mt-1 text-red-400">
 				<svg

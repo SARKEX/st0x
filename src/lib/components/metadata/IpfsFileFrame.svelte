@@ -13,8 +13,6 @@
 	export let cid: string;
 	export let showAllFiles: boolean;
 
-	$: console.log('cid : ', cid);
-
 	let fetchedFileType: string = '';
 	let textFromIpfs: string;
 	let csvFromIpfs: string;
@@ -28,22 +26,23 @@
 
 		fetchedFileType = result.contentType;
 		fetchStatus = result.fetchStatus;
+		// @ts-expect-error - fetchError is not defined
 		fetchError = result.fetchError || '';
 
 		if (result.contentType.startsWith('text/plain')) {
-			console.log('result.data 1: ', result.data);
 			textFromIpfs = result.data as string;
 		} else if (result.contentType.startsWith('text/csv')) {
-			console.log('result.data 2: ', result.data);
 			csvFromIpfs = result.data as string;
 		} else {
 			pinataUrl = result.data as string;
 		}
 	};
-	$: console.log('pinataUrl : ', pinataUrl);
-	$: cid && loadIpfsFile(cid);
 
+	// eslint-disable-next-line  @typescript-eslint/no-unused-expressions
+	$: cid && loadIpfsFile(cid);
+	// eslint-disable-next-line  @typescript-eslint/no-unused-expressions
 	$: showAllFiles && (isFileVisible = true);
+	// eslint-disable-next-line  @typescript-eslint/no-unused-expressions
 	$: showAllFiles === false && (isFileVisible = false);
 
 	const toggleFileVisibility = () => {

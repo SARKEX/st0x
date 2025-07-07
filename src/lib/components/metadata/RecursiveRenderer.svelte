@@ -6,15 +6,9 @@
 	export let fileUploadProperties: string[] = [];
 	export let depth: number = 0;
 
-	$: console.log('data : ', data);
-
 	// Type guard to check if a value is an object
 	const isObject = (value: unknown): value is Record<string, unknown> =>
 		value !== null && typeof value === 'object' && !Array.isArray(value);
-
-	// Function to determine text color based on depth
-	const textColor = (depth: number): string =>
-		depth % 2 === 0 ? 'text-blue-500' : 'text-green-500';
 
 	// Function to check if a property path matches any of the file upload properties
 	const isFileUploadProperty = (currentPath: string): boolean => {
@@ -28,7 +22,7 @@
 </script>
 
 {#if isObject(data)}
-	<div class="ml-6 border-l-4 border-white/10 pl-6 bg-gray-900/70 rounded-lg shadow-sm py-2">
+	<div class="ml-6 rounded-lg border-l-4 border-white/10 bg-gray-900/70 py-2 pl-6 shadow-sm">
 		{#each Object.keys(data) as key}
 			<div class="my-4">
 				<!-- Ensure consistent spacing -->
@@ -56,7 +50,11 @@
 							{/if}
 						</div>
 					{:else}
-						<span class="text-gray-100">{typeof data[key] === 'string' || typeof data[key] === 'number' ? data[key] : JSON.stringify(data[key])}</span>
+						<span class="text-gray-100"
+							>{typeof data[key] === 'string' || typeof data[key] === 'number'
+								? data[key]
+								: JSON.stringify(data[key])}</span
+						>
 					{/if}
 				{:else}
 					<span data-testid={key} class="font-mono text-gray-300">{key}: </span>
@@ -68,12 +66,18 @@
 							bind:showAllFiles
 						/>
 					{:else}
-						<span class="text-gray-100">{typeof data[key] === 'string' || typeof data[key] === 'number' ? data[key] : JSON.stringify(data[key])}</span>
+						<span class="text-gray-100"
+							>{typeof data[key] === 'string' || typeof data[key] === 'number'
+								? data[key]
+								: JSON.stringify(data[key])}</span
+						>
 					{/if}
 				{/if}
 			</div>
 		{/each}
 	</div>
 {:else}
-	<span class="text-gray-100">{typeof data === 'string' || typeof data === 'number' ? data : JSON.stringify(data)}</span>
+	<span class="text-gray-100"
+		>{typeof data === 'string' || typeof data === 'number' ? data : JSON.stringify(data)}</span
+	>
 {/if}

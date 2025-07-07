@@ -15,14 +15,13 @@ export function deflateJson(data_: string | pako.Data) {
 	return hex;
 }
 
-
 // export function encodeCBOR(data: string | ArrayBuffer, magicNumber: bigint) {
 //     // If data is an object (e.g., ArrayBuffer), convert to string
 //     if (typeof data === 'object') {
 //         data = JSON.stringify(data);
 //     }
 //     // deflateJson: should return Uint8Array or ArrayBuffer
-//     const deflated = deflateJson(data); 
+//     const deflated = deflateJson(data);
 //     // ethers.utils.arrayify returns a Uint8Array, convert to ArrayBuffer
 //     const deflatedData = utils.arrayify(deflated).buffer as ArrayBuffer;
 
@@ -30,7 +29,6 @@ export function deflateJson(data_: string | pako.Data) {
 //         contentEncoding: 'deflate'
 //     });
 // }
-
 
 export function cborEncode(
 	payload_: string | ArrayBuffer,

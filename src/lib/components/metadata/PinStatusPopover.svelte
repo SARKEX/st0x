@@ -22,6 +22,7 @@
 	let pinStatus: PinStatus;
 	let noPinFound: boolean = false;
 
+	// eslint-disable-next-line  @typescript-eslint/no-unused-expressions
 	$: cid && initPinStatus();
 
 	const initPinStatus = async () => {
@@ -33,7 +34,7 @@
 			} else {
 				noPinFound = true;
 			}
-		} catch (err) {
+		} catch {
 			return (noPinFound = true);
 		}
 	};

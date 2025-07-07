@@ -31,7 +31,7 @@ export const fetchIpfsFile = async (cid: string): Promise<FetchFileResponse> => 
 
 		fetchStatus = FetchStatus.FETCHED;
 		return { contentType, fetchStatus, data };
-	} catch (error) {
+	} catch {
 		fetchStatus = FetchStatus.ERROR;
 		fetchError = 'Error fetching file';
 		return { contentType, fetchStatus, data, fetchError };

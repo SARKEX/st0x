@@ -63,8 +63,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				{ status: 404 }
 			);
 		}
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	} catch (err: any) {
+	} catch {
 		return json(
 			{
 				error: 'Bad Request',

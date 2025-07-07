@@ -82,6 +82,7 @@ if (import.meta.vitest) {
 		];
 
 		vi.mocked(cborDecode).mockReturnValue([
+			// @ts-expect-error - Map type is not defined
 			new Map([
 				[1, MAGIC_NUMBERS.OA_SCHEMA],
 				[0, 'Test Schema']
