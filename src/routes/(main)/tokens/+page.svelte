@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import { sfts, tokenGlobalQuote } from '$lib/stores';
+	import { ArrowUpRightFromSquareOutline } from 'flowbite-svelte-icons';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { SFT_EXPLORER_URL, STOXs, ETFs, ST0NX } from '$lib/network';
 	import { formatUnits } from 'viem';
@@ -262,12 +263,16 @@
 										>Holders</th
 									>
 									<th
-										class="px-4 py-4 text-left text-xs font-medium text-gray-400 sm:px-6 sm:text-sm"
-										>Status</th
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Chart</th
+									>
+									<th
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Trade</th
 									>
 									<th
 										class="px-4 py-4 text-left text-xs font-medium text-gray-400 sm:px-6 sm:text-sm"
-										>Proof Of Reserves</th
+										>Proofs</th
 									>
 								</tr>
 							</thead>
@@ -311,21 +316,31 @@
 										<td class="px-4 py-4 text-white sm:px-6">{token.totalSupply}</td>
 										<td class="px-4 py-4 text-white sm:px-6">{token.totalHolders}</td>
 										<td class="px-4 py-4 sm:px-6">
-											<span
-												class="rounded-full bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
+											<button
+												on:click|stopPropagation={() => goto(`/tokens/${token.id}/chart`)}
+												class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 											>
-												Active
-											</span>
+												View
+												<ArrowUpRightFromSquareOutline class="w-4 h-4" />
+											</button>
 										</td>
 										<td class="px-4 py-4 sm:px-6">
-											<a
-												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
-												target="_blank"
-												class="text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
-												on:click|stopPropagation
+											<button
+												on:click|stopPropagation={() => goto(`/neworder`)}
+												class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 											>
-												Proof Of Reserves →
-											</a>
+												View
+												<ArrowUpRightFromSquareOutline class="w-4 h-4" />
+											</button>
+										</td>
+										<td class="px-4 py-4 sm:px-6">
+											<button
+												on:click|stopPropagation={() => goto(`/tokens/${token.id}/proofs`)}
+												class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
+											>
+												View
+												<ArrowUpRightFromSquareOutline class="w-4 h-4" />
+											</button>
 										</td>
 									</tr>
 								{/each}

@@ -62,14 +62,6 @@
 <div>
 	<!-- Header -->
 	<Header title="Orders List" description="View all orders" />
-	<div class="mx-6 mt-4 flex max-w-full justify-center">
-		<div
-			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
-		>
-			<div class="mb-1 text-xl font-bold tracking-wide text-white">Order List</div>
-			<div class="text-sm font-medium leading-relaxed text-gray-300">View deployed orders</div>
-		</div>
-	</div>
 
 	<!-- Orders Content -->
 	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
