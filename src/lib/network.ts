@@ -15,6 +15,8 @@ export const ARBITRUM_SFT_SUBGRAPH_URL =
 	'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn';
 export const ARBITRUM_ORDERBOOK_SUBGRAPH_URL =
 	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn';
+export const ARBITRUM_METADATA_SUBGRAPH_URL =
+	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn';
 export const TARGET_NETWORK = 'arbitrum2';
 export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io';
 export const SFT_EXPLORER_URL = 'https://stox.h20.market';
