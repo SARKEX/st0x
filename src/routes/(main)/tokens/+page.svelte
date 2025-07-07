@@ -321,7 +321,7 @@
 												class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 											>
 												View
-												<ArrowUpRightFromSquareOutline class="w-4 h-4" />
+												<ArrowUpRightFromSquareOutline class="h-4 w-4" />
 											</button>
 										</td>
 										<td class="px-4 py-4 sm:px-6">
@@ -330,7 +330,7 @@
 												class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 											>
 												View
-												<ArrowUpRightFromSquareOutline class="w-4 h-4" />
+												<ArrowUpRightFromSquareOutline class="h-4 w-4" />
 											</button>
 										</td>
 										<td class="px-4 py-4 sm:px-6">
@@ -339,7 +339,7 @@
 												class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 											>
 												View
-												<ArrowUpRightFromSquareOutline class="w-4 h-4" />
+												<ArrowUpRightFromSquareOutline class="h-4 w-4" />
 											</button>
 										</td>
 									</tr>
