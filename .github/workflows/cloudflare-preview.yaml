@@ -37,5 +37,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: st0x
-          directory: build
+          directory: .svelte-kit/cloudflare
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
