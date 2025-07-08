@@ -1,8 +1,9 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import { sfts, tokenGlobalQuote } from '$lib/stores';
+	import { ArrowUpRightFromSquareOutline } from 'flowbite-svelte-icons';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { SFT_EXPLORER_URL, STOXs, ETFs, ST0NX } from '$lib/network';
+	import { SFT_EXPLORER_URL, TOKENS, getTokensByCategory } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { goto } from '$app/navigation';
@@ -10,15 +11,20 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 
+	// Create ALL_TOKENS array that includes USDC_TOKEN
+	const ALL_TOKENS = [...TOKENS];
+
 	let viewMode = 'table';
 	let activeFilter = 'All';
 
 	$: query = createQuery({
 		queryKey: ['getSftsStocks', $sfts?.length, $tokenGlobalQuote?.length],
-		enabled: !!($sfts && $sfts.length > 0 && $tokenGlobalQuote && $tokenGlobalQuote.length > 0),
+		enabled: !!($tokenGlobalQuote && $tokenGlobalQuote.length > 0),
 		queryFn: () => {
-			const sftVaults: OffchainAssetReceiptVault[] = $sfts;
+			const sftVaults: OffchainAssetReceiptVault[] = $sfts || [];
 			const tokens = [];
+
+			// Process SFT vaults (from subgraph)
 			for (let sft of sftVaults) {
 				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 					(q) => q?.['Global Quote']?.['01. symbol'] === sft.symbol?.split('s1')[0]
@@ -26,6 +32,7 @@
 				const sftPrice = quote?.['Global Quote']?.['05. price'] ?? 0;
 				tokens.push({
 					id: sft.id,
+					address: sft.address,
 					name: sft.name,
 					symbol: sft.symbol,
 					price: sftPrice,
@@ -36,23 +43,61 @@
 						18
 					),
 					totalTransfers: sft.shareTransfers.length.toString(),
-					createdAt: sft.deployTimestamp
+					createdAt: sft.deployTimestamp,
+					isSft: true
 				});
 			}
+
+			// Process regular tokens (not in subgraph) - CRYPTO tokens like WBTC, USDC
+			const cryptoTokens = getTokensByCategory('CRYPTO');
+			for (let token of cryptoTokens) {
+				// Check if this token is not already processed as an SFT
+				const existingToken = tokens.find(
+					(t) => t.address.toLowerCase() === token.address.toLowerCase()
+				);
+				if (!existingToken) {
+					// For crypto tokens, we don't have subgraph data, so we'll use placeholder values
+					tokens.push({
+						id: token.address, // Use address as ID for regular tokens
+						address: token.address,
+						name: token.name,
+						symbol: token.symbol,
+						price: 0, // Will be populated by price data if available
+						totalHolders: 'N/A',
+						totalSupply: 'N/A',
+						marketCap: 'N/A',
+						totalTransfers: 'N/A',
+						createdAt: '0', // No deploy timestamp for regular tokens
+						isSft: false
+					});
+				}
+			}
+
 			return tokens;
 		}
 	});
 
 	$: filteredData = ($query.data ?? []).filter((token) => {
 		if (activeFilter === 'All') return true;
-		if (activeFilter === 'STOXs') {
-			return STOXs.some((t) => t.address.toLowerCase() === token.id.toLowerCase());
+		if (activeFilter === 'ST0x') {
+			return getTokensByCategory('ST0x').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
 		}
 		if (activeFilter === 'ETFs') {
-			return ETFs.some((t) => t.address.toLowerCase() === token.id.toLowerCase());
+			return getTokensByCategory('ETFs').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
 		}
 		if (activeFilter === 'ST0NX') {
-			return ST0NX.some((t) => t.address.toLowerCase() === token.id.toLowerCase());
+			return getTokensByCategory('ST0NX').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
+		}
+		if (activeFilter === 'CRYPTO') {
+			return getTokensByCategory('CRYPTO').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
 		}
 		return false;
 	});
@@ -109,7 +154,7 @@
 					class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between"
 				>
 					<div class="flex w-full gap-2 rounded-lg bg-white/5 p-1 sm:w-auto">
-						{#each ['All', 'STOXs', 'ETFs', 'ST0NX'] as filter}
+						{#each ['All', 'ST0x', 'ETFs', 'ST0NX', 'CRYPTO'] as filter}
 							<button
 								on:click={() => (activeFilter = filter)}
 								class="rounded-md px-3 py-1.5 text-xs font-medium transition-all sm:text-sm {activeFilter ===
@@ -148,87 +193,169 @@
 					<!-- Grid View -->
 					<div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 						{#each filteredData as token (token.id)}
-							<div
-								class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
-								role="link"
-								tabindex="0"
-								on:click={() => goto(`/tokens/${token.id}`)}
-								on:keydown={(e) => e.key === 'Enter' && goto(`/tokens/${token.id}`)}
-							>
+							{#if token.isSft}
 								<div
-									class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-								/>
-
-								<!-- Header with token info and price -->
-								<div
-									class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+									class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
+									role="link"
+									tabindex="0"
+									on:click={() => goto(`/tokens/${token.id}`)}
+									on:keydown={(e) => e.key === 'Enter' && goto(`/tokens/${token.id}`)}
 								>
-									<div class="flex items-center gap-3">
-										<div
-											class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
-										>
-											<img
-												src={STOXs.find((s) => s.address.toLowerCase() === token.id.toLowerCase())
-													?.logoUrl}
-												alt={token.symbol}
-												class="h-10 w-10 rounded-full bg-gray-700"
-											/>
-										</div>
-										<div>
-											<h3 class="text-base font-semibold sm:text-lg">{token.symbol}</h3>
-											<p class="text-xs text-gray-400 sm:text-sm">{token.name}</p>
-											<p class="text-xs text-gray-400 sm:text-sm">
-												<a
-													href={`https://stox.h20.market/token/${token.id}`}
-													target="_blank"
-													class="text-blue-400 underline hover:text-blue-300"
-													on:click|stopPropagation
-												>
-													{truncateId(token.id)}
-												</a>
-											</p>
-										</div>
-									</div>
+									<div
+										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
+									/>
 
-									<div class="text-right">
-										<div class="text-base font-bold sm:text-lg">
-											${parseFloat(token.price.toString()).toFixed(2)}
-										</div>
-									</div>
-								</div>
-
-								<!-- Simple metrics row -->
-								<div class="mb-3 flex flex-wrap justify-between gap-2 text-xs sm:text-sm">
-									<div class="text-center">
-										<div class="text-gray-400">Supply</div>
-										<div class="font-medium text-white">{token.totalSupply}</div>
-									</div>
-									<div class="text-center">
-										<div class="text-gray-400">Holders</div>
-										<div class="font-medium text-white">{token.totalHolders}</div>
-									</div>
-									<div class="text-center">
-										<div class="text-gray-400">Transfers</div>
-										<div class="font-medium text-white">{token.totalTransfers}</div>
-									</div>
-									<div class="text-center">
-										<div class="text-gray-400">Market Cap</div>
-										<div class="font-medium text-white">${token.marketCap}</div>
-									</div>
-								</div>
-
-								<!-- Status and last activity -->
-								<div
-									class="flex flex-col gap-2 border-t border-white/10 pt-3 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between"
-								>
-									<span
-										class="rounded bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
+									<!-- Header with token info and price -->
+									<div
+										class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
 									>
-										Active
-									</span>
-									<span>{new Date(Number(token.createdAt) * 1000).toLocaleDateString()}</span>
+										<div class="flex items-center gap-3">
+											<div
+												class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
+											>
+												<img
+													src={ALL_TOKENS.find(
+														(s) => s.address.toLowerCase() === token.address.toLowerCase()
+													)?.logoUrl}
+													alt={token.symbol}
+													class="h-10 w-10 rounded-full bg-gray-700"
+												/>
+											</div>
+											<div>
+												<h3 class="text-base font-semibold sm:text-lg">{token.symbol}</h3>
+												<p class="text-xs text-gray-400 sm:text-sm">{token.name}</p>
+												<p class="text-xs text-gray-400 sm:text-sm">
+													<a
+														href={`https://stox.h20.market/token/${token.id}`}
+														target="_blank"
+														class="text-blue-400 underline hover:text-blue-300"
+														on:click|stopPropagation
+													>
+														{truncateId(token.id)}
+													</a>
+												</p>
+											</div>
+										</div>
+
+										<div class="text-right">
+											<div class="text-base font-bold sm:text-lg">
+												${parseFloat(token.price.toString()).toFixed(2)}
+											</div>
+										</div>
+									</div>
+
+									<!-- Simple metrics row -->
+									<div class="mb-3 flex flex-wrap justify-between gap-2 text-xs sm:text-sm">
+										<div class="text-center">
+											<div class="text-gray-400">Supply</div>
+											<div class="font-medium text-white">{token.totalSupply}</div>
+										</div>
+										<div class="text-center">
+											<div class="text-gray-400">Holders</div>
+											<div class="font-medium text-white">{token.totalHolders}</div>
+										</div>
+										<div class="text-center">
+											<div class="text-gray-400">Transfers</div>
+											<div class="font-medium text-white">{token.totalTransfers}</div>
+										</div>
+										<div class="text-center">
+											<div class="text-gray-400">Market Cap</div>
+											<div class="font-medium text-white">${token.marketCap}</div>
+										</div>
+									</div>
+
+									<!-- Status and last activity -->
+									<div
+										class="flex flex-col gap-2 border-t border-white/10 pt-3 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between"
+									>
+										<span
+											class="rounded bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
+										>
+											Active
+										</span>
+										<span>{new Date(Number(token.createdAt) * 1000).toLocaleDateString()}</span>
+									</div>
 								</div>
-							</div>
+							{:else}
+								<div
+									class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
+								>
+									<div
+										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
+									/>
+
+									<!-- Header with token info and price -->
+									<div
+										class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+									>
+										<div class="flex items-center gap-3">
+											<div
+												class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
+											>
+												<img
+													src={ALL_TOKENS.find(
+														(s) => s.address.toLowerCase() === token.address.toLowerCase()
+													)?.logoUrl}
+													alt={token.symbol}
+													class="h-10 w-10 rounded-full bg-gray-700"
+												/>
+											</div>
+											<div>
+												<h3 class="text-base font-semibold sm:text-lg">{token.symbol}</h3>
+												<p class="text-xs text-gray-400 sm:text-sm">{token.name}</p>
+												<p class="text-xs text-gray-400 sm:text-sm">
+													<a
+														href={`https://stox.h20.market/token/${token.id}`}
+														target="_blank"
+														class="text-blue-400 underline hover:text-blue-300"
+														on:click|stopPropagation
+													>
+														{truncateId(token.id)}
+													</a>
+												</p>
+											</div>
+										</div>
+
+										<div class="text-right">
+											<div class="text-base font-bold sm:text-lg">
+												${parseFloat(token.price.toString()).toFixed(2)}
+											</div>
+										</div>
+									</div>
+
+									<!-- Simple metrics row -->
+									<div class="mb-3 flex flex-wrap justify-between gap-2 text-xs sm:text-sm">
+										<div class="text-center">
+											<div class="text-gray-400">Supply</div>
+											<div class="font-medium text-white">{token.totalSupply}</div>
+										</div>
+										<div class="text-center">
+											<div class="text-gray-400">Holders</div>
+											<div class="font-medium text-white">{token.totalHolders}</div>
+										</div>
+										<div class="text-center">
+											<div class="text-gray-400">Transfers</div>
+											<div class="font-medium text-white">{token.totalTransfers}</div>
+										</div>
+										<div class="text-center">
+											<div class="text-gray-400">Market Cap</div>
+											<div class="font-medium text-white">{token.marketCap}</div>
+										</div>
+									</div>
+
+									<!-- Status and last activity -->
+									<div
+										class="flex flex-col gap-2 border-t border-white/10 pt-3 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between"
+									>
+										<span
+											class="rounded bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
+										>
+											Active
+										</span>
+										<span>{new Date(Number(token.createdAt) * 1000).toLocaleDateString()}</span>
+									</div>
+								</div>
+							{/if}
 						{/each}
 					</div>
 				{:else}
@@ -262,20 +389,26 @@
 										>Holders</th
 									>
 									<th
-										class="px-4 py-4 text-left text-xs font-medium text-gray-400 sm:px-6 sm:text-sm"
-										>Status</th
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Chart</th
+									>
+									<th
+										class="cursor-pointer px-4 py-4 text-left text-xs font-medium text-gray-400 hover:text-white sm:px-6 sm:text-sm"
+										>Trade</th
 									>
 									<th
 										class="px-4 py-4 text-left text-xs font-medium text-gray-400 sm:px-6 sm:text-sm"
-										>Proof Of Reserves</th
+										>Proofs</th
 									>
 								</tr>
 							</thead>
 							<tbody>
 								{#each filteredData as token (token.id)}
 									<tr
-										class="cursor-pointer border-b border-white/5 hover:bg-white/5"
-										on:click={() => goto(`/tokens/${token.id}`)}
+										class="border-b border-white/5 {token.isSft
+											? 'cursor-pointer hover:bg-white/5'
+											: ''}"
+										on:click={() => token.isSft && goto(`/tokens/${token.id}`)}
 									>
 										<td class="px-4 py-4 sm:px-6">
 											<div class="flex items-center gap-3">
@@ -283,8 +416,8 @@
 													class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
 												>
 													<img
-														src={STOXs.find(
-															(s) => s.address.toLowerCase() === token.id.toLowerCase()
+														src={ALL_TOKENS.find(
+															(s) => s.address.toLowerCase() === token.address.toLowerCase()
 														)?.logoUrl}
 														alt={token.symbol}
 														class="h-10 w-10 rounded-full bg-gray-700"
@@ -311,21 +444,43 @@
 										<td class="px-4 py-4 text-white sm:px-6">{token.totalSupply}</td>
 										<td class="px-4 py-4 text-white sm:px-6">{token.totalHolders}</td>
 										<td class="px-4 py-4 sm:px-6">
-											<span
-												class="rounded-full bg-green-500/20 px-2 py-1 text-xs font-medium text-green-400"
-											>
-												Active
-											</span>
+											{#if token.isSft}
+												<button
+													on:click|stopPropagation={() => goto(`/tokens/${token.id}/chart`)}
+													class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
+												>
+													View
+													<ArrowUpRightFromSquareOutline class="h-4 w-4" />
+												</button>
+											{:else}
+												<span class="text-xs text-gray-500 sm:text-sm">N/A</span>
+											{/if}
 										</td>
 										<td class="px-4 py-4 sm:px-6">
-											<a
-												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
-												target="_blank"
-												class="text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
-												on:click|stopPropagation
-											>
-												Proof Of Reserves →
-											</a>
+											{#if token.isSft}
+												<button
+													on:click|stopPropagation={() => goto(`/neworder`)}
+													class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
+												>
+													View
+													<ArrowUpRightFromSquareOutline class="h-4 w-4" />
+												</button>
+											{:else}
+												<span class="text-xs text-gray-500 sm:text-sm">N/A</span>
+											{/if}
+										</td>
+										<td class="px-4 py-4 sm:px-6">
+											{#if token.isSft}
+												<button
+													on:click|stopPropagation={() => goto(`/tokens/${token.id}/proofs`)}
+													class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
+												>
+													View
+													<ArrowUpRightFromSquareOutline class="h-4 w-4" />
+												</button>
+											{:else}
+												<span class="text-xs text-gray-500 sm:text-sm">N/A</span>
+											{/if}
 										</td>
 									</tr>
 								{/each}

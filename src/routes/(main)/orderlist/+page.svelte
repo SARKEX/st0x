@@ -3,13 +3,13 @@
 	import { getOrders } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
-	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, STOXs, TARGET_NETWORK, USDC_TOKEN } from '$lib/network';
+	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TOKENS, TARGET_NETWORK } from '$lib/network';
 	import { signerAddress } from 'svelte-wagmi';
 	import type { Token } from 'sushi/currency';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import Header from '$lib/components/Header.svelte';
 
-	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
+	const ALL_TOKENS: Token[] = [...TOKENS];
 	const ORDER_LIST_PAGE_SIZE = 1000;
 
 	let ordersActiveFilter: boolean | undefined = false;
@@ -40,7 +40,7 @@
 			const filteredOrders = allOrders.filter(({ order }) => {
 				const inputAddresses = order.inputs.map((input) => input.token.address.toLowerCase());
 				const outputAddresses = order.outputs.map((output) => output.token.address.toLowerCase());
-				const filterAddresses = TOKENS.map((token) => token.address.toLowerCase());
+				const filterAddresses = ALL_TOKENS.map((token) => token.address.toLowerCase());
 				const hasTokenInInputs = inputAddresses.some((addr) => filterAddresses.includes(addr));
 				const hasTokenInOutputs = outputAddresses.some((addr) => filterAddresses.includes(addr));
 				return hasTokenInInputs || hasTokenInOutputs;
@@ -62,14 +62,6 @@
 <div>
 	<!-- Header -->
 	<Header title="Orders List" description="View all orders" />
-	<div class="mx-6 mt-4 flex max-w-full justify-center">
-		<div
-			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"
-		>
-			<div class="mb-1 text-xl font-bold tracking-wide text-white">Order List</div>
-			<div class="text-sm font-medium leading-relaxed text-gray-300">View deployed orders</div>
-		</div>
-	</div>
 
 	<!-- Orders Content -->
 	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">

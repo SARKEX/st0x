@@ -10,14 +10,14 @@
 	import Header from '$lib/components/Header.svelte';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore } from '$lib/stores';
-	import { USDC_TOKEN, STOXs } from '$lib/network';
+	import { USDC_TOKEN, TOKENS } from '$lib/network';
 	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
 	import { page } from '$app/stores';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
-	// Find the corresponding PythToken from STOXs array
-	$: currentPythToken = STOXs.find(
+	// Find the corresponding PythToken from TOKENS array
+	$: currentPythToken = TOKENS.find(
 		(token) => token.address.toLowerCase() === $currentToken?.address.toLowerCase()
 	);
 
@@ -112,9 +112,12 @@
 
 	function handleBuyClick() {
 		if (currentPythToken) {
+			// Find USDC in TOKENS array to ensure it has priceFeedId
+			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+
 			// Set the token data in the store for buying (USDC -> St0x)
 			orderTokenStore.set({
-				inputToken: USDC_TOKEN,
+				inputToken: usdcWithPriceFeed,
 				outputToken: currentPythToken,
 				orderType: 'Buy'
 			});
@@ -126,10 +129,13 @@
 
 	function handleSellClick() {
 		if (currentPythToken) {
+			// Find USDC in TOKENS array to ensure it has priceFeedId
+			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+
 			// Set the token data in the store for selling (St0x -> USDC)
 			orderTokenStore.set({
 				inputToken: currentPythToken,
-				outputToken: USDC_TOKEN,
+				outputToken: usdcWithPriceFeed,
 				orderType: 'Sell'
 			});
 

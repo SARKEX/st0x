@@ -8,7 +8,7 @@ import {
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { getPrice } from './getPrice';
 import { formatUnits } from 'viem';
-import { STOXs, TARGET_NETWORK, USDC_TOKEN } from './network';
+import { STOXs, TARGET_NETWORK, USDC_TOKEN, TOKENS } from './network';
 import { get } from 'svelte/store';
 
 // Mock the DotrainOrderGui
@@ -207,13 +207,13 @@ describe('getDeploymentArgs', () => {
 
 	it('should handle getFolioDeploymentArgs strategy correctly', async () => {
 		await getFolioDeploymentArgs({
-			selectedToken1: STOXs[1],
-			selectedToken2: STOXs[2],
-			selectedToken3: STOXs[3],
-			selectedToken4: STOXs[4],
-			selectedToken5: STOXs[5],
-			selectedToken6: STOXs[6],
-			selectedToken7: STOXs[7],
+			selectedToken1: TOKENS[0], // GOOGLs1
+			selectedToken2: TOKENS[1], // METAs1
+			selectedToken3: TOKENS[2], // MSFTs1
+			selectedToken4: TOKENS[3], // TSLAs1
+			selectedToken5: TOKENS[4], // NVDAs1
+			selectedToken6: TOKENS[5], // AAPLs1
+			selectedToken7: TOKENS[6], // AMZNs1
 			overrideThreshold: '0.1',
 			overrideFee: '0.1',
 			depositAmount1: 1000000000000000000n,
@@ -243,41 +243,41 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fee', '0.1');
 
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', STOXs[1].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', STOXs[2].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token3', STOXs[3].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token4', STOXs[4].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token5', STOXs[5].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token6', STOXs[6].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token7', STOXs[7].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', TOKENS[0].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', TOKENS[1].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token3', TOKENS[2].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token4', TOKENS[3].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token5', TOKENS[4].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token6', TOKENS[5].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token7', TOKENS[6].address);
 
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token1',
-			formatUnits(1000000000000000000n, STOXs[1].decimals)
+			formatUnits(1000000000000000000n, TOKENS[0].decimals)
 		);
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token2',
-			formatUnits(2000000000000000000n, STOXs[2].decimals)
+			formatUnits(2000000000000000000n, TOKENS[1].decimals)
 		);
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token3',
-			formatUnits(3000000000000000000n, STOXs[3].decimals)
+			formatUnits(3000000000000000000n, TOKENS[2].decimals)
 		);
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token4',
-			formatUnits(4000000000000000000n, STOXs[4].decimals)
+			formatUnits(4000000000000000000n, TOKENS[3].decimals)
 		);
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token5',
-			formatUnits(5000000000000000000n, STOXs[5].decimals)
+			formatUnits(5000000000000000000n, TOKENS[4].decimals)
 		);
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token6',
-			formatUnits(6000000000000000000n, STOXs[6].decimals)
+			formatUnits(6000000000000000000n, TOKENS[5].decimals)
 		);
 		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
 			'token7',
-			formatUnits(7000000000000000000n, STOXs[7].decimals)
+			formatUnits(7000000000000000000n, TOKENS[6].decimals)
 		);
 	});
 
@@ -356,13 +356,13 @@ describe('getDeploymentArgs', () => {
 
 	it('should return getFolioDeploymentArgs deployment args', async () => {
 		const result = await getFolioDeploymentArgs({
-			selectedToken1: STOXs[1],
-			selectedToken2: STOXs[2],
-			selectedToken3: STOXs[3],
-			selectedToken4: STOXs[4],
-			selectedToken5: STOXs[5],
-			selectedToken6: STOXs[6],
-			selectedToken7: STOXs[7],
+			selectedToken1: TOKENS[0], // GOOGLs1
+			selectedToken2: TOKENS[1], // METAs1
+			selectedToken3: TOKENS[2], // MSFTs1
+			selectedToken4: TOKENS[3], // TSLAs1
+			selectedToken5: TOKENS[4], // NVDAs1
+			selectedToken6: TOKENS[5], // AAPLs1
+			selectedToken7: TOKENS[6], // AMZNs1
 			overrideThreshold: '0.1',
 			overrideFee: '0.1',
 			depositAmount1: 1000000000000000000n,
@@ -465,13 +465,13 @@ describe('getDeploymentArgs', () => {
 
 	it('should handle optional parameters in getFolioDeploymentArgs', async () => {
 		await getFolioDeploymentArgs({
-			selectedToken1: STOXs[1],
-			selectedToken2: STOXs[2],
-			selectedToken3: STOXs[3],
-			selectedToken4: STOXs[4],
-			selectedToken5: STOXs[5],
-			selectedToken6: STOXs[6],
-			selectedToken7: STOXs[7],
+			selectedToken1: TOKENS[0], // GOOGLs1
+			selectedToken2: TOKENS[1], // METAs1
+			selectedToken3: TOKENS[2], // MSFTs1
+			selectedToken4: TOKENS[3], // TSLAs1
+			selectedToken5: TOKENS[4], // NVDAs1
+			selectedToken6: TOKENS[5], // AAPLs1
+			selectedToken7: TOKENS[6], // AMZNs1
 			overrideThreshold: undefined,
 			overrideFee: undefined,
 			depositAmount1: 1000000000000000000n,

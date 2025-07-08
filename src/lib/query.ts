@@ -1,5 +1,5 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
-import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, ARBITRUM_SFT_SUBGRAPH_URL, STOXs } from './network';
+import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, ARBITRUM_SFT_SUBGRAPH_URL, TOKENS } from './network';
 import axios from 'axios';
 
 // TODO: Add type for the response
@@ -8,7 +8,7 @@ export const getSfts = async (): Promise<any> => {
 	const query = `
     {
  offchainAssetReceiptVaults(where: {
- id_in: [${STOXs.map((s) => `"${s.address.toLowerCase()}"`).join(',')}]
+ id_in: [${TOKENS.map((s) => `"${s.address.toLowerCase()}"`).join(',')}]
  }) {
 
     withdraws {

@@ -6,7 +6,9 @@ import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVaul
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { Token } from 'sushi/currency';
 import type { ApiStockQuote } from './types';
+import type { MetaV1S } from './types/OffchainAssetReceiptVault';
 
+export const sftMetadata = writable<MetaV1S[] | null>(null);
 export const targetNetwork = writable<Chain>(arbitrum);
 export const wrongNetwork = derived(
 	[chainId, signerAddress, targetNetwork],

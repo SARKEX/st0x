@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { STOXs, ETFs, ST0NX, USDC_TOKEN } from '$lib/network';
+	import { TOKENS, getTokensByCategory, type TokenCategory, USDC_TOKEN } from '$lib/network';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore, tokenGlobalQuote } from '$lib/stores';
 	import type { Token } from 'sushi/currency';
@@ -10,19 +10,15 @@
 	const CARDS_PER_PAGE = 8;
 	let currentPage = 0;
 
-	const FILTERS = ['All', 'ST0x', 'ETFs', 'ST0NX'];
-	let activeFilter = 'All';
+	const FILTERS: TokenCategory[] = ['ST0x', 'ETFs', 'ST0NX', 'CRYPTO'];
+	let activeFilter: TokenCategory | 'All' = 'All';
 
-	// Treat all tokens as Token[] for display
-	$: allTokens = ([] as Token[]).concat(STOXs as Token[], ETFs as Token[], ST0NX as Token[]);
-	$: filteredTokens =
-		activeFilter === 'All'
-			? allTokens
-			: activeFilter === 'ST0x'
-				? (STOXs as Token[])
-				: activeFilter === 'ETFs'
-					? (ETFs as Token[])
-					: (ST0NX as Token[]);
+	// Create ALL_TOKENS array that includes
+	const ALL_TOKENS: Token[] = [...TOKENS];
+
+	// Get all tokens from the consolidated array
+	$: allTokens = ALL_TOKENS;
+	$: filteredTokens = activeFilter === 'All' ? allTokens : getTokensByCategory(activeFilter);
 
 	// Calculate total pages
 	$: totalPages = Math.ceil(filteredTokens.length / CARDS_PER_PAGE);
@@ -74,10 +70,16 @@
 	}
 
 	function handleStoxClick(stox: Token) {
+		// Find the token in TOKENS array to ensure it has priceFeedId
+		const tokenWithPriceFeed = TOKENS.find(
+			(t) => t.address.toLowerCase() === stox.address.toLowerCase()
+		);
+		const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+
 		// Set the token data in the store
 		orderTokenStore.set({
-			inputToken: stox,
-			outputToken: USDC_TOKEN,
+			inputToken: tokenWithPriceFeed || stox,
+			outputToken: usdcWithPriceFeed,
 			orderType: 'Buy'
 		});
 
@@ -85,7 +87,7 @@
 		goto('/neworder');
 	}
 
-	function handleFilterChange(filter: string) {
+	function handleFilterChange(filter: TokenCategory | 'All') {
 		activeFilter = filter;
 		currentPage = 0;
 	}
@@ -95,6 +97,15 @@
 	<div class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
 		<!-- Filter Tabs -->
 		<div class="flex gap-2">
+			<button
+				on:click={() => handleFilterChange('All')}
+				class="rounded-md px-4 py-1.5 text-xs font-semibold transition-colors
+					{activeFilter === 'All'
+					? 'bg-yellow-500/20 text-yellow-400'
+					: 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+			>
+				All
+			</button>
 			{#each FILTERS as filter}
 				<button
 					on:click={() => handleFilterChange(filter)}
