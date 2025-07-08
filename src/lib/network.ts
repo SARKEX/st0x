@@ -1,4 +1,3 @@
-import { Token } from 'sushi/currency';
 import { arbitrum } from '@wagmi/core/chains';
 import type { PythToken } from './types';
 
@@ -81,7 +80,7 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
 		category: 'ST0x'
 	} as unknown as CategorizedToken,
-	
+
 	// ETF tokens (currently same as some ST0x tokens, but kept separate for future expansion)
 	{
 		chainId: arbitrum.id,
@@ -93,7 +92,7 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
 		category: 'ETFs'
 	} as unknown as CategorizedToken,
-	
+
 	// ST0NX tokens (currently same as some ST0x tokens, but kept separate for future expansion)
 	{
 		chainId: arbitrum.id,
@@ -105,7 +104,7 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
 		category: 'ST0NX'
 	} as unknown as CategorizedToken,
-	
+
 	// CRYPTO tokens
 	{
 		chainId: arbitrum.id,
@@ -139,7 +138,7 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0x3fa4252848f9f0a1480be62745a4629d9eb1322aebab8a791e344b3b9c1adcf5',
 		category: 'CRYPTO'
 	} as unknown as CategorizedToken,
-	
+
 	// USDC token
 	{
 		chainId: arbitrum.id,
@@ -150,12 +149,12 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/USDC.png',
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
 		category: 'CRYPTO'
-	} as unknown as CategorizedToken,
+	} as unknown as CategorizedToken
 ];
 
 // Helper functions to get tokens by category
 export function getTokensByCategory(category: TokenCategory): CategorizedToken[] {
-	return TOKENS.filter(token => token.category === category);
+	return TOKENS.filter((token) => token.category === category);
 }
 
 export function getAllTokens(): CategorizedToken[] {

@@ -26,7 +26,7 @@
 		loading = true;
 		error = null;
 		priceData = null;
-		
+
 		try {
 			const resp = await axios.get(
 				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${token.priceFeedId}`

@@ -18,10 +18,7 @@
 
 	// Get all tokens from the consolidated array
 	$: allTokens = ALL_TOKENS;
-	$: filteredTokens =
-		activeFilter === 'All'
-			? allTokens
-			: getTokensByCategory(activeFilter);
+	$: filteredTokens = activeFilter === 'All' ? allTokens : getTokensByCategory(activeFilter);
 
 	// Calculate total pages
 	$: totalPages = Math.ceil(filteredTokens.length / CARDS_PER_PAGE);
@@ -74,9 +71,11 @@
 
 	function handleStoxClick(stox: Token) {
 		// Find the token in TOKENS array to ensure it has priceFeedId
-		const tokenWithPriceFeed = TOKENS.find(t => t.address.toLowerCase() === stox.address.toLowerCase());
-		const usdcWithPriceFeed = TOKENS.find(t => t.symbol === 'USDC') || USDC_TOKEN;
-		
+		const tokenWithPriceFeed = TOKENS.find(
+			(t) => t.address.toLowerCase() === stox.address.toLowerCase()
+		);
+		const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+
 		// Set the token data in the store
 		orderTokenStore.set({
 			inputToken: tokenWithPriceFeed || stox,

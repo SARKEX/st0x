@@ -3,12 +3,11 @@
 	import { sfts, tokenGlobalQuote } from '$lib/stores';
 	import { ArrowUpRightFromSquareOutline } from 'flowbite-svelte-icons';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { SFT_EXPLORER_URL, TOKENS, getTokensByCategory, type TokenCategory, USDC_TOKEN } from '$lib/network';
+	import { SFT_EXPLORER_URL, TOKENS, getTokensByCategory } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { goto } from '$app/navigation';
 	import type { ApiStockQuote } from '$lib/types';
-	import type { Token } from 'sushi/currency';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 
@@ -24,7 +23,7 @@
 		queryFn: () => {
 			const sftVaults: OffchainAssetReceiptVault[] = $sfts || [];
 			const tokens = [];
-			
+
 			// Process SFT vaults (from subgraph)
 			for (let sft of sftVaults) {
 				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
@@ -48,12 +47,14 @@
 					isSft: true
 				});
 			}
-			
+
 			// Process regular tokens (not in subgraph) - CRYPTO tokens like WBTC, USDC
 			const cryptoTokens = getTokensByCategory('CRYPTO');
 			for (let token of cryptoTokens) {
 				// Check if this token is not already processed as an SFT
-				const existingToken = tokens.find(t => t.address.toLowerCase() === token.address.toLowerCase());
+				const existingToken = tokens.find(
+					(t) => t.address.toLowerCase() === token.address.toLowerCase()
+				);
 				if (!existingToken) {
 					// For crypto tokens, we don't have subgraph data, so we'll use placeholder values
 					tokens.push({
@@ -71,7 +72,7 @@
 					});
 				}
 			}
-			
+
 			return tokens;
 		}
 	});
@@ -79,16 +80,24 @@
 	$: filteredData = ($query.data ?? []).filter((token) => {
 		if (activeFilter === 'All') return true;
 		if (activeFilter === 'ST0x') {
-			return getTokensByCategory('ST0x').some((t) => t.address.toLowerCase() === token.address.toLowerCase());
+			return getTokensByCategory('ST0x').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
 		}
 		if (activeFilter === 'ETFs') {
-			return getTokensByCategory('ETFs').some((t) => t.address.toLowerCase() === token.address.toLowerCase());
+			return getTokensByCategory('ETFs').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
 		}
 		if (activeFilter === 'ST0NX') {
-			return getTokensByCategory('ST0NX').some((t) => t.address.toLowerCase() === token.address.toLowerCase());
+			return getTokensByCategory('ST0NX').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
 		}
 		if (activeFilter === 'CRYPTO') {
-			return getTokensByCategory('CRYPTO').some((t) => t.address.toLowerCase() === token.address.toLowerCase());
+			return getTokensByCategory('CRYPTO').some(
+				(t) => t.address.toLowerCase() === token.address.toLowerCase()
+			);
 		}
 		return false;
 	});
@@ -186,7 +195,7 @@
 						{#each filteredData as token (token.id)}
 							{#if token.isSft}
 								<div
-									class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30 cursor-pointer"
+									class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
 									role="link"
 									tabindex="0"
 									on:click={() => goto(`/tokens/${token.id}`)}
@@ -205,8 +214,9 @@
 												class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
 											>
 												<img
-													src={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())
-														?.logoUrl}
+													src={ALL_TOKENS.find(
+														(s) => s.address.toLowerCase() === token.address.toLowerCase()
+													)?.logoUrl}
 													alt={token.symbol}
 													class="h-10 w-10 rounded-full bg-gray-700"
 												/>
@@ -283,8 +293,9 @@
 												class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold"
 											>
 												<img
-													src={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())
-														?.logoUrl}
+													src={ALL_TOKENS.find(
+														(s) => s.address.toLowerCase() === token.address.toLowerCase()
+													)?.logoUrl}
 													alt={token.symbol}
 													class="h-10 w-10 rounded-full bg-gray-700"
 												/>
@@ -394,7 +405,9 @@
 							<tbody>
 								{#each filteredData as token (token.id)}
 									<tr
-										class="border-b border-white/5 {token.isSft ? 'cursor-pointer hover:bg-white/5' : ''}"
+										class="border-b border-white/5 {token.isSft
+											? 'cursor-pointer hover:bg-white/5'
+											: ''}"
 										on:click={() => token.isSft && goto(`/tokens/${token.id}`)}
 									>
 										<td class="px-4 py-4 sm:px-6">

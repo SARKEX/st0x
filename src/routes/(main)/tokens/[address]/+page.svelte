@@ -11,12 +11,8 @@
 	import { goto } from '$app/navigation';
 	import { orderTokenStore } from '$lib/stores';
 	import { USDC_TOKEN, TOKENS } from '$lib/network';
-	import type { Token } from 'sushi/currency';
 	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
 	import { page } from '$app/stores';
-
-	// Create ALL_TOKENS array that includes USDC_TOKEN
-	const ALL_TOKENS = [...TOKENS, USDC_TOKEN as Token];
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
@@ -117,8 +113,8 @@
 	function handleBuyClick() {
 		if (currentPythToken) {
 			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed = TOKENS.find(t => t.symbol === 'USDC') || USDC_TOKEN;
-			
+			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+
 			// Set the token data in the store for buying (USDC -> St0x)
 			orderTokenStore.set({
 				inputToken: usdcWithPriceFeed,
@@ -134,8 +130,8 @@
 	function handleSellClick() {
 		if (currentPythToken) {
 			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed = TOKENS.find(t => t.symbol === 'USDC') || USDC_TOKEN;
-			
+			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+
 			// Set the token data in the store for selling (St0x -> USDC)
 			orderTokenStore.set({
 				inputToken: currentPythToken,
