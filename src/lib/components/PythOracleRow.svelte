@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import axios from 'axios';
 	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 	import type { PythToken, ApiStockQuote } from '$lib/types';
@@ -18,22 +17,34 @@
 		: undefined;
 	$: quotePrice = quote?.['Global Quote']?.['05. price'];
 
-	onMount(async () => {
+	// Reactive statement that triggers when token changes
+	$: if (token?.priceFeedId) {
+		fetchOracleData();
+	}
+
+	async function fetchOracleData() {
 		loading = true;
 		error = null;
 		priceData = null;
-		const resp = await axios.get(
-			`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${token.priceFeedId}`
-		);
-		const parsed = resp.data.parsed?.[0]?.price;
-		if (parsed) {
-			priceData = {
-				price: Number(parsed.price) * Math.pow(10, parsed.expo),
-				confidence: Number(parsed.conf) * Math.pow(10, parsed.expo)
-			};
+		
+		try {
+			const resp = await axios.get(
+				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${token.priceFeedId}`
+			);
+			const parsed = resp.data.parsed?.[0]?.price;
+			if (parsed) {
+				priceData = {
+					price: Number(parsed.price) * Math.pow(10, parsed.expo),
+					confidence: Number(parsed.conf) * Math.pow(10, parsed.expo)
+				};
+			}
+		} catch (err) {
+			error = 'Failed to fetch oracle data';
+			console.error('Error fetching oracle data:', err);
+		} finally {
+			loading = false;
 		}
-		loading = false;
-	});
+	}
 </script>
 
 <!-- Desktop Table Row -->

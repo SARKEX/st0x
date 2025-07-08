@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { STOXs, USDC_TOKEN } from '$lib/network';
+	import { TOKENS } from '$lib/network';
 	import Select from '$lib/components/Select.svelte';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -19,10 +19,10 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
+	const ALL_TOKENS: Token[] = [...TOKENS];
 
-	let selectedInputToken: Token = TOKENS[0];
-	let selectedOutputToken: Token = TOKENS[TOKENS.length - 1];
+	let selectedInputToken: Token = ALL_TOKENS[0];
+	let selectedOutputToken: Token = ALL_TOKENS[ALL_TOKENS.length - 1];
 	let selectedAmount: bigint = 0n;
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';
@@ -108,11 +108,11 @@
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token to Accumulate</span>
-				<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
+				<TokenSelect options={ALL_TOKENS} bind:selected={selectedInputToken} />
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Pay With</span>
-				<TokenSelect options={TOKENS} bind:selected={selectedOutputToken} />
+				<TokenSelect options={ALL_TOKENS} bind:selected={selectedOutputToken} />
 			</div>
 			{#if isInputTokenSameAsOutputToken}
 				<div class="col-span-full mt-0 text-sm text-red-500">

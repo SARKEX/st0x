@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { STOXs, USDC_TOKEN } from '$lib/network';
+	import { TOKENS } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
@@ -17,11 +17,11 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	const TOKENS: Token[] = STOXs.concat(USDC_TOKEN);
+	const ALL_TOKENS: Token[] = [...TOKENS];
 
 	let showAdvancedOptions = false;
-	let selectedToken1: Token = TOKENS[TOKENS.length - 1];
-	let selectedToken2: Token = TOKENS[0];
+	let selectedToken1: Token = ALL_TOKENS[ALL_TOKENS.length - 1];
+	let selectedToken2: Token = ALL_TOKENS[0];
 	let isToken1FastExit = false;
 	let isToken2FastExit = false;
 	let inputVaultId1: Hex | undefined;
@@ -91,11 +91,11 @@
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token 1</span>
-				<TokenSelect options={TOKENS} bind:selected={selectedToken1} />
+				<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken1} />
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token 2</span>
-				<TokenSelect options={TOKENS} bind:selected={selectedToken2} />
+				<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken2} />
 			</div>
 		</div>
 

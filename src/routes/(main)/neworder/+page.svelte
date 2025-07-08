@@ -32,8 +32,8 @@
 		// Check if we have data in the store
 		const unsubscribe = orderTokenStore.subscribe((storeData) => {
 			if (storeData.inputToken || storeData.outputToken || storeData.orderType) {
-				if (storeData.inputToken) inputToken = storeData.inputToken as PythToken;
-				if (storeData.outputToken) outputToken = storeData.outputToken as PythToken;
+				if (storeData.inputToken) inputToken = storeData.inputToken as unknown as PythToken;
+				if (storeData.outputToken) outputToken = storeData.outputToken as unknown as PythToken;
 				if (storeData.orderType) passedOrderType = storeData.orderType;
 
 				// Clear the store after using the data

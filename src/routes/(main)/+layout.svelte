@@ -10,7 +10,7 @@
 
 	import { getSfts } from '$lib/query';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote } from '$lib/stores';
-	import { STOXs } from '$lib/network';
+	import { TOKENS } from '$lib/network';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
@@ -26,7 +26,7 @@
 		queryKey: ['tokenGlobalQuote'],
 		queryFn: async () => {
 			const tokenQuotes = [];
-			for (const stox of STOXs) {
+			for (const stox of TOKENS) {
 				const response = await fetch(
 					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${
 						stox.symbol?.split('s1')[0]

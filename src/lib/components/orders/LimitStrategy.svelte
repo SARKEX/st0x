@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { STOXs, USDC_TOKEN } from '$lib/network';
+	import { TOKENS } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -20,25 +19,13 @@
 	export let passedOutputToken: PythToken | undefined;
 	export let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
-	const TOKENS: PythToken[] = STOXs.concat(USDC_TOKEN);
+	const ALL_TOKENS: Token[] = [...TOKENS];
 
-	let selectedInputToken: Token = TOKENS[3];
-	let selectedOutputToken: Token = TOKENS[TOKENS.length - 1];
+	// Initialize with passed props or defaults
+	let selectedInputToken: Token = passedInputToken || ALL_TOKENS[3];
+	let selectedOutputToken: Token = passedOutputToken || ALL_TOKENS[ALL_TOKENS.length - 1];
+	let selectedOrderType: 'Buy' | 'Sell' = passedOrderType;
 
-	onMount(() => {
-		// Set initial values from props if provided
-		if (passedInputToken) {
-			selectedInputToken = passedInputToken;
-		}
-		if (passedOutputToken) {
-			selectedOutputToken = passedOutputToken;
-		}
-		if (passedOrderType) {
-			selectedOrderType = passedOrderType;
-		}
-	});
-
-	let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
 	let selectedInitialRatio: string = '';
 	let selectedAmount: bigint = 0n;
 	let inputVaultId: Hex | undefined;
@@ -91,7 +78,7 @@
 			</div>
 			<div>
 				{#if selectedInputToken}
-					<TokenSelect options={TOKENS} bind:selected={selectedInputToken} />
+					<TokenSelect options={ALL_TOKENS} bind:selected={selectedInputToken} />
 				{/if}
 			</div>
 		</div>
@@ -101,7 +88,7 @@
 					>{selectedOrderType === 'Buy' ? 'With' : 'For'}</span
 				>
 				{#if selectedOutputToken}
-					<TokenSelect options={TOKENS} bind:selected={selectedOutputToken} />
+					<TokenSelect options={ALL_TOKENS} bind:selected={selectedOutputToken} />
 				{/if}
 			</div>
 			{#if isInputTokenSameAsOutputToken}
