@@ -15,7 +15,7 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
-import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from './network';
+import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL } from './network';
 import { rainlangConfirmationModal } from './stores';
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
@@ -118,7 +118,7 @@ const transactionStore = () => {
 				clearInterval(interval);
 				const orderHash = orders[0].order.orderHash;
 				const orderbookId = orders[0].order.orderbook.id;
-				const chainId = get(targetNetwork).id
+				const chainId = get(targetNetwork).id;
 				const link = `
 				<a
 								target="_blank"

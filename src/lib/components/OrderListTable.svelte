@@ -62,7 +62,9 @@
 							<TableBodyCell
 								><a
 									class="text-blue-400 hover:text-blue-300"
-									href={`https://v2.raindex.finance/orders/${$targetNetwork.id}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
+									href={`https://v2.raindex.finance/orders/${
+										$targetNetwork.id
+									}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
 									target="_blank"
 									>{order.orderHash.toString().slice(0, 6)}...{order.orderHash
 										.toString()
