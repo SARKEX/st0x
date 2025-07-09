@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS } from '$lib/network';
+	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -19,7 +19,7 @@
 	export let passedOutputToken: PythToken | undefined;
 	export let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
-	const ALL_TOKENS: Token[] = [...TOKENS];
+	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
 
 	// Initialize with passed props or defaults
 	let selectedInputToken: Token = passedInputToken || ALL_TOKENS[3];
