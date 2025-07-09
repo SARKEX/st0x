@@ -154,7 +154,6 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 	} as unknown as CategorizedToken
 ];
 
-
 // Helper functions to get tokens by category
 export function getTokensByCategory(category: TokenCategory): CategorizedToken[] {
 	return TOKENS.filter((token) => token.category === category);
