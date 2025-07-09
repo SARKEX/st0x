@@ -47,7 +47,7 @@ export const getMinTradeAmount = async (amountToken: Token, minAmountInUSDC: big
 // Get baseline
 export const getBaseline = (selectedBuyOrSell: 'Buy' | 'Sell', selectedBaseline: string) => {
 	const finalBaseline =
-		selectedBuyOrSell === 'Buy' ? (1 / +selectedBaseline).toString() : selectedBaseline;
+		selectedBuyOrSell === 'Buy' ? (1 / +selectedBaseline).toFixed(18).toString() : selectedBaseline;
 	return finalBaseline;
 };
 export const hasValidPriceFeedId = (token: Token): token is PythToken => {

@@ -1,4 +1,5 @@
 import { get, writable } from 'svelte/store';
+import { targetNetwork } from '$lib/stores';
 import type { Hex } from 'viem';
 import { sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { TransactionErrorMessage } from '$lib/types/errors';
@@ -14,7 +15,7 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
-import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK } from './network';
+import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL } from './network';
 import { rainlangConfirmationModal } from './stores';
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
@@ -116,11 +117,13 @@ const transactionStore = () => {
 			if (orders && orders.length > 0) {
 				clearInterval(interval);
 				const orderHash = orders[0].order.orderHash;
+				const orderbookId = orders[0].order.orderbook.id;
+				const chainId = get(targetNetwork).id;
 				const link = `
 				<a
 								target="_blank"
 								class="whitespace-pre-wrap break-words text-center hover:underline"
-								href="https://v2.raindex.finance/orders/${TARGET_NETWORK}-${orderHash}"
+								href="https://v2.raindex.finance/orders/${chainId}-${orderbookId}-${orderHash}"
 								data-testid="raindex-link">Manage your order on Raindex</a
 							>
 				`;

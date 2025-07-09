@@ -16,13 +16,13 @@
 	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
 
 	// Selected Tokens
-	let selectedToken1: Token = TOKENS[1];
-	let selectedToken2: Token = TOKENS[2];
-	let selectedToken3: Token = TOKENS[3];
-	let selectedToken4: Token = TOKENS[4];
-	let selectedToken5: Token = TOKENS[5];
-	let selectedToken6: Token = TOKENS[6];
-	let selectedToken7: Token = TOKENS[7];
+	let selectedToken1: Token = TOKENS[0];
+	let selectedToken2: Token = TOKENS[1];
+	let selectedToken3: Token = TOKENS[2];
+	let selectedToken4: Token = TOKENS[3];
+	let selectedToken5: Token = TOKENS[4];
+	let selectedToken6: Token = TOKENS[5];
+	let selectedToken7: Token = TOKENS[6];
 
 	// Advanced Options
 	let showAdvancedOptions = false;
