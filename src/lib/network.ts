@@ -103,8 +103,10 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/AMZN.png',
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
 		category: 'ST0NX'
-	} as unknown as CategorizedToken,
+	} as unknown as CategorizedToken
+];
 
+export const CRYPTO_TOKENS: CategorizedToken[] = [
 	// CRYPTO tokens
 	{
 		chainId: arbitrum.id,
@@ -151,6 +153,7 @@ export const TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO'
 	} as unknown as CategorizedToken
 ];
+
 
 // Helper functions to get tokens by category
 export function getTokensByCategory(category: TokenCategory): CategorizedToken[] {

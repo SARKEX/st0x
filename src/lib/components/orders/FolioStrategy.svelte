@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS } from '$lib/network';
+	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
@@ -13,7 +13,7 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	const ALL_TOKENS: Token[] = [...TOKENS];
+	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
 
 	// Selected Tokens
 	let selectedToken1: Token = TOKENS[1];

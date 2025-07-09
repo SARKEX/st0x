@@ -34,7 +34,7 @@
 			<a href="/dashboard">
 				<span
 					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
-					>St0x Liquidity</span
+					>St0x</span
 				>
 			</a>
 		</div>
