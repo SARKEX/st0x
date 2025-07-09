@@ -8,6 +8,7 @@
 		TableBodyCell,
 		TableHead
 	} from 'flowbite-svelte';
+	import { targetNetwork } from '$lib/stores';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
 	import LoadingSpinner from './LoadingSpinner.svelte';
@@ -61,7 +62,7 @@
 							<TableBodyCell
 								><a
 									class="text-blue-400 hover:text-blue-300"
-									href={`https://v2.raindex.finance/orders/${subgraphName}-${order.orderHash.toString()}`}
+									href={`https://v2.raindex.finance/orders/${$targetNetwork.id}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
 									target="_blank"
 									>{order.orderHash.toString().slice(0, 6)}...{order.orderHash
 										.toString()
