@@ -251,50 +251,6 @@
 					{/each}
 				</div>
 			</div>
-			<!-- Documentation -->
-			<div class={SECTION_CLASSES}>
-				<div
-					class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between"
-				>
-					<div>
-						<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Documentation</h2>
-						<p class="text-xs text-gray-400 sm:text-sm">Links to all ST0x website explainers</p>
-					</div>
-					<button
-						class="w-full rounded-lg border border-blue-500 bg-blue-500/20 px-3 py-2 text-xs font-medium text-blue-500 transition-all hover:bg-blue-500 hover:text-white sm:w-auto sm:px-4 sm:text-sm"
-					>
-						View All Docs
-					</button>
-				</div>
-				<div class="space-y-2">
-					{#each DOCUMENTATION_ITEMS as item, index}
-						<!-- Documentation Item -->
-						<div class="overflow-hidden rounded-lg border border-white/10">
-							<button
-								on:click={() => toggleDocumentation(index)}
-								class="flex w-full items-center justify-between px-3 py-3 text-left transition-colors hover:bg-white/5 sm:px-4 sm:py-4 lg:px-6"
-							>
-								<span class="pr-2 text-xs font-medium sm:text-sm lg:text-base">{item.question}</span
-								>
-								<span class="flex-shrink-0 transition-transform {item.isOpen ? 'rotate-180' : ''}">
-									↓
-								</span>
-							</button>
-							{#if item.isOpen}
-								<div class="border-t border-white/10 px-3 pb-3 sm:px-4 sm:pb-4 lg:px-6">
-									<p class="mb-3 text-xs text-gray-400 sm:text-sm">{item.answer}</p>
-									<a
-										href={item.link}
-										class="text-xs text-yellow-500 transition-colors hover:text-yellow-400 sm:text-sm"
-									>
-										Learn more →
-									</a>
-								</div>
-							{/if}
-						</div>
-					{/each}
-				</div>
-			</div>
 		</div>
 
 		<!-- Footer -->

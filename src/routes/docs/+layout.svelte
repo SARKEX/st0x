@@ -88,7 +88,7 @@
 	<div
 		data-testid="side-menu"
 		class:left-0={mobileMenuOpen}
-		class="fixed -left-full z-[999] h-[calc(100vh-56px)] w-full min-w-80 overflow-auto border-b border-white/10 bg-gray-800/80 p-4 backdrop-blur-sm transition-all md:sticky md:left-0 md:top-[56px] md:w-80 md:border-b-0 md:border-r"
+		class="fixed -left-full z-[999] h-[calc(100vh-56px)] max-w-full min-w-80 overflow-auto border-b border-white/10 bg-gray-800/80 p-4 backdrop-blur-sm transition-all md:sticky md:left-0 md:top-[56px] md:w-80 md:border-b-0 md:border-r"
 	>
 		<ul class="container flex flex-col gap-y-2 md:mx-auto">
 			{#each data.categorisedArticles as { articles }}
