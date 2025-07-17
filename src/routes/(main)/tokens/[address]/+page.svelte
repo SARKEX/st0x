@@ -123,7 +123,7 @@
 			});
 
 			// Navigate to the neworder page
-			goto('/neworder');
+			goto('/trade');
 		}
 	}
 
@@ -140,7 +140,7 @@
 			});
 
 			// Navigate to the neworder page
-			goto('/neworder');
+			goto('/trade');
 		}
 	}
 </script>

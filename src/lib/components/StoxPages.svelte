@@ -84,7 +84,7 @@
 		});
 
 		// Navigate to the neworder page
-		goto('/neworder');
+		goto('/trade');
 	}
 
 	function handleFilterChange(filter: TokenCategory | 'All') {

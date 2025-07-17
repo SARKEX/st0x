@@ -449,7 +449,7 @@
 										<td class="px-4 py-4 sm:px-6">
 											{#if token.isSft}
 												<button
-													on:click|stopPropagation={() => goto(`/neworder`)}
+													on:click|stopPropagation={() => goto(`/trade`)}
 													class="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 sm:text-sm"
 												>
 													View

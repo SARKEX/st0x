@@ -13,7 +13,9 @@
 		{ name: 'Mint', href: '/mint', protected: false },
 		{ name: 'Burn', href: '/burn', protected: false },
 		{ name: 'Token List', href: '/tokens', protected: false },
-		{ name: 'New Order', href: '/neworder', protected: true },
+		{ name: 'Trade', href: '/trade', protected: true },
+		{ name: 'Market Making', href: '/mm', protected: true },
+		{ name: 'Portfolio', href: '/portfolio', protected: true },
 		{ name: 'Order List', href: '/orderlist', protected: true },
 		{ name: 'Vault List', href: '/vaultlist', protected: true }
 	];
