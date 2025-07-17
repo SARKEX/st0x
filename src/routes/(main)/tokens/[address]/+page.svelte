@@ -115,7 +115,7 @@
 			// Find USDC in TOKENS array to ensure it has priceFeedId
 			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
 
-			// Set the token data in the store for buying (USDC -> St0x)
+			// Set the token data in the store for buying (USDC -> ST0x)
 			orderTokenStore.set({
 				inputToken: usdcWithPriceFeed,
 				outputToken: currentPythToken,
@@ -132,7 +132,7 @@
 			// Find USDC in TOKENS array to ensure it has priceFeedId
 			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
 
-			// Set the token data in the store for selling (St0x -> USDC)
+			// Set the token data in the store for selling (ST0x -> USDC)
 			orderTokenStore.set({
 				inputToken: currentPythToken,
 				outputToken: usdcWithPriceFeed,
@@ -227,7 +227,7 @@
 
 				<div class="my-8 border-t border-white/20"></div>
 
-				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">St0x Token</h3>
+				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">ST0x Token</h3>
 				<div class="space-y-4">
 					<div class="flex items-baseline justify-between py-1">
 						<span class="text-gray-400">Name</span>

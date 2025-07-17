@@ -90,7 +90,7 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Apple 01',
 		logoUrl: '/images/AAPL.png',
 		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
-		category: 'ETFs'
+		category: 'ST0x'
 	} as unknown as CategorizedToken,
 
 	// ST0NX tokens (currently same as some ST0x tokens, but kept separate for future expansion)
@@ -102,7 +102,7 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Amazon 01',
 		logoUrl: '/images/AMZN.png',
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
-		category: 'ST0NX'
+		category: 'ST0x'
 	} as unknown as CategorizedToken
 ];
 

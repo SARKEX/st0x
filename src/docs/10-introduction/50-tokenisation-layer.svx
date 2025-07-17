@@ -50,7 +50,7 @@ The Connector is then granted authorization to mint and manage the associated ER
 
 ## Ownership and Security Considerations
 
-The St0x SFT contracts (Offchain Asset Vault – ethgild repo) follow a standard OpenZeppelin ownership model. While the contracts are non-upgradeable, the owner can update the authoriser, which controls critical functions like minting and burning.
+The ST0x SFT contracts (Offchain Asset Vault – ethgild repo) follow a standard OpenZeppelin ownership model. While the contracts are non-upgradeable, the owner can update the authoriser, which controls critical functions like minting and burning.
 This creates a major risk: if the mint function is compromised, an attacker can irreversibly drain supply within a single transaction, leaving no time to respond.
 
 To mitigate this, ownership is typically placed behind an M-of-N multisig (e.g. Gnosis Safe). However, as TVL increases, so does attacker sophistication. Multisigs have been breached via phishing, interface hijacks, and supply chain exploits. For example, ByBit’s Gnosis Safe was compromised by a state actor for $1.5B by targeting the front end used by its signers.
@@ -106,7 +106,7 @@ In short, while timelocks add friction to some attacks, they fail to prevent the
 
 ### Owner-Controlled Freeze Mechanism
 
-As an alternative to traditional timelocks, the St0x framework introduces an owner-controlled freeze state for critical compromise mitigation. This operates alongside the certification freeze—both must be inactive for transfers to proceed.
+As an alternative to traditional timelocks, the ST0x framework introduces an owner-controlled freeze state for critical compromise mitigation. This operates alongside the certification freeze—both must be inactive for transfers to proceed.
 
 Unlike the certification freeze, the owner freeze:
 

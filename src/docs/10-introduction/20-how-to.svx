@@ -11,7 +11,7 @@ Limit order
 DCA
 Active Liquidity
 Portfolio Strategy
-St0x current does not support market orders, place limit orders that will be cleared against avilable liquidity.
+ST0x current does not support market orders, place limit orders that will be cleared against avilable liquidity.
 
 If liquidty is not avilable solvers will goto the S1 bridge to pull it through for your order.
 

@@ -39,7 +39,7 @@ Tokens are deposited into vaults created by users that function as virtual accou
 
 ## Order Book
 
-The St0x orderbook is an on-chain smart contract that incorporate dynamic algorithms directing token transfers between vaults.	
+The ST0x orderbook is an on-chain smart contract that incorporate dynamic algorithms directing token transfers between vaults.	
 
 Strategies formulated using Rainlang must determine a maximum amount and a price ratio for but offer near-limitless flexibility beyond this. Furthermore, Rainlang itself is permissionless extensible – the protocol facilitates the integration of multiple interpreters supporting various versions of the language.
 
@@ -50,7 +50,7 @@ Instead of granting token approvals, users deposit their tokens into vaults that
 Strategies deployed on-chain remain active until filled or removed.				
 Order placers do not bear the gas costs associated with continuous strategy execution. Instead, the protocol fosters an ecosystem where fillers capitalize on arbitrage opportunities, guaranteeing active strategy execution without imposing burdens on the original order placer. Arbitrage can occur between two orders on the orderbook or between an order and external liquidity.
 
-As a result, the St0x orderbook resembles an intent-driven system. 
+As a result, the ST0x orderbook resembles an intent-driven system. 
 
 <img src={intentsystem} />
 

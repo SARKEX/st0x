@@ -44,7 +44,7 @@
 </script>
 
 {#if $vaultQuery.isLoading || $tokenGlobalQuoteQuery.isLoading}
-	<LoadingSpinner variant="fullscreen" size="xl" text="Loading St0x..." />
+	<LoadingSpinner variant="fullscreen" size="xl" text="Loading ST0x..." />
 {:else if $vaultQuery.isError || $tokenGlobalQuoteQuery.isError}
 	<div class="flex h-screen items-center justify-center">
 		<div class="text-red-500">
@@ -98,13 +98,13 @@
 				<div class="flex items-center gap-2">
 					<img
 						src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
-						alt="St0x Logo"
+						alt="ST0x Logo"
 						class="h-8 w-8 rounded-full"
 					/>
 					<span
 						class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
 					>
-						St0x
+						ST0x
 					</span>
 				</div>
 			</div>

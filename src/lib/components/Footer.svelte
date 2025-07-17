@@ -14,21 +14,6 @@
 						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
 						>Terms of Service</a
 					>
-					<a
-						href="/privacy"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>Privacy Policy</a
-					>
-					<a
-						href="/disclaimers"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>Risk Disclaimers</a
-					>
-					<a
-						href="/compliance"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>Compliance</a
-					>
 				</div>
 			</div>
 			<div>
@@ -40,44 +25,9 @@
 						>Documentation</a
 					>
 					<a
-						href="/api"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>API Reference</a
-					>
-					<a
-						href="/security"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>Security</a
-					>
-					<a
 						href="/audit"
 						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
 						>Audit Reports</a
-					>
-				</div>
-			</div>
-			<div>
-				<h4 class="mb-4 text-base font-semibold sm:text-lg">Contact</h4>
-				<div class="space-y-2">
-					<a
-						href="/support"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>Support Center</a
-					>
-					<a
-						href="mailto:hello@st0x.com"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>hello@st0x.com</a
-					>
-					<a
-						href="/bug-bounty"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>Bug Bounty</a
-					>
-					<a
-						href="/careers"
-						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
-						>Careers</a
 					>
 				</div>
 			</div>
@@ -86,15 +36,15 @@
 		<!-- Bottom Bar -->
 		<div class="border-t border-white/10 pt-6 sm:pt-8">
 			<div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
-				<div class="text-xs text-gray-400 sm:text-sm">© 2025 St0x. All rights reserved.</div>
+				<div class="text-xs text-gray-400 sm:text-sm">© SARK X (BVI) Ltd. All rights reserved.</div>
 				<div class="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
 					<div class="flex items-center gap-2 text-xs text-gray-400 sm:text-sm">
 						{#if $connected}
 							<div class="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-							System Status: Operational
+							Wallet Connected
 						{:else}
 							<div class="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-							System Status: Offline
+							Wallet Disconnected
 						{/if}
 					</div>
 					<div class="text-xs text-gray-400 sm:text-sm">Network: Arbitrum</div>
@@ -112,7 +62,7 @@
 					<div class="text-xs text-gray-300 sm:text-sm">
 						<strong class="text-yellow-500">Investment Risk Warning:</strong> Trading tokenized assets
 						involves substantial risk of loss. Past performance does not guarantee future results. Please
-						read our risk disclaimers and ensure you understand the risks before trading. St0x is not
+						read our risk disclaimers and ensure you understand the risks before trading. ST0x is not
 						available to residents of certain jurisdictions.
 					</div>
 				</div>
