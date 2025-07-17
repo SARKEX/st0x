@@ -1,23 +1,11 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { fade } from 'svelte/transition';
-	import { goto } from '$app/navigation';
 	export let data: PageData;
 </script>
 
 {#key data}
-	<div data-testid="body" in:fade={{ duration: 300 }}>
-		<!-- Back Button -->
-		<button
-			on:click={() => goto('/dashboard')}
-			class="mb-4 flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-		>
-			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-			</svg>
-			Back to Dashboard
-		</button>
-
+	<div data-testid="body" in:fade={{ duration: 300 }} class="p-4 md:p-8">
 		<h1
 			data-testid="title"
 			class="mb-6 text-4xl font-bold text-white"
