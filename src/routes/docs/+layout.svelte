@@ -1,117 +1,84 @@
 <script lang="ts">
 	import type { LayoutData } from './$types';
-	import { BarsOutline } from 'flowbite-svelte-icons';
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
-	import SocialLinks from '$lib/components/SocialLinks.svelte';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import DocsSidebar from '$lib/components/DocsSidebar.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Header from '$lib/components/Header.svelte';
+	import Footer from '$lib/components/Footer.svelte';
 	export let data: LayoutData;
 
-	let mobileMenuOpen = false;
-	const toggleMenu = () => {
-		mobileMenuOpen = !mobileMenuOpen;
-	};
-
-	// For header nav collapse
-	let mobileHeaderMenuOpen = false;
-	const toggleHeaderMenu = () => {
-		mobileHeaderMenuOpen = !mobileHeaderMenuOpen;
-	};
+	let sidebarExpanded = true;
+	let mobileSidebarOpen = false;
 </script>
 
-<!-- Docs Header -->
-<div
-	class="sticky top-0 z-[1000] border-b border-white/10 bg-gray-900/90 px-4 py-3 backdrop-blur-md"
->
-	<div class="flex items-center justify-between">
-		<!-- Left: Logo and Title -->
-		<div class="flex items-center gap-2 md:gap-3">
-			<a href="/dashboard">
-				<img
-					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
-					alt="St0x Logo"
-					class="h-8 w-8 rounded-full md:h-9 md:w-9"
-				/>
-			</a>
-			<a href="/dashboard">
-				<span
-					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
-					>St0x</span
+{#if $wagmiConfig}
+	<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
+		<!-- Background Pattern -->
+		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
+			<div
+				class="bg-[url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 2000 1000%27%3E%3Cpath d=%27M0,500 Q250,400 500,500 T1000,500 T1500,500 T2000,500%27 stroke=%27%23F3B13C%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,400 Q250,300 500,400 T1000,400 T1500,400 T2000,400%27 stroke=%27%231A5C8E%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,600 Q250,500 500,600 T1000,600 T1500,600 T2000,600%27 stroke=%27%2337134D%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3C/svg%3E')] h-full w-full bg-cover"
+			/>
+		</div>
+		<!-- Always render for transition, pass visible prop -->
+		<div class="lg:hidden">
+			<DocsSidebar
+				visible={mobileSidebarOpen}
+				desktop={false}
+				{data}
+				on:close={() => (mobileSidebarOpen = false)}
+			/>
+		</div>
+		<!-- Desktop sidebar -->
+		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
+			<DocsSidebar visible={true} desktop={true} {data} />
+		</div>
+
+		<!-- Main Content -->
+		<div
+			class="transition-all duration-300"
+			class:lg:ml-64={sidebarExpanded}
+			class:lg:ml-16={!sidebarExpanded}
+		>
+			<!-- Mobile Header with Menu Button -->
+			<div
+				class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
+			>
+				<button
+					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+					class="rounded-lg border border-white/10 p-2 transition-colors hover:bg-white/5"
 				>
-			</a>
-		</div>
-		<!-- Hamburger (mobile only) -->
-		<button class="ml-1 md:hidden" on:click={toggleHeaderMenu}>
-			<BarsOutline class="text-white" size="xl" />
-		</button>
-		<!-- Right: Nav, Social, Wallet (desktop only) -->
-		<div class="hidden items-center gap-6 md:flex">
-			<a href="/dashboard" class="text-lg text-white transition-colors hover:text-yellow-400"
-				>Dashboard</a
-			>
-			<a href="/neworder" class="text-lg text-white transition-colors hover:text-yellow-400"
-				>New Order</a
-			>
-			<SocialLinks />
-			<WalletConnect />
+					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M4 6h16M4 12h16M4 18h16"
+						/>
+					</svg>
+				</button>
+				<div class="flex items-center gap-2">
+					<img
+						src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
+						alt="ST0x Logo"
+						class="h-8 w-8 rounded-full"
+					/>
+					<span
+						class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
+					>
+						ST0x
+					</span>
+				</div>
+			</div>
+
+			<!-- Header -->
+			<Header title="Documentation" description="ST0x Platform Documentation" />
+
+			<slot {sidebarExpanded} />
+
+			<!-- Footer -->
+			<Footer />
 		</div>
 	</div>
-	<!-- Mobile dropdown menu -->
-	{#if mobileHeaderMenuOpen}
-		<div class="mt-2 flex flex-col gap-2 md:hidden">
-			<a href="/dashboard" class="text-lg text-white transition-colors hover:text-yellow-400"
-				>Dashboard</a
-			>
-			<a href="/neworder" class="text-lg text-white transition-colors hover:text-yellow-400"
-				>New Order</a
-			>
-			<SocialLinks />
-			<WalletConnect />
-		</div>
-	{/if}
-</div>
-
-<!-- Mobile Header -->
-<div
-	class="sticky top-0 z-[999] flex h-[var(--header-height)] flex-row items-center gap-x-2 border-b border-white/10 bg-gray-800/80 px-2 py-6 text-white backdrop-blur-sm md:hidden md:p-4"
->
-	<BarsOutline
-		class="block cursor-pointer text-gray-300 transition-colors hover:text-white"
-		size="xl"
-		withEvents
-		on:click={toggleMenu}
-		data-testid="menu-icon"
-	/>
-</div>
-
-<!-- Main Layout -->
-<div class="z-0 flex min-h-screen flex-col bg-gray-900 text-white md:flex-row">
-	<!-- Sidebar -->
-	<div
-		data-testid="side-menu"
-		class:left-0={mobileMenuOpen}
-		class="fixed -left-full z-[999] h-[calc(100vh-56px)] w-full min-w-80 overflow-auto border-b border-white/10 bg-gray-800/80 p-4 backdrop-blur-sm transition-all md:sticky md:left-0 md:top-[56px] md:w-80 md:border-b-0 md:border-r"
-	>
-		<ul class="container flex flex-col gap-y-2 md:mx-auto">
-			{#each data.categorisedArticles as { articles }}
-				{#each articles as { slug, title }}
-					<li>
-						<a
-							on:click={toggleMenu}
-							data-testid="doc-title"
-							href={`${slug}`}
-							class="rounded-lg px-3 py-2 text-lg text-gray-100 transition-colors hover:bg-white/10 hover:text-yellow-400"
-						>
-							{title}
-						</a>
-					</li>
-				{/each}
-			{/each}
-		</ul>
-	</div>
-
-	<!-- Content Area -->
-	<div class="flex-1">
-		<div class="prose prose-invert max-w-[100ch] p-4 md:p-8">
-			<slot />
-		</div>
-	</div>
-</div>
+{:else}
+	<LoadingSpinner variant="fullscreen" size="xl" text="Loading ST0x..." />
+{/if}

@@ -4,22 +4,13 @@
 	import WithdrawChart from '$lib/components/charts/WithdrawChart.svelte';
 	import CumulativeSupplyChart from '$lib/components/charts/CumulativeSupplyChart.svelte';
 	import { sfts } from '$lib/stores';
-	import { ArrowRightToBracketOutline, InfoCircleSolid } from 'flowbite-svelte-icons';
+	import { InfoCircleSolid } from 'flowbite-svelte-icons';
 	import type { OffchainAssetReceiptVault, Withdraw } from '$lib/types/OffchainAssetReceiptVault';
 	import BurnReceiptInfoModal from './BurnReceiptInfoModal.svelte';
 	import Header from '$lib/components/Header.svelte';
 
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Withdraw | null = null;
-
-	const BURN_ISSUERS = [
-		{
-			issuerName: 'Charles Schwab',
-			issuerInfo:
-				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-			issuerLink: 'https://st0x.io/'
-		}
-	];
 
 	// Utility Classes
 	const CARD_BASE_CLASSES =
@@ -48,57 +39,7 @@
 		</div>
 		<!-- Burn Process -->
 		<div class={SECTION_CLASSES}>
-			<div class="mb-6 sm:mb-8">
-				<h2
-					class="mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
-				>
-					Burn Partners
-				</h2>
-			</div>
 			<div class="space-y-4 sm:space-y-6">
-				<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
-					<div class="space-y-4 sm:space-y-6">
-						{#each BURN_ISSUERS as issuer}
-							<div
-								class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-orange-500/30 hover:bg-gray-700/40 sm:p-6"
-							>
-								<div
-									class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-								/>
-								<div class="flex flex-col items-start gap-4 sm:flex-row sm:gap-6">
-									<div
-										class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-14 sm:w-14 sm:text-2xl"
-									>
-										{issuer.issuerName.slice(0, 2).toUpperCase() ?? '??'}
-									</div>
-									<div class="flex-1 space-y-2">
-										<div
-											class="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center"
-										>
-											<h3 class="text-lg font-semibold text-white sm:text-xl">
-												{issuer.issuerName}
-											</h3>
-											<a
-												href={issuer.issuerLink}
-												target="_blank"
-												rel="noopener noreferrer"
-												class="text-xs text-orange-500 transition-colors hover:text-orange-400 sm:text-sm"
-											>
-												<div class="flex items-center gap-1">
-													Link to Issuer
-													<ArrowRightToBracketOutline />
-												</div>
-											</a>
-										</div>
-										<p class="text-xs leading-relaxed text-gray-400 sm:text-sm">
-											{issuer.issuerInfo}
-										</p>
-									</div>
-								</div>
-							</div>
-						{/each}
-					</div>
-				</div>
 				<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
 					<div class="space-y-4 sm:space-y-6">
 						<h2

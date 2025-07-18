@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightToBracketOutline, InfoCircleSolid } from 'flowbite-svelte-icons';
+	import { InfoCircleSolid } from 'flowbite-svelte-icons';
 	import Footer from '$lib/components/Footer.svelte';
 	import { sfts } from '$lib/stores';
 	import MintReceiptInfoModal from './MintReceiptInfoModal.svelte';
@@ -12,19 +12,8 @@
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Deposit | null = null;
 
-	const MINT_ISSUERS = [
-		{
-			issuerName: 'Charles Schwab',
-			issuerInfo:
-				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-			issuerLink: 'https://st0x.io/'
-		}
-	];
-
 	const CARD_BASE_CLASSES =
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
-	const GRADIENT_HOVER_CLASSES =
-		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
 
 	function truncateId(id: string, start: number = 6, end: number = 4) {
@@ -52,61 +41,7 @@
 		</div>
 		<!-- Mint Process -->
 		<div class={SECTION_CLASSES}>
-			<div class="mb-6 sm:mb-8">
-				<h2
-					class="mb-4 bg-gradient-to-r from-yellow-500 to-green-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
-				>
-					Mint Partners
-				</h2>
-			</div>
-
 			<div class="space-y-4 sm:space-y-6">
-				<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
-					<div class={GRADIENT_HOVER_CLASSES} />
-					<div class="flex flex-col gap-4">
-						<div class="space-y-3 text-gray-300">
-							{#each MINT_ISSUERS as issuer}
-								<div
-									class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30 hover:bg-gray-700/40 sm:p-6"
-								>
-									<div
-										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-									/>
-									<div class="flex flex-col items-start gap-4 sm:flex-row sm:gap-6">
-										<div
-											class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-14 sm:w-14 sm:text-2xl"
-										>
-											{issuer.issuerName.slice(0, 2).toUpperCase() ?? '??'}
-										</div>
-										<div class="flex-1 space-y-2">
-											<div
-												class="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center"
-											>
-												<h3 class="text-lg font-semibold text-white sm:text-xl">
-													{issuer.issuerName}
-												</h3>
-												<a
-													href={issuer.issuerLink}
-													target="_blank"
-													rel="noopener noreferrer"
-													class="text-xs text-yellow-500 transition-colors hover:text-yellow-400 sm:text-sm"
-												>
-													<div class="flex items-center gap-1">
-														Link to Issuer
-														<ArrowRightToBracketOutline />
-													</div>
-												</a>
-											</div>
-											<p class="text-xs leading-relaxed text-gray-400 sm:text-sm">
-												{issuer.issuerInfo}
-											</p>
-										</div>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-				</div>
 				<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
 					<div class="space-y-4 sm:space-y-6">
 						<h2

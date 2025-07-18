@@ -6,7 +6,7 @@ published: true
 <script>
 </script>
 
-## Welcome to St0x
+## Welcome to ST0x
 The Global 24/7 Decentralised Exchange is closer than we think.
 
 "The next generation for markets… will be the tokenization of securities" - Blackrock CEO, Larry Fink
@@ -18,11 +18,11 @@ The $255T global equities market is rapidly evolving, driven by tech innovation,
 
 Tokenization is the key. It enables fractional ownership, real-time settlement, and liquidity at a scale never seen before. By 2030, tokenized assets could reach $16T, or 10% of global GDP (BCG).
 
-St0x integrates this potential with DeFi principles—removing intermediaries, boosting transparency, and unlocking new levels of efficiency. We’re not just enabling access; we’re reshaping the foundation of capital markets.
+ST0x integrates this potential with DeFi principles—removing intermediaries, boosting transparency, and unlocking new levels of efficiency. We’re not just enabling access; we’re reshaping the foundation of capital markets.
 
 ### A New Capital Market Infrastructure
-St0x unifies liquidity across on-chain and off-chain markets, giving users seamless access to global trading venues across jurisdictions and asset classes—equities, bonds, commodities, and digital assets.
+ST0x unifies liquidity across on-chain and off-chain markets, giving users seamless access to global trading venues across jurisdictions and asset classes—equities, bonds, commodities, and digital assets.
 
-Users can trade in real time and publish orders directly to the St0x orderbook, where they’re instantly aggregated with liquidity from other venues for maximum exposure and execution potential. Orders remain user-owned and secured on-chain.
+Users can trade in real time and publish orders directly to the ST0x orderbook, where they’re instantly aggregated with liquidity from other venues for maximum exposure and execution potential. Orders remain user-owned and secured on-chain.
 
-Trades are executed the moment liquidity intersects—whether sourced internally or externally. St0x abstracts the complexity, letting users define what they want to trade while the system routes to the best available liquidity, anywhere.
+Trades are executed the moment liquidity intersects—whether sourced internally or externally. ST0x abstracts the complexity, letting users define what they want to trade while the system routes to the best available liquidity, anywhere.

@@ -78,7 +78,7 @@
 		// Update platform stats
 		PLATFORM_STATS = [
 			{ label: 'Total Assets', value: st0xVaults.length.toString(), change: 'Live on arbitrum' },
-			{ label: 'Tokens Minted', value: metrics.totalDeposits.toString(), change: 'St0xs' },
+			{ label: 'Tokens Minted', value: metrics.totalDeposits.toString(), change: 'ST0xs' },
 			{
 				label: 'Tokens Redeemed',
 				value: metrics.totalRedeems.toString(),
@@ -87,7 +87,7 @@
 			{
 				label: 'Tokens Circulating',
 				value: (metrics.totalDeposits - metrics.totalRedeems).toString(),
-				change: 'Total St0xs'
+				change: 'Total ST0xs'
 			},
 			{
 				label: 'Token Holders',
@@ -104,33 +104,6 @@
 		];
 	}
 
-	const DOCUMENTATION_ITEMS = [
-		{
-			question: 'What is St0x?',
-			answer: 'St0x is an onchain equities platform that tokenizes real-world assets.',
-			link: '/docs/what-is-st0x',
-			isOpen: false
-		},
-		{
-			question: 'How does proof of reserves work?',
-			answer: 'All tokens are backed by verifiable real-world assets with immutable proofs.',
-			link: '/docs/proof-of-reserves',
-			isOpen: false
-		},
-		{
-			question: 'How to mint tokens?',
-			answer: 'Use our mint interface to create new tokens backed by verified deposits.',
-			link: '/docs/how-to-mint',
-			isOpen: false
-		},
-		{
-			question: 'What are the risks?',
-			answer: 'Review our comprehensive risk disclosures and legal framework.',
-			link: '/docs/risks',
-			isOpen: false
-		}
-	];
-
 	// Utility Classes
 	const CARD_BASE_CLASSES =
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
@@ -138,10 +111,6 @@
 		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
 	const SECTION_CLASSES =
 		'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-white/10';
-
-	function toggleDocumentation(index: number) {
-		DOCUMENTATION_ITEMS[index].isOpen = !DOCUMENTATION_ITEMS[index].isOpen;
-	}
 </script>
 
 <!-- Main Content -->
@@ -149,7 +118,7 @@
 {#if $sfts.length > 0}
 	<div>
 		<!-- Header -->
-		<Header title="Dashboard" description="Welcome to St0x" />
+		<Header title="Dashboard" description="Welcome to ST0x" />
 
 		<!-- Dashboard Content -->
 		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">
@@ -247,50 +216,6 @@
 									</a>
 								</div>
 							</div>
-						</div>
-					{/each}
-				</div>
-			</div>
-			<!-- Documentation -->
-			<div class={SECTION_CLASSES}>
-				<div
-					class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between"
-				>
-					<div>
-						<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Documentation</h2>
-						<p class="text-xs text-gray-400 sm:text-sm">Links to all St0x website explainers</p>
-					</div>
-					<button
-						class="w-full rounded-lg border border-blue-500 bg-blue-500/20 px-3 py-2 text-xs font-medium text-blue-500 transition-all hover:bg-blue-500 hover:text-white sm:w-auto sm:px-4 sm:text-sm"
-					>
-						View All Docs
-					</button>
-				</div>
-				<div class="space-y-2">
-					{#each DOCUMENTATION_ITEMS as item, index}
-						<!-- Documentation Item -->
-						<div class="overflow-hidden rounded-lg border border-white/10">
-							<button
-								on:click={() => toggleDocumentation(index)}
-								class="flex w-full items-center justify-between px-3 py-3 text-left transition-colors hover:bg-white/5 sm:px-4 sm:py-4 lg:px-6"
-							>
-								<span class="pr-2 text-xs font-medium sm:text-sm lg:text-base">{item.question}</span
-								>
-								<span class="flex-shrink-0 transition-transform {item.isOpen ? 'rotate-180' : ''}">
-									↓
-								</span>
-							</button>
-							{#if item.isOpen}
-								<div class="border-t border-white/10 px-3 pb-3 sm:px-4 sm:pb-4 lg:px-6">
-									<p class="mb-3 text-xs text-gray-400 sm:text-sm">{item.answer}</p>
-									<a
-										href={item.link}
-										class="text-xs text-yellow-500 transition-colors hover:text-yellow-400 sm:text-sm"
-									>
-										Learn more →
-									</a>
-								</div>
-							{/if}
 						</div>
 					{/each}
 				</div>

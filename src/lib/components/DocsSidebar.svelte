@@ -2,23 +2,13 @@
 	import { targetNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { WalletOutline, ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
+	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
 	import TelegramLogo from '$lib/images/telegram.svg';
+	import type { LayoutData } from '../../routes/docs/$types';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
-
-	const NAVIGATION_ITEMS = [
-		{ name: 'Dashboard', href: '/', protected: false },
-		{ name: 'Mint', href: '/mint', protected: false },
-		{ name: 'Burn', href: '/burn', protected: false },
-		{ name: 'Token List', href: '/tokens', protected: false },
-		{ name: 'Trade', href: '/trade', protected: true },
-		{ name: 'Market Making', href: '/mm', protected: true },
-		{ name: 'Portfolio', href: '/portfolio', protected: true },
-		{ name: 'Order List', href: '/orderlist', protected: true },
-		{ name: 'Vault List', href: '/vaultlist', protected: true }
-	];
+	export let data: LayoutData;
 
 	import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
@@ -66,26 +56,24 @@
 
 	<!-- Navigation (scrollable) -->
 	<div class="flex-1 space-y-2 overflow-y-auto p-4">
-		{#each NAVIGATION_ITEMS as item}
-			<a
-				href={item.href}
-				on:click={() => {
-					if (!desktop) dispatch('close');
-				}}
-				class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
-				item.href
-					? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
-					: item.protected && !$connected
-						? 'text-blue-400/60 hover:text-blue-300'
+		{#each data.categorisedArticles as { articles }}
+			{#each articles as { slug, title }}
+				<a
+					href={`/docs/${slug}`}
+					on:click={() => {
+						if (!desktop) dispatch('close');
+					}}
+					class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
+					`/docs/${slug}`
+						? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
 						: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
-			>
-				<span>{item.name}</span>
-				{#if item.protected && !$connected}
-					<WalletOutline class="ml-auto h-5 w-5" />
-				{:else if activePath === item.href}
-					<div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
-				{/if}
-			</a>
+				>
+					<span>{title}</span>
+					{#if activePath === `/docs/${slug}`}
+						<div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
+					{/if}
+				</a>
+			{/each}
 		{/each}
 	</div>
 
@@ -105,11 +93,11 @@
 				</div>
 			</div>
 			<a
-				href="/docs"
+				href="/dashboard"
 				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
 			>
 				<ArrowUpRightFromSquareSolid class="h-5 w-5" />
-				<span>Docs</span>
+				<span>Dashboard</span>
 			</a>
 			<a
 				href="https://t.me/toby_meller"
