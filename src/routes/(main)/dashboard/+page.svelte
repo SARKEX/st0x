@@ -104,33 +104,6 @@
 		];
 	}
 
-	const DOCUMENTATION_ITEMS = [
-		{
-			question: 'What is ST0x?',
-			answer: 'ST0x is an onchain equities platform that tokenizes real-world assets.',
-			link: '/docs/what-is-st0x',
-			isOpen: false
-		},
-		{
-			question: 'How does proof of reserves work?',
-			answer: 'All tokens are backed by verifiable real-world assets with immutable proofs.',
-			link: '/docs/proof-of-reserves',
-			isOpen: false
-		},
-		{
-			question: 'How to mint tokens?',
-			answer: 'Use our mint interface to create new tokens backed by verified deposits.',
-			link: '/docs/how-to-mint',
-			isOpen: false
-		},
-		{
-			question: 'What are the risks?',
-			answer: 'Review our comprehensive risk disclosures and legal framework.',
-			link: '/docs/risks',
-			isOpen: false
-		}
-	];
-
 	// Utility Classes
 	const CARD_BASE_CLASSES =
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
@@ -138,10 +111,6 @@
 		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
 	const SECTION_CLASSES =
 		'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-white/10';
-
-	function toggleDocumentation(index: number) {
-		DOCUMENTATION_ITEMS[index].isOpen = !DOCUMENTATION_ITEMS[index].isOpen;
-	}
 </script>
 
 <!-- Main Content -->

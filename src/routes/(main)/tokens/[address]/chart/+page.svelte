@@ -48,9 +48,11 @@
 			← Back
 		</button>
 		<div class="text-lg font-semibold text-white">
-			{$currentToken?.name} {$currentToken?.symbol?.replace('s1', '') || 'Token'}
+			{$currentToken?.name}
+			{$currentToken?.symbol?.replace('s1', '') || 'Token'}
 		</div>
-		<div class="w-24"></div> <!-- Spacer for centering -->
+		<div class="w-24"></div>
+		<!-- Spacer for centering -->
 	</div>
 
 	<!-- Chart Container -->

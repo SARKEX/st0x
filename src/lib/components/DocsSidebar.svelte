@@ -2,7 +2,7 @@
 	import { targetNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { WalletOutline, ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
+	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
 	import TelegramLogo from '$lib/images/telegram.svg';
 	import type { LayoutData } from '../../routes/docs/$types';
 
@@ -63,7 +63,8 @@
 					on:click={() => {
 						if (!desktop) dispatch('close');
 					}}
-					class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath === `/docs/${slug}`
+					class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
+					`/docs/${slug}`
 						? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
 						: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
 				>
@@ -109,4 +110,4 @@
 			</a>
 		</div>
 	</div>
-</div> 
+</div>

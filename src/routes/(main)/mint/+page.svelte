@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightToBracketOutline, InfoCircleSolid } from 'flowbite-svelte-icons';
+	import { InfoCircleSolid } from 'flowbite-svelte-icons';
 	import Footer from '$lib/components/Footer.svelte';
 	import { sfts } from '$lib/stores';
 	import MintReceiptInfoModal from './MintReceiptInfoModal.svelte';
@@ -12,19 +12,8 @@
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Deposit | null = null;
 
-	const MINT_ISSUERS = [
-		{
-			issuerName: 'Charles Schwab',
-			issuerInfo:
-				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-			issuerLink: 'https://st0x.io/'
-		}
-	];
-
 	const CARD_BASE_CLASSES =
 		'bg-gray-700/30 rounded-xl border border-white/5 relative overflow-hidden group hover:border-yellow-500/30 transition-all';
-	const GRADIENT_HOVER_CLASSES =
-		'absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity';
 	const SECTION_CLASSES = 'bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10';
 
 	function truncateId(id: string, start: number = 6, end: number = 4) {

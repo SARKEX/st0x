@@ -4,22 +4,13 @@
 	import WithdrawChart from '$lib/components/charts/WithdrawChart.svelte';
 	import CumulativeSupplyChart from '$lib/components/charts/CumulativeSupplyChart.svelte';
 	import { sfts } from '$lib/stores';
-	import { ArrowRightToBracketOutline, InfoCircleSolid } from 'flowbite-svelte-icons';
+	import { InfoCircleSolid } from 'flowbite-svelte-icons';
 	import type { OffchainAssetReceiptVault, Withdraw } from '$lib/types/OffchainAssetReceiptVault';
 	import BurnReceiptInfoModal from './BurnReceiptInfoModal.svelte';
 	import Header from '$lib/components/Header.svelte';
 
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Withdraw | null = null;
-
-	const BURN_ISSUERS = [
-		{
-			issuerName: 'Charles Schwab',
-			issuerInfo:
-				'lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-			issuerLink: 'https://st0x.io/'
-		}
-	];
 
 	// Utility Classes
 	const CARD_BASE_CLASSES =

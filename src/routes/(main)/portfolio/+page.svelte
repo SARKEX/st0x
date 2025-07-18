@@ -1,19 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import Footer from '$lib/components/Footer.svelte';
-	import DcaStrategy from '$lib/components/orders/DcaStrategy.svelte';
-	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';
-	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
-	import { orderTokenStore } from '$lib/stores';
 	import Header from '$lib/components/Header.svelte';
-	import type { PythToken } from '$lib/types';
 	import { connected } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 
-	const ORDER_TYPES = [
-		{ id: 'portfolio', name: 'Portfolio' }
-	];
+	const ORDER_TYPES = [{ id: 'portfolio', name: 'Portfolio' }];
 
 	let activeOrderType = 'portfolio';
 
