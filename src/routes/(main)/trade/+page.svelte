@@ -13,9 +13,7 @@
 
 	const ORDER_TYPES = [
 		{ id: 'limit', name: 'Limit Orders' },
-		{ id: 'dca', name: 'DCA' },
-		{ id: 'activeliquidity', name: 'Active Liquidity' },
-		{ id: 'portfolio', name: 'Portfolio' }
+		{ id: 'dca', name: 'DCA' }
 	];
 
 	let activeOrderType = 'limit';
