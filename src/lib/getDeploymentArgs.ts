@@ -4,8 +4,8 @@ import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { Token } from 'sushi/currency';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
-import { TARGET_NETWORK } from './network';
 import { getPeriodInSeconds } from './derivations';
+import { currentNetwork } from './stores';
 
 export type DcaDeploymentArgs = {
 	outputToken: Token;
@@ -28,7 +28,8 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/e9b2c5bf2ec6500f4def41b74653cdd998c26df5/src/auction-dca.rain'
 		)
 	).text();
-	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, TARGET_NETWORK))
+	const network = get(currentNetwork);
+	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, network.raindexNetworkSlug))
 		.value as DotrainOrderGui;
 
 	await gui.saveSelectToken('output', args.outputToken.address);
@@ -98,7 +99,8 @@ export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/e9b2c5bf2ec6500f4def41b74653cdd998c26df5/src/fixed-limit.rain'
 		)
 	).text();
-	const guiResult = await DotrainOrderGui.newWithDeployment(limitStrategy, TARGET_NETWORK);
+	const network = get(currentNetwork);
+	const guiResult = await DotrainOrderGui.newWithDeployment(limitStrategy, network.raindexNetworkSlug);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 
@@ -157,7 +159,8 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/e9b2c5bf2ec6500f4def41b74653cdd998c26df5/src/dynamic-spread.rain'
 		)
 	).text();
-	const guiResult = await DotrainOrderGui.newWithDeployment(dsfStrategy, TARGET_NETWORK);
+	const network = get(currentNetwork);
+	const guiResult = await DotrainOrderGui.newWithDeployment(dsfStrategy, network.raindexNetworkSlug);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 

@@ -4,14 +4,14 @@
 	import { getSftMetadata } from '$lib/getSftMetadata';
 	import { page } from '$app/stores';
 	import { sftMetadata } from '$lib/stores';
-	import { ARBITRUM_METADATA_SUBGRAPH_URL } from '$lib/network';
+	import { currentNetwork } from '$lib/stores';
 
 	const { address } = $page.params;
 
 	$: query = createQuery({
 		queryKey: ['getSftMetadata', address],
 		queryFn: () => {
-			return getSftMetadata(address, ARBITRUM_METADATA_SUBGRAPH_URL as string);
+			return getSftMetadata(address, $currentNetwork.metadata_subgraph_url as string);
 		}
 	});
 

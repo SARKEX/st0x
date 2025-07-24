@@ -1,6 +1,6 @@
 <script lang="ts">
 	import axios from 'axios';
-	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { currentNetwork } from '$lib/stores'
 	import type { PythToken, ApiStockQuote } from '$lib/types';
 
 	export let token: PythToken;
@@ -56,7 +56,7 @@
 	{:else if priceData}
 		<td class="px-2 py-1">
 			<a
-				href={`${TARGET_NETWORK_EXPLORER_URL}/address/${token.address}`}
+				href={`${$currentNetwork.blockExplorer}/address/${token.address}`}
 				target="_blank"
 				class="underline"
 			>
@@ -85,7 +85,7 @@
 				<div>
 					<span class="font-semibold">Token: </span>
 					<a
-						href={`${TARGET_NETWORK_EXPLORER_URL}/address/${token.address}`}
+						href={`${$currentNetwork.blockExplorer}/address/${token.address}`}
 						target="_blank"
 						class="underline"
 					>

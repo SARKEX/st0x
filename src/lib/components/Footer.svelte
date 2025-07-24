@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { connected } from 'svelte-wagmi';
+	import { currentNetwork } from '$lib/stores';
 </script>
 
 <!-- Footer -->
@@ -49,7 +50,7 @@
 							Wallet Disconnected
 						{/if}
 					</div>
-					<div class="text-xs text-gray-400 sm:text-sm">Network: Arbitrum</div>
+					<div class="text-xs text-gray-400 sm:text-sm">Network: {$currentNetwork.name}</div>
 				</div>
 			</div>
 

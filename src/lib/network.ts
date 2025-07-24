@@ -1,5 +1,107 @@
-import { arbitrum } from '@wagmi/core/chains';
+import { arbitrum, base } from '@wagmi/core/chains';
 import type { PythToken } from './types';
+
+// Network interface
+export interface Network {
+	id: number;
+	chainId: number;
+	name: string;
+	raindexNetworkSlug: string;
+	displayName: string;
+	currencySymbol: string;
+	blockExplorer: string;
+	sftExplorer: string;
+	blockExplorerIcon: string;
+	rpcUrl: string;
+	icon: string;
+	receipt_vault_implementation_address: string;
+	verify_implementation_address: string;
+	receipt_vault_authorizer_implementation_address: string;
+	payment_vault_authorizer_implementation_address: string;
+	clone_factory_address: string;
+	metaboard_address: string;
+	subgraph_url: string;
+	metadata_subgraph_url: string;
+	orderbook_subgraph_url: string;
+}
+
+// Networks configuration
+export const networks: Network[] = [
+	{
+		id: 42161,
+		chainId: 42161,
+		name: 'arbitrum-one',
+		raindexNetworkSlug: 'arbitrum2',
+		displayName: 'Arbitrum One',
+		currencySymbol: 'ETH',
+		blockExplorer: 'https://arbiscan.io',
+		sftExplorer: 'https://stox.h20.market',
+		blockExplorerIcon: 'arbitrum',
+		rpcUrl: 'https://arbitrum-one-rpc.publicnode.com',
+		icon: 'arbitrum',
+		receipt_vault_implementation_address: '0xA75040cc33bF4BE0c953e4617f66ff05798B4D1c',
+		verify_implementation_address: '',
+		receipt_vault_authorizer_implementation_address: '0x0438560b398eA874DEb29360aCda10735D9790C8',
+		payment_vault_authorizer_implementation_address: '',
+		clone_factory_address: '0x34b9Fc3cbe19330fBd57ff732630d1517b605e48',
+		metaboard_address: '0x1eFd85E6C384fAD9B80C6D508E9098Eb91C4eD30',
+		subgraph_url:
+			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
+		metadata_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn',
+			orderbook_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn'
+		
+	},
+	{
+		id: 8453,
+		chainId: 8453,
+		name: 'base',
+		raindexNetworkSlug: 'base',
+		displayName: 'Base Mainnet',
+		currencySymbol: 'ETH',
+		blockExplorer: 'https://basescan.org',
+		sftExplorer: 'https://stox2.h20.market',
+		blockExplorerIcon: 'etherscan',
+		rpcUrl: 'https://base-rpc.publicnode.com',
+		icon: 'ethereum',
+		receipt_vault_implementation_address: '0xBe1B6eb500773Fc61ba596B4beF9409F190bF6df',
+		receipt_vault_authorizer_implementation_address: '0x2B4A510c3619d5E888095BFE9f95902D32dA5556',
+		verify_implementation_address: '',
+		payment_vault_authorizer_implementation_address: '0x86E489460507fD6e0016f9a43C998F7E284c4B56',
+		clone_factory_address: '0x5e9e22154D71f9Fd4b5FD1eE36852A4c9FcDcC9E',
+		metaboard_address: '0x59401C9302E79Eb8AC6aea659B8B3ae475715e86',
+		subgraph_url:
+			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.3/gn',
+		metadata_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
+			orderbook_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2024-12-13-9c39/gn'
+		
+	}
+];
+
+// Helper functions
+export function getNetworkById(id: number): Network | undefined {
+	return networks.find(network => network.id === id);
+}
+
+export function getNetworkByChainId(chainId: number): Network | undefined {
+	return networks.find(network => network.chainId === chainId);
+}
+
+export function getNetworkByName(name: string): Network | undefined {
+	return networks.find(network => network.name === name);
+}
+
+// Legacy exports for backward compatibility
+export const ARBITRUM_SFT_SUBGRAPH_URL = networks[0].subgraph_url;
+export const ARBITRUM_ORDERBOOK_SUBGRAPH_URL = networks[0].orderbook_subgraph_url;
+export const ARBITRUM_METADATA_SUBGRAPH_URL = networks[0].metadata_subgraph_url;
+export const ARBITRUM_EXPLORER_URL = 'https://stox.h20.market';
+
+export const TARGET_NETWORK = 'arbitrum2';
+export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io';
 
 export const USDC_TOKEN = {
 	chainId: arbitrum.id,
@@ -9,16 +111,6 @@ export const USDC_TOKEN = {
 	logoUrl: '/images/USDC.png',
 	priceFeedId: '0x0000000000000000000000000000000000000000000000000000000000000000'
 } as unknown as PythToken;
-
-export const ARBITRUM_SFT_SUBGRAPH_URL =
-	'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn';
-export const ARBITRUM_ORDERBOOK_SUBGRAPH_URL =
-	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn';
-export const ARBITRUM_METADATA_SUBGRAPH_URL =
-	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn';
-export const TARGET_NETWORK = 'arbitrum2';
-export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io';
-export const SFT_EXPLORER_URL = 'https://stox.h20.market';
 
 // Define token categories
 export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
@@ -30,6 +122,17 @@ export interface CategorizedToken extends PythToken {
 
 export const TOKENS: CategorizedToken[] = [
 	// ST0x tokens
+
+	{
+		chainId: base.id,
+		address: '0xabef041ebd0ad5d9c8a4e88b04f9a58c1cab93c0',
+		symbol: 'TSLAs1',
+		decimals: 18,
+		name: 'STx Tesla 01',
+		logoUrl: '/images/TSLA.png',
+		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
 		address: '0xaca45fea0049823e809f0e789144c21d96230996',

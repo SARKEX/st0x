@@ -7,26 +7,87 @@
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Header from '$lib/components/Header.svelte';
+	import { page } from '$app/stores';
 
 	import { getSfts } from '$lib/query';
-	import { sfts, rainlangConfirmationModal, tokenGlobalQuote } from '$lib/stores';
+	import { sfts, rainlangConfirmationModal, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import { TOKENS } from '$lib/network';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
 
+	// Get page title and description based on current route
+	$: pageTitle = getPageTitle($page.url.pathname);
+	$: pageDescription = getPageDescription($page.url.pathname);
+
+	function getPageTitle(pathname: string): string {
+		switch (pathname) {
+			case '/':
+			case '/dashboard':
+				return 'Dashboard';
+			case '/mint':
+				return 'Mint';
+			case '/burn':
+				return 'Burn';
+			case '/tokens':
+				return 'Token List';
+			case '/trade':
+				return 'Trade';
+			case '/mm':
+				return 'Market Making';
+			case '/portfolio':
+				return 'Portfolio';
+			case '/orderlist':
+				return 'Order List';
+			case '/vaultlist':
+				return 'Vault List';
+			default:
+				return 'ST0x';
+		}
+	}
+
+	function getPageDescription(pathname: string): string {
+		switch (pathname) {
+			case '/':
+			case '/dashboard':
+				return `Welcome to ST0x - ${$currentNetwork?.displayName || 'Network'}`;
+			case '/mint':
+				return 'Mint new tokens';
+			case '/burn':
+				return 'Burn tokens';
+			case '/tokens':
+				return 'View all tokens';
+			case '/trade':
+				return 'Trade tokens';
+			case '/mm':
+				return 'Market making';
+			case '/portfolio':
+				return 'Your portfolio';
+			case '/orderlist':
+				return 'Order management';
+			case '/vaultlist':
+				return 'Vault management';
+			default:
+				return 'ST0x Platform';
+		}
+	}
+
 	$: vaultQuery = createQuery({
-		queryKey: ['getSfts'],
+		queryKey: ['getSfts', $currentNetwork?.id],
 		queryFn: () => {
 			return getSfts();
-		}
+		},
+		enabled: !!$currentNetwork?.subgraph_url
 	});
 
 	$: tokenGlobalQuoteQuery = createQuery({
-		queryKey: ['tokenGlobalQuote'],
+		queryKey: ['tokenGlobalQuote', $currentNetwork?.id],
 		queryFn: async () => {
+			// Filter tokens by current network's chain ID
+			const networkTokens = TOKENS.filter(token => token.chainId === $currentNetwork.chainId);
 			const tokenQuotes = [];
-			for (const stox of TOKENS) {
+			for (const stox of networkTokens) {
 				const response = await fetch(
 					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${
 						stox.symbol?.split('s1')[0]
@@ -36,22 +97,15 @@
 				tokenQuotes.push(data);
 			}
 			return tokenQuotes;
-		}
+		},
+		enabled: !!$currentNetwork?.chainId
 	});
 
 	$: sfts.set($vaultQuery.data);
 	$: tokenGlobalQuote.set($tokenGlobalQuoteQuery.data ?? []);
 </script>
 
-{#if $vaultQuery.isLoading || $tokenGlobalQuoteQuery.isLoading}
-	<LoadingSpinner variant="fullscreen" size="xl" text="Loading ST0x..." />
-{:else if $vaultQuery.isError || $tokenGlobalQuoteQuery.isError}
-	<div class="flex h-screen items-center justify-center">
-		<div class="text-red-500">
-			Error: {$vaultQuery.error?.message || $tokenGlobalQuoteQuery.error?.message}
-		</div>
-	</div>
-{:else if $wagmiConfig}
+{#if $wagmiConfig}
 	<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
 		<!-- Background Pattern -->
 		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
@@ -78,6 +132,11 @@
 			class:lg:ml-64={sidebarExpanded}
 			class:lg:ml-16={!sidebarExpanded}
 		>
+			<!-- Desktop Header -->
+			<div class="hidden lg:block">
+				<Header title={pageTitle} description={pageDescription} />
+			</div>
+
 			<!-- Mobile Header with Menu Button -->
 			<div
 				class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
@@ -118,5 +177,9 @@
 				onCancel={$rainlangConfirmationModal.onCancel || (() => {})}
 			/>
 		</div>
+	</div>
+{:else}
+	<div class="flex h-screen items-center justify-center">
+		<LoadingSpinner variant="fullscreen" size="xl" text="Loading ST0x..." />
 	</div>
 {/if}

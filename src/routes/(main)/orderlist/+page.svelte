@@ -3,7 +3,8 @@
 	import { getOrders } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
-	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TOKENS, TARGET_NETWORK } from '$lib/network';
+	import { TOKENS } from '$lib/network';
+	import { currentNetwork } from '$lib/stores';
 	import { signerAddress } from 'svelte-wagmi';
 	import type { Token } from 'sushi/currency';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
@@ -22,8 +23,8 @@
 			const ordersResult = await getOrders(
 				[
 					{
-						url: ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
-						name: TARGET_NETWORK
+						url: $currentNetwork.orderbook_subgraph_url,
+						name: $currentNetwork.raindexNetworkSlug
 					}
 				],
 				{

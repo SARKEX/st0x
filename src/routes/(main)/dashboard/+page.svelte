@@ -4,8 +4,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { formatUnits } from 'viem';
 	import type { Deposit, OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import { sfts } from '$lib/stores';
-	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { currentNetwork, sfts } from '$lib/stores';
 	import { getTrades } from '$lib/query';
 	import StoxPages from '$lib/components/StoxPages.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -15,14 +14,16 @@
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
 	let recentDeposits: Deposit[] = [];
 
+
 	$: tradesQuery = createQuery({
-		queryKey: ['getTrades'],
+		queryKey: ['getTrades', $currentNetwork?.id],
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
 			const monthAgo = now - 30 * 86400;
-			const trades = await getTrades(monthAgo, now);
+			const trades = await getTrades(monthAgo, now, $currentNetwork);
 			return trades;
 		},
+		enabled: !!$currentNetwork?.orderbook_subgraph_url,
 		retry: 3,
 		retryDelay: 1000
 	});
@@ -41,13 +42,13 @@
 			(acc, sft) => {
 				// Process deposits
 				const depositAmount = sft.deposits.reduce(
-					(sum, deposit) => sum + BigInt(formatUnits(BigInt(deposit.amount), 18)),
+					(sum, deposit) => sum + BigInt(deposit.amount),
 					BigInt(0)
 				);
 
 				// Process withdraws
 				const withdrawAmount = sft.withdraws.reduce(
-					(sum, withdraw) => sum + BigInt(formatUnits(BigInt(withdraw.amount), 18)),
+					(sum, withdraw) => sum + BigInt(withdraw.amount),
 					BigInt(0)
 				);
 
@@ -77,16 +78,16 @@
 
 		// Update platform stats
 		PLATFORM_STATS = [
-			{ label: 'Total Assets', value: st0xVaults.length.toString(), change: 'Live on arbitrum' },
-			{ label: 'Tokens Minted', value: metrics.totalDeposits.toString(), change: 'ST0xs' },
+			{ label: 'Total Assets', value: st0xVaults.length.toString(), change: 'Live on ' + $currentNetwork.name },
+			{ label: 'Tokens Minted', value: formatUnits(metrics.totalDeposits, 18), change: 'ST0xs' },
 			{
 				label: 'Tokens Redeemed',
-				value: metrics.totalRedeems.toString(),
+				value: formatUnits(metrics.totalRedeems, 18),
 				change: 'Recent transfers'
 			},
 			{
 				label: 'Tokens Circulating',
-				value: (metrics.totalDeposits - metrics.totalRedeems).toString(),
+				value: formatUnits(metrics.totalDeposits - metrics.totalRedeems, 18),
 				change: 'Total ST0xs'
 			},
 			{
@@ -115,11 +116,12 @@
 
 <!-- Main Content -->
 
-{#if $sfts.length > 0}
+{#if !$sfts}
+	<div class="flex w-full items-center justify-center p-8">
+		<LoadingSpinner variant="fullscreen" size="lg" text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..." />
+	</div>
+{:else if $sfts.length > 0}
 	<div>
-		<!-- Header -->
-		<Header title="Dashboard" description="Welcome to ST0x" />
-
 		<!-- Dashboard Content -->
 		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">
 			<StoxPages />
@@ -209,7 +211,7 @@
 								<div class="flex flex-shrink-0 items-center gap-2">
 									<div class="h-2 w-2 rounded-full bg-green-500" />
 									<a
-										href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${proof.transaction.id}`}
+										href={`${$currentNetwork?.blockExplorer}/tx/${proof.transaction.id}`}
 										class="whitespace-nowrap text-xs text-blue-400 transition-colors hover:text-blue-300"
 									>
 										View Details
@@ -224,5 +226,12 @@
 
 		<!-- Footer -->
 		<Footer />
+	</div>
+{:else}
+	<div class="flex w-full items-center justify-center p-8">
+		<div class="text-center">
+			<h2 class="mb-4 text-xl font-semibold text-gray-400">No SFTs Found</h2>
+			<p class="text-gray-500">No SFTs available on {$currentNetwork?.displayName || 'this network'}.</p>
+		</div>
 	</div>
 {/if}

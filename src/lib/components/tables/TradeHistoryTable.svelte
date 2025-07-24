@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import Button from '../Button.svelte';
 	import { Spinner } from 'flowbite-svelte';
 	import LoadingSpinner from '../LoadingSpinner.svelte';
-
+	import { currentNetwork } from '$lib/stores';
 	export let query: CreateInfiniteQueryResult<InfiniteData<{ trades: SgTrade[] }, unknown>, Error>;
 
 	function formatTimestamp(timestamp: string): string {
@@ -77,7 +76,7 @@
 							</td>
 							<td class="whitespace-nowrap px-6 py-4 text-sm text-blue-400">
 								<a
-									href="{TARGET_NETWORK_EXPLORER_URL}/tx/{trade.tradeEvent.transaction.id}"
+									href="{$currentNetwork.blockExplorer}/tx/{trade.tradeEvent.transaction.id}"
 									target="_blank"
 									rel="noopener noreferrer"
 									class="hover:underline"

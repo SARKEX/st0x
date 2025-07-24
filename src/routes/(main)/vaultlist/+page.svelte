@@ -3,7 +3,7 @@
 	import { getVaults } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import type { SgErc20, SgVaultWithSubgraphName } from '@rainlanguage/orderbook';
-	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TARGET_NETWORK, USDC_TOKEN } from '$lib/network';
+	import { USDC_TOKEN } from '$lib/network';
 	import { signerAddress } from 'svelte-wagmi';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
 	import { formatUnits } from 'viem';
@@ -15,6 +15,7 @@
 	import { getPrice } from '$lib/getPrice';
 	import { Token } from 'sushi/currency';
 	import { arbitrum } from '@wagmi/core/chains';
+	import { currentNetwork } from '$lib/stores';
 
 	const VAULT_LIST_PAGE_SIZE = 1000;
 
@@ -35,8 +36,8 @@
 			const vaultsResult = await getVaults(
 				[
 					{
-						url: ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
-						name: TARGET_NETWORK
+						url: $currentNetwork.orderbook_subgraph_url,
+						name: $currentNetwork.raindexNetworkSlug
 					}
 				],
 				{

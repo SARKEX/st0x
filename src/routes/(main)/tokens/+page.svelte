@@ -3,7 +3,7 @@
 	import { sfts, tokenGlobalQuote } from '$lib/stores';
 	import { ArrowUpRightFromSquareOutline } from 'flowbite-svelte-icons';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { SFT_EXPLORER_URL, TOKENS, getTokensByCategory } from '$lib/network';
+	import { ARBITRUM_SFT_EXPLORER_URL, TOKENS, getTokensByCategory } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { goto } from '$app/navigation';
@@ -421,7 +421,7 @@
 										</td>
 										<td class="px-4 py-4 sm:px-6">
 											<a
-												href={`${SFT_EXPLORER_URL}/token/${token.id}`}
+												href={`${ARBITRUM_SFT_EXPLORER_URL}/token/${token.id}`}
 												target="_blank"
 												class="text-xs text-blue-400 underline hover:text-blue-300 sm:text-sm"
 												on:click|stopPropagation
