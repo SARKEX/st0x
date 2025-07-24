@@ -18,7 +18,7 @@
 	let showMyOrders = true;
 
 	$: ordersQuery = createInfiniteQuery({
-		queryKey: ['orders', ordersActiveFilter, orderHashFilter, showMyOrders],
+		queryKey: ['orders', $currentNetwork?.id, ordersActiveFilter, orderHashFilter, showMyOrders],
 		queryFn: async ({ pageParam }) => {
 			const ordersResult = await getOrders(
 				[
@@ -56,14 +56,11 @@
 		getNextPageParam(lastPage, _allPages, lastPageParam) {
 			return lastPage.hasMore ? lastPageParam + 1 : undefined;
 		},
-		enabled: true
+		enabled: !!$currentNetwork?.orderbook_subgraph_url
 	});
 </script>
 
 <div>
-	<!-- Header -->
-	<Header title="Orders List" description="View all orders" />
-
 	<!-- Orders Content -->
 	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		<div class="mb-4 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-6">

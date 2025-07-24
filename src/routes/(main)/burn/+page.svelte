@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { infoModalOpen } from '$lib/stores';
+	import { currentNetwork } from '$lib/stores';
 	import Footer from '$lib/components/Footer.svelte';
 	import WithdrawChart from '$lib/components/charts/WithdrawChart.svelte';
 	import CumulativeSupplyChart from '$lib/components/charts/CumulativeSupplyChart.svelte';
@@ -7,6 +8,7 @@
 	import { InfoCircleSolid } from 'flowbite-svelte-icons';
 	import type { OffchainAssetReceiptVault, Withdraw } from '$lib/types/OffchainAssetReceiptVault';
 	import BurnReceiptInfoModal from './BurnReceiptInfoModal.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 
 	let selectedSft: OffchainAssetReceiptVault | null = null;
@@ -24,114 +26,126 @@
 	}
 </script>
 
-<!-- Main Content -->
-<div>
-	<!-- Header -->
-	<Header title="Burn" description="Redeem tokens for underlying securities" />
-
-	<!-- Burn Content -->
-	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
-		<div class="h-100 mb-4 w-full sm:mb-6">
-			<WithdrawChart vaults={$sfts} />
-		</div>
-		<div class="h-100 mb-4 w-full sm:mb-6">
-			<CumulativeSupplyChart vaults={$sfts} />
-		</div>
-		<!-- Burn Process -->
-		<div class={SECTION_CLASSES}>
-			<div class="space-y-4 sm:space-y-6">
-				<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
-					<div class="space-y-4 sm:space-y-6">
-						<h2
-							class="mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
-						>
-							Burn History
-						</h2>
-						{#each $sfts as sft}
-							{#each sft.withdraws.slice(0, 10) as withdraw}
-								<div
-									class="group relative mb-6 flex flex-col gap-4 rounded-lg border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-orange-500/30 hover:bg-gray-700/40 sm:p-6"
-								>
+{#if !$sfts}
+	<div class="flex w-full items-center justify-center p-8">
+		<LoadingSpinner variant="fullscreen" size="lg" text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..." />
+	</div>
+{:else if $sfts.length > 0}
+	<!-- Main Content -->
+	<div>
+		<!-- Burn Content -->
+		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
+			<div class="h-100 mb-4 w-full sm:mb-6">
+				<WithdrawChart vaults={$sfts} />
+			</div>
+			<div class="h-100 mb-4 w-full sm:mb-6">
+				<CumulativeSupplyChart vaults={$sfts} />
+			</div>
+			<!-- Burn Process -->
+			<div class={SECTION_CLASSES}>
+				<div class="space-y-4 sm:space-y-6">
+					<div class="{CARD_BASE_CLASSES} p-4 sm:p-6">
+						<div class="space-y-4 sm:space-y-6">
+							<h2
+								class="mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
+							>
+								Burn History
+							</h2>
+							{#each $sfts as sft}
+								{#each sft.withdraws.slice(0, 10) as withdraw}
 									<div
-										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
-									/>
-									<!-- Status Badge -->
-									<div class="static flex flex-row gap-2 sm:absolute sm:right-4 sm:top-4">
-										{#if withdraw.id}
-											<span
-												class="rounded-full bg-gray-600 px-2 py-1 text-xs font-semibold text-orange-300 sm:px-3"
-												>Completed</span
+										class="group relative mb-6 flex flex-col gap-4 rounded-lg border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-orange-500/30 hover:bg-gray-700/40 sm:p-6"
+									>
+										<div
+											class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-red-700 via-orange-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
+										/>
+										<!-- Status Badge -->
+										<div class="static flex flex-row gap-2 sm:absolute sm:right-4 sm:top-4">
+											{#if withdraw.id}
+												<span
+													class="rounded-full bg-gray-600 px-2 py-1 text-xs font-semibold text-orange-300 sm:px-3"
+													>Completed</span
+												>
+												<button
+													class="info-button inline-block text-orange-500 transition-colors hover:text-orange-400"
+													aria-label="Show strategy information"
+													on:click={() => {
+														infoModalOpen.set(true);
+														selectedSft = sft;
+														selectedDeposit = withdraw;
+													}}
+												>
+													<InfoCircleSolid />
+												</button>
+											{:else}
+												<span
+													class="rounded-full bg-gray-600 px-2 py-1 text-xs font-semibold text-orange-300 sm:px-3"
+													>Processing</span
+												>
+											{/if}
+										</div>
+										<div class="flex items-center gap-3 sm:gap-4">
+											<!-- Avatar -->
+											<div
+												class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-2xl"
 											>
-											<button
-												class="info-button inline-block text-orange-500 transition-colors hover:text-orange-400"
-												aria-label="Show strategy information"
-												on:click={() => {
-													infoModalOpen.set(true);
-													selectedSft = sft;
-													selectedDeposit = withdraw;
-												}}
+												{sft.symbol?.slice(0, 2) ?? '??'}
+											</div>
+											<div>
+												<div class="text-base font-semibold text-white sm:text-lg">{sft.name}</div>
+												<div class="text-xs text-gray-400">
+													Transfer ID: {truncateId(withdraw.id)}
+												</div>
+											</div>
+										</div>
+										<div
+											class="mt-2 grid grid-cols-1 gap-4 text-xs sm:text-sm md:grid-cols-2 md:grid-cols-4"
+										>
+											<div>
+												<div class="text-gray-400">From Brokerage</div>
+												<div class="text-white">
+													{withdraw.emitter.address.slice(0, 6)}...{withdraw.emitter.address.slice(
+														-4
+													)}
+												</div>
+											</div>
+											<div>
+												<div class="text-gray-400">Completed</div>
+												<div class="text-white">
+													{withdraw.timestamp
+														? new Date(Number(withdraw.timestamp) * 1000).toLocaleString()
+														: 'Pending'}
+												</div>
+											</div>
+										</div>
+										<!-- Message Bar -->
+										{#if withdraw.transaction.id}
+											<div
+												class="mt-4 overflow-x-auto rounded bg-red-900/50 px-4 py-2 text-xs text-orange-200"
 											>
-												<InfoCircleSolid />
-											</button>
-										{:else}
-											<span
-												class="rounded-full bg-gray-600 px-2 py-1 text-xs font-semibold text-orange-300 sm:px-3"
-												>Processing</span
-											>
+												Tokens Burned TX: {truncateId(withdraw.transaction.id)}
+											</div>
 										{/if}
 									</div>
-									<div class="flex items-center gap-3 sm:gap-4">
-										<!-- Avatar -->
-										<div
-											class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-600/20 to-orange-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-2xl"
-										>
-											{sft.symbol?.slice(0, 2) ?? '??'}
-										</div>
-										<div>
-											<div class="text-base font-semibold text-white sm:text-lg">{sft.name}</div>
-											<div class="text-xs text-gray-400">
-												Transfer ID: {truncateId(withdraw.id)}
-											</div>
-										</div>
-									</div>
-									<div
-										class="mt-2 grid grid-cols-1 gap-4 text-xs sm:text-sm md:grid-cols-2 md:grid-cols-4"
-									>
-										<div>
-											<div class="text-gray-400">From Brokerage</div>
-											<div class="text-white">
-												{withdraw.emitter.address.slice(0, 6)}...{withdraw.emitter.address.slice(
-													-4
-												)}
-											</div>
-										</div>
-										<div>
-											<div class="text-gray-400">Completed</div>
-											<div class="text-white">
-												{withdraw.timestamp
-													? new Date(Number(withdraw.timestamp) * 1000).toLocaleString()
-													: 'Pending'}
-											</div>
-										</div>
-									</div>
-									<!-- Message Bar -->
-									{#if withdraw.transaction.id}
-										<div
-											class="mt-4 overflow-x-auto rounded bg-red-900/50 px-4 py-2 text-xs text-orange-200"
-										>
-											Tokens Burned TX: {truncateId(withdraw.transaction.id)}
-										</div>
-									{/if}
-								</div>
+								{/each}
 							{/each}
-						{/each}
+						</div>
 					</div>
 				</div>
 			</div>
 		</div>
+		<Footer />
 	</div>
-	<Footer />
-</div>
+{:else}
+	<div class="flex w-full items-center justify-center p-8">
+		<div class="text-center">
+			<h2 class="mb-4 text-xl font-semibold text-gray-400">No SFTs Found</h2>
+			<p class="text-gray-500">No SFTs available on {$currentNetwork?.displayName || 'this network'}.</p>
+		</div>
+	</div>
+{/if}
+
+
 
 <BurnReceiptInfoModal
 	bind:showModal={$infoModalOpen}

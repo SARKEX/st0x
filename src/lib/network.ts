@@ -23,7 +23,30 @@ export interface Network {
 	subgraph_url: string;
 	metadata_subgraph_url: string;
 	orderbook_subgraph_url: string;
+	usdcToken: PythToken;
 }
+
+// USDC tokens for different networks
+export const USDC_TOKENS: { [chainId: number]: PythToken } = {
+	42161: {
+		chainId: 42161,
+		address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+		symbol: 'USDC',
+		decimals: 6,
+		name: 'USD Coin',
+		logoUrl: '/images/USDC.png',
+		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+	} as unknown as PythToken,
+	8453: {
+		chainId: 8453,
+		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+		symbol: 'USDC',
+		decimals: 6,
+		name: 'USD Coin',
+		logoUrl: '/images/USDC.png',
+		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+	} as unknown as PythToken
+};
 
 // Networks configuration
 export const networks: Network[] = [
@@ -49,9 +72,9 @@ export const networks: Network[] = [
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
 		metadata_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn',
-			orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn'
-		
+		orderbook_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn',
+		usdcToken: USDC_TOKENS[42161]
 	},
 	{
 		id: 8453,
@@ -75,9 +98,9 @@ export const networks: Network[] = [
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.3/gn',
 		metadata_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
-			orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2024-12-13-9c39/gn'
-		
+		orderbook_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2024-12-13-9c39/gn',
+		usdcToken: USDC_TOKENS[8453]
 	}
 ];
 
@@ -94,23 +117,10 @@ export function getNetworkByName(name: string): Network | undefined {
 	return networks.find(network => network.name === name);
 }
 
-// Legacy exports for backward compatibility
-export const ARBITRUM_SFT_SUBGRAPH_URL = networks[0].subgraph_url;
-export const ARBITRUM_ORDERBOOK_SUBGRAPH_URL = networks[0].orderbook_subgraph_url;
-export const ARBITRUM_METADATA_SUBGRAPH_URL = networks[0].metadata_subgraph_url;
-export const ARBITRUM_EXPLORER_URL = 'https://stox.h20.market';
-
-export const TARGET_NETWORK = 'arbitrum2';
-export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io';
-
-export const USDC_TOKEN = {
-	chainId: arbitrum.id,
-	address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-	symbol: 'USDC',
-	decimals: 6,
-	logoUrl: '/images/USDC.png',
-	priceFeedId: '0x0000000000000000000000000000000000000000000000000000000000000000'
-} as unknown as PythToken;
+// Helper function to get USDC token for a specific network
+export function getUsdcTokenForNetwork(chainId: number): PythToken | undefined {
+	return USDC_TOKENS[chainId];
+}
 
 // Define token categories
 export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';

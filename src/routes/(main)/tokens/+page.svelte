@@ -1,9 +1,9 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { sfts, tokenGlobalQuote } from '$lib/stores';
+	import { sfts, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import { ArrowUpRightFromSquareOutline } from 'flowbite-svelte-icons';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { ARBITRUM_SFT_EXPLORER_URL, TOKENS, getTokensByCategory } from '$lib/network';
+	import { TOKENS, getTokensByCategory } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { goto } from '$app/navigation';
@@ -11,15 +11,15 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 
-	// Create ALL_TOKENS array that includes USDC_TOKEN
-	const ALL_TOKENS = [...TOKENS];
+	// Filter tokens by current network
+	$: ALL_TOKENS = TOKENS.filter(token => token.chainId === $currentNetwork?.chainId);
 
 	let viewMode = 'table';
 	let activeFilter = 'All';
 
 	$: query = createQuery({
-		queryKey: ['getSftsStocks', $sfts?.length, $tokenGlobalQuote?.length],
-		enabled: !!($tokenGlobalQuote && $tokenGlobalQuote.length > 0),
+		queryKey: ['getSftsStocks', $currentNetwork?.id, $sfts?.length, $tokenGlobalQuote?.length],
+		enabled: !!($tokenGlobalQuote && $tokenGlobalQuote.length > 0 && $currentNetwork?.chainId),
 		queryFn: () => {
 			const sftVaults: OffchainAssetReceiptVault[] = $sfts || [];
 			const tokens = [];
@@ -49,7 +49,7 @@
 			}
 
 			// Process regular tokens (not in subgraph) - CRYPTO tokens like WBTC, USDC
-			const cryptoTokens = getTokensByCategory('CRYPTO');
+			const cryptoTokens = getTokensByCategory('CRYPTO').filter(token => token.chainId === $currentNetwork?.chainId);
 			for (let token of cryptoTokens) {
 				// Check if this token is not already processed as an SFT
 				const existingToken = tokens.find(
@@ -80,22 +80,22 @@
 	$: filteredData = ($query.data ?? []).filter((token) => {
 		if (activeFilter === 'All') return true;
 		if (activeFilter === 'ST0x') {
-			return getTokensByCategory('ST0x').some(
+			return getTokensByCategory('ST0x').filter(t => t.chainId === $currentNetwork?.chainId).some(
 				(t) => t.address.toLowerCase() === token.address.toLowerCase()
 			);
 		}
 		if (activeFilter === 'ETFs') {
-			return getTokensByCategory('ETFs').some(
+			return getTokensByCategory('ETFs').filter(t => t.chainId === $currentNetwork?.chainId).some(
 				(t) => t.address.toLowerCase() === token.address.toLowerCase()
 			);
 		}
 		if (activeFilter === 'ST0NX') {
-			return getTokensByCategory('ST0NX').some(
+			return getTokensByCategory('ST0NX').filter(t => t.chainId === $currentNetwork?.chainId).some(
 				(t) => t.address.toLowerCase() === token.address.toLowerCase()
 			);
 		}
 		if (activeFilter === 'CRYPTO') {
-			return getTokensByCategory('CRYPTO').some(
+			return getTokensByCategory('CRYPTO').filter(t => t.chainId === $currentNetwork?.chainId).some(
 				(t) => t.address.toLowerCase() === token.address.toLowerCase()
 			);
 		}
@@ -111,7 +111,7 @@
 
 {#if $query.isLoading || $query.isFetching || $query.isRefetching}
 	<div class="flex flex-col items-center justify-center p-8">
-		<LoadingSpinner variant="inline" size="md" text="Loading..." />
+		<LoadingSpinner variant="inline" size="md" text="Loading tokens from {$currentNetwork?.displayName || 'network'}..." />
 	</div>
 {:else if $query.error}
 	<div data-testid="error">
@@ -121,8 +121,6 @@
 {:else if $query.data}
 	<!-- Main Content -->
 	<div>
-		<!-- Header -->
-		<Header title="Tokens" description="Browse all available tokenized assets" />
 
 		<!-- Token List Content -->
 		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
@@ -134,7 +132,7 @@
 					<div>
 						<h2 class="text-lg font-semibold sm:text-xl">Available Tokens</h2>
 						<p class="text-xs text-gray-400 sm:text-sm">
-							Explore all tokenized assets on the platform
+							Explore all tokenized assets on {$currentNetwork?.displayName || 'the platform'}
 						</p>
 					</div>
 				</div>
@@ -181,11 +179,11 @@
 
 				{#if viewMode === 'grid'}
 					<!-- Grid View -->
-					<div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					<div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-all duration-300 ease-in-out">
 						{#each filteredData as token (token.id)}
 							{#if token.isSft}
 								<div
-									class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
+									class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all duration-300 ease-in-out hover:border-yellow-500/30 animate-in fade-in-0 slide-in-from-bottom-2"
 									role="link"
 									tabindex="0"
 									on:click={() => goto(`/tokens/${token.id}`)}
@@ -216,7 +214,7 @@
 												<p class="text-xs text-gray-400 sm:text-sm">{token.name}</p>
 												<p class="text-xs text-gray-400 sm:text-sm">
 													<a
-														href={`https://stox.h20.market/token/${token.id}`}
+														href={`${$currentNetwork.sftExplorer}/token/${token.id}`}
 														target="_blank"
 														class="text-blue-400 underline hover:text-blue-300"
 														on:click|stopPropagation
@@ -268,7 +266,7 @@
 								</div>
 							{:else}
 								<div
-									class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-yellow-500/30"
+									class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all duration-300 ease-in-out hover:border-yellow-500/30 animate-in fade-in-0 slide-in-from-bottom-2"
 								>
 									<div
 										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
@@ -295,7 +293,7 @@
 												<p class="text-xs text-gray-400 sm:text-sm">{token.name}</p>
 												<p class="text-xs text-gray-400 sm:text-sm">
 													<a
-														href={`https://stox.h20.market/token/${token.id}`}
+														href={`${$currentNetwork.sftExplorer}/token/${token.id}`}
 														target="_blank"
 														class="text-blue-400 underline hover:text-blue-300"
 														on:click|stopPropagation
@@ -350,7 +348,7 @@
 					</div>
 				{:else}
 					<!-- Table View -->
-					<div class="overflow-x-auto">
+					<div class="overflow-x-auto transition-all duration-300 ease-in-out">
 						<table class="w-full min-w-[600px]">
 							<thead>
 								<tr class="border-b border-white/10">
@@ -393,11 +391,12 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each filteredData as token (token.id)}
+								{#each filteredData as token, index (token.id)}
 									<tr
 										class="border-b border-white/5 {token.isSft
 											? 'cursor-pointer hover:bg-white/5'
-											: ''}"
+											: ''} transition-all duration-300 ease-in-out animate-in fade-in-0 slide-in-from-bottom-2"
+										style="animation-delay: {index * 50}ms"
 										on:click={() => token.isSft && goto(`/tokens/${token.id}`)}
 									>
 										<td class="px-4 py-4 sm:px-6">
@@ -421,7 +420,7 @@
 										</td>
 										<td class="px-4 py-4 sm:px-6">
 											<a
-												href={`${ARBITRUM_SFT_EXPLORER_URL}/token/${token.id}`}
+												href={`${$currentNetwork.blockExplorer}/token/${token.id}`}
 												target="_blank"
 												class="text-xs text-blue-400 underline hover:text-blue-300 sm:text-sm"
 												on:click|stopPropagation

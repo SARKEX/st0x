@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, getTokensByCategory, type TokenCategory, USDC_TOKEN } from '$lib/network';
+	import { TOKENS, getTokensByCategory, type TokenCategory } from '$lib/network';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import type { Token } from 'sushi/currency';
@@ -74,7 +74,7 @@
 		const tokenWithPriceFeed = TOKENS.find(
 			(t) => t.address.toLowerCase() === stox.address.toLowerCase()
 		);
-		const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+		const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
 
 		// Set the token data in the store
 		orderTokenStore.set({

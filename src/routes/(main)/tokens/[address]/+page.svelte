@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentToken } from '$lib/stores';
+	import { currentNetwork, currentToken } from '$lib/stores';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import EquityChart from '$lib/components/charts/EquityChart.svelte';
@@ -10,7 +10,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore } from '$lib/stores';
-	import { USDC_TOKEN, TOKENS } from '$lib/network';
+	import { TOKENS } from '$lib/network';
 	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
 	import { page } from '$app/stores';
 
@@ -113,7 +113,7 @@
 	function handleBuyClick() {
 		if (currentPythToken) {
 			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
 
 			// Set the token data in the store for buying (USDC -> ST0x)
 			orderTokenStore.set({
@@ -130,7 +130,7 @@
 	function handleSellClick() {
 		if (currentPythToken) {
 			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
 
 			// Set the token data in the store for selling (ST0x -> USDC)
 			orderTokenStore.set({
