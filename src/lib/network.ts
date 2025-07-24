@@ -264,6 +264,18 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/USDC.png',
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
 		category: 'CRYPTO'
+	} as unknown as CategorizedToken,
+
+	// USDC token
+	{
+		chainId: base.id,
+		address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+		symbol: 'USDC',
+		decimals: 6,
+		name: 'USD Coin',
+		logoUrl: '/images/USDC.png',
+		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
+		category: 'CRYPTO'
 	} as unknown as CategorizedToken
 ];
 
@@ -274,6 +286,19 @@ export function getTokensByCategory(category: TokenCategory): CategorizedToken[]
 
 export function getAllTokens(): CategorizedToken[] {
 	return TOKENS;
+}
+
+// Helper function to get tokens filtered by network chainId
+export function getTokensByNetwork(chainId: number): CategorizedToken[] {
+	return TOKENS.filter((token) => token.chainId === chainId);
+}
+
+export function getCryptoTokensByNetwork(chainId: number): CategorizedToken[] {
+	return CRYPTO_TOKENS.filter((token) => token.chainId === chainId);
+}
+
+export function getAllTokensByNetwork(chainId: number): CategorizedToken[] {
+	return [...getTokensByNetwork(chainId), ...getCryptoTokensByNetwork(chainId)];
 }
 
 // Legacy exports for backward compatibility

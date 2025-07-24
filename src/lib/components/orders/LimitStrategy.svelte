@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -11,7 +11,7 @@
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
 	import { getBaseline, hasValidPriceFeedId } from '$lib/derivations';
-	import { tokenGlobalQuote } from '$lib/stores';
+	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 
@@ -19,17 +19,44 @@
 	export let passedOutputToken: PythToken | undefined;
 	export let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
-	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
+	// Make ALL_TOKENS reactive to network changes
+	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Initialize with passed props or defaults
-	let selectedInputToken: Token = passedInputToken || ALL_TOKENS[3];
-	let selectedOutputToken: Token = passedOutputToken || ALL_TOKENS[ALL_TOKENS.length - 1];
+	let selectedInputToken: Token | undefined;
+	let selectedOutputToken: Token | undefined;
 	let selectedOrderType: 'Buy' | 'Sell' = passedOrderType;
 
 	let selectedInitialRatio: string = '';
 	let selectedAmount: bigint = 0n;
 	let inputVaultId: Hex | undefined;
 	let outputVaultId: Hex | undefined;
+
+	// Reset selections when network changes or when passed props change
+	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
+		// Check if passed tokens are valid for current network
+		const isValidInputToken = passedInputToken && ALL_TOKENS.some(token => 
+			token.address.toLowerCase() === passedInputToken.address.toLowerCase()
+		);
+		const isValidOutputToken = passedOutputToken && ALL_TOKENS.some(token => 
+			token.address.toLowerCase() === passedOutputToken.address.toLowerCase()
+		);
+		
+		// Set default selections for new network
+		selectedInputToken = isValidInputToken ? passedInputToken : (ALL_TOKENS[3] || ALL_TOKENS[0]);
+		selectedOutputToken = isValidOutputToken ? passedOutputToken : (ALL_TOKENS[ALL_TOKENS.length - 1] || ALL_TOKENS[0]);
+		
+		// Reset form state
+		selectedInitialRatio = '';
+		selectedAmount = 0n;
+		inputVaultId = undefined;
+		outputVaultId = undefined;
+		// Reset errors
+		selectedInitialRatioError = false;
+		selectedAmountError = false;
+		inputVaultIdError = false;
+		outputVaultIdError = false;
+	}
 
 	$: isInputTokenSameAsOutputToken =
 		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
@@ -77,8 +104,13 @@
 				/>
 			</div>
 			<div>
+				<span class="mb-2 block text-sm font-medium text-gray-300"
+					>{selectedOrderType === 'Buy' ? 'Buy' : 'Sell'}</span
+				>
 				{#if selectedInputToken}
-					<TokenSelect options={ALL_TOKENS} bind:selected={selectedInputToken} />
+					<TokenSelect options={ALL_TOKENS} selected={selectedInputToken} on:change={(e) => selectedInputToken = e.detail.token} />
+				{:else}
+					<TokenSelect options={ALL_TOKENS} selected={ALL_TOKENS[3] || ALL_TOKENS[0]} on:change={(e) => selectedInputToken = e.detail.token} />
 				{/if}
 			</div>
 		</div>
@@ -88,7 +120,9 @@
 					>{selectedOrderType === 'Buy' ? 'With' : 'For'}</span
 				>
 				{#if selectedOutputToken}
-					<TokenSelect options={ALL_TOKENS} bind:selected={selectedOutputToken} />
+					<TokenSelect options={ALL_TOKENS} selected={selectedOutputToken} on:change={(e) => selectedOutputToken = e.detail.token} />
+				{:else}
+					<TokenSelect options={ALL_TOKENS} selected={ALL_TOKENS[ALL_TOKENS.length - 1] || ALL_TOKENS[0]} on:change={(e) => selectedOutputToken = e.detail.token} />
 				{/if}
 			</div>
 			{#if isInputTokenSameAsOutputToken}
@@ -132,6 +166,10 @@
 							validate={validateSelectedAmount}
 							bind:isError={selectedAmountError}
 						/>
+					{:else}
+						<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
+							Select tokens first
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -189,40 +227,21 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#if selectedInputToken}
-							{#if hasValidPriceFeedId(selectedInputToken)}
-								<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
-							{:else}
-								<tr>
-									<td class="px-2 py-1">{selectedInputToken ? selectedInputToken.symbol : '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-								</tr>
-							{/if}
+						{#if selectedInputToken && hasValidPriceFeedId(selectedInputToken)}
+							<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
 						{:else}
 							<tr>
-								<td class="px-2 py-1">-</td>
+								<td class="px-2 py-1">{selectedInputToken?.symbol ?? '-'}</td>
 								<td class="px-2 py-1 text-right">-</td>
 								<td class="px-2 py-1 text-right">-</td>
 								<td class="px-2 py-1 text-right">-</td>
 							</tr>
 						{/if}
-						{#if selectedOutputToken}
-							{#if hasValidPriceFeedId(selectedOutputToken)}
-								<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
-							{:else}
-								<tr>
-									<td class="px-2 py-1">{selectedOutputToken ? selectedOutputToken.symbol : '-'}</td
-									>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-								</tr>
-							{/if}
+						{#if selectedOutputToken && hasValidPriceFeedId(selectedOutputToken)}
+							<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
 						{:else}
 							<tr>
-								<td class="px-2 py-1">-</td>
+								<td class="px-2 py-1">{selectedOutputToken?.symbol ?? '-'}</td>
 								<td class="px-2 py-1 text-right">-</td>
 								<td class="px-2 py-1 text-right">-</td>
 								<td class="px-2 py-1 text-right">-</td>
@@ -232,39 +251,21 @@
 				</table>
 			</div>
 			<div class="mt-2 flex flex-col gap-2 sm:hidden">
-				{#if selectedInputToken}
-					{#if hasValidPriceFeedId(selectedInputToken)}
-						<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
-					{:else}
-						<div class="rounded bg-gray-800/80 p-3 text-xs">
-							<div><span class="font-semibold">Token: </span>{selectedInputToken.symbol}</div>
-							<div><span class="font-semibold">Oracle Price: </span>-</div>
-							<div><span class="font-semibold">Price Certainty: </span>-</div>
-							<div><span class="font-semibold">Real-Time: </span>-</div>
-						</div>
-					{/if}
+				{#if selectedInputToken && hasValidPriceFeedId(selectedInputToken)}
+					<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>-</div>
+						<div><span class="font-semibold">Token: </span>{selectedInputToken?.symbol ?? '-'}</div>
 						<div><span class="font-semibold">Oracle Price: </span>-</div>
 						<div><span class="font-semibold">Price Certainty: </span>-</div>
 						<div><span class="font-semibold">Real-Time: </span>-</div>
 					</div>
 				{/if}
-				{#if selectedOutputToken}
-					{#if hasValidPriceFeedId(selectedOutputToken)}
-						<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
-					{:else}
-						<div class="rounded bg-gray-800/80 p-3 text-xs">
-							<div><span class="font-semibold">Token: </span>{selectedOutputToken.symbol}</div>
-							<div><span class="font-semibold">Oracle Price: </span>-</div>
-							<div><span class="font-semibold">Price Certainty: </span>-</div>
-							<div><span class="font-semibold">Real-Time: </span>-</div>
-						</div>
-					{/if}
+				{#if selectedOutputToken && hasValidPriceFeedId(selectedOutputToken)}
+					<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>-</div>
+						<div><span class="font-semibold">Token: </span>{selectedOutputToken?.symbol ?? '-'}</div>
 						<div><span class="font-semibold">Oracle Price: </span>-</div>
 						<div><span class="font-semibold">Price Certainty: </span>-</div>
 						<div><span class="font-semibold">Real-Time: </span>-</div>
@@ -292,7 +293,7 @@
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(selectedAmount ?? 0n, selectedOutputToken?.decimals ?? 18)}
+						>{selectedOutputToken ? formatUnits(selectedAmount ?? 0n, selectedOutputToken.decimals) : '0'}
 						{selectedOutputToken?.symbol}</span
 					>
 				</div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
@@ -15,13 +15,15 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId } from '$lib/derivations';
-	import { tokenGlobalQuote } from '$lib/stores';
+	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
+
+	// Make ALL_TOKENS reactive to network changes
+	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let showAdvancedOptions = false;
-	let selectedToken1: Token = ALL_TOKENS[ALL_TOKENS.length - 1];
-	let selectedToken2: Token = ALL_TOKENS[0];
+	let selectedToken1: Token | undefined;
+	let selectedToken2: Token | undefined;
 	let isToken1FastExit = false;
 	let isToken2FastExit = false;
 	let inputVaultId1: Hex | undefined;
@@ -45,8 +47,37 @@
 	let outputVaultId2Error: boolean = false;
 	let initialIoError: boolean = false;
 
+	// Reset selections when network changes
+	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
+		// Set default selections for new network
+		selectedToken1 = ALL_TOKENS[ALL_TOKENS.length - 1];
+		selectedToken2 = ALL_TOKENS[0];
+		// Reset form state
+		isToken1FastExit = false;
+		isToken2FastExit = false;
+		inputVaultId1 = undefined;
+		inputVaultId2 = undefined;
+		outputVaultId1 = undefined;
+		outputVaultId2 = undefined;
+		depositAmount1 = 0n;
+		depositAmount2 = 0n;
+		minTradeAmount = 0n;
+		maxTradeAmount = 0n;
+		initialIo = '0';
+		// Reset errors
+		minTradeAmountError = false;
+		maxTradeAmountError = false;
+		token1DepositAmountError = false;
+		token2DepositAmountError = false;
+		inputVaultId1Error = false;
+		inputVaultId2Error = false;
+		outputVaultId1Error = false;
+		outputVaultId2Error = false;
+		initialIoError = false;
+	}
+
 	$: isToken1SameAsToken2 =
-		selectedToken1.address.toLowerCase() === selectedToken2.address.toLowerCase();
+		selectedToken1?.address.toLowerCase() === selectedToken2?.address.toLowerCase();
 
 	$: disableDeploy =
 		!selectedToken1 ||
@@ -66,7 +97,7 @@
 		isToken1SameAsToken2;
 
 	const handleDsfDeploy = () => {
-		if ($connected) {
+		if ($connected && selectedToken1 && selectedToken2) {
 			transactionStore.handleDsfDeploy({
 				token1: selectedToken1,
 				token2: selectedToken2,
@@ -91,11 +122,19 @@
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token 1</span>
-				<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken1} />
+				{#if selectedToken1}
+					<TokenSelect options={ALL_TOKENS} selected={selectedToken1} on:change={(e) => selectedToken1 = e.detail.token} />
+				{:else}
+					<TokenSelect options={ALL_TOKENS} selected={ALL_TOKENS[0]} on:change={(e) => selectedToken1 = e.detail.token} />
+				{/if}
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token 2</span>
-				<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken2} />
+				{#if selectedToken2}
+					<TokenSelect options={ALL_TOKENS} selected={selectedToken2} on:change={(e) => selectedToken2 = e.detail.token} />
+				{:else}
+					<TokenSelect options={ALL_TOKENS} selected={ALL_TOKENS[1] || ALL_TOKENS[0]} on:change={(e) => selectedToken2 = e.detail.token} />
+				{/if}
 			</div>
 		</div>
 
@@ -106,7 +145,7 @@
 					class="h-4 w-4 rounded border-white/10 bg-gray-700 text-blue-500"
 					bind:checked={isToken1FastExit}
 				/>
-				<span class="text-sm">{selectedToken1.symbol || 'Token 1'} Fast Exit</span>
+				<span class="text-sm">{selectedToken1?.symbol || 'Token 1'} Fast Exit</span>
 			</label>
 			<label class="flex items-center gap-2">
 				<input
@@ -114,7 +153,7 @@
 					class="h-4 w-4 rounded border-white/10 bg-gray-700 text-blue-500"
 					bind:checked={isToken2FastExit}
 				/>
-				<span class="text-sm">{selectedToken2.symbol || 'Token 2'} Fast Exit</span>
+				<span class="text-sm">{selectedToken2?.symbol || 'Token 2'} Fast Exit</span>
 			</label>
 		</div>
 
@@ -127,7 +166,7 @@
 			<div class="relative">
 				<Input
 					type="number"
-					unit={selectedToken1.symbol}
+					unit={selectedToken1?.symbol}
 					bind:amount={initialIo}
 					validate={validateBaseline}
 					bind:isError={initialIoError}
@@ -140,25 +179,37 @@
 				<div class="space-y-2">
 					<div class="relative">
 						<span class="text-sm font-medium text-gray-300"
-							>{selectedToken1.symbol} Deposit Amount</span
+							>{selectedToken1?.symbol} Deposit Amount</span
 						>
-						<TradeAmountInput
-							amountToken={selectedToken1}
-							bind:amount={depositAmount1}
-							validate={validateOverrideDepositAmount}
-							bind:isError={token1DepositAmountError}
-						/>
+						{#if selectedToken1}
+							<TradeAmountInput
+								amountToken={selectedToken1}
+								bind:amount={depositAmount1}
+								validate={validateOverrideDepositAmount}
+								bind:isError={token1DepositAmountError}
+							/>
+						{:else}
+							<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
+								Select Token 1 first
+							</div>
+						{/if}
 					</div>
 					<div class="relative">
 						<span class="text-sm font-medium text-gray-300"
-							>{selectedToken2.symbol} Deposit Amount</span
+							>{selectedToken2?.symbol} Deposit Amount</span
 						>
-						<TradeAmountInput
-							amountToken={selectedToken2}
-							bind:amount={depositAmount2}
-							validate={validateOverrideDepositAmount}
-							bind:isError={token2DepositAmountError}
-						/>
+						{#if selectedToken2}
+							<TradeAmountInput
+								amountToken={selectedToken2}
+								bind:amount={depositAmount2}
+								validate={validateOverrideDepositAmount}
+								bind:isError={token2DepositAmountError}
+							/>
+						{:else}
+							<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
+								Select Token 2 first
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -166,21 +217,33 @@
 				<div class="space-y-2">
 					<div class="relative">
 						<span class="text-sm font-medium text-gray-300">Minimum Trade Amount</span>
-						<TradeAmountInput
-							amountToken={selectedToken1}
-							bind:amount={minTradeAmount}
-							validate={validateSelectedAmount}
-							bind:isError={minTradeAmountError}
-						/>
+						{#if selectedToken1}
+							<TradeAmountInput
+								amountToken={selectedToken1}
+								bind:amount={minTradeAmount}
+								validate={validateSelectedAmount}
+								bind:isError={minTradeAmountError}
+							/>
+						{:else}
+							<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
+								Select Token 1 first
+							</div>
+						{/if}
 					</div>
 					<div class="relative">
 						<span class="text-sm font-medium text-gray-300">Maximum Trade Amount</span>
-						<TradeAmountInput
-							amountToken={selectedToken1}
-							bind:amount={maxTradeAmount}
-							validate={validateSelectedAmount}
-							bind:isError={maxTradeAmountError}
-						/>
+						{#if selectedToken1}
+							<TradeAmountInput
+								amountToken={selectedToken1}
+								bind:amount={maxTradeAmount}
+								validate={validateSelectedAmount}
+								bind:isError={maxTradeAmountError}
+							/>
+						{:else}
+							<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
+								Select Token 1 first
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -211,13 +274,13 @@
 						<div class="space-y-2">
 							<div class="relative">
 								<span class="text-sm font-medium text-gray-300"
-									>Input {selectedToken1.symbol} Vault ID</span
+									>Input {selectedToken1?.symbol} Vault ID</span
 								>
 								<VaultIdInput bind:vaultId={inputVaultId1} bind:isError={inputVaultId1Error} />
 							</div>
 							<div class="relative">
 								<span class="text-sm font-medium text-gray-300"
-									>Input {selectedToken2.symbol} Vault ID</span
+									>Input {selectedToken2?.symbol} Vault ID</span
 								>
 								<VaultIdInput bind:vaultId={inputVaultId2} bind:isError={inputVaultId2Error} />
 							</div>
@@ -225,13 +288,13 @@
 						<div class="space-y-2">
 							<div class="relative">
 								<span class="text-sm font-medium text-gray-300"
-									>Output {selectedToken1.symbol} Vault ID</span
+									>Output {selectedToken1?.symbol} Vault ID</span
 								>
 								<VaultIdInput bind:vaultId={outputVaultId1} bind:isError={outputVaultId1Error} />
 							</div>
 							<div class="relative">
 								<span class="text-sm font-medium text-gray-300"
-									>Output {selectedToken2.symbol} Vault ID</span
+									>Output {selectedToken2?.symbol} Vault ID</span
 								>
 								<VaultIdInput bind:vaultId={outputVaultId2} bind:isError={outputVaultId2Error} />
 							</div>
@@ -257,7 +320,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#if hasValidPriceFeedId(selectedToken1)}
+						{#if selectedToken1 && hasValidPriceFeedId(selectedToken1)}
 							<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
 						{:else}
 							<tr>
@@ -267,7 +330,7 @@
 								<td class="px-2 py-1 text-right">-</td>
 							</tr>
 						{/if}
-						{#if hasValidPriceFeedId(selectedToken2)}
+						{#if selectedToken2 && hasValidPriceFeedId(selectedToken2)}
 							<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
 						{:else}
 							<tr>
@@ -282,7 +345,7 @@
 			</div>
 			<!-- Mobile stacked cards -->
 			<div class="mt-2 flex flex-col gap-2 sm:hidden">
-				{#if hasValidPriceFeedId(selectedToken1)}
+				{#if selectedToken1 && hasValidPriceFeedId(selectedToken1)}
 					<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
@@ -292,7 +355,7 @@
 						<div><span class="font-semibold">Real-Time: </span>-</div>
 					</div>
 				{/if}
-				{#if hasValidPriceFeedId(selectedToken2)}
+				{#if selectedToken2 && hasValidPriceFeedId(selectedToken2)}
 					<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
@@ -333,35 +396,35 @@
 					<span class="font-medium text-white">1 hour</span>
 				</div>
 				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">{selectedToken1.symbol} Fast Exit</span>
+					<span class="text-gray-400">{selectedToken1?.symbol} Fast Exit</span>
 					<span class="font-medium text-white">{isToken1FastExit ? 'Yes' : 'No'}</span>
 				</div>
 				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">{selectedToken2.symbol} Fast Exit</span>
+					<span class="text-gray-400">{selectedToken2?.symbol} Fast Exit</span>
 					<span class="font-medium text-white">{isToken2FastExit ? 'Yes' : 'No'}</span>
 				</div>
 				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">{selectedToken1.symbol} Deposit Amount</span>
+					<span class="text-gray-400">{selectedToken1?.symbol} Deposit Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(depositAmount1 ?? 0n, selectedToken1.decimals)}</span
+						>{selectedToken1 ? formatUnits(depositAmount1 ?? 0n, selectedToken1.decimals) : '0'}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">{selectedToken2.symbol} Deposit Amount</span>
+					<span class="text-gray-400">{selectedToken2?.symbol} Deposit Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(depositAmount2 ?? 0n, selectedToken2.decimals)}</span
+						>{selectedToken2 ? formatUnits(depositAmount2 ?? 0n, selectedToken2.decimals) : '0'}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Minimum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(minTradeAmount ?? 0n, selectedToken1.decimals)}</span
+						>{selectedToken1 ? formatUnits(minTradeAmount ?? 0n, selectedToken1.decimals) : '0'}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Maximum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{formatUnits(maxTradeAmount ?? 0n, selectedToken1.decimals)}</span
+						>{selectedToken1 ? formatUnits(maxTradeAmount ?? 0n, selectedToken1.decimals) : '0'}</span
 					>
 				</div>
 			</div>

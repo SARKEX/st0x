@@ -3,7 +3,7 @@
 	import { sfts, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import { ArrowUpRightFromSquareOutline } from 'flowbite-svelte-icons';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { TOKENS, getTokensByCategory } from '$lib/network';
+	import { getAllTokensByNetwork, getTokensByCategory } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { goto } from '$app/navigation';
@@ -12,7 +12,7 @@
 	import Header from '$lib/components/Header.svelte';
 
 	// Filter tokens by current network
-	$: ALL_TOKENS = TOKENS.filter(token => token.chainId === $currentNetwork?.chainId);
+	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let viewMode = 'table';
 	let activeFilter = 'All';
