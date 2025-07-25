@@ -10,13 +10,13 @@ import type { Network } from './network';
 export const getSfts = async (): Promise<any> => {
 	// Get current network value from store
 	const network = get(currentNetwork);
-	
+
 	// Filter tokens by current network's chain ID
-	const networkTokens = TOKENS.filter(token => token.chainId === network.chainId);
-	
+	const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
+
 	// Use current network's subgraph URL
 	const subgraphUrl = network.subgraph_url;
-	
+
 	const query = `
     {
  offchainAssetReceiptVaults(where: {
@@ -238,7 +238,11 @@ export const getSfts = async (): Promise<any> => {
 	return json.data.offchainAssetReceiptVaults;
 };
 
-export const getTrades = async (timestampGt: number, timestampLt: number, network?: Network): Promise<SgTrade[]> => {
+export const getTrades = async (
+	timestampGt: number,
+	timestampLt: number,
+	network?: Network
+): Promise<SgTrade[]> => {
 	// Validate input parameters
 	if (typeof timestampGt !== 'number' || typeof timestampLt !== 'number') {
 		throw new Error('Invalid timestamp parameters: timestampGt and timestampLt must be numbers');

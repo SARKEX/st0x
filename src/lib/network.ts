@@ -88,15 +88,15 @@ export const networks: Network[] = [
 
 // Helper functions
 export function getNetworkById(id: number): Network | undefined {
-	return networks.find(network => network.id === id);
+	return networks.find((network) => network.id === id);
 }
 
 export function getNetworkByChainId(chainId: number): Network | undefined {
-	return networks.find(network => network.chainId === chainId);
+	return networks.find((network) => network.chainId === chainId);
 }
 
 export function getNetworkByName(name: string): Network | undefined {
-	return networks.find(network => network.name === name);
+	return networks.find((network) => network.name === name);
 }
 
 // Helper function to get USDC token for a specific network

@@ -27,7 +27,11 @@
 
 {#if !$sfts}
 	<div class="flex w-full items-center justify-center p-8">
-		<LoadingSpinner variant="fullscreen" size="lg" text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..." />
+		<LoadingSpinner
+			variant="fullscreen"
+			size="lg"
+			text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
+		/>
 	</div>
 {:else if $sfts.length > 0}
 	<div>
@@ -88,7 +92,9 @@
 											</div>
 											<div>
 												<div class="text-base font-semibold text-white sm:text-lg">{sft.name}</div>
-												<div class="text-xs text-gray-400">Transfer ID: {truncateId(deposit.id)}</div>
+												<div class="text-xs text-gray-400">
+													Transfer ID: {truncateId(deposit.id)}
+												</div>
 											</div>
 										</div>
 										<div
@@ -97,7 +103,9 @@
 											<div>
 												<div class="text-gray-400">From Brokerage</div>
 												<div class="text-white">
-													{deposit.emitter.address.slice(0, 6)}...{deposit.emitter.address.slice(-4)}
+													{deposit.emitter.address.slice(0, 6)}...{deposit.emitter.address.slice(
+														-4
+													)}
 												</div>
 											</div>
 											<div>
@@ -131,12 +139,12 @@
 	<div class="flex w-full items-center justify-center p-8">
 		<div class="text-center">
 			<h2 class="mb-4 text-xl font-semibold text-gray-400">No SFTs Found</h2>
-			<p class="text-gray-500">No SFTs available on {$currentNetwork?.displayName || 'this network'}.</p>
+			<p class="text-gray-500">
+				No SFTs available on {$currentNetwork?.displayName || 'this network'}.
+			</p>
 		</div>
 	</div>
 {/if}
-
-
 
 <MintReceiptInfoModal
 	bind:showModal={$infoModalOpen}

@@ -49,7 +49,9 @@
 			}
 
 			// Process regular tokens (not in subgraph) - CRYPTO tokens like WBTC, USDC
-			const cryptoTokens = getTokensByCategory('CRYPTO').filter(token => token.chainId === $currentNetwork?.chainId);
+			const cryptoTokens = getTokensByCategory('CRYPTO').filter(
+				(token) => token.chainId === $currentNetwork?.chainId
+			);
 			for (let token of cryptoTokens) {
 				// Check if this token is not already processed as an SFT
 				const existingToken = tokens.find(
@@ -80,24 +82,24 @@
 	$: filteredData = ($query.data ?? []).filter((token) => {
 		if (activeFilter === 'All') return true;
 		if (activeFilter === 'ST0x') {
-			return getTokensByCategory('ST0x').filter(t => t.chainId === $currentNetwork?.chainId).some(
-				(t) => t.address.toLowerCase() === token.address.toLowerCase()
-			);
+			return getTokensByCategory('ST0x')
+				.filter((t) => t.chainId === $currentNetwork?.chainId)
+				.some((t) => t.address.toLowerCase() === token.address.toLowerCase());
 		}
 		if (activeFilter === 'ETFs') {
-			return getTokensByCategory('ETFs').filter(t => t.chainId === $currentNetwork?.chainId).some(
-				(t) => t.address.toLowerCase() === token.address.toLowerCase()
-			);
+			return getTokensByCategory('ETFs')
+				.filter((t) => t.chainId === $currentNetwork?.chainId)
+				.some((t) => t.address.toLowerCase() === token.address.toLowerCase());
 		}
 		if (activeFilter === 'ST0NX') {
-			return getTokensByCategory('ST0NX').filter(t => t.chainId === $currentNetwork?.chainId).some(
-				(t) => t.address.toLowerCase() === token.address.toLowerCase()
-			);
+			return getTokensByCategory('ST0NX')
+				.filter((t) => t.chainId === $currentNetwork?.chainId)
+				.some((t) => t.address.toLowerCase() === token.address.toLowerCase());
 		}
 		if (activeFilter === 'CRYPTO') {
-			return getTokensByCategory('CRYPTO').filter(t => t.chainId === $currentNetwork?.chainId).some(
-				(t) => t.address.toLowerCase() === token.address.toLowerCase()
-			);
+			return getTokensByCategory('CRYPTO')
+				.filter((t) => t.chainId === $currentNetwork?.chainId)
+				.some((t) => t.address.toLowerCase() === token.address.toLowerCase());
 		}
 		return false;
 	});
@@ -111,7 +113,11 @@
 
 {#if $query.isLoading || $query.isFetching || $query.isRefetching}
 	<div class="flex flex-col items-center justify-center p-8">
-		<LoadingSpinner variant="inline" size="md" text="Loading tokens from {$currentNetwork?.displayName || 'network'}..." />
+		<LoadingSpinner
+			variant="inline"
+			size="md"
+			text="Loading tokens from {$currentNetwork?.displayName || 'network'}..."
+		/>
 	</div>
 {:else if $query.error}
 	<div data-testid="error">
@@ -121,7 +127,6 @@
 {:else if $query.data}
 	<!-- Main Content -->
 	<div>
-
 		<!-- Token List Content -->
 		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 			<!-- Token List Section -->
@@ -179,11 +184,13 @@
 
 				{#if viewMode === 'grid'}
 					<!-- Grid View -->
-					<div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-all duration-300 ease-in-out">
+					<div
+						class="grid grid-cols-1 gap-4 transition-all duration-300 ease-in-out sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+					>
 						{#each filteredData as token (token.id)}
 							{#if token.isSft}
 								<div
-									class="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all duration-300 ease-in-out hover:border-yellow-500/30 animate-in fade-in-0 slide-in-from-bottom-2"
+									class="animate-in fade-in-0 slide-in-from-bottom-2 group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all duration-300 ease-in-out hover:border-yellow-500/30"
 									role="link"
 									tabindex="0"
 									on:click={() => goto(`/tokens/${token.id}`)}
@@ -266,7 +273,7 @@
 								</div>
 							{:else}
 								<div
-									class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all duration-300 ease-in-out hover:border-yellow-500/30 animate-in fade-in-0 slide-in-from-bottom-2"
+									class="animate-in fade-in-0 slide-in-from-bottom-2 group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all duration-300 ease-in-out hover:border-yellow-500/30"
 								>
 									<div
 										class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"
@@ -395,7 +402,7 @@
 									<tr
 										class="border-b border-white/5 {token.isSft
 											? 'cursor-pointer hover:bg-white/5'
-											: ''} transition-all duration-300 ease-in-out animate-in fade-in-0 slide-in-from-bottom-2"
+											: ''} animate-in fade-in-0 slide-in-from-bottom-2 transition-all duration-300 ease-in-out"
 										style="animation-delay: {index * 50}ms"
 										on:click={() => token.isSft && goto(`/tokens/${token.id}`)}
 									>

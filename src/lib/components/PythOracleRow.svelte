@@ -1,6 +1,6 @@
 <script lang="ts">
 	import axios from 'axios';
-	import { currentNetwork } from '$lib/stores'
+	import { currentNetwork } from '$lib/stores';
 	import type { PythToken, ApiStockQuote } from '$lib/types';
 
 	export let token: PythToken;

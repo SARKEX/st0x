@@ -173,7 +173,9 @@
 		<div
 			class="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-gray-700/30 p-8 text-center"
 		>
-			<h3 class="mb-2 text-lg font-semibold text-white">No STOXs balances found in your wallet on {$currentNetwork?.displayName || 'this network'}</h3>
+			<h3 class="mb-2 text-lg font-semibold text-white">
+				No STOXs balances found in your wallet on {$currentNetwork?.displayName || 'this network'}
+			</h3>
 		</div>
 	{/if}
 </div>

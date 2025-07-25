@@ -100,7 +100,10 @@ export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs
 		)
 	).text();
 	const network = get(currentNetwork);
-	const guiResult = await DotrainOrderGui.newWithDeployment(limitStrategy, network.raindexNetworkSlug);
+	const guiResult = await DotrainOrderGui.newWithDeployment(
+		limitStrategy,
+		network.raindexNetworkSlug
+	);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 
@@ -160,7 +163,10 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 		)
 	).text();
 	const network = get(currentNetwork);
-	const guiResult = await DotrainOrderGui.newWithDeployment(dsfStrategy, network.raindexNetworkSlug);
+	const guiResult = await DotrainOrderGui.newWithDeployment(
+		dsfStrategy,
+		network.raindexNetworkSlug
+	);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 
@@ -256,7 +262,10 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/1f1b2aaa3fa30c46d15eda87859f5a3330054c54/src/folio.rain'
 		)
 	).text();
-	const guiResult = await DotrainOrderGui.newWithDeployment(folioStrategy, network.raindexNetworkSlug);
+	const guiResult = await DotrainOrderGui.newWithDeployment(
+		folioStrategy,
+		network.raindexNetworkSlug
+	);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 

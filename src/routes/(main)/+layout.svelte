@@ -85,7 +85,7 @@
 		queryKey: ['tokenGlobalQuote', $currentNetwork?.id],
 		queryFn: async () => {
 			// Filter tokens by current network's chain ID
-			const networkTokens = TOKENS.filter(token => token.chainId === $currentNetwork.chainId);
+			const networkTokens = TOKENS.filter((token) => token.chainId === $currentNetwork.chainId);
 			const tokenQuotes = [];
 			for (const stox of networkTokens) {
 				const response = await fetch(

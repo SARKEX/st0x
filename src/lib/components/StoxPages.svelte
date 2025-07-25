@@ -14,11 +14,16 @@
 	let activeFilter: TokenCategory | 'All' = 'All';
 
 	// Filter tokens by current network's chain ID
-	$: networkTokens = TOKENS.filter(token => token.chainId === $currentNetwork?.chainId);
+	$: networkTokens = TOKENS.filter((token) => token.chainId === $currentNetwork?.chainId);
 
 	// Get all tokens from the current network
 	$: allTokens = networkTokens;
-	$: filteredTokens = activeFilter === 'All' ? allTokens : getTokensByCategory(activeFilter).filter(token => token.chainId === $currentNetwork?.chainId);
+	$: filteredTokens =
+		activeFilter === 'All'
+			? allTokens
+			: getTokensByCategory(activeFilter).filter(
+					(token) => token.chainId === $currentNetwork?.chainId
+				);
 
 	// Calculate total pages
 	$: totalPages = Math.ceil(filteredTokens.length / CARDS_PER_PAGE);

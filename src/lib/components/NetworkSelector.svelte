@@ -7,7 +7,7 @@
 
 	let isOpen = false;
 
-	async function selectNetwork(network: typeof networks[0]) {
+	async function selectNetwork(network: (typeof networks)[0]) {
 		$currentNetwork = network;
 		isOpen = false;
 
@@ -63,12 +63,17 @@
 	</button>
 
 	{#if isOpen}
-		<div class="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-white/10 bg-gray-800/95 backdrop-blur-lg shadow-lg">
+		<div
+			class="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-white/10 bg-gray-800/95 shadow-lg backdrop-blur-lg"
+		>
 			<div class="p-1">
 				{#each networks as network}
 					<button
 						on:click={() => selectNetwork(network)}
-						class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-white transition-colors hover:bg-gray-700/80 {$currentNetwork.id === network.id ? 'bg-yellow-500/20' : ''}"
+						class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-white transition-colors hover:bg-gray-700/80 {$currentNetwork.id ===
+						network.id
+							? 'bg-yellow-500/20'
+							: ''}"
 					>
 						<div class="h-3 w-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-600"></div>
 						<div class="flex flex-col items-start">

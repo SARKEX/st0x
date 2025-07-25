@@ -14,7 +14,6 @@
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
 	let recentDeposits: Deposit[] = [];
 
-
 	$: tradesQuery = createQuery({
 		queryKey: ['getTrades', $currentNetwork?.id],
 		queryFn: async () => {
@@ -78,7 +77,11 @@
 
 		// Update platform stats
 		PLATFORM_STATS = [
-			{ label: 'Total Assets', value: st0xVaults.length.toString(), change: 'Live on ' + $currentNetwork.name },
+			{
+				label: 'Total Assets',
+				value: st0xVaults.length.toString(),
+				change: 'Live on ' + $currentNetwork.name
+			},
 			{ label: 'Tokens Minted', value: formatUnits(metrics.totalDeposits, 18), change: 'ST0xs' },
 			{
 				label: 'Tokens Redeemed',
@@ -118,7 +121,11 @@
 
 {#if !$sfts}
 	<div class="flex w-full items-center justify-center p-8">
-		<LoadingSpinner variant="fullscreen" size="lg" text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..." />
+		<LoadingSpinner
+			variant="fullscreen"
+			size="lg"
+			text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
+		/>
 	</div>
 {:else if $sfts.length > 0}
 	<div>
@@ -231,7 +238,9 @@
 	<div class="flex w-full items-center justify-center p-8">
 		<div class="text-center">
 			<h2 class="mb-4 text-xl font-semibold text-gray-400">No SFTs Found</h2>
-			<p class="text-gray-500">No SFTs available on {$currentNetwork?.displayName || 'this network'}.</p>
+			<p class="text-gray-500">
+				No SFTs available on {$currentNetwork?.displayName || 'this network'}.
+			</p>
 		</div>
 	</div>
 {/if}

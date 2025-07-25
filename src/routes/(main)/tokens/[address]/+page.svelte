@@ -113,7 +113,8 @@
 	function handleBuyClick() {
 		if (currentPythToken) {
 			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
+			const usdcWithPriceFeed =
+				TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
 
 			// Set the token data in the store for buying (USDC -> ST0x)
 			orderTokenStore.set({
@@ -130,7 +131,8 @@
 	function handleSellClick() {
 		if (currentPythToken) {
 			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
+			const usdcWithPriceFeed =
+				TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
 
 			// Set the token data in the store for selling (ST0x -> USDC)
 			orderTokenStore.set({

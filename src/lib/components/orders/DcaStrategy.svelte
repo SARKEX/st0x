@@ -19,7 +19,7 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	
+
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 
@@ -30,7 +30,8 @@
 	}
 
 	let selectedInputToken: Token = getAllTokensByNetwork(42161)[0]; // Initialize with Arbitrum tokens
-	let selectedOutputToken: Token = getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
+	let selectedOutputToken: Token =
+		getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
 	let selectedAmount: bigint = 0n;
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';

@@ -79,8 +79,14 @@
 		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 backdrop-blur-sm sm:p-6">
 			{#if isNetworkLoading}
 				<div class="flex flex-col items-center justify-center gap-4 py-8">
-					<LoadingSpinner variant="inline" size="md" text="Switching to {$currentNetwork?.displayName || 'network'}..." />
-					<p class="text-center text-gray-400">Loading trading interface for {$currentNetwork?.displayName || 'this network'}.</p>
+					<LoadingSpinner
+						variant="inline"
+						size="md"
+						text="Switching to {$currentNetwork?.displayName || 'network'}..."
+					/>
+					<p class="text-center text-gray-400">
+						Loading trading interface for {$currentNetwork?.displayName || 'this network'}.
+					</p>
 				</div>
 			{:else if $connected}
 				{#if activeOrderType === 'limit'}
@@ -107,7 +113,10 @@
 			{:else}
 				<div class="flex flex-col items-center justify-center gap-4 py-8">
 					<WalletConnect />
-					<p class="text-center text-gray-400">Connect your wallet to use trading strategies on {$currentNetwork?.displayName || 'this network'}.</p>
+					<p class="text-center text-gray-400">
+						Connect your wallet to use trading strategies on {$currentNetwork?.displayName ||
+							'this network'}.
+					</p>
 				</div>
 			{/if}
 		</div>

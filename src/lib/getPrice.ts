@@ -8,7 +8,7 @@ import { get } from 'svelte/store';
 export const getPrice = async (baseToken: Token, quoteToken: Token): Promise<string> => {
 	try {
 		const network = get(currentNetwork);
-		const usdcToken = network.usdcToken; 
+		const usdcToken = network.usdcToken;
 		if (
 			baseToken.address.toLowerCase() === usdcToken.address.toLowerCase() &&
 			quoteToken.address.toLowerCase() === usdcToken.address.toLowerCase()

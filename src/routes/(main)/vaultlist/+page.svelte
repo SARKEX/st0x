@@ -32,7 +32,7 @@
 	}[] = [];
 
 	$: vaultsQuery = createInfiniteQuery({
-		queryKey: ['vaults',$currentNetwork?.id, hideEmptyVaults, showMyVaults, $signerAddress],
+		queryKey: ['vaults', $currentNetwork?.id, hideEmptyVaults, showMyVaults, $signerAddress],
 		queryFn: async ({ pageParam }) => {
 			const vaultsResult = await getVaults(
 				[
@@ -131,21 +131,27 @@
 				};
 			}
 		);
-		
+
 		// Set loading state and process balances
 		isProcessingBalances = true;
-		Promise.all(balancePromises).then((balances) => {
-			myTokenBalance = balances;
-			isProcessingBalances = false;
-		}).catch(() => {
-			isProcessingBalances = false;
-		});
+		Promise.all(balancePromises)
+			.then((balances) => {
+				myTokenBalance = balances;
+				isProcessingBalances = false;
+			})
+			.catch(() => {
+				isProcessingBalances = false;
+			});
 	}
 </script>
 
 {#if !$sfts}
 	<div class="flex w-full items-center justify-center p-8">
-		<LoadingSpinner variant="fullscreen" size="lg" text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..." />
+		<LoadingSpinner
+			variant="fullscreen"
+			size="lg"
+			text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
+		/>
 	</div>
 {:else if $sfts.length > 0}
 	<div>
@@ -169,18 +175,18 @@
 							>
 								<div class="flex items-start gap-3 sm:gap-4">
 									<div
-										class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gray-600/50 animate-pulse sm:h-12 sm:w-12"
+										class="flex h-10 w-10 flex-shrink-0 animate-pulse items-center justify-center rounded-xl bg-gray-600/50 sm:h-12 sm:w-12"
 									></div>
 									<div class="flex-1">
-										<div class="h-5 w-24 bg-gray-600/50 rounded animate-pulse mb-2"></div>
-										<div class="h-4 w-16 bg-gray-600/50 rounded animate-pulse"></div>
+										<div class="mb-2 h-5 w-24 animate-pulse rounded bg-gray-600/50"></div>
+										<div class="h-4 w-16 animate-pulse rounded bg-gray-600/50"></div>
 									</div>
 								</div>
 								<div class="mt-4 space-y-2">
 									{#each Array(4) as _}
 										<div class="flex items-center justify-between">
-											<div class="h-4 w-20 bg-gray-600/50 rounded animate-pulse"></div>
-											<div class="h-4 w-16 bg-gray-600/50 rounded animate-pulse"></div>
+											<div class="h-4 w-20 animate-pulse rounded bg-gray-600/50"></div>
+											<div class="h-4 w-16 animate-pulse rounded bg-gray-600/50"></div>
 										</div>
 									{/each}
 								</div>
@@ -234,7 +240,9 @@
 								<div class="mt-4 space-y-2">
 									<div class="flex items-center justify-between">
 										<span class="text-xs text-gray-400 sm:text-sm">Total Balance</span>
-										<span class="text-base font-semibold text-white sm:text-lg">{token.balance}</span>
+										<span class="text-base font-semibold text-white sm:text-lg"
+											>{token.balance}</span
+										>
 									</div>
 									<div class="flex items-center justify-between">
 										<span class="text-xs text-gray-400 sm:text-sm">Price</span>
@@ -279,7 +287,9 @@
 					<LoadingSpinner variant="inline" size="lg" text="Loading Vaults..." />
 				</div>
 			{:else if $vaultsQuery.isError}
-				<div class="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-gray-700/30 p-8 text-center">
+				<div
+					class="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-gray-700/30 p-8 text-center"
+				>
 					<div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-600/20">
 						<svg class="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
@@ -301,14 +311,13 @@
 		<!-- Footer -->
 		<Footer />
 	</div>
-
 {:else}
 	<div class="flex w-full items-center justify-center p-8">
 		<div class="text-center">
 			<h2 class="mb-4 text-xl font-semibold text-gray-400">No SFTs Found</h2>
-			<p class="text-gray-500">No SFTs available on {$currentNetwork?.displayName || 'this network'}.</p>
+			<p class="text-gray-500">
+				No SFTs available on {$currentNetwork?.displayName || 'this network'}.
+			</p>
 		</div>
 	</div>
 {/if}
-
-
