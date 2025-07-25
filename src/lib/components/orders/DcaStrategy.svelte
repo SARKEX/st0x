@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { TOKENS, CRYPTO_TOKENS, getAllTokensByNetwork } from '$lib/network';
 	import Select from '$lib/components/Select.svelte';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -19,12 +19,18 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+	
+	// Filter tokens based on current network
+	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 
-	// Make ALL_TOKENS reactive to network changes
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+	// Initialize selected tokens when network changes
+	$: if (ALL_TOKENS.length > 0) {
+		selectedInputToken = ALL_TOKENS[0];
+		selectedOutputToken = ALL_TOKENS[ALL_TOKENS.length - 1];
+	}
 
-	let selectedInputToken: Token | undefined;
-	let selectedOutputToken: Token | undefined;
+	let selectedInputToken: Token = getAllTokensByNetwork(42161)[0]; // Initialize with Arbitrum tokens
+	let selectedOutputToken: Token = getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
 	let selectedAmount: bigint = 0n;
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';
@@ -37,35 +43,8 @@
 	let inputVaultId: Hex | undefined;
 	let outputVaultId: Hex | undefined;
 
-	// Reset selections when network changes
-	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
-		// Set default selections for new network
-		selectedInputToken = ALL_TOKENS[0];
-		selectedOutputToken = ALL_TOKENS[ALL_TOKENS.length - 1];
-		// Reset form state
-		selectedAmount = 0n;
-		selectedPeriod = '';
-		selectedBaseline = '';
-		selectedInitialRatio = '';
-		overrideDepositAmount = 0n;
-		overrideMinTradeAmount = 0n;
-		overrideMaxTradeAmount = 0n;
-		inputVaultId = undefined;
-		outputVaultId = undefined;
-		// Reset errors
-		selectedAmountError = false;
-		selectedPeriodError = false;
-		overrideDepositAmountError = false;
-		overrideMinTradeAmountError = false;
-		overrideMaxTradeAmountError = false;
-		inputVaultIdError = false;
-		outputVaultIdError = false;
-		selectedBaselineError = false;
-		selectedInitialRatioError = false;
-	}
-
 	$: isInputTokenSameAsOutputToken =
-		selectedInputToken?.address.toLowerCase() === selectedOutputToken?.address.toLowerCase();
+		selectedOutputToken.address.toLowerCase() === selectedInputToken.address.toLowerCase();
 
 	let showAdvancedOptions = false;
 
@@ -113,7 +92,7 @@
 		selectedInitialRatioError;
 
 	const handleDcaDeploy = () => {
-		if ($connected && selectedInputToken && selectedOutputToken) {
+		if ($connected) {
 			transactionStore.handleDcaDeploy({
 				outputToken: selectedOutputToken,
 				inputToken: selectedInputToken,
@@ -137,19 +116,11 @@
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token to Accumulate</span>
-				{#if selectedInputToken}
-					<TokenSelect options={ALL_TOKENS} selected={selectedInputToken} on:change={(e) => selectedInputToken = e.detail.token} />
-				{:else}
-					<TokenSelect options={ALL_TOKENS} selected={ALL_TOKENS[0]} on:change={(e) => selectedInputToken = e.detail.token} />
-				{/if}
+				<TokenSelect options={ALL_TOKENS} bind:selected={selectedInputToken} />
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Pay With</span>
-				{#if selectedOutputToken}
-					<TokenSelect options={ALL_TOKENS} selected={selectedOutputToken} on:change={(e) => selectedOutputToken = e.detail.token} />
-				{:else}
-					<TokenSelect options={ALL_TOKENS} selected={ALL_TOKENS[ALL_TOKENS.length - 1] || ALL_TOKENS[0]} on:change={(e) => selectedOutputToken = e.detail.token} />
-				{/if}
+				<TokenSelect options={ALL_TOKENS} bind:selected={selectedOutputToken} />
 			</div>
 			{#if isInputTokenSameAsOutputToken}
 				<div class="col-span-full mt-0 text-sm text-red-500">
@@ -161,18 +132,12 @@
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Budget Amount</span>
-				{#if selectedOutputToken}
-					<TradeAmountInput
-						amountToken={selectedOutputToken}
-						bind:amount={selectedAmount}
-						validate={validateSelectedAmount}
-						bind:isError={selectedAmountError}
-					/>
-				{:else}
-					<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
-						Select output token first
-					</div>
-				{/if}
+				<TradeAmountInput
+					amountToken={selectedOutputToken}
+					bind:amount={selectedAmount}
+					validate={validateSelectedAmount}
+					bind:isError={selectedAmountError}
+				/>
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Budget Period Every</span>
@@ -205,7 +170,7 @@
 			<div class="relative">
 				<Input
 					type="number"
-					unit={selectedInputToken?.symbol}
+					unit={selectedInputToken.symbol}
 					bind:amount={selectedBaseline}
 					validate={validateBaseline}
 					bind:isError={selectedBaselineError}
@@ -221,7 +186,7 @@
 			<div class="relative">
 				<Input
 					type="number"
-					unit={selectedInputToken?.symbol}
+					unit={selectedInputToken.symbol}
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -254,65 +219,47 @@
 					<div>
 						<span class="mb-2 block text-sm font-medium text-gray-300">Custom deposit amount</span>
 						<div class="relative">
-							{#if selectedOutputToken}
-								<TradeAmountInput
-									amountToken={selectedOutputToken}
-									bind:amount={overrideDepositAmount}
-									validate={validateOverrideDepositAmount}
-									bind:isError={overrideDepositAmountError}
-								/>
-							{:else}
-								<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
-									Select output token first
-								</div>
-							{/if}
+							<TradeAmountInput
+								amountToken={selectedOutputToken}
+								bind:amount={overrideDepositAmount}
+								validate={validateOverrideDepositAmount}
+								bind:isError={overrideDepositAmountError}
+							/>
 						</div>
 					</div>
 					<div>
 						<span class="mb-2 block text-sm font-medium text-gray-300">Min Trade Amount</span>
 						<div class="relative">
-							{#if selectedOutputToken}
-								<TradeAmountInput
-									amountToken={selectedOutputToken}
-									bind:amount={overrideMinTradeAmount}
-									validate={validateSelectedAmount}
-									bind:isError={overrideMinTradeAmountError}
-								/>
-							{:else}
-								<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
-									Select output token first
-								</div>
-							{/if}
+							<TradeAmountInput
+								amountToken={selectedOutputToken}
+								bind:amount={overrideMinTradeAmount}
+								validate={validateSelectedAmount}
+								bind:isError={overrideMinTradeAmountError}
+							/>
 						</div>
 					</div>
 					<div>
 						<span class="mb-2 block text-sm font-medium text-gray-300">Max Trade Amount</span>
 						<div class="relative">
-							{#if selectedOutputToken}
-								<TradeAmountInput
-									amountToken={selectedOutputToken}
-									bind:amount={overrideMaxTradeAmount}
-									validate={validateSelectedAmount}
-									bind:isError={overrideMaxTradeAmountError}
-								/>
-							{:else}
-								<div class="rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-gray-400">
-									Select output token first
-								</div>
-							{/if}
+							<TradeAmountInput
+								amountToken={selectedOutputToken}
+								bind:amount={overrideMaxTradeAmount}
+								validate={validateSelectedAmount}
+								bind:isError={overrideMaxTradeAmountError}
+							/>
 						</div>
 					</div>
 				</div>
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
-							Input {selectedInputToken?.symbol} Vault ID
+							Input {selectedInputToken.symbol} Vault ID
 						</span>
 						<VaultIdInput bind:vaultId={inputVaultId} bind:isError={inputVaultIdError} />
 					</div>
 					<div class="flex flex-col gap-2">
 						<span class="text-left text-sm font-medium text-gray-400">
-							Output {selectedOutputToken?.symbol} Vault ID
+							Output {selectedOutputToken.symbol} Vault ID
 						</span>
 						<VaultIdInput bind:vaultId={outputVaultId} bind:isError={outputVaultIdError} />
 					</div>
@@ -336,7 +283,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#if selectedInputToken && hasValidPriceFeedId(selectedInputToken)}
+						{#if hasValidPriceFeedId(selectedInputToken)}
 							<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
 						{:else}
 							<tr>
@@ -346,7 +293,7 @@
 								<td class="px-2 py-1 text-right">-</td>
 							</tr>
 						{/if}
-						{#if selectedOutputToken && hasValidPriceFeedId(selectedOutputToken)}
+						{#if hasValidPriceFeedId(selectedOutputToken)}
 							<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
 						{:else}
 							<tr>
@@ -360,7 +307,7 @@
 				</table>
 			</div>
 			<div class="mt-2 flex flex-col gap-2 sm:hidden">
-				{#if selectedInputToken && hasValidPriceFeedId(selectedInputToken)}
+				{#if hasValidPriceFeedId(selectedInputToken)}
 					<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
@@ -370,7 +317,7 @@
 						<div><span class="font-semibold">Real-Time: </span>-</div>
 					</div>
 				{/if}
-				{#if selectedOutputToken && hasValidPriceFeedId(selectedOutputToken)}
+				{#if hasValidPriceFeedId(selectedOutputToken)}
 					<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
 				{:else}
 					<div class="rounded bg-gray-800/80 p-3 text-xs">
@@ -399,8 +346,8 @@
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Budget Amount</span>
 					<span class="font-medium text-white"
-						>{selectedOutputToken ? formatUnits(selectedAmount ?? 0n, selectedOutputToken.decimals) : '0'}
-						{selectedOutputToken?.symbol}</span
+						>{formatUnits(selectedAmount ?? 0n, selectedOutputToken.decimals)}
+						{selectedOutputToken.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
@@ -410,15 +357,15 @@
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Minimum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{selectedOutputToken ? formatUnits(overrideMinTradeAmount ?? 0n, selectedOutputToken.decimals) : '0'}
-						{selectedOutputToken?.symbol}</span
+						>{formatUnits(overrideMinTradeAmount ?? 0n, selectedOutputToken.decimals)}
+						{selectedOutputToken.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Maximum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{selectedOutputToken ? formatUnits(overrideMaxTradeAmount ?? 0n, selectedOutputToken.decimals) : '0'}
-						{selectedOutputToken?.symbol}</span
+						>{formatUnits(overrideMaxTradeAmount ?? 0n, selectedOutputToken.decimals)}
+						{selectedOutputToken.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
@@ -440,22 +387,22 @@
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Deposit Amount</span>
 					<span class="font-medium text-white"
-						>{selectedOutputToken ? formatUnits(depositAmount ?? 0n, selectedOutputToken.decimals) : '0'}
-						{selectedOutputToken?.symbol}</span
+						>{formatUnits(depositAmount ?? 0n, selectedOutputToken.decimals)}
+						{selectedOutputToken.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Min Trade Amount</span>
 					<span class="font-medium text-white"
-						>{selectedOutputToken ? formatUnits(minTradeAmount ?? 0n, selectedOutputToken.decimals) : '0'}
-						{selectedOutputToken?.symbol}</span
+						>{formatUnits(minTradeAmount ?? 0n, selectedOutputToken.decimals)}
+						{selectedOutputToken.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Max Trade Amount</span>
 					<span class="font-medium text-white"
-						>{selectedOutputToken ? formatUnits(maxTradeAmount ?? 0n, selectedOutputToken.decimals) : '0'}
-						{selectedOutputToken?.symbol}</span
+						>{formatUnits(maxTradeAmount ?? 0n, selectedOutputToken.decimals)}
+						{selectedOutputToken.symbol}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">

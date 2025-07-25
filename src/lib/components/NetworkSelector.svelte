@@ -22,6 +22,19 @@
 		}
 	}
 
+	// Auto-trigger network switch when currentNetwork changes from other parts of the app
+	$: if ($currentNetwork && $connected && $chainId && $chainId !== $currentNetwork.id) {
+		// Small delay to avoid immediate switching during initial load
+		setTimeout(async () => {
+			try {
+				await switchChain(get(wagmiConfig), { chainId: $currentNetwork.id });
+			} catch (error) {
+				console.log('Auto network switch failed:', error);
+				// User might have rejected the network switch, which is fine
+			}
+		}, 100);
+	}
+
 	function toggleDropdown() {
 		isOpen = !isOpen;
 	}

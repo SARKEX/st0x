@@ -3,14 +3,15 @@
 	import { getOrders } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
-	import { TOKENS } from '$lib/network';
+	import { TOKENS, getAllTokensByNetwork } from '$lib/network';
 	import { currentNetwork } from '$lib/stores';
 	import { signerAddress } from 'svelte-wagmi';
 	import type { Token } from 'sushi/currency';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import Header from '$lib/components/Header.svelte';
 
-	const ALL_TOKENS: Token[] = [...TOKENS];
+	// Filter tokens based on current network
+	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 	const ORDER_LIST_PAGE_SIZE = 1000;
 
 	let ordersActiveFilter: boolean | undefined = false;
