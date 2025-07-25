@@ -14,12 +14,6 @@ export interface Network {
 	blockExplorerIcon: string;
 	rpcUrl: string;
 	icon: string;
-	receipt_vault_implementation_address: string;
-	verify_implementation_address: string;
-	receipt_vault_authorizer_implementation_address: string;
-	payment_vault_authorizer_implementation_address: string;
-	clone_factory_address: string;
-	metaboard_address: string;
 	subgraph_url: string;
 	metadata_subgraph_url: string;
 	orderbook_subgraph_url: string;
@@ -62,12 +56,6 @@ export const networks: Network[] = [
 		blockExplorerIcon: 'arbitrum',
 		rpcUrl: 'https://arbitrum-one-rpc.publicnode.com',
 		icon: 'arbitrum',
-		receipt_vault_implementation_address: '0xA75040cc33bF4BE0c953e4617f66ff05798B4D1c',
-		verify_implementation_address: '',
-		receipt_vault_authorizer_implementation_address: '0x0438560b398eA874DEb29360aCda10735D9790C8',
-		payment_vault_authorizer_implementation_address: '',
-		clone_factory_address: '0x34b9Fc3cbe19330fBd57ff732630d1517b605e48',
-		metaboard_address: '0x1eFd85E6C384fAD9B80C6D508E9098Eb91C4eD30',
 		subgraph_url:
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
 		metadata_subgraph_url:
@@ -88,12 +76,6 @@ export const networks: Network[] = [
 		blockExplorerIcon: 'etherscan',
 		rpcUrl: 'https://base-rpc.publicnode.com',
 		icon: 'ethereum',
-		receipt_vault_implementation_address: '0xBe1B6eb500773Fc61ba596B4beF9409F190bF6df',
-		receipt_vault_authorizer_implementation_address: '0x2B4A510c3619d5E888095BFE9f95902D32dA5556',
-		verify_implementation_address: '',
-		payment_vault_authorizer_implementation_address: '0x86E489460507fD6e0016f9a43C998F7E284c4B56',
-		clone_factory_address: '0x5e9e22154D71f9Fd4b5FD1eE36852A4c9FcDcC9E',
-		metaboard_address: '0x59401C9302E79Eb8AC6aea659B8B3ae475715e86',
 		subgraph_url:
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.3/gn',
 		metadata_subgraph_url:
