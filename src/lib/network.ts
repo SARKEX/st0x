@@ -80,7 +80,7 @@ export const networks: Network[] = [
 		id: 8453,
 		chainId: 8453,
 		name: 'base',
-		raindexNetworkSlug: 'base',
+		raindexNetworkSlug: 'base2',
 		displayName: 'Base Mainnet',
 		currencySymbol: 'ETH',
 		blockExplorer: 'https://basescan.org',
@@ -99,7 +99,7 @@ export const networks: Network[] = [
 		metadata_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 		orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2024-12-13-9c39/gn',
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-07-03-f4dc/gn',
 		usdcToken: USDC_TOKENS[8453]
 	}
 ];
