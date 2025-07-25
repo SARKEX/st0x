@@ -8,6 +8,8 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import NetworkSelector from '$lib/components/NetworkSelector.svelte';
+	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { page } from '$app/stores';
 
 	import { getSfts } from '$lib/query';
@@ -139,7 +141,7 @@
 
 			<!-- Mobile Header with Menu Button -->
 			<div
-				class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
+				class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden relative z-[9999]"
 			>
 				<button
 					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
@@ -165,6 +167,10 @@
 					>
 						ST0x
 					</span>
+				</div>
+				<div class="flex items-center gap-2">
+					<NetworkSelector />
+					<WalletConnect />
 				</div>
 			</div>
 
