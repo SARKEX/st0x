@@ -32,6 +32,7 @@
 				tokenMap.set(
 					tokenKey,
 					new Token({
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						chainId: $currentNetwork.chainId as any,
 						address: vault.address,
 						symbol: vault.symbol,

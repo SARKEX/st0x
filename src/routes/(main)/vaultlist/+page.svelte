@@ -8,8 +8,6 @@
 	import { formatUnits } from 'viem';
 	import Portfolio from '$lib/components/Portfolio.svelte';
 	import { sfts, tokenGlobalQuote } from '$lib/stores';
-
-	import Header from '$lib/components/Header.svelte';
 	import type { ApiStockQuote } from '$lib/types';
 	import { getPrice } from '$lib/getPrice';
 	import { Token } from 'sushi/currency';
@@ -168,6 +166,7 @@
 						My Vaults
 					</h2>
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+						<!-- eslint-disable-next-line-->
 						{#each Array(3) as _}
 							<div
 								class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all sm:p-6"
@@ -182,7 +181,8 @@
 									</div>
 								</div>
 								<div class="mt-4 space-y-2">
-									{#each Array(4) as _}
+									<!-- eslint-disable-next-line-->
+									{#each Array(4) as _, i (i)}
 										<div class="flex items-center justify-between">
 											<div class="h-4 w-20 animate-pulse rounded bg-gray-600/50"></div>
 											<div class="h-4 w-16 animate-pulse rounded bg-gray-600/50"></div>

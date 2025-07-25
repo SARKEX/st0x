@@ -8,7 +8,6 @@
 	import { getTrades } from '$lib/query';
 	import StoxPages from '$lib/components/StoxPages.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import Header from '$lib/components/Header.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];

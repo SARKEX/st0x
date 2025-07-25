@@ -1,7 +1,5 @@
 import { derived, writable } from 'svelte/store';
 import { chainId, signerAddress } from 'svelte-wagmi';
-import { type Chain } from '@wagmi/core/chains';
-import { arbitrum } from '@wagmi/core/chains';
 import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { Token } from 'sushi/currency';

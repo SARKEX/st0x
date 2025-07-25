@@ -9,7 +9,6 @@
 	import type { OffchainAssetReceiptVault, Withdraw } from '$lib/types/OffchainAssetReceiptVault';
 	import BurnReceiptInfoModal from './BurnReceiptInfoModal.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import Header from '$lib/components/Header.svelte';
 
 	let selectedSft: OffchainAssetReceiptVault | null = null;
 	let selectedDeposit: Withdraw | null = null;

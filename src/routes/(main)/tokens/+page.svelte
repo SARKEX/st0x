@@ -9,7 +9,6 @@
 	import { goto } from '$app/navigation';
 	import type { ApiStockQuote } from '$lib/types';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import Header from '$lib/components/Header.svelte';
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];

@@ -6,7 +6,6 @@
 	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
 	import { orderTokenStore, currentNetwork } from '$lib/stores';
-	import Header from '$lib/components/Header.svelte';
 	import type { PythToken } from '$lib/types';
 	import { connected } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';

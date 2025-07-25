@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
-	import Header from '$lib/components/Header.svelte';
 	import { connected } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { currentNetwork } from '$lib/stores';

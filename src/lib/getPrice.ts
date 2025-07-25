@@ -1,6 +1,6 @@
 import { Token } from 'sushi/currency';
 import { ethers } from 'ethers';
-import { EvmChainId, getSwap } from 'sushi';
+import { getSwap } from 'sushi';
 import { formatUnits } from 'viem';
 import { currentNetwork } from './stores';
 import { get } from 'svelte/store';
@@ -19,6 +19,7 @@ export const getPrice = async (baseToken: Token, quoteToken: Token): Promise<str
 		const amountIn = 10n ** BigInt(baseToken.decimals);
 
 		const data = await getSwap({
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			chainId: network.chainId as any,
 			tokenIn: baseToken.address as `0x${string}`,
 			tokenOut: quoteToken.address as `0x${string}`,

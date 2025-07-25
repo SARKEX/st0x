@@ -55,11 +55,17 @@
 
 	{#if isOpen}
 		<!-- Mobile overlay for better touch interaction -->
-		<div class="fixed inset-0 z-[9998] bg-black/20 sm:hidden" on:click={() => (isOpen = false)} on:keydown={(e) => e.key === 'Escape' && (isOpen = false)} role="button" tabindex="0"></div>
-		
+		<div
+			class="fixed inset-0 z-[9998] bg-black/20 sm:hidden"
+			on:click={() => (isOpen = false)}
+			on:keydown={(e) => e.key === 'Escape' && (isOpen = false)}
+			role="button"
+			tabindex="0"
+		></div>
+
 		<!-- Dropdown content - responsive positioning -->
 		<div
-			class="absolute z-[9999] mt-1 min-w-[200px] rounded-lg border border-white/10 bg-gray-800/95 shadow-lg backdrop-blur-lg sm:right-0 sm:top-full left-0 right-0 top-full mx-2 sm:mx-0 sm:left-auto sm:w-auto"
+			class="absolute left-0 right-0 top-full z-[9999] mx-2 mt-1 min-w-[200px] rounded-lg border border-white/10 bg-gray-800/95 shadow-lg backdrop-blur-lg sm:left-auto sm:right-0 sm:top-full sm:mx-0 sm:w-auto"
 		>
 			<div class="p-1">
 				{#each networks as network}

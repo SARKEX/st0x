@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, CRYPTO_TOKENS, getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import Select from '$lib/components/Select.svelte';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';

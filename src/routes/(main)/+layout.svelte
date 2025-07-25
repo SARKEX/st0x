@@ -141,7 +141,7 @@
 
 			<!-- Mobile Header with Menu Button -->
 			<div
-				class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden relative z-[9999]"
+				class="relative z-[9999] flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
 			>
 				<button
 					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}

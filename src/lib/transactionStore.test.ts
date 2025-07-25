@@ -4,7 +4,7 @@ import transactionStore from './transactionStore';
 import { sendTransaction } from '@wagmi/core';
 import { getTransactionAddOrders } from '@rainlanguage/orderbook';
 import { mockWagmiConfigStore } from '$lib/mocks/mockStores';
-import { getNetworkById, STOXs, USDC_TOKENS } from './network';
+import { STOXs, USDC_TOKENS } from './network';
 import { rainlangConfirmationModal, currentNetwork } from './stores';
 import {
 	getMarketMakingDeploymentArgs,

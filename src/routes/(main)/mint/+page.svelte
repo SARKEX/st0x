@@ -7,7 +7,6 @@
 	import type { OffchainAssetReceiptVault, Deposit } from '$lib/types/OffchainAssetReceiptVault';
 	import DepositChart from '$lib/components/charts/DepositChart.svelte';
 	import CumulativeSupplyChart from '$lib/components/charts/CumulativeSupplyChart.svelte';
-	import Header from '$lib/components/Header.svelte';
 	import { currentNetwork } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 

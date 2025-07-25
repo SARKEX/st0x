@@ -3,12 +3,10 @@
 	import { getOrders } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
-	import { TOKENS, getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import { currentNetwork } from '$lib/stores';
 	import { signerAddress } from 'svelte-wagmi';
-	import type { Token } from 'sushi/currency';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
-	import Header from '$lib/components/Header.svelte';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
