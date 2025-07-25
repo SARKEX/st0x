@@ -113,8 +113,66 @@ export interface CategorizedToken extends PythToken {
 }
 
 export const TOKENS: CategorizedToken[] = [
-	// ST0x tokens
-
+	{
+		chainId: base.id,
+		address: '0xf1c5c12e32f288b63aa6fe9bba65518785d3a4da',
+		symbol: 'MSFTs1',
+		decimals: 18,
+		name: 'STx Microsoft 01',
+		logoUrl: '/images/MSFT.png',
+		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x89e3815578775b5846b1acd442baf159fd4ab581',
+		symbol: 'METAs1',
+		decimals: 18,
+		name: 'STx Meta 01',
+		logoUrl: '/images/META.png',
+		priceFeedId: '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0xc0edd7ee86c8402ac863499226572f8fb641eb61',
+		symbol: 'NVDAs1',
+		decimals: 18,
+		name: 'STx Nvidia 01',
+		logoUrl: '/images/NVDA.png',
+		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x7c67adfdda34d01175c23976f75f70fced0702c3',
+		symbol: 'GOOGLs1',
+		decimals: 18,
+		name: 'STx Alphabet 01',
+		logoUrl: '/images/GOOGL.png',
+		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x469b467e6ad08e99c5bf84ce358d0996a4f313c4',
+		symbol: 'AMZNs1',
+		decimals: 18,
+		name: 'STx Amazon 01',
+		logoUrl: '/images/AMZN.png',
+		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0xd8ddf363a182cc50bdc851fbabf77d74bc292774',
+		symbol: 'AAPLs1',
+		decimals: 18,
+		name: 'STx Apple 01',
+		logoUrl: '/images/AAPL.png',
+		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
 		address: '0xabef041ebd0ad5d9c8a4e88b04f9a58c1cab93c0',
@@ -175,8 +233,6 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
 		category: 'ST0x'
 	} as unknown as CategorizedToken,
-
-	// ETF tokens (currently same as some ST0x tokens, but kept separate for future expansion)
 	{
 		chainId: arbitrum.id,
 		address: '0x294afcc97cc03bd7e4dccf4addf2a1497d96d454',
@@ -187,8 +243,6 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
 		category: 'ST0x'
 	} as unknown as CategorizedToken,
-
-	// ST0NX tokens (currently same as some ST0x tokens, but kept separate for future expansion)
 	{
 		chainId: arbitrum.id,
 		address: '0x2e93b2c6cb3ac1b9993e784686c5637de28c2c2a',
