@@ -23,9 +23,42 @@
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 
 	// Initialize with passed props or defaults
-	let selectedInputToken: Token = passedInputToken || getAllTokensByNetwork(42161)[3];
-	let selectedOutputToken: Token = passedOutputToken || getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
+	let selectedInputToken: Token = passedInputToken || getAllTokensByNetwork($currentNetwork.id)[3];
+	let selectedOutputToken: Token = passedOutputToken || getAllTokensByNetwork($currentNetwork.id)[getAllTokensByNetwork($currentNetwork.id).length - 1];
 	let selectedOrderType: 'Buy' | 'Sell' = passedOrderType;
+
+	// Update tokens when network changes or when passed tokens are from different network
+	$: if ($currentNetwork) {
+		const currentNetworkTokens = getAllTokensByNetwork($currentNetwork.id);
+		
+		// Check if passed input token is from current network, otherwise use default
+		if (passedInputToken) {
+			const tokenExistsInNetwork = currentNetworkTokens.some(token => 
+				token.address.toLowerCase() === passedInputToken.address.toLowerCase()
+			);
+			if (!tokenExistsInNetwork) {
+				selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
+			} else {
+				selectedInputToken = passedInputToken;
+			}
+		} else {
+			selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
+		}
+
+		// Check if passed output token is from current network, otherwise use default
+		if (passedOutputToken) {
+			const tokenExistsInNetwork = currentNetworkTokens.some(token => 
+				token.address.toLowerCase() === passedOutputToken.address.toLowerCase()
+			);
+			if (!tokenExistsInNetwork) {
+				selectedOutputToken = currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
+			} else {
+				selectedOutputToken = passedOutputToken;
+			}
+		} else {
+			selectedOutputToken = currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
+		}
+	}
 
 	let selectedInitialRatio: string = '';
 	let selectedAmount: bigint = 0n;
