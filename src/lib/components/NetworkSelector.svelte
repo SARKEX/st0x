@@ -13,12 +13,7 @@
 
 		// If wallet is connected and on a different network, prompt to switch
 		if ($connected && $chainId && $chainId !== network.id) {
-			try {
-				await switchChain(get(wagmiConfig), { chainId: network.id });
-			} catch (error) {
-				console.log('User rejected network switch or error occurred:', error);
-				// User might have rejected the network switch, which is fine
-			}
+			await switchChain(get(wagmiConfig), { chainId: network.id });
 		}
 	}
 
@@ -26,12 +21,7 @@
 	$: if ($currentNetwork && $connected && $chainId && $chainId !== $currentNetwork.id) {
 		// Small delay to avoid immediate switching during initial load
 		setTimeout(async () => {
-			try {
-				await switchChain(get(wagmiConfig), { chainId: $currentNetwork.id });
-			} catch (error) {
-				console.log('Auto network switch failed:', error);
-				// User might have rejected the network switch, which is fine
-			}
+			await switchChain(get(wagmiConfig), { chainId: $currentNetwork.id });
 		}, 100);
 	}
 

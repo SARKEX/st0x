@@ -115,7 +115,6 @@
 						}),
 						$currentNetwork.usdcToken
 					);
-					console.log(`${token.symbol} : ${priceStr}`);
 					price = parseFloat(priceStr);
 				}
 
