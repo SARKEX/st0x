@@ -1,25 +1,33 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
-	import Header from '$lib/components/Header.svelte';
 	import { connected } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
+	import { currentNetwork } from '$lib/stores';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	const ORDER_TYPES = [{ id: 'activeliquidity', name: 'Active Liquidity' }];
 
 	let activeOrderType = 'activeliquidity';
+	let isNetworkLoading = false;
 
 	function handleOrderTypeChange(newType: string) {
 		activeOrderType = newType;
 		window.location.hash = newType;
 	}
+
+	// Watch for network changes and show loading state
+	$: if ($currentNetwork) {
+		isNetworkLoading = true;
+		// Small delay to show loading state
+		setTimeout(() => {
+			isNetworkLoading = false;
+		}, 300);
+	}
 </script>
 
 <!-- Main Content -->
 <div>
-	<!-- Header -->
-	<Header title="Active Liquidity" description="Manage your st0x liquidity" />
-
 	<!-- Orders Content -->
 	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
 		<!-- Order Type Selector -->
@@ -38,12 +46,28 @@
 		</div>
 
 		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 backdrop-blur-sm sm:p-6">
-			{#if $connected}
-				<ActiveLiquidity />
+			{#if isNetworkLoading}
+				<div class="flex flex-col items-center justify-center gap-4 py-8">
+					<LoadingSpinner
+						variant="inline"
+						size="md"
+						text="Switching to {$currentNetwork?.displayName || 'network'}..."
+					/>
+					<p class="text-center text-gray-400">
+						Loading market making interface for {$currentNetwork?.displayName || 'this network'}.
+					</p>
+				</div>
+			{:else if $connected}
+				{#key [$currentNetwork?.id]}
+					<ActiveLiquidity />
+				{/key}
 			{:else}
 				<div class="flex flex-col items-center justify-center gap-4 py-8">
 					<WalletConnect />
-					<p class="text-center text-gray-400">Connect your wallet to use trading strategies.</p>
+					<p class="text-center text-gray-400">
+						Connect your wallet to use market making strategies on {$currentNetwork?.displayName ||
+							'this network'}.
+					</p>
 				</div>
 			{/if}
 		</div>

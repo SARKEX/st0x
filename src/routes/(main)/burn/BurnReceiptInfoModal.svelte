@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import type { OffchainAssetReceiptVault, Withdraw } from '$lib/types/OffchainAssetReceiptVault';
-	import { SFT_EXPLORER_URL, TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { currentNetwork } from '$lib/stores';
 
 	export let showModal: boolean;
 	export let sft: OffchainAssetReceiptVault | null = null;
@@ -98,7 +98,7 @@
 						<div class="text-sm text-gray-400">Transaction ID</div>
 						<div class="font-mono text-white">
 							<a
-								href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${withdraw?.transaction.id}`}
+								href={`${$currentNetwork.blockExplorer}/tx/${withdraw?.transaction.id}`}
 								target="_blank"
 								rel="noopener noreferrer"
 								class="text-blue-500 underline hover:text-blue-400"
@@ -111,7 +111,7 @@
 						<div class="text-sm text-gray-400">Receipt ID</div>
 						<div class="font-mono text-white">
 							<a
-								href={`${SFT_EXPLORER_URL}/token/${sft?.id}/withdraw/${withdraw?.id}`}
+								href={`${$currentNetwork.sftExplorer}/token/${sft?.id}/withdraw/${withdraw?.id}`}
 								target="_blank"
 								rel="noopener noreferrer"
 								class="text-blue-500 underline hover:text-blue-400"

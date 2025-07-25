@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { targetNetwork } from '$lib/stores';
+import { currentNetwork } from '$lib/stores';
 import type { Hex } from 'viem';
 import { sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { TransactionErrorMessage } from '$lib/types/errors';
@@ -15,7 +15,6 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
-import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL } from './network';
 import { rainlangConfirmationModal } from './stores';
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
@@ -113,12 +112,13 @@ const transactionStore = () => {
 		}
 		// Poll for the order to be added to the orderbook
 		const interval = setInterval(async () => {
-			const orders = (await getTransactionAddOrders(ARBITRUM_ORDERBOOK_SUBGRAPH_URL, hash)).value;
+			const network = get(currentNetwork);
+			const orders = (await getTransactionAddOrders(network.orderbook_subgraph_url, hash)).value;
 			if (orders && orders.length > 0) {
 				clearInterval(interval);
 				const orderHash = orders[0].order.orderHash;
 				const orderbookId = orders[0].order.orderbook.id;
-				const chainId = get(targetNetwork).id;
+				const chainId = get(currentNetwork).id;
 				const link = `
 				<a
 								target="_blank"

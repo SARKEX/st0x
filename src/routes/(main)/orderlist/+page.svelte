@@ -3,13 +3,13 @@
 	import { getOrders } from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
-	import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, TOKENS, TARGET_NETWORK } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
+	import { currentNetwork } from '$lib/stores';
 	import { signerAddress } from 'svelte-wagmi';
-	import type { Token } from 'sushi/currency';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
-	import Header from '$lib/components/Header.svelte';
 
-	const ALL_TOKENS: Token[] = [...TOKENS];
+	// Filter tokens based on current network
+	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 	const ORDER_LIST_PAGE_SIZE = 1000;
 
 	let ordersActiveFilter: boolean | undefined = false;
@@ -17,13 +17,13 @@
 	let showMyOrders = true;
 
 	$: ordersQuery = createInfiniteQuery({
-		queryKey: ['orders', ordersActiveFilter, orderHashFilter, showMyOrders],
+		queryKey: ['orders', $currentNetwork?.id, ordersActiveFilter, orderHashFilter, showMyOrders],
 		queryFn: async ({ pageParam }) => {
 			const ordersResult = await getOrders(
 				[
 					{
-						url: ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
-						name: TARGET_NETWORK
+						url: $currentNetwork.orderbook_subgraph_url,
+						name: $currentNetwork.raindexNetworkSlug
 					}
 				],
 				{
@@ -55,14 +55,11 @@
 		getNextPageParam(lastPage, _allPages, lastPageParam) {
 			return lastPage.hasMore ? lastPageParam + 1 : undefined;
 		},
-		enabled: true
+		enabled: !!$currentNetwork?.orderbook_subgraph_url
 	});
 </script>
 
 <div>
-	<!-- Header -->
-	<Header title="Orders List" description="View all orders" />
-
 	<!-- Orders Content -->
 	<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 		<div class="mb-4 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-6">

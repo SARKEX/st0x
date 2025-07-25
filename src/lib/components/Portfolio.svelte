@@ -7,7 +7,7 @@
 	import type { Hex } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { Token } from 'sushi/currency';
-	import { arbitrum } from '@wagmi/core/chains';
+	import { currentNetwork } from '$lib/stores';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 	import type { ApiStockQuote } from '$lib/types';
 
@@ -32,7 +32,8 @@
 				tokenMap.set(
 					tokenKey,
 					new Token({
-						chainId: arbitrum.id,
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						chainId: $currentNetwork.chainId as any,
 						address: vault.address,
 						symbol: vault.symbol,
 						decimals: 18,
@@ -49,6 +50,7 @@
 	$: balancesQuery = createQuery({
 		queryKey: [
 			'tokenBalances',
+			$currentNetwork?.id,
 			uniqueTokens.map((t) => t.address),
 			$signerAddress,
 			tokenGlobalQuote
@@ -93,7 +95,7 @@
 			const balances = await Promise.all(balancePromises);
 			return balances.filter((token) => BigInt(token.balance) > 0n);
 		},
-		enabled: !!$signerAddress && uniqueTokens.length > 0
+		enabled: !!$signerAddress && uniqueTokens.length > 0 && !!$currentNetwork?.chainId
 	});
 </script>
 
@@ -172,7 +174,9 @@
 		<div
 			class="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-gray-700/30 p-8 text-center"
 		>
-			<h3 class="mb-2 text-lg font-semibold text-white">No STOXs balances found in your wallet</h3>
+			<h3 class="mb-2 text-lg font-semibold text-white">
+				No STOXs balances found in your wallet on {$currentNetwork?.displayName || 'this network'}
+			</h3>
 		</div>
 	{/if}
 </div>

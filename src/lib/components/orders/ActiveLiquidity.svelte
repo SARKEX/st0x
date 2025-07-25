@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
@@ -15,13 +15,21 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId } from '$lib/derivations';
-	import { tokenGlobalQuote } from '$lib/stores';
+	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
+
+	// Filter tokens based on current network
+	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
+
+	// Initialize selected tokens when network changes
+	$: if (ALL_TOKENS.length > 0) {
+		selectedToken1 = ALL_TOKENS[ALL_TOKENS.length - 1];
+		selectedToken2 = ALL_TOKENS[0];
+	}
 
 	let showAdvancedOptions = false;
-	let selectedToken1: Token = ALL_TOKENS[ALL_TOKENS.length - 1];
-	let selectedToken2: Token = ALL_TOKENS[0];
+	let selectedToken1: Token = getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
+	let selectedToken2: Token = getAllTokensByNetwork(42161)[0];
 	let isToken1FastExit = false;
 	let isToken2FastExit = false;
 	let inputVaultId1: Hex | undefined;

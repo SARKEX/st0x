@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { targetNetwork } from '$lib/stores';
+	import { currentNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
@@ -82,7 +82,7 @@
 		<div class="flex w-full flex-col gap-3">
 			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
 				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
-					<div class="text-sm font-semibold text-yellow-500">{$targetNetwork.name}</div>
+					<div class="text-sm font-semibold text-yellow-500">{$currentNetwork.name}</div>
 					{#if $connected}
 						<div class="text-xs text-gray-400 sm:ml-2">
 							{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}

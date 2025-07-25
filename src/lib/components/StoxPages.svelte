@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { TOKENS, getTokensByCategory, type TokenCategory, USDC_TOKEN } from '$lib/network';
+	import { TOKENS, getTokensByCategory, type TokenCategory } from '$lib/network';
 	import { goto } from '$app/navigation';
-	import { orderTokenStore, tokenGlobalQuote } from '$lib/stores';
+	import { orderTokenStore, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import type { Token } from 'sushi/currency';
 	import type { ApiStockQuote } from '$lib/types';
 
@@ -13,12 +13,17 @@
 	const FILTERS: TokenCategory[] = ['ST0x', 'ETFs', 'ST0NX', 'CRYPTO'];
 	let activeFilter: TokenCategory | 'All' = 'All';
 
-	// Create ALL_TOKENS array that includes
-	const ALL_TOKENS: Token[] = [...TOKENS];
+	// Filter tokens by current network's chain ID
+	$: networkTokens = TOKENS.filter((token) => token.chainId === $currentNetwork?.chainId);
 
-	// Get all tokens from the consolidated array
-	$: allTokens = ALL_TOKENS;
-	$: filteredTokens = activeFilter === 'All' ? allTokens : getTokensByCategory(activeFilter);
+	// Get all tokens from the current network
+	$: allTokens = networkTokens;
+	$: filteredTokens =
+		activeFilter === 'All'
+			? allTokens
+			: getTokensByCategory(activeFilter).filter(
+					(token) => token.chainId === $currentNetwork?.chainId
+				);
 
 	// Calculate total pages
 	$: totalPages = Math.ceil(filteredTokens.length / CARDS_PER_PAGE);
@@ -74,7 +79,7 @@
 		const tokenWithPriceFeed = TOKENS.find(
 			(t) => t.address.toLowerCase() === stox.address.toLowerCase()
 		);
-		const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || USDC_TOKEN;
+		const usdcWithPriceFeed = TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
 
 		// Set the token data in the store
 		orderTokenStore.set({

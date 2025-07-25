@@ -1,14 +1,26 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
-import { ARBITRUM_ORDERBOOK_SUBGRAPH_URL, ARBITRUM_SFT_SUBGRAPH_URL, TOKENS } from './network';
+import { TOKENS } from './network';
+import { currentNetwork } from './stores';
 import axios from 'axios';
+import { get } from 'svelte/store';
+import type { Network } from './network';
 
 // TODO: Add type for the response
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const getSfts = async (): Promise<any> => {
+	// Get current network value from store
+	const network = get(currentNetwork);
+
+	// Filter tokens by current network's chain ID
+	const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
+
+	// Use current network's subgraph URL
+	const subgraphUrl = network.subgraph_url;
+
 	const query = `
     {
  offchainAssetReceiptVaults(where: {
- id_in: [${TOKENS.map((s) => `"${s.address.toLowerCase()}"`).join(',')}]
+ id_in: [${networkTokens.map((s) => `"${s.address.toLowerCase()}"`).join(',')}]
  }) {
 
     withdraws {
@@ -215,7 +227,7 @@ export const getSfts = async (): Promise<any> => {
           }
     `;
 
-	const response = await fetch(ARBITRUM_SFT_SUBGRAPH_URL, {
+	const response = await fetch(subgraphUrl, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ query })
@@ -226,7 +238,11 @@ export const getSfts = async (): Promise<any> => {
 	return json.data.offchainAssetReceiptVaults;
 };
 
-export const getTrades = async (timestampGt: number, timestampLt: number): Promise<SgTrade[]> => {
+export const getTrades = async (
+	timestampGt: number,
+	timestampLt: number,
+	network?: Network
+): Promise<SgTrade[]> => {
 	// Validate input parameters
 	if (typeof timestampGt !== 'number' || typeof timestampLt !== 'number') {
 		throw new Error('Invalid timestamp parameters: timestampGt and timestampLt must be numbers');
@@ -235,6 +251,9 @@ export const getTrades = async (timestampGt: number, timestampLt: number): Promi
 	if (timestampGt >= timestampLt) {
 		throw new Error('Invalid timestamp range: timestampGt must be less than timestampLt');
 	}
+
+	// Use network's orderbook subgraph URL or fall back to default
+	const orderbookSubgraphUrl = network?.orderbook_subgraph_url;
 
 	const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
   trades(
@@ -327,7 +346,7 @@ export const getTrades = async (timestampGt: number, timestampLt: number): Promi
 
 	try {
 		const trades = await fetchAllPaginatedData(
-			ARBITRUM_ORDERBOOK_SUBGRAPH_URL,
+			orderbookSubgraphUrl || '',
 			tradesQuery,
 			{ timestampGt: timestampGt, timestampLt: timestampLt },
 			'trades'

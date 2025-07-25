@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
+	import { currentNetwork } from '$lib/stores';
 	import { onMount } from 'svelte';
 	import { onDestroy } from 'svelte';
 	let container: HTMLDivElement;
@@ -18,8 +19,9 @@
 		if (isMobile) paused = true;
 
 		// Build the symbols array for all TOKENS, with fallback for undefined symbol
-		if (container) {
-			const symbols = TOKENS.map((stox) => {
+		if (container && $currentNetwork) {
+			const networkTokens = getAllTokensByNetwork($currentNetwork.chainId);
+			const symbols = networkTokens.map((stox) => {
 				const baseSymbol = stox.symbol ? stox.symbol.replace('s1', '') : '';
 				return {
 					proName: `NASDAQ:${baseSymbol}`,

@@ -8,8 +8,15 @@ import {
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { getPrice } from './getPrice';
 import { formatUnits } from 'viem';
-import { STOXs, TARGET_NETWORK, USDC_TOKEN, TOKENS } from './network';
+import { STOXs, TOKENS, USDC_TOKENS } from './network';
+import { currentNetwork } from './stores';
 import { get } from 'svelte/store';
+import { mockCurrentNetwork } from './mocks/mockCurrentNetwork';
+
+// Shared mock network object to avoid repetition
+const mockNetwork = mockCurrentNetwork;
+
+const USDC_TOKEN = USDC_TOKENS[mockNetwork.id];
 
 // Mock the DotrainOrderGui
 vi.mock('@rainlanguage/orderbook', () => ({
@@ -27,15 +34,30 @@ vi.mock('./getPrice', () => ({
 vi.mock('svelte-wagmi', () => ({
 	signerAddress: {
 		subscribe: vi.fn()
+	},
+	chainId: {
+		subscribe: vi.fn()
+	},
+	connected: {
+		subscribe: vi.fn()
+	},
+	wagmiConfig: {
+		subscribe: vi.fn()
 	}
 }));
 
 // Mock the svelte/store module
 vi.mock('svelte/store', async () => {
 	const actual = await vi.importActual('svelte/store');
+
 	return {
 		...actual,
-		get: vi.fn().mockReturnValue('0x1234567890123456789012345678901234567890')
+		get: vi.fn().mockImplementation((store) => {
+			if (store === currentNetwork) {
+				return mockNetwork;
+			}
+			return '0x1234567890123456789012345678901234567890';
+		})
 	};
 });
 
@@ -69,6 +91,14 @@ describe('getDeploymentArgs', () => {
 		});
 
 		vi.mocked(getPrice).mockResolvedValue('1.5');
+
+		// Reset the get mock to its default implementation
+		vi.mocked(get).mockImplementation((store) => {
+			if (store === currentNetwork) {
+				return mockNetwork;
+			}
+			return '0x1234567890123456789012345678901234567890';
+		});
 	});
 
 	it('should call DotrainOrderGui.newWithDeployment with the correct arguments', async () => {
@@ -90,7 +120,7 @@ describe('getDeploymentArgs', () => {
 
 		expect(DotrainOrderGui.newWithDeployment).toHaveBeenCalledWith(
 			expect.any(String),
-			TARGET_NETWORK
+			mockNetwork.raindexNetworkSlug
 		);
 	});
 
@@ -442,7 +472,14 @@ describe('getDeploymentArgs', () => {
 	});
 
 	it('should handle missing signer address', async () => {
-		vi.mocked(get).mockReturnValueOnce(undefined);
+		// Mock get to return undefined for signerAddress but keep currentNetwork working
+		vi.mocked(get).mockImplementation((store) => {
+			if (store === currentNetwork) {
+				return mockNetwork;
+			}
+			// Return undefined for signerAddress (which is what we want to test)
+			return undefined;
+		});
 
 		await expect(
 			getMarketMakingDeploymentArgs({

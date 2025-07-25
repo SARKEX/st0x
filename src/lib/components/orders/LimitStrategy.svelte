@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -11,7 +11,7 @@
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
 	import { getBaseline, hasValidPriceFeedId } from '$lib/derivations';
-	import { tokenGlobalQuote } from '$lib/stores';
+	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 
@@ -19,12 +19,50 @@
 	export let passedOutputToken: PythToken | undefined;
 	export let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
-	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
+	// Filter tokens based on current network
+	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 
 	// Initialize with passed props or defaults
-	let selectedInputToken: Token = passedInputToken || ALL_TOKENS[3];
-	let selectedOutputToken: Token = passedOutputToken || ALL_TOKENS[ALL_TOKENS.length - 1];
+	let selectedInputToken: Token = passedInputToken || getAllTokensByNetwork($currentNetwork.id)[3];
+	let selectedOutputToken: Token =
+		passedOutputToken ||
+		getAllTokensByNetwork($currentNetwork.id)[getAllTokensByNetwork($currentNetwork.id).length - 1];
 	let selectedOrderType: 'Buy' | 'Sell' = passedOrderType;
+
+	// Update tokens when network changes or when passed tokens are from different network
+	$: if ($currentNetwork) {
+		const currentNetworkTokens = getAllTokensByNetwork($currentNetwork.id);
+
+		// Check if passed input token is from current network, otherwise use default
+		if (passedInputToken) {
+			const tokenExistsInNetwork = currentNetworkTokens.some(
+				(token) => token.address.toLowerCase() === passedInputToken.address.toLowerCase()
+			);
+			if (!tokenExistsInNetwork) {
+				selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
+			} else {
+				selectedInputToken = passedInputToken;
+			}
+		} else {
+			selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
+		}
+
+		// Check if passed output token is from current network, otherwise use default
+		if (passedOutputToken) {
+			const tokenExistsInNetwork = currentNetworkTokens.some(
+				(token) => token.address.toLowerCase() === passedOutputToken.address.toLowerCase()
+			);
+			if (!tokenExistsInNetwork) {
+				selectedOutputToken =
+					currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
+			} else {
+				selectedOutputToken = passedOutputToken;
+			}
+		} else {
+			selectedOutputToken =
+				currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
+		}
+	}
 
 	let selectedInitialRatio: string = '';
 	let selectedAmount: bigint = 0n;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import Select from '$lib/components/Select.svelte';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -17,12 +17,21 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId } from '$lib/derivations';
-	import { tokenGlobalQuote } from '$lib/stores';
+	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
 
-	let selectedInputToken: Token = ALL_TOKENS[0];
-	let selectedOutputToken: Token = ALL_TOKENS[ALL_TOKENS.length - 1];
+	// Filter tokens based on current network
+	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
+
+	// Initialize selected tokens when network changes
+	$: if (ALL_TOKENS.length > 0) {
+		selectedInputToken = ALL_TOKENS[0];
+		selectedOutputToken = ALL_TOKENS[ALL_TOKENS.length - 1];
+	}
+
+	let selectedInputToken: Token = getAllTokensByNetwork(42161)[0]; // Initialize with Arbitrum tokens
+	let selectedOutputToken: Token =
+		getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
 	let selectedAmount: bigint = 0n;
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';

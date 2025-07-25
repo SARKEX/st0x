@@ -3,7 +3,7 @@
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
 	import { PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
 	import { defaultConfig } from 'svelte-wagmi';
-	import { arbitrum } from '@wagmi/core/chains';
+	import { arbitrum, base } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
 
@@ -20,7 +20,7 @@
 			autoConnect: true,
 			appName: 'st0x-liquidity',
 			walletConnectProjectId: PUBLIC_WALLETCONNECT_ID,
-			chains: [arbitrum],
+			chains: [arbitrum, base],
 			connectors: [injected(), walletConnect({ projectId: PUBLIC_WALLETCONNECT_ID })]
 		});
 		await erckit.init();

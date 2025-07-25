@@ -4,8 +4,8 @@ import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { Token } from 'sushi/currency';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
-import { TARGET_NETWORK } from './network';
 import { getPeriodInSeconds } from './derivations';
+import { currentNetwork } from './stores';
 
 export type DcaDeploymentArgs = {
 	outputToken: Token;
@@ -25,10 +25,11 @@ export type DcaDeploymentArgs = {
 export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 	const dcaStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/e9b2c5bf2ec6500f4def41b74653cdd998c26df5/src/auction-dca.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/fddae4559e61e4b0ab323086946406bf18b11c7f/src/auction-dca.rain'
 		)
 	).text();
-	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, TARGET_NETWORK))
+	const network = get(currentNetwork);
+	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, network.raindexNetworkSlug))
 		.value as DotrainOrderGui;
 
 	await gui.saveSelectToken('output', args.outputToken.address);
@@ -95,10 +96,14 @@ export type LimitOrderDeploymentArgs = {
 export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs) => {
 	const limitStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/e9b2c5bf2ec6500f4def41b74653cdd998c26df5/src/fixed-limit.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/fddae4559e61e4b0ab323086946406bf18b11c7f/src/fixed-limit.rain'
 		)
 	).text();
-	const guiResult = await DotrainOrderGui.newWithDeployment(limitStrategy, TARGET_NETWORK);
+	const network = get(currentNetwork);
+	const guiResult = await DotrainOrderGui.newWithDeployment(
+		limitStrategy,
+		network.raindexNetworkSlug
+	);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 
@@ -154,10 +159,14 @@ export type MarketMakingDeploymentArgs = {
 export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeploymentArgs) => {
 	const dsfStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/e9b2c5bf2ec6500f4def41b74653cdd998c26df5/src/dynamic-spread.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/fddae4559e61e4b0ab323086946406bf18b11c7f/src/dynamic-spread.rain'
 		)
 	).text();
-	const guiResult = await DotrainOrderGui.newWithDeployment(dsfStrategy, TARGET_NETWORK);
+	const network = get(currentNetwork);
+	const guiResult = await DotrainOrderGui.newWithDeployment(
+		dsfStrategy,
+		network.raindexNetworkSlug
+	);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 
@@ -247,12 +256,16 @@ export type FolioDeploymentArgs = {
 };
 
 export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
+	const network = get(currentNetwork);
 	const folioStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/6bb0e30cc5c5716a7860c6960b3cd924e3d80843/src/folio.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/1f1b2aaa3fa30c46d15eda87859f5a3330054c54/src/folio.rain'
 		)
 	).text();
-	const guiResult = await DotrainOrderGui.newWithDeployment(folioStrategy, 'arbitrum');
+	const guiResult = await DotrainOrderGui.newWithDeployment(
+		folioStrategy,
+		network.raindexNetworkSlug
+	);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 

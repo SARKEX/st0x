@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TOKENS, CRYPTO_TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
@@ -11,18 +11,30 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId } from '$lib/derivations';
-	import { tokenGlobalQuote } from '$lib/stores';
+	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	const ALL_TOKENS: Token[] = [...TOKENS, ...CRYPTO_TOKENS];
 
-	// Selected Tokens
-	let selectedToken1: Token = TOKENS[0];
-	let selectedToken2: Token = TOKENS[1];
-	let selectedToken3: Token = TOKENS[2];
-	let selectedToken4: Token = TOKENS[3];
-	let selectedToken5: Token = TOKENS[4];
-	let selectedToken6: Token = TOKENS[5];
-	let selectedToken7: Token = TOKENS[6];
+	// Filter tokens based on current network
+	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
+
+	// Selected Tokens - initialize with first available tokens from current network
+	$: if (ALL_TOKENS.length > 0) {
+		selectedToken1 = ALL_TOKENS[0];
+		selectedToken2 = ALL_TOKENS[1] || ALL_TOKENS[0];
+		selectedToken3 = ALL_TOKENS[2] || ALL_TOKENS[0];
+		selectedToken4 = ALL_TOKENS[3] || ALL_TOKENS[0];
+		selectedToken5 = ALL_TOKENS[4] || ALL_TOKENS[0];
+		selectedToken6 = ALL_TOKENS[5] || ALL_TOKENS[0];
+		selectedToken7 = ALL_TOKENS[6] || ALL_TOKENS[0];
+	}
+
+	let selectedToken1: Token = getAllTokensByNetwork(42161)[0];
+	let selectedToken2: Token = getAllTokensByNetwork(42161)[1] || getAllTokensByNetwork(42161)[0];
+	let selectedToken3: Token = getAllTokensByNetwork(42161)[2] || getAllTokensByNetwork(42161)[0];
+	let selectedToken4: Token = getAllTokensByNetwork(42161)[3] || getAllTokensByNetwork(42161)[0];
+	let selectedToken5: Token = getAllTokensByNetwork(42161)[4] || getAllTokensByNetwork(42161)[0];
+	let selectedToken6: Token = getAllTokensByNetwork(42161)[5] || getAllTokensByNetwork(42161)[0];
+	let selectedToken7: Token = getAllTokensByNetwork(42161)[6] || getAllTokensByNetwork(42161)[0];
 
 	// Advanced Options
 	let showAdvancedOptions = false;

@@ -1,7 +1,9 @@
 <script lang="ts">
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
+	import TickerTape from './TickerTape.svelte';
+	import WalletConnect from './WalletConnect.svelte';
+	import NetworkSelector from './NetworkSelector.svelte';
 	import { goto } from '$app/navigation';
-	import TickerTape from '$lib/components/TickerTape.svelte';
+
 	export let title: string;
 	export let description: string;
 </script>
@@ -18,6 +20,7 @@
 			</div>
 
 			<div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
+				<NetworkSelector />
 				<button
 					class="hidden w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-4 py-3 text-sm font-semibold text-white shadow-md transition-transform hover:scale-105 sm:inline-flex sm:w-auto sm:px-5 sm:py-2.5"
 					on:click={() => goto('/trade')}

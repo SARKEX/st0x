@@ -5,11 +5,11 @@
 	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';
 	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
-	import { orderTokenStore } from '$lib/stores';
-	import Header from '$lib/components/Header.svelte';
+	import { orderTokenStore, currentNetwork } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
 	import { connected } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	const ORDER_TYPES = [
 		{ id: 'limit', name: 'Limit Orders' },
@@ -20,10 +20,20 @@
 	let inputToken: PythToken | undefined;
 	let outputToken: PythToken | undefined;
 	let passedOrderType: 'Buy' | 'Sell' = 'Buy';
+	let isNetworkLoading = false;
 
 	function handleOrderTypeChange(newType: string) {
 		activeOrderType = newType;
 		window.location.hash = newType;
+	}
+
+	// Watch for network changes and show loading state
+	$: if ($currentNetwork) {
+		isNetworkLoading = true;
+		// Small delay to show loading state
+		setTimeout(() => {
+			isNetworkLoading = false;
+		}, 300);
 	}
 
 	onMount(() => {
@@ -48,9 +58,6 @@
 
 <!-- Main Content -->
 <div>
-	<!-- Header -->
-	<Header title="Orders" description="Manage your trading strategies" />
-
 	<!-- Orders Content -->
 	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
 		<!-- Order Type Selector -->
@@ -69,9 +76,20 @@
 		</div>
 
 		<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-3 backdrop-blur-sm sm:p-6">
-			{#if $connected}
+			{#if isNetworkLoading}
+				<div class="flex flex-col items-center justify-center gap-4 py-8">
+					<LoadingSpinner
+						variant="inline"
+						size="md"
+						text="Switching to {$currentNetwork?.displayName || 'network'}..."
+					/>
+					<p class="text-center text-gray-400">
+						Loading trading interface for {$currentNetwork?.displayName || 'this network'}.
+					</p>
+				</div>
+			{:else if $connected}
 				{#if activeOrderType === 'limit'}
-					{#key [inputToken?.address, outputToken?.address, passedOrderType]}
+					{#key [$currentNetwork?.id, inputToken?.address, outputToken?.address, passedOrderType]}
 						<LimitStrategy
 							passedInputToken={inputToken}
 							passedOutputToken={outputToken}
@@ -79,16 +97,25 @@
 						/>
 					{/key}
 				{:else if activeOrderType === 'dca'}
-					<DcaStrategy />
+					{#key [$currentNetwork?.id]}
+						<DcaStrategy />
+					{/key}
 				{:else if activeOrderType === 'activeliquidity'}
-					<ActiveLiquidity />
+					{#key [$currentNetwork?.id]}
+						<ActiveLiquidity />
+					{/key}
 				{:else if activeOrderType === 'portfolio'}
-					<FolioStrategy />
+					{#key [$currentNetwork?.id]}
+						<FolioStrategy />
+					{/key}
 				{/if}
 			{:else}
 				<div class="flex flex-col items-center justify-center gap-4 py-8">
 					<WalletConnect />
-					<p class="text-center text-gray-400">Connect your wallet to use trading strategies.</p>
+					<p class="text-center text-gray-400">
+						Connect your wallet to use trading strategies on {$currentNetwork?.displayName ||
+							'this network'}.
+					</p>
 				</div>
 			{/if}
 		</div>

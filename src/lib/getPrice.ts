@@ -1,14 +1,17 @@
 import { Token } from 'sushi/currency';
 import { ethers } from 'ethers';
-import { EvmChainId, getSwap } from 'sushi';
+import { getSwap } from 'sushi';
 import { formatUnits } from 'viem';
-import { USDC_TOKEN } from './network';
+import { currentNetwork } from './stores';
+import { get } from 'svelte/store';
 
 export const getPrice = async (baseToken: Token, quoteToken: Token): Promise<string> => {
 	try {
+		const network = get(currentNetwork);
+		const usdcToken = network.usdcToken;
 		if (
-			baseToken.address.toLowerCase() === USDC_TOKEN.address.toLowerCase() &&
-			quoteToken.address.toLowerCase() === USDC_TOKEN.address.toLowerCase()
+			baseToken.address.toLowerCase() === usdcToken.address.toLowerCase() &&
+			quoteToken.address.toLowerCase() === usdcToken.address.toLowerCase()
 		) {
 			return '1';
 		}
@@ -16,7 +19,8 @@ export const getPrice = async (baseToken: Token, quoteToken: Token): Promise<str
 		const amountIn = 10n ** BigInt(baseToken.decimals);
 
 		const data = await getSwap({
-			chainId: EvmChainId.ARBITRUM,
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			chainId: network.chainId as any,
 			tokenIn: baseToken.address as `0x${string}`,
 			tokenOut: quoteToken.address as `0x${string}`,
 			to: recipientAddress as `0x${string}`,

@@ -1,8 +1,9 @@
 import type { Token } from 'sushi/currency';
-import { USDC_TOKEN } from './network';
 import { getPrice } from './getPrice';
 import { parseUnits } from 'viem';
 import type { PythToken } from './types';
+import { currentNetwork } from './stores';
+import { get } from 'svelte/store';
 
 // Returns the period in seconds
 export const getPeriodInSeconds = (
@@ -31,13 +32,14 @@ export const getMaxTradeAmount = (
 };
 
 export const getMinTradeAmount = async (amountToken: Token, minAmountInUSDC: bigint) => {
-	if (USDC_TOKEN.address.toLowerCase() === amountToken.address.toLowerCase()) {
+	const usdcToken = get(currentNetwork).usdcToken;
+	if (usdcToken.address.toLowerCase() === amountToken.address.toLowerCase()) {
 		return minAmountInUSDC;
 	}
-	const price = await getPrice(USDC_TOKEN, amountToken);
+	const price = await getPrice(usdcToken, amountToken);
 	const fp18Price =
 		parseUnits(price, amountToken.decimals) * 10n ** (18n - BigInt(amountToken.decimals));
-	const minAmountInUSDCFp18 = minAmountInUSDC * 10n ** (18n - BigInt(USDC_TOKEN.decimals));
+	const minAmountInUSDCFp18 = minAmountInUSDC * 10n ** (18n - BigInt(usdcToken.decimals));
 	const minAmountFp18 = (minAmountInUSDCFp18 * fp18Price) / 10n ** 18n;
 	const minAmountInAmountToken = minAmountFp18 / 10n ** (18n - BigInt(amountToken.decimals));
 

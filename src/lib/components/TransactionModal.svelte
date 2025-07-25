@@ -4,7 +4,7 @@
 	import transactionStore from '$lib/transactionStore';
 	import { TransactionStatus } from '$lib/transactionStore';
 	import { TransactionErrorMessage } from '$lib/types/errors';
-	import { TARGET_NETWORK_EXPLORER_URL } from '$lib/network';
+	import { currentNetwork } from '$lib/stores';
 
 	const handleClose = () => {
 		return transactionStore.reset();
@@ -50,7 +50,7 @@
 				{#if $transactionStore.hash}
 					<a
 						class="whitespace-pre-wrap break-words text-center text-sm text-white hover:text-yellow-500/50 hover:underline"
-						href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${$transactionStore.hash}`}
+						href={`${$currentNetwork.blockExplorer}/tx/${$transactionStore.hash}`}
 						data-testid="view-transaction-link">View transaction on PolygonScan</a
 					>
 				{/if}
@@ -86,7 +86,7 @@
 							<a
 								target="_blank"
 								class="whitespace-pre-wrap break-words text-center text-white hover:text-yellow-500/50 hover:underline"
-								href={`${TARGET_NETWORK_EXPLORER_URL}/tx/${$transactionStore.hash}`}
+								href={`${$currentNetwork.blockExplorer}/tx/${$transactionStore.hash}`}
 								data-testid="view-transaction-link">View transaction</a
 							>
 						</div>

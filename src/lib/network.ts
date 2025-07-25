@@ -1,24 +1,108 @@
-import { arbitrum } from '@wagmi/core/chains';
+import { arbitrum, base } from '@wagmi/core/chains';
 import type { PythToken } from './types';
 
-export const USDC_TOKEN = {
-	chainId: arbitrum.id,
-	address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-	symbol: 'USDC',
-	decimals: 6,
-	logoUrl: '/images/USDC.png',
-	priceFeedId: '0x0000000000000000000000000000000000000000000000000000000000000000'
-} as unknown as PythToken;
+// Network interface
+export interface Network {
+	id: number;
+	chainId: number;
+	name: string;
+	raindexNetworkSlug: string;
+	displayName: string;
+	currencySymbol: string;
+	blockExplorer: string;
+	sftExplorer: string;
+	blockExplorerIcon: string;
+	rpcUrl: string;
+	icon: string;
+	subgraph_url: string;
+	metadata_subgraph_url: string;
+	orderbook_subgraph_url: string;
+	usdcToken: PythToken;
+}
 
-export const ARBITRUM_SFT_SUBGRAPH_URL =
-	'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn';
-export const ARBITRUM_ORDERBOOK_SUBGRAPH_URL =
-	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn';
-export const ARBITRUM_METADATA_SUBGRAPH_URL =
-	'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn';
-export const TARGET_NETWORK = 'arbitrum2';
-export const TARGET_NETWORK_EXPLORER_URL = 'https://arbiscan.io';
-export const SFT_EXPLORER_URL = 'https://stox.h20.market';
+// USDC tokens for different networks
+export const USDC_TOKENS: { [chainId: number]: PythToken } = {
+	42161: {
+		chainId: 42161,
+		address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+		symbol: 'USDC',
+		decimals: 6,
+		name: 'USD Coin',
+		logoUrl: '/images/USDC.png',
+		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+	} as unknown as PythToken,
+	8453: {
+		chainId: 8453,
+		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+		symbol: 'USDC',
+		decimals: 6,
+		name: 'USD Coin',
+		logoUrl: '/images/USDC.png',
+		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+	} as unknown as PythToken
+};
+
+// Networks configuration
+export const networks: Network[] = [
+	{
+		id: 42161,
+		chainId: 42161,
+		name: 'arbitrum-one',
+		raindexNetworkSlug: 'arbitrum2',
+		displayName: 'Arbitrum One',
+		currencySymbol: 'ETH',
+		blockExplorer: 'https://arbiscan.io',
+		sftExplorer: 'https://stox.h20.market',
+		blockExplorerIcon: 'arbitrum',
+		rpcUrl: 'https://arbitrum-one-rpc.publicnode.com',
+		icon: 'arbitrum',
+		subgraph_url:
+			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
+		metadata_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn',
+		orderbook_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn',
+		usdcToken: USDC_TOKENS[42161]
+	},
+	{
+		id: 8453,
+		chainId: 8453,
+		name: 'base',
+		raindexNetworkSlug: 'base2',
+		displayName: 'Base Mainnet',
+		currencySymbol: 'ETH',
+		blockExplorer: 'https://basescan.org',
+		sftExplorer: 'https://stox2.h20.market',
+		blockExplorerIcon: 'etherscan',
+		rpcUrl: 'https://base-rpc.publicnode.com',
+		icon: 'ethereum',
+		subgraph_url:
+			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.3/gn',
+		metadata_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
+		orderbook_subgraph_url:
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-07-03-f4dc/gn',
+		usdcToken: USDC_TOKENS[8453]
+	}
+];
+
+// Helper functions
+export function getNetworkById(id: number): Network | undefined {
+	return networks.find((network) => network.id === id);
+}
+
+export function getNetworkByChainId(chainId: number): Network | undefined {
+	return networks.find((network) => network.chainId === chainId);
+}
+
+export function getNetworkByName(name: string): Network | undefined {
+	return networks.find((network) => network.name === name);
+}
+
+// Helper function to get USDC token for a specific network
+export function getUsdcTokenForNetwork(chainId: number): PythToken | undefined {
+	return USDC_TOKENS[chainId];
+}
 
 // Define token categories
 export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
@@ -29,7 +113,76 @@ export interface CategorizedToken extends PythToken {
 }
 
 export const TOKENS: CategorizedToken[] = [
-	// ST0x tokens
+	{
+		chainId: base.id,
+		address: '0xf1c5c12e32f288b63aa6fe9bba65518785d3a4da',
+		symbol: 'MSFTs1',
+		decimals: 18,
+		name: 'STx Microsoft 01',
+		logoUrl: '/images/MSFT.png',
+		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x89e3815578775b5846b1acd442baf159fd4ab581',
+		symbol: 'METAs1',
+		decimals: 18,
+		name: 'STx Meta 01',
+		logoUrl: '/images/META.png',
+		priceFeedId: '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0xc0edd7ee86c8402ac863499226572f8fb641eb61',
+		symbol: 'NVDAs1',
+		decimals: 18,
+		name: 'STx Nvidia 01',
+		logoUrl: '/images/NVDA.png',
+		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x7c67adfdda34d01175c23976f75f70fced0702c3',
+		symbol: 'GOOGLs1',
+		decimals: 18,
+		name: 'STx Alphabet 01',
+		logoUrl: '/images/GOOGL.png',
+		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x469b467e6ad08e99c5bf84ce358d0996a4f313c4',
+		symbol: 'AMZNs1',
+		decimals: 18,
+		name: 'STx Amazon 01',
+		logoUrl: '/images/AMZN.png',
+		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0xd8ddf363a182cc50bdc851fbabf77d74bc292774',
+		symbol: 'AAPLs1',
+		decimals: 18,
+		name: 'STx Apple 01',
+		logoUrl: '/images/AAPL.png',
+		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0xabef041ebd0ad5d9c8a4e88b04f9a58c1cab93c0',
+		symbol: 'TSLAs1',
+		decimals: 18,
+		name: 'STx Tesla 01',
+		logoUrl: '/images/TSLA.png',
+		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
 		address: '0xaca45fea0049823e809f0e789144c21d96230996',
@@ -80,8 +233,6 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
 		category: 'ST0x'
 	} as unknown as CategorizedToken,
-
-	// ETF tokens (currently same as some ST0x tokens, but kept separate for future expansion)
 	{
 		chainId: arbitrum.id,
 		address: '0x294afcc97cc03bd7e4dccf4addf2a1497d96d454',
@@ -92,8 +243,6 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
 		category: 'ST0x'
 	} as unknown as CategorizedToken,
-
-	// ST0NX tokens (currently same as some ST0x tokens, but kept separate for future expansion)
 	{
 		chainId: arbitrum.id,
 		address: '0x2e93b2c6cb3ac1b9993e784686c5637de28c2c2a',
@@ -151,6 +300,18 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/USDC.png',
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
 		category: 'CRYPTO'
+	} as unknown as CategorizedToken,
+
+	// USDC token
+	{
+		chainId: base.id,
+		address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+		symbol: 'USDC',
+		decimals: 6,
+		name: 'USD Coin',
+		logoUrl: '/images/USDC.png',
+		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
+		category: 'CRYPTO'
 	} as unknown as CategorizedToken
 ];
 
@@ -161,6 +322,19 @@ export function getTokensByCategory(category: TokenCategory): CategorizedToken[]
 
 export function getAllTokens(): CategorizedToken[] {
 	return TOKENS;
+}
+
+// Helper function to get tokens filtered by network chainId
+export function getTokensByNetwork(chainId: number): CategorizedToken[] {
+	return TOKENS.filter((token) => token.chainId === chainId);
+}
+
+export function getCryptoTokensByNetwork(chainId: number): CategorizedToken[] {
+	return CRYPTO_TOKENS.filter((token) => token.chainId === chainId);
+}
+
+export function getAllTokensByNetwork(chainId: number): CategorizedToken[] {
+	return [...getTokensByNetwork(chainId), ...getCryptoTokensByNetwork(chainId)];
 }
 
 // Legacy exports for backward compatibility
