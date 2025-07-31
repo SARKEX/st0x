@@ -33,32 +33,50 @@
 	$: if ($currentNetwork) {
 		const currentNetworkTokens = getAllTokensByNetwork($currentNetwork.id);
 
-		// Check if passed input token is from current network, otherwise use default
+		// Check if current selections are still valid for the new network
+		const inputTokenStillValid =
+			selectedInputToken &&
+			currentNetworkTokens.some(
+				(token) => token.address.toLowerCase() === selectedInputToken.address.toLowerCase()
+			);
+		const outputTokenStillValid =
+			selectedOutputToken &&
+			currentNetworkTokens.some(
+				(token) => token.address.toLowerCase() === selectedOutputToken.address.toLowerCase()
+			);
+
+		// Handle input token selection
 		if (passedInputToken) {
-			const tokenExistsInNetwork = currentNetworkTokens.some(
+			// If passed token exists and is valid for current network, use it
+			const passedTokenExistsInNetwork = currentNetworkTokens.some(
 				(token) => token.address.toLowerCase() === passedInputToken.address.toLowerCase()
 			);
-			if (!tokenExistsInNetwork) {
-				selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
-			} else {
+			if (passedTokenExistsInNetwork) {
 				selectedInputToken = passedInputToken;
+			} else if (!inputTokenStillValid) {
+				// If passed token is not valid and current selection is not valid, use default
+				selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
 			}
-		} else {
+		} else if (!inputTokenStillValid) {
+			// No passed token and current selection is not valid, use default
 			selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
 		}
 
-		// Check if passed output token is from current network, otherwise use default
+		// Handle output token selection
 		if (passedOutputToken) {
-			const tokenExistsInNetwork = currentNetworkTokens.some(
+			// If passed token exists and is valid for current network, use it
+			const passedTokenExistsInNetwork = currentNetworkTokens.some(
 				(token) => token.address.toLowerCase() === passedOutputToken.address.toLowerCase()
 			);
-			if (!tokenExistsInNetwork) {
+			if (passedTokenExistsInNetwork) {
+				selectedOutputToken = passedOutputToken;
+			} else if (!outputTokenStillValid) {
+				// If passed token is not valid and current selection is not valid, use default
 				selectedOutputToken =
 					currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
-			} else {
-				selectedOutputToken = passedOutputToken;
 			}
-		} else {
+		} else if (!outputTokenStillValid) {
+			// No passed token and current selection is not valid, use default
 			selectedOutputToken =
 				currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
 		}

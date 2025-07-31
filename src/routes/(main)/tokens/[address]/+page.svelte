@@ -7,7 +7,6 @@
 	import TradeHistoryTable from '$lib/components/tables/TradeHistoryTable.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
-	import Header from '$lib/components/Header.svelte';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore } from '$lib/stores';
 	import { TOKENS } from '$lib/network';
@@ -25,14 +24,10 @@
 	$: priceQuery = createQuery({
 		queryKey: ['tokenPrice', symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			try {
-				const response = await fetch(
-					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
-				);
-				return await response.json();
-			} catch (error) {
-				throw error;
-			}
+			const response = await fetch(
+				`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+			);
+			return await response.json();
 		},
 		refetchInterval: 60000 // Refetch every 60 seconds
 	});
@@ -41,30 +36,22 @@
 	$: overviewQuery = createQuery({
 		queryKey: ['tokenOverview', symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			try {
-				const response = await fetch(
+			const response = await fetch(
 				`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
-				);
-				return await response.json();
-			} catch (error) {
-				throw error;
-			}
+			);
+			return await response.json();
 		}
 	});
 
 	$: timeseriesQuery = createQuery({
 		queryKey: ['timeseries', $currentToken?.symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			try {
-				const response = await fetch(
+			const response = await fetch(
 				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${
 					$currentToken?.symbol?.split('s1')[0]
 				}&outputsize=full&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
-				);
-				return await response.json();
-			} catch (error) {
-				throw error;
-			}
+			);
+			return await response.json();
 		},
 		enabled: !!$currentToken?.symbol && !!$currentNetwork
 	});
@@ -72,32 +59,28 @@
 	$: tradesQuery = createInfiniteQuery({
 		queryKey: ['trades', $currentToken?.id, $currentNetwork?.id],
 		queryFn: async ({ pageParam = 0 }) => {
-			try {
-				const now = Math.floor(Date.now() / 1000);
-				const monthAgo = now - 30 * 86400; // Example range, adjust as needed
-				const trades = await getTrades(monthAgo, now, $currentNetwork);
+			const now = Math.floor(Date.now() / 1000);
+			const monthAgo = now - 30 * 86400; // Example range, adjust as needed
+			const trades = await getTrades(monthAgo, now, $currentNetwork);
 
-				const filteredTrades = trades.filter(
-					(trade) =>
-						trade.outputVaultBalanceChange.vault.token.id.toLowerCase() ===
-							$currentToken?.id.toLowerCase() ||
-						trade.inputVaultBalanceChange.vault.token.id.toLowerCase() ===
-							$currentToken?.id.toLowerCase()
-				);
+			const filteredTrades = trades.filter(
+				(trade) =>
+					trade.outputVaultBalanceChange.vault.token.id.toLowerCase() ===
+						$currentToken?.id.toLowerCase() ||
+					trade.inputVaultBalanceChange.vault.token.id.toLowerCase() ===
+						$currentToken?.id.toLowerCase()
+			);
 
 			// Simple pagination - return a subset based on pageParam
-				const pageSize = 20;
-				const startIndex = pageParam * pageSize;
-				const endIndex = startIndex + pageSize;
-				const paginatedTrades = filteredTrades.slice(startIndex, endIndex);
+			const pageSize = 20;
+			const startIndex = pageParam * pageSize;
+			const endIndex = startIndex + pageSize;
+			const paginatedTrades = filteredTrades.slice(startIndex, endIndex);
 
-				return {
-					trades: paginatedTrades,
-					hasMore: endIndex < filteredTrades.length
-				};
-			} catch (error) {
-				throw error;
-			}
+			return {
+				trades: paginatedTrades,
+				hasMore: endIndex < filteredTrades.length
+			};
 		},
 		initialPageParam: 0,
 		getNextPageParam: (lastPage, _allPages, lastPageParam) => {

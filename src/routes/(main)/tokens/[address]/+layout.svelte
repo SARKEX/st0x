@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Spinner } from 'flowbite-svelte';
 	import { page } from '$app/stores';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { sfts, currentToken } from '$lib/stores';

@@ -20,14 +20,21 @@
 	// Selected Tokens - initialize with first available tokens from current network, but preserve user selections if valid
 	$: if (ALL_TOKENS.length > 0) {
 		// Check if current selections are still valid for the new network
-		const token1StillValid = selectedToken1 && ALL_TOKENS.some(token => token.address === selectedToken1.address);
-		const token2StillValid = selectedToken2 && ALL_TOKENS.some(token => token.address === selectedToken2.address);
-		const token3StillValid = selectedToken3 && ALL_TOKENS.some(token => token.address === selectedToken3.address);
-		const token4StillValid = selectedToken4 && ALL_TOKENS.some(token => token.address === selectedToken4.address);
-		const token5StillValid = selectedToken5 && ALL_TOKENS.some(token => token.address === selectedToken5.address);
-		const token6StillValid = selectedToken6 && ALL_TOKENS.some(token => token.address === selectedToken6.address);
-		const token7StillValid = selectedToken7 && ALL_TOKENS.some(token => token.address === selectedToken7.address);
-		
+		const token1StillValid =
+			selectedToken1 && ALL_TOKENS.some((token) => token.address === selectedToken1.address);
+		const token2StillValid =
+			selectedToken2 && ALL_TOKENS.some((token) => token.address === selectedToken2.address);
+		const token3StillValid =
+			selectedToken3 && ALL_TOKENS.some((token) => token.address === selectedToken3.address);
+		const token4StillValid =
+			selectedToken4 && ALL_TOKENS.some((token) => token.address === selectedToken4.address);
+		const token5StillValid =
+			selectedToken5 && ALL_TOKENS.some((token) => token.address === selectedToken5.address);
+		const token6StillValid =
+			selectedToken6 && ALL_TOKENS.some((token) => token.address === selectedToken6.address);
+		const token7StillValid =
+			selectedToken7 && ALL_TOKENS.some((token) => token.address === selectedToken7.address);
+
 		// Only reset if current selections are not valid for the new network
 		if (!token1StillValid) {
 			selectedToken1 = ALL_TOKENS[0];

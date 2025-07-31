@@ -26,9 +26,13 @@
 	// Initialize selected tokens when network changes, but preserve user selections if valid
 	$: if (ALL_TOKENS.length > 0) {
 		// Check if current selections are still valid for the new network
-		const inputTokenStillValid = selectedInputToken && ALL_TOKENS.some(token => token.address === selectedInputToken.address);
-		const outputTokenStillValid = selectedOutputToken && ALL_TOKENS.some(token => token.address === selectedOutputToken.address);
-		
+		const inputTokenStillValid =
+			selectedInputToken &&
+			ALL_TOKENS.some((token) => token.address === selectedInputToken.address);
+		const outputTokenStillValid =
+			selectedOutputToken &&
+			ALL_TOKENS.some((token) => token.address === selectedOutputToken.address);
+
 		// Only reset if current selections are not valid for the new network
 		if (!inputTokenStillValid) {
 			selectedInputToken = ALL_TOKENS[0];
