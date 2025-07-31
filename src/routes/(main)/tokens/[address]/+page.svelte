@@ -23,71 +23,87 @@
 
 	// Query for price data - refetches every 60 seconds
 	$: priceQuery = createQuery({
-		queryKey: ['tokenPrice', symbol],
+		queryKey: ['tokenPrice', symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			const response = await fetch(
-				`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
-			);
-			return await response.json();
+			try {
+				const response = await fetch(
+					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+				);
+				return await response.json();
+			} catch (error) {
+				throw error;
+			}
 		},
 		refetchInterval: 60000 // Refetch every 60 seconds
 	});
 
 	// Query for overview data - fetches only once
 	$: overviewQuery = createQuery({
-		queryKey: ['tokenOverview', symbol],
+		queryKey: ['tokenOverview', symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			const response = await fetch(
+			try {
+				const response = await fetch(
 				`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
-			);
-			return await response.json();
+				);
+				return await response.json();
+			} catch (error) {
+				throw error;
+			}
 		}
 	});
 
 	$: timeseriesQuery = createQuery({
-		queryKey: ['timeseries', $currentToken?.symbol],
+		queryKey: ['timeseries', $currentToken?.symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			const response = await fetch(
+			try {
+				const response = await fetch(
 				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${
 					$currentToken?.symbol?.split('s1')[0]
 				}&outputsize=full&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
-			);
-			return await response.json();
+				);
+				return await response.json();
+			} catch (error) {
+				throw error;
+			}
 		},
-		enabled: !!$currentToken?.symbol
+		enabled: !!$currentToken?.symbol && !!$currentNetwork
 	});
 
 	$: tradesQuery = createInfiniteQuery({
-		queryKey: ['trades', $currentToken?.id],
+		queryKey: ['trades', $currentToken?.id, $currentNetwork?.id],
 		queryFn: async ({ pageParam = 0 }) => {
-			const now = Math.floor(Date.now() / 1000);
-			const monthAgo = now - 30 * 86400; // Example range, adjust as needed
-			const trades = await getTrades(monthAgo, now);
+			try {
+				const now = Math.floor(Date.now() / 1000);
+				const monthAgo = now - 30 * 86400; // Example range, adjust as needed
+				const trades = await getTrades(monthAgo, now, $currentNetwork);
 
-			const filteredTrades = trades.filter(
-				(trade) =>
-					trade.outputVaultBalanceChange.vault.token.id.toLowerCase() ===
-						$currentToken?.id.toLowerCase() ||
-					trade.inputVaultBalanceChange.vault.token.id.toLowerCase() ===
-						$currentToken?.id.toLowerCase()
-			);
+				const filteredTrades = trades.filter(
+					(trade) =>
+						trade.outputVaultBalanceChange.vault.token.id.toLowerCase() ===
+							$currentToken?.id.toLowerCase() ||
+						trade.inputVaultBalanceChange.vault.token.id.toLowerCase() ===
+							$currentToken?.id.toLowerCase()
+				);
 
 			// Simple pagination - return a subset based on pageParam
-			const pageSize = 20;
-			const startIndex = pageParam * pageSize;
-			const endIndex = startIndex + pageSize;
-			const paginatedTrades = filteredTrades.slice(startIndex, endIndex);
+				const pageSize = 20;
+				const startIndex = pageParam * pageSize;
+				const endIndex = startIndex + pageSize;
+				const paginatedTrades = filteredTrades.slice(startIndex, endIndex);
 
-			return {
-				trades: paginatedTrades,
-				hasMore: endIndex < filteredTrades.length
-			};
+				return {
+					trades: paginatedTrades,
+					hasMore: endIndex < filteredTrades.length
+				};
+			} catch (error) {
+				throw error;
+			}
 		},
 		initialPageParam: 0,
 		getNextPageParam: (lastPage, _allPages, lastPageParam) => {
 			return lastPage.hasMore ? lastPageParam + 1 : undefined;
 		},
-		enabled: !!$currentToken?.id
+		enabled: !!$currentToken?.id && !!$currentNetwork
 	});
 
 	$: globalQuote = $priceQuery.data?.['Global Quote'];
@@ -152,7 +168,6 @@
 		<LoadingSpinner variant="fullscreen" size="lg" text="Loading token data..." />
 	</div>
 {:else if $priceQuery.data && $overviewQuery.data && $timeseriesQuery.data && $tradesQuery.data}
-	<Header title={$currentToken?.name ?? ''} description={$currentToken?.symbol ?? ''} />
 	<div class="mx-6 mt-4 flex max-w-full justify-center">
 		<div
 			class="flex w-full max-w-full flex-col items-start rounded-lg border border-white/10 px-4 py-3 shadow"

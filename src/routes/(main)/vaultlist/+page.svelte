@@ -153,6 +153,25 @@
 {:else if $sfts.length > 0}
 	<div>
 		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
+			<div class="mb-6 sm:mb-8">
+				<h2 class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl">
+					About Vaults
+				</h2>
+				<div class="group relative overflow-hidden rounded-xl border border-white/5 bg-gray-700/30 p-4 transition-all hover:border-blue-500/30 hover:bg-gray-700/40 sm:p-6">
+					<div class="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-0 transition-opacity group-hover:opacity-100"></div>
+					<div class="space-y-4 text-sm text-gray-300 sm:text-base">
+						<p>
+							Rather than doing token approvals, users deposit their tokens into vaults, which are like virtual accounts within the orderbook. Orders reference input/output vaults. There can be many inputs and many outputs for an order, e.g. a user could accept a number of different stables for WETH.
+						</p>
+						<p>
+							Different orders can also reference the same vaults, which allows for even more sophistication when building meta-strategies.
+						</p>
+						<p>For more information, see the <a href="https://docs.rainlang.xyz/raindex/overview" target="_blank" class="text-blue-500 hover:underline">Raindex documentation</a>.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="space-y-6 p-4 sm:space-y-8 sm:p-6">
 			<Portfolio vaults={$sfts} tokenGlobalQuote={$tokenGlobalQuote} />
 		</div>
 
