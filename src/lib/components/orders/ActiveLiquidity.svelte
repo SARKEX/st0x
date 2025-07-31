@@ -21,10 +21,21 @@
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 
-	// Initialize selected tokens when network changes
+	// Initialize selected tokens when network changes, but preserve user selections if valid
 	$: if (ALL_TOKENS.length > 0) {
-		selectedToken1 = ALL_TOKENS[ALL_TOKENS.length - 1];
-		selectedToken2 = ALL_TOKENS[0];
+		// Check if current selections are still valid for the new network
+		const token1StillValid =
+			selectedToken1 && ALL_TOKENS.some((token) => token.address === selectedToken1.address);
+		const token2StillValid =
+			selectedToken2 && ALL_TOKENS.some((token) => token.address === selectedToken2.address);
+
+		// Only reset if current selections are not valid for the new network
+		if (!token1StillValid) {
+			selectedToken1 = ALL_TOKENS[ALL_TOKENS.length - 1];
+		}
+		if (!token2StillValid) {
+			selectedToken2 = ALL_TOKENS[0];
+		}
 	}
 
 	let showAdvancedOptions = false;

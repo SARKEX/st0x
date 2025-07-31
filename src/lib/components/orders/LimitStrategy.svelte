@@ -29,38 +29,74 @@
 		getAllTokensByNetwork($currentNetwork.id)[getAllTokensByNetwork($currentNetwork.id).length - 1];
 	let selectedOrderType: 'Buy' | 'Sell' = passedOrderType;
 
+	// Track if we've initialized with passed tokens to prevent overriding user selections
+	let hasInitializedWithPassedTokens = false;
+
 	// Update tokens when network changes or when passed tokens are from different network
 	$: if ($currentNetwork) {
 		const currentNetworkTokens = getAllTokensByNetwork($currentNetwork.id);
 
-		// Check if passed input token is from current network, otherwise use default
-		if (passedInputToken) {
-			const tokenExistsInNetwork = currentNetworkTokens.some(
-				(token) => token.address.toLowerCase() === passedInputToken.address.toLowerCase()
+		// Check if current selections are still valid for the new network
+		const inputTokenStillValid =
+			selectedInputToken &&
+			currentNetworkTokens.some(
+				(token) => token.address.toLowerCase() === selectedInputToken.address.toLowerCase()
 			);
-			if (!tokenExistsInNetwork) {
-				selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
-			} else {
-				selectedInputToken = passedInputToken;
-			}
-		} else {
-			selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
-		}
+		const outputTokenStillValid =
+			selectedOutputToken &&
+			currentNetworkTokens.some(
+				(token) => token.address.toLowerCase() === selectedOutputToken.address.toLowerCase()
+			);
 
-		// Check if passed output token is from current network, otherwise use default
-		if (passedOutputToken) {
-			const tokenExistsInNetwork = currentNetworkTokens.some(
-				(token) => token.address.toLowerCase() === passedOutputToken.address.toLowerCase()
-			);
-			if (!tokenExistsInNetwork) {
+		// Only apply passed tokens on initial load, not on subsequent network changes
+		if (!hasInitializedWithPassedTokens) {
+			// Handle input token selection
+			if (passedInputToken) {
+				// If passed token exists and is valid for current network, use it
+				const passedTokenExistsInNetwork = currentNetworkTokens.some(
+					(token) => token.address.toLowerCase() === passedInputToken.address.toLowerCase()
+				);
+				if (passedTokenExistsInNetwork) {
+					selectedInputToken = passedInputToken;
+				} else if (!inputTokenStillValid) {
+					// If passed token is not valid and current selection is not valid, use default
+					selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
+				}
+			} else if (!inputTokenStillValid) {
+				// No passed token and current selection is not valid, use default
+				selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
+			}
+
+			// Handle output token selection
+			if (passedOutputToken) {
+				// If passed token exists and is valid for current network, use it
+				const passedTokenExistsInNetwork = currentNetworkTokens.some(
+					(token) => token.address.toLowerCase() === passedOutputToken.address.toLowerCase()
+				);
+				if (passedTokenExistsInNetwork) {
+					selectedOutputToken = passedOutputToken;
+				} else if (!outputTokenStillValid) {
+					// If passed token is not valid and current selection is not valid, use default
+					selectedOutputToken =
+						currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
+				}
+			} else if (!outputTokenStillValid) {
+				// No passed token and current selection is not valid, use default
 				selectedOutputToken =
 					currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
-			} else {
-				selectedOutputToken = passedOutputToken;
 			}
+
+			// Mark as initialized so we don't override user selections on subsequent network changes
+			hasInitializedWithPassedTokens = true;
 		} else {
-			selectedOutputToken =
-				currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
+			// After initial load, only reset if current selections are not valid for the new network
+			if (!inputTokenStillValid) {
+				selectedInputToken = currentNetworkTokens[3] || currentNetworkTokens[0];
+			}
+			if (!outputTokenStillValid) {
+				selectedOutputToken =
+					currentNetworkTokens[currentNetworkTokens.length - 1] || currentNetworkTokens[0];
+			}
 		}
 	}
 

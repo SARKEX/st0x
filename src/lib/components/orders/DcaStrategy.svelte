@@ -23,10 +23,23 @@
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
 
-	// Initialize selected tokens when network changes
+	// Initialize selected tokens when network changes, but preserve user selections if valid
 	$: if (ALL_TOKENS.length > 0) {
-		selectedInputToken = ALL_TOKENS[0];
-		selectedOutputToken = ALL_TOKENS[ALL_TOKENS.length - 1];
+		// Check if current selections are still valid for the new network
+		const inputTokenStillValid =
+			selectedInputToken &&
+			ALL_TOKENS.some((token) => token.address === selectedInputToken.address);
+		const outputTokenStillValid =
+			selectedOutputToken &&
+			ALL_TOKENS.some((token) => token.address === selectedOutputToken.address);
+
+		// Only reset if current selections are not valid for the new network
+		if (!inputTokenStillValid) {
+			selectedInputToken = ALL_TOKENS[0];
+		}
+		if (!outputTokenStillValid) {
+			selectedOutputToken = ALL_TOKENS[ALL_TOKENS.length - 1];
+		}
 	}
 
 	let selectedInputToken: Token = getAllTokensByNetwork(42161)[0]; // Initialize with Arbitrum tokens
