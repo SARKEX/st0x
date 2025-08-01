@@ -5,9 +5,6 @@
 
 <!-- Main Content -->
 <div>
-	<!-- Header -->
-	<Header title="Terms of Service" description="Terms of Service" />
-
 	<!-- Terms Content -->
 	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
 		<div
