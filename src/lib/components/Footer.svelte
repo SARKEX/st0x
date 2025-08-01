@@ -30,6 +30,11 @@
 						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
 						>Audit Reports</a
 					>
+					<a
+						href="/faqs"
+						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
+						>FAQs</a
+					>
 				</div>
 			</div>
 		</div>
