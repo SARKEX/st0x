@@ -5,7 +5,6 @@
 
 <!-- Main Content -->
 <div>
-
 	<!-- Terms Content -->
 	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
 		<div
