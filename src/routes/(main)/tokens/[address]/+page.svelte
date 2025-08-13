@@ -9,42 +9,52 @@
 	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore } from '$lib/stores';
-	import { TOKENS } from '$lib/network';
+	import { TOKENS, networks } from '$lib/network';
 	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
 	import { page } from '$app/stores';
 
 	const symbol = $currentToken?.symbol.split('s1')[0];
 
-	// Find the corresponding PythToken from TOKENS array
+	// Find the corresponding PythToken from TOKENS array (search across all networks)
 	$: currentPythToken = TOKENS.find(
 		(token) => token.address.toLowerCase() === $currentToken?.address.toLowerCase()
 	);
 
-	// Query for price data - refetches every 60 seconds
+	// Find which network this token belongs to
+	$: tokenNetwork = networks.find(network => 
+		TOKENS.some(token => 
+			token.address.toLowerCase() === $currentToken?.address.toLowerCase() && 
+			token.chainId === network.chainId
+		)
+	);
+
+	// Query for price data - refetches every 60 seconds (removed network dependency)
 	$: priceQuery = createQuery({
-		queryKey: ['tokenPrice', symbol, $currentNetwork?.id],
+		queryKey: ['tokenPrice', symbol],
 		queryFn: async () => {
 			const response = await fetch(
 				`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 			);
 			return await response.json();
 		},
-		refetchInterval: 60000 // Refetch every 60 seconds
+		refetchInterval: 60000, // Refetch every 60 seconds
+		enabled: !!symbol
 	});
 
-	// Query for overview data - fetches only once
+	// Query for overview data - fetches only once (removed network dependency)
 	$: overviewQuery = createQuery({
-		queryKey: ['tokenOverview', symbol, $currentNetwork?.id],
+		queryKey: ['tokenOverview', symbol],
 		queryFn: async () => {
 			const response = await fetch(
 				`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 			);
 			return await response.json();
-		}
+		},
+		enabled: !!symbol
 	});
 
 	$: timeseriesQuery = createQuery({
-		queryKey: ['timeseries', $currentToken?.symbol, $currentNetwork?.id],
+		queryKey: ['timeseries', $currentToken?.symbol],
 		queryFn: async () => {
 			const response = await fetch(
 				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${
@@ -53,15 +63,18 @@
 			);
 			return await response.json();
 		},
-		enabled: !!$currentToken?.symbol && !!$currentNetwork
+		enabled: !!$currentToken?.symbol
 	});
 
 	$: tradesQuery = createInfiniteQuery({
-		queryKey: ['trades', $currentToken?.id, $currentNetwork?.id],
+		queryKey: ['trades', $currentToken?.id, tokenNetwork?.id],
 		queryFn: async ({ pageParam = 0 }) => {
 			const now = Math.floor(Date.now() / 1000);
 			const monthAgo = now - 30 * 86400; // Example range, adjust as needed
-			const trades = await getTrades(monthAgo, now, $currentNetwork);
+			
+			// Use the token's network instead of current network
+			const networkToUse = tokenNetwork || $currentNetwork;
+			const trades = await getTrades(monthAgo, now, networkToUse);
 
 			const filteredTrades = trades.filter(
 				(trade) =>
@@ -86,7 +99,7 @@
 		getNextPageParam: (lastPage, _allPages, lastPageParam) => {
 			return lastPage.hasMore ? lastPageParam + 1 : undefined;
 		},
-		enabled: !!$currentToken?.id && !!$currentNetwork
+		enabled: !!$currentToken?.id && !!tokenNetwork
 	});
 
 	$: globalQuote = $priceQuery.data?.['Global Quote'];
@@ -111,9 +124,10 @@
 
 	function handleBuyClick() {
 		if (currentPythToken) {
-			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed =
-				TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
+			// Find USDC in the token's network to ensure it has priceFeedId
+			const usdcWithPriceFeed = TOKENS.find(
+				(t) => t.symbol === 'USDC' && t.chainId === (tokenNetwork?.chainId || $currentNetwork.chainId)
+			) || $currentNetwork.usdcToken;
 
 			// Set the token data in the store for buying (USDC -> ST0x)
 			orderTokenStore.set({
@@ -129,9 +143,10 @@
 
 	function handleSellClick() {
 		if (currentPythToken) {
-			// Find USDC in TOKENS array to ensure it has priceFeedId
-			const usdcWithPriceFeed =
-				TOKENS.find((t) => t.symbol === 'USDC') || $currentNetwork.usdcToken;
+			// Find USDC in the token's network to ensure it has priceFeedId
+			const usdcWithPriceFeed = TOKENS.find(
+				(t) => t.symbol === 'USDC' && t.chainId === (tokenNetwork?.chainId || $currentNetwork.chainId)
+			) || $currentNetwork.usdcToken;
 
 			// Set the token data in the store for selling (ST0x -> USDC)
 			orderTokenStore.set({
@@ -158,6 +173,11 @@
 			<div class="mb-1 text-xl font-bold tracking-wide text-white">
 				{$currentToken?.name} - {symbol} Token Details
 			</div>
+			{#if tokenNetwork && tokenNetwork.id !== $currentNetwork.id}
+				<div class="text-sm text-yellow-400">
+					Token is on {tokenNetwork.displayName} network
+				</div>
+			{/if}
 		</div>
 	</div>
 
