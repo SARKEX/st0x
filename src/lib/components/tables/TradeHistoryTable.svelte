@@ -11,7 +11,7 @@
 
 	const sortedTrades = derived(query, ($query) => {
 		if (!$query.data?.pages) return [];
-		const allTrades = $query.data.pages.flatMap(page => page.trades);
+		const allTrades = $query.data.pages.flatMap((page) => page.trades);
 		return allTrades.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
 	});
 
