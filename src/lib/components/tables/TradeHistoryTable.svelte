@@ -6,7 +6,14 @@
 	import { Spinner } from 'flowbite-svelte';
 	import LoadingSpinner from '../LoadingSpinner.svelte';
 	import { currentNetwork } from '$lib/stores';
+	import { derived } from 'svelte/store';
 	export let query: CreateInfiniteQueryResult<InfiniteData<{ trades: SgTrade[] }, unknown>, Error>;
+
+	const sortedTrades = derived(query, ($query) => {
+		if (!$query.data?.pages) return [];
+		const allTrades = $query.data.pages.flatMap((page) => page.trades);
+		return allTrades.sort((a, b) => parseInt(b.timestamp) - parseInt(a.timestamp));
+	});
 
 	function formatTimestamp(timestamp: string): string {
 		return new Date(parseInt(timestamp) * 1000).toLocaleString();
@@ -59,33 +66,31 @@
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-gray-800 bg-gray-900">
-				{#each $query.data.pages as page}
-					{#each page.trades as trade}
-						<tr class="hover:bg-gray-800/50">
-							<td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-white">
-								{trade.inputVaultBalanceChange.vault.token.symbol}
-							</td>
-							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
-								{trade.outputVaultBalanceChange.vault.token.symbol}
-							</td>
-							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
-								{formatUnits(BigInt(trade.inputVaultBalanceChange.amount), 18)}
-							</td>
-							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
-								{formatTimestamp(trade.timestamp)}
-							</td>
-							<td class="whitespace-nowrap px-6 py-4 text-sm text-blue-400">
-								<a
-									href="{$currentNetwork.blockExplorer}/tx/{trade.tradeEvent.transaction.id}"
-									target="_blank"
-									rel="noopener noreferrer"
-									class="hover:underline"
-								>
-									View Transaction
-								</a>
-							</td>
-						</tr>
-					{/each}
+				{#each $sortedTrades as trade}
+					<tr class="hover:bg-gray-800/50">
+						<td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-white">
+							{trade.inputVaultBalanceChange.vault.token.symbol}
+						</td>
+						<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+							{trade.outputVaultBalanceChange.vault.token.symbol}
+						</td>
+						<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+							{formatUnits(BigInt(trade.inputVaultBalanceChange.amount), 18)}
+						</td>
+						<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-300">
+							{formatTimestamp(trade.timestamp)}
+						</td>
+						<td class="whitespace-nowrap px-6 py-4 text-sm text-blue-400">
+							<a
+								href="{$currentNetwork.blockExplorer}/tx/{trade.tradeEvent.transaction.id}"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="hover:underline"
+							>
+								View Transaction
+							</a>
+						</td>
+					</tr>
 				{/each}
 			</tbody>
 		</table>
