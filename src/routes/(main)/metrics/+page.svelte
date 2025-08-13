@@ -8,12 +8,58 @@
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import type { ApiStockQuote } from '$lib/types';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import { getVaults } from '@rainlanguage/orderbook';
+	import type { SgVaultWithSubgraphName } from '@rainlanguage/orderbook';
 
 	// Get all SFTS for the current network
 	$: allSfts = $sfts || [];
 	
 	// Get all tokens for logo URLs (like the tokens page does)
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+
+	// Query for vault balances (like vaultlist page) - fetch ALL vaults
+	$: vaultsQuery = createQuery({
+		queryKey: ['metrics-vaults', $currentNetwork?.id],
+		queryFn: async () => {
+			if (!$currentNetwork?.orderbook_subgraph_url) return [];
+			
+			let allVaults: SgVaultWithSubgraphName[] = [];
+			let page = 1;
+			const pageSize = 1000;
+			let hasMore = true;
+			
+			// Fetch all vaults by paginating through all pages
+			while (hasMore) {
+				const vaultsResult = await getVaults(
+					[
+						{
+							url: $currentNetwork.orderbook_subgraph_url,
+							name: $currentNetwork.raindexNetworkSlug
+						}
+					],
+					{
+						owners: [],
+						hideZeroBalance: false
+					},
+					{ page, pageSize }
+				);
+				
+				if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
+				
+				const vaults = vaultsResult.value;
+				allVaults.push(...vaults);
+				
+				// Check if there are more pages
+				hasMore = vaults.length === pageSize;
+				page++;
+			}
+			
+			return allVaults;
+		},
+		enabled: !!$currentNetwork?.orderbook_subgraph_url,
+		retry: 3,
+		retryDelay: 1000
+	});
 
 	// Query for trades data - last month (30 days)
 	$: tradesQueryMonth = createQuery({
@@ -43,42 +89,63 @@
 		retryDelay: 1000
 	});
 
-	// Calculate Total Locked Value (TLV) and individual SFT values
+	// Calculate Total Locked Value (TLV) and individual SFT values using vault balances
 	$: sftTotalValues = (() => {
-		if (!allSfts.length || !$tokenGlobalQuote.length) return [];
+		if (!$vaultsQuery.data || !$tokenGlobalQuote.length) return [];
 
-		return allSfts.map(sft => {
-			// Calculate total balance across all receipt balances for this SFT
-			const totalBalance = sft.receiptBalances.reduce((sum, receiptBalance) => {
-				// Sum up all balances in this receipt
-				const receiptSum = receiptBalance.receipt.balances.reduce((balanceSum, balance) => {
-					return balanceSum + BigInt(balance.valueExact || balance.value || '0');
-				}, BigInt(0));
-				return sum + receiptSum;
-			}, BigInt(0));
+		// Group vaults by token to calculate total balances
+		const tokenMap = new Map<string, {
+			sft: OffchainAssetReceiptVault;
+			totalBalance: bigint;
+			vaultCount: number;
+		}>();
 
-			// Find the quote for this token
-			const quote = $tokenGlobalQuote.find((q: ApiStockQuote) => {
-				const symbol = q['Global Quote']['01. symbol'];
-				// Match token symbol with quote symbol (remove 's1' suffix if present)
-				return symbol === sft.symbol || symbol === sft.symbol.replace('s1', '');
-			});
-
-			let usdValue = 0;
-			if (quote) {
-				const price = parseFloat(quote['Global Quote']['05. price']);
-				const totalBalanceInUnits = parseFloat(formatUnits(totalBalance, 18)); // Assuming 18 decimals for SFTS
-				usdValue = price * totalBalanceInUnits;
-			}
-
-			return {
+		// Initialize all SFTS with zero balance
+		allSfts.forEach(sft => {
+			tokenMap.set(sft.address.toLowerCase(), {
 				sft,
-				totalBalance,
-				usdValue,
-				formattedBalance: formatUnits(totalBalance, 18),
-				formattedUsdValue: usdValue > 0 ? `$${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'
-			};
-		}).sort((a, b) => b.usdValue - a.usdValue); // Sort by USD value descending
+				totalBalance: 0n,
+				vaultCount: 0
+			});
+		});
+
+		// Sum up balances from all vaults
+		$vaultsQuery.data?.forEach((vaultData: SgVaultWithSubgraphName) => {
+			const vault = vaultData.vault;
+			const tokenAddress = vault.token.id.toLowerCase();
+			
+			if (tokenMap.has(tokenAddress)) {
+				const current = tokenMap.get(tokenAddress)!;
+				current.totalBalance += BigInt(vault.balance);
+				current.vaultCount += 1;
+			}
+		});
+
+		// Calculate USD values and format data
+		return Array.from(tokenMap.values())
+			.map(item => {
+				// Find the quote for this token
+				const quote = $tokenGlobalQuote.find((q: ApiStockQuote) => {
+					const symbol = q['Global Quote']['01. symbol'];
+					// Match token symbol with quote symbol (remove 's1' suffix if present)
+					return symbol === item.sft.symbol || symbol === item.sft.symbol.replace('s1', '');
+				});
+
+				let usdValue = 0;
+				if (quote) {
+					const price = parseFloat(quote['Global Quote']['05. price']);
+					const totalBalanceInUnits = parseFloat(formatUnits(item.totalBalance, 18)); // Assuming 18 decimals for SFTS
+					usdValue = price * totalBalanceInUnits;
+				}
+
+				return {
+					...item,
+					usdValue,
+					formattedBalance: formatUnits(item.totalBalance, 18),
+					formattedUsdValue: usdValue > 0 ? `$${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'
+				};
+			})
+			.sort((a, b) => b.usdValue - a.usdValue); // Sort by USD value descending
 	})();
 
 	// Calculate total platform TLV
@@ -427,18 +494,22 @@
 									<td class="px-8 py-5 text-right">
 										<div class="text-sm text-gray-300">{item.formattedBalance}</div>
 									</td>
-									<td class="px-8 py-5 text-right">
+									<td class="px-8 py-4 text-right">
 										<div class="text-sm font-medium text-green-400">{item.formattedUsdValue}</div>
 									</td>
-									<td class="px-8 py-5 text-right">
+									<td class="px-8 py-4 text-right">
 										<div class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-700/50 text-gray-300">
-											{item.sft.receiptBalances.length}
+											{item.vaultCount}
 										</div>
 									</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
+				</div>
+			{:else if $vaultsQuery.isLoading}
+				<div class="p-12 text-center">
+					<LoadingSpinner variant="inline" size="lg" text="Loading vault data..." />
 				</div>
 			{:else if !allSfts.length}
 				<div class="p-12 text-center">
