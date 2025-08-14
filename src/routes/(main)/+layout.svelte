@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../../app.css';
 	import { wagmiConfig } from 'svelte-wagmi';
-	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
+	import { env as publicEnv } from '$env/dynamic/public';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
@@ -28,10 +28,6 @@
 			case '/':
 			case '/dashboard':
 				return 'Dashboard';
-			case '/mint':
-				return 'Mint';
-			case '/burn':
-				return 'Burn';
 			case '/tokens':
 				return 'Token List';
 			case '/trade':
@@ -56,10 +52,6 @@
 			case '/':
 			case '/dashboard':
 				return `Welcome to ST0x - ${$currentNetwork?.displayName || 'Network'}`;
-			case '/mint':
-				return 'Mint new tokens';
-			case '/burn':
-				return 'Burn tokens';
 			case '/tokens':
 				return 'View all tokens';
 			case '/trade':
@@ -97,7 +89,7 @@
 				const response = await fetch(
 					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${
 						stox.symbol?.split('s1')[0]
-					}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+					}&apikey=${publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY || ''}`
 				);
 				const data = await response.json();
 				tokenQuotes.push(data);

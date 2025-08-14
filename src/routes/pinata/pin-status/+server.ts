@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { PRIVATE_PINATA_JWT } from '$env/static/private';
+import { env as privateEnv } from '$env/dynamic/private';
 const PINATA_PIN_LIST_URL = 'https://api.pinata.cloud/data/pinList';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -7,6 +7,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	if (!cid) {
 		return json({ error: 'CID is required' }, { status: 400 });
+	}
+
+	const PRIVATE_PINATA_JWT = privateEnv.PRIVATE_PINATA_JWT;
+	if (!PRIVATE_PINATA_JWT) {
+		return json({ error: 'Pinata JWT not configured on server' }, { status: 500 });
 	}
 
 	try {

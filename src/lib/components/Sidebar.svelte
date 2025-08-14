@@ -10,8 +10,6 @@
 
 	const NAVIGATION_ITEMS = [
 		{ name: 'Dashboard', href: '/', protected: false },
-		{ name: 'Mint', href: '/mint', protected: false },
-		{ name: 'Burn', href: '/burn', protected: false },
 		{ name: 'Token List', href: '/tokens', protected: false },
 		{ name: 'Trade', href: '/trade', protected: true },
 		{ name: 'Market Making', href: '/mm', protected: true },

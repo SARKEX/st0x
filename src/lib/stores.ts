@@ -22,7 +22,6 @@ export const currentTokenPrice = writable<{
 	changePercent: number;
 } | null>(null);
 export const trades = writable<SgTrade[]>([]);
-export const infoModalOpen = writable(false);
 export const tokenGlobalQuote = writable<ApiStockQuote[]>([]);
 
 // Store for Rainlang confirmation modal

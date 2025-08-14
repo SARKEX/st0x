@@ -6,7 +6,7 @@
 	import { getTrades } from '$lib/query';
 	import TradeHistoryTable from '$lib/components/tables/TradeHistoryTable.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
+	import { env as publicEnv } from '$env/dynamic/public';
 	import { goto } from '$app/navigation';
 	import { orderTokenStore } from '$lib/stores';
 	import { TOKENS } from '$lib/network';
@@ -25,7 +25,7 @@
 		queryKey: ['tokenPrice', symbol, $currentNetwork?.id],
 		queryFn: async () => {
 			const response = await fetch(
-				`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+				`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY || ''}`
 			);
 			return await response.json();
 		},
@@ -37,7 +37,7 @@
 		queryKey: ['tokenOverview', symbol, $currentNetwork?.id],
 		queryFn: async () => {
 			const response = await fetch(
-				`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+				`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY || ''}`
 			);
 			return await response.json();
 		}
@@ -49,7 +49,7 @@
 			const response = await fetch(
 				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${
 					$currentToken?.symbol?.split('s1')[0]
-				}&outputsize=full&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+				}&outputsize=full&apikey=${publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY || ''}`
 			);
 			return await response.json();
 		},
@@ -218,98 +218,75 @@
 						<span class="font-semibold">{$overviewQuery.data.Name}</span>
 					</div>
 					<div class="flex items-baseline justify-between">
-						<span class="text-gray-400">Market Cap</span>
-						<span class="font-semibold">
-							${parseInt($overviewQuery.data.MarketCapitalization).toLocaleString()}
-						</span>
+						<span class="text-gray-400">Sector</span>
+						<span class="font-semibold">{$overviewQuery.data.Sector}</span>
 					</div>
 				</div>
+				<div class="mt-6 flex items-center gap-3">
+					<a
+						href={`/tokens/${$currentToken?.id}/chart`}
+						class="flex items-center gap-2 rounded-lg border border-white/20 bg-gray-700/80 px-3 py-2 text-xs font-semibold text-white transition-all duration-200 hover:border-yellow-500/50 hover:bg-gray-600/80"
+					>
+						<span>Open Chart</span>
+						<ArrowUpRightFromSquareSolid class="h-4 w-4" />
+					</a>
+				</div>
+			</div>
 
-				<div class="my-8 border-t border-white/20"></div>
-
-				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">ST0x Token</h3>
+			<!-- Card 2: Market Cap & Supply -->
+			<div class="{CARD_BASE_CLASSES} p-4 sm:p-6 lg:col-span-1">
+				<div class={GRADIENT_HOVER_CLASSES}></div>
+				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
+					Market Metrics
+				</h3>
 				<div class="space-y-4">
-					<div class="flex items-baseline justify-between py-1">
-						<span class="text-gray-400">Name</span>
-						<span class="font-semibold">{$currentToken?.name}</span>
+					<div class="flex items-baseline justify-between">
+						<span class="text-gray-400">Market Cap (approx)</span>
+						<span class="font-semibold">${parseFloat(formatUnits(marketCap, 18)).toFixed(2)}</span>
 					</div>
-					<div class="flex items-baseline justify-between py-1">
-						<span class="text-gray-400">Symbol</span>
-						<span class="font-semibold">{$currentToken?.symbol}</span>
-					</div>
-					<div class="flex items-baseline justify-between py-1">
+					<div class="flex items-baseline justify-between">
 						<span class="text-gray-400">Total Shares</span>
-						<span class="font-semibold">
-							{formatUnits(BigInt($currentToken?.totalShares ?? 0n), 18)}
-						</span>
-					</div>
-					<div class="flex items-baseline justify-between py-1">
-						<span class="text-gray-400">Market Cap</span>
-						<span class="font-semibold">${formatUnits(marketCap, 18)}</span>
+						<span class="font-semibold">{formatUnits(BigInt($currentToken?.totalShares || 0), 18)}</span>
 					</div>
 				</div>
+			</div>
 
-				<div class="my-8 border-t border-white/20"></div>
-
-				<h3 class="mb-6 text-sm font-bold uppercase tracking-wide text-yellow-400">Trade Now</h3>
+			<!-- Card 3: Buy/Sell Actions -->
+			<div class="{CARD_BASE_CLASSES} p-4 sm:p-6 lg:col-span-1">
+				<div class={GRADIENT_HOVER_CLASSES}></div>
+				<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
+					Actions
+				</h3>
 				<div class="flex gap-3">
 					<button
 						on:click={handleBuyClick}
-						class="flex-1 rounded-lg border border-green-500/30 bg-green-600/20 px-4 py-3 text-sm font-semibold text-green-400 transition-all duration-200 hover:border-green-500/50 hover:bg-green-600/30"
+						class="flex-1 rounded-lg border border-white/20 bg-green-600/20 px-3 py-2 text-sm font-semibold text-green-300 transition-all hover:border-green-500/40 hover:bg-green-600/30"
 					>
-						Buy {symbol}
+						Buy
 					</button>
 					<button
 						on:click={handleSellClick}
-						class="flex-1 rounded-lg border border-red-500/30 bg-red-600/20 px-4 py-3 text-sm font-semibold text-red-400 transition-all duration-200 hover:border-red-500/50 hover:bg-red-600/30"
+						class="flex-1 rounded-lg border border-white/20 bg-red-600/20 px-3 py-2 text-sm font-semibold text-red-300 transition-all hover:border-red-500/40 hover:bg-red-600/30"
 					>
-						Sell {symbol}
+						Sell
 					</button>
-				</div>
-			</div>
-
-			<!-- Equity Chart Section -->
-			<div class="{SECTION_CLASSES} flex flex-col p-4 sm:p-6 lg:col-span-2">
-				<div class="mb-4 flex items-center justify-between">
-					<h3 class="text-base font-semibold sm:text-xl">Price History</h3>
-					<button
-						on:click={() => goto(`${$page.url.pathname}/chart`)}
-						class="ml-2 text-gray-400 transition-colors hover:text-yellow-400"
-						title="Open interactive chart in new tab"
-						aria-label="Open interactive chart in new tab"
-					>
-						<ArrowUpRightFromSquareSolid />
-					</button>
-				</div>
-				<div class="w-full flex-grow">
-					<EquityChart timeseriesData={$timeseriesQuery.data} height="h-full" />
 				</div>
 			</div>
 		</div>
 
-		<div class="{SECTION_CLASSES} p-4 sm:p-6">
-			<h3 class="mb-4 text-base font-semibold sm:text-xl">Trade History</h3>
-			{#if $tradesQuery.data?.pages.flatMap((page) => page.trades).length > 0}
-				<div class="overflow-x-auto">
-					<TradeHistoryTable query={tradesQuery} />
-				</div>
-			{:else}
-				<p class="text-center text-gray-400">No trades found for this token.</p>
-			{/if}
+		<!-- Trade History Table -->
+		<div class="{SECTION_CLASSES}">
+			<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
+				Trade History
+			</h3>
+			<TradeHistoryTable trades={$tradesQuery.data?.pages.flatMap((p) => p.trades) || []} />
 		</div>
 	</div>
-{:else if $priceQuery.error || $overviewQuery.error || $timeseriesQuery.error || $tradesQuery.error}
-	<div class="rounded-2xl border border-red-500/30 bg-red-900/20 p-8">
-		<h2 class="mb-4 text-xl font-semibold text-red-400">Error Loading Token Data</h2>
-		<p class="mb-2 text-gray-300">There was an error fetching the token data:</p>
-		<div class="mt-4 rounded border border-red-500/30 bg-red-900/20 p-4">
-			<p class="text-sm text-red-300">
-				{$priceQuery.error?.message ||
-					$overviewQuery.error?.message ||
-					$timeseriesQuery.error?.message ||
-					$tradesQuery.error?.message ||
-					'Unknown error occurred'}
-			</p>
+{:else}
+	<div class="flex w-full items-center justify-center p-8">
+		<div class="text-center">
+			<h2 class="mb-4 text-xl font-semibold text-gray-400">Failed to load token data</h2>
+			<p class="text-gray-500">Please try again later.</p>
 		</div>
 	</div>
 {/if}

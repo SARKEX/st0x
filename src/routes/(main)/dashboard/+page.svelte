@@ -1,39 +1,44 @@
 <script lang="ts">
-	import VolumeChart from '$lib/components/charts/VolumeChart.svelte';
-	import { createQuery } from '@tanstack/svelte-query';
 	import Footer from '$lib/components/Footer.svelte';
 	import { formatUnits } from 'viem';
-	import type { Deposit, OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { currentNetwork, sfts } from '$lib/stores';
-	import { getTrades } from '$lib/query';
-	import StoxPages from '$lib/components/StoxPages.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
-	let recentDeposits: Deposit[] = [];
 
-	$: tradesQuery = createQuery({
-		queryKey: ['getTrades', $currentNetwork?.id],
-		queryFn: async () => {
-			const now = Math.floor(Date.now() / 1000);
-			const monthAgo = now - 30 * 86400;
-			const trades = await getTrades(monthAgo, now, $currentNetwork);
-			return trades;
-		},
-		enabled: !!$currentNetwork?.orderbook_subgraph_url,
-		retry: 3,
-		retryDelay: 1000
-	});
+	let searchTerm = '';
+	let filteredSfts: OffchainAssetReceiptVault[] = [];
+	let biggestMovers: OffchainAssetReceiptVault[] = [];
+	let biggestVolume: OffchainAssetReceiptVault[] = [];
+	let recentlyAdded: OffchainAssetReceiptVault[] = [];
 
-	// Use the query data instead of the store
-	$: tradesData = $tradesQuery?.data || [];
+	function getRandomItems<T>(arr: T[], count: number): T[] {
+		const copy = [...arr];
+		for (let i = copy.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[copy[i], copy[j]] = [copy[j], copy[i]];
+		}
+		return copy.slice(0, count);
+	}
+
+	$: filteredSfts =
+		searchTerm.trim().length === 0
+			? []
+			: $sfts.filter(
+					(s) =>
+						s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+						s.symbol.toLowerCase().includes(searchTerm.toLowerCase())
+				);
 
 	$: if ($sfts) {
 		st0xVaults = $sfts;
 
-		// Memoize deposits and transfers
-		recentDeposits = st0xVaults.map((sft) => sft.deposits).flat();
+		// Random selections for cards (placeholder until real metrics implemented)
+		biggestMovers = getRandomItems(st0xVaults, 5);
+		biggestVolume = getRandomItems(st0xVaults, 5);
+		recentlyAdded = getRandomItems(st0xVaults, 5);
 
 		// Calculate all metrics in a single pass
 		const metrics = st0xVaults.reduce(
@@ -130,7 +135,83 @@
 	<div>
 		<!-- Dashboard Content -->
 		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">
-			<StoxPages />
+			<!-- Central Search -->
+			<div class={SECTION_CLASSES}>
+				<div class="mx-auto max-w-3xl">
+					<input
+						type="text"
+						class="w-full rounded-xl border border-white/10 bg-black/30 p-4 text-lg outline-none placeholder-gray-400 focus:border-yellow-500/50 focus:ring-0"
+						placeholder="Search stocks by name or symbol..."
+						bind:value={searchTerm}
+					/>
+					{#if filteredSfts.length > 0}
+						<div class="mt-2 divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-800/80">
+							{#each filteredSfts.slice(0, 10) as sft}
+								<a class="block px-4 py-3 hover:bg-white/5" href={`/tokens/${sft.id}`}>
+									<div class="flex items-center justify-between">
+										<div class="min-w-0">
+											<div class="truncate text-sm font-semibold text-white sm:text-base">{sft.name}</div>
+											<div class="text-xs text-gray-400">{sft.symbol}</div>
+										</div>
+										<div class="ml-3 text-xs text-yellow-500">View</div>
+									</div>
+								</a>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Discover Cards -->
+			<div class={SECTION_CLASSES}>
+				<div class="mb-4 flex items-center justify-between sm:mb-6">
+					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Discover</h2>
+				</div>
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+					<div class="{CARD_BASE_CLASSES} p-3 sm:p-4 lg:p-5">
+						<div class={GRADIENT_HOVER_CLASSES} />
+						<div class="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">Biggest Movers</div>
+						<ul class="space-y-2">
+							{#each biggestMovers as sft}
+								<li>
+									<a class="flex items-center justify-between rounded-lg border border-white/5 bg-black/20 p-2 hover:border-yellow-500/30" href={`/tokens/${sft.id}`}>
+										<span class="truncate text-sm text-white">{sft.name}</span>
+										<span class="ml-2 text-xs text-gray-400">{sft.symbol}</span>
+									</a>
+								</li>
+							{/each}
+						</ul>
+					</div>
+					<div class="{CARD_BASE_CLASSES} p-3 sm:p-4 lg:p-5">
+						<div class={GRADIENT_HOVER_CLASSES} />
+						<div class="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">Biggest Volume</div>
+						<ul class="space-y-2">
+							{#each biggestVolume as sft}
+								<li>
+									<a class="flex items-center justify-between rounded-lg border border-white/5 bg-black/20 p-2 hover:border-yellow-500/30" href={`/tokens/${sft.id}`}>
+										<span class="truncate text-sm text-white">{sft.name}</span>
+										<span class="ml-2 text-xs text-gray-400">{sft.symbol}</span>
+									</a>
+								</li>
+							{/each}
+						</ul>
+					</div>
+					<div class="{CARD_BASE_CLASSES} p-3 sm:p-4 lg:p-5">
+						<div class={GRADIENT_HOVER_CLASSES} />
+						<div class="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">Most Recently Added</div>
+						<ul class="space-y-2">
+							{#each recentlyAdded as sft}
+								<li>
+									<a class="flex items-center justify-between rounded-lg border border-white/5 bg-black/20 p-2 hover:border-yellow-500/30" href={`/tokens/${sft.id}`}>
+										<span class="truncate text-sm text-white">{sft.name}</span>
+										<span class="ml-2 text-xs text-gray-400">{sft.symbol}</span>
+									</a>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				</div>
+			</div>
 
 			<!-- Platform Overview -->
 			<div class={SECTION_CLASSES}>
@@ -151,78 +232,6 @@
 							<div class="flex items-center gap-1 text-xs font-medium text-yellow-500 sm:text-sm">
 								<span>↗</span>
 								<span class="truncate">{metric.change}</span>
-							</div>
-						</div>
-					{/each}
-				</div>
-			</div>
-
-			<div class={SECTION_CLASSES}>
-				{#if $tradesQuery?.isLoading}
-					<div class="max-w-full rounded-lg bg-gray-800/50 p-4 sm:p-6 lg:p-8">
-						<LoadingSpinner variant="inline" size="lg" text="Loading Trades Data..." />
-						<p class="text-center text-sm text-gray-300 sm:text-base">Fetching trades...</p>
-					</div>
-				{:else if $tradesQuery?.isError}
-					<div class="max-w-full rounded-lg bg-gray-800/50 p-4 sm:p-6 lg:p-8">
-						<h2 class="mb-4 text-base font-semibold text-red-400 sm:text-lg lg:text-xl">
-							Error Loading Trades Data
-						</h2>
-						<p class="mb-2 text-xs text-gray-300 sm:text-sm lg:text-base">
-							There was an error fetching the trades data:
-						</p>
-						<div class="mt-4 rounded border border-red-500/30 bg-red-900/20 p-3 sm:p-4">
-							<p class="text-xs text-red-300 sm:text-sm">
-								{$tradesQuery.error?.message || 'Unknown error occurred'}
-							</p>
-						</div>
-					</div>
-				{:else if tradesData && Array.isArray(tradesData) && tradesData.length > 0}
-					<div class="max-w-full overflow-x-auto">
-						<VolumeChart trades={tradesData} />
-					</div>
-				{:else}
-					<h2 class="mb-4 text-base font-semibold text-white sm:text-lg lg:text-xl">
-						No Trades Data Available
-					</h2>
-				{/if}
-			</div>
-			<!-- Latest Proofs -->
-			<div
-				class="rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-blue-900/30 via-purple-900/30 to-yellow-900/20 p-3 backdrop-blur-sm sm:p-4 lg:p-6"
-			>
-				<div class="mb-4 flex items-center justify-between sm:mb-6">
-					<div>
-						<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Latest Deposits</h2>
-						<p class="text-xs text-gray-400 sm:text-sm">Most recent deposits</p>
-					</div>
-				</div>
-				<div class="space-y-3">
-					{#each recentDeposits.slice(0, 5) as proof}
-						<!-- Proof Card -->
-						<div
-							class="rounded-xl border border-white/5 bg-black/30 p-3 transition-all hover:border-blue-500/30 sm:p-4"
-						>
-							<div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-								<div class="min-w-0 flex-1">
-									<h4 class="truncate text-xs font-semibold sm:text-sm">
-										{proof.id.split('-')[0]} - {formatUnits(BigInt(proof.amount), 18)}
-									</h4>
-									<p class="break-words text-xs text-gray-400">
-										Depositor: {proof.emitter.address.slice(0, 8)}...{proof.emitter.address.slice(
-											-6
-										)} • {new Date(Number(proof.timestamp) * 1000).toLocaleString()}
-									</p>
-								</div>
-								<div class="flex flex-shrink-0 items-center gap-2">
-									<div class="h-2 w-2 rounded-full bg-green-500" />
-									<a
-										href={`${$currentNetwork?.blockExplorer}/tx/${proof.transaction.id}`}
-										class="whitespace-nowrap text-xs text-blue-400 transition-colors hover:text-blue-300"
-									>
-										View Details
-									</a>
-								</div>
 							</div>
 						</div>
 					{/each}
