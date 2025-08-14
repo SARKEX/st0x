@@ -2,7 +2,6 @@
 	import { currentNetwork, currentToken } from '$lib/stores';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
-	import EquityChart from '$lib/components/charts/EquityChart.svelte';
 	import { getTrades } from '$lib/query';
 	import TradeHistoryTable from '$lib/components/tables/TradeHistoryTable.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
