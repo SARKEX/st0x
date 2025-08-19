@@ -254,17 +254,20 @@ export const getTrades = async (
 
 	// Collect all orderbook subgraph URLs (active + inactive)
 	const allOrderbookUrls: string[] = [];
-	
+
 	// Add active URL if it exists
 	if (network?.orderbook_subgraph_url) {
 		allOrderbookUrls.push(network.orderbook_subgraph_url);
 	}
-	
+
 	// Add inactive URLs if they exist
-	if (network?.orderbook_subgraph_urls_inactive && network.orderbook_subgraph_urls_inactive.length > 0) {
+	if (
+		network?.orderbook_subgraph_urls_inactive &&
+		network.orderbook_subgraph_urls_inactive.length > 0
+	) {
 		allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
 	}
-	
+
 	// If no URLs available, return empty array
 	if (allOrderbookUrls.length === 0) {
 		return [];
@@ -369,41 +372,26 @@ export const getTrades = async (
 					{ timestampGt: timestampGt, timestampLt: timestampLt },
 					'trades'
 				);
-				
-				// Log success for monitoring
-				if (index === 0) {
-					console.log(`✅ Successfully fetched ${trades.length} trades from active subgraph: ${url}`);
-				} else {
-					console.log(`✅ Successfully fetched ${trades.length} trades from inactive subgraph ${index}: ${url}`);
-				}
-				
+
 				return trades;
-			} catch (error) {
-				// Log error but don't fail completely - some inactive URLs might be down
-				if (index === 0) {
-					console.error(`❌ Failed to fetch trades from active subgraph: ${url}`, error);
-				} else {
-					console.warn(`⚠️ Failed to fetch trades from inactive subgraph ${index}: ${url}`, error);
-				}
+			} catch {
 				return [];
 			}
 		});
 
 		// Wait for all queries to complete
 		const allTradesResults = await Promise.all(allTradesPromises);
-		
+
 		// Combine all results and remove duplicates based on trade ID
 		const allTrades = allTradesResults.flat();
-		const uniqueTrades = allTrades.filter((trade, index, self) => 
-			index === self.findIndex(t => t.id === trade.id)
+		const uniqueTrades = allTrades.filter(
+			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
 		);
 
 		// Log summary of results
 		const totalFetched = allTrades.length;
 		const uniqueCount = uniqueTrades.length;
 		const duplicateCount = totalFetched - uniqueCount;
-		
-		console.log(`📊 Trades Summary: Fetched ${totalFetched} total trades from ${allOrderbookUrls.length} subgraphs, ${uniqueCount} unique trades after deduplication${duplicateCount > 0 ? ` (${duplicateCount} duplicates removed)` : ''}`);
 
 		return uniqueTrades;
 	} catch (error) {

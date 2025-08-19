@@ -23,17 +23,20 @@
 		queryFn: async () => {
 			// Collect all orderbook subgraph URLs (active + inactive)
 			const allOrderbookUrls: string[] = [];
-			
+
 			// Add active URL if it exists
 			if ($currentNetwork?.orderbook_subgraph_url) {
 				allOrderbookUrls.push($currentNetwork.orderbook_subgraph_url);
 			}
-			
+
 			// Add inactive URLs if they exist
-			if ($currentNetwork?.orderbook_subgraph_urls_inactive && $currentNetwork.orderbook_subgraph_urls_inactive.length > 0) {
+			if (
+				$currentNetwork?.orderbook_subgraph_urls_inactive &&
+				$currentNetwork.orderbook_subgraph_urls_inactive.length > 0
+			) {
 				allOrderbookUrls.push(...$currentNetwork.orderbook_subgraph_urls_inactive);
 			}
-			
+
 			// If no URLs available, return empty array
 			if (allOrderbookUrls.length === 0) return [];
 
@@ -63,7 +66,6 @@
 						);
 
 						if (vaultsResult.error) {
-							console.warn(`Failed to fetch vaults from ${subgraphUrl}:`, vaultsResult.error.readableMsg);
 							break; // Skip this subgraph if it fails
 						}
 
@@ -74,22 +76,21 @@
 						hasMore = vaults.length === pageSize;
 						page++;
 					}
-				} catch (error) {
-					console.warn(`Error fetching vaults from ${subgraphUrl}:`, error);
+				} catch {
 					// Continue with other subgraphs even if one fails
 				}
 			}
 
 			// Remove duplicate vaults based on vault ID (in case same vault exists in multiple subgraphs)
-			const uniqueVaults = allVaults.filter((vault, index, self) => 
-				index === self.findIndex(v => v.vault.id === vault.vault.id)
+			const uniqueVaults = allVaults.filter(
+				(vault, index, self) => index === self.findIndex((v) => v.vault.id === vault.vault.id)
 			);
-
-			console.log(`📊 Vaults Summary: Fetched ${allVaults.length} total vaults from ${allOrderbookUrls.length} subgraphs, ${uniqueVaults.length} unique vaults after deduplication`);
 
 			return uniqueVaults;
 		},
-		enabled: !!$currentNetwork?.orderbook_subgraph_url || !!$currentNetwork?.orderbook_subgraph_urls_inactive?.length,
+		enabled:
+			!!$currentNetwork?.orderbook_subgraph_url ||
+			!!$currentNetwork?.orderbook_subgraph_urls_inactive?.length,
 		retry: 3,
 		retryDelay: 1000
 	});
@@ -437,17 +438,24 @@
 		<!-- Header -->
 		<div class="mb-12">
 			<h1 class="text-2xl font-bold text-white sm:text-3xl">Platform Metrics</h1>
-			
+
 			{#if $currentNetwork?.orderbook_subgraph_urls_inactive?.length > 0}
 				<div class="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
 					<div class="flex items-start space-x-3">
 						<div class="flex-shrink-0">
 							<svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-								<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+								<path
+									fill-rule="evenodd"
+									d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+									clip-rule="evenodd"
+								/>
 							</svg>
 						</div>
 						<div class="text-sm text-blue-300">
-							<strong>Enhanced Data Coverage:</strong> This page now queries both active and inactive orderbook subgraphs to provide comprehensive trading volume data. This includes historical data from {1 + $currentNetwork.orderbook_subgraph_urls_inactive.length} total subgraph sources.
+							<strong>Enhanced Data Coverage:</strong> This page now queries both active and
+							inactive orderbook subgraphs to provide comprehensive trading volume data. This
+							includes historical data from {1 +
+								$currentNetwork.orderbook_subgraph_urls_inactive.length} total subgraph sources.
 						</div>
 					</div>
 				</div>

@@ -32,7 +32,6 @@ export const getSftMetadata = async (
 
 		return json.data.metaV1S as MetaV1S[];
 	} catch (error) {
-		console.error('Error fetching metadata:', error);
 		throw error;
 	}
 };
