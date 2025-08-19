@@ -364,7 +364,7 @@ export const getTrades = async (
 
 	try {
 		// Query all orderbook subgraph URLs and combine results
-		const allTradesPromises = allOrderbookUrls.map(async (url, index) => {
+		const allTradesPromises = allOrderbookUrls.map(async (url) => {
 			try {
 				const trades = await fetchAllPaginatedData(
 					url,
@@ -387,11 +387,6 @@ export const getTrades = async (
 		const uniqueTrades = allTrades.filter(
 			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
 		);
-
-		// Log summary of results
-		const totalFetched = allTrades.length;
-		const uniqueCount = uniqueTrades.length;
-		const duplicateCount = totalFetched - uniqueCount;
 
 		return uniqueTrades;
 	} catch (error) {
