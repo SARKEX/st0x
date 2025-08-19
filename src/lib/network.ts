@@ -17,6 +17,7 @@ export interface Network {
 	subgraph_url: string;
 	metadata_subgraph_url: string;
 	orderbook_subgraph_url: string;
+	orderbook_subgraph_urls_inactive: string[];
 	usdcToken: PythToken;
 }
 
@@ -61,7 +62,10 @@ export const networks: Network[] = [
 		metadata_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn',
 		orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn',
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-08-18-61bd/gn',
+		orderbook_subgraph_urls_inactive: [
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn'
+		],
 		usdcToken: USDC_TOKENS[42161]
 	},
 	{
@@ -77,11 +81,14 @@ export const networks: Network[] = [
 		rpcUrl: 'https://base-rpc.publicnode.com',
 		icon: 'ethereum',
 		subgraph_url:
-			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.3/gn',
+			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.4/gn',
 		metadata_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 		orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-07-03-f4dc/gn',
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-08-18-2744/gn',
+		orderbook_subgraph_urls_inactive: [
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-07-03-f4dc/gn'
+		],
 		usdcToken: USDC_TOKENS[8453]
 	}
 ];

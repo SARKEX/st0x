@@ -17,46 +17,80 @@
 	// Get all tokens for logo URLs (like the tokens page does)
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
-	// Query for vault balances (like vaultlist page) - fetch ALL vaults
+	// Query for vault balances (like vaultlist page) - fetch ALL vaults from all subgraphs
 	$: vaultsQuery = createQuery({
 		queryKey: ['metrics-vaults', $currentNetwork?.id],
 		queryFn: async () => {
-			if (!$currentNetwork?.orderbook_subgraph_url) return [];
+			// Collect all orderbook subgraph URLs (active + inactive)
+			const allOrderbookUrls: string[] = [];
 
-			let allVaults: SgVaultWithSubgraphName[] = [];
-			let page = 1;
-			const pageSize = 1000;
-			let hasMore = true;
-
-			// Fetch all vaults by paginating through all pages
-			while (hasMore) {
-				const vaultsResult = await getVaults(
-					[
-						{
-							url: $currentNetwork.orderbook_subgraph_url,
-							name: $currentNetwork.raindexNetworkSlug
-						}
-					],
-					{
-						owners: [],
-						hideZeroBalance: false
-					},
-					{ page, pageSize }
-				);
-
-				if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
-
-				const vaults = vaultsResult.value;
-				allVaults.push(...vaults);
-
-				// Check if there are more pages
-				hasMore = vaults.length === pageSize;
-				page++;
+			// Add active URL if it exists
+			if ($currentNetwork?.orderbook_subgraph_url) {
+				allOrderbookUrls.push($currentNetwork.orderbook_subgraph_url);
 			}
 
-			return allVaults;
+			// Add inactive URLs if they exist
+			if (
+				$currentNetwork?.orderbook_subgraph_urls_inactive &&
+				$currentNetwork.orderbook_subgraph_urls_inactive.length > 0
+			) {
+				allOrderbookUrls.push(...$currentNetwork.orderbook_subgraph_urls_inactive);
+			}
+
+			// If no URLs available, return empty array
+			if (allOrderbookUrls.length === 0) return [];
+
+			let allVaults: SgVaultWithSubgraphName[] = [];
+
+			// Query each subgraph for vaults
+			for (const subgraphUrl of allOrderbookUrls) {
+				try {
+					let page = 1;
+					const pageSize = 1000;
+					let hasMore = true;
+
+					// Fetch all vaults by paginating through all pages for this subgraph
+					while (hasMore) {
+						const vaultsResult = await getVaults(
+							[
+								{
+									url: subgraphUrl,
+									name: $currentNetwork.raindexNetworkSlug
+								}
+							],
+							{
+								owners: [],
+								hideZeroBalance: false
+							},
+							{ page, pageSize }
+						);
+
+						if (vaultsResult.error) {
+							break; // Skip this subgraph if it fails
+						}
+
+						const vaults = vaultsResult.value;
+						allVaults.push(...vaults);
+
+						// Check if there are more pages
+						hasMore = vaults.length === pageSize;
+						page++;
+					}
+				} catch {
+					// Continue with other subgraphs even if one fails
+				}
+			}
+
+			// Remove duplicate vaults based on vault ID (in case same vault exists in multiple subgraphs)
+			const uniqueVaults = allVaults.filter(
+				(vault, index, self) => index === self.findIndex((v) => v.vault.id === vault.vault.id)
+			);
+
+			return uniqueVaults;
 		},
-		enabled: !!$currentNetwork?.orderbook_subgraph_url,
+		enabled:
+			!!$currentNetwork?.orderbook_subgraph_url ||
+			!!$currentNetwork?.orderbook_subgraph_urls_inactive?.length,
 		retry: 3,
 		retryDelay: 1000
 	});
@@ -403,7 +437,27 @@
 	<div class="max-w-8xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
 		<!-- Header -->
 		<div class="mb-12">
-			<h1 class="text-2xl font-bold text-white sm:text-3xl">Platform Metrics</h1>
+			{#if $currentNetwork?.orderbook_subgraph_urls_inactive?.length > 0}
+				<div class="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
+					<div class="flex items-start space-x-3">
+						<div class="flex-shrink-0">
+							<svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+								<path
+									fill-rule="evenodd"
+									d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+									clip-rule="evenodd"
+								/>
+							</svg>
+						</div>
+						<div class="text-sm text-blue-300">
+							<strong>Enhanced Data Coverage:</strong> This page now queries both active and
+							inactive orderbook subgraphs to provide comprehensive trading volume data. This
+							includes historical data from {1 +
+								$currentNetwork.orderbook_subgraph_urls_inactive.length} total subgraph sources.
+						</div>
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Key Metrics Grid -->
@@ -507,7 +561,12 @@
 					</div>
 					<div class="flex items-center space-x-2">
 						<div class="h-3 w-3 rounded-full bg-green-500"></div>
-						<span class="text-xs text-gray-400">Live Data</span>
+						<span class="text-xs text-gray-400">
+							Live Data
+							{#if $currentNetwork?.orderbook_subgraph_urls_inactive?.length > 0}
+								• Including {1 + $currentNetwork.orderbook_subgraph_urls_inactive.length} subgraphs
+							{/if}
+						</span>
 					</div>
 				</div>
 			</div>
@@ -638,7 +697,12 @@
 					</div>
 					<div class="flex items-center space-x-2">
 						<div class="h-3 w-3 rounded-full bg-yellow-500"></div>
-						<span class="text-xs text-gray-400">Live Data</span>
+						<span class="text-xs text-gray-400">
+							Live Data
+							{#if $currentNetwork?.orderbook_subgraph_urls_inactive?.length > 0}
+								• Including {1 + $currentNetwork.orderbook_subgraph_urls_inactive.length} subgraphs
+							{/if}
+						</span>
 					</div>
 				</div>
 			</div>

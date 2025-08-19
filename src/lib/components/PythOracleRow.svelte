@@ -38,9 +38,8 @@
 					confidence: Number(parsed.conf) * Math.pow(10, parsed.expo)
 				};
 			}
-		} catch (err) {
+		} catch {
 			error = 'Failed to fetch oracle data';
-			console.error('Error fetching oracle data:', err);
 		} finally {
 			loading = false;
 		}

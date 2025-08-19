@@ -252,8 +252,26 @@ export const getTrades = async (
 		throw new Error('Invalid timestamp range: timestampGt must be less than timestampLt');
 	}
 
-	// Use network's orderbook subgraph URL or fall back to default
-	const orderbookSubgraphUrl = network?.orderbook_subgraph_url;
+	// Collect all orderbook subgraph URLs (active + inactive)
+	const allOrderbookUrls: string[] = [];
+
+	// Add active URL if it exists
+	if (network?.orderbook_subgraph_url) {
+		allOrderbookUrls.push(network.orderbook_subgraph_url);
+	}
+
+	// Add inactive URLs if they exist
+	if (
+		network?.orderbook_subgraph_urls_inactive &&
+		network.orderbook_subgraph_urls_inactive.length > 0
+	) {
+		allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
+	}
+
+	// If no URLs available, return empty array
+	if (allOrderbookUrls.length === 0) {
+		return [];
+	}
 
 	const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
   trades(
@@ -345,14 +363,32 @@ export const getTrades = async (
 }`;
 
 	try {
-		const trades = await fetchAllPaginatedData(
-			orderbookSubgraphUrl || '',
-			tradesQuery,
-			{ timestampGt: timestampGt, timestampLt: timestampLt },
-			'trades'
+		// Query all orderbook subgraph URLs and combine results
+		const allTradesPromises = allOrderbookUrls.map(async (url) => {
+			try {
+				const trades = await fetchAllPaginatedData(
+					url,
+					tradesQuery,
+					{ timestampGt: timestampGt, timestampLt: timestampLt },
+					'trades'
+				);
+
+				return trades;
+			} catch {
+				return [];
+			}
+		});
+
+		// Wait for all queries to complete
+		const allTradesResults = await Promise.all(allTradesPromises);
+
+		// Combine all results and remove duplicates based on trade ID
+		const allTrades = allTradesResults.flat();
+		const uniqueTrades = allTrades.filter(
+			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
 		);
 
-		return trades;
+		return uniqueTrades;
 	} catch (error) {
 		throw new Error(
 			`Failed to fetch trades: ${error instanceof Error ? error.message : 'Unknown error'}`
