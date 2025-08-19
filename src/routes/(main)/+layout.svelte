@@ -44,6 +44,8 @@
 				return 'Order List';
 			case '/vaultlist':
 				return 'Vault List';
+			case '/metrics':
+				return 'Platform Metrics';
 			default:
 				return 'ST0x';
 		}
@@ -70,6 +72,8 @@
 				return 'Order management';
 			case '/vaultlist':
 				return 'Vault management';
+			case '/metrics':
+				return '';
 			default:
 				return 'ST0x Platform';
 		}

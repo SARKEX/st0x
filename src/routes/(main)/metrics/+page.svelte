@@ -437,8 +437,6 @@
 	<div class="max-w-8xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
 		<!-- Header -->
 		<div class="mb-12">
-			<h1 class="text-2xl font-bold text-white sm:text-3xl">Platform Metrics</h1>
-
 			{#if $currentNetwork?.orderbook_subgraph_urls_inactive?.length > 0}
 				<div class="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
 					<div class="flex items-start space-x-3">

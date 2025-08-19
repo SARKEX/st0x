@@ -17,7 +17,8 @@
 		{ name: 'Market Making', href: '/mm', protected: true },
 		{ name: 'Portfolio', href: '/portfolio', protected: true },
 		{ name: 'Order List', href: '/orderlist', protected: true },
-		{ name: 'Vault List', href: '/vaultlist', protected: true }
+		{ name: 'Vault List', href: '/vaultlist', protected: true },
+		{ name: 'Metrics', href: '/metrics', protected: false }
 	];
 
 	import { createEventDispatcher } from 'svelte';
