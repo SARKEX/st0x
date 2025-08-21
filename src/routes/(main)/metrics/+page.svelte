@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentNetwork, tokenGlobalQuote, sfts } from '$lib/stores';
+	import { currentNetwork, tokenGlobalQuote } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import { getTrades } from '$lib/query';
@@ -16,22 +16,20 @@
 		queryKey: ['metrics-all-networks-sfts'],
 		queryFn: async () => {
 			const allNetworksSfts: OffchainAssetReceiptVault[] = [];
-			
+
 			// Query each network for SFTs
 			for (const network of networks) {
 				try {
 					if (network.subgraph_url) {
-						console.log(`Fetching SFTs for network: ${network.displayName}`);
 						// Import getSfts dynamically to avoid circular dependency
 						const { getSfts } = await import('$lib/query');
 						// Temporarily set currentNetwork to this network to get SFTs
 						const originalNetwork = $currentNetwork;
 						$currentNetwork = network;
-						
+
 						try {
 							const networkSfts = await getSfts();
 							if (networkSfts && Array.isArray(networkSfts)) {
-								console.log(`Got ${networkSfts.length} SFTs for ${network.displayName}:`, networkSfts);
 								allNetworksSfts.push(...networkSfts);
 							}
 						} finally {
@@ -39,13 +37,10 @@
 							$currentNetwork = originalNetwork;
 						}
 					}
-				} catch (error) {
-					console.error(`Failed to fetch SFTs for network ${network.displayName}:`, error);
+				} catch {
 					// Continue with other networks even if one fails
 				}
 			}
-
-			console.log('All networks SFTs result:', allNetworksSfts);
 			return allNetworksSfts;
 		},
 		enabled: true, // Always enabled since we want data from all networks
@@ -53,19 +48,18 @@
 		retryDelay: 1000
 	});
 
-	// Use the network-agnostic SFTs instead of the network-dependent ones
-	$: allSfts = $allNetworksSftsQuery.data || [];
-
 	// Get all tokens for logo URLs - combine tokens from ALL networks, not just current network
 	$: ALL_TOKENS = (() => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const allTokens: any[] = [];
-		networks.forEach(network => {
+		networks.forEach((network) => {
 			const networkTokens = getAllTokensByNetwork(network.chainId);
 			allTokens.push(...networkTokens);
 		});
 		// Remove duplicates based on address
-		return allTokens.filter((token, index, self) => 
-			index === self.findIndex(t => t.address.toLowerCase() === token.address.toLowerCase())
+		return allTokens.filter(
+			(token, index, self) =>
+				index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
 		);
 	})();
 
@@ -74,7 +68,7 @@
 		queryKey: ['metrics-all-networks-vaults'],
 		queryFn: async () => {
 			const allNetworksData: {
-				network: typeof networks[0];
+				network: (typeof networks)[0];
 				vaults: SgVaultWithSubgraphName[];
 				tlv: number;
 			}[] = [];
@@ -91,7 +85,10 @@
 					}
 
 					// Add inactive URLs if they exist
-					if (network.orderbook_subgraph_urls_inactive && network.orderbook_subgraph_urls_inactive.length > 0) {
+					if (
+						network.orderbook_subgraph_urls_inactive &&
+						network.orderbook_subgraph_urls_inactive.length > 0
+					) {
 						allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
 					}
 
@@ -149,9 +146,8 @@
 						vaults: uniqueVaults,
 						tlv: 0 // Will be calculated later
 					});
-				} catch (error) {
-					console.error(`Failed to fetch vaults for network ${network.displayName}:`, error);
-					// Continue with other networks even if one fails
+				} catch {
+					continue;
 				}
 			}
 
@@ -168,9 +164,9 @@
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
 			const monthAgo = now - 30 * 86400; // Last 30 days
-			
+
 			const allNetworksTrades: {
-				network: typeof networks[0];
+				network: (typeof networks)[0];
 				trades: SgTrade[];
 				volume: number;
 			}[] = [];
@@ -179,22 +175,17 @@
 			for (const network of networks) {
 				try {
 					if (network.orderbook_subgraph_url) {
-						console.log(`Fetching trades for network: ${network.displayName}`);
 						const trades = await getTrades(monthAgo, now, network);
-						console.log(`Got ${trades.length} trades for ${network.displayName}:`, trades);
 						allNetworksTrades.push({
 							network,
 							trades,
 							volume: 0 // Will be calculated later
 						});
 					}
-				} catch (error) {
-					console.error(`Failed to fetch trades for network ${network.displayName}:`, error);
-					// Continue with other networks even if one fails
+				} catch {
+					continue;
 				}
 			}
-
-			console.log('All networks trades result:', allNetworksTrades);
 			return allNetworksTrades;
 		},
 		enabled: true, // Always enabled since we want data from all networks
@@ -208,9 +199,9 @@
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
 			const weekAgo = now - 7 * 86400; // Last 7 days
-			
+
 			const allNetworksTrades: {
-				network: typeof networks[0];
+				network: (typeof networks)[0];
 				trades: SgTrade[];
 				volume: number;
 			}[] = [];
@@ -219,22 +210,17 @@
 			for (const network of networks) {
 				try {
 					if (network.orderbook_subgraph_url) {
-						console.log(`Fetching trades for network: ${network.displayName}`);
 						const trades = await getTrades(weekAgo, now, network);
-						console.log(`Got ${trades.length} trades for ${network.displayName}:`, trades);
 						allNetworksTrades.push({
 							network,
 							trades,
 							volume: 0 // Will be calculated later
 						});
 					}
-				} catch (error) {
-					console.error(`Failed to fetch trades for network ${network.displayName}:`, error);
-					// Continue with other networks even if one fails
+				} catch {
+					continue;
 				}
 			}
-
-			console.log('All networks trades result:', allNetworksTrades);
 			return allNetworksTrades;
 		},
 		enabled: true, // Always enabled since we want data from all networks
@@ -244,7 +230,13 @@
 
 	// Calculate Total Locked Value (TLV) across all networks - COMPLETELY network-agnostic
 	$: allNetworksTlv = (() => {
-		if (!$allNetworksVaultsQuery.data || !$tokenGlobalQuote.length || !$allNetworksSftsQuery.data || $allNetworksSftsQuery.data.length === 0) return [];
+		if (
+			!$allNetworksVaultsQuery.data ||
+			!$tokenGlobalQuote.length ||
+			!$allNetworksSftsQuery.data ||
+			$allNetworksSftsQuery.data.length === 0
+		)
+			return [];
 
 		return $allNetworksVaultsQuery.data.map((networkData) => {
 			// Group vaults by token to calculate total balances for this network
@@ -335,21 +327,13 @@
 
 	// Calculate token-level volumes across all networks (combining all vaults for the same token) - COMPLETELY network-agnostic
 	$: allNetworksTokenVolumes = (() => {
-		if (!$allNetworksTradesMonthQuery.data || !$allNetworksSftsQuery.data || $allNetworksSftsQuery.data.length === 0) {
-			console.log('Volume calculation skipped - missing data:', {
-				tradesData: !!$allNetworksTradesMonthQuery.data,
-				sftsData: !!$allNetworksSftsQuery.data,
-				sftsLength: $allNetworksSftsQuery.data?.length || 0,
-				tradesDataLength: $allNetworksTradesMonthQuery.data?.length || 0
-			});
+		if (
+			!$allNetworksTradesMonthQuery.data ||
+			!$allNetworksSftsQuery.data ||
+			$allNetworksSftsQuery.data.length === 0
+		) {
 			return [];
 		}
-
-		console.log('Starting volume calculation with:', {
-			networksCount: $allNetworksTradesMonthQuery.data.length,
-			sftsCount: $allNetworksSftsQuery.data.length,
-			tradesData: $allNetworksTradesMonthQuery.data
-		});
 
 		// Group trades by token across all networks to calculate token-level volumes
 		const tokenMap = new Map<
@@ -380,12 +364,8 @@
 			});
 		});
 
-		console.log('Initialized token map with', tokenMap.size, 'tokens');
-
 		// Process each trade from all networks to build token-level volumes
 		$allNetworksTradesMonthQuery.data.forEach((networkTrades) => {
-			console.log(`Processing trades for network ${networkTrades.network.displayName}:`, networkTrades.trades.length, 'trades');
-			
 			networkTrades.trades.forEach((trade: SgTrade) => {
 				// Handle input vault
 				const inputToken = trade.inputVaultBalanceChange.vault.token;
@@ -427,14 +407,6 @@
 				}
 			});
 		});
-
-		console.log('After processing trades, token map:', Array.from(tokenMap.entries()).map(([addr, data]) => ({
-			symbol: data.sft.symbol,
-			inVolume: data.inVolume.toString(),
-			outVolume: data.outVolume.toString(),
-			tradeCount: data.tradeCount,
-			networks: data.networks
-		})));
 
 		// Calculate net volumes, total volumes, and USD volumes
 		tokenMap.forEach((tokenData) => {
@@ -478,28 +450,18 @@
 							})}`
 						: 'N/A'
 			}));
-
-		console.log('Final volume calculation result:', result);
 		return result;
 	})();
 
 	// Calculate token-level volumes for last week across all networks - COMPLETELY network-agnostic
 	$: allNetworksTokenVolumesWeek = (() => {
-		if (!$allNetworksTradesWeekQuery.data || !$allNetworksSftsQuery.data || $allNetworksSftsQuery.data.length === 0) {
-			console.log('Weekly volume calculation skipped - missing data:', {
-				tradesData: !!$allNetworksTradesWeekQuery.data,
-				sftsData: !!$allNetworksSftsQuery.data,
-				sftsLength: $allNetworksSftsQuery.data?.length || 0,
-				tradesDataLength: $allNetworksTradesWeekQuery.data?.length || 0
-			});
+		if (
+			!$allNetworksTradesWeekQuery.data ||
+			!$allNetworksSftsQuery.data ||
+			$allNetworksSftsQuery.data.length === 0
+		) {
 			return [];
 		}
-
-		console.log('Starting weekly volume calculation with:', {
-			networksCount: $allNetworksTradesWeekQuery.data.length,
-			sftsCount: $allNetworksSftsQuery.data.length,
-			tradesData: $allNetworksTradesWeekQuery.data
-		});
 
 		// Group trades by token across all networks to calculate token-level volumes
 		const tokenMap = new Map<
@@ -530,12 +492,8 @@
 			});
 		});
 
-		console.log('Initialized weekly token map with', tokenMap.size, 'tokens');
-
 		// Process each trade from all networks to build token-level volumes
 		$allNetworksTradesWeekQuery.data.forEach((networkTrades) => {
-			console.log(`Processing weekly trades for network ${networkTrades.network.displayName}:`, networkTrades.trades.length, 'trades');
-			
 			networkTrades.trades.forEach((trade: SgTrade) => {
 				// Handle input vault
 				const inputToken = trade.inputVaultBalanceChange.vault.token;
@@ -577,14 +535,6 @@
 				}
 			});
 		});
-
-		console.log('After processing weekly trades, token map:', Array.from(tokenMap.entries()).map(([addr, data]) => ({
-			symbol: data.sft.symbol,
-			inVolume: data.inVolume.toString(),
-			outVolume: data.outVolume.toString(),
-			tradeCount: data.tradeCount,
-			networks: data.networks
-		})));
 
 		// Calculate net volumes, total volumes, and USD volumes
 		tokenMap.forEach((tokenData) => {
@@ -628,19 +578,23 @@
 							})}`
 						: 'N/A'
 			}));
-
-		console.log('Final weekly volume calculation result:', result);
 		return result;
 	})();
 
 	// Calculate total platform volume in USD for both time periods across all networks - COMPLETELY network-agnostic
-	$: totalPlatformVolumeUsdMonth = allNetworksTokenVolumes.reduce((sum, item) => sum + item.usdVolume, 0);
+	$: totalPlatformVolumeUsdMonth = allNetworksTokenVolumes.reduce(
+		(sum, item) => sum + item.usdVolume,
+		0
+	);
 	$: formattedTotalVolumeUsdMonth = `$${totalPlatformVolumeUsdMonth.toLocaleString(undefined, {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 2
 	})}`;
 
-	$: totalPlatformVolumeUsdWeek = allNetworksTokenVolumesWeek.reduce((sum, item) => sum + item.usdVolume, 0);
+	$: totalPlatformVolumeUsdWeek = allNetworksTokenVolumesWeek.reduce(
+		(sum, item) => sum + item.usdVolume,
+		0
+	);
 	$: formattedTotalVolumeUsdWeek = `$${totalPlatformVolumeUsdWeek.toLocaleString(undefined, {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 2
@@ -660,7 +614,7 @@
 					Total Value Locked (TVL) and Trading Volume across all supported networks
 				</p>
 			</div>
-			
+
 			{#if networks.length > 1}
 				<div class="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
 					<div class="flex items-start space-x-3">
@@ -674,8 +628,9 @@
 							</svg>
 						</div>
 						<div class="text-sm text-blue-300">
-							<strong>Multi-Network Data:</strong> This page now aggregates data from {networks.length} networks: {networks.map(n => n.displayName).join(', ')}. 
-							All metrics shown are cross-network totals.
+							<strong>Multi-Network Data:</strong> This page now aggregates data from {networks.length}
+							networks: {networks.map((n) => n.displayName).join(', ')}. All metrics shown are
+							cross-network totals.
 						</div>
 					</div>
 				</div>
@@ -736,10 +691,16 @@
 					<div class="text-3xl font-bold text-white">
 						{activeTab === 'month'
 							? $allNetworksTradesMonthQuery.data
-								? $allNetworksTradesMonthQuery.data.reduce((sum, network) => sum + network.trades.length, 0)
+								? $allNetworksTradesMonthQuery.data.reduce(
+										(sum, network) => sum + network.trades.length,
+										0
+									)
 								: 0
 							: $allNetworksTradesWeekQuery.data
-								? $allNetworksTradesWeekQuery.data.reduce((sum, network) => sum + network.trades.length, 0)
+								? $allNetworksTradesWeekQuery.data.reduce(
+										(sum, network) => sum + network.trades.length,
+										0
+									)
 								: 0}
 					</div>
 					<div class="mt-1 text-xs font-medium text-yellow-500">
@@ -760,7 +721,9 @@
 						Active Tokens
 					</div>
 					<div class="text-3xl font-bold text-white">
-						{activeTab === 'month' ? allNetworksTokenVolumes.length : allNetworksTokenVolumesWeek.length}
+						{activeTab === 'month'
+							? allNetworksTokenVolumes.length
+							: allNetworksTokenVolumesWeek.length}
 					</div>
 					<div class="mt-1 text-xs font-medium text-yellow-500">
 						{activeTab === 'month' ? 'Last 30 days' : 'Last 7 days'}
@@ -821,13 +784,19 @@
 									<td class="px-8 py-5">
 										<div class="flex items-center space-x-4">
 											<div class="flex-shrink-0">
-												<div class="h-10 w-10 rounded-xl border border-white/10 bg-gray-700 flex items-center justify-center">
-													<span class="text-lg font-bold text-white">{networkData.network.displayName.charAt(0)}</span>
+												<div
+													class="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gray-700"
+												>
+													<span class="text-lg font-bold text-white"
+														>{networkData.network.displayName.charAt(0)}</span
+													>
 												</div>
 											</div>
 											<div>
 												<div class="font-medium text-white">{networkData.network.displayName}</div>
-												<div class="text-sm text-gray-400">{networkData.network.currencySymbol}</div>
+												<div class="text-sm text-gray-400">
+													{networkData.network.currencySymbol}
+												</div>
 												<div class="font-mono text-xs text-gray-500">
 													{networkData.network.name}
 												</div>
@@ -908,7 +877,8 @@
 					<div>
 						<h2 class="text-xl font-semibold text-white">Cross-Network Token Trading Volumes</h2>
 						<p class="mt-1 text-sm text-gray-400">
-							{activeTab === 'month' ? 'Last 30 days' : 'Last 7 days'} • Combined volumes across all networks
+							{activeTab === 'month' ? 'Last 30 days' : 'Last 7 days'} • Combined volumes across all
+							networks
 						</p>
 					</div>
 					<div class="flex items-center space-x-2">
