@@ -8,6 +8,7 @@
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import ListCard from '$lib/components/ui/ListCard.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
+	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	let PLATFORM_STATS: { label: string; value: string; change: string }[] = [];
@@ -17,6 +18,8 @@
 	let biggestMovers: OffchainAssetReceiptVault[] = [];
 	let biggestVolume: OffchainAssetReceiptVault[] = [];
 	let recentlyAdded: OffchainAssetReceiptVault[] = [];
+	let isSearching = false;
+	let currentSearchId: string | null = null;
 
 	function getRandomItems<T>(arr: T[], count: number): T[] {
 		const copy = [...arr];
@@ -27,14 +30,37 @@
 		return copy.slice(0, count);
 	}
 
-	$: filteredSfts =
-		searchTerm.trim().length === 0
-			? []
-			: $sfts.filter(
-					(s) =>
-						s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-						s.symbol.toLowerCase().includes(searchTerm.toLowerCase())
-				);
+	$: {
+		const trimmedSearch = searchTerm.trim();
+		if (trimmedSearch.length >= 3) {
+			// Start tracking search
+			searchAnalytics.trackSearchStart();
+			
+			isSearching = true;
+			filteredSfts = $sfts.filter(
+				(s) =>
+					s.name.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
+					s.symbol.toLowerCase().includes(trimmedSearch.toLowerCase())
+			);
+			
+			// Track the search with debouncing (800ms delay) to avoid too many events
+			trackSearchDebounced(trimmedSearch, filteredSfts.length, 800);
+			currentSearchId = trimmedSearch; // Store for click tracking
+		} else {
+			isSearching = false;
+			filteredSfts = [];
+			currentSearchId = null;
+		}
+	}
+	
+	function handleResultClick(sft: OffchainAssetReceiptVault, position: number) {
+		// Track the click
+		if (currentSearchId) {
+			searchAnalytics.trackClick(currentSearchId, sft.symbol, position);
+		}
+		// Clear search term
+		searchTerm = '';
+	}
 
 	$: if ($sfts) {
 		st0xVaults = $sfts;
@@ -101,22 +127,64 @@
 		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">
 			<Section>
 				<div class="mx-auto max-w-3xl">
-					<SearchBar bind:value={searchTerm} placeholder="Search stocks by name or symbol..." />
-					{#if filteredSfts.length > 0}
-						<div class="mt-2 divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-800/80">
-							{#each filteredSfts.slice(0, 10) as sft}
-								<a class="block px-4 py-3 hover:bg-white/5" href={`/tokens/${sft.id}`}>
-									<div class="flex items-center justify-between">
-										<div class="min-w-0">
-											<div class="truncate text-sm font-semibold text-white sm:text-base">{sft.name}</div>
-											<div class="text-xs text-gray-400">{sft.symbol}</div>
+					<div class="relative">
+						<SearchBar 
+							bind:value={searchTerm} 
+							placeholder="Search stocks by name or symbol..." 
+							minChars={3}
+						/>
+						{#if isSearching}
+							<div class="absolute left-0 right-0 top-full z-10 mt-2">
+								{#if filteredSfts.length > 0}
+									<div class="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-900/95 shadow-xl backdrop-blur-sm">
+										<div class="bg-gray-800/50 px-4 py-2 text-xs text-gray-400">
+											{filteredSfts.length} result{filteredSfts.length === 1 ? '' : 's'} found
 										</div>
-										<div class="ml-3 text-xs text-yellow-500">View</div>
+										{#each filteredSfts.slice(0, 10) as sft, index}
+											<a 
+												class="block px-4 py-3 transition-colors hover:bg-white/10" 
+												href={`/tokens/${sft.id}`}
+												on:click={() => handleResultClick(sft, index)}
+											>
+												<div class="flex items-center justify-between">
+													<div class="min-w-0">
+														<div class="truncate text-sm font-semibold text-white sm:text-base">
+															{@html sft.name.replace(
+																new RegExp(`(${searchTerm.trim()})`, 'gi'),
+																'<span class="text-yellow-400">$1</span>'
+															)}
+														</div>
+														<div class="text-xs text-gray-400">
+															{@html sft.symbol.replace(
+																new RegExp(`(${searchTerm.trim()})`, 'gi'),
+																'<span class="text-yellow-400">$1</span>'
+															)}
+														</div>
+													</div>
+													<div class="ml-3 flex items-center gap-1 text-xs text-yellow-500">
+														<span>View</span>
+														<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+														</svg>
+													</div>
+												</div>
+											</a>
+										{/each}
+										{#if filteredSfts.length > 10}
+											<div class="bg-gray-800/50 px-4 py-2 text-center text-xs text-gray-400">
+												Showing first 10 results
+											</div>
+										{/if}
 									</div>
-								</a>
-							{/each}
-						</div>
-					{/if}
+								{:else}
+									<div class="rounded-xl border border-white/10 bg-gray-900/95 px-4 py-8 text-center shadow-xl backdrop-blur-sm">
+										<div class="text-gray-400">No stocks found matching "{searchTerm}"</div>
+										<div class="mt-2 text-xs text-gray-500">Try searching for a different name or symbol</div>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
 				</div>
 			</Section>
 
