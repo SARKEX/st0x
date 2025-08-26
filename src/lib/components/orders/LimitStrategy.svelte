@@ -20,13 +20,21 @@
 	export let passedOrderType: 'Buy' | 'Sell' = 'Buy';
 
 	// Filter tokens based on current network
-	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
+	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.id) : [];
 
-	// Initialize with passed props or defaults
-	let selectedInputToken: Token = passedInputToken || getAllTokensByNetwork($currentNetwork.id)[3];
-	let selectedOutputToken: Token =
-		passedOutputToken ||
-		getAllTokensByNetwork($currentNetwork.id)[getAllTokensByNetwork($currentNetwork.id).length - 1];
+	// Initialize with passed props or defaults, with safety checks
+	const getDefaultTokens = () => {
+		if (!$currentNetwork) return { input: undefined, output: undefined };
+		const tokens = getAllTokensByNetwork($currentNetwork.id);
+		return {
+			input: tokens[3] || tokens[0],
+			output: tokens[tokens.length - 1] || tokens[1] || tokens[0]
+		};
+	};
+	
+	const defaults = getDefaultTokens();
+	let selectedInputToken: Token = passedInputToken || defaults.input;
+	let selectedOutputToken: Token = passedOutputToken || defaults.output;
 	let selectedOrderType: 'Buy' | 'Sell' = passedOrderType;
 
 	// Track if we've initialized with passed tokens to prevent overriding user selections
@@ -139,6 +147,7 @@
 	};
 </script>
 
+{#if $currentNetwork && ALL_TOKENS.length > 0}
 <div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
 	<div class="space-y-6 lg:col-span-2">
 		<div class="grid grid-cols-1 gap-3 sm:gap-4">
@@ -382,3 +391,8 @@
 		</button>
 	</div>
 </div>
+{:else}
+	<div class="flex items-center justify-center py-12">
+		<p class="text-gray-400">Loading trading interface...</p>
+	</div>
+{/if}

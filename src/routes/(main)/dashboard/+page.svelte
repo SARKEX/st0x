@@ -125,16 +125,20 @@
 {:else if $sfts.length > 0}
 	<div>
 		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">
-			<Section>
-				<div class="mx-auto max-w-3xl">
-					<div class="relative">
-						<SearchBar 
-							bind:value={searchTerm} 
-							placeholder="Search stocks by name or symbol..." 
-							minChars={3}
-						/>
-						{#if isSearching}
-							<div class="absolute left-0 right-0 top-full z-10 mt-2">
+			<div class="relative z-50 mb-8">
+				<Section>
+					<div class="mx-auto max-w-3xl">
+						<div class="relative">
+							<SearchBar 
+								bind:value={searchTerm} 
+								placeholder="Search stocks by name or symbol..." 
+								minChars={3}
+							/>
+						</div>
+					</div>
+				</Section>
+				{#if isSearching}
+					<div class="absolute left-1/2 top-full z-50 mt-2 w-full max-w-3xl -translate-x-1/2 px-4 sm:px-6">
 								{#if filteredSfts.length > 0}
 									<div class="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-900/95 shadow-xl backdrop-blur-sm">
 										<div class="bg-gray-800/50 px-4 py-2 text-xs text-gray-400">
@@ -181,12 +185,10 @@
 										<div class="text-gray-400">No stocks found matching "{searchTerm}"</div>
 										<div class="mt-2 text-xs text-gray-500">Try searching for a different name or symbol</div>
 									</div>
-								{/if}
-							</div>
 						{/if}
 					</div>
-				</div>
-			</Section>
+				{/if}
+			</div>
 
 			<Section>
 				<div class="mb-4 flex items-center justify-between sm:mb-6">

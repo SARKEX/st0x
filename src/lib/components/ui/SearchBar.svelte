@@ -12,10 +12,10 @@
 	$: showHint = showMinCharsHint && value.length > 0 && value.length < minChars;
 </script>
 
-<div class="relative">
+<div class="relative h-full">
 	<input
 		type="text"
-		class="w-full rounded-xl border border-white/10 bg-black/30 p-4 text-lg outline-none placeholder-gray-400 focus:border-yellow-500/50 focus:ring-0"
+		class="h-full w-full rounded-xl border border-white/10 bg-black/30 px-6 py-5 text-lg outline-none placeholder-gray-400 focus:border-yellow-500/50 focus:ring-0"
 		placeholder={placeholder}
 		{value}
 		on:input={handleInput}

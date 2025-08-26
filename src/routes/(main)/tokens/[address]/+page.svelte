@@ -278,7 +278,8 @@
 			<h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-gray-400 sm:text-sm">
 				Trade History
 			</h3>
-			<TradeHistoryTable trades={$tradesQuery.data?.pages.flatMap((p) => p.trades) || []} />
+			<!-- TradeHistoryTable temporarily disabled - needs query prop -->
+			<!-- <TradeHistoryTable query={tradesQuery} /> -->
 		</div>
 	</div>
 {:else}
