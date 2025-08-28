@@ -23,9 +23,9 @@
 				<NetworkSelector />
 				<button
 					class="hidden w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-4 py-3 text-sm font-semibold text-white shadow-md transition-transform hover:scale-105 sm:inline-flex sm:w-auto sm:px-5 sm:py-2.5"
-					on:click={() => goto('/stocks')}
+					on:click={() => goto('/trade-list')}
 				>
-					Browse Stocks
+					Trade Now
 				</button>
 				<WalletConnect />
 			</div>

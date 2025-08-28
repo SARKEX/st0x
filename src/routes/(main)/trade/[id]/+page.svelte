@@ -549,6 +549,90 @@
 						</div>
 					</div>
 				</div>
+			{:else if activeTab === 'trading'}
+				<div class="space-y-4">
+					<!-- Token Trading Volumes Table -->
+					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+						<h3 class="mb-4 font-semibold">Trading Activity</h3>
+						<div class="overflow-x-auto">
+							<table class="w-full text-sm">
+								<thead>
+									<tr class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+										<th class="p-2">Metric</th>
+										<th class="p-2 text-right">Value</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr class="border-b border-white/5">
+										<td class="p-2 text-gray-400">Total Minted (In Volume)</td>
+										<td class="p-2 text-right font-medium">
+											{formatUnits(
+												currentToken.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)),
+												18
+											)}
+										</td>
+									</tr>
+									<tr class="border-b border-white/5">
+										<td class="p-2 text-gray-400">Total Redeemed (Out Volume)</td>
+										<td class="p-2 text-right font-medium">
+											{formatUnits(
+												currentToken.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)),
+												18
+											)}
+										</td>
+									</tr>
+									<tr class="border-b border-white/5">
+										<td class="p-2 text-gray-400">Net Volume</td>
+										<td class="p-2 text-right font-medium {parseFloat(formatUnits(
+												currentToken.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)) -
+												currentToken.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)),
+												18
+											)) >= 0 ? 'text-green-400' : 'text-red-400'}">
+											{formatUnits(
+												currentToken.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)) -
+												currentToken.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)),
+												18
+											)}
+										</td>
+									</tr>
+									<tr class="border-b border-white/5">
+										<td class="p-2 text-gray-400">Total Transfers</td>
+										<td class="p-2 text-right font-medium">{currentToken.shareTransfers.length}</td>
+									</tr>
+									<tr class="border-b border-white/5">
+										<td class="p-2 text-gray-400">Unique Holders</td>
+										<td class="p-2 text-right font-medium">{currentToken.tokenHolders.length}</td>
+									</tr>
+									<tr class="border-b border-white/5">
+										<td class="p-2 text-gray-400">Certifications</td>
+										<td class="p-2 text-right font-medium">{currentToken.certifications.length}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<!-- Historical Activity -->
+					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+						<h3 class="mb-4 font-semibold">Recent Activity</h3>
+						<div class="space-y-3">
+							<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+								<div class="rounded-lg bg-gray-800/50 p-3">
+									<div class="text-xs text-gray-400">Total Deposits</div>
+									<div class="text-lg font-semibold">{currentToken.deposits.length}</div>
+								</div>
+								<div class="rounded-lg bg-gray-800/50 p-3">
+									<div class="text-xs text-gray-400">Total Withdrawals</div>
+									<div class="text-lg font-semibold">{currentToken.withdraws.length}</div>
+								</div>
+								<div class="rounded-lg bg-gray-800/50 p-3">
+									<div class="text-xs text-gray-400">Transfer Events</div>
+									<div class="text-lg font-semibold">{currentToken.shareTransfers.length}</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
 			{/if}
 		</Section>
 

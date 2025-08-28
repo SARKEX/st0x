@@ -24,12 +24,12 @@
 	$: pageDescription = getPageDescription($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
-		if (pathname.startsWith('/trade/')) return 'Trade';
+		if (pathname.startsWith('/trade/')) return 'Trade Details';
 		
 		switch (pathname) {
 			case '/':
-			case '/stocks':
-				return 'Stocks';
+			case '/trade-list':
+				return 'Trade';
 			case '/strategies':
 				return 'Strategies';
 			case '/portfolio':
@@ -52,7 +52,7 @@
 		
 		switch (pathname) {
 			case '/':
-			case '/stocks':
+			case '/trade-list':
 				return `Browse and trade tokenized stocks on ${$currentNetwork?.displayName || 'Network'}`;
 			case '/strategies':
 				return 'Manage your trading strategies';

@@ -8,7 +8,7 @@
 	import ListCard from '$lib/components/ui/ListCard.svelte';
 	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getAllTokensByNetwork, getTokensByCategory } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import type { ApiStockQuote } from '$lib/types';
@@ -17,26 +17,14 @@
 	
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
-	
-	let viewMode = 'table';
-	let activeFilter = 'All';
 
 	let searchTerm = '';
 	let filteredSfts: OffchainAssetReceiptVault[] = [];
-	let biggestMovers: OffchainAssetReceiptVault[] = [];
-	let biggestVolume: OffchainAssetReceiptVault[] = [];
+	let biggestMovers: any[] = [];
+	let biggestVolume: any[] = [];
 	let recentlyAdded: OffchainAssetReceiptVault[] = [];
 	let isSearching = false;
 	let currentSearchId: string | null = null;
-
-	function getRandomItems<T>(arr: T[], count: number): T[] {
-		const copy = [...arr];
-		for (let i = copy.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[copy[i], copy[j]] = [copy[j], copy[i]];
-		}
-		return copy.slice(0, count);
-	}
 
 	$: {
 		const trimmedSearch = searchTerm.trim();
@@ -70,13 +58,51 @@
 		searchTerm = '';
 	}
 
-	$: if ($sfts) {
+	$: if ($sfts && $tokenGlobalQuote) {
 		st0xVaults = $sfts;
 
-		// Random selections for cards (placeholder until real metrics implemented)
-		biggestMovers = getRandomItems(st0xVaults, 5);
-		biggestVolume = getRandomItems(st0xVaults, 5);
-		recentlyAdded = getRandomItems(st0xVaults, 5);
+		// Calculate biggest movers based on AlphaVantage daily change percentage
+		biggestMovers = [...st0xVaults]
+			.map(sft => {
+				const symbol = sft.symbol?.split('s1')[0];
+				// Find the quote in the array by matching symbol
+				const quoteData = ($tokenGlobalQuote as ApiStockQuote[]).find(
+					q => q?.['Global Quote']?.['01. symbol'] === symbol
+				);
+				const globalQuote = quoteData?.['Global Quote'];
+				const changePercent = globalQuote?.['10. change percent'] ? 
+					parseFloat(globalQuote['10. change percent'].replace('%', '')) : 0;
+				return { ...sft, changePercent };
+			})
+			.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+			.slice(0, 5);
+
+		// Calculate biggest volume based on on-chain transfers and deposits/withdrawals
+		biggestVolume = [...st0xVaults]
+			.map(sft => {
+				// Calculate total on-chain volume (deposits + withdrawals + transfers)
+				const depositVolume = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
+				const withdrawVolume = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
+				const totalVolume = depositVolume + withdrawVolume;
+				const transferCount = sft.shareTransfers.length;
+				return { ...sft, totalVolume, transferCount };
+			})
+			.sort((a, b) => {
+				// Sort by total volume, then by transfer count as tiebreaker
+				const volumeDiff = Number(b.totalVolume - a.totalVolume);
+				return volumeDiff !== 0 ? volumeDiff : b.transferCount - a.transferCount;
+			})
+			.slice(0, 5);
+
+		// Sort by deployment timestamp (most recent first)
+		recentlyAdded = [...st0xVaults]
+			.sort((a, b) => {
+				// deployTimestamp is a string timestamp in seconds
+				const timestampA = parseInt(a.deployTimestamp || '0');
+				const timestampB = parseInt(b.deployTimestamp || '0');
+				return timestampB - timestampA;
+			})
+			.slice(0, 5);
 	}
 
 	// Process tokens with quote data
@@ -115,26 +141,6 @@
 		}
 	});
 
-	$: filteredData = ($query.data ?? []).filter((token) => {
-		if (activeFilter === 'All') return true;
-		if (activeFilter === 'ST0x') {
-			return getTokensByCategory('ST0x')
-				.filter((t) => t.chainId === $currentNetwork?.chainId)
-				.some((t) => t.address.toLowerCase() === token.address.toLowerCase());
-		}
-		if (activeFilter === 'ETFs') {
-			return getTokensByCategory('ETFs')
-				.filter((t) => t.chainId === $currentNetwork?.chainId)
-				.some((t) => t.address.toLowerCase() === token.address.toLowerCase());
-		}
-		return false;
-	});
-
-	function truncateId(id: string, start: number = 6, end: number = 4) {
-		if (!id) return '';
-		if (id.length <= start + end + 3) return id;
-		return `${id.slice(0, start)}...${id.slice(-end)}`;
-	}
 </script>
 
 {#if !$sfts}
@@ -214,60 +220,109 @@
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Discover</h2>
 				</div>
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-					<ListCard title="Biggest Movers" items={biggestMovers.map((s) => ({ name: s.name, symbol: s.symbol, href: `/trade/${s.id}` }))} />
-					<ListCard title="Biggest Volume" items={biggestVolume.map((s) => ({ name: s.name, symbol: s.symbol, href: `/trade/${s.id}` }))} />
-					<ListCard title="Most Recently Added" items={recentlyAdded.map((s) => ({ name: s.name, symbol: s.symbol, href: `/trade/${s.id}` }))} />
+					<ListCard 
+						title="Biggest Movers (24H)" 
+						items={biggestMovers.map((s) => {
+							const symbol = s.symbol?.split('s1')[0];
+							const quoteData = $tokenGlobalQuote.find(
+								q => q?.['Global Quote']?.['01. symbol'] === symbol
+							);
+							const price = quoteData?.['Global Quote']?.['05. price'];
+							const tokenInfo = ALL_TOKENS.find((t) => t.address.toLowerCase() === s.address.toLowerCase());
+							return { 
+								name: s.name, 
+								symbol: s.symbol, 
+								href: `/trade/${s.id}`,
+								logoUrl: tokenInfo?.logoUrl,
+								price: price ? parseFloat(price).toFixed(2) : 'N/A',
+								metadata: s.changePercent ? `${s.changePercent > 0 ? '+' : ''}${s.changePercent.toFixed(2)}%` : 'N/A',
+								metadataClass: s.changePercent > 0 ? 'text-green-400' : s.changePercent < 0 ? 'text-red-400' : 'text-gray-400',
+								showTradeButton: true
+							};
+						})} 
+					/>
+					<ListCard 
+						title="Biggest Volume" 
+						items={biggestVolume.map((s) => {
+							const tokenInfo = ALL_TOKENS.find((t) => t.address.toLowerCase() === s.address.toLowerCase());
+							// Calculate dollar value of volume
+							const volumeInShares = parseFloat(formatUnits(s.totalVolume, 18));
+							const symbol = s.symbol?.split('s1')[0];
+							const quoteData = $tokenGlobalQuote.find(
+								q => q?.['Global Quote']?.['01. symbol'] === symbol
+							);
+							const price = quoteData?.['Global Quote']?.['05. price'] ? 
+								parseFloat(quoteData['Global Quote']['05. price']) : 0;
+							const dollarVolume = volumeInShares * price;
+							
+							// Format dollar volume
+							const volumeStr = dollarVolume >= 1000000 ? 
+								`$${(dollarVolume / 1000000).toFixed(2)}M` : 
+								dollarVolume >= 1000 ? 
+								`$${(dollarVolume / 1000).toFixed(1)}K` : 
+								`$${dollarVolume.toFixed(2)}`;
+							
+							return { 
+								name: s.name, 
+								symbol: s.symbol, 
+								href: `/trade/${s.id}`,
+								logoUrl: tokenInfo?.logoUrl,
+								metadata: `${s.transferCount} txs\n${volumeStr}`,
+								metadataClass: 'text-yellow-400',
+								showTradeButton: true
+							};
+						})} 
+					/>
+					<ListCard 
+						title="Most Recently Added" 
+						items={recentlyAdded.map((s) => {
+							const timestamp = parseInt(s.deployTimestamp || '0');
+							const date = new Date(timestamp * 1000);
+							const daysAgo = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+							const tokenInfo = ALL_TOKENS.find((t) => t.address.toLowerCase() === s.address.toLowerCase());
+							return { 
+								name: s.name, 
+								symbol: s.symbol, 
+								href: `/trade/${s.id}`,
+								logoUrl: tokenInfo?.logoUrl,
+								metadata: daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`,
+								metadataClass: 'text-blue-400',
+								showTradeButton: true
+							};
+						})} 
+					/>
 				</div>
 			</Section>
 
 			<!-- Stock Table Section -->
 			<Section>
-				<div class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">All Stocks</h2>
-					<div class="flex gap-2">
-						<div class="flex gap-1 rounded-lg bg-white/5 p-1">
-							{#each ['All', 'ST0x', 'ETFs'] as filter}
-								<button
-									on:click={() => (activeFilter = filter)}
-									class="rounded-md px-3 py-1.5 text-xs font-medium transition-all {activeFilter === filter ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}"
-								>
-									{filter}
-								</button>
-							{/each}
-						</div>
-						<div class="flex gap-1 rounded-lg bg-white/5 p-1">
-							<button
-								on:click={() => (viewMode = 'grid')}
-								class="rounded-md px-3 py-1.5 text-xs font-medium transition-all {viewMode === 'grid' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}"
-							>
-								Grid
-							</button>
-							<button
-								on:click={() => (viewMode = 'table')}
-								class="rounded-md px-3 py-1.5 text-xs font-medium transition-all {viewMode === 'table' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}"
-							>
-								Table
-							</button>
-						</div>
-					</div>
+				<div class="mb-4 sm:mb-6">
+					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse Stocks</h2>
 				</div>
 				
-				{#if viewMode === 'table'}
-					<!-- Table View -->
+				<!-- Table View -->
 					<div class="overflow-x-auto rounded-lg border border-white/10 bg-gray-800/50">
 						<table class="w-full">
 							<thead>
 								<tr class="border-b border-white/10">
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</th>
 									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">Market Cap</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">Supply</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">Holders</th>
-									<th class="px-4 py-3 text-center text-xs font-medium text-gray-400">Actions</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</th>
+									<th class="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</th>
 								</tr>
 							</thead>
 							<tbody>
-								{#each filteredData as token (token.id)}
+								{#each $query.data || [] as token (token.id)}
+									{@const sft = $sfts.find(s => s.id === token.id)}
+									{@const deposits = sft ? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)) : BigInt(0)}
+									{@const withdraws = sft ? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)) : BigInt(0)}
+									{@const circulating = deposits - withdraws}
+									{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
+									{@const onChainPrice = parseFloat(token.price.toString())}
+									{@const onChainMarketCap = circulatingSupply * onChainPrice}
 									<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
 										<td class="px-4 py-3">
 											<div class="flex items-center gap-3">
@@ -282,10 +337,31 @@
 												</div>
 											</div>
 										</td>
-										<td class="px-4 py-3 font-medium">${parseFloat(token.price.toString()).toFixed(2)}</td>
-										<td class="px-4 py-3 hidden sm:table-cell">${token.marketCap}</td>
-										<td class="px-4 py-3 hidden lg:table-cell">{token.totalSupply}</td>
-										<td class="px-4 py-3 hidden lg:table-cell">{token.totalHolders}</td>
+										<td class="px-4 py-3">
+											<div class="font-medium">${onChainPrice.toFixed(2)}</div>
+										</td>
+										<td class="px-4 py-3 hidden sm:table-cell">
+											<div class="text-sm text-gray-500">TBD</div>
+										</td>
+										<td class="px-4 py-3 hidden md:table-cell">
+											<div class="text-sm">
+												${onChainMarketCap >= 1000000 ? 
+													`${(onChainMarketCap / 1000000).toFixed(2)}M` : 
+													onChainMarketCap >= 1000 ? 
+													`${(onChainMarketCap / 1000).toFixed(1)}K` : 
+													onChainMarketCap.toFixed(2)}
+											</div>
+										</td>
+										<td class="px-4 py-3 hidden lg:table-cell">
+											<div class="text-sm">
+												{circulatingSupply >= 1000 ? 
+													`${(circulatingSupply / 1000).toFixed(2)}K` : 
+													circulatingSupply.toFixed(2)}
+											</div>
+										</td>
+										<td class="px-4 py-3 hidden xl:table-cell">
+											<div class="text-sm">{token.totalHolders}</div>
+										</td>
 										<td class="px-4 py-3">
 											<div class="flex justify-center gap-2">
 												<button
@@ -301,45 +377,6 @@
 							</tbody>
 						</table>
 					</div>
-				{:else}
-					<!-- Grid View -->
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-						{#each filteredData as token (token.id)}
-							<div
-								class="group cursor-pointer rounded-xl border border-white/5 bg-gray-800/50 p-4 transition-all hover:border-yellow-500/30"
-								on:click={() => goto(`/trade/${token.id}`)}
-								role="button"
-								tabindex="0"
-								on:keydown={(e) => e.key === 'Enter' && goto(`/trade/${token.id}`)}
-							>
-								<div class="mb-3 flex items-start justify-between">
-									<div class="flex items-center gap-3">
-										<img
-											src={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
-											alt={token.symbol}
-											class="h-10 w-10 rounded-full bg-gray-700"
-										/>
-										<div>
-											<div class="font-semibold">{token.symbol}</div>
-											<div class="text-xs text-gray-400">{truncateId(token.address)}</div>
-										</div>
-									</div>
-								</div>
-								<div class="mb-3 text-2xl font-bold">${parseFloat(token.price.toString()).toFixed(2)}</div>
-								<div class="space-y-1 text-xs">
-									<div class="flex justify-between">
-										<span class="text-gray-400">Market Cap</span>
-										<span>${token.marketCap}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Holders</span>
-										<span>{token.totalHolders}</span>
-									</div>
-								</div>
-							</div>
-						{/each}
-					</div>
-				{/if}
 			</Section>
 		</div>
 

@@ -9,10 +9,10 @@
 	export let desktop: boolean = false; // is this the desktop sidebar?
 
 	const NAVIGATION_ITEMS = [
-		{ name: 'Stocks', href: '/stocks', protected: false },
+		{ name: 'Trade', href: '/trade-list', protected: false },
 		{ name: 'Strategies', href: '/strategies', protected: true },
 		{ name: 'Portfolio', href: '/portfolio', protected: true },
-		{ name: 'Network Stats', href: '/network-stats', protected: false },
+		{ name: 'Platform Metrics', href: '/platform-metrics', protected: false },
 		{ name: 'Order List', href: '/orderlist', protected: true },
 		{ name: 'Vault List', href: '/vaultlist', protected: true }
 	];
@@ -45,14 +45,14 @@
 	<!-- Logo -->
 	<div class="p-4">
 		<div class="flex items-center gap-2">
-			<a href="/stocks">
+			<a href="/trade-list">
 				<img
 					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
 					alt="ST0x Logo"
 					class="h-8 w-8 rounded-full md:h-9 md:w-9"
 				/>
 			</a>
-			<a href="/stocks">
+			<a href="/trade-list">
 				<span
 					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
 					>ST0x</span
