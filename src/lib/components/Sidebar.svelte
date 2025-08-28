@@ -3,20 +3,18 @@
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import { WalletOutline, ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
-	import TelegramLogo from '$lib/images/telegram.svg';
+	import ShareButton from './ShareButton.svelte';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
 
 	const NAVIGATION_ITEMS = [
-		{ name: 'Dashboard', href: '/', protected: false },
-		{ name: 'Token List', href: '/tokens', protected: false },
-		{ name: 'Trade', href: '/trade', protected: true },
-		{ name: 'Market Making', href: '/mm', protected: true },
+		{ name: 'Stocks', href: '/stocks', protected: false },
+		{ name: 'Strategies', href: '/strategies', protected: true },
 		{ name: 'Portfolio', href: '/portfolio', protected: true },
+		{ name: 'Network Stats', href: '/network-stats', protected: false },
 		{ name: 'Order List', href: '/orderlist', protected: true },
-		{ name: 'Vault List', href: '/vaultlist', protected: true },
-		{ name: 'Metrics', href: '/metrics', protected: false }
+		{ name: 'Vault List', href: '/vaultlist', protected: true }
 	];
 
 	import { createEventDispatcher } from 'svelte';
@@ -47,14 +45,14 @@
 	<!-- Logo -->
 	<div class="p-4">
 		<div class="flex items-center gap-2">
-			<a href="/dashboard">
+			<a href="/stocks">
 				<img
 					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
 					alt="ST0x Logo"
 					class="h-8 w-8 rounded-full md:h-9 md:w-9"
 				/>
 			</a>
-			<a href="/dashboard">
+			<a href="/stocks">
 				<span
 					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
 					>ST0x</span
@@ -110,15 +108,7 @@
 				<ArrowUpRightFromSquareSolid class="h-5 w-5" />
 				<span>Docs</span>
 			</a>
-			<a
-				href="https://t.me/toby_meller"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-			>
-				<img src={TelegramLogo} alt="Telegram" class="h-5 w-5" />
-				<span>Telegram</span>
-			</a>
+			<ShareButton />
 		</div>
 	</div>
 </div>

@@ -24,48 +24,48 @@
 	$: pageDescription = getPageDescription($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
+		if (pathname.startsWith('/trade/')) return 'Trade';
+		
 		switch (pathname) {
 			case '/':
-			case '/dashboard':
-				return 'Dashboard';
-			case '/tokens':
-				return 'Token List';
-			case '/trade':
-				return 'Trade';
-			case '/mm':
-				return 'Market Making';
+			case '/stocks':
+				return 'Stocks';
+			case '/strategies':
+				return 'Strategies';
 			case '/portfolio':
 				return 'Portfolio';
+			case '/network-stats':
+				return 'Network Stats';
 			case '/orderlist':
 				return 'Order List';
 			case '/vaultlist':
 				return 'Vault List';
-			case '/metrics':
-				return 'Platform Metrics';
+			case '/tokens':
+				return 'Token List';
 			default:
 				return 'ST0x';
 		}
 	}
 
 	function getPageDescription(pathname: string): string {
+		if (pathname.startsWith('/trade/')) return 'Trade tokenized stocks';
+		
 		switch (pathname) {
 			case '/':
-			case '/dashboard':
-				return `Welcome to ST0x - ${$currentNetwork?.displayName || 'Network'}`;
-			case '/tokens':
-				return 'View all tokens';
-			case '/trade':
-				return 'Trade tokens';
-			case '/mm':
-				return 'Market making';
+			case '/stocks':
+				return `Browse and trade tokenized stocks on ${$currentNetwork?.displayName || 'Network'}`;
+			case '/strategies':
+				return 'Manage your trading strategies';
 			case '/portfolio':
-				return 'Your portfolio';
+				return 'Your portfolio overview';
+			case '/network-stats':
+				return 'Platform statistics and metrics';
 			case '/orderlist':
 				return 'Order management';
 			case '/vaultlist':
 				return 'Vault management';
-			case '/metrics':
-				return '';
+			case '/tokens':
+				return 'View all tokens';
 			default:
 				return 'ST0x Platform';
 		}
