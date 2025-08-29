@@ -32,10 +32,12 @@
 				return 'Trade';
 			case '/strategies':
 				return 'Strategies';
+			case '/dashboard':
+				return 'My Dashboard';
 			case '/portfolio':
-				return 'Portfolio';
-			case '/network-stats':
-				return 'Network Stats';
+				return 'My Dashboard';
+			case '/platform-metrics':
+				return 'Platform Metrics';
 			case '/orderlist':
 				return 'Order List';
 			case '/vaultlist':
@@ -56,9 +58,11 @@
 				return `Browse and trade tokenized stocks on ${$currentNetwork?.displayName || 'Network'}`;
 			case '/strategies':
 				return 'Manage your trading strategies';
+			case '/dashboard':
+				return 'Your portfolio, orders, and vault positions';
 			case '/portfolio':
-				return 'Your portfolio overview';
-			case '/network-stats':
+				return 'Your portfolio, orders, and vault positions';
+			case '/platform-metrics':
 				return 'Platform statistics and metrics';
 			case '/orderlist':
 				return 'Order management';

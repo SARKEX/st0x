@@ -130,13 +130,15 @@
 			const amount = parseFloat(formatUnits(circulating, 18));
 
 			const tokenInfo = ALL_TOKENS.find(
-				(t) => t.address?.toLowerCase() === sft.receipt?.address?.toLowerCase()
+				(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
 			);
 
-			if (tokenInfo?.ticker) {
-				const quote = $tokenGlobalQuote[tokenInfo.ticker] as ApiStockQuote;
-				if (quote?.['05. price']) {
-					tlv += amount * parseFloat(quote['05. price']);
+			if (tokenInfo?.symbol) {
+				const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
+					(q) => q?.['Global Quote']?.['01. symbol'] === tokenInfo.symbol?.split('s1')[0]
+				);
+				if (quote?.['Global Quote']?.['05. price']) {
+					tlv += amount * parseFloat(quote['Global Quote']['05. price']);
 				} else {
 					tlv += amount; // Fallback to amount if no price
 				}
@@ -201,12 +203,14 @@
 				
 				// Calculate TVL
 				const tokenInfo = ALL_TOKENS.find(
-					t => t.address?.toLowerCase() === sft.receipt?.address?.toLowerCase()
+					t => t.address?.toLowerCase() === sft.address?.toLowerCase()
 				);
-				if (tokenInfo?.ticker) {
-					const quote = $tokenGlobalQuote[tokenInfo.ticker] as ApiStockQuote;
-					if (quote?.['05. price']) {
-						tvl += amount * parseFloat(quote['05. price']);
+				if (tokenInfo?.symbol) {
+					const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
+						(q) => q?.['Global Quote']?.['01. symbol'] === tokenInfo.symbol?.split('s1')[0]
+					);
+					if (quote?.['Global Quote']?.['05. price']) {
+						tvl += amount * parseFloat(quote['Global Quote']['05. price']);
 					} else {
 						tvl += amount;
 					}
@@ -236,10 +240,10 @@
 	$: tokenTradingData = (() => {
 		if (!$allNetworksSftsQuery.data) return [];
 		
-		// @ts-ignore - networkId added dynamically
-		const networkSfts = $allNetworksSftsQuery.data.filter(
-			sft => sft.networkId === selectedNetwork.chainId
-		);
+		// Filter by matching network
+		const networkSfts = selectedNetwork.id === 'all' 
+			? $allNetworksSftsQuery.data 
+			: $sfts || [];
 		
 		return networkSfts.map(sft => {
 			const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
@@ -247,15 +251,17 @@
 			const netVolume = deposits - withdraws;
 			
 			const tokenInfo = ALL_TOKENS.find(
-				t => t.address?.toLowerCase() === sft.receipt?.address?.toLowerCase()
+				t => t.address?.toLowerCase() === sft.address?.toLowerCase()
 			);
 			
 			let usdValue = 'N/A';
 			const amount = parseFloat(formatUnits(deposits, 18));
-			if (tokenInfo?.ticker) {
-				const quote = $tokenGlobalQuote[tokenInfo.ticker] as ApiStockQuote;
-				if (quote?.['05. price']) {
-					const value = amount * parseFloat(quote['05. price']);
+			if (tokenInfo?.symbol) {
+				const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
+					(q) => q?.['Global Quote']?.['01. symbol'] === tokenInfo.symbol?.split('s1')[0]
+				);
+				if (quote?.['Global Quote']?.['05. price']) {
+					const value = amount * parseFloat(quote['Global Quote']['05. price']);
 					usdValue = `$${value.toFixed(2)}`;
 				}
 			}

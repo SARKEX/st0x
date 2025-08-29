@@ -11,10 +11,8 @@
 	const NAVIGATION_ITEMS = [
 		{ name: 'Trade', href: '/trade-list', protected: false },
 		{ name: 'Strategies', href: '/strategies', protected: true },
-		{ name: 'Portfolio', href: '/portfolio', protected: true },
-		{ name: 'Platform Metrics', href: '/platform-metrics', protected: false },
-		{ name: 'Order List', href: '/orderlist', protected: true },
-		{ name: 'Vault List', href: '/vaultlist', protected: true }
+		{ name: 'My Dashboard', href: '/dashboard', protected: true },
+		{ name: 'Platform Metrics', href: '/platform-metrics', protected: false }
 	];
 
 	import { createEventDispatcher } from 'svelte';

@@ -5,8 +5,8 @@
 	
 	let showShareModal = false;
 	let shareUrl = '';
-	let shareTitle = 'Check out ST0x - Tokenized Stocks';
-	let shareText = 'Trade tokenized stocks on blockchain';
+	let shareTitle = 'Check out ST0x';
+	let shareText = 'Trade tokenized equities, set up automated on-chain trading strategies, and more';
 	let copied = false;
 	let canNativeShare = false;
 	
@@ -18,7 +18,7 @@
 	});
 	
 	$: shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-	$: shareTitle = $page.data?.title || 'ST0x - Tokenized Stocks';
+	$: shareTitle = $page.data?.title || 'ST0x - Tokenized equities';
 	
 	async function handleShare() {
 		// Try native share first if available
@@ -29,16 +29,21 @@
 					text: shareText,
 					url: shareUrl
 				});
+				// Native share successful, don't show modal
 				return;
 			} catch (err) {
-				// User cancelled or error occurred, show modal as fallback
-				if ((err as Error).name !== 'AbortError') {
-					console.log('Share failed:', err);
+				// Check if user just cancelled (AbortError) or clicked outside (NotAllowedError)
+				const errorName = (err as Error).name;
+				if (errorName === 'AbortError' || errorName === 'NotAllowedError') {
+					// User cancelled or dismissed - don't show fallback modal
+					return;
 				}
+				// Real error occurred, fall through to show modal
+				console.log('Share failed with error:', err);
 			}
 		}
 		
-		// Show custom share modal as fallback
+		// Show custom share modal only if native share is not available or had a real error
 		showShareModal = true;
 	}
 	
@@ -50,19 +55,27 @@
 		
 		switch(platform) {
 			case 'telegram':
-				url = `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`;
+				// Telegram: URL must be separate for proper link preview
+				const telegramText = `${shareTitle}\n\n${shareText}`;
+				url = `https://t.me/share/url?url=${encodedUrl}&text=${encodeURIComponent(telegramText)}`;
 				break;
 			case 'whatsapp':
-				url = `https://wa.me/?text=${encodedText}%20${encodedUrl}`;
+				// WhatsApp: Combine text and URL with line breaks for better formatting
+				const whatsappText = `${shareTitle}\n\n${shareText}\n\n${shareUrl}`;
+				url = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
 				break;
 			case 'twitter':
+				// Twitter/X: Keep text and URL separate for proper link card
 				url = `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`;
 				break;
 			case 'linkedin':
+				// LinkedIn: URL parameter handles link preview automatically
 				url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
 				break;
 			case 'email':
-				url = `mailto:?subject=${encodedTitle}&body=${encodedText}%0A%0A${encodedUrl}`;
+				// Email: Format with proper line breaks for readability
+				const emailBody = `${shareText}\n\n${shareUrl}`;
+				url = `mailto:?subject=${encodedTitle}&body=${encodeURIComponent(emailBody)}`;
 				break;
 		}
 		
