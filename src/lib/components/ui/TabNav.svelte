@@ -13,11 +13,47 @@
 	}
 
 	export let className: string = '';
+
+	function onKeydown(event: KeyboardEvent) {
+		const currentIndex = tabs.findIndex(t => t.id === activeId);
+		if (currentIndex === -1) return;
+		switch (event.key) {
+			case 'ArrowRight': {
+				const next = (currentIndex + 1) % tabs.length;
+				setActive(tabs[next].id);
+				event.preventDefault();
+				break;
+			}
+			case 'ArrowLeft': {
+				const prev = (currentIndex - 1 + tabs.length) % tabs.length;
+				setActive(tabs[prev].id);
+				event.preventDefault();
+				break;
+			}
+			case 'Home': {
+				setActive(tabs[0].id);
+				event.preventDefault();
+				break;
+			}
+			case 'End': {
+				setActive(tabs[tabs.length - 1].id);
+				event.preventDefault();
+				break;
+			}
+		}
+	}
 </script>
 
-<div class={"flex gap-2 border-b border-white/10 " + className}>
+<div
+	class={"flex gap-2 border-b border-white/10 " + className}
+	role="tablist"
+	on:keydown={onKeydown}
+>
 	{#each tabs as tab}
 		<button
+			role="tab"
+			aria-selected={activeId === tab.id}
+			tabindex={activeId === tab.id ? 0 : -1}
 			on:click={() => setActive(tab.id)}
 			class={"border-b-2 px-4 py-2 text-sm font-medium transition-colors " + (activeId === tab.id
 				? 'border-yellow-500 text-yellow-500'
