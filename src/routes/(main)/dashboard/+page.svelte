@@ -5,6 +5,9 @@
 	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import TabNav from '$lib/components/ui/TabNav.svelte';
+	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import { getAllTokensByNetwork } from '$lib/network';
@@ -24,7 +27,7 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let isNetworkLoading = false;
-	let activeTab: 'portfolio' | 'orders' | 'vaults' = 'portfolio';
+	let activeTab: 'portfolio' | 'orders' | 'vaults' | string = 'portfolio';
 
 	// Order List variables
 	let ordersActiveFilter: boolean | undefined = false;
@@ -271,7 +274,7 @@
 
 <!-- Main Content -->
 <div>
-	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
+	<PageContainer>
 		{#if isNetworkLoading}
 			<div class="flex flex-col items-center justify-center gap-4 py-8">
 				<LoadingSpinner
@@ -310,54 +313,23 @@
 				
 				<!-- Overview Stats -->
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
-					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
-						<div class="text-sm text-gray-400">Total Value</div>
-						<div class="text-2xl font-bold">${totalValue.toFixed(2)}</div>
-					</div>
-					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
-						<div class="text-sm text-gray-400">24h Change</div>
-						<div class="text-2xl font-bold {totalChange24h >= 0 ? 'text-green-500' : 'text-red-500'}">
-							{totalChange24h >= 0 ? '+' : ''}${Math.abs(totalChange24h).toFixed(2)}
-						</div>
-					</div>
-					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
-						<div class="text-sm text-gray-400">Active Orders</div>
-						<div class="text-2xl font-bold">{activeOrdersCount}</div>
-					</div>
-					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
-						<div class="text-sm text-gray-400">Active Vaults</div>
-						<div class="text-2xl font-bold">{activeVaultsCount}</div>
-					</div>
+					<MetricCard label="Total Value" value={`$${totalValue.toFixed(2)}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
+					<MetricCard 
+						label="24h Change" 
+						value={`${totalChange24h >= 0 ? '+' : ''}$${Math.abs(totalChange24h).toFixed(2)}`}
+						cardClass="bg-gray-800/50 border border-white/10"
+						paddingClass="p-4"
+						showGradient={false}
+						change=""
+						valueClass={`text-2xl font-bold ${totalChange24h >= 0 ? 'text-green-500' : 'text-red-500'}`}
+					/>
+					<MetricCard label="Active Orders" value={`${activeOrdersCount}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
+					<MetricCard label="Active Vaults" value={`${activeVaultsCount}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
 				</div>
 			</Section>
 
 			<!-- Tab Navigation -->
-			<div class="flex gap-2 border-b border-white/10">
-				<button
-					on:click={() => (activeTab = 'portfolio')}
-					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'portfolio'
-						? 'border-yellow-500 text-yellow-500'
-						: 'border-transparent text-gray-400 hover:text-white'}"
-				>
-					Portfolio
-				</button>
-				<button
-					on:click={() => (activeTab = 'orders')}
-					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'orders'
-						? 'border-yellow-500 text-yellow-500'
-						: 'border-transparent text-gray-400 hover:text-white'}"
-				>
-					Orders
-				</button>
-				<button
-					on:click={() => (activeTab = 'vaults')}
-					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'vaults'
-						? 'border-yellow-500 text-yellow-500'
-						: 'border-transparent text-gray-400 hover:text-white'}"
-				>
-					Vaults
-				</button>
-			</div>
+			<TabNav bind:activeId={activeTab} tabs={[{ id: 'portfolio', label: 'Portfolio' }, { id: 'orders', label: 'Orders' }, { id: 'vaults', label: 'Vaults' }]} />
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}
@@ -609,7 +581,7 @@
 				</Section>
 			{/if}
 		{/if}
-	</div>
+	</PageContainer>
 
 	<!-- Footer -->
 	<Footer />

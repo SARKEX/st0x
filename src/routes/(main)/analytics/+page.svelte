@@ -4,6 +4,7 @@
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	
 	let localStats: any = null;
 	let serverStats: any = null;
@@ -47,7 +48,7 @@
 	}
 </script>
 
-<div class="space-y-6 p-6">
+<PageContainer>
 	<Section>
 		<div class="mb-6 flex items-center justify-between">
 			<h2 class="text-2xl font-bold">Search Analytics Dashboard</h2>
@@ -182,4 +183,4 @@
 			{/if}
 		{/if}
 	</Section>
-</div>
+</PageContainer>
