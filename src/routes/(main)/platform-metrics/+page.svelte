@@ -11,6 +11,8 @@
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import type { ApiStockQuote } from '$lib/types';
 	import { InfoCircleSolid } from 'flowbite-svelte-icons';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 
 	// State for network selector in token trading table
 	let selectedNetwork = networks[0];
@@ -280,8 +282,6 @@
 		}).sort((a, b) => b.trades - a.trades);
 	})();
 </script>
-import PageContainer from '$lib/components/ui/PageContainer.svelte';
-import MetricCard from '$lib/components/ui/MetricCard.svelte';
 
 <div class="min-h-screen bg-gray-900 text-white">
 	<PageContainer>

@@ -54,6 +54,7 @@
 		<button
 			role="tab"
 			aria-selected={activeId === tab.id}
+			aria-controls={`panel-${tab.id}`}
 			tabindex={activeId === tab.id ? 0 : -1}
 			on:click={() => setActive(tab.id)}
 			class={"border-b-2 px-4 py-2 text-sm font-medium transition-colors " + (activeId === tab.id

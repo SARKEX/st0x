@@ -306,14 +306,14 @@
 				<div class="overflow-x-auto rounded-lg border border-white/10 bg-gray-800/50">
 					<Table>
 						<TableHead>
-							<TableRow className="border-b border-white/10">
-								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</TableCell>
-								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
-								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</TableCell>
-								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</TableCell>
-								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</TableCell>
-								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</TableCell>
-								<TableCell header className="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</TableCell>
+							<TableRow class="border-b border-white/10">
+								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</TableCell>
+								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
+								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</TableCell>
+								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</TableCell>
+								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</TableCell>
+								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</TableCell>
+								<TableCell header class="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</TableCell>
 							</TableRow>
 						</TableHead>
 						<tbody>
@@ -326,7 +326,7 @@
 								{@const onChainPrice = parseFloat(token.price.toString())}
 								{@const onChainMarketCap = circulatingSupply * onChainPrice}
 								<TableRow>
-									<TableCell className="px-4 py-3">
+									<TableCell class="px-4 py-3">
 										<div class="flex items-center gap-3">
 											<img
 												src={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
@@ -339,13 +339,13 @@
 											</div>
 										</div>
 									</TableCell>
-									<TableCell className="px-4 py-3">
+									<TableCell class="px-4 py-3">
 										<div class="font-medium">${onChainPrice.toFixed(2)}</div>
 									</TableCell>
-									<TableCell className="px-4 py-3 hidden sm:table-cell">
+									<TableCell class="px-4 py-3 hidden sm:table-cell">
 										<div class="text-sm text-gray-500">TBD</div>
 									</TableCell>
-									<TableCell className="px-4 py-3 hidden md:table-cell">
+									<TableCell class="px-4 py-3 hidden md:table-cell">
 										<div class="text-sm">
 											${onChainMarketCap >= 1000000 ? 
 												`${(onChainMarketCap / 1000000).toFixed(2)}M` : 
@@ -354,17 +354,17 @@
 												onChainMarketCap.toFixed(2)}
 										</div>
 									</TableCell>
-									<TableCell className="px-4 py-3 hidden lg:table-cell">
+									<TableCell class="px-4 py-3 hidden lg:table-cell">
 										<div class="text-sm">
 											{circulatingSupply >= 1000 ? 
 												`${(circulatingSupply / 1000).toFixed(2)}K` : 
 												circulatingSupply.toFixed(2)}
 										</div>
 									</TableCell>
-									<TableCell className="px-4 py-3 hidden xl:table-cell">
+									<TableCell class="px-4 py-3 hidden xl:table-cell">
 										<div class="text-sm">{token.totalHolders}</div>
 									</TableCell>
-									<TableCell className="px-4 py-3">
+									<TableCell class="px-4 py-3">
 										<div class="flex justify-center gap-2">
 											<Button size="sm" variant="primary" on:click={() => goto(`/trade/${token.id}`)}>Trade</Button>
 										</div>
