@@ -12,6 +12,12 @@
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import type { ApiStockQuote } from '$lib/types';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import Table from '$lib/components/ui/table/Table.svelte';
+	import TableHead from '$lib/components/ui/table/TableHead.svelte';
+	import TableRow from '$lib/components/ui/table/TableRow.svelte';
+	import TableCell from '$lib/components/ui/table/TableCell.svelte';
+	import Button from '$lib/components/Button.svelte';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	
@@ -149,7 +155,7 @@
 	</div>
 {:else if $sfts.length > 0}
 	<div>
-		<div class="space-y-4 p-3 sm:space-y-6 sm:p-4 lg:space-y-8 lg:p-6">
+		<PageContainer>
 			<div class="relative z-50 mb-8">
 				<Section>
 					<div class="mx-auto max-w-3xl">
@@ -164,52 +170,52 @@
 				</Section>
 				{#if isSearching}
 					<div class="absolute left-1/2 top-full z-50 mt-2 w-full max-w-3xl -translate-x-1/2 px-4 sm:px-6">
-								{#if filteredSfts.length > 0}
-									<div class="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-900/95 shadow-xl backdrop-blur-sm">
-										<div class="bg-gray-800/50 px-4 py-2 text-xs text-gray-400">
-											{filteredSfts.length} result{filteredSfts.length === 1 ? '' : 's'} found
+							{#if filteredSfts.length > 0}
+								<div class="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-900/95 shadow-xl backdrop-blur-sm">
+									<div class="bg-gray-800/50 px-4 py-2 text-xs text-gray-400">
+										{filteredSfts.length} result{filteredSfts.length === 1 ? '' : 's'} found
 										</div>
-										{#each filteredSfts.slice(0, 10) as sft, index}
-											<a 
-												class="block px-4 py-3 transition-colors hover:bg-white/10" 
-												href={`/tokens/${sft.id}`}
-												on:click={() => handleResultClick(sft, index)}
-											>
-												<div class="flex items-center justify-between">
-													<div class="min-w-0">
-														<div class="truncate text-sm font-semibold text-white sm:text-base">
-															{@html sft.name.replace(
-																new RegExp(`(${searchTerm.trim()})`, 'gi'),
-																'<span class="text-yellow-400">$1</span>'
-															)}
-														</div>
-														<div class="text-xs text-gray-400">
-															{@html sft.symbol.replace(
-																new RegExp(`(${searchTerm.trim()})`, 'gi'),
-																'<span class="text-yellow-400">$1</span>'
-															)}
-														</div>
+									{#each filteredSfts.slice(0, 10) as sft, index}
+										<a 
+											class="block px-4 py-3 transition-colors hover:bg-white/10" 
+											href={`/tokens/${sft.id}`}
+											on:click={() => handleResultClick(sft, index)}
+										>
+											<div class="flex items-center justify-between">
+												<div class="min-w-0">
+													<div class="truncate text-sm font-semibold text-white sm:text-base">
+														{@html sft.name.replace(
+															new RegExp(`(${searchTerm.trim()})`, 'gi'),
+															'<span class="text-yellow-400">$1</span>'
+														)}
 													</div>
-													<div class="ml-3 flex items-center gap-1 text-xs text-yellow-500">
-														<span>View</span>
-														<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-														</svg>
+													<div class="text-xs text-gray-400">
+														{@html sft.symbol.replace(
+															new RegExp(`(${searchTerm.trim()})`, 'gi'),
+															'<span class="text-yellow-400">$1</span>'
+														)}
 													</div>
 												</div>
-											</a>
-										{/each}
-										{#if filteredSfts.length > 10}
-											<div class="bg-gray-800/50 px-4 py-2 text-center text-xs text-gray-400">
-												Showing first 10 results
+												<div class="ml-3 flex items-center gap-1 text-xs text-yellow-500">
+													<span>View</span>
+													<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+													</svg>
+												</div>
 											</div>
-										{/if}
-									</div>
-								{:else}
-									<div class="rounded-xl border border-white/10 bg-gray-900/95 px-4 py-8 text-center shadow-xl backdrop-blur-sm">
-										<div class="text-gray-400">No stocks found matching "{searchTerm}"</div>
-										<div class="mt-2 text-xs text-gray-500">Try searching for a different name or symbol</div>
-									</div>
+										</a>
+									{/each}
+									{#if filteredSfts.length > 10}
+										<div class="bg-gray-800/50 px-4 py-2 text-center text-xs text-gray-400">
+											Showing first 10 results
+										</div>
+									{/if}
+								</div>
+							{:else}
+								<div class="rounded-xl border border-white/10 bg-gray-900/95 px-4 py-8 text-center shadow-xl backdrop-blur-sm">
+									<div class="text-gray-400">No stocks found matching "{searchTerm}"</div>
+									<div class="mt-2 text-xs text-gray-500">Try searching for a different name or symbol</div>
+								</div>
 						{/if}
 					</div>
 				{/if}
@@ -245,7 +251,6 @@
 						title="Biggest Volume" 
 						items={biggestVolume.map((s) => {
 							const tokenInfo = ALL_TOKENS.find((t) => t.address.toLowerCase() === s.address.toLowerCase());
-							// Calculate dollar value of volume
 							const volumeInShares = parseFloat(formatUnits(s.totalVolume, 18));
 							const symbol = s.symbol?.split('s1')[0];
 							const quoteData = $tokenGlobalQuote.find(
@@ -255,7 +260,6 @@
 								parseFloat(quoteData['Global Quote']['05. price']) : 0;
 							const dollarVolume = volumeInShares * price;
 							
-							// Format dollar volume
 							const volumeStr = dollarVolume >= 1000000 ? 
 								`$${(dollarVolume / 1000000).toFixed(2)}M` : 
 								dollarVolume >= 1000 ? 
@@ -299,86 +303,79 @@
 				<div class="mb-4 sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse Stocks</h2>
 				</div>
-				
-				<!-- Table View -->
-					<div class="overflow-x-auto rounded-lg border border-white/10 bg-gray-800/50">
-						<table class="w-full">
-							<thead>
-								<tr class="border-b border-white/10">
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</th>
-									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</th>
-									<th class="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each $query.data || [] as token (token.id)}
-									{@const sft = $sfts.find(s => s.id === token.id)}
-									{@const deposits = sft ? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)) : BigInt(0)}
-									{@const withdraws = sft ? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)) : BigInt(0)}
-									{@const circulating = deposits - withdraws}
-									{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
-									{@const onChainPrice = parseFloat(token.price.toString())}
-									{@const onChainMarketCap = circulatingSupply * onChainPrice}
-									<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-										<td class="px-4 py-3">
-											<div class="flex items-center gap-3">
-												<img
-													src={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
-													alt={token.symbol}
-													class="h-8 w-8 rounded-full bg-gray-700"
-												/>
-												<div>
-													<div class="font-medium text-sm">{token.symbol}</div>
-													<div class="text-xs text-gray-400">{token.name}</div>
-												</div>
+				<div class="overflow-x-auto rounded-lg border border-white/10 bg-gray-800/50">
+					<Table>
+						<TableHead>
+							<TableRow className="border-b border-white/10">
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</TableCell>
+								<TableCell header className="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</TableCell>
+							</TableRow>
+						</TableHead>
+						<tbody>
+							{#each $query.data || [] as token (token.id)}
+								{@const sft = $sfts.find(s => s.id === token.id)}
+								{@const deposits = sft ? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)) : BigInt(0)}
+								{@const withdraws = sft ? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)) : BigInt(0)}
+								{@const circulating = deposits - withdraws}
+								{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
+								{@const onChainPrice = parseFloat(token.price.toString())}
+								{@const onChainMarketCap = circulatingSupply * onChainPrice}
+								<TableRow>
+									<TableCell className="px-4 py-3">
+										<div class="flex items-center gap-3">
+											<img
+												src={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
+												alt={token.symbol}
+												class="h-8 w-8 rounded-full bg-gray-700"
+											/>
+											<div>
+												<div class="font-medium text-sm">{token.symbol}</div>
+												<div class="text-xs text-gray-400">{token.name}</div>
 											</div>
-										</td>
-										<td class="px-4 py-3">
-											<div class="font-medium">${onChainPrice.toFixed(2)}</div>
-										</td>
-										<td class="px-4 py-3 hidden sm:table-cell">
-											<div class="text-sm text-gray-500">TBD</div>
-										</td>
-										<td class="px-4 py-3 hidden md:table-cell">
-											<div class="text-sm">
-												${onChainMarketCap >= 1000000 ? 
-													`${(onChainMarketCap / 1000000).toFixed(2)}M` : 
-													onChainMarketCap >= 1000 ? 
-													`${(onChainMarketCap / 1000).toFixed(1)}K` : 
-													onChainMarketCap.toFixed(2)}
-											</div>
-										</td>
-										<td class="px-4 py-3 hidden lg:table-cell">
-											<div class="text-sm">
-												{circulatingSupply >= 1000 ? 
-													`${(circulatingSupply / 1000).toFixed(2)}K` : 
-													circulatingSupply.toFixed(2)}
-											</div>
-										</td>
-										<td class="px-4 py-3 hidden xl:table-cell">
-											<div class="text-sm">{token.totalHolders}</div>
-										</td>
-										<td class="px-4 py-3">
-											<div class="flex justify-center gap-2">
-												<button
-													on:click={() => goto(`/trade/${token.id}`)}
-													class="rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-3 py-1 text-xs font-semibold text-white transition-transform hover:scale-105"
-												>
-													Trade
-												</button>
-											</div>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
+										</div>
+									</TableCell>
+									<TableCell className="px-4 py-3">
+										<div class="font-medium">${onChainPrice.toFixed(2)}</div>
+									</TableCell>
+									<TableCell className="px-4 py-3 hidden sm:table-cell">
+										<div class="text-sm text-gray-500">TBD</div>
+									</TableCell>
+									<TableCell className="px-4 py-3 hidden md:table-cell">
+										<div class="text-sm">
+											${onChainMarketCap >= 1000000 ? 
+												`${(onChainMarketCap / 1000000).toFixed(2)}M` : 
+												onChainMarketCap >= 1000 ? 
+												`${(onChainMarketCap / 1000).toFixed(1)}K` : 
+												onChainMarketCap.toFixed(2)}
+										</div>
+									</TableCell>
+									<TableCell className="px-4 py-3 hidden lg:table-cell">
+										<div class="text-sm">
+											{circulatingSupply >= 1000 ? 
+												`${(circulatingSupply / 1000).toFixed(2)}K` : 
+												circulatingSupply.toFixed(2)}
+										</div>
+									</TableCell>
+									<TableCell className="px-4 py-3 hidden xl:table-cell">
+										<div class="text-sm">{token.totalHolders}</div>
+									</TableCell>
+									<TableCell className="px-4 py-3">
+										<div class="flex justify-center gap-2">
+											<Button size="sm" variant="primary" on:click={() => goto(`/trade/${token.id}`)}>Trade</Button>
+										</div>
+									</TableCell>
+								</TableRow>
+							{/each}
+						</tbody>
+					</Table>
+				</div>
 			</Section>
-		</div>
+		</PageContainer>
 
 		<Footer />
 	</div>

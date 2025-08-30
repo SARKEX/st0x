@@ -6,6 +6,7 @@
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { currentNetwork } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 
 	const STRATEGY_TYPES = [
 		{ id: 'portfolio', name: 'Portfolio Strategy' },
@@ -33,7 +34,7 @@
 <!-- Main Content -->
 <div>
 	<!-- Strategies Content -->
-	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
+	<PageContainer>
 		<!-- Strategy Type Selector -->
 		<div class="mb-4 flex flex-col gap-2 rounded-lg bg-white/5 p-1 sm:mb-6 sm:flex-row sm:gap-0">
 			{#each STRATEGY_TYPES as type}
@@ -81,7 +82,7 @@
 				</div>
 			{/if}
 		</div>
-	</div>
+	</PageContainer>
 
 	<!-- Footer -->
 	<Footer />

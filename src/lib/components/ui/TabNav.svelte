@@ -47,6 +47,7 @@
 <div
 	class={"flex gap-2 border-b border-white/10 " + className}
 	role="tablist"
+	tabindex="0"
 	on:keydown={onKeydown}
 >
 	{#each tabs as tab}

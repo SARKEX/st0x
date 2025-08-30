@@ -280,9 +280,11 @@
 		}).sort((a, b) => b.trades - a.trades);
 	})();
 </script>
+import PageContainer from '$lib/components/ui/PageContainer.svelte';
+import MetricCard from '$lib/components/ui/MetricCard.svelte';
 
 <div class="min-h-screen bg-gray-900 text-white">
-	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
+	<PageContainer>
 		<!-- Multi-Network Notice -->
 		<div class="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
 			<InfoCircleSolid class="mt-0.5 h-5 w-5 text-blue-400" />
@@ -296,26 +298,10 @@
 
 		<!-- Top Metrics -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<div class="rounded-lg border border-white/10 bg-gray-800/50 p-6">
-				<div class="text-xs font-medium uppercase tracking-wide text-gray-400">Total Locked Value</div>
-				<div class="mt-3 text-3xl font-bold">${totalTVL.toFixed(2)}</div>
-				<div class="mt-2 text-sm text-gray-500">All Networks • Live</div>
-			</div>
-			<div class="rounded-lg border border-white/10 bg-gray-800/50 p-6">
-				<div class="text-xs font-medium uppercase tracking-wide text-gray-400">Trading Volume</div>
-				<div class="mt-3 text-3xl font-bold">${tradingVolume.toFixed(2)}</div>
-				<div class="mt-2 text-sm text-gray-500">Last 30 days</div>
-			</div>
-			<div class="rounded-lg border border-white/10 bg-gray-800/50 p-6">
-				<div class="text-xs font-medium uppercase tracking-wide text-gray-400">Total Trades</div>
-				<div class="mt-3 text-3xl font-bold">{totalTrades}</div>
-				<div class="mt-2 text-sm text-gray-500">Last 30 days</div>
-			</div>
-			<div class="rounded-lg border border-white/10 bg-gray-800/50 p-6">
-				<div class="text-xs font-medium uppercase tracking-wide text-gray-400">Active ST0x</div>
-				<div class="mt-3 text-3xl font-bold">{activeST0x}</div>
-				<div class="mt-2 text-sm text-gray-500">Last 30 days</div>
-			</div>
+			<MetricCard label="Total Locked Value" value={`$${totalTVL.toFixed(2)}`} subtitle="All Networks • Live" cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-6" showGradient={false} valueClass="text-3xl font-bold" />
+			<MetricCard label="Trading Volume" value={`$${tradingVolume.toFixed(2)}`} subtitle="Last 30 days" cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-6" showGradient={false} valueClass="text-3xl font-bold" />
+			<MetricCard label="Total Trades" value={`${totalTrades}`} subtitle="Last 30 days" cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-6" showGradient={false} valueClass="text-3xl font-bold" />
+			<MetricCard label="Active ST0x" value={`${activeST0x}`} subtitle="Last 30 days" cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-6" showGradient={false} valueClass="text-3xl font-bold" />
 		</div>
 
 		<!-- Stats by Network -->
@@ -452,7 +438,7 @@
 				</div>
 			{/if}
 		</Section>
-	</div>
+	</PageContainer>
 
 	<Footer />
 </div>

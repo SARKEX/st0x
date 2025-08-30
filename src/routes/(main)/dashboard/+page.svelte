@@ -22,6 +22,12 @@
 	import { getPrice } from '$lib/getPrice';
 	import { Token } from 'sushi/currency';
 	import { arbitrum } from '@wagmi/core/chains';
+	import Table from '$lib/components/ui/table/Table.svelte';
+	import TableHead from '$lib/components/ui/table/TableHead.svelte';
+	import TableRow from '$lib/components/ui/table/TableRow.svelte';
+	import TableCell from '$lib/components/ui/table/TableCell.svelte';
+	import Button from '$lib/components/Button.svelte';
+	import TextInput from '$lib/components/ui/TextInput.svelte';
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -100,7 +106,7 @@
 		}
 	});
 
-
+	
 	$: totalValue = ($holdingsQuery?.data || []).reduce((sum, holding) => sum + holding.value, 0);
 	$: totalChange24h = ($holdingsQuery?.data || []).reduce((sum, holding) => {
 		// Calculate the change in value based on the price change
@@ -327,7 +333,7 @@
 					<MetricCard label="Active Vaults" value={`${activeVaultsCount}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
 				</div>
 			</Section>
-
+			
 			<!-- Tab Navigation -->
 			<TabNav bind:activeId={activeTab} tabs={[{ id: 'portfolio', label: 'Portfolio' }, { id: 'orders', label: 'Orders' }, { id: 'vaults', label: 'Vaults' }]} />
 
@@ -339,21 +345,21 @@
 						<LoadingSpinner variant="inline" size="md" text="Loading holdings..." />
 					{:else if $holdingsQuery.data && $holdingsQuery.data.length > 0}
 						<div class="overflow-x-auto">
-							<table class="w-full">
-								<thead>
-									<tr class="border-b border-white/10">
-										<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</th>
-										<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Balance</th>
-										<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</th>
-										<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Value</th>
-										<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">24h</th>
-										<th class="px-4 py-3 text-center text-xs font-medium text-gray-400">Actions</th>
-									</tr>
-								</thead>
+							<Table>
+								<TableHead class="border-b border-white/10">
+									<TableRow class="border-b border-white/10">
+										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</TableCell>
+										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Balance</TableCell>
+										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
+										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Value</TableCell>
+										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">24h</TableCell>
+										<TableCell header class="px-4 py-3 text-center text-xs font-medium text-gray-400">Actions</TableCell>
+									</TableRow>
+								</TableHead>
 								<tbody>
 									{#each $holdingsQuery.data as holding}
-										<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-											<td class="px-4 py-3">
+										<TableRow>
+											<TableCell class="px-4 py-3">
 												<div class="flex items-center gap-3">
 													<img
 														src={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
@@ -365,29 +371,24 @@
 														<div class="text-xs text-gray-400">{holding.name}</div>
 													</div>
 												</div>
-											</td>
-											<td class="px-4 py-3">{parseFloat(holding.balance).toFixed(4)}</td>
-											<td class="px-4 py-3">${holding.price.toFixed(2)}</td>
-											<td class="px-4 py-3 font-medium">${holding.value.toFixed(2)}</td>
-											<td class="px-4 py-3 hidden sm:table-cell">
-												<span class="{holding.priceChangePercent >= 0 ? 'text-green-500' : 'text-red-500'}">
+											</TableCell>
+											<TableCell class="px-4 py-3">{parseFloat(holding.balance).toFixed(4)}</TableCell>
+											<TableCell class="px-4 py-3">${holding.price.toFixed(2)}</TableCell>
+											<TableCell class="px-4 py-3 font-medium">${holding.value.toFixed(2)}</TableCell>
+											<TableCell class="px-4 py-3 hidden sm:table-cell">
+												<span class={holding.priceChangePercent >= 0 ? 'text-green-500' : 'text-red-500'}>
 													{holding.priceChangePercent >= 0 ? '+' : ''}{holding.priceChangePercent.toFixed(2)}%
 												</span>
-											</td>
-											<td class="px-4 py-3">
+											</TableCell>
+											<TableCell class="px-4 py-3">
 												<div class="flex justify-center gap-2">
-													<button
-														on:click={() => goto(`/trade/${holding.id}`)}
-														class="rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-3 py-1 text-xs font-semibold text-white transition-transform hover:scale-105"
-													>
-														Trade
-													</button>
+													<Button size="sm" variant="primary" on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button>
 												</div>
-											</td>
-										</tr>
+											</TableCell>
+										</TableRow>
 									{/each}
 								</tbody>
-							</table>
+							</Table>
 						</div>
 					{:else}
 						<div class="py-12 text-center text-gray-400">
@@ -400,12 +401,7 @@
 			{:else if activeTab === 'orders'}
 				<Section>
 					<div class="mb-4 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-6">
-						<input
-							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none sm:w-auto"
-							type="text"
-							placeholder="Order hash"
-							bind:value={orderHashFilter}
-						/>
+						<TextInput id="orderHash" type="search" placeholder="Order hash" bind:value={orderHashFilter} class="sm:w-auto" />
 						<label class="flex w-full items-center gap-2 text-white sm:w-auto">
 							<input type="checkbox" bind:checked={showMyOrders} class="accent-yellow-500" />
 							<span class="text-xs sm:text-base">Show my orders</span>

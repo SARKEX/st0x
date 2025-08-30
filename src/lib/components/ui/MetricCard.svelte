@@ -10,6 +10,7 @@
 	export let cardClass: string = '';
 	export let showGradient: boolean | undefined = undefined;
 	export let paddingClass: string | undefined = undefined;
+	export let subtitle: string = '';
 </script>
 
 <Card className={cardClass} {showGradient} paddingClass={paddingClass}>
@@ -23,4 +24,7 @@
 			<span class="truncate">{change}</span>
 		</div>
 	{/if}
+    {#if subtitle}
+        <div class="mt-2 text-sm text-gray-500">{subtitle}</div>
+    {/if}
 </Card>
