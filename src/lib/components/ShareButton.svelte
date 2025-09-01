@@ -39,7 +39,6 @@
 					return;
 				}
 				// Real error occurred, fall through to show modal
-				console.log('Share failed with error:', err);
 			}
 		}
 		

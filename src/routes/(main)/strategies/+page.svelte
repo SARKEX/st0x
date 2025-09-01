@@ -62,7 +62,7 @@
 						Loading strategy interface for {$currentNetwork?.displayName || 'this network'}.
 					</p>
 				</div>
-			{:else if $connected}
+			{:else}
 				{#if activeStrategyType === 'portfolio'}
 					{#key [$currentNetwork?.id]}
 						<FolioStrategy />
@@ -72,14 +72,6 @@
 						<ActiveLiquidity />
 					{/key}
 				{/if}
-			{:else}
-				<div class="flex flex-col items-center justify-center gap-4 py-8">
-					<WalletConnect />
-					<p class="text-center text-gray-400">
-						Connect your wallet to use trading strategies on {$currentNetwork?.displayName ||
-							'this network'}.
-					</p>
-				</div>
 			{/if}
 		</div>
 	</PageContainer>

@@ -239,15 +239,7 @@ export interface ReceiptVaultInformation {
 	};
 }
 
-export type SchemaProperty = {
-	type: string;
-	description?: string;
-	enum?: string[];
-	minimum?: number;
-	maximum?: number;
-	properties?: Record<string, SchemaProperty>;
-	required?: string[];
-};
+import type { SchemaProperty } from './SchemaQueryResponse';
 
 export type AssetSchema = {
 	displayName: string;

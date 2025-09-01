@@ -10,6 +10,7 @@
 	import Section from '$lib/components/ui/Section.svelte';
 	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';
 	import DcaStrategy from '$lib/components/orders/DcaStrategy.svelte';
+	import { truncateAddress, formatCompact } from '$lib/utils/format';
 	import EquityChart from '$lib/components/charts/EquityChart.svelte';
 	import { ArrowUpRightFromSquareSolid, ExpandOutline } from 'flowbite-svelte-icons';
 	import { connected } from 'svelte-wagmi';
@@ -190,18 +191,12 @@
 	$: latestOBV = $obvQuery.data?.['Technical Analysis: OBV'] ? 
 		Object.values($obvQuery.data['Technical Analysis: OBV'])[0] as any : null;
 
-	function truncateAddress(address: string) {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
-	}
-
+	// Use formatCompact from utils instead of local formatNumber
 	function formatNumber(value: string | number | undefined): string {
 		if (!value) return 'N/A';
 		const num = typeof value === 'string' ? parseFloat(value) : value;
-		if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-		if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-		if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
-		return num.toFixed(2);
+		if (isNaN(num)) return 'N/A';
+		return formatCompact(num);
 	}
 	
 	function openChartModal() {

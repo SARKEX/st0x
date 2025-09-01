@@ -6,6 +6,8 @@
 	import Section from '$lib/components/ui/Section.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import ListCard from '$lib/components/ui/ListCard.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { getAllTokensByNetwork } from '$lib/network';
@@ -14,7 +16,6 @@
 	import type { ApiStockQuote } from '$lib/types';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import TableHead from '$lib/components/ui/table/TableHead.svelte';
 	import TableRow from '$lib/components/ui/table/TableRow.svelte';
 	import TableCell from '$lib/components/ui/table/TableCell.svelte';
 	import Button from '$lib/components/Button.svelte';
@@ -212,10 +213,12 @@
 									{/if}
 								</div>
 							{:else}
-								<div class="rounded-xl border border-white/10 bg-gray-900/95 px-4 py-8 text-center shadow-xl backdrop-blur-sm">
-									<div class="text-gray-400">No stocks found matching "{searchTerm}"</div>
-									<div class="mt-2 text-xs text-gray-500">Try searching for a different name or symbol</div>
-								</div>
+								<EmptyState 
+									title="No stocks found matching '{searchTerm}'"
+									description="Try searching for a different name or symbol"
+									showBorder={true}
+									className="shadow-xl"
+								/>
 						{/if}
 					</div>
 				{/if}
@@ -305,17 +308,17 @@
 				</div>
 				<div class="overflow-x-auto rounded-lg border border-white/10 bg-gray-800/50">
 					<Table>
-						<TableHead>
-							<TableRow class="border-b border-white/10">
-								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</TableCell>
-								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
-								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</TableCell>
-								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</TableCell>
-								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</TableCell>
-								<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</TableCell>
-								<TableCell header class="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</TableCell>
+						<thead>
+							<TableRow className="border-b border-white/10">
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</TableCell>
+								<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</TableCell>
+								<TableCell header className="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</TableCell>
 							</TableRow>
-						</TableHead>
+						</thead>
 						<tbody>
 							{#each $query.data || [] as token (token.id)}
 								{@const sft = $sfts.find(s => s.id === token.id)}
@@ -326,48 +329,40 @@
 								{@const onChainPrice = parseFloat(token.price.toString())}
 								{@const onChainMarketCap = circulatingSupply * onChainPrice}
 								<TableRow>
-									<TableCell class="px-4 py-3">
-										<div class="flex items-center gap-3">
-											<img
-												src={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
-												alt={token.symbol}
-												class="h-8 w-8 rounded-full bg-gray-700"
-											/>
-											<div>
-												<div class="font-medium text-sm">{token.symbol}</div>
-												<div class="text-xs text-gray-400">{token.name}</div>
-											</div>
-										</div>
+									<TableCell className="px-4 py-3">
+										<TokenDisplay
+											logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
+											symbol={token.symbol}
+											name={token.name}
+										/>
 									</TableCell>
-									<TableCell class="px-4 py-3">
+									<TableCell className="px-4 py-3">
 										<div class="font-medium">${onChainPrice.toFixed(2)}</div>
 									</TableCell>
-									<TableCell class="px-4 py-3 hidden sm:table-cell">
+									<TableCell className="px-4 py-3 hidden sm:table-cell">
 										<div class="text-sm text-gray-500">TBD</div>
 									</TableCell>
-									<TableCell class="px-4 py-3 hidden md:table-cell">
+									<TableCell className="px-4 py-3 hidden md:table-cell">
 										<div class="text-sm">
 											${onChainMarketCap >= 1000000 ? 
 												`${(onChainMarketCap / 1000000).toFixed(2)}M` : 
-												onChainMarketCap >= 1000 ? 
+											onChainMarketCap >= 1000 ? 
 												`${(onChainMarketCap / 1000).toFixed(1)}K` : 
 												onChainMarketCap.toFixed(2)}
 										</div>
 									</TableCell>
-									<TableCell class="px-4 py-3 hidden lg:table-cell">
+									<TableCell className="px-4 py-3 hidden lg:table-cell">
 										<div class="text-sm">
 											{circulatingSupply >= 1000 ? 
 												`${(circulatingSupply / 1000).toFixed(2)}K` : 
 												circulatingSupply.toFixed(2)}
 										</div>
 									</TableCell>
-									<TableCell class="px-4 py-3 hidden xl:table-cell">
+									<TableCell className="px-4 py-3 hidden xl:table-cell">
 										<div class="text-sm">{token.totalHolders}</div>
 									</TableCell>
-									<TableCell class="px-4 py-3">
-										<div class="flex justify-center gap-2">
-											<Button size="sm" variant="primary" on:click={() => goto(`/trade/${token.id}`)}>Trade</Button>
-										</div>
+									<TableCell className="px-4 py-3 text-center">
+										<Button size="sm" variant="primary" on:click={() => goto(`/trade/${token.id}`)}>Trade</Button>
 									</TableCell>
 								</TableRow>
 							{/each}
@@ -381,9 +376,9 @@
 	</div>
 {:else}
 	<div class="flex w-full items-center justify-center p-8">
-		<div class="text-center">
-			<h2 class="mb-4 text-xl font-semibold text-gray-400">No SFTs Found</h2>
-			<p class="text-gray-500">No SFTs available on {$currentNetwork?.displayName || 'this network'}.</p>
-		</div>
+		<EmptyState 
+			title="No SFTs Found"
+			description="No SFTs available on {$currentNetwork?.displayName || 'this network'}."
+		/>
 	</div>
 {/if}

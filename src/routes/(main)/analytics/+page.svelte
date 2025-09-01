@@ -5,6 +5,7 @@
 	import Section from '$lib/components/ui/Section.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import { gridStyles, flexStyles } from '$lib/utils/styles';
 	
 	let localStats: any = null;
 	let serverStats: any = null;
@@ -75,7 +76,7 @@
 			{#if localStats}
 				<div class="mb-8">
 					<h3 class="mb-4 text-lg font-semibold text-gray-300">Current Session</h3>
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					<div class={gridStyles.responsive4}>
 						<MetricCard 
 							label="Total Searches" 
 							value={localStats.totalSearches.toString()} 
@@ -118,7 +119,7 @@
 			{#if serverStats}
 				<div>
 					<h3 class="mb-4 text-lg font-semibold text-gray-300">All Time Statistics</h3>
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					<div class={gridStyles.responsive4}>
 						<MetricCard 
 							label="Total Searches" 
 							value={serverStats.totalSearches?.toString() || '0'} 

@@ -10,9 +10,14 @@
 	import { getAllTokensByNetwork, networks } from '$lib/network';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import type { ApiStockQuote } from '$lib/types';
-	import { InfoCircleSolid } from 'flowbite-svelte-icons';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
+	import Table from '$lib/components/ui/table/Table.svelte';
+	import TableHead from '$lib/components/ui/table/TableHead.svelte';
+	import TableRow from '$lib/components/ui/table/TableRow.svelte';
+	import TableCell from '$lib/components/ui/table/TableCell.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
 
 	// State for network selector in token trading table
 	let selectedNetwork = networks[0];
@@ -286,15 +291,11 @@
 <div class="min-h-screen bg-gray-900 text-white">
 	<PageContainer>
 		<!-- Multi-Network Notice -->
-		<div class="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
-			<InfoCircleSolid class="mt-0.5 h-5 w-5 text-blue-400" />
-			<div>
-				<div class="font-medium text-blue-400">Multi-Network Data</div>
-				<div class="mt-1 text-sm text-gray-300">
-					Except where specified, all metrics are cross-network totals.
-				</div>
-			</div>
-		</div>
+		<InfoBlock 
+			variant="info"
+			title="Multi-Network Data"
+			description="Except where specified, all metrics are cross-network totals."
+		/>
 
 		<!-- Top Metrics -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -317,55 +318,53 @@
 				</div>
 			</div>
 			
-			<div class="overflow-x-auto">
-				<table class="w-full">
-					<thead>
-						<tr class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
-							<th class="p-3">Network</th>
-							<th class="p-3 text-right">TVL</th>
-							<th class="p-3 text-right">ST0x</th>
-							<th class="p-3 text-right">Tokens Minted</th>
-							<th class="p-3 text-right">Tokens Redeemed</th>
-							<th class="p-3 text-right">Tokens Circulating</th>
-							<th class="p-3 text-right">Unique Addresses</th>
-							<th class="p-3 text-right">24H Volume</th>
-							<th class="p-3 text-right">7D Volume</th>
-							<th class="p-3 text-center">Status</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each networkStats as stats}
-							<tr class="border-b border-white/5 hover:bg-white/5">
-								<td class="p-3">
-									<div class="flex items-center gap-3">
-										<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800 text-lg font-bold">
-											{stats.network.displayName.charAt(0)}
-										</div>
-										<div>
-											<div class="font-medium">{stats.network.displayName}</div>
-											<div class="text-xs text-gray-400">{stats.network.name}</div>
-										</div>
+			<Table>
+				<thead>
+					<TableRow isHeader>
+						<TableHead>Network</TableHead>
+						<TableHead align="right">TVL</TableHead>
+						<TableHead align="right">ST0x</TableHead>
+						<TableHead align="right" className="hidden sm:table-cell">Tokens Minted</TableHead>
+						<TableHead align="right" className="hidden sm:table-cell">Tokens Redeemed</TableHead>
+						<TableHead align="right" className="hidden md:table-cell">Tokens Circulating</TableHead>
+						<TableHead align="right" className="hidden lg:table-cell">Unique Addresses</TableHead>
+						<TableHead align="right">24H Volume</TableHead>
+						<TableHead align="right" className="hidden xl:table-cell">7D Volume</TableHead>
+						<TableHead align="center">Status</TableHead>
+					</TableRow>
+				</thead>
+				<tbody>
+					{#each networkStats as stats}
+						<TableRow>
+							<TableCell>
+								<div class="flex items-center gap-2 sm:gap-3">
+									<div class="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-gray-800 text-sm sm:text-lg font-bold">
+										{stats.network.displayName.charAt(0)}
 									</div>
-								</td>
-								<td class="p-3 text-right font-medium text-green-400">${stats.tvl.toFixed(2)}</td>
-								<td class="p-3 text-right">{stats.st0xCount}</td>
-								<td class="p-3 text-right">{parseFloat(stats.tokensMinted).toFixed(2)}</td>
-								<td class="p-3 text-right">{parseFloat(stats.tokensRedeemed).toFixed(2)}</td>
-								<td class="p-3 text-right">{parseFloat(stats.tokensCirculating).toFixed(2)}</td>
-								<td class="p-3 text-right">{stats.uniqueAddresses}</td>
-								<td class="p-3 text-right">{stats.dayVolume}</td>
-								<td class="p-3 text-right">{stats.weekVolume}</td>
-								<td class="p-3">
-									<div class="flex items-center justify-center gap-2">
-										<div class="h-2 w-2 rounded-full bg-green-400"></div>
-										<span class="text-xs text-green-400">Active</span>
+									<div class="min-w-0">
+										<div class="font-medium truncate">{stats.network.displayName}</div>
+										<div class="text-xs text-gray-400 hidden sm:block">{stats.network.name}</div>
 									</div>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+								</div>
+							</TableCell>
+							<TableCell align="right" className="font-medium text-green-400">${stats.tvl.toFixed(2)}</TableCell>
+							<TableCell align="right">{stats.st0xCount}</TableCell>
+							<TableCell align="right" className="hidden sm:table-cell">{parseFloat(stats.tokensMinted).toFixed(2)}</TableCell>
+							<TableCell align="right" className="hidden sm:table-cell">{parseFloat(stats.tokensRedeemed).toFixed(2)}</TableCell>
+							<TableCell align="right" className="hidden md:table-cell">{parseFloat(stats.tokensCirculating).toFixed(2)}</TableCell>
+							<TableCell align="right" className="hidden lg:table-cell">{stats.uniqueAddresses}</TableCell>
+							<TableCell align="right">{stats.dayVolume}</TableCell>
+							<TableCell align="right" className="hidden xl:table-cell">{stats.weekVolume}</TableCell>
+							<TableCell align="center">
+								<div class="flex items-center justify-center gap-1 sm:gap-2">
+									<div class="h-2 w-2 rounded-full bg-green-400"></div>
+									<span class="text-xs text-green-400 hidden sm:inline">Active</span>
+								</div>
+							</TableCell>
+						</TableRow>
+					{/each}
+				</tbody>
+			</Table>
 		</Section>
 
 		<!-- Token Trading Volumes -->
@@ -433,9 +432,10 @@
 					</table>
 				</div>
 			{:else}
-				<div class="rounded-lg border border-white/10 bg-gray-800/50 p-8 text-center">
-					<p class="text-gray-400">No trading data available for {selectedNetwork.displayName}</p>
-				</div>
+				<EmptyState 
+					description="No trading data available for {selectedNetwork.displayName}"
+					showBorder={true}
+				/>
 			{/if}
 		</Section>
 	</PageContainer>

@@ -8,6 +8,11 @@
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
+	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
+	import { truncateAddress } from '$lib/utils/format';
+	import { textStyles, gridStyles, flexStyles } from '$lib/utils/styles';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import { getAllTokensByNetwork } from '$lib/network';
@@ -190,7 +195,7 @@
 	});
 
 	// Process vault balances
-	$: if ($vaultsListQuery.data?.pages[0]?.vaults && activeTab === 'vaults') {
+	$: if ($vaultsListQuery?.data?.pages?.[0]?.vaults && activeTab === 'vaults') {
 		// Create a map to aggregate balances by token address
 		const tokenBalances = new Map<
 			string,
@@ -201,7 +206,7 @@
 			}
 		>();
 
-		for (const { vault } of $vaultsListQuery.data.pages[0].vaults) {
+		for (const { vault } of $vaultsListQuery?.data?.pages?.[0]?.vaults || []) {
 			if (
 				vault.owner.toLowerCase() === $signerAddress?.toLowerCase() &&
 				BigInt(vault.balance) > 0n
@@ -225,12 +230,19 @@
 		// Convert map to array and format balances
 		const balancePromises = Array.from(tokenBalances.values()).map(
 			async ({ token, totalBalance, vaultIds }) => {
-				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
+				// Check if this is USDC
+				const isUSDC = token.symbol?.toUpperCase() === 'USDC' || 
+					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
+				
+				const quote = !isUSDC ? ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 					(q) => q?.['Global Quote']?.['01. symbol'] === token.symbol?.split('s1')[0]
-				);
+				) : null;
 
 				let price: number;
-				if (quote && quote['Global Quote']?.['05. price']) {
+				if (isUSDC) {
+					// USDC is always $1
+					price = 1.00;
+				} else if (quote && quote['Global Quote']?.['05. price']) {
 					price = parseFloat(quote['Global Quote']['05. price']);
 				} else {
 					// Fallback to getPrice if not in global quote
@@ -255,7 +267,8 @@
 					balance: balance.toFixed(6),
 					vaultIds,
 					price: price.toFixed(6),
-					estimatedValue
+					estimatedValue,
+					isUSDC
 				};
 			}
 		);
@@ -272,10 +285,6 @@
 			});
 	}
 
-	function truncateAddress(address: string) {
-		if (!address) return '';
-		return `${address.slice(0, 6)}...${address.slice(-4)}`;
-	}
 </script>
 
 <!-- Main Content -->
@@ -290,25 +299,9 @@
 				/>
 			</div>
 		{:else if !$connected}
-			<div class="flex min-h-[60vh] items-center justify-center">
-				<Section>
-					<div class="flex flex-col items-center justify-center gap-6 py-16 px-8">
-						<div class="rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6">
-							<svg class="h-12 w-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-									d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-							</svg>
-						</div>
-						<div class="text-center">
-							<h2 class="text-2xl font-bold mb-2">Connect Your Wallet</h2>
-							<p class="text-gray-400 max-w-md">
-								Connect your wallet to access your dashboard and view your portfolio, orders, and vault positions on {$currentNetwork?.displayName || 'this network'}.
-							</p>
-						</div>
-						<WalletConnect />
-					</div>
-				</Section>
-			</div>
+			<WalletConnectionPrompt 
+				description="Connect your wallet to access your dashboard and view your portfolio, orders, and vault positions on {$currentNetwork?.displayName || 'this network'}."
+			/>
 		{:else}
 			<!-- Dashboard Header -->
 			<Section>
@@ -318,7 +311,7 @@
 				</div>
 				
 				<!-- Overview Stats -->
-				<div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+				<div class={gridStyles.responsive4}>
 					<MetricCard label="Total Value" value={`$${totalValue.toFixed(2)}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
 					<MetricCard 
 						label="24h Change" 
@@ -347,40 +340,34 @@
 						<div class="overflow-x-auto">
 							<Table>
 								<TableHead class="border-b border-white/10">
-									<TableRow class="border-b border-white/10">
-										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</TableCell>
-										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Balance</TableCell>
-										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
-										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400">Value</TableCell>
-										<TableCell header class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">24h</TableCell>
-										<TableCell header class="px-4 py-3 text-center text-xs font-medium text-gray-400">Actions</TableCell>
+									<TableRow className="border-b border-white/10">
+										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</TableCell>
+										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Balance</TableCell>
+										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
+										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Value</TableCell>
+										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">24h</TableCell>
+										<TableCell header className="px-4 py-3 text-center text-xs font-medium text-gray-400">Actions</TableCell>
 									</TableRow>
 								</TableHead>
 								<tbody>
 									{#each $holdingsQuery.data as holding}
 										<TableRow>
-											<TableCell class="px-4 py-3">
-												<div class="flex items-center gap-3">
-													<img
-														src={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
-														alt={holding.symbol}
-														class="h-8 w-8 rounded-full bg-gray-700"
-													/>
-													<div>
-														<div class="font-medium">{holding.symbol}</div>
-														<div class="text-xs text-gray-400">{holding.name}</div>
-													</div>
-												</div>
+											<TableCell className="px-4 py-3">
+												<TokenDisplay 
+													logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
+													symbol={holding.symbol}
+													name={holding.name}
+												/>
 											</TableCell>
-											<TableCell class="px-4 py-3">{parseFloat(holding.balance).toFixed(4)}</TableCell>
-											<TableCell class="px-4 py-3">${holding.price.toFixed(2)}</TableCell>
-											<TableCell class="px-4 py-3 font-medium">${holding.value.toFixed(2)}</TableCell>
-											<TableCell class="px-4 py-3 hidden sm:table-cell">
+											<TableCell className="px-4 py-3">{parseFloat(holding.balance).toFixed(4)}</TableCell>
+											<TableCell className="px-4 py-3">${holding.price.toFixed(2)}</TableCell>
+											<TableCell className="px-4 py-3 font-medium">${holding.value.toFixed(2)}</TableCell>
+											<TableCell className="px-4 py-3 hidden sm:table-cell">
 												<span class={holding.priceChangePercent >= 0 ? 'text-green-500' : 'text-red-500'}>
 													{holding.priceChangePercent >= 0 ? '+' : ''}{holding.priceChangePercent.toFixed(2)}%
 												</span>
 											</TableCell>
-											<TableCell class="px-4 py-3">
+											<TableCell className="px-4 py-3">
 												<div class="flex justify-center gap-2">
 													<Button size="sm" variant="primary" on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button>
 												</div>
@@ -391,9 +378,7 @@
 							</Table>
 						</div>
 					{:else}
-						<div class="py-12 text-center text-gray-400">
-							No holdings found in your wallet.
-						</div>
+						<EmptyState description="No holdings found in your wallet." />
 					{/if}
 				</Section>
 
@@ -401,7 +386,7 @@
 			{:else if activeTab === 'orders'}
 				<Section>
 					<div class="mb-4 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-6">
-						<TextInput id="orderHash" type="search" placeholder="Order hash" bind:value={orderHashFilter} class="sm:w-auto" />
+						<TextInput id="orderHash" type="search" placeholder="Order hash" bind:value={orderHashFilter} className="sm:w-auto" />
 						<label class="flex w-full items-center gap-2 text-white sm:w-auto">
 							<input type="checkbox" bind:checked={showMyOrders} class="accent-yellow-500" />
 							<span class="text-xs sm:text-base">Show my orders</span>
@@ -452,14 +437,12 @@
 							</div>
 						</div>
 
-						<Portfolio vaults={$sfts} tokenGlobalQuote={$tokenGlobalQuote} />
-
 						{#if isProcessingBalances}
 							<div class="mb-6 sm:mb-8">
 								<h2
 									class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
 								>
-									My Vaults
+									My Vault Holdings
 								</h2>
 								<div class="flex flex-col items-center justify-center p-8">
 									<LoadingSpinner variant="inline" size="md" text="Calculating balances and prices..." />
@@ -470,7 +453,7 @@
 								<h2
 									class="mb-4 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
 								>
-									My Vaults
+									My Vault Holdings
 								</h2>
 								<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
 									{#each myTokenBalance as token}
@@ -484,7 +467,7 @@
 											<!-- Token Info -->
 											<div class="flex items-start gap-3 sm:gap-4">
 												<div
-													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-700/20 text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-xl"
+													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {token.isUSDC ? 'bg-gradient-to-br from-green-600/20 to-emerald-700/20' : 'bg-gradient-to-br from-blue-600/20 to-purple-700/20'} text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-xl"
 												>
 													{token.token.symbol?.slice(0, 2) ?? '??'}
 												</div>
@@ -492,30 +475,37 @@
 													<h3 class="text-base font-semibold text-white sm:text-lg">
 														{token.token.name ?? 'Unknown Token'}
 													</h3>
-													<p class="text-xs text-gray-400 sm:text-sm">{token.token.symbol ?? '???'}</p>
+													<div class="flex items-center gap-2">
+														<p class="{textStyles.label} sm:text-sm">{token.token.symbol ?? '???'}</p>
+														{#if token.isUSDC}
+															<span class="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400">
+																Stablecoin
+															</span>
+														{/if}
+													</div>
 												</div>
 											</div>
 
 											<!-- Balance Info -->
 											<div class="mt-4 space-y-2">
 												<div class="flex items-center justify-between">
-													<span class="text-xs text-gray-400 sm:text-sm">Total Balance</span>
+													<span class="{textStyles.label} sm:text-sm">Total Balance</span>
 													<span class="text-base font-semibold text-white sm:text-lg"
 														>{token.balance}</span
 													>
 												</div>
 												<div class="flex items-center justify-between">
-													<span class="text-xs text-gray-400 sm:text-sm">Price</span>
+													<span class="{textStyles.label} sm:text-sm">Price</span>
 													<span class="text-xs text-gray-300 sm:text-sm">${token.price}</span>
 												</div>
 												<div class="flex items-center justify-between">
-													<span class="text-xs text-gray-400 sm:text-sm">Estimated Value</span>
-													<span class="text-xs font-medium text-green-400 sm:text-sm"
+													<span class="{textStyles.label} sm:text-sm">Estimated Value</span>
+													<span class="text-xs font-medium {token.isUSDC ? 'text-emerald-400' : 'text-green-400'} sm:text-sm"
 														>${token.estimatedValue}</span
 													>
 												</div>
 												<div class="flex items-center justify-between">
-													<span class="text-xs text-gray-400 sm:text-sm">Vaults</span>
+													<span class="{textStyles.label} sm:text-sm">Vaults</span>
 													<span class="text-xs text-gray-300 sm:text-sm">{token.vaultIds.length}</span>
 												</div>
 											</div>
