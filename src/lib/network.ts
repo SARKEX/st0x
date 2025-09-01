@@ -191,6 +191,16 @@ export const TOKENS: CategorizedToken[] = [
 		category: 'ST0x'
 	} as unknown as CategorizedToken,
 	{
+		chainId: base.id,
+		address: '0xde9597f10384d6c7f64aa7cb014f10e2f82e60f1',
+		symbol: 'GME0x',
+		decimals: 18,
+		name: 'STx GameStop 01',
+		logoUrl: '/images/GME.svg',
+		priceFeedId: '0x6f9cd89ef1b7fd39f667101a91ad578b6c6ace4579d5f7f285a4b06aa4504be6',
+		category: 'ST0x'
+	} as unknown as CategorizedToken,
+	{
 		chainId: arbitrum.id,
 		address: '0xaca45fea0049823e809f0e789144c21d96230996',
 		symbol: 'GOOGLs1',

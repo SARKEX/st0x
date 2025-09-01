@@ -277,7 +277,11 @@
 					const quote = $tokenGlobalQuote.find((q: ApiStockQuote) => {
 						const symbol = q['Global Quote']['01. symbol'];
 						// Match token symbol with quote symbol (remove 's1' suffix if present)
-						return symbol === item.sft.symbol || symbol === item.sft.symbol.replace('s1', '');
+						return (
+							symbol === item.sft.symbol ||
+							symbol === item.sft.symbol.replace('s1', '') ||
+							symbol === item.sft.symbol.replace('0x', '')
+						);
 					});
 
 					let usdValue = 0;
@@ -421,7 +425,11 @@
 			const quote = $tokenGlobalQuote.find((q: ApiStockQuote) => {
 				const symbol = q['Global Quote']['01. symbol'];
 				// Match token symbol with quote symbol (remove 's1' suffix if present)
-				return symbol === tokenData.sft.symbol || symbol === tokenData.sft.symbol.replace('s1', '');
+				return (
+					symbol === tokenData.sft.symbol ||
+					symbol === tokenData.sft.symbol.replace('s1', '') ||
+					symbol === tokenData.sft.symbol.replace('0x', '')
+				);
 			});
 
 			if (quote) {
@@ -549,7 +557,11 @@
 			const quote = $tokenGlobalQuote.find((q: ApiStockQuote) => {
 				const symbol = q['Global Quote']['01. symbol'];
 				// Match token symbol with quote symbol (remove 's1' suffix if present)
-				return symbol === tokenData.sft.symbol || symbol === tokenData.sft.symbol.replace('s1', '');
+				return (
+					symbol === tokenData.sft.symbol ||
+					symbol === tokenData.sft.symbol.replace('s1', '') ||
+					symbol === tokenData.sft.symbol.replace('0x', '')
+				);
 			});
 
 			if (quote) {
