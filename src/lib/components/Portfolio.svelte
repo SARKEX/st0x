@@ -67,7 +67,9 @@
 						args: [$signerAddress as Hex]
 					});
 
-					const tokenSymbol = token.symbol?.includes('s1') ? token.symbol?.split('s1')[0] : token.symbol?.split('0x')[0]
+					const tokenSymbol = token.symbol?.includes('s1')
+						? token.symbol?.split('s1')[0]
+						: token.symbol?.split('0x')[0];
 					const quote = (tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 						(q) => q?.['Global Quote']?.['01. symbol'] === tokenSymbol
 					);

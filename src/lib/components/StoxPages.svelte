@@ -37,8 +37,8 @@
 	// Helper function to get token data
 	function getTokenData(symbol: string) {
 		if (!$tokenGlobalQuote || $tokenGlobalQuote.length === 0) return null;
-		
-		const tokenSymbol = symbol?.includes('s1') ? symbol?.split('s1')[0] : symbol?.split('0x')[0]
+
+		const tokenSymbol = symbol?.includes('s1') ? symbol?.split('s1')[0] : symbol?.split('0x')[0];
 		const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 			(q) => q?.['Global Quote']?.['01. symbol'] === tokenSymbol
 		);

@@ -25,7 +25,9 @@
 
 			// Process SFT vaults (from subgraph)
 			for (let sft of sftVaults) {
-				const tokenSymbol = sft.symbol?.includes('s1') ? sft.symbol?.split('s1')[0] : sft.symbol?.split('0x')[0]
+				const tokenSymbol = sft.symbol?.includes('s1')
+					? sft.symbol?.split('s1')[0]
+					: sft.symbol?.split('0x')[0];
 				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 					(q) => q?.['Global Quote']?.['01. symbol'] === tokenSymbol
 				);
