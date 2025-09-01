@@ -88,24 +88,31 @@
 	});
 
 	$: tokenGlobalQuoteQuery = createQuery({
-		queryKey: ['tokenGlobalQuote', $currentNetwork?.id],
+		queryKey: ['tokenGlobalQuote-unique-symbols'],
 		queryFn: async () => {
-			// Filter tokens by current network's chain ID
-			const networkTokens = TOKENS.filter((token) => token.chainId === $currentNetwork.chainId);
+			// Build unique list of base symbols across all TOKENS (strip 's1' and '0x' suffixes)
+			const uniqueBaseSymbols = Array.from(
+				new Set(
+					TOKENS.map((t) => {
+						const sym = t.symbol ?? '';
+						if (sym.includes('s1')) return sym.split('s1')[0];
+						if (sym.includes('0x')) return sym.split('0x')[0];
+						return sym;
+					})
+				)
+			).filter(Boolean);
+
 			const tokenQuotes = [];
-			for (const stox of networkTokens) {
-				const stockSymbol = stox.symbol?.includes('s1') ? stox.symbol?.split('s1')[0] : stox.symbol?.split('0x')[0]
+			for (const baseSymbol of uniqueBaseSymbols) {
 				const response = await fetch(
-					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${
-						stockSymbol
-					}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
+					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${baseSymbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 				);
 				const data = await response.json();
 				tokenQuotes.push(data);
 			}
 			return tokenQuotes;
 		},
-		enabled: !!$currentNetwork?.chainId
+		enabled: true
 	});
 
 	$: sfts.set($vaultQuery.data);
