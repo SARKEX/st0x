@@ -13,7 +13,7 @@
 	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
 	import { page } from '$app/stores';
 
-	const symbol = $currentToken?.symbol.split('s1')[0];
+	const symbol = $currentToken?.symbol.includes('s1') ? $currentToken?.symbol.split('s1')[0] : $currentToken?.symbol.split('0x')[0];
 
 	// Find the corresponding PythToken from TOKENS array
 	$: currentPythToken = TOKENS.find(
@@ -46,9 +46,10 @@
 	$: timeseriesQuery = createQuery({
 		queryKey: ['timeseries', $currentToken?.symbol, $currentNetwork?.id],
 		queryFn: async () => {
+			const tokenSymbol = $currentToken?.symbol?.includes('s1') ? $currentToken?.symbol?.split('s1')[0] : $currentToken?.symbol?.split('0x')[0]
 			const response = await fetch(
 				`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${
-					$currentToken?.symbol?.split('s1')[0]
+					tokenSymbol
 				}&outputsize=full&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 			);
 			return await response.json();

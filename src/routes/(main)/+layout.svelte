@@ -94,9 +94,10 @@
 			const networkTokens = TOKENS.filter((token) => token.chainId === $currentNetwork.chainId);
 			const tokenQuotes = [];
 			for (const stox of networkTokens) {
+				const stockSymbol = stox.symbol?.includes('s1') ? stox.symbol?.split('s1')[0] : stox.symbol?.split('0x')[0]
 				const response = await fetch(
 					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${
-						stox.symbol?.split('s1')[0]
+						stockSymbol
 					}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
 				);
 				const data = await response.json();
