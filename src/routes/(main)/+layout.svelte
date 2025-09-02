@@ -10,6 +10,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import NetworkSelector from '$lib/components/NetworkSelector.svelte';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
+    import Button from '$lib/components/ui/Button.svelte';
 	import { page } from '$app/stores';
 
 	import { getSfts } from '$lib/query';
@@ -143,10 +144,7 @@
 			<div
 				class="relative z-[9999] flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
 			>
-				<button
-					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
-					class="rounded-lg border border-white/10 p-2 transition-colors hover:bg-white/5"
-				>
+				<Button variant="ghost" size="sm" className="rounded-lg border border-white/10 p-2 hover:bg-white/5" on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}>
 					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
 							stroke-linecap="round"
@@ -155,7 +153,7 @@
 							d="M4 6h16M4 12h16M4 18h16"
 						/>
 					</svg>
-				</button>
+				</Button>
 				<div class="flex items-center gap-2">
 					<img
 						src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"

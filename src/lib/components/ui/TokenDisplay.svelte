@@ -2,7 +2,7 @@
 	export let logoUrl: string | undefined = undefined;
 	export let symbol: string;
 	export let name: string = '';
-	export let size: 'sm' | 'md' | 'lg' = 'md';
+export let size: 'sm' | 'md' | 'lg' = 'md';
 	export let showName: boolean = true;
 	export let className: string = '';
 	
@@ -27,7 +27,7 @@
 			gap: 'gap-3',
 			symbolText: 'text-lg',
 			nameText: 'text-sm'
-		}
+    }
 	};
 	
 	$: sizeConfig = sizes[size];

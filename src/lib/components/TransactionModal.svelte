@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { Modal, Spinner } from 'flowbite-svelte';
-	import Button from '$lib/components/Button.svelte';
+	import Modal from '$lib/components/ui/Modal.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import transactionStore from '$lib/transactionStore';
 	import { TransactionStatus } from '$lib/transactionStore';
 	import { TransactionErrorMessage } from '$lib/types/errors';
@@ -12,101 +13,56 @@
 </script>
 
 <Modal
-	size="sm"
-	defaultClass="rounded-lg border border-white/10"
-	class="bg-gray-700/50 backdrop-blur-sm"
-	open={$transactionStore.status !== TransactionStatus.IDLE}
-	on:close={() => handleClose()}
-	data-testid="transaction-modal"
+	show={$transactionStore.status !== TransactionStatus.IDLE}
+	title="Transaction"
+	onClose={() => handleClose()}
 >
 	{#if $transactionStore.status !== TransactionStatus.IDLE}
 		<div class="flex flex-col items-center justify-center gap-2 p-4 text-white">
 			{#if $transactionStore.status === TransactionStatus.ERROR}
-				<div
-					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-400 bg-red-900/50"
-					data-testid="error-icon"
-				>
+				<div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-400 bg-red-900/50" data-testid="error-icon">
 					<h1 class="text-lg md:text-2xl">❌</h1>
 				</div>
-				<p
-					class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold"
-					data-testid="error-status"
-				>
+				<p class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold" data-testid="error-status">
 					{$transactionStore.status}
 				</p>
-				<p
-					class="w-full whitespace-pre-wrap break-words text-center font-normal"
-					data-testid="error-message"
-				>
+				<p class="w-full whitespace-pre-wrap break-words text-center font-normal" data-testid="error-message">
 					{$transactionStore.error}
 				</p>
 				{#if $transactionStore.error === TransactionErrorMessage.GENERIC}
-					<a
-						class="text-center text-white hover:text-yellow-500/50 hover:underline"
-						href="https://q2i2qetuwucfyfgcamqsi2h33fgmlz26o4jlt3hlndyd5xk3xo2a.arweave.net/hpGoEnS1BFwUwgMhJGj72UzF5153Erns62jwPt1bu7Q"
-						>Sarcophagus.io</a
-					>
+					<a class="text-center text-white hover:text-yellow-500/50 hover:underline" href="https://q2i2qetuwucfyfgcamqsi2h33fgmlz26o4jlt3hlndyd5xk3xo2a.arweave.net/hpGoEnS1BFwUwgMhJGj72UzF5153Erns62jwPt1bu7Q">Sarcophagus.io</a>
 				{/if}
 				{#if $transactionStore.hash}
-					<a
-						class="whitespace-pre-wrap break-words text-center text-sm text-white hover:text-yellow-500/50 hover:underline"
-						href={`${$currentNetwork.blockExplorer}/tx/${$transactionStore.hash}`}
-						data-testid="view-transaction-link">View transaction on PolygonScan</a
-					>
+					<a class="whitespace-pre-wrap break-words text-center text-sm text-white hover:text-yellow-500/50 hover:underline" href={`${$currentNetwork.blockExplorer}/tx/${$transactionStore.hash}`} data-testid="view-transaction-link">View transaction on PolygonScan</a>
 				{/if}
-				<Button on:click={() => handleClose()} class="mt-4" dataTestId="dismiss-button"
-					>DISMISS</Button
-				>
+				<Button on:click={() => handleClose()} className="mt-4" dataTestId="dismiss-button">DISMISS</Button>
 			{:else if $transactionStore.status === TransactionStatus.SUCCESS}
-				<div
-					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-900/50"
-					data-testid="success-icon"
-				>
+				<div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-900/50" data-testid="success-icon">
 					<h1 class="text-lg md:text-2xl">✅</h1>
 				</div>
 				<div class="flex flex-col gap-4 text-center">
-					<p
-						class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold"
-						data-testid="success-status"
-					>
+					<p class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold" data-testid="success-status">
 						{$transactionStore.status}
 					</p>
 					{#if $transactionStore.message}
-						<p
-							class="w-full break-words text-center text-sm font-normal"
-							data-testid="success-message"
-						>
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+						<p class="w-full break-words text-center text-sm font-normal" data-testid="success-message">
 							{@html $transactionStore.message}
 						</p>
 					{/if}
 
 					{#if $transactionStore.hash}
 						<div class="flex flex-col gap-2">
-							<a
-								target="_blank"
-								class="whitespace-pre-wrap break-words text-center text-white hover:text-yellow-500/50 hover:underline"
-								href={`${$currentNetwork.blockExplorer}/tx/${$transactionStore.hash}`}
-								data-testid="view-transaction-link">View transaction</a
-							>
+							<a target="_blank" class="whitespace-pre-wrap break-words text-center text-white hover:text-yellow-500/50 hover:underline" href={`${$currentNetwork.blockExplorer}/tx/${$transactionStore.hash}`} data-testid="view-transaction-link">View transaction</a>
 						</div>
 					{/if}
 				</div>
 
-				<Button on:click={() => handleClose()} class="mt-4" dataTestId="dismiss-button"
-					>DISMISS</Button
-				>
+				<Button on:click={() => handleClose()} className="mt-4" dataTestId="dismiss-button">DISMISS</Button>
 			{:else if $transactionStore.status === TransactionStatus.CHECKING_ALLOWANCE || $transactionStore.status === TransactionStatus.PENDING_WALLET || $transactionStore.status === TransactionStatus.PENDING_APPROVAL}
-				<div
-					class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-600/50"
-					data-testid="spinner"
-				>
-					<Spinner color="yellow" size={10} />
+				<div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-600/50" data-testid="spinner">
+					<LoadingSpinner variant="button" size="lg" text="" showText={false} />
 				</div>
-				<p
-					class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold"
-					data-testid="pending-message"
-				>
+				<p class="w-full whitespace-pre-wrap break-words text-center text-lg font-semibold" data-testid="pending-message">
 					{$transactionStore.message || $transactionStore.status}
 				</p>
 			{/if}

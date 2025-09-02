@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getAllTokensByNetwork } from '$lib/network';
-	import Select from '$lib/components/Select.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
@@ -11,7 +11,7 @@
 		validatePeriod,
 		validateSelectedAmount
 	} from '$lib/validateDeploymentArgs';
-	import Input from '$lib/components/Input.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';

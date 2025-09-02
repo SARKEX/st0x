@@ -31,7 +31,7 @@
 	import TableHead from '$lib/components/ui/table/TableHead.svelte';
 	import TableRow from '$lib/components/ui/table/TableRow.svelte';
 	import TableCell from '$lib/components/ui/table/TableCell.svelte';
-	import Button from '$lib/components/Button.svelte';
+    import Button from '$lib/components/ui/Button.svelte';
 	import TextInput from '$lib/components/ui/TextInput.svelte';
 
 	// Filter tokens by current network
@@ -339,7 +339,7 @@
 					{:else if $holdingsQuery.data && $holdingsQuery.data.length > 0}
 						<div class="overflow-x-auto">
 							<Table>
-								<TableHead class="border-b border-white/10">
+							<TableHead className="border-b border-white/10">
 									<TableRow className="border-b border-white/10">
 										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</TableCell>
 										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Balance</TableCell>
@@ -353,11 +353,11 @@
 									{#each $holdingsQuery.data as holding}
 										<TableRow>
 											<TableCell className="px-4 py-3">
-												<TokenDisplay 
-													logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
-													symbol={holding.symbol}
-													name={holding.name}
-												/>
+                                    <TokenDisplay 
+                                        logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
+                                        symbol={holding.symbol}
+                                        name={holding.name}
+                                    />
 											</TableCell>
 											<TableCell className="px-4 py-3">{parseFloat(holding.balance).toFixed(4)}</TableCell>
 											<TableCell className="px-4 py-3">${holding.price.toFixed(2)}</TableCell>

@@ -10,35 +10,6 @@ export function truncateAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-/**
- * Format a number with commas and decimal places
- */
-export function formatNumber(value: number, decimals: number = 2): string {
-	return new Intl.NumberFormat('en-US', {
-		minimumFractionDigits: decimals,
-		maximumFractionDigits: decimals
-	}).format(value);
-}
-
-/**
- * Format a USD price
- */
-export function formatUSD(value: number, decimals: number = 2): string {
-	return new Intl.NumberFormat('en-US', {
-		style: 'currency',
-		currency: 'USD',
-		minimumFractionDigits: decimals,
-		maximumFractionDigits: decimals
-	}).format(value);
-}
-
-/**
- * Format a percentage with + or - sign
- */
-export function formatPercent(value: number, decimals: number = 2): string {
-	const sign = value >= 0 ? '+' : '';
-	return `${sign}${value.toFixed(decimals)}%`;
-}
 
 /**
  * Format large numbers with K, M, B suffixes

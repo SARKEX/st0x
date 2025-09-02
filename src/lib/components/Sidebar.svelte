@@ -10,7 +10,7 @@
 
 	const NAVIGATION_ITEMS = [
 		{ name: 'Trade', href: '/trade-list', protected: false },
-		{ name: 'Strategies', href: '/strategies', protected: true },
+		{ name: 'Strategies', href: '/strategies', protected: false },
 		{ name: 'My Dashboard', href: '/dashboard', protected: true },
 		{ name: 'Platform Metrics', href: '/platform-metrics', protected: false }
 	];

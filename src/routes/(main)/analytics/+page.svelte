@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { searchAnalytics } from '$lib/analytics';
-	import MetricCard from '$lib/components/ui/MetricCard.svelte';
-	import Section from '$lib/components/ui/Section.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
-	import PageContainer from '$lib/components/ui/PageContainer.svelte';
-	import { gridStyles, flexStyles } from '$lib/utils/styles';
+    import MetricCard from '$lib/components/ui/MetricCard.svelte';
+    import Section from '$lib/components/ui/Section.svelte';
+    import Card from '$lib/components/ui/Card.svelte';
+    import PageContainer from '$lib/components/ui/PageContainer.svelte';
+    import { gridStyles, flexStyles } from '$lib/utils/styles';
+    import Button from '$lib/components/ui/Button.svelte';
 	
 	let localStats: any = null;
 	let serverStats: any = null;
@@ -51,23 +52,13 @@
 
 <PageContainer>
 	<Section>
-		<div class="mb-6 flex items-center justify-between">
-			<h2 class="text-2xl font-bold">Search Analytics Dashboard</h2>
-			<div class="flex gap-2">
-				<button
-					class="rounded-lg bg-yellow-500/10 px-4 py-2 text-sm font-medium text-yellow-500 hover:bg-yellow-500/20"
-					on:click={exportData}
-				>
-					Export Data
-				</button>
-				<button
-					class="rounded-lg bg-red-500/10 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/20"
-					on:click={clearLocalData}
-				>
-					Clear Local Data
-				</button>
-			</div>
-		</div>
+    <div class="mb-6 flex items-center justify-between">
+        <h2 class="text-2xl font-bold">Search Analytics Dashboard</h2>
+        <div class="flex gap-2">
+            <Button size="sm" variant="secondary" on:click={exportData}>Export Data</Button>
+            <Button size="sm" variant="danger" on:click={clearLocalData}>Clear Local Data</Button>
+        </div>
+    </div>
 
 		{#if loading}
 			<div class="text-center text-gray-400">Loading analytics...</div>

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import Modal from './Modal.svelte';
+	import Modal from '$lib/components/ui/Modal.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import hljs from 'highlight.js/lib/core';
 	import javascript from 'highlight.js/lib/languages/javascript';
 	import 'highlight.js/styles/github-dark.css';
@@ -27,20 +28,8 @@
 		</div>
 
 		<div class="flex justify-end space-x-3 pt-4">
-			<button
-				type="button"
-				class="rounded-lg border border-white/10 bg-gray-700/30 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-600/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-				on:click={onCancel}
-			>
-				Cancel
-			</button>
-			<button
-				type="button"
-				class="rounded-lg border border-transparent bg-gradient-to-r from-blue-600 to-purple-700 px-4 py-2 text-sm font-medium font-semibold text-white transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-				on:click={onDeploy}
-			>
-				Deploy Strategy
-			</button>
+			<Button variant="ghost" size="md" on:click={onCancel}>Cancel</Button>
+			<Button variant="primary" size="md" on:click={onDeploy}>Deploy Strategy</Button>
 		</div>
 	</div>
 </Modal>

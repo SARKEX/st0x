@@ -15,10 +15,11 @@
 	import { goto } from '$app/navigation';
 	import type { ApiStockQuote } from '$lib/types';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
-	import Table from '$lib/components/ui/table/Table.svelte';
-	import TableRow from '$lib/components/ui/table/TableRow.svelte';
-	import TableCell from '$lib/components/ui/table/TableCell.svelte';
-	import Button from '$lib/components/Button.svelte';
+    import Table from '$lib/components/ui/table/Table.svelte';
+    import TableRow from '$lib/components/ui/table/TableRow.svelte';
+    import TableCell from '$lib/components/ui/table/TableCell.svelte';
+    import Button from '$lib/components/ui/Button.svelte';
+    import { containerStyles } from '$lib/utils/styles';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	
@@ -306,7 +307,7 @@
 				<div class="mb-4 sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse Stocks</h2>
 				</div>
-				<div class="overflow-x-auto rounded-lg border border-white/10 bg-gray-800/50">
+            <div class={"overflow-x-auto " + containerStyles.cardBordered}>
 					<Table>
 						<thead>
 							<TableRow className="border-b border-white/10">
@@ -330,11 +331,11 @@
 								{@const onChainMarketCap = circulatingSupply * onChainPrice}
 								<TableRow>
 									<TableCell className="px-4 py-3">
-										<TokenDisplay
-											logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
-											symbol={token.symbol}
-											name={token.name}
-										/>
+                                    <TokenDisplay
+                                        logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === token.address.toLowerCase())?.logoUrl}
+                                        symbol={token.symbol}
+                                        name={token.name}
+                                    />
 									</TableCell>
 									<TableCell className="px-4 py-3">
 										<div class="font-medium">${onChainPrice.toFixed(2)}</div>

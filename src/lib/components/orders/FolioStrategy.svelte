@@ -4,7 +4,7 @@
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
 	import { validateOverrideDepositAmount } from '$lib/validateDeploymentArgs';
-	import Input from '$lib/components/Input.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
@@ -13,6 +13,7 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+    import Button from '$lib/components/ui/Button.svelte';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -624,15 +625,11 @@
 						>{formatUnits(overrideDepositAmount7 ?? 0n, selectedToken7.decimals)}</span
 					>
 				</div>
-			</div>
+		</div>
 		</div>
 
-		<button
-			class="w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-6 py-3 font-semibold transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
-			disabled={disableDeploy}
-			on:click={handleFolioDeploy}
-		>
+		<Button variant="primary" size="lg" fullWidth={true} disabled={disableDeploy} on:click={handleFolioDeploy}>
 			Deploy Order
-		</button>
+		</Button>
 	</div>
 </div>

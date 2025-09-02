@@ -405,17 +405,17 @@
 								<tr class="border-b border-white/5 hover:bg-white/5">
 									<td class="p-3">
 										<div class="flex items-center gap-3">
-											{#if token.logoUrl}
-												<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
-											{:else}
-												<div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold">
-													{token.symbol?.charAt(0)}
-												</div>
-											{/if}
-											<div>
-												<div class="font-medium">{token.symbol}</div>
-												<div class="text-xs text-gray-400">{token.name}</div>
-											</div>
+                                {#if token.logoUrl}
+                                    <img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
+                                {:else}
+                                    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold">
+                                        {token.symbol?.charAt(0)}
+                                    </div>
+                                {/if}
+                                <div>
+                                    <div class="font-medium">{token.symbol}</div>
+                                    <div class="text-xs text-gray-400">{token.name}</div>
+                                </div>
 										</div>
 									</td>
 									<td class="p-3 text-right">{parseFloat(token.inVolume).toFixed(6)}</td>

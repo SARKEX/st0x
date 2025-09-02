@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Card from './Card.svelte';
 	import { goto } from '$app/navigation';
+	import Button from '$lib/components/ui/Button.svelte';
 	
 	type Item = { 
 		name: string; 
@@ -50,14 +51,11 @@
 								</div>
 							</div>
 						</a>
-						{#if item.showTradeButton}
-							<button
-								on:click|stopPropagation={() => goto(item.href)}
-								class="ml-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:scale-105"
-							>
-								Trade
-							</button>
-						{/if}
+					{#if item.showTradeButton}
+						<Button size="sm" variant="primary" on:click={() => goto(item.href)}>
+							Trade
+						</Button>
+					{/if}
 					</div>
 				</div>
 			</li>

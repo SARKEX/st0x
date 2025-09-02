@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { connected } from 'svelte-wagmi';
-	import { currentNetwork } from '$lib/stores';
+    import { connected } from 'svelte-wagmi';
+    import { currentNetwork } from '$lib/stores';
+    import Button from '$lib/components/ui/Button.svelte';
 	
 	let email = '';
 	let isSubmitting = false;
@@ -122,13 +123,15 @@
 								disabled={isSubmitting}
 								class="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-yellow-500/50 sm:text-sm"
 							/>
-							<button
+							<Button
 								type="submit"
 								disabled={isSubmitting}
-								class="rounded-lg bg-yellow-500 px-4 py-2 text-xs font-medium text-black transition-all hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+								variant="secondary"
+								size="sm"
+								className="bg-yellow-500 text-black hover:bg-yellow-400 border-0"
 							>
 								{isSubmitting ? 'Submitting...' : 'Subscribe'}
-							</button>
+							</Button>
 						</div>
 						{#if submitMessage}
 							<p class="text-xs {submitMessage.includes('Thank you') ? 'text-green-400' : 'text-red-400'}">

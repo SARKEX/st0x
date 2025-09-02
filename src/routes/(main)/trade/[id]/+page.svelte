@@ -15,7 +15,9 @@
 	import { ArrowUpRightFromSquareSolid, ExpandOutline } from 'flowbite-svelte-icons';
 	import { connected } from 'svelte-wagmi';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
-	import Modal from '$lib/components/Modal.svelte';
+	import Modal from '$lib/components/ui/Modal.svelte';
+    import Button from '$lib/components/ui/Button.svelte';
+    import { containerStyles } from '$lib/utils/styles';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find(sft => sft.id === tokenId);
@@ -191,13 +193,6 @@
 	$: latestOBV = $obvQuery.data?.['Technical Analysis: OBV'] ? 
 		Object.values($obvQuery.data['Technical Analysis: OBV'])[0] as any : null;
 
-	// Use formatCompact from utils instead of local formatNumber
-	function formatNumber(value: string | number | undefined): string {
-		if (!value) return 'N/A';
-		const num = typeof value === 'string' ? parseFloat(value) : value;
-		if (isNaN(num)) return 'N/A';
-		return formatCompact(num);
-	}
 	
 	function openChartModal() {
 		showChartModal = true;
@@ -286,7 +281,7 @@
 						</div>
 						<div>
 							<span class="text-gray-400">Volume</span>
-							<div class="font-medium">{formatNumber(globalQuote?.['06. volume'])}</div>
+							<div class="font-medium">{globalQuote?.['06. volume'] ? formatCompact(parseFloat(globalQuote['06. volume'])) : 'N/A'}</div>
 						</div>
 						<div>
 							<span class="text-gray-400">Day Range</span>
@@ -302,14 +297,16 @@
 				</div>
 				
 				<!-- Right: Chart -->
-				<div class="relative h-64 rounded-lg border border-white/10 bg-gray-800/50 p-2">
-					<button
-						on:click={openChartModal}
-						class="absolute right-2 top-2 z-10 rounded-md bg-gray-700/80 p-1.5 text-gray-400 transition-colors hover:bg-gray-600 hover:text-white"
+    <div class={`${containerStyles.cardBordered} relative h-64 p-2`}>
+					<Button
+						variant="ghost"
+						size="sm"
+						className="absolute right-2 top-2 z-10 rounded-md bg-gray-700/80 p-1.5 text-gray-400 hover:bg-gray-600 hover:text-white"
 						aria-label="View fullscreen chart"
+						on:click={openChartModal}
 					>
 						<ExpandOutline class="h-4 w-4" />
-					</button>
+					</Button>
 					{#if $intradayQuery.data?.error === 'API_LIMIT'}
 						<div class="flex h-full items-center justify-center">
 							<p class="text-sm text-gray-400">Chart unavailable (API limit reached)</p>
@@ -359,57 +356,57 @@
 			{#if activeTab === 'fundamentals'}
 				<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
 					{#if overview && Object.keys(overview).length > 0}
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">P/E Ratio</div>
 							<div class="text-lg font-semibold">{overview.PERatio || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">Forward P/E</div>
 							<div class="text-lg font-semibold">{overview.ForwardPE || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">PEG Ratio</div>
 							<div class="text-lg font-semibold">{overview.PEGRatio || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">P/B Ratio</div>
 							<div class="text-lg font-semibold">{overview.PriceToBookRatio || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">Market Cap</div>
 							<div class="text-lg font-semibold">
-								{formatNumber(overview.MarketCapitalization)}
+								{overview.MarketCapitalization ? formatCompact(parseFloat(overview.MarketCapitalization)) : 'N/A'}
 							</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">EPS</div>
 							<div class="text-lg font-semibold">${overview.EPS || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">Dividend Yield</div>
 							<div class="text-lg font-semibold">
 								{overview.DividendYield ? (parseFloat(overview.DividendYield) * 100).toFixed(2) + '%' : 'N/A'}
 							</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">Beta</div>
 							<div class="text-lg font-semibold">{overview.Beta || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">52W High</div>
 							<div class="text-lg font-semibold">${overview['52WeekHigh'] || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">52W Low</div>
 							<div class="text-lg font-semibold">${overview['52WeekLow'] || 'N/A'}</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">Profit Margin</div>
 							<div class="text-lg font-semibold">
 								{overview.ProfitMargin ? (parseFloat(overview.ProfitMargin) * 100).toFixed(2) + '%' : 'N/A'}
 							</div>
 						</div>
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-3">
+                        <div class={`${containerStyles.cardBordered} p-3`}>
 							<div class="text-xs text-gray-400">ROE</div>
 							<div class="text-lg font-semibold">
 								{overview.ReturnOnEquityTTM ? (parseFloat(overview.ReturnOnEquityTTM) * 100).toFixed(2) + '%' : 'N/A'}
@@ -425,7 +422,7 @@
 				<div class="space-y-4">
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 						<!-- MACD -->
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                        <div class={containerStyles.cardBordered}>
 							<h3 class="mb-3 font-semibold">MACD</h3>
 							{#if latestMACD}
 								<div class="space-y-2 text-sm">
@@ -450,7 +447,7 @@
 						</div>
 						
 						<!-- RSI -->
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                        <div class={containerStyles.cardBordered}>
 							<h3 class="mb-3 font-semibold">RSI (14)</h3>
 							{#if latestRSI}
 								<div class="space-y-2">
@@ -467,12 +464,12 @@
 						</div>
 						
 						<!-- OBV -->
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                        <div class={containerStyles.cardBordered}>
 							<h3 class="mb-3 font-semibold">OBV</h3>
 							{#if latestOBV}
 								<div class="space-y-2">
 									<div class="text-lg font-bold">
-										{formatNumber(latestOBV.OBV)}
+										{latestOBV.OBV ? formatCompact(parseFloat(latestOBV.OBV)) : 'N/A'}
 									</div>
 									<div class="text-xs text-gray-400">On-Balance Volume</div>
 								</div>
@@ -492,7 +489,7 @@
 			{:else if activeTab === 'token'}
 				<div class="space-y-4">
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                        <div class={containerStyles.cardBordered}>
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex justify-between">
@@ -521,7 +518,7 @@
 							</div>
 						</div>
 						
-						<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                        <div class={containerStyles.cardBordered}>
 							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex justify-between">
@@ -547,7 +544,7 @@
 			{:else if activeTab === 'trading'}
 				<div class="space-y-4">
 					<!-- Token Trading Volumes Table -->
-					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                    <div class={containerStyles.cardBordered}>
 						<h3 class="mb-4 font-semibold">Trading Activity</h3>
 						<div class="overflow-x-auto">
 							<table class="w-full text-sm">
@@ -608,7 +605,7 @@
 					</div>
 
 					<!-- Historical Activity -->
-					<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                    <div class={containerStyles.cardBordered}>
 						<h3 class="mb-4 font-semibold">Recent Activity</h3>
 						<div class="space-y-3">
 							<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -637,26 +634,26 @@
 			
 			<!-- Order Type Selector -->
 			<div class="mb-4 flex gap-2 rounded-lg bg-white/5 p-1">
-				<button
+				<Button
+					fullWidth={true}
+					variant="ghost"
+					className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${activeOrderType === 'limit' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}`}
 					on:click={() => (activeOrderType = 'limit')}
-					class="flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all {activeOrderType === 'limit'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'text-gray-400 hover:text-white'}"
 				>
 					Limit Order
-				</button>
-				<button
+				</Button>
+				<Button
+					fullWidth={true}
+					variant="ghost"
+					className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${activeOrderType === 'dca' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}`}
 					on:click={() => (activeOrderType = 'dca')}
-					class="flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all {activeOrderType === 'dca'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'text-gray-400 hover:text-white'}"
 				>
 					DCA Strategy
-				</button>
+				</Button>
 			</div>
 
 			{#if $connected}
-				<div class="rounded-lg border border-white/10 bg-gray-800/50 p-4">
+                <div class={containerStyles.cardBordered}>
 					{#if activeOrderType === 'limit'}
 						<LimitStrategy
 							passedOutputToken={currentPythToken}
@@ -691,50 +688,15 @@
 	<div class="space-y-4">
 		<!-- Interval Selector -->
 		<div class="flex gap-2">
-			<button
-				on:click={() => changeChartInterval('5min')}
-				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {chartInterval === '5min'
-					? 'bg-yellow-500/20 text-yellow-500'
-					: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}"
-			>
-				5 min
-			</button>
-			<button
-				on:click={() => changeChartInterval('15min')}
-				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {chartInterval === '15min'
-					? 'bg-yellow-500/20 text-yellow-500'
-					: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}"
-			>
-				15 min
-			</button>
-			<button
-				on:click={() => changeChartInterval('30min')}
-				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {chartInterval === '30min'
-					? 'bg-yellow-500/20 text-yellow-500'
-					: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}"
-			>
-				30 min
-			</button>
-			<button
-				on:click={() => changeChartInterval('60min')}
-				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {chartInterval === '60min'
-					? 'bg-yellow-500/20 text-yellow-500'
-					: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}"
-			>
-				1 hour
-			</button>
-			<button
-				on:click={() => changeChartInterval('daily')}
-				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {chartInterval === 'daily'
-					? 'bg-yellow-500/20 text-yellow-500'
-					: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}"
-			>
-				Daily
-			</button>
+			<Button variant="ghost" size="sm" className={`rounded-md px-3 py-1.5 text-sm font-medium ${chartInterval === '5min' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}`} on:click={() => changeChartInterval('5min')}>5 min</Button>
+			<Button variant="ghost" size="sm" className={`rounded-md px-3 py-1.5 text-sm font-medium ${chartInterval === '15min' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}`} on:click={() => changeChartInterval('15min')}>15 min</Button>
+			<Button variant="ghost" size="sm" className={`rounded-md px-3 py-1.5 text-sm font-medium ${chartInterval === '30min' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}`} on:click={() => changeChartInterval('30min')}>30 min</Button>
+			<Button variant="ghost" size="sm" className={`rounded-md px-3 py-1.5 text-sm font-medium ${chartInterval === '60min' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}`} on:click={() => changeChartInterval('60min')}>1 hour</Button>
+			<Button variant="ghost" size="sm" className={`rounded-md px-3 py-1.5 text-sm font-medium ${chartInterval === 'daily' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'}`} on:click={() => changeChartInterval('daily')}>Daily</Button>
 		</div>
 		
 		<!-- Chart -->
-		<div class="h-96 rounded-lg border border-white/10 bg-gray-800/50 p-2">
+            <div class={`${containerStyles.cardBordered} h-96 p-2`}>
 			{#if modalChartData}
 				<EquityChart 
 					timeseriesData={modalChartData} 
@@ -761,7 +723,7 @@
 			</div>
 			<div>
 				<span class="text-gray-400">Volume</span>
-				<div class="font-medium">{formatNumber(globalQuote?.['06. volume'])}</div>
+				<div class="font-medium">{globalQuote?.['06. volume'] ? formatCompact(parseFloat(globalQuote['06. volume'])) : 'N/A'}</div>
 			</div>
 			<div>
 				<span class="text-gray-400">Day Range</span>
