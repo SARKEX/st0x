@@ -17,9 +17,11 @@
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
-	import { hasValidPriceFeedId } from '$lib/derivations';
+    import { hasValidPriceFeedId, getBaseline } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+    
+    let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
 
 	export let passedInputToken: PythToken | undefined; // The token we're accumulating
 
@@ -41,7 +43,7 @@
 		}
 	}
 
-	let selectedAmount: bigint = 0n;
+    let selectedAmount: bigint = 0n;
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';
 	let selectedBaseline: string = '';
@@ -67,9 +69,9 @@
 	let selectedBaselineError: boolean = false;
 	let selectedInitialRatioError: boolean = false;
 
-	$: depositAmount = selectedAmount;
-	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
-	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
+    $: depositAmount = selectedAmount;
+    $: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
+    $: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
 
 	$: disableDeploy =
 		!selectedAmount ||
@@ -84,24 +86,28 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError;
 
-	const handleDcaDeploy = () => {
-		if ($connected) {
-			transactionStore.handleDcaDeploy({
-				outputToken: selectedOutputToken,
-				inputToken: selectedInputToken,
-				budgetAmount: selectedAmount,
-				selectedPeriod: selectedPeriod,
-				selectedPeriodUnit: selectedPeriodUnit,
-				baseline: selectedBaseline,
-				kickoff: selectedInitialRatio,
-				minTradeAmount: minTradeAmount,
-				maxTradeAmount: maxTradeAmount,
-				inputVaultId: inputVaultId,
-				outputVaultId: outputVaultId,
-				depositAmount: depositAmount
-			});
-		}
-	};
+    const handleDcaDeploy = () => {
+        if ($connected) {
+            // For Buy: spend USDC (output), receive asset (input)
+            // For Sell: spend asset (output), receive USDC (input)
+            const outputTok = selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken;
+            const inputTok = selectedOrderType === 'Buy' ? selectedInputToken : selectedOutputToken;
+            transactionStore.handleDcaDeploy({
+                outputToken: outputTok,
+                inputToken: inputTok,
+                budgetAmount: selectedAmount,
+                selectedPeriod: selectedPeriod,
+                selectedPeriodUnit: selectedPeriodUnit,
+                baseline: getBaseline(selectedOrderType, selectedBaseline),
+                kickoff: getBaseline(selectedOrderType, selectedInitialRatio),
+                minTradeAmount: minTradeAmount,
+                maxTradeAmount: maxTradeAmount,
+                inputVaultId: inputVaultId,
+                outputVaultId: outputVaultId,
+                depositAmount: depositAmount
+            });
+        }
+    };
 
 	// Calculate average price per period
 	$: avgPricePerPeriod = selectedAmount && selectedPeriod 
@@ -111,40 +117,44 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0 && selectedInputToken && selectedOutputToken}
 <div class="space-y-4">
-	<!-- Simplified header showing what we're accumulating -->
-	<div class="rounded-lg bg-gray-800/50 p-4">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-3">
-				<span class="text-sm text-gray-400">Accumulating</span>
-				<div class="flex items-center gap-2">
-					{#if selectedInputToken.logoUrl}
-						<img src={selectedInputToken.logoUrl} alt={selectedInputToken.symbol} class="h-6 w-6 rounded-full" />
-					{/if}
-					<span class="font-semibold text-lg">{selectedInputToken.symbol}</span>
-				</div>
-			</div>
-			<div class="flex items-center gap-2 text-sm text-gray-400">
-				<span>with</span>
-				<img src="/images/USDC.png" alt="USDC" class="h-5 w-5" />
-				<span>USDC</span>
-			</div>
+    <!-- Action toggle and header -->
+    <div class="rounded-lg bg-gray-800/50 p-4">
+        <div class="mb-3 flex gap-2">
+            <button on:click={() => (selectedOrderType = 'Buy')} class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType === 'Buy' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}">Buy</button>
+            <button on:click={() => (selectedOrderType = 'Sell')} class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType === 'Sell' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}">Sell</button>
+        </div>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+				<span class="text-sm text-gray-400">{selectedOrderType === 'Buy' ? 'Buying' : 'Selling'}</span>
+                <div class="flex items-center gap-2">
+                    {#if selectedInputToken.logoUrl}
+                        <img src={selectedInputToken.logoUrl} alt={selectedInputToken.symbol} class="h-6 w-6 rounded-full" />
+                    {/if}
+                    <span class="font-semibold text-lg">{selectedInputToken.symbol}</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+                <span>{selectedOrderType === 'Buy' ? 'with' : 'for'}</span>
+                <img src="/images/USDC.png" alt="USDC" class="h-5 w-5" />
+                <span>USDC</span>
+            </div>
 		</div>
 	</div>
 
-	<!-- Budget and Period -->
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-		<div>
-			<label class="mb-2 block text-sm font-medium text-gray-300">
-				Budget Amount
-				<span class="text-xs text-gray-500 ml-1">(USDC)</span>
-			</label>
-			<TradeAmountInput
-				amountToken={selectedOutputToken}
-				bind:amount={selectedAmount}
-				validate={validateSelectedAmount}
-				bind:isError={selectedAmountError}
-			/>
-		</div>
+    <!-- Budget and Period -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+            <label class="mb-2 block text-sm font-medium text-gray-300">
+                Budget Amount
+                <span class="text-xs text-gray-500 ml-1">({selectedOrderType === 'Buy' ? 'USDC' : selectedInputToken.symbol})</span>
+            </label>
+            <TradeAmountInput
+                amountToken={selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken}
+                bind:amount={selectedAmount}
+                validate={validateSelectedAmount}
+                bind:isError={selectedAmountError}
+            />
+        </div>
 		<div>
 			<label class="mb-2 block text-sm font-medium text-gray-300">
 				Budget Period Every
@@ -199,42 +209,58 @@
 		</div>
 	</div>
 
-	<!-- Strategy Summary -->
-	<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
-		<h4 class="mb-3 text-sm font-medium text-gray-300">DCA Strategy Summary</h4>
-		<div class="space-y-2 text-sm">
-			<div class="flex justify-between">
-				<span class="text-gray-400">Total Budget</span>
-				<span class="font-medium">
-					{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
-				</span>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Period</span>
-				<span class="font-medium">
-					Every {selectedPeriod || '0'} {selectedPeriodUnit.toLowerCase()}
-				</span>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Average per period</span>
-				<span class="font-medium">
-					~{avgPricePerPeriod} USDC
-				</span>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Min trade size</span>
-				<span class="font-medium text-xs">
-					{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} USDC
-				</span>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Max trade size</span>
-				<span class="font-medium text-xs">
-					{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} USDC
-				</span>
-			</div>
-		</div>
-	</div>
+    <!-- Strategy Summary -->
+    <div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+        <h4 class="mb-3 text-sm font-medium text-gray-300">DCA Strategy Summary</h4>
+        <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <span class="text-gray-400">Total Budget</span>
+                <span class="font-medium">
+                    {#if selectedOrderType === 'Buy'}
+                        {selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
+                    {:else}
+                        {selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'} {selectedInputToken.symbol}
+                    {/if}
+                </span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-400">Period</span>
+                <span class="font-medium">
+                    Every {selectedPeriod || '0'} {selectedPeriodUnit.toLowerCase()}
+                </span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-400">Average per period</span>
+                <span class="font-medium">
+                    {#if selectedOrderType === 'Buy'}
+                        ~{avgPricePerPeriod} USDC
+                    {:else}
+                        ~{avgPricePerPeriod} {selectedInputToken.symbol}
+                    {/if}
+                </span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-400">Min trade size</span>
+                <span class="font-medium text-xs">
+                    {#if selectedOrderType === 'Buy'}
+                        {minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+                    {:else}
+                        {minTradeAmount ? formatUnits(minTradeAmount, selectedInputToken.decimals) : '0'} {selectedInputToken.symbol}
+                    {/if}
+                </span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-400">Max trade size</span>
+                <span class="font-medium text-xs">
+                    {#if selectedOrderType === 'Buy'}
+                        {maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+                    {:else}
+                        {maxTradeAmount ? formatUnits(maxTradeAmount, selectedInputToken.decimals) : '0'} {selectedInputToken.symbol}
+                    {/if}
+                </span>
+            </div>
+        </div>
+    </div>
 
 	<!-- Price Oracle Info (simplified) -->
 	{#if hasValidPriceFeedId(selectedInputToken)}

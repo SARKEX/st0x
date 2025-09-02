@@ -32,7 +32,7 @@
 	$: symbol = currentToken?.symbol?.split('s1')[0];
 
 	// Tab state
-	let activeTab: 'fundamentals' | 'technical' | 'token' = 'fundamentals';
+    let activeTab: 'fundamentals' | 'technical' | 'token' | 'mints-burns' = 'fundamentals';
 	let activeOrderType = 'limit';
 	
 	// Chart modal state
@@ -325,32 +325,40 @@
 		<!-- Tabbed Information Section -->
 		<Section>
 			<!-- Tab Navigation -->
-			<div class="mb-6 flex gap-2 border-b border-white/10">
-				<button
-					on:click={() => (activeTab = 'fundamentals')}
-					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'fundamentals'
-						? 'border-yellow-500 text-yellow-500'
-						: 'border-transparent text-gray-400 hover:text-white'}"
-				>
-					Fundamentals
-				</button>
-				<button
-					on:click={() => (activeTab = 'technical')}
-					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'technical'
-						? 'border-yellow-500 text-yellow-500'
-						: 'border-transparent text-gray-400 hover:text-white'}"
-				>
-					Technical
-				</button>
-				<button
-					on:click={() => (activeTab = 'token')}
-					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'token'
-						? 'border-yellow-500 text-yellow-500'
-						: 'border-transparent text-gray-400 hover:text-white'}"
-				>
-					Token Info
-				</button>
-			</div>
+            <div class="mb-6 flex gap-2 border-b border-white/10">
+                <button
+                    on:click={() => (activeTab = 'fundamentals')}
+                    class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'fundamentals'
+                        ? 'border-yellow-500 text-yellow-500'
+                        : 'border-transparent text-gray-400 hover:text-white'}"
+                >
+                    Fundamentals
+                </button>
+                <button
+                    on:click={() => (activeTab = 'technical')}
+                    class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'technical'
+                        ? 'border-yellow-500 text-yellow-500'
+                        : 'border-transparent text-gray-400 hover:text-white'}"
+                >
+                    Technical
+                </button>
+                <button
+                    on:click={() => (activeTab = 'token')}
+                    class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'token'
+                        ? 'border-yellow-500 text-yellow-500'
+                        : 'border-transparent text-gray-400 hover:text-white'}"
+                >
+                    Token Info
+                </button>
+                <button
+                    on:click={() => (activeTab = 'mints-burns')}
+                    class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === 'mints-burns'
+                        ? 'border-yellow-500 text-yellow-500'
+                        : 'border-transparent text-gray-400 hover:text-white'}"
+                >
+                    Mints & Burns
+                </button>
+            </div>
 
 			<!-- Tab Content -->
 			{#if activeTab === 'fundamentals'}
@@ -486,12 +494,12 @@
 						</p>
 					</div>
 				</div>
-			{:else if activeTab === 'token'}
-				<div class="space-y-4">
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div class={containerStyles.cardBordered}>
-							<h3 class="mb-3 font-semibold">Contract Information</h3>
-							<div class="space-y-3 text-sm">
+{:else if activeTab === 'token'}
+                <div class="space-y-4">
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class={containerStyles.cardBordered}>
+                    <h3 class="mb-3 font-semibold">Contract Information</h3>
+                    <div class="space-y-3 text-sm">
 								<div class="flex justify-between">
 									<span class="text-gray-400">Address</span>
 									<a
@@ -514,33 +522,121 @@
 								<div class="flex justify-between">
 									<span class="text-gray-400">Decimals</span>
 									<span>18</span>
-								</div>
-							</div>
-						</div>
-						
-                        <div class={containerStyles.cardBordered}>
-							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
-							<div class="space-y-3 text-sm">
-								<div class="flex justify-between">
-									<span class="text-gray-400">Total Supply</span>
-									<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">On-Chain Market Cap</span>
-									<span>${marketCap}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Holders</span>
-									<span>{currentToken.tokenHolders.length}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Total Transfers</span>
-									<span>{currentToken.shareTransfers.length}</span>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">Proofs</span>
+                            <a
+                                href={`/trade/${tokenId}/proofs`}
+                                class="text-blue-400 hover:text-blue-300"
+                            >
+                                View proofs
+                            </a>
+                        </div>
+                    </div>
+                    </div>
+                <div class={containerStyles.cardBordered}>
+                    <h3 class="mb-3 font-semibold">Supply & Distribution</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Total Supply</span>
+                            <span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">On-Chain Market Cap</span>
+                            <span>${marketCap}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Holders</span>
+                            <span>{currentToken.tokenHolders.length}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Total Transfers</span>
+                            <span>{currentToken.shareTransfers.length}</span>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+            {:else if activeTab === 'mints-burns'}
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div class={containerStyles.cardBordered}>
+                        <div class="mb-2 flex items-center justify-between">
+                            <h3 class="font-semibold">Latest Mints</h3>
+                            <a href="https://portal.s01issuer.com/metrics" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300">
+                                View All <ArrowUpRightFromSquareSolid class="h-3 w-3" />
+                            </a>
+                        </div>
+                        {#if currentToken?.deposits?.length}
+                            <div class="space-y-1">
+                                {#each currentToken.deposits.slice(0, 5) as dep}
+                                    <div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+                                        <div class="flex items-center justify-between gap-3 text-xs">
+                                            <div class="min-w-0 truncate">
+                                                <span class="font-medium text-green-400">+ {formatUnits(BigInt(dep.amount), 18)} {currentToken.symbol}</span>
+                                                <span class="mx-2 text-gray-500">•</span>
+                                                <span class="text-gray-400">{dep.emitter.address.slice(0, 8)}...{dep.emitter.address.slice(-6)}</span>
+                                                <span class="mx-2 text-gray-500">•</span>
+                                                <span class="text-gray-400">{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
+                                            </div>
+                                            <div class="flex flex-shrink-0 items-center gap-2">
+                                                <a
+                                                    href={`${$currentNetwork.blockExplorer}/tx/${dep.transaction.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="flex items-center gap-1 font-mono text-xs text-blue-400 hover:text-blue-300"
+                                                >
+                                                    {dep.transaction.id.slice(0, 10)}...{dep.transaction.id.slice(-8)}
+                                                    <ArrowUpRightFromSquareSolid class="h-3 w-3" />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        {:else}
+                            <div class="text-sm text-gray-400">No recent mints.</div>
+                        {/if}
+                    </div>
+
+                    <div class={containerStyles.cardBordered}>
+                        <div class="mb-2 flex items-center justify-between">
+                            <h3 class="font-semibold">Latest Burns</h3>
+                            <a href="https://portal.s01issuer.com/metrics" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300">
+                                View All <ArrowUpRightFromSquareSolid class="h-3 w-3" />
+                            </a>
+                        </div>
+                        {#if currentToken?.withdraws?.length}
+                            <div class="space-y-1">
+                                {#each currentToken.withdraws.slice(0, 5) as w}
+                                    <div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+                                        <div class="flex items-center justify-between gap-3 text-xs">
+                                            <div class="min-w-0 truncate">
+                                                <span class="font-medium text-red-400">− {formatUnits(BigInt(w.amount), 18)} {currentToken.symbol}</span>
+                                                <span class="mx-2 text-gray-500">•</span>
+                                                <span class="text-gray-400">{w.emitter.address.slice(0, 8)}...{w.emitter.address.slice(-6)}</span>
+                                                <span class="mx-2 text-gray-500">•</span>
+                                                <span class="text-gray-400">{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
+                                            </div>
+                                            <div class="flex flex-shrink-0 items-center gap-2">
+                                                <a
+                                                    href={`${$currentNetwork.blockExplorer}/tx/${w.transaction.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="flex items-center gap-1 font-mono text-xs text-blue-400 hover:text-blue-300"
+                                                >
+                                                    {w.transaction.id.slice(0, 10)}...{w.transaction.id.slice(-8)}
+                                                    <ArrowUpRightFromSquareSolid class="h-3 w-3" />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        {:else}
+                            <div class="text-sm text-gray-400">No recent burns.</div>
+                        {/if}
+                    </div>
+                </div>
 			{:else if activeTab === 'trading'}
 				<div class="space-y-4">
 					<!-- Token Trading Volumes Table -->

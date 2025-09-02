@@ -7,7 +7,7 @@
 	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
-	import { formatUnits } from 'viem';
+    import { formatUnits, parseUnits } from 'viem';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
 	import { getBaseline, hasValidPriceFeedId } from '$lib/derivations';
@@ -36,7 +36,7 @@
 		}
 	}
 	
-	let selectedOrderType: 'Buy' | 'Sell' = 'Buy'; // Always buying for now
+    let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
 
 	// Autofill with current price if available
 	let selectedInitialRatio: string = currentPrice || '';
@@ -68,17 +68,38 @@
 		inputVaultIdError ||
 		outputVaultIdError;
 
-	const handleDeploy = async () => {
-		if (!selectedInputToken || !selectedOutputToken) return;
-		transactionStore.handleLimitDeploy({
-			outputToken: selectedOutputToken,
-			inputToken: selectedInputToken,
-			ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
-			depositAmount: selectedAmount,
-			inputVaultId: inputVaultId,
-			outputVaultId: outputVaultId
-		});
-	};
+    const handleDeploy = async () => {
+        if (!selectedInputToken || !selectedOutputToken) return;
+
+        if (selectedOrderType === 'Buy') {
+            transactionStore.handleLimitDeploy({
+                outputToken: selectedOutputToken,
+                inputToken: selectedInputToken,
+                ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
+                depositAmount: selectedAmount,
+                inputVaultId: inputVaultId,
+                outputVaultId: outputVaultId
+            });
+        } else {
+            // Sell: receive USDC, spend asset. Keep displayed price unchanged.
+            const assetDecimals = selectedOutputToken?.decimals || 18;
+            const usdcDecimals = selectedInputToken?.decimals || 6;
+            const priceScaled = parseUnits(selectedInitialRatio || '0', usdcDecimals);
+            const scale = 10n ** BigInt(assetDecimals);
+            const usdcAmount = selectedAmount ? (selectedAmount * priceScaled) / scale : 0n;
+
+            transactionStore.handleLimitDeploy({
+                // Swap tokens so output is USDC
+                outputToken: selectedInputToken,
+                inputToken: selectedOutputToken,
+                ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
+                // Deposit on output side, in USDC units
+                depositAmount: usdcAmount,
+                inputVaultId: inputVaultId,
+                outputVaultId: outputVaultId
+            });
+        }
+    };
 
 	// Calculate total cost
 	$: totalCost = selectedAmount && selectedInitialRatio 
@@ -88,25 +109,29 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0 && selectedOutputToken && selectedInputToken}
 <div class="space-y-4">
-	<!-- Simplified header showing what we're buying -->
-	<div class="rounded-lg bg-gray-800/50 p-4">
-		<div class="flex items-center justify-between">
-			<div class="flex items-center gap-3">
-				<span class="text-sm text-gray-400">Buying</span>
-				<div class="flex items-center gap-2">
-					{#if selectedOutputToken.logoUrl}
-						<img src={selectedOutputToken.logoUrl} alt={selectedOutputToken.symbol} class="h-6 w-6 rounded-full" />
-					{/if}
-					<span class="font-semibold text-lg">{selectedOutputToken.symbol}</span>
-				</div>
-			</div>
-			<div class="flex items-center gap-2 text-sm text-gray-400">
-				<span>with</span>
-				<img src="/images/USDC.png" alt="USDC" class="h-5 w-5" />
-				<span>USDC</span>
-			</div>
-		</div>
-	</div>
+    <!-- Action toggle and header -->
+    <div class="rounded-lg bg-gray-800/50 p-4">
+        <div class="mb-3 flex gap-2">
+            <button on:click={() => (selectedOrderType = 'Buy')} class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType === 'Buy' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}">Buy</button>
+            <button on:click={() => (selectedOrderType = 'Sell')} class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType === 'Sell' ? 'bg-yellow-500/20 text-yellow-500' : 'text-gray-400 hover:text-white'}">Sell</button>
+        </div>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-sm text-gray-400">{selectedOrderType === 'Buy' ? 'Buying' : 'Selling'}</span>
+                <div class="flex items-center gap-2">
+                    {#if selectedOutputToken.logoUrl}
+                        <img src={selectedOutputToken.logoUrl} alt={selectedOutputToken.symbol} class="h-6 w-6 rounded-full" />
+                    {/if}
+                    <span class="font-semibold text-lg">{selectedOutputToken.symbol}</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+                <span>{selectedOrderType === 'Buy' ? 'with' : 'for'}</span>
+                <img src="/images/USDC.png" alt="USDC" class="h-5 w-5" />
+                <span>USDC</span>
+            </div>
+        </div>
+    </div>
 
 	<!-- Main inputs in a clean grid -->
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
