@@ -92,7 +92,8 @@
 			return alpha.getIntraday(
 				symbol as string,
 				chartInterval,
-				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY
+				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
+				'full'
 			);
 		},
 		enabled: !!symbol && showChartModal && chartInterval !== 'daily',
@@ -797,7 +798,7 @@
 					}`}
 					on:click={() => (activeOrderType = 'dca')}
 				>
-					DCA Strategy
+					DCA Order
 				</Button>
 			</div>
 
@@ -828,6 +829,8 @@
 <Modal
 	show={showChartModal}
 	title="{currentToken?.symbol} - {currentToken?.name} Chart"
+	maxWidthClass="max-w-7xl"
+	maxHeightVh={90}
 	onClose={() => (showChartModal = false)}
 >
 	<div class="space-y-4">
@@ -886,9 +889,14 @@
 		</div>
 
 		<!-- Chart -->
-		<div class={`${containerStyles.cardBordered} h-96 p-2`}>
+		<div class={`${containerStyles.cardBordered} h-[70vh] p-2`}>
 			{#if modalChartData}
-				<EquityChart timeseriesData={modalChartData} height={368} />
+				<EquityChart
+					timeseriesData={modalChartData}
+					barCount={180}
+					alignToNow={true}
+					interval={chartInterval}
+				/>
 			{:else}
 				<div class="flex h-full items-center justify-center">
 					<LoadingSpinner variant="inline" size="md" text="Loading chart..." />

@@ -24,21 +24,17 @@
 	export let passedInputToken: PythToken | undefined; // The token we're accumulating
 
 	// Filter tokens based on current network
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.id) : [];
+	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Initialize tokens - accumulating token from prop, USDC for payment
 	let selectedInputToken: Token;
 	let selectedOutputToken: Token;
 
-	// Always use USDC for payment
+	// Resolve tokens whenever network, token list, or prop changes
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
-		const usdcToken = ALL_TOKENS.find((t) => t.symbol === 'USDC');
+		const usdcToken = ALL_TOKENS.find((t) => t.symbol?.toUpperCase() === 'USDC');
 		selectedOutputToken = usdcToken || ALL_TOKENS[0];
-
-		// Update selectedInputToken if network changes
-		if (passedInputToken && !selectedInputToken) {
-			selectedInputToken = passedInputToken;
-		}
+		selectedInputToken = (passedInputToken as unknown as Token) || selectedInputToken || ALL_TOKENS[0];
 	}
 
 	let selectedAmount: bigint = 0n;
@@ -111,7 +107,7 @@
 			: '0.00';
 </script>
 
-{#if $currentNetwork && ALL_TOKENS.length > 0 && selectedInputToken && selectedOutputToken}
+{#if $currentNetwork && ALL_TOKENS.length > 0}
 	<div class="space-y-4">
 		<!-- Action toggle and header -->
 		<div class="rounded-lg bg-gray-800/50 p-4">

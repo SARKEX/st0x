@@ -16,7 +16,7 @@
 	}
 </script>
 
-<div class="sticky top-0 z-40 border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
+<div class="sticky top-0 z-[100] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
 	<TickerTape />
 	<div class="px-4 py-1 sm:px-6 sm:py-2">
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

@@ -17,7 +17,7 @@
 	export let currentPrice: string | undefined = undefined; // Current market price
 
 	// Filter tokens based on current network
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.id) : [];
+	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Initialize tokens - trading token from prop, USDC for payment
 	let selectedOutputToken: Token;
@@ -170,9 +170,9 @@
 				/>
 			</div>
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">Amount to Buy</div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
 				<TradeAmountInput
-					aria-label="Amount to Buy"
+					aria-label="Quantity"
 					amountToken={selectedOutputToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}

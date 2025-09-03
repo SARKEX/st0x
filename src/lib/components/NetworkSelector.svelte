@@ -40,7 +40,7 @@
 
 <svelte:window on:click={handleClickOutside} />
 
-<div class="network-selector relative">
+<div class="network-selector relative z-[10000]">
 	<button
 		on:click={toggleDropdown}
 		class="flex items-center gap-2 rounded-lg border border-white/10 bg-gray-700/80 px-3 py-2 text-sm font-medium text-white transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-600/80 active:scale-95"

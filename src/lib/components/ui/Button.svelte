@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { createEventDispatcher } from 'svelte';
 	export let dataTestId: string = '';
 	export let variant: 'primary' | 'secondary' | 'danger' | 'ghost' = 'secondary';
 	export let size: 'sm' | 'md' | 'lg' = 'md';
 	export let fullWidth: boolean = false;
 	export let className: string = '';
+
+	const dispatch = createEventDispatcher<{ click: MouseEvent }>();
 
 	const variantClass = {
 		primary: 'bg-gradient-to-r from-blue-600 to-purple-700 text-white hover:opacity-90',
@@ -20,7 +23,9 @@
 </script>
 
 <button
+	type="button"
 	{...$$restProps}
+	on:click={(e) => dispatch('click', e)}
 	data-testid={dataTestId}
 	class={'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors ' +
 		'focus:outline-none focus:ring-2 focus:ring-yellow-500/30 disabled:cursor-not-allowed disabled:opacity-50 ' +
