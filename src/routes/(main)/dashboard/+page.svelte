@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import { connected, signerAddress } from 'svelte-wagmi';
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
@@ -12,27 +11,34 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { truncateAddress } from '$lib/utils/format';
-	import { textStyles, gridStyles, flexStyles } from '$lib/utils/styles';
+	import { textStyles, gridStyles } from '$lib/utils/styles';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import { getAllTokensByNetwork } from '$lib/network';
 	import type { ApiStockQuote } from '$lib/types';
 	import { goto } from '$app/navigation';
 	import { getOrders, getVaults } from '@rainlanguage/orderbook';
-	import type { SgOrderWithSubgraphName, SgErc20, SgVaultWithSubgraphName } from '@rainlanguage/orderbook';
+	import type {
+		SgOrderWithSubgraphName,
+		SgErc20,
+		SgVaultWithSubgraphName
+	} from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
-	import Portfolio from '$lib/components/Portfolio.svelte';
 	import { getPrice } from '$lib/getPrice';
 	import { Token } from 'sushi/currency';
 	import { arbitrum } from '@wagmi/core/chains';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import TableHead from '$lib/components/ui/table/TableHead.svelte';
-	import TableRow from '$lib/components/ui/table/TableRow.svelte';
-	import TableCell from '$lib/components/ui/table/TableCell.svelte';
-    import Button from '$lib/components/ui/Button.svelte';
-	import TextInput from '$lib/components/ui/TextInput.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
+
+	function isUSDCPosition(token: { token: SgErc20 }) {
+		return (
+			token.token.symbol?.toUpperCase() === 'USDC' ||
+			token.token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase()
+		);
+	}
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -75,24 +81,26 @@
 		enabled: !!($connected && $signerAddress && $sfts && $currentNetwork),
 		queryFn: () => {
 			if (!$sfts || !$signerAddress) return [];
-			
+
 			const userHoldings = [];
 			for (const sft of $sfts) {
 				const userHolder = sft.tokenHolders.find(
-					holder => holder.address.toLowerCase() === $signerAddress.toLowerCase()
+					(holder) => holder.address.toLowerCase() === $signerAddress.toLowerCase()
 				);
-				
+
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
 					const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 						(q) => q?.['Global Quote']?.['01. symbol'] === sft.symbol?.split('s1')[0]
 					);
 					const price = parseFloat(quote?.['Global Quote']?.['05. price'] || '0');
 					const priceChange = parseFloat(quote?.['Global Quote']?.['09. change'] || '0');
-					const priceChangePercent = parseFloat(quote?.['Global Quote']?.['10. change percent']?.replace('%', '') || '0');
-					
+					const priceChangePercent = parseFloat(
+						quote?.['Global Quote']?.['10. change percent']?.replace('%', '') || '0'
+					);
+
 					const balance = formatUnits(BigInt(userHolder.balance), 18);
 					const value = parseFloat(balance) * price;
-					
+
 					userHoldings.push({
 						id: sft.id,
 						address: sft.address,
@@ -106,19 +114,19 @@
 					});
 				}
 			}
-			
+
 			return userHoldings;
 		}
 	});
 
-	
 	$: totalValue = ($holdingsQuery?.data || []).reduce((sum, holding) => sum + holding.value, 0);
 	$: totalChange24h = ($holdingsQuery?.data || []).reduce((sum, holding) => {
 		// Calculate the change in value based on the price change
-		return sum + (holding.priceChange * parseFloat(holding.balance));
+		return sum + holding.priceChange * parseFloat(holding.balance);
 	}, 0);
-	$: activeOrdersCount = $ordersListQuery?.data?.pages?.reduce((sum, page) => sum + page.orders.length, 0) || 0;
-	$: activeVaultsCount = myTokenBalance?.filter(v => parseFloat(v.balance) > 0).length || 0;
+	$: activeOrdersCount =
+		$ordersListQuery?.data?.pages?.reduce((sum, page) => sum + page.orders.length, 0) || 0;
+	$: activeVaultsCount = myTokenBalance?.filter((v) => parseFloat(v.balance) > 0).length || 0;
 
 	// Order List Query
 	$: ordersListQuery = createInfiniteQuery({
@@ -231,17 +239,20 @@
 		const balancePromises = Array.from(tokenBalances.values()).map(
 			async ({ token, totalBalance, vaultIds }) => {
 				// Check if this is USDC
-				const isUSDC = token.symbol?.toUpperCase() === 'USDC' || 
+				const isUSDC =
+					token.symbol?.toUpperCase() === 'USDC' ||
 					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
-				
-				const quote = !isUSDC ? ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === token.symbol?.split('s1')[0]
-				) : null;
+
+				const quote = !isUSDC
+					? ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
+							(q) => q?.['Global Quote']?.['01. symbol'] === token.symbol?.split('s1')[0]
+						)
+					: null;
 
 				let price: number;
 				if (isUSDC) {
 					// USDC is always $1
-					price = 1.00;
+					price = 1.0;
 				} else if (quote && quote['Global Quote']?.['05. price']) {
 					price = parseFloat(quote['Global Quote']['05. price']);
 				} else {
@@ -284,7 +295,6 @@
 				isProcessingBalances = false;
 			});
 	}
-
 </script>
 
 <!-- Main Content -->
@@ -299,8 +309,9 @@
 				/>
 			</div>
 		{:else if !$connected}
-			<WalletConnectionPrompt 
-				description="Connect your wallet to access your dashboard and view your portfolio, orders, and vault positions on {$currentNetwork?.displayName || 'this network'}."
+			<WalletConnectionPrompt
+				description="Connect your wallet to access your dashboard and view your portfolio, orders, and vault positions on {$currentNetwork?.displayName ||
+					'this network'}."
 			/>
 		{:else}
 			<!-- Dashboard Header -->
@@ -309,26 +320,56 @@
 					<h1 class="text-2xl font-bold">My Dashboard</h1>
 					<p class="text-gray-400">{truncateAddress($signerAddress || '')}</p>
 				</div>
-				
+
 				<!-- Overview Stats -->
 				<div class={gridStyles.responsive4}>
-					<MetricCard label="Total Value" value={`$${totalValue.toFixed(2)}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
-					<MetricCard 
-						label="24h Change" 
+					<MetricCard
+						label="Total Value"
+						value={`$${totalValue.toFixed(2)}`}
+						cardClass="bg-gray-800/50 border border-white/10"
+						paddingClass="p-4"
+						showGradient={false}
+						valueClass="text-2xl font-bold"
+					/>
+					<MetricCard
+						label="24h Change"
 						value={`${totalChange24h >= 0 ? '+' : ''}$${Math.abs(totalChange24h).toFixed(2)}`}
 						cardClass="bg-gray-800/50 border border-white/10"
 						paddingClass="p-4"
 						showGradient={false}
 						change=""
-						valueClass={`text-2xl font-bold ${totalChange24h >= 0 ? 'text-green-500' : 'text-red-500'}`}
+						valueClass={`text-2xl font-bold ${
+							totalChange24h >= 0 ? 'text-green-500' : 'text-red-500'
+						}`}
 					/>
-					<MetricCard label="Active Orders" value={`${activeOrdersCount}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
-					<MetricCard label="Active Vaults" value={`${activeVaultsCount}`} cardClass="bg-gray-800/50 border border-white/10" paddingClass="p-4" showGradient={false} valueClass="text-2xl font-bold" />
+					<MetricCard
+						label="Active Orders"
+						value={`${activeOrdersCount}`}
+						cardClass="bg-gray-800/50 border border-white/10"
+						paddingClass="p-4"
+						showGradient={false}
+						valueClass="text-2xl font-bold"
+					/>
+					<MetricCard
+						label="Active Vaults"
+						value={`${activeVaultsCount}`}
+						cardClass="bg-gray-800/50 border border-white/10"
+						paddingClass="p-4"
+						showGradient={false}
+						valueClass="text-2xl font-bold"
+					/>
 				</div>
 			</Section>
-			
+
 			<!-- Tab Navigation -->
-			<TabNav bind:activeId={activeTab} tabs={[{ id: 'portfolio', label: 'Portfolio' }, { id: 'orders', label: 'Orders' }, { id: 'vaults', label: 'Vaults' }]} />
+			<TabNav
+				bind:activeId={activeTab}
+				tabs={[
+					{ id: 'portfolio', label: 'Portfolio' },
+					{ id: 'orders', label: 'Orders' },
+					{ id: 'vaults', label: 'Vaults' }
+				]}
+			/>
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}
@@ -338,41 +379,54 @@
 						<LoadingSpinner variant="inline" size="md" text="Loading holdings..." />
 					{:else if $holdingsQuery.data && $holdingsQuery.data.length > 0}
 						<div class="overflow-x-auto">
-							<Table>
-							<TableHead className="border-b border-white/10">
-									<TableRow className="border-b border-white/10">
-										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</TableCell>
-										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Balance</TableCell>
-										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</TableCell>
-										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400">Value</TableCell>
-										<TableCell header className="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">24h</TableCell>
-										<TableCell header className="px-4 py-3 text-center text-xs font-medium text-gray-400">Actions</TableCell>
-									</TableRow>
-								</TableHead>
-								<tbody>
+						<Table>
+							<thead>
+								<tr class="border-b border-white/10">
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Token</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Balance</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Value</th>
+									<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">24h</th>
+									<th class="px-4 py-3 text-center text-xs font-medium text-gray-400">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
 									{#each $holdingsQuery.data as holding}
-										<TableRow>
-											<TableCell className="px-4 py-3">
-                                    <TokenDisplay 
-                                        logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
-                                        symbol={holding.symbol}
-                                        name={holding.name}
-                                    />
-											</TableCell>
-											<TableCell className="px-4 py-3">{parseFloat(holding.balance).toFixed(4)}</TableCell>
-											<TableCell className="px-4 py-3">${holding.price.toFixed(2)}</TableCell>
-											<TableCell className="px-4 py-3 font-medium">${holding.value.toFixed(2)}</TableCell>
-											<TableCell className="px-4 py-3 hidden sm:table-cell">
-												<span class={holding.priceChangePercent >= 0 ? 'text-green-500' : 'text-red-500'}>
-													{holding.priceChangePercent >= 0 ? '+' : ''}{holding.priceChangePercent.toFixed(2)}%
+										<tr>
+											<td class="px-4 py-3">
+												<TokenDisplay
+													logoUrl={ALL_TOKENS.find(
+														(s) => s.address.toLowerCase() === holding.address.toLowerCase()
+													)?.logoUrl}
+													symbol={holding.symbol}
+													name={holding.name}
+												/>
+											</td>
+											<td class="px-4 py-3"
+												>{parseFloat(holding.balance).toFixed(4)}</td>
+											<td class="px-4 py-3">${holding.price.toFixed(2)}</td>
+											<td class="px-4 py-3 font-medium">${holding.value.toFixed(2)}</td>
+											<td class="px-4 py-3 hidden sm:table-cell">
+												<span
+													class={holding.priceChangePercent >= 0
+														? 'text-green-500'
+														: 'text-red-500'}
+												>
+													{holding.priceChangePercent >= 0
+														? '+'
+														: ''}{holding.priceChangePercent.toFixed(2)}%
 												</span>
-											</TableCell>
-											<TableCell className="px-4 py-3">
+											</td>
+											<td class="px-4 py-3">
 												<div class="flex justify-center gap-2">
-													<Button size="sm" variant="primary" on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button>
+													<Button
+														size="sm"
+														variant="primary"
+														on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
+													>
 												</div>
-											</TableCell>
-										</TableRow>
+											</td>
+										</tr>
 									{/each}
 								</tbody>
 							</Table>
@@ -382,11 +436,19 @@
 					{/if}
 				</Section>
 
-			<!-- Orders Tab -->
+				<!-- Orders Tab -->
 			{:else if activeTab === 'orders'}
 				<Section>
-					<div class="mb-4 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-6">
-						<TextInput id="orderHash" type="search" placeholder="Order hash" bind:value={orderHashFilter} className="sm:w-auto" />
+					<div
+						class="mb-4 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:gap-6"
+					>
+						<input
+							id="orderHash"
+							type="search"
+							placeholder="Order hash"
+							bind:value={orderHashFilter}
+							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none sm:w-auto"
+						/>
 						<label class="flex w-full items-center gap-2 text-white sm:w-auto">
 							<input type="checkbox" bind:checked={showMyOrders} class="accent-yellow-500" />
 							<span class="text-xs sm:text-base">Show my orders</span>
@@ -398,8 +460,8 @@
 					</div>
 					<OrderListTable query={ordersListQuery} />
 				</Section>
-			
-			<!-- Vaults Tab -->
+
+				<!-- Vaults Tab -->
 			{:else if activeTab === 'vaults'}
 				<Section>
 					{#if $sfts && $sfts.length > 0}
@@ -417,21 +479,23 @@
 								></div>
 								<div class="space-y-4 text-sm text-gray-300 sm:text-base">
 									<p>
-										Rather than doing token approvals, users deposit their tokens into vaults, which are
-										like virtual accounts within the orderbook. Orders reference input/output vaults.
-										There can be many inputs and many outputs for an order, e.g. a user could accept a
-										number of different stables for WETH.
+										Rather than doing token approvals, users deposit their tokens into vaults, which
+										are like virtual accounts within the orderbook. Orders reference input/output
+										vaults. There can be many inputs and many outputs for an order, e.g. a user
+										could accept a number of different stables for WETH.
 									</p>
 									<p>
 										Different orders can also reference the same vaults, which allows for even more
 										sophistication when building meta-strategies.
 									</p>
 									<p>
-										For more information, see the <a
+										For more information, see the
+										<ExternalLink
 											href="https://docs.rainlang.xyz/raindex/overview"
-											target="_blank"
-											class="text-blue-500 hover:underline">Raindex documentation</a
-										>.
+											label="Raindex documentation"
+											className="text-blue-500 hover:underline"
+										/>
+										.
 									</p>
 								</div>
 							</div>
@@ -445,7 +509,11 @@
 									My Vault Holdings
 								</h2>
 								<div class="flex flex-col items-center justify-center p-8">
-									<LoadingSpinner variant="inline" size="md" text="Calculating balances and prices..." />
+									<LoadingSpinner
+										variant="inline"
+										size="md"
+										text="Calculating balances and prices..."
+									/>
 								</div>
 							</div>
 						{:else if myTokenBalance.length > 0}
@@ -467,7 +535,11 @@
 											<!-- Token Info -->
 											<div class="flex items-start gap-3 sm:gap-4">
 												<div
-													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {token.isUSDC ? 'bg-gradient-to-br from-green-600/20 to-emerald-700/20' : 'bg-gradient-to-br from-blue-600/20 to-purple-700/20'} text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-xl"
+													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {isUSDCPosition(
+														token
+													)
+														? 'bg-gradient-to-br from-green-600/20 to-emerald-700/20'
+														: 'bg-gradient-to-br from-blue-600/20 to-purple-700/20'} text-lg font-bold text-white ring-1 ring-white/10 backdrop-blur-sm sm:h-12 sm:w-12 sm:text-xl"
 												>
 													{token.token.symbol?.slice(0, 2) ?? '??'}
 												</div>
@@ -476,9 +548,13 @@
 														{token.token.name ?? 'Unknown Token'}
 													</h3>
 													<div class="flex items-center gap-2">
-														<p class="{textStyles.label} sm:text-sm">{token.token.symbol ?? '???'}</p>
-														{#if token.isUSDC}
-															<span class="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400">
+														<p class="{textStyles.label} sm:text-sm">
+															{token.token.symbol ?? '???'}
+														</p>
+														{#if isUSDCPosition(token)}
+															<span
+																class="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400"
+															>
 																Stablecoin
 															</span>
 														{/if}
@@ -500,13 +576,17 @@
 												</div>
 												<div class="flex items-center justify-between">
 													<span class="{textStyles.label} sm:text-sm">Estimated Value</span>
-													<span class="text-xs font-medium {token.isUSDC ? 'text-emerald-400' : 'text-green-400'} sm:text-sm"
-														>${token.estimatedValue}</span
+													<span
+														class="text-xs font-medium {isUSDCPosition(token)
+															? 'text-emerald-400'
+															: 'text-green-400'} sm:text-sm">${token.estimatedValue}</span
 													>
 												</div>
 												<div class="flex items-center justify-between">
 													<span class="{textStyles.label} sm:text-sm">Vaults</span>
-													<span class="text-xs text-gray-300 sm:text-sm">{token.vaultIds.length}</span>
+													<span class="text-xs text-gray-300 sm:text-sm"
+														>{token.vaultIds.length}</span
+													>
 												</div>
 											</div>
 										</div>
@@ -516,7 +596,9 @@
 						{/if}
 
 						<div class="mb-4 sm:mb-6">
-							<label class="flex w-full flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-2">
+							<label
+								class="flex w-full flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-2"
+							>
 								<input
 									type="checkbox"
 									bind:checked={showMyVaults}
@@ -540,8 +622,15 @@
 							<div
 								class="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-gray-700/30 p-8 text-center"
 							>
-								<div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-600/20">
-									<svg class="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<div
+									class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-600/20"
+								>
+									<svg
+										class="h-8 w-8 text-red-400"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
 										<path
 											stroke-linecap="round"
 											stroke-linejoin="round"

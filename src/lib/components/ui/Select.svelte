@@ -20,4 +20,3 @@
 		</option>
 	{/each}
 </select>
-

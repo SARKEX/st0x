@@ -2,6 +2,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import ProsePanel from '$lib/components/ui/ProsePanel.svelte';
+	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 </script>
 
 <!-- Main Content -->
@@ -27,9 +28,11 @@
 					SARK X (BVI) Ltd located at Craigmuir Chambers, Road Town, Tortola, VG 1110, British
 					Virgin Islands ("<strong class="text-white">Provider</strong>") is the owner and operator
 					of the website at
-					<a href="https://st0x.io" class="text-blue-400 underline hover:text-blue-300"
-						>https://st0x.io</a
-					>
+					<ExternalLink
+						href="https://st0x.io"
+						label="https://st0x.io"
+						className="text-blue-400 underline hover:text-blue-300"
+					/>
 					(the "<strong class="text-white">Website</strong>"). Provider is a business company
 					limited by shares incorporated under the laws of the British Virgin Islands ("<strong
 						class="text-white">BVI</strong

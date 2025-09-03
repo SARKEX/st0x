@@ -85,4 +85,3 @@
 {#if error}
 	<span class="text-left text-sm text-red-500">{error}</span>
 {/if}
-

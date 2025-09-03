@@ -13,18 +13,18 @@
 	export let subtitle: string = '';
 </script>
 
-<Card className={cardClass} {showGradient} paddingClass={paddingClass}>
+<Card className={cardClass} {showGradient} {paddingClass}>
 	<div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">{label}</div>
 	<div class="mb-2">
-		<span class={"block " + valueClass}>{value}</span>
+		<span class={'block ' + valueClass}>{value}</span>
 	</div>
 	{#if change}
-		<div class={"flex items-center gap-1 " + changeClass}>
+		<div class={'flex items-center gap-1 ' + changeClass}>
 			<span>{icon ?? '↗'}</span>
 			<span class="truncate">{change}</span>
 		</div>
 	{/if}
-    {#if subtitle}
-        <div class="mt-2 text-sm text-gray-500">{subtitle}</div>
-    {/if}
+	{#if subtitle}
+		<div class="mt-2 text-sm text-gray-500">{subtitle}</div>
+	{/if}
 </Card>

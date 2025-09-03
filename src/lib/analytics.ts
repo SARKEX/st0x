@@ -35,7 +35,7 @@ function generateId(): string {
 
 function getSessionId(): string {
 	if (!browser) return '';
-	
+
 	let sessionId = sessionStorage.getItem('analytics_session_id');
 	if (!sessionId) {
 		sessionId = generateId();
@@ -46,7 +46,7 @@ function getSessionId(): string {
 
 function getVisitorId(): string {
 	if (!browser) return '';
-	
+
 	let visitorId = localStorage.getItem('analytics_visitor_id');
 	if (!visitorId) {
 		visitorId = generateId();
@@ -69,7 +69,7 @@ function createAnalyticsStore() {
 
 	return {
 		subscribe,
-		
+
 		trackSearchStart: () => {
 			searchStartTime = Date.now();
 			currentSearchId = generateId();
@@ -78,7 +78,7 @@ function createAnalyticsStore() {
 		trackSearch: (searchTerm: string, resultsCount: number, selectedResult?: string) => {
 			const network = get(currentNetwork);
 			const searchDuration = searchStartTime ? Date.now() - searchStartTime : undefined;
-			
+
 			const searchEvent: SearchEvent = {
 				id: currentSearchId || generateId(),
 				timestamp: Date.now(),
@@ -90,7 +90,7 @@ function createAnalyticsStore() {
 				searchDuration
 			};
 
-			update(store => ({
+			update((store) => ({
 				...store,
 				searches: [...store.searches, searchEvent]
 			}));
@@ -102,13 +102,13 @@ function createAnalyticsStore() {
 
 			// Store locally for backup
 			storeLocally('search', searchEvent);
-			
+
 			return searchEvent.id;
 		},
 
 		trackClick: (searchId: string, selectedToken: string, position: number) => {
 			const network = get(currentNetwork);
-			
+
 			const clickEvent: ClickEvent = {
 				id: generateId(),
 				timestamp: Date.now(),
@@ -118,7 +118,7 @@ function createAnalyticsStore() {
 				networkId: network?.id || 0
 			};
 
-			update(store => ({
+			update((store) => ({
 				...store,
 				clicks: [...store.clicks, clickEvent]
 			}));
@@ -136,15 +136,17 @@ function createAnalyticsStore() {
 			const store = get({ subscribe });
 			const stats = {
 				totalSearches: store.searches.length,
-				uniqueTerms: new Set(store.searches.map(s => s.searchTerm.toLowerCase())).size,
-				avgResultsCount: store.searches.reduce((acc, s) => acc + s.resultsCount, 0) / store.searches.length || 0,
+				uniqueTerms: new Set(store.searches.map((s) => s.searchTerm.toLowerCase())).size,
+				avgResultsCount:
+					store.searches.reduce((acc, s) => acc + s.resultsCount, 0) / store.searches.length || 0,
 				clickThroughRate: (store.clicks.length / store.searches.length) * 100 || 0,
 				topSearchTerms: getTopSearchTerms(store.searches),
-				searchesWithNoResults: store.searches.filter(s => s.resultsCount === 0).length,
-				avgSearchDuration: store.searches
-					.filter(s => s.searchDuration)
-					.reduce((acc, s) => acc + (s.searchDuration || 0), 0) / 
-					store.searches.filter(s => s.searchDuration).length || 0
+				searchesWithNoResults: store.searches.filter((s) => s.resultsCount === 0).length,
+				avgSearchDuration:
+					store.searches
+						.filter((s) => s.searchDuration)
+						.reduce((acc, s) => acc + (s.searchDuration || 0), 0) /
+						store.searches.filter((s) => s.searchDuration).length || 0
 			};
 			return stats;
 		},
@@ -170,11 +172,14 @@ function createAnalyticsStore() {
 }
 
 function getTopSearchTerms(searches: SearchEvent[], limit = 10): { term: string; count: number }[] {
-	const termCounts = searches.reduce((acc, search) => {
-		const term = search.searchTerm.toLowerCase();
-		acc[term] = (acc[term] || 0) + 1;
-		return acc;
-	}, {} as Record<string, number>);
+	const termCounts = searches.reduce(
+		(acc, search) => {
+			const term = search.searchTerm.toLowerCase();
+			acc[term] = (acc[term] || 0) + 1;
+			return acc;
+		},
+		{} as Record<string, number>
+	);
 
 	return Object.entries(termCounts)
 		.map(([term, count]) => ({ term, count }))
@@ -188,13 +193,13 @@ function storeLocally(type: 'search' | 'click', event: SearchEvent | ClickEvent)
 	const key = `${type}_analytics`;
 	const stored = localStorage.getItem(key);
 	const events = stored ? JSON.parse(stored) : [];
-	
+
 	// Keep only last 1000 events
 	events.push(event);
 	if (events.length > 1000) {
 		events.shift();
 	}
-	
+
 	localStorage.setItem(key, JSON.stringify(events));
 }
 
@@ -202,7 +207,7 @@ async function sendAnalytics(type: 'search' | 'click', event: SearchEvent | Clic
 	try {
 		// Only send search events to KV storage
 		if (type !== 'search') return;
-		
+
 		const searchEvent = event as SearchEvent;
 		const response = await fetch('/api/analytics', {
 			method: 'POST',
@@ -231,7 +236,7 @@ async function sendAnalytics(type: 'search' | 'click', event: SearchEvent | Clic
 export const searchAnalytics = createAnalyticsStore();
 
 // Debounced search tracking with deduplication
-let searchDebounceTimer: NodeJS.Timeout;
+let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 let lastSearchTerm: string = '';
 let lastSearchTime: number = 0;
 
@@ -239,13 +244,13 @@ export function trackSearchDebounced(searchTerm: string, resultsCount: number, d
 	if (searchDebounceTimer) {
 		clearTimeout(searchDebounceTimer);
 	}
-	
+
 	// Don't track if it's the same search within 5 seconds
 	const now = Date.now();
-	if (searchTerm === lastSearchTerm && (now - lastSearchTime) < 5000) {
+	if (searchTerm === lastSearchTerm && now - lastSearchTime < 5000) {
 		return;
 	}
-	
+
 	searchDebounceTimer = setTimeout(() => {
 		lastSearchTerm = searchTerm;
 		lastSearchTime = now;

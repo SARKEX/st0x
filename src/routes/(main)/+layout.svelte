@@ -10,10 +10,12 @@
 	import Header from '$lib/components/Header.svelte';
 	import NetworkSelector from '$lib/components/NetworkSelector.svelte';
 	import WalletConnect from '$lib/components/WalletConnect.svelte';
-    import Button from '$lib/components/ui/Button.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import { page } from '$app/stores';
 
 	import { getSfts } from '$lib/query';
+	import * as alpha from '$lib/services/alpha';
+	import type { ApiStockQuote } from '$lib/types';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import { TOKENS } from '$lib/network';
 
@@ -26,7 +28,7 @@
 
 	function getPageTitle(pathname: string): string {
 		if (pathname.startsWith('/trade/')) return 'Trade Details';
-		
+
 		switch (pathname) {
 			case '/':
 			case '/trade-list':
@@ -52,7 +54,7 @@
 
 	function getPageDescription(pathname: string): string {
 		if (pathname.startsWith('/trade/')) return 'Trade tokenized stocks';
-		
+
 		switch (pathname) {
 			case '/':
 			case '/trade-list':
@@ -91,12 +93,10 @@
 			const networkTokens = TOKENS.filter((token) => token.chainId === $currentNetwork.chainId);
 			const tokenQuotes = [];
 			for (const stox of networkTokens) {
-				const response = await fetch(
-					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${
-						stox.symbol?.split('s1')[0]
-					}&apikey=${publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY || ''}`
+				const data = await alpha.getGlobalQuote(
+					stox.symbol?.split('s1')[0] as string,
+					publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY
 				);
-				const data = await response.json();
 				tokenQuotes.push(data);
 			}
 			return tokenQuotes;
@@ -105,7 +105,7 @@
 	});
 
 	$: sfts.set($vaultQuery.data);
-	$: tokenGlobalQuote.set($tokenGlobalQuoteQuery.data ?? []);
+	$: tokenGlobalQuote.set(($tokenGlobalQuoteQuery.data as unknown as ApiStockQuote[]) ?? []);
 </script>
 
 {#if $wagmiConfig}
@@ -144,7 +144,12 @@
 			<div
 				class="relative z-[9999] flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
 			>
-				<Button variant="ghost" size="sm" className="rounded-lg border border-white/10 p-2 hover:bg-white/5" on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="rounded-lg border border-white/10 p-2 hover:bg-white/5"
+					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+				>
 					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
 							stroke-linecap="round"

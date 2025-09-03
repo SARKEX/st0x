@@ -5,7 +5,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import Footer from '$lib/components/Footer.svelte';
-    import Button from '$lib/components/ui/Button.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	export let data: LayoutData;
 
 	let sidebarExpanded = true;
@@ -44,7 +44,12 @@
 			<div
 				class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
 			>
-				<Button variant="ghost" size="sm" className="rounded-lg border border-white/10 p-2 hover:bg-white/5" on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="rounded-lg border border-white/10 p-2 hover:bg-white/5"
+					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+				>
 					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
 							stroke-linecap="round"

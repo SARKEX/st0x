@@ -10,15 +10,15 @@ import type { Token } from 'sushi/currency';
  * to avoid unintended price inversion. Adjust here if Sell should invert in future.
  */
 export function getBaseline(orderType: 'Buy' | 'Sell', ratio: string): string {
-    const r = (ratio ?? '').toString().trim();
-    if (!r) return '';
-    if (orderType === 'Sell') {
-        const n = Number(r);
-        if (!Number.isFinite(n) || n === 0) return r;
-        const inverted = 1 / n;
-        return inverted.toString();
-    }
-    return r;
+	const r = (ratio ?? '').toString().trim();
+	if (!r) return '';
+	if (orderType === 'Sell') {
+		const n = Number(r);
+		if (!Number.isFinite(n) || n === 0) return r;
+		const inverted = 1 / n;
+		return inverted.toString();
+	}
+	return r;
 }
 
 /**
@@ -26,7 +26,7 @@ export function getBaseline(orderType: 'Buy' | 'Sell', ratio: string): string {
  */
 export function getPeriodInSeconds(period: string, unit: 'Days' | 'Hours' | 'Minutes'): number {
 	const periodNum = parseInt(period) || 0;
-	
+
 	switch (unit) {
 		case 'Days':
 			return periodNum * 24 * 60 * 60;
@@ -42,9 +42,11 @@ export function getPeriodInSeconds(period: string, unit: 'Days' | 'Hours' | 'Min
 /**
  * Check if a token has a valid Pyth price feed ID
  */
-export function hasValidPriceFeedId(token: Token | undefined): boolean {
+type MaybePythToken = Token & { priceFeedId?: string };
+
+export function hasValidPriceFeedId(token: Token | MaybePythToken | undefined): boolean {
 	if (!token) return false;
-	// Check if token has priceFeedId property and it's not empty
-	const feedId = (token as any).priceFeedId;
+	const maybe = token as MaybePythToken;
+	const feedId = maybe.priceFeedId;
 	return !!feedId && feedId !== '' && feedId !== '0x';
 }

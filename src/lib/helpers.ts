@@ -245,4 +245,3 @@ export function mapRoles(roles: Role[]): MappedRole[] {
 
 	return Array.from(roleMap.values());
 }
-

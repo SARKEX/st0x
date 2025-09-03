@@ -13,7 +13,8 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-    import Button from '$lib/components/ui/Button.svelte';
+	import { containerStyles } from '$lib/utils/styles';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -442,7 +443,7 @@
 
 	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
 	<div class="mt-4 space-y-4 lg:mt-0">
-		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
 			<div class="hidden overflow-x-auto sm:block">
 				<table class="min-w-full text-sm text-gray-200">
@@ -544,7 +545,7 @@
 			</div>
 		</div>
 
-		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Portfolio Order Summary</h4>
 			<div class="space-y-2">
 				<div class="flex justify-between text-sm">
@@ -625,10 +626,16 @@
 						>{formatUnits(overrideDepositAmount7 ?? 0n, selectedToken7.decimals)}</span
 					>
 				</div>
-		</div>
+			</div>
 		</div>
 
-		<Button variant="primary" size="lg" fullWidth={true} disabled={disableDeploy} on:click={handleFolioDeploy}>
+		<Button
+			variant="primary"
+			size="lg"
+			fullWidth={true}
+			disabled={disableDeploy}
+			on:click={handleFolioDeploy}
+		>
 			Deploy Order
 		</Button>
 	</div>

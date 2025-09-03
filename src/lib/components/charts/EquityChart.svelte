@@ -15,36 +15,36 @@
 		if (!data || typeof data !== 'object') return [];
 		// Check for both daily and intraday time series
 		const dataObj = data as Record<string, unknown>;
-		const isIntraday = !!(dataObj["Time Series (30min)"] || 
-			dataObj["Time Series (60min)"] || 
-			dataObj["Time Series (15min)"] || 
-			dataObj["Time Series (5min)"]);
-		
-		const ts = (dataObj["Time Series (Daily)"] || 
-			dataObj["Time Series (30min)"] || 
-			dataObj["Time Series (60min)"] || 
-			dataObj["Time Series (15min)"] || 
-			dataObj["Time Series (5min)"]) as
-			| Record<string, Record<string, string>>
-			| undefined;
+		const isIntraday = !!(
+			dataObj['Time Series (30min)'] ||
+			dataObj['Time Series (60min)'] ||
+			dataObj['Time Series (15min)'] ||
+			dataObj['Time Series (5min)']
+		);
+
+		const ts = (dataObj['Time Series (Daily)'] ||
+			dataObj['Time Series (30min)'] ||
+			dataObj['Time Series (60min)'] ||
+			dataObj['Time Series (15min)'] ||
+			dataObj['Time Series (5min)']) as Record<string, Record<string, string>> | undefined;
 		if (!ts) return [];
-		
+
 		const points: { time: string | number; value: number }[] = [];
 		const allDates = Object.keys(ts);
-		
+
 		// For intraday, get only the most recent trading day's data
 		if (isIntraday && allDates.length > 0) {
 			// Find the most recent date
 			const sortedDates = allDates.sort((a, b) => b.localeCompare(a));
 			const mostRecentDate = sortedDates[0].split(' ')[0];
-			
+
 			// Filter to only include data from the most recent trading day
 			for (const [dateStr, ohlc] of Object.entries(ts)) {
 				if (!dateStr.startsWith(mostRecentDate)) continue;
-				
-				const close = parseFloat((ohlc as Record<string, string>)["4. close"]) || 0;
+
+				const close = parseFloat((ohlc as Record<string, string>)['4. close']) || 0;
 				if (!isFinite(close)) continue;
-				
+
 				// Convert to Unix timestamp (seconds)
 				const time = Math.floor(new Date(dateStr).getTime() / 1000);
 				points.push({ time, value: close });
@@ -52,14 +52,14 @@
 		} else {
 			// For daily data or if we want all data
 			for (const [dateStr, ohlc] of Object.entries(ts)) {
-				const close = parseFloat((ohlc as Record<string, string>)["4. close"]) || 0;
+				const close = parseFloat((ohlc as Record<string, string>)['4. close']) || 0;
 				if (!isFinite(close)) continue;
-				
+
 				// For daily data, keep as yyyy-mm-dd string
-				const time = isIntraday 
+				const time = isIntraday
 					? Math.floor(new Date(dateStr).getTime() / 1000)
 					: dateStr.split(' ')[0];
-				
+
 				points.push({ time, value: close });
 			}
 			// Only show last 30 days for daily data
@@ -67,12 +67,12 @@
 				points.splice(0, points.length - 30);
 			}
 		}
-		
+
 		points.sort((a, b) => {
 			if (typeof a.time === 'number' && typeof b.time === 'number') {
 				return a.time - b.time;
 			}
-			return (a.time < b.time ? -1 : 1);
+			return a.time < b.time ? -1 : 1;
 		});
 		return points;
 	}
@@ -94,7 +94,7 @@
 				vertLines: { color: 'rgba(255,255,255,0.06)' },
 				horzLines: { color: 'rgba(255,255,255,0.06)' }
 			},
-			rightPriceScale: { 
+			rightPriceScale: {
 				borderColor: 'rgba(255,255,255,0.15)',
 				autoScale: true,
 				scaleMargins: {
@@ -102,11 +102,11 @@
 					bottom: 0.1
 				}
 			},
-			timeScale: { 
+			timeScale: {
 				borderColor: 'rgba(255,255,255,0.15)',
 				timeVisible: true,
 				secondsVisible: false,
-				tickMarkFormatter: (time: any, tickMarkType: any, locale: any) => {
+				tickMarkFormatter: (time: number | string) => {
 					// For intraday (timestamp), show time
 					if (typeof time === 'number') {
 						const date = new Date(time * 1000);
@@ -147,7 +147,8 @@
 		});
 		const initial = parseSeries(timeseriesData);
 		if (initial.length && series) {
-			series.setData(initial);
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			series.setData(initial as any);
 			// Fit content to show all data without extra space
 			chart.timeScale().fitContent();
 		}
@@ -156,7 +157,8 @@
 
 	$: if (series && chart) {
 		const next = parseSeries(timeseriesData);
-		series.setData(next);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		series.setData(next as any);
 		// Fit content to avoid empty space
 		if (next.length > 0) {
 			chart.timeScale().fitContent();

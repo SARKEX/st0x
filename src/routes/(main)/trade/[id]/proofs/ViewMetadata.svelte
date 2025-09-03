@@ -40,8 +40,7 @@
 {:else}
 	<div in:fade>
 		{#each mappedMetaV1 as deposit}
-			<ReceiptMetadata receiptInformation={deposit.meta} schema={deposit.schema} />
+			<ReceiptMetadata receiptInformation={deposit.meta} />
 		{/each}
 	</div>
 {/if}
-

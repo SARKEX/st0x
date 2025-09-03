@@ -4,13 +4,13 @@
 	import NetworkSelector from './NetworkSelector.svelte';
 	import { goto } from '$app/navigation';
 	import { createEventDispatcher } from 'svelte';
-    import Button from '$lib/components/ui/Button.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	export let title: string;
 	export let description: string;
-	
+
 	const dispatch = createEventDispatcher();
-	
+
 	function openMobileMenu() {
 		dispatch('openMenu');
 	}
@@ -21,9 +21,24 @@
 	<div class="px-4 py-1 sm:px-6 sm:py-2">
 		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 			<div class="flex items-center gap-3 sm:gap-4">
-				<Button variant="ghost" size="sm" className="p-2 lg:hidden" aria-label="Open menu" on:click={openMobileMenu}>
-					<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-						<path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="p-2 lg:hidden"
+					aria-label="Open menu"
+					on:click={openMobileMenu}
+				>
+					<svg
+						class="h-5 w-5"
+						fill="currentColor"
+						viewBox="0 0 20 20"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+							clip-rule="evenodd"
+						></path>
 					</svg>
 				</Button>
 				<div>
@@ -34,7 +49,13 @@
 
 			<div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
 				<NetworkSelector />
-				<Button variant="primary" size="md" fullWidth={true} className="hidden sm:inline-flex sm:w-auto sm:px-5 sm:py-2.5" on:click={() => goto('/trade-list')}>
+				<Button
+					variant="primary"
+					size="md"
+					fullWidth={true}
+					className="hidden sm:inline-flex sm:w-auto sm:px-5 sm:py-2.5"
+					on:click={() => goto('/trade-list')}
+				>
 					Trade Now
 				</Button>
 				<WalletConnect />

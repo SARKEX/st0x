@@ -29,7 +29,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const response = await fetch(url, {
 			method: 'POST',
 			headers: {
-				'Authorization': `apikey ${MAILCHIMP_API_KEY}`,
+				Authorization: `apikey ${MAILCHIMP_API_KEY}`,
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
@@ -44,29 +44,37 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!response.ok) {
 			// Handle specific Mailchimp errors
 			if (data.title === 'Member Exists') {
-				return json({ 
-					success: false, 
-					error: 'You are already subscribed to our newsletter' 
-				}, { status: 400 });
+				return json(
+					{
+						success: false,
+						error: 'You are already subscribed to our newsletter'
+					},
+					{ status: 400 }
+				);
 			}
-			
+
 			console.error('Mailchimp error:', data);
-			return json({ 
-				success: false, 
-				error: 'Failed to subscribe. Please try again later.' 
-			}, { status: 500 });
+			return json(
+				{
+					success: false,
+					error: 'Failed to subscribe. Please try again later.'
+				},
+				{ status: 500 }
+			);
 		}
 
-		return json({ 
-			success: true, 
-			message: 'Thank you for subscribing!' 
+		return json({
+			success: true,
+			message: 'Thank you for subscribing!'
 		});
-
 	} catch (error) {
 		console.error('Newsletter signup error:', error);
-		return json({ 
-			success: false, 
-			error: 'An error occurred. Please try again later.' 
-		}, { status: 500 });
+		return json(
+			{
+				success: false,
+				error: 'An error occurred. Please try again later.'
+			},
+			{ status: 500 }
+		);
 	}
 };

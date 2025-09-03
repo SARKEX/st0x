@@ -35,4 +35,3 @@ export const addSchemaToReceipts = (vault: OffchainAssetReceiptVault) => {
 	}
 	return tempSchema;
 };
-

@@ -2,7 +2,8 @@
 	import { currentNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { WalletOutline, ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
+	import WalletIcon from '$lib/components/icons/IconWalletOutline.svelte';
+	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
 	import ShareButton from './ShareButton.svelte';
 
 	export let visible: boolean = false; // controlled by parent
@@ -76,7 +77,7 @@
 			>
 				<span>{item.name}</span>
 				{#if item.protected && !$connected}
-					<WalletOutline class="ml-auto h-5 w-5" />
+					<WalletIcon class="ml-auto h-5 w-5" />
 				{:else if activePath === item.href}
 					<div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
 				{/if}
@@ -103,7 +104,7 @@
 				href="/docs"
 				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
 			>
-				<ArrowUpRightFromSquareSolid class="h-5 w-5" />
+				<ExternalLinkIcon class="h-5 w-5" />
 				<span>Docs</span>
 			</a>
 			<ShareButton />

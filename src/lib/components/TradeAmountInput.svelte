@@ -67,6 +67,7 @@
 
 <div class="flex flex-col gap-2">
 	<Input
+		{...$$restProps}
 		bind:amount={inputAmount}
 		type="number"
 		unit={amountToken.symbol}
