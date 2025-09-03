@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Input from './Input.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits, parseUnits } from 'viem';
 	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -67,6 +67,7 @@
 
 <div class="flex flex-col gap-2">
 	<Input
+		{...$$restProps}
 		bind:amount={inputAmount}
 		type="number"
 		unit={amountToken.symbol}

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import Card from './Card.svelte';
 	import { goto } from '$app/navigation';
-	
-	type Item = { 
-		name: string; 
-		symbol?: string; 
-		href: string; 
-		metadata?: string; 
+	import Button from '$lib/components/ui/Button.svelte';
+
+	type Item = {
+		name: string;
+		symbol?: string;
+		href: string;
+		metadata?: string;
 		metadataClass?: string;
 		logoUrl?: string;
 		price?: string;
@@ -24,11 +25,7 @@
 				<div class="rounded-lg border border-white/5 bg-black/20 p-3 hover:border-yellow-500/30">
 					<div class="flex items-center gap-3">
 						{#if item.logoUrl}
-							<img 
-								src={item.logoUrl} 
-								alt={item.symbol} 
-								class="h-8 w-8 rounded-full bg-gray-700"
-							/>
+							<img src={item.logoUrl} alt={item.symbol} class="h-8 w-8 rounded-full bg-gray-700" />
 						{/if}
 						<a class="min-w-0 flex-1" href={item.href}>
 							<div class="flex items-center justify-between">
@@ -44,19 +41,16 @@
 									{/if}
 									{#if item.metadata}
 										{#each item.metadata.split('\n') as line}
-											<div class="text-xs font-medium {item.metadataClass || 'text-gray-400'}">{line}</div>
+											<div class="text-xs font-medium {item.metadataClass || 'text-gray-400'}">
+												{line}
+											</div>
 										{/each}
 									{/if}
 								</div>
 							</div>
 						</a>
 						{#if item.showTradeButton}
-							<button
-								on:click|stopPropagation={() => goto(item.href)}
-								class="ml-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:scale-105"
-							>
-								Trade
-							</button>
+							<Button size="sm" variant="primary" on:click={() => goto(item.href)}>Trade</Button>
 						{/if}
 					</div>
 				</div>

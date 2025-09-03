@@ -4,7 +4,6 @@ import { ROLES } from './consts';
 import pako from 'pako';
 import { decodeAllSync, encodeCanonical } from 'cbor-web';
 import { utils } from 'ethers';
-// import { networks } from '$lib/networks';
 
 export function deflateJson(data_: string | pako.Data) {
 	const bytes = Uint8Array.from(pako.deflate(data_));
@@ -14,21 +13,6 @@ export function deflateJson(data_: string | pako.Data) {
 	}
 	return hex;
 }
-
-// export function encodeCBOR(data: string | ArrayBuffer, magicNumber: bigint) {
-//     // If data is an object (e.g., ArrayBuffer), convert to string
-//     if (typeof data === 'object') {
-//         data = JSON.stringify(data);
-//     }
-//     // deflateJson: should return Uint8Array or ArrayBuffer
-//     const deflated = deflateJson(data);
-//     // ethers.utils.arrayify returns a Uint8Array, convert to ArrayBuffer
-//     const deflatedData = utils.arrayify(deflated).buffer as ArrayBuffer;
-
-//     return cborEncode(deflatedData, magicNumber, 'application/json', {
-//         contentEncoding: 'deflate'
-//     });
-// }
 
 export function cborEncode(
 	payload_: string | ArrayBuffer,
@@ -177,19 +161,8 @@ export function convertDotNotationToObject(input: Record<string, any>): Record<s
 	return result;
 }
 
-interface Account {
-	address: string;
-}
-
-export interface RoleHolder {
-	account: Account;
-}
-
-export interface Role {
-	roleName: string;
-	roleHolders: RoleHolder[];
-	roleHash: string;
-}
+import type { RoleHolder, Role } from './types/OffchainAssetReceiptVault';
+export type { RoleHolder, Role };
 
 interface MappedRole {
 	roleName: string;
@@ -272,8 +245,3 @@ export function mapRoles(roles: Role[]): MappedRole[] {
 
 	return Array.from(roleMap.values());
 }
-
-// export function getBlockExplorerUrl(chainId: number): string | null {
-// 	const network = networks.find((network) => network.chainId === chainId);
-// 	return network ? network.blockExplorer : null;
-// }

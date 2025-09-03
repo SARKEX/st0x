@@ -5,7 +5,6 @@ import axios from 'axios';
 import { get } from 'svelte/store';
 import type { Network } from './network';
 
-// TODO: Add type for the response
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const getSfts = async (): Promise<any> => {
 	// Get current network value from store

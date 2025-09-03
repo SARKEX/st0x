@@ -1,60 +1,52 @@
+/**
+ * Utility functions for derived calculations
+ */
+
 import type { Token } from 'sushi/currency';
-import { getPrice } from './getPrice';
-import { parseUnits } from 'viem';
-import type { PythToken } from './types';
-import { currentNetwork } from './stores';
-import { get } from 'svelte/store';
 
-// Returns the period in seconds
-export const getPeriodInSeconds = (
-	period: string,
-	periodUnit: 'Days' | 'Hours' | 'Minutes'
-): number => {
-	switch (periodUnit) {
+/**
+ * For limit strategies, return the baseline IO ratio to use.
+ * Currently acts as a pass-through for Buy orders; for Sell orders, also pass-through
+ * to avoid unintended price inversion. Adjust here if Sell should invert in future.
+ */
+export function getBaseline(orderType: 'Buy' | 'Sell', ratio: string): string {
+	const r = (ratio ?? '').toString().trim();
+	if (!r) return '';
+	if (orderType === 'Sell') {
+		const n = Number(r);
+		if (!Number.isFinite(n) || n === 0) return r;
+		const inverted = 1 / n;
+		return inverted.toString();
+	}
+	return r;
+}
+
+/**
+ * Convert period and unit to seconds
+ */
+export function getPeriodInSeconds(period: string, unit: 'Days' | 'Hours' | 'Minutes'): number {
+	const periodNum = parseInt(period) || 0;
+
+	switch (unit) {
 		case 'Days':
-			return Number(period) * 86400;
+			return periodNum * 24 * 60 * 60;
 		case 'Hours':
-			return Number(period) * 3600;
+			return periodNum * 60 * 60;
 		case 'Minutes':
-			return Number(period) * 60;
+			return periodNum * 60;
+		default:
+			return 0;
 	}
-};
+}
 
-// Returns 1/10 of the normalised daily amount
-export const getMaxTradeAmount = (
-	amount: bigint,
-	period: string,
-	periodUnit: 'Days' | 'Hours' | 'Minutes'
-) => {
-	const periodInSeconds = BigInt(getPeriodInSeconds(period, periodUnit));
-	const normalisedDailyAmount = (amount * 8640n) / periodInSeconds;
-	return normalisedDailyAmount;
-};
+/**
+ * Check if a token has a valid Pyth price feed ID
+ */
+type MaybePythToken = Token & { priceFeedId?: string };
 
-export const getMinTradeAmount = async (amountToken: Token, minAmountInUSDC: bigint) => {
-	const usdcToken = get(currentNetwork).usdcToken;
-	if (usdcToken.address.toLowerCase() === amountToken.address.toLowerCase()) {
-		return minAmountInUSDC;
-	}
-	const price = await getPrice(usdcToken, amountToken);
-	const fp18Price =
-		parseUnits(price, amountToken.decimals) * 10n ** (18n - BigInt(amountToken.decimals));
-	const minAmountInUSDCFp18 = minAmountInUSDC * 10n ** (18n - BigInt(usdcToken.decimals));
-	const minAmountFp18 = (minAmountInUSDCFp18 * fp18Price) / 10n ** 18n;
-	const minAmountInAmountToken = minAmountFp18 / 10n ** (18n - BigInt(amountToken.decimals));
-
-	return minAmountInAmountToken;
-};
-
-// Get baseline
-export const getBaseline = (selectedBuyOrSell: 'Buy' | 'Sell', selectedBaseline: string) => {
-	const finalBaseline =
-		selectedBuyOrSell === 'Buy' ? (1 / +selectedBaseline).toFixed(18).toString() : selectedBaseline;
-	return finalBaseline;
-};
-export const hasValidPriceFeedId = (token: Token): token is PythToken => {
-	return (
-		'priceFeedId' in token &&
-		token.priceFeedId !== '0x0000000000000000000000000000000000000000000000000000000000000000'
-	);
-};
+export function hasValidPriceFeedId(token: Token | MaybePythToken | undefined): boolean {
+	if (!token) return false;
+	const maybe = token as MaybePythToken;
+	const feedId = maybe.priceFeedId;
+	return !!feedId && feedId !== '' && feedId !== '0x';
+}

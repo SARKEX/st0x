@@ -1,14 +1,15 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import ProsePanel from '$lib/components/ui/ProsePanel.svelte';
+	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 </script>
 
 <!-- Main Content -->
 <div>
 	<!-- Terms Content -->
-	<div class="space-y-6 p-3 sm:space-y-8 sm:p-6">
-		<div
-			class="prose prose-invert mx-auto w-full max-w-full rounded-2xl border border-white/10 bg-gray-800/70 p-4 shadow-xl backdrop-blur-md md:p-6 xl:p-8"
-		>
+	<PageContainer>
+		<ProsePanel>
 			<h1 class="mb-6 text-4xl font-bold text-white">DEX Website Terms of Use</h1>
 
 			<p class="text-gray-400"><em>Last Updated: 30 June 2025</em></p>
@@ -27,9 +28,11 @@
 					SARK X (BVI) Ltd located at Craigmuir Chambers, Road Town, Tortola, VG 1110, British
 					Virgin Islands ("<strong class="text-white">Provider</strong>") is the owner and operator
 					of the website at
-					<a href="https://st0x.io" class="text-blue-400 underline hover:text-blue-300"
-						>https://st0x.io</a
-					>
+					<ExternalLink
+						href="https://st0x.io"
+						label="https://st0x.io"
+						className="text-blue-400 underline hover:text-blue-300"
+					/>
 					(the "<strong class="text-white">Website</strong>"). Provider is a business company
 					limited by shares incorporated under the laws of the British Virgin Islands ("<strong
 						class="text-white">BVI</strong
@@ -525,8 +528,8 @@
 				the Website and supersede all prior and contemporaneous understandings, agreements,
 				representations and warranties, both written and oral, with respect to the Website.
 			</p>
-		</div>
-	</div>
+		</ProsePanel>
+	</PageContainer>
 
 	<!-- Footer -->
 	<Footer />

@@ -7,6 +7,18 @@
 
 	let isOpen = false;
 
+	function getChainLogo(n: (typeof networks)[0]): string {
+		if (!n) return '/images/ETH.svg';
+		switch (n.chainId) {
+			case 42161:
+				return '/images/ARB.svg';
+			case 8453:
+				return '/images/BASE.svg';
+			default:
+				return '/images/ETH.svg';
+		}
+	}
+
 	async function selectNetwork(network: (typeof networks)[0]) {
 		$currentNetwork = network;
 		isOpen = false;
@@ -40,15 +52,19 @@
 
 <svelte:window on:click={handleClickOutside} />
 
-<div class="network-selector relative">
+<div class="network-selector relative z-[10000] inline-block shrink-0">
 	<button
 		on:click={toggleDropdown}
-		class="flex items-center gap-2 rounded-lg border border-white/10 bg-gray-700/80 px-3 py-2 text-sm font-medium text-white transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-600/80 active:scale-95"
+		class="flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-gray-700/80 px-2 py-1 text-xs font-medium text-white transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-600/80 active:scale-95 sm:px-3 sm:py-2 sm:text-sm"
 	>
 		<div class="flex items-center gap-2">
-			<div class="h-4 w-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600"></div>
+			<img
+				src={getChainLogo($currentNetwork)}
+				alt={$currentNetwork.displayName}
+				class="h-4 w-4"
+				class:rounded-full={$currentNetwork.chainId !== 8453}
+			/>
 			<span class="hidden sm:inline">{$currentNetwork.displayName}</span>
-			<span class="sm:hidden">{$currentNetwork.displayName.split(' ')[0]}</span>
 		</div>
 		<span class="text-xs transition-transform duration-200" class:rotate-180={isOpen}>▼</span>
 	</button>
@@ -76,7 +92,12 @@
 							? 'bg-yellow-500/20'
 							: ''}"
 					>
-						<div class="h-3 w-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-600"></div>
+						<img
+							src={getChainLogo(network)}
+							alt={network.displayName}
+							class="h-4 w-4"
+							class:rounded-full={network.chainId !== 8453}
+						/>
 						<div class="flex flex-col items-start">
 							<span class="font-medium">{network.displayName}</span>
 							<span class="text-xs text-gray-400">{network.currencySymbol}</span>
