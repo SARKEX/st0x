@@ -15,7 +15,7 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId, getBaseline } from '$lib/derivations';
-	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
+    import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	import { containerStyles } from '$lib/utils/styles';
 
@@ -41,10 +41,10 @@
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';
 	let selectedBaseline: string = '';
-	let selectedInitialRatio: string = '';
+    let selectedInitialRatio: string = '';
 
-	let inputVaultId: Hex | undefined;
-	let outputVaultId: Hex | undefined;
+    let inputVaultId: Hex | undefined;
+    let outputVaultId: Hex | undefined;
 
 	$: isInputTokenSameAsOutputToken =
 		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
@@ -98,13 +98,34 @@
 	};
 
 	// Calculate average price per period
-	$: avgPricePerPeriod =
-		selectedAmount && selectedPeriod
-			? (
-					parseFloat(formatUnits(selectedAmount, selectedOutputToken?.decimals || 18)) /
-					parseFloat(selectedPeriod || '1')
-				).toFixed(2)
-			: '0.00';
+    $: avgPricePerPeriod =
+        selectedAmount && selectedPeriod
+            ? (
+                    parseFloat(formatUnits(selectedAmount, selectedOutputToken?.decimals || 18)) /
+                    parseFloat(selectedPeriod || '1')
+                ).toFixed(2)
+            : '0.00';
+
+    // Default Start Price to oracle price when available and if user hasn't entered a value yet
+    $: if (hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
+        const feedId = (selectedInputToken as unknown as { priceFeedId?: string })?.priceFeedId;
+        if (feedId) {
+            fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`)
+                .then((r) => r.json())
+                .then((data) => {
+                    const parsed = data?.parsed?.[0]?.price;
+                    if (parsed) {
+                        const px = Number(parsed.price) * Math.pow(10, parsed.expo);
+                        if (!Number.isNaN(px) && !selectedInitialRatio) {
+                            selectedInitialRatio = String(px);
+                        }
+                    }
+                })
+                .catch(() => {
+                    // silently ignore; user can input manually
+                });
+        }
+    }
 </script>
 
 {#if $currentNetwork && ALL_TOKENS.length > 0}
@@ -194,10 +215,10 @@
 		<!-- Price Settings -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Floor Price
-					<span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
-				</div>
+        <div class="mb-2 block text-sm font-medium text-gray-300">
+            {selectedOrderType === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
+            <span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
+        </div>
 				<Input
 					aria-label="Floor Price"
 					type="number"
@@ -208,10 +229,10 @@
 				/>
 			</div>
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Initial Ratio
-					<span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
-				</div>
+        <div class="mb-2 block text-sm font-medium text-gray-300">
+            Start Price
+            <span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
+        </div>
 				<Input
 					aria-label="Initial Ratio"
 					type="number"
@@ -223,10 +244,12 @@
 			</div>
 		</div>
 
-		<!-- Strategy Summary -->
-		<div class={containerStyles.cardBordered}>
-			<h4 class="mb-3 text-sm font-medium text-gray-300">DCA Strategy Summary</h4>
-			<div class="space-y-2 text-sm">
+		<!-- Summary and Market Price side by side -->
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			<!-- Order Summary -->
+			<div class={containerStyles.cardBordered}>
+				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+				<div class="space-y-2 text-sm">
 				<div class="flex justify-between">
 					<span class="text-gray-400">Total Budget</span>
 					<span class="font-medium">
@@ -277,29 +300,31 @@
 						{/if}
 					</span>
 				</div>
-			</div>
-		</div>
-
-		<!-- Price Oracle Info (simplified) -->
-		{#if hasValidPriceFeedId(selectedInputToken)}
-			<div class={containerStyles.cardBordered}>
-				<h4 class="mb-3 text-sm font-medium text-gray-300">Current Market Price</h4>
-				<div class="overflow-x-auto">
-					<table class="min-w-full text-sm text-gray-200">
-						<thead>
-							<tr class="border-b border-white/10">
-								<th class="px-2 py-1 text-left">Token</th>
-								<th class="px-2 py-1 text-right">Oracle Price</th>
-								<th class="px-2 py-1 text-right">Confidence</th>
-							</tr>
-						</thead>
-						<tbody>
-							<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
-						</tbody>
-					</table>
 				</div>
 			</div>
-		{/if}
+
+			<!-- Current Market Price -->
+			{#if hasValidPriceFeedId(selectedInputToken)}
+				<div class={containerStyles.cardBordered}>
+					<h4 class="mb-3 text-sm font-medium text-gray-300">Current Market Price</h4>
+					<div class="overflow-x-auto">
+						<table class="min-w-full text-sm text-gray-200">
+							<thead>
+								<tr class="border-b border-white/10">
+									<th class="px-2 py-1 text-left">Token</th>
+									<th class="px-2 py-1 text-right">Oracle Price</th>
+									<th class="px-2 py-1 text-right">Confidence</th>
+									<th class="px-2 py-1 text-right">Off-chain</th>
+								</tr>
+							</thead>
+							<tbody>
+								<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
+							</tbody>
+						</table>
+					</div>
+				</div>
+			{/if}
+		</div>
 
 		<!-- Deploy Button -->
 		<button
@@ -315,9 +340,9 @@
 				{:else if !selectedPeriod}
 					Enter a period
 				{:else if !selectedBaseline}
-					Enter a floor price
+					{selectedOrderType === 'Buy' ? 'Enter a ceiling price' : 'Enter a floor price'}
 				{:else if !selectedInitialRatio}
-					Enter an initial ratio
+					Enter a start price
 				{:else}
 					Complete all fields
 				{/if}

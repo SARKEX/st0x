@@ -215,8 +215,20 @@
 			{#if hasValidPriceFeedId(selectedOutputToken)}
 				<div class={containerStyles.cardBordered}>
 					<h4 class="mb-3 text-sm font-medium text-gray-300">Current Market Price</h4>
-					<div class="text-sm">
-						<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
+					<div class="overflow-x-auto">
+						<table class="min-w-full text-sm text-gray-200">
+							<thead>
+								<tr class="border-b border-white/10">
+									<th class="px-2 py-1 text-left">Token</th>
+									<th class="px-2 py-1 text-right">Oracle Price</th>
+									<th class="px-2 py-1 text-right">Confidence</th>
+									<th class="px-2 py-1 text-right">Off-chain</th>
+								</tr>
+							</thead>
+							<tbody>
+								<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
+							</tbody>
+						</table>
 					</div>
 				</div>
 			{:else}

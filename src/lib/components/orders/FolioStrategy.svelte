@@ -452,7 +452,7 @@
 							<th class="px-2 py-1 text-left">Token</th>
 							<th class="px-2 py-1 text-right">Oracle Price</th>
 							<th class="px-2 py-1 text-right">Price Certainty</th>
-							<th class="px-2 py-1 text-right">Real-Time</th>
+							<th class="px-2 py-1 text-right">Off-chain</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -538,7 +538,7 @@
 							<div><span class="font-semibold">Token: </span>{token?.symbol ?? '-'}</div>
 							<div><span class="font-semibold">Oracle Price: </span>-</div>
 							<div><span class="font-semibold">Price Certainty: </span>-</div>
-							<div><span class="font-semibold">Real-Time: </span>-</div>
+							<div><span class="font-semibold">Off-chain: </span>-</div>
 						</div>
 					{/if}
 				{/each}

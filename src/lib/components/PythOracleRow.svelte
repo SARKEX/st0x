@@ -99,7 +99,7 @@
 					± {priceData.confidence.toFixed(5)}
 				</div>
 				<div>
-					<span class="font-semibold">Real-Time: </span>
+					<span class="font-semibold">Off-chain: </span>
 					{#if quotePrice}
 						${parseFloat(quotePrice).toFixed(5)}
 					{:else}

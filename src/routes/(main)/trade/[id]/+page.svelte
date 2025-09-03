@@ -328,34 +328,31 @@
 				</div>
 
 				<!-- Right: Chart -->
-				<div class={`${containerStyles.cardBordered} relative h-64 p-2`}>
-					<Button
-						variant="ghost"
-						size="sm"
-						className="absolute right-2 top-2 z-10 rounded-md bg-gray-700/80 p-1.5 text-gray-400 hover:bg-gray-600 hover:text-white"
-						aria-label="View fullscreen chart"
-						on:click={openChartModal}
-					>
-						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M4 8V4h4M20 16v4h-4M4 20l6-6M20 4l-6 6"
-							/>
-						</svg>
-					</Button>
-					{#if intradayData?.error === 'API_LIMIT'}
-						<div class="flex h-full items-center justify-center">
-							<p class="text-sm text-gray-400">Chart unavailable (API limit reached)</p>
-						</div>
-					{:else if $intradayQuery.data}
-						<EquityChart timeseriesData={$intradayQuery.data} height={240} />
-					{:else}
-						<div class="flex h-full items-center justify-center">
-							<LoadingSpinner variant="inline" size="md" text="Loading chart..." />
-						</div>
-					{/if}
+				<div class={`${containerStyles.cardBordered} h-80 sm:h-96 p-2`} style="display: flex; flex-direction: column;">
+					<div class="relative flex-1">
+						<Button
+							variant="ghost"
+							size="sm"
+							className="absolute left-2 top-2 z-10 rounded-md bg-gray-700/60 p-1.5 text-gray-300 hover:bg-gray-600 hover:text-white"
+							aria-label="View fullscreen chart"
+							on:click={openChartModal}
+						>
+							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 16v4h-4M4 20l6-6M20 4l-6 6" />
+							</svg>
+						</Button>
+						{#if intradayData?.error === 'API_LIMIT'}
+							<div class="flex h-full items-center justify-center">
+								<p class="text-sm text-gray-400">Chart unavailable (API limit reached)</p>
+							</div>
+						{:else if $intradayQuery.data}
+							<EquityChart timeseriesData={$intradayQuery.data} />
+						{:else}
+							<div class="flex h-full items-center justify-center">
+								<LoadingSpinner variant="inline" size="md" text="Loading chart..." />
+							</div>
+						{/if}
+					</div>
 				</div>
 			</div>
 		</Section>
