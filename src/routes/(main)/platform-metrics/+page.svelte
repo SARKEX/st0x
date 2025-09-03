@@ -140,8 +140,15 @@
 			);
 
 			if (tokenInfo?.symbol) {
+				// Extract base symbol
+				let baseSymbol = tokenInfo.symbol;
+				if (baseSymbol?.includes('s1')) {
+					baseSymbol = baseSymbol.split('s1')[0];
+				} else if (baseSymbol?.includes('0x')) {
+					baseSymbol = baseSymbol.split('0x')[0];
+				}
 				const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === tokenInfo.symbol?.split('s1')[0]
+					(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
 				);
 				if (quote?.['Global Quote']?.['05. price']) {
 					tlv += amount * parseFloat(quote['Global Quote']['05. price']);
@@ -213,8 +220,15 @@
 					(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
 				);
 				if (tokenInfo?.symbol) {
+					// Extract base symbol
+					let baseSymbol = tokenInfo.symbol;
+					if (baseSymbol?.includes('s1')) {
+						baseSymbol = baseSymbol.split('s1')[0];
+					} else if (baseSymbol?.includes('0x')) {
+						baseSymbol = baseSymbol.split('0x')[0];
+					}
 					const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
-						(q) => q?.['Global Quote']?.['01. symbol'] === tokenInfo.symbol?.split('s1')[0]
+						(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
 					);
 					if (quote?.['Global Quote']?.['05. price']) {
 						tvl += amount * parseFloat(quote['Global Quote']['05. price']);
@@ -263,8 +277,15 @@
 				let usdValue = 'N/A';
 				const amount = parseFloat(formatUnits(deposits, 18));
 				if (tokenInfo?.symbol) {
+					// Extract base symbol
+					let baseSymbol = tokenInfo.symbol;
+					if (baseSymbol?.includes('s1')) {
+						baseSymbol = baseSymbol.split('s1')[0];
+					} else if (baseSymbol?.includes('0x')) {
+						baseSymbol = baseSymbol.split('0x')[0];
+					}
 					const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
-						(q) => q?.['Global Quote']?.['01. symbol'] === tokenInfo.symbol?.split('s1')[0]
+						(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
 					);
 					if (quote?.['Global Quote']?.['05. price']) {
 						const value = amount * parseFloat(quote['Global Quote']['05. price']);

@@ -89,8 +89,16 @@
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
+					// Extract base symbol (handle both 's1' and '0x' suffixes)
+					let baseSymbol = sft.symbol;
+					if (baseSymbol?.includes('s1')) {
+						baseSymbol = baseSymbol.split('s1')[0];
+					} else if (baseSymbol?.includes('0x')) {
+						baseSymbol = baseSymbol.split('0x')[0];
+					}
+					
 					const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-						(q) => q?.['Global Quote']?.['01. symbol'] === sft.symbol?.split('s1')[0]
+						(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
 					);
 					const price = parseFloat(quote?.['Global Quote']?.['05. price'] || '0');
 					const priceChange = parseFloat(quote?.['Global Quote']?.['09. change'] || '0');
@@ -243,9 +251,17 @@
 					token.symbol?.toUpperCase() === 'USDC' ||
 					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
 
+				// Extract base symbol (handle both 's1' and '0x' suffixes)
+				let baseSymbol = token.symbol;
+				if (baseSymbol?.includes('s1')) {
+					baseSymbol = baseSymbol.split('s1')[0];
+				} else if (baseSymbol?.includes('0x')) {
+					baseSymbol = baseSymbol.split('0x')[0];
+				}
+				
 				const quote = !isUSDC
 					? ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-							(q) => q?.['Global Quote']?.['01. symbol'] === token.symbol?.split('s1')[0]
+							(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
 						)
 					: null;
 

@@ -96,21 +96,31 @@
 	});
 
 	$: tokenGlobalQuoteQuery = createQuery({
-		queryKey: ['tokenGlobalQuote', $currentNetwork?.id],
+		queryKey: ['tokenGlobalQuote-unique-symbols'],
 		queryFn: async () => {
-			// Filter tokens by current network's chain ID
-			const networkTokens = TOKENS.filter((token) => token.chainId === $currentNetwork.chainId);
+			// Build unique list of base symbols across all TOKENS (strip 's1' and '0x' suffixes)
+			const uniqueBaseSymbols = Array.from(
+				new Set(
+					TOKENS.map((t) => {
+						const sym = t.symbol ?? '';
+						if (sym.includes('s1')) return sym.split('s1')[0];
+						if (sym.includes('0x')) return sym.split('0x')[0];
+						return sym;
+					})
+				)
+			).filter(Boolean);
+
 			const tokenQuotes = [];
-			for (const stox of networkTokens) {
+			for (const baseSymbol of uniqueBaseSymbols) {
 				const data = await alpha.getGlobalQuote(
-					stox.symbol?.split('s1')[0] as string,
+					baseSymbol,
 					publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY
 				);
 				tokenQuotes.push(data);
 			}
 			return tokenQuotes;
 		},
-		enabled: !!$currentNetwork?.chainId
+		enabled: true
 	});
 
 	$: sfts.set($vaultQuery.data);

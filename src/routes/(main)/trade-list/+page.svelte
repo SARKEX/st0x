@@ -72,7 +72,13 @@
 		// Calculate biggest movers based on AlphaVantage daily change percentage
 		biggestMovers = [...st0xVaults]
 			.map((sft) => {
-				const symbol = sft.symbol?.split('s1')[0];
+				// Extract base symbol (handle both 's1' and '0x' suffixes)
+				let symbol = sft.symbol;
+				if (symbol?.includes('s1')) {
+					symbol = symbol.split('s1')[0];
+				} else if (symbol?.includes('0x')) {
+					symbol = symbol.split('0x')[0];
+				}
 				// Find the quote in the array by matching symbol
 				const quoteData = ($tokenGlobalQuote as ApiStockQuote[]).find(
 					(q) => q?.['Global Quote']?.['01. symbol'] === symbol
@@ -124,8 +130,15 @@
 
 			// Process SFT vaults (from subgraph)
 			for (let sft of sftVaults) {
+				// Extract base symbol for quote lookup
+				let baseSymbol = sft.symbol;
+				if (baseSymbol?.includes('s1')) {
+					baseSymbol = baseSymbol.split('s1')[0];
+				} else if (baseSymbol?.includes('0x')) {
+					baseSymbol = baseSymbol.split('0x')[0];
+				}
 				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === sft.symbol?.split('s1')[0]
+					(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
 				);
 				const sftPrice = quote?.['Global Quote']?.['05. price'] ?? 0;
 				tokens.push({
@@ -248,7 +261,13 @@
 					<ListCard
 						title="Biggest Movers (24H)"
 						items={biggestMovers.map((s) => {
-							const symbol = s.symbol?.split('s1')[0];
+							// Extract base symbol
+							let symbol = s.symbol;
+							if (symbol?.includes('s1')) {
+								symbol = symbol.split('s1')[0];
+							} else if (symbol?.includes('0x')) {
+								symbol = symbol.split('0x')[0];
+							}
 							const quoteData = $tokenGlobalQuote.find(
 								(q) => q?.['Global Quote']?.['01. symbol'] === symbol
 							);
@@ -282,7 +301,13 @@
 								(t) => t.address.toLowerCase() === s.address.toLowerCase()
 							);
 							const volumeInShares = parseFloat(formatUnits(s.totalVolume, 18));
-							const symbol = s.symbol?.split('s1')[0];
+							// Extract base symbol
+							let symbol = s.symbol;
+							if (symbol?.includes('s1')) {
+								symbol = symbol.split('s1')[0];
+							} else if (symbol?.includes('0x')) {
+								symbol = symbol.split('0x')[0];
+							}
 							const quoteData = $tokenGlobalQuote.find(
 								(q) => q?.['Global Quote']?.['01. symbol'] === symbol
 							);

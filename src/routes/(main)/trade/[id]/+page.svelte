@@ -35,8 +35,16 @@
 			token.chainId === $currentNetwork?.chainId
 	);
 
-	// Extract base symbol for API calls
-	$: symbol = currentToken?.symbol?.split('s1')[0];
+	// Extract base symbol for API calls (handle both 's1' and '0x' suffixes)
+	$: symbol = (() => {
+		let sym = currentToken?.symbol;
+		if (sym?.includes('s1')) {
+			return sym.split('s1')[0];
+		} else if (sym?.includes('0x')) {
+			return sym.split('0x')[0];
+		}
+		return sym;
+	})();
 
 	// Tab state
 	let activeTab: 'fundamentals' | 'technical' | 'token' | 'mints-burns' = 'fundamentals';
