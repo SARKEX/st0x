@@ -112,10 +112,7 @@
 
 			const tokenQuotes = [];
 			for (const baseSymbol of uniqueBaseSymbols) {
-				const data = await alpha.getGlobalQuote(
-					baseSymbol,
-					publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY
-				);
+				const data = await alpha.getGlobalQuote(baseSymbol, publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
 				tokenQuotes.push(data);
 			}
 			return tokenQuotes;

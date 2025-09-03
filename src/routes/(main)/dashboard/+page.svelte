@@ -96,7 +96,7 @@
 					} else if (baseSymbol?.includes('0x')) {
 						baseSymbol = baseSymbol.split('0x')[0];
 					}
-					
+
 					const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 						(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
 					);
@@ -258,7 +258,7 @@
 				} else if (baseSymbol?.includes('0x')) {
 					baseSymbol = baseSymbol.split('0x')[0];
 				}
-				
+
 				const quote = !isUSDC
 					? ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
 							(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
