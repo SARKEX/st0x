@@ -43,19 +43,21 @@
 				{#each $query.data.pages as page}
 					{#each page.vaults as { vault, subgraphName }}
 						<tr class="border-b border-white/10 bg-gray-800/80 text-center text-gray-100 last:border-0">
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">{subgraphName}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
-								>0x{BigInt(vault.vaultId).toString(16).slice(0, 6)}...{BigInt(vault.vaultId)
-									.toString(16)
-									.slice(-4)}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
-								>{vault.orderbook.id.toString().slice(0, 6)}...{vault.orderbook.id
-									.toString()
-									.slice(-4)}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
-								>{vault.owner.toString().slice(0, 6)}...{vault.owner
-									.toString()
-									.slice(-4)}</td>
+                        <td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">{subgraphName}</td>
+                        <td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">
+                            <!-- Mobile: last 6 only -->
+                            <span class="sm:hidden">…{BigInt(vault.vaultId).toString(16).slice(-6)}</span>
+                            <!-- Desktop: 6...4 -->
+                            <span class="hidden sm:inline">0x{BigInt(vault.vaultId).toString(16).slice(0, 6)}...{BigInt(vault.vaultId).toString(16).slice(-4)}</span>
+                        </td>
+                        <td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">
+                            <span class="sm:hidden">…{vault.orderbook.id.toString().slice(-6)}</span>
+                            <span class="hidden sm:inline">{vault.orderbook.id.toString().slice(0, 6)}...{vault.orderbook.id.toString().slice(-4)}</span>
+                        </td>
+                        <td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">
+                            <span class="sm:hidden">…{vault.owner.toString().slice(-6)}</span>
+                            <span class="hidden sm:inline">{vault.owner.toString().slice(0, 6)}...{vault.owner.toString().slice(-4)}</span>
+                        </td>
 							<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">{vault.token.symbol}</td>
 							<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
 								>{formatUnits(
@@ -63,32 +65,58 @@
 									vault.token.decimals ? Number(vault.token.decimals) : 18
 								)}
 								{vault.token.symbol}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm">
-								{#each vault.ordersAsInput as order}
-									<ExternalLink
-										href={`https://v2.raindex.finance/orders/${
-											$currentNetwork.id
-										}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
-										label={`${order.orderHash.toString().slice(0, 6)}...${order.orderHash
-											.toString()
-											.slice(-4)}`}
-										className="text-blue-400 hover:text-blue-300"
-									/>
-								{/each}
-							</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm">
-								{#each vault.ordersAsOutput as order}
-									<ExternalLink
-										href={`https://v2.raindex.finance/orders/${
-											$currentNetwork.id
-										}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
-										label={`${order.orderHash.toString().slice(0, 6)}...${order.orderHash
-											.toString()
-											.slice(-4)}`}
-										className="text-blue-400 hover:text-blue-300"
-									/>
-								{/each}
-							</td>
+                        <td class="p-2 text-xs sm:p-3 sm:text-sm">
+                            {#each vault.ordersAsInput as order}
+                                <!-- Mobile: last 6 only -->
+                                <div class="sm:hidden">
+                                    <ExternalLink
+                                        href={`https://v2.raindex.finance/orders/${
+                                            $currentNetwork.id
+                                        }-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+                                        label={order.orderHash.toString()}
+                                        truncate={{ start: 0, end: 6 }}
+                                        className="text-blue-400 hover:text-blue-300"
+                                    />
+                                </div>
+                                <!-- Desktop: 6...4 -->
+                                <div class="hidden sm:block">
+                                    <ExternalLink
+                                        href={`https://v2.raindex.finance/orders/${
+                                            $currentNetwork.id
+                                        }-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+                                        label={order.orderHash.toString()}
+                                        truncate={{ start: 6, end: 4 }}
+                                        className="text-blue-400 hover:text-blue-300"
+                                    />
+                                </div>
+                            {/each}
+                        </td>
+                        <td class="p-2 text-xs sm:p-3 sm:text-sm">
+                            {#each vault.ordersAsOutput as order}
+                                <!-- Mobile: last 6 only -->
+                                <div class="sm:hidden">
+                                    <ExternalLink
+                                        href={`https://v2.raindex.finance/orders/${
+                                            $currentNetwork.id
+                                        }-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+                                        label={order.orderHash.toString()}
+                                        truncate={{ start: 0, end: 6 }}
+                                        className="text-blue-400 hover:text-blue-300"
+                                    />
+                                </div>
+                                <!-- Desktop: 6...4 -->
+                                <div class="hidden sm:block">
+                                    <ExternalLink
+                                        href={`https://v2.raindex.finance/orders/${
+                                            $currentNetwork.id
+                                        }-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+                                        label={order.orderHash.toString()}
+                                        truncate={{ start: 6, end: 4 }}
+                                        className="text-blue-400 hover:text-blue-300"
+                                    />
+                                </div>
+                            {/each}
+                        </td>
 						</tr>
 					{/each}
 				{/each}

@@ -267,7 +267,7 @@
 	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
-			<div class="hidden overflow-x-auto sm:block">
+			<div class="overflow-x-auto">
 				<table class="min-w-full text-sm text-gray-200">
 					<thead>
 						<tr>
@@ -301,29 +301,7 @@
 					</tbody>
 				</table>
 			</div>
-			<!-- Mobile stacked cards -->
-			<div class="mt-2 flex flex-col gap-2 sm:hidden">
-				{#if hasValidPriceFeedId(selectedToken1)}
-					<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
-				{:else}
-					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>{selectedToken1?.symbol ?? '-'}</div>
-						<div><span class="font-semibold">Oracle Price: </span>-</div>
-						<div><span class="font-semibold">Price Certainty: </span>-</div>
-							<div><span class="font-semibold">Off-chain: </span>-</div>
-					</div>
-				{/if}
-				{#if hasValidPriceFeedId(selectedToken2)}
-					<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
-				{:else}
-					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>{selectedToken2?.symbol ?? '-'}</div>
-						<div><span class="font-semibold">Oracle Price: </span>-</div>
-						<div><span class="font-semibold">Price Certainty: </span>-</div>
-							<div><span class="font-semibold">Off-chain: </span>-</div>
-					</div>
-				{/if}
-			</div>
+			<!-- Removed mobile-only cards; table above now scrolls on small screens -->
 		</div>
 
 		<div class={containerStyles.cardBordered}>

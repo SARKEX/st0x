@@ -115,7 +115,7 @@
 				<div class="mb-4">
 					<p class="mb-3 text-xs text-gray-400 sm:text-sm">Subscribe to our newsletter</p>
 					<form on:submit={handleNewsletterSubmit} class="space-y-2">
-						<div class="flex gap-2">
+						<div class="flex flex-col gap-2 sm:flex-row">
 							<input
 								type="email"
 								bind:value={email}
@@ -128,7 +128,7 @@
 								disabled={isSubmitting}
 								variant="secondary"
 								size="sm"
-								className="bg-yellow-500 text-black hover:bg-yellow-400 border-0"
+								className="bg-yellow-500 text-black hover:bg-yellow-400 border-0 w-full sm:w-auto"
 							>
 								{isSubmitting ? 'Submitting...' : 'Subscribe'}
 							</Button>
@@ -199,24 +199,24 @@
 		</div>
 
 		<!-- Bottom Bar -->
-		<div class="border-t border-white/10 pt-6 sm:pt-8">
-			<div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
-				<div class="text-xs text-gray-400 sm:text-sm">
-					© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
-				</div>
-				<div class="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
-					<div class="flex items-center gap-2 text-xs text-gray-400 sm:text-sm">
-						{#if $connected}
-							<div class="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-							Wallet Connected
-						{:else}
-							<div class="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-							Wallet Disconnected
-						{/if}
+				<div class="border-t border-white/10 pt-6 sm:pt-8">
+					<div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+						<div class="text-xs text-gray-400 sm:text-sm">
+							© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
+						</div>
+						<div class="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
+							<div class="hidden items-center gap-2 text-xs text-gray-400 sm:flex sm:text-sm">
+								{#if $connected}
+									<div class="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+									Wallet Connected
+								{:else}
+									<div class="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+									Wallet Disconnected
+								{/if}
+							</div>
+							<div class="hidden text-xs text-gray-400 sm:block sm:text-sm">Network: {$currentNetwork.name}</div>
+						</div>
 					</div>
-					<div class="text-xs text-gray-400 sm:text-sm">Network: {$currentNetwork.name}</div>
-				</div>
-			</div>
 
 			<!-- Risk Warning -->
 			<div class="mt-6 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 sm:p-4">

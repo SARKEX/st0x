@@ -37,7 +37,7 @@
 
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-50 flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-[10000] flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
@@ -63,24 +63,29 @@
 	<!-- Navigation (scrollable) -->
 	<div class="flex-1 space-y-2 overflow-y-auto p-4">
 		{#each NAVIGATION_ITEMS as item}
-			<a
-				href={item.href}
-				on:click={() => {
-					if (!desktop) dispatch('close');
-				}}
-				class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
+            <a
+                href={item.href}
+                on:click={() => {
+                    if (!desktop) dispatch('close');
+                }}
+                class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
 				item.href
 					? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
 					: item.protected && !$connected
 						? 'text-blue-400/60 hover:text-blue-300'
 						: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
-			>
-				<span>{item.name}</span>
-				{#if item.protected && !$connected}
-					<WalletIcon class="ml-auto h-5 w-5" />
-				{:else if activePath === item.href}
-					<div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
-				{/if}
+            >
+                <span class="flex items-center gap-2">
+                    {item.name}
+                    {#if item.name === 'Strategies'}
+                        <span class="rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-semibold text-yellow-400 uppercase tracking-wide">Alpha</span>
+                    {/if}
+                </span>
+                {#if item.protected && !$connected}
+                    <WalletIcon class="ml-auto h-5 w-5" />
+                {:else if activePath === item.href}
+                    <div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
+                {/if}
 			</a>
 		{/each}
 	</div>
@@ -91,10 +96,11 @@
 			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
 				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
 					<div class="text-sm font-semibold text-yellow-500">{$currentNetwork.name}</div>
-					{#if $connected}
-						<div class="text-xs text-gray-400 sm:ml-2">
-							{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}
-						</div>
+                        {#if $connected}
+                            <div class="text-xs text-gray-400 sm:ml-2">
+                                <span class="sm:hidden">…{$signerAddress?.slice(-6)}</span>
+                                <span class="hidden sm:inline">{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}</span>
+                            </div>
 					{:else}
 						<div class="text-xs text-gray-400 sm:ml-2">Not Connected</div>
 					{/if}

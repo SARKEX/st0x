@@ -34,6 +34,10 @@
 <div>
 	<!-- Strategies Content -->
 	<PageContainer>
+		<!-- Alpha banner -->
+		<div class="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 sm:mb-6">
+			<p class="text-sm text-yellow-400">This section is currently a work in progress.</p>
+		</div>
 		<!-- Strategy Type Selector -->
 		<div class="mb-4 flex flex-col gap-2 rounded-lg bg-white/5 p-1 sm:mb-6 sm:flex-row sm:gap-0">
 			{#each STRATEGY_TYPES as type}

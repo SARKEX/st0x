@@ -31,7 +31,7 @@
 
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-50 flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-[10000] flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
@@ -83,10 +83,11 @@
 			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
 				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
 					<div class="text-sm font-semibold text-yellow-500">{$currentNetwork.name}</div>
-					{#if $connected}
-						<div class="text-xs text-gray-400 sm:ml-2">
-							{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}
-						</div>
+                        {#if $connected}
+                            <div class="text-xs text-gray-400 sm:ml-2">
+                                <span class="sm:hidden">…{$signerAddress?.slice(-6)}</span>
+                                <span class="hidden sm:inline">{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}</span>
+                            </div>
 					{:else}
 						<div class="text-xs text-gray-400 sm:ml-2">Not Connected</div>
 					{/if}

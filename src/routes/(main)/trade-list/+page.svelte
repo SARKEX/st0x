@@ -342,13 +342,13 @@
 					<Table>
 						<thead>
 							<tr class="border-b border-white/10">
-								<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Stock</th>
-								<th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Price</th>
-								<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden sm:table-cell">On-Chain Price</th>
-								<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden md:table-cell">On-Chain Market Cap</th>
-								<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden lg:table-cell">On-Chain Supply</th>
-								<th class="px-4 py-3 text-left text-xs font-medium text-gray-400 hidden xl:table-cell">Holders</th>
-								<th class="px-4 py-3 text-center text-xs font-medium text-gray-400">Trade</th>
+								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400 sticky left-0 z-10 bg-gray-800">Stock</th>
+								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">Price</th>
+								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">On-Chain Price</th>
+								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">On-Chain Market Cap</th>
+								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">On-Chain Supply</th>
+								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">Holders</th>
+								<th class="px-2 py-2 sm:px-4 sm:py-3 text-center text-xs font-medium text-gray-400">Trade</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -365,7 +365,7 @@
 								{@const onChainPrice = parseFloat(token.price.toString())}
 								{@const onChainMarketCap = circulatingSupply * onChainPrice}
 								<tr>
-									<td class="px-4 py-3">
+									<td class="px-2 py-2 sm:px-4 sm:py-3 sticky left-0 bg-gray-800">
 										<TokenDisplay
 											logoUrl={ALL_TOKENS.find(
 												(s) => s.address.toLowerCase() === token.address.toLowerCase()
@@ -374,13 +374,13 @@
 											name={token.name}
 										/>
 									</td>
-									<td class="px-4 py-3">
+									<td class="px-2 py-2 sm:px-4 sm:py-3">
 										<div class="font-medium">${onChainPrice.toFixed(2)}</div>
 									</td>
-									<td class="px-4 py-3 hidden sm:table-cell">
+									<td class="px-2 py-2 sm:px-4 sm:py-3">
 										<div class="text-sm text-gray-500">TBD</div>
 									</td>
-									<td class="px-4 py-3 hidden md:table-cell">
+									<td class="px-2 py-2 sm:px-4 sm:py-3">
 										<div class="text-sm">
 											${onChainMarketCap >= 1000000
 												? `${(onChainMarketCap / 1000000).toFixed(2)}M`
@@ -389,17 +389,17 @@
 													: onChainMarketCap.toFixed(2)}
 										</div>
 									</td>
-									<td class="px-4 py-3 hidden lg:table-cell">
+									<td class="px-4 py-3">
 										<div class="text-sm">
 											{circulatingSupply >= 1000
 												? `${(circulatingSupply / 1000).toFixed(2)}K`
 												: circulatingSupply.toFixed(2)}
 										</div>
 									</td>
-									<td class="px-4 py-3 hidden xl:table-cell">
+									<td class="px-2 py-2 sm:px-4 sm:py-3">
 										<div class="text-sm">{token.totalHolders}</div>
 									</td>
-									<td class="px-4 py-3 text-center">
+									<td class="px-2 py-2 sm:px-4 sm:py-3 text-center">
 										<Button size="sm" variant="primary" on:click={() => goto(`/trade/${token.id}`)}
 											>Trade</Button
 										>

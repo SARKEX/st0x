@@ -355,28 +355,29 @@
 			<Table>
 				<thead>
 					<tr class="border-b border-white/10">
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-left">Network</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">TVL</th>
+						<th class="p-2 sm:p-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400 sticky left-0 z-10 bg-gray-800">Network</th>
+						<th class="p-2 sm:p-3 text-right text-xs font-medium uppercase tracking-wide text-gray-400">TVL</th>
 						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">ST0x</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right hidden sm:table-cell">Tokens Minted</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right hidden sm:table-cell">Tokens Redeemed</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right hidden md:table-cell">Tokens Circulating</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right hidden lg:table-cell">Unique Addresses</th>
+						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">Tokens Minted</th>
+						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">Tokens Redeemed</th>
+						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">Tokens Circulating</th>
+						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">Unique Addresses</th>
 						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">24H Volume</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right hidden xl:table-cell">7D Volume</th>
+						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-right">7D Volume</th>
 						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Status</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each networkStats as stats}
 						<tr>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm">
+							<td class="p-2 sm:p-3 sm:text-sm sticky left-0 bg-gray-800">
 								<div class="flex items-center gap-2 sm:gap-3">
-									<div
-										class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-800 text-sm font-bold sm:h-10 sm:w-10 sm:text-lg"
-									>
-										{stats.network.displayName.charAt(0)}
-									</div>
+                            <img
+                                src={stats.network.chainId === 42161 ? '/images/ARB.svg' : stats.network.chainId === 8453 ? '/images/BASE.svg' : '/images/ETH.svg'}
+                                alt={stats.network.displayName}
+                                class="h-8 w-8 sm:h-10 sm:w-10"
+                                class:rounded-full={stats.network.chainId !== 8453}
+                            />
 									<div class="min-w-0">
 										<div class="truncate font-medium">{stats.network.displayName}</div>
 										<div class="hidden text-xs text-gray-400 sm:block">{stats.network.name}</div>
@@ -386,16 +387,16 @@
 							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right font-medium text-green-400"
 									>${stats.tvl.toFixed(2)}</td>
 							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right">{stats.st0xCount}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right hidden sm:table-cell"
+							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right"
 									>{parseFloat(stats.tokensMinted).toFixed(2)}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right hidden sm:table-cell"
+							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right"
 									>{parseFloat(stats.tokensRedeemed).toFixed(2)}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right hidden md:table-cell"
+							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right"
 									>{parseFloat(stats.tokensCirculating).toFixed(2)}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right hidden lg:table-cell"
+							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right"
 									>{stats.uniqueAddresses}</td>
 							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right">{stats.dayVolume}</td>
-							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right hidden xl:table-cell"
+							<td class="p-2 text-xs sm:p-3 sm:text-sm text-right"
 									>{stats.weekVolume}</td>
 							<td class="p-2 text-xs sm:p-3 sm:text-sm text-center">
 								<div class="flex items-center justify-center gap-1 sm:gap-2">
@@ -437,19 +438,19 @@
 							<tr
 								class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
 							>
-								<th class="p-3">Token</th>
-								<th class="p-3 text-right">In Volume</th>
-								<th class="p-3 text-right">Out Volume</th>
-								<th class="p-3 text-right">Net Volume</th>
-								<th class="p-3 text-right">Total Volume</th>
-								<th class="p-3 text-right">USD Value</th>
-								<th class="p-3 text-right">Trades</th>
+								<th class="p-2 sm:p-3 sticky left-0 z-10 bg-gray-800">Token</th>
+								<th class="p-2 sm:p-3 text-right">In Volume</th>
+								<th class="p-2 sm:p-3 text-right">Out Volume</th>
+								<th class="p-2 sm:p-3 text-right">Net Volume</th>
+								<th class="p-2 sm:p-3 text-right">Total Volume</th>
+								<th class="p-2 sm:p-3 text-right">USD Value</th>
+								<th class="p-2 sm:p-3 text-right">Trades</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each tokenTradingData as token}
 								<tr class="border-b border-white/5 hover:bg-white/5">
-									<td class="p-3">
+									<td class="p-2 sm:p-3 sticky left-0 bg-gray-800">
 										<div class="flex items-center gap-3">
 											{#if token.logoUrl}
 												<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
@@ -460,26 +461,26 @@
 													{token.symbol?.charAt(0)}
 												</div>
 											{/if}
-											<div>
-												<div class="font-medium">{token.symbol}</div>
-												<div class="text-xs text-gray-400">{token.name}</div>
-											</div>
+                            <div>
+                                <div class="font-medium text-xs sm:text-sm">{token.symbol}</div>
+                                <div class="hidden sm:block text-[11px] text-gray-400">{token.name}</div>
+                            </div>
 										</div>
 									</td>
-									<td class="p-3 text-right">{parseFloat(token.inVolume).toFixed(6)}</td>
-									<td class="p-3 text-right">{parseFloat(token.outVolume).toFixed(6)}</td>
-									<td
-										class="p-3 text-right {parseFloat(token.netVolume) >= 0
-											? 'text-green-400'
-											: 'text-red-400'}"
-									>
-										{parseFloat(token.netVolume).toFixed(6)}
-									</td>
-									<td class="p-3 text-right text-yellow-400"
-										>{parseFloat(token.totalVolume).toFixed(6)}</td
-									>
-									<td class="p-3 text-right font-medium">{token.usdValue}</td>
-									<td class="p-3 text-right">{token.trades}</td>
+                            <td class="p-2 sm:p-3 text-right">{parseFloat(token.inVolume).toFixed(3)}</td>
+                            <td class="p-2 sm:p-3 text-right">{parseFloat(token.outVolume).toFixed(3)}</td>
+                            <td
+                                class="p-2 sm:p-3 text-right {parseFloat(token.netVolume) >= 0
+                                    ? 'text-green-400'
+                                    : 'text-red-400'}"
+                            >
+                                {parseFloat(token.netVolume).toFixed(3)}
+                            </td>
+                            <td class="p-2 sm:p-3 text-right text-yellow-400"
+                                >{parseFloat(token.totalVolume).toFixed(3)}</td
+                            >
+									<td class="p-2 sm:p-3 text-right font-medium">{token.usdValue}</td>
+									<td class="p-2 sm:p-3 text-right">{token.trades}</td>
 								</tr>
 							{/each}
 						</tbody>

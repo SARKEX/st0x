@@ -45,7 +45,7 @@
 </script>
 
 <div
-	class={'flex gap-2 border-b border-white/10 ' + className}
+	class={'flex gap-2 overflow-x-auto border-b border-white/10 ' + className}
 	role="tablist"
 	tabindex="0"
 	on:keydown={onKeydown}
@@ -57,7 +57,7 @@
 			aria-controls={`panel-${tab.id}`}
 			tabindex={activeId === tab.id ? 0 : -1}
 			on:click={() => setActive(tab.id)}
-			class={'border-b-2 px-4 py-2 text-sm font-medium transition-colors ' +
+			class={'border-b-2 px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ' +
 				(activeId === tab.id
 					? 'border-yellow-500 text-yellow-500'
 					: 'border-transparent text-gray-400 hover:text-white')}

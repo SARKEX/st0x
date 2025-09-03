@@ -445,7 +445,7 @@
 	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
-			<div class="hidden overflow-x-auto sm:block">
+			<div class="overflow-x-auto">
 				<table class="min-w-full text-sm text-gray-200">
 					<thead>
 						<tr>
@@ -529,20 +529,7 @@
 					</tbody>
 				</table>
 			</div>
-			<div class="mt-2 flex flex-col gap-2 sm:hidden">
-				{#each [selectedToken1, selectedToken2, selectedToken3, selectedToken4, selectedToken5, selectedToken6, selectedToken7] as token}
-					{#if hasValidPriceFeedId(token)}
-						<PythOracleRow {token} tokenQuotes={$tokenGlobalQuote} />
-					{:else}
-						<div class="rounded bg-gray-800/80 p-3 text-xs">
-							<div><span class="font-semibold">Token: </span>{token?.symbol ?? '-'}</div>
-							<div><span class="font-semibold">Oracle Price: </span>-</div>
-							<div><span class="font-semibold">Price Certainty: </span>-</div>
-							<div><span class="font-semibold">Off-chain: </span>-</div>
-						</div>
-					{/if}
-				{/each}
-			</div>
+			<!-- Removed mobile-only stacked cards; table above now scrolls on small screens -->
 		</div>
 
 		<div class={containerStyles.cardBordered}>

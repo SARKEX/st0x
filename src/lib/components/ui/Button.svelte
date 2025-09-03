@@ -27,7 +27,7 @@
 	{...$$restProps}
 	on:click={(e) => dispatch('click', e)}
 	data-testid={dataTestId}
-	class={'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors ' +
+	class={'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors min-h-10 ' +
 		'focus:outline-none focus:ring-2 focus:ring-yellow-500/30 disabled:cursor-not-allowed disabled:opacity-50 ' +
 		variantClass +
 		' ' +

@@ -22,6 +22,8 @@
 	import { containerStyles } from '$lib/utils/styles';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
+    import { onMount } from 'svelte';
+    import { slide, fade } from 'svelte/transition';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -39,6 +41,29 @@
 	// Tab state
 	let activeTab: 'fundamentals' | 'technical' | 'token' | 'mints-burns' = 'fundamentals';
 	let activeOrderType = 'limit';
+    let infoCollapsed = true;
+    let tradeCollapsed = true;
+    let tradeSectionEl: HTMLElement | null = null;
+    let tradeInView = false;
+    let observer: IntersectionObserver | null = null;
+    let priceDetailsCollapsed = true;
+
+    onMount(() => {
+        // Default: collapse price details on mobile, expand on larger screens
+        try {
+            priceDetailsCollapsed = typeof window !== 'undefined' ? window.innerWidth < 640 : true;
+        } catch {}
+        if (tradeSectionEl && 'IntersectionObserver' in window) {
+            observer = new IntersectionObserver(
+                (entries) => {
+                    tradeInView = entries.some((e) => e.isIntersecting);
+                },
+                { root: null, threshold: 0 }
+            );
+            observer.observe(tradeSectionEl);
+        }
+        return () => observer?.disconnect();
+    });
 
 	const TABS = [
 		{ id: 'fundamentals', label: 'Fundamentals' },
@@ -254,10 +279,10 @@
 		<!-- Header Section with Chart -->
 		<Section>
 			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-				<!-- Left: Price Info -->
-				<div>
-					<div class="mb-4">
-						<div class="flex items-center gap-3">
+                <!-- Left: Price Info -->
+                <div>
+                    <div class="mb-4">
+                        <div class="flex items-center gap-3">
 							<img
 								src={currentPythToken?.logoUrl || '/placeholder.png'}
 								alt={currentToken.symbol}
@@ -301,34 +326,60 @@
 						</div>
 					</div>
 
-					<div class="mt-4 grid grid-cols-2 gap-4 text-sm">
-						<div>
-							<span class="text-gray-400">Open</span>
-							<div class="font-medium">${globalQuote?.['02. open'] || 'N/A'}</div>
-						</div>
-						<div>
-							<span class="text-gray-400">Volume</span>
-							<div class="font-medium">
-								{globalQuote?.['06. volume']
-									? formatCompact(parseFloat(globalQuote['06. volume']))
-									: 'N/A'}
-							</div>
-						</div>
-						<div>
-							<span class="text-gray-400">Day Range</span>
-							<div class="font-medium">
-								${globalQuote?.['04. low'] || 'N/A'} - ${globalQuote?.['03. high'] || 'N/A'}
-							</div>
-						</div>
-						<div>
-							<span class="text-gray-400">Prev Close</span>
-							<div class="font-medium">${globalQuote?.['08. previous close'] || 'N/A'}</div>
-						</div>
-					</div>
-				</div>
+                    <div class="mt-4">
+                        <div class="mb-2 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-gray-300">Daily Stats</h3>
+                            <button
+                                class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
+                                aria-label={priceDetailsCollapsed ? 'Expand daily stats' : 'Collapse daily stats'}
+                                on:click={() => (priceDetailsCollapsed = !priceDetailsCollapsed)}
+                            >
+                                <svg
+                                    class="h-4 w-4 transition-transform duration-200 ease-out {priceDetailsCollapsed ? '' : 'rotate-180'}"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
+                        </div>
+                        {#if !priceDetailsCollapsed}
+                        <div in:fade|local out:fade|local>
+                        <div class="grid grid-cols-2 gap-4 text-sm" transition:slide|local>
+                            <div>
+                                <span class="text-gray-400">Open</span>
+                                <div class="font-medium">${globalQuote?.['02. open'] || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <span class="text-gray-400">Volume</span>
+                                <div class="font-medium">
+                                    {globalQuote?.['06. volume']
+                                        ? formatCompact(parseFloat(globalQuote['06. volume']))
+                                        : 'N/A'}
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-gray-400">Day Range</span>
+                                <div class="font-medium">
+                                    ${globalQuote?.['04. low'] || 'N/A'} - ${globalQuote?.['03. high'] || 'N/A'}
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-gray-400">Prev Close</span>
+                                <div class="font-medium">${globalQuote?.['08. previous close'] || 'N/A'}</div>
+                            </div>
+                        </div>
+                        </div>
+                        {/if}
+                    </div>
+                </div>
 
 				<!-- Right: Chart -->
-				<div class={`${containerStyles.cardBordered} h-80 sm:h-96 p-2`} style="display: flex; flex-direction: column;">
+				<div class={`${containerStyles.cardBordered} h-[55vw] min-h-56 max-h-96 sm:h-96 p-2`} style="display: flex; flex-direction: column;">
 					<div class="relative flex-1">
 						<Button
 							variant="ghost"
@@ -357,12 +408,35 @@
 			</div>
 		</Section>
 
-		<!-- Tabbed Information Section -->
-		<Section>
-			<TabNav className="mb-6" tabs={TABS} activeId={activeTab} on:change={onTabChange} />
+        <!-- Tabbed Information Section (collapsible) -->
+        <Section>
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-base font-semibold">Details</h2>
+                <button
+                    class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
+                    aria-label={infoCollapsed ? 'Expand details' : 'Collapse details'}
+                    on:click={() => (infoCollapsed = !infoCollapsed)}
+                >
+                    <svg
+                        class="h-4 w-4 transition-transform duration-200 ease-out {infoCollapsed ? '' : 'rotate-180'}"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M6 9l6 6 6-6" />
+                    </svg>
+                </button>
+            </div>
+            {#if !infoCollapsed}
+            <div in:fade|local out:fade|local>
+            <div transition:slide|local>
+                <TabNav className="mb-6" tabs={TABS} activeId={activeTab} on:change={onTabChange} />
 
-			<!-- Tab Content -->
-			{#if activeTab === 'fundamentals'}
+                <!-- Tab Content -->
+                {#if activeTab === 'fundamentals'}
 				<div
 					id="panel-fundamentals"
 					role="tabpanel"
@@ -437,7 +511,7 @@
 						<div class="col-span-full text-center text-gray-400">Loading fundamental data...</div>
 					{/if}
 				</div>
-			{:else if activeTab === 'technical'}
+            {:else if activeTab === 'technical'}
 				<div id="panel-technical" role="tabpanel" class="space-y-4">
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 						<!-- MACD -->
@@ -520,20 +594,32 @@
 						</p>
 					</div>
 				</div>
-			{:else if activeTab === 'token'}
+            {:else if activeTab === 'token'}
 				<div id="panel-token" role="tabpanel" class="space-y-4">
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<div class={containerStyles.cardBordered}>
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
-							<div class="space-y-3 text-sm">
-								<div class="flex justify-between">
-									<span class="text-gray-400">Address</span>
-									<ExternalLink
-										href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-										label={truncateAddress(currentToken.address)}
-										className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-									/>
-								</div>
+                            <div class="space-y-3 text-sm">
+                                <div class="flex justify-between items-center gap-2">
+                                    <span class="text-gray-400">Address</span>
+                                    <div>
+                                        <div class="sm:hidden">
+                                            <ExternalLink
+                                                href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+                                                label={currentToken.address}
+                                                truncate={{ start: 0, end: 6 }}
+                                                className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+                                            />
+                                        </div>
+                                        <div class="hidden sm:block">
+                                            <ExternalLink
+                                                href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+                                                label={truncateAddress(currentToken.address)}
+                                                className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Network</span>
 									<span>{$currentNetwork.displayName}</span>
@@ -577,7 +663,7 @@
 						</div>
 					</div>
 				</div>
-			{:else if activeTab === 'mints-burns'}
+            {:else if activeTab === 'mints-burns'}
 				<div id="panel-mints-burns" role="tabpanel" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 					<div class={containerStyles.cardBordered}>
 						<div class="mb-2 flex items-center justify-between">
@@ -598,9 +684,10 @@
 													>+ {formatUnits(BigInt(dep.amount), 18)} {currentToken.symbol}</span
 												>
 												<span class="mx-2 text-gray-500">•</span>
-												<span class="text-gray-400"
-													>{dep.emitter.address.slice(0, 8)}...{dep.emitter.address.slice(-6)}</span
-												>
+                                            <span class="text-gray-400">
+                                                <span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
+                                                <span class="hidden sm:inline">{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}</span>
+                                            </span>
 												<span class="mx-2 text-gray-500">•</span>
 												<span class="text-gray-400"
 													>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span
@@ -637,9 +724,10 @@
 													>− {formatUnits(BigInt(w.amount), 18)} {currentToken.symbol}</span
 												>
 												<span class="mx-2 text-gray-500">•</span>
-												<span class="text-gray-400"
-													>{w.emitter.address.slice(0, 8)}...{w.emitter.address.slice(-6)}</span
-												>
+                                            <span class="text-gray-400">
+                                                <span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
+                                                <span class="hidden sm:inline">{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}</span>
+                                            </span>
 												<span class="mx-2 text-gray-500">•</span>
 												<span class="text-gray-400"
 													>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span
@@ -765,13 +853,40 @@
 					</div>
 				</div>
 			{/if}
+			</div>
+			</div>
+		{/if}
 		</Section>
 
-		<!-- Trade Section -->
+		<!-- Trade Section (collapsible) -->
 		<Section>
-			<h2 class="mb-4 text-lg font-semibold">Trade {currentToken.symbol}</h2>
+			<!-- Anchor element for intersection observer -->
+			<div bind:this={tradeSectionEl} class="h-0 w-0 overflow-hidden"></div>
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Trade {currentToken.symbol}</h2>
+                <button
+                    class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
+                    aria-label={tradeCollapsed ? 'Expand trade panel' : 'Collapse trade panel'}
+                    on:click={() => (tradeCollapsed = !tradeCollapsed)}
+                >
+                    <svg
+                        class="h-4 w-4 transition-transform duration-200 ease-out {tradeCollapsed ? '' : 'rotate-180'}"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M6 9l6 6 6-6" />
+                    </svg>
+                </button>
+            </div>
 
-			<!-- Order Type Selector -->
+            {#if !tradeCollapsed}
+            <div in:fade|local out:fade|local>
+            <div transition:slide|local>
+            <!-- Order Type Selector -->
 			<div class="mb-4 flex gap-2 rounded-lg bg-white/5 p-1">
 				<Button
 					fullWidth={true}
@@ -816,7 +931,10 @@
 					<p class="text-center text-sm text-gray-400">Connect your wallet to start trading</p>
 				</div>
 			{/if}
-		</Section>
+            </div>
+            </div>
+            {/if}
+        </Section>
 	</div>
 
 	<Footer />

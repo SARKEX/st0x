@@ -49,8 +49,8 @@
 	}
 </script>
 
-<!-- Desktop Table Row -->
-<tr class="hidden sm:table-row">
+<!-- Unified Table Row (responsive) -->
+<tr>
 	{#if loading}
 		<td class="px-2 py-1" colspan="4">Loading...</td>
 	{:else if error}
@@ -71,42 +71,4 @@
 			{/if}
 		</td>
 	{/if}
-</tr>
-
-<!-- Mobile Card Row -->
-<tr class="sm:hidden">
-	<td class="p-2" colspan="4">
-		{#if loading}
-			<div class="text-xs">Loading...</div>
-		{:else if error}
-			<div class="p-2 text-xs text-red-400">{error}</div>
-		{:else if priceData}
-			<div class="flex flex-col gap-1 text-xs">
-				<div>
-					<span class="font-semibold">Token: </span>
-					<ExternalLink
-						href={`${$currentNetwork.blockExplorer}/address/${token.address}`}
-						label={token.symbol || ''}
-						className="underline"
-					/>
-				</div>
-				<div>
-					<span class="font-semibold">Oracle Price: </span>
-					{priceData.price.toFixed(5)}
-				</div>
-				<div>
-					<span class="font-semibold">Price Certainty: </span>
-					± {priceData.confidence.toFixed(5)}
-				</div>
-				<div>
-					<span class="font-semibold">Off-chain: </span>
-					{#if quotePrice}
-						${parseFloat(quotePrice).toFixed(5)}
-					{:else}
-						-
-					{/if}
-				</div>
-			</div>
-		{/if}
-	</td>
 </tr>
