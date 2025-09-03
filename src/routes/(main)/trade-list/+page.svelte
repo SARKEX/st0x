@@ -342,13 +342,28 @@
 					<Table>
 						<thead>
 							<tr class="border-b border-white/10">
-								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400 sticky left-0 z-10 bg-gray-800">Stock</th>
-								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">Price</th>
-								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">On-Chain Price</th>
-								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">On-Chain Market Cap</th>
-								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">On-Chain Supply</th>
-								<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">Holders</th>
-								<th class="px-2 py-2 sm:px-4 sm:py-3 text-center text-xs font-medium text-gray-400">Trade</th>
+								<th
+									class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+									>Stock</th
+								>
+								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+									>Price</th
+								>
+								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+									>On-Chain Price</th
+								>
+								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+									>On-Chain Market Cap</th
+								>
+								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+									>On-Chain Supply</th
+								>
+								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+									>Holders</th
+								>
+								<th class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+									>Trade</th
+								>
 							</tr>
 						</thead>
 						<tbody>
@@ -365,7 +380,7 @@
 								{@const onChainPrice = parseFloat(token.price.toString())}
 								{@const onChainMarketCap = circulatingSupply * onChainPrice}
 								<tr>
-									<td class="px-2 py-2 sm:px-4 sm:py-3 sticky left-0 bg-gray-800">
+									<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
 										<TokenDisplay
 											logoUrl={ALL_TOKENS.find(
 												(s) => s.address.toLowerCase() === token.address.toLowerCase()
@@ -399,7 +414,7 @@
 									<td class="px-2 py-2 sm:px-4 sm:py-3">
 										<div class="text-sm">{token.totalHolders}</div>
 									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3 text-center">
+									<td class="px-2 py-2 text-center sm:px-4 sm:py-3">
 										<Button size="sm" variant="primary" on:click={() => goto(`/trade/${token.id}`)}
 											>Trade</Button
 										>

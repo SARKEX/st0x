@@ -15,7 +15,7 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId, getBaseline } from '$lib/derivations';
-    import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
+	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	import { containerStyles } from '$lib/utils/styles';
 
@@ -34,17 +34,18 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const usdcToken = ALL_TOKENS.find((t) => t.symbol?.toUpperCase() === 'USDC');
 		selectedOutputToken = usdcToken || ALL_TOKENS[0];
-		selectedInputToken = (passedInputToken as unknown as Token) || selectedInputToken || ALL_TOKENS[0];
+		selectedInputToken =
+			(passedInputToken as unknown as Token) || selectedInputToken || ALL_TOKENS[0];
 	}
 
 	let selectedAmount: bigint = 0n;
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';
 	let selectedBaseline: string = '';
-    let selectedInitialRatio: string = '';
+	let selectedInitialRatio: string = '';
 
-    let inputVaultId: Hex | undefined;
-    let outputVaultId: Hex | undefined;
+	let inputVaultId: Hex | undefined;
+	let outputVaultId: Hex | undefined;
 
 	$: isInputTokenSameAsOutputToken =
 		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
@@ -98,34 +99,34 @@
 	};
 
 	// Calculate average price per period
-    $: avgPricePerPeriod =
-        selectedAmount && selectedPeriod
-            ? (
-                    parseFloat(formatUnits(selectedAmount, selectedOutputToken?.decimals || 18)) /
-                    parseFloat(selectedPeriod || '1')
-                ).toFixed(2)
-            : '0.00';
+	$: avgPricePerPeriod =
+		selectedAmount && selectedPeriod
+			? (
+					parseFloat(formatUnits(selectedAmount, selectedOutputToken?.decimals || 18)) /
+					parseFloat(selectedPeriod || '1')
+				).toFixed(2)
+			: '0.00';
 
-    // Default Start Price to oracle price when available and if user hasn't entered a value yet
-    $: if (hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
-        const feedId = (selectedInputToken as unknown as { priceFeedId?: string })?.priceFeedId;
-        if (feedId) {
-            fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`)
-                .then((r) => r.json())
-                .then((data) => {
-                    const parsed = data?.parsed?.[0]?.price;
-                    if (parsed) {
-                        const px = Number(parsed.price) * Math.pow(10, parsed.expo);
-                        if (!Number.isNaN(px) && !selectedInitialRatio) {
-                            selectedInitialRatio = String(px);
-                        }
-                    }
-                })
-                .catch(() => {
-                    // silently ignore; user can input manually
-                });
-        }
-    }
+	// Default Start Price to oracle price when available and if user hasn't entered a value yet
+	$: if (hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
+		const feedId = (selectedInputToken as unknown as { priceFeedId?: string })?.priceFeedId;
+		if (feedId) {
+			fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`)
+				.then((r) => r.json())
+				.then((data) => {
+					const parsed = data?.parsed?.[0]?.price;
+					if (parsed) {
+						const px = Number(parsed.price) * Math.pow(10, parsed.expo);
+						if (!Number.isNaN(px) && !selectedInitialRatio) {
+							selectedInitialRatio = String(px);
+						}
+					}
+				})
+				.catch(() => {
+					// silently ignore; user can input manually
+				});
+		}
+	}
 </script>
 
 {#if $currentNetwork && ALL_TOKENS.length > 0}
@@ -215,10 +216,10 @@
 		<!-- Price Settings -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div>
-        <div class="mb-2 block text-sm font-medium text-gray-300">
-            {selectedOrderType === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
-            <span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
-        </div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">
+					{selectedOrderType === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
+					<span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
+				</div>
 				<Input
 					aria-label="Floor Price"
 					type="number"
@@ -229,10 +230,10 @@
 				/>
 			</div>
 			<div>
-        <div class="mb-2 block text-sm font-medium text-gray-300">
-            Start Price
-            <span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
-        </div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">
+					Start Price
+					<span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
+				</div>
 				<Input
 					aria-label="Initial Ratio"
 					type="number"
@@ -250,56 +251,56 @@
 			<div class={containerStyles.cardBordered}>
 				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 				<div class="space-y-2 text-sm">
-				<div class="flex justify-between">
-					<span class="text-gray-400">Total Budget</span>
-					<span class="font-medium">
-						{#if selectedOrderType === 'Buy'}
-							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
-						{:else}
-							{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
-							{selectedInputToken.symbol}
-						{/if}
-					</span>
-				</div>
-				<div class="flex justify-between">
-					<span class="text-gray-400">Period</span>
-					<span class="font-medium">
-						Every {selectedPeriod || '0'}
-						{selectedPeriodUnit.toLowerCase()}
-					</span>
-				</div>
-				<div class="flex justify-between">
-					<span class="text-gray-400">Average per period</span>
-					<span class="font-medium">
-						{#if selectedOrderType === 'Buy'}
-							~{avgPricePerPeriod} USDC
-						{:else}
-							~{avgPricePerPeriod} {selectedInputToken.symbol}
-						{/if}
-					</span>
-				</div>
-				<div class="flex justify-between">
-					<span class="text-gray-400">Min trade size</span>
-					<span class="text-xs font-medium">
-						{#if selectedOrderType === 'Buy'}
-							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} USDC
-						{:else}
-							{minTradeAmount ? formatUnits(minTradeAmount, selectedInputToken.decimals) : '0'}
-							{selectedInputToken.symbol}
-						{/if}
-					</span>
-				</div>
-				<div class="flex justify-between">
-					<span class="text-gray-400">Max trade size</span>
-					<span class="text-xs font-medium">
-						{#if selectedOrderType === 'Buy'}
-							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} USDC
-						{:else}
-							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedInputToken.decimals) : '0'}
-							{selectedInputToken.symbol}
-						{/if}
-					</span>
-				</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Total Budget</span>
+						<span class="font-medium">
+							{#if selectedOrderType === 'Buy'}
+								{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
+							{:else}
+								{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
+								{selectedInputToken.symbol}
+							{/if}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Period</span>
+						<span class="font-medium">
+							Every {selectedPeriod || '0'}
+							{selectedPeriodUnit.toLowerCase()}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Average per period</span>
+						<span class="font-medium">
+							{#if selectedOrderType === 'Buy'}
+								~{avgPricePerPeriod} USDC
+							{:else}
+								~{avgPricePerPeriod} {selectedInputToken.symbol}
+							{/if}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Min trade size</span>
+						<span class="text-xs font-medium">
+							{#if selectedOrderType === 'Buy'}
+								{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{:else}
+								{minTradeAmount ? formatUnits(minTradeAmount, selectedInputToken.decimals) : '0'}
+								{selectedInputToken.symbol}
+							{/if}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Max trade size</span>
+						<span class="text-xs font-medium">
+							{#if selectedOrderType === 'Buy'}
+								{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{:else}
+								{maxTradeAmount ? formatUnits(maxTradeAmount, selectedInputToken.decimals) : '0'}
+								{selectedInputToken.symbol}
+							{/if}
+						</span>
+					</div>
 				</div>
 			</div>
 

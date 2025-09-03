@@ -27,24 +27,53 @@
 	<div class={`${containerStyles.cardBordered} space-y-4`}>
 		<Table class="rounded-lg bg-gray-800/80">
 			<thead>
-					<tr class="border-b border-white/10">
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Network</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Status</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Order ID</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Order Owner</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Order Book</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Last Updated</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Inputs</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Outputs</th>
-						<th class="p-2 text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3 text-center">Trades</th>
-					</tr>
+				<tr class="border-b border-white/10">
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Network</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Status</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Order ID</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Order Owner</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Order Book</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Last Updated</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Inputs</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Outputs</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Trades</th
+					>
+				</tr>
 			</thead>
 			<tbody>
 				{#each $query.data.pages as page}
 					{#each page.orders as { order, subgraphName }}
-							<tr class="border-b border-white/10 bg-gray-800/80 text-center text-gray-100 last:border-0">
-								<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">{subgraphName}</td>
-								<td class="px-4 py-3 text-gray-200">
+						<tr
+							class="border-b border-white/10 bg-gray-800/80 text-center text-gray-100 last:border-0"
+						>
+							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm">{subgraphName}</td>
+							<td class="px-4 py-3 text-gray-200">
 								<span
 									class={`rounded px-2 py-1 ${
 										order.active
@@ -54,50 +83,60 @@
 								>
 									{order.active ? 'Active' : 'Inactive'}
 								</span>
-								</td>
-                        <td class="p-2 text-xs sm:p-3 sm:text-sm">
-                            <!-- Mobile: last 6 only -->
-                            <div class="sm:hidden">
-                                <ExternalLink
-                                    href={`https://v2.raindex.finance/orders/${
-                                        $currentNetwork.id
-                                    }-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
-                                    label={order.orderHash.toString()}
-                                    truncate={{ start: 0, end: 6 }}
-                                    className="text-blue-400 hover:text-blue-300"
-                                />
-                            </div>
-                            <!-- Desktop: 6...4 -->
-                            <div class="hidden sm:block">
-                                <ExternalLink
-                                    href={`https://v2.raindex.finance/orders/${
-                                        $currentNetwork.id
-                                    }-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
-                                    label={order.orderHash.toString()}
-                                    truncate={{ start: 6, end: 4 }}
-                                    className="text-blue-400 hover:text-blue-300"
-                                />
-                            </div>
-                        </td>
-                        <td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">
-                            <span class="sm:hidden">…{order.owner.toString().slice(-6)}</span>
-                            <span class="hidden sm:inline">{order.owner.toString().slice(0, 6)}...{order.owner.toString().slice(-4)}</span>
-                        </td>
-                        <td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200">
-                            <span class="sm:hidden">…{order.orderbook.id.toString().slice(-6)}</span>
-                            <span class="hidden sm:inline">{order.orderbook.id.toString().slice(0, 6)}...{order.orderbook.id.toString().slice(-4)}</span>
-                        </td>
-								<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
+							</td>
+							<td class="p-2 text-xs sm:p-3 sm:text-sm">
+								<!-- Mobile: last 6 only -->
+								<div class="sm:hidden">
+									<ExternalLink
+										href={`https://v2.raindex.finance/orders/${
+											$currentNetwork.id
+										}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
+										label={order.orderHash.toString()}
+										truncate={{ start: 0, end: 6 }}
+										className="text-blue-400 hover:text-blue-300"
+									/>
+								</div>
+								<!-- Desktop: 6...4 -->
+								<div class="hidden sm:block">
+									<ExternalLink
+										href={`https://v2.raindex.finance/orders/${
+											$currentNetwork.id
+										}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
+										label={order.orderHash.toString()}
+										truncate={{ start: 6, end: 4 }}
+										className="text-blue-400 hover:text-blue-300"
+									/>
+								</div>
+							</td>
+							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm">
+								<span class="sm:hidden">…{order.owner.toString().slice(-6)}</span>
+								<span class="hidden sm:inline"
+									>{order.owner.toString().slice(0, 6)}...{order.owner.toString().slice(-4)}</span
+								>
+							</td>
+							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm">
+								<span class="sm:hidden">…{order.orderbook.id.toString().slice(-6)}</span>
+								<span class="hidden sm:inline"
+									>{order.orderbook.id.toString().slice(0, 6)}...{order.orderbook.id
+										.toString()
+										.slice(-4)}</span
+								>
+							</td>
+							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
 								>{new Date(
 									Number(order.addEvents[0].transaction.timestamp) * 1000
-								).toLocaleString()}</td>
-								<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
-									>{order.inputs.map((input) => input.token.symbol).join(', ')}</td>
-								<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
-									>{order.outputs.map((output) => output.token.symbol).join(', ')}</td>
-								<td class="p-2 text-xs sm:p-3 sm:text-sm text-gray-200"
-									>{order.trades.length > 99 ? '>99' : order.trades.length}</td>
-							</tr>
+								).toLocaleString()}</td
+							>
+							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
+								>{order.inputs.map((input) => input.token.symbol).join(', ')}</td
+							>
+							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
+								>{order.outputs.map((output) => output.token.symbol).join(', ')}</td
+							>
+							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
+								>{order.trades.length > 99 ? '>99' : order.trades.length}</td
+							>
+						</tr>
 					{/each}
 				{/each}
 			</tbody>

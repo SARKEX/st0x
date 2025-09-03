@@ -7,7 +7,6 @@
 	export let maxHeightVh: number = 80; // percentage of viewport height
 </script>
 
-
 {#if show}
 	<button
 		type="button"

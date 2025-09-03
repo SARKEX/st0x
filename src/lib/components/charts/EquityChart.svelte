@@ -8,13 +8,13 @@
 	// If provided, chart uses this fixed height; otherwise fills container height
 	export let height: number | undefined = undefined;
 	// When true, don't trim series; include all returned data
-export let fullRange: boolean = false;
-// When provided, show exactly the last `barCount` points
-export let barCount: number | undefined = undefined;
-// Align right edge to current time/market close by adding right offset
-export let alignToNow: boolean = false;
-// Accept interval as a string to avoid template casts in consumers
-export let interval: string | undefined = undefined;
+	export let fullRange: boolean = false;
+	// When provided, show exactly the last `barCount` points
+	export let barCount: number | undefined = undefined;
+	// Align right edge to current time/market close by adding right offset
+	export let alignToNow: boolean = false;
+	// Accept interval as a string to avoid template casts in consumers
+	export let interval: string | undefined = undefined;
 
 	let containerEl: HTMLDivElement | null = null;
 	let chart: IChartApi | null = null;
@@ -172,9 +172,9 @@ export let interval: string | undefined = undefined;
 		return missingBars;
 	}
 
-let ro: ResizeObserver | null = null;
+	let ro: ResizeObserver | null = null;
 
-onMount(() => {
+	onMount(() => {
 		if (!containerEl) return;
 		chart = createChart(containerEl, {
 			layout: {
@@ -252,15 +252,15 @@ onMount(() => {
 			}
 		}
 		window.addEventListener('resize', resize);
-    // Resize when the container itself changes size (e.g., modal size changes)
-    if (window.ResizeObserver && containerEl) {
-        ro = new ResizeObserver(() => resize());
-        ro.observe(containerEl);
-    }
-});
+		// Resize when the container itself changes size (e.g., modal size changes)
+		if (window.ResizeObserver && containerEl) {
+			ro = new ResizeObserver(() => resize());
+			ro.observe(containerEl);
+		}
+	});
 
 	$: if (series && chart) {
-	const next = parseSeries(timeseriesData);
+		const next = parseSeries(timeseriesData);
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		series.setData(next as any);
 		if (next.length > 0) {
@@ -276,14 +276,14 @@ onMount(() => {
 		}
 	}
 
-onDestroy(() => {
-    window.removeEventListener('resize', resize);
-    ro?.disconnect();
-    if (chart) {
-        chart.remove();
-        chart = null;
-        series = null;
-    }
+	onDestroy(() => {
+		window.removeEventListener('resize', resize);
+		ro?.disconnect();
+		if (chart) {
+			chart.remove();
+			chart = null;
+			series = null;
+		}
 	});
 </script>
 

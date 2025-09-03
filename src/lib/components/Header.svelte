@@ -41,7 +41,11 @@
 						></path>
 					</svg>
 				</Button>
-				<a href="/trade-list" aria-label="Go to trade list" class="hidden md:flex items-center gap-2">
+				<a
+					href="/trade-list"
+					aria-label="Go to trade list"
+					class="hidden items-center gap-2 md:flex"
+				>
 					<img
 						src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
 						alt="ST0x Logo"

@@ -318,10 +318,10 @@
 			<Section>
 				<div class="mb-6">
 					<h1 class="text-2xl font-bold">My Dashboard</h1>
-                    <p class="text-gray-400">
-                        <span class="sm:hidden">…{($signerAddress || '').slice(-6)}</span>
-                        <span class="hidden sm:inline">{truncateAddress($signerAddress || '')}</span>
-                    </p>
+					<p class="text-gray-400">
+						<span class="sm:hidden">…{($signerAddress || '').slice(-6)}</span>
+						<span class="hidden sm:inline">{truncateAddress($signerAddress || '')}</span>
+					</p>
 				</div>
 
 				<!-- Overview Stats -->
@@ -382,21 +382,39 @@
 						<LoadingSpinner variant="inline" size="md" text="Loading holdings..." />
 					{:else if $holdingsQuery.data && $holdingsQuery.data.length > 0}
 						<div class="overflow-x-auto">
-						<Table>
-							<thead>
-								<tr class="border-b border-white/10">
-									<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400 sticky left-0 z-10 bg-gray-800">Token</th>
-									<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">Balance</th>
-									<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">Price</th>
-									<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">Value</th>
-									<th class="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-400">24h</th>
-									<th class="px-2 py-2 sm:px-4 sm:py-3 text-center text-xs font-medium text-gray-400">Actions</th>
-								</tr>
-							</thead>
-							<tbody>
+							<Table>
+								<thead>
+									<tr class="border-b border-white/10">
+										<th
+											class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											>Token</th
+										>
+										<th
+											class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											>Balance</th
+										>
+										<th
+											class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											>Price</th
+										>
+										<th
+											class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											>Value</th
+										>
+										<th
+											class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											>24h</th
+										>
+										<th
+											class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											>Actions</th
+										>
+									</tr>
+								</thead>
+								<tbody>
 									{#each $holdingsQuery.data as holding}
 										<tr>
-											<td class="px-2 py-2 sm:px-4 sm:py-3 sticky left-0 bg-gray-800">
+											<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
 												<TokenDisplay
 													logoUrl={ALL_TOKENS.find(
 														(s) => s.address.toLowerCase() === holding.address.toLowerCase()
@@ -406,9 +424,12 @@
 												/>
 											</td>
 											<td class="px-2 py-2 sm:px-4 sm:py-3"
-												>{parseFloat(holding.balance).toFixed(4)}</td>
+												>{parseFloat(holding.balance).toFixed(4)}</td
+											>
 											<td class="px-2 py-2 sm:px-4 sm:py-3">${holding.price.toFixed(2)}</td>
-											<td class="px-2 py-2 sm:px-4 sm:py-3 font-medium">${holding.value.toFixed(2)}</td>
+											<td class="px-2 py-2 font-medium sm:px-4 sm:py-3"
+												>${holding.value.toFixed(2)}</td
+											>
 											<td class="px-2 py-2 sm:px-4 sm:py-3">
 												<span
 													class={holding.priceChangePercent >= 0

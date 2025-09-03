@@ -52,15 +52,20 @@
 
 <svelte:window on:click={handleClickOutside} />
 
-<div class="network-selector relative z-[10000] shrink-0 inline-block">
-    <button
-        on:click={toggleDropdown}
-        class="flex items-center gap-2 rounded-lg border border-white/10 bg-gray-700/80 px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium text-white transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-600/80 active:scale-95 min-h-10"
-    >
-        <div class="flex items-center gap-2">
-            <img src={getChainLogo($currentNetwork)} alt={$currentNetwork.displayName} class="h-4 w-4" class:rounded-full={$currentNetwork.chainId !== 8453} />
-            <span class="hidden sm:inline">{$currentNetwork.displayName}</span>
-        </div>
+<div class="network-selector relative z-[10000] inline-block shrink-0">
+	<button
+		on:click={toggleDropdown}
+		class="flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-gray-700/80 px-2 py-1 text-xs font-medium text-white transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-600/80 active:scale-95 sm:px-3 sm:py-2 sm:text-sm"
+	>
+		<div class="flex items-center gap-2">
+			<img
+				src={getChainLogo($currentNetwork)}
+				alt={$currentNetwork.displayName}
+				class="h-4 w-4"
+				class:rounded-full={$currentNetwork.chainId !== 8453}
+			/>
+			<span class="hidden sm:inline">{$currentNetwork.displayName}</span>
+		</div>
 		<span class="text-xs transition-transform duration-200" class:rotate-180={isOpen}>▼</span>
 	</button>
 
@@ -87,7 +92,12 @@
 							? 'bg-yellow-500/20'
 							: ''}"
 					>
-                    <img src={getChainLogo(network)} alt={network.displayName} class="h-4 w-4" class:rounded-full={network.chainId !== 8453} />
+						<img
+							src={getChainLogo(network)}
+							alt={network.displayName}
+							class="h-4 w-4"
+							class:rounded-full={network.chainId !== 8453}
+						/>
 						<div class="flex flex-col items-start">
 							<span class="font-medium">{network.displayName}</span>
 							<span class="text-xs text-gray-400">{network.currencySymbol}</span>

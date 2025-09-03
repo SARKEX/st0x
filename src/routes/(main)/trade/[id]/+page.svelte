@@ -22,8 +22,8 @@
 	import { containerStyles } from '$lib/utils/styles';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
-    import { onMount } from 'svelte';
-    import { slide, fade } from 'svelte/transition';
+	import { onMount } from 'svelte';
+	import { slide, fade } from 'svelte/transition';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -41,29 +41,28 @@
 	// Tab state
 	let activeTab: 'fundamentals' | 'technical' | 'token' | 'mints-burns' = 'fundamentals';
 	let activeOrderType = 'limit';
-    let infoCollapsed = true;
-    let tradeCollapsed = true;
-    let tradeSectionEl: HTMLElement | null = null;
-    let tradeInView = false;
-    let observer: IntersectionObserver | null = null;
-    let priceDetailsCollapsed = true;
+	let infoCollapsed = true;
+	let tradeCollapsed = true;
+	let tradeSectionEl: HTMLElement | null = null;
+	let observer: IntersectionObserver | null = null;
+	let priceDetailsCollapsed = true;
 
-    onMount(() => {
-        // Default: collapse price details on mobile, expand on larger screens
-        try {
-            priceDetailsCollapsed = typeof window !== 'undefined' ? window.innerWidth < 640 : true;
-        } catch {}
-        if (tradeSectionEl && 'IntersectionObserver' in window) {
-            observer = new IntersectionObserver(
-                (entries) => {
-                    tradeInView = entries.some((e) => e.isIntersecting);
-                },
-                { root: null, threshold: 0 }
-            );
-            observer.observe(tradeSectionEl);
-        }
-        return () => observer?.disconnect();
-    });
+	onMount(() => {
+		// Default: collapse price details on mobile, expand on larger screens
+		if (typeof window !== 'undefined') {
+			priceDetailsCollapsed = window.innerWidth < 640;
+		}
+		if (tradeSectionEl && typeof window !== 'undefined' && 'IntersectionObserver' in window) {
+			observer = new IntersectionObserver(
+				() => {
+					// no-op; previously updated view state
+				},
+				{ root: null, threshold: 0 }
+			);
+			observer.observe(tradeSectionEl);
+		}
+		return () => observer?.disconnect();
+	});
 
 	const TABS = [
 		{ id: 'fundamentals', label: 'Fundamentals' },
@@ -279,10 +278,10 @@
 		<!-- Header Section with Chart -->
 		<Section>
 			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <!-- Left: Price Info -->
-                <div>
-                    <div class="mb-4">
-                        <div class="flex items-center gap-3">
+				<!-- Left: Price Info -->
+				<div>
+					<div class="mb-4">
+						<div class="flex items-center gap-3">
 							<img
 								src={currentPythToken?.logoUrl || '/placeholder.png'}
 								alt={currentToken.symbol}
@@ -326,60 +325,65 @@
 						</div>
 					</div>
 
-                    <div class="mt-4">
-                        <div class="mb-2 flex items-center justify-between">
-                            <h3 class="text-sm font-semibold text-gray-300">Daily Stats</h3>
-                            <button
-                                class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
-                                aria-label={priceDetailsCollapsed ? 'Expand daily stats' : 'Collapse daily stats'}
-                                on:click={() => (priceDetailsCollapsed = !priceDetailsCollapsed)}
-                            >
-                                <svg
-                                    class="h-4 w-4 transition-transform duration-200 ease-out {priceDetailsCollapsed ? '' : 'rotate-180'}"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                >
-                                    <path d="M6 9l6 6 6-6" />
-                                </svg>
-                            </button>
-                        </div>
-                        {#if !priceDetailsCollapsed}
-                        <div in:fade|local out:fade|local>
-                        <div class="grid grid-cols-2 gap-4 text-sm" transition:slide|local>
-                            <div>
-                                <span class="text-gray-400">Open</span>
-                                <div class="font-medium">${globalQuote?.['02. open'] || 'N/A'}</div>
-                            </div>
-                            <div>
-                                <span class="text-gray-400">Volume</span>
-                                <div class="font-medium">
-                                    {globalQuote?.['06. volume']
-                                        ? formatCompact(parseFloat(globalQuote['06. volume']))
-                                        : 'N/A'}
-                                </div>
-                            </div>
-                            <div>
-                                <span class="text-gray-400">Day Range</span>
-                                <div class="font-medium">
-                                    ${globalQuote?.['04. low'] || 'N/A'} - ${globalQuote?.['03. high'] || 'N/A'}
-                                </div>
-                            </div>
-                            <div>
-                                <span class="text-gray-400">Prev Close</span>
-                                <div class="font-medium">${globalQuote?.['08. previous close'] || 'N/A'}</div>
-                            </div>
-                        </div>
-                        </div>
-                        {/if}
-                    </div>
-                </div>
+					<div class="mt-4">
+						<div class="mb-2 flex items-center justify-between">
+							<h3 class="text-sm font-semibold text-gray-300">Daily Stats</h3>
+							<button
+								class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
+								aria-label={priceDetailsCollapsed ? 'Expand daily stats' : 'Collapse daily stats'}
+								on:click={() => (priceDetailsCollapsed = !priceDetailsCollapsed)}
+							>
+								<svg
+									class="h-4 w-4 transition-transform duration-200 ease-out {priceDetailsCollapsed
+										? ''
+										: 'rotate-180'}"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M6 9l6 6 6-6" />
+								</svg>
+							</button>
+						</div>
+						{#if !priceDetailsCollapsed}
+							<div in:fade|local out:fade|local>
+								<div class="grid grid-cols-2 gap-4 text-sm" transition:slide|local>
+									<div>
+										<span class="text-gray-400">Open</span>
+										<div class="font-medium">${globalQuote?.['02. open'] || 'N/A'}</div>
+									</div>
+									<div>
+										<span class="text-gray-400">Volume</span>
+										<div class="font-medium">
+											{globalQuote?.['06. volume']
+												? formatCompact(parseFloat(globalQuote['06. volume']))
+												: 'N/A'}
+										</div>
+									</div>
+									<div>
+										<span class="text-gray-400">Day Range</span>
+										<div class="font-medium">
+											${globalQuote?.['04. low'] || 'N/A'} - ${globalQuote?.['03. high'] || 'N/A'}
+										</div>
+									</div>
+									<div>
+										<span class="text-gray-400">Prev Close</span>
+										<div class="font-medium">${globalQuote?.['08. previous close'] || 'N/A'}</div>
+									</div>
+								</div>
+							</div>
+						{/if}
+					</div>
+				</div>
 
 				<!-- Right: Chart -->
-				<div class={`${containerStyles.cardBordered} h-[55vw] min-h-56 max-h-96 sm:h-96 p-2`} style="display: flex; flex-direction: column;">
+				<div
+					class={`${containerStyles.cardBordered} h-[55vw] max-h-96 min-h-56 p-2 sm:h-96`}
+					style="display: flex; flex-direction: column;"
+				>
 					<div class="relative flex-1">
 						<Button
 							variant="ghost"
@@ -389,7 +393,12 @@
 							on:click={openChartModal}
 						>
 							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 16v4h-4M4 20l6-6M20 4l-6 6" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M4 8V4h4M20 16v4h-4M4 20l6-6M20 4l-6 6"
+								/>
 							</svg>
 						</Button>
 						{#if intradayData?.error === 'API_LIMIT'}
@@ -408,533 +417,569 @@
 			</div>
 		</Section>
 
-        <!-- Tabbed Information Section (collapsible) -->
-        <Section>
-            <div class="mb-3 flex items-center justify-between">
-                <h2 class="text-base font-semibold">Details</h2>
-                <button
-                    class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
-                    aria-label={infoCollapsed ? 'Expand details' : 'Collapse details'}
-                    on:click={() => (infoCollapsed = !infoCollapsed)}
-                >
-                    <svg
-                        class="h-4 w-4 transition-transform duration-200 ease-out {infoCollapsed ? '' : 'rotate-180'}"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    >
-                        <path d="M6 9l6 6 6-6" />
-                    </svg>
-                </button>
-            </div>
-            {#if !infoCollapsed}
-            <div in:fade|local out:fade|local>
-            <div transition:slide|local>
-                <TabNav className="mb-6" tabs={TABS} activeId={activeTab} on:change={onTabChange} />
-
-                <!-- Tab Content -->
-                {#if activeTab === 'fundamentals'}
-				<div
-					id="panel-fundamentals"
-					role="tabpanel"
-					class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
+		<!-- Tabbed Information Section (collapsible) -->
+		<Section>
+			<div class="mb-3 flex items-center justify-between">
+				<h2 class="text-base font-semibold">Details</h2>
+				<button
+					class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
+					aria-label={infoCollapsed ? 'Expand details' : 'Collapse details'}
+					on:click={() => (infoCollapsed = !infoCollapsed)}
 				>
-					{#if overview && Object.keys(overview).length > 0}
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">P/E Ratio</div>
-							<div class="text-lg font-semibold">{overview.PERatio || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">Forward P/E</div>
-							<div class="text-lg font-semibold">{overview.ForwardPE || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">PEG Ratio</div>
-							<div class="text-lg font-semibold">{overview.PEGRatio || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">P/B Ratio</div>
-							<div class="text-lg font-semibold">{overview.PriceToBookRatio || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">Market Cap</div>
-							<div class="text-lg font-semibold">
-								{overview.MarketCapitalization
-									? formatCompact(parseFloat(overview.MarketCapitalization))
-									: 'N/A'}
-							</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">EPS</div>
-							<div class="text-lg font-semibold">${overview.EPS || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">Dividend Yield</div>
-							<div class="text-lg font-semibold">
-								{overview.DividendYield
-									? (parseFloat(overview.DividendYield) * 100).toFixed(2) + '%'
-									: 'N/A'}
-							</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">Beta</div>
-							<div class="text-lg font-semibold">{overview.Beta || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">52W High</div>
-							<div class="text-lg font-semibold">${overview['52WeekHigh'] || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">52W Low</div>
-							<div class="text-lg font-semibold">${overview['52WeekLow'] || 'N/A'}</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">Profit Margin</div>
-							<div class="text-lg font-semibold">
-								{overview.ProfitMargin
-									? (parseFloat(overview.ProfitMargin) * 100).toFixed(2) + '%'
-									: 'N/A'}
-							</div>
-						</div>
-						<div class={`${containerStyles.cardBordered} p-3`}>
-							<div class="text-xs text-gray-400">ROE</div>
-							<div class="text-lg font-semibold">
-								{overview.ReturnOnEquityTTM
-									? (parseFloat(overview.ReturnOnEquityTTM) * 100).toFixed(2) + '%'
-									: 'N/A'}
-							</div>
-						</div>
-					{:else}
-						<div class="col-span-full text-center text-gray-400">Loading fundamental data...</div>
-					{/if}
-				</div>
-            {:else if activeTab === 'technical'}
-				<div id="panel-technical" role="tabpanel" class="space-y-4">
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-						<!-- MACD -->
-						<div class={containerStyles.cardBordered}>
-							<h3 class="mb-3 font-semibold">MACD</h3>
-							{#if latestMACD}
-								<div class="space-y-2 text-sm">
-									<div class="flex justify-between">
-										<span class="text-gray-400">MACD</span>
-										<span class="font-medium">{parseFloat(latestMACD.MACD).toFixed(4)}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Signal</span>
-										<span class="font-medium">{parseFloat(latestMACD.MACD_Signal).toFixed(4)}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Histogram</span>
-										<span
-											class="font-medium {parseFloat(latestMACD.MACD_Hist) >= 0
-												? 'text-green-500'
-												: 'text-red-500'}"
-										>
-											{parseFloat(latestMACD.MACD_Hist).toFixed(4)}
-										</span>
-									</div>
-								</div>
-							{:else}
-								<div class="text-sm text-gray-400">Loading...</div>
-							{/if}
-						</div>
+					<svg
+						class="h-4 w-4 transition-transform duration-200 ease-out {infoCollapsed
+							? ''
+							: 'rotate-180'}"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M6 9l6 6 6-6" />
+					</svg>
+				</button>
+			</div>
+			{#if !infoCollapsed}
+				<div in:fade|local out:fade|local>
+					<div transition:slide|local>
+						<TabNav className="mb-6" tabs={TABS} activeId={activeTab} on:change={onTabChange} />
 
-						<!-- RSI -->
-						<div class={containerStyles.cardBordered}>
-							<h3 class="mb-3 font-semibold">RSI (14)</h3>
-							{#if latestRSI}
-								<div class="space-y-2">
-									<div
-										class="text-2xl font-bold {parseFloat(latestRSI.RSI) > 70
-											? 'text-red-500'
-											: parseFloat(latestRSI.RSI) < 30
-												? 'text-green-500'
-												: 'text-white'}"
-									>
-										{parseFloat(latestRSI.RSI).toFixed(2)}
+						<!-- Tab Content -->
+						{#if activeTab === 'fundamentals'}
+							<div
+								id="panel-fundamentals"
+								role="tabpanel"
+								class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
+							>
+								{#if overview && Object.keys(overview).length > 0}
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">P/E Ratio</div>
+										<div class="text-lg font-semibold">{overview.PERatio || 'N/A'}</div>
 									</div>
-									<div class="text-xs text-gray-400">
-										{parseFloat(latestRSI.RSI) > 70
-											? 'Overbought'
-											: parseFloat(latestRSI.RSI) < 30
-												? 'Oversold'
-												: 'Neutral'}
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">Forward P/E</div>
+										<div class="text-lg font-semibold">{overview.ForwardPE || 'N/A'}</div>
 									</div>
-								</div>
-							{:else}
-								<div class="text-sm text-gray-400">Loading...</div>
-							{/if}
-						</div>
-
-						<!-- OBV -->
-						<div class={containerStyles.cardBordered}>
-							<h3 class="mb-3 font-semibold">OBV</h3>
-							{#if latestOBV}
-								<div class="space-y-2">
-									<div class="text-lg font-bold">
-										{latestOBV.OBV ? formatCompact(parseFloat(latestOBV.OBV)) : 'N/A'}
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">PEG Ratio</div>
+										<div class="text-lg font-semibold">{overview.PEGRatio || 'N/A'}</div>
 									</div>
-									<div class="text-xs text-gray-400">On-Balance Volume</div>
-								</div>
-							{:else}
-								<div class="text-sm text-gray-400">Loading...</div>
-							{/if}
-						</div>
-					</div>
-
-					<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
-						<p class="text-sm text-yellow-400">
-							Technical indicators are calculated using daily price data. MACD uses 12-day and
-							26-day exponential moving averages. RSI is calculated over a 14-day period. Values
-							update daily after market close.
-						</p>
-					</div>
-				</div>
-            {:else if activeTab === 'token'}
-				<div id="panel-token" role="tabpanel" class="space-y-4">
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-						<div class={containerStyles.cardBordered}>
-							<h3 class="mb-3 font-semibold">Contract Information</h3>
-                            <div class="space-y-3 text-sm">
-                                <div class="flex justify-between items-center gap-2">
-                                    <span class="text-gray-400">Address</span>
-                                    <div>
-                                        <div class="sm:hidden">
-                                            <ExternalLink
-                                                href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-                                                label={currentToken.address}
-                                                truncate={{ start: 0, end: 6 }}
-                                                className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-                                            />
-                                        </div>
-                                        <div class="hidden sm:block">
-                                            <ExternalLink
-                                                href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-                                                label={truncateAddress(currentToken.address)}
-                                                className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Network</span>
-									<span>{$currentNetwork.displayName}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Symbol</span>
-									<span>{currentToken.symbol}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Decimals</span>
-									<span>18</span>
-								</div>
-								<div class="flex items-center justify-between">
-									<span class="text-gray-400">Proofs</span>
-									<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
-										View proofs
-									</a>
-								</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">P/B Ratio</div>
+										<div class="text-lg font-semibold">{overview.PriceToBookRatio || 'N/A'}</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">Market Cap</div>
+										<div class="text-lg font-semibold">
+											{overview.MarketCapitalization
+												? formatCompact(parseFloat(overview.MarketCapitalization))
+												: 'N/A'}
+										</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">EPS</div>
+										<div class="text-lg font-semibold">${overview.EPS || 'N/A'}</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">Dividend Yield</div>
+										<div class="text-lg font-semibold">
+											{overview.DividendYield
+												? (parseFloat(overview.DividendYield) * 100).toFixed(2) + '%'
+												: 'N/A'}
+										</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">Beta</div>
+										<div class="text-lg font-semibold">{overview.Beta || 'N/A'}</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">52W High</div>
+										<div class="text-lg font-semibold">${overview['52WeekHigh'] || 'N/A'}</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">52W Low</div>
+										<div class="text-lg font-semibold">${overview['52WeekLow'] || 'N/A'}</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">Profit Margin</div>
+										<div class="text-lg font-semibold">
+											{overview.ProfitMargin
+												? (parseFloat(overview.ProfitMargin) * 100).toFixed(2) + '%'
+												: 'N/A'}
+										</div>
+									</div>
+									<div class={`${containerStyles.cardBordered} p-3`}>
+										<div class="text-xs text-gray-400">ROE</div>
+										<div class="text-lg font-semibold">
+											{overview.ReturnOnEquityTTM
+												? (parseFloat(overview.ReturnOnEquityTTM) * 100).toFixed(2) + '%'
+												: 'N/A'}
+										</div>
+									</div>
+								{:else}
+									<div class="col-span-full text-center text-gray-400">
+										Loading fundamental data...
+									</div>
+								{/if}
 							</div>
-						</div>
-						<div class={containerStyles.cardBordered}>
-							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
-							<div class="space-y-3 text-sm">
-								<div class="flex justify-between">
-									<span class="text-gray-400">Total Supply</span>
-									<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">On-Chain Market Cap</span>
-									<span>${marketCap}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Holders</span>
-									<span>{currentToken.tokenHolders.length}</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Total Transfers</span>
-									<span>{currentToken.shareTransfers.length}</span>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-            {:else if activeTab === 'mints-burns'}
-				<div id="panel-mints-burns" role="tabpanel" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<div class={containerStyles.cardBordered}>
-						<div class="mb-2 flex items-center justify-between">
-							<h3 class="font-semibold">Latest Mints</h3>
-							<ExternalLink
-								href="https://portal.s01issuer.com/metrics"
-								label="View All"
-								className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
-							/>
-						</div>
-						{#if currentToken?.deposits?.length}
-							<div class="space-y-1">
-								{#each currentToken.deposits.slice(0, 5) as dep}
-									<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
-										<div class="flex items-center justify-between gap-3 text-xs">
-											<div class="min-w-0 truncate">
-												<span class="font-medium text-green-400"
-													>+ {formatUnits(BigInt(dep.amount), 18)} {currentToken.symbol}</span
-												>
-												<span class="mx-2 text-gray-500">•</span>
-                                            <span class="text-gray-400">
-                                                <span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
-                                                <span class="hidden sm:inline">{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}</span>
-                                            </span>
-												<span class="mx-2 text-gray-500">•</span>
-												<span class="text-gray-400"
-													>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span
-												>
+						{:else if activeTab === 'technical'}
+							<div id="panel-technical" role="tabpanel" class="space-y-4">
+								<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+									<!-- MACD -->
+									<div class={containerStyles.cardBordered}>
+										<h3 class="mb-3 font-semibold">MACD</h3>
+										{#if latestMACD}
+											<div class="space-y-2 text-sm">
+												<div class="flex justify-between">
+													<span class="text-gray-400">MACD</span>
+													<span class="font-medium">{parseFloat(latestMACD.MACD).toFixed(4)}</span>
+												</div>
+												<div class="flex justify-between">
+													<span class="text-gray-400">Signal</span>
+													<span class="font-medium"
+														>{parseFloat(latestMACD.MACD_Signal).toFixed(4)}</span
+													>
+												</div>
+												<div class="flex justify-between">
+													<span class="text-gray-400">Histogram</span>
+													<span
+														class="font-medium {parseFloat(latestMACD.MACD_Hist) >= 0
+															? 'text-green-500'
+															: 'text-red-500'}"
+													>
+														{parseFloat(latestMACD.MACD_Hist).toFixed(4)}
+													</span>
+												</div>
 											</div>
-											<div class="flex flex-shrink-0 items-center gap-2">
-												<TxLink hash={dep.transaction.id} />
+										{:else}
+											<div class="text-sm text-gray-400">Loading...</div>
+										{/if}
+									</div>
+
+									<!-- RSI -->
+									<div class={containerStyles.cardBordered}>
+										<h3 class="mb-3 font-semibold">RSI (14)</h3>
+										{#if latestRSI}
+											<div class="space-y-2">
+												<div
+													class="text-2xl font-bold {parseFloat(latestRSI.RSI) > 70
+														? 'text-red-500'
+														: parseFloat(latestRSI.RSI) < 30
+															? 'text-green-500'
+															: 'text-white'}"
+												>
+													{parseFloat(latestRSI.RSI).toFixed(2)}
+												</div>
+												<div class="text-xs text-gray-400">
+													{parseFloat(latestRSI.RSI) > 70
+														? 'Overbought'
+														: parseFloat(latestRSI.RSI) < 30
+															? 'Oversold'
+															: 'Neutral'}
+												</div>
+											</div>
+										{:else}
+											<div class="text-sm text-gray-400">Loading...</div>
+										{/if}
+									</div>
+
+									<!-- OBV -->
+									<div class={containerStyles.cardBordered}>
+										<h3 class="mb-3 font-semibold">OBV</h3>
+										{#if latestOBV}
+											<div class="space-y-2">
+												<div class="text-lg font-bold">
+													{latestOBV.OBV ? formatCompact(parseFloat(latestOBV.OBV)) : 'N/A'}
+												</div>
+												<div class="text-xs text-gray-400">On-Balance Volume</div>
+											</div>
+										{:else}
+											<div class="text-sm text-gray-400">Loading...</div>
+										{/if}
+									</div>
+								</div>
+
+								<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+									<p class="text-sm text-yellow-400">
+										Technical indicators are calculated using daily price data. MACD uses 12-day and
+										26-day exponential moving averages. RSI is calculated over a 14-day period.
+										Values update daily after market close.
+									</p>
+								</div>
+							</div>
+						{:else if activeTab === 'token'}
+							<div id="panel-token" role="tabpanel" class="space-y-4">
+								<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+									<div class={containerStyles.cardBordered}>
+										<h3 class="mb-3 font-semibold">Contract Information</h3>
+										<div class="space-y-3 text-sm">
+											<div class="flex items-center justify-between gap-2">
+												<span class="text-gray-400">Address</span>
+												<div>
+													<div class="sm:hidden">
+														<ExternalLink
+															href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+															label={currentToken.address}
+															truncate={{ start: 0, end: 6 }}
+															className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+														/>
+													</div>
+													<div class="hidden sm:block">
+														<ExternalLink
+															href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+															label={truncateAddress(currentToken.address)}
+															className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+														/>
+													</div>
+												</div>
+											</div>
+											<div class="flex justify-between">
+												<span class="text-gray-400">Network</span>
+												<span>{$currentNetwork.displayName}</span>
+											</div>
+											<div class="flex justify-between">
+												<span class="text-gray-400">Symbol</span>
+												<span>{currentToken.symbol}</span>
+											</div>
+											<div class="flex justify-between">
+												<span class="text-gray-400">Decimals</span>
+												<span>18</span>
+											</div>
+											<div class="flex items-center justify-between">
+												<span class="text-gray-400">Proofs</span>
+												<a
+													href={`/trade/${tokenId}/proofs`}
+													class="text-blue-400 hover:text-blue-300"
+												>
+													View proofs
+												</a>
 											</div>
 										</div>
 									</div>
-								{/each}
-							</div>
-						{:else}
-							<div class="text-sm text-gray-400">No recent mints.</div>
-						{/if}
-					</div>
-
-					<div class={containerStyles.cardBordered}>
-						<div class="mb-2 flex items-center justify-between">
-							<h3 class="font-semibold">Latest Burns</h3>
-							<ExternalLink
-								href="https://portal.s01issuer.com/metrics"
-								label="View All"
-								className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
-							/>
-						</div>
-						{#if currentToken?.withdraws?.length}
-							<div class="space-y-1">
-								{#each currentToken.withdraws.slice(0, 5) as w}
-									<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
-										<div class="flex items-center justify-between gap-3 text-xs">
-											<div class="min-w-0 truncate">
-												<span class="font-medium text-red-400"
-													>− {formatUnits(BigInt(w.amount), 18)} {currentToken.symbol}</span
-												>
-												<span class="mx-2 text-gray-500">•</span>
-                                            <span class="text-gray-400">
-                                                <span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
-                                                <span class="hidden sm:inline">{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}</span>
-                                            </span>
-												<span class="mx-2 text-gray-500">•</span>
-												<span class="text-gray-400"
-													>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span
-												>
+									<div class={containerStyles.cardBordered}>
+										<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
+										<div class="space-y-3 text-sm">
+											<div class="flex justify-between">
+												<span class="text-gray-400">Total Supply</span>
+												<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
 											</div>
-											<div class="flex flex-shrink-0 items-center gap-2">
-												<TxLink hash={w.transaction.id} />
+											<div class="flex justify-between">
+												<span class="text-gray-400">On-Chain Market Cap</span>
+												<span>${marketCap}</span>
+											</div>
+											<div class="flex justify-between">
+												<span class="text-gray-400">Holders</span>
+												<span>{currentToken.tokenHolders.length}</span>
+											</div>
+											<div class="flex justify-between">
+												<span class="text-gray-400">Total Transfers</span>
+												<span>{currentToken.shareTransfers.length}</span>
 											</div>
 										</div>
 									</div>
-								{/each}
+								</div>
 							</div>
-						{:else}
-							<div class="text-sm text-gray-400">No recent burns.</div>
-						{/if}
-					</div>
-				</div>
-			{:else if activeTab === 'trading'}
-				<div class="space-y-4">
-					<!-- Token Trading Volumes Table -->
-					<div class={containerStyles.cardBordered}>
-						<h3 class="mb-4 font-semibold">Trading Activity</h3>
-						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
-								<thead>
-									<tr
-										class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
-									>
-										<th class="p-2">Metric</th>
-										<th class="p-2 text-right">Value</th>
-									</tr>
-								</thead>
-								<tbody>
-									<tr class="border-b border-white/5">
-										<td class="p-2 text-gray-400">Total Minted (In Volume)</td>
-										<td class="p-2 text-right font-medium">
-											{formatUnits(
-												currentToken.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)),
-												18
-											)}
-										</td>
-									</tr>
-									<tr class="border-b border-white/5">
-										<td class="p-2 text-gray-400">Total Redeemed (Out Volume)</td>
-										<td class="p-2 text-right font-medium">
-											{formatUnits(
-												currentToken.withdraws.reduce(
-													(sum, w) => sum + BigInt(w.amount),
-													BigInt(0)
-												),
-												18
-											)}
-										</td>
-									</tr>
-									<tr class="border-b border-white/5">
-										<td class="p-2 text-gray-400">Net Volume</td>
-										<td
-											class="p-2 text-right font-medium {parseFloat(
-												formatUnits(
-													currentToken.deposits.reduce(
-														(sum, d) => sum + BigInt(d.amount),
-														BigInt(0)
-													) -
-														currentToken.withdraws.reduce(
-															(sum, w) => sum + BigInt(w.amount),
-															BigInt(0)
-														),
-													18
-												)
-											) >= 0
-												? 'text-green-400'
-												: 'text-red-400'}"
-										>
-											{formatUnits(
-												currentToken.deposits.reduce(
-													(sum, d) => sum + BigInt(d.amount),
-													BigInt(0)
-												) -
-													currentToken.withdraws.reduce(
-														(sum, w) => sum + BigInt(w.amount),
-														BigInt(0)
-													),
-												18
-											)}
-										</td>
-									</tr>
-									<tr class="border-b border-white/5">
-										<td class="p-2 text-gray-400">Total Transfers</td>
-										<td class="p-2 text-right font-medium">{currentToken.shareTransfers.length}</td>
-									</tr>
-									<tr class="border-b border-white/5">
-										<td class="p-2 text-gray-400">Unique Holders</td>
-										<td class="p-2 text-right font-medium">{currentToken.tokenHolders.length}</td>
-									</tr>
-									<tr class="border-b border-white/5">
-										<td class="p-2 text-gray-400">Certifications</td>
-										<td class="p-2 text-right font-medium">{currentToken.certifications.length}</td>
-									</tr>
-								</tbody>
-							</table>
-						</div>
-					</div>
+						{:else if activeTab === 'mints-burns'}
+							<div
+								id="panel-mints-burns"
+								role="tabpanel"
+								class="grid grid-cols-1 gap-4 sm:grid-cols-2"
+							>
+								<div class={containerStyles.cardBordered}>
+									<div class="mb-2 flex items-center justify-between">
+										<h3 class="font-semibold">Latest Mints</h3>
+										<ExternalLink
+											href="https://portal.s01issuer.com/metrics"
+											label="View All"
+											className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+										/>
+									</div>
+									{#if currentToken?.deposits?.length}
+										<div class="space-y-1">
+											{#each currentToken.deposits.slice(0, 5) as dep}
+												<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+													<div class="flex items-center justify-between gap-3 text-xs">
+														<div class="min-w-0 truncate">
+															<span class="font-medium text-green-400"
+																>+ {formatUnits(BigInt(dep.amount), 18)} {currentToken.symbol}</span
+															>
+															<span class="mx-2 text-gray-500">•</span>
+															<span class="text-gray-400">
+																<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
+																<span class="hidden sm:inline"
+																	>{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(
+																		-4
+																	)}</span
+																>
+															</span>
+															<span class="mx-2 text-gray-500">•</span>
+															<span class="text-gray-400"
+																>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span
+															>
+														</div>
+														<div class="flex flex-shrink-0 items-center gap-2">
+															<TxLink hash={dep.transaction.id} />
+														</div>
+													</div>
+												</div>
+											{/each}
+										</div>
+									{:else}
+										<div class="text-sm text-gray-400">No recent mints.</div>
+									{/if}
+								</div>
 
-					<!-- Historical Activity -->
-					<div class={containerStyles.cardBordered}>
-						<h3 class="mb-4 font-semibold">Recent Activity</h3>
-						<div class="space-y-3">
-							<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-								<div class="rounded-lg bg-gray-800/50 p-3">
-									<div class="text-xs text-gray-400">Total Deposits</div>
-									<div class="text-lg font-semibold">{currentToken.deposits.length}</div>
-								</div>
-								<div class="rounded-lg bg-gray-800/50 p-3">
-									<div class="text-xs text-gray-400">Total Withdrawals</div>
-									<div class="text-lg font-semibold">{currentToken.withdraws.length}</div>
-								</div>
-								<div class="rounded-lg bg-gray-800/50 p-3">
-									<div class="text-xs text-gray-400">Transfer Events</div>
-									<div class="text-lg font-semibold">{currentToken.shareTransfers.length}</div>
+								<div class={containerStyles.cardBordered}>
+									<div class="mb-2 flex items-center justify-between">
+										<h3 class="font-semibold">Latest Burns</h3>
+										<ExternalLink
+											href="https://portal.s01issuer.com/metrics"
+											label="View All"
+											className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+										/>
+									</div>
+									{#if currentToken?.withdraws?.length}
+										<div class="space-y-1">
+											{#each currentToken.withdraws.slice(0, 5) as w}
+												<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+													<div class="flex items-center justify-between gap-3 text-xs">
+														<div class="min-w-0 truncate">
+															<span class="font-medium text-red-400"
+																>− {formatUnits(BigInt(w.amount), 18)} {currentToken.symbol}</span
+															>
+															<span class="mx-2 text-gray-500">•</span>
+															<span class="text-gray-400">
+																<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
+																<span class="hidden sm:inline"
+																	>{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(
+																		-4
+																	)}</span
+																>
+															</span>
+															<span class="mx-2 text-gray-500">•</span>
+															<span class="text-gray-400"
+																>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span
+															>
+														</div>
+														<div class="flex flex-shrink-0 items-center gap-2">
+															<TxLink hash={w.transaction.id} />
+														</div>
+													</div>
+												</div>
+											{/each}
+										</div>
+									{:else}
+										<div class="text-sm text-gray-400">No recent burns.</div>
+									{/if}
 								</div>
 							</div>
-						</div>
+						{:else if activeTab === 'trading'}
+							<div class="space-y-4">
+								<!-- Token Trading Volumes Table -->
+								<div class={containerStyles.cardBordered}>
+									<h3 class="mb-4 font-semibold">Trading Activity</h3>
+									<div class="overflow-x-auto">
+										<table class="w-full text-sm">
+											<thead>
+												<tr
+													class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
+												>
+													<th class="p-2">Metric</th>
+													<th class="p-2 text-right">Value</th>
+												</tr>
+											</thead>
+											<tbody>
+												<tr class="border-b border-white/5">
+													<td class="p-2 text-gray-400">Total Minted (In Volume)</td>
+													<td class="p-2 text-right font-medium">
+														{formatUnits(
+															currentToken.deposits.reduce(
+																(sum, d) => sum + BigInt(d.amount),
+																BigInt(0)
+															),
+															18
+														)}
+													</td>
+												</tr>
+												<tr class="border-b border-white/5">
+													<td class="p-2 text-gray-400">Total Redeemed (Out Volume)</td>
+													<td class="p-2 text-right font-medium">
+														{formatUnits(
+															currentToken.withdraws.reduce(
+																(sum, w) => sum + BigInt(w.amount),
+																BigInt(0)
+															),
+															18
+														)}
+													</td>
+												</tr>
+												<tr class="border-b border-white/5">
+													<td class="p-2 text-gray-400">Net Volume</td>
+													<td
+														class="p-2 text-right font-medium {parseFloat(
+															formatUnits(
+																currentToken.deposits.reduce(
+																	(sum, d) => sum + BigInt(d.amount),
+																	BigInt(0)
+																) -
+																	currentToken.withdraws.reduce(
+																		(sum, w) => sum + BigInt(w.amount),
+																		BigInt(0)
+																	),
+																18
+															)
+														) >= 0
+															? 'text-green-400'
+															: 'text-red-400'}"
+													>
+														{formatUnits(
+															currentToken.deposits.reduce(
+																(sum, d) => sum + BigInt(d.amount),
+																BigInt(0)
+															) -
+																currentToken.withdraws.reduce(
+																	(sum, w) => sum + BigInt(w.amount),
+																	BigInt(0)
+																),
+															18
+														)}
+													</td>
+												</tr>
+												<tr class="border-b border-white/5">
+													<td class="p-2 text-gray-400">Total Transfers</td>
+													<td class="p-2 text-right font-medium"
+														>{currentToken.shareTransfers.length}</td
+													>
+												</tr>
+												<tr class="border-b border-white/5">
+													<td class="p-2 text-gray-400">Unique Holders</td>
+													<td class="p-2 text-right font-medium"
+														>{currentToken.tokenHolders.length}</td
+													>
+												</tr>
+												<tr class="border-b border-white/5">
+													<td class="p-2 text-gray-400">Certifications</td>
+													<td class="p-2 text-right font-medium"
+														>{currentToken.certifications.length}</td
+													>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+								</div>
+
+								<!-- Historical Activity -->
+								<div class={containerStyles.cardBordered}>
+									<h3 class="mb-4 font-semibold">Recent Activity</h3>
+									<div class="space-y-3">
+										<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+											<div class="rounded-lg bg-gray-800/50 p-3">
+												<div class="text-xs text-gray-400">Total Deposits</div>
+												<div class="text-lg font-semibold">{currentToken.deposits.length}</div>
+											</div>
+											<div class="rounded-lg bg-gray-800/50 p-3">
+												<div class="text-xs text-gray-400">Total Withdrawals</div>
+												<div class="text-lg font-semibold">{currentToken.withdraws.length}</div>
+											</div>
+											<div class="rounded-lg bg-gray-800/50 p-3">
+												<div class="text-xs text-gray-400">Transfer Events</div>
+												<div class="text-lg font-semibold">
+													{currentToken.shareTransfers.length}
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/if}
-			</div>
-			</div>
-		{/if}
 		</Section>
 
 		<!-- Trade Section (collapsible) -->
 		<Section>
 			<!-- Anchor element for intersection observer -->
 			<div bind:this={tradeSectionEl} class="h-0 w-0 overflow-hidden"></div>
-            <div class="mb-3 flex items-center justify-between">
-                <h2 class="text-lg font-semibold">Trade {currentToken.symbol}</h2>
-                <button
-                    class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
-                    aria-label={tradeCollapsed ? 'Expand trade panel' : 'Collapse trade panel'}
-                    on:click={() => (tradeCollapsed = !tradeCollapsed)}
-                >
-                    <svg
-                        class="h-4 w-4 transition-transform duration-200 ease-out {tradeCollapsed ? '' : 'rotate-180'}"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    >
-                        <path d="M6 9l6 6 6-6" />
-                    </svg>
-                </button>
-            </div>
-
-            {#if !tradeCollapsed}
-            <div in:fade|local out:fade|local>
-            <div transition:slide|local>
-            <!-- Order Type Selector -->
-			<div class="mb-4 flex gap-2 rounded-lg bg-white/5 p-1">
-				<Button
-					fullWidth={true}
-					variant="ghost"
-					className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
-						activeOrderType === 'limit'
-							? 'bg-yellow-500/20 text-yellow-500'
-							: 'text-gray-400 hover:text-white'
-					}`}
-					on:click={() => (activeOrderType = 'limit')}
+			<div class="mb-3 flex items-center justify-between">
+				<h2 class="text-lg font-semibold">Trade {currentToken.symbol}</h2>
+				<button
+					class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
+					aria-label={tradeCollapsed ? 'Expand trade panel' : 'Collapse trade panel'}
+					on:click={() => (tradeCollapsed = !tradeCollapsed)}
 				>
-					Limit Order
-				</Button>
-				<Button
-					fullWidth={true}
-					variant="ghost"
-					className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
-						activeOrderType === 'dca'
-							? 'bg-yellow-500/20 text-yellow-500'
-							: 'text-gray-400 hover:text-white'
-					}`}
-					on:click={() => (activeOrderType = 'dca')}
-				>
-					DCA Order
-				</Button>
+					<svg
+						class="h-4 w-4 transition-transform duration-200 ease-out {tradeCollapsed
+							? ''
+							: 'rotate-180'}"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M6 9l6 6 6-6" />
+					</svg>
+				</button>
 			</div>
 
-			{#if $connected}
-				<div class={containerStyles.cardBordered}>
-					{#if activeOrderType === 'limit'}
-						<LimitStrategy
-							passedOutputToken={currentPythToken}
-							currentPrice={globalQuote?.['05. price']}
-						/>
-					{:else}
-						<DcaStrategy passedInputToken={currentPythToken} />
-					{/if}
-				</div>
-			{:else}
-				<div class="flex flex-col items-center justify-center gap-4 py-12">
-					<WalletConnect />
-					<p class="text-center text-sm text-gray-400">Connect your wallet to start trading</p>
+			{#if !tradeCollapsed}
+				<div in:fade|local out:fade|local>
+					<div transition:slide|local>
+						<!-- Order Type Selector -->
+						<div class="mb-4 flex gap-2 rounded-lg bg-white/5 p-1">
+							<Button
+								fullWidth={true}
+								variant="ghost"
+								className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
+									activeOrderType === 'limit'
+										? 'bg-yellow-500/20 text-yellow-500'
+										: 'text-gray-400 hover:text-white'
+								}`}
+								on:click={() => (activeOrderType = 'limit')}
+							>
+								Limit Order
+							</Button>
+							<Button
+								fullWidth={true}
+								variant="ghost"
+								className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
+									activeOrderType === 'dca'
+										? 'bg-yellow-500/20 text-yellow-500'
+										: 'text-gray-400 hover:text-white'
+								}`}
+								on:click={() => (activeOrderType = 'dca')}
+							>
+								DCA Order
+							</Button>
+						</div>
+
+						{#if $connected}
+							<div class={containerStyles.cardBordered}>
+								{#if activeOrderType === 'limit'}
+									<LimitStrategy
+										passedOutputToken={currentPythToken}
+										currentPrice={globalQuote?.['05. price']}
+									/>
+								{:else}
+									<DcaStrategy passedInputToken={currentPythToken} />
+								{/if}
+							</div>
+						{:else}
+							<div class="flex flex-col items-center justify-center gap-4 py-12">
+								<WalletConnect />
+								<p class="text-center text-sm text-gray-400">
+									Connect your wallet to start trading
+								</p>
+							</div>
+						{/if}
+					</div>
 				</div>
 			{/if}
-            </div>
-            </div>
-            {/if}
-        </Section>
+		</Section>
 	</div>
 
 	<Footer />
