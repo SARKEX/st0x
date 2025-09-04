@@ -51,8 +51,6 @@
 	let activeOrderType = 'limit';
 	let infoCollapsed = true;
 	let tradeCollapsed = true;
-	let tradeSectionEl: HTMLElement | null = null;
-	let observer: IntersectionObserver | null = null;
 	let priceDetailsCollapsed = true;
 
 	onMount(() => {
@@ -60,16 +58,7 @@
 		if (typeof window !== 'undefined') {
 			priceDetailsCollapsed = window.innerWidth < 640;
 		}
-		if (tradeSectionEl && typeof window !== 'undefined' && 'IntersectionObserver' in window) {
-			observer = new IntersectionObserver(
-				() => {
-					// no-op; previously updated view state
-				},
-				{ root: null, threshold: 0 }
-			);
-			observer.observe(tradeSectionEl);
-		}
-		return () => observer?.disconnect();
+		return () => {};
 	});
 
 	const TABS = [
@@ -1061,7 +1050,7 @@
 		<!-- Trade Section (collapsible) -->
 		<Section>
 			<!-- Anchor element for intersection observer -->
-			<div bind:this={tradeSectionEl} class="h-0 w-0 overflow-hidden"></div>
+			<!-- removed unused tradeSectionEl anchor -->
 			<div class="mb-3 flex items-center justify-between">
 				<h2 class="text-lg font-semibold">Trade {currentToken.symbol}</h2>
 				<button

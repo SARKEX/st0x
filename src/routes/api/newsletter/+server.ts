@@ -18,7 +18,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		// If Mailchimp credentials are not configured, just log and return success
 		// This allows the app to work in development without Mailchimp
 		if (!MAILCHIMP_API_KEY || !MAILCHIMP_LIST_ID) {
-			console.log('Newsletter signup (Mailchimp not configured):', email);
+			if (process.env.NODE_ENV === 'development') {
+				console.log('Newsletter signup (Mailchimp not configured):', email);
+			}
 			return json({ success: true, message: 'Thank you for subscribing!' });
 		}
 
