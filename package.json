@@ -71,6 +71,7 @@
 		"@wagmi/core": "2.14.3",
 		"axios": "1.7.7",
 		"cbor-web": "^9.0.1",
+		"date-fns-tz": "^3.2.0",
 		"ethers": "=5.7.0",
 		"highlight.js": "^11.11.1",
 		"lightweight-charts": "=4.2.0",

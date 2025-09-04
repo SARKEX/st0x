@@ -8,9 +8,6 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import NetworkSelector from '$lib/components/NetworkSelector.svelte';
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
 	import { page } from '$app/stores';
 
 	import { getSfts } from '$lib/query';
@@ -151,47 +148,12 @@
 			class:lg:ml-64={sidebarExpanded}
 			class:lg:ml-16={!sidebarExpanded}
 		>
-			<!-- Desktop Header -->
-			<div class="hidden lg:block">
-				<Header title={pageTitle} description={pageDescription} />
-			</div>
-
-			<!-- Mobile Header with Menu Button -->
-			<div
-				class="relative z-[9999] flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
-			>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="rounded-lg border border-white/10 p-2 hover:bg-white/5"
-					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
-				>
-					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M4 6h16M4 12h16M4 18h16"
-						/>
-					</svg>
-				</Button>
-				<a href="/trade-list" aria-label="Go to trade list" class="flex items-center gap-2">
-					<img
-						src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
-						alt="ST0x Logo"
-						class="h-8 w-8 rounded-full"
-					/>
-					<span
-						class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
-					>
-						ST0x
-					</span>
-				</a>
-				<div class="flex items-center gap-2">
-					<NetworkSelector />
-					<WalletConnect />
-				</div>
-			</div>
+			<!-- Header for all screen sizes -->
+			<Header
+				title={pageTitle}
+				description={pageDescription}
+				on:openMenu={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+			/>
 
 			<slot {sidebarExpanded} />
 			<TransactionModal />

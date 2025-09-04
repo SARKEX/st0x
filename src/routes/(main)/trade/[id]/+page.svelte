@@ -88,29 +88,82 @@
 	// Chart modal state
 	let showChartModal = false;
 	let chartInterval = '30min';
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let modalChartData: any = null;
+	// Zoom percentage of the available dataset (1-100)
+	let zoomPercent = 25;
+	let modalBarCount = 0; // derived from zoomPercent and available bars
+	let modalChartData: unknown = null;
+
+	// Helpers for freshness checks in ET
+	function todayET(): string {
+		try {
+			// en-CA yields YYYY-MM-DD
+			return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+		} catch {
+			const d = new Date();
+			const m = `${d.getMonth() + 1}`.padStart(2, '0');
+			const day = `${d.getDate()}`.padStart(2, '0');
+			return `${d.getFullYear()}-${m}-${day}`;
+		}
+	}
+
+	async function fetchIntradayFresh(sym: string, ivl: string) {
+		// First try 'full' for history, then fallback to 'compact' if last date < today ET
+		const primary = await alpha.getIntraday(
+			sym,
+			ivl,
+			publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
+			'full'
+		);
+		const latestFrom = (obj: Record<string, unknown>): string | undefined => {
+			if (!obj || 'error' in obj) return undefined;
+			const ts =
+				(obj['Time Series (5min)'] as Record<string, unknown>) ||
+				(obj['Time Series (15min)'] as Record<string, unknown>) ||
+				(obj['Time Series (30min)'] as Record<string, unknown>) ||
+				(obj['Time Series (60min)'] as Record<string, unknown>);
+			if (!ts) return undefined;
+			return Object.keys(ts).sort((a, b) => b.localeCompare(a))[0];
+		};
+		const latest = latestFrom(primary as Record<string, unknown>);
+		const today = todayET();
+		if (latest && !latest.startsWith(today)) {
+			// Stale: try compact for fresher CDN slice
+			const fallback = await alpha.getIntraday(
+				sym,
+				ivl,
+				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
+				'compact'
+			);
+			const latestFb = latestFrom(fallback as Record<string, unknown>);
+			if (latestFb && latestFb.localeCompare(latest) > 0) {
+				return fallback;
+			}
+		}
+		return primary;
+	}
 
 	// Query for intraday data (5-minute intervals for more detail)
 	$: intradayQuery = createQuery({
 		queryKey: ['intraday', symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			return alpha.getIntraday(
-				symbol as string,
-				'5min',
-				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
-				'full'
-			);
+			const result = await fetchIntradayFresh(symbol as string, '5min');
+			return result;
 		},
 		enabled: !!symbol,
-		refetchInterval: 300000
+		refetchInterval: 300000 // Refetch every 5 minutes
 	});
 
 	// Query for daily data (for fullscreen view)
 	$: dailyQuery = createQuery({
 		queryKey: ['daily', symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			return alpha.getDaily(symbol as string, publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
+			// Request full daily history to allow up to 1800+ datapoints
+			const result = await alpha.getDaily(
+				symbol as string,
+				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
+				'full'
+			);
+			return result;
 		},
 		enabled: !!symbol && showChartModal && chartInterval === 'daily',
 		refetchInterval: false
@@ -121,15 +174,16 @@
 		queryKey: ['modalIntraday', symbol, $currentNetwork?.id, chartInterval],
 		queryFn: async () => {
 			if (chartInterval === 'daily') return null;
-			return alpha.getIntraday(
-				symbol as string,
-				chartInterval,
-				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
-				'full'
-			);
+			return fetchIntradayFresh(symbol as string, chartInterval).then((result) => {
+				return result;
+			});
 		},
 		enabled: !!symbol && showChartModal && chartInterval !== 'daily',
-		refetchInterval: false
+		// Keep data fresh while modal is open so today's points appear when available
+		refetchInterval: 60000,
+		staleTime: 0,
+		refetchOnWindowFocus: true
+		// keepPreviousData removed in TanStack Query v5; default behavior is fine
 	});
 
 	// Query for price data
@@ -187,6 +241,8 @@
 	$: priceData = $priceQuery.data as any;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	$: intradayData = $intradayQuery.data as any;
+
+	// noisy metadata log removed
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	$: overviewData = $overviewQuery.data as any;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -199,6 +255,24 @@
 	$: globalQuote = priceData?.error ? null : priceData?.['Global Quote'];
 	$: overview = overviewData?.error ? null : overviewData;
 
+	// Get the most recent price from intraday data if available, otherwise use global quote
+	$: latestPrice = (() => {
+		// First try to get from intraday data (most recent)
+		if (intradayData && !intradayData.error) {
+			const timeSeries = intradayData['Time Series (5min)'];
+			if (timeSeries) {
+				const times = Object.keys(timeSeries).sort().reverse();
+				if (times.length > 0) {
+					const latestData = timeSeries[times[0]];
+					// use latest timestamp silently
+					return latestData?.['4. close'] || globalQuote?.['05. price'] || '0.00';
+				}
+			}
+		}
+		// Fall back to global quote
+		return globalQuote?.['05. price'] || '0.00';
+	})();
+
 	// Check if any query hit the API limit
 	$: hasApiLimitError =
 		priceData?.error === 'API_LIMIT' ||
@@ -206,10 +280,9 @@
 		overviewData?.error === 'API_LIMIT';
 
 	$: marketCap =
-		currentToken?.totalShares && globalQuote?.['05. price']
+		currentToken?.totalShares && latestPrice
 			? formatUnits(
-					BigInt(Math.floor(parseFloat(globalQuote['05. price']) * 100)) *
-						BigInt(currentToken.totalShares),
+					BigInt(Math.floor(parseFloat(latestPrice) * 100)) * BigInt(currentToken.totalShares),
 					20
 				)
 			: '0';
@@ -245,6 +318,84 @@
 	function changeChartInterval(interval: string) {
 		chartInterval = interval;
 	}
+
+	function onZoomSliderInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		zoomPercent = Math.max(1, Math.min(100, +target.value));
+	}
+
+	function zoomOut() {
+		zoomPercent = Math.max(1, zoomPercent - 5);
+	}
+
+	function zoomIn() {
+		zoomPercent = Math.min(100, zoomPercent + 5);
+	}
+
+	// Dynamic slider caps based on available bars in current dataset/interval
+	// Derived availability per interval
+	function intradayKeyFor(obj: Record<string, unknown>, ivl: string): string | null {
+		if (!obj) return null;
+		const exact = `Time Series (${ivl})`;
+		if (obj[exact] != null) return exact;
+		const prefs = ['5min', '15min', '30min', '60min'];
+		for (const k of [ivl, ...prefs]) {
+			const key = `Time Series (${k})`;
+			if (obj[key] != null) return key;
+		}
+		return null;
+	}
+
+	$: {
+		const dataObj =
+			typeof modalChartData === 'object' && modalChartData !== null
+				? (modalChartData as Record<string, unknown>)
+				: undefined;
+		let available = 0;
+		let hasSeries = false;
+		let earliest: string | null = null;
+		let latest: string | null = null;
+		if (dataObj && !('error' in dataObj)) {
+			if (chartInterval === 'daily') {
+				const ts = dataObj['Time Series (Daily)'] as Record<string, unknown> | undefined;
+				if (ts) {
+					const keys = Object.keys(ts).sort();
+					available = keys.length;
+					hasSeries = available > 0;
+					earliest = available ? keys[0] : null;
+					latest = available ? keys[available - 1] : null;
+				}
+			} else {
+				const key = intradayKeyFor(dataObj, chartInterval);
+				const ts = key ? (dataObj[key] as Record<string, unknown>) : undefined;
+				if (ts) {
+					const keys = Object.keys(ts).sort();
+					available = keys.length;
+					hasSeries = available > 0;
+					earliest = available ? keys[0] : null;
+					latest = available ? keys[available - 1] : null;
+				}
+			}
+		}
+		// Derive barCount from percent. Keep minimum of 2 to render a range.
+		if (hasSeries) {
+			const pct = Math.max(1, Math.min(100, zoomPercent));
+			modalBarCount = Math.max(2, Math.round((available * pct) / 100));
+		} else {
+			modalBarCount = 0;
+		}
+
+		zoomDisabled = !hasSeries || modalBarCount <= 1;
+
+		// Quick check: log datapoints and range for current interval in dev
+		if (typeof window !== 'undefined' && import.meta.env.DEV && hasSeries) {
+			console.info(
+				`[Data] ${chartInterval}: count=${available}, earliest=${earliest}, latest=${latest}`
+			);
+		}
+	}
+
+	let zoomDisabled = false;
 
 	// Get the right data for the modal chart based on interval
 	$: modalChartData = showChartModal
@@ -304,7 +455,7 @@
 
 					<div class="flex items-baseline gap-4">
 						<span class="text-3xl font-bold">
-							${globalQuote?.['05. price'] || '0.00'}
+							${latestPrice}
 						</span>
 						<div class="flex items-center gap-2">
 							{#if priceChange >= 0}
@@ -968,10 +1119,7 @@
 						{#if $connected}
 							<div class={containerStyles.cardBordered}>
 								{#if activeOrderType === 'limit'}
-									<LimitStrategy
-										passedOutputToken={currentPythToken}
-										currentPrice={globalQuote?.['05. price']}
-									/>
+									<LimitStrategy passedOutputToken={currentPythToken} currentPrice={latestPrice} />
 								{:else}
 									<DcaStrategy passedInputToken={currentPythToken} />
 								{/if}
@@ -1003,7 +1151,7 @@
 >
 	<div class="space-y-4">
 		<!-- Interval Selector -->
-		<div class="flex gap-2">
+		<div class="flex flex-wrap items-center gap-2">
 			<Button
 				variant="ghost"
 				size="sm"
@@ -1054,17 +1202,92 @@
 				}`}
 				on:click={() => changeChartInterval('daily')}>Daily</Button
 			>
+
+			<!-- Zoom / Bars selector (slider with +/- magnifiers) -->
+			<div class="ml-auto flex items-center gap-2">
+				<!-- Zoom out -->
+				<button
+					class="rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-white"
+					aria-label="Zoom out"
+					on:click={zoomOut}
+					disabled={zoomDisabled}
+				>
+					<!-- Heroicons: Magnifying Glass Minus -->
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						class="h-5 w-5"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="1.5"
+							d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"
+						/>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 11h8" />
+					</svg>
+				</button>
+
+				<input
+					type="range"
+					min="1"
+					max="100"
+					step="1"
+					bind:value={zoomPercent}
+					on:input={onZoomSliderInput}
+					class="h-1 w-44 cursor-pointer accent-yellow-500 disabled:opacity-50"
+					disabled={zoomDisabled}
+				/>
+
+				<!-- Zoom in -->
+				<button
+					class="rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-white"
+					aria-label="Zoom in"
+					on:click={zoomIn}
+					disabled={zoomDisabled}
+				>
+					<!-- Heroicons: Magnifying Glass Plus -->
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						class="h-5 w-5"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="1.5"
+							d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"
+						/>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="1.5"
+							d="M12 8v6m-3-3h6"
+						/>
+					</svg>
+				</button>
+			</div>
 		</div>
 
 		<!-- Chart -->
 		<div class={`${containerStyles.cardBordered} h-[70vh] p-2`}>
 			{#if modalChartData}
-				<EquityChart
-					timeseriesData={modalChartData}
-					barCount={180}
-					alignToNow={true}
-					interval={chartInterval}
-				/>
+				{#if zoomDisabled}
+					<div class="flex h-full items-center justify-center text-sm text-gray-400">
+						No data available for this interval.
+					</div>
+				{:else}
+					<EquityChart
+						timeseriesData={modalChartData}
+						barCount={modalBarCount}
+						alignToNow={true}
+						interval={chartInterval}
+					/>
+				{/if}
 			{:else}
 				<div class="flex h-full items-center justify-center">
 					<LoadingSpinner variant="inline" size="md" text="Loading chart..." />
@@ -1076,7 +1299,7 @@
 		<div class="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
 			<div>
 				<span class="text-gray-400">Current Price</span>
-				<div class="font-medium">${globalQuote?.['05. price'] || 'N/A'}</div>
+				<div class="font-medium">${latestPrice}</div>
 			</div>
 			<div>
 				<span class="text-gray-400">Change</span>

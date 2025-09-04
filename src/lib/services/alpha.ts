@@ -29,8 +29,10 @@ export function getOverview(symbol: string, apiKey?: string) {
 	return alphaRequest('OVERVIEW', { symbol }, apiKey);
 }
 
-export function getDaily(symbol: string, apiKey?: string) {
-	return alphaRequest('TIME_SERIES_DAILY', { symbol }, apiKey);
+export function getDaily(symbol: string, apiKey?: string, outputsize?: 'compact' | 'full') {
+	const params: Record<string, string> = { symbol };
+	if (outputsize) params.outputsize = outputsize;
+	return alphaRequest('TIME_SERIES_DAILY', params, apiKey);
 }
 
 export function getIntraday(
@@ -39,7 +41,10 @@ export function getIntraday(
 	apiKey?: string,
 	outputsize?: 'compact' | 'full'
 ) {
-	const params: Record<string, string> = { symbol, interval };
+	const params: Record<string, string> = {
+		symbol,
+		interval
+	};
 	if (outputsize) params.outputsize = outputsize;
 	return alphaRequest('TIME_SERIES_INTRADAY', params, apiKey);
 }

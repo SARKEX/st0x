@@ -41,25 +41,6 @@
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
-	<!-- Logo -->
-	<div class="p-4">
-		<div class="flex items-center gap-2">
-			<a href="/trade-list">
-				<img
-					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
-					alt="ST0x Logo"
-					class="h-8 w-8 rounded-full md:h-9 md:w-9"
-				/>
-			</a>
-			<a href="/trade-list">
-				<span
-					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
-					>ST0x</span
-				>
-			</a>
-		</div>
-	</div>
-
 	<!-- Navigation (scrollable) -->
 	<div class="flex-1 space-y-2 overflow-y-auto p-4">
 		{#each NAVIGATION_ITEMS as item}

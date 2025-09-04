@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts';
+	import {
+		createChart,
+		type IChartApi,
+		type ISeriesApi,
+		type MouseEventParams,
+		type UTCTimestamp
+	} from 'lightweight-charts';
+	import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 
 	// Raw AlphaVantage TIME_SERIES_DAILY_ADJUSTED response
 	// or any object with a "Time Series (Daily)" map
@@ -17,6 +24,7 @@
 	export let interval: string | undefined = undefined;
 
 	let containerEl: HTMLDivElement | null = null;
+	let wrapperEl: HTMLDivElement | null = null;
 	let chart: IChartApi | null = null;
 	let series: ISeriesApi<'Area'> | null = null;
 
@@ -41,21 +49,66 @@
 		const points: { time: string | number; value: number }[] = [];
 		const allDates = Object.keys(ts);
 
-		// For intraday, by default show only the most recent trading day unless fullRange or barCount
+		// For intraday, by default show only the most recent trading session unless fullRange or barCount
 		if (isIntraday && allDates.length > 0 && !fullRange && !barCount) {
-			// Find the most recent date
+			// Find the most recent timestamp
 			const sortedDates = allDates.sort((a, b) => b.localeCompare(a));
-			const mostRecentDate = sortedDates[0].split(' ')[0];
+			const mostRecentTimestamp = sortedDates[0];
 
-			// Filter to only include data from the most recent trading day
+			// Get current time in ET to check if we should show today's data
+			const todayET = formatInTimeZone(new Date(), 'America/New_York', 'yyyy-MM-dd');
+
+			// Get the date portion of the most recent data
+			const mostRecentDateStr = mostRecentTimestamp.split(' ')[0];
+
+			// Determine which session to show:
+			// If we have today's data (even just pre-market), show today
+			// Otherwise show the most recent day with data
+			let sessionDate = mostRecentDateStr;
+
+			// Check if we have any data from today
+			const hasToday = sortedDates.some((d) => d.startsWith(todayET));
+			if (hasToday) {
+				sessionDate = todayET;
+			}
+
+			// Create session boundaries in ET
+			// Pre-market starts at 4:00 AM ET, regular 9:30 AM ET, close 4:00 PM ET, after-hours ends 8:00 PM ET
+			const preStartStr = `${sessionDate} 04:00:00`;
+			const regOpenStr = `${sessionDate} 09:30:00`;
+			const regCloseStr = `${sessionDate} 16:00:00`;
+			const afterCloseStr = `${sessionDate} 20:00:00`;
+
+			// Convert these ET times to UTC for comparison
+			const sessionStartTime = fromZonedTime(preStartStr, 'America/New_York').getTime();
+			const sessionEndTime = fromZonedTime(afterCloseStr, 'America/New_York').getTime();
+			const regOpenTime = fromZonedTime(regOpenStr, 'America/New_York').getTime();
+			const regCloseTime = fromZonedTime(regCloseStr, 'America/New_York').getTime();
+
+			// Save for overlays and markers (seconds)
+			sessionBounds = {
+				preStart: Math.floor(sessionStartTime / 1000),
+				regOpen: Math.floor(regOpenTime / 1000),
+				regClose: Math.floor(regCloseTime / 1000),
+				afterClose: Math.floor(sessionEndTime / 1000)
+			};
+
+			// Filter to only include data from the most recent trading session
 			for (const [dateStr, ohlc] of Object.entries(ts)) {
-				if (!dateStr.startsWith(mostRecentDate)) continue;
+				const timestamp = fromZonedTime(dateStr, 'America/New_York').getTime();
+
+				// Include if within the trading session (4 AM to 8 PM ET)
+				if (timestamp < sessionStartTime || timestamp > sessionEndTime) {
+					continue;
+				}
 
 				const close = parseFloat((ohlc as Record<string, string>)['4. close']) || 0;
 				if (!isFinite(close)) continue;
 
 				// Convert to Unix timestamp (seconds)
-				const time = Math.floor(new Date(dateStr).getTime() / 1000);
+				// AlphaVantage returns times in US/Eastern timezone
+				// Use date-fns-tz to properly handle timezone conversion including DST
+				const time = Math.floor(fromZonedTime(dateStr, 'America/New_York').getTime() / 1000);
 				points.push({ time, value: close });
 			}
 		} else {
@@ -65,9 +118,13 @@
 				if (!isFinite(close)) continue;
 
 				// For daily data, keep as yyyy-mm-dd string
-				const time = isIntraday
-					? Math.floor(new Date(dateStr).getTime() / 1000)
-					: dateStr.split(' ')[0];
+				let time;
+				if (isIntraday) {
+					// Parse intraday timestamps as ET timezone using proper timezone library
+					time = Math.floor(fromZonedTime(dateStr, 'America/New_York').getTime() / 1000);
+				} else {
+					time = dateStr.split(' ')[0];
+				}
 
 				points.push({ time, value: close });
 			}
@@ -75,20 +132,91 @@
 			if (!isIntraday && !fullRange && !barCount && points.length > 30) {
 				points.splice(0, points.length - 30);
 			}
+			// If intraday (but either fullRange or barCount specified), still compute session bounds for overlays/markers
+			if (isIntraday && allDates.length > 0) {
+				const sortedDates = allDates.sort((a, b) => b.localeCompare(a));
+				const mostRecentTimestamp = sortedDates[0];
+				const todayET = formatInTimeZone(new Date(), 'America/New_York', 'yyyy-MM-dd');
+				const mostRecentDateStr = mostRecentTimestamp.split(' ')[0];
+				const hasToday = sortedDates.some((d) => d.startsWith(todayET));
+				const sessionDate = hasToday ? todayET : mostRecentDateStr;
+				const preStartStr = `${sessionDate} 04:00:00`;
+				const regOpenStr = `${sessionDate} 09:30:00`;
+				const regCloseStr = `${sessionDate} 16:00:00`;
+				const afterCloseStr = `${sessionDate} 20:00:00`;
+				const sessionStartTime = fromZonedTime(preStartStr, 'America/New_York').getTime();
+				const regOpenTime = fromZonedTime(regOpenStr, 'America/New_York').getTime();
+				const regCloseTime = fromZonedTime(regCloseStr, 'America/New_York').getTime();
+				const sessionEndTime = fromZonedTime(afterCloseStr, 'America/New_York').getTime();
+				sessionBounds = {
+					preStart: Math.floor(sessionStartTime / 1000),
+					regOpen: Math.floor(regOpenTime / 1000),
+					regClose: Math.floor(regCloseTime / 1000),
+					afterClose: Math.floor(sessionEndTime / 1000)
+				};
+			}
 		}
 
-		// If barCount specified and not aligning to now, trim to last N points
-		if (barCount && !alignToNow && points.length > barCount) {
-			points.splice(0, points.length - barCount);
-		}
-
+		// Always sort ascending by time before trimming so we keep the most recent tail
 		points.sort((a, b) => {
 			if (typeof a.time === 'number' && typeof b.time === 'number') {
 				return a.time - b.time;
 			}
 			return a.time < b.time ? -1 : 1;
 		});
+
+		// If barCount specified: for alignToNow, keep a bounded tail; else trim exactly to N
+		if (barCount && points.length > barCount) {
+			if (alignToNow) {
+				// Keep at most ~2x bars to avoid massive datasets while allowing smoother zoom/pan
+				const keep = Math.max(400, Math.min(points.length, barCount * 2));
+				points.splice(0, points.length - keep);
+			} else {
+				points.splice(0, points.length - barCount);
+			}
+		}
+
 		return points;
+	}
+
+	// Session boundaries cache for overlays/markers (seconds since epoch)
+	let sessionBounds: {
+		preStart: number;
+		regOpen: number;
+		regClose: number;
+		afterClose: number;
+	} | null = null;
+
+	// Shading overlay positions (in pixels)
+	let preLeft = 0;
+	let preWidth = 0;
+	let postLeft = 0;
+	let postWidth = 0;
+
+	function updateOverlays() {
+		if (!chart || !sessionBounds || !wrapperEl) return;
+		const ts = chart.timeScale();
+		const xPre = ts.timeToCoordinate(sessionBounds.preStart as unknown as UTCTimestamp);
+		const xOpen = ts.timeToCoordinate(sessionBounds.regOpen as unknown as UTCTimestamp);
+		const xClose = ts.timeToCoordinate(sessionBounds.regClose as unknown as UTCTimestamp);
+		const xAfter = ts.timeToCoordinate(sessionBounds.afterClose as unknown as UTCTimestamp);
+		if (
+			xPre == null ||
+			xOpen == null ||
+			xClose == null ||
+			xAfter == null ||
+			Number.isNaN(xPre) ||
+			Number.isNaN(xOpen) ||
+			Number.isNaN(xClose) ||
+			Number.isNaN(xAfter)
+		) {
+			preLeft = preWidth = postLeft = postWidth = 0;
+			return;
+		}
+		preLeft = Math.min(xPre, xOpen);
+		preWidth = Math.max(0, Math.abs(xOpen - xPre));
+		postLeft = Math.min(xClose, xAfter);
+		postWidth = Math.max(0, Math.abs(xAfter - xClose));
 	}
 
 	function resize() {
@@ -96,83 +224,25 @@
 		const width = containerEl.clientWidth || 600;
 		const chartHeight = height ?? (containerEl.clientHeight || 320);
 		chart.applyOptions({ width, height: chartHeight });
-	}
-
-	function getStepSeconds(ivl: typeof interval): number {
-		switch (ivl) {
-			case '5min':
-				return 5 * 60;
-			case '15min':
-				return 15 * 60;
-			case '30min':
-				return 30 * 60;
-			case '60min':
-				return 60 * 60;
-			case 'daily':
-				return 24 * 60 * 60;
-			default:
-				return 5 * 60;
-		}
-	}
-
-	function computeDailyAnchorDate(): Date {
-		// Approximate US market hours in ET (09:30 - 16:00). Ignore holidays.
-		const now = new Date();
-		// Convert to ET by guessing offset diff from UTC using Intl (approx only)
-		const nowStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
-		const nowET = new Date(nowStr);
-		const day = nowET.getDay(); // 0 Sun ... 6 Sat
-		const hour = nowET.getHours();
-		const minute = nowET.getMinutes();
-		const isWeekend = day === 0 || day === 6;
-
-		// Helper to set time to 16:00 ET same day
-		function setClose(d: Date) {
-			const s = new Date(d);
-			s.setHours(16, 0, 0, 0);
-			return s;
-		}
-		// If weekend, roll back to Friday
-		if (isWeekend) {
-			const diff = day === 0 ? 2 : 1; // Sun->Fri (2), Sat->Fri (1)
-			nowET.setDate(nowET.getDate() - diff);
-			return setClose(nowET);
-		}
-		// Market open 09:30-16:00 ET
-		const afterClose = hour > 16 || (hour === 16 && minute >= 0);
-		const beforeOpen = hour < 9 || (hour === 9 && minute < 30);
-		if (afterClose) return setClose(nowET);
-		if (beforeOpen) {
-			// Previous business day at close
-			const prev = new Date(nowET);
-			// If Monday before open, go to previous Friday
-			const prevDiff = day === 1 ? 3 : 1;
-			prev.setDate(prev.getDate() - prevDiff);
-			return setClose(prev);
-		}
-		// During market hours, anchor to 'now'
-		return nowET;
-	}
-
-	function computeMissingBars(points: { time: string | number }[]): number {
-		if (!alignToNow || !interval || points.length === 0) return 0;
-		const last = points[points.length - 1].time;
-		let missingBars = 0;
-		if (typeof last === 'number') {
-			const step = getStepSeconds(interval);
-			const nowSec = Math.floor(Date.now() / 1000);
-			missingBars = Math.max(0, Math.ceil((nowSec - last) / step));
-		} else {
-			// Daily: compute bars between last date and anchor day (approx calendar days)
-			const lastDate = new Date(last);
-			const anchor = computeDailyAnchorDate();
-			const diffMs = anchor.getTime() - lastDate.getTime();
-			missingBars = Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
-		}
-		return missingBars;
+		// Keep overlays and bar spacing in sync with size changes
+		updateBarDensity();
+		updateOverlays();
 	}
 
 	let ro: ResizeObserver | null = null;
+
+	// Tooltip state
+	let tooltipEl: HTMLDivElement | null = null;
+	let showTooltip = false;
+	let tooltipX = 0;
+	let tooltipY = 0;
+	let tooltipTime = '';
+	let tooltipDate = '';
+	// Only show date and time; omit price per request
+
+	function isBusinessDay(t: unknown): t is { year: number; month: number; day: number } {
+		return !!t && typeof t === 'object' && 'year' in (t as Record<string, unknown>);
+	}
 
 	onMount(() => {
 		if (!containerEl) return;
@@ -180,6 +250,15 @@
 			layout: {
 				background: { color: 'transparent' },
 				textColor: '#ddd'
+			},
+			handleScroll: {
+				mouseWheel: true,
+				pressedMouseMove: true
+			},
+			handleScale: {
+				axisPressedMouseMove: true,
+				mouseWheel: true,
+				pinch: true
 			},
 			grid: {
 				vertLines: { color: 'rgba(255,255,255,0.06)' },
@@ -223,6 +302,38 @@
 				fixLeftEdge: true,
 				fixRightEdge: true
 			},
+			localization: {
+				locale: typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+				timeFormatter: (time: unknown) => {
+					try {
+						if (typeof time === 'number') {
+							const d = new Date(time * 1000);
+							return new Intl.DateTimeFormat(
+								typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+								{ month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }
+							).format(d);
+						}
+						if (typeof time === 'string') {
+							const d = new Date(time);
+							return new Intl.DateTimeFormat(
+								typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+								{ month: 'short', day: '2-digit' }
+							).format(d);
+						}
+						if (isBusinessDay(time)) {
+							const t = time;
+							const d = new Date(Date.UTC(t.year, (t.month || 1) - 1, t.day || 1));
+							return new Intl.DateTimeFormat(
+								typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+								{ month: 'short', day: '2-digit' }
+							).format(d);
+						}
+					} catch {
+						/* noop */
+					}
+					return '';
+				}
+			},
 			width: containerEl.clientWidth || 600,
 			height: height ?? (containerEl.clientHeight || 320)
 		});
@@ -240,16 +351,9 @@
 		if (initial.length && series) {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			series.setData(initial as any);
-			if (barCount && alignToNow && interval) {
-				const missing = computeMissingBars(initial);
-				const lastIndex = initial.length - 1;
-				const to = lastIndex + missing;
-				const from = Math.max(0, lastIndex - (barCount - 1) - missing);
-				chart.timeScale().setVisibleLogicalRange({ from, to });
-			} else {
-				// Default behavior
-				chart.timeScale().fitContent();
-			}
+			updateBarDensity();
+			updateVisibleRange();
+			requestAnimationFrame(() => updateOverlays());
 		}
 		window.addEventListener('resize', resize);
 		// Resize when the container itself changes size (e.g., modal size changes)
@@ -257,23 +361,114 @@
 			ro = new ResizeObserver(() => resize());
 			ro.observe(containerEl);
 		}
+		// Update overlays on zoom/pan
+		chart
+			.timeScale()
+			.subscribeVisibleTimeRangeChange(() => requestAnimationFrame(() => updateOverlays()));
+
+		// Custom tooltip near cursor showing date + time
+		chart.subscribeCrosshairMove((param: MouseEventParams) => {
+			if (!wrapperEl) return;
+			if (!param || !param.point || param.time === undefined) {
+				showTooltip = false;
+				return;
+			}
+			const { x, y } = param.point;
+			tooltipX = x + 12; // small offset right of cursor
+			tooltipY = Math.max(8, Math.min(y + 12, (wrapperEl.clientHeight || 0) - 40));
+			// Format time/date in local timezone
+			if (typeof param.time === 'number') {
+				const d = new Date(param.time * 1000);
+				tooltipTime = new Intl.DateTimeFormat(
+					typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+					{ hour: '2-digit', minute: '2-digit' }
+				).format(d);
+				tooltipDate = new Intl.DateTimeFormat(
+					typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+					{ year: 'numeric', month: 'short', day: '2-digit' }
+				).format(d);
+			} else if (typeof param.time === 'string') {
+				const d = new Date(param.time);
+				tooltipTime = new Intl.DateTimeFormat(
+					typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+					{ hour: '2-digit', minute: '2-digit' }
+				).format(d);
+				tooltipDate = new Intl.DateTimeFormat(
+					typeof navigator !== 'undefined' ? navigator.language : 'en-GB',
+					{ year: 'numeric', month: 'short', day: '2-digit' }
+				).format(d);
+			}
+			showTooltip = true;
+		});
 	});
+
+	function updateBarDensity() {
+		if (!chart || !containerEl) return;
+		if (!barCount) return;
+		const width = containerEl.clientWidth || 600;
+		const spacing = Math.max(1, Math.floor(width / Math.max(10, barCount)));
+		try {
+			chart.timeScale().applyOptions({ barSpacing: spacing });
+		} catch {
+			/* noop */
+		}
+	}
+
+	let lastPoints: { time: string | number; value: number }[] = [];
+
+	function updateVisibleRange() {
+		if (!chart || !barCount || !interval || lastPoints.length < 2) return;
+
+		const ts = chart.timeScale();
+		const n = lastPoints.length;
+		const startIndex = Math.max(0, n - barCount);
+		const start = lastPoints[startIndex]?.time;
+		const end = lastPoints[n - 1]?.time;
+		if (start == null || end == null) return;
+
+		try {
+			if (interval !== 'daily' && typeof start === 'number' && typeof end === 'number') {
+				ts.setVisibleRange({
+					from: start as unknown as UTCTimestamp,
+					to: end as unknown as UTCTimestamp
+				});
+			} else if (typeof start === 'string' && typeof end === 'string') {
+				const s = new Date(start);
+				const e = new Date(end);
+				ts.setVisibleRange({
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					from: { year: s.getFullYear(), month: s.getMonth() + 1, day: s.getDate() } as any,
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					to: { year: e.getFullYear(), month: e.getMonth() + 1, day: e.getDate() } as any
+				});
+			}
+			if (alignToNow) ts.scrollToPosition(0, true);
+		} catch {
+			/* noop */
+		}
+	}
 
 	$: if (series && chart) {
 		const next = parseSeries(timeseriesData);
+		lastPoints = next;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		series.setData(next as any);
-		if (next.length > 0) {
-			if (barCount && alignToNow && interval) {
-				const missing = computeMissingBars(next);
-				const lastIndex = next.length - 1;
-				const to = lastIndex + missing;
-				const from = Math.max(0, lastIndex - (barCount - 1) - missing);
-				chart.timeScale().setVisibleLogicalRange({ from, to });
-			} else {
-				chart.timeScale().fitContent();
-			}
+		if (next.length >= 2) {
+			updateBarDensity();
+			// Defer range + overlays until after data is applied by the chart
+			requestAnimationFrame(() => {
+				updateVisibleRange();
+				updateOverlays();
+			});
 		}
+	}
+
+	// Re-apply visible range when controls change (barCount)
+	$: if (chart && series && lastPoints.length >= 2 && barCount != null) {
+		// React to slider/button changes immediately
+		updateBarDensity();
+		updateVisibleRange();
+		updateOverlays();
 	}
 
 	onDestroy(() => {
@@ -288,6 +483,39 @@
 </script>
 
 <div
-	bind:this={containerEl}
+	class="relative"
+	bind:this={wrapperEl}
 	style={`width: 100%; height: ${height ? height + 'px' : '100%'};`}
-></div>
+>
+	<!-- Chart Canvas Container -->
+	<div bind:this={containerEl} style="width: 100%; height: 100%"></div>
+
+	<!-- Overlays (pointer-events: none to not block chart) -->
+	<div class="pointer-events-none absolute inset-0" style="z-index: 2;">
+		<!-- Pre/After hours shading under everything -->
+		{#if preWidth > 0}
+			<div
+				style={`position:absolute; top:0; bottom:0; left:${preLeft}px; width:${preWidth}px; background: rgba(56,132,255,0.08);`}
+			></div>
+		{/if}
+		{#if postWidth > 0}
+			<div
+				style={`position:absolute; top:0; bottom:0; left:${postLeft}px; width:${postWidth}px; background: rgba(243,177,60,0.10);`}
+			></div>
+		{/if}
+
+		<!-- Legend removed while consolidating to single series -->
+
+		<!-- Tooltip -->
+		{#if showTooltip}
+			<div
+				bind:this={tooltipEl}
+				class="rounded bg-black/70 px-2 py-1 text-xs text-gray-100 shadow"
+				style={`position:absolute; left:${tooltipX}px; top:${tooltipY}px; white-space:nowrap;`}
+			>
+				<div>{tooltipDate}</div>
+				<div>{tooltipTime}</div>
+			</div>
+		{/if}
+	</div>
+</div>
