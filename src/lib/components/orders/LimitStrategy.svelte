@@ -7,7 +7,7 @@
 	import { formatUnits, parseUnits } from 'viem';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
-	import { getBaseline, hasValidPriceFeedId } from '$lib/derivations';
+	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
@@ -80,17 +80,18 @@
 		if (selectedOrderType === 'Buy') {
 			// Buy: input is asset, output is USDC
 			// We're buying the asset, so we deposit USDC and receive asset
-			const assetDecimals = selectedOutputToken?.decimals || 18;
-			const usdcDecimals = selectedInputToken?.decimals || 6;
-			const priceScaled = parseUnits(selectedInitialRatio || '0', usdcDecimals);
-			const scale = 10n ** BigInt(assetDecimals);
-			const usdcAmount = selectedAmount ? (selectedAmount * priceScaled) / scale : 0n;
+			// Calculate USDC amount needed
+			const assetQuantity = formatUnits(selectedAmount || 0n, selectedOutputToken?.decimals || 18);
+			const price = parseFloat(selectedInitialRatio || '0');
+			const usdcNeeded = parseFloat(assetQuantity) * price;
+			const usdcAmount = parseUnits(usdcNeeded.toString(), selectedInputToken?.decimals || 6);
 
 			transactionStore.handleLimitDeploy({
-				inputToken: selectedOutputToken, // Asset is input
-				outputToken: selectedInputToken, // USDC is output
-				ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
-				depositAmount: usdcAmount, // Deposit USDC amount
+				inputToken: selectedOutputToken, // Asset is input (token1)
+				outputToken: selectedInputToken, // USDC is output (token2)
+				// For Buy: ratio should be asset/USDC = 1/price
+				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toString(),
+				depositAmount: usdcAmount, // Deposit USDC amount in USDC wei
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
 			});
@@ -98,10 +99,11 @@
 			// Sell: input is USDC, output is asset
 			// We're selling the asset, so we deposit asset and receive USDC
 			transactionStore.handleLimitDeploy({
-				inputToken: selectedInputToken, // USDC is input
-				outputToken: selectedOutputToken, // Asset is output
-				ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
-				depositAmount: selectedAmount, // Deposit asset amount
+				inputToken: selectedInputToken, // USDC is input (token1)
+				outputToken: selectedOutputToken, // Asset is output (token2)
+				// For Sell: ratio should be USDC/asset = price
+				ioRatio: selectedInitialRatio,
+				depositAmount: selectedAmount, // Deposit asset amount in asset wei
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
 			});

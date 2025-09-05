@@ -16,14 +16,22 @@
 	});
 
 	const initWallet = async () => {
-		const projectId = publicEnv.PUBLIC_WALLETCONNECT_ID || '';
-		const erckit = defaultConfig({
+		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
+		const connectorsList = [injected()];
+		if (projectId && projectId.trim().length > 0) {
+			// @ts-expect-error - walletConnect connector type mismatch with wagmi
+			connectorsList.push(walletConnect({ projectId }));
+		}
+
+		const cfgOptions = {
 			autoConnect: true,
 			appName: 'st0x-liquidity',
-			walletConnectProjectId: projectId,
-			chains: [arbitrum, base],
-			connectors: [injected(), walletConnect({ projectId })]
-		});
+			chains: [arbitrum, base] as [typeof arbitrum, typeof base],
+			connectors: connectorsList,
+			walletConnectProjectId: projectId || 'dummy-project-id'
+		};
+
+		const erckit = defaultConfig(cfgOptions);
 		await erckit.init();
 	};
 

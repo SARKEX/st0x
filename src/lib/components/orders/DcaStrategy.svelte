@@ -14,7 +14,7 @@
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
-	import { hasValidPriceFeedId, getBaseline } from '$lib/derivations';
+	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	import { containerStyles } from '$lib/utils/styles';
@@ -79,6 +79,24 @@
 		selectedInitialRatioError;
 
 	const handleDcaDeploy = () => {
+		const normalizeDecimal = (v: string): string => {
+			if (!v) return v;
+			const n = Number(v);
+			if (!Number.isFinite(n)) return v;
+			// format to 18 fractional digits, then trim trailing zeros and dot
+			return n
+				.toFixed(18)
+				.replace(/\.0+$/, '')
+				.replace(/\.(.*?)(0+)$/, (m, p1) => (p1 ? `.${p1}`.replace(/\.$/, '') : ''))
+				.replace(/\.$/, '');
+		};
+
+		const invertAndNormalize = (v: string): string => {
+			const n = Number(v || '0');
+			if (!Number.isFinite(n) || n === 0) return '0';
+			return normalizeDecimal(String(1 / n));
+		};
+
 		if (!$connected) {
 			showConnectModal = true;
 			return;
@@ -97,12 +115,14 @@
 				// For DCA, prices need to be inverted for Buy orders (not Sell)
 				// Buy: User enters USDC price, but Rain expects asset/USDC ratio
 				// Sell: User enters USDC price, Rain expects USDC/asset ratio (same as entered)
-				baseline: selectedOrderType === 'Buy' 
-					? (1 / parseFloat(selectedBaseline || '1')).toString()
-					: selectedBaseline,
-				kickoff: selectedOrderType === 'Buy'
-					? (1 / parseFloat(selectedInitialRatio || '1')).toString()
-					: selectedInitialRatio,
+				baseline:
+					selectedOrderType === 'Buy'
+						? invertAndNormalize(selectedBaseline)
+						: normalizeDecimal(selectedBaseline),
+				kickoff:
+					selectedOrderType === 'Buy'
+						? invertAndNormalize(selectedInitialRatio)
+						: normalizeDecimal(selectedInitialRatio),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
 				inputVaultId: inputVaultId,
@@ -115,14 +135,22 @@
 	// Wallet connect modal state
 	let showConnectModal = false;
 
-	// Calculate average price per period
-	$: avgPricePerPeriod =
-		selectedAmount && selectedPeriod
-			? (
-					parseFloat(formatUnits(selectedAmount, selectedOutputToken?.decimals || 18)) /
-					parseFloat(selectedPeriod || '1')
-				).toFixed(2)
-			: '0.00';
+	// Calculate average amount per period (use correct decimals for order type)
+	$: avgPricePerPeriod = (() => {
+		if (!selectedAmount || !selectedPeriod) return '0.00';
+		const decimals =
+			selectedOrderType === 'Buy'
+				? selectedOutputToken?.decimals || 18
+				: selectedInputToken?.decimals || 18;
+		const amount = parseFloat(formatUnits(selectedAmount, decimals));
+		const periods = parseFloat(selectedPeriod || '1');
+		if (!Number.isFinite(amount) || !Number.isFinite(periods) || periods === 0) return '0.00';
+		const dp = selectedOrderType === 'Buy' ? 2 : 6; // Preserve 2dp for Buy (USDC), higher precision for Sell
+		return (amount / periods).toFixed(dp);
+	})();
+
+	// Dynamic label for accumulation/divestment depending on order type
+	$: periodLabel = selectedOrderType === 'Buy' ? 'Accumulation Period' : 'Divestment Period';
 
 	// Default Start Price to oracle price when available and if user hasn't entered a value yet
 	$: if (hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
@@ -208,7 +236,7 @@
 				/>
 			</div>
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">Accumulation Period</div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">{periodLabel}</div>
 				<div class="flex gap-2">
 					<div class="flex-grow">
 						<Input
@@ -246,9 +274,7 @@
 				/>
 			</div>
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Start Price
-				</div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Start Price</div>
 				<Input
 					aria-label="Initial Ratio"
 					type="number"
@@ -278,7 +304,7 @@
 						</span>
 					</div>
 					<div class="flex justify-between">
-						<span class="text-gray-400">Accumulation Period</span>
+						<span class="text-gray-400">{periodLabel}</span>
 						<span class="font-medium">
 							{selectedPeriod || '0'}
 							{selectedPeriodUnit.toLowerCase()}
