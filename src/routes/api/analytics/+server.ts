@@ -43,7 +43,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		await storage.incr(dailyKey);
 
 		// Add to recent searches list (keep last 100)
-		await storage.lpush('recent:searches', JSON.stringify(data));
+		// Vercel KV handles JSON automatically, local Redis needs stringification
+		await storage.lpush('recent:searches', data as unknown);
 		await storage.ltrim('recent:searches', 0, 99);
 
 		// Track unique visitors
@@ -64,15 +65,7 @@ export const GET: RequestHandler = async () => {
 	try {
 		// Get recent searches
 		const recentSearchesRaw = await storage.lrange('recent:searches', 0, 99);
-		const recentSearches = recentSearchesRaw
-			.map((s) => {
-				try {
-					return typeof s === 'string' ? JSON.parse(s) : s;
-				} catch {
-					return null;
-				}
-			})
-			.filter(Boolean);
+		const recentSearches = recentSearchesRaw.filter(Boolean);
 
 		// Get top search terms
 		const termKeys = await storage.keys('term:*');

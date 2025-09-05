@@ -253,7 +253,7 @@
 								{#each filteredSfts.slice(0, 10) as sft, index}
 									<a
 										class="block px-4 py-3 transition-colors hover:bg-white/10"
-										href={`/tokens/${sft.id}`}
+										href={`/trade/${sft.id}`}
 										on:click={() => handleResultClick(sft, index)}
 									>
 										<div class="flex items-center justify-between">

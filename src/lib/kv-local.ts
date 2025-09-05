@@ -38,9 +38,17 @@ const impl = {
 		return await redis.lPush(key, stringValues);
 	},
 
-	async lrange(key: string, start: number, stop: number): Promise<string[]> {
+	async lrange(key: string, start: number, stop: number): Promise<unknown[]> {
 		if (!redis.isOpen) await redis.connect();
-		return await redis.lRange(key, start, stop);
+		const values = await redis.lRange(key, start, stop);
+		// Parse JSON strings to match Vercel KV behavior
+		return values.map((v) => {
+			try {
+				return JSON.parse(v);
+			} catch {
+				return v;
+			}
+		});
 	},
 
 	async ltrim(key: string, start: number, stop: number): Promise<string> {
