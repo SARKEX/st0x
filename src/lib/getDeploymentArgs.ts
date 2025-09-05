@@ -25,7 +25,7 @@ export type DcaDeploymentArgs = {
 export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 	const dcaStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/fddae4559e61e4b0ab323086946406bf18b11c7f/src/auction-dca.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/6f052d3cc7ccc509e0722f9a6134a17ab56ac629/src/auction-dca.rain'
 		)
 	).text();
 	const network = get(currentNetwork);
@@ -96,7 +96,7 @@ export type LimitOrderDeploymentArgs = {
 export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs) => {
 	const limitStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/fddae4559e61e4b0ab323086946406bf18b11c7f/src/fixed-limit.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/6f052d3cc7ccc509e0722f9a6134a17ab56ac629/src/fixed-limit.rain'
 		)
 	).text();
 	const network = get(currentNetwork);
@@ -159,7 +159,7 @@ export type MarketMakingDeploymentArgs = {
 export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeploymentArgs) => {
 	const dsfStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/fddae4559e61e4b0ab323086946406bf18b11c7f/src/dynamic-spread.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/6f052d3cc7ccc509e0722f9a6134a17ab56ac629/src/dynamic-spread.rain'
 		)
 	).text();
 	const network = get(currentNetwork);
@@ -259,7 +259,7 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	const network = get(currentNetwork);
 	const folioStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/1f1b2aaa3fa30c46d15eda87859f5a3330054c54/src/folio.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/478e75f0e84114dcd529a19f49e8c095b253a06a/src/folio.rain'
 		)
 	).text();
 	const guiResult = await DotrainOrderGui.newWithDeployment(
