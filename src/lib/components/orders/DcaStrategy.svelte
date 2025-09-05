@@ -84,18 +84,25 @@
 			return;
 		}
 		if ($connected) {
-			// For Buy: spend USDC (output), receive asset (input)
-			// For Sell: spend asset (output), receive USDC (input)
-			const outputTok = selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken;
+			// For Buy: input is asset (what we're accumulating), output is USDC (what we're spending)
+			// For Sell: input is USDC (what we're accumulating), output is asset (what we're spending)
 			const inputTok = selectedOrderType === 'Buy' ? selectedInputToken : selectedOutputToken;
+			const outputTok = selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken;
 			transactionStore.handleDcaDeploy({
 				outputToken: outputTok,
 				inputToken: inputTok,
 				budgetAmount: selectedAmount,
 				selectedPeriod: selectedPeriod,
 				selectedPeriodUnit: selectedPeriodUnit,
-				baseline: getBaseline(selectedOrderType, selectedBaseline),
-				kickoff: getBaseline(selectedOrderType, selectedInitialRatio),
+				// For DCA, prices need to be inverted for Buy orders (not Sell)
+				// Buy: User enters USDC price, but Rain expects asset/USDC ratio
+				// Sell: User enters USDC price, Rain expects USDC/asset ratio (same as entered)
+				baseline: selectedOrderType === 'Buy' 
+					? (1 / parseFloat(selectedBaseline || '1')).toString()
+					: selectedBaseline,
+				kickoff: selectedOrderType === 'Buy'
+					? (1 / parseFloat(selectedInitialRatio || '1')).toString()
+					: selectedInitialRatio,
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
 				inputVaultId: inputVaultId,
@@ -183,17 +190,17 @@
 			</div>
 		</div>
 
-		<!-- Budget and Period -->
+		<!-- Target Amount and Period -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Budget Amount
+					Target Amount
 					<span class="ml-1 text-xs text-gray-500"
 						>({selectedOrderType === 'Buy' ? 'USDC' : selectedInputToken.symbol})</span
 					>
 				</div>
 				<TradeAmountInput
-					aria-label="Budget Amount"
+					aria-label="Target Amount"
 					amountToken={selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
@@ -201,11 +208,11 @@
 				/>
 			</div>
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">Budget Period Every</div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Accumulation Period</div>
 				<div class="flex gap-2">
 					<div class="flex-grow">
 						<Input
-							aria-label="Budget period"
+							aria-label="Accumulation period"
 							type="number"
 							bind:amount={selectedPeriod}
 							validate={validatePeriod}
@@ -228,12 +235,11 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					{selectedOrderType === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
-					<span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
 				</div>
 				<Input
 					aria-label="Floor Price"
 					type="number"
-					unit={selectedInputToken.symbol}
+					unit="USDC"
 					bind:amount={selectedBaseline}
 					validate={validateBaseline}
 					bind:isError={selectedBaselineError}
@@ -242,12 +248,11 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Start Price
-					<span class="ml-1 text-xs text-gray-500">({selectedInputToken.symbol}/USDC)</span>
 				</div>
 				<Input
 					aria-label="Initial Ratio"
 					type="number"
-					unit={selectedInputToken.symbol}
+					unit="USDC"
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -262,7 +267,7 @@
 				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 				<div class="space-y-2 text-sm">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Total Budget</span>
+						<span class="text-gray-400">Target Amount</span>
 						<span class="font-medium">
 							{#if selectedOrderType === 'Buy'}
 								{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
@@ -273,9 +278,9 @@
 						</span>
 					</div>
 					<div class="flex justify-between">
-						<span class="text-gray-400">Period</span>
+						<span class="text-gray-400">Accumulation Period</span>
 						<span class="font-medium">
-							Every {selectedPeriod || '0'}
+							{selectedPeriod || '0'}
 							{selectedPeriodUnit.toLowerCase()}
 						</span>
 					</div>
