@@ -17,6 +17,16 @@
 	let password = '';
 	let loginError = false;
 
+	function getAverageResults(stats: any): number {
+		if (!stats || stats.totalSearches === 0) return 0;
+		return (
+			stats.recentSearches?.reduce(
+				(acc: number, s: { resultsCount?: number }) => acc + (s.resultsCount || 0),
+				0
+			) / stats.totalSearches || 0
+		);
+	}
+
 	onMount(async () => {
 		// Only fetch stats if authenticated
 		if (data.authenticated) {
@@ -116,11 +126,7 @@
 						/>
 						<MetricCard
 							label="Avg Results Count"
-							value={(serverStats.totalSearches > 0
-								? serverStats.recentSearches?.reduce((acc, s) => acc + (s.resultsCount || 0), 0) /
-									serverStats.totalSearches
-								: 0
-							).toFixed(1)}
+							value={getAverageResults(serverStats).toFixed(1)}
 							change="Average number of results per search"
 						/>
 					</div>

@@ -64,9 +64,9 @@
 			case '/':
 				return `Browse and trade tokenized stocks`;
 			case '/strategies':
-				return 'Manage your trading strategies';
+				return 'Manage automated trading strategies';
 			case '/dashboard':
-				return 'Your portfolio, orders, and vault positions';
+				return 'Portfolio, orders, and vault positions';
 			case '/platform-metrics':
 				return 'Platform statistics and metrics';
 			default:

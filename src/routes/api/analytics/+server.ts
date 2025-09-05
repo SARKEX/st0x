@@ -65,7 +65,9 @@ export const GET: RequestHandler = async () => {
 	try {
 		// Get recent searches
 		const recentSearchesRaw = await storage.lrange('recent:searches', 0, 99);
-		const recentSearches = recentSearchesRaw.filter(Boolean);
+		const recentSearches = recentSearchesRaw
+			.filter(Boolean)
+			.map((item) => (typeof item === 'string' ? JSON.parse(item) : item) as AnalyticsEvent);
 
 		// Get top search terms
 		const termKeys = await storage.keys('term:*');
