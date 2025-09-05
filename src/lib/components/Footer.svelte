@@ -115,24 +115,22 @@
 				<div class="mb-4">
 					<p class="mb-3 text-xs text-gray-400 sm:text-sm">Subscribe to our newsletter</p>
 					<form on:submit={handleNewsletterSubmit} class="space-y-2">
-						<div class="flex flex-col gap-2 sm:flex-row">
-							<input
-								type="email"
-								bind:value={email}
-								placeholder="Enter your email"
-								disabled={isSubmitting}
-								class="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-yellow-500/50 sm:text-sm"
-							/>
-							<Button
-								type="submit"
-								disabled={isSubmitting}
-								variant="secondary"
-								size="sm"
-								className="bg-yellow-500 text-black hover:bg-yellow-400 border-0 w-full sm:w-auto"
-							>
-								{isSubmitting ? 'Submitting...' : 'Subscribe'}
-							</Button>
-						</div>
+						<input
+							type="email"
+							bind:value={email}
+							placeholder="Enter your email"
+							disabled={isSubmitting}
+							class="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-yellow-500/50 sm:text-sm"
+						/>
+						<Button
+							type="submit"
+							disabled={isSubmitting}
+							variant="secondary"
+							size="sm"
+							className="bg-yellow-500 text-black hover:bg-yellow-400 border-0 w-full px-4"
+						>
+							{isSubmitting ? 'Submitting...' : 'Subscribe'}
+						</Button>
 						{#if submitMessage}
 							<p
 								class="text-xs {submitMessage.includes('Thank you')

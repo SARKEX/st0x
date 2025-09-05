@@ -131,11 +131,11 @@
 		return primary;
 	}
 
-	// Query for intraday data (5-minute intervals for more detail)
+	// Query for intraday data (30-minute intervals for minimized view)
 	$: intradayQuery = createQuery({
 		queryKey: ['intraday', symbol, $currentNetwork?.id],
 		queryFn: async () => {
-			const result = await fetchIntradayFresh(symbol as string, '5min');
+			const result = await fetchIntradayFresh(symbol as string, '30min');
 			return result;
 		},
 		enabled: !!symbol,
@@ -425,9 +425,9 @@
 
 		<!-- Header Section with Chart -->
 		<Section>
-			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-				<!-- Left: Price Info -->
-				<div>
+			<div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+				<!-- Left: Price Info (narrower) -->
+				<div class="lg:col-span-2">
 					<div class="mb-4">
 						<div class="flex items-center gap-3">
 							<img
@@ -527,9 +527,9 @@
 					</div>
 				</div>
 
-				<!-- Right: Chart -->
+				<!-- Right: Chart (wider) -->
 				<div
-					class={`${containerStyles.cardBordered} h-[55vw] max-h-96 min-h-56 p-2 sm:h-96`}
+					class={`${containerStyles.cardBordered} h-[55vw] max-h-96 min-h-56 p-2 sm:h-96 lg:col-span-3`}
 					style="display: flex; flex-direction: column;"
 				>
 					<div class="relative flex-1">
@@ -554,7 +554,7 @@
 								<p class="text-sm text-gray-400">Chart unavailable (API limit reached)</p>
 							</div>
 						{:else if $intradayQuery.data}
-							<EquityChart timeseriesData={$intradayQuery.data} />
+							<EquityChart timeseriesData={$intradayQuery.data} barCount={26} interval="30min" />
 						{:else}
 							<div class="flex h-full items-center justify-center">
 								<LoadingSpinner variant="inline" size="md" text="Loading chart..." />

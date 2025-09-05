@@ -38,14 +38,14 @@
 	<!-- Logo -->
 	<div class="p-4">
 		<div class="flex items-center gap-2">
-			<a href="/trade-list">
+			<a href="/">
 				<img
 					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
 					alt="ST0x Logo"
 					class="h-8 w-8 rounded-full md:h-9 md:w-9"
 				/>
 			</a>
-			<a href="/trade-list">
+			<a href="/">
 				<span
 					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
 					>ST0x</span
@@ -96,7 +96,7 @@
 				</div>
 			</div>
 			<a
-				href="/trade-list"
+				href="/"
 				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
 			>
 				<ExternalLinkIcon class="h-5 w-5" />

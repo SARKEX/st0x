@@ -9,6 +9,7 @@ async function alphaRequest(
 ): Promise<unknown | AlphaError> {
 	const search = new URLSearchParams({
 		function: func,
+		entitlement: 'realtime',
 		...(apiKey ? { apikey: apiKey } : {}),
 		...params
 	});

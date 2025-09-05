@@ -44,8 +44,8 @@
 
 			<!-- Center: Logo -->
 			<a
-				href="/trade-list"
-				aria-label="Go to trade list"
+				href="/"
+				aria-label="Go to home"
 				class="absolute left-1/2 -translate-x-1/2"
 			>
 				<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-8 w-auto" />
@@ -87,6 +87,15 @@
 					<p class="text-xs text-gray-400">{description}</p>
 				</div>
 			</div>
+
+			<!-- Center: Logo -->
+			<a
+				href="/"
+				aria-label="Go to home"
+				class="absolute left-1/2 -translate-x-1/2"
+			>
+				<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-10 w-auto" />
+			</a>
 
 			<!-- Right side: Controls -->
 			<div class="flex items-center gap-4">

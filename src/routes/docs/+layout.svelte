@@ -68,7 +68,7 @@
 						/>
 					</svg>
 				</Button>
-				<a href="/trade-list" aria-label="Go to trade list" class="flex items-center gap-2">
+				<a href="/" aria-label="Go to home" class="flex items-center gap-2">
 					<img
 						src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
 						alt="ST0x Logo"

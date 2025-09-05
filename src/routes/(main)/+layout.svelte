@@ -37,7 +37,6 @@
 
 		switch (pathname) {
 			case '/':
-			case '/trade-list':
 				return 'Trade';
 			case '/strategies':
 				return 'Strategies';
@@ -63,22 +62,13 @@
 
 		switch (pathname) {
 			case '/':
-			case '/trade-list':
-				return `Browse and trade tokenized stocks on ${$currentNetwork?.displayName || 'Network'}`;
+				return `Browse and trade tokenized stocks`;
 			case '/strategies':
 				return 'Manage your trading strategies';
 			case '/dashboard':
 				return 'Your portfolio, orders, and vault positions';
-			case '/portfolio':
-				return 'Your portfolio, orders, and vault positions';
 			case '/platform-metrics':
 				return 'Platform statistics and metrics';
-			case '/orderlist':
-				return 'Order management';
-			case '/vaultlist':
-				return 'Vault management';
-			case '/tokens':
-				return 'View all tokens';
 			default:
 				return 'ST0x Platform';
 		}
