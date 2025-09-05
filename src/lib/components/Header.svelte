@@ -43,11 +43,7 @@
 			</Button>
 
 			<!-- Center: Logo -->
-			<a
-				href="/"
-				aria-label="Go to home"
-				class="absolute left-1/2 -translate-x-1/2"
-			>
+			<a href="/" aria-label="Go to home" class="absolute left-1/2 -translate-x-1/2">
 				<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-8 w-auto" />
 			</a>
 
@@ -89,11 +85,7 @@
 			</div>
 
 			<!-- Center: Logo -->
-			<a
-				href="/"
-				aria-label="Go to home"
-				class="absolute left-1/2 -translate-x-1/2"
-			>
+			<a href="/" aria-label="Go to home" class="absolute left-1/2 -translate-x-1/2">
 				<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-10 w-auto" />
 			</a>
 

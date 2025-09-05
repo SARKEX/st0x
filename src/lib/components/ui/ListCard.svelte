@@ -19,7 +19,7 @@
 	<ul class="space-y-3">
 		{#each items as item}
 			<li>
-				<a 
+				<a
 					href={item.href}
 					class="block rounded-lg border border-white/5 bg-black/20 p-3 transition-all hover:border-yellow-500/30 hover:bg-yellow-500/5 hover:shadow-lg hover:shadow-yellow-500/10"
 				>
@@ -49,8 +49,18 @@
 										{/if}
 									</div>
 									<!-- Arrow icon to indicate clickable -->
-									<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+									<svg
+										class="h-4 w-4 text-gray-400"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M9 5l7 7-7 7"
+										/>
 									</svg>
 								</div>
 							</div>
