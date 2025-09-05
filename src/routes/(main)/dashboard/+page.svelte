@@ -47,14 +47,14 @@
 	let activeTab: 'portfolio' | 'orders' | 'vaults' | string = 'portfolio';
 
 	// Order List variables
-	let ordersActiveFilter: boolean | undefined = false;
+	let ordersActiveFilter: boolean | undefined = undefined; // Show inactive orders by default
 	let orderHashFilter: string | undefined = undefined;
-	let showMyOrders = true;
+	let showMyOrders = true; // Always show only user's orders
 	const ORDER_LIST_PAGE_SIZE = 1000;
 
 	// Vault List variables
 	let hideEmptyVaults: boolean | undefined = false;
-	let showMyVaults: boolean | undefined = false;
+	let showMyVaults: boolean | undefined = true; // Default to showing only user's vaults
 	let isProcessingBalances = false;
 	const VAULT_LIST_PAGE_SIZE = 1000;
 
@@ -148,8 +148,8 @@
 					}
 				],
 				{
-					owners: showMyOrders ? ($signerAddress ? [$signerAddress.toLowerCase()] : []) : [],
-					active: ordersActiveFilter ? undefined : true,
+					owners: $signerAddress ? [$signerAddress.toLowerCase()] : [], // Always filter by user's address
+					active: ordersActiveFilter, // undefined shows all, true shows active, false shows inactive
 					orderHash: orderHashFilter === '' ? undefined : orderHashFilter
 				},
 				{ page: pageParam + 1, pageSize: ORDER_LIST_PAGE_SIZE }
@@ -191,7 +191,7 @@
 					}
 				],
 				{
-					owners: showMyVaults ? ($signerAddress ? [$signerAddress.toLowerCase()] : []) : [],
+					owners: $signerAddress ? [$signerAddress.toLowerCase()] : [], // Always filter by user's address
 					hideZeroBalance: hideEmptyVaults ?? false
 				},
 				{ page: pageParam + 1, pageSize: VAULT_LIST_PAGE_SIZE }
@@ -490,12 +490,8 @@
 							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none sm:w-auto"
 						/>
 						<label class="flex w-full items-center gap-2 text-white sm:w-auto">
-							<input type="checkbox" bind:checked={showMyOrders} class="accent-yellow-500" />
-							<span class="text-xs sm:text-base">Show my orders</span>
-						</label>
-						<label class="flex w-full items-center gap-2 text-white sm:w-auto">
 							<input type="checkbox" bind:checked={ordersActiveFilter} class="accent-yellow-500" />
-							<span class="text-xs sm:text-base">Include Inactive orders</span>
+							<span class="text-xs sm:text-base">Show active orders only</span>
 						</label>
 					</div>
 					<OrderListTable query={ordersListQuery} />
@@ -636,15 +632,7 @@
 						{/if}
 
 						<div class="mb-4 sm:mb-6">
-							<label
-								class="flex w-full flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-2"
-							>
-								<input
-									type="checkbox"
-									bind:checked={showMyVaults}
-									class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-								/>
-								<span class="text-xs text-gray-300 sm:text-sm">Show only my vaults</span>
+							<label class="flex w-full items-center gap-2">
 								<input
 									type="checkbox"
 									bind:checked={hideEmptyVaults}

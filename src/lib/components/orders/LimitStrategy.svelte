@@ -78,16 +78,8 @@
 		}
 
 		if (selectedOrderType === 'Buy') {
-			transactionStore.handleLimitDeploy({
-				outputToken: selectedOutputToken,
-				inputToken: selectedInputToken,
-				ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
-				depositAmount: selectedAmount,
-				inputVaultId: inputVaultId,
-				outputVaultId: outputVaultId
-			});
-		} else {
-			// Sell: receive USDC, spend asset. Keep displayed price unchanged.
+			// Buy: input is asset, output is USDC
+			// We're buying the asset, so we deposit USDC and receive asset
 			const assetDecimals = selectedOutputToken?.decimals || 18;
 			const usdcDecimals = selectedInputToken?.decimals || 6;
 			const priceScaled = parseUnits(selectedInitialRatio || '0', usdcDecimals);
@@ -95,12 +87,21 @@
 			const usdcAmount = selectedAmount ? (selectedAmount * priceScaled) / scale : 0n;
 
 			transactionStore.handleLimitDeploy({
-				// Swap tokens so output is USDC
-				outputToken: selectedInputToken,
-				inputToken: selectedOutputToken,
+				inputToken: selectedOutputToken, // Asset is input
+				outputToken: selectedInputToken, // USDC is output
 				ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
-				// Deposit on output side, in USDC units
-				depositAmount: usdcAmount,
+				depositAmount: usdcAmount, // Deposit USDC amount
+				inputVaultId: inputVaultId,
+				outputVaultId: outputVaultId
+			});
+		} else {
+			// Sell: input is USDC, output is asset
+			// We're selling the asset, so we deposit asset and receive USDC
+			transactionStore.handleLimitDeploy({
+				inputToken: selectedInputToken, // USDC is input
+				outputToken: selectedOutputToken, // Asset is output
+				ioRatio: getBaseline(selectedOrderType, selectedInitialRatio),
+				depositAmount: selectedAmount, // Deposit asset amount
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
 			});
@@ -199,7 +200,7 @@
 				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 				<div class="space-y-2 text-sm">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Buying</span>
+						<span class="text-gray-400">{selectedOrderType === 'Buy' ? 'Buying' : 'Selling'}</span>
 						<span class="font-medium">
 							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
 							{selectedOutputToken.symbol}
@@ -213,7 +214,7 @@
 					</div>
 					<div class="mt-2 border-t border-white/10 pt-2">
 						<div class="flex justify-between">
-							<span class="text-gray-400">Total cost</span>
+							<span class="text-gray-400">Total</span>
 							<span class="text-lg font-semibold text-yellow-500">
 								{totalCost} USDC
 							</span>

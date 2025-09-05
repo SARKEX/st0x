@@ -54,11 +54,11 @@
 					>
 					<th
 						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-						>Inputs</th
+						>Buying</th
 					>
 					<th
 						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-						>Outputs</th
+						>Selling</th
 					>
 					<th
 						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
