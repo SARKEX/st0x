@@ -8,6 +8,7 @@
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import { gridStyles } from '$lib/utils/styles';
 	import Button from '$lib/components/ui/Button.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let localStats: any = null;
 	let serverStats: any = null;
@@ -62,7 +63,9 @@
 		</div>
 
 		{#if loading}
-			<div class="text-center text-gray-400">Loading analytics...</div>
+			<div class="flex min-h-[40vh] items-center justify-center">
+				<LoadingSpinner size="lg" text="Loading analytics..." />
+			</div>
 		{:else}
 			<!-- Local Session Stats -->
 			{#if localStats}

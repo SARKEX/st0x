@@ -15,8 +15,7 @@
 	// inline icons used instead of external icon package
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import * as alpha from '$lib/services/alpha';
-	import { connected } from 'svelte-wagmi';
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
+	// Removed wallet-gating for trading window
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { containerStyles } from '$lib/utils/styles';
@@ -49,14 +48,18 @@
 	// Tab state
 	let activeTab: 'fundamentals' | 'technical' | 'token' | 'mints-burns' = 'fundamentals';
 	let activeOrderType = 'limit';
-	let infoCollapsed = true;
-	let tradeCollapsed = true;
-	let priceDetailsCollapsed = true;
+	// Default to expanded on desktop; adjust on mount for mobile
+	let infoCollapsed = false;
+	let tradeCollapsed = false;
+	let priceDetailsCollapsed = false;
 
 	onMount(() => {
-		// Default: collapse price details on mobile, expand on larger screens
+		// Collapse panels on mobile, expanded on larger screens
 		if (typeof window !== 'undefined') {
-			priceDetailsCollapsed = window.innerWidth < 640;
+			const isMobile = window.innerWidth < 640;
+			priceDetailsCollapsed = isMobile;
+			infoCollapsed = isMobile;
+			tradeCollapsed = isMobile;
 		}
 		return () => {};
 	});
@@ -667,8 +670,10 @@
 										</div>
 									</div>
 								{:else}
-									<div class="col-span-full text-center text-gray-400">
-										Loading fundamental data...
+									<div class="col-span-full py-4">
+										<div class="flex items-center justify-center">
+											<LoadingSpinner size="md" text="Loading fundamental data..." />
+										</div>
 									</div>
 								{/if}
 							</div>
@@ -702,7 +707,9 @@
 												</div>
 											</div>
 										{:else}
-											<div class="text-sm text-gray-400">Loading...</div>
+											<div class="py-2">
+												<LoadingSpinner size="sm" text="Loading..." />
+											</div>
 										{/if}
 									</div>
 
@@ -729,7 +736,9 @@
 												</div>
 											</div>
 										{:else}
-											<div class="text-sm text-gray-400">Loading...</div>
+											<div class="py-2">
+												<LoadingSpinner size="sm" text="Loading..." />
+											</div>
 										{/if}
 									</div>
 
@@ -744,7 +753,9 @@
 												<div class="text-xs text-gray-400">On-Balance Volume</div>
 											</div>
 										{:else}
-											<div class="text-sm text-gray-400">Loading...</div>
+											<div class="py-2">
+												<LoadingSpinner size="sm" text="Loading..." />
+											</div>
 										{/if}
 									</div>
 								</div>
@@ -1105,22 +1116,13 @@
 							</Button>
 						</div>
 
-						{#if $connected}
-							<div class={containerStyles.cardBordered}>
-								{#if activeOrderType === 'limit'}
-									<LimitStrategy passedOutputToken={currentPythToken} currentPrice={latestPrice} />
-								{:else}
-									<DcaStrategy passedInputToken={currentPythToken} />
-								{/if}
-							</div>
-						{:else}
-							<div class="flex flex-col items-center justify-center gap-4 py-12">
-								<WalletConnect />
-								<p class="text-center text-sm text-gray-400">
-									Connect your wallet to start trading
-								</p>
-							</div>
-						{/if}
+						<div class={containerStyles.cardBordered}>
+							{#if activeOrderType === 'limit'}
+								<LimitStrategy passedOutputToken={currentPythToken} currentPrice={latestPrice} />
+							{:else}
+								<DcaStrategy passedInputToken={currentPythToken} />
+							{/if}
+						</div>
 					</div>
 				</div>
 			{/if}

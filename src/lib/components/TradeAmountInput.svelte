@@ -7,6 +7,7 @@
 	import { erc20Abi } from 'viem';
 	import type { Token } from 'sushi/currency';
 	import type { ValidateFunction } from '$lib/validateDeploymentArgs';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	export let amountToken: Token;
 	let inputAmount: string | undefined;
@@ -79,7 +80,9 @@
 	/>
 	<span class="text-left text-sm text-gray-400">
 		{#await balancePromise}
-			Loading balance...
+			<span class="inline-flex items-center gap-2">
+				<LoadingSpinner variant="inline" size="sm" text="Loading balance..." />
+			</span>
 		{:then data}
 			{#if data}
 				Balance: {formatUnits(data.balance, data.decimals)} {amountToken.symbol}

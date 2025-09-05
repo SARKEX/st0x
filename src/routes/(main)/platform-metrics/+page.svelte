@@ -15,6 +15,7 @@
 	// Consolidated table component usage
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	// State for network selector in token trading table
 	let selectedNetwork = networks[0];
@@ -311,245 +312,255 @@
 
 <div class="min-h-screen bg-gray-900 text-white">
 	<PageContainer>
-		<!-- Multi-Network Notice -->
-		<InfoBlock
-			variant="info"
-			title="Multi-Network Data"
-			description="Except where specified, all metrics are cross-network totals."
-		/>
+		{#if $allNetworksSftsQuery.isLoading || $allNetworksTradesQuery.isLoading}
+			<div class="flex min-h-[60vh] items-center justify-center">
+				<LoadingSpinner size="lg" text="Loading metrics..." />
+			</div>
+		{:else}
+			<!-- Multi-Network Notice -->
+			<InfoBlock
+				variant="info"
+				title="Multi-Network Data"
+				description="Except where specified, all metrics are cross-network totals."
+			/>
 
-		<!-- Top Metrics -->
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<MetricCard
-				label="Total Locked Value"
-				value={`$${totalTVL.toFixed(2)}`}
-				subtitle="All Networks • Live"
-				cardClass="bg-gray-800/50 border border-white/10"
-				paddingClass="p-6"
-				showGradient={false}
-				valueClass="text-3xl font-bold"
-			/>
-			<MetricCard
-				label="Trading Volume"
-				value={`$${tradingVolume.toFixed(2)}`}
-				subtitle="Last 30 days"
-				cardClass="bg-gray-800/50 border border-white/10"
-				paddingClass="p-6"
-				showGradient={false}
-				valueClass="text-3xl font-bold"
-			/>
-			<MetricCard
-				label="Total Trades"
-				value={`${totalTrades}`}
-				subtitle="Last 30 days"
-				cardClass="bg-gray-800/50 border border-white/10"
-				paddingClass="p-6"
-				showGradient={false}
-				valueClass="text-3xl font-bold"
-			/>
-			<MetricCard
-				label="Active ST0x"
-				value={`${activeST0x}`}
-				subtitle="Last 30 days"
-				cardClass="bg-gray-800/50 border border-white/10"
-				paddingClass="p-6"
-				showGradient={false}
-				valueClass="text-3xl font-bold"
-			/>
-		</div>
-
-		<!-- Stats by Network -->
-		<Section>
-			<div class="mb-6 flex items-center justify-between">
-				<div>
-					<h2 class="text-xl font-semibold">Stats by Network</h2>
-					<p class="mt-1 text-sm text-gray-400">
-						Breakdown of metrics across each supported network • Live data
-					</p>
-				</div>
-				<div class="flex items-center gap-2 text-sm text-green-400">
-					<div class="h-2 w-2 rounded-full bg-green-400"></div>
-					Live Data
-				</div>
+			<!-- Top Metrics -->
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<MetricCard
+					label="Total Locked Value"
+					value={`$${totalTVL.toFixed(2)}`}
+					subtitle="All Networks • Live"
+					cardClass="bg-gray-800/50 border border-white/10"
+					paddingClass="p-6"
+					showGradient={false}
+					valueClass="text-3xl font-bold"
+				/>
+				<MetricCard
+					label="Trading Volume"
+					value={`$${tradingVolume.toFixed(2)}`}
+					subtitle="Last 30 days"
+					cardClass="bg-gray-800/50 border border-white/10"
+					paddingClass="p-6"
+					showGradient={false}
+					valueClass="text-3xl font-bold"
+				/>
+				<MetricCard
+					label="Total Trades"
+					value={`${totalTrades}`}
+					subtitle="Last 30 days"
+					cardClass="bg-gray-800/50 border border-white/10"
+					paddingClass="p-6"
+					showGradient={false}
+					valueClass="text-3xl font-bold"
+				/>
+				<MetricCard
+					label="Active ST0x"
+					value={`${activeST0x}`}
+					subtitle="Last 30 days"
+					cardClass="bg-gray-800/50 border border-white/10"
+					paddingClass="p-6"
+					showGradient={false}
+					valueClass="text-3xl font-bold"
+				/>
 			</div>
 
-			<Table>
-				<thead>
-					<tr class="border-b border-white/10">
-						<th
-							class="sticky left-0 z-10 bg-gray-800 p-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>Network</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>TVL</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>ST0x</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>Tokens Minted</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>Tokens Redeemed</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>Tokens Circulating</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>Unique Addresses</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>24H Volume</th
-						>
-						<th
-							class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>7D Volume</th
-						>
-						<th
-							class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-							>Status</th
-						>
-					</tr>
-				</thead>
-				<tbody>
-					{#each networkStats as stats}
-						<tr>
-							<td class="sticky left-0 bg-gray-800 p-2 sm:p-3 sm:text-sm">
-								<div class="flex items-center gap-2 sm:gap-3">
-									<img
-										src={stats.network.chainId === 42161
-											? '/images/ARB.svg'
-											: stats.network.chainId === 8453
-												? '/images/BASE.svg'
-												: '/images/ETH.svg'}
-										alt={stats.network.displayName}
-										class="h-8 w-8 sm:h-10 sm:w-10"
-										class:rounded-full={stats.network.chainId !== 8453}
-									/>
-									<div class="min-w-0">
-										<div class="truncate font-medium">{stats.network.displayName}</div>
-										<div class="hidden text-xs text-gray-400 sm:block">{stats.network.name}</div>
-									</div>
-								</div>
-							</td>
-							<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm"
-								>${stats.tvl.toFixed(2)}</td
-							>
-							<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.st0xCount}</td>
-							<td class="p-2 text-right text-xs sm:p-3 sm:text-sm"
-								>{parseFloat(stats.tokensMinted).toFixed(2)}</td
-							>
-							<td class="p-2 text-right text-xs sm:p-3 sm:text-sm"
-								>{parseFloat(stats.tokensRedeemed).toFixed(2)}</td
-							>
-							<td class="p-2 text-right text-xs sm:p-3 sm:text-sm"
-								>{parseFloat(stats.tokensCirculating).toFixed(2)}</td
-							>
-							<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.uniqueAddresses}</td>
-							<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.dayVolume}</td>
-							<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.weekVolume}</td>
-							<td class="p-2 text-center text-xs sm:p-3 sm:text-sm">
-								<div class="flex items-center justify-center gap-1 sm:gap-2">
-									<div class="h-2 w-2 rounded-full bg-green-400"></div>
-									<span class="hidden text-xs text-green-400 sm:inline">Active</span>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</Table>
-		</Section>
-
-		<!-- Token Trading Volumes -->
-		<Section>
-			<div class="mb-6">
-				<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<!-- Stats by Network -->
+			<Section>
+				<div class="mb-6 flex items-center justify-between">
 					<div>
-						<h2 class="text-xl font-semibold">Token Trading Volumes</h2>
+						<h2 class="text-xl font-semibold">Stats by Network</h2>
 						<p class="mt-1 text-sm text-gray-400">
-							Trading activity for tokens on selected network
+							Breakdown of metrics across each supported network • Live data
 						</p>
 					</div>
-					<select
-						bind:value={selectedNetwork}
-						class="rounded-lg border border-white/10 bg-gray-800 px-4 py-2 text-sm focus:border-yellow-500 focus:outline-none"
-					>
-						{#each networks as network}
-							<option value={network}>{network.displayName}</option>
-						{/each}
-					</select>
+					<div class="flex items-center gap-2 text-sm text-green-400">
+						<div class="h-2 w-2 rounded-full bg-green-400"></div>
+						Live Data
+					</div>
 				</div>
-			</div>
 
-			{#if tokenTradingData.length > 0}
-				<div class="overflow-x-auto">
-					<table class="w-full">
-						<thead>
-							<tr
-								class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
+				<Table>
+					<thead>
+						<tr class="border-b border-white/10">
+							<th
+								class="sticky left-0 z-10 bg-gray-800 p-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>Network</th
 							>
-								<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
-								<th class="p-2 text-right sm:p-3">In Volume</th>
-								<th class="p-2 text-right sm:p-3">Out Volume</th>
-								<th class="p-2 text-right sm:p-3">Net Volume</th>
-								<th class="p-2 text-right sm:p-3">Total Volume</th>
-								<th class="p-2 text-right sm:p-3">USD Value</th>
-								<th class="p-2 text-right sm:p-3">Trades</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each tokenTradingData as token}
-								<tr class="border-b border-white/5 hover:bg-white/5">
-									<td class="sticky left-0 bg-gray-800 p-2 sm:p-3">
-										<div class="flex items-center gap-3">
-											{#if token.logoUrl}
-												<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
-											{:else}
-												<div
-													class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold"
-												>
-													{token.symbol?.charAt(0)}
-												</div>
-											{/if}
-											<div>
-												<div class="text-xs font-medium sm:text-sm">{token.symbol}</div>
-												<div class="hidden text-[11px] text-gray-400 sm:block">{token.name}</div>
-											</div>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>TVL</th
+							>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>ST0x</th
+							>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>Tokens Minted</th
+							>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>Tokens Redeemed</th
+							>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>Tokens Circulating</th
+							>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>Unique Addresses</th
+							>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>24H Volume</th
+							>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>7D Volume</th
+							>
+							<th
+								class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								>Status</th
+							>
+						</tr>
+					</thead>
+					<tbody>
+						{#each networkStats as stats}
+							<tr>
+								<td class="sticky left-0 bg-gray-800 p-2 sm:p-3 sm:text-sm">
+									<div class="flex items-center gap-2 sm:gap-3">
+										<img
+											src={stats.network.chainId === 42161
+												? '/images/ARB.svg'
+												: stats.network.chainId === 8453
+													? '/images/BASE.svg'
+													: '/images/ETH.svg'}
+											alt={stats.network.displayName}
+											class="h-8 w-8 sm:h-10 sm:w-10"
+											class:rounded-full={stats.network.chainId !== 8453}
+										/>
+										<div class="min-w-0">
+											<div class="truncate font-medium">{stats.network.displayName}</div>
+											<div class="hidden text-xs text-gray-400 sm:block">{stats.network.name}</div>
 										</div>
-									</td>
-									<td class="p-2 text-right sm:p-3">{parseFloat(token.inVolume).toFixed(3)}</td>
-									<td class="p-2 text-right sm:p-3">{parseFloat(token.outVolume).toFixed(3)}</td>
-									<td
-										class="p-2 text-right sm:p-3 {parseFloat(token.netVolume) >= 0
-											? 'text-green-400'
-											: 'text-red-400'}"
-									>
-										{parseFloat(token.netVolume).toFixed(3)}
-									</td>
-									<td class="p-2 text-right text-yellow-400 sm:p-3"
-										>{parseFloat(token.totalVolume).toFixed(3)}</td
-									>
-									<td class="p-2 text-right font-medium sm:p-3">{token.usdValue}</td>
-									<td class="p-2 text-right sm:p-3">{token.trades}</td>
-								</tr>
+									</div>
+								</td>
+								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm"
+									>${stats.tvl.toFixed(2)}</td
+								>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.st0xCount}</td>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm"
+									>{parseFloat(stats.tokensMinted).toFixed(2)}</td
+								>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm"
+									>{parseFloat(stats.tokensRedeemed).toFixed(2)}</td
+								>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm"
+									>{parseFloat(stats.tokensCirculating).toFixed(2)}</td
+								>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.uniqueAddresses}</td>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.dayVolume}</td>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.weekVolume}</td>
+								<td class="p-2 text-center text-xs sm:p-3 sm:text-sm">
+									<div class="flex items-center justify-center gap-1 sm:gap-2">
+										<div class="h-2 w-2 rounded-full bg-green-400"></div>
+										<span class="hidden text-xs text-green-400 sm:inline">Active</span>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</Table>
+			</Section>
+
+			<!-- Token Trading Volumes -->
+			<Section>
+				<div class="mb-6">
+					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+						<div>
+							<h2 class="text-xl font-semibold">Token Trading Volumes</h2>
+							<p class="mt-1 text-sm text-gray-400">
+								Trading activity for tokens on selected network
+							</p>
+						</div>
+						<select
+							bind:value={selectedNetwork}
+							class="rounded-lg border border-white/10 bg-gray-800 px-4 py-2 text-sm focus:border-yellow-500 focus:outline-none"
+						>
+							{#each networks as network}
+								<option value={network}>{network.displayName}</option>
 							{/each}
-						</tbody>
-					</table>
+						</select>
+					</div>
 				</div>
-			{:else}
-				<EmptyState
-					description="No trading data available for {selectedNetwork.displayName}"
-					showBorder={true}
-				/>
-			{/if}
-		</Section>
+
+				{#if tokenTradingData.length > 0}
+					<div class="overflow-x-auto">
+						<table class="w-full">
+							<thead>
+								<tr
+									class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
+								>
+									<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
+									<th class="p-2 text-right sm:p-3">In Volume</th>
+									<th class="p-2 text-right sm:p-3">Out Volume</th>
+									<th class="p-2 text-right sm:p-3">Net Volume</th>
+									<th class="p-2 text-right sm:p-3">Total Volume</th>
+									<th class="p-2 text-right sm:p-3">USD Value</th>
+									<th class="p-2 text-right sm:p-3">Trades</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each tokenTradingData as token}
+									<tr class="border-b border-white/5 hover:bg-white/5">
+										<td class="sticky left-0 bg-gray-800 p-2 sm:p-3">
+											<div class="flex items-center gap-3">
+												{#if token.logoUrl}
+													<img
+														src={token.logoUrl}
+														alt={token.symbol}
+														class="h-8 w-8 rounded-full"
+													/>
+												{:else}
+													<div
+														class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold"
+													>
+														{token.symbol?.charAt(0)}
+													</div>
+												{/if}
+												<div>
+													<div class="text-xs font-medium sm:text-sm">{token.symbol}</div>
+													<div class="hidden text-[11px] text-gray-400 sm:block">{token.name}</div>
+												</div>
+											</div>
+										</td>
+										<td class="p-2 text-right sm:p-3">{parseFloat(token.inVolume).toFixed(3)}</td>
+										<td class="p-2 text-right sm:p-3">{parseFloat(token.outVolume).toFixed(3)}</td>
+										<td
+											class="p-2 text-right sm:p-3 {parseFloat(token.netVolume) >= 0
+												? 'text-green-400'
+												: 'text-red-400'}"
+										>
+											{parseFloat(token.netVolume).toFixed(3)}
+										</td>
+										<td class="p-2 text-right text-yellow-400 sm:p-3"
+											>{parseFloat(token.totalVolume).toFixed(3)}</td
+										>
+										<td class="p-2 text-right font-medium sm:p-3">{token.usdValue}</td>
+										<td class="p-2 text-right sm:p-3">{token.trades}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{:else}
+					<EmptyState
+						description="No trading data available for {selectedNetwork.displayName}"
+						showBorder={true}
+					/>
+				{/if}
+			</Section>
+		{/if}
 	</PageContainer>
 
 	<Footer />

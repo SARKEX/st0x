@@ -18,6 +18,9 @@
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	import { containerStyles } from '$lib/utils/styles';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Modal from '$lib/components/ui/Modal.svelte';
+	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 
 	let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
 
@@ -76,6 +79,10 @@
 		selectedInitialRatioError;
 
 	const handleDcaDeploy = () => {
+		if (!$connected) {
+			showConnectModal = true;
+			return;
+		}
 		if ($connected) {
 			// For Buy: spend USDC (output), receive asset (input)
 			// For Sell: spend asset (output), receive USDC (input)
@@ -97,6 +104,9 @@
 			});
 		}
 	};
+
+	// Wallet connect modal state
+	let showConnectModal = false;
 
 	// Calculate average price per period
 	$: avgPricePerPeriod =
@@ -354,6 +364,23 @@
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">
-		<p class="text-gray-400">Loading...</p>
+		<LoadingSpinner size="md" text="Loading..." />
 	</div>
 {/if}
+
+<!-- Connect Wallet Modal -->
+<Modal
+	show={showConnectModal}
+	title="Connect Your Wallet"
+	maxWidthClass="max-w-lg"
+	onClose={() => (showConnectModal = false)}
+>
+	<div class="space-y-4">
+		<WalletConnectionPrompt
+			title="Wallet Required to Place Order"
+			description="Connect your wallet to continue. After connecting, click Place again to submit your order."
+			showSection={false}
+			minHeight={false}
+		/>
+	</div>
+</Modal>

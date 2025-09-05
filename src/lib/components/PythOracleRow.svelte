@@ -3,6 +3,7 @@
 	import { currentNetwork } from '$lib/stores';
 	import type { PythToken, ApiStockQuote } from '$lib/types';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	type CommonToken = Partial<PythToken> & { symbol?: string; address: string };
 	export let token: CommonToken;
@@ -52,7 +53,11 @@
 <!-- Unified Table Row (responsive) -->
 <tr>
 	{#if loading}
-		<td class="px-2 py-1" colspan="4">Loading...</td>
+		<td class="px-2 py-1" colspan="4">
+			<div class="flex items-center justify-center">
+				<LoadingSpinner size="sm" text="" showText={false} />
+			</div>
+		</td>
 	{:else if error}
 		<td class="px-2 py-1 text-red-400" colspan="4">{error}</td>
 	{:else if priceData}
