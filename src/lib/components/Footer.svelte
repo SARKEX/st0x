@@ -3,48 +3,10 @@
 	import { currentNetwork } from '$lib/stores';
 	import Button from '$lib/components/ui/Button.svelte';
 
-	let email = '';
-	let isSubmitting = false;
-	let submitMessage = '';
-
-	async function handleNewsletterSubmit(e: Event) {
-		e.preventDefault();
-		isSubmitting = true;
-		submitMessage = '';
-
-		// Basic email validation
-		if (!email || !email.includes('@')) {
-			submitMessage = 'Please enter a valid email address';
-			isSubmitting = false;
-			return;
-		}
-
-		try {
-			const response = await fetch('/api/newsletter', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ email })
-			});
-
-			const data = await response.json();
-
-			if (data.success) {
-				submitMessage = data.message || 'Thank you for subscribing!';
-				email = '';
-			} else {
-				submitMessage = data.error || 'Something went wrong. Please try again.';
-			}
-		} catch {
-			submitMessage = 'Something went wrong. Please try again.';
-		} finally {
-			isSubmitting = false;
-			setTimeout(() => {
-				submitMessage = '';
-			}, 5000);
-		}
-	}
+	// Mailchimp embedded form details (as provided)
+	const MC_EMBED_ACTION =
+		'https://st0x.us16.list-manage.com/subscribe/post?u=bd31e8a29d4a816aaa70e665a&id=fe76c8ce23&f_id=00d364e0f0';
+	const HONEYPOT_NAME = 'b_bd31e8a29d4a816aaa70e665a_fe76c8ce23';
 </script>
 
 <!-- Footer -->
@@ -114,32 +76,27 @@
 				<!-- Newsletter Signup -->
 				<div class="mb-4">
 					<p class="mb-3 text-xs text-gray-400 sm:text-sm">Subscribe to our newsletter</p>
-					<form on:submit={handleNewsletterSubmit} class="space-y-2">
+					<form action={MC_EMBED_ACTION} method="post" target="_self" class="space-y-2">
+						<label for="mce-EMAIL" class="sr-only">Email Address</label>
 						<input
+							id="mce-EMAIL"
+							name="EMAIL"
 							type="email"
-							bind:value={email}
+							required
 							placeholder="Enter your email"
-							disabled={isSubmitting}
 							class="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-yellow-500/50 sm:text-sm"
 						/>
+						<div aria-hidden="true" style="position: absolute; left: -5000px;">
+							<input type="text" name={HONEYPOT_NAME} tabindex="-1" value="" />
+						</div>
 						<Button
 							type="submit"
-							disabled={isSubmitting}
 							variant="secondary"
 							size="sm"
 							className="bg-yellow-500 text-black hover:bg-yellow-400 border-0 w-full px-4"
 						>
-							{isSubmitting ? 'Submitting...' : 'Subscribe'}
+							Subscribe
 						</Button>
-						{#if submitMessage}
-							<p
-								class="text-xs {submitMessage.includes('Thank you')
-									? 'text-green-400'
-									: 'text-red-400'}"
-							>
-								{submitMessage}
-							</p>
-						{/if}
 					</form>
 				</div>
 
