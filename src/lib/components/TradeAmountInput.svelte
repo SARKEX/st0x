@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Input from './Input.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits, parseUnits } from 'viem';
 	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -7,6 +7,7 @@
 	import { erc20Abi } from 'viem';
 	import type { Token } from 'sushi/currency';
 	import type { ValidateFunction } from '$lib/validateDeploymentArgs';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	export let amountToken: Token;
 	let inputAmount: string | undefined;
@@ -67,6 +68,7 @@
 
 <div class="flex flex-col gap-2">
 	<Input
+		{...$$restProps}
 		bind:amount={inputAmount}
 		type="number"
 		unit={amountToken.symbol}
@@ -78,7 +80,9 @@
 	/>
 	<span class="text-left text-sm text-gray-400">
 		{#await balancePromise}
-			Loading balance...
+			<span class="inline-flex items-center gap-2">
+				<LoadingSpinner variant="inline" size="sm" text="Loading balance..." />
+			</span>
 		{:then data}
 			{#if data}
 				Balance: {formatUnits(data.balance, data.decimals)} {amountToken.symbol}

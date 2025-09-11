@@ -1,17 +1,15 @@
 <script lang="ts">
 	import { getAllTokensByNetwork } from '$lib/network';
-	import Select from '$lib/components/Select.svelte';
-	import TokenSelect from '$lib/components/TokenSelect.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { Token } from 'sushi/currency';
+	import type { PythToken } from '$lib/types';
 	import {
 		validateBaseline,
-		validateOverrideDepositAmount,
 		validatePeriod,
 		validateSelectedAmount
 	} from '$lib/validateDeploymentArgs';
-	import Input from '$lib/components/Input.svelte';
-	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
@@ -19,102 +17,112 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+	import { containerStyles } from '$lib/utils/styles';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Modal from '$lib/components/ui/Modal.svelte';
+	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+
+	let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
+
+	export let passedInputToken: PythToken | undefined; // The token we're accumulating
 
 	// Filter tokens based on current network
-	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
+	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
-	// Initialize selected tokens when network changes, but preserve user selections if valid
-	$: if (ALL_TOKENS.length > 0) {
-		// Check if current selections are still valid for the new network
-		const inputTokenStillValid =
-			selectedInputToken &&
-			ALL_TOKENS.some((token) => token.address === selectedInputToken.address);
-		const outputTokenStillValid =
-			selectedOutputToken &&
-			ALL_TOKENS.some((token) => token.address === selectedOutputToken.address);
+	// Initialize tokens - accumulating token from prop, USDC for payment
+	let selectedInputToken: Token;
+	let selectedOutputToken: Token;
 
-		// Only reset if current selections are not valid for the new network
-		if (!inputTokenStillValid) {
-			selectedInputToken = ALL_TOKENS[0];
-		}
-		if (!outputTokenStillValid) {
-			selectedOutputToken = ALL_TOKENS[ALL_TOKENS.length - 1];
-		}
+	// Resolve tokens whenever network, token list, or prop changes
+	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
+		const usdcToken = ALL_TOKENS.find((t) => t.symbol?.toUpperCase() === 'USDC');
+		selectedOutputToken = usdcToken || ALL_TOKENS[0];
+		selectedInputToken =
+			(passedInputToken as unknown as Token) || selectedInputToken || ALL_TOKENS[0];
 	}
 
-	let selectedInputToken: Token = getAllTokensByNetwork(42161)[0]; // Initialize with Arbitrum tokens
-	let selectedOutputToken: Token =
-		getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
 	let selectedAmount: bigint = 0n;
 	let selectedPeriodUnit: 'Days' | 'Hours' | 'Minutes' = 'Days';
 	let selectedPeriod: string = '';
 	let selectedBaseline: string = '';
 	let selectedInitialRatio: string = '';
 
-	let overrideDepositAmount: bigint = 0n;
-	let overrideMinTradeAmount: bigint = 0n;
-	let overrideMaxTradeAmount: bigint = 0n;
 	let inputVaultId: Hex | undefined;
 	let outputVaultId: Hex | undefined;
 
 	$: isInputTokenSameAsOutputToken =
-		selectedOutputToken.address.toLowerCase() === selectedInputToken.address.toLowerCase();
-
-	let showAdvancedOptions = false;
+		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
 
 	// errors
 	let selectedAmountError: boolean = false;
 	let selectedPeriodError: boolean = false;
-	let overrideDepositAmountError: boolean = false;
-	let overrideMinTradeAmountError: boolean = false;
-	let overrideMaxTradeAmountError: boolean = false;
 	let inputVaultIdError: boolean = false;
 	let outputVaultIdError: boolean = false;
 	let selectedBaselineError: boolean = false;
 	let selectedInitialRatioError: boolean = false;
 
-	$: depositAmount = showAdvancedOptions ? overrideDepositAmount : selectedAmount;
-
-	$: maxTradeAmount = showAdvancedOptions
-		? overrideMaxTradeAmount
-		: selectedAmount
-			? selectedAmount / 10n
-			: 0n;
-	$: minTradeAmount = showAdvancedOptions
-		? overrideMinTradeAmount
-		: selectedAmount
-			? selectedAmount / 50n
-			: 0n;
+	$: depositAmount = selectedAmount;
+	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
+	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
 
 	$: disableDeploy =
 		!selectedAmount ||
 		!selectedPeriod ||
 		!selectedBaseline ||
 		!selectedInitialRatio ||
-		(showAdvancedOptions && overrideDepositAmount == undefined) ||
-		(showAdvancedOptions && overrideMinTradeAmount == undefined) ||
-		(showAdvancedOptions && overrideMaxTradeAmount == undefined) ||
 		inputVaultIdError ||
 		outputVaultIdError ||
 		selectedAmountError ||
 		selectedPeriodError ||
 		selectedBaselineError ||
-		(showAdvancedOptions && overrideDepositAmountError) ||
-		(showAdvancedOptions && overrideMinTradeAmountError) ||
-		(showAdvancedOptions && overrideMaxTradeAmountError) ||
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError;
 
 	const handleDcaDeploy = () => {
+		const normalizeDecimal = (v: string): string => {
+			if (!v) return v;
+			const n = Number(v);
+			if (!Number.isFinite(n)) return v;
+			// format to 18 fractional digits, then trim trailing zeros and dot
+			return n
+				.toFixed(18)
+				.replace(/\.0+$/, '')
+				.replace(/\.(.*?)(0+)$/, (m, p1) => (p1 ? `.${p1}`.replace(/\.$/, '') : ''))
+				.replace(/\.$/, '');
+		};
+
+		const invertAndNormalize = (v: string): string => {
+			const n = Number(v || '0');
+			if (!Number.isFinite(n) || n === 0) return '0';
+			return normalizeDecimal(String(1 / n));
+		};
+
+		if (!$connected) {
+			showConnectModal = true;
+			return;
+		}
 		if ($connected) {
+			// For Buy: input is asset (what we're accumulating), output is USDC (what we're spending)
+			// For Sell: input is USDC (what we're accumulating), output is asset (what we're spending)
+			const inputTok = selectedOrderType === 'Buy' ? selectedInputToken : selectedOutputToken;
+			const outputTok = selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken;
 			transactionStore.handleDcaDeploy({
-				outputToken: selectedOutputToken,
-				inputToken: selectedInputToken,
+				outputToken: outputTok,
+				inputToken: inputTok,
 				budgetAmount: selectedAmount,
 				selectedPeriod: selectedPeriod,
 				selectedPeriodUnit: selectedPeriodUnit,
-				baseline: selectedBaseline,
-				kickoff: selectedInitialRatio,
+				// For DCA, prices need to be inverted for Buy orders (not Sell)
+				// Buy: User enters USDC price, but Rain expects asset/USDC ratio
+				// Sell: User enters USDC price, Rain expects USDC/asset ratio (same as entered)
+				baseline:
+					selectedOrderType === 'Buy'
+						? invertAndNormalize(selectedBaseline)
+						: normalizeDecimal(selectedBaseline),
+				kickoff:
+					selectedOrderType === 'Buy'
+						? invertAndNormalize(selectedInitialRatio)
+						: normalizeDecimal(selectedInitialRatio),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
 				inputVaultId: inputVaultId,
@@ -123,48 +131,123 @@
 			});
 		}
 	};
+
+	// Wallet connect modal state
+	let showConnectModal = false;
+
+	// Calculate average amount per period (use correct decimals for order type)
+	$: avgPricePerPeriod = (() => {
+		if (!selectedAmount || !selectedPeriod) return '0.00';
+		const decimals =
+			selectedOrderType === 'Buy'
+				? selectedOutputToken?.decimals || 18
+				: selectedInputToken?.decimals || 18;
+		const amount = parseFloat(formatUnits(selectedAmount, decimals));
+		const periods = parseFloat(selectedPeriod || '1');
+		if (!Number.isFinite(amount) || !Number.isFinite(periods) || periods === 0) return '0.00';
+		const dp = selectedOrderType === 'Buy' ? 2 : 6; // Preserve 2dp for Buy (USDC), higher precision for Sell
+		return (amount / periods).toFixed(dp);
+	})();
+
+	// Dynamic label for accumulation/divestment depending on order type
+	$: periodLabel = selectedOrderType === 'Buy' ? 'Accumulation Period' : 'Divestment Period';
+
+	// Default Start Price to oracle price when available and if user hasn't entered a value yet
+	$: if (hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
+		const feedId = (selectedInputToken as unknown as { priceFeedId?: string })?.priceFeedId;
+		if (feedId) {
+			fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`)
+				.then((r) => r.json())
+				.then((data) => {
+					const parsed = data?.parsed?.[0]?.price;
+					if (parsed) {
+						const px = Number(parsed.price) * Math.pow(10, parsed.expo);
+						if (!Number.isNaN(px) && !selectedInitialRatio) {
+							selectedInitialRatio = String(px);
+						}
+					}
+				})
+				.catch(() => {
+					// silently ignore; user can input manually
+				});
+		}
+	}
 </script>
 
-<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
-	<div class="space-y-6 lg:col-span-2">
-		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Token to Accumulate</span>
-				<TokenSelect options={ALL_TOKENS} bind:selected={selectedInputToken} />
+{#if $currentNetwork && ALL_TOKENS.length > 0}
+	<div class="space-y-4">
+		<!-- Action toggle and header -->
+		<div class="rounded-lg bg-gray-800/50 p-4">
+			<div class="mb-3 flex gap-2">
+				<button
+					on:click={() => (selectedOrderType = 'Buy')}
+					class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType ===
+					'Buy'
+						? 'bg-yellow-500/20 text-yellow-500'
+						: 'text-gray-400 hover:text-white'}">Buy</button
+				>
+				<button
+					on:click={() => (selectedOrderType = 'Sell')}
+					class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType ===
+					'Sell'
+						? 'bg-yellow-500/20 text-yellow-500'
+						: 'text-gray-400 hover:text-white'}">Sell</button
+				>
 			</div>
-			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Pay With</span>
-				<TokenSelect options={ALL_TOKENS} bind:selected={selectedOutputToken} />
-			</div>
-			{#if isInputTokenSameAsOutputToken}
-				<div class="col-span-full mt-0 text-sm text-red-500">
-					Same tokens are not allowed for both budget and buy tokens
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					<span class="text-sm text-gray-400"
+						>{selectedOrderType === 'Buy' ? 'Buying' : 'Selling'}</span
+					>
+					<div class="flex items-center gap-2">
+						{#if selectedInputToken.logoUrl}
+							<img
+								src={selectedInputToken.logoUrl}
+								alt={selectedInputToken.symbol}
+								class="h-6 w-6 rounded-full"
+							/>
+						{/if}
+						<span class="text-lg font-semibold">{selectedInputToken.symbol}</span>
+					</div>
 				</div>
-			{/if}
+				<div class="flex items-center gap-2 text-sm text-gray-400">
+					<span>{selectedOrderType === 'Buy' ? 'with' : 'for'}</span>
+					<img src="/images/USDC.png" alt="USDC" class="h-5 w-5" />
+					<span>USDC</span>
+				</div>
+			</div>
 		</div>
 
-		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+		<!-- Target Amount and Period -->
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Budget Amount</span>
+				<div class="mb-2 block text-sm font-medium text-gray-300">
+					Target Amount
+					<span class="ml-1 text-xs text-gray-500"
+						>({selectedOrderType === 'Buy' ? 'USDC' : selectedInputToken.symbol})</span
+					>
+				</div>
 				<TradeAmountInput
-					amountToken={selectedOutputToken}
+					aria-label="Target Amount"
+					amountToken={selectedOrderType === 'Buy' ? selectedOutputToken : selectedInputToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
 				/>
 			</div>
 			<div>
-				<span class="mb-2 block text-sm font-medium text-gray-300">Budget Period Every</span>
+				<div class="mb-2 block text-sm font-medium text-gray-300">{periodLabel}</div>
 				<div class="flex gap-2">
-					<div class="flex-grow text-gray-600">
+					<div class="flex-grow">
 						<Input
+							aria-label="Accumulation period"
 							type="number"
 							bind:amount={selectedPeriod}
 							validate={validatePeriod}
 							bind:isError={selectedPeriodError}
 						/>
 					</div>
-					<div class="text-gray-600">
+					<div class="w-28">
 						<Select
 							options={['Days', 'Hours', 'Minutes']}
 							bind:selected={selectedPeriodUnit}
@@ -175,32 +258,27 @@
 			</div>
 		</div>
 
-		<div>
-			<span class="mb-2 block text-sm font-medium text-gray-300">
-				Floor Price {selectedInputToken && selectedOutputToken
-					? `${selectedInputToken.symbol}/${selectedOutputToken.symbol}`
-					: ''}
-			</span>
-			<div class="relative">
+		<!-- Price Settings -->
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">
+					{selectedOrderType === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
+				</div>
 				<Input
+					aria-label="Floor Price"
 					type="number"
-					unit={selectedInputToken.symbol}
+					unit="USDC"
 					bind:amount={selectedBaseline}
 					validate={validateBaseline}
 					bind:isError={selectedBaselineError}
 				/>
 			</div>
-		</div>
-		<div>
-			<span class="mb-2 block text-sm font-medium text-gray-300">
-				Initial Ratio {selectedInputToken && selectedOutputToken
-					? `${selectedInputToken.symbol}/${selectedOutputToken.symbol}`
-					: ''}
-			</span>
-			<div class="relative">
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Start Price</div>
 				<Input
+					aria-label="Initial Ratio"
 					type="number"
-					unit={selectedInputToken.symbol}
+					unit="USDC"
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -208,234 +286,132 @@
 			</div>
 		</div>
 
-		<!-- Advanced Toggle -->
-		<div class="mb-6 flex items-center gap-3">
-			<button
-				on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
-				class="relative h-6 w-12 rounded-full transition-colors {showAdvancedOptions
-					? 'bg-blue-500'
-					: 'bg-gray-600'}"
-			>
-				<div
-					class="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform {showAdvancedOptions
-						? 'translate-x-6'
-						: 'translate-x-0.5'}"
-				/>
-			</button>
-			<span class="text-sm font-medium">Show advanced options</span>
-		</div>
-
-		{#if showAdvancedOptions}
-			<div class="space-y-4 rounded-lg border border-white/5 bg-gray-800/30 p-4">
-				<h4 class="text-sm font-medium text-gray-300">Advanced Options</h4>
-
-				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-					<div>
-						<span class="mb-2 block text-sm font-medium text-gray-300">Custom deposit amount</span>
-						<div class="relative">
-							<TradeAmountInput
-								amountToken={selectedOutputToken}
-								bind:amount={overrideDepositAmount}
-								validate={validateOverrideDepositAmount}
-								bind:isError={overrideDepositAmountError}
-							/>
-						</div>
-					</div>
-					<div>
-						<span class="mb-2 block text-sm font-medium text-gray-300">Min Trade Amount</span>
-						<div class="relative">
-							<TradeAmountInput
-								amountToken={selectedOutputToken}
-								bind:amount={overrideMinTradeAmount}
-								validate={validateSelectedAmount}
-								bind:isError={overrideMinTradeAmountError}
-							/>
-						</div>
-					</div>
-					<div>
-						<span class="mb-2 block text-sm font-medium text-gray-300">Max Trade Amount</span>
-						<div class="relative">
-							<TradeAmountInput
-								amountToken={selectedOutputToken}
-								bind:amount={overrideMaxTradeAmount}
-								validate={validateSelectedAmount}
-								bind:isError={overrideMaxTradeAmountError}
-							/>
-						</div>
-					</div>
-				</div>
-				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-					<div class="flex flex-col gap-2">
-						<span class="text-left text-sm font-medium text-gray-400">
-							Input {selectedInputToken.symbol} Vault ID
+		<!-- Summary and Market Price side by side -->
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			<!-- Order Summary -->
+			<div class={containerStyles.cardBordered}>
+				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+				<div class="space-y-2 text-sm">
+					<div class="flex justify-between">
+						<span class="text-gray-400">Target Amount</span>
+						<span class="font-medium">
+							{#if selectedOrderType === 'Buy'}
+								{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
+							{:else}
+								{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
+								{selectedInputToken.symbol}
+							{/if}
 						</span>
-						<VaultIdInput bind:vaultId={inputVaultId} bind:isError={inputVaultIdError} />
 					</div>
-					<div class="flex flex-col gap-2">
-						<span class="text-left text-sm font-medium text-gray-400">
-							Output {selectedOutputToken.symbol} Vault ID
+					<div class="flex justify-between">
+						<span class="text-gray-400">{periodLabel}</span>
+						<span class="font-medium">
+							{selectedPeriod || '0'}
+							{selectedPeriodUnit.toLowerCase()}
 						</span>
-						<VaultIdInput bind:vaultId={outputVaultId} bind:isError={outputVaultIdError} />
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Average per period</span>
+						<span class="font-medium">
+							{#if selectedOrderType === 'Buy'}
+								~{avgPricePerPeriod} USDC
+							{:else}
+								~{avgPricePerPeriod} {selectedInputToken.symbol}
+							{/if}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Min trade size</span>
+						<span class="text-xs font-medium">
+							{#if selectedOrderType === 'Buy'}
+								{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{:else}
+								{minTradeAmount ? formatUnits(minTradeAmount, selectedInputToken.decimals) : '0'}
+								{selectedInputToken.symbol}
+							{/if}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Max trade size</span>
+						<span class="text-xs font-medium">
+							{#if selectedOrderType === 'Buy'}
+								{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{:else}
+								{maxTradeAmount ? formatUnits(maxTradeAmount, selectedInputToken.decimals) : '0'}
+								{selectedInputToken.symbol}
+							{/if}
+						</span>
 					</div>
 				</div>
 			</div>
-		{/if}
-	</div>
 
-	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
-	<div class="mt-4 space-y-4 lg:mt-0">
-		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
-			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
-			<div class="hidden overflow-x-auto sm:block">
-				<table class="min-w-full text-sm text-gray-200">
-					<thead>
-						<tr>
-							<th class="px-2 py-1 text-left">Token</th>
-							<th class="px-2 py-1 text-right">Oracle Price</th>
-							<th class="px-2 py-1 text-right">Price Certainty</th>
-							<th class="px-2 py-1 text-right">Real-Time</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#if hasValidPriceFeedId(selectedInputToken)}
-							<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
-						{:else}
-							<tr>
-								<td class="px-2 py-1">{selectedInputToken?.symbol ?? '-'}</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
-							</tr>
-						{/if}
-						{#if hasValidPriceFeedId(selectedOutputToken)}
-							<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
-						{:else}
-							<tr>
-								<td class="px-2 py-1">{selectedOutputToken?.symbol ?? '-'}</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
-							</tr>
-						{/if}
-					</tbody>
-				</table>
-			</div>
-			<div class="mt-2 flex flex-col gap-2 sm:hidden">
-				{#if hasValidPriceFeedId(selectedInputToken)}
-					<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
-				{:else}
-					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>{selectedInputToken?.symbol ?? '-'}</div>
-						<div><span class="font-semibold">Oracle Price: </span>-</div>
-						<div><span class="font-semibold">Price Certainty: </span>-</div>
-						<div><span class="font-semibold">Real-Time: </span>-</div>
+			<!-- Current Market Price -->
+			{#if hasValidPriceFeedId(selectedInputToken)}
+				<div class={containerStyles.cardBordered}>
+					<h4 class="mb-3 text-sm font-medium text-gray-300">Current Market Price</h4>
+					<div class="overflow-x-auto">
+						<table class="min-w-full text-sm text-gray-200">
+							<thead>
+								<tr class="border-b border-white/10">
+									<th class="px-2 py-1 text-left">Token</th>
+									<th class="px-2 py-1 text-right">Oracle Price</th>
+									<th class="px-2 py-1 text-right">Confidence</th>
+									<th class="px-2 py-1 text-right">Off-chain</th>
+								</tr>
+							</thead>
+							<tbody>
+								<PythOracleRow token={selectedInputToken} tokenQuotes={$tokenGlobalQuote} />
+							</tbody>
+						</table>
 					</div>
-				{/if}
-				{#if hasValidPriceFeedId(selectedOutputToken)}
-					<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
-				{:else}
-					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div>
-							<span class="font-semibold">Token: </span>{selectedOutputToken?.symbol ?? '-'}
-						</div>
-						<div><span class="font-semibold">Oracle Price: </span>-</div>
-						<div><span class="font-semibold">Price Certainty: </span>-</div>
-						<div><span class="font-semibold">Real-Time: </span>-</div>
-					</div>
-				{/if}
-			</div>
-		</div>
-		<!-- Order Summary -->
-		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
-			<h4 class="mb-3 text-sm font-medium text-gray-300">DCA Order Summary</h4>
-			<div class="space-y-2">
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Trading Pair</span>
-					<span class="font-medium text-white"
-						>{selectedInputToken && selectedOutputToken
-							? `${selectedInputToken.symbol}/${selectedOutputToken.symbol}`
-							: 'Select tokens'}</span
-					>
 				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Budget Amount</span>
-					<span class="font-medium text-white"
-						>{formatUnits(selectedAmount ?? 0n, selectedOutputToken.decimals)}
-						{selectedOutputToken.symbol}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Budget Period</span>
-					<span class="font-medium text-white">{selectedPeriod} {selectedPeriodUnit}</span>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Minimum Trade Amount</span>
-					<span class="font-medium text-white"
-						>{formatUnits(overrideMinTradeAmount ?? 0n, selectedOutputToken.decimals)}
-						{selectedOutputToken.symbol}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Maximum Trade Amount</span>
-					<span class="font-medium text-white"
-						>{formatUnits(overrideMaxTradeAmount ?? 0n, selectedOutputToken.decimals)}
-						{selectedOutputToken.symbol}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Kickoff</span>
-					<span class="font-medium text-white"
-						>{selectedInputToken && selectedOutputToken
-							? `${selectedInitialRatio} ${selectedInputToken.symbol}/${selectedOutputToken.symbol}`
-							: 'N/A'}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Floor Price</span>
-					<span class="font-medium text-white"
-						>{selectedInputToken && selectedOutputToken
-							? `${selectedBaseline} ${selectedInputToken.symbol}/${selectedOutputToken.symbol}`
-							: 'N/A'}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Deposit Amount</span>
-					<span class="font-medium text-white"
-						>{formatUnits(depositAmount ?? 0n, selectedOutputToken.decimals)}
-						{selectedOutputToken.symbol}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Min Trade Amount</span>
-					<span class="font-medium text-white"
-						>{formatUnits(minTradeAmount ?? 0n, selectedOutputToken.decimals)}
-						{selectedOutputToken.symbol}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Max Trade Amount</span>
-					<span class="font-medium text-white"
-						>{formatUnits(maxTradeAmount ?? 0n, selectedOutputToken.decimals)}
-						{selectedOutputToken.symbol}</span
-					>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Next Trade Multiplier</span>
-					<span class="font-medium text-white">1.01</span>
-				</div>
-				<div class="flex justify-between text-sm">
-					<span class="text-gray-400">Next Trade Baseline Multiplier</span>
-					<span class="font-medium text-white">0</span>
-				</div>
-			</div>
+			{/if}
 		</div>
 
+		<!-- Deploy Button -->
 		<button
-			class="w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-6 py-3 font-semibold transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
-			disabled={disableDeploy}
 			on:click={handleDcaDeploy}
+			disabled={disableDeploy}
+			class="w-full rounded-md px-4 py-3 text-sm font-semibold text-black transition-all {disableDeploy
+				? 'cursor-not-allowed bg-gray-600 opacity-50'
+				: 'bg-yellow-500 hover:bg-yellow-600'}"
 		>
-			Deploy Order
+			{#if disableDeploy}
+				{#if !selectedAmount}
+					Enter a budget amount
+				{:else if !selectedPeriod}
+					Enter a period
+				{:else if !selectedBaseline}
+					{selectedOrderType === 'Buy' ? 'Enter a ceiling price' : 'Enter a floor price'}
+				{:else if !selectedInitialRatio}
+					Enter a start price
+				{:else}
+					Complete all fields
+				{/if}
+			{:else}
+				Start DCA Strategy
+			{/if}
 		</button>
 	</div>
-</div>
+{:else}
+	<div class="flex h-32 items-center justify-center">
+		<LoadingSpinner size="md" text="Loading..." />
+	</div>
+{/if}
+
+<!-- Connect Wallet Modal -->
+<Modal
+	show={showConnectModal}
+	title="Connect Your Wallet"
+	maxWidthClass="max-w-lg"
+	onClose={() => (showConnectModal = false)}
+>
+	<div class="space-y-4">
+		<WalletConnectionPrompt
+			title="Wallet Required to Place Order"
+			description="Connect your wallet to continue. After connecting, click Place again to submit your order."
+			showSection={false}
+			minHeight={false}
+		/>
+	</div>
+</Modal>

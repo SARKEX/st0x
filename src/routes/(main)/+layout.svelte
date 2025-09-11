@@ -1,79 +1,74 @@
 <script lang="ts">
 	import '../../app.css';
 	import { wagmiConfig } from 'svelte-wagmi';
-	import { PUBLIC_ALPHAVANTAGE_API_KEY } from '$env/static/public';
+	import { env as publicEnv } from '$env/dynamic/public';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import NetworkSelector from '$lib/components/NetworkSelector.svelte';
-	import WalletConnect from '$lib/components/WalletConnect.svelte';
 	import { page } from '$app/stores';
 
 	import { getSfts } from '$lib/query';
+	import * as alpha from '$lib/services/alpha';
+	import type { ApiStockQuote } from '$lib/types';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import { TOKENS } from '$lib/network';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
 
+	// Prevent background scroll when mobile sidebar is open
+	$: {
+		if (mobileSidebarOpen) {
+			document?.body?.classList.add('overflow-hidden');
+		} else {
+			document?.body?.classList.remove('overflow-hidden');
+		}
+	}
+
 	// Get page title and description based on current route
 	$: pageTitle = getPageTitle($page.url.pathname);
 	$: pageDescription = getPageDescription($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
+		if (pathname.startsWith('/trade/')) return 'Trade Details';
+
 		switch (pathname) {
 			case '/':
-			case '/dashboard':
-				return 'Dashboard';
-			case '/mint':
-				return 'Mint';
-			case '/burn':
-				return 'Burn';
-			case '/tokens':
-				return 'Token List';
-			case '/trade':
 				return 'Trade';
-			case '/mm':
-				return 'Market Making';
+			case '/strategies':
+				return 'Strategies';
+			case '/dashboard':
+				return 'My Dashboard';
 			case '/portfolio':
-				return 'Portfolio';
+				return 'My Dashboard';
+			case '/platform-metrics':
+				return 'Platform Metrics';
 			case '/orderlist':
 				return 'Order List';
 			case '/vaultlist':
 				return 'Vault List';
-			case '/metrics':
-				return 'Platform Metrics';
+			case '/tokens':
+				return 'Token List';
 			default:
 				return 'ST0x';
 		}
 	}
 
 	function getPageDescription(pathname: string): string {
+		if (pathname.startsWith('/trade/')) return 'Trade tokenized stocks';
+
 		switch (pathname) {
 			case '/':
+				return `Browse and trade tokenized stocks`;
+			case '/strategies':
+				return 'Manage automated trading strategies';
 			case '/dashboard':
-				return `Welcome to ST0x - ${$currentNetwork?.displayName || 'Network'}`;
-			case '/mint':
-				return 'Mint new tokens';
-			case '/burn':
-				return 'Burn tokens';
-			case '/tokens':
-				return 'View all tokens';
-			case '/trade':
-				return 'Trade tokens';
-			case '/mm':
-				return 'Market making';
-			case '/portfolio':
-				return 'Your portfolio';
-			case '/orderlist':
-				return 'Order management';
-			case '/vaultlist':
-				return 'Vault management';
-			case '/metrics':
-				return '';
+				return 'Portfolio, orders, and vault positions';
+			case '/platform-metrics':
+				return 'Platform statistics and metrics';
 			default:
 				return 'ST0x Platform';
 		}
@@ -104,10 +99,7 @@
 
 			const tokenQuotes = [];
 			for (const baseSymbol of uniqueBaseSymbols) {
-				const response = await fetch(
-					`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${baseSymbol}&apikey=${PUBLIC_ALPHAVANTAGE_API_KEY}`
-				);
-				const data = await response.json();
+				const data = await alpha.getGlobalQuote(baseSymbol, publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
 				tokenQuotes.push(data);
 			}
 			return tokenQuotes;
@@ -116,7 +108,7 @@
 	});
 
 	$: sfts.set($vaultQuery.data);
-	$: tokenGlobalQuote.set($tokenGlobalQuoteQuery.data ?? []);
+	$: tokenGlobalQuote.set(($tokenGlobalQuoteQuery.data as unknown as ApiStockQuote[]) ?? []);
 </script>
 
 {#if $wagmiConfig}
@@ -146,45 +138,12 @@
 			class:lg:ml-64={sidebarExpanded}
 			class:lg:ml-16={!sidebarExpanded}
 		>
-			<!-- Desktop Header -->
-			<div class="hidden lg:block">
-				<Header title={pageTitle} description={pageDescription} />
-			</div>
-
-			<!-- Mobile Header with Menu Button -->
-			<div
-				class="relative z-[9999] flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
-			>
-				<button
-					on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
-					class="rounded-lg border border-white/10 p-2 transition-colors hover:bg-white/5"
-				>
-					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M4 6h16M4 12h16M4 18h16"
-						/>
-					</svg>
-				</button>
-				<div class="flex items-center gap-2">
-					<img
-						src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
-						alt="ST0x Logo"
-						class="h-8 w-8 rounded-full"
-					/>
-					<span
-						class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
-					>
-						ST0x
-					</span>
-				</div>
-				<div class="flex items-center gap-2">
-					<NetworkSelector />
-					<WalletConnect />
-				</div>
-			</div>
+			<!-- Header for all screen sizes -->
+			<Header
+				title={pageTitle}
+				description={pageDescription}
+				on:openMenu={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+			/>
 
 			<slot {sidebarExpanded} />
 			<TransactionModal />

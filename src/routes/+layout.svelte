@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
-	import { PUBLIC_WALLETCONNECT_ID } from '$env/static/public';
+	import { env as publicEnv } from '$env/dynamic/public';
 	import { defaultConfig } from 'svelte-wagmi';
 	import { arbitrum, base } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
@@ -16,13 +16,22 @@
 	});
 
 	const initWallet = async () => {
-		const erckit = defaultConfig({
+		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
+		const connectorsList = [injected()];
+		if (projectId && projectId.trim().length > 0) {
+			// @ts-expect-error - walletConnect connector type mismatch with wagmi
+			connectorsList.push(walletConnect({ projectId }));
+		}
+
+		const cfgOptions = {
 			autoConnect: true,
 			appName: 'st0x-liquidity',
-			walletConnectProjectId: PUBLIC_WALLETCONNECT_ID,
-			chains: [arbitrum, base],
-			connectors: [injected(), walletConnect({ projectId: PUBLIC_WALLETCONNECT_ID })]
-		});
+			chains: [arbitrum, base] as [typeof arbitrum, typeof base],
+			connectors: connectorsList,
+			walletConnectProjectId: projectId || 'dummy-project-id'
+		};
+
+		const erckit = defaultConfig(cfgOptions);
 		await erckit.init();
 	};
 

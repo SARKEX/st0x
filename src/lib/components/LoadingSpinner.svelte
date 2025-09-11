@@ -16,7 +16,8 @@
 	const variantConfig = {
 		inline: {
 			container: 'flex flex-col items-center justify-center gap-3',
-			spinner: 'animate-spin rounded-full border-4 border-gray-600 border-t-yellow-500',
+			spinner:
+				'relative animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500',
 			text: 'font-medium text-gray-300'
 		},
 		fullscreen: {
@@ -27,7 +28,8 @@
 		},
 		button: {
 			container: 'flex items-center gap-2',
-			spinner: 'animate-spin rounded-full border-2 border-gray-600 border-t-yellow-500',
+			spinner:
+				'relative animate-spin rounded-full border-2 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500',
 			text: 'text-sm'
 		},
 		dot: {

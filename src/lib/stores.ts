@@ -9,7 +9,7 @@ import type { Network } from './network';
 import { networks } from './network';
 
 export const sftMetadata = writable<MetaV1S[] | null>(null);
-export const currentNetwork = writable<Network>(networks[0]);
+export const currentNetwork = writable<Network>(networks[1]); // Base is default
 export const wrongNetwork = derived(
 	[chainId, signerAddress, currentNetwork],
 	([$chainId, $signerAddress, $currentNetwork]) => $signerAddress && $chainId !== $currentNetwork.id
@@ -22,7 +22,6 @@ export const currentTokenPrice = writable<{
 	changePercent: number;
 } | null>(null);
 export const trades = writable<SgTrade[]>([]);
-export const infoModalOpen = writable(false);
 export const tokenGlobalQuote = writable<ApiStockQuote[]>([]);
 
 // Store for Rainlang confirmation modal

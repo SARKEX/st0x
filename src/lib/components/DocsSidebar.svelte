@@ -2,8 +2,8 @@
 	import { currentNetwork } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { ArrowUpRightFromSquareSolid } from 'flowbite-svelte-icons';
-	import TelegramLogo from '$lib/images/telegram.svg';
+	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
+	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import type { LayoutData } from '../../routes/docs/$types';
 
 	export let visible: boolean = false; // controlled by parent
@@ -31,21 +31,21 @@
 
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-50 flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-[10000] flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
 	<!-- Logo -->
 	<div class="p-4">
 		<div class="flex items-center gap-2">
-			<a href="/dashboard">
+			<a href="/">
 				<img
 					src="https://st0x.io/_next/image?url=%2Fimages%2Flogo-circle.png&w=256&q=75"
 					alt="ST0x Logo"
 					class="h-8 w-8 rounded-full md:h-9 md:w-9"
 				/>
 			</a>
-			<a href="/dashboard">
+			<a href="/">
 				<span
 					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
 					>ST0x</span
@@ -85,7 +85,10 @@
 					<div class="text-sm font-semibold text-yellow-500">{$currentNetwork.name}</div>
 					{#if $connected}
 						<div class="text-xs text-gray-400 sm:ml-2">
-							{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}
+							<span class="sm:hidden">…{$signerAddress?.slice(-6)}</span>
+							<span class="hidden sm:inline"
+								>{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}</span
+							>
 						</div>
 					{:else}
 						<div class="text-xs text-gray-400 sm:ml-2">Not Connected</div>
@@ -93,21 +96,17 @@
 				</div>
 			</div>
 			<a
-				href="/dashboard"
+				href="/"
 				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
 			>
-				<ArrowUpRightFromSquareSolid class="h-5 w-5" />
-				<span>Dashboard</span>
+				<ExternalLinkIcon class="h-5 w-5" />
+				<span>Back to App</span>
 			</a>
-			<a
+			<ExternalLink
 				href="https://t.me/toby_meller"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-			>
-				<img src={TelegramLogo} alt="Telegram" class="h-5 w-5" />
-				<span>Telegram</span>
-			</a>
+				label="Telegram"
+				className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+			/>
 		</div>
 	</div>
 </div>

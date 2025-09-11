@@ -10,6 +10,9 @@ node_modules
 .DS_Store
 Thumbs.db
 
+CLAUDE.md
+AGENTS.md
+
 # Env
 .env
 .env.*
@@ -19,3 +22,9 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Analytics data
+/analytics
+
+AGENTS.md
+CLAUDE.md

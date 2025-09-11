@@ -6,20 +6,19 @@ export const getSftMetadata = async (
 ): Promise<MetaV1S[]> => {
 	const query = `
     {
-  metaV1S(where: {
-    subject: "0x000000000000000000000000${vaultAddress.slice(2)}"
-  },
-  orderBy: transaction__timestamp
-  orderDirection: desc
-  ) {
-    id
-    meta
-    sender
-    subject
-    metaHash
-  }
-}
-    `;
+      metaV1S(
+        where: { subject: "0x000000000000000000000000${vaultAddress.slice(2)}" },
+        orderBy: transaction__timestamp,
+        orderDirection: desc
+      ) {
+        id
+        meta
+        sender
+        subject
+        metaHash
+      }
+    }
+  `;
 
 	const response = await fetch(subgraphUrl, {
 		method: 'POST',
@@ -27,7 +26,10 @@ export const getSftMetadata = async (
 		body: JSON.stringify({ query })
 	});
 
-	const json = await response.json();
+	if (!response.ok) {
+		throw new Error(`Failed to fetch SFT metadata: ${response.status}`);
+	}
 
-	return json.data.metaV1S as MetaV1S[];
+	const json = await response.json();
+	return json.data?.metaV1S as MetaV1S[];
 };

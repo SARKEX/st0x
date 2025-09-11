@@ -8,7 +8,7 @@
 		validateOverrideDepositAmount,
 		validateSelectedAmount
 	} from '$lib/validateDeploymentArgs';
-	import Input from '$lib/components/Input.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
@@ -17,6 +17,8 @@
 	import { hasValidPriceFeedId } from '$lib/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+	import { containerStyles } from '$lib/utils/styles';
+	import Button from '$lib/components/ui/Button.svelte';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -263,16 +265,16 @@
 
 	<!-- Order Summary and Button: always below form on mobile, side on desktop -->
 	<div class="mt-4 space-y-4 lg:mt-0">
-		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
-			<div class="hidden overflow-x-auto sm:block">
+			<div class="overflow-x-auto">
 				<table class="min-w-full text-sm text-gray-200">
 					<thead>
 						<tr>
 							<th class="px-2 py-1 text-left">Token</th>
 							<th class="px-2 py-1 text-right">Oracle Price</th>
 							<th class="px-2 py-1 text-right">Price Certainty</th>
-							<th class="px-2 py-1 text-right">Real-Time</th>
+							<th class="px-2 py-1 text-right">Off-chain</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -299,32 +301,10 @@
 					</tbody>
 				</table>
 			</div>
-			<!-- Mobile stacked cards -->
-			<div class="mt-2 flex flex-col gap-2 sm:hidden">
-				{#if hasValidPriceFeedId(selectedToken1)}
-					<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
-				{:else}
-					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>{selectedToken1?.symbol ?? '-'}</div>
-						<div><span class="font-semibold">Oracle Price: </span>-</div>
-						<div><span class="font-semibold">Price Certainty: </span>-</div>
-						<div><span class="font-semibold">Real-Time: </span>-</div>
-					</div>
-				{/if}
-				{#if hasValidPriceFeedId(selectedToken2)}
-					<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
-				{:else}
-					<div class="rounded bg-gray-800/80 p-3 text-xs">
-						<div><span class="font-semibold">Token: </span>{selectedToken2?.symbol ?? '-'}</div>
-						<div><span class="font-semibold">Oracle Price: </span>-</div>
-						<div><span class="font-semibold">Price Certainty: </span>-</div>
-						<div><span class="font-semibold">Real-Time: </span>-</div>
-					</div>
-				{/if}
-			</div>
+			<!-- Removed mobile-only cards; table above now scrolls on small screens -->
 		</div>
 
-		<div class="rounded-lg border border-white/10 bg-gray-700/30 p-4">
+		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Active Liquidity Order Summary</h4>
 			<div class="space-y-2">
 				<div class="flex justify-between text-sm">
@@ -386,12 +366,14 @@
 			</div>
 		</div>
 
-		<button
-			class="w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-6 py-3 font-semibold transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+		<Button
+			variant="primary"
+			size="lg"
+			fullWidth={true}
 			disabled={disableDeploy}
 			on:click={handleDsfDeploy}
 		>
 			Deploy Order
-		</button>
+		</Button>
 	</div>
 </div>
