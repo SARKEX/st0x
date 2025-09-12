@@ -8,11 +8,42 @@ export default defineConfig({
 		'process.env': {}
 	},
 	optimizeDeps: {
-		include: ['viem', 'viem/chains', 'viem/actions', 'viem/utils'],
+		include: [
+			'viem',
+			'viem/chains',
+			'viem/actions',
+			'viem/utils',
+			'viem/accounts',
+			'viem/clients',
+			'viem/contract',
+			'viem/ens',
+			'viem/public',
+			'viem/wallet',
+			'@wagmi/core',
+			'@wagmi/connectors',
+			'wagmi'
+		],
 		exclude: []
 	},
 	ssr: {
-		noExternal: ['viem']
+		noExternal: [
+			'viem',
+			'@wagmi/core',
+			'@wagmi/connectors', 
+			'wagmi',
+			'svelte-wagmi'
+		]
+	},
+	build: {
+		rollupOptions: {
+			external: (id) => {
+				// Don't externalize viem or wagmi related packages
+				if (id.includes('viem') || id.includes('wagmi')) {
+					return false;
+				}
+				return false;
+			}
+		}
 	},
 	test: {
 		server: {
