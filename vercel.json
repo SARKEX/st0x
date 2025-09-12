@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "src/hooks.server.ts": {
+      "maxDuration": 30
+    },
+    "src/routes/**/*.js": {
+      "maxDuration": 30
+    },
+    "src/routes/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "build": {
+    "env": {
+      "NODE_OPTIONS": "--max-old-space-size=4096"
+    }
+  }
+}

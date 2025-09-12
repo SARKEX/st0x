@@ -7,6 +7,13 @@ export default defineConfig({
 	define: {
 		'process.env': {}
 	},
+	optimizeDeps: {
+		include: ['viem', 'viem/chains', 'viem/actions', 'viem/utils'],
+		exclude: []
+	},
+	ssr: {
+		noExternal: ['viem']
+	},
 	test: {
 		server: {
 			deps: {
