@@ -9,6 +9,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
 
 	import { getSfts } from '$lib/query';
 	import * as alpha from '$lib/services/alpha';
@@ -20,11 +21,11 @@
 	let mobileSidebarOpen = false;
 
 	// Prevent background scroll when mobile sidebar is open
-	$: {
+	$: if (browser) {
 		if (mobileSidebarOpen) {
-			document?.body?.classList.add('overflow-hidden');
+			document.body.classList.add('overflow-hidden');
 		} else {
-			document?.body?.classList.remove('overflow-hidden');
+			document.body.classList.remove('overflow-hidden');
 		}
 	}
 
