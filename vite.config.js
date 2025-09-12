@@ -26,24 +26,8 @@ export default defineConfig({
 		exclude: []
 	},
 	ssr: {
-		noExternal: [
-			'viem',
-			'@wagmi/core',
-			'@wagmi/connectors', 
-			'wagmi',
-			'svelte-wagmi'
-		]
-	},
-	build: {
-		rollupOptions: {
-			external: (id) => {
-				// Don't externalize viem or wagmi related packages
-				if (id.includes('viem') || id.includes('wagmi')) {
-					return false;
-				}
-				return false;
-			}
-		}
+		external: ['viem', '@wagmi/core', '@wagmi/connectors', 'wagmi'],
+		noExternal: ['svelte-wagmi']
 	},
 	test: {
 		server: {

@@ -3,12 +3,5 @@
     "env": {
       "NODE_OPTIONS": "--max-old-space-size=4096"
     }
-  },
-  "functions": {
-    ".svelte-kit/output/server/index.js": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  },
-  "outputDirectory": ".svelte-kit/output/client"
+  }
 }
