@@ -7,40 +7,6 @@ export default defineConfig({
 	define: {
 		'process.env': {}
 	},
-	server: {
-		fs: {
-			allow: ['..']
-		}
-	},
-	build: {
-		rollupOptions: {
-			output: {
-				manualChunks: undefined
-			}
-		}
-	},
-	optimizeDeps: {
-		include: [
-			'viem',
-			'viem/chains',
-			'viem/actions',
-			'viem/utils',
-			'viem/accounts',
-			'viem/clients',
-			'viem/contract',
-			'viem/ens',
-			'viem/public',
-			'viem/wallet',
-			'@wagmi/core',
-			'@wagmi/connectors',
-			'wagmi'
-		],
-		exclude: []
-	},
-	ssr: {
-		external: ['viem', '@wagmi/core', '@wagmi/connectors', 'wagmi'],
-		noExternal: ['svelte-wagmi']
-	},
 	test: {
 		server: {
 			deps: {
