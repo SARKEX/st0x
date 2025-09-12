@@ -7,6 +7,18 @@ export default defineConfig({
 	define: {
 		'process.env': {}
 	},
+	server: {
+		fs: {
+			allow: ['..']
+		}
+	},
+	build: {
+		rollupOptions: {
+			output: {
+				manualChunks: undefined
+			}
+		}
+	},
 	optimizeDeps: {
 		include: [
 			'viem',
