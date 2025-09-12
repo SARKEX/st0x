@@ -2,12 +2,21 @@ import type { Handle } from '@sveltejs/kit';
 import { verifySessionToken } from '$lib/server/auth';
 import { env } from '$env/dynamic/private';
 
-const ALLOWLIST = new Set<string>(['/login', '/favicon.ico', '/robots.txt', '/site.webmanifest']);
+const ALLOWLIST = new Set<string>([
+  '/login',
+  '/robots.txt',
+  '/site.webmanifest',
+  '/favicon.ico',
+  '/favicon.svg',
+  '/favicon.png',
+  '/apple-touch-icon.png',
+  '/apple-touch-icon-precomposed.png'
+]);
 
 function isAllowlisted(path: string) {
 	if (path === '/login') return true;
 	if (path.startsWith('/_app/')) return true; // SvelteKit assets
-	if (path.startsWith('/images/') || path.startsWith('/assets/')) return true;
+  if (path.startsWith('/images/') || path.startsWith('/assets/')) return true;
 	return ALLOWLIST.has(path);
 }
 

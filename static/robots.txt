@@ -1,0 +1,6 @@
+# Allow all by default; adjust as needed
+User-agent: *
+Allow: /
+
+# Sitemaps (update if available)
+# Sitemap: https://st0x.io/sitemap.xml

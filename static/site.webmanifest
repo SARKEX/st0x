@@ -1,0 +1,12 @@
+{
+  "name": "ST0x",
+  "short_name": "ST0x",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

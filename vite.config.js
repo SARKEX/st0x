@@ -7,6 +7,10 @@ export default defineConfig({
 	define: {
 		'process.env': {}
 	},
+	ssr: {
+		// Bundle heavy ESM deps to avoid runtime "EMFILE" in serverless
+		noExternal: ['viem', '@wagmi/core', '@wagmi/connectors', 'svelte-wagmi']
+	},
 	test: {
 		server: {
 			deps: {
