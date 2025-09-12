@@ -1,2 +1,3 @@
-export const prerender = true;
-export const ssr = false;
+// Enable SSR so server hooks can enforce the login guard.
+export const prerender = false;
+export const ssr = true;
