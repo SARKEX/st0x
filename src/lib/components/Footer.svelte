@@ -102,8 +102,20 @@
 
 				<!-- Social Media Links -->
 				<div class="mt-6">
-					<p class="mb-3 text-xs text-gray-400 sm:text-sm">Follow us</p>
+					<p class="mb-3 text-xs text-gray-400 sm:text-sm">Connect with us</p>
 					<div class="flex gap-3">
+						<!-- Email -->
+						<a
+							href="mailto:toby@st0x.io"
+							rel="noopener noreferrer"
+							class="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+							aria-label="Email ST0x"
+							title="Email toby@st0x.io"
+						>
+							<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 2v.01L12 13 4 6.01V6h16zM4 18V8.236l7.386 6.178a1 1 0 001.228 0L20 8.236V18H4z"/>
+							</svg>
+						</a>
 						<!-- X (Twitter) -->
 						<a
 							href="https://x.com/st0x_io"
