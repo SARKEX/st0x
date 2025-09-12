@@ -3,10 +3,5 @@
     "env": {
       "NODE_OPTIONS": "--max-old-space-size=4096 --max-http-header-size=65536"
     }
-  },
-  "functions": {
-    "src/routes/**": {
-      "maxDuration": 30
-    }
   }
 }
