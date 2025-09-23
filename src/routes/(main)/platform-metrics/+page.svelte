@@ -8,7 +8,7 @@
 	import { getTrades } from '$lib/query';
 	import { getAllTokensByNetwork, networks } from '$lib/network';
 	import type { SgTrade } from '@rainlanguage/orderbook';
-	import type { ApiStockQuote } from '$lib/types';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -53,12 +53,45 @@
 					// Continue with other networks even if one fails
 				}
 			}
-			return allNetworksSfts;
+		return allNetworksSfts;
 		},
 		enabled: true,
 		retry: 3,
 		retryDelay: 1000
 	});
+
+	function baseFromSymbol(sym?: string) {
+		if (!sym) return undefined;
+		if (sym.includes('s1')) return sym.split('s1')[0];
+		if (sym.includes('0x')) return sym.split('0x')[0];
+		return sym;
+	}
+
+	function findTradingViewSymbol(symbol?: string) {
+		const base = baseFromSymbol(symbol);
+		if (!base) return undefined;
+		const match = ALL_TOKENS.find((token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase());
+		return match?.tradingViewSymbol;
+	}
+
+	function findQuoteForSymbol(symbol?: string) {
+		if (!$tokenGlobalQuote?.length) return undefined;
+		const quotes = $tokenGlobalQuote as TradingViewQuote[];
+		const tradingSymbol = findTradingViewSymbol(symbol);
+		if (tradingSymbol) {
+			const tsUpper = tradingSymbol.toUpperCase();
+			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
+			if (direct) return direct;
+		}
+		const base = baseFromSymbol(symbol)?.toUpperCase();
+		if (!base) return undefined;
+		return quotes.find((q) => {
+			const quoteSymbol = (q.symbol ?? '').toUpperCase();
+			if (quoteSymbol === base) return true;
+			const parts = quoteSymbol.split(':');
+			return parts[parts.length - 1] === base;
+		});
+	}
 
 	// Get all tokens for logo URLs
 	$: ALL_TOKENS = (() => {
@@ -141,18 +174,9 @@
 			);
 
 			if (tokenInfo?.symbol) {
-				// Extract base symbol
-				let baseSymbol = tokenInfo.symbol;
-				if (baseSymbol?.includes('s1')) {
-					baseSymbol = baseSymbol.split('s1')[0];
-				} else if (baseSymbol?.includes('0x')) {
-					baseSymbol = baseSymbol.split('0x')[0];
-				}
-				const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
-				);
-				if (quote?.['Global Quote']?.['05. price']) {
-					tlv += amount * parseFloat(quote['Global Quote']['05. price']);
+				const quote = findQuoteForSymbol(tokenInfo.symbol);
+				if (quote?.close != null) {
+					tlv += amount * quote.close;
 				} else {
 					tlv += amount; // Fallback to amount if no price
 				}
@@ -221,18 +245,9 @@
 					(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
 				);
 				if (tokenInfo?.symbol) {
-					// Extract base symbol
-					let baseSymbol = tokenInfo.symbol;
-					if (baseSymbol?.includes('s1')) {
-						baseSymbol = baseSymbol.split('s1')[0];
-					} else if (baseSymbol?.includes('0x')) {
-						baseSymbol = baseSymbol.split('0x')[0];
-					}
-					const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
-						(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
-					);
-					if (quote?.['Global Quote']?.['05. price']) {
-						tvl += amount * parseFloat(quote['Global Quote']['05. price']);
+					const quote = findQuoteForSymbol(tokenInfo.symbol);
+					if (quote?.close != null) {
+						tvl += amount * quote.close;
 					} else {
 						tvl += amount;
 					}
@@ -278,18 +293,9 @@
 				let usdValue = 'N/A';
 				const amount = parseFloat(formatUnits(deposits, 18));
 				if (tokenInfo?.symbol) {
-					// Extract base symbol
-					let baseSymbol = tokenInfo.symbol;
-					if (baseSymbol?.includes('s1')) {
-						baseSymbol = baseSymbol.split('s1')[0];
-					} else if (baseSymbol?.includes('0x')) {
-						baseSymbol = baseSymbol.split('0x')[0];
-					}
-					const quote = ($tokenGlobalQuote as ApiStockQuote[])?.find(
-						(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
-					);
-					if (quote?.['Global Quote']?.['05. price']) {
-						const value = amount * parseFloat(quote['Global Quote']['05. price']);
+					const quote = findQuoteForSymbol(tokenInfo.symbol);
+					if (quote?.close != null) {
+						const value = amount * quote.close;
 						usdValue = `$${value.toFixed(2)}`;
 					}
 				}

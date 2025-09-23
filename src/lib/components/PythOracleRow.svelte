@@ -1,24 +1,47 @@
 <script lang="ts">
 	import axios from 'axios';
 	import { currentNetwork } from '$lib/stores';
-	import type { PythToken, ApiStockQuote } from '$lib/types';
+	import type { PythToken } from '$lib/types';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
-	type CommonToken = Partial<PythToken> & { symbol?: string; address: string };
+	type CommonToken = Partial<PythToken> & {
+		symbol?: string;
+		address: string;
+		tradingViewSymbol?: string;
+	};
 	export let token: CommonToken;
-	export let tokenQuotes: ApiStockQuote[] = [];
+	export let tokenQuotes: TradingViewQuote[] = [];
 
 	let priceData: { price: number; confidence: number } | null = null;
 	let error: string | null = null;
 	let loading = true;
 
-	$: quote = token?.symbol
-		? tokenQuotes.find(
-				(q) => q?.['Global Quote']?.['01. symbol'] === token?.symbol?.replace(/s1$/, '')
-			)
-		: undefined;
-	$: quotePrice = quote?.['Global Quote']?.['05. price'];
+
+	function normalizeSymbol(sym?: string) {
+		if (!sym) return undefined;
+		if (sym.includes('s1')) return sym.split('s1')[0];
+		if (sym.includes('0x')) return sym.split('0x')[0];
+		return sym;
+	}
+
+	function matchesQuote(quote: TradingViewQuote, tokenSymbol?: string, override?: string) {
+		const quoteSymbol = quote.symbol ?? '';
+		const target = override ?? tokenSymbol;
+		if (!target) return false;
+		if (override && quoteSymbol.toUpperCase() === override.toUpperCase()) return true;
+		const normalized = normalizeSymbol(target);
+		if (!normalized) return false;
+		const [, sym] = quoteSymbol.split(':');
+		return (
+			quoteSymbol.toUpperCase() === normalized.toUpperCase() ||
+			(sym ? sym.toUpperCase() === normalized.toUpperCase() : false)
+		);
+	}
+
+	$: quote = tokenQuotes.find((q) => matchesQuote(q, token?.symbol, token?.tradingViewSymbol));
+	$: quotePrice = quote?.close ?? null;
 
 	// Reactive statement that triggers when token changes
 	$: if ('priceFeedId' in token && (token as PythToken).priceFeedId) {
@@ -71,8 +94,8 @@
 		<td class="px-2 py-1 text-right">${priceData.price.toFixed(5)}</td>
 		<td class="px-2 py-1 text-right">± {priceData.confidence.toFixed(5)}</td>
 		<td class="px-2 py-1 text-right text-gray-400">
-			{#if quotePrice}
-				${parseFloat(quotePrice).toFixed(5)}
+			{#if quotePrice !== null}
+				${quotePrice.toFixed(5)}
 			{/if}
 		</td>
 	{/if}

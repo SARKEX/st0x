@@ -13,7 +13,7 @@
 	import { getAllTokensByNetwork } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
-	import type { ApiStockQuote } from '$lib/types';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	// Consolidated table usage
@@ -33,6 +33,39 @@
 	let recentlyAdded: OffchainAssetReceiptVault[] = [];
 	let isSearching = false;
 	let currentSearchId: string | null = null;
+
+	function baseFromSymbol(sym?: string) {
+		if (!sym) return undefined;
+		if (sym.includes('s1')) return sym.split('s1')[0];
+		if (sym.includes('0x')) return sym.split('0x')[0];
+		return sym;
+	}
+
+	function findTradingViewSymbol(symbol?: string) {
+		const base = baseFromSymbol(symbol);
+		if (!base) return undefined;
+		const match = ALL_TOKENS.find((token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase());
+		return match?.tradingViewSymbol;
+	}
+
+	function findQuoteForSymbol(symbol?: string) {
+		if (!$tokenGlobalQuote?.length) return undefined;
+		const quotes = $tokenGlobalQuote as TradingViewQuote[];
+		const tradingSymbol = findTradingViewSymbol(symbol);
+		if (tradingSymbol) {
+			const tsUpper = tradingSymbol.toUpperCase();
+			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
+			if (direct) return direct;
+		}
+		const base = baseFromSymbol(symbol)?.toUpperCase();
+		if (!base) return undefined;
+		return quotes.find((q) => {
+			const quoteSymbol = (q.symbol ?? '').toUpperCase();
+			if (quoteSymbol === base) return true;
+			const parts = quoteSymbol.split(':');
+			return parts[parts.length - 1] === base;
+		});
+	}
 
 	// Scroll indicator for Discover section
 	let discoverScrollEl: HTMLDivElement;
@@ -121,24 +154,11 @@
 		// Check if scrollable after data loads
 		setTimeout(checkScrollable, 100);
 
-		// Calculate biggest movers based on AlphaVantage daily change percentage
+		// Calculate biggest movers based on TradingView daily change percentage
 		biggestMovers = [...st0xVaults]
 			.map((sft) => {
-				// Extract base symbol (handle both 's1' and '0x' suffixes)
-				let symbol = sft.symbol;
-				if (symbol?.includes('s1')) {
-					symbol = symbol.split('s1')[0];
-				} else if (symbol?.includes('0x')) {
-					symbol = symbol.split('0x')[0];
-				}
-				// Find the quote in the array by matching symbol
-				const quoteData = ($tokenGlobalQuote as ApiStockQuote[]).find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === symbol
-				);
-				const globalQuote = quoteData?.['Global Quote'];
-				const changePercent = globalQuote?.['10. change percent']
-					? parseFloat(globalQuote['10. change percent'].replace('%', ''))
-					: 0;
+				const quote = findQuoteForSymbol(sft.symbol);
+				const changePercent = quote?.changePercent ?? 0;
 				return { ...sft, changePercent };
 			})
 			.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
@@ -182,29 +202,16 @@
 
 			// Process SFT vaults (from subgraph)
 			for (let sft of sftVaults) {
-				// Extract base symbol for quote lookup
-				let baseSymbol = sft.symbol;
-				if (baseSymbol?.includes('s1')) {
-					baseSymbol = baseSymbol.split('s1')[0];
-				} else if (baseSymbol?.includes('0x')) {
-					baseSymbol = baseSymbol.split('0x')[0];
-				}
-				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
-				);
-				const sftPrice = quote?.['Global Quote']?.['05. price'] ?? 0;
+				const quote = findQuoteForSymbol(sft.symbol);
+				const price = quote?.close ?? 0;
 				tokens.push({
 					id: sft.id,
 					address: sft.address,
 					name: sft.name,
 					symbol: sft.symbol,
-					price: sftPrice,
+					price,
 					totalHolders: sft.tokenHolders.length.toString(),
 					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
-					marketCap: formatUnits(
-						BigInt(Math.floor(Number(sftPrice))) * BigInt(sft.totalShares),
-						18
-					),
 					totalTransfers: sft.shareTransfers.length.toString(),
 					createdAt: sft.deployTimestamp,
 					isSft: true
@@ -389,17 +396,8 @@
 							<ListCard
 								title="Biggest Movers (24H)"
 								items={biggestMovers.map((s) => {
-									// Extract base symbol
-									let symbol = s.symbol;
-									if (symbol?.includes('s1')) {
-										symbol = symbol.split('s1')[0];
-									} else if (symbol?.includes('0x')) {
-										symbol = symbol.split('0x')[0];
-									}
-									const quoteData = $tokenGlobalQuote.find(
-										(q) => q?.['Global Quote']?.['01. symbol'] === symbol
-									);
-									const price = quoteData?.['Global Quote']?.['05. price'];
+									const quote = findQuoteForSymbol(s.symbol);
+									const price = quote?.close ?? null;
 									const tokenInfo = ALL_TOKENS.find(
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
 									);
@@ -408,7 +406,7 @@
 										symbol: s.symbol,
 										href: `/trade/${s.id}`,
 										logoUrl: tokenInfo?.logoUrl,
-										price: price ? parseFloat(price).toFixed(2) : 'N/A',
+										price: price != null ? price.toFixed(2) : 'N/A',
 										metadata: s.changePercent
 											? `${s.changePercent > 0 ? '+' : ''}${s.changePercent.toFixed(2)}%`
 											: 'N/A',
@@ -428,19 +426,8 @@
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
 									);
 									const volumeInShares = parseFloat(formatUnits(s.totalVolume, 18));
-									// Extract base symbol
-									let symbol = s.symbol;
-									if (symbol?.includes('s1')) {
-										symbol = symbol.split('s1')[0];
-									} else if (symbol?.includes('0x')) {
-										symbol = symbol.split('0x')[0];
-									}
-									const quoteData = $tokenGlobalQuote.find(
-										(q) => q?.['Global Quote']?.['01. symbol'] === symbol
-									);
-									const price = quoteData?.['Global Quote']?.['05. price']
-										? parseFloat(quoteData['Global Quote']['05. price'])
-										: 0;
+									const quote = findQuoteForSymbol(s.symbol);
+									const price = quote?.close ?? 0;
 									const dollarVolume = volumeInShares * price;
 
 									const volumeStr =

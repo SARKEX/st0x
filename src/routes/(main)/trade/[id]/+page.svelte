@@ -11,10 +11,9 @@
 	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';
 	import DcaStrategy from '$lib/components/orders/DcaStrategy.svelte';
 	import { truncateAddress, formatCompact } from '$lib/utils/format';
-	import EquityChart from '$lib/components/charts/EquityChart.svelte';
+	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
 	// inline icons used instead of external icon package
 	import TxLink from '$lib/components/ui/TxLink.svelte';
-	import * as alpha from '$lib/services/alpha';
 	// Removed wallet-gating for trading window
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -23,6 +22,14 @@
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
 	import { slide, fade } from 'svelte/transition';
+	import {
+		getQuote,
+		getFundamentals,
+		getTechnicals,
+		type TradingViewQuote,
+		type TradingViewFundamentals,
+		type TradingViewTechnicals
+	} from '$lib/services/tradingview';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -34,16 +41,24 @@
 			token.chainId === $currentNetwork?.chainId
 	);
 
-	// Extract base symbol for API calls (handle both 's1' and '0x' suffixes)
-	$: symbol = (() => {
-		let sym = currentToken?.symbol;
-		if (sym?.includes('s1')) {
-			return sym.split('s1')[0];
-		} else if (sym?.includes('0x')) {
-			return sym.split('0x')[0];
-		}
+	function baseFromSymbol(sym?: string | null) {
+		if (!sym) return undefined;
+		if (sym.includes('s1')) return sym.split('s1')[0];
+		if (sym.includes('0x')) return sym.split('0x')[0];
 		return sym;
-	})();
+	}
+
+	$: baseSymbol = baseFromSymbol(currentToken?.symbol);
+	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
+	$: tradingViewMarket = currentPythToken?.tradingViewMarket ?? 'america';
+
+	function formatNumber(value: number | null | undefined, digits = 2) {
+		return value != null ? value.toFixed(digits) : 'N/A';
+	}
+
+	function formatPercent(value: number | null | undefined, digits = 2) {
+		return value != null ? `${(value * 100).toFixed(digits)}%` : 'N/A';
+	}
 
 	// Tab state
 	let activeTab: 'fundamentals' | 'technical' | 'token' | 'mints-burns' = 'fundamentals';
@@ -79,322 +94,74 @@
 
 	// Chart modal state
 	let showChartModal = false;
-	let chartInterval = '30min';
-	// Zoom percentage of the available dataset (1-100)
-	let zoomPercent = 25;
-	let modalBarCount = 0; // derived from zoomPercent and available bars
-	let modalChartData: unknown = null;
 
-	// Helpers for freshness checks in ET
-	function todayET(): string {
-		try {
-			// en-CA yields YYYY-MM-DD
-			return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-		} catch {
-			const d = new Date();
-			const m = `${d.getMonth() + 1}`.padStart(2, '0');
-			const day = `${d.getDate()}`.padStart(2, '0');
-			return `${d.getFullYear()}-${m}-${day}`;
-		}
-	}
-
-	async function fetchIntradayFresh(sym: string, ivl: string) {
-		// First try 'full' for history, then fallback to 'compact' if last date < today ET
-		const primary = await alpha.getIntraday(
-			sym,
-			ivl,
-			publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
-			'full'
-		);
-		const latestFrom = (obj: Record<string, unknown>): string | undefined => {
-			if (!obj || 'error' in obj) return undefined;
-			const ts =
-				(obj['Time Series (5min)'] as Record<string, unknown>) ||
-				(obj['Time Series (15min)'] as Record<string, unknown>) ||
-				(obj['Time Series (30min)'] as Record<string, unknown>) ||
-				(obj['Time Series (60min)'] as Record<string, unknown>);
-			if (!ts) return undefined;
-			return Object.keys(ts).sort((a, b) => b.localeCompare(a))[0];
-		};
-		const latest = latestFrom(primary as Record<string, unknown>);
-		const today = todayET();
-		if (latest && !latest.startsWith(today)) {
-			// Stale: try compact for fresher CDN slice
-			const fallback = await alpha.getIntraday(
-				sym,
-				ivl,
-				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
-				'compact'
-			);
-			const latestFb = latestFrom(fallback as Record<string, unknown>);
-			if (latestFb && latestFb.localeCompare(latest) > 0) {
-				return fallback;
-			}
-		}
-		return primary;
-	}
-
-	// Query for intraday data (30-minute intervals for minimized view)
-	$: intradayQuery = createQuery({
-		queryKey: ['intraday', symbol, $currentNetwork?.id],
+	// Query for price data via TradingView
+	$: quoteQuery = createQuery({
+		queryKey: ['tv-quote', tradingViewSymbol, tradingViewMarket, $currentNetwork?.id],
 		queryFn: async () => {
-			const result = await fetchIntradayFresh(symbol as string, '30min');
-			return result;
+			if (!tradingViewSymbol) return null;
+			return getQuote(tradingViewSymbol, tradingViewMarket);
 		},
-		enabled: !!symbol,
-		refetchInterval: 300000 // Refetch every 5 minutes
-	});
-
-	// Query for daily data (for fullscreen view)
-	$: dailyQuery = createQuery({
-		queryKey: ['daily', symbol, $currentNetwork?.id],
-		queryFn: async () => {
-			// Request full daily history to allow up to 1800+ datapoints
-			const result = await alpha.getDaily(
-				symbol as string,
-				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY,
-				'full'
-			);
-			return result;
-		},
-		enabled: !!symbol && showChartModal && chartInterval === 'daily',
-		refetchInterval: false
-	});
-
-	// Query for different intervals when modal is open
-	$: modalIntradayQuery = createQuery({
-		queryKey: ['modalIntraday', symbol, $currentNetwork?.id, chartInterval],
-		queryFn: async () => {
-			if (chartInterval === 'daily') return null;
-			return fetchIntradayFresh(symbol as string, chartInterval).then((result) => {
-				return result;
-			});
-		},
-		enabled: !!symbol && showChartModal && chartInterval !== 'daily',
-		// Keep data fresh while modal is open so today's points appear when available
-		refetchInterval: 60000,
-		staleTime: 0,
-		refetchOnWindowFocus: true
-		// keepPreviousData removed in TanStack Query v5; default behavior is fine
-	});
-
-	// Query for price data
-	$: priceQuery = createQuery({
-		queryKey: ['tokenPrice', symbol, $currentNetwork?.id],
-		queryFn: async () => {
-			return alpha.getGlobalQuote(symbol as string, publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
-		},
-		enabled: !!symbol,
+		enabled: !!tradingViewSymbol,
 		refetchInterval: 60000
 	});
 
-	// Query for comprehensive overview data (fundamentals)
+	// Query for fundamental data only when tab active
 	$: overviewQuery = createQuery({
-		queryKey: ['tokenOverview', symbol, $currentNetwork?.id],
+		queryKey: ['tv-fundamentals', tradingViewSymbol, tradingViewMarket, $currentNetwork?.id],
 		queryFn: async () => {
-			return alpha.getOverview(symbol as string, publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
+			if (!tradingViewSymbol) return null;
+			return getFundamentals(tradingViewSymbol, tradingViewMarket);
 		},
-		enabled: !!symbol && activeTab === 'fundamentals' // Only load when tab is active
+		enabled: !!tradingViewSymbol && activeTab === 'fundamentals'
 	});
 
-	// Query for technical indicators - only load when technical tab is active to save API calls
-	$: macdQuery = createQuery({
-		queryKey: ['macd', symbol, $currentNetwork?.id],
+	// Query for technical indicators when technical tab active
+	$: technicalsQuery = createQuery({
+		queryKey: ['tv-technicals', tradingViewSymbol, tradingViewMarket, $currentNetwork?.id],
 		queryFn: async () => {
-			return alpha.getMACD(symbol as string, 'daily', publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
+			if (!tradingViewSymbol) return null;
+			return getTechnicals(tradingViewSymbol, tradingViewMarket);
 		},
-		enabled: !!symbol && activeTab === 'technical' // Only load when tab is active
+		enabled: !!tradingViewSymbol && activeTab === 'technical'
 	});
 
-	$: rsiQuery = createQuery({
-		queryKey: ['rsi', symbol, $currentNetwork?.id],
-		queryFn: async () => {
-			return alpha.getRSI(
-				symbol as string,
-				'daily',
-				14,
-				'close',
-				publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY
-			);
-		},
-		enabled: !!symbol && activeTab === 'technical' // Only load when tab is active
-	});
+	$: quoteData = $quoteQuery.data as TradingViewQuote | null;
+	$: overview = $overviewQuery.data as TradingViewFundamentals | null;
+	$: technicals = $technicalsQuery.data as TradingViewTechnicals | null;
 
-	$: obvQuery = createQuery({
-		queryKey: ['obv', symbol, $currentNetwork?.id],
-		queryFn: async () => {
-			return alpha.getOBV(symbol as string, 'daily', publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
-		},
-		enabled: !!symbol && activeTab === 'technical' // Only load when tab is active
-	});
+	$: latestPrice = quoteData?.close ?? null;
+	$: latestPriceLabel =
+		latestPrice !== null && latestPrice !== undefined ? `$${latestPrice.toFixed(2)}` : 'N/A';
+	$: latestPriceValue = latestPrice !== null && latestPrice !== undefined ? latestPrice.toFixed(2) : undefined;
+	$: openPrice = quoteData?.open ?? null;
+	$: highPrice = quoteData?.high ?? null;
+	$: lowPrice = quoteData?.low ?? null;
+	$: volumeValue = quoteData?.volume ?? null;
+	$: prevClose = quoteData?.prevClose ?? null;
+	$: week52High = quoteData?.week52High ?? null;
+	$: week52Low = quoteData?.week52Low ?? null;
 
-	// Loosen types for AlphaVantage responses to satisfy TS
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	$: priceData = $priceQuery.data as any;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	$: intradayData = $intradayQuery.data as any;
+	$: marketCapDisplay =
+		quoteData?.marketCap != null ? `$${formatCompact(quoteData.marketCap)}` : 'N/A';
 
-	// noisy metadata log removed
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	$: overviewData = $overviewQuery.data as any;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	$: macdData = $macdQuery.data as any;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	$: rsiData = $rsiQuery.data as any;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	$: obvData = $obvQuery.data as any;
+	$: priceChange = quoteData?.change ?? 0;
+	$: priceChangePercent = quoteData?.changePercent ?? 0;
 
-	$: globalQuote = priceData?.error ? null : priceData?.['Global Quote'];
-	$: overview = overviewData?.error ? null : overviewData;
-
-	// Get the most recent price from intraday data if available, otherwise use global quote
-	$: latestPrice = (() => {
-		// First try to get from intraday data (most recent)
-		if (intradayData && !intradayData.error) {
-			const timeSeries = intradayData['Time Series (5min)'];
-			if (timeSeries) {
-				const times = Object.keys(timeSeries).sort().reverse();
-				if (times.length > 0) {
-					const latestData = timeSeries[times[0]];
-					// use latest timestamp silently
-					return latestData?.['4. close'] || globalQuote?.['05. price'] || '0.00';
-				}
-			}
+	$: macdValues = technicals
+		? {
+			macd: technicals.macd,
+			signal: technicals.macdSignal,
+			histogram: technicals.macdHistogram
 		}
-		// Fall back to global quote
-		return globalQuote?.['05. price'] || '0.00';
-	})();
-
-	// Check if any query hit the API limit
-	$: hasApiLimitError =
-		priceData?.error === 'API_LIMIT' ||
-		intradayData?.error === 'API_LIMIT' ||
-		overviewData?.error === 'API_LIMIT';
-
-	$: marketCap =
-		currentToken?.totalShares && latestPrice
-			? formatUnits(
-					BigInt(Math.floor(parseFloat(latestPrice) * 100)) * BigInt(currentToken.totalShares),
-					20
-				)
-			: '0';
-
-	$: priceChange = parseFloat(globalQuote?.['09. change']) || 0;
-	$: priceChangePercent = parseFloat(globalQuote?.['10. change percent']?.replace('%', '')) || 0;
-
-	// Get latest technical indicator values (typed)
-	type TAResponse = Record<string, Record<string, string>>;
-	$: latestMACD = (macdData as TAResponse)?.['Technical Analysis: MACD']
-		? (Object.values((macdData as TAResponse)['Technical Analysis: MACD'])[0] as unknown as Record<
-				string,
-				string
-			>)
 		: null;
-	$: latestRSI = (rsiData as TAResponse)?.['Technical Analysis: RSI']
-		? (Object.values((rsiData as TAResponse)['Technical Analysis: RSI'])[0] as unknown as Record<
-				string,
-				string
-			>)
-		: null;
-	$: latestOBV = (obvData as TAResponse)?.['Technical Analysis: OBV']
-		? (Object.values((obvData as TAResponse)['Technical Analysis: OBV'])[0] as unknown as Record<
-				string,
-				string
-			>)
-		: null;
+	$: rsiValue = technicals?.rsi ?? null;
+	$: obvValue = technicals?.obv ?? null;
 
 	function openChartModal() {
 		showChartModal = true;
 	}
 
-	function changeChartInterval(interval: string) {
-		chartInterval = interval;
-	}
-
-	function onZoomSliderInput(e: Event) {
-		const target = e.target as HTMLInputElement;
-		zoomPercent = Math.max(1, Math.min(100, +target.value));
-	}
-
-	function zoomOut() {
-		zoomPercent = Math.max(1, zoomPercent - 5);
-	}
-
-	function zoomIn() {
-		zoomPercent = Math.min(100, zoomPercent + 5);
-	}
-
-	// Dynamic slider caps based on available bars in current dataset/interval
-	// Derived availability per interval
-	function intradayKeyFor(obj: Record<string, unknown>, ivl: string): string | null {
-		if (!obj) return null;
-		const exact = `Time Series (${ivl})`;
-		if (obj[exact] != null) return exact;
-		const prefs = ['5min', '15min', '30min', '60min'];
-		for (const k of [ivl, ...prefs]) {
-			const key = `Time Series (${k})`;
-			if (obj[key] != null) return key;
-		}
-		return null;
-	}
-
-	$: {
-		const dataObj =
-			typeof modalChartData === 'object' && modalChartData !== null
-				? (modalChartData as Record<string, unknown>)
-				: undefined;
-		let available = 0;
-		let hasSeries = false;
-		let earliest: string | null = null;
-		let latest: string | null = null;
-		if (dataObj && !('error' in dataObj)) {
-			if (chartInterval === 'daily') {
-				const ts = dataObj['Time Series (Daily)'] as Record<string, unknown> | undefined;
-				if (ts) {
-					const keys = Object.keys(ts).sort();
-					available = keys.length;
-					hasSeries = available > 0;
-					earliest = available ? keys[0] : null;
-					latest = available ? keys[available - 1] : null;
-				}
-			} else {
-				const key = intradayKeyFor(dataObj, chartInterval);
-				const ts = key ? (dataObj[key] as Record<string, unknown>) : undefined;
-				if (ts) {
-					const keys = Object.keys(ts).sort();
-					available = keys.length;
-					hasSeries = available > 0;
-					earliest = available ? keys[0] : null;
-					latest = available ? keys[available - 1] : null;
-				}
-			}
-		}
-		// Derive barCount from percent. Keep minimum of 2 to render a range.
-		if (hasSeries) {
-			const pct = Math.max(1, Math.min(100, zoomPercent));
-			modalBarCount = Math.max(2, Math.round((available * pct) / 100));
-		} else {
-			modalBarCount = 0;
-		}
-
-		zoomDisabled = !hasSeries || modalBarCount <= 1;
-
-		// Quick check: log datapoints and range for current interval in dev
-		if (typeof window !== 'undefined' && import.meta.env.DEV && hasSeries) {
-			console.info(
-				`[Data] ${chartInterval}: count=${available}, earliest=${earliest}, latest=${latest}`
-			);
-		}
-	}
-
-	let zoomDisabled = false;
-
-	// Get the right data for the modal chart based on interval
-	$: modalChartData = showChartModal
-		? chartInterval === 'daily'
-			? $dailyQuery.data
-			: $modalIntradayQuery.data
-		: null;
 </script>
 
 {#if !currentToken}
@@ -403,29 +170,6 @@
 	</div>
 {:else}
 	<div class="space-y-6 p-4 sm:p-6">
-		<!-- API Rate Limit Warning -->
-		{#if hasApiLimitError}
-			<div class="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-				<h3 class="mb-2 font-semibold text-red-400">AlphaVantage API Rate Limit Reached</h3>
-				<p class="text-sm text-red-300">
-					The free AlphaVantage API allows only 25 requests per day, and this limit has been
-					reached.
-				</p>
-				<p class="mt-2 text-sm text-red-300">To continue using real-time market data, you can:</p>
-				<ul class="mt-1 list-inside list-disc text-sm text-red-300">
-					<li>Wait until tomorrow when the limit resets</li>
-					<li>Use a different API key</li>
-					<li>
-						<ExternalLink
-							href="https://www.alphavantage.co/premium/"
-							label="Upgrade to a premium AlphaVantage plan"
-							className="underline"
-						/>
-					</li>
-				</ul>
-			</div>
-		{/if}
-
 		<!-- Header Section with Chart -->
 		<Section>
 			<div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -447,7 +191,7 @@
 
 					<div class="flex items-baseline gap-4">
 						<span class="text-3xl font-bold">
-							${latestPrice}
+							{latestPriceLabel}
 						</span>
 						<div class="flex items-center gap-2">
 							{#if priceChange >= 0}
@@ -501,29 +245,33 @@
 						</div>
 						{#if !priceDetailsCollapsed}
 							<div in:fade|local out:fade|local>
-								<div class="grid grid-cols-2 gap-4 text-sm" transition:slide|local>
-									<div>
-										<span class="text-gray-400">Open</span>
-										<div class="font-medium">${globalQuote?.['02. open'] || 'N/A'}</div>
-									</div>
-									<div>
-										<span class="text-gray-400">Volume</span>
-										<div class="font-medium">
-											{globalQuote?.['06. volume']
-												? formatCompact(parseFloat(globalQuote['06. volume']))
-												: 'N/A'}
+									<div class="grid grid-cols-2 gap-4 text-sm" transition:slide|local>
+										<div>
+											<span class="text-gray-400">Open</span>
+											<div class="font-medium">
+												{openPrice != null ? `$${formatNumber(openPrice)}` : 'N/A'}
+											</div>
 										</div>
-									</div>
-									<div>
-										<span class="text-gray-400">Day Range</span>
-										<div class="font-medium">
-											${globalQuote?.['04. low'] || 'N/A'} - ${globalQuote?.['03. high'] || 'N/A'}
+										<div>
+											<span class="text-gray-400">Volume</span>
+											<div class="font-medium">
+												{volumeValue != null ? formatCompact(volumeValue) : 'N/A'}
+											</div>
 										</div>
-									</div>
-									<div>
-										<span class="text-gray-400">Prev Close</span>
-										<div class="font-medium">${globalQuote?.['08. previous close'] || 'N/A'}</div>
-									</div>
+										<div>
+											<span class="text-gray-400">Day Range</span>
+											<div class="font-medium">
+												{lowPrice != null && highPrice != null
+													? `$${formatNumber(lowPrice)} - $${formatNumber(highPrice)}`
+													: 'N/A'}
+											</div>
+										</div>
+										<div>
+											<span class="text-gray-400">Prev Close</span>
+											<div class="font-medium">
+												{prevClose != null ? `$${formatNumber(prevClose)}` : 'N/A'}
+											</div>
+										</div>
 								</div>
 							</div>
 						{/if}
@@ -552,15 +300,11 @@
 								/>
 							</svg>
 						</Button>
-						{#if intradayData?.error === 'API_LIMIT'}
-							<div class="flex h-full items-center justify-center">
-								<p class="text-sm text-gray-400">Chart unavailable (API limit reached)</p>
-							</div>
-						{:else if $intradayQuery.data}
-							<EquityChart timeseriesData={$intradayQuery.data} barCount={26} interval="30min" />
+						{#if tradingViewSymbol}
+							<TradingViewChart symbol={tradingViewSymbol} interval="30" />
 						{:else}
-							<div class="flex h-full items-center justify-center">
-								<LoadingSpinner variant="inline" size="md" text="Loading chart..." />
+							<div class="flex h-full items-center justify-center text-sm text-gray-400">
+								TradingView data unavailable for this token.
 							</div>
 						{/if}
 					</div>
@@ -604,70 +348,60 @@
 								role="tabpanel"
 								class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
 							>
-								{#if overview && Object.keys(overview).length > 0}
+								{#if overview}
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">P/E Ratio</div>
-										<div class="text-lg font-semibold">{overview.PERatio || 'N/A'}</div>
+										<div class="text-lg font-semibold">{formatNumber(overview.peRatio)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">Forward P/E</div>
-										<div class="text-lg font-semibold">{overview.ForwardPE || 'N/A'}</div>
+										<div class="text-lg font-semibold">{formatNumber(overview.forwardPe)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">PEG Ratio</div>
-										<div class="text-lg font-semibold">{overview.PEGRatio || 'N/A'}</div>
+										<div class="text-lg font-semibold">{formatNumber(overview.pegRatio)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">P/B Ratio</div>
-										<div class="text-lg font-semibold">{overview.PriceToBookRatio || 'N/A'}</div>
+										<div class="text-lg font-semibold">{formatNumber(overview.priceToBook)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">Market Cap</div>
 										<div class="text-lg font-semibold">
-											{overview.MarketCapitalization
-												? formatCompact(parseFloat(overview.MarketCapitalization))
-												: 'N/A'}
+											{overview.marketCap != null ? `$${formatCompact(overview.marketCap)}` : 'N/A'}
 										</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">EPS</div>
-										<div class="text-lg font-semibold">${overview.EPS || 'N/A'}</div>
+										<div class="text-lg font-semibold">{formatNumber(overview.eps)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">Dividend Yield</div>
-										<div class="text-lg font-semibold">
-											{overview.DividendYield
-												? (parseFloat(overview.DividendYield) * 100).toFixed(2) + '%'
-												: 'N/A'}
-										</div>
+										<div class="text-lg font-semibold">{formatPercent(overview.dividendYield)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">Beta</div>
-										<div class="text-lg font-semibold">{overview.Beta || 'N/A'}</div>
+										<div class="text-lg font-semibold">{formatNumber(overview.beta)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">52W High</div>
-										<div class="text-lg font-semibold">${overview['52WeekHigh'] || 'N/A'}</div>
+										<div class="text-lg font-semibold">
+											{overview.week52High != null ? `$${formatNumber(overview.week52High)}` : 'N/A'}
+										</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">52W Low</div>
-										<div class="text-lg font-semibold">${overview['52WeekLow'] || 'N/A'}</div>
+										<div class="text-lg font-semibold">
+											{overview.week52Low != null ? `$${formatNumber(overview.week52Low)}` : 'N/A'}
+										</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">Profit Margin</div>
-										<div class="text-lg font-semibold">
-											{overview.ProfitMargin
-												? (parseFloat(overview.ProfitMargin) * 100).toFixed(2) + '%'
-												: 'N/A'}
-										</div>
+										<div class="text-lg font-semibold">{formatPercent(overview.profitMargin)}</div>
 									</div>
 									<div class={`${containerStyles.cardBordered} p-3`}>
 										<div class="text-xs text-gray-400">ROE</div>
-										<div class="text-lg font-semibold">
-											{overview.ReturnOnEquityTTM
-												? (parseFloat(overview.ReturnOnEquityTTM) * 100).toFixed(2) + '%'
-												: 'N/A'}
-										</div>
+										<div class="text-lg font-semibold">{formatPercent(overview.returnOnEquity)}</div>
 									</div>
 								{:else}
 									<div class="col-span-full py-4">
@@ -683,26 +417,24 @@
 									<!-- MACD -->
 									<div class={containerStyles.cardBordered}>
 										<h3 class="mb-3 font-semibold">MACD</h3>
-										{#if latestMACD}
+										{#if macdValues}
 											<div class="space-y-2 text-sm">
 												<div class="flex justify-between">
 													<span class="text-gray-400">MACD</span>
-													<span class="font-medium">{parseFloat(latestMACD.MACD).toFixed(4)}</span>
+													<span class="font-medium">{formatNumber(macdValues.macd, 4)}</span>
 												</div>
 												<div class="flex justify-between">
 													<span class="text-gray-400">Signal</span>
-													<span class="font-medium"
-														>{parseFloat(latestMACD.MACD_Signal).toFixed(4)}</span
-													>
+													<span class="font-medium">{formatNumber(macdValues.signal, 4)}</span>
 												</div>
 												<div class="flex justify-between">
 													<span class="text-gray-400">Histogram</span>
 													<span
-														class="font-medium {parseFloat(latestMACD.MACD_Hist) >= 0
+														class="font-medium {macdValues.histogram != null && macdValues.histogram >= 0
 															? 'text-green-500'
 															: 'text-red-500'}"
 													>
-														{parseFloat(latestMACD.MACD_Hist).toFixed(4)}
+														{formatNumber(macdValues.histogram, 4)}
 													</span>
 												</div>
 											</div>
@@ -716,21 +448,21 @@
 									<!-- RSI -->
 									<div class={containerStyles.cardBordered}>
 										<h3 class="mb-3 font-semibold">RSI (14)</h3>
-										{#if latestRSI}
+										{#if rsiValue != null}
 											<div class="space-y-2">
 												<div
-													class="text-2xl font-bold {parseFloat(latestRSI.RSI) > 70
+													class="text-2xl font-bold {rsiValue > 70
 														? 'text-red-500'
-														: parseFloat(latestRSI.RSI) < 30
+														: rsiValue < 30
 															? 'text-green-500'
 															: 'text-white'}"
 												>
-													{parseFloat(latestRSI.RSI).toFixed(2)}
+													{formatNumber(rsiValue, 2)}
 												</div>
 												<div class="text-xs text-gray-400">
-													{parseFloat(latestRSI.RSI) > 70
+													{rsiValue > 70
 														? 'Overbought'
-														: parseFloat(latestRSI.RSI) < 30
+														: rsiValue < 30
 															? 'Oversold'
 															: 'Neutral'}
 												</div>
@@ -745,10 +477,10 @@
 									<!-- OBV -->
 									<div class={containerStyles.cardBordered}>
 										<h3 class="mb-3 font-semibold">OBV</h3>
-										{#if latestOBV}
+										{#if obvValue != null}
 											<div class="space-y-2">
 												<div class="text-lg font-bold">
-													{latestOBV.OBV ? formatCompact(parseFloat(latestOBV.OBV)) : 'N/A'}
+													{formatCompact(obvValue)}
 												</div>
 												<div class="text-xs text-gray-400">On-Balance Volume</div>
 											</div>
@@ -826,7 +558,7 @@
 											</div>
 											<div class="flex justify-between">
 												<span class="text-gray-400">On-Chain Market Cap</span>
-												<span>${marketCap}</span>
+												<span>{marketCapDisplay}</span>
 											</div>
 											<div class="flex justify-between">
 												<span class="text-gray-400">Holders</span>
@@ -1118,7 +850,7 @@
 
 						<div class={containerStyles.cardBordered}>
 							{#if activeOrderType === 'limit'}
-								<LimitStrategy passedOutputToken={currentPythToken} currentPrice={latestPrice} />
+								<LimitStrategy passedOutputToken={currentPythToken} currentPrice={latestPriceValue} />
 							{:else}
 								<DcaStrategy passedInputToken={currentPythToken} />
 							{/if}
@@ -1141,177 +873,14 @@
 	onClose={() => (showChartModal = false)}
 >
 	<div class="space-y-4">
-		<!-- Interval Selector -->
-		<div class="flex flex-wrap items-center gap-2">
-			<Button
-				variant="ghost"
-				size="sm"
-				className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-					chartInterval === '5min'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'
-				}`}
-				on:click={() => changeChartInterval('5min')}>5 min</Button
-			>
-			<Button
-				variant="ghost"
-				size="sm"
-				className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-					chartInterval === '15min'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'
-				}`}
-				on:click={() => changeChartInterval('15min')}>15 min</Button
-			>
-			<Button
-				variant="ghost"
-				size="sm"
-				className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-					chartInterval === '30min'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'
-				}`}
-				on:click={() => changeChartInterval('30min')}>30 min</Button
-			>
-			<Button
-				variant="ghost"
-				size="sm"
-				className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-					chartInterval === '60min'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'
-				}`}
-				on:click={() => changeChartInterval('60min')}>1 hour</Button
-			>
-			<Button
-				variant="ghost"
-				size="sm"
-				className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-					chartInterval === 'daily'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white'
-				}`}
-				on:click={() => changeChartInterval('daily')}>Daily</Button
-			>
-
-			<!-- Zoom / Bars selector (slider with +/- magnifiers) -->
-			<div class="ml-auto flex items-center gap-2">
-				<!-- Zoom out -->
-				<button
-					class="rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-white"
-					aria-label="Zoom out"
-					on:click={zoomOut}
-					disabled={zoomDisabled}
-				>
-					<!-- Heroicons: Magnifying Glass Minus -->
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						class="h-5 w-5"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="1.5"
-							d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"
-						/>
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 11h8" />
-					</svg>
-				</button>
-
-				<input
-					type="range"
-					min="1"
-					max="100"
-					step="1"
-					bind:value={zoomPercent}
-					on:input={onZoomSliderInput}
-					class="h-1 w-44 cursor-pointer accent-yellow-500 disabled:opacity-50"
-					disabled={zoomDisabled}
-				/>
-
-				<!-- Zoom in -->
-				<button
-					class="rounded p-1 text-gray-400 hover:bg-gray-700 hover:text-white"
-					aria-label="Zoom in"
-					on:click={zoomIn}
-					disabled={zoomDisabled}
-				>
-					<!-- Heroicons: Magnifying Glass Plus -->
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						class="h-5 w-5"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="1.5"
-							d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"
-						/>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="1.5"
-							d="M12 8v6m-3-3h6"
-						/>
-					</svg>
-				</button>
-			</div>
-		</div>
-
-		<!-- Chart -->
 		<div class={`${containerStyles.cardBordered} h-[70vh] p-2`}>
-			{#if modalChartData}
-				{#if zoomDisabled}
-					<div class="flex h-full items-center justify-center text-sm text-gray-400">
-						No data available for this interval.
-					</div>
-				{:else}
-					<EquityChart
-						timeseriesData={modalChartData}
-						barCount={modalBarCount}
-						alignToNow={true}
-						interval={chartInterval}
-					/>
-				{/if}
+			{#if tradingViewSymbol}
+				<TradingViewChart symbol={tradingViewSymbol} interval="60" />
 			{:else}
-				<div class="flex h-full items-center justify-center">
-					<LoadingSpinner variant="inline" size="md" text="Loading chart..." />
+				<div class="flex h-full items-center justify-center text-sm text-gray-400">
+					TradingView data unavailable for this token.
 				</div>
 			{/if}
-		</div>
-
-		<!-- Price Info -->
-		<div class="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-			<div>
-				<span class="text-gray-400">Current Price</span>
-				<div class="font-medium">${latestPrice}</div>
-			</div>
-			<div>
-				<span class="text-gray-400">Change</span>
-				<div class="font-medium {priceChange >= 0 ? 'text-green-500' : 'text-red-500'}">
-					{priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
-				</div>
-			</div>
-			<div>
-				<span class="text-gray-400">Volume</span>
-				<div class="font-medium">
-					{globalQuote?.['06. volume']
-						? formatCompact(parseFloat(globalQuote['06. volume']))
-						: 'N/A'}
-				</div>
-			</div>
-			<div>
-				<span class="text-gray-400">Day Range</span>
-				<div class="font-medium">
-					${globalQuote?.['04. low'] || 'N/A'} - ${globalQuote?.['03. high'] || 'N/A'}
-				</div>
-			</div>
 		</div>
 	</div>
 </Modal>

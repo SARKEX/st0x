@@ -117,6 +117,8 @@ export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
 // Extended token interface with category
 export interface CategorizedToken extends PythToken {
 	category: TokenCategory;
+	tradingViewSymbol?: string;
+	tradingViewMarket?: string;
 }
 
 export const TOKENS: CategorizedToken[] = [
@@ -128,7 +130,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Microsoft 01',
 		logoUrl: '/images/MSFT.png',
 		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:MSFT',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -138,7 +142,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Meta 01',
 		logoUrl: '/images/META.png',
 		priceFeedId: '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:META',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -148,7 +154,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Nvidia 01',
 		logoUrl: '/images/NVDA.png',
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:NVDA',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -158,7 +166,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Alphabet 01',
 		logoUrl: '/images/GOOGL.png',
 		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:GOOGL',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -168,7 +178,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Amazon 01',
 		logoUrl: '/images/AMZN.png',
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:AMZN',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -178,7 +190,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Apple 01',
 		logoUrl: '/images/AAPL.png',
 		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:AAPL',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -188,7 +202,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Tesla 01',
 		logoUrl: '/images/TSLA.png',
 		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:TSLA',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -198,7 +214,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx GameStop 01',
 		logoUrl: '/images/GME.svg',
 		priceFeedId: '0x6f9cd89ef1b7fd39f667101a91ad578b6c6ace4579d5f7f285a4b06aa4504be6',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:GME',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
@@ -208,7 +226,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Alphabet 01',
 		logoUrl: '/images/GOOGL.png',
 		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:GOOGL',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
@@ -218,7 +238,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Meta 01',
 		logoUrl: '/images/META.png',
 		priceFeedId: '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:META',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
@@ -228,7 +250,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Microsoft 01',
 		logoUrl: '/images/MSFT.png',
 		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:MSFT',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
@@ -238,7 +262,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Tesla 01',
 		logoUrl: '/images/TSLA.png',
 		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:TSLA',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
@@ -248,7 +274,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Nvidia 01',
 		logoUrl: '/images/NVDA.png',
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:NVDA',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
@@ -258,7 +286,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Apple 01',
 		logoUrl: '/images/AAPL.png',
 		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:AAPL',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: arbitrum.id,
@@ -268,7 +298,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'STx Amazon 01',
 		logoUrl: '/images/AMZN.png',
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:AMZN',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken
 ];
 
@@ -282,7 +314,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'Wrapped BTC',
 		logoUrl: '/images/BTC.svg',
 		priceFeedId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'BINANCE:BTCUSDT',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	{
@@ -293,7 +327,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'Wrapped Ether',
 		logoUrl: '/images/ETH.svg',
 		priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'BINANCE:ETHUSDT',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	{
@@ -304,7 +340,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'Arbitrum (ARB)',
 		logoUrl: '/images/ARB.svg',
 		priceFeedId: '0x3fa4252848f9f0a1480be62745a4629d9eb1322aebab8a791e344b3b9c1adcf5',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'BINANCE:ARBUSDT',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	// USDC token
@@ -316,7 +354,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'USD Coin',
 		logoUrl: '/images/USDC.png',
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'KRAKEN:USDCUSD',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	// USDC token
@@ -328,7 +368,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'USD Coin',
 		logoUrl: '/images/USDC.png',
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'KRAKEN:USDCUSD',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken
 ];
 

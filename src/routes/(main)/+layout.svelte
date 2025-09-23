@@ -1,7 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
 	import { wagmiConfig } from 'svelte-wagmi';
-	import { env as publicEnv } from '$env/dynamic/public';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
@@ -12,8 +11,7 @@
 	import { browser } from '$app/environment';
 
 	import { getSfts } from '$lib/query';
-	import * as alpha from '$lib/services/alpha';
-	import type { ApiStockQuote } from '$lib/types';
+	import { getQuotes, type TradingViewQuote } from '$lib/services/tradingview';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import { TOKENS } from '$lib/network';
 
@@ -84,32 +82,31 @@
 	});
 
 	$: tokenGlobalQuoteQuery = createQuery({
-		queryKey: ['tokenGlobalQuote-unique-symbols'],
+		queryKey: ['tokenGlobalQuote-tradingview'],
 		queryFn: async () => {
-			// Build unique list of base symbols across all TOKENS (strip 's1' and '0x' suffixes)
-			const uniqueBaseSymbols = Array.from(
-				new Set(
-					TOKENS.map((t) => {
-						const sym = t.symbol ?? '';
-						if (sym.includes('s1')) return sym.split('s1')[0];
-						if (sym.includes('0x')) return sym.split('0x')[0];
-						return sym;
-					})
-				)
-			).filter(Boolean);
-
-			const tokenQuotes = [];
-			for (const baseSymbol of uniqueBaseSymbols) {
-				const data = await alpha.getGlobalQuote(baseSymbol, publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
-				tokenQuotes.push(data);
+			const grouped = new Map<string, Set<string>>();
+			for (const token of TOKENS) {
+				if (!token.tradingViewSymbol) continue;
+				const market = token.tradingViewMarket ?? 'america';
+				if (!grouped.has(market)) {
+					grouped.set(market, new Set());
+				}
+				grouped.get(market)?.add(token.tradingViewSymbol);
 			}
-			return tokenQuotes;
+
+			const responses = await Promise.all(
+				Array.from(grouped.entries()).map(([market, symbols]) =>
+					getQuotes(Array.from(symbols), market)
+				)
+			);
+
+			return responses.flat();
 		},
 		enabled: true
 	});
 
 	$: sfts.set($vaultQuery.data);
-	$: tokenGlobalQuote.set(($tokenGlobalQuoteQuery.data as unknown as ApiStockQuote[]) ?? []);
+	$: tokenGlobalQuote.set(($tokenGlobalQuoteQuery.data as unknown as TradingViewQuote[]) ?? []);
 </script>
 
 {#if $wagmiConfig}
