@@ -154,7 +154,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="flex h-screen items-center justify-center">
+	<div class="flex h-screen items-center justify-center bg-gray-900 text-white">
 		<LoadingSpinner variant="fullscreen" size="xl" text="Loading ST0x..." />
 	</div>
 {/if}

@@ -19,6 +19,7 @@
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	import { containerStyles } from '$lib/utils/styles';
 	import Button from '$lib/components/ui/Button.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -267,41 +268,34 @@
 	<div class="mt-4 space-y-4 lg:mt-0">
 		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
-			<div class="overflow-x-auto">
-				<table class="min-w-full text-sm text-gray-200">
-					<thead>
-						<tr>
-							<th class="px-2 py-1 text-left">Token</th>
-							<th class="px-2 py-1 text-right">Oracle Price</th>
-							<th class="px-2 py-1 text-right">Price Certainty</th>
-							<th class="px-2 py-1 text-right">Off-chain</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#if hasValidPriceFeedId(selectedToken1)}
-							<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
-						{:else}
+			{#if !hasValidPriceFeedId(selectedToken1) && !hasValidPriceFeedId(selectedToken2)}
+				<div class="py-6 text-center text-sm text-gray-400">No price feed data available</div>
+			{:else if !$tokenGlobalQuote?.length}
+				<div class="flex justify-center py-6">
+					<LoadingSpinner size="sm" text="Loading price data..." />
+				</div>
+			{:else}
+				<div class="overflow-x-auto">
+					<table class="min-w-full text-sm text-gray-200">
+						<thead>
 							<tr>
-								<td class="px-2 py-1">{selectedToken1?.symbol ?? '-'}</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
+								<th class="px-2 py-1 text-left">Token</th>
+								<th class="px-2 py-1 text-right">Oracle Price</th>
+								<th class="px-2 py-1 text-right">Price Certainty</th>
+								<th class="px-2 py-1 text-right">Off-chain</th>
 							</tr>
-						{/if}
-						{#if hasValidPriceFeedId(selectedToken2)}
-							<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
-						{:else}
-							<tr>
-								<td class="px-2 py-1">{selectedToken2?.symbol ?? '-'}</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
-								<td class="px-2 py-1 text-right">-</td>
-							</tr>
-						{/if}
-					</tbody>
-				</table>
-			</div>
-			<!-- Removed mobile-only cards; table above now scrolls on small screens -->
+						</thead>
+						<tbody>
+							{#if hasValidPriceFeedId(selectedToken1)}
+								<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
+							{/if}
+							{#if hasValidPriceFeedId(selectedToken2)}
+								<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
+							{/if}
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		</div>
 
 		<div class={containerStyles.cardBordered}>

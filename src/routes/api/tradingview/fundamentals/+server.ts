@@ -64,11 +64,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 	});
 
 	if (!response.ok) {
-		return json({
-			error: true,
-			status: response.status,
-			message: `TradingView fundamentals request failed with status ${response.status}`
-		}, { status: response.status });
+		return json({ fundamentals: null });
 	}
 
 	const payload = await response.json();

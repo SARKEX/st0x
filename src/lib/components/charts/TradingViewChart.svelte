@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { loadTradingView } from '$lib/utils/tradingview';
 
 	export let symbol: string | undefined;
@@ -25,13 +25,16 @@
 	async function createWidget() {
 		if (!mounted || !symbol) return;
 
+		const currentId = containerId;
 		const TradingView = await loadTradingView();
+		await tick();
+		if (!mounted || !symbol || currentId !== containerId) return;
 
-		if (widget?.remove) {
-			widget.remove();
-		}
+		const containerEl = document.getElementById(containerId);
+		if (!containerEl) return;
 
-		widget = new TradingView.widget({
+		try {
+			widget = new TradingView.widget({
 			symbol,
 			interval,
 			theme,
@@ -46,7 +49,12 @@
 			toolbar_bg: toolbarBg,
 			disabled_features: disabledFeatures,
 			enabled_features: enabledFeatures
-		});
+			});
+		} catch (err) {
+			console.warn('[tradingview] failed to create widget', err);
+			widget = null;
+			return;
+		}
 
 		lastSymbol = symbol;
 	}
@@ -58,9 +66,7 @@
 
 	onDestroy(() => {
 		mounted = false;
-		if (widget?.remove) {
-			widget.remove();
-		}
+		widget = null;
 	});
 
 	$: if (mounted && symbol && symbol !== lastSymbol) {
