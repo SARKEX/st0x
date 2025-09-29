@@ -34,6 +34,7 @@
 		if (!containerEl) return;
 
 		try {
+			widget?.remove?.();
 			widget = new TradingView.widget({
 			symbol,
 			interval,
@@ -66,6 +67,7 @@
 
 	onDestroy(() => {
 		mounted = false;
+		widget?.remove?.();
 		widget = null;
 	});
 

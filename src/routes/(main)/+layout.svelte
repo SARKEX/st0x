@@ -32,7 +32,7 @@
 	$: pageDescription = getPageDescription($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
-		if (pathname.startsWith('/trade/')) return 'Trade Details';
+		if (pathname.startsWith('/trade/')) return 'Trade';
 
 		switch (pathname) {
 			case '/':
