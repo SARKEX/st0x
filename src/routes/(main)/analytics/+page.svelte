@@ -122,7 +122,7 @@
 						<MetricCard
 							label="No Result Searches"
 							value={serverStats.searchesWithNoResults?.toString() || '0'}
-							change="Searches that returned zero matching stocks"
+							change="Searches that returned zero matching assets"
 						/>
 						<MetricCard
 							label="Avg Results Count"

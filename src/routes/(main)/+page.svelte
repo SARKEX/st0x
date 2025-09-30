@@ -234,84 +234,6 @@
 {:else if $sfts.length > 0}
 	<div>
 		<PageContainer>
-			<div class="relative z-50 mb-8">
-				<Section>
-					<div class="mx-auto max-w-3xl">
-						<div class="relative">
-							<SearchBar
-								bind:value={searchTerm}
-								placeholder="Search stocks by name or symbol..."
-								minChars={3}
-							/>
-						</div>
-					</div>
-				</Section>
-				{#if isSearching}
-					<div
-						class="absolute left-1/2 top-full z-50 mt-2 w-full max-w-3xl -translate-x-1/2 px-4 sm:px-6"
-					>
-						{#if filteredSfts.length > 0}
-							<div
-								class="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-900/95 shadow-xl backdrop-blur-sm"
-							>
-								<div class="bg-gray-800/50 px-4 py-2 text-xs text-gray-400">
-									{filteredSfts.length} result{filteredSfts.length === 1 ? '' : 's'} found
-								</div>
-								{#each filteredSfts.slice(0, 10) as sft, index}
-									<a
-										class="block px-4 py-3 transition-colors hover:bg-white/10"
-										href={`/trade/${sft.id}`}
-										on:click={() => handleResultClick(sft, index)}
-									>
-										<div class="flex items-center justify-between">
-											<div class="min-w-0">
-												<div class="truncate text-sm font-semibold text-white sm:text-base">
-													<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-													{@html sft.name.replace(
-														new RegExp(`(${searchTerm.trim()})`, 'gi'),
-														'<span class="text-yellow-400">$1</span>'
-													)}
-												</div>
-												<div class="text-xs text-gray-400">
-													<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-													{@html sft.symbol.replace(
-														new RegExp(`(${searchTerm.trim()})`, 'gi'),
-														'<span class="text-yellow-400">$1</span>'
-													)}
-												</div>
-											</div>
-											<div class="ml-3 flex items-center gap-1 text-xs text-yellow-500">
-												<span>View</span>
-												<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M9 5l7 7-7 7"
-													/>
-												</svg>
-											</div>
-										</div>
-									</a>
-								{/each}
-								{#if filteredSfts.length > 10}
-									<div class="bg-gray-800/50 px-4 py-2 text-center text-xs text-gray-400">
-										Showing first 10 results
-									</div>
-								{/if}
-							</div>
-						{:else}
-							<EmptyState
-								title="No stocks found matching '{searchTerm}'"
-								description="Try searching for a different name or symbol"
-								showBorder={true}
-								className="shadow-xl"
-							/>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
 			<Section>
 				<div class="mb-4 flex items-center justify-between sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Discover</h2>
@@ -503,10 +425,10 @@
 				</div>
 			</Section>
 
-			<!-- Stock Table Section -->
+			<!-- Asset Table Section -->
 			<Section>
 				<div class="mb-4 sm:mb-6">
-					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse Stocks</h2>
+					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse</h2>
 				</div>
 				<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
 					<Table>
@@ -514,7 +436,7 @@
 							<tr class="border-b border-white/10">
 								<th
 									class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>Stock</th
+									>Asset</th
 								>
 								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 									>Price</th
