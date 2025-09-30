@@ -21,7 +21,13 @@
 	$: activePath = $page.url.pathname;
 
 	let searchTerm = '';
-	let filteredAssets: OffchainAssetReceiptVault[] = [];
+	type AssetWithMetrics = OffchainAssetReceiptVault & {
+		price: number;
+		dollarVolume: number;
+	};
+
+	let filteredAssets: AssetWithMetrics[] = [];
+	let sortedAssets: AssetWithMetrics[] = [];
 
 	// Get all tokens for the current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -62,7 +68,7 @@
 	// Calculate assets sorted by volume
 	$: sortedAssets = $sfts
 		? [...$sfts]
-				.map((sft) => {
+				.map<AssetWithMetrics>((sft) => {
 					// Calculate total on-chain volume (deposits + withdrawals)
 					const depositVolume = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
 					const withdrawVolume = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
@@ -96,9 +102,8 @@
 <!-- Sidebar -->
 <div
 	class="fixed left-0 top-0 z-[10000] flex h-full transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-all duration-300 ease-in-out"
-	class:w-64={!collapsed && desktop}
-	class:w-16={collapsed && desktop}
-	class:w-64={!desktop && visible}
+	class:w-64={(desktop && !collapsed) || (!desktop && visible)}
+	class:w-16={desktop && collapsed}
 	class:w-12={!desktop && !visible}
 	class:max-w-[80vw]={!desktop && visible}
 >

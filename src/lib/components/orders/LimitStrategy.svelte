@@ -40,6 +40,17 @@
 
 	let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
 
+	const ORDER_TOGGLE_ACTIVE_CLASSES = {
+		Buy: 'bg-green-500/20 text-green-400',
+		Sell: 'bg-red-500/20 text-red-400'
+	} as const;
+	const ORDER_TOGGLE_INACTIVE_CLASSES = 'text-gray-400 hover:text-white';
+	$: summaryAccentClass = selectedOrderType === 'Buy' ? 'text-green-400' : 'text-red-400';
+	$: actionButtonClass =
+		selectedOrderType === 'Buy'
+			? 'bg-green-500 hover:bg-green-600 text-white'
+			: 'bg-red-500 hover:bg-red-600 text-white';
+
 	// Autofill with current price if available
 	let selectedInitialRatio: string = currentPrice || '';
 	$: if (currentPrice && !selectedInitialRatio) {
@@ -130,18 +141,24 @@
 			<div class="mb-3 flex gap-2">
 				<button
 					on:click={() => (selectedOrderType = 'Buy')}
-					class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType ===
-					'Buy'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'text-gray-400 hover:text-white'}">Buy</button
+					class={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+						selectedOrderType === 'Buy'
+							? ORDER_TOGGLE_ACTIVE_CLASSES.Buy
+							: ORDER_TOGGLE_INACTIVE_CLASSES
+					}`}
 				>
+					Buy
+				</button>
 				<button
 					on:click={() => (selectedOrderType = 'Sell')}
-					class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType ===
-					'Sell'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'text-gray-400 hover:text-white'}">Sell</button
+					class={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+						selectedOrderType === 'Sell'
+							? ORDER_TOGGLE_ACTIVE_CLASSES.Sell
+							: ORDER_TOGGLE_INACTIVE_CLASSES
+					}`}
 				>
+					Sell
+				</button>
 			</div>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-3">
@@ -217,7 +234,7 @@
 					<div class="mt-2 border-t border-white/10 pt-2">
 						<div class="flex justify-between">
 							<span class="text-gray-400">Total</span>
-							<span class="text-lg font-semibold text-yellow-500">
+							<span class={`text-lg font-semibold ${summaryAccentClass}`}>
 								{totalCost} USDC
 							</span>
 						</div>
@@ -257,9 +274,11 @@
 		<button
 			on:click={handleDeploy}
 			disabled={disableDeploy}
-			class="w-full rounded-md px-4 py-3 text-sm font-semibold text-black transition-all {disableDeploy
-				? 'cursor-not-allowed bg-gray-600 opacity-50'
-				: 'bg-yellow-500 hover:bg-yellow-600'}"
+			class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
+				disableDeploy
+					? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
+					: actionButtonClass
+			}`}
 		>
 			{#if disableDeploy}
 				{#if !selectedInitialRatio}

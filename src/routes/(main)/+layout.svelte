@@ -11,9 +11,10 @@
 	import { browser } from '$app/environment';
 
 	import { getSfts } from '$lib/query';
-	import { getQuotes, type TradingViewQuote } from '$lib/services/tradingview';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
+	import { getPythQuotes } from '$lib/services/pyth';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote, currentNetwork } from '$lib/stores';
-	import { TOKENS } from '$lib/network';
+	import { TOKENS, type CategorizedToken } from '$lib/network';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
@@ -94,28 +95,21 @@
 		enabled: !!$currentNetwork?.subgraph_url
 	});
 
+	let networkTokensForQuotes: CategorizedToken[] = [];
+	$: networkTokensForQuotes = TOKENS.filter(
+		(token) => token.chainId === $currentNetwork?.chainId && token.priceFeedId
+	) as CategorizedToken[];
+	$: networkFeedKey = networkTokensForQuotes
+		.map((token) => token.priceFeedId.toLowerCase())
+		.sort()
+		.join(',');
 	$: tokenGlobalQuoteQuery = createQuery({
-		queryKey: ['tokenGlobalQuote-tradingview'],
+		queryKey: ['tokenGlobalQuote-pyth', $currentNetwork?.id, networkFeedKey],
 		queryFn: async () => {
-			const grouped = new Map<string, Set<string>>();
-			for (const token of TOKENS) {
-				if (!token.tradingViewSymbol) continue;
-				const market = token.tradingViewMarket ?? 'america';
-				if (!grouped.has(market)) {
-					grouped.set(market, new Set());
-				}
-				grouped.get(market)?.add(token.tradingViewSymbol);
-			}
-
-			const responses = await Promise.all(
-				Array.from(grouped.entries()).map(([market, symbols]) =>
-					getQuotes(Array.from(symbols), market)
-				)
-			);
-
-			return responses.flat();
+			if (!networkTokensForQuotes.length) return [] as TradingViewQuote[];
+			return getPythQuotes(networkTokensForQuotes);
 		},
-		enabled: true
+		enabled: networkTokensForQuotes.length > 0
 	});
 
 	$: sfts.set($vaultQuery.data);

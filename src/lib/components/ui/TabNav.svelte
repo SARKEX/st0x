@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Tabs: array of { id: string; label: string }
-	export let tabs: { id: string; label: string }[] = [];
+	export let tabs: ReadonlyArray<{ id: string; label: string }> = [];
 	export let activeId: string;
 	// Emit change events
 	import { createEventDispatcher } from 'svelte';
@@ -8,7 +8,6 @@
 
 	function setActive(id: string) {
 		if (id === activeId) return;
-		activeId = id;
 		dispatch('change', { id });
 	}
 

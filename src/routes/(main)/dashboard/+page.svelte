@@ -77,7 +77,20 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let isNetworkLoading = false;
-	let activeTab: 'portfolio' | 'orders' | 'vaults' | string = 'portfolio';
+	const DASHBOARD_TABS = [
+		{ id: 'portfolio', label: 'Portfolio' },
+		{ id: 'orders', label: 'Orders' },
+		{ id: 'vaults', label: 'Vaults' }
+	] as const;
+	type DashboardTabId = (typeof DASHBOARD_TABS)[number]['id'];
+	let activeTab: DashboardTabId = 'portfolio';
+
+	const handleDashboardTabChange = (event: CustomEvent<{ id: string }>) => {
+		const nextId = event.detail.id;
+		if (DASHBOARD_TABS.some((tab) => tab.id === nextId)) {
+			activeTab = nextId as DashboardTabId;
+		}
+	};
 
 	// Order List variables
 	let ordersActiveFilter: boolean | undefined = undefined; // Show inactive orders by default
@@ -393,12 +406,9 @@
 
 			<!-- Tab Navigation -->
 			<TabNav
-				bind:activeId={activeTab}
-				tabs={[
-					{ id: 'portfolio', label: 'Portfolio' },
-					{ id: 'orders', label: 'Orders' },
-					{ id: 'vaults', label: 'Vaults' }
-				]}
+				activeId={activeTab}
+				on:change={handleDashboardTabChange}
+				tabs={DASHBOARD_TABS}
 			/>
 
 			<!-- Portfolio Tab -->

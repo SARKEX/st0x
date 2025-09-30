@@ -32,6 +32,8 @@
 		{ name: 'Strategies', href: '/strategies', showAlpha: true },
 		{ name: 'Platform Metrics', href: '/platform-metrics' }
 	];
+
+	const DESKTOP_NAV_WIDTH = 'w-44';
 </script>
 
 <div class="sticky top-0 z-[100] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
@@ -119,10 +121,11 @@
 				{#each NAV_ITEMS as item}
 					<a
 						href={item.href}
-						class="rounded-lg px-3 py-2 text-sm font-medium transition-colors {activePath ===
-						item.href
-							? 'bg-yellow-500/20 text-yellow-500'
-							: 'text-gray-300 hover:bg-white/5 hover:text-white'}"
+						class={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${DESKTOP_NAV_WIDTH} ${
+							activePath === item.href
+								? 'bg-yellow-500/20 text-yellow-500'
+								: 'text-gray-300 hover:bg-white/5 hover:text-white'
+						}`}
 					>
 						<span class="flex items-center gap-1.5">
 							{item.name}

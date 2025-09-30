@@ -44,7 +44,16 @@
 	$: baseSymbol = baseFromSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
 
-	let activeTab: 'company' | 'fundamentals' | 'technical' | 'news' | 'token' | 'mints-burns' = 'company';
+	const TABS = [
+		{ id: 'company', label: 'Company Info' },
+		{ id: 'fundamentals', label: 'Fundamentals' },
+		{ id: 'technical', label: 'Technical' },
+		{ id: 'news', label: 'Top Stories' },
+		{ id: 'token', label: 'Token Info' },
+		{ id: 'mints-burns', label: 'Mints & Burns' }
+	] as const;
+	type DetailsTabId = (typeof TABS)[number]['id'];
+	let activeTab: DetailsTabId = 'company';
 	let activeOrderType: 'limit' | 'dca' = 'limit';
 	let infoCollapsed = false;
 	let tradeCollapsed = false;
@@ -58,14 +67,12 @@
 		return () => {};
 	});
 
-	const TABS = [
-		{ id: 'company', label: 'Company Info' },
-		{ id: 'fundamentals', label: 'Fundamentals' },
-		{ id: 'technical', label: 'Technical' },
-		{ id: 'news', label: 'Top Stories' },
-		{ id: 'token', label: 'Token Info' },
-		{ id: 'mints-burns', label: 'Mints & Burns' }
-	];
+	const handleDetailsTabChange = (event: CustomEvent<{ id: string }>) => {
+		const nextId = event.detail.id;
+		if (TABS.some((tab) => tab.id === nextId)) {
+			activeTab = nextId as DetailsTabId;
+		}
+	};
 
 	let showChartModal = false;
 
@@ -185,7 +192,12 @@
 			{#if !infoCollapsed}
 				<div in:fade|local out:fade|local>
 					<div transition:slide|local>
-						<TabNav className="mb-6" tabs={TABS} bind:activeId={activeTab} />
+					<TabNav
+						className="mb-6"
+						tabs={TABS}
+						activeId={activeTab}
+						on:change={handleDetailsTabChange}
+					/>
 
 										<!-- Tab Content -->
 					{#if activeTab === 'company'}
