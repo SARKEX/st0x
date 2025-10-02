@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { onMount } from 'svelte';
-	import type { Token } from 'sushi/currency';
+	import type { Token } from 'sushi';
 
 	export let options: Token[] = [];
 	export let selected: Token;

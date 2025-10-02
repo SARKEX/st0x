@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getAllTokensByNetwork } from '$lib/network';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { Token } from 'sushi/currency';
+	import type { Token } from 'sushi';
 	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits, parseUnits } from 'viem';

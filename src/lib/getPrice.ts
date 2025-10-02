@@ -1,4 +1,4 @@
-import { Token } from 'sushi/currency';
+import { Token } from 'sushi';
 import { ethers } from 'ethers';
 import { getSwap } from 'sushi';
 import { formatUnits } from 'viem';

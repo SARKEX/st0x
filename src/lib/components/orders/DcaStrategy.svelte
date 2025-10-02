@@ -2,7 +2,7 @@
 	import { getAllTokensByNetwork } from '$lib/network';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { Token } from 'sushi/currency';
+	import type { Token } from 'sushi';
 	import type { PythToken } from '$lib/types';
 	import {
 		validateBaseline,
