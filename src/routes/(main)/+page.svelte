@@ -9,6 +9,12 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
+	import { IPythAbi } from'@pythnetwork/pyth-evm-js';
+	import { signerAddress, wagmiConfig, connected } from 'svelte-wagmi';
+	import { readContract } from '@wagmi/core';
+	import { erc20Abi } from 'viem';
+	import type { Hex } from 'viem';
+
 	import { createQuery } from '@tanstack/svelte-query';
 	import { getAllTokensByNetwork } from '$lib/network';
 	import { formatUnits } from 'viem';
@@ -137,6 +143,27 @@
 			filteredSfts = [];
 			currentSearchId = null;
 		}
+	}
+
+	$: if ($connected && $wagmiConfig) {
+		async function getOnChainPrice() {
+			try {
+				const onChainPriceUpdate = await readContract($wagmiConfig, {
+					abi: IPythAbi,
+					// Base contract address for each network, differen for different networks https://docs.pyth.network/price-feeds/contract-addresses/evm
+					address: "0x8250f4aF4B972684F7b336503E2D6dFeDeB1487a" as `0x${string}`, 
+					functionName: 'getPriceNoOlderThan',
+					// Pyth feed id for each token. https://docs.pyth.network/price-feeds/price-feeds
+					// No older than arg in seconds
+					args: ['0x6f9cd89ef1b7fd39f667101a91ad578b6c6ace4579d5f7f285a4b06aa4504be6','86400']
+				})
+				console.log('onChainPriceUpdate : ', onChainPriceUpdate); 
+			} catch (error) {
+				console.log('error : ', error);
+			}
+
+		}
+		getOnChainPrice();
 	}
 
 	function handleResultClick(sft: OffchainAssetReceiptVault, position: number) {
