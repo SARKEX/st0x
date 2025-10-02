@@ -1,13 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-const TECHNICAL_COLUMNS = [
-	'MACD.macd',
-	'MACD.signal',
-	'MACD.histogram',
-	'RSI',
-	'OBV'
-];
+const TECHNICAL_COLUMNS = ['MACD.macd', 'MACD.signal', 'MACD.histogram', 'RSI', 'OBV'];
 
 function coerceNumber(value: unknown): number | null {
 	if (value === null || value === undefined) return null;

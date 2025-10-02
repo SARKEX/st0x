@@ -18,14 +18,14 @@
 
 	$: config = symbol
 		? {
-			symbol,
-			colorTheme,
-			displayMode,
-			isTransparent,
-			locale,
-			width,
-			height: normaliseHeight(height)
-		}
+				symbol,
+				colorTheme,
+				displayMode,
+				isTransparent,
+				locale,
+				width,
+				height: normaliseHeight(height)
+			}
 		: null;
 </script>
 
@@ -33,6 +33,8 @@
 	<TradingViewEmbed {src} {config} />
 {:else}
 	<slot name="fallback">
-		<div class="px-4 py-6 text-sm text-gray-400">TradingView fundamentals are unavailable for this token.</div>
+		<div class="px-4 py-6 text-sm text-gray-400">
+			TradingView fundamentals are unavailable for this token.
+		</div>
 	</slot>
 {/if}

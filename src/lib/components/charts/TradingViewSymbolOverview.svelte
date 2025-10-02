@@ -16,26 +16,21 @@
 
 	$: config = symbol
 		? {
-			width: '100%',
-			height,
-			autosize,
-			symbols: [
-				[
-					displayName ?? symbol,
-					`${symbol}|${dateRange}`
-				]
-			],
-			showSymbolLogo: true,
-			isTransparent: false,
-			locale,
-			lineWidth,
-			colorTheme,
-			chartOnly: false,
-			showVolume,
-			showMA,
-			maLineColor: '#f59e0b',
-			headerFontSize: 'medium'
-		}
+				width: '100%',
+				height,
+				autosize,
+				symbols: [[displayName ?? symbol, `${symbol}|${dateRange}`]],
+				showSymbolLogo: true,
+				isTransparent: false,
+				locale,
+				lineWidth,
+				colorTheme,
+				chartOnly: false,
+				showVolume,
+				showMA,
+				maLineColor: '#f59e0b',
+				headerFontSize: 'medium'
+			}
 		: null;
 </script>
 

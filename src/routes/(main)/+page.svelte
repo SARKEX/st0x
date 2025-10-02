@@ -4,7 +4,6 @@
 	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import ListCard from '$lib/components/ui/ListCard.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
@@ -31,8 +30,6 @@
 	let biggestMovers: any[] = [];
 	let biggestVolume: any[] = [];
 	let recentlyAdded: OffchainAssetReceiptVault[] = [];
-	let isSearching = false;
-	let currentSearchId: string | null = null;
 
 	function baseFromSymbol(sym?: string) {
 		if (!sym) return undefined;
@@ -44,7 +41,9 @@
 	function findTradingViewSymbol(symbol?: string) {
 		const base = baseFromSymbol(symbol);
 		if (!base) return undefined;
-		const match = ALL_TOKENS.find((token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase());
+		const match = ALL_TOKENS.find(
+			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
+		);
 		return match?.tradingViewSymbol;
 	}
 
@@ -122,7 +121,6 @@
 			// Start tracking search
 			searchAnalytics.trackSearchStart();
 
-			isSearching = true;
 			filteredSfts = $sfts.filter(
 				(s) =>
 					s.name.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
@@ -131,21 +129,9 @@
 
 			// Track the search with debouncing (800ms delay) to avoid too many events
 			trackSearchDebounced(trimmedSearch, filteredSfts.length, 800);
-			currentSearchId = trimmedSearch; // Store for click tracking
 		} else {
-			isSearching = false;
 			filteredSfts = [];
-			currentSearchId = null;
 		}
-	}
-
-	function handleResultClick(sft: OffchainAssetReceiptVault, position: number) {
-		// Track the click
-		if (currentSearchId) {
-			searchAnalytics.trackClick(currentSearchId, sft.symbol, position);
-		}
-		// Clear search term
-		searchTerm = '';
 	}
 
 	$: if ($sfts && $tokenGlobalQuote) {

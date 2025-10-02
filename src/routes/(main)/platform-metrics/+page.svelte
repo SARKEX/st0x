@@ -53,7 +53,7 @@
 					// Continue with other networks even if one fails
 				}
 			}
-		return allNetworksSfts;
+			return allNetworksSfts;
 		},
 		enabled: true,
 		retry: 3,
@@ -70,7 +70,9 @@
 	function findTradingViewSymbol(symbol?: string) {
 		const base = baseFromSymbol(symbol);
 		if (!base) return undefined;
-		const match = ALL_TOKENS.find((token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase());
+		const match = ALL_TOKENS.find(
+			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
+		);
 		return match?.tradingViewSymbol;
 	}
 

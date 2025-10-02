@@ -33,6 +33,15 @@
 		sidebarCollapsed = event.detail.collapsed;
 	}
 
+	function handleHeaderSidebarToggle(event: CustomEvent<{ target: 'mobile' | 'desktop' }>) {
+		if (event.detail?.target === 'desktop') {
+			sidebarCollapsed = !sidebarCollapsed;
+			mobileSidebarOpen = false;
+		} else {
+			mobileSidebarOpen = !mobileSidebarOpen;
+		}
+	}
+
 	// Get page title and description based on current route
 	$: pageTitle = getPageTitle($page.url.pathname);
 	$: pageDescription = getPageDescription($page.url.pathname);
@@ -106,10 +115,10 @@
 	$: tokenGlobalQuoteQuery = createQuery({
 		queryKey: ['tokenGlobalQuote-pyth', $currentNetwork?.id, networkFeedKey],
 		queryFn: async () => {
-			if (!networkTokensForQuotes.length) return [] as TradingViewQuote[];
+			if (!browser || !networkTokensForQuotes.length) return [] as TradingViewQuote[];
 			return getPythQuotes(networkTokensForQuotes);
 		},
-		enabled: networkTokensForQuotes.length > 0
+		enabled: browser && networkTokensForQuotes.length > 0
 	});
 
 	$: sfts.set($vaultQuery.data);
@@ -125,7 +134,7 @@
 			/>
 		</div>
 		<!-- Mobile/Tablet sidebar (always rendered) -->
-		<div class="md:hidden">
+		<div class="lg:hidden">
 			<Sidebar
 				visible={mobileSidebarOpen}
 				desktop={false}
@@ -134,23 +143,28 @@
 			/>
 		</div>
 		<!-- Desktop sidebar -->
-		<div class="fixed left-0 top-0 z-50 hidden h-full md:block">
-			<Sidebar visible={true} desktop={true} collapsed={sidebarCollapsed} on:toggleCollapse={handleSidebarToggle} />
+		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
+			<Sidebar
+				visible={true}
+				desktop={true}
+				collapsed={sidebarCollapsed}
+				on:toggleCollapse={handleSidebarToggle}
+			/>
 		</div>
 
 		<!-- Main Content -->
 		<div
 			class="transition-all duration-300"
-			class:ml-12={!mobileSidebarOpen}
-			class:ml-64={mobileSidebarOpen}
-			class:md:ml-64={!sidebarCollapsed}
-			class:md:ml-16={sidebarCollapsed}
+			class:lg:ml-64={!sidebarCollapsed}
+			class:lg:ml-0={sidebarCollapsed}
 		>
 			<!-- Header for all screen sizes -->
 			<Header
 				title={pageTitle}
 				description={pageDescription}
-				on:openMenu={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+				isSidebarCollapsed={sidebarCollapsed}
+				isMobileSidebarOpen={mobileSidebarOpen}
+				on:toggleSidebar={handleHeaderSidebarToggle}
 			/>
 
 			<slot {sidebarExpanded} />

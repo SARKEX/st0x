@@ -36,20 +36,20 @@
 		try {
 			widget?.remove?.();
 			widget = new TradingView.widget({
-			symbol,
-			interval,
-			theme,
-			locale,
-			studies,
-			autosize,
-			timezone,
-			container_id: containerId,
-			hide_top_toolbar: hideTopToolbar,
-			hide_side_toolbar: hideSideToolbar,
-			withdateranges,
-			toolbar_bg: toolbarBg,
-			disabled_features: disabledFeatures,
-			enabled_features: enabledFeatures
+				symbol,
+				interval,
+				theme,
+				locale,
+				studies,
+				autosize,
+				timezone,
+				container_id: containerId,
+				hide_top_toolbar: hideTopToolbar,
+				hide_side_toolbar: hideSideToolbar,
+				withdateranges,
+				toolbar_bg: toolbarBg,
+				disabled_features: disabledFeatures,
+				enabled_features: enabledFeatures
 			});
 		} catch (err) {
 			console.warn('[tradingview] failed to create widget', err);

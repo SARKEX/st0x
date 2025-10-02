@@ -50,7 +50,9 @@
 	function findTradingViewSymbol(symbol?: string) {
 		const base = baseFromSymbol(symbol);
 		if (!base) return undefined;
-		const match = ALL_TOKENS.find((token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase());
+		const match = ALL_TOKENS.find(
+			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
+		);
 		return match?.tradingViewSymbol;
 	}
 
@@ -135,7 +137,6 @@
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
-
 					const quote = findQuoteForSymbol(sft.symbol);
 					const price = quote?.close ?? 0;
 					const priceChange = quote?.change ?? 0;
@@ -286,7 +287,6 @@
 					token.symbol?.toUpperCase() === 'USDC' ||
 					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
 
-
 				const quote = !isUSDC ? findQuoteForSymbol(token.symbol) : null;
 
 				let price: number;
@@ -405,11 +405,7 @@
 			</Section>
 
 			<!-- Tab Navigation -->
-			<TabNav
-				activeId={activeTab}
-				on:change={handleDashboardTabChange}
-				tabs={DASHBOARD_TABS}
-			/>
+			<TabNav activeId={activeTab} on:change={handleDashboardTabChange} tabs={DASHBOARD_TABS} />
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}

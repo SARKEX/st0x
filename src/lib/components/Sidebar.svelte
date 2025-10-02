@@ -4,8 +4,6 @@
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
 	import ShareButton from './ShareButton.svelte';
-	import SearchBar from './ui/SearchBar.svelte';
-	import TokenDisplay from './ui/TokenDisplay.svelte';
 	import { getAllTokensByNetwork } from '$lib/network';
 	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
@@ -42,7 +40,9 @@
 	function findTradingViewSymbol(symbol?: string) {
 		const base = baseFromSymbol(symbol);
 		if (!base) return undefined;
-		const match = ALL_TOKENS.find((token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase());
+		const match = ALL_TOKENS.find(
+			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
+		);
 		return match?.tradingViewSymbol;
 	}
 
@@ -71,7 +71,10 @@
 				.map<AssetWithMetrics>((sft) => {
 					// Calculate total on-chain volume (deposits + withdrawals)
 					const depositVolume = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
-					const withdrawVolume = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
+					const withdrawVolume = sft.withdraws.reduce(
+						(sum, w) => sum + BigInt(w.amount),
+						BigInt(0)
+					);
 					const totalVolume = depositVolume + withdrawVolume;
 					const quote = findQuoteForSymbol(sft.symbol);
 					const price = quote?.close ?? 0;
@@ -102,10 +105,11 @@
 <!-- Sidebar -->
 <div
 	class="fixed left-0 top-0 z-[10000] flex h-full transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-all duration-300 ease-in-out"
-	class:w-64={(desktop && !collapsed) || (!desktop && visible)}
-	class:w-16={desktop && collapsed}
-	class:w-12={!desktop && !visible}
+	class:w-64={desktop || (!desktop && visible)}
+	class:w-0={!desktop && !visible}
 	class:max-w-[80vw]={!desktop && visible}
+	class:-translate-x-full={(desktop && collapsed) || (!desktop && !visible)}
+	class:pointer-events-none={(desktop && collapsed) || (!desktop && !visible)}
 >
 	<!-- Header with collapse button (desktop) or arrow indicator (mobile/tablet) -->
 	<div class="flex items-center justify-end border-b border-white/10 p-2">
@@ -117,17 +121,12 @@
 			>
 				<svg
 					class="h-5 w-5 transition-transform duration-300"
-					class:rotate-180={collapsed}
+					class:rotate-180={!collapsed}
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
 				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-					/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
 			</button>
 		{:else}
@@ -138,17 +137,12 @@
 			>
 				<svg
 					class="h-5 w-5 transition-transform duration-300"
-					class:rotate-180={!visible}
+					class:rotate-180={visible}
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
 				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M9 5l7 7-7 7"
-					/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
 			</button>
 		{/if}
@@ -270,24 +264,6 @@
 					<span>Docs</span>
 				</a>
 				<ShareButton />
-			</div>
-		</div>
-	{:else if desktop && collapsed}
-		<!-- Desktop collapsed view (rotated text) -->
-		<div class="flex flex-1 items-center justify-center">
-			<div class="flex items-center justify-center" style="writing-mode: vertical-rl; text-orientation: mixed;">
-				<span class="text-sm font-semibold uppercase tracking-widest text-gray-400">
-					Asset List Panel
-				</span>
-			</div>
-		</div>
-	{:else if !desktop && !visible}
-		<!-- Mobile/Tablet collapsed view (arrow) -->
-		<div class="flex flex-1 items-center justify-center">
-			<div class="flex items-center justify-center" style="writing-mode: vertical-rl; text-orientation: mixed;">
-				<span class="text-xs font-semibold uppercase tracking-widest text-gray-400">
-					Assets
-				</span>
 			</div>
 		</div>
 	{/if}

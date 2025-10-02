@@ -13,15 +13,15 @@
 
 	$: config = symbol
 		? {
-			feedMode: 'symbol',
-			symbol,
-			width,
-			height,
-			locale,
-			colorTheme,
-			isTransparent,
-			displayMode
-		}
+				feedMode: 'symbol',
+				symbol,
+				width,
+				height,
+				locale,
+				colorTheme,
+				isTransparent,
+				displayMode
+			}
 		: null;
 </script>
 

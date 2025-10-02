@@ -1,5 +1,6 @@
 <script lang="ts">
 	import axios from 'axios';
+	import { browser } from '$app/environment';
 	import { currentNetwork } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
 	import type { TradingViewQuote } from '$lib/services/tradingview';
@@ -17,7 +18,6 @@
 	let priceData: { price: number; confidence: number } | null = null;
 	let error: string | null = null;
 	let loading = true;
-
 
 	function normalizeSymbol(sym?: string) {
 		if (!sym) return undefined;
@@ -44,11 +44,12 @@
 	$: quotePrice = quote?.close ?? null;
 
 	// Reactive statement that triggers when token changes
-	$: if ('priceFeedId' in token && (token as PythToken).priceFeedId) {
+	$: if (browser && 'priceFeedId' in token && (token as PythToken).priceFeedId) {
 		fetchOracleData();
 	}
 
 	async function fetchOracleData() {
+		if (!browser) return;
 		loading = true;
 		error = null;
 		priceData = null;

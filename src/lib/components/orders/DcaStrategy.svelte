@@ -21,6 +21,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { browser } from '$app/environment';
 
 	let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
 
@@ -163,7 +164,7 @@
 	$: periodLabel = selectedOrderType === 'Buy' ? 'Accumulation Period' : 'Divestment Period';
 
 	// Default Start Price to oracle price when available and if user hasn't entered a value yet
-	$: if (hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
+	$: if (browser && hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
 		const feedId = (selectedInputToken as unknown as { priceFeedId?: string })?.priceFeedId;
 		if (feedId) {
 			fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`)

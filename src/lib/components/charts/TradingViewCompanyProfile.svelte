@@ -12,13 +12,13 @@
 
 	$: config = symbol
 		? {
-			symbol,
-			width,
-			height,
-			locale,
-			colorTheme,
-			isTransparent
-		}
+				symbol,
+				width,
+				height,
+				locale,
+				colorTheme,
+				isTransparent
+			}
 		: null;
 </script>
 

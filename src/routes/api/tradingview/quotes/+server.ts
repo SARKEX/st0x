@@ -15,15 +15,7 @@ const DEFAULT_COLUMNS = [
 	'market_cap_basic'
 ];
 
-const FALLBACK_COLUMNS = [
-	'close',
-	'open',
-	'high',
-	'low',
-	'volume',
-	'change',
-	'change_percent'
-];
+const FALLBACK_COLUMNS = ['close', 'open', 'high', 'low', 'volume', 'change', 'change_percent'];
 
 function coerceNumber(value: unknown): number | null {
 	if (value === null || value === undefined) return null;
@@ -183,12 +175,17 @@ async function requestQuotes(
 			ticker: tickers[0]
 		});
 		return [];
-
 	}
 
 	const results: ReturnType<typeof parseQuotes> = [];
 	for (const ticker of tickers) {
-		const single = await requestQuotes(endpoint, [ticker], fetchFn, primaryColumns, secondaryColumns);
+		const single = await requestQuotes(
+			endpoint,
+			[ticker],
+			fetchFn,
+			primaryColumns,
+			secondaryColumns
+		);
 		results.push(...single);
 	}
 	return results;
@@ -205,13 +202,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 
 	const endpoint = resolveEndpoint(marketParam);
 
-	const quotes = await requestQuotes(
-		endpoint,
-		tickers,
-		fetch,
-		DEFAULT_COLUMNS,
-		FALLBACK_COLUMNS
-	);
+	const quotes = await requestQuotes(endpoint, tickers, fetch, DEFAULT_COLUMNS, FALLBACK_COLUMNS);
 
 	return json({ quotes });
 };

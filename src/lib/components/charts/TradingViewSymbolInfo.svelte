@@ -13,14 +13,14 @@
 
 	$: config = symbol
 		? {
-			symbol,
-			width,
-			height,
-			locale,
-			colorTheme,
-			isTransparent,
-			showIntervalTabs
-		}
+				symbol,
+				width,
+				height,
+				locale,
+				colorTheme,
+				isTransparent,
+				showIntervalTabs
+			}
 		: null;
 </script>
 
