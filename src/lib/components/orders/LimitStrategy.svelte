@@ -132,9 +132,7 @@
 		<div class="rounded-lg bg-gray-800/50 p-4">
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-3">
-					<span class="text-sm text-gray-400"
-						>{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span
-					>
+					<span class="text-sm text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 					<div class="flex items-center gap-2">
 						{#if selectedOutputToken.logoUrl}
 							<img

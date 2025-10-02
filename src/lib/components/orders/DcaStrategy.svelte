@@ -143,14 +143,14 @@
 	// Calculate average amount per period (use correct decimals for order type)
 	$: avgPricePerPeriod = (() => {
 		if (!selectedAmount || !selectedPeriod) return '0.00';
-	const decimals =
-		orderSide === 'Buy'
-			? selectedOutputToken?.decimals || 18
-			: selectedInputToken?.decimals || 18;
+		const decimals =
+			orderSide === 'Buy'
+				? selectedOutputToken?.decimals || 18
+				: selectedInputToken?.decimals || 18;
 		const amount = parseFloat(formatUnits(selectedAmount, decimals));
 		const periods = parseFloat(selectedPeriod || '1');
 		if (!Number.isFinite(amount) || !Number.isFinite(periods) || periods === 0) return '0.00';
-	const dp = orderSide === 'Buy' ? 2 : 6; // Preserve 2dp for Buy (USDC), higher precision for Sell
+		const dp = orderSide === 'Buy' ? 2 : 6; // Preserve 2dp for Buy (USDC), higher precision for Sell
 		return (amount / periods).toFixed(dp);
 	})();
 
@@ -179,16 +179,13 @@
 	}
 </script>
 
-
 {#if $currentNetwork && ALL_TOKENS.length > 0}
 	<div class="space-y-4">
 		<!-- Header info -->
 		<div class="rounded-lg bg-gray-800/50 p-4">
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-3">
-					<span class="text-sm text-gray-400"
-						>{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span
-					>
+					<span class="text-sm text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 					<div class="flex items-center gap-2">
 						{#if selectedInputToken.logoUrl}
 							<img
