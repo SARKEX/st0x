@@ -22,6 +22,21 @@
 	let mounted = false;
 	let lastSymbol: string | undefined;
 
+	function destroyWidget() {
+		if (!widget?.remove) {
+			widget = null;
+			return;
+		}
+
+		try {
+			widget.remove();
+		} catch (err) {
+			console.warn('[tradingview] failed to remove widget', err);
+		} finally {
+			widget = null;
+		}
+	}
+
 	async function createWidget() {
 		if (!mounted || !symbol) return;
 
@@ -34,7 +49,7 @@
 		if (!containerEl) return;
 
 		try {
-			widget?.remove?.();
+			destroyWidget();
 			widget = new TradingView.widget({
 				symbol,
 				interval,
@@ -67,8 +82,7 @@
 
 	onDestroy(() => {
 		mounted = false;
-		widget?.remove?.();
-		widget = null;
+		destroyWidget();
 	});
 
 	$: if (mounted && symbol && symbol !== lastSymbol) {

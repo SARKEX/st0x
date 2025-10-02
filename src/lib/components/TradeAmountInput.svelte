@@ -17,6 +17,8 @@
 	export let isError: boolean = false;
 
 	export let dataTestId: string = '';
+	export let showUnit: boolean = true;
+	export let showMaxButton: boolean = true;
 
 	let balance: bigint = 0n;
 	let decimals: number = 0;
@@ -71,8 +73,8 @@
 		{...$$restProps}
 		bind:amount={inputAmount}
 		type="number"
-		unit={amountToken.symbol}
-		maxButton
+		unit={showUnit ? amountToken.symbol : ''}
+		maxButton={showMaxButton}
 		on:setValueToMax={setValueToMax}
 		{dataTestId}
 		{validate}
