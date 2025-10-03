@@ -3,7 +3,12 @@ import { currentNetwork } from '$lib/stores';
 import type { Hex } from 'viem';
 import { sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { TransactionErrorMessage } from '$lib/types/errors';
-import { getTransactionAddOrders, type DeploymentTransactionArgs } from '@rainlanguage/orderbook';
+import {
+	getTransactionAddOrders,
+	getVaultWithdrawCalldata,
+	type DeploymentTransactionArgs,
+	type SgVault
+} from '@rainlanguage/orderbook';
 import { wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
@@ -75,6 +80,46 @@ const transactionStore = () => {
 			error: message,
 			hash: hash || ''
 		}));
+
+	const handleWithdraw = async (vault: SgVault) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const vaultWithdrawCalldata = await getVaultWithdrawCalldata(vault, vault.balance);
+		let hash: string;
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
+
+			hash = await sendTransaction(config, {
+				data: vaultWithdrawCalldata.value as Hex,
+				to: vault.orderbook.id as `0x${string}`
+			});
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+
+			await waitForTransactionReceipt(config, {
+				hash: hash as `0x${string}`
+			});
+
+			const chainId = get(currentNetwork).id;
+			const link = `
+			<a
+				target="_blank"
+				rel="noopener noreferrer"
+				class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+				href="https://v2.raindex.finance/orders/${chainId}-${vault.orderbook.id}-${vault.id}"
+				data-testid="raindex-link">
+				Manage your order on Raindex
+				<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+				</svg>
+			</a>
+			`;
+
+			return transactionSuccess(hash, link);
+		} catch (error) {
+			// @ts-expect-error Send transaction error
+			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+		}
+	};
 
 	const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
 		const config = get(wagmiConfig);
@@ -212,7 +257,8 @@ const transactionStore = () => {
 		handleDcaDeploy,
 		handleLimitDeploy,
 		handleDsfDeploy,
-		handleFolioDeploy
+		handleFolioDeploy,
+		handleWithdraw
 	};
 };
 

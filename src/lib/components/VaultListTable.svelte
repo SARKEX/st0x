@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
-	import type { SgVaultWithSubgraphName } from '@rainlanguage/orderbook';
+	import { ArrowUpFromBracketOutline } from 'flowbite-svelte-icons';
+	import type { SgVaultWithSubgraphName, SgVault } from '@rainlanguage/orderbook';
 	import { formatUnits } from 'viem';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -14,6 +15,11 @@
 	>;
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { containerStyles } from '$lib/utils/styles';
+	import transactionStore from '$lib/transactionStore';
+
+	async function withdraw(vault: SgVault) {
+		transactionStore.handleWithdraw(vault);
+	}
 </script>
 
 {#if $query.isError}
@@ -60,6 +66,10 @@
 					<th
 						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 						>Output For</th
+					>
+					<th
+						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+						>Withdraw</th
 					>
 				</tr>
 			</thead>
@@ -153,6 +163,15 @@
 										/>
 									</div>
 								{/each}
+							</td>
+							<td class="p-2 text-center text-xs sm:p-3 sm:text-sm">
+								<button
+									on:click={() => withdraw(vault)}
+									class="inline-flex items-center justify-center rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+									title="Withdraw"
+								>
+									<ArrowUpFromBracketOutline class="h-4 w-4" />
+								</button>
 							</td>
 						</tr>
 					{/each}
