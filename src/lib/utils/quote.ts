@@ -37,6 +37,7 @@ function getTokenSymbol(address: string, tokens: any[]): string {
 function processQuotes(
     allQuotes: any[], 
     filteredOrders: SgOrderWithSubgraphName[], 
+    quoteSpecs: QuoteSpec[],
     usdcToken: any, 
     stockTokens: any[]
 ): ProcessedQuote[] {
@@ -74,39 +75,31 @@ function processQuotes(
                 return;
             }
             
-            // Find the corresponding order (we need to match by index since quotes are in same order as quoteSpecs)
-            const orderIndex = index;
-            if (orderIndex >= filteredOrders.length) {
+            // Find the corresponding order by matching orderHash from quoteSpecs
+            // Since we now have multiple quote specs per order, we need to find the order by hash
+            const quoteSpec = quoteSpecs[index];
+            if (!quoteSpec) {
                 return;
             }
             
-            const { order } = filteredOrders[orderIndex];
+            const orderMapData = orderMap.get(quoteSpec.orderHash);
+            if (!orderMapData) {
+                return;
+            }
+            
+            const { order } = orderMapData;
             
             // Decode order to get token addresses
             const decodedOrder = ethers.utils.defaultAbiCoder.decode([OrderV3], order.orderBytes);
             const orderData = decodedOrder[0];
             
-            // Get input and output token addresses
-            const usdcAddress = usdcToken.address.toLowerCase();
-            const stockAddresses = stockTokens.map(token => token.address.toLowerCase());
+            // Use the input/output indexes from the quote spec
+            const inputTokenAddress = orderData.validInputs[quoteSpec.inputIOIndex].token;
+            const outputTokenAddress = orderData.validOutputs[quoteSpec.outputIOIndex].token;
             
-            const usdcInputIndex = orderData.validInputs.findIndex((input: any) => 
-                input.token.toLowerCase() === usdcAddress
-            );
-            const stockOutputIndex = orderData.validOutputs.findIndex((output: any) => 
-                stockAddresses.includes(output.token.toLowerCase())
-            );
-            
-            if (usdcInputIndex === -1 || stockOutputIndex === -1) {
-                return;
-            }
-            
-            const inputTokenAddress = orderData.validInputs[usdcInputIndex].token;
-            const outputTokenAddress = orderData.validOutputs[stockOutputIndex].token;
-            
-            // Get token symbols
-            const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [usdcToken]);
-            const outputTokenSymbol = getTokenSymbol(outputTokenAddress, stockTokens);
+            // Get token symbols - need to check both USDC and stock tokens for both input and output
+            const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [usdcToken, ...stockTokens]);
+            const outputTokenSymbol = getTokenSymbol(outputTokenAddress, [usdcToken, ...stockTokens]);
             
             const processedQuote: ProcessedQuote = {
                 orderHash: order.orderHash,
@@ -121,9 +114,9 @@ function processQuotes(
             processedQuotes.push(processedQuote);
             
         } catch (error) {
-            // Silently skip errors
         }
     });
+    
     
     return processedQuotes;
 }
@@ -174,7 +167,7 @@ export async function fetchAndQuoteUSDCOrders(
                     }],
                     {
                         active: true, // Only active orders
-                        owners: [] // Get all orders, not filtered by owner
+                        owners: []
                     },
                     { page, pageSize }
                 );
@@ -209,7 +202,7 @@ export async function fetchAndQuoteUSDCOrders(
             }
         }
 
-        // Filter orders that have USDC as input and stock tokens as output
+        // Filter orders that have USDC and stock tokens in either direction
         const filteredOrders = allOrders.filter(({ order }) => {
             try {
                 // Decode the order bytes to get the actual order structure
@@ -223,13 +216,27 @@ export async function fetchAndQuoteUSDCOrders(
                 const usdcAddress = usdcToken.address.toLowerCase();
                 const stockAddresses = stockTokens.map(token => token.address.toLowerCase());
                 
-                // Check if order has USDC as input
-                const hasUSDCAsInput = inputAddresses.includes(usdcAddress);
+                // Check if order has USDC as input and stock as output
+                const hasUSDCAsInputAndStockAsOutput = inputAddresses.includes(usdcAddress) && 
+                    outputAddresses.some((addr: string) => stockAddresses.includes(addr));
                 
-                // Check if order has any stock token as output
-                const hasStockAsOutput = outputAddresses.some((addr: string) => stockAddresses.includes(addr));
+                // Check if order has stock as input and USDC as output
+                const hasStockAsInputAndUSDCAsOutput = inputAddresses.some((addr: string) => stockAddresses.includes(addr)) && 
+                    outputAddresses.includes(usdcAddress);
                 
-                return hasUSDCAsInput && hasStockAsOutput;
+                // Check if order has both USDC and stock in inputs (bidirectional)
+                const hasBothInInputs = inputAddresses.includes(usdcAddress) && 
+                    inputAddresses.some((addr: string) => stockAddresses.includes(addr));
+                
+                // Check if order has both USDC and stock in outputs (bidirectional)
+                const hasBothInOutputs = outputAddresses.includes(usdcAddress) && 
+                    outputAddresses.some((addr: string) => stockAddresses.includes(addr));
+                
+                const shouldInclude = hasUSDCAsInputAndStockAsOutput || hasStockAsInputAndUSDCAsOutput || 
+                    (hasBothInInputs && hasBothInOutputs);
+                
+                
+                return shouldInclude;
             } catch (error) {
                 return false;
             }
@@ -239,8 +246,11 @@ export async function fetchAndQuoteUSDCOrders(
             return [];
         }
 
+
         // Create quote specs for all filtered orders
-        const quoteSpecs: QuoteSpec[] = filteredOrders.map(({ order }) => {
+        const quoteSpecs: QuoteSpec[] = [];
+        
+        filteredOrders.forEach(({ order }) => {
             try {
                 // Decode the order bytes to get the actual order structure
                 const decodedOrder = ethers.utils.defaultAbiCoder.decode([OrderV3], order.orderBytes);
@@ -251,29 +261,47 @@ export async function fetchAndQuoteUSDCOrders(
                 const outputAddresses = orderData.validOutputs.map((output: any) => output.token.toLowerCase());
                 
                 const usdcAddress = usdcToken.address.toLowerCase();
-                const stockAddresses = stockTokens.map(token => token.address.toLowerCase());
                 
-                // Find USDC input index from decoded order
-                const usdcInputIndex = inputAddresses.findIndex((addr: string) => addr === usdcAddress);
-                
-                // Find stock output index from decoded order
-                const stockOutputIndex = outputAddresses.findIndex((addr: string) => stockAddresses.includes(addr));
-                
-                if (usdcInputIndex === -1 || stockOutputIndex === -1) {
-                    throw new Error(`Could not find proper input/output indexes for order ${order.orderHash}`);
-                }
-
-                return {
-                    orderHash: order.orderHash,
-                    inputIOIndex: usdcInputIndex,
-                    outputIOIndex: stockOutputIndex,
-                    signedContext: [],
-                    orderbook: order.orderbook.id
-                };
+                // Create quote specs for each supported direction
+                // For each stock token, check if we can create a quote spec
+                stockTokens.forEach(stockToken => {
+                    const stockAddress = stockToken.address.toLowerCase();
+                    
+                    // Check USDC -> Stock direction for this specific stock
+                    const usdcInputIndex = inputAddresses.findIndex((addr: string) => addr === usdcAddress);
+                    const stockOutputIndex = outputAddresses.findIndex((addr: string) => addr === stockAddress);
+                    
+                    if (usdcInputIndex !== -1 && stockOutputIndex !== -1) {
+                        // USDC -> Stock direction
+                        quoteSpecs.push({
+                            orderHash: order.orderHash,
+                            inputIOIndex: usdcInputIndex,
+                            outputIOIndex: stockOutputIndex,
+                            signedContext: [],
+                            orderbook: order.orderbook.id
+                        });
+                    }
+                    
+                    // Check Stock -> USDC direction for this specific stock
+                    const stockInputIndex = inputAddresses.findIndex((addr: string) => addr === stockAddress);
+                    const usdcOutputIndex = outputAddresses.findIndex((addr: string) => addr === usdcAddress);
+                    
+                    if (stockInputIndex !== -1 && usdcOutputIndex !== -1) {
+                        // Stock -> USDC direction
+                        quoteSpecs.push({
+                            orderHash: order.orderHash,
+                            inputIOIndex: stockInputIndex,
+                            outputIOIndex: usdcOutputIndex,
+                            signedContext: [],
+                            orderbook: order.orderbook.id
+                        });
+                    }
+                });
             } catch (error) {
                 throw error;
             }
         });
+
 
         // Quote all orders in batches to avoid overwhelming the API
         const batchSize = 10;
@@ -292,7 +320,7 @@ export async function fetchAndQuoteUSDCOrders(
         }
 
         // Process and filter the quotes
-        const processedQuotes = processQuotes(allQuotes, filteredOrders, usdcToken, stockTokens);
+        const processedQuotes = processQuotes(allQuotes, filteredOrders, quoteSpecs, usdcToken, stockTokens);
         
         return processedQuotes;
 
