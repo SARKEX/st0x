@@ -2,12 +2,80 @@
 	import { connected } from 'svelte-wagmi';
 	import { currentNetwork } from '$lib/stores';
 	import Button from '$lib/components/ui/Button.svelte';
+	import { MAILERLITE_RECAPTCHA_SITE_KEY } from '$lib/constants/newsletter';
 
-	// Mailchimp embedded form details (as provided)
-	const MC_EMBED_ACTION =
-		'https://st0x.us16.list-manage.com/subscribe/post?u=bd31e8a29d4a816aaa70e665a&id=fe76c8ce23&f_id=00d364e0f0';
-	const HONEYPOT_NAME = 'b_bd31e8a29d4a816aaa70e665a_fe76c8ce23';
+	type FormStatus = 'idle' | 'loading' | 'success' | 'error';
+
+	let showCaptcha = false;
+	let formState: { status: FormStatus; message?: string } = { status: 'idle' };
+
+	function handleEmailInput(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		showCaptcha = input.validity.valid;
+		if (!showCaptcha && formState.status === 'error') {
+			formState = { status: 'idle' };
+		}
+	}
+
+	function resetRecaptcha() {
+		if (typeof window === 'undefined') return;
+		const grecaptcha = (window as typeof window & { grecaptcha?: { reset: () => void } })
+			.grecaptcha;
+		grecaptcha?.reset();
+	}
+
+	async function handleSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		if (formState.status === 'loading') return;
+
+		const form = event.currentTarget as HTMLFormElement;
+		const emailInput = form.querySelector<HTMLInputElement>('#ml-email');
+		const email = emailInput?.value.trim() ?? '';
+		const recaptchaField = form.querySelector<HTMLInputElement>('[name="g-recaptcha-response"]');
+		const recaptchaToken = recaptchaField?.value.trim() ?? '';
+
+		if (!emailInput?.validity.valid) {
+			formState = { status: 'error', message: 'Please enter a valid email address.' };
+			emailInput?.focus();
+			return;
+		}
+
+		if (!recaptchaToken) {
+			formState = { status: 'error', message: 'Please complete the CAPTCHA verification.' };
+			return;
+		}
+
+		formState = { status: 'loading' };
+
+		try {
+			const response = await fetch('/api/newsletter', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, recaptchaToken })
+			});
+
+			const result = await response.json().catch(() => ({}));
+
+			if (!response.ok || !result?.success) {
+				const message = (result && result.error) || 'Subscription failed. Please try again.';
+				throw new Error(message);
+			}
+
+			formState = { status: 'success' };
+			form.reset();
+			showCaptcha = false;
+			resetRecaptcha();
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Subscription failed. Please try again.';
+			formState = { status: 'error', message };
+		}
+	}
 </script>
+
+<svelte:head>
+	<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+</svelte:head>
 
 <!-- Footer -->
 <div class="mt-16 border-t border-white/10 bg-gray-800/80 backdrop-blur-sm">
@@ -24,7 +92,7 @@
 						Terms of Service
 					</a>
 					<a
-						href="/privacy"
+						href="/privacy-policy"
 						class="block text-xs text-gray-400 transition-colors hover:text-yellow-500 sm:text-sm"
 					>
 						Privacy Policy
@@ -76,28 +144,56 @@
 				<!-- Newsletter Signup -->
 				<div class="mb-4">
 					<p class="mb-3 text-xs text-gray-400 sm:text-sm">Subscribe to our newsletter</p>
-					<form action={MC_EMBED_ACTION} method="post" target="_self" class="space-y-2">
-						<label for="mce-EMAIL" class="sr-only">Email Address</label>
-						<input
-							id="mce-EMAIL"
-							name="EMAIL"
-							type="email"
-							required
-							placeholder="Enter your email"
-							class="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-yellow-500/50 sm:text-sm"
-						/>
-						<div aria-hidden="true" style="position: absolute; left: -5000px;">
-							<input type="text" name={HONEYPOT_NAME} tabindex="-1" value="" />
-						</div>
-						<Button
-							type="submit"
-							variant="secondary"
-							size="sm"
-							className="bg-yellow-500 text-black hover:bg-yellow-400 border-0 w-full px-4"
+					{#if formState.status === 'success'}
+						<div
+							class="rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-3 text-xs text-green-200 sm:text-sm"
 						>
-							Subscribe
-						</Button>
-					</form>
+							Thank you for subscribing.
+						</div>
+					{:else}
+						<form class="space-y-3" on:submit|preventDefault={handleSubmit}>
+							<input type="hidden" name="ml-submit" value="1" />
+							<input type="hidden" name="anticsrf" value="true" />
+							<label for="ml-email" class="sr-only">Email Address</label>
+							<input
+								id="ml-email"
+								name="fields[email]"
+								type="email"
+								autocomplete="email"
+								required
+								on:input={handleEmailInput}
+								placeholder="Enter your email"
+								class="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-yellow-500/50 sm:text-sm"
+							/>
+							<p class="text-[11px] text-gray-500 sm:text-xs">
+								You can unsubscribe anytime.
+								<a href="/privacy-policy" class="ml-1 underline hover:text-yellow-500"
+									>Privacy Policy</a
+								>.
+							</p>
+							<div
+								class="mt-3 sm:mt-4"
+								class:captcha-hidden={!showCaptcha}
+								aria-hidden={!showCaptcha}
+							>
+								<div class="g-recaptcha" data-sitekey={MAILERLITE_RECAPTCHA_SITE_KEY}></div>
+							</div>
+							<Button
+								type="submit"
+								variant="secondary"
+								size="sm"
+								className="bg-yellow-500 text-black hover:bg-yellow-400 border-0 w-full px-4"
+								disabled={formState.status === 'loading'}
+							>
+								{formState.status === 'loading' ? 'Submitting...' : 'Subscribe'}
+							</Button>
+							{#if formState.status === 'error'}
+								<p class="text-xs text-red-400 sm:text-sm" role="alert">
+									{formState.message ?? 'Subscription failed. Please try again.'}
+								</p>
+							{/if}
+						</form>
+					{/if}
 				</div>
 
 				<!-- Social Media Links -->
@@ -208,3 +304,9 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	.captcha-hidden {
+		display: none;
+	}
+</style>

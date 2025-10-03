@@ -14,23 +14,22 @@
 	import { goto } from '$app/navigation';
 	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
-	import { wagmiConfig, connected } from 'svelte-wagmi';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	// Consolidated table usage
 	import { containerStyles } from '$lib/utils/styles';
 	import { onMount } from 'svelte';
-	import { fetchAndQuoteUSDCOrders } from '$lib/utils/quote';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
+	type VaultWithChange = OffchainAssetReceiptVault & { changePercent: number };
+	type VaultWithVolume = OffchainAssetReceiptVault & { totalVolume: bigint; transferCount: number };
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let searchTerm = '';
 	let filteredSfts: OffchainAssetReceiptVault[] = [];
-	/* eslint-disable @typescript-eslint/no-explicit-any */
-	let biggestMovers: any[] = [];
-	let biggestVolume: any[] = [];
+	let biggestMovers: VaultWithChange[] = [];
+	let biggestVolume: VaultWithVolume[] = [];
 	let recentlyAdded: OffchainAssetReceiptVault[] = [];
 
 	function baseFromSymbol(sym?: string) {
@@ -107,13 +106,6 @@
 			showScrollIndicator = false;
 			hasDiscoverOverflow = false;
 		}
-	}
-
-	$: if ($connected && $wagmiConfig) {
-		async function test(){
-			const quotes = await fetchAndQuoteUSDCOrders($currentNetwork?.chainId, { maxPages: 1, pageSize: 1000 });
-		}
-		test();
 	}
 
 	onMount(() => {

@@ -6,12 +6,13 @@ const HERMES_BASE_URL = 'https://hermes.pyth.network/v2/updates/price';
 interface PythPriceData {
 	price: number | string;
 	expo: number;
+	publish_time?: number | string;
 }
 
 interface PythParsedEntry {
 	id: string;
 	price: PythPriceData | null;
-	publish_time: number | string;
+	publish_time?: number | string;
 }
 
 interface ApiResponse<T> {
@@ -51,6 +52,13 @@ const normalisePublishTime = (raw: number | string | undefined): number | null =
 
 const normaliseFeedId = (feedId: string) => feedId.replace(/^0x/, '').toLowerCase();
 
+const extractPublishTime = (entry: PythParsedEntry | undefined | null): number | null => {
+	if (!entry) return null;
+	const priceEmbedded = normalisePublishTime(entry.price?.publish_time);
+	if (priceEmbedded !== null) return priceEmbedded;
+	return normalisePublishTime(entry.publish_time);
+};
+
 // Fetch latest prices for multiple feed IDs in a single request
 async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoint>> {
 	const normalizedIds = feedIds.map(normaliseFeedId);
@@ -75,7 +83,7 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 			const id = normaliseFeedId(entry.id);
 			results.set(id, {
 				price: normalisePrice(entry?.price),
-				publishTime: normalisePublishTime(entry?.publish_time)
+				publishTime: extractPublishTime(entry)
 			});
 		});
 
@@ -99,15 +107,6 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 	return results;
 }
 
-const calculateChange = (current: number | null, previous: number | null) => {
-	if (current === null || previous === null || previous === 0) {
-		return { change: null, changePercent: null };
-	}
-	const change = current - previous;
-	const changePercent = (change / previous) * 100;
-	return { change, changePercent };
-};
-
 export async function getPythQuotes(tokens: TokenWithMarket[]): Promise<TradingViewQuote[]> {
 	const tokensWithFeed = tokens.filter((token) => token.priceFeedId);
 	if (!tokensWithFeed.length) return [];
@@ -118,11 +117,15 @@ export async function getPythQuotes(tokens: TokenWithMarket[]): Promise<TradingV
 	const latestPrices = await fetchLatestBatch(feedIds);
 	logReference('pyth-prices-fetched', { count: feedIds.length });
 
-	// Map Pyth prices to results (without historical data - Pyth doesn't support stock historicals)
 	const results = tokensWithFeed.map((token) => {
 		const feedId = normaliseFeedId(token.priceFeedId);
 		const latest = latestPrices.get(feedId) ?? { price: null, publishTime: null };
-
+		if (latest.publishTime === null) {
+			logReference('latest-missing-publish-time', { feedId, latestPrice: latest.price });
+		}
+		if (latest.price === null) {
+			logReference('latest-missing-price', { feedId, publishTime: latest.publishTime });
+		}
 		return {
 			symbol: token.tradingViewSymbol ?? token.symbol ?? null,
 			close: latest.price,
@@ -142,5 +145,3 @@ export async function getPythQuotes(tokens: TokenWithMarket[]): Promise<TradingV
 
 	return results;
 }
-
-export type { PricePoint as PythSnapshot };
