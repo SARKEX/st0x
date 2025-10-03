@@ -13,6 +13,7 @@ export interface Network {
 	sftExplorer: string;
 	blockExplorerIcon: string;
 	rpcUrl: string;
+	fallbackRpcUrls: string[];
 	icon: string;
 	subgraph_url: string;
 	metadata_subgraph_url: string;
@@ -56,6 +57,7 @@ export const networks: Network[] = [
 		sftExplorer: 'https://stox.h20.market',
 		blockExplorerIcon: 'arbitrum',
 		rpcUrl: 'https://arbitrum-one-rpc.publicnode.com',
+		fallbackRpcUrls: ['https://arbitrum-one-rpc.publicnode.com'],
 		icon: 'arbitrum',
 		subgraph_url:
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
@@ -79,6 +81,14 @@ export const networks: Network[] = [
 		sftExplorer: 'https://stox2.h20.market',
 		blockExplorerIcon: 'etherscan',
 		rpcUrl: 'https://base-rpc.publicnode.com',
+		fallbackRpcUrls: [
+			'https://base-rpc.publicnode.com',
+			'https://mainnet.base.org',
+			'https://base.llamarpc.com',
+			'https://base.meowrpc.com',
+			'https://base-mainnet.public.blastapi.io',
+			'https://gateway.tenderly.co/public/base'
+		],
 		icon: 'ethereum',
 		subgraph_url:
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.4/gn',
