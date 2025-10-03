@@ -128,30 +128,6 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0 && selectedOutputToken && selectedInputToken}
 	<div class="space-y-4">
-		<!-- Header info -->
-		<div class="rounded-lg bg-gray-800/50 p-4">
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-3">
-					<span class="text-sm text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-					<div class="flex items-center gap-2">
-						{#if selectedOutputToken.logoUrl}
-							<img
-								src={selectedOutputToken.logoUrl}
-								alt={selectedOutputToken.symbol}
-								class="h-6 w-6 rounded-full"
-							/>
-						{/if}
-						<span class="text-lg font-semibold">{selectedOutputToken.symbol}</span>
-					</div>
-				</div>
-				<div class="flex items-center gap-2 text-sm text-gray-400">
-					<span>{orderSide === 'Buy' ? 'with' : 'for'}</span>
-					<img src="/images/USDC.png" alt="USDC" class="h-5 w-5" />
-					<span>USDC</span>
-				</div>
-			</div>
-		</div>
-
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>

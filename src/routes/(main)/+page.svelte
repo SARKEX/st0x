@@ -9,7 +9,7 @@
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork, USDC_TOKENS } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import type { TradingViewQuote } from '$lib/services/tradingview';
@@ -18,6 +18,12 @@
 	// Consolidated table usage
 	import { containerStyles } from '$lib/utils/styles';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import {
+		fetchAndQuoteUSDCOrders,
+		buildTokenPriceMap,
+		type TokenPriceSummary
+	} from '$lib/utils/quote';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	type VaultWithChange = OffchainAssetReceiptVault & { changePercent: number };
@@ -179,24 +185,59 @@
 			.slice(0, 5);
 	}
 
+	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
+		if (!summary) return null;
+		const { buy, sell } = summary;
+		if (buy != null && sell != null) {
+			return (buy + sell) / 2;
+		}
+		return buy ?? sell ?? null;
+	}
+
 	// Process tokens with quote data
 	$: query = createQuery({
 		queryKey: ['getSftsStocks', $currentNetwork?.id, $sfts?.length, $tokenGlobalQuote?.length],
 		enabled: !!($sfts && $currentNetwork?.chainId),
-		queryFn: () => {
+		staleTime: 30_000,
+		refetchOnWindowFocus: false,
+		queryFn: async () => {
 			const sftVaults: OffchainAssetReceiptVault[] = $sfts || [];
 			const tokens = [];
+			const networkId = $currentNetwork?.chainId;
+			const usdcToken = networkId ? USDC_TOKENS[networkId] : undefined;
+			let priceMap: Map<string, TokenPriceSummary> | null = null;
+
+			if (browser && networkId && usdcToken) {
+				try {
+					const quotes = await fetchAndQuoteUSDCOrders(networkId);
+					priceMap = buildTokenPriceMap(quotes, usdcToken.address);
+				} catch (error) {
+					console.warn('[onchain-quotes] failed to fetch quotes', error);
+					priceMap = null;
+				}
+			}
 
 			// Process SFT vaults (from subgraph)
 			for (let sft of sftVaults) {
 				const quote = findQuoteForSymbol(sft.symbol);
-				const price = quote?.close ?? 0;
+				const summary = priceMap?.get(sft.address.toLowerCase()) ?? null;
+				const buyPrice = summary?.buy ?? null;
+				const sellPrice = summary?.sell ?? null;
+				const onChainPrice = calculateMidPrice(summary);
+				const fallbackPrice = quote?.close ?? 0;
+				const price = onChainPrice ?? fallbackPrice;
+				if (browser && summary) {
+					// Logging removed after validation
+				}
 				tokens.push({
 					id: sft.id,
 					address: sft.address,
 					name: sft.name,
 					symbol: sft.symbol,
 					price,
+					onChainPrice,
+					buyPrice,
+					sellPrice,
 					totalHolders: sft.tokenHolders.length.toString(),
 					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
 					totalTransfers: sft.shareTransfers.length.toString(),
@@ -218,10 +259,15 @@
 			text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
 		/>
 	</div>
-{:else if $sfts.length > 0}
+	{:else if $sfts.length > 0}
 	<div>
 		<PageContainer>
-			<Section>
+			{#if $query.isLoading}
+				<div class="flex w-full justify-center py-24">
+					<LoadingSpinner variant="fullscreen" size="lg" text="Fetching on-chain prices..." />
+				</div>
+			{:else}
+				<Section>
 				<div class="mb-4 flex items-center justify-between sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Discover</h2>
 				</div>
@@ -420,42 +466,57 @@
 				<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
 					<Table>
 						<thead>
-							<tr class="border-b border-white/10">
-								<th
-									class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>Asset</th
+								<tr class="border-b border-white/10">
+									<th
+										class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>Asset</th
 								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>Price</th
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>Price</th
 								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Price</th
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>On-Chain Price</th
 								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Market Cap</th
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>On-Chain Market Cap</th
 								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Supply</th
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>On-Chain Supply</th
 								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>Holders</th
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>Holders</th
 								>
-								<th class="w-8"></th>
-							</tr>
-						</thead>
+									<th class="w-8"></th>
+								</tr>
+							</thead>
 						<tbody>
-							{#each $query.data || [] as token (token.id)}
+							{#if $query.isLoading}
+								<tr>
+									<td colspan="7" class="px-4 py-12 text-center">
+										<LoadingSpinner size="md" text="Loading on-chain prices..." />
+									</td>
+								</tr>
+							{:else if !$query.data?.length}
+								<tr>
+									<td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
+										No assets available.
+									</td>
+								</tr>
+							{:else}
+								{#each $query.data || [] as token (token.id)}
 								{@const sft = $sfts.find((s) => s.id === token.id)}
-								{@const deposits = sft
-									? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))
-									: BigInt(0)}
+						{@const deposits = sft
+							? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))
+							: BigInt(0)}
 								{@const withdraws = sft
 									? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0))
 									: BigInt(0)}
 								{@const circulating = deposits - withdraws}
-								{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
-								{@const onChainPrice = parseFloat(token.price.toString())}
-								{@const onChainMarketCap = circulatingSupply * onChainPrice}
+						{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
+						{@const displayPrice =
+							typeof token.price === 'number' ? token.price : Number(token.price ?? NaN)}
+						{@const onChainPrice = token.onChainPrice ?? null}
+						{@const onChainMarketCap = onChainPrice != null ? circulatingSupply * onChainPrice : null}
 								<tr
 									class="cursor-pointer transition-colors hover:bg-yellow-500/5"
 									on:click={() => goto(`/trade/${token.id}`)}
@@ -469,20 +530,30 @@
 											name={token.name}
 										/>
 									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="font-medium">${onChainPrice.toFixed(2)}</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="text-sm text-gray-500">TBD</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="text-sm">
-											${onChainMarketCap >= 1000000
-												? `${(onChainMarketCap / 1000000).toFixed(2)}M`
-												: onChainMarketCap >= 1000
-													? `${(onChainMarketCap / 1000).toFixed(1)}K`
-													: onChainMarketCap.toFixed(2)}
-										</div>
+										<td class="px-2 py-2 sm:px-4 sm:py-3">
+											<div class="font-medium">
+												{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
+											</div>
+										</td>
+										<td class="px-2 py-2 sm:px-4 sm:py-3">
+											<div class="text-sm text-gray-200">
+												{onChainPrice != null
+													? `$${onChainPrice.toFixed(4)}`
+													: 'N/A'}
+											</div>
+										</td>
+										<td class="px-2 py-2 sm:px-4 sm:py-3">
+											<div class="text-sm">
+												{#if onChainMarketCap != null}
+													{onChainMarketCap >= 1_000_000
+														? `$${(onChainMarketCap / 1_000_000).toFixed(2)}M`
+														: onChainMarketCap >= 1_000
+															? `$${(onChainMarketCap / 1_000).toFixed(1)}K`
+															: `$${onChainMarketCap.toFixed(2)}`}
+												{:else}
+													N/A
+												{/if}
+											</div>
 									</td>
 									<td class="px-4 py-3">
 										<div class="text-sm">
@@ -511,10 +582,12 @@
 									</td>
 								</tr>
 							{/each}
+							{/if}
 						</tbody>
 					</Table>
 				</div>
 			</Section>
+			{/if}
 		</PageContainer>
 
 		<Footer />

@@ -48,6 +48,9 @@ type QuoteResultWithSpec = {
 	spec: QuoteSpec;
 };
 
+const RATIO_SCALE = 1e18;
+
+
 function processQuotes(
 	quoteResults: QuoteResultWithSpec[],
 	filteredOrders: SgOrderWithSubgraphName[],
@@ -341,3 +344,70 @@ export async function fetchAndQuoteUSDCOrders(
 
 	return processedQuotes;
 }
+
+const normaliseRatio = (value: bigint): number => {
+	const ratio = Number(value);
+	if (!Number.isFinite(ratio)) {
+		return NaN;
+	}
+	return ratio / RATIO_SCALE;
+};
+
+export type TokenPriceSummary = {
+	buy?: number;
+	sell?: number;
+};
+
+const chooseBestPrice = (current: number | undefined, candidate: number, comparator: 'min' | 'max') => {
+	if (!Number.isFinite(candidate) || candidate <= 0) {
+		return current;
+	}
+	if (current === undefined) {
+		return candidate;
+	}
+	return comparator === 'min' ? Math.min(current, candidate) : Math.max(current, candidate);
+};
+
+export const buildTokenPriceMap = (
+	quotes: ProcessedQuote[],
+	usdcAddressRaw: string
+): Map<string, TokenPriceSummary> => {
+	const priceMap = new Map<string, TokenPriceSummary>();
+	const usdcAddress = usdcAddressRaw.toLowerCase();
+
+	quotes.forEach((quote) => {
+		const ratio = normaliseRatio(quote.ratio);
+		if (!Number.isFinite(ratio) || ratio <= 0) return;
+
+		const inputAddress = quote.inputTokenAddress.toLowerCase();
+		const outputAddress = quote.outputTokenAddress.toLowerCase();
+		const inputIsUsdc = inputAddress === usdcAddress || quote.inputTokenSymbol?.toUpperCase() === 'USDC';
+		const outputIsUsdc = outputAddress === usdcAddress || quote.outputTokenSymbol?.toUpperCase() === 'USDC';
+
+		if (outputIsUsdc) {
+			const assetAddress = inputAddress;
+			if (assetAddress !== usdcAddress) {
+				const price = ratio === 0 ? NaN : 1 / ratio;
+				if (Number.isFinite(price) && price > 0) {
+					const existing = priceMap.get(assetAddress) ?? {};
+					existing.buy = chooseBestPrice(existing.buy, price, 'max');
+					priceMap.set(assetAddress, existing);
+				}
+			}
+		}
+
+		if (inputIsUsdc) {
+			const assetAddress = outputAddress;
+			if (assetAddress !== usdcAddress) {
+				const price = ratio;
+				if (Number.isFinite(price) && price > 0) {
+					const existing = priceMap.get(assetAddress) ?? {};
+					existing.sell = chooseBestPrice(existing.sell, price, 'min');
+					priceMap.set(assetAddress, existing);
+				}
+			}
+		}
+	});
+
+	return priceMap;
+};
