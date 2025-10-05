@@ -26,7 +26,7 @@
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
-	import { EvmToken } from 'sushi/evm';
+	import { evmChainIds, EvmToken } from 'sushi/evm';
 	import { getPrice } from '$lib/getPrice';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -297,14 +297,14 @@
 					// Fallback to getPrice if not in global quote
 					const priceStr = await getPrice(
 						new EvmToken({
-							chainId: $currentNetwork.chainId as any,
+							chainId: evmChainIds[$currentNetwork.chainId],
 							address: token.id as `0x${string}`,
 							symbol: token.symbol || '',
 							decimals: Number(token.decimals ?? 18),
 							name: token.name || ''
 						}),
 						new EvmToken({
-							chainId: $currentNetwork.chainId as any,
+							chainId: evmChainIds[$currentNetwork.chainId],
 							address: $currentNetwork.usdcToken.address as `0x${string}`,
 							symbol: $currentNetwork.usdcToken.symbol,
 							decimals: Number($currentNetwork.usdcToken.decimals),
