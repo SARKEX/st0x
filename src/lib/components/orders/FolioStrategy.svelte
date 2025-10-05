@@ -61,19 +61,19 @@
 		}
 	}
 
-	let selectedToken1: CategorizedToken = getAllTokensByNetwork(42161)[0];
+	let selectedToken1: CategorizedToken = getAllTokensByNetwork($currentNetwork.id)[0];
 	let selectedToken2: CategorizedToken =
-		getAllTokensByNetwork(42161)[1] || getAllTokensByNetwork(42161)[0];
+		getAllTokensByNetwork($currentNetwork.id)[1] || getAllTokensByNetwork($currentNetwork.id)[0];
 	let selectedToken3: CategorizedToken =
-		getAllTokensByNetwork(42161)[2] || getAllTokensByNetwork(42161)[0];
+		getAllTokensByNetwork($currentNetwork.id)[2] || getAllTokensByNetwork($currentNetwork.id)[0];
 	let selectedToken4: CategorizedToken =
-		getAllTokensByNetwork(42161)[3] || getAllTokensByNetwork(42161)[0];
+		getAllTokensByNetwork($currentNetwork.id)[3] || getAllTokensByNetwork($currentNetwork.id)[0];
 	let selectedToken5: CategorizedToken =
-		getAllTokensByNetwork(42161)[4] || getAllTokensByNetwork(42161)[0];
+		getAllTokensByNetwork($currentNetwork.id)[4] || getAllTokensByNetwork($currentNetwork.id)[0];
 	let selectedToken6: CategorizedToken =
-		getAllTokensByNetwork(42161)[5] || getAllTokensByNetwork(42161)[0];
+		getAllTokensByNetwork($currentNetwork.id)[5] || getAllTokensByNetwork($currentNetwork.id)[0];
 	let selectedToken7: CategorizedToken =
-		getAllTokensByNetwork(42161)[6] || getAllTokensByNetwork(42161)[0];
+		getAllTokensByNetwork($currentNetwork.id)[6] || getAllTokensByNetwork($currentNetwork.id)[0];
 
 	// Advanced Options
 	let showAdvancedOptions = false;
