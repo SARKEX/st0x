@@ -180,7 +180,6 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:MSTR',
 		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
-
 	{
 		chainId: base.id,
 		address: '0x32f417da481b9d8d578ebeec54490886b9a1643a',
@@ -203,90 +202,6 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:SPLG',
-		tradingViewMarket: 'america'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0xaca45fea0049823e809f0e789144c21d96230996',
-		symbol: 'GOOGLs1',
-		decimals: 18,
-		name: 'STx Alphabet 01',
-		logoUrl: '/images/GOOGL.png',
-		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:GOOGL',
-		tradingViewMarket: 'america'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x52946181fe3e3ab967a52f7294fa1cd39ae882e9',
-		symbol: 'METAs1',
-		decimals: 18,
-		name: 'STx Meta 01',
-		logoUrl: '/images/META.png',
-		priceFeedId: '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:META',
-		tradingViewMarket: 'america'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x20c40dd9e905482e6bc7c06de3383104746b7928',
-		symbol: 'MSFTs1',
-		decimals: 18,
-		name: 'STx Microsoft 01',
-		logoUrl: '/images/MSFT.png',
-		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:MSFT',
-		tradingViewMarket: 'america'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x6696E32EbD293783bCb4b4f157Da02A65789e38e',
-		symbol: 'TSLAs1',
-		decimals: 18,
-		name: 'STx Tesla 01',
-		logoUrl: '/images/TSLA.png',
-		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:TSLA',
-		tradingViewMarket: 'america'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x5191aF5069923b4AA2120f456ADbACF4d7Cf2a87',
-		symbol: 'NVDAs1',
-		decimals: 18,
-		name: 'STx Nvidia 01',
-		logoUrl: '/images/NVDA.png',
-		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:NVDA',
-		tradingViewMarket: 'america'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x294afcc97cc03bd7e4dccf4addf2a1497d96d454',
-		symbol: 'AAPLs1',
-		decimals: 18,
-		name: 'STx Apple 01',
-		logoUrl: '/images/AAPL.png',
-		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:AAPL',
-		tradingViewMarket: 'america'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x2e93b2c6cb3ac1b9993e784686c5637de28c2c2a',
-		symbol: 'AMZNs1',
-		decimals: 18,
-		name: 'STx Amazon 01',
-		logoUrl: '/images/AMZN.png',
-		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:AMZN',
 		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken
 ];
