@@ -22,9 +22,9 @@
 		if (container && $currentNetwork) {
 			const networkTokens = getTokensByNetwork($currentNetwork.chainId);
 			const symbols = networkTokens.map((stox) => {
-				const baseSymbol = stox.symbol ? stox.symbol.replace('s1', '') : '';
+				const baseSymbol = stox.symbol ? stox.symbol.replace('t', '') : '';
 				return {
-					proName: `NASDAQ:${baseSymbol}`,
+					proName: stox.tradingViewSymbol,
 					title: stox.name || baseSymbol
 				};
 			});

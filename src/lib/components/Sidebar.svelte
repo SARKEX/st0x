@@ -32,8 +32,7 @@
 
 	function baseFromSymbol(sym?: string) {
 		if (!sym) return undefined;
-		if (sym.includes('s1')) return sym.split('s1')[0];
-		if (sym.includes('0x')) return sym.split('0x')[0];
+		if (sym.includes('t')) return sym.split('t')[1];
 		return sym;
 	}
 
