@@ -8,7 +8,7 @@ import {
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { getPrice } from './getPrice';
 import { formatUnits } from 'viem';
-import { getAllTokensByNetwork, STOXs, TOKENS, USDC_TOKENS } from './network';
+import { getAllTokensByNetwork, STOXs, USDC_TOKENS } from './network';
 import { currentNetwork } from './stores';
 import { get } from 'svelte/store';
 import { mockCurrentNetwork } from './mocks/mockCurrentNetwork';
