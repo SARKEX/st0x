@@ -2,7 +2,7 @@
 	import { getAllTokensByNetwork } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { Token } from 'sushi';
+	import type { CategorizedToken } from '$lib/network';
 	import { validateOverrideDepositAmount } from '$lib/validateDeploymentArgs';
 	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
@@ -61,13 +61,13 @@
 		}
 	}
 
-	let selectedToken1: Token = getAllTokensByNetwork(42161)[0];
-	let selectedToken2: Token = getAllTokensByNetwork(42161)[1] || getAllTokensByNetwork(42161)[0];
-	let selectedToken3: Token = getAllTokensByNetwork(42161)[2] || getAllTokensByNetwork(42161)[0];
-	let selectedToken4: Token = getAllTokensByNetwork(42161)[3] || getAllTokensByNetwork(42161)[0];
-	let selectedToken5: Token = getAllTokensByNetwork(42161)[4] || getAllTokensByNetwork(42161)[0];
-	let selectedToken6: Token = getAllTokensByNetwork(42161)[5] || getAllTokensByNetwork(42161)[0];
-	let selectedToken7: Token = getAllTokensByNetwork(42161)[6] || getAllTokensByNetwork(42161)[0];
+	let selectedToken1: CategorizedToken = getAllTokensByNetwork(42161)[0];
+	let selectedToken2: CategorizedToken = getAllTokensByNetwork(42161)[1] || getAllTokensByNetwork(42161)[0];
+	let selectedToken3: CategorizedToken = getAllTokensByNetwork(42161)[2] || getAllTokensByNetwork(42161)[0];
+	let selectedToken4: CategorizedToken = getAllTokensByNetwork(42161)[3] || getAllTokensByNetwork(42161)[0];
+	let selectedToken5: CategorizedToken = getAllTokensByNetwork(42161)[4] || getAllTokensByNetwork(42161)[0];
+	let selectedToken6: CategorizedToken = getAllTokensByNetwork(42161)[5] || getAllTokensByNetwork(42161)[0];
+	let selectedToken7: CategorizedToken = getAllTokensByNetwork(42161)[6] || getAllTokensByNetwork(42161)[0];
 
 	// Advanced Options
 	let showAdvancedOptions = false;
