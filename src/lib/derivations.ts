@@ -2,7 +2,7 @@
  * Utility functions for derived calculations
  */
 
-import type { Token } from 'sushi/currency';
+import type { Token } from 'sushi';
 
 /**
  * For limit strategies, return the baseline IO ratio to use.

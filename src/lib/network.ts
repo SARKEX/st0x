@@ -127,6 +127,7 @@ export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
 // Extended token interface with category
 export interface CategorizedToken extends PythToken {
 	category: TokenCategory;
+	logoUrl?: string;
 	tradingViewSymbol?: string;
 	tradingViewMarket?: string;
 }

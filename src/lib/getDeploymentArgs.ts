@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import { signerAddress } from 'svelte-wagmi';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
-import { Token } from 'sushi/currency';
+import { Token } from 'sushi';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from './derivations';

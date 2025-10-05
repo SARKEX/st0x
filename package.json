@@ -73,7 +73,7 @@
 		"flowbite-svelte-icons": "0.4.5",
 		"cbor-web": "^9.0.1",
 		"date-fns-tz": "^3.2.0",
-		"ethers": "=5.7.0",
+		"ethers": "^6.10.0",
 		"highlight.js": "^11.11.1",
 		"lightweight-charts": "=4.2.0",
 		"lodash-es": "4.17.21",
@@ -81,7 +81,7 @@
 		"pako": "^2.1.0",
 		"pinata-web3": "^0.4.1",
 		"rehype-katex-svelte": "1.2.0",
-		"sushi": "=5.0.24",
+		"sushi": "=6.1.11",
 		"svelte-wagmi": "1.0.7",
 		"truncate-eth-address": "1.0.2"
 	}
