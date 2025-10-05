@@ -4,18 +4,16 @@ import { currentNetwork } from './stores';
 import { get } from 'svelte/store';
 import type { SwapResponse } from 'sushi/evm';
 
-
 export const getPrice = async (baseToken: EvmToken, quoteToken: EvmToken): Promise<string> => {
-	
-		const network = get(currentNetwork);
-		const usdcToken = network.usdcToken;
-		if (
-			baseToken.address.toLowerCase() === usdcToken.address.toLowerCase() &&
-			quoteToken.address.toLowerCase() === usdcToken.address.toLowerCase()
-		) {
-			return '1';
-		}
-		const SWAP_API_URL = new URL(`https://api.sushi.com/swap/v7/${network.chainId}`);
+	const network = get(currentNetwork);
+	const usdcToken = network.usdcToken;
+	if (
+		baseToken.address.toLowerCase() === usdcToken.address.toLowerCase() &&
+		quoteToken.address.toLowerCase() === usdcToken.address.toLowerCase()
+	) {
+		return '1';
+	}
+	const SWAP_API_URL = new URL(`https://api.sushi.com/swap/v7/${network.chainId}`);
 
 	// Amount to swap (1 token with proper decimals)
 	const amount = 10n ** BigInt(baseToken.decimals);
@@ -59,10 +57,4 @@ export const getPrice = async (baseToken: EvmToken, quoteToken: EvmToken): Promi
 	}
 
 	throw new Error(`Swap API returned unsuccessful status: ${data.status}`);
-		
 };
-
-async function test(){
-	console.log('test');
-}
-test()

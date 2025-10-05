@@ -42,13 +42,13 @@
 		const [balance, decimals] = await Promise.all([
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address,
+				address: amountToken.address as `0x${string}`,
 				functionName: 'balanceOf',
 				args: [$signerAddress as Hex]
 			}),
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address,
+				address: amountToken.address as `0x${string}`,
 				functionName: 'decimals',
 				args: []
 			})

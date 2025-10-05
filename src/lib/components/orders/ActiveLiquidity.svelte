@@ -42,7 +42,8 @@
 	}
 
 	let showAdvancedOptions = false;
-	let selectedToken1: CategorizedToken = getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
+	let selectedToken1: CategorizedToken =
+		getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
 	let selectedToken2: CategorizedToken = getAllTokensByNetwork(42161)[0];
 	let isToken1FastExit = false;
 	let isToken2FastExit = false;
