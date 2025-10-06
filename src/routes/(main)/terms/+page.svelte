@@ -287,7 +287,7 @@
 				<li>
 					Where any descriptions of functionality are posted these are for informational and
 					demonstrationl purposes only and are not in any way intended to represent an endorsement
-					of any particular token or security that may be referenced therein, in any manner.
+					of any particular token or asset that may be referenced therein, in any manner.
 				</li>
 				<li>
 					The Website may include content provided by third parties, including materials provided by

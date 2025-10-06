@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { onMount } from 'svelte';
-	import type { Token } from 'sushi/currency';
+	import type { CategorizedToken } from '$lib/network';
 
-	export let options: Token[] = [];
-	export let selected: Token;
+	export let options: CategorizedToken[] = [];
+	export let selected: CategorizedToken;
 	export let placeholder: string = 'Select a token';
 
 	const dispatch = createEventDispatcher();
@@ -26,7 +26,7 @@
 		};
 	});
 
-	function handleSelect(token: Token) {
+	function handleSelect(token: CategorizedToken) {
 		selected = token;
 		isOpen = false;
 		dispatch('change', { token });

@@ -15,7 +15,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
 	import { getAllTokensByNetwork } from '$lib/network';
-	import type { ApiStockQuote } from '$lib/types';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import { goto } from '$app/navigation';
 	import { getOrders, getVaults } from '@rainlanguage/orderbook';
 	import type {
@@ -26,9 +26,8 @@
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
+	import { evmChainIds, EvmToken } from 'sushi/evm';
 	import { getPrice } from '$lib/getPrice';
-	import { Token } from 'sushi/currency';
-	import { arbitrum } from '@wagmi/core/chains';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
@@ -40,11 +39,58 @@
 		);
 	}
 
+	function baseFromSymbol(sym?: string) {
+		if (!sym) return undefined;
+		if (sym.includes('t')) return sym.split('t')[1];
+		return sym;
+	}
+
+	function findTradingViewSymbol(symbol?: string) {
+		const base = baseFromSymbol(symbol);
+		if (!base) return undefined;
+		const match = ALL_TOKENS.find(
+			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
+		);
+		return match?.tradingViewSymbol;
+	}
+
+	function findQuoteForSymbol(symbol?: string) {
+		if (!$tokenGlobalQuote?.length) return undefined;
+		const quotes = $tokenGlobalQuote as TradingViewQuote[];
+		const tradingSymbol = findTradingViewSymbol(symbol);
+		if (tradingSymbol) {
+			const tsUpper = tradingSymbol.toUpperCase();
+			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
+			if (direct) return direct;
+		}
+		const base = baseFromSymbol(symbol)?.toUpperCase();
+		if (!base) return undefined;
+		return quotes.find((q) => {
+			const quoteSymbol = (q.symbol ?? '').toUpperCase();
+			if (quoteSymbol === base) return true;
+			const parts = quoteSymbol.split(':');
+			return parts[parts.length - 1] === base;
+		});
+	}
+
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let isNetworkLoading = false;
-	let activeTab: 'portfolio' | 'orders' | 'vaults' | string = 'portfolio';
+	const DASHBOARD_TABS = [
+		{ id: 'portfolio', label: 'Portfolio' },
+		{ id: 'orders', label: 'Orders' },
+		{ id: 'vaults', label: 'Vaults' }
+	] as const;
+	type DashboardTabId = (typeof DASHBOARD_TABS)[number]['id'];
+	let activeTab: DashboardTabId = 'portfolio';
+
+	const handleDashboardTabChange = (event: CustomEvent<{ id: string }>) => {
+		const nextId = event.detail.id;
+		if (DASHBOARD_TABS.some((tab) => tab.id === nextId)) {
+			activeTab = nextId as DashboardTabId;
+		}
+	};
 
 	// Order List variables
 	let ordersActiveFilter: boolean | undefined = undefined; // Show inactive orders by default
@@ -89,22 +135,10 @@
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
-					// Extract base symbol (handle both 's1' and '0x' suffixes)
-					let baseSymbol = sft.symbol;
-					if (baseSymbol?.includes('s1')) {
-						baseSymbol = baseSymbol.split('s1')[0];
-					} else if (baseSymbol?.includes('0x')) {
-						baseSymbol = baseSymbol.split('0x')[0];
-					}
-
-					const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-						(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
-					);
-					const price = parseFloat(quote?.['Global Quote']?.['05. price'] || '0');
-					const priceChange = parseFloat(quote?.['Global Quote']?.['09. change'] || '0');
-					const priceChangePercent = parseFloat(
-						quote?.['Global Quote']?.['10. change percent']?.replace('%', '') || '0'
-					);
+					const quote = findQuoteForSymbol(sft.symbol);
+					const price = quote?.close ?? 0;
+					const priceChange = quote?.change ?? 0;
+					const priceChangePercent = quote?.changePercent ?? 0;
 
 					const balance = formatUnits(BigInt(userHolder.balance), 18);
 					const value = parseFloat(balance) * price;
@@ -251,37 +285,31 @@
 					token.symbol?.toUpperCase() === 'USDC' ||
 					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
 
-				// Extract base symbol (handle both 's1' and '0x' suffixes)
-				let baseSymbol = token.symbol;
-				if (baseSymbol?.includes('s1')) {
-					baseSymbol = baseSymbol.split('s1')[0];
-				} else if (baseSymbol?.includes('0x')) {
-					baseSymbol = baseSymbol.split('0x')[0];
-				}
-
-				const quote = !isUSDC
-					? ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-							(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
-						)
-					: null;
+				const quote = !isUSDC ? findQuoteForSymbol(token.symbol) : null;
 
 				let price: number;
 				if (isUSDC) {
 					// USDC is always $1
 					price = 1.0;
-				} else if (quote && quote['Global Quote']?.['05. price']) {
-					price = parseFloat(quote['Global Quote']['05. price']);
+				} else if (quote?.close != null) {
+					price = quote.close;
 				} else {
 					// Fallback to getPrice if not in global quote
 					const priceStr = await getPrice(
-						new Token({
-							chainId: arbitrum.id,
-							address: token.id,
-							symbol: token.symbol,
+						new EvmToken({
+							chainId: evmChainIds[$currentNetwork.chainId],
+							address: token.id as `0x${string}`,
+							symbol: token.symbol || '',
 							decimals: Number(token.decimals ?? 18),
-							name: token.name
+							name: token.name || ''
 						}),
-						$currentNetwork.usdcToken
+						new EvmToken({
+							chainId: evmChainIds[$currentNetwork.chainId],
+							address: $currentNetwork.usdcToken.address as `0x${string}`,
+							symbol: $currentNetwork.usdcToken.symbol,
+							decimals: Number($currentNetwork.usdcToken.decimals),
+							name: $currentNetwork.usdcToken.name
+						})
 					);
 					price = parseFloat(priceStr);
 				}
@@ -381,14 +409,7 @@
 			</Section>
 
 			<!-- Tab Navigation -->
-			<TabNav
-				bind:activeId={activeTab}
-				tabs={[
-					{ id: 'portfolio', label: 'Portfolio' },
-					{ id: 'orders', label: 'Orders' },
-					{ id: 'vaults', label: 'Vaults' }
-				]}
-			/>
+			<TabNav activeId={activeTab} on:change={handleDashboardTabChange} tabs={DASHBOARD_TABS} />
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}

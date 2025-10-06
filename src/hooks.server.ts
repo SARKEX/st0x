@@ -8,6 +8,7 @@ function isAllowlisted(path: string) {
 	if (path === '/login') return true;
 	if (path.startsWith('/_app/')) return true; // SvelteKit assets
 	if (path.startsWith('/images/') || path.startsWith('/assets/')) return true;
+	if (path.startsWith('/.well-known/')) return true; // Chrome DevTools and other well-known endpoints
 	return ALLOWLIST.has(path);
 }
 

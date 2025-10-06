@@ -1,7 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
 	import { wagmiConfig } from 'svelte-wagmi';
-	import { env as publicEnv } from '$env/dynamic/public';
 	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
@@ -12,13 +11,14 @@
 	import { browser } from '$app/environment';
 
 	import { getSfts } from '$lib/query';
-	import * as alpha from '$lib/services/alpha';
-	import type { ApiStockQuote } from '$lib/types';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
+	import { getPythQuotes } from '$lib/services/pyth';
 	import { sfts, rainlangConfirmationModal, tokenGlobalQuote, currentNetwork } from '$lib/stores';
-	import { TOKENS } from '$lib/network';
+	import { TOKENS, type CategorizedToken } from '$lib/network';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
+	let sidebarCollapsed = false;
 
 	// Prevent background scroll when mobile sidebar is open
 	$: if (browser) {
@@ -29,16 +29,29 @@
 		}
 	}
 
+	function handleSidebarToggle(event: CustomEvent<{ collapsed: boolean }>) {
+		sidebarCollapsed = event.detail.collapsed;
+	}
+
+	function handleHeaderSidebarToggle(event: CustomEvent<{ target: 'mobile' | 'desktop' }>) {
+		if (event.detail?.target === 'desktop') {
+			sidebarCollapsed = !sidebarCollapsed;
+			mobileSidebarOpen = false;
+		} else {
+			mobileSidebarOpen = !mobileSidebarOpen;
+		}
+	}
+
 	// Get page title and description based on current route
 	$: pageTitle = getPageTitle($page.url.pathname);
 	$: pageDescription = getPageDescription($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
-		if (pathname.startsWith('/trade/')) return 'Trade Details';
+		if (pathname.startsWith('/trade/')) return 'Trade';
 
 		switch (pathname) {
 			case '/':
-				return 'Trade';
+				return 'Assets';
 			case '/strategies':
 				return 'Strategies';
 			case '/dashboard':
@@ -59,11 +72,19 @@
 	}
 
 	function getPageDescription(pathname: string): string {
-		if (pathname.startsWith('/trade/')) return 'Trade tokenized stocks';
+		if (pathname.startsWith('/trade/')) {
+			// Extract token name from path
+			const tokenId = pathname.split('/trade/')[1];
+			const sft = $sfts?.find((s) => s.id === tokenId);
+			if (sft) {
+				return `Trade ${sft.name} on our DEX`;
+			}
+			return 'Trade tokenised assets';
+		}
 
 		switch (pathname) {
 			case '/':
-				return `Browse and trade tokenized stocks`;
+				return `Browse and trade tokenised assets`;
 			case '/strategies':
 				return 'Manage automated trading strategies';
 			case '/dashboard':
@@ -83,33 +104,25 @@
 		enabled: !!$currentNetwork?.subgraph_url
 	});
 
+	let networkTokensForQuotes: CategorizedToken[] = [];
+	$: networkTokensForQuotes = TOKENS.filter(
+		(token) => token.chainId === $currentNetwork?.chainId && token.priceFeedId
+	) as CategorizedToken[];
+	$: networkFeedKey = networkTokensForQuotes
+		.map((token) => token.priceFeedId.toLowerCase())
+		.sort()
+		.join(',');
 	$: tokenGlobalQuoteQuery = createQuery({
-		queryKey: ['tokenGlobalQuote-unique-symbols'],
+		queryKey: ['tokenGlobalQuote-pyth', $currentNetwork?.id, networkFeedKey],
 		queryFn: async () => {
-			// Build unique list of base symbols across all TOKENS (strip 's1' and '0x' suffixes)
-			const uniqueBaseSymbols = Array.from(
-				new Set(
-					TOKENS.map((t) => {
-						const sym = t.symbol ?? '';
-						if (sym.includes('s1')) return sym.split('s1')[0];
-						if (sym.includes('0x')) return sym.split('0x')[0];
-						return sym;
-					})
-				)
-			).filter(Boolean);
-
-			const tokenQuotes = [];
-			for (const baseSymbol of uniqueBaseSymbols) {
-				const data = await alpha.getGlobalQuote(baseSymbol, publicEnv.PUBLIC_ALPHAVANTAGE_API_KEY);
-				tokenQuotes.push(data);
-			}
-			return tokenQuotes;
+			if (!browser || !networkTokensForQuotes.length) return [] as TradingViewQuote[];
+			return getPythQuotes(networkTokensForQuotes);
 		},
-		enabled: true
+		enabled: browser && networkTokensForQuotes.length > 0
 	});
 
 	$: sfts.set($vaultQuery.data);
-	$: tokenGlobalQuote.set(($tokenGlobalQuoteQuery.data as unknown as ApiStockQuote[]) ?? []);
+	$: tokenGlobalQuote.set(($tokenGlobalQuoteQuery.data as unknown as TradingViewQuote[]) ?? []);
 </script>
 
 {#if $wagmiConfig}
@@ -120,30 +133,38 @@
 				class="bg-[url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 2000 1000%27%3E%3Cpath d=%27M0,500 Q250,400 500,500 T1000,500 T1500,500 T2000,500%27 stroke=%27%23F3B13C%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,400 Q250,300 500,400 T1000,400 T1500,400 T2000,400%27 stroke=%27%231A5C8E%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,600 Q250,500 500,600 T1000,600 T1500,600 T2000,600%27 stroke=%27%2337134D%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3C/svg%3E')] h-full w-full bg-cover"
 			/>
 		</div>
-		<!-- Always render for transition, pass visible prop -->
+		<!-- Mobile/Tablet sidebar (always rendered) -->
 		<div class="lg:hidden">
 			<Sidebar
 				visible={mobileSidebarOpen}
 				desktop={false}
 				on:close={() => (mobileSidebarOpen = false)}
+				on:open={() => (mobileSidebarOpen = true)}
 			/>
 		</div>
 		<!-- Desktop sidebar -->
 		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
-			<Sidebar visible={true} desktop={true} />
+			<Sidebar
+				visible={true}
+				desktop={true}
+				collapsed={sidebarCollapsed}
+				on:toggleCollapse={handleSidebarToggle}
+			/>
 		</div>
 
 		<!-- Main Content -->
 		<div
 			class="transition-all duration-300"
-			class:lg:ml-64={sidebarExpanded}
-			class:lg:ml-16={!sidebarExpanded}
+			class:lg:ml-64={!sidebarCollapsed}
+			class:lg:ml-0={sidebarCollapsed}
 		>
 			<!-- Header for all screen sizes -->
 			<Header
 				title={pageTitle}
 				description={pageDescription}
-				on:openMenu={() => (mobileSidebarOpen = !mobileSidebarOpen)}
+				isSidebarCollapsed={sidebarCollapsed}
+				isMobileSidebarOpen={mobileSidebarOpen}
+				on:toggleSidebar={handleHeaderSidebarToggle}
 			/>
 
 			<slot {sidebarExpanded} />
@@ -157,7 +178,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="flex h-screen items-center justify-center">
+	<div class="flex h-screen items-center justify-center bg-gray-900 text-white">
 		<LoadingSpinner variant="fullscreen" size="xl" text="Loading ST0x..." />
 	</div>
 {/if}

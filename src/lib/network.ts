@@ -13,6 +13,7 @@ export interface Network {
 	sftExplorer: string;
 	blockExplorerIcon: string;
 	rpcUrl: string;
+	fallbackRpcUrls: string[];
 	icon: string;
 	subgraph_url: string;
 	metadata_subgraph_url: string;
@@ -56,6 +57,7 @@ export const networks: Network[] = [
 		sftExplorer: 'https://stox.h20.market',
 		blockExplorerIcon: 'arbitrum',
 		rpcUrl: 'https://arbitrum-one-rpc.publicnode.com',
+		fallbackRpcUrls: ['https://arbitrum-one-rpc.publicnode.com'],
 		icon: 'arbitrum',
 		subgraph_url:
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
@@ -79,6 +81,14 @@ export const networks: Network[] = [
 		sftExplorer: 'https://stox2.h20.market',
 		blockExplorerIcon: 'etherscan',
 		rpcUrl: 'https://base-rpc.publicnode.com',
+		fallbackRpcUrls: [
+			'https://base-rpc.publicnode.com',
+			'https://mainnet.base.org',
+			'https://base.llamarpc.com',
+			'https://base.meowrpc.com',
+			'https://base-mainnet.public.blastapi.io',
+			'https://gateway.tenderly.co/public/base'
+		],
 		icon: 'ethereum',
 		subgraph_url:
 			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.4/gn',
@@ -117,158 +127,83 @@ export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
 // Extended token interface with category
 export interface CategorizedToken extends PythToken {
 	category: TokenCategory;
+	logoUrl?: string;
+	tradingViewSymbol?: string;
+	tradingViewMarket?: string;
 }
 
 export const TOKENS: CategorizedToken[] = [
 	{
 		chainId: base.id,
-		address: '0xf1c5c12e32f288b63aa6fe9bba65518785d3a4da',
-		symbol: 'MSFTs1',
+		address: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
+		symbol: 'tNVDA',
 		decimals: 18,
-		name: 'STx Microsoft 01',
-		logoUrl: '/images/MSFT.png',
-		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0x89e3815578775b5846b1acd442baf159fd4ab581',
-		symbol: 'METAs1',
-		decimals: 18,
-		name: 'STx Meta 01',
-		logoUrl: '/images/META.png',
-		priceFeedId: '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0xc0edd7ee86c8402ac863499226572f8fb641eb61',
-		symbol: 'NVDAs1',
-		decimals: 18,
-		name: 'STx Nvidia 01',
+		name: 'NVIDIA Corporation ST0x',
 		logoUrl: '/images/NVDA.png',
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:NVDA',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
-		address: '0x7c67adfdda34d01175c23976f75f70fced0702c3',
-		symbol: 'GOOGLs1',
+		address: '0x8d8c315db61f60dcc3c66cdb48ca87fc643e35ea',
+		symbol: 'tAMZN',
 		decimals: 18,
-		name: 'STx Alphabet 01',
-		logoUrl: '/images/GOOGL.png',
-		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0x469b467e6ad08e99c5bf84ce358d0996a4f313c4',
-		symbol: 'AMZNs1',
-		decimals: 18,
-		name: 'STx Amazon 01',
+		name: 'Amazon.com Inc ST0x',
 		logoUrl: '/images/AMZN.png',
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:AMZN',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
-		address: '0xd8ddf363a182cc50bdc851fbabf77d74bc292774',
-		symbol: 'AAPLs1',
+		address: '0x470b06815a2e286df8c38c9c73280e0760088623',
+		symbol: 'tTSLA',
 		decimals: 18,
-		name: 'STx Apple 01',
-		logoUrl: '/images/AAPL.png',
-		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0xabef041ebd0ad5d9c8a4e88b04f9a58c1cab93c0',
-		symbol: 'TSLAs1',
-		decimals: 18,
-		name: 'STx Tesla 01',
+		name: 'Tesla Inc ST0x',
 		logoUrl: '/images/TSLA.png',
 		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
-		category: 'ST0x'
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:TSLA',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
-		address: '0xde9597f10384d6c7f64aa7cb014f10e2f82e60f1',
-		symbol: 'GME0x',
+		address: '0xff647ad8c4b065bd746911bb9ea1a33c38c63604',
+		symbol: 'tMSTR',
 		decimals: 18,
-		name: 'STx GameStop 01',
-		logoUrl: '/images/GME.svg',
-		priceFeedId: '0x6f9cd89ef1b7fd39f667101a91ad578b6c6ace4579d5f7f285a4b06aa4504be6',
-		category: 'ST0x'
+		name: 'MicroStrategy Incorporated ST0x',
+		logoUrl: '/images/MSTR.png',
+		priceFeedId: '0xe1e80251e5f5184f2195008382538e847fafc36f751896889dd3d1b1f6111f09',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:MSTR',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
-		chainId: arbitrum.id,
-		address: '0xaca45fea0049823e809f0e789144c21d96230996',
-		symbol: 'GOOGLs1',
+		chainId: base.id,
+		address: '0x32f417da481b9d8d578ebeec54490886b9a1643a',
+		symbol: 'tBRK.B',
 		decimals: 18,
-		name: 'STx Alphabet 01',
-		logoUrl: '/images/GOOGL.png',
-		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
-		category: 'ST0x'
+		name: 'Berkshire Hathaway Inc ST0x',
+		logoUrl: '/images/BRK.B.png',
+		priceFeedId: '0xe21c688b7fc65b4606a50f3635f466f6986db129bf16979875d160f9c508e8c7',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:BRK.B',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
-		chainId: arbitrum.id,
-		address: '0x52946181fe3e3ab967a52f7294fa1cd39ae882e9',
-		symbol: 'METAs1',
+		chainId: base.id,
+		address: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
+		symbol: 'tSPLG',
 		decimals: 18,
-		name: 'STx Meta 01',
-		logoUrl: '/images/META.png',
-		priceFeedId: '0x78a3e3b8e676a8f73c439f5d749737034b139bbbe899ba5775216fba596607fe',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x20c40dd9e905482e6bc7c06de3383104746b7928',
-		symbol: 'MSFTs1',
-		decimals: 18,
-		name: 'STx Microsoft 01',
-		logoUrl: '/images/MSFT.png',
-		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x6696E32EbD293783bCb4b4f157Da02A65789e38e',
-		symbol: 'TSLAs1',
-		decimals: 18,
-		name: 'STx Tesla 01',
-		logoUrl: '/images/TSLA.png',
-		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x5191aF5069923b4AA2120f456ADbACF4d7Cf2a87',
-		symbol: 'NVDAs1',
-		decimals: 18,
-		name: 'STx Nvidia 01',
-		logoUrl: '/images/NVDA.png',
-		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x294afcc97cc03bd7e4dccf4addf2a1497d96d454',
-		symbol: 'AAPLs1',
-		decimals: 18,
-		name: 'STx Apple 01',
-		logoUrl: '/images/AAPL.png',
-		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
-		category: 'ST0x'
-	} as unknown as CategorizedToken,
-	{
-		chainId: arbitrum.id,
-		address: '0x2e93b2c6cb3ac1b9993e784686c5637de28c2c2a',
-		symbol: 'AMZNs1',
-		decimals: 18,
-		name: 'STx Amazon 01',
-		logoUrl: '/images/AMZN.png',
-		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
-		category: 'ST0x'
+		name: 'SPDR Portfolio S&P 500 ETF ST0x',
+		logoUrl: '/images/SPLG.png',
+		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:SPLG',
+		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken
 ];
 
@@ -282,7 +217,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'Wrapped BTC',
 		logoUrl: '/images/BTC.svg',
 		priceFeedId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'BINANCE:BTCUSDT',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	{
@@ -293,7 +230,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'Wrapped Ether',
 		logoUrl: '/images/ETH.svg',
 		priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'BINANCE:ETHUSDT',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	{
@@ -304,7 +243,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'Arbitrum (ARB)',
 		logoUrl: '/images/ARB.svg',
 		priceFeedId: '0x3fa4252848f9f0a1480be62745a4629d9eb1322aebab8a791e344b3b9c1adcf5',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'BINANCE:ARBUSDT',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	// USDC token
@@ -316,7 +257,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'USD Coin',
 		logoUrl: '/images/USDC.png',
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'KRAKEN:USDCUSD',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken,
 
 	// USDC token
@@ -328,7 +271,9 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		name: 'USD Coin',
 		logoUrl: '/images/USDC.png',
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
-		category: 'CRYPTO'
+		category: 'CRYPTO',
+		tradingViewSymbol: 'KRAKEN:USDCUSD',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken
 ];
 

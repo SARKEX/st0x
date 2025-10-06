@@ -5,7 +5,7 @@
 	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
-	import type { Token } from 'sushi/currency';
+	import type { Token } from 'sushi';
 	import type { ValidateFunction } from '$lib/validateDeploymentArgs';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
@@ -17,6 +17,8 @@
 	export let isError: boolean = false;
 
 	export let dataTestId: string = '';
+	export let showUnit: boolean = true;
+	export let showMaxButton: boolean = true;
 
 	let balance: bigint = 0n;
 	let decimals: number = 0;
@@ -40,13 +42,13 @@
 		const [balance, decimals] = await Promise.all([
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address,
+				address: amountToken.address as `0x${string}`,
 				functionName: 'balanceOf',
 				args: [$signerAddress as Hex]
 			}),
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address,
+				address: amountToken.address as `0x${string}`,
 				functionName: 'decimals',
 				args: []
 			})
@@ -71,8 +73,8 @@
 		{...$$restProps}
 		bind:amount={inputAmount}
 		type="number"
-		unit={amountToken.symbol}
-		maxButton
+		unit={showUnit ? amountToken.symbol : ''}
+		maxButton={showMaxButton}
 		on:setValueToMax={setValueToMax}
 		{dataTestId}
 		{validate}

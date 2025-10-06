@@ -1,16 +1,14 @@
 <script lang="ts">
 	import { getAllTokensByNetwork } from '$lib/network';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { Token } from 'sushi/currency';
+	import type { CategorizedToken } from '$lib/network';
 	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits, parseUnits } from 'viem';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/transactionStore';
-	import { hasValidPriceFeedId } from '$lib/derivations';
-	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
+	import { currentNetwork } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
-	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
 	import { containerStyles } from '$lib/utils/styles';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
@@ -19,13 +17,14 @@
 
 	export let passedOutputToken: PythToken | undefined; // The token we're trading
 	export let currentPrice: string | undefined = undefined; // Current market price
+	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Initialize tokens - trading token from prop, USDC for payment
-	let selectedOutputToken: Token;
-	let selectedInputToken: Token;
+	let selectedOutputToken: CategorizedToken;
+	let selectedInputToken: CategorizedToken;
 
 	// Always use USDC for payment
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
@@ -34,11 +33,15 @@
 
 		// Update selectedOutputToken if network changes
 		if (passedOutputToken && !selectedOutputToken) {
-			selectedOutputToken = passedOutputToken;
+			selectedOutputToken = passedOutputToken as unknown as CategorizedToken;
 		}
 	}
 
-	let selectedOrderType: 'Buy' | 'Sell' = 'Buy';
+	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
+	$: actionButtonClass =
+		orderSide === 'Buy'
+			? 'bg-green-500 hover:bg-green-600 text-white'
+			: 'bg-red-500 hover:bg-red-600 text-white';
 
 	// Autofill with current price if available
 	let selectedInitialRatio: string = currentPrice || '';
@@ -77,7 +80,7 @@
 			return;
 		}
 
-		if (selectedOrderType === 'Buy') {
+		if (orderSide === 'Buy') {
 			// Buy: input is asset, output is USDC
 			// We're buying the asset, so we deposit USDC and receive asset
 			// Calculate USDC amount needed
@@ -125,50 +128,20 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0 && selectedOutputToken && selectedInputToken}
 	<div class="space-y-4">
-		<!-- Action toggle and header -->
-		<div class="rounded-lg bg-gray-800/50 p-4">
-			<div class="mb-3 flex gap-2">
-				<button
-					on:click={() => (selectedOrderType = 'Buy')}
-					class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType ===
-					'Buy'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'text-gray-400 hover:text-white'}">Buy</button
-				>
-				<button
-					on:click={() => (selectedOrderType = 'Sell')}
-					class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors {selectedOrderType ===
-					'Sell'
-						? 'bg-yellow-500/20 text-yellow-500'
-						: 'text-gray-400 hover:text-white'}">Sell</button
-				>
+		<!-- Main inputs stacked -->
+		<div class="space-y-4">
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
+				<TradeAmountInput
+					aria-label="Quantity"
+					amountToken={selectedOutputToken}
+					bind:amount={selectedAmount}
+					validate={validateSelectedAmount}
+					bind:isError={selectedAmountError}
+					showUnit={false}
+					showMaxButton={false}
+				/>
 			</div>
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-3">
-					<span class="text-sm text-gray-400"
-						>{selectedOrderType === 'Buy' ? 'Buying' : 'Selling'}</span
-					>
-					<div class="flex items-center gap-2">
-						{#if selectedOutputToken.logoUrl}
-							<img
-								src={selectedOutputToken.logoUrl}
-								alt={selectedOutputToken.symbol}
-								class="h-6 w-6 rounded-full"
-							/>
-						{/if}
-						<span class="text-lg font-semibold">{selectedOutputToken.symbol}</span>
-					</div>
-				</div>
-				<div class="flex items-center gap-2 text-sm text-gray-400">
-					<span>{selectedOrderType === 'Buy' ? 'with' : 'for'}</span>
-					<img src="/images/USDC.png" alt="USDC" class="h-5 w-5" />
-					<span>USDC</span>
-				</div>
-			</div>
-		</div>
-
-		<!-- Main inputs in a clean grid -->
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Limit Price
@@ -183,83 +156,45 @@
 					bind:isError={selectedInitialRatioError}
 				/>
 			</div>
-			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
-				<TradeAmountInput
-					aria-label="Quantity"
-					amountToken={selectedOutputToken}
-					bind:amount={selectedAmount}
-					validate={validateSelectedAmount}
-					bind:isError={selectedAmountError}
-				/>
-			</div>
 		</div>
 
-		<!-- Summary boxes side by side -->
-		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-			<!-- Order summary with total cost -->
-			<div class={containerStyles.cardBordered}>
-				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
-				<div class="space-y-2 text-sm">
+		<!-- Order summary -->
+		<div class={containerStyles.cardBordered}>
+			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+			<div class="space-y-2 text-sm">
+				<div class="flex justify-between">
+					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+					<span class="font-medium">
+						{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
+						{selectedOutputToken.symbol}
+					</span>
+				</div>
+				<div class="flex justify-between">
+					<span class="text-gray-400">At price</span>
+					<span class="font-medium">
+						{selectedInitialRatio || '0'} USDC
+					</span>
+				</div>
+				<div class="mt-2 border-t border-white/10 pt-2">
 					<div class="flex justify-between">
-						<span class="text-gray-400">{selectedOrderType === 'Buy' ? 'Buying' : 'Selling'}</span>
-						<span class="font-medium">
-							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
-							{selectedOutputToken.symbol}
+						<span class="text-gray-400">Total</span>
+						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
+							{totalCost} USDC
 						</span>
-					</div>
-					<div class="flex justify-between">
-						<span class="text-gray-400">At price</span>
-						<span class="font-medium">
-							{selectedInitialRatio || '0'} USDC
-						</span>
-					</div>
-					<div class="mt-2 border-t border-white/10 pt-2">
-						<div class="flex justify-between">
-							<span class="text-gray-400">Total</span>
-							<span class="text-lg font-semibold text-yellow-500">
-								{totalCost} USDC
-							</span>
-						</div>
 					</div>
 				</div>
 			</div>
-
-			<!-- Price Oracle Info (simplified) -->
-			{#if hasValidPriceFeedId(selectedOutputToken)}
-				<div class={containerStyles.cardBordered}>
-					<h4 class="mb-3 text-sm font-medium text-gray-300">Current Market Price</h4>
-					<div class="overflow-x-auto">
-						<table class="min-w-full text-sm text-gray-200">
-							<thead>
-								<tr class="border-b border-white/10">
-									<th class="px-2 py-1 text-left">Token</th>
-									<th class="px-2 py-1 text-right">Oracle Price</th>
-									<th class="px-2 py-1 text-right">Confidence</th>
-									<th class="px-2 py-1 text-right">Off-chain</th>
-								</tr>
-							</thead>
-							<tbody>
-								<PythOracleRow token={selectedOutputToken} tokenQuotes={$tokenGlobalQuote} />
-							</tbody>
-						</table>
-					</div>
-				</div>
-			{:else}
-				<div class={containerStyles.cardBordered}>
-					<h4 class="mb-3 text-sm font-medium text-gray-300">Market Price</h4>
-					<p class="text-sm text-gray-400">Price feed unavailable</p>
-				</div>
-			{/if}
 		</div>
 
 		<!-- Deploy Button -->
 		<button
 			on:click={handleDeploy}
 			disabled={disableDeploy}
-			class="w-full rounded-md px-4 py-3 text-sm font-semibold text-black transition-all {disableDeploy
-				? 'cursor-not-allowed bg-gray-600 opacity-50'
-				: 'bg-yellow-500 hover:bg-yellow-600'}"
+			class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
+				disableDeploy
+					? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
+					: actionButtonClass
+			}`}
 		>
 			{#if disableDeploy}
 				{#if !selectedInitialRatio}
@@ -270,7 +205,7 @@
 					Complete all fields
 				{/if}
 			{:else}
-				Place Limit Order
+				Create Order
 			{/if}
 		</button>
 	</div>

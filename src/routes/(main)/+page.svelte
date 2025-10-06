@@ -4,35 +4,73 @@
 	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import ListCard from '$lib/components/ui/ListCard.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork, USDC_TOKENS } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
-	import type { ApiStockQuote } from '$lib/types';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	// Consolidated table usage
 	import { containerStyles } from '$lib/utils/styles';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import {
+		fetchAndQuoteUSDCOrders,
+		buildTokenPriceMap,
+		type TokenPriceSummary
+	} from '$lib/utils/quote';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
+	type VaultWithChange = OffchainAssetReceiptVault & { changePercent: number };
+	type VaultWithVolume = OffchainAssetReceiptVault & { totalVolume: bigint; transferCount: number };
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let searchTerm = '';
 	let filteredSfts: OffchainAssetReceiptVault[] = [];
-	/* eslint-disable @typescript-eslint/no-explicit-any */
-	let biggestMovers: any[] = [];
-	let biggestVolume: any[] = [];
+	let biggestMovers: VaultWithChange[] = [];
+	let biggestVolume: VaultWithVolume[] = [];
 	let recentlyAdded: OffchainAssetReceiptVault[] = [];
-	let isSearching = false;
-	let currentSearchId: string | null = null;
+
+	function baseFromSymbol(sym?: string) {
+		if (!sym) return undefined;
+		if (sym.includes('t')) return sym.split('t')[1];
+		return sym;
+	}
+
+	function findTradingViewSymbol(symbol?: string) {
+		const base = baseFromSymbol(symbol);
+		if (!base) return undefined;
+		const match = ALL_TOKENS.find(
+			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
+		);
+		return match?.tradingViewSymbol;
+	}
+
+	function findQuoteForSymbol(symbol?: string) {
+		if (!$tokenGlobalQuote?.length) return undefined;
+		const quotes = $tokenGlobalQuote as TradingViewQuote[];
+		const tradingSymbol = findTradingViewSymbol(symbol);
+		if (tradingSymbol) {
+			const tsUpper = tradingSymbol.toUpperCase();
+			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
+			if (direct) return direct;
+		}
+		const base = baseFromSymbol(symbol)?.toUpperCase();
+		if (!base) return undefined;
+		return quotes.find((q) => {
+			const quoteSymbol = (q.symbol ?? '').toUpperCase();
+			if (quoteSymbol === base) return true;
+			const parts = quoteSymbol.split(':');
+			return parts[parts.length - 1] === base;
+		});
+	}
 
 	// Scroll indicator for Discover section
 	let discoverScrollEl: HTMLDivElement;
@@ -89,7 +127,6 @@
 			// Start tracking search
 			searchAnalytics.trackSearchStart();
 
-			isSearching = true;
 			filteredSfts = $sfts.filter(
 				(s) =>
 					s.name.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
@@ -98,21 +135,9 @@
 
 			// Track the search with debouncing (800ms delay) to avoid too many events
 			trackSearchDebounced(trimmedSearch, filteredSfts.length, 800);
-			currentSearchId = trimmedSearch; // Store for click tracking
 		} else {
-			isSearching = false;
 			filteredSfts = [];
-			currentSearchId = null;
 		}
-	}
-
-	function handleResultClick(sft: OffchainAssetReceiptVault, position: number) {
-		// Track the click
-		if (currentSearchId) {
-			searchAnalytics.trackClick(currentSearchId, sft.symbol, position);
-		}
-		// Clear search term
-		searchTerm = '';
 	}
 
 	$: if ($sfts && $tokenGlobalQuote) {
@@ -121,24 +146,11 @@
 		// Check if scrollable after data loads
 		setTimeout(checkScrollable, 100);
 
-		// Calculate biggest movers based on AlphaVantage daily change percentage
+		// Calculate biggest movers based on TradingView daily change percentage
 		biggestMovers = [...st0xVaults]
 			.map((sft) => {
-				// Extract base symbol (handle both 's1' and '0x' suffixes)
-				let symbol = sft.symbol;
-				if (symbol?.includes('s1')) {
-					symbol = symbol.split('s1')[0];
-				} else if (symbol?.includes('0x')) {
-					symbol = symbol.split('0x')[0];
-				}
-				// Find the quote in the array by matching symbol
-				const quoteData = ($tokenGlobalQuote as ApiStockQuote[]).find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === symbol
-				);
-				const globalQuote = quoteData?.['Global Quote'];
-				const changePercent = globalQuote?.['10. change percent']
-					? parseFloat(globalQuote['10. change percent'].replace('%', ''))
-					: 0;
+				const quote = findQuoteForSymbol(sft.symbol);
+				const changePercent = quote?.changePercent ?? 0;
 				return { ...sft, changePercent };
 			})
 			.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
@@ -172,39 +184,61 @@
 			.slice(0, 5);
 	}
 
+	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
+		if (!summary) return null;
+		const { buy, sell } = summary;
+		if (buy != null && sell != null) {
+			return (buy + sell) / 2;
+		}
+		return buy ?? sell ?? null;
+	}
+
 	// Process tokens with quote data
 	$: query = createQuery({
 		queryKey: ['getSftsStocks', $currentNetwork?.id, $sfts?.length, $tokenGlobalQuote?.length],
 		enabled: !!($sfts && $currentNetwork?.chainId),
-		queryFn: () => {
+		staleTime: 30_000,
+		refetchOnWindowFocus: false,
+		queryFn: async () => {
 			const sftVaults: OffchainAssetReceiptVault[] = $sfts || [];
 			const tokens = [];
+			const networkId = $currentNetwork?.chainId;
+			const usdcToken = networkId ? USDC_TOKENS[networkId] : undefined;
+			let priceMap: Map<string, TokenPriceSummary> | null = null;
+
+			if (browser && networkId && usdcToken) {
+				try {
+					const quotes = await fetchAndQuoteUSDCOrders(networkId);
+					priceMap = buildTokenPriceMap(quotes, usdcToken.address);
+				} catch (error) {
+					console.warn('[onchain-quotes] failed to fetch quotes', error);
+					priceMap = null;
+				}
+			}
 
 			// Process SFT vaults (from subgraph)
 			for (let sft of sftVaults) {
-				// Extract base symbol for quote lookup
-				let baseSymbol = sft.symbol;
-				if (baseSymbol?.includes('s1')) {
-					baseSymbol = baseSymbol.split('s1')[0];
-				} else if (baseSymbol?.includes('0x')) {
-					baseSymbol = baseSymbol.split('0x')[0];
+				const quote = findQuoteForSymbol(sft.symbol);
+				const summary = priceMap?.get(sft.address.toLowerCase()) ?? null;
+				const buyPrice = summary?.buy ?? null;
+				const sellPrice = summary?.sell ?? null;
+				const onChainPrice = calculateMidPrice(summary);
+				const fallbackPrice = quote?.close ?? 0;
+				const price = onChainPrice ?? fallbackPrice;
+				if (browser && summary) {
+					// Logging removed after validation
 				}
-				const quote = ($tokenGlobalQuote as unknown as ApiStockQuote[])?.find(
-					(q) => q?.['Global Quote']?.['01. symbol'] === baseSymbol
-				);
-				const sftPrice = quote?.['Global Quote']?.['05. price'] ?? 0;
 				tokens.push({
 					id: sft.id,
 					address: sft.address,
 					name: sft.name,
 					symbol: sft.symbol,
-					price: sftPrice,
+					price,
+					onChainPrice,
+					buyPrice,
+					sellPrice,
 					totalHolders: sft.tokenHolders.length.toString(),
 					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
-					marketCap: formatUnits(
-						BigInt(Math.floor(Number(sftPrice))) * BigInt(sft.totalShares),
-						18
-					),
 					totalTransfers: sft.shareTransfers.length.toString(),
 					createdAt: sft.deployTimestamp,
 					isSft: true
@@ -227,84 +261,6 @@
 {:else if $sfts.length > 0}
 	<div>
 		<PageContainer>
-			<div class="relative z-50 mb-8">
-				<Section>
-					<div class="mx-auto max-w-3xl">
-						<div class="relative">
-							<SearchBar
-								bind:value={searchTerm}
-								placeholder="Search stocks by name or symbol..."
-								minChars={3}
-							/>
-						</div>
-					</div>
-				</Section>
-				{#if isSearching}
-					<div
-						class="absolute left-1/2 top-full z-50 mt-2 w-full max-w-3xl -translate-x-1/2 px-4 sm:px-6"
-					>
-						{#if filteredSfts.length > 0}
-							<div
-								class="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-gray-900/95 shadow-xl backdrop-blur-sm"
-							>
-								<div class="bg-gray-800/50 px-4 py-2 text-xs text-gray-400">
-									{filteredSfts.length} result{filteredSfts.length === 1 ? '' : 's'} found
-								</div>
-								{#each filteredSfts.slice(0, 10) as sft, index}
-									<a
-										class="block px-4 py-3 transition-colors hover:bg-white/10"
-										href={`/trade/${sft.id}`}
-										on:click={() => handleResultClick(sft, index)}
-									>
-										<div class="flex items-center justify-between">
-											<div class="min-w-0">
-												<div class="truncate text-sm font-semibold text-white sm:text-base">
-													<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-													{@html sft.name.replace(
-														new RegExp(`(${searchTerm.trim()})`, 'gi'),
-														'<span class="text-yellow-400">$1</span>'
-													)}
-												</div>
-												<div class="text-xs text-gray-400">
-													<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-													{@html sft.symbol.replace(
-														new RegExp(`(${searchTerm.trim()})`, 'gi'),
-														'<span class="text-yellow-400">$1</span>'
-													)}
-												</div>
-											</div>
-											<div class="ml-3 flex items-center gap-1 text-xs text-yellow-500">
-												<span>View</span>
-												<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M9 5l7 7-7 7"
-													/>
-												</svg>
-											</div>
-										</div>
-									</a>
-								{/each}
-								{#if filteredSfts.length > 10}
-									<div class="bg-gray-800/50 px-4 py-2 text-center text-xs text-gray-400">
-										Showing first 10 results
-									</div>
-								{/if}
-							</div>
-						{:else}
-							<EmptyState
-								title="No stocks found matching '{searchTerm}'"
-								description="Try searching for a different name or symbol"
-								showBorder={true}
-								className="shadow-xl"
-							/>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
 			<Section>
 				<div class="mb-4 flex items-center justify-between sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Discover</h2>
@@ -389,17 +345,8 @@
 							<ListCard
 								title="Biggest Movers (24H)"
 								items={biggestMovers.map((s) => {
-									// Extract base symbol
-									let symbol = s.symbol;
-									if (symbol?.includes('s1')) {
-										symbol = symbol.split('s1')[0];
-									} else if (symbol?.includes('0x')) {
-										symbol = symbol.split('0x')[0];
-									}
-									const quoteData = $tokenGlobalQuote.find(
-										(q) => q?.['Global Quote']?.['01. symbol'] === symbol
-									);
-									const price = quoteData?.['Global Quote']?.['05. price'];
+									const quote = findQuoteForSymbol(s.symbol);
+									const price = quote?.close ?? null;
 									const tokenInfo = ALL_TOKENS.find(
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
 									);
@@ -408,7 +355,7 @@
 										symbol: s.symbol,
 										href: `/trade/${s.id}`,
 										logoUrl: tokenInfo?.logoUrl,
-										price: price ? parseFloat(price).toFixed(2) : 'N/A',
+										price: price != null ? price.toFixed(2) : 'N/A',
 										metadata: s.changePercent
 											? `${s.changePercent > 0 ? '+' : ''}${s.changePercent.toFixed(2)}%`
 											: 'N/A',
@@ -428,19 +375,8 @@
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
 									);
 									const volumeInShares = parseFloat(formatUnits(s.totalVolume, 18));
-									// Extract base symbol
-									let symbol = s.symbol;
-									if (symbol?.includes('s1')) {
-										symbol = symbol.split('s1')[0];
-									} else if (symbol?.includes('0x')) {
-										symbol = symbol.split('0x')[0];
-									}
-									const quoteData = $tokenGlobalQuote.find(
-										(q) => q?.['Global Quote']?.['01. symbol'] === symbol
-									);
-									const price = quoteData?.['Global Quote']?.['05. price']
-										? parseFloat(quoteData['Global Quote']['05. price'])
-										: 0;
+									const quote = findQuoteForSymbol(s.symbol);
+									const price = quote?.close ?? 0;
 									const dollarVolume = volumeInShares * price;
 
 									const volumeStr =
@@ -516,108 +452,133 @@
 				</div>
 			</Section>
 
-			<!-- Stock Table Section -->
+			<!-- Asset Table Section -->
 			<Section>
 				<div class="mb-4 sm:mb-6">
-					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse Stocks</h2>
+					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse</h2>
 				</div>
-				<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
-					<Table>
-						<thead>
-							<tr class="border-b border-white/10">
-								<th
-									class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>Stock</th
-								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>Price</th
-								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Price</th
-								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Market Cap</th
-								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Supply</th
-								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>Holders</th
-								>
-								<th class="w-8"></th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each $query.data || [] as token (token.id)}
-								{@const sft = $sfts.find((s) => s.id === token.id)}
-								{@const deposits = sft
-									? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))
-									: BigInt(0)}
-								{@const withdraws = sft
-									? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0))
-									: BigInt(0)}
-								{@const circulating = deposits - withdraws}
-								{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
-								{@const onChainPrice = parseFloat(token.price.toString())}
-								{@const onChainMarketCap = circulatingSupply * onChainPrice}
-								<tr
-									class="cursor-pointer transition-colors hover:bg-yellow-500/5"
-									on:click={() => goto(`/trade/${token.id}`)}
-								>
-									<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
-										<TokenDisplay
-											logoUrl={ALL_TOKENS.find(
-												(s) => s.address.toLowerCase() === token.address.toLowerCase()
-											)?.logoUrl}
-											symbol={token.symbol}
-											name={token.name}
-										/>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="font-medium">${onChainPrice.toFixed(2)}</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="text-sm text-gray-500">TBD</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="text-sm">
-											${onChainMarketCap >= 1000000
-												? `${(onChainMarketCap / 1000000).toFixed(2)}M`
-												: onChainMarketCap >= 1000
-													? `${(onChainMarketCap / 1000).toFixed(1)}K`
-													: onChainMarketCap.toFixed(2)}
-										</div>
-									</td>
-									<td class="px-4 py-3">
-										<div class="text-sm">
-											{circulatingSupply >= 1000
-												? `${(circulatingSupply / 1000).toFixed(2)}K`
-												: circulatingSupply.toFixed(2)}
-										</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="text-sm">{token.totalHolders}</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<svg
-											class="h-4 w-4 text-gray-400"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M9 5l7 7-7 7"
-											/>
-										</svg>
-									</td>
+				{#if $query.isLoading}
+					<div class="flex w-full justify-center py-12">
+						<LoadingSpinner size="lg" text="Fetching on-chain prices..." />
+					</div>
+				{:else}
+					<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
+						<Table>
+							<thead>
+								<tr class="border-b border-white/10">
+									<th
+										class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>Asset</th
+									>
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>Price</th
+									>
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>On-Chain Price</th
+									>
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>On-Chain Market Cap</th
+									>
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>On-Chain Supply</th
+									>
+									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+										>Holders</th
+									>
+									<th class="w-8"></th>
 								</tr>
-							{/each}
-						</tbody>
-					</Table>
-				</div>
+							</thead>
+							<tbody>
+								{#if !$query.data?.length}
+									<tr>
+										<td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
+											No assets available.
+										</td>
+									</tr>
+								{:else}
+									{#each $query.data || [] as token (token.id)}
+										{@const sft = $sfts.find((s) => s.id === token.id)}
+										{@const deposits = sft
+											? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))
+											: BigInt(0)}
+										{@const withdraws = sft
+											? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0))
+											: BigInt(0)}
+										{@const circulating = deposits - withdraws}
+										{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
+										{@const displayPrice =
+											typeof token.price === 'number' ? token.price : Number(token.price ?? NaN)}
+										{@const onChainPrice = token.onChainPrice ?? null}
+										{@const onChainMarketCap =
+											onChainPrice != null ? circulatingSupply * onChainPrice : null}
+										<tr
+											class="cursor-pointer transition-colors hover:bg-yellow-500/5"
+											on:click={() => goto(`/trade/${token.id}`)}
+										>
+											<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+												<TokenDisplay
+													logoUrl={ALL_TOKENS.find(
+														(s) => s.address.toLowerCase() === token.address.toLowerCase()
+													)?.logoUrl}
+													symbol={token.symbol}
+													name={token.name}
+												/>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="font-medium">
+													{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
+												</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="text-sm text-gray-200">
+													{onChainPrice != null ? `$${onChainPrice.toFixed(4)}` : 'N/A'}
+												</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="text-sm">
+													{#if onChainMarketCap != null}
+														{onChainMarketCap >= 1_000_000
+															? `$${(onChainMarketCap / 1_000_000).toFixed(2)}M`
+															: onChainMarketCap >= 1_000
+																? `$${(onChainMarketCap / 1_000).toFixed(1)}K`
+																: `$${onChainMarketCap.toFixed(2)}`}
+													{:else}
+														N/A
+													{/if}
+												</div>
+											</td>
+											<td class="px-4 py-3">
+												<div class="text-sm">
+													{circulatingSupply >= 1000
+														? `${(circulatingSupply / 1000).toFixed(2)}K`
+														: circulatingSupply.toFixed(2)}
+												</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="text-sm">{token.totalHolders}</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<svg
+													class="h-4 w-4 text-gray-400"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M9 5l7 7-7 7"
+													/>
+												</svg>
+											</td>
+										</tr>
+									{/each}
+								{/if}
+							</tbody>
+						</Table>
+					</div>
+				{/if}
 			</Section>
 		</PageContainer>
 
