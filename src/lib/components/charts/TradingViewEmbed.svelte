@@ -50,9 +50,7 @@
 	});
 
 	$: widgetKey = JSON.stringify([src, config]);
-	$: if (container) {
-		// Access widgetKey inside the reactive block so config/src changes trigger rerender
-		widgetKey;
+	$: if (container && widgetKey) {
 		renderWidget();
 	}
 

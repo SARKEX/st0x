@@ -24,15 +24,6 @@ export interface Network {
 
 // USDC tokens for different networks
 export const USDC_TOKENS: { [chainId: number]: PythToken } = {
-	42161: {
-		chainId: 42161,
-		address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-		symbol: 'USDC',
-		decimals: 6,
-		name: 'USD Coin',
-		logoUrl: '/images/USDC.png',
-		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-	} as unknown as PythToken,
 	8453: {
 		chainId: 8453,
 		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -45,31 +36,8 @@ export const USDC_TOKENS: { [chainId: number]: PythToken } = {
 };
 
 // Networks configuration
+
 export const networks: Network[] = [
-	{
-		id: 42161,
-		chainId: 42161,
-		name: 'arbitrum-one',
-		raindexNetworkSlug: 'arbitrum2',
-		displayName: 'Arbitrum One',
-		currencySymbol: 'ETH',
-		blockExplorer: 'https://arbiscan.io',
-		sftExplorer: 'https://stox.h20.market',
-		blockExplorerIcon: 'arbitrum',
-		rpcUrl: 'https://arbitrum-one-rpc.publicnode.com',
-		fallbackRpcUrls: ['https://arbitrum-one-rpc.publicnode.com'],
-		icon: 'arbitrum',
-		subgraph_url:
-			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
-		metadata_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn',
-		orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-08-18-61bd/gn',
-		orderbook_subgraph_urls_inactive: [
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn'
-		],
-		usdcToken: USDC_TOKENS[42161]
-	},
 	{
 		id: 8453,
 		chainId: 8453,

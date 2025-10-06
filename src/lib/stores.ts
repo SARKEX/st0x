@@ -9,7 +9,7 @@ import type { Network } from './network';
 import { networks } from './network';
 
 export const sftMetadata = writable<MetaV1S[] | null>(null);
-export const currentNetwork = writable<Network>(networks[1]); // Base is default
+export const currentNetwork = writable<Network>(networks[0]); // Base is default
 export const wrongNetwork = derived(
 	[chainId, signerAddress, currentNetwork],
 	([$chainId, $signerAddress, $currentNetwork]) => $signerAddress && $chainId !== $currentNetwork.id

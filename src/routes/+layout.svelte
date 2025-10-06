@@ -3,7 +3,7 @@
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { defaultConfig } from 'svelte-wagmi';
-	import { arbitrum, base } from '@wagmi/core/chains';
+	import { base } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
 
@@ -26,7 +26,7 @@
 		const cfgOptions = {
 			autoConnect: true,
 			appName: 'st0x-liquidity',
-			chains: [arbitrum, base] as [typeof arbitrum, typeof base],
+			chains: [base] as [typeof base],
 			connectors: connectorsList,
 			walletConnectProjectId: projectId || 'dummy-project-id'
 		};
