@@ -1,5 +1,4 @@
 <script lang="ts">
-	import axios from 'axios';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { currentNetwork, sfts } from '$lib/stores';
@@ -27,6 +26,7 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
+	import { getLatestPythPrice } from '$lib/services/pyth';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -103,20 +103,16 @@
 		oraclePriceData = null;
 
 		try {
-			const resp = await axios.get(
-				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`
-			);
+			const latest = await getLatestPythPrice(feedId);
 			if (requestId !== oracleRequestToken) return;
-			const parsed = resp.data.parsed?.[0]?.price;
-			if (parsed) {
-				const expo = Number(parsed.expo ?? 0);
-				const multiplier = Math.pow(10, expo);
+			if (latest.price !== null && latest.confidence !== null) {
 				oraclePriceData = {
-					price: Number(parsed.price) * multiplier,
-					confidence: Number(parsed.conf) * multiplier
+					price: latest.price,
+					confidence: latest.confidence
 				};
 			} else {
 				oraclePriceData = null;
+				oracleError = 'Failed to fetch oracle data';
 			}
 		} catch (error) {
 			if (requestId === oracleRequestToken) {

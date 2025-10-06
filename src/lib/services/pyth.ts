@@ -5,6 +5,7 @@ const HERMES_BASE_URL = 'https://hermes.pyth.network/v2/updates/price';
 
 interface PythPriceData {
 	price: number | string;
+	conf?: number | string;
 	expo: number;
 	publish_time?: number | string;
 }
@@ -21,6 +22,7 @@ interface ApiResponse<T> {
 
 type PricePoint = {
 	price: number | null;
+	confidence: number | null;
 	publishTime: number | null;
 };
 
@@ -33,12 +35,24 @@ const logReference = (tag: string, payload?: unknown) => {
 	console.log('[pyth-quotes]', tag, payload ?? '');
 };
 
+const normaliseWithExpo = (
+	value: number | string | undefined,
+	expo: number | string | undefined
+): number | null => {
+	const numericValue = typeof value === 'number' ? value : Number(value);
+	const numericExpo = typeof expo === 'number' ? expo : Number(expo);
+	if (!Number.isFinite(numericValue) || !Number.isFinite(numericExpo)) return null;
+	return numericValue * Math.pow(10, numericExpo);
+};
+
 const normalisePrice = (data: PythPriceData | null | undefined): number | null => {
 	if (!data) return null;
-	const price = typeof data.price === 'number' ? data.price : Number(data.price);
-	const expo = typeof data.expo === 'number' ? data.expo : Number(data.expo);
-	if (!Number.isFinite(price) || !Number.isFinite(expo)) return null;
-	return price * Math.pow(10, expo);
+	return normaliseWithExpo(data.price, data.expo);
+};
+
+const normaliseConfidence = (data: PythPriceData | null | undefined): number | null => {
+	if (!data) return null;
+	return normaliseWithExpo(data.conf, data.expo);
 };
 
 const normalisePublishTime = (raw: number | string | undefined): number | null => {
@@ -60,6 +74,12 @@ const extractPublishTime = (entry: PythParsedEntry | undefined | null): number |
 };
 
 // Fetch latest prices for multiple feed IDs in a single request
+const createEmptyPricePoint = (): PricePoint => ({
+	price: null,
+	confidence: null,
+	publishTime: null
+});
+
 async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoint>> {
 	const normalizedIds = feedIds.map(normaliseFeedId);
 	const idsParams = normalizedIds.map((id) => `ids[]=${id}`).join('&');
@@ -72,7 +92,7 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 		if (!response.ok) {
 			logReference('batch-latest-fail', { count: feedIds.length, status: response.status });
 			// Return empty prices for all feeds
-			normalizedIds.forEach((id) => results.set(id, { price: null, publishTime: null }));
+			normalizedIds.forEach((id) => results.set(id, createEmptyPricePoint()));
 			return results;
 		}
 
@@ -83,16 +103,17 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 			const id = normaliseFeedId(entry.id);
 			results.set(id, {
 				price: normalisePrice(entry?.price),
+				confidence: normaliseConfidence(entry?.price),
 				publishTime: extractPublishTime(entry)
 			});
 		});
 
 		// Fill in missing entries with null
-		normalizedIds.forEach((id) => {
-			if (!results.has(id)) {
-				results.set(id, { price: null, publishTime: null });
-			}
-		});
+			normalizedIds.forEach((id) => {
+				if (!results.has(id)) {
+					results.set(id, createEmptyPricePoint());
+				}
+			});
 
 		logReference('batch-latest-success', {
 			count: feedIds.length,
@@ -100,11 +121,17 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 		});
 	} catch (error) {
 		logReference('batch-latest-error', { count: feedIds.length, error });
-		// Return empty prices for all feeds
-		normalizedIds.forEach((id) => results.set(id, { price: null, publishTime: null }));
+			// Return empty prices for all feeds
+			normalizedIds.forEach((id) => results.set(id, createEmptyPricePoint()));
 	}
 
 	return results;
+}
+
+export async function getLatestPythPrice(feedId: string): Promise<PricePoint> {
+	const normalized = normaliseFeedId(feedId);
+	const results = await fetchLatestBatch([feedId]);
+	return results.get(normalized) ?? createEmptyPricePoint();
 }
 
 export async function getPythQuotes(tokens: TokenWithMarket[]): Promise<TradingViewQuote[]> {
@@ -119,7 +146,7 @@ export async function getPythQuotes(tokens: TokenWithMarket[]): Promise<TradingV
 
 	const results = tokensWithFeed.map((token) => {
 		const feedId = normaliseFeedId(token.priceFeedId);
-		const latest = latestPrices.get(feedId) ?? { price: null, publishTime: null };
+		const latest = latestPrices.get(feedId) ?? createEmptyPricePoint();
 		if (latest.publishTime === null) {
 			logReference('latest-missing-publish-time', { feedId, latestPrice: latest.price });
 		}

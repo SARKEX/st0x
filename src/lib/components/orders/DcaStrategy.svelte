@@ -22,6 +22,7 @@
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
+	import { getLatestPythPrice } from '$lib/services/pyth';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -170,16 +171,10 @@
 		lastFetchedTokenAddress = selectedInputToken.address;
 
 		try {
-			const response = await fetch(
-				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`
-			);
-			const data = await response.json();
-			const parsed = data?.parsed?.[0]?.price;
-			if (parsed) {
-				const px = Number(parsed.price) * Math.pow(10, parsed.expo);
-				if (!Number.isNaN(px) && !selectedInitialRatio) {
-					selectedInitialRatio = String(px);
-				}
+			const latest = await getLatestPythPrice(feedId);
+			const price = latest.price;
+			if (price !== null && !Number.isNaN(price) && !selectedInitialRatio) {
+				selectedInitialRatio = String(price);
 			}
 		} catch {
 			// silently ignore; user can input manually
