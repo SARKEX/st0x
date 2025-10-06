@@ -5,7 +5,7 @@
 	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
-	import type { Token } from 'sushi/currency';
+	import type { Token } from 'sushi';
 	import type { ValidateFunction } from '$lib/validateDeploymentArgs';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
@@ -42,13 +42,13 @@
 		const [balance, decimals] = await Promise.all([
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address,
+				address: amountToken.address as `0x${string}`,
 				functionName: 'balanceOf',
 				args: [$signerAddress as Hex]
 			}),
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address,
+				address: amountToken.address as `0x${string}`,
 				functionName: 'decimals',
 				args: []
 			})
