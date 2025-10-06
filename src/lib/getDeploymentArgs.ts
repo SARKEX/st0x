@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import { signerAddress } from 'svelte-wagmi';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
-import { Token } from 'sushi/currency';
+import { Token } from 'sushi';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from './derivations';
@@ -259,7 +259,7 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	const network = get(currentNetwork);
 	const folioStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/478e75f0e84114dcd529a19f49e8c095b253a06a/src/folio.rain'
+			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/8d71d26409cc882d41b695db46639b33b4410590/src/folio.rain'
 		)
 	).text();
 	const guiResult = await DotrainOrderGui.newWithDeployment(

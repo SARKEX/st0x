@@ -3,7 +3,8 @@ import { MAGIC_NUMBERS } from './consts';
 import { ROLES } from './consts';
 import pako from 'pako';
 import { decodeAllSync, encodeCanonical } from 'cbor-web';
-import { utils } from 'ethers';
+import { isBytesLike } from 'ethers';
+import { arrayify } from '@ethersproject/bytes';
 
 export function deflateJson(data_: string | pako.Data) {
 	const bytes = Uint8Array.from(pako.deflate(data_));
@@ -53,7 +54,7 @@ export function encodeCBORStructure(structure: string, schemaHash: string) {
 	if (typeof structure === 'object') {
 		structure = JSON.stringify(structure);
 	}
-	const deflatedData = utils.arrayify(deflateJson(structure)).buffer as ArrayBuffer;
+	const deflatedData = arrayify(deflateJson(structure)).buffer as ArrayBuffer;
 	return cborEncode(deflatedData, MAGIC_NUMBERS.OA_STRUCTURE, 'application/json', {
 		contentEncoding: 'deflate',
 		schema: schemaHash
@@ -88,8 +89,8 @@ export function mapOrder<T extends Record<string, any>>(
 }
 
 export function bytesToMeta(bytes: any, type: any) {
-	if (utils.isBytesLike(bytes)) {
-		const _bytesArr = utils.arrayify(bytes);
+	if (isBytesLike(bytes)) {
+		const _bytesArr = arrayify(bytes);
 		let _meta;
 		if (type === 'json') {
 			_meta = pako.inflate(_bytesArr, { to: 'string' });

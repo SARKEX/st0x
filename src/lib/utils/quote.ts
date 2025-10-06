@@ -7,7 +7,7 @@ import type {
 } from '@rainlanguage/orderbook';
 import { doQuoteSpecs, getOrders } from '@rainlanguage/orderbook';
 import { networks, TOKENS, USDC_TOKENS } from '$lib/network';
-import { ethers } from 'ethers';
+import { AbiCoder } from 'ethers';
 
 // ABI types for decoding order bytes
 const IO = '(address token, uint8 decimals, uint256 vaultId)';
@@ -85,7 +85,8 @@ function processQuotes(
 			}
 
 			// Decode order to get token addresses
-			const decodedOrder = ethers.utils.defaultAbiCoder.decode([OrderV3], order.orderBytes);
+			const abiCoder = AbiCoder.defaultAbiCoder();
+			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			const inputDefinition = orderData.validInputs[spec.inputIOIndex];
@@ -206,7 +207,8 @@ export async function fetchAndQuoteUSDCOrders(
 	const filteredOrders = allOrders.filter(({ order }) => {
 		try {
 			// Decode the order bytes to get the actual order structure
-			const decodedOrder = ethers.utils.defaultAbiCoder.decode([OrderV3], order.orderBytes);
+			const abiCoder = AbiCoder.defaultAbiCoder();
+			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order
@@ -261,7 +263,8 @@ export async function fetchAndQuoteUSDCOrders(
 	filteredOrders.forEach(({ order }) => {
 		try {
 			// Decode the order bytes to get the actual order structure
-			const decodedOrder = ethers.utils.defaultAbiCoder.decode([OrderV3], order.orderBytes);
+			const abiCoder = AbiCoder.defaultAbiCoder();
+			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order
