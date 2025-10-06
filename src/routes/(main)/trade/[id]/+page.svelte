@@ -16,7 +16,7 @@
 	import TradingViewCompanyProfile from '$lib/components/charts/TradingViewCompanyProfile.svelte';
 	import TradingViewFundamentalData from '$lib/components/charts/TradingViewFundamentalData.svelte';
 	import TradingViewTechnicalAnalysis from '$lib/components/charts/TradingViewTechnicalAnalysis.svelte';
-import TradingViewTopStories from '$lib/components/charts/TradingViewTopStories.svelte';
+	import TradingViewTopStories from '$lib/components/charts/TradingViewTopStories.svelte';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { containerStyles } from '$lib/utils/styles';
@@ -26,7 +26,7 @@ import TradingViewTopStories from '$lib/components/charts/TradingViewTopStories.
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
+	import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -238,18 +238,18 @@ import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
 			const usdcToken = networkId ? USDC_TOKENS[networkId] : undefined;
 			const quotes = $onChainQuoteQuery.data ?? [];
 
-				if (!usdcToken || !quotes.length) {
-					resetOnChainPrices();
-				} else {
-					const map = buildTokenPriceMap(quotes, usdcToken.address);
-					const summary = map.get(currentToken.address.toLowerCase()) ?? null;
-					buyPrice = summary?.buy ?? null;
-					sellPrice = summary?.sell ?? null;
+			if (!usdcToken || !quotes.length) {
+				resetOnChainPrices();
+			} else {
+				const map = buildTokenPriceMap(quotes, usdcToken.address);
+				const summary = map.get(currentToken.address.toLowerCase()) ?? null;
+				buyPrice = summary?.buy ?? null;
+				sellPrice = summary?.sell ?? null;
 
-					if (browser) {
-						// Logging removed after validation
-					}
+				if (browser) {
+					// Logging removed after validation
 				}
+			}
 		}
 	}
 
@@ -342,25 +342,24 @@ import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
 								</dd>
 							</div>
 							<div>
-							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Price to Buy</dt>
+								<dt class="text-xs uppercase tracking-wide text-gray-500">Bid Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
 									{#if $onChainQuoteQuery.isLoading}
 										Loading...
-									{:else if sellPrice !== null}
-										${formatNumeric(sellPrice)}
+									{:else if buyPrice !== null}
+										${formatNumeric(buyPrice)}
 									{:else}
 										—
 									{/if}
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Price to Sell</dt>
+								<dt class="text-xs uppercase tracking-wide text-gray-500">Offer Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
 									{#if $onChainQuoteQuery.isLoading}
 										Loading...
-									{:else if buyPrice !== null}
-										${formatNumeric(buyPrice)}
+									{:else if sellPrice !== null}
+										${formatNumeric(sellPrice)}
 									{:else}
 										—
 									{/if}
@@ -685,19 +684,19 @@ import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
 			>
 				<div class="flex h-full flex-col">
 					<div class="flex items-start justify-between border-b border-white/10 px-6 py-5">
-					<div class="flex items-start gap-3">
-						{#if currentPythToken?.logoUrl}
-							<img
-								src={currentPythToken.logoUrl}
-								alt={tokenDisplaySymbol || tokenDisplayName}
+						<div class="flex items-start gap-3">
+							{#if currentPythToken?.logoUrl}
+								<img
+									src={currentPythToken.logoUrl}
+									alt={tokenDisplaySymbol || tokenDisplayName}
 									class="h-10 w-10 rounded-full border border-white/10 object-cover"
 								/>
 							{/if}
-						<div>
-							<h2 class="text-lg font-semibold text-white">{tokenDisplayName}</h2>
-							{#if tokenDisplaySymbol}
-								<p class="text-sm text-gray-400">{tokenDisplaySymbol}</p>
-							{/if}
+							<div>
+								<h2 class="text-lg font-semibold text-white">{tokenDisplayName}</h2>
+								{#if tokenDisplaySymbol}
+									<p class="text-sm text-gray-400">{tokenDisplaySymbol}</p>
+								{/if}
 							</div>
 						</div>
 						<button
@@ -745,18 +744,18 @@ import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
 									Sell
 								</button>
 							</div>
-						<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
-							<span>{panelSummaryVerb} {panelTokenLabel}</span>
-							<span class="text-gray-500">{panelSummaryPreposition}</span>
-							<span class="inline-flex items-center gap-1 text-gray-200">
-								USDC
-								<img src="/images/USDC.png" alt="USDC" class="h-4 w-4" />
-							</span>
-						</div>
-						<label class="block space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
-							<span id={PANEL_STRATEGY_LABEL_ID} class="block text-sm font-medium text-gray-300">
-								Order Type
-							</span>
+							<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
+								<span>{panelSummaryVerb} {panelTokenLabel}</span>
+								<span class="text-gray-500">{panelSummaryPreposition}</span>
+								<span class="inline-flex items-center gap-1 text-gray-200">
+									USDC
+									<img src="/images/USDC.png" alt="USDC" class="h-4 w-4" />
+								</span>
+							</div>
+							<label class="block space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
+								<span id={PANEL_STRATEGY_LABEL_ID} class="block text-sm font-medium text-gray-300">
+									Order Type
+								</span>
 								<Select
 									options={PANEL_STRATEGY_OPTIONS}
 									bind:selected={panelStrategy}
@@ -769,15 +768,20 @@ import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
 								{#if panelStrategy === 'limit'}
 									<LimitStrategy orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
 								{:else}
-									<div class="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-gray-400">
+									<div
+										class="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-gray-400"
+									>
 										<div class="flex items-center justify-between">
 											<span class="font-semibold text-gray-300">DCA orders</span>
-											<span class="rounded-full bg-yellow-400/10 px-2 py-0.5 text-xs font-semibold text-yellow-300">
+											<span
+												class="rounded-full bg-yellow-400/10 px-2 py-0.5 text-xs font-semibold text-yellow-300"
+											>
 												Coming soon
 											</span>
 										</div>
 										<p class="mt-2 text-xs text-gray-500">
-											Automated DCA flows are on the way. Stay tuned, or place a limit order in the meantime.
+											Automated DCA flows are on the way. Stay tuned, or place a limit order in the
+											meantime.
 										</p>
 									</div>
 								{/if}

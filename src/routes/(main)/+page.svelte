@@ -259,15 +259,10 @@
 			text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
 		/>
 	</div>
-	{:else if $sfts.length > 0}
+{:else if $sfts.length > 0}
 	<div>
 		<PageContainer>
-			{#if $query.isLoading}
-				<div class="flex w-full justify-center py-24">
-					<LoadingSpinner variant="fullscreen" size="lg" text="Fetching on-chain prices..." />
-				</div>
-			{:else}
-				<Section>
+			<Section>
 				<div class="mb-4 flex items-center justify-between sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Discover</h2>
 				</div>
@@ -463,131 +458,129 @@
 				<div class="mb-4 sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse</h2>
 				</div>
-				<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
-					<Table>
-						<thead>
+				{#if $query.isLoading}
+					<div class="flex w-full justify-center py-12">
+						<LoadingSpinner size="lg" text="Fetching on-chain prices..." />
+					</div>
+				{:else}
+					<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
+						<Table>
+							<thead>
 								<tr class="border-b border-white/10">
 									<th
 										class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 										>Asset</th
-								>
+									>
 									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 										>Price</th
-								>
+									>
 									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 										>On-Chain Price</th
-								>
+									>
 									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 										>On-Chain Market Cap</th
-								>
+									>
 									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 										>On-Chain Supply</th
-								>
+									>
 									<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 										>Holders</th
-								>
+									>
 									<th class="w-8"></th>
 								</tr>
 							</thead>
-						<tbody>
-							{#if $query.isLoading}
-								<tr>
-									<td colspan="7" class="px-4 py-12 text-center">
-										<LoadingSpinner size="md" text="Loading on-chain prices..." />
-									</td>
-								</tr>
-							{:else if !$query.data?.length}
-								<tr>
-									<td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
-										No assets available.
-									</td>
-								</tr>
-							{:else}
-								{#each $query.data || [] as token (token.id)}
-								{@const sft = $sfts.find((s) => s.id === token.id)}
-						{@const deposits = sft
-							? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))
-							: BigInt(0)}
-								{@const withdraws = sft
-									? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0))
-									: BigInt(0)}
-								{@const circulating = deposits - withdraws}
-						{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
-						{@const displayPrice =
-							typeof token.price === 'number' ? token.price : Number(token.price ?? NaN)}
-						{@const onChainPrice = token.onChainPrice ?? null}
-						{@const onChainMarketCap = onChainPrice != null ? circulatingSupply * onChainPrice : null}
-								<tr
-									class="cursor-pointer transition-colors hover:bg-yellow-500/5"
-									on:click={() => goto(`/trade/${token.id}`)}
-								>
-									<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
-										<TokenDisplay
-											logoUrl={ALL_TOKENS.find(
-												(s) => s.address.toLowerCase() === token.address.toLowerCase()
-											)?.logoUrl}
-											symbol={token.symbol}
-											name={token.name}
-										/>
-									</td>
-										<td class="px-2 py-2 sm:px-4 sm:py-3">
-											<div class="font-medium">
-												{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
-											</div>
+							<tbody>
+								{#if !$query.data?.length}
+									<tr>
+										<td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
+											No assets available.
 										</td>
-										<td class="px-2 py-2 sm:px-4 sm:py-3">
-											<div class="text-sm text-gray-200">
-												{onChainPrice != null
-													? `$${onChainPrice.toFixed(4)}`
-													: 'N/A'}
-											</div>
-										</td>
-										<td class="px-2 py-2 sm:px-4 sm:py-3">
-											<div class="text-sm">
-												{#if onChainMarketCap != null}
-													{onChainMarketCap >= 1_000_000
-														? `$${(onChainMarketCap / 1_000_000).toFixed(2)}M`
-														: onChainMarketCap >= 1_000
-															? `$${(onChainMarketCap / 1_000).toFixed(1)}K`
-															: `$${onChainMarketCap.toFixed(2)}`}
-												{:else}
-													N/A
-												{/if}
-											</div>
-									</td>
-									<td class="px-4 py-3">
-										<div class="text-sm">
-											{circulatingSupply >= 1000
-												? `${(circulatingSupply / 1000).toFixed(2)}K`
-												: circulatingSupply.toFixed(2)}
-										</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<div class="text-sm">{token.totalHolders}</div>
-									</td>
-									<td class="px-2 py-2 sm:px-4 sm:py-3">
-										<svg
-											class="h-4 w-4 text-gray-400"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
+									</tr>
+								{:else}
+									{#each $query.data || [] as token (token.id)}
+										{@const sft = $sfts.find((s) => s.id === token.id)}
+										{@const deposits = sft
+											? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))
+											: BigInt(0)}
+										{@const withdraws = sft
+											? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0))
+											: BigInt(0)}
+										{@const circulating = deposits - withdraws}
+										{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
+										{@const displayPrice =
+											typeof token.price === 'number' ? token.price : Number(token.price ?? NaN)}
+										{@const onChainPrice = token.onChainPrice ?? null}
+										{@const onChainMarketCap =
+											onChainPrice != null ? circulatingSupply * onChainPrice : null}
+										<tr
+											class="cursor-pointer transition-colors hover:bg-yellow-500/5"
+											on:click={() => goto(`/trade/${token.id}`)}
 										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M9 5l7 7-7 7"
-											/>
-										</svg>
-									</td>
-								</tr>
-							{/each}
-							{/if}
-						</tbody>
-					</Table>
-				</div>
+											<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+												<TokenDisplay
+													logoUrl={ALL_TOKENS.find(
+														(s) => s.address.toLowerCase() === token.address.toLowerCase()
+													)?.logoUrl}
+													symbol={token.symbol}
+													name={token.name}
+												/>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="font-medium">
+													{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
+												</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="text-sm text-gray-200">
+													{onChainPrice != null ? `$${onChainPrice.toFixed(4)}` : 'N/A'}
+												</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="text-sm">
+													{#if onChainMarketCap != null}
+														{onChainMarketCap >= 1_000_000
+															? `$${(onChainMarketCap / 1_000_000).toFixed(2)}M`
+															: onChainMarketCap >= 1_000
+																? `$${(onChainMarketCap / 1_000).toFixed(1)}K`
+																: `$${onChainMarketCap.toFixed(2)}`}
+													{:else}
+														N/A
+													{/if}
+												</div>
+											</td>
+											<td class="px-4 py-3">
+												<div class="text-sm">
+													{circulatingSupply >= 1000
+														? `${(circulatingSupply / 1000).toFixed(2)}K`
+														: circulatingSupply.toFixed(2)}
+												</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<div class="text-sm">{token.totalHolders}</div>
+											</td>
+											<td class="px-2 py-2 sm:px-4 sm:py-3">
+												<svg
+													class="h-4 w-4 text-gray-400"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M9 5l7 7-7 7"
+													/>
+												</svg>
+											</td>
+										</tr>
+									{/each}
+								{/if}
+							</tbody>
+						</Table>
+					</div>
+				{/if}
 			</Section>
-			{/if}
 		</PageContainer>
 
 		<Footer />

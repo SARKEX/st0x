@@ -50,7 +50,6 @@ type QuoteResultWithSpec = {
 
 const RATIO_SCALE = 1e18;
 
-
 function processQuotes(
 	quoteResults: QuoteResultWithSpec[],
 	filteredOrders: SgOrderWithSubgraphName[],
@@ -358,7 +357,11 @@ export type TokenPriceSummary = {
 	sell?: number;
 };
 
-const chooseBestPrice = (current: number | undefined, candidate: number, comparator: 'min' | 'max') => {
+const chooseBestPrice = (
+	current: number | undefined,
+	candidate: number,
+	comparator: 'min' | 'max'
+) => {
 	if (!Number.isFinite(candidate) || candidate <= 0) {
 		return current;
 	}
@@ -381,8 +384,10 @@ export const buildTokenPriceMap = (
 
 		const inputAddress = quote.inputTokenAddress.toLowerCase();
 		const outputAddress = quote.outputTokenAddress.toLowerCase();
-		const inputIsUsdc = inputAddress === usdcAddress || quote.inputTokenSymbol?.toUpperCase() === 'USDC';
-		const outputIsUsdc = outputAddress === usdcAddress || quote.outputTokenSymbol?.toUpperCase() === 'USDC';
+		const inputIsUsdc =
+			inputAddress === usdcAddress || quote.inputTokenSymbol?.toUpperCase() === 'USDC';
+		const outputIsUsdc =
+			outputAddress === usdcAddress || quote.outputTokenSymbol?.toUpperCase() === 'USDC';
 
 		if (outputIsUsdc) {
 			const assetAddress = inputAddress;

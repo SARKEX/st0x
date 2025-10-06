@@ -21,6 +21,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 	import { browser } from '$app/environment';
+	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -157,25 +158,40 @@
 	// Dynamic label for accumulation/divestment depending on order type
 	$: periodLabel = orderSide === 'Buy' ? 'Accumulation Period' : 'Divestment Period';
 
-	// Default Start Price to oracle price when available and if user hasn't entered a value yet
-	$: if (browser && hasValidPriceFeedId(selectedInputToken) && !selectedInitialRatio) {
+	// Fetch oracle price on mount and when token changes
+	let lastFetchedTokenAddress = '';
+
+	async function fetchOraclePrice() {
+		if (!browser || !hasValidPriceFeedId(selectedInputToken) || selectedInitialRatio) return;
+
 		const feedId = (selectedInputToken as unknown as { priceFeedId?: string })?.priceFeedId;
-		if (feedId) {
-			fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`)
-				.then((r) => r.json())
-				.then((data) => {
-					const parsed = data?.parsed?.[0]?.price;
-					if (parsed) {
-						const px = Number(parsed.price) * Math.pow(10, parsed.expo);
-						if (!Number.isNaN(px) && !selectedInitialRatio) {
-							selectedInitialRatio = String(px);
-						}
-					}
-				})
-				.catch(() => {
-					// silently ignore; user can input manually
-				});
+		if (!feedId || lastFetchedTokenAddress === selectedInputToken.address) return;
+
+		lastFetchedTokenAddress = selectedInputToken.address;
+
+		try {
+			const response = await fetch(
+				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`
+			);
+			const data = await response.json();
+			const parsed = data?.parsed?.[0]?.price;
+			if (parsed) {
+				const px = Number(parsed.price) * Math.pow(10, parsed.expo);
+				if (!Number.isNaN(px) && !selectedInitialRatio) {
+					selectedInitialRatio = String(px);
+				}
+			}
+		} catch {
+			// silently ignore; user can input manually
 		}
+	}
+
+	onMount(() => {
+		fetchOraclePrice();
+	});
+
+	$: if (browser && selectedInputToken) {
+		fetchOraclePrice();
 	}
 </script>
 
