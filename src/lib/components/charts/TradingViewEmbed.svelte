@@ -7,6 +7,7 @@
 
 	let container: HTMLDivElement | null = null;
 	let currentKey = '';
+	let widgetKey = '';
 
 	function renderWidget() {
 		if (!container) return;
@@ -48,7 +49,10 @@
 		renderWidget();
 	});
 
+	$: widgetKey = JSON.stringify([src, config]);
 	$: if (container) {
+		// Access widgetKey inside the reactive block so config/src changes trigger rerender
+		widgetKey;
 		renderWidget();
 	}
 
