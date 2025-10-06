@@ -109,11 +109,11 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 		});
 
 		// Fill in missing entries with null
-			normalizedIds.forEach((id) => {
-				if (!results.has(id)) {
-					results.set(id, createEmptyPricePoint());
-				}
-			});
+		normalizedIds.forEach((id) => {
+			if (!results.has(id)) {
+				results.set(id, createEmptyPricePoint());
+			}
+		});
 
 		logReference('batch-latest-success', {
 			count: feedIds.length,
@@ -121,8 +121,8 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 		});
 	} catch (error) {
 		logReference('batch-latest-error', { count: feedIds.length, error });
-			// Return empty prices for all feeds
-			normalizedIds.forEach((id) => results.set(id, createEmptyPricePoint()));
+		// Return empty prices for all feeds
+		normalizedIds.forEach((id) => results.set(id, createEmptyPricePoint()));
 	}
 
 	return results;
