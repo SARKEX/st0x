@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getAllTokensByNetwork } from '$lib/network';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { Token } from 'sushi/currency';
+	import type { CategorizedToken } from '$lib/network';
 	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits, parseUnits } from 'viem';
@@ -23,8 +23,8 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Initialize tokens - trading token from prop, USDC for payment
-	let selectedOutputToken: Token;
-	let selectedInputToken: Token;
+	let selectedOutputToken: CategorizedToken;
+	let selectedInputToken: CategorizedToken;
 
 	// Always use USDC for payment
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
@@ -33,7 +33,7 @@
 
 		// Update selectedOutputToken if network changes
 		if (passedOutputToken && !selectedOutputToken) {
-			selectedOutputToken = passedOutputToken;
+			selectedOutputToken = passedOutputToken as unknown as CategorizedToken;
 		}
 	}
 

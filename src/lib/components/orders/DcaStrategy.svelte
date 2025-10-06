@@ -2,7 +2,7 @@
 	import { getAllTokensByNetwork } from '$lib/network';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { Token } from 'sushi/currency';
+	import type { CategorizedToken } from '$lib/network';
 	import type { PythToken } from '$lib/types';
 	import {
 		validateBaseline,
@@ -36,15 +36,15 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Initialize tokens - accumulating token from prop, USDC for payment
-	let selectedInputToken: Token;
-	let selectedOutputToken: Token;
+	let selectedInputToken: CategorizedToken;
+	let selectedOutputToken: CategorizedToken;
 
 	// Resolve tokens whenever network, token list, or prop changes
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const usdcToken = ALL_TOKENS.find((t) => t.symbol?.toUpperCase() === 'USDC');
 		selectedOutputToken = usdcToken || ALL_TOKENS[0];
 		selectedInputToken =
-			(passedInputToken as unknown as Token) || selectedInputToken || ALL_TOKENS[0];
+			(passedInputToken as unknown as CategorizedToken) || selectedInputToken || ALL_TOKENS[0];
 	}
 
 	let selectedAmount: bigint = 0n;

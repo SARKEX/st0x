@@ -2,7 +2,7 @@ import { derived, writable } from 'svelte/store';
 import { chainId, signerAddress } from 'svelte-wagmi';
 import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
 import type { SgTrade } from '@rainlanguage/orderbook';
-import type { Token } from 'sushi/currency';
+import type { Token } from 'sushi';
 import type { TradingViewQuote } from './services/tradingview';
 import type { MetaV1S } from './types/OffchainAssetReceiptVault';
 import type { Network } from './network';

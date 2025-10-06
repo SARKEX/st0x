@@ -26,9 +26,8 @@
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
+	import { evmChainIds, EvmToken } from 'sushi/evm';
 	import { getPrice } from '$lib/getPrice';
-	import { Token } from 'sushi/currency';
-	import { arbitrum } from '@wagmi/core/chains';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
@@ -42,8 +41,7 @@
 
 	function baseFromSymbol(sym?: string) {
 		if (!sym) return undefined;
-		if (sym.includes('s1')) return sym.split('s1')[0];
-		if (sym.includes('0x')) return sym.split('0x')[0];
+		if (sym.includes('t')) return sym.split('t')[1];
 		return sym;
 	}
 
@@ -298,14 +296,20 @@
 				} else {
 					// Fallback to getPrice if not in global quote
 					const priceStr = await getPrice(
-						new Token({
-							chainId: arbitrum.id,
-							address: token.id,
-							symbol: token.symbol,
+						new EvmToken({
+							chainId: evmChainIds[$currentNetwork.chainId],
+							address: token.id as `0x${string}`,
+							symbol: token.symbol || '',
 							decimals: Number(token.decimals ?? 18),
-							name: token.name
+							name: token.name || ''
 						}),
-						$currentNetwork.usdcToken
+						new EvmToken({
+							chainId: evmChainIds[$currentNetwork.chainId],
+							address: $currentNetwork.usdcToken.address as `0x${string}`,
+							symbol: $currentNetwork.usdcToken.symbol,
+							decimals: Number($currentNetwork.usdcToken.decimals),
+							name: $currentNetwork.usdcToken.name
+						})
 					);
 					price = parseFloat(priceStr);
 				}

@@ -2,7 +2,7 @@
 	import { getAllTokensByNetwork } from '$lib/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { Token } from 'sushi/currency';
+	import type { CategorizedToken } from '$lib/network';
 	import {
 		validateBaseline,
 		validateOverrideDepositAmount,
@@ -42,8 +42,9 @@
 	}
 
 	let showAdvancedOptions = false;
-	let selectedToken1: Token = getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
-	let selectedToken2: Token = getAllTokensByNetwork(42161)[0];
+	let selectedToken1: CategorizedToken =
+		getAllTokensByNetwork(42161)[getAllTokensByNetwork(42161).length - 1];
+	let selectedToken2: CategorizedToken = getAllTokensByNetwork(42161)[0];
 	let isToken1FastExit = false;
 	let isToken2FastExit = false;
 	let inputVaultId1: Hex | undefined;

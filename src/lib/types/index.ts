@@ -1,4 +1,4 @@
-import type { Token } from 'sushi/currency';
+import type { Token } from 'sushi';
 
 export interface Sft {
 	name: string;
