@@ -233,15 +233,13 @@ export const getSfts = async (): Promise<any> => {
 	});
 
 	const json = await response.json();
-
 	return json.data.offchainAssetReceiptVaults;
 };
 
 export const getTrades = async (
 	timestampGt: number,
 	timestampLt: number,
-	network?: Network,
-	owner?: string
+	network?: Network
 ): Promise<SgTrade[]> => {
 	// Validate input parameters
 	if (typeof timestampGt !== 'number' || typeof timestampLt !== 'number') {
@@ -273,19 +271,14 @@ export const getTrades = async (
 		return [];
 	}
 
-	const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!, $owner: String!) {
+	const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
   trades(
     skip: $skip
     first: $first
     where: {
       and: [
         { timestamp_gt: $timestampGt },
-        { timestamp_lt: $timestampLt },
-        {
-          order_: {
-            owner: $owner
-          }
-        }
+        { timestamp_lt: $timestampLt }
       ]
     }
   ){
@@ -374,7 +367,7 @@ export const getTrades = async (
 				const trades = await fetchAllPaginatedData(
 					url,
 					tradesQuery,
-					{ timestampGt: timestampGt, timestampLt: timestampLt, owner: owner || '' },
+					{ timestampGt: timestampGt, timestampLt: timestampLt },
 					'trades'
 				);
 

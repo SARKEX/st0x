@@ -12,7 +12,6 @@
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import { env as publicEnv } from '$env/dynamic/public';
 	// Consolidated table component usage
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
@@ -26,7 +25,6 @@
 		queryKey: ['metrics-all-networks-sfts'],
 		queryFn: async () => {
 			const allNetworksSfts: OffchainAssetReceiptVault[] = [];
-
 			// Query each network for SFTs
 			for (const network of networks) {
 				try {
@@ -125,7 +123,7 @@
 			for (const network of networks) {
 				try {
 					if (network.orderbook_subgraph_url) {
-						const trades = await getTrades(monthAgo, now, network, publicEnv.PUBLIC_SCHWAB_OWNER);
+						const trades = await getTrades(monthAgo, now, network);
 						allNetworksTrades.push({
 							network,
 							trades,
@@ -172,13 +170,20 @@
 		return tlv;
 	})();
 
-	// Calculate trading volume in USD
+	// Calculate trading volume in USD (total volume from unique trades)
 	$: tradingVolume = (() => {
 		if (!$allNetworksTradesMonthQuery.data) return 0;
 
 		let volume = 0;
 		$allNetworksTradesMonthQuery.data.forEach((networkData) => {
-			networkData.trades.forEach((trade) => {
+			// Get unique trades (filter by transaction ID to avoid double counting)
+			const uniqueTrades = networkData.trades.filter(
+				(trade, index, self) =>
+					index ===
+					self.findIndex((t) => t.tradeEvent?.transaction?.id === trade.tradeEvent?.transaction?.id)
+			);
+
+			uniqueTrades.forEach((trade) => {
 				// Calculate USD volume from input vault balance change
 				if (trade.inputVaultBalanceChange) {
 					const inputAmount = Math.abs(
@@ -280,9 +285,12 @@
 				}
 
 				// Count unique holders
-				sft.tokenHolders.forEach((holder) => uniqueHolders.add(holder.address));
+				sft.tokenHolders.forEach((holder) => {
+					if(BigInt(holder.balance) > BigInt(0)) {
+						uniqueHolders.add(holder.address);
+					}
+				});
 			});
-
 			return {
 				network,
 				tvl,
@@ -330,33 +338,72 @@
 						sft.address?.toLowerCase()
 				);
 
-				// Calculate in volume (tokens offered as input)
+				// Calculate in volume (tokens received - always positive)
 				let inVolume = 0;
 				inputTrades.forEach((trade) => {
 					if (trade.inputVaultBalanceChange) {
 						const amount = parseFloat(
 							formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18)
 						);
-						inVolume += amount;
+						inVolume += Math.abs(amount); // Always positive
 					}
 				});
 
-				// Calculate out volume (tokens offered as output)
+				// Calculate out volume (tokens sent - always positive)
 				let outVolume = 0;
 				outputTrades.forEach((trade) => {
 					if (trade.outputVaultBalanceChange) {
 						const amount = parseFloat(
 							formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18)
 						);
-						outVolume += amount;
+						outVolume += Math.abs(amount); // Always positive
 					}
 				});
 
-				// Calculate net volume (out - in)
-				const netTradingVolume = outVolume - inVolume;
+				// Calculate net volume (in - out, can be negative)
+				const netTradingVolume = inVolume - outVolume;
 
-				// Calculate total volume (sum of in + out, taking absolute values)
-				const totalTradingVolume = Math.abs(inVolume) + Math.abs(outVolume);
+				// Get all unique trades for this token (filter by transaction ID to avoid double counting)
+				const allTokenTrades = networkTrades.filter(
+					(trade) =>
+						trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
+							sft.address?.toLowerCase() ||
+						trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
+							sft.address?.toLowerCase()
+				);
+
+				const uniqueTokenTrades = allTokenTrades.filter(
+					(trade, index, self) =>
+						index ===
+						self.findIndex(
+							(t) => t.tradeEvent?.transaction?.id === trade.tradeEvent?.transaction?.id
+						)
+				);
+
+				// Calculate total volume (sum of unique trade amounts)
+				let totalTradingVolume = 0;
+				uniqueTokenTrades.forEach((trade) => {
+					// Add input amount if this token is the input
+					if (
+						trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
+						sft.address?.toLowerCase()
+					) {
+						const amount = parseFloat(
+							formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18)
+						);
+						totalTradingVolume += Math.abs(amount);
+					}
+					// Add output amount if this token is the output
+					if (
+						trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
+						sft.address?.toLowerCase()
+					) {
+						const amount = parseFloat(
+							formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18)
+						);
+						totalTradingVolume += Math.abs(amount);
+					}
+				});
 
 				// Calculate USD value of total volume
 				let usdTradingVolume = 0;
@@ -376,7 +423,7 @@
 					netVolume: netTradingVolume.toFixed(3),
 					totalVolume: totalTradingVolume.toFixed(3),
 					usdValue: usdTradingVolume > 0 ? `$${usdTradingVolume.toFixed(2)}` : 'N/A',
-					trades: inputTrades.length + outputTrades.length
+					trades: uniqueTokenTrades.length
 				};
 			})
 			.sort((a, b) => b.trades - a.trades);
@@ -484,14 +531,6 @@
 								>Unique Addresses</th
 							>
 							<th
-								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-								>24H Volume</th
-							>
-							<th
-								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-								>7D Volume</th
-							>
-							<th
 								class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 								>Status</th
 							>
@@ -532,8 +571,6 @@
 									>{parseFloat(stats.tokensCirculating).toFixed(2)}</td
 								>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.uniqueAddresses}</td>
-								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.dayVolume}</td>
-								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.weekVolume}</td>
 								<td class="p-2 text-center text-xs sm:p-3 sm:text-sm">
 									<div class="flex items-center justify-center gap-1 sm:gap-2">
 										<div class="h-2 w-2 rounded-full bg-green-400"></div>
@@ -575,9 +612,6 @@
 									class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
 								>
 									<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
-									<th class="p-2 text-right sm:p-3">In Volume</th>
-									<th class="p-2 text-right sm:p-3">Out Volume</th>
-									<th class="p-2 text-right sm:p-3">Net Volume</th>
 									<th class="p-2 text-right sm:p-3">Total Volume</th>
 									<th class="p-2 text-right sm:p-3">USD Value</th>
 									<th class="p-2 text-right sm:p-3">Trades</th>
@@ -606,15 +640,6 @@
 													<div class="hidden text-[11px] text-gray-400 sm:block">{token.name}</div>
 												</div>
 											</div>
-										</td>
-										<td class="p-2 text-right sm:p-3">{parseFloat(token.inVolume).toFixed(3)}</td>
-										<td class="p-2 text-right sm:p-3">{parseFloat(token.outVolume).toFixed(3)}</td>
-										<td
-											class="p-2 text-right sm:p-3 {parseFloat(token.netVolume) >= 0
-												? 'text-green-400'
-												: 'text-red-400'}"
-										>
-											{parseFloat(token.netVolume).toFixed(3)}
 										</td>
 										<td class="p-2 text-right text-yellow-400 sm:p-3"
 											>{parseFloat(token.totalVolume).toFixed(3)}</td
