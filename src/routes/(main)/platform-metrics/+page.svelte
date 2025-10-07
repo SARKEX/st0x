@@ -2,7 +2,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { formatUnits } from 'viem';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
+	import { currentNetwork, tokenGlobalQuote } from '$lib/stores';
 	import Section from '$lib/components/ui/Section.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { getTrades } from '$lib/query';
@@ -181,14 +181,16 @@
 			networkData.trades.forEach((trade) => {
 				// Calculate USD volume from input vault balance change
 				if (trade.inputVaultBalanceChange) {
-					const inputAmount = Math.abs(parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18)));
+					const inputAmount = Math.abs(
+						parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18))
+					);
 					const inputTokenAddress = trade.inputVaultBalanceChange.vault?.token?.address;
-					
+
 					if (inputTokenAddress) {
 						const tokenInfo = ALL_TOKENS.find(
 							(t) => t.address?.toLowerCase() === inputTokenAddress.toLowerCase()
 						);
-						
+
 						if (tokenInfo?.symbol) {
 							const quote = findQuoteForSymbol(tokenInfo.symbol);
 							if (quote?.close != null) {
@@ -197,17 +199,19 @@
 						}
 					}
 				}
-				
+
 				// Calculate USD volume from output vault balance change
 				if (trade.outputVaultBalanceChange) {
-					const outputAmount = Math.abs(parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18)));
+					const outputAmount = Math.abs(
+						parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18))
+					);
 					const outputTokenAddress = trade.outputVaultBalanceChange.vault?.token?.address;
-					
+
 					if (outputTokenAddress) {
 						const tokenInfo = ALL_TOKENS.find(
 							(t) => t.address?.toLowerCase() === outputTokenAddress.toLowerCase()
 						);
-						
+
 						if (tokenInfo?.symbol) {
 							const quote = findQuoteForSymbol(tokenInfo.symbol);
 							if (quote?.close != null) {
@@ -304,32 +308,35 @@
 		);
 
 		// Get trades for selected network
-		const networkTrades = $allNetworksTradesMonthQuery.data.find(
-			(d) => d.network.chainId === selectedNetwork.chainId
-		)?.trades || [];
+		const networkTrades =
+			$allNetworksTradesMonthQuery.data.find((d) => d.network.chainId === selectedNetwork.chainId)
+				?.trades || [];
 
 		return networkSfts
 			.map((sft) => {
-				const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
-				const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
-
 				const tokenInfo = ALL_TOKENS.find(
 					(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
 				);
 
 				// Get all trades for this token (both input and output)
 				const inputTrades = networkTrades.filter(
-					(trade) => trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() === sft.address?.toLowerCase()
+					(trade) =>
+						trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
+						sft.address?.toLowerCase()
 				);
 				const outputTrades = networkTrades.filter(
-					(trade) => trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() === sft.address?.toLowerCase()
+					(trade) =>
+						trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
+						sft.address?.toLowerCase()
 				);
 
 				// Calculate in volume (tokens offered as input)
 				let inVolume = 0;
 				inputTrades.forEach((trade) => {
 					if (trade.inputVaultBalanceChange) {
-						const amount = parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18));
+						const amount = parseFloat(
+							formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18)
+						);
 						inVolume += amount;
 					}
 				});
@@ -338,7 +345,9 @@
 				let outVolume = 0;
 				outputTrades.forEach((trade) => {
 					if (trade.outputVaultBalanceChange) {
-						const amount = parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18));
+						const amount = parseFloat(
+							formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18)
+						);
 						outVolume += amount;
 					}
 				});
@@ -355,17 +364,6 @@
 					const quote = findQuoteForSymbol(tokenInfo.symbol);
 					if (quote?.close != null) {
 						usdTradingVolume = totalTradingVolume * quote.close;
-					}
-				}
-
-				// Calculate USD value for the deposits (for the existing usdValue field)
-				let usdValue = 'N/A';
-				const amount = parseFloat(formatUnits(deposits, 18));
-				if (tokenInfo?.symbol) {
-					const quote = findQuoteForSymbol(tokenInfo.symbol);
-					if (quote?.close != null) {
-						const value = amount * quote.close;
-						usdValue = `$${value.toFixed(2)}`;
 					}
 				}
 

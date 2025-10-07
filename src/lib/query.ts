@@ -374,7 +374,7 @@ export const getTrades = async (
 				const trades = await fetchAllPaginatedData(
 					url,
 					tradesQuery,
-					{ timestampGt: timestampGt, timestampLt: timestampLt, owner: owner || "" },
+					{ timestampGt: timestampGt, timestampLt: timestampLt, owner: owner || '' },
 					'trades'
 				);
 
