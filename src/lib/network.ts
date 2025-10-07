@@ -64,9 +64,7 @@ export const networks: Network[] = [
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 		orderbook_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-08-18-2744/gn',
-		orderbook_subgraph_urls_inactive: [
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-07-03-f4dc/gn'
-		],
+		orderbook_subgraph_urls_inactive: [],
 		usdcToken: USDC_TOKENS[8453]
 	}
 ];
