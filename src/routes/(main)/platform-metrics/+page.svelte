@@ -298,9 +298,7 @@
 				tokensMinted: formatUnits(totalDeposits, 18),
 				tokensRedeemed: formatUnits(totalWithdraws, 18),
 				tokensCirculating: formatUnits(totalDeposits - totalWithdraws, 18),
-				uniqueAddresses: uniqueHolders.size,
-				dayVolume: 0, // Will be calculated separately if needed
-				weekVolume: tradeData?.trades.length || 0
+				uniqueAddresses: uniqueHolders.size
 			};
 		});
 	})();
