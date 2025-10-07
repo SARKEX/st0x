@@ -93,7 +93,7 @@
 				inputToken: selectedOutputToken, // Asset is input (token1)
 				outputToken: selectedInputToken, // USDC is output (token2)
 				// For Buy: ratio should be asset/USDC = 1/price
-				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toString(),
+				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toFixed(18).toString(),
 				depositAmount: usdcAmount, // Deposit USDC amount in USDC wei
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
