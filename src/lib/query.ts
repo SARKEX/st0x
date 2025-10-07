@@ -233,7 +233,6 @@ export const getSfts = async (): Promise<any> => {
 	});
 
 	const json = await response.json();
-
 	return json.data.offchainAssetReceiptVaults;
 };
 
@@ -278,7 +277,7 @@ export const getTrades = async (
     first: $first
     where: {
       and: [
-        { timestamp_gt: $timestampGt }
+        { timestamp_gt: $timestampGt },
         { timestamp_lt: $timestampLt }
       ]
     }
