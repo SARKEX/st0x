@@ -12,6 +12,7 @@
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
+	import { env as publicEnv } from '$env/dynamic/public';
 	// Consolidated table component usage
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
@@ -107,54 +108,37 @@
 		);
 	})();
 
-	// Query for trading volumes across all networks
-	$: allNetworksTradesQuery = createQuery({
-		queryKey: ['metrics-all-networks-trades'],
+	// Query for trades data across ALL networks - last month (30 days)
+	$: allNetworksTradesMonthQuery = createQuery({
+		queryKey: ['metrics-all-networks-trades-month'],
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
-			const dayAgo = now - 86400;
-			const weekAgo = now - 7 * 86400;
-			const monthAgo = now - 30 * 86400;
+			const monthAgo = now - 30 * 86400; // Last 30 days
 
-			const allTradesData: {
+			const allNetworksTrades: {
 				network: (typeof networks)[0];
-				dayTrades: SgTrade[];
-				weekTrades: SgTrade[];
-				monthTrades: SgTrade[];
+				trades: SgTrade[];
+				volume: number;
 			}[] = [];
 
+			// Query each network for trades
 			for (const network of networks) {
 				try {
-					const originalNetwork = $currentNetwork;
-					$currentNetwork = network;
-
-					try {
-						const dayTrades = await getTrades(dayAgo, now, network);
-						const weekTrades = await getTrades(weekAgo, now, network);
-						const monthTrades = await getTrades(monthAgo, now, network);
-
-						allTradesData.push({
+					if (network.orderbook_subgraph_url) {
+						const trades = await getTrades(monthAgo, now, network, publicEnv.PUBLIC_SCHWAB_OWNER);
+						allNetworksTrades.push({
 							network,
-							dayTrades: dayTrades || [],
-							weekTrades: weekTrades || [],
-							monthTrades: monthTrades || []
+							trades,
+							volume: 0 // Will be calculated later
 						});
-					} finally {
-						$currentNetwork = originalNetwork;
 					}
 				} catch {
-					allTradesData.push({
-						network,
-						dayTrades: [],
-						weekTrades: [],
-						monthTrades: []
-					});
+					continue;
 				}
 			}
-
-			return allTradesData;
+			return allNetworksTrades;
 		},
-		enabled: true,
+		enabled: true, // Always enabled since we want data from all networks
 		retry: 3,
 		retryDelay: 1000
 	});
@@ -190,13 +174,48 @@
 
 	// Calculate trading volume in USD
 	$: tradingVolume = (() => {
-		if (!$allNetworksTradesQuery.data) return 0;
+		if (!$allNetworksTradesMonthQuery.data) return 0;
 
 		let volume = 0;
-		$allNetworksTradesQuery.data.forEach((networkData) => {
-			networkData.monthTrades.forEach(() => {
-				// Simplified - in production would calculate actual trade values
-				volume += 100; // Placeholder value per trade
+		$allNetworksTradesMonthQuery.data.forEach((networkData) => {
+			networkData.trades.forEach((trade) => {
+				// Calculate USD volume from input vault balance change
+				if (trade.inputVaultBalanceChange) {
+					const inputAmount = Math.abs(parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18)));
+					const inputTokenAddress = trade.inputVaultBalanceChange.vault?.token?.address;
+					
+					if (inputTokenAddress) {
+						const tokenInfo = ALL_TOKENS.find(
+							(t) => t.address?.toLowerCase() === inputTokenAddress.toLowerCase()
+						);
+						
+						if (tokenInfo?.symbol) {
+							const quote = findQuoteForSymbol(tokenInfo.symbol);
+							if (quote?.close != null) {
+								volume += inputAmount * quote.close;
+							}
+						}
+					}
+				}
+				
+				// Calculate USD volume from output vault balance change
+				if (trade.outputVaultBalanceChange) {
+					const outputAmount = Math.abs(parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18)));
+					const outputTokenAddress = trade.outputVaultBalanceChange.vault?.token?.address;
+					
+					if (outputTokenAddress) {
+						const tokenInfo = ALL_TOKENS.find(
+							(t) => t.address?.toLowerCase() === outputTokenAddress.toLowerCase()
+						);
+						
+						if (tokenInfo?.symbol) {
+							const quote = findQuoteForSymbol(tokenInfo.symbol);
+							if (quote?.close != null) {
+								volume += outputAmount * quote.close;
+							}
+						}
+					}
+				}
 			});
 		});
 		return volume;
@@ -204,8 +223,8 @@
 
 	// Calculate total trades
 	$: totalTrades = (() => {
-		if (!$allNetworksTradesQuery.data) return 0;
-		return $allNetworksTradesQuery.data.reduce((sum, d) => sum + d.monthTrades.length, 0);
+		if (!$allNetworksTradesMonthQuery.data) return 0;
+		return $allNetworksTradesMonthQuery.data.reduce((sum, d) => sum + d.trades.length, 0);
 	})();
 
 	// Calculate active ST0x tokens
@@ -213,7 +232,7 @@
 
 	// Calculate stats by network
 	$: networkStats = (() => {
-		if (!$allNetworksSftsQuery.data || !$allNetworksTradesQuery.data) return [];
+		if (!$allNetworksSftsQuery.data || !$allNetworksTradesMonthQuery.data) return [];
 
 		return networks.map((network) => {
 			const networkSfts =
@@ -222,7 +241,7 @@
 					(sft) => sft.networkId === network.chainId
 				) || [];
 
-			const tradeData = $allNetworksTradesQuery.data?.find(
+			const tradeData = $allNetworksTradesMonthQuery.data?.find(
 				(d) => d.network.chainId === network.chainId
 			);
 
@@ -268,29 +287,78 @@
 				tokensRedeemed: formatUnits(totalWithdraws, 18),
 				tokensCirculating: formatUnits(totalDeposits - totalWithdraws, 18),
 				uniqueAddresses: uniqueHolders.size,
-				dayVolume: tradeData?.dayTrades.length || 0,
-				weekVolume: tradeData?.weekTrades.length || 0
+				dayVolume: 0, // Will be calculated separately if needed
+				weekVolume: tradeData?.trades.length || 0
 			};
 		});
 	})();
 
 	// Get token trading data for selected network
 	$: tokenTradingData = (() => {
-		if (!$allNetworksSftsQuery.data) return [];
+		if (!$allNetworksSftsQuery.data || !$allNetworksTradesMonthQuery.data) return [];
 
-		// Filter by current network selection; fallback to all SFTs
-		const networkSfts = $sfts || $allNetworksSftsQuery.data;
+		// Filter SFTs by selected network
+		const networkSfts = $allNetworksSftsQuery.data.filter(
+			// @ts-expect-error - networkId added dynamically
+			(sft) => sft.networkId === selectedNetwork.chainId
+		);
+
+		// Get trades for selected network
+		const networkTrades = $allNetworksTradesMonthQuery.data.find(
+			(d) => d.network.chainId === selectedNetwork.chainId
+		)?.trades || [];
 
 		return networkSfts
 			.map((sft) => {
 				const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
 				const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
-				const netVolume = deposits - withdraws;
 
 				const tokenInfo = ALL_TOKENS.find(
 					(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
 				);
 
+				// Get all trades for this token (both input and output)
+				const inputTrades = networkTrades.filter(
+					(trade) => trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() === sft.address?.toLowerCase()
+				);
+				const outputTrades = networkTrades.filter(
+					(trade) => trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() === sft.address?.toLowerCase()
+				);
+
+				// Calculate in volume (tokens offered as input)
+				let inVolume = 0;
+				inputTrades.forEach((trade) => {
+					if (trade.inputVaultBalanceChange) {
+						const amount = parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18));
+						inVolume += amount;
+					}
+				});
+
+				// Calculate out volume (tokens offered as output)
+				let outVolume = 0;
+				outputTrades.forEach((trade) => {
+					if (trade.outputVaultBalanceChange) {
+						const amount = parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18));
+						outVolume += amount;
+					}
+				});
+
+				// Calculate net volume (out - in)
+				const netTradingVolume = outVolume - inVolume;
+
+				// Calculate total volume (sum of in + out, taking absolute values)
+				const totalTradingVolume = Math.abs(inVolume) + Math.abs(outVolume);
+
+				// Calculate USD value of total volume
+				let usdTradingVolume = 0;
+				if (tokenInfo?.symbol) {
+					const quote = findQuoteForSymbol(tokenInfo.symbol);
+					if (quote?.close != null) {
+						usdTradingVolume = totalTradingVolume * quote.close;
+					}
+				}
+
+				// Calculate USD value for the deposits (for the existing usdValue field)
 				let usdValue = 'N/A';
 				const amount = parseFloat(formatUnits(deposits, 18));
 				if (tokenInfo?.symbol) {
@@ -305,12 +373,12 @@
 					symbol: sft.symbol,
 					name: sft.name,
 					logoUrl: tokenInfo?.logoUrl,
-					inVolume: formatUnits(deposits, 18),
-					outVolume: formatUnits(withdraws, 18),
-					netVolume: formatUnits(netVolume, 18),
-					totalVolume: formatUnits(deposits, 18),
-					usdValue,
-					trades: sft.shareTransfers.length
+					inVolume: inVolume.toFixed(3),
+					outVolume: outVolume.toFixed(3),
+					netVolume: netTradingVolume.toFixed(3),
+					totalVolume: totalTradingVolume.toFixed(3),
+					usdValue: usdTradingVolume > 0 ? `$${usdTradingVolume.toFixed(2)}` : 'N/A',
+					trades: inputTrades.length + outputTrades.length
 				};
 			})
 			.sort((a, b) => b.trades - a.trades);
@@ -319,7 +387,7 @@
 
 <div class="min-h-screen bg-gray-900 text-white">
 	<PageContainer>
-		{#if $allNetworksSftsQuery.isLoading || $allNetworksTradesQuery.isLoading}
+		{#if $allNetworksSftsQuery.isLoading || $allNetworksTradesMonthQuery.isLoading}
 			<div class="flex min-h-[60vh] items-center justify-center">
 				<LoadingSpinner size="lg" text="Loading metrics..." />
 			</div>

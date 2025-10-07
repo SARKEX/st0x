@@ -240,7 +240,8 @@ export const getSfts = async (): Promise<any> => {
 export const getTrades = async (
 	timestampGt: number,
 	timestampLt: number,
-	network?: Network
+	network?: Network,
+	owner?: string
 ): Promise<SgTrade[]> => {
 	// Validate input parameters
 	if (typeof timestampGt !== 'number' || typeof timestampLt !== 'number') {
@@ -272,14 +273,19 @@ export const getTrades = async (
 		return [];
 	}
 
-	const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
+	const tradesQuery = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!, $owner: String!) {
   trades(
     skip: $skip
     first: $first
     where: {
       and: [
-        { timestamp_gt: $timestampGt }
-        { timestamp_lt: $timestampLt }
+        { timestamp_gt: $timestampGt },
+        { timestamp_lt: $timestampLt },
+        {
+          order_: {
+            owner: $owner
+          }
+        }
       ]
     }
   ){
@@ -368,7 +374,7 @@ export const getTrades = async (
 				const trades = await fetchAllPaginatedData(
 					url,
 					tradesQuery,
-					{ timestampGt: timestampGt, timestampLt: timestampLt },
+					{ timestampGt: timestampGt, timestampLt: timestampLt, owner: owner || "" },
 					'trades'
 				);
 
