@@ -237,7 +237,9 @@
 					onChainPrice,
 					buyPrice,
 					sellPrice,
-					totalHolders: sft.tokenHolders.filter((holder) => BigInt(holder.balance) > BigInt(0)).length.toString(),
+					totalHolders: sft.tokenHolders
+						.filter((holder) => BigInt(holder.balance) > BigInt(0))
+						.length.toString(),
 					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
 					totalTransfers: sft.shareTransfers.length.toString(),
 					createdAt: sft.deployTimestamp,

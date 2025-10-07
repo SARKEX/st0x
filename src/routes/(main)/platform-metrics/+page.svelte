@@ -250,10 +250,6 @@
 					(sft) => sft.networkId === network.chainId
 				) || [];
 
-			const tradeData = $allNetworksTradesMonthQuery.data?.find(
-				(d) => d.network.chainId === network.chainId
-			);
-
 			// Calculate network metrics
 			let tvl = 0;
 			let totalDeposits = BigInt(0);
@@ -286,7 +282,7 @@
 
 				// Count unique holders
 				sft.tokenHolders.forEach((holder) => {
-					if(BigInt(holder.balance) > BigInt(0)) {
+					if (BigInt(holder.balance) > BigInt(0)) {
 						uniqueHolders.add(holder.address);
 					}
 				});
