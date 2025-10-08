@@ -168,7 +168,7 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/IAU.png',
 		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
 		category: 'ST0x',
-		tradingViewSymbol: 'NYSEArca:IAU',
+		tradingViewSymbol: 'AMEX:IAU',
 		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken,
 	{
@@ -180,7 +180,7 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/SPLG.png',
 		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
 		category: 'ST0x',
-		tradingViewSymbol: 'NYSEArca:SPLG',
+		tradingViewSymbol: 'AMEX:SPLG',
 		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken
 ];
