@@ -161,6 +161,18 @@ export const TOKENS: CategorizedToken[] = [
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
+		address: '0xd0a90b7c9ae5facbe09ca4c576a3795eda53b397',
+		symbol: 'tIAU',
+		decimals: 18,
+		name: 'iShares Gold Trust ST0x',
+		logoUrl: '/images/IAU.png',
+		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSEArca:IAU',
+		tradingViewMarket: 'america'
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
 		address: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
 		symbol: 'tSPLG',
 		decimals: 18,
@@ -168,7 +180,7 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/SPLG.png',
 		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
 		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:SPLG',
+		tradingViewSymbol: 'NYSEArca:SPLG',
 		tradingViewMarket: 'america'
 	} as unknown as CategorizedToken
 ];
