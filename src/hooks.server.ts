@@ -1,5 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { verifySessionToken } from '$lib/server/auth';
+import { BASIC_AUTH_USER, BASIC_AUTH_PASS } from '$env/static/private';
 import { env } from '$env/dynamic/private';
 
 const ALLOWLIST = new Set<string>(['/login', '/favicon.ico', '/robots.txt', '/site.webmanifest']);
@@ -13,10 +14,6 @@ function isAllowlisted(path: string) {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	// Read credentials from env; still gate even if missing so misconfigurations are obvious.
-	const user = env.BASIC_AUTH_USER || '';
-	const pass = env.BASIC_AUTH_PASS || '';
-
 	const { url, cookies } = event;
 	const path = url.pathname;
 
@@ -33,8 +30,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const valid = token && Number.isFinite(timestamp) && verifySessionToken(token, timestamp);
 	if (debug) {
 		console.log('[auth] path', path, {
-			haveUser: !!user,
-			havePass: !!pass,
+			haveUser: !!(BASIC_AUTH_USER || ''),
+			havePass: !!(BASIC_AUTH_PASS || ''),
 			hasToken: !!token,
 			ts: tsStr,
 			valid
