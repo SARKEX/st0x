@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import { encodeFunctionData, erc20Abi, formatUnits, parseUnits, type Hex } from 'viem';
-import { readContract, sendTransaction, simulateContract, waitForTransactionReceipt } from '@wagmi/core';
+import { encodeFunctionData, erc20Abi, type Hex } from 'viem';
+import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { getTakeOrders2Calldata, type TakeOrdersConfigV3 } from '@rainlanguage/orderbook'
 import { TransactionErrorMessage } from '$lib/types/errors';
 import {
@@ -266,21 +266,14 @@ const transactionStore = () => {
 			args: [$signerAddress as Hex, orderbookAddress]
 		});
 
-		console.log('currentAllowance', currentAllowance); 
-
 		// Calculate required amount from maxInput
-		// Rounding up
 		const requiredAmount = BigInt(BigInt(args.maximumInput) * BigInt(10 ** (18 - Number(outputToken.decimals))));
-		console.log('requiredAmount', requiredAmount);
-		console.log('marketPrice in tx : ', marketPrice);
-
-		let req = ((requiredAmount * marketPrice) / 1000000000000000000n);
-		console.log('req', req); //10000000000
+		const requiredAmountFp18 = ((requiredAmount * marketPrice) / 1000000000000000000n);
+		
 		// rounding up
-		const requiredAmountWithMarketPrice = req / BigInt(10 ** (18 - Number(inputToken.decimals))) + 1n;
-		console.log('requiredAmountWithMarketPrice :', requiredAmountWithMarketPrice);  
+		const requiredAmountFormattedDecimals = requiredAmountFp18 / BigInt(10 ** (18 - Number(inputToken.decimals))) + 1n;
 
-		if (currentAllowance < BigInt(requiredAmountWithMarketPrice)) {
+		if (currentAllowance < BigInt(requiredAmountFormattedDecimals)) {
 			// Need to approve more tokens
 			awaitWalletConfirmation(`Approving token spend...`);
 
@@ -288,7 +281,7 @@ const transactionStore = () => {
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',
-					args: [orderbookAddress, requiredAmountWithMarketPrice]
+					args: [orderbookAddress, requiredAmountFormattedDecimals]
 				}) as Hex,
 				to: inputToken.token as `0x${string}`
 			});
@@ -297,13 +290,11 @@ const transactionStore = () => {
 		}
 
 		// Now take the order
-		awaitWalletConfirmation(`Taking order...`);
-		console.log('args xx here : ', args);
+		awaitWalletConfirmation(`Executing market order...`);
 
 		let result;
 		try {
 			result = getTakeOrders2Calldata(args);
-			console.log('result', result);
 
 			if (result.error) {
 				console.log('result.error', result.error);

@@ -1,13 +1,11 @@
 <script lang="ts">
 	import type { CategorizedToken, LimitOrder } from "$lib/network";
 	import { currentNetwork } from "$lib/stores";
-	import type { PythToken } from "$lib/types";
 	import { hexToBigInt, OrderV3_ABI } from "$lib/utils/quote";
 	import { doQuoteSpecs, getOrders, type OrderV3, type QuoteSpec, type TakeOrderConfigV3, type TakeOrdersConfigV3 } from "@rainlanguage/orderbook";
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { AbiCoder, ethers } from 'ethers';
-	import { formatUnits, parseUnits } from 'viem';
-	import type { Hex } from 'viem';
+	import { formatUnits } from 'viem';
 	import { containerStyles } from '$lib/utils/styles';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
@@ -141,10 +139,6 @@
 					marketPrice = ratioBigInt;
 					console.log('marketPrice : ', marketPrice);
 				}
-				
-				// console.log('maxOutputBigInt', maxOutputBigInt);
-				// console.log('ratioBigInt', ratioBigInt); //10000000000000000n
-				// console.log('marketPrice', marketPrice);
 			} else {
 				priceError = true;
 			}
@@ -191,19 +185,7 @@
 			outputIOIndex: '0',
 			signedContext: []
 		};
-
-		// console.log('marketPrice : ', marketPrice);
-
-
 		if(orderSide === 'Buy') {
-
-			// console.log('orderData xx : ', orderData?.validOutputs);
-			console.log('selectedAmount : ', selectedAmount);
-			console.log('marketPrice : ', marketPrice);
-
-
-
-			// console.log('selectedAmount : ', selectedAmount);
 			const takeOrdersArgs: TakeOrdersConfigV3 = {
 				minimumInput: '0',
 				maximumInput: selectedAmount.toString(),
@@ -211,24 +193,10 @@
 				orders: [takeOrdersArg],
 				data: '0x'
 			};
-
 			await transactionStore.handleTakeOrders(takeOrdersArgs, orderbook as `0x${string}`, marketPrice);
-
-			
 		}else if(orderSide === 'Sell') {
-
-			console.log("marketPrice : ", marketPrice);
-			console.log("selectedAmount : ", selectedAmount);
-			const selectedAmountInDecimal = formatUnits(selectedAmount, passedOutputToken?.decimals || 18);
-			console.log('selectedAmountInDecimal : ', selectedAmountInDecimal);
-
 			const expectedInputAmount = (selectedAmount * marketPrice) / 1000000000000000000n;
-			console.log("expectedInputAmount : ", expectedInputAmount.toString()); //7953053946053946581n
-
 			const expectedInputInTokenTerms = expectedInputAmount / BigInt(10 ** (18 - Number(orderData?.validOutputs[0].decimals)));
-			console.log("expectedInputInTokenTerms : ", expectedInputInTokenTerms.toString()); //7953053946053946581n //7953053
-
-
 			const takeOrdersArgs: TakeOrdersConfigV3 = {
 				minimumInput: '0',
 				maximumInput: expectedInputInTokenTerms.toString(),
@@ -236,9 +204,7 @@
 				orders: [takeOrdersArg],
 				data: '0x'
 			};
-
 			await transactionStore.handleTakeOrders(takeOrdersArgs, orderbook as `0x${string}`, ratioOrder || 0n);
-
 		}
 	};
 </script>
