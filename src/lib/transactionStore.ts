@@ -2,7 +2,7 @@ import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
 import { encodeFunctionData, erc20Abi, type Hex } from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
-import { getTakeOrders2Calldata, type TakeOrdersConfigV3 } from '@rainlanguage/orderbook'
+import { getTakeOrders2Calldata, type TakeOrdersConfigV3 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import {
 	getTransactionAddOrders,
@@ -239,8 +239,11 @@ const transactionStore = () => {
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
-	const handleTakeOrders = async (args: TakeOrdersConfigV3, orderbookAddress: `0x${string}`, marketPrice: bigint) => {
-
+	const handleTakeOrders = async (
+		args: TakeOrdersConfigV3,
+		orderbookAddress: `0x${string}`,
+		marketPrice: bigint
+	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(signerAddress);
@@ -267,11 +270,14 @@ const transactionStore = () => {
 		});
 
 		// Calculate required amount from maxInput
-		const requiredAmount = BigInt(BigInt(args.maximumInput) * BigInt(10 ** (18 - Number(outputToken.decimals))));
-		const requiredAmountFp18 = ((requiredAmount * marketPrice) / 1000000000000000000n);
-		
+		const requiredAmount = BigInt(
+			BigInt(args.maximumInput) * BigInt(10 ** (18 - Number(outputToken.decimals)))
+		);
+		const requiredAmountFp18 = (requiredAmount * marketPrice) / 1000000000000000000n;
+
 		// rounding up
-		const requiredAmountFormattedDecimals = requiredAmountFp18 / BigInt(10 ** (18 - Number(inputToken.decimals))) + 1n;
+		const requiredAmountFormattedDecimals =
+			requiredAmountFp18 / BigInt(10 ** (18 - Number(inputToken.decimals))) + 1n;
 
 		if (currentAllowance < BigInt(requiredAmountFormattedDecimals)) {
 			// Need to approve more tokens
@@ -310,7 +316,9 @@ const transactionStore = () => {
 		} catch (error) {
 			// void error;
 			console.log('error', error);
-			return transactionError('Failed to generate transaction calldata x2' as TransactionErrorMessage);
+			return transactionError(
+				'Failed to generate transaction calldata x2' as TransactionErrorMessage
+			);
 		}
 
 		try {
@@ -339,8 +347,7 @@ const transactionStore = () => {
 			// @ts-expect-error Send transaction error
 			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
 		}
-
-	}
+	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
 		const config = get(wagmiConfig);

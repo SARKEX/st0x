@@ -620,7 +620,7 @@
 								{:else}
 									<div class="text-sm text-gray-400">No recent mints.</div>
 								{/if}
-								</div>
+							</div>
 						{:else}
 							<div class={containerStyles.cardBordered}>
 								<div class="mb-2 flex items-center justify-between">
@@ -763,10 +763,14 @@
 									ariaLabelledby={PANEL_STRATEGY_LABEL_ID}
 									getOptionLabel={(opt) => {
 										switch (opt) {
-											case 'limit': return 'Limit Order';
-											case 'dca': return 'DCA Order';
-											case 'market': return 'Market Order';
-											default: return opt;
+											case 'limit':
+												return 'Limit Order';
+											case 'dca':
+												return 'DCA Order';
+											case 'market':
+												return 'Market Order';
+											default:
+												return opt;
 										}
 									}}
 								/>

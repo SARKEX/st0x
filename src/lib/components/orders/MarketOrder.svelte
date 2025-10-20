@@ -1,8 +1,15 @@
 <script lang="ts">
-	import type { CategorizedToken, LimitOrder } from "$lib/network";
-	import { currentNetwork } from "$lib/stores";
-	import { hexToBigInt, OrderV3_ABI } from "$lib/utils/quote";
-	import { doQuoteSpecs, getOrders, type OrderV3, type QuoteSpec, type TakeOrderConfigV3, type TakeOrdersConfigV3 } from "@rainlanguage/orderbook";
+	import type { CategorizedToken, LimitOrder } from '$lib/network';
+	import { currentNetwork } from '$lib/stores';
+	import { hexToBigInt, OrderV3_ABI } from '$lib/utils/quote';
+	import {
+		doQuoteSpecs,
+		getOrders,
+		type OrderV3,
+		type QuoteSpec,
+		type TakeOrderConfigV3,
+		type TakeOrdersConfigV3
+	} from '@rainlanguage/orderbook';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { AbiCoder, ethers } from 'ethers';
 	import { formatUnits } from 'viem';
@@ -12,7 +19,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
-	import transactionStore from "$lib/transactionStore";
+	import transactionStore from '$lib/transactionStore';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let passedOutputToken: CategorizedToken | undefined;
@@ -47,8 +54,9 @@
 	$: totalCost =
 		selectedAmount && marketPrice
 			? (
-					parseFloat(formatUnits(selectedAmount, passedOutputToken?.decimals || 18)) *
-					Number(marketPrice) / 1e18
+					(parseFloat(formatUnits(selectedAmount, passedOutputToken?.decimals || 18)) *
+						Number(marketPrice)) /
+					1e18
 				).toFixed(2)
 			: '0.00';
 
@@ -65,7 +73,9 @@
 			isLoadingPrice = true;
 			priceError = false;
 
-			const limitOrders = passedOutputToken.limitOrders.filter((order: LimitOrder) => order.type !== orderSide);
+			const limitOrders = passedOutputToken.limitOrders.filter(
+				(order: LimitOrder) => order.type !== orderSide
+			);
 			if (limitOrders.length === 0) {
 				priceError = true;
 				isLoadingPrice = false;
@@ -93,7 +103,10 @@
 			if (ordersResult.value && ordersResult.value.length > 0) {
 				const order = ordersResult.value[0];
 
-				const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV3_ABI], order.order.orderBytes);
+				const decodedOrder = AbiCoder.defaultAbiCoder().decode(
+					[OrderV3_ABI],
+					order.order.orderBytes
+				);
 				orderData = decodedOrder[0] as OrderV3;
 				orderbook = order.order.orderbook.id;
 				const quoteSpecs: QuoteSpec[] = [];
@@ -105,7 +118,11 @@
 					orderbook: orderbook
 				});
 
-				const quoteResult = await doQuoteSpecs(quoteSpecs, $currentNetwork.orderbook_subgraph_url, $currentNetwork.fallbackRpcUrls);
+				const quoteResult = await doQuoteSpecs(
+					quoteSpecs,
+					$currentNetwork.orderbook_subgraph_url,
+					$currentNetwork.fallbackRpcUrls
+				);
 
 				if (quoteResult.error || !quoteResult.value) {
 					priceError = true;
@@ -118,26 +135,21 @@
 					return;
 				}
 
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars
 				const { maxOutput, ratio } = result.value;
-				
-				// Convert hex to BigInt
-				const maxOutputBigInt = hexToBigInt(maxOutput);
+
 				const ratioBigInt = hexToBigInt(ratio);
-				
-				
+
 				// Convert ratio to price based on order type using BigInt with 18 decimal precision
 				const PRECISION = BigInt(1e18);
 				ratioOrder = ratioBigInt;
-				
+
 				if (limitOrders[0].type === 'Buy') {
-					console.log("buy order");
 					// For buy orders, price is PRECISION/ratioBigInt
 					marketPrice = (PRECISION * PRECISION) / ratioBigInt;
-					console.log("marketPrice : ", marketPrice);//79530539460539465818n
 				} else {
 					// For sell orders, ratio is the price directly
 					marketPrice = ratioBigInt;
-					console.log('marketPrice : ', marketPrice);
 				}
 			} else {
 				priceError = true;
@@ -169,23 +181,27 @@
 			order: {
 				owner: orderData?.owner,
 				evaluable: orderData?.evaluable,
-				validInputs: [{
-					token: orderData?.validInputs[0].token,
-					decimals: Number(orderData?.validInputs[0].decimals),
-					vaultId: orderData?.validInputs[0].vaultId.toString()
-				}],
-				validOutputs: [{
-					token: orderData?.validOutputs[0].token,
-					decimals: Number(orderData?.validOutputs[0].decimals),
-					vaultId: orderData?.validOutputs[0].vaultId.toString()
-				}],
+				validInputs: [
+					{
+						token: orderData?.validInputs[0].token,
+						decimals: Number(orderData?.validInputs[0].decimals),
+						vaultId: orderData?.validInputs[0].vaultId.toString()
+					}
+				],
+				validOutputs: [
+					{
+						token: orderData?.validOutputs[0].token,
+						decimals: Number(orderData?.validOutputs[0].decimals),
+						vaultId: orderData?.validOutputs[0].vaultId.toString()
+					}
+				],
 				nonce: orderData?.nonce
 			},
 			inputIOIndex: '0',
 			outputIOIndex: '0',
 			signedContext: []
 		};
-		if(orderSide === 'Buy') {
+		if (orderSide === 'Buy') {
 			const takeOrdersArgs: TakeOrdersConfigV3 = {
 				minimumInput: '0',
 				maximumInput: selectedAmount.toString(),
@@ -193,10 +209,15 @@
 				orders: [takeOrdersArg],
 				data: '0x'
 			};
-			await transactionStore.handleTakeOrders(takeOrdersArgs, orderbook as `0x${string}`, marketPrice);
-		}else if(orderSide === 'Sell') {
+			await transactionStore.handleTakeOrders(
+				takeOrdersArgs,
+				orderbook as `0x${string}`,
+				marketPrice
+			);
+		} else if (orderSide === 'Sell') {
 			const expectedInputAmount = (selectedAmount * marketPrice) / 1000000000000000000n;
-			const expectedInputInTokenTerms = expectedInputAmount / BigInt(10 ** (18 - Number(orderData?.validOutputs[0].decimals)));
+			const expectedInputInTokenTerms =
+				expectedInputAmount / BigInt(10 ** (18 - Number(orderData?.validOutputs[0].decimals)));
 			const takeOrdersArgs: TakeOrdersConfigV3 = {
 				minimumInput: '0',
 				maximumInput: expectedInputInTokenTerms.toString(),
@@ -204,7 +225,11 @@
 				orders: [takeOrdersArg],
 				data: '0x'
 			};
-			await transactionStore.handleTakeOrders(takeOrdersArgs, orderbook as `0x${string}`, ratioOrder || 0n);
+			await transactionStore.handleTakeOrders(
+				takeOrdersArgs,
+				orderbook as `0x${string}`,
+				ratioOrder || 0n
+			);
 		}
 	};
 </script>
@@ -233,7 +258,11 @@
 				<div class="relative">
 					<input
 						type="text"
-						value={isLoadingPrice ? 'Loading...' : priceError ? 'Price unavailable' : (Number(marketPrice) / 1e18).toFixed(6)}
+						value={isLoadingPrice
+							? 'Loading...'
+							: priceError
+								? 'Price unavailable'
+								: (Number(marketPrice) / 1e18).toFixed(6)}
 						disabled
 						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 					/>
@@ -260,7 +289,11 @@
 				<div class="flex justify-between">
 					<span class="text-gray-400">At market price</span>
 					<span class="font-medium">
-						{isLoadingPrice ? 'Loading...' : priceError ? 'N/A' : (Number(marketPrice) / 1e18).toFixed(6)} USDC
+						{isLoadingPrice
+							? 'Loading...'
+							: priceError
+								? 'N/A'
+								: (Number(marketPrice) / 1e18).toFixed(6)} USDC
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">

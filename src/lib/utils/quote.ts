@@ -210,7 +210,7 @@ export async function fetchAndQuoteUSDCOrders(
 		try {
 			// Decode the order bytes to get the actual order structure
 			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
+			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order
@@ -266,7 +266,7 @@ export async function fetchAndQuoteUSDCOrders(
 		try {
 			// Decode the order bytes to get the actual order structure
 			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
+			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order
