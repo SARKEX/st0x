@@ -90,15 +90,43 @@ export function getUsdcTokenForNetwork(chainId: number): PythToken | undefined {
 // Define token categories
 export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
 
+export interface LimitOrder {
+	orderHash: string;
+	type: 'Buy' | 'Sell';
+}
+
 // Extended token interface with category
 export interface CategorizedToken extends PythToken {
 	category: TokenCategory;
 	logoUrl?: string;
 	tradingViewSymbol?: string;
 	tradingViewMarket?: string;
+	limitOrders?: LimitOrder[];
 }
 
 export const TOKENS: CategorizedToken[] = [
+	{
+		chainId: base.id,
+		address: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+		symbol: 'tSTOX',
+		decimals: 18,
+		name: 'iShares Gold Trust ST0x',
+		logoUrl: '/images/IAU.png',
+		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:IAU',
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0x6cc741615bdc1d25dd5ef4c5099ae3774b8178e1bab62cae067b91d4eb107e07',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0x5febc5e97fe5dccb8b6ab6f842386481637caa9ceaab58981d8aa9865e32d69e',
+				type: 'Buy'
+			}
+		]
+	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
 		address: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
