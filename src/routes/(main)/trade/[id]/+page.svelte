@@ -27,6 +27,7 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
+	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -66,9 +67,9 @@
 	let infoCollapsed = false;
 	let showTradePanel = false;
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
-	let panelStrategy: 'limit' | 'dca' = 'limit';
+	let panelStrategy: 'limit' | 'dca' | 'market' = 'limit';
 	let panelOpenedFromTerminal = false;
-	const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca'> = ['limit', 'dca'];
+	const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
 	const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
 	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
 
@@ -760,12 +761,25 @@
 									bind:selected={panelStrategy}
 									id={PANEL_STRATEGY_SELECT_ID}
 									ariaLabelledby={PANEL_STRATEGY_LABEL_ID}
-									getOptionLabel={(opt) => (opt === 'limit' ? 'Limit Order' : 'DCA Order')}
+									getOptionLabel={(opt) => {
+										switch (opt) {
+											case 'limit':
+												return 'Limit Order';
+											case 'dca':
+												return 'DCA Order';
+											case 'market':
+												return 'Market Order';
+											default:
+												return opt;
+										}
+									}}
 								/>
 							</label>
 							<div>
 								{#if panelStrategy === 'limit'}
 									<LimitStrategy orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
+								{:else if panelStrategy === 'market'}
+									<MarketOrder orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
 								{:else}
 									<div
 										class="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-gray-400"

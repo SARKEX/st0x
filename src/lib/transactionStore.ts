@@ -1,7 +1,8 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import type { Hex } from 'viem';
-import { sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
+import { encodeFunctionData, erc20Abi, type Hex } from 'viem';
+import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
+import { getTakeOrders2Calldata, type TakeOrdersConfigV3 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import {
 	getTransactionAddOrders,
@@ -9,7 +10,7 @@ import {
 	type DeploymentTransactionArgs,
 	type SgVault
 } from '@rainlanguage/orderbook';
-import { wagmiConfig } from 'svelte-wagmi';
+import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
@@ -238,6 +239,116 @@ const transactionStore = () => {
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
+	const handleTakeOrders = async (
+		args: TakeOrdersConfigV3,
+		orderbookAddress: `0x${string}`,
+		marketPrice: bigint
+	) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const $signerAddress = get(signerAddress);
+		if (!$signerAddress) throw new Error('Signer address not found');
+
+		// Get the input token from the first order
+		const inputToken = args.orders[0].order.validInputs[0];
+		if (!inputToken) {
+			return transactionError('No input token found in order' as TransactionErrorMessage);
+		}
+
+		const outputToken = args.orders[0].order.validOutputs[0];
+		if (!outputToken) {
+			return transactionError('No input token found in order' as TransactionErrorMessage);
+		}
+
+		// Check current allowance
+		checkingWalletAllowance(`Checking token allowance...`);
+		const currentAllowance = await readContract(config, {
+			abi: erc20Abi,
+			address: inputToken.token as `0x${string}`,
+			functionName: 'allowance',
+			args: [$signerAddress as Hex, orderbookAddress]
+		});
+
+		// Calculate required amount from maxInput
+		const requiredAmount = BigInt(
+			BigInt(args.maximumInput) * BigInt(10 ** (18 - Number(outputToken.decimals)))
+		);
+		const requiredAmountFp18 = (requiredAmount * marketPrice) / 1000000000000000000n;
+
+		// rounding up
+		const requiredAmountFormattedDecimals =
+			requiredAmountFp18 / BigInt(10 ** (18 - Number(inputToken.decimals))) + 1n;
+
+		if (currentAllowance < BigInt(requiredAmountFormattedDecimals)) {
+			// Need to approve more tokens
+			awaitWalletConfirmation(`Approving token spend...`);
+
+			const approvalHash = await sendTransaction(config, {
+				data: encodeFunctionData({
+					abi: erc20Abi,
+					functionName: 'approve',
+					args: [orderbookAddress, requiredAmountFormattedDecimals]
+				}) as Hex,
+				to: inputToken.token as `0x${string}`
+			});
+
+			await waitForTransactionReceipt(config, { hash: approvalHash });
+		}
+
+		// Now take the order
+		awaitWalletConfirmation(`Executing market order...`);
+
+		let result;
+		try {
+			result = getTakeOrders2Calldata(args);
+
+			if (result.error) {
+				console.log('result.error', result.error);
+				return transactionError(result.error as unknown as TransactionErrorMessage);
+			}
+
+			if (!result.value) {
+				console.log('result.value', result.value);
+				return transactionError(
+					'Failed to generate transaction calldata x1' as TransactionErrorMessage
+				);
+			}
+		} catch (error) {
+			// void error;
+			console.log('error', error);
+			return transactionError(
+				'Failed to generate transaction calldata x2' as TransactionErrorMessage
+			);
+		}
+
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
+
+			// Convert Uint8Array to hex string
+			const calldata =
+				'0x' +
+				Array.from(result.value)
+					.map((b) => {
+						const hex = Number(b).toString(16);
+						return hex.length === 1 ? '0' + hex : hex;
+					})
+					.join('');
+
+			// const req = await simulateContract
+
+			const hash = await sendTransaction(config, {
+				data: calldata as Hex,
+				to: orderbookAddress
+			});
+
+			await waitForTransactionReceipt(config, { hash });
+			transactionSuccess(hash, `Order taken successfully!`);
+		} catch (error) {
+			// @ts-expect-error Send transaction error
+			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+		}
+	};
+
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -258,7 +369,8 @@ const transactionStore = () => {
 		handleLimitDeploy,
 		handleDsfDeploy,
 		handleFolioDeploy,
-		handleWithdraw
+		handleWithdraw,
+		handleTakeOrders
 	};
 };
 

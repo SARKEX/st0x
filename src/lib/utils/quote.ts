@@ -10,9 +10,9 @@ import { networks, TOKENS, USDC_TOKENS } from '$lib/network';
 import { AbiCoder } from 'ethers';
 
 // ABI types for decoding order bytes
-const IO = '(address token, uint8 decimals, uint256 vaultId)';
-const EvaluableV3 = '(address interpreter, address store, bytes bytecode)';
-const OrderV3 = `(address owner, ${EvaluableV3} evaluable, ${IO}[] validInputs, ${IO}[] validOutputs, bytes32 nonce)`;
+export const IO = '(address token, uint8 decimals, uint256 vaultId)';
+export const EvaluableV3 = '(address interpreter, address store, bytes bytecode)';
+export const OrderV3_ABI = `(address owner, ${EvaluableV3} evaluable, ${IO}[] validInputs, ${IO}[] validOutputs, bytes32 nonce)`;
 
 // Types for processed quotes
 export interface ProcessedQuote {
@@ -26,7 +26,7 @@ export interface ProcessedQuote {
 }
 
 // Helper function to convert hex string to BigInt
-function hexToBigInt(hex: string): bigint {
+export function hexToBigInt(hex: string): bigint {
 	if (hex.startsWith('0x')) {
 		return BigInt(hex);
 	}
@@ -88,7 +88,7 @@ function processQuotes(
 
 			// Decode order to get token addresses
 			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
+			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			const inputDefinition = orderData.validInputs[spec.inputIOIndex];
@@ -210,7 +210,7 @@ export async function fetchAndQuoteUSDCOrders(
 		try {
 			// Decode the order bytes to get the actual order structure
 			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
+			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order
@@ -266,7 +266,7 @@ export async function fetchAndQuoteUSDCOrders(
 		try {
 			// Decode the order bytes to get the actual order structure
 			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3], order.orderBytes);
+			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order

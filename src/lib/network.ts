@@ -90,12 +90,18 @@ export function getUsdcTokenForNetwork(chainId: number): PythToken | undefined {
 // Define token categories
 export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
 
+export interface LimitOrder {
+	orderHash: string;
+	type: 'Buy' | 'Sell';
+}
+
 // Extended token interface with category
 export interface CategorizedToken extends PythToken {
 	category: TokenCategory;
 	logoUrl?: string;
 	tradingViewSymbol?: string;
 	tradingViewMarket?: string;
+	limitOrders?: LimitOrder[];
 }
 
 export const TOKENS: CategorizedToken[] = [
@@ -109,7 +115,17 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:NVDA',
-		tradingViewMarket: 'america'
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0xc2ea2074815a79ed582a5820e8f3b8cccb74ebc90853c999d6c570be17b903a4',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0x5d592e69e1e99ed25f5f7bea7c6e7b75d4ea5ba2f9e1b1a85a0bb6344167c89e',
+				type: 'Buy'
+			}
+		]
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -121,7 +137,17 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:AMZN',
-		tradingViewMarket: 'america'
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0x5d9d96aaf146a0ab62132e54ec59e77efd57a2615d36492245747a17d695d491',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0x937d6f20a112af5d73e55b6c85b24dd132b18248e3f88db23f51eb0d2f1147f9',
+				type: 'Buy'
+			}
+		]
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -133,7 +159,17 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:TSLA',
-		tradingViewMarket: 'america'
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0x04eb64b08271455a1ac7ac5474ed5b2c6635f61719b21ed5a55c9be6211e171d',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0x0f36b8633d3d2b22e18c2568e850eb8f05c41ca0ca0536c8a4a6efd3068c0999',
+				type: 'Buy'
+			}
+		]
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -145,7 +181,17 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xe1e80251e5f5184f2195008382538e847fafc36f751896889dd3d1b1f6111f09',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:MSTR',
-		tradingViewMarket: 'america'
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0xa3c151ec4714fcc33351f28becd49d9adee28278cb1d56d6484eafa9f5e55430',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0x55a894cf799cc9d5687690adbe9531ca15d2df2de80bfec7d23f2ea098697d20',
+				type: 'Buy'
+			}
+		]
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -157,7 +203,17 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xe21c688b7fc65b4606a50f3635f466f6986db129bf16979875d160f9c508e8c7',
 		category: 'ST0x',
 		tradingViewSymbol: 'NYSE:BRK.B',
-		tradingViewMarket: 'america'
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0xbb3bc76a25fe7d8f5a3e14a1c7242c36aa722e5fd7049e06d30d92d6dd377254',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0x91ec29362a17f56830b79583cefbff081e989b084ab418e9620ff4be1a8ea7bb',
+				type: 'Buy'
+			}
+		]
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -169,7 +225,17 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:IAU',
-		tradingViewMarket: 'america'
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0x635591f73b2d85159418e96704d0b04175ef9bca75e29b944b87272152e3bace',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0xf9fabb91559e8a3347475a824eae124d1131a0a3bba103e52ba86f46980c0e60',
+				type: 'Buy'
+			}
+		]
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
@@ -181,7 +247,17 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:SPLG',
-		tradingViewMarket: 'america'
+		tradingViewMarket: 'america',
+		limitOrders: [
+			{
+				orderHash: '0x03ccefaf1a12989190d8392f3fc5c2c347a8f157d143f29b3d6ca744f3d66829',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0xe88705033c55a50af86f340bf3b3e7c1e3af60fadf1005c4ed363ea127dd9607',
+				type: 'Buy'
+			}
+		]
 	} as unknown as CategorizedToken
 ];
 
