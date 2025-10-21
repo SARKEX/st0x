@@ -2,7 +2,11 @@ import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
 import { encodeFunctionData, erc20Abi, formatUnits, type Hex } from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
-import { getTakeOrders2Calldata, type SgOrder, type TakeOrdersConfigV3 } from '@rainlanguage/orderbook';
+import {
+	getTakeOrders2Calldata,
+	type SgOrder,
+	type TakeOrdersConfigV3
+} from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import {
 	getTransactionAddOrders,
@@ -344,11 +348,21 @@ const transactionStore = () => {
 
 			const interval = setInterval(async () => {
 				const trade = await getTradeByTransactionHash(hash, raindexOrder.orderHash);
-				if(trade) {
+				if (trade) {
 					clearInterval(interval);
 					const chainId = get(currentNetwork).id;
-					const tokenSold = `${parseFloat(formatUnits(BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))), trade.order.inputs[0].token.decimals))} ${trade.order.inputs[0].token.symbol}`
-					const tokenBought = `${parseFloat(formatUnits(BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))), trade.order.outputs[0].token.decimals))} ${trade.order.outputs[0].token.symbol}`
+					const tokenSold = `${parseFloat(
+						formatUnits(
+							BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
+							trade.order.inputs[0].token.decimals
+						)
+					)} ${trade.order.inputs[0].token.symbol}`;
+					const tokenBought = `${parseFloat(
+						formatUnits(
+							BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
+							trade.order.outputs[0].token.decimals
+						)
+					)} ${trade.order.outputs[0].token.symbol}`;
 
 					const link = `
 						<div class="flex flex-col gap-2 text-center">

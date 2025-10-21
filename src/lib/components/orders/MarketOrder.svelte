@@ -212,11 +212,7 @@
 				orders: [takeOrdersArg],
 				data: '0x'
 			};
-			await transactionStore.handleTakeOrders(
-				takeOrdersArgs,
-				raindexOrder as SgOrder,
-				marketPrice
-			);
+			await transactionStore.handleTakeOrders(takeOrdersArgs, raindexOrder as SgOrder, marketPrice);
 		} else if (orderSide === 'Sell') {
 			const expectedInputAmount = (selectedAmount * marketPrice) / 1000000000000000000n;
 			const expectedInputInTokenTerms =

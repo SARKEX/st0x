@@ -395,7 +395,7 @@ export const getTrades = async (
 };
 
 export const getTradeByTransactionHash = async (transactionHash: string, orderHash: string) => {
-  const tradeQuery = `{
+	const tradeQuery = `{
  trades(
   where: {
     tradeEvent_:{
@@ -436,15 +436,15 @@ export const getTradeByTransactionHash = async (transactionHash: string, orderHa
       amount
     }
 } 
-}`
+}`;
 
-const trades = await fetchAllPaginatedData(
-  get(currentNetwork).orderbook_subgraph_url,
-  tradeQuery,
+	const trades = await fetchAllPaginatedData(
+		get(currentNetwork).orderbook_subgraph_url,
+		tradeQuery,
 		{},
 		'trades'
 	);
-	if(trades && trades.length > 0) {
+	if (trades && trades.length > 0) {
 		return trades[0];
 	}
 

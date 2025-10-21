@@ -43,8 +43,7 @@
 				{#if $transactionStore.error === TransactionErrorMessage.GENERIC}
 					<a
 						class="text-center text-white hover:text-yellow-500/50 hover:underline"
-						href="https://platform.st0x.io/"
-						>platform.st0x.io</a
+						href="https://platform.st0x.io/">platform.st0x.io</a
 					>
 				{/if}
 				{#if $transactionStore.hash}
