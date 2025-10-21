@@ -1,8 +1,8 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import { encodeFunctionData, erc20Abi, type Hex } from 'viem';
+import { encodeFunctionData, erc20Abi, formatUnits, type Hex } from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
-import { getTakeOrders2Calldata, type TakeOrdersConfigV3 } from '@rainlanguage/orderbook';
+import { getTakeOrders2Calldata, type SgOrder, type TakeOrdersConfigV3 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import {
 	getTransactionAddOrders,
@@ -22,6 +22,7 @@ import {
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
 import { rainlangConfirmationModal } from './stores';
+import { getTradeByTransactionHash } from './query';
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
@@ -241,7 +242,7 @@ const transactionStore = () => {
 
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV3,
-		orderbookAddress: `0x${string}`,
+		raindexOrder: SgOrder,
 		marketPrice: bigint
 	) => {
 		const config = get(wagmiConfig);
@@ -266,7 +267,7 @@ const transactionStore = () => {
 			abi: erc20Abi,
 			address: inputToken.token as `0x${string}`,
 			functionName: 'allowance',
-			args: [$signerAddress as Hex, orderbookAddress]
+			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
 
 		// Calculate required amount from maxInput
@@ -287,7 +288,7 @@ const transactionStore = () => {
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',
-					args: [orderbookAddress, requiredAmountFormattedDecimals]
+					args: [raindexOrder.orderbook.id as `0x${string}`, requiredAmountFormattedDecimals]
 				}) as Hex,
 				to: inputToken.token as `0x${string}`
 			});
@@ -334,15 +335,43 @@ const transactionStore = () => {
 					})
 					.join('');
 
-			// const req = await simulateContract
-
 			const hash = await sendTransaction(config, {
 				data: calldata as Hex,
-				to: orderbookAddress
+				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
 			await waitForTransactionReceipt(config, { hash });
-			transactionSuccess(hash, `Order taken successfully!`);
+
+			const interval = setInterval(async () => {
+				const trade = await getTradeByTransactionHash(hash, raindexOrder.orderHash);
+				if(trade) {
+					clearInterval(interval);
+					const chainId = get(currentNetwork).id;
+					const tokenSold = `${parseFloat(formatUnits(BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))), trade.order.inputs[0].token.decimals))} ${trade.order.inputs[0].token.symbol}`
+					const tokenBought = `${parseFloat(formatUnits(BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))), trade.order.outputs[0].token.decimals))} ${trade.order.outputs[0].token.symbol}`
+
+					const link = `
+						<div class="flex flex-col gap-2 text-center">
+							<div class="text-base text-gray-300">
+								${tokenBought} bought, ${tokenSold} sold
+							</div>
+							<a
+								target="_blank"
+								rel="noopener noreferrer"
+								class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+								href="https://raindex.finance/orders/${chainId}-${raindexOrder.orderbook.id}-${raindexOrder.orderHash}"
+								data-testid="raindex-link">
+								View order on Raindex
+								<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+								</svg>
+							</a>
+						</div>
+					`;
+
+					return transactionSuccess(hash, link);
+				}
+			}, 2000);
 		} catch (error) {
 			// @ts-expect-error Send transaction error
 			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
