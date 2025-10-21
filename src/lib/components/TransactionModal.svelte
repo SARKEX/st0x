@@ -43,8 +43,7 @@
 				{#if $transactionStore.error === TransactionErrorMessage.GENERIC}
 					<a
 						class="text-center text-white hover:text-yellow-500/50 hover:underline"
-						href="https://q2i2qetuwucfyfgcamqsi2h33fgmlz26o4jlt3hlndyd5xk3xo2a.arweave.net/hpGoEnS1BFwUwgMhJGj72UzF5153Erns62jwPt1bu7Q"
-						>Sarcophagus.io</a
+						href="https://platform.st0x.io/">platform.st0x.io</a
 					>
 				{/if}
 				{#if $transactionStore.hash}

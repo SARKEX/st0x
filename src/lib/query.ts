@@ -394,6 +394,63 @@ export const getTrades = async (
 	}
 };
 
+export const getTradeByTransactionHash = async (transactionHash: string, orderHash: string) => {
+	const tradeQuery = `{
+ trades(
+  where: {
+    tradeEvent_:{
+      transaction_in:["${transactionHash.toLowerCase()}"]
+    }
+    order_:{
+      orderHash: "${orderHash.toLowerCase()}"
+    }
+  }
+){
+  tradeEvent {
+      id
+      transaction {
+        id
+      }
+    }
+    order {
+      orderHash
+      inputs {
+        token {
+          symbol
+          address
+          decimals
+        }
+      }
+      outputs{
+        token{
+          symbol
+          address
+          decimals
+        }
+      }
+    }
+    inputVaultBalanceChange {
+      amount
+    }
+    outputVaultBalanceChange {
+      amount
+    }
+} 
+}`;
+
+	const trades = await fetchAllPaginatedData(
+		get(currentNetwork).orderbook_subgraph_url,
+		tradeQuery,
+		{},
+		'trades'
+	);
+	if (trades && trades.length > 0) {
+		return trades[0];
+	}
+
+	return null;
+};
+
 export async function fetchAllPaginatedData(
 	endpoint: string,
 	query: string,

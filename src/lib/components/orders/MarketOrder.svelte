@@ -7,6 +7,7 @@
 		getOrders,
 		type OrderV3,
 		type QuoteSpec,
+		type SgOrder,
 		type TakeOrderConfigV3,
 		type TakeOrdersConfigV3
 	} from '@rainlanguage/orderbook';
@@ -29,6 +30,7 @@
 	let selectedAmount: bigint = 0n;
 	let isLoadingPrice = true;
 	let priceError = false;
+	let raindexOrder: SgOrder | undefined = undefined;
 	let orderData: OrderV3 | undefined = undefined;
 	let orderbook: string | undefined = undefined;
 	let ratioOrder: bigint = 0n;
@@ -102,6 +104,7 @@
 
 			if (ordersResult.value && ordersResult.value.length > 0) {
 				const order = ordersResult.value[0];
+				raindexOrder = order.order;
 
 				const decodedOrder = AbiCoder.defaultAbiCoder().decode(
 					[OrderV3_ABI],
@@ -209,11 +212,7 @@
 				orders: [takeOrdersArg],
 				data: '0x'
 			};
-			await transactionStore.handleTakeOrders(
-				takeOrdersArgs,
-				orderbook as `0x${string}`,
-				marketPrice
-			);
+			await transactionStore.handleTakeOrders(takeOrdersArgs, raindexOrder as SgOrder, marketPrice);
 		} else if (orderSide === 'Sell') {
 			const expectedInputAmount = (selectedAmount * marketPrice) / 1000000000000000000n;
 			const expectedInputInTokenTerms =
@@ -227,7 +226,7 @@
 			};
 			await transactionStore.handleTakeOrders(
 				takeOrdersArgs,
-				orderbook as `0x${string}`,
+				raindexOrder as SgOrder,
 				ratioOrder || 0n
 			);
 		}
