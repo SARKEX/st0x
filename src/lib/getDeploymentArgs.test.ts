@@ -13,6 +13,9 @@ import { currentNetwork } from './stores';
 import { get } from 'svelte/store';
 import { mockCurrentNetwork } from './mocks/mockCurrentNetwork';
 
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
 // Shared mock network object to avoid repetition
 const mockNetwork = mockCurrentNetwork;
 const ALL_TOKENS = getAllTokensByNetwork(mockNetwork.id);
@@ -84,6 +87,10 @@ describe('getDeploymentArgs', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 
+		mockFetch.mockResolvedValue({
+			text: vi.fn().mockResolvedValue('/* mock strategy */')
+		});
+
 		// Setup mocks
 		vi.mocked(DotrainOrderGui.newWithDeployment).mockResolvedValue({
 			value: mockGui as unknown as DotrainOrderGui,
@@ -141,6 +148,9 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', USDC_TOKEN.address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', STOXs[0].address);
+
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('amount-is-fast-exit', '1');
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('not-amount-is-fast-exit', '0');
@@ -190,6 +200,9 @@ describe('getDeploymentArgs', () => {
 			depositAmount: 4000000000000000000n
 		});
 
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('output', USDC_TOKEN.address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('input', STOXs[0].address);
+
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '86400');
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
@@ -217,6 +230,29 @@ describe('getDeploymentArgs', () => {
 		);
 	});
 
+	it('should apply vault IDs when provided in getDcaDeploymentArgs', async () => {
+		const inputVaultId = '0x1234567890123456789012345678901234567895';
+		const outputVaultId = '0x1234567890123456789012345678901234567896';
+
+		await getDcaDeploymentArgs({
+			outputToken: USDC_TOKEN,
+			inputToken: STOXs[0],
+			budgetAmount: 1000000000000000000n,
+			selectedPeriod: '1',
+			selectedPeriodUnit: 'Days',
+			kickoff: '1.2',
+			baseline: '0.9',
+			minTradeAmount: 2000000000000000000n,
+			maxTradeAmount: 3000000000000000000n,
+			inputVaultId,
+			outputVaultId,
+			depositAmount: 4000000000000000000n
+		});
+
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(true, 0, inputVaultId);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(false, 0, outputVaultId);
+	});
+
 	it('should handle getLimitOrderDeploymentArgs strategy correctly', async () => {
 		await getLimitOrderDeploymentArgs({
 			outputToken: USDC_TOKEN,
@@ -226,6 +262,9 @@ describe('getDeploymentArgs', () => {
 			inputVaultId: undefined,
 			outputVaultId: undefined
 		});
+
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', STOXs[0].address);
+		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', USDC_TOKEN.address);
 
 		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fixed-io', '0.1');
 
@@ -429,8 +468,10 @@ describe('getDeploymentArgs', () => {
 	});
 
 	it('should handle vault IDs correctly in getMarketMakingDeploymentArgs', async () => {
-		const inputVaultId = '0x1234567890123456789012345678901234567891';
-		const outputVaultId = '0x1234567890123456789012345678901234567892';
+		const inputVaultIdToken1 = '0x1234567890123456789012345678901234567891';
+		const inputVaultIdToken2 = '0x1234567890123456789012345678901234567892';
+		const outputVaultIdToken1 = '0x1234567890123456789012345678901234567893';
+		const outputVaultIdToken2 = '0x1234567890123456789012345678901234567894';
 
 		await getMarketMakingDeploymentArgs({
 			token1: USDC_TOKEN,
@@ -442,14 +483,16 @@ describe('getDeploymentArgs', () => {
 			minAmount: 1000000000000000000n,
 			depositAmountToken1: 1000000000000000000n,
 			depositAmountToken2: 1000000000000000000n,
-			inputVaultIdToken1: inputVaultId,
-			inputVaultIdToken2: undefined,
-			outputVaultIdToken1: outputVaultId,
-			outputVaultIdToken2: undefined
+			inputVaultIdToken1: inputVaultIdToken1,
+			inputVaultIdToken2: inputVaultIdToken2,
+			outputVaultIdToken1: outputVaultIdToken1,
+			outputVaultIdToken2: outputVaultIdToken2
 		});
 
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(true, 0, inputVaultId);
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(false, 0, outputVaultId);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(true, 0, inputVaultIdToken1);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(true, 1, inputVaultIdToken2);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(false, 0, outputVaultIdToken1);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(false, 1, outputVaultIdToken2);
 	});
 
 	it('should handle different period units in getDcaDeploymentArgs', async () => {

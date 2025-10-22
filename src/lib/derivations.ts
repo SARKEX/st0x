@@ -6,8 +6,8 @@ import type { Token } from 'sushi';
 
 /**
  * For limit strategies, return the baseline IO ratio to use.
- * Currently acts as a pass-through for Buy orders; for Sell orders, also pass-through
- * to avoid unintended price inversion. Adjust here if Sell should invert in future.
+ * Buy orders pass through unchanged, while Sell orders return the inverse
+ * (unless the provided ratio is invalid or zero).
  */
 export function getBaseline(orderType: 'Buy' | 'Sell', ratio: string): string {
 	const r = (ratio ?? '').toString().trim();
