@@ -25,9 +25,20 @@
 	import { onMount } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
-	import { createQuery } from '@tanstack/svelte-query';
-	import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
-	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+        import type { SgTrade } from '@rainlanguage/orderbook';
+        import type { QueryObserverResult } from '@tanstack/query-core';
+        import { createQuery } from '@tanstack/svelte-query';
+        import type { ProcessedQuote } from '$lib/utils/quote';
+        import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
+        import type { Readable } from 'svelte/store';
+        import { getTrades } from '$lib/query';
+        import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
+        import type {
+                DepthSeries,
+                TradeHistoryPoint,
+                VolumeBucket
+        } from '$lib/components/charts/token-chart-types';
+        import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -69,13 +80,88 @@
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
 	let panelStrategy: 'limit' | 'dca' | 'market' = 'limit';
 	let panelOpenedFromTerminal = false;
-	const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
-	const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
-	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
+        const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
+        const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
+        const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
 
-	let oraclePriceData: { price: number; confidence: number } | null = null;
-	let oracleLoading = false;
-	let oracleError: string | null = null;
+        const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
+        const VOLUME_BUCKET_SECONDS = 24 * 60 * 60;
+
+        const parseAmount = (value: string | null | undefined, decimals: number): number => {
+                if (value === null || value === undefined) return 0;
+                try {
+                        const raw = BigInt(value);
+                        const magnitude = raw < 0n ? -raw : raw;
+                        return Number.parseFloat(formatUnits(magnitude, decimals));
+                } catch {
+                        return 0;
+                }
+        };
+
+        const tradeToPoint = (
+                trade: SgTrade,
+                assetAddress: string,
+                assetDecimals: number,
+                usdcAddress: string,
+                usdcDecimals: number
+        ): TradeHistoryPoint | null => {
+                if (!trade) return null;
+
+                const rawTimestamp = Number(
+                        trade.tradeEvent?.transaction?.timestamp ?? trade.timestamp ?? 0
+                );
+                if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return null;
+                const timestamp = rawTimestamp * 1000;
+
+                const inputToken = trade.inputVaultBalanceChange?.vault?.token;
+                const outputToken = trade.outputVaultBalanceChange?.vault?.token;
+
+                const inputAddress = inputToken?.address?.toLowerCase();
+                const outputAddress = outputToken?.address?.toLowerCase();
+
+                if (!inputAddress || !outputAddress) return null;
+
+                if (inputAddress === usdcAddress && outputAddress === assetAddress) {
+                        const tokens = parseAmount(
+                                trade.outputVaultBalanceChange?.amount ?? null,
+                                Number(outputToken?.decimals ?? assetDecimals)
+                        );
+                        const usdc = parseAmount(
+                                trade.inputVaultBalanceChange?.amount ?? null,
+                                Number(inputToken?.decimals ?? usdcDecimals)
+                        );
+                        if (tokens <= 0 || usdc <= 0) return null;
+                        return { timestamp, price: usdc / tokens, tokens, usdc, side: 'buy' };
+                }
+
+                if (inputAddress === assetAddress && outputAddress === usdcAddress) {
+                        const tokens = parseAmount(
+                                trade.inputVaultBalanceChange?.amount ?? null,
+                                Number(inputToken?.decimals ?? assetDecimals)
+                        );
+                        const usdc = parseAmount(
+                                trade.outputVaultBalanceChange?.amount ?? null,
+                                Number(outputToken?.decimals ?? usdcDecimals)
+                        );
+                        if (tokens <= 0 || usdc <= 0) return null;
+                        return { timestamp, price: usdc / tokens, tokens, usdc, side: 'sell' };
+                }
+
+                return null;
+        };
+
+        let tradeHistoryPoints: TradeHistoryPoint[] = [];
+        let tradeVolumeBuckets: VolumeBucket[] = [];
+        let orderbookDepth: DepthSeries = { bids: [], asks: [] };
+        let chartsLoading = false;
+        let tradeQueryError: string | null = null;
+
+        let onChainQuoteQuery: Readable<QueryObserverResult<ProcessedQuote[] | undefined, Error | null>>;
+        let tradeHistoryQuery: Readable<QueryObserverResult<SgTrade[] | undefined, Error | null>>;
+
+        let oraclePriceData: { price: number; confidence: number } | null = null;
+        let oracleLoading = false;
+        let oracleError: string | null = null;
 	let oracleRequestToken = 0;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
@@ -208,11 +294,11 @@
 		}
 	};
 
-	$: onChainQuoteQuery = createQuery({
-		queryKey: ['fetchAndQuoteUSDCOrders', $currentNetwork?.id],
-		enabled: browser && !!$currentNetwork?.chainId,
-		staleTime: 20_000,
-		queryFn: async () => {
+        $: onChainQuoteQuery = createQuery({
+                queryKey: ['fetchAndQuoteUSDCOrders', $currentNetwork?.id],
+                enabled: browser && !!$currentNetwork?.chainId,
+                staleTime: 20_000,
+                queryFn: async () => {
 			if (!browser) return [];
 			const networkId = $currentNetwork?.chainId;
 			if (!networkId) return [];
@@ -222,8 +308,31 @@
 				console.warn('[onchain-quotes] failed to fetch quotes', error);
 				return [];
 			}
-		}
-	});
+                }
+        });
+
+        $: tradeHistoryQuery = createQuery({
+                queryKey: ['token-trade-history', currentToken?.address, $currentNetwork?.id],
+                enabled:
+                        browser &&
+                        !!currentToken?.address &&
+                        !!$currentNetwork?.orderbook_subgraph_url &&
+                        !!$currentNetwork?.chainId,
+                staleTime: 60_000,
+                refetchInterval: 60_000,
+                queryFn: async () => {
+                        if (!browser || !currentToken || !$currentNetwork) return [];
+                        try {
+                                const now = Math.floor(Date.now() / 1000);
+                                const since = now - TRADE_HISTORY_LOOKBACK_SECONDS;
+                                const trades = await getTrades(since, now, $currentNetwork);
+                                return trades;
+                        } catch (error) {
+                                console.warn('[trade-history] failed to fetch trades', error);
+                                return [];
+                        }
+                }
+        });
 
 	const resetOnChainPrices = () => {
 		buyPrice = null;
@@ -251,9 +360,113 @@
 				}
 			}
 		}
-	}
+        }
 
-	$: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
+        $: tradeHistoryPoints = (() => {
+                if (!browser || !currentToken || !$currentNetwork) return [];
+                const usdcToken = $currentNetwork.chainId
+                        ? USDC_TOKENS[$currentNetwork.chainId]
+                        : undefined;
+                if (!usdcToken) return [];
+                const assetAddress = currentToken.address?.toLowerCase();
+                const usdcAddress = usdcToken.address?.toLowerCase();
+                if (!assetAddress || !usdcAddress) return [];
+                const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+                const usdcDecimals = Number(usdcToken.decimals ?? 6);
+
+                const trades = ($tradeHistoryQuery.data ?? []) as SgTrade[];
+                return trades
+                        .map((trade) =>
+                                tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals)
+                        )
+                        .filter((point): point is TradeHistoryPoint => Boolean(point))
+                        .sort((a, b) => a.timestamp - b.timestamp);
+        })();
+
+        $: tradeVolumeBuckets = (() => {
+                if (!tradeHistoryPoints.length) return [];
+                const bucketMap = new Map<number, number>();
+                tradeHistoryPoints.forEach((point) => {
+                        const bucketStart =
+                                Math.floor(point.timestamp / 1000 / VOLUME_BUCKET_SECONDS) *
+                                VOLUME_BUCKET_SECONDS *
+                                1000;
+                        bucketMap.set(bucketStart, (bucketMap.get(bucketStart) ?? 0) + point.tokens);
+                });
+                return Array.from(bucketMap.entries())
+                        .sort((a, b) => a[0] - b[0])
+                        .map(([start, tokens]) => ({ start, tokens }));
+        })();
+
+        $: orderbookDepth = (() => {
+                if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
+                const quotes = $onChainQuoteQuery.data ?? [];
+                if (!quotes.length) return { bids: [], asks: [] };
+                const usdcToken = $currentNetwork.chainId
+                        ? USDC_TOKENS[$currentNetwork.chainId]
+                        : undefined;
+                if (!usdcToken) return { bids: [], asks: [] };
+                const assetAddress = currentToken.address?.toLowerCase();
+                const usdcAddress = usdcToken.address?.toLowerCase();
+                if (!assetAddress || !usdcAddress) return { bids: [], asks: [] };
+                const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+                const usdcDecimals = Number(usdcToken.decimals ?? 6);
+
+                const bids: DepthSeries['bids'] = [];
+                const asks: DepthSeries['asks'] = [];
+
+                quotes.forEach((quote) => {
+                        const ratio = Number(quote.ratio) / 1e18;
+                        if (!Number.isFinite(ratio) || ratio <= 0) return;
+                        const inputAddress = quote.inputTokenAddress.toLowerCase();
+                        const outputAddress = quote.outputTokenAddress.toLowerCase();
+                        if (!inputAddress || !outputAddress) return;
+
+                        if (inputAddress === usdcAddress && outputAddress === assetAddress) {
+                                const tokenAmount = Number.parseFloat(formatUnits(quote.maxOutput, assetDecimals));
+                                const price = ratio;
+                                if (!Number.isFinite(tokenAmount) || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
+                                        return;
+                                }
+                                asks.push({ price, quantity: tokenAmount });
+                                return;
+                        }
+
+                        if (inputAddress === assetAddress && outputAddress === usdcAddress) {
+                                const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals));
+                                if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) return;
+                                const price = 1 / ratio;
+                                if (!Number.isFinite(price) || price <= 0) return;
+                                const tokenAmount = usdcAmount / price;
+                                if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
+                                bids.push({ price, quantity: tokenAmount });
+                        }
+                });
+
+                return { bids, asks };
+        })();
+
+        $: {
+                const tradeResult = $tradeHistoryQuery;
+                const quoteResult = $onChainQuoteQuery;
+
+                const tradeStatus = tradeResult?.status;
+                const quoteStatus = quoteResult?.status;
+                const tradeFetchStatus = tradeResult?.fetchStatus;
+                const quoteFetchStatus = quoteResult?.fetchStatus;
+
+                chartsLoading = Boolean(
+                        tradeStatus === 'pending' ||
+                                tradeFetchStatus === 'fetching' ||
+                                quoteStatus === 'pending' ||
+                                quoteFetchStatus === 'fetching'
+                );
+
+                const err = tradeResult?.error;
+                tradeQueryError = err ? err.message ?? 'Failed to load trade history.' : null;
+        }
+
+        $: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
 	$: pageTitle = `Trade ${tokenDisplayName}`;
 	$: modalTitle = tokenDisplaySymbol
@@ -285,11 +498,11 @@
 			</h1>
 		</div>
 		<!-- Header Section with Chart -->
-		<Section>
-			<div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
-				<!-- Left: Symbol info -->
-				<div class="space-y-4 xl:col-span-2">
-					<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+                <Section>
+                        <div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
+                                <!-- Left: Symbol info -->
+                                <div class="space-y-4 xl:col-span-2">
+                                        <div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
 						<div class="border-b border-white/10 bg-gray-900/60 px-4 py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
@@ -419,15 +632,36 @@
 						>
 							Terminal View
 						</Button>
-					</div>
-				</div>
-			</div>
-		</Section>
+                                        </div>
+                                </div>
+                        </div>
+                </Section>
 
-		<!-- Tabbed Information Section (collapsible) -->
-		<Section>
-			<div class="mb-3 flex items-center justify-between">
-				<h2 class="text-base font-semibold">Details</h2>
+                <Section>
+                        <div class="space-y-4">
+                                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                                <h2 class="text-base font-semibold text-white">On-chain Activity</h2>
+                                                <p class="text-sm text-gray-400">
+                                                        Visualize recent trades and current liquidity sourced directly from the on-chain orderbook.
+                                                </p>
+                                        </div>
+                                        <p class="text-xs uppercase tracking-wide text-gray-500">Last 30 days</p>
+                                </div>
+                                <TokenMarketCharts
+                                        tradeHistory={tradeHistoryPoints}
+                                        volumeBuckets={tradeVolumeBuckets}
+                                        depth={orderbookDepth}
+                                        isLoading={chartsLoading}
+                                        error={tradeQueryError}
+                                />
+                        </div>
+                </Section>
+
+                <!-- Tabbed Information Section (collapsible) -->
+                <Section>
+                        <div class="mb-3 flex items-center justify-between">
+                                <h2 class="text-base font-semibold">Details</h2>
 				<button
 					class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
 					aria-label={infoCollapsed ? 'Expand details' : 'Collapse details'}
