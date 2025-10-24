@@ -84,8 +84,23 @@
         const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
         const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
 
-        const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
+        const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60; // 30 days (max window)
         const VOLUME_BUCKET_SECONDS = 24 * 60 * 60;
+        const OHLC_BUCKET_SECONDS = 60; // 1 minute buckets for candles
+
+        type HistoryRangeKey = '1D' | '7D' | '30D';
+
+        const HISTORY_RANGE_CONFIG: Record<HistoryRangeKey, { label: string; seconds: number }> = {
+                '1D': { label: '1D', seconds: 24 * 60 * 60 },
+                '7D': { label: '7D', seconds: 7 * 24 * 60 * 60 },
+                '30D': { label: '30D', seconds: 30 * 24 * 60 * 60 }
+        };
+
+        const HISTORY_RANGE_OPTIONS: Array<{ key: HistoryRangeKey; label: string }> = [
+                { key: '1D', label: '1D' },
+                { key: '7D', label: '7D' },
+                { key: '30D', label: '30D' }
+        ];
 
         const parseAmount = (value: string | null | undefined, decimals: number): number => {
                 if (value === null || value === undefined) return 0;
@@ -150,7 +165,47 @@
                 return null;
         };
 
+        // Convert trade points to OHLC candles
+        const tradesToOHLC = (trades: TradeHistoryPoint[], bucketSeconds: number) => {
+                if (trades.length === 0) return [];
+
+                const buckets = new Map<number, TradeHistoryPoint[]>();
+
+                for (const trade of trades) {
+                        const bucketTime = Math.floor(trade.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
+                        if (!buckets.has(bucketTime)) {
+                                buckets.set(bucketTime, []);
+                        }
+                        buckets.get(bucketTime)!.push(trade);
+                }
+
+                const candles: Array<{ t: number; o: number; h: number; l: number; c: number }> = [];
+                const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+
+                for (const [time, bucketTrades] of sortedBuckets) {
+                        if (bucketTrades.length === 0) continue;
+                        const prices = bucketTrades.map((t) => t.price).filter((p) => Number.isFinite(p));
+                        if (prices.length === 0) continue;
+
+                        candles.push({
+                                t: time,
+                                o: prices[0],
+                                h: Math.max(...prices),
+                                l: Math.min(...prices),
+                                c: prices[prices.length - 1]
+                        });
+                }
+
+                return candles;
+        };
+
+        let historyRange: HistoryRangeKey = '7D';
+        let historyRangeStartMs = 0;
+        let historyRangeEndMs = 0;
+
         let tradeHistoryPoints: TradeHistoryPoint[] = [];
+        let visibleTradeHistoryPoints: TradeHistoryPoint[] = [];
+        let ohlcCandles: Array<{ t: number; o: number; h: number; l: number; c: number }> = [];
         let tradeVolumeBuckets: VolumeBucket[] = [];
         let orderbookDepth: DepthSeries = { bids: [], asks: [] };
         let chartsLoading = false;
@@ -383,25 +438,62 @@
                         .sort((a, b) => a.timestamp - b.timestamp);
         })();
 
-        $: tradeVolumeBuckets = (() => {
-                if (!tradeHistoryPoints.length) return [];
+        function getVolumeBucketSeconds(range: HistoryRangeKey) {
+                if (range === '1D') return 60 * 60;
+                if (range === '7D') return 6 * 60 * 60;
+                return 24 * 60 * 60;
+        }
+
+        $: {
+                const rangeSeconds = HISTORY_RANGE_CONFIG[historyRange].seconds;
+                const nowMs = Date.now();
+                const latestTradeMs = tradeHistoryPoints.length
+                        ? tradeHistoryPoints[tradeHistoryPoints.length - 1].timestamp
+                        : 0;
+                const rangeEnd = Math.max(nowMs, latestTradeMs || nowMs);
+                const rangeStart = Math.max(0, rangeEnd - rangeSeconds * 1000);
+
+                // Determine bucket resolution (1 minute for 1D, 15 min for 7D, 1 hour for 30D)
+                let candleBucketSeconds = OHLC_BUCKET_SECONDS;
+                if (historyRange === '7D') {
+                        candleBucketSeconds = 15 * 60;
+                } else if (historyRange === '30D') {
+                        candleBucketSeconds = 60 * 60;
+                }
+
+                const bucketedCandles = tradesToOHLC(visibleTradeHistoryPoints, candleBucketSeconds);
+
+                historyRangeStartMs = rangeStart;
+                historyRangeEndMs = rangeEnd;
+
+                visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
+
+                ohlcCandles = bucketedCandles;
+
+                const bucketSeconds = getVolumeBucketSeconds(historyRange);
+                const bucketStartTime = Math.max(rangeStart, rangeEnd - rangeSeconds * 1000);
                 const bucketMap = new Map<number, number>();
-                tradeHistoryPoints.forEach((point) => {
-                        const bucketStart =
-                                Math.floor(point.timestamp / 1000 / VOLUME_BUCKET_SECONDS) *
-                                VOLUME_BUCKET_SECONDS *
-                                1000;
-                        bucketMap.set(bucketStart, (bucketMap.get(bucketStart) ?? 0) + point.tokens);
-                });
-                return Array.from(bucketMap.entries())
+
+                for (let ts = bucketStartTime; ts <= rangeEnd; ts += bucketSeconds * 1000) {
+                        bucketMap.set(ts, 0);
+                }
+
+                for (const point of visibleTradeHistoryPoints) {
+                const bucketStart = Math.floor(point.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
+                        const clampedBucket = Math.max(bucketStart, bucketStartTime);
+                        bucketMap.set(clampedBucket, (bucketMap.get(clampedBucket) ?? 0) + point.tokens);
+                }
+
+                tradeVolumeBuckets = Array.from(bucketMap.entries())
                         .sort((a, b) => a[0] - b[0])
                         .map(([start, tokens]) => ({ start, tokens }));
-        })();
+        }
 
         $: orderbookDepth = (() => {
                 if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
                 const quotes = $onChainQuoteQuery.data ?? [];
                 if (!quotes.length) return { bids: [], asks: [] };
+
                 const usdcToken = $currentNetwork.chainId
                         ? USDC_TOKENS[$currentNetwork.chainId]
                         : undefined;
@@ -437,7 +529,7 @@
                                 if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) return;
                                 const price = 1 / ratio;
                                 if (!Number.isFinite(price) || price <= 0) return;
-                                const tokenAmount = usdcAmount / price;
+                                const tokenAmount = (usdcAmount / 1e12) / price;
                                 if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
                                 bids.push({ price, quantity: tokenAmount });
                         }
@@ -639,19 +731,37 @@
 
                 <Section>
                         <div class="space-y-4">
-                                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                                         <div>
                                                 <h2 class="text-base font-semibold text-white">On-chain Activity</h2>
                                                 <p class="text-sm text-gray-400">
                                                         Visualize recent trades and current liquidity sourced directly from the on-chain orderbook.
                                                 </p>
                                         </div>
-                                        <p class="text-xs uppercase tracking-wide text-gray-500">Last 30 days</p>
+                                        <div class="flex items-center gap-2 self-start">
+                                                {#each HISTORY_RANGE_OPTIONS as option}
+                                                        <button
+                                                                type="button"
+                                                                class={`rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+                                                                        historyRange === option.key
+                                                                                ? 'border-blue-400/60 bg-blue-500/20 text-blue-200'
+                                                                                : 'border-white/10 text-gray-400 hover:border-white/25 hover:text-white'
+                                                                }`}
+                                                                aria-pressed={historyRange === option.key}
+                                                                on:click={() => (historyRange = option.key)}
+                                                        >
+                                                                {option.label}
+                                                        </button>
+                                                {/each}
+                                        </div>
                                 </div>
                                 <TokenMarketCharts
-                                        tradeHistory={tradeHistoryPoints}
+                                        tradeHistory={visibleTradeHistoryPoints}
                                         volumeBuckets={tradeVolumeBuckets}
                                         depth={orderbookDepth}
+                                        ohlcCandles={ohlcCandles}
+                                        rangeStartMs={historyRangeStartMs}
+                                        rangeEndMs={historyRangeEndMs}
                                         isLoading={chartsLoading}
                                         error={tradeQueryError}
                                 />

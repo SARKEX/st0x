@@ -22,17 +22,146 @@
         export let depth: DepthSeries = { bids: [], asks: [] };
         export let isLoading = false;
         export let error: string | null = null;
+        export let ohlcCandles: Array<{ t: number; o: number; h: number; l: number; c: number }> = [];
+        export let rangeStartMs: number | null = null;
+        export let rangeEndMs: number | null = null;
 
         let historyCanvas: HTMLCanvasElement | null = null;
-        let volumeCanvas: HTMLCanvasElement | null = null;
         let depthCanvas: HTMLCanvasElement | null = null;
 
         let historyChart: ChartInstance = null;
-        let volumeChart: ChartInstance = null;
         let depthChart: ChartInstance = null;
         let ChartCtor: any = null;
         let loadingChartLib = false;
         let chartLibError: string | null = null;
+        let candlestickPluginRegistered = false;
+
+        function roundToNiceNumber(value: number): number {
+                if (!Number.isFinite(value) || value <= 0) return 1;
+                const exponent = Math.floor(Math.log10(value));
+                const base = 10 ** exponent;
+                const fraction = value / base;
+
+                let niceFraction = 1;
+                if (fraction <= 1) niceFraction = 1;
+                else if (fraction <= 2) niceFraction = 2;
+                else if (fraction <= 5) niceFraction = 5;
+                else niceFraction = 10;
+
+                return niceFraction * base;
+        }
+
+        function registerCandlestickPlugin(chartGlobal: any) {
+                if (candlestickPluginRegistered || !chartGlobal) return;
+
+                const candlestickPlugin = {
+                        id: 'customCandlesticks',
+                        defaults: {
+                                bodyWidthFactor: 0.6,
+                                minBodyWidth: 4,
+                                maxBodyWidth: 18
+                        },
+                        afterDatasetsDraw(chart: any, _args: unknown, opts: any) {
+                                const options = {
+                                        bodyWidthFactor: opts?.bodyWidthFactor ?? 0.6,
+                                        minBodyWidth: opts?.minBodyWidth ?? 4,
+                                        maxBodyWidth: opts?.maxBodyWidth ?? 18
+                                };
+
+                                const xScale = chart.scales?.x;
+                                if (!xScale) return;
+
+                                const ctx: CanvasRenderingContext2D = chart.ctx;
+
+                                chart.data.datasets.forEach((dataset: any, datasetIndex: number) => {
+                                        if (!dataset?.candlestick) return;
+                                        const meta = chart.getDatasetMeta(datasetIndex);
+                                        if (meta.hidden) return;
+
+                                        const yScale = chart.scales?.[dataset.yAxisID ?? 'y'];
+                                        if (!yScale) return;
+
+                                        const data: Array<{ x: number; y: number; o: number; h: number; l: number; c: number }> =
+                                                dataset.data ?? [];
+
+                                        const upColor = dataset.upColor ?? '#22c55e';
+                                        const downColor = dataset.downColor ?? '#ef4444';
+                                        const flatColor = dataset.unchangedColor ?? '#facc15';
+                                        const borderUp = dataset.borderUp ?? '#14532d';
+                                        const borderDown = dataset.borderDown ?? '#7f1d1d';
+                                        const borderFlat = dataset.borderFlat ?? '#854d0e';
+
+                                        for (let i = 0; i < data.length; i += 1) {
+                                                const point = data[i];
+                                                if (!point) continue;
+
+                                                const x = xScale.getPixelForValue(point.x);
+                                                if (!Number.isFinite(x)) continue;
+
+                                                const prevX = data[i - 1] ? xScale.getPixelForValue(data[i - 1].x) : undefined;
+                                                const nextX = data[i + 1] ? xScale.getPixelForValue(data[i + 1].x) : undefined;
+
+                                                let halfWidth = (options.maxBodyWidth ?? 18) / 2;
+                                                const widthCandidates: number[] = [];
+                                                if (Number.isFinite(prevX)) {
+                                                        widthCandidates.push(Math.abs(x - (prevX as number)));
+                                                }
+                                                if (Number.isFinite(nextX)) {
+                                                        widthCandidates.push(Math.abs((nextX as number) - x));
+                                                }
+                                                if (widthCandidates.length > 0) {
+                                                        const spacing = Math.min(...widthCandidates);
+                                                        halfWidth = (spacing * (options.bodyWidthFactor ?? 0.6)) / 2;
+                                                }
+
+                                                const minHalf = (options.minBodyWidth ?? 4) / 2;
+                                                const maxHalf = (options.maxBodyWidth ?? 18) / 2;
+                                                halfWidth = Math.max(minHalf, Math.min(maxHalf, halfWidth));
+
+                                                const openY = yScale.getPixelForValue(point.o);
+                                                const closeY = yScale.getPixelForValue(point.c);
+                                                const highY = yScale.getPixelForValue(point.h);
+                                                const lowY = yScale.getPixelForValue(point.l);
+
+                                                if (!Number.isFinite(openY) || !Number.isFinite(closeY) || !Number.isFinite(highY) || !Number.isFinite(lowY)) {
+                                                        continue;
+                                                }
+
+                                                const rising = point.c > point.o;
+                                                const falling = point.c < point.o;
+                                                const fillColor = rising ? upColor : falling ? downColor : flatColor;
+                                                const strokeColor = rising ? borderUp : falling ? borderDown : borderFlat;
+
+                                                const bodyTop = Math.min(openY as number, closeY as number);
+                                                const bodyBottom = Math.max(openY as number, closeY as number);
+                                                const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+
+                                                ctx.save();
+                                                ctx.lineWidth = 1;
+                                                ctx.strokeStyle = strokeColor;
+                                                ctx.fillStyle = fillColor;
+
+                                                ctx.beginPath();
+                                                ctx.moveTo(x, highY as number);
+                                                ctx.lineTo(x, lowY as number);
+                                                ctx.stroke();
+
+                                                const left = Math.round(x - halfWidth) + 0.5;
+                                                const width = Math.round(halfWidth * 2);
+                                                ctx.fillRect(left, bodyTop, width, bodyHeight);
+                                                ctx.strokeRect(left, bodyTop, width, bodyHeight);
+
+                                                ctx.restore();
+                                        }
+                                });
+                        }
+                };
+
+                if (typeof chartGlobal.register === 'function') {
+                        chartGlobal.register(candlestickPlugin);
+                        candlestickPluginRegistered = true;
+                }
+        }
 
         const scriptPromises = new Map<string, Promise<void>>();
 
@@ -96,6 +225,7 @@
 
                 if (typeof window !== 'undefined' && (window as { Chart?: any }).Chart) {
                         ChartCtor = (window as { Chart?: any }).Chart ?? null;
+                        registerCandlestickPlugin(ChartCtor);
                         chartLibError = null;
                         return ChartCtor;
                 }
@@ -112,6 +242,7 @@
                                 throw new Error('Chart.js global not found');
                         }
                         ChartCtor = chartGlobal;
+                        registerCandlestickPlugin(ChartCtor);
                         chartLibError = null;
                         return ChartCtor;
                 } catch (err) {
@@ -128,31 +259,20 @@
                         historyChart.destroy();
                         historyChart = null;
                 }
-                if (volumeChart) {
-                        volumeChart.destroy();
-                        volumeChart = null;
-                }
                 if (depthChart) {
                         depthChart.destroy();
                         depthChart = null;
                 }
         }
 
-        function priceRange(points: TradeHistoryPoint[]) {
-                if (!points.length) return { min: undefined, max: undefined };
-                let min = Number.POSITIVE_INFINITY;
-                let max = Number.NEGATIVE_INFINITY;
-                for (const point of points) {
-                        if (!Number.isFinite(point.price)) continue;
-                        min = Math.min(min, point.price);
-                        max = Math.max(max, point.price);
+        function formatYAxisValue(value: number, range: number): string {
+                if (!Number.isFinite(value) || !Number.isFinite(range)) return String(value);
+                // Use 1 decimal if range < 10, else use integers
+                if (range < 10) {
+                        return value.toFixed(1);
+                } else {
+                        return Math.round(value).toString();
                 }
-                if (!Number.isFinite(min) || !Number.isFinite(max) || min === Number.POSITIVE_INFINITY) {
-                        return { min: undefined, max: undefined };
-                }
-                const span = max - min;
-                const padding = span > 0 ? span * 0.1 : min > 0 ? min * 0.1 : 0;
-                return { min: Math.max(0, min - padding), max: max + padding };
         }
 
         function updateHistoryChart() {
@@ -160,32 +280,112 @@
                 const ctx = historyCanvas.getContext('2d');
                 if (!ctx) return;
 
-                const dataset = tradeHistory
-                        .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.price))
-                        .map((point) => ({ x: point.timestamp, y: point.price, side: point.side }));
+                const sortedCandles = [...ohlcCandles]
+                        .filter((candle) =>
+                                Number.isFinite(candle.t) &&
+                                Number.isFinite(candle.o) &&
+                                Number.isFinite(candle.h) &&
+                                Number.isFinite(candle.l) &&
+                                Number.isFinite(candle.c)
+                        )
+                        .sort((a, b) => a.t - b.t)
+                        .map((candle) => ({
+                                x: candle.t,
+                                y: candle.c,
+                                o: candle.o,
+                                h: candle.h,
+                                l: candle.l,
+                                c: candle.c
+                        }));
+
+                const volumeData = volumeBuckets
+                        .filter((bucket) => Number.isFinite(bucket.start) && Number.isFinite(bucket.tokens))
+                        .sort((a, b) => a.start - b.start)
+                        .map((bucket) => ({ x: bucket.start, y: bucket.tokens }));
+
+                const allTimes: number[] = [];
+                for (const candle of sortedCandles) {
+                        allTimes.push(candle.x);
+                }
+                for (const bucket of volumeData) {
+                        allTimes.push(bucket.x);
+                }
+                for (const point of tradeHistory) {
+                        if (Number.isFinite(point.timestamp)) {
+                                allTimes.push(point.timestamp);
+                        }
+                }
+
+                const hasExplicitStart = typeof rangeStartMs === 'number' && Number.isFinite(rangeStartMs);
+                const hasExplicitEnd = typeof rangeEndMs === 'number' && Number.isFinite(rangeEndMs);
+                const fallbackEnd = hasExplicitEnd ? (rangeEndMs as number) : Date.now();
+                const fallbackStart = hasExplicitStart
+                        ? (rangeStartMs as number)
+                        : fallbackEnd - 7 * 24 * 60 * 60 * 1000;
+
+                let minTime = allTimes.length ? Math.min(...allTimes) : fallbackStart;
+                let maxTime = allTimes.length ? Math.max(...allTimes) : fallbackEnd;
+
+                if (hasExplicitStart) {
+                        minTime = rangeStartMs as number;
+                }
+                if (hasExplicitEnd) {
+                        maxTime = rangeEndMs as number;
+                }
+
+                if (!Number.isFinite(minTime)) {
+                        minTime = fallbackStart;
+                }
+                if (!Number.isFinite(maxTime) || maxTime <= minTime) {
+                        maxTime = Math.max(fallbackEnd, minTime + 60 * 60 * 1000);
+                }
+
+                const volumeValues = volumeData.map((bucket) => bucket.y);
+                const volumeMax = volumeValues.length ? Math.max(...volumeValues) : 0;
+                const volumeRange = volumeMax > 0 ? volumeMax : 1;
+                const volumeAxisMax = roundToNiceNumber(volumeRange * 4);
 
                 if (!historyChart) {
                         historyChart = new ChartCtor(ctx, {
-                                type: 'line',
+                                type: 'scatter',
                                 data: { datasets: [] },
                                 options: {
                                         responsive: true,
                                         maintainAspectRatio: false,
                                         interaction: { mode: 'nearest', intersect: false },
                                         plugins: {
-                                                legend: { display: false },
+                                                legend: {
+                                                        labels: {
+                                                                color: '#d1d5db'
+                                                        }
+                                                },
                                                 tooltip: {
                                                         callbacks: {
-                                                                label: (context: { raw?: { y?: number; side?: string } }) => {
-                                                                        const value = context.raw?.y;
-                                                                        const side = context.raw?.side;
-                                                                        const priceLabel =
-                                                                                value && Number.isFinite(value)
-                                                                                        ? `$${value.toFixed(2)}`
-                                                                                        : '—';
-                                                                        if (side === 'buy') return `Buy @ ${priceLabel}`;
-                                                                        if (side === 'sell') return `Sell @ ${priceLabel}`;
-                                                                        return priceLabel;
+                                                                title: (items: any[]) => {
+                                                                        if (items.length === 0) return '';
+                                                                        const time = items[0].raw?.x ?? items[0].parsed?.x;
+                                                                        if (!time) return '';
+                                                                        const date = new Date(time);
+                                                                        return date.toLocaleString('en-US', {
+                                                                                year: 'numeric',
+                                                                                month: '2-digit',
+                                                                                day: '2-digit',
+                                                                                hour: '2-digit',
+                                                                                minute: '2-digit',
+                                                                                hour12: false
+                                                                        });
+                                                                },
+                                                                label: (context: any) => {
+                                                                        if (context.dataset?.candlestick) {
+                                                                                const candle = context.raw;
+                                                                                if (!candle) return '';
+                                                                                const direction = candle.c >= candle.o ? '▲' : '▼';
+                                                                                return `${direction} O:${candle.o.toFixed(2)} H:${candle.h.toFixed(
+                                                                                        2
+                                                                                )} L:${candle.l.toFixed(2)} C:${candle.c.toFixed(2)}`;
+                                                                        }
+                                                                        const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
+                                                                        return `Volume: ${formatYAxisValue(volumeValue, volumeRange)}`;
                                                                 }
                                                         }
                                                 }
@@ -193,15 +393,24 @@
                                         scales: {
                                                 x: {
                                                         type: 'time',
-                                                        time: { tooltipFormat: 'MMM d, yyyy HH:mm' },
+                                                        time: {
+                                                                unit: 'hour',
+                                                                stepSize: 1,
+                                                                displayFormats: {
+                                                                        hour: 'MMM dd HH:00'
+                                                                }
+                                                        },
                                                         ticks: {
                                                                 color: '#9ca3af',
                                                                 maxRotation: 0,
-                                                                autoSkip: true
+                                                                autoSkip: false
                                                         },
-                                                        grid: { color: 'rgba(148, 163, 184, 0.15)' }
+                                                        grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                                                        min: minTime,
+                                                        max: maxTime
                                                 },
-                                                y: {
+                                                yPrice: {
+                                                        position: 'left',
                                                         ticks: {
                                                                 color: '#9ca3af',
                                                                 callback: (value: string | number) => {
@@ -211,6 +420,17 @@
                                                                 }
                                                         },
                                                         grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                                                },
+                                                yVolume: {
+                                                        position: 'right',
+                                                        beginAtZero: true,
+                                                        grid: { drawOnChartArea: false },
+                                                        ticks: {
+                                                                color: '#9ca3af',
+                                                                callback: (value: string | number) => {
+                                                                        return formatYAxisValue(Number(value), volumeRange);
+                                                                }
+                                                        }
                                                 }
                                         }
                                 }
@@ -221,104 +441,65 @@
 
                 historyChart.data.datasets = [
                         {
-                                label: 'Trade price (USDC)',
-                                data: dataset,
-                                borderColor: '#facc15',
-                                backgroundColor: 'rgba(250, 204, 21, 0.15)',
-                                tension: 0.2,
-                                spanGaps: true,
+                                label: 'Price',
+                                type: 'scatter',
+                                yAxisID: 'yPrice',
+                                candlestick: true,
+                                data: sortedCandles,
+                                upColor: '#22c55e',
+                                downColor: '#ef4444',
+                                unchangedColor: '#facc15',
+                                borderUp: '#14532d',
+                                borderDown: '#7f1d1d',
+                                borderFlat: '#854d0e',
                                 parsing: false,
-                                pointRadius: 4,
-                                pointHoverRadius: 6,
-                                pointBackgroundColor: (context: { raw?: { side?: string } }) =>
-                                        context.raw?.side === 'buy' ? '#22c55e' : '#ef4444',
-                                pointBorderColor: (context: { raw?: { side?: string } }) =>
-                                        context.raw?.side === 'buy' ? '#22c55e' : '#ef4444'
+                                showLine: false,
+                                pointRadius: 0,
+                                pointHoverRadius: 0,
+                                pointHitRadius: 12
+                        },
+                        {
+                                label: 'Volume',
+                                type: 'bar',
+                                yAxisID: 'yVolume',
+                                data: volumeData,
+                                backgroundColor: 'rgba(14, 165, 233, 0.45)',
+                                borderColor: '#0ea5e9',
+                                borderWidth: 1,
+                                borderRadius: 4,
+                                maxBarThickness: 24,
+                                hoverBackgroundColor: 'rgba(14, 165, 233, 0.6)',
+                                parsing: false
                         }
                 ];
 
-                const { min, max } = priceRange(tradeHistory);
-                const yScale = historyChart.options.scales?.y ?? historyChart.options.scales?.['y'];
-                if (yScale) {
-                        if (Number.isFinite(min)) {
-                                yScale.suggestedMin = min;
-                        } else {
-                                delete yScale.suggestedMin;
-                        }
-                        if (Number.isFinite(max)) {
-                                yScale.suggestedMax = max;
-                        } else {
-                                delete yScale.suggestedMax;
-                        }
+                // Update x-axis range
+                const xScale = historyChart.options.scales?.x;
+                if (xScale) {
+                        xScale.min = minTime;
+                        xScale.max = maxTime;
+                }
+
+                const priceScale = historyChart.options.scales?.yPrice;
+                if (priceScale) {
+                        priceScale.ticks = priceScale.ticks ?? {};
+                }
+
+                const volumeScale = historyChart.options.scales?.yVolume;
+                if (volumeScale) {
+                        volumeScale.display = false;
+                        volumeScale.grid = { drawOnChartArea: false, display: false };
+                        volumeScale.suggestedMax = volumeAxisMax;
+                        volumeScale.min = 0;
                 }
 
                 historyChart.update();
         }
 
-        function updateVolumeChart() {
-                if (!ChartCtor || !volumeCanvas) return;
-                const ctx = volumeCanvas.getContext('2d');
-                if (!ctx) return;
-
-                const dataset = volumeBuckets
-                        .filter((bucket) => Number.isFinite(bucket.start) && Number.isFinite(bucket.tokens))
-                        .map((bucket) => ({ x: bucket.start, y: bucket.tokens }));
-
-                if (!volumeChart) {
-                        volumeChart = new ChartCtor(ctx, {
-                                type: 'bar',
-                                data: { datasets: [] },
-                                options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                                legend: { display: false }
-                                        },
-                                        scales: {
-                                                x: {
-                                                        type: 'time',
-                                                        time: { unit: 'day' },
-                                                        ticks: { color: '#9ca3af', maxRotation: 0 },
-                                                        grid: { color: 'rgba(148, 163, 184, 0.15)' }
-                                                },
-                                                y: {
-                                                        ticks: {
-                                                                color: '#9ca3af',
-                                                                callback: (value: string | number) => {
-                                                                        const numeric = Number(value);
-                                                                        if (!Number.isFinite(numeric)) return value;
-                                                                        return `${numeric.toFixed(2)} tokens`;
-                                                                }
-                                                        },
-                                                        grid: { color: 'rgba(148, 163, 184, 0.1)' }
-                                                }
-                                        }
-                                }
-                        }) as ChartInstance;
-                }
-
-                if (!volumeChart) return;
-
-                volumeChart.data.datasets = [
-                        {
-                                label: 'Volume (tokens)',
-                                data: dataset,
-                                backgroundColor: 'rgba(14, 165, 233, 0.55)',
-                                borderColor: '#0ea5e9',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                                maxBarThickness: 36,
-                                parsing: false
-                        }
-                ];
-
-                volumeChart.update();
-        }
-
         function buildDepthDataset(points: DepthSeries['bids'], side: 'bids' | 'asks') {
                 const sorted = [...points]
                         .filter((point) => Number.isFinite(point.price) && Number.isFinite(point.quantity) && point.quantity > 0)
-                        .sort((a, b) => (side === 'bids' ? b.price - a.price : a.price - b.price));
+                        .sort((a, b) => (side === 'bids' ? a.price - b.price : a.price - b.price));
 
                 const cumulative: Array<{ x: number; y: number }> = [];
                 let running = 0;
@@ -326,6 +507,7 @@
                         running += point.quantity;
                         cumulative.push({ x: point.price, y: running });
                 }
+
                 return cumulative;
         }
 
@@ -334,8 +516,39 @@
                 const ctx = depthCanvas.getContext('2d');
                 if (!ctx) return;
 
-                const bidsData = buildDepthDataset(depth.bids, 'bids');
-                const asksData = buildDepthDataset(depth.asks, 'asks');
+                let bidsData = buildDepthDataset(depth.bids, 'bids');
+                let asksData = buildDepthDataset(depth.asks, 'asks');
+
+                const allVolumes = [...bidsData, ...asksData].map((point) => point.y);
+                const maxVolume = allVolumes.length ? Math.max(...allVolumes) : 0;
+                const volumeRange = maxVolume > 0 ? maxVolume : 1;
+
+                const priceValues = [...bidsData, ...asksData].map((point) => point.x).filter((value) => Number.isFinite(value));
+                const baseMinPrice = priceValues.length ? Math.min(...priceValues) : 0;
+                const baseMaxPrice = priceValues.length ? Math.max(...priceValues) : 1;
+                const priceSpan = Math.max(baseMaxPrice - baseMinPrice, baseMaxPrice * 0.05, 0.5);
+                const pricePadding = priceSpan * 0.1;
+                const lowerTail = Math.max(baseMinPrice - pricePadding, 0);
+                const upperTail = baseMaxPrice + pricePadding;
+
+                const extendWithTail = (data: Array<{ x: number; y: number }>) => {
+                        if (!data.length) return data;
+                        const extended = [...data];
+                        if (extended[0].x > lowerTail) {
+                                extended.unshift({ x: lowerTail, y: 0 });
+                        } else {
+                                extended[0] = { x: extended[0].x, y: 0 };
+                        }
+                        if (extended[extended.length - 1].x < upperTail) {
+                                extended.push({ x: upperTail, y: 0 });
+                        } else {
+                                extended[extended.length - 1] = { x: extended[extended.length - 1].x, y: 0 };
+                        }
+                        return extended;
+                };
+
+                bidsData = extendWithTail(bidsData);
+                asksData = extendWithTail(asksData);
 
                 if (!depthChart) {
                         depthChart = new ChartCtor(ctx, {
@@ -346,7 +559,17 @@
                                         maintainAspectRatio: false,
                                         interaction: { mode: 'nearest', intersect: false },
                                         plugins: {
-                                                legend: { position: 'bottom', labels: { color: '#d1d5db' } }
+                                                legend: { position: 'bottom', labels: { color: '#d1d5db' } },
+                                                tooltip: {
+                                                        callbacks: {
+                                                                label: (context: any) => {
+                                                                        const label = context.dataset.label || '';
+                                                                        const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
+                                                                        const price = Number(context.raw?.x ?? context.parsed?.x ?? 0).toFixed(2);
+                                                                        return `${label}: ${formatYAxisValue(volumeValue, volumeRange)} @ $${price}`;
+                                                                }
+                                                        }
+                                                }
                                         },
                                         scales: {
                                                 x: {
@@ -362,12 +585,13 @@
                                                         grid: { color: 'rgba(148, 163, 184, 0.1)' }
                                                 },
                                                 y: {
+                                                        beginAtZero: true,
                                                         ticks: {
                                                                 color: '#9ca3af',
                                                                 callback: (value: string | number) => {
                                                                         const numeric = Number(value);
                                                                         if (!Number.isFinite(numeric)) return value;
-                                                                        return `${numeric.toFixed(2)} tokens`;
+                                                                        return formatYAxisValue(numeric, volumeRange);
                                                                 }
                                                         },
                                                         grid: { color: 'rgba(148, 163, 184, 0.1)' }
@@ -384,7 +608,7 @@
                                 label: 'Bids',
                                 data: bidsData,
                                 borderColor: '#22c55e',
-                                backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                                backgroundColor: 'rgba(34, 197, 94, 0.25)',
                                 fill: 'origin',
                                 stepped: 'before',
                                 parsing: false,
@@ -394,7 +618,7 @@
                                 label: 'Asks',
                                 data: asksData,
                                 borderColor: '#ef4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                                backgroundColor: 'rgba(239, 68, 68, 0.25)',
                                 fill: 'origin',
                                 stepped: 'after',
                                 parsing: false,
@@ -402,13 +626,23 @@
                         }
                 ];
 
+                const yScale = depthChart.options.scales?.y;
+                if (yScale) {
+                        yScale.suggestedMax = roundToNiceNumber(volumeRange * 1.2);
+                }
+
+                const xScale = depthChart.options.scales?.x;
+                if (xScale && priceValues.length) {
+                        xScale.min = lowerTail;
+                        xScale.max = upperTail;
+                }
+
                 depthChart.update();
         }
 
         function updateCharts() {
                 if (!ChartCtor) return;
                 updateHistoryChart();
-                updateVolumeChart();
                 updateDepthChart();
         }
 
@@ -429,16 +663,33 @@
                 };
         });
 
+        // Debug logging
+        $: if (browser) {
+                if (tradeHistory.length > 0) {
+                        console.log('[TokenMarketCharts] Trade history points:', tradeHistory.length);
+                }
+                if (volumeBuckets.length > 0) {
+                        console.log('[TokenMarketCharts] Volume buckets:', volumeBuckets.length);
+                }
+                if (depth.bids.length > 0 || depth.asks.length > 0) {
+                        console.log('[TokenMarketCharts] Orderbook depth:', { bids: depth.bids.length, asks: depth.asks.length });
+                }
+        }
+
         onDestroy(() => {
                 destroyCharts();
         });
 
         $: if (ChartCtor && browser) {
+                void tradeHistory;
+                void volumeBuckets;
+                void depth;
+                void rangeStartMs;
+                void rangeEndMs;
                 updateCharts();
         }
 
-        $: historyEmpty = tradeHistory.length === 0;
-        $: volumeEmpty = volumeBuckets.length === 0;
+        $: historyEmpty = ohlcCandles.length === 0;
         $: depthEmpty = depth.bids.length === 0 && depth.asks.length === 0;
         $: combinedError = error ?? chartLibError;
         $: libraryLoading = loadingChartLib && !ChartCtor;
@@ -450,11 +701,12 @@
                         {combinedError}
                 </div>
         {/if}
-        <div class="grid gap-6 xl:grid-cols-3">
-                <div class={`${containerStyles.cardBordered} flex flex-col`}> 
+        <div class="grid gap-6 xl:grid-cols-3 xl:grid-rows-2">
+                <!-- Row 1: Trade History (2/3) -->
+                <div class={`${containerStyles.cardBordered} flex flex-col xl:col-span-2 xl:row-span-2`}>
                         <div class="border-b border-white/5 pb-3">
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Trade History</h3>
-                                <p class="mt-1 text-xs text-gray-500">On-chain trade executions over the last 30 days</p>
+                                <p class="mt-1 text-xs text-gray-500">On-chain trade executions over time</p>
                         </div>
                         <div class="relative flex-1 pt-4">
                                 {#if !browser}
@@ -462,7 +714,7 @@
                                                 Charts are available in a browser environment.
                                         </div>
                                 {:else}
-                                        <div class="relative h-64">
+                                        <div class="relative h-80">
                                                 <canvas bind:this={historyCanvas} class="absolute inset-0 h-full w-full"></canvas>
                                                 {#if (isLoading || libraryLoading) && historyEmpty}
                                                         <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-sm text-gray-400">
@@ -478,37 +730,11 @@
                         </div>
                 </div>
 
-                <div class={`${containerStyles.cardBordered} flex flex-col`}>
-                        <div class="border-b border-white/5 pb-3">
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Trade Volume</h3>
-                                <p class="mt-1 text-xs text-gray-500">Daily token volume settled on-chain</p>
-                        </div>
-                        <div class="relative flex-1 pt-4">
-                                {#if !browser}
-                                        <div class="absolute inset-4 flex items-center justify-center rounded-lg border border-dashed border-white/10 p-4 text-center text-sm text-gray-400">
-                                                Charts are available in a browser environment.
-                                        </div>
-                                {:else}
-                                        <div class="relative h-64">
-                                                <canvas bind:this={volumeCanvas} class="absolute inset-0 h-full w-full"></canvas>
-                                                {#if (isLoading || libraryLoading) && volumeEmpty}
-                                                        <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-sm text-gray-400">
-                                                                Loading volume data...
-                                                        </div>
-                                                {:else if (!isLoading && !libraryLoading && volumeEmpty)}
-                                                        <div class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-gray-400">
-                                                                No settled trades to calculate volume for this period.
-                                                        </div>
-                                                {/if}
-                                        </div>
-                                {/if}
-                        </div>
-                </div>
-
-                <div class={`${containerStyles.cardBordered} flex flex-col`}>
+                <!-- Orderbook Depth (spans remaining column) -->
+                <div class={`${containerStyles.cardBordered} flex flex-col xl:row-span-2`}>
                         <div class="border-b border-white/5 pb-3">
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Orderbook Depth</h3>
-                                <p class="mt-1 text-xs text-gray-500">Aggregated on-chain liquidity from current quotes</p>
+                                <p class="mt-1 text-xs text-gray-500">Current on-chain liquidity</p>
                         </div>
                         <div class="relative flex-1 pt-4">
                                 {#if !browser}
@@ -516,7 +742,7 @@
                                                 Charts are available in a browser environment.
                                         </div>
                                 {:else}
-                                        <div class="relative h-64">
+                                        <div class="relative h-full">
                                                 <canvas bind:this={depthCanvas} class="absolute inset-0 h-full w-full"></canvas>
                                                 {#if (isLoading || libraryLoading) && depthEmpty}
                                                         <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-sm text-gray-400">
