@@ -3,11 +3,11 @@
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
-	import ShareButton from './ShareButton.svelte';
-	import { getAllTokensByNetwork } from '$lib/network';
-	import type { TradingViewQuote } from '$lib/services/tradingview';
-	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import { formatUnits } from 'viem';
+import ShareButton from './ShareButton.svelte';
+import { getAllTokensByNetwork } from '$lib/network';
+import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+import { formatUnits } from 'viem';
+import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
@@ -30,40 +30,6 @@
 	// Get all tokens for the current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
-	function baseFromSymbol(sym?: string) {
-		if (!sym) return undefined;
-		if (sym.includes('t')) return sym.split('t')[1];
-		return sym;
-	}
-
-	function findTradingViewSymbol(symbol?: string) {
-		const base = baseFromSymbol(symbol);
-		if (!base) return undefined;
-		const match = ALL_TOKENS.find(
-			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
-		);
-		return match?.tradingViewSymbol;
-	}
-
-	function findQuoteForSymbol(symbol?: string) {
-		if (!$tokenGlobalQuote?.length) return undefined;
-		const quotes = $tokenGlobalQuote as TradingViewQuote[];
-		const tradingSymbol = findTradingViewSymbol(symbol);
-		if (tradingSymbol) {
-			const tsUpper = tradingSymbol.toUpperCase();
-			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
-			if (direct) return direct;
-		}
-		const base = baseFromSymbol(symbol)?.toUpperCase();
-		if (!base) return undefined;
-		return quotes.find((q) => {
-			const quoteSymbol = (q.symbol ?? '').toUpperCase();
-			if (quoteSymbol === base) return true;
-			const parts = quoteSymbol.split(':');
-			return parts[parts.length - 1] === base;
-		});
-	}
-
 	// Calculate assets sorted by volume
 	$: sortedAssets = $sfts
 		? [...$sfts]
@@ -75,7 +41,7 @@
 						BigInt(0)
 					);
 					const totalVolume = depositVolume + withdrawVolume;
-					const quote = findQuoteForSymbol(sft.symbol);
+                                        const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;

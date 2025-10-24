@@ -1,8 +1,8 @@
 <script lang="ts">
 	import axios from 'axios';
-	import { browser } from '$app/environment';
-	import { page } from '$app/stores';
-	import { currentNetwork, sfts } from '$lib/stores';
+        import { browser } from '$app/environment';
+        import { page } from '$app/stores';
+        import { currentNetwork, sfts, orderbookQuotesResource } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS, USDC_TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -28,17 +28,16 @@
         import type { SgTrade } from '@rainlanguage/orderbook';
         import type { QueryObserverResult } from '@tanstack/query-core';
         import { createQuery } from '@tanstack/svelte-query';
-        import type { ProcessedQuote } from '$lib/utils/quote';
-        import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
         import type { Readable } from 'svelte/store';
-        import { getTrades } from '$lib/query';
-        import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
-        import type {
+import { getTrades } from '$lib/query';
+import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
+import type {
                 DepthSeries,
                 TradeHistoryPoint,
                 VolumeBucket
         } from '$lib/components/charts/token-chart-types';
-        import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -49,13 +48,7 @@
 			token.chainId === $currentNetwork?.chainId
 	);
 
-	function baseFromSymbol(sym?: string | null) {
-		if (!sym) return undefined;
-		if (sym.includes('t')) return sym.split('t')[1];
-		return sym;
-	}
-
-	$: baseSymbol = baseFromSymbol(currentToken?.symbol);
+        $: baseSymbol = extractBaseSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
 
 	const ASSET_TABS = [
@@ -156,7 +149,6 @@
         let chartsLoading = false;
         let tradeQueryError: string | null = null;
 
-        let onChainQuoteQuery: Readable<QueryObserverResult<ProcessedQuote[] | undefined, Error | null>>;
         let tradeHistoryQuery: Readable<QueryObserverResult<SgTrade[] | undefined, Error | null>>;
 
         let oraclePriceData: { price: number; confidence: number } | null = null;
@@ -294,23 +286,6 @@
 		}
 	};
 
-        $: onChainQuoteQuery = createQuery({
-                queryKey: ['fetchAndQuoteUSDCOrders', $currentNetwork?.id],
-                enabled: browser && !!$currentNetwork?.chainId,
-                staleTime: 20_000,
-                queryFn: async () => {
-			if (!browser) return [];
-			const networkId = $currentNetwork?.chainId;
-			if (!networkId) return [];
-			try {
-				return await fetchAndQuoteUSDCOrders(networkId);
-			} catch (error) {
-				console.warn('[onchain-quotes] failed to fetch quotes', error);
-				return [];
-			}
-                }
-        });
-
         $: tradeHistoryQuery = createQuery({
                 queryKey: ['token-trade-history', currentToken?.address, $currentNetwork?.id],
                 enabled:
@@ -339,27 +314,17 @@
 		sellPrice = null;
 	};
 
-	$: {
-		if (!browser || !currentToken) {
-			resetOnChainPrices();
-		} else {
-			const networkId = $currentNetwork?.chainId;
-			const usdcToken = networkId ? USDC_TOKENS[networkId] : undefined;
-			const quotes = $onChainQuoteQuery.data ?? [];
-
-			if (!usdcToken || !quotes.length) {
-				resetOnChainPrices();
-			} else {
-				const map = buildTokenPriceMap(quotes, usdcToken.address);
-				const summary = map.get(currentToken.address.toLowerCase()) ?? null;
-				buyPrice = summary?.buy ?? null;
-				sellPrice = summary?.sell ?? null;
-
-				if (browser) {
-					// Logging removed after validation
-				}
-			}
-		}
+        $: {
+                if (!browser || !currentToken) {
+                        resetOnChainPrices();
+                } else {
+                        const summary =
+                                $orderbookQuotesResource?.data?.summary?.[
+                                        currentToken.address?.toLowerCase() ?? ''
+                                ] ?? null;
+                        buyPrice = summary?.buy ?? null;
+                        sellPrice = summary?.sell ?? null;
+                }
         }
 
         $: tradeHistoryPoints = (() => {
@@ -400,7 +365,7 @@
 
         $: orderbookDepth = (() => {
                 if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
-                const quotes = $onChainQuoteQuery.data ?? [];
+                const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
                 if (!quotes.length) return { bids: [], asks: [] };
                 const usdcToken = $currentNetwork.chainId
                         ? USDC_TOKENS[$currentNetwork.chainId]
@@ -448,18 +413,14 @@
 
         $: {
                 const tradeResult = $tradeHistoryQuery;
-                const quoteResult = $onChainQuoteQuery;
-
                 const tradeStatus = tradeResult?.status;
-                const quoteStatus = quoteResult?.status;
                 const tradeFetchStatus = tradeResult?.fetchStatus;
-                const quoteFetchStatus = quoteResult?.fetchStatus;
+                const quoteLoading = $orderbookQuotesResource?.status === 'loading';
 
                 chartsLoading = Boolean(
                         tradeStatus === 'pending' ||
                                 tradeFetchStatus === 'fetching' ||
-                                quoteStatus === 'pending' ||
-                                quoteFetchStatus === 'fetching'
+                                quoteLoading
                 );
 
                 const err = tradeResult?.error;
@@ -556,25 +517,25 @@
 							</div>
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Bid Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
-									{#if $onChainQuoteQuery.isLoading}
-										Loading...
-									{:else if buyPrice !== null}
-										${formatNumeric(buyPrice)}
-									{:else}
-										—
+                                                                <dd class="mt-1 font-medium text-gray-100">
+                                                                        {#if $orderbookQuotesResource?.status === 'loading'}
+                                                                                Loading...
+                                                                        {:else if buyPrice !== null}
+                                                                                ${formatNumeric(buyPrice)}
+                                                                        {:else}
+                                                                                —
 									{/if}
 								</dd>
 							</div>
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Offer Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
-									{#if $onChainQuoteQuery.isLoading}
-										Loading...
-									{:else if sellPrice !== null}
-										${formatNumeric(sellPrice)}
-									{:else}
-										—
+                                                                <dd class="mt-1 font-medium text-gray-100">
+                                                                        {#if $orderbookQuotesResource?.status === 'loading'}
+                                                                                Loading...
+                                                                        {:else if sellPrice !== null}
+                                                                                ${formatNumeric(sellPrice)}
+                                                                        {:else}
+                                                                                —
 									{/if}
 								</dd>
 							</div>

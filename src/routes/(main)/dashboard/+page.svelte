@@ -14,9 +14,8 @@
 	import { textStyles, gridStyles } from '$lib/utils/styles';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
-	import { getAllTokensByNetwork } from '$lib/network';
-	import type { TradingViewQuote } from '$lib/services/tradingview';
-	import { goto } from '$app/navigation';
+import { getAllTokensByNetwork } from '$lib/network';
+import { goto } from '$app/navigation';
 	import { getOrders, getVaults } from '@rainlanguage/orderbook';
 	import type {
 		SgOrderWithSubgraphName,
@@ -27,50 +26,17 @@
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
 	import { evmChainIds, EvmToken } from 'sushi/evm';
-	import { getPrice } from '$lib/getPrice';
-	import Table from '$lib/components/ui/table/Table.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
+import { getPrice } from '$lib/getPrice';
+import Table from '$lib/components/ui/table/Table.svelte';
+import Button from '$lib/components/ui/Button.svelte';
+import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
+import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
 	function isUSDCPosition(token: { token: SgErc20 }) {
 		return (
 			token.token.symbol?.toUpperCase() === 'USDC' ||
 			token.token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase()
 		);
-	}
-
-	function baseFromSymbol(sym?: string) {
-		if (!sym) return undefined;
-		if (sym.includes('t')) return sym.split('t')[1];
-		return sym;
-	}
-
-	function findTradingViewSymbol(symbol?: string) {
-		const base = baseFromSymbol(symbol);
-		if (!base) return undefined;
-		const match = ALL_TOKENS.find(
-			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
-		);
-		return match?.tradingViewSymbol;
-	}
-
-	function findQuoteForSymbol(symbol?: string) {
-		if (!$tokenGlobalQuote?.length) return undefined;
-		const quotes = $tokenGlobalQuote as TradingViewQuote[];
-		const tradingSymbol = findTradingViewSymbol(symbol);
-		if (tradingSymbol) {
-			const tsUpper = tradingSymbol.toUpperCase();
-			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
-			if (direct) return direct;
-		}
-		const base = baseFromSymbol(symbol)?.toUpperCase();
-		if (!base) return undefined;
-		return quotes.find((q) => {
-			const quoteSymbol = (q.symbol ?? '').toUpperCase();
-			if (quoteSymbol === base) return true;
-			const parts = quoteSymbol.split(':');
-			return parts[parts.length - 1] === base;
-		});
 	}
 
 	// Filter tokens by current network
@@ -135,7 +101,7 @@
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
-					const quote = findQuoteForSymbol(sft.symbol);
+                                        const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const priceChange = quote?.change ?? 0;
 					const priceChangePercent = quote?.changePercent ?? 0;
@@ -285,7 +251,9 @@
 					token.symbol?.toUpperCase() === 'USDC' ||
 					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
 
-				const quote = !isUSDC ? findQuoteForSymbol(token.symbol) : null;
+                            const quote = !isUSDC
+                                    ? findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS)
+                                    : null;
 
 				let price: number;
 				if (isUSDC) {

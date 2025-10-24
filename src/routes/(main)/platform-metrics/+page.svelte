@@ -1,97 +1,113 @@
 <script lang="ts">
-	import Footer from '$lib/components/Footer.svelte';
-	import { formatUnits } from 'viem';
-	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import { currentNetwork, tokenGlobalQuote } from '$lib/stores';
-	import Section from '$lib/components/ui/Section.svelte';
-	import { createQuery } from '@tanstack/svelte-query';
-	import { getTrades } from '$lib/query';
-	import { getAllTokensByNetwork, networks } from '$lib/network';
-	import type { SgTrade } from '@rainlanguage/orderbook';
-	import type { TradingViewQuote } from '$lib/services/tradingview';
-	import PageContainer from '$lib/components/ui/PageContainer.svelte';
-	import MetricCard from '$lib/components/ui/MetricCard.svelte';
-	import Table from '$lib/components/ui/table/Table.svelte';
-	// Consolidated table component usage
-	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
-	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+        import Footer from '$lib/components/Footer.svelte';
+        import { formatUnits } from 'viem';
+        import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+        import Section from '$lib/components/ui/Section.svelte';
+        import { getAllTokensByNetwork, networks } from '$lib/network';
+import type { TradingViewQuote } from '$lib/services/tradingview';
+import PageContainer from '$lib/components/ui/PageContainer.svelte';
+import MetricCard from '$lib/components/ui/MetricCard.svelte';
+import Table from '$lib/components/ui/table/Table.svelte';
+// Consolidated table component usage
+import EmptyState from '$lib/components/ui/EmptyState.svelte';
+import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
+import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+import { derived } from 'svelte/store';
+import { onMount } from 'svelte';
+import {
+                getResourceStore,
+                ensureResource,
+                type TimedResource,
+                type TradeMetricPayload
+        } from '$lib/stores/network-data-cache';
+import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
-	// State for network selector in token trading table
-	let selectedNetwork = networks[0];
+        // State for network selector in token trading table
+        let selectedNetwork = networks[0];
 
-	// Create a network-agnostic SFTs query to get SFTs from ALL networks
-	$: allNetworksSftsQuery = createQuery({
-		queryKey: ['metrics-all-networks-sfts'],
-		queryFn: async () => {
-			const allNetworksSfts: OffchainAssetReceiptVault[] = [];
-			// Query each network for SFTs
-			for (const network of networks) {
-				try {
-					if (network.subgraph_url) {
-						const { getSfts } = await import('$lib/query');
-						const originalNetwork = $currentNetwork;
-						$currentNetwork = network;
+        const vaultResourceStores = networks.map((network) =>
+                getResourceStore(network.id, 'vaultSnapshot')
+        );
+        const priceFeedResourceStores = networks.map((network) =>
+                getResourceStore(network.id, 'priceFeeds')
+        );
+        const tradeResourceStores = networks.map((network) =>
+                getResourceStore(network.id, 'tradeActivity')
+        );
 
-						try {
-							const networkSfts = await getSfts();
-							if (networkSfts && Array.isArray(networkSfts)) {
-								// Add network info to each SFT
-								allNetworksSfts.push(
-									...networkSfts.map((sft) => ({
-										...sft,
-										networkId: network.chainId
-									}))
-								);
-							}
-						} finally {
-							$currentNetwork = originalNetwork;
-						}
-					}
-				} catch {
-					// Continue with other networks even if one fails
-				}
-			}
-			return allNetworksSfts;
-		},
-		enabled: true,
-		retry: 3,
-		retryDelay: 1000
-	});
+        const allVaultResources = derived(
+                vaultResourceStores,
+                (resources) => resources,
+                vaultResourceStores.map(() => null as TimedResource<OffchainAssetReceiptVault[]> | null)
+        );
 
-	function baseFromSymbol(sym?: string) {
-		if (!sym) return undefined;
-		if (sym.includes('t')) return sym.split('t')[1];
-		return sym;
-	}
+        const allPriceFeedResources = derived(
+                priceFeedResourceStores,
+                (resources) => resources,
+                priceFeedResourceStores.map(() => null as TimedResource<TradingViewQuote[]> | null)
+        );
 
-	function findTradingViewSymbol(symbol?: string) {
-		const base = baseFromSymbol(symbol);
-		if (!base) return undefined;
-		const match = ALL_TOKENS.find(
-			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
-		);
-		return match?.tradingViewSymbol;
-	}
+        const allTradeResources = derived(
+                tradeResourceStores,
+                (resources) => resources,
+                tradeResourceStores.map(() => null as TimedResource<TradeMetricPayload> | null)
+        );
 
-	function findQuoteForSymbol(symbol?: string) {
-		if (!$tokenGlobalQuote?.length) return undefined;
-		const quotes = $tokenGlobalQuote as TradingViewQuote[];
-		const tradingSymbol = findTradingViewSymbol(symbol);
-		if (tradingSymbol) {
-			const tsUpper = tradingSymbol.toUpperCase();
-			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
-			if (direct) return direct;
-		}
-		const base = baseFromSymbol(symbol)?.toUpperCase();
-		if (!base) return undefined;
-		return quotes.find((q) => {
-			const quoteSymbol = (q.symbol ?? '').toUpperCase();
-			if (quoteSymbol === base) return true;
-			const parts = quoteSymbol.split(':');
-			return parts[parts.length - 1] === base;
-		});
-	}
+        onMount(() => {
+                networks.forEach((network) => {
+                        ensureResource(network.id, 'vaultSnapshot');
+                        ensureResource(network.id, 'priceFeeds');
+                        ensureResource(network.id, 'tradeActivity');
+                });
+        });
+
+        $: vaultStates = networks.map((network, index) => ({
+                network,
+                resource: $allVaultResources[index]
+        }));
+
+        $: priceFeedStates = networks.map((network, index) => ({
+                network,
+                resource: $allPriceFeedResources[index]
+        }));
+
+        $: tradeStates = networks.map((network, index) => ({
+                network,
+                resource: $allTradeResources[index]
+        }));
+
+        let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
+        $: priceFeedByNetwork = (() => {
+                const map = new Map<number, TradingViewQuote[]>();
+                priceFeedStates.forEach(({ network, resource }) => {
+                        map.set(network.chainId, resource?.data ?? []);
+                });
+                return map;
+        })();
+
+        $: allNetworksSfts = (() => {
+                const aggregated: (OffchainAssetReceiptVault & { networkId: number })[] = [];
+                vaultStates.forEach(({ network, resource }) => {
+                        (resource?.data ?? []).forEach((sft) => {
+                                aggregated.push({ ...sft, networkId: network.chainId });
+                        });
+                });
+                return aggregated;
+        })();
+
+        $: allNetworksTrades = tradeStates.map(({ network, resource }) => ({
+                network,
+                trades: resource?.data?.trades ?? [],
+                range: resource?.data?.range,
+                status: resource?.status ?? 'idle'
+        }));
+
+        function findNetworkQuote(symbol?: string, networkId?: number) {
+                if (networkId == null) return undefined;
+                const quotes = priceFeedByNetwork.get(networkId) ?? [];
+                if (!quotes.length) return undefined;
+                return findQuoteForSymbol(symbol, quotes, ALL_TOKENS);
+        }
 
 	// Get all tokens for logo URLs
 	$: ALL_TOKENS = (() => {
@@ -106,215 +122,169 @@
 		);
 	})();
 
-	// Query for trades data across ALL networks - last month (30 days)
-	$: allNetworksTradesMonthQuery = createQuery({
-		queryKey: ['metrics-all-networks-trades-month'],
-		queryFn: async () => {
-			const now = Math.floor(Date.now() / 1000);
-			const monthAgo = now - 30 * 86400; // Last 30 days
+        // Calculate total TVL across all networks
+        $: totalTVL = (() => {
+                if (!allNetworksSfts.length) return 0;
 
-			const allNetworksTrades: {
-				network: (typeof networks)[0];
-				trades: SgTrade[];
-				volume: number;
-			}[] = [];
+                let tlv = 0;
+                allNetworksSfts.forEach((sft) => {
+                        const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
+                        const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
+                        const circulating = deposits - withdraws;
+                        const amount = parseFloat(formatUnits(circulating, 18));
 
-			// Query each network for trades
-			for (const network of networks) {
-				try {
-					if (network.orderbook_subgraph_url) {
-						const trades = await getTrades(monthAgo, now, network);
-						allNetworksTrades.push({
-							network,
-							trades,
-							volume: 0 // Will be calculated later
-						});
-					}
-				} catch {
-					continue;
-				}
-			}
-			return allNetworksTrades;
-		},
-		enabled: true, // Always enabled since we want data from all networks
-		retry: 3,
-		retryDelay: 1000
-	});
+                        const tokenInfo = ALL_TOKENS.find(
+                                (t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
+                        );
 
-	// Calculate total TVL across all networks
-	$: totalTVL = (() => {
-		if (!$allNetworksSftsQuery.data) return 0;
+                        if (tokenInfo?.symbol) {
+                                const quote = findNetworkQuote(tokenInfo.symbol, sft.networkId);
+                                if (quote?.close != null) {
+                                        tlv += amount * quote.close;
+                                } else {
+                                        tlv += amount;
+                                }
+                        } else {
+                                tlv += amount;
+                        }
+                });
+                return tlv;
+        })();
 
-		let tlv = 0;
-		$allNetworksSftsQuery.data.forEach((sft) => {
-			const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
-			const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
-			const circulating = deposits - withdraws;
-			const amount = parseFloat(formatUnits(circulating, 18));
+        // Calculate trading volume in USD (total volume from unique trades)
+        $: tradingVolume = (() => {
+                if (!allNetworksTrades.length) return 0;
 
-			const tokenInfo = ALL_TOKENS.find(
-				(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
-			);
+                let volume = 0;
+                allNetworksTrades.forEach(({ network, trades }) => {
+                        const uniqueTrades = trades.filter(
+                                (trade, index, self) =>
+                                        index ===
+                                        self.findIndex((t) => t.tradeEvent?.transaction?.id === trade.tradeEvent?.transaction?.id)
+                        );
 
-			if (tokenInfo?.symbol) {
-				const quote = findQuoteForSymbol(tokenInfo.symbol);
-				if (quote?.close != null) {
-					tlv += amount * quote.close;
-				} else {
-					tlv += amount; // Fallback to amount if no price
-				}
-			} else {
-				tlv += amount;
-			}
-		});
-		return tlv;
-	})();
+                        uniqueTrades.forEach((trade) => {
+                                if (trade.inputVaultBalanceChange) {
+                                        const inputAmount = Math.abs(
+                                                parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18))
+                                        );
+                                        const inputTokenAddress = trade.inputVaultBalanceChange.vault?.token?.address;
 
-	// Calculate trading volume in USD (total volume from unique trades)
-	$: tradingVolume = (() => {
-		if (!$allNetworksTradesMonthQuery.data) return 0;
+                                        if (inputTokenAddress) {
+                                                const tokenInfo = ALL_TOKENS.find(
+                                                        (t) => t.address?.toLowerCase() === inputTokenAddress.toLowerCase()
+                                                );
 
-		let volume = 0;
-		$allNetworksTradesMonthQuery.data.forEach((networkData) => {
-			// Get unique trades (filter by transaction ID to avoid double counting)
-			const uniqueTrades = networkData.trades.filter(
-				(trade, index, self) =>
-					index ===
-					self.findIndex((t) => t.tradeEvent?.transaction?.id === trade.tradeEvent?.transaction?.id)
-			);
+                                                if (tokenInfo?.symbol) {
+                                                        const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
+                                                        if (quote?.close != null) {
+                                                                volume += inputAmount * quote.close;
+                                                        }
+                                                }
+                                        }
+                                }
 
-			uniqueTrades.forEach((trade) => {
-				// Calculate USD volume from input vault balance change
-				if (trade.inputVaultBalanceChange) {
-					const inputAmount = Math.abs(
-						parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18))
-					);
-					const inputTokenAddress = trade.inputVaultBalanceChange.vault?.token?.address;
+                                if (trade.outputVaultBalanceChange) {
+                                        const outputAmount = Math.abs(
+                                                parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18))
+                                        );
+                                        const outputTokenAddress = trade.outputVaultBalanceChange.vault?.token?.address;
 
-					if (inputTokenAddress) {
-						const tokenInfo = ALL_TOKENS.find(
-							(t) => t.address?.toLowerCase() === inputTokenAddress.toLowerCase()
-						);
+                                        if (outputTokenAddress) {
+                                                const tokenInfo = ALL_TOKENS.find(
+                                                        (t) => t.address?.toLowerCase() === outputTokenAddress.toLowerCase()
+                                                );
 
-						if (tokenInfo?.symbol) {
-							const quote = findQuoteForSymbol(tokenInfo.symbol);
-							if (quote?.close != null) {
-								volume += inputAmount * quote.close;
-							}
-						}
-					}
-				}
+                                                if (tokenInfo?.symbol) {
+                                                        const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
+                                                        if (quote?.close != null) {
+                                                                volume += outputAmount * quote.close;
+                                                        }
+                                                }
+                                        }
+                                }
+                        });
+                });
+                return volume;
+        })();
 
-				// Calculate USD volume from output vault balance change
-				if (trade.outputVaultBalanceChange) {
-					const outputAmount = Math.abs(
-						parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18))
-					);
-					const outputTokenAddress = trade.outputVaultBalanceChange.vault?.token?.address;
+        // Calculate total trades
+        $: totalTrades = allNetworksTrades.reduce((sum, d) => sum + d.trades.length, 0);
 
-					if (outputTokenAddress) {
-						const tokenInfo = ALL_TOKENS.find(
-							(t) => t.address?.toLowerCase() === outputTokenAddress.toLowerCase()
-						);
+        // Calculate active ST0x tokens
+        $: activeST0x = allNetworksSfts.length;
 
-						if (tokenInfo?.symbol) {
-							const quote = findQuoteForSymbol(tokenInfo.symbol);
-							if (quote?.close != null) {
-								volume += outputAmount * quote.close;
-							}
-						}
-					}
-				}
-			});
-		});
-		return volume;
-	})();
+        function isVaultPending(resource: TimedResource<OffchainAssetReceiptVault[]> | null | undefined) {
+                const count = resource?.data?.length ?? 0;
+                return !resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0);
+        }
 
-	// Calculate total trades
-	$: totalTrades = (() => {
-		if (!$allNetworksTradesMonthQuery.data) return 0;
-		return $allNetworksTradesMonthQuery.data.reduce((sum, d) => sum + d.trades.length, 0);
-	})();
+        function isTradePending(resource: TimedResource<TradeMetricPayload> | null | undefined) {
+                const count = resource?.data?.trades?.length ?? 0;
+                return !resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0);
+        }
 
-	// Calculate active ST0x tokens
-	$: activeST0x = $allNetworksSftsQuery.data?.length || 0;
+        $: vaultLoading = vaultStates.some(({ resource }) => isVaultPending(resource));
+        $: tradeLoading = tradeStates.some(({ resource }) => isTradePending(resource));
+        $: metricsLoading = vaultLoading || tradeLoading;
 
-	// Calculate stats by network
-	$: networkStats = (() => {
-		if (!$allNetworksSftsQuery.data || !$allNetworksTradesMonthQuery.data) return [];
+        // Calculate stats by network
+        $: networkStats = networks.map((network) => {
+                const networkSfts = allNetworksSfts.filter((sft) => sft.networkId === network.chainId);
 
-		return networks.map((network) => {
-			const networkSfts =
-				$allNetworksSftsQuery.data?.filter(
-					// @ts-expect-error - networkId added dynamically
-					(sft) => sft.networkId === network.chainId
-				) || [];
+                let tvl = 0;
+                let totalDeposits = BigInt(0);
+                let totalWithdraws = BigInt(0);
+                const uniqueHolders = new Set<string>();
 
-			// Calculate network metrics
-			let tvl = 0;
-			let totalDeposits = BigInt(0);
-			let totalWithdraws = BigInt(0);
-			let uniqueHolders = new Set<string>();
+                networkSfts.forEach((sft) => {
+                        const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
+                        const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
+                        totalDeposits += deposits;
+                        totalWithdraws += withdraws;
 
-			networkSfts.forEach((sft) => {
-				const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
-				const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
-				totalDeposits += deposits;
-				totalWithdraws += withdraws;
+                        const circulating = deposits - withdraws;
+                        const amount = parseFloat(formatUnits(circulating, 18));
 
-				const circulating = deposits - withdraws;
-				const amount = parseFloat(formatUnits(circulating, 18));
+                        const tokenInfo = ALL_TOKENS.find(
+                                (t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
+                        );
+                        if (tokenInfo?.symbol) {
+                                const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
+                                if (quote?.close != null) {
+                                        tvl += amount * quote.close;
+                                } else {
+                                        tvl += amount;
+                                }
+                        } else {
+                                tvl += amount;
+                        }
 
-				// Calculate TVL
-				const tokenInfo = ALL_TOKENS.find(
-					(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
-				);
-				if (tokenInfo?.symbol) {
-					const quote = findQuoteForSymbol(tokenInfo.symbol);
-					if (quote?.close != null) {
-						tvl += amount * quote.close;
-					} else {
-						tvl += amount;
-					}
-				} else {
-					tvl += amount;
-				}
+                        sft.tokenHolders.forEach((holder) => {
+                                if (BigInt(holder.balance) > BigInt(0)) {
+                                        uniqueHolders.add(holder.address);
+                                }
+                        });
+                });
 
-				// Count unique holders
-				sft.tokenHolders.forEach((holder) => {
-					if (BigInt(holder.balance) > BigInt(0)) {
-						uniqueHolders.add(holder.address);
-					}
-				});
-			});
-			return {
-				network,
-				tvl,
-				st0xCount: networkSfts.length,
-				tokensMinted: formatUnits(totalDeposits, 18),
-				tokensRedeemed: formatUnits(totalWithdraws, 18),
-				tokensCirculating: formatUnits(totalDeposits - totalWithdraws, 18),
-				uniqueAddresses: uniqueHolders.size
-			};
-		});
-	})();
+                return {
+                        network,
+                        tvl,
+                        st0xCount: networkSfts.length,
+                        tokensMinted: formatUnits(totalDeposits, 18),
+                        tokensRedeemed: formatUnits(totalWithdraws, 18),
+                        tokensCirculating: formatUnits(totalDeposits - totalWithdraws, 18),
+                        uniqueAddresses: uniqueHolders.size
+                };
+        });
 
-	// Get token trading data for selected network
-	$: tokenTradingData = (() => {
-		if (!$allNetworksSftsQuery.data || !$allNetworksTradesMonthQuery.data) return [];
+        // Get token trading data for selected network
+        $: tokenTradingData = (() => {
+                const networkSfts = allNetworksSfts.filter((sft) => sft.networkId === selectedNetwork.chainId);
+                const networkTrades =
+                        allNetworksTrades.find((d) => d.network.chainId === selectedNetwork.chainId)?.trades || [];
 
-		// Filter SFTs by selected network
-		const networkSfts = $allNetworksSftsQuery.data.filter(
-			// @ts-expect-error - networkId added dynamically
-			(sft) => sft.networkId === selectedNetwork.chainId
-		);
-
-		// Get trades for selected network
-		const networkTrades =
-			$allNetworksTradesMonthQuery.data.find((d) => d.network.chainId === selectedNetwork.chainId)
-				?.trades || [];
-
-		return networkSfts
+                return networkSfts
 			.map((sft) => {
 				const tokenInfo = ALL_TOKENS.find(
 					(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
@@ -401,8 +371,8 @@
 
 				// Calculate USD value of total volume
 				let usdTradingVolume = 0;
-				if (tokenInfo?.symbol) {
-					const quote = findQuoteForSymbol(tokenInfo.symbol);
+                                if (tokenInfo?.symbol) {
+                                        const quote = findNetworkQuote(tokenInfo.symbol, selectedNetwork.chainId);
 					if (quote?.close != null) {
 						usdTradingVolume = totalTradingVolume * quote.close;
 					}
@@ -425,8 +395,8 @@
 </script>
 
 <div class="min-h-screen bg-gray-900 text-white">
-	<PageContainer>
-		{#if $allNetworksSftsQuery.isLoading || $allNetworksTradesMonthQuery.isLoading}
+        <PageContainer>
+                {#if metricsLoading}
 			<div class="flex min-h-[60vh] items-center justify-center">
 				<LoadingSpinner size="lg" text="Loading metrics..." />
 			</div>

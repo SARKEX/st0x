@@ -1,20 +1,15 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { TOKENS } from './network';
-import { currentNetwork } from './stores';
 import axios from 'axios';
 import { get } from 'svelte/store';
 import type { Network } from './network';
+import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
+import { currentNetwork } from './stores';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const getSfts = async (): Promise<any> => {
-	// Get current network value from store
-	const network = get(currentNetwork);
+export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVault[]> => {
+        const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
 
-	// Filter tokens by current network's chain ID
-	const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
-
-	// Use current network's subgraph URL
-	const subgraphUrl = network.subgraph_url;
+        const subgraphUrl = network.subgraph_url;
 
 	const query = `
     {
@@ -233,7 +228,7 @@ export const getSfts = async (): Promise<any> => {
 	});
 
 	const json = await response.json();
-	return json.data.offchainAssetReceiptVaults;
+        return (json.data.offchainAssetReceiptVaults ?? []) as OffchainAssetReceiptVault[];
 };
 
 export const getTrades = async (
