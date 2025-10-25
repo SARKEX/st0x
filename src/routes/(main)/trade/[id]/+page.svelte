@@ -38,9 +38,12 @@ import type {
         } from '$lib/components/charts/token-chart-types';
 import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
+import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/tokenMath';
 
 	$: tokenId = $page.params.id;
-	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
+        $: currentToken = $sfts?.find((sft) => sft.id === tokenId);
+
+        const tokensLookup = createTokenLookup(TOKENS);
 
 	$: currentPythToken = TOKENS.find(
 		(token) =>
@@ -80,17 +83,6 @@ import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
         const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
         const VOLUME_BUCKET_SECONDS = 24 * 60 * 60;
 
-        const parseAmount = (value: string | null | undefined, decimals: number): number => {
-                if (value === null || value === undefined) return 0;
-                try {
-                        const raw = BigInt(value);
-                        const magnitude = raw < 0n ? -raw : raw;
-                        return Number.parseFloat(formatUnits(magnitude, decimals));
-                } catch {
-                        return 0;
-                }
-        };
-
         const tradeToPoint = (
                 trade: SgTrade,
                 assetAddress: string,
@@ -106,41 +98,24 @@ import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
                 if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return null;
                 const timestamp = rawTimestamp * 1000;
 
-                const inputToken = trade.inputVaultBalanceChange?.vault?.token;
-                const outputToken = trade.outputVaultBalanceChange?.vault?.token;
+                const normalizedAsset = normalizeAddress(assetAddress);
+                const quoteToken = { address: usdcAddress, decimals: usdcDecimals, symbol: 'USDC' as const };
+                const lookup = (address: string | null | undefined) => {
+                        const normalized = normalizeAddress(address);
+                        if (normalized && normalized === normalizedAsset) {
+                                return { address: normalized, decimals: assetDecimals };
+                        }
+                        return tokensLookup(address);
+                };
 
-                const inputAddress = inputToken?.address?.toLowerCase();
-                const outputAddress = outputToken?.address?.toLowerCase();
+                const analysis = analyzeTrade(trade, quoteToken, lookup);
+                if (!analysis) return null;
+                if (normalizedAsset && analysis.assetAddress !== normalizedAsset) return null;
 
-                if (!inputAddress || !outputAddress) return null;
+                const { tokens, usdc, price, side } = analysis;
+                if (!Number.isFinite(tokens) || !Number.isFinite(usdc) || !Number.isFinite(price)) return null;
 
-                if (inputAddress === usdcAddress && outputAddress === assetAddress) {
-                        const tokens = parseAmount(
-                                trade.outputVaultBalanceChange?.amount ?? null,
-                                Number(outputToken?.decimals ?? assetDecimals)
-                        );
-                        const usdc = parseAmount(
-                                trade.inputVaultBalanceChange?.amount ?? null,
-                                Number(inputToken?.decimals ?? usdcDecimals)
-                        );
-                        if (tokens <= 0 || usdc <= 0) return null;
-                        return { timestamp, price: usdc / tokens, tokens, usdc, side: 'buy' };
-                }
-
-                if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-                        const tokens = parseAmount(
-                                trade.inputVaultBalanceChange?.amount ?? null,
-                                Number(inputToken?.decimals ?? assetDecimals)
-                        );
-                        const usdc = parseAmount(
-                                trade.outputVaultBalanceChange?.amount ?? null,
-                                Number(outputToken?.decimals ?? usdcDecimals)
-                        );
-                        if (tokens <= 0 || usdc <= 0) return null;
-                        return { timestamp, price: usdc / tokens, tokens, usdc, side: 'sell' };
-                }
-
-                return null;
+                return { timestamp, price, tokens, usdc, side };
         };
 
         let tradeHistoryPoints: TradeHistoryPoint[] = [];

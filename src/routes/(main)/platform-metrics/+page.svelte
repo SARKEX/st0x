@@ -21,6 +21,13 @@ import {
                 type TradeMetricPayload
         } from '$lib/stores/network-data-cache';
 import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+import {
+        analyzeTrade,
+        createTokenLookup,
+        toDecimal,
+        type TradeAnalysis
+} from '$lib/utils/tokenMath';
+import type { SgTrade } from '@rainlanguage/orderbook';
 
         // State for network selector in token trading table
         let selectedNetwork = networks[0];
@@ -110,17 +117,20 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
         }
 
 	// Get all tokens for logo URLs
-	$: ALL_TOKENS = (() => {
-		const allTokens: import('$lib/network').CategorizedToken[] = [];
-		networks.forEach((network) => {
-			const networkTokens = getAllTokensByNetwork(network.chainId);
-			allTokens.push(...networkTokens);
-		});
-		return allTokens.filter(
-			(token, index, self) =>
-				index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
-		);
-	})();
+        $: ALL_TOKENS = (() => {
+                const allTokens: import('$lib/network').CategorizedToken[] = [];
+                networks.forEach((network) => {
+                        const networkTokens = getAllTokensByNetwork(network.chainId);
+                        allTokens.push(...networkTokens);
+                });
+                return allTokens.filter(
+                        (token, index, self) =>
+                                index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
+                );
+        })();
+
+        let tokenLookup = createTokenLookup<import('$lib/network').CategorizedToken>([]);
+        $: tokenLookup = createTokenLookup(ALL_TOKENS);
 
         // Calculate total TVL across all networks
         $: totalTVL = (() => {
@@ -131,11 +141,10 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
                         const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
                         const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
                         const circulating = deposits - withdraws;
-                        const amount = parseFloat(formatUnits(circulating, 18));
 
-                        const tokenInfo = ALL_TOKENS.find(
-                                (t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
-                        );
+                        const tokenInfo = tokenLookup(sft.address);
+                        const decimals = tokenInfo?.decimals ?? 18;
+                        const amount = toDecimal(circulating, decimals, { absolute: true, fallback: 0 }) ?? 0;
 
                         if (tokenInfo?.symbol) {
                                 const quote = findNetworkQuote(tokenInfo.symbol, sft.networkId);
@@ -157,52 +166,16 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
                 let volume = 0;
                 allNetworksTrades.forEach(({ network, trades }) => {
-                        const uniqueTrades = trades.filter(
-                                (trade, index, self) =>
-                                        index ===
-                                        self.findIndex((t) => t.tradeEvent?.transaction?.id === trade.tradeEvent?.transaction?.id)
-                        );
-
-                        uniqueTrades.forEach((trade) => {
-                                if (trade.inputVaultBalanceChange) {
-                                        const inputAmount = Math.abs(
-                                                parseFloat(formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18))
-                                        );
-                                        const inputTokenAddress = trade.inputVaultBalanceChange.vault?.token?.address;
-
-                                        if (inputTokenAddress) {
-                                                const tokenInfo = ALL_TOKENS.find(
-                                                        (t) => t.address?.toLowerCase() === inputTokenAddress.toLowerCase()
-                                                );
-
-                                                if (tokenInfo?.symbol) {
-                                                        const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
-                                                        if (quote?.close != null) {
-                                                                volume += inputAmount * quote.close;
-                                                        }
-                                                }
-                                        }
+                        const seenTransactions = new Set<string>();
+                        trades.forEach((trade) => {
+                                const txId = trade.tradeEvent?.transaction?.id;
+                                if (txId) {
+                                        if (seenTransactions.has(txId)) return;
+                                        seenTransactions.add(txId);
                                 }
-
-                                if (trade.outputVaultBalanceChange) {
-                                        const outputAmount = Math.abs(
-                                                parseFloat(formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18))
-                                        );
-                                        const outputTokenAddress = trade.outputVaultBalanceChange.vault?.token?.address;
-
-                                        if (outputTokenAddress) {
-                                                const tokenInfo = ALL_TOKENS.find(
-                                                        (t) => t.address?.toLowerCase() === outputTokenAddress.toLowerCase()
-                                                );
-
-                                                if (tokenInfo?.symbol) {
-                                                        const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
-                                                        if (quote?.close != null) {
-                                                                volume += outputAmount * quote.close;
-                                                        }
-                                                }
-                                        }
-                                }
+                                const analysis = analyzeTrade(trade, network.usdcToken, tokenLookup);
+                                if (!analysis) return;
+                                volume += analysis.usdc;
                         });
                 });
                 return volume;
@@ -244,11 +217,9 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
                         totalWithdraws += withdraws;
 
                         const circulating = deposits - withdraws;
-                        const amount = parseFloat(formatUnits(circulating, 18));
-
-                        const tokenInfo = ALL_TOKENS.find(
-                                (t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
-                        );
+                        const tokenInfo = tokenLookup(sft.address);
+                        const decimals = tokenInfo?.decimals ?? 18;
+                        const amount = toDecimal(circulating, decimals, { absolute: true, fallback: 0 }) ?? 0;
                         if (tokenInfo?.symbol) {
                                 const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
                                 if (quote?.close != null) {
@@ -284,114 +255,63 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
                 const networkTrades =
                         allNetworksTrades.find((d) => d.network.chainId === selectedNetwork.chainId)?.trades || [];
 
+                const analyzed: Array<{ trade: SgTrade; analysis: TradeAnalysis }> = [];
+                networkTrades.forEach((trade) => {
+                        const analysis = analyzeTrade(trade, selectedNetwork.usdcToken, tokenLookup);
+                        if (!analysis) return;
+                        analyzed.push({ trade, analysis });
+                });
+
                 return networkSfts
-			.map((sft) => {
-				const tokenInfo = ALL_TOKENS.find(
-					(t) => t.address?.toLowerCase() === sft.address?.toLowerCase()
-				);
+                        .map((sft) => {
+                                const address = sft.address?.toLowerCase();
+                                const tokenInfo = tokenLookup(sft.address);
 
-				// Get all trades for this token (both input and output)
-				const inputTrades = networkTrades.filter(
-					(trade) =>
-						trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
-						sft.address?.toLowerCase()
-				);
-				const outputTrades = networkTrades.filter(
-					(trade) =>
-						trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
-						sft.address?.toLowerCase()
-				);
+                                const relevant = analyzed.filter(
+                                        ({ analysis }) => analysis.assetAddress === address
+                                );
 
-				// Calculate in volume (tokens received - always positive)
-				let inVolume = 0;
-				inputTrades.forEach((trade) => {
-					if (trade.inputVaultBalanceChange) {
-						const amount = parseFloat(
-							formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18)
-						);
-						inVolume += Math.abs(amount); // Always positive
-					}
-				});
+                                const inVolume = relevant
+                                        .filter(({ analysis }) => analysis.side === 'buy')
+                                        .reduce((sum, { analysis }) => sum + analysis.tokens, 0);
 
-				// Calculate out volume (tokens sent - always positive)
-				let outVolume = 0;
-				outputTrades.forEach((trade) => {
-					if (trade.outputVaultBalanceChange) {
-						const amount = parseFloat(
-							formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18)
-						);
-						outVolume += Math.abs(amount); // Always positive
-					}
-				});
+                                const outVolume = relevant
+                                        .filter(({ analysis }) => analysis.side === 'sell')
+                                        .reduce((sum, { analysis }) => sum + analysis.tokens, 0);
 
-				// Calculate net volume (in - out, can be negative)
-				const netTradingVolume = inVolume - outVolume;
+                                const netTradingVolume = inVolume - outVolume;
 
-				// Get all unique trades for this token (filter by transaction ID to avoid double counting)
-				const allTokenTrades = networkTrades.filter(
-					(trade) =>
-						trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
-							sft.address?.toLowerCase() ||
-						trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
-							sft.address?.toLowerCase()
-				);
+                                const seenTransactions = new Set<string>();
+                                const uniqueEntries: Array<{ trade: SgTrade; analysis: TradeAnalysis }> = [];
+                                relevant.forEach((entry) => {
+                                        const txId = entry.trade.tradeEvent?.transaction?.id;
+                                        if (txId) {
+                                                if (seenTransactions.has(txId)) return;
+                                                seenTransactions.add(txId);
+                                        }
+                                        uniqueEntries.push(entry);
+                                });
 
-				const uniqueTokenTrades = allTokenTrades.filter(
-					(trade, index, self) =>
-						index ===
-						self.findIndex(
-							(t) => t.tradeEvent?.transaction?.id === trade.tradeEvent?.transaction?.id
-						)
-				);
+                                const usdTradingVolume = uniqueEntries.reduce(
+                                        (sum, { analysis }) => sum + analysis.usdc,
+                                        0
+                                );
+                                const totalTradingVolume = inVolume + outVolume;
 
-				// Calculate total volume (sum of unique trade amounts)
-				let totalTradingVolume = 0;
-				uniqueTokenTrades.forEach((trade) => {
-					// Add input amount if this token is the input
-					if (
-						trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
-						sft.address?.toLowerCase()
-					) {
-						const amount = parseFloat(
-							formatUnits(BigInt(trade.inputVaultBalanceChange.amount || 0), 18)
-						);
-						totalTradingVolume += Math.abs(amount);
-					}
-					// Add output amount if this token is the output
-					if (
-						trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase() ===
-						sft.address?.toLowerCase()
-					) {
-						const amount = parseFloat(
-							formatUnits(BigInt(trade.outputVaultBalanceChange.amount || 0), 18)
-						);
-						totalTradingVolume += Math.abs(amount);
-					}
-				});
-
-				// Calculate USD value of total volume
-				let usdTradingVolume = 0;
-                                if (tokenInfo?.symbol) {
-                                        const quote = findNetworkQuote(tokenInfo.symbol, selectedNetwork.chainId);
-					if (quote?.close != null) {
-						usdTradingVolume = totalTradingVolume * quote.close;
-					}
-				}
-
-				return {
-					symbol: sft.symbol,
-					name: sft.name,
-					logoUrl: tokenInfo?.logoUrl,
-					inVolume: inVolume.toFixed(3),
-					outVolume: outVolume.toFixed(3),
-					netVolume: netTradingVolume.toFixed(3),
-					totalVolume: totalTradingVolume.toFixed(3),
-					usdValue: usdTradingVolume > 0 ? `$${usdTradingVolume.toFixed(2)}` : 'N/A',
-					trades: uniqueTokenTrades.length
-				};
-			})
-			.sort((a, b) => b.trades - a.trades);
-	})();
+                                return {
+                                        symbol: sft.symbol,
+                                        name: sft.name,
+                                        logoUrl: tokenInfo?.logoUrl,
+                                        inVolume: inVolume.toFixed(3),
+                                        outVolume: outVolume.toFixed(3),
+                                        netVolume: netTradingVolume.toFixed(3),
+                                        totalVolume: totalTradingVolume.toFixed(3),
+                                        usdValue: usdTradingVolume > 0 ? `$${usdTradingVolume.toFixed(2)}` : 'N/A',
+                                        trades: uniqueEntries.length
+                                };
+                        })
+                        .sort((a, b) => b.trades - a.trades);
+        })();
 </script>
 
 <div class="min-h-screen bg-gray-900 text-white">
