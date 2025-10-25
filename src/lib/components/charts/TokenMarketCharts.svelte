@@ -241,6 +241,7 @@
 		data: { datasets: [] },
 		options: {
 			responsive: true,
+			animation: false,
 			maintainAspectRatio: false,
 			interaction: { mode: 'nearest', intersect: false },
 			plugins: {
@@ -325,7 +326,7 @@
 			pointBorderColor: '#ffffff',
 			pointBorderWidth: 1,
 			pointHoverRadius: 5,
-			tension: 0.3,
+			tension: 0,
 			parsing: false
 		});
 	} else {
@@ -472,6 +473,7 @@
                                 data: { datasets: [] },
                                 options: {
                                         responsive: true,
+			animation: false,
                                         maintainAspectRatio: false,
                                         interaction: { mode: 'nearest', intersect: false },
                                         plugins: {
@@ -596,6 +598,7 @@
                 tick().then(() => {
                         if (ChartCtor && browser) {
                                 console.log('[child tick callback] calling updateCharts with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs);
+                console.log("[child tick] depth prop at tick time:", { bidsCount: depth.bids.length, asksCount: depth.asks.length });
                                 updateCharts();
                         }
                 });
@@ -603,6 +606,9 @@
 
         $: historyEmpty = averagePrices.length === 0 && volumeBuckets.length === 0;
         $: depthEmpty = depth.bids.length === 0 && depth.asks.length === 0;
+        $: if (depthEmpty) {
+                console.log("[loading state] depthEmpty: true, isLoading:", isLoading, "libraryLoading:", libraryLoading);
+        }
         $: combinedError = error ?? chartLibError;
         $: libraryLoading = loadingChartLib && !ChartCtor;
         $: {

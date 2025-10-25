@@ -350,7 +350,8 @@ const pricePoints: Array<{ x: number; y: number }> = [];
         $: onChainQuoteQuery = createQuery({
                 queryKey: ['fetchAndQuoteUSDCOrders', $currentNetwork?.id],
                 enabled: browser && !!$currentNetwork?.chainId,
-                staleTime: 20_000,
+                staleTime: 5_000,
+                refetchInterval: 10_000,
                 queryFn: async () => {
 			if (!browser) return [];
 			const networkId = $currentNetwork?.chainId;
@@ -472,9 +473,9 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                 }
 
                 averagePrices = tradesToAveragePrices(visibleTradeHistoryPoints, candleBucketSeconds);
-                console.log('[parent ohlc] ohlcCandles:', ohlcCandles.length, 'bucketSeconds:', candleBucketSeconds);
-                if (ohlcCandles.length > 0) {
-                        console.log('[parent ohlc] first candle:', {t: new Date(ohlcCandles[0].t).toISOString(), o: ohlcCandles[0].o, h: ohlcCandles[0].h, l: ohlcCandles[0].l, c: ohlcCandles[0].c});
+                console.log('[parent avg] averagePrices:', averagePrices.length, 'bucketSeconds:', candleBucketSeconds);
+                if (averagePrices.length > 0) {
+                        console.log('[parent avg] first price:', {x: new Date(averagePrices[0].x).toISOString(), y: averagePrices[0].y});
                 }
 
                 const bucketSeconds = getVolumeBucketSeconds(historyRange);
@@ -572,14 +573,16 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                 const tradeFetchStatus = tradeResult?.fetchStatus;
                 const quoteFetchStatus = quoteResult?.fetchStatus;
 
-                // Don't show loading if we have volume data (parent has processed trades)
+                // Don't show loading if we have volume data OR orderbook depth data
                 const hasVolumeData = tradeVolumeBuckets.length > 0;
+                const hasDepthData = orderbookDepth.bids.length > 0 || orderbookDepth.asks.length > 0;
                 chartsLoading = Boolean(
                         (tradeStatus === 'pending' ||
                                 tradeFetchStatus === 'fetching' ||
                                 quoteStatus === 'pending' ||
                                 quoteFetchStatus === 'fetching') &&
-                        !hasVolumeData
+                        !hasVolumeData &&
+                        !hasDepthData
                 );
 
                 const err = tradeResult?.error;
