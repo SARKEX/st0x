@@ -639,32 +639,36 @@
                                         Visualize recent trades and current liquidity sourced directly from the on-chain orderbook.
                                 </p>
                         </div>
-                        {#if historyRangeOptions.length > 0}
-                                <div class="flex items-center gap-2 self-start">
-                                        {#each historyRangeOptions as option}
-                                                <button
-                                                        type="button"
-                                                        class={`rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
-                                                                historyRange === option.key
-                                                                        ? 'border-blue-400/60 bg-blue-500/20 text-blue-200'
-                                                                        : 'border-white/10 text-gray-400 hover:border-white/25 hover:text-white'
-                                                        }`}
-                                                        aria-pressed={historyRange === option.key}
-                                                        on:click={() => dispatch('rangeChange', { key: option.key })}
-                                                >
-                                                        {option.label}
-                                                </button>
-                                        {/each}
-                                </div>
-                        {/if}
                 </div>
         </div>
         <div class="grid gap-6 grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 xl:grid-rows-2">
                 <!-- Row 1: Trade History (2/3) -->
                 <div class={`${containerStyles.cardBordered} flex flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2 min-h-96`}>
                         <div class="border-b border-white/5 pb-3">
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Trade History</h3>
-                                <p class="mt-1 text-xs text-gray-500">On-chain trade executions over time</p>
+                                <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                                        <div>
+                                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Trade History</h3>
+                                                <p class="mt-1 text-xs text-gray-500">On-chain trade executions over time</p>
+                                        </div>
+                                        {#if historyRangeOptions.length > 0}
+                                                <div class="flex items-center gap-2 self-start">
+                                                        {#each historyRangeOptions as option}
+                                                                <button
+                                                                        type="button"
+                                                                        class={`rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+                                                                                historyRange === option.key
+                                                                                        ? 'border-blue-400/60 bg-blue-500/20 text-blue-200'
+                                                                                        : 'border-white/10 text-gray-400 hover:border-white/25 hover:text-white'
+                                                                        }`}
+                                                                        aria-pressed={historyRange === option.key}
+                                                                        on:click={() => dispatch('rangeChange', { key: option.key })}
+                                                                >
+                                                                        {option.label}
+                                                                </button>
+                                                        {/each}
+                                                </div>
+                                        {/if}
+                                </div>
                         </div>
                         <div class="relative flex-1 pt-4">
                                 {#if !browser}
