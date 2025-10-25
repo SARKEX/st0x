@@ -301,6 +301,8 @@
 	const ctx = historyCanvas.getContext('2d');
 	if (!ctx) return;
 
+	console.log('[updateHistoryChart] called with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs);
+
 	const sortedCandles = [...ohlcCandles]
 		.filter((candle) =>
 			Number.isFinite(candle.t) &&
@@ -682,24 +684,13 @@
                 };
         });
 
-        // Debug logging
-        $: if (browser) {
-                if (tradeHistory.length > 0) {
-                        console.log('[TokenMarketCharts] Trade history points:', tradeHistory.length);
-                }
-                if (volumeBuckets.length > 0) {
-                        console.log('[TokenMarketCharts] Volume buckets:', volumeBuckets.length);
-                }
-                if (depth.bids.length > 0 || depth.asks.length > 0) {
-                        console.log('[TokenMarketCharts] Orderbook depth:', { bids: depth.bids.length, asks: depth.asks.length });
-                }
-        }
 
         onDestroy(() => {
                 destroyCharts();
         });
 
         $: if (ChartCtor && browser) {
+                console.log('[child reactive] triggered with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'historyRange:', historyRange, 'ohlcCandles:', ohlcCandles.length, 'volumeBuckets:', volumeBuckets.length);
                 void tradeHistory;
                 void volumeBuckets;
                 void depth;
@@ -708,6 +699,7 @@
                 void historyRange;
                 tick().then(() => {
                         if (ChartCtor && browser) {
+                                console.log('[child tick callback] calling updateCharts with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs);
                                 updateCharts();
                         }
                 });
@@ -717,6 +709,11 @@
         $: depthEmpty = depth.bids.length === 0 && depth.asks.length === 0;
         $: combinedError = error ?? chartLibError;
         $: libraryLoading = loadingChartLib && !ChartCtor;
+        $: {
+                if (historyEmpty) {
+                        console.log('[loading state] historyEmpty: true, isLoading:', isLoading, 'libraryLoading:', libraryLoading, 'loadingChartLib:', loadingChartLib, 'ChartCtor:', !!ChartCtor);
+                }
+        }
 </script>
 
 <div class="space-y-6">

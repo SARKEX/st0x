@@ -453,6 +453,8 @@
                 const rangeEnd = Math.max(nowMs, latestTradeMs || nowMs);
                 const rangeStart = Math.max(0, rangeEnd - rangeSeconds * 1000);
 
+                console.log('[parent reactive] historyRange:', historyRange, 'rangeStart:', new Date(rangeStart).toISOString(), 'rangeEnd:', new Date(rangeEnd).toISOString(), 'tradeHistoryPoints:', tradeHistoryPoints.length);
+
                 // Determine bucket resolution (1 minute for 1D, 15 min for 7D, 1 hour for 30D)
                 let candleBucketSeconds = OHLC_BUCKET_SECONDS;
                 if (historyRange === '7D') {
@@ -463,10 +465,13 @@
 
                 historyRangeStartMs = rangeStart;
                 historyRangeEndMs = rangeEnd;
+                console.log('[parent state update] historyRangeStartMs:', new Date(historyRangeStartMs).toISOString(), 'historyRangeEndMs:', new Date(historyRangeEndMs).toISOString());
 
                 visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
+                console.log('[parent filter] visibleTradeHistoryPoints:', visibleTradeHistoryPoints.length);
 
                 ohlcCandles = tradesToOHLC(visibleTradeHistoryPoints, candleBucketSeconds);
+                console.log('[parent ohlc] ohlcCandles:', ohlcCandles.length);
 
                 const bucketSeconds = getVolumeBucketSeconds(historyRange);
                 const bucketStartTime = Math.max(rangeStart, rangeEnd - rangeSeconds * 1000);
@@ -525,7 +530,7 @@
                         }
 
                         if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-                                const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals));
+                                const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals + 12));
                                 if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) return;
                                 const price = 1 / ratio;
                                 if (!Number.isFinite(price) || price <= 0) return;
@@ -549,11 +554,14 @@
                 const tradeFetchStatus = tradeResult?.fetchStatus;
                 const quoteFetchStatus = quoteResult?.fetchStatus;
 
+                // Don't show loading if we have volume data (parent has processed trades)
+                const hasVolumeData = tradeVolumeBuckets.length > 0;
                 chartsLoading = Boolean(
-                        tradeStatus === 'pending' ||
+                        (tradeStatus === 'pending' ||
                                 tradeFetchStatus === 'fetching' ||
                                 quoteStatus === 'pending' ||
-                                quoteFetchStatus === 'fetching'
+                                quoteFetchStatus === 'fetching') &&
+                        !hasVolumeData
                 );
 
                 const err = tradeResult?.error;
