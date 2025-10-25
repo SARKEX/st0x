@@ -7,6 +7,7 @@
                 TradeHistoryPoint,
                 VolumeBucket
         } from '$lib/components/charts/token-chart-types';
+        import 'chartjs-chart-financial';
 
         type ChartInstance = {
                 destroy: () => void;
@@ -41,8 +42,6 @@
         let ChartCtor: any = null;
         let loadingChartLib = false;
         let chartLibError: string | null = null;
-        let candlestickPluginRegistered = false;
-
         function roundToNiceNumber(value: number): number {
                 if (!Number.isFinite(value) || value <= 0) return 1;
                 const exponent = Math.floor(Math.log10(value));
@@ -58,117 +57,6 @@
                 return niceFraction * base;
         }
 
-        function registerCandlestickPlugin(chartGlobal: any) {
-                if (candlestickPluginRegistered || !chartGlobal) return;
-
-                const candlestickPlugin = {
-                        id: 'customCandlesticks',
-                        defaults: {
-                                bodyWidthFactor: 0.6,
-                                minBodyWidth: 4,
-                                maxBodyWidth: 18
-                        },
-                        afterDatasetsDraw(chart: any, _args: unknown, opts: any) {
-                                const options = {
-                                        bodyWidthFactor: opts?.bodyWidthFactor ?? 0.6,
-                                        minBodyWidth: opts?.minBodyWidth ?? 4,
-                                        maxBodyWidth: opts?.maxBodyWidth ?? 18
-                                };
-
-                                const xScale = chart.scales?.x;
-                                if (!xScale) return;
-
-                                const ctx: CanvasRenderingContext2D = chart.ctx;
-
-                                chart.data.datasets.forEach((dataset: any, datasetIndex: number) => {
-                                        if (!dataset?.candlestick) return;
-                                        const meta = chart.getDatasetMeta(datasetIndex);
-                                        if (meta.hidden) return;
-
-                                        const yScale = chart.scales?.[dataset.yAxisID ?? 'y'];
-                                        if (!yScale) return;
-
-                                        const data: Array<{ x: number; y: number; o: number; h: number; l: number; c: number }> =
-                                                dataset.data ?? [];
-
-                                        const upColor = dataset.upColor ?? '#22c55e';
-                                        const downColor = dataset.downColor ?? '#22c55e';
-                                        const flatColor = dataset.unchangedColor ?? upColor;
-                                        const borderUp = dataset.borderUp ?? '#166534';
-                                        const borderDown = dataset.borderDown ?? borderUp;
-                                        const borderFlat = dataset.borderFlat ?? borderUp;
-
-                                        for (let i = 0; i < data.length; i += 1) {
-                                                const point = data[i];
-                                                if (!point) continue;
-
-                                                const x = xScale.getPixelForValue(point.x);
-                                                if (!Number.isFinite(x)) continue;
-
-                                                const prevX = data[i - 1] ? xScale.getPixelForValue(data[i - 1].x) : undefined;
-                                                const nextX = data[i + 1] ? xScale.getPixelForValue(data[i + 1].x) : undefined;
-
-                                                let halfWidth = (options.maxBodyWidth ?? 18) / 2;
-                                                const widthCandidates: number[] = [];
-                                                if (Number.isFinite(prevX)) {
-                                                        widthCandidates.push(Math.abs(x - (prevX as number)));
-                                                }
-                                                if (Number.isFinite(nextX)) {
-                                                        widthCandidates.push(Math.abs((nextX as number) - x));
-                                                }
-                                                if (widthCandidates.length > 0) {
-                                                        const spacing = Math.min(...widthCandidates);
-                                                        halfWidth = (spacing * (options.bodyWidthFactor ?? 0.6)) / 2;
-                                                }
-
-                                                const minHalf = (options.minBodyWidth ?? 4) / 2;
-                                                const maxHalf = (options.maxBodyWidth ?? 18) / 2;
-                                                halfWidth = Math.max(minHalf, Math.min(maxHalf, halfWidth));
-
-                                                const openY = yScale.getPixelForValue(point.o);
-                                                const closeY = yScale.getPixelForValue(point.c);
-                                                const highY = yScale.getPixelForValue(point.h);
-                                                const lowY = yScale.getPixelForValue(point.l);
-
-                                                if (!Number.isFinite(openY) || !Number.isFinite(closeY) || !Number.isFinite(highY) || !Number.isFinite(lowY)) {
-                                                        continue;
-                                                }
-
-                                                const rising = point.c > point.o;
-                                                const falling = point.c < point.o;
-                                                const fillColor = rising ? upColor : falling ? downColor : flatColor;
-                                                const strokeColor = rising ? borderUp : falling ? borderDown : borderFlat;
-
-                                                const bodyTop = Math.min(openY as number, closeY as number);
-                                                const bodyBottom = Math.max(openY as number, closeY as number);
-                                                const bodyHeight = Math.max(1, bodyBottom - bodyTop);
-
-                                                ctx.save();
-                                                ctx.lineWidth = 2;
-                                                ctx.strokeStyle = strokeColor;
-                                                ctx.fillStyle = fillColor;
-
-                                                ctx.beginPath();
-                                                ctx.moveTo(x, highY as number);
-                                                ctx.lineTo(x, lowY as number);
-                                                ctx.stroke();
-
-                                                const left = Math.round(x - halfWidth) + 0.5;
-                                                const width = Math.round(halfWidth * 2);
-                                                ctx.fillRect(left, bodyTop, width, bodyHeight);
-                                                ctx.strokeRect(left, bodyTop, width, bodyHeight);
-
-                                                ctx.restore();
-                                        }
-                                });
-                        }
-                };
-
-                if (typeof chartGlobal.register === 'function') {
-                        chartGlobal.register(candlestickPlugin);
-                        candlestickPluginRegistered = true;
-                }
-        }
 
         const scriptPromises = new Map<string, Promise<void>>();
 
@@ -232,7 +120,6 @@
 
                 if (typeof window !== 'undefined' && (window as { Chart?: any }).Chart) {
                         ChartCtor = (window as { Chart?: any }).Chart ?? null;
-                        registerCandlestickPlugin(ChartCtor);
                         chartLibError = null;
                         return ChartCtor;
                 }
@@ -244,12 +131,14 @@
                         await loadScript(
                                 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js'
                         );
+                        await loadScript(
+                                'https://cdn.jsdelivr.net/npm/chartjs-chart-financial@1.1.1/dist/chartjs-chart-financial.umd.min.js'
+                        );
                         const chartGlobal = (window as { Chart?: any }).Chart ?? null;
                         if (!chartGlobal) {
                                 throw new Error('Chart.js global not found');
                         }
                         ChartCtor = chartGlobal;
-                        registerCandlestickPlugin(ChartCtor);
                         chartLibError = null;
                         return ChartCtor;
                 } catch (err) {
@@ -301,7 +190,7 @@
 	const ctx = historyCanvas.getContext('2d');
 	if (!ctx) return;
 
-	console.log('[updateHistoryChart] called with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs);
+	console.log('[updateHistoryChart] called with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'ohlcCandles prop:', ohlcCandles.length);
 
 	const sortedCandles = [...ohlcCandles]
 		.filter((candle) =>
@@ -357,6 +246,7 @@
 	}
 
 	const hasCandles = sortedCandles.length > 0;
+	console.log('[updateHistoryChart] hasCandles:', hasCandles, 'sortedCandles:', sortedCandles.length, 'volumeData:', volumeData.length);
 
 	if (historyChart) {
 		historyChart.destroy();
@@ -437,24 +327,25 @@
 
 	const datasets: any[] = [];
 	if (hasCandles) {
+		console.log('[updateHistoryChart] adding candles dataset with', sortedCandles.length, 'candles');
 		datasets.push({
 			label: 'Candles',
-			type: 'scatter',
-			 yAxisID: 'yPrice',
-			 candlestick: true,
-			 data: sortedCandles,
-			 upColor: '#22c55e',
-			 downColor: '#22c55e',
-			 unchangedColor: '#22c55e',
-			 borderUp: '#166534',
-			 borderDown: '#166534',
-			 borderFlat: '#166534',
-			 parsing: false,
-			 showLine: false,
-			 pointRadius: 0,
-			 pointHoverRadius: 0,
-			 pointHitRadius: 12
+			type: 'ohlc',
+			yAxisID: 'yPrice',
+			data: sortedCandles,
+			color: {
+				up: '#00ff00',
+				down: '#00ff00',
+				unchanged: '#00ff00'
+			},
+			borderColor: {
+				up: '#00ff00',
+				down: '#00ff00',
+				unchanged: '#00ff00'
+			}
 		});
+	} else {
+		console.log('[updateHistoryChart] no candles - hasCandles:', hasCandles);
 	}
 	if (volumeData.length > 0) {
 		datasets.push({
@@ -490,6 +381,7 @@
 	}
 
 	historyChart.data.datasets = datasets;
+	console.log('[updateHistoryChart] chart datasets:', historyChart.data.datasets.length, 'with types:', historyChart.data.datasets.map((d: any) => d.type));
 
 	const xScale = historyChart.options.scales?.x as { min?: number; max?: number; time?: { unit?: string; stepSize?: number } };
 	if (xScale) {
@@ -767,9 +659,9 @@
                         {/if}
                 </div>
         </div>
-        <div class="grid gap-6 xl:grid-cols-3 xl:grid-rows-2">
+        <div class="grid gap-6 grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 xl:grid-rows-2">
                 <!-- Row 1: Trade History (2/3) -->
-                <div class={`${containerStyles.cardBordered} flex flex-col xl:col-span-2 xl:row-span-2`}>
+                <div class={`${containerStyles.cardBordered} flex flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2`}>
                         <div class="border-b border-white/5 pb-3">
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Trade History</h3>
                                 <p class="mt-1 text-xs text-gray-500">On-chain trade executions over time</p>
@@ -797,7 +689,7 @@
                 </div>
 
                 <!-- Orderbook Depth (spans remaining column) -->
-                <div class={`${containerStyles.cardBordered} flex flex-col xl:row-span-2`}>
+                <div class={`${containerStyles.cardBordered} flex flex-col lg:row-span-1 xl:row-span-2`}>
                         <div class="border-b border-white/5 pb-3">
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Orderbook Depth</h3>
                                 <p class="mt-1 text-xs text-gray-500">Current on-chain liquidity</p>

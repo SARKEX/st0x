@@ -469,9 +469,15 @@
 
                 visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
                 console.log('[parent filter] visibleTradeHistoryPoints:', visibleTradeHistoryPoints.length);
+                if (visibleTradeHistoryPoints.length > 0) {
+                        console.log('[parent filter] first trade:', {ts: new Date(visibleTradeHistoryPoints[0].timestamp).toISOString(), price: visibleTradeHistoryPoints[0].price});
+                }
 
                 ohlcCandles = tradesToOHLC(visibleTradeHistoryPoints, candleBucketSeconds);
-                console.log('[parent ohlc] ohlcCandles:', ohlcCandles.length);
+                console.log('[parent ohlc] ohlcCandles:', ohlcCandles.length, 'bucketSeconds:', candleBucketSeconds);
+                if (ohlcCandles.length > 0) {
+                        console.log('[parent ohlc] first candle:', {t: new Date(ohlcCandles[0].t).toISOString(), o: ohlcCandles[0].o, h: ohlcCandles[0].h, l: ohlcCandles[0].l, c: ohlcCandles[0].c});
+                }
 
                 const bucketSeconds = getVolumeBucketSeconds(historyRange);
                 const bucketStartTime = Math.max(rangeStart, rangeEnd - rangeSeconds * 1000);

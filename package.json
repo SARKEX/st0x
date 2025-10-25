@@ -72,6 +72,7 @@
 		"@wagmi/core": "2.14.3",
 		"axios": "1.7.7",
 		"cbor-web": "^9.0.1",
+		"chartjs-chart-financial": "^0.2.1",
 		"date-fns-tz": "^3.2.0",
 		"ethers": "^6.10.0",
 		"flowbite-svelte-icons": "0.4.5",
