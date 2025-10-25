@@ -661,7 +661,7 @@
         </div>
         <div class="grid gap-6 grid-cols-1 lg:grid-cols-3 xl:grid-cols-3 xl:grid-rows-2">
                 <!-- Row 1: Trade History (2/3) -->
-                <div class={`${containerStyles.cardBordered} flex flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2`}>
+                <div class={`${containerStyles.cardBordered} flex flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2 min-h-96`}>
                         <div class="border-b border-white/5 pb-3">
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Trade History</h3>
                                 <p class="mt-1 text-xs text-gray-500">On-chain trade executions over time</p>
@@ -672,7 +672,7 @@
                                                 Charts are available in a browser environment.
                                         </div>
                                 {:else}
-                                        <div class="relative h-80">
+                                        <div class="relative h-96 lg:h-80">
                                                 <canvas bind:this={historyCanvas} class="absolute inset-0 h-full w-full"></canvas>
                                                 {#if (isLoading || libraryLoading) && historyEmpty}
                                                         <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-sm text-gray-400">
@@ -689,18 +689,18 @@
                 </div>
 
                 <!-- Orderbook Depth (spans remaining column) -->
-                <div class={`${containerStyles.cardBordered} flex flex-col lg:row-span-1 xl:row-span-2`}>
+                <div class={`${containerStyles.cardBordered} flex flex-col lg:row-span-1 xl:row-span-2 min-h-96`}>
                         <div class="border-b border-white/5 pb-3">
                                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Orderbook Depth</h3>
                                 <p class="mt-1 text-xs text-gray-500">Current on-chain liquidity</p>
                         </div>
-                        <div class="relative flex-1 pt-4">
+                        <div class="relative flex-1 pt-4 min-h-80">
                                 {#if !browser}
                                         <div class="absolute inset-4 flex items-center justify-center rounded-lg border border-dashed border-white/10 p-4 text-center text-sm text-gray-400">
                                                 Charts are available in a browser environment.
                                         </div>
                                 {:else}
-                                        <div class="relative h-full">
+                                        <div class="relative w-full h-full">
                                                 <canvas bind:this={depthCanvas} class="absolute inset-0 h-full w-full"></canvas>
                                                 {#if (isLoading || libraryLoading) && depthEmpty}
                                                         <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-sm text-gray-400">
