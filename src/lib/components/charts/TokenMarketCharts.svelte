@@ -516,21 +516,30 @@
                 const filtered = points.filter(
                         (point) => Number.isFinite(point.price) && Number.isFinite(point.quantity) && point.quantity > 0
                 );
-                const sorted = filtered.sort((a, b) => a.price - b.price);
+
+                // For bids: sort DESCENDING (high to low) so cumulative volume increases as price decreases
+                // For asks: sort ASCENDING (low to high) so cumulative volume increases as price increases
+                const sorted = side === 'bids'
+                        ? filtered.sort((a, b) => b.price - a.price)
+                        : filtered.sort((a, b) => a.price - b.price);
 
                 const cumulative: Array<{ x: number; y: number }> = [];
                 let running = 0;
-                const iterator = side === 'bids' ? [...sorted].reverse() : sorted;
-                const processed: Array<{ price: number; qty: number }> = [];
 
-                for (const point of iterator) {
+                // Get the starting price (max for bids, min for asks)
+                const startPrice = sorted.length > 0 ? sorted[0].price : 0;
+
+                // Start at the first price with 0 volume
+                cumulative.push({ x: startPrice, y: 0 });
+
+                // For each point, add the cumulative volume step
+                for (const point of sorted) {
+                        // Point at current price with volume before this order
+                        cumulative.push({ x: point.price, y: running });
+                        // Add this order's volume to running total
                         running += point.quantity;
-                        processed.push({ price: point.price, qty: running });
-                }
-
-                const normalized = side === 'bids' ? processed.reverse() : processed;
-                for (const item of normalized) {
-                        cumulative.push({ x: item.price, y: item.qty });
+                        // Point at current price with volume after this order
+                        cumulative.push({ x: point.price, y: running });
                 }
 
                 return cumulative;
@@ -556,20 +565,28 @@
                 const lowerTail = Math.max(baseMinPrice - pricePadding, 0);
                 const upperTail = baseMaxPrice + pricePadding;
 
-                const extendWithTail = (data: Array<{ x: number; y: number }>) => {
+                const extendWithTail = (data: Array<{ x: number; y: number }>, side: 'bids' | 'asks') => {
                         if (!data.length) return data;
                         const sorted = [...data].sort((a, b) => a.x - b.x);
                         const extended: Array<{ x: number; y: number }> = [];
-                        extended.push({ x: lowerTail, y: 0 });
-                        extended.push({ x: sorted[0].x, y: 0 });
+
+                        // Add all data points
                         extended.push(...sorted);
-                        extended.push({ x: sorted[sorted.length - 1].x, y: 0 });
-                        extended.push({ x: upperTail, y: 0 });
+
+                        // Add horizontal tail at far price (but don't drop back to 0)
+                        if (side === 'bids') {
+                                // For bids, extend tail to lower prices at the final cumulative volume
+                                extended.push({ x: lowerTail, y: sorted[sorted.length - 1].y });
+                        } else {
+                                // For asks, extend tail to higher prices at the final cumulative volume
+                                extended.push({ x: upperTail, y: sorted[sorted.length - 1].y });
+                        }
+
                         return extended;
                 };
 
-                bidsData = extendWithTail(bidsData);
-                asksData = extendWithTail(asksData);
+                bidsData = extendWithTail(bidsData, 'bids');
+                asksData = extendWithTail(asksData, 'asks');
 
                 if (!depthChart) {
                         depthChart = new ChartCtor(ctx, {

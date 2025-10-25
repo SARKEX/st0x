@@ -497,6 +497,7 @@
                 const quotes = $onChainQuoteQuery.data ?? [];
                 if (!quotes.length) return { bids: [], asks: [] };
 
+
                 const usdcToken = $currentNetwork.chainId
                         ? USDC_TOKENS[$currentNetwork.chainId]
                         : undefined;
@@ -510,7 +511,7 @@
                 const bids: DepthSeries['bids'] = [];
                 const asks: DepthSeries['asks'] = [];
 
-                quotes.forEach((quote) => {
+                quotes.forEach((quote, idx) => {
                         const ratio = Number(quote.ratio) / 1e18;
                         if (!Number.isFinite(ratio) || ratio <= 0) return;
                         const inputAddress = quote.inputTokenAddress.toLowerCase();
@@ -524,21 +525,34 @@
                                         return;
                                 }
                                 const orderValue = price * tokenAmount;
-                                if (!Number.isFinite(orderValue) || orderValue < 2) return;
+                                console.log(`[orderbookDepth ask ${idx}] tokenAmount: ${tokenAmount.toFixed(6)}, price: ${price.toFixed(6)}, orderValue: ${orderValue.toFixed(2)}`);
+                                if (!Number.isFinite(orderValue) || orderValue < 2) {
+                                        console.log(`[orderbookDepth ask ${idx}] FILTERED (dust)`);
+                                        return;
+                                }
                                 asks.push({ price, quantity: tokenAmount });
+                                console.log(`[orderbookDepth ask ${idx}] ADDED`);
                                 return;
                         }
 
                         if (inputAddress === assetAddress && outputAddress === usdcAddress) {
                                 const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals + 12));
-                                if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) return;
+                                if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) {
+                                        console.log(`[orderbookDepth bid ${idx}] usdcAmount invalid: ${usdcAmount}`);
+                                        return;
+                                }
                                 const price = 1 / ratio;
                                 if (!Number.isFinite(price) || price <= 0) return;
                                 const tokenAmount = usdcAmount / price;
                                 const orderValue = price * tokenAmount;
-                                if (!Number.isFinite(orderValue) || orderValue < 2) return;
+                                console.log(`[orderbookDepth bid ${idx}] usdcAmount: ${usdcAmount.toFixed(6)}, price: ${price.toFixed(6)}, tokenAmount: ${tokenAmount.toFixed(6)}, orderValue: ${orderValue.toFixed(2)}`);
+                                if (!Number.isFinite(orderValue) || orderValue < 2) {
+                                        console.log(`[orderbookDepth bid ${idx}] FILTERED (dust)`);
+                                        return;
+                                }
                                 if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
                                 bids.push({ price, quantity: tokenAmount });
+                                console.log(`[orderbookDepth bid ${idx}] ADDED`);
                         }
                 });
 
