@@ -17,6 +17,21 @@
                 };
         } | null;
 
+        type ChartConfigurationLike = {
+                type: string;
+                data?: Record<string, unknown>;
+                options?: Record<string, unknown>;
+        };
+
+        type ChartConstructor = new (
+                ctx: CanvasRenderingContext2D,
+                config: ChartConfigurationLike
+        ) => ChartInstance;
+
+        interface ChartJsWindow extends Window {
+                Chart?: ChartConstructor;
+        }
+
         export let tradeHistory: TradeHistoryPoint[] = [];
         export let volumeBuckets: VolumeBucket[] = [];
         export let depth: DepthSeries = { bids: [], asks: [] };
@@ -30,7 +45,7 @@
         let historyChart: ChartInstance = null;
         let volumeChart: ChartInstance = null;
         let depthChart: ChartInstance = null;
-        let ChartCtor: any = null;
+        let ChartCtor: ChartConstructor | null = null;
         let loadingChartLib = false;
         let chartLibError: string | null = null;
 
@@ -94,8 +109,8 @@
                 if (!browser) return null;
                 if (ChartCtor) return ChartCtor;
 
-                if (typeof window !== 'undefined' && (window as { Chart?: any }).Chart) {
-                        ChartCtor = (window as { Chart?: any }).Chart ?? null;
+                if (typeof window !== 'undefined' && (window as ChartJsWindow).Chart) {
+                        ChartCtor = (window as ChartJsWindow).Chart ?? null;
                         chartLibError = null;
                         return ChartCtor;
                 }
@@ -107,7 +122,7 @@
                         await loadScript(
                                 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js'
                         );
-                        const chartGlobal = (window as { Chart?: any }).Chart ?? null;
+                        const chartGlobal = (window as ChartJsWindow).Chart ?? null;
                         if (!chartGlobal) {
                                 throw new Error('Chart.js global not found');
                         }
