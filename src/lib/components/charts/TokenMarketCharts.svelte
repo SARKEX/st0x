@@ -7,7 +7,6 @@
                 TradeHistoryPoint,
                 VolumeBucket
         } from '$lib/components/charts/token-chart-types';
-        import 'chartjs-chart-financial';
 
         type ChartInstance = {
                 destroy: () => void;
@@ -26,7 +25,7 @@
         export let depth: DepthSeries = { bids: [], asks: [] };
         export let isLoading = false;
         export let error: string | null = null;
-        export let ohlcCandles: Array<{ t: number; o: number; h: number; l: number; c: number }> = [];
+        export let averagePrices: Array<{ x: number; y: number }> = [];
         export let rangeStartMs: number | null = null;
         export let rangeEndMs: number | null = null;
         export let historyRange: HistoryRangeKey = '7D';
@@ -131,9 +130,6 @@
                         await loadScript(
                                 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js'
                         );
-                        await loadScript(
-                                'https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js'
-                        );
                         const chartGlobal = (window as { Chart?: any }).Chart ?? null;
                         if (!chartGlobal) {
                                 throw new Error('Chart.js global not found');
@@ -190,24 +186,11 @@
 	const ctx = historyCanvas.getContext('2d');
 	if (!ctx) return;
 
-	console.log('[updateHistoryChart] called with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'ohlcCandles prop:', ohlcCandles.length);
+	console.log('[updateHistoryChart] called with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'averagePrices prop:', averagePrices.length);
 
-	const sortedCandles = [...ohlcCandles]
-		.filter((candle) =>
-			Number.isFinite(candle.t) &&
-			Number.isFinite(candle.o) &&
-			Number.isFinite(candle.h) &&
-			Number.isFinite(candle.l) &&
-			Number.isFinite(candle.c)
-		)
-		.sort((a, b) => a.t - b.t)
-		.map((candle) => ({
-			x: candle.t,
-			o: candle.o,
-			h: candle.h,
-			l: candle.l,
-			c: candle.c
-		}));
+	const priceLineData = [...averagePrices]
+		.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+		.sort((a, b) => a.x - b.x);
 
 	const volumeData = volumeBuckets
 		.filter((bucket) => Number.isFinite(bucket.start) && Number.isFinite(bucket.tokens))
@@ -245,8 +228,8 @@
 		timeStep = 6;
 	}
 
-	const hasCandles = sortedCandles.length > 0;
-	console.log('[updateHistoryChart] hasCandles:', hasCandles, 'sortedCandles:', sortedCandles.length, 'volumeData:', volumeData.length);
+	const hasPriceData = priceLineData.length > 0;
+	console.log('[updateHistoryChart] hasPriceData:', hasPriceData, 'priceLineData:', priceLineData.length, 'volumeData:', volumeData.length);
 
 	if (historyChart) {
 		historyChart.destroy();
@@ -326,26 +309,27 @@
 	if (!historyChart) return;
 
 	const datasets: any[] = [];
-	if (hasCandles) {
-		console.log('[updateHistoryChart] adding candles dataset with', sortedCandles.length, 'candles');
+	if (hasPriceData) {
+		console.log('[updateHistoryChart] adding price line dataset with', priceLineData.length, 'points');
 		datasets.push({
-			label: 'Candles',
-			type: 'ohlc',
+			label: 'Average Price',
+			type: 'line',
 			yAxisID: 'yPrice',
-			data: sortedCandles,
-			color: {
-				up: '#00ff00',
-				down: '#00ff00',
-				unchanged: '#00ff00'
-			},
-			borderColor: {
-				up: '#00ff00',
-				down: '#00ff00',
-				unchanged: '#00ff00'
-			}
+			data: priceLineData,
+			borderColor: '#00ff00',
+			backgroundColor: 'transparent',
+			borderWidth: 2,
+			fill: false,
+			pointRadius: 3,
+			pointBackgroundColor: '#00ff00',
+			pointBorderColor: '#ffffff',
+			pointBorderWidth: 1,
+			pointHoverRadius: 5,
+			tension: 0.3,
+			parsing: false
 		});
 	} else {
-		console.log('[updateHistoryChart] no candles - hasCandles:', hasCandles);
+		console.log('[updateHistoryChart] no price data - hasPriceData:', hasPriceData);
 	}
 	if (volumeData.length > 0) {
 		datasets.push({
@@ -362,7 +346,7 @@
 			parsing: false
 		});
 	}
-	if (!hasCandles && volumeData.length === 0) {
+	if (!hasPriceData && volumeData.length === 0) {
 		datasets.push({
 			label: 'Placeholder',
 			type: 'line',
@@ -442,8 +426,10 @@
                 const ctx = depthCanvas.getContext('2d');
                 if (!ctx) return;
 
+                console.log('[updateDepthChart] depth prop:', { bidsCount: depth.bids.length, asksCount: depth.asks.length });
                 let bidsData = buildDepthDataset(depth.bids, 'bids');
                 let asksData = buildDepthDataset(depth.asks, 'asks');
+                console.log('[updateDepthChart] after buildDepthDataset:', { bidsDataCount: bidsData.length, asksDataCount: asksData.length });
 
                 const allVolumes = [...bidsData, ...asksData].map((point) => point.y);
                 const maxVolume = allVolumes.length ? Math.max(...allVolumes) : 0;
@@ -599,13 +585,14 @@
         });
 
         $: if (ChartCtor && browser) {
-                console.log('[child reactive] triggered with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'historyRange:', historyRange, 'ohlcCandles:', ohlcCandles.length, 'volumeBuckets:', volumeBuckets.length);
+                console.log('[child reactive] triggered with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'historyRange:', historyRange, 'averagePrices:', averagePrices.length, 'volumeBuckets:', volumeBuckets.length);
                 void tradeHistory;
                 void volumeBuckets;
                 void depth;
                 void rangeStartMs;
                 void rangeEndMs;
                 void historyRange;
+                void averagePrices;
                 tick().then(() => {
                         if (ChartCtor && browser) {
                                 console.log('[child tick callback] calling updateCharts with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs);
@@ -614,7 +601,7 @@
                 });
         }
 
-        $: historyEmpty = ohlcCandles.length === 0;
+        $: historyEmpty = averagePrices.length === 0 && volumeBuckets.length === 0;
         $: depthEmpty = depth.bids.length === 0 && depth.asks.length === 0;
         $: combinedError = error ?? chartLibError;
         $: libraryLoading = loadingChartLib && !ChartCtor;
