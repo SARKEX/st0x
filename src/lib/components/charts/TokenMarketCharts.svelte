@@ -132,7 +132,7 @@
                                 'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js'
                         );
                         await loadScript(
-                                'https://cdn.jsdelivr.net/npm/chartjs-chart-financial@1.1.1/dist/chartjs-chart-financial.umd.min.js'
+                                'https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js'
                         );
                         const chartGlobal = (window as { Chart?: any }).Chart ?? null;
                         if (!chartGlobal) {
