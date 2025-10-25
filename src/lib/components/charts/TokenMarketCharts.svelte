@@ -2,6 +2,7 @@
         import { browser } from '$app/environment';
         import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
         import { containerStyles } from '$lib/utils/styles';
+        import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
         import type {
                 DepthSeries,
                 TradeHistoryPoint,
@@ -41,6 +42,7 @@
         let ChartCtor: any = null;
         let loadingChartLib = false;
         let chartLibError: string | null = null;
+        let chartsReady = false;
         function roundToNiceNumber(value: number): number {
                 if (!Number.isFinite(value) || value <= 0) return 1;
                 const exponent = Math.floor(Math.log10(value));
@@ -186,8 +188,6 @@
 	const ctx = historyCanvas.getContext('2d');
 	if (!ctx) return;
 
-	console.log('[updateHistoryChart] called with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'averagePrices prop:', averagePrices.length);
-
 	const priceLineData = [...averagePrices]
 		.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
 		.sort((a, b) => a.x - b.x);
@@ -229,7 +229,6 @@
 	}
 
 	const hasPriceData = priceLineData.length > 0;
-	console.log('[updateHistoryChart] hasPriceData:', hasPriceData, 'priceLineData:', priceLineData.length, 'volumeData:', volumeData.length);
 
 	if (historyChart) {
 		historyChart.destroy();
@@ -311,7 +310,6 @@
 
 	const datasets: any[] = [];
 	if (hasPriceData) {
-		console.log('[updateHistoryChart] adding price line dataset with', priceLineData.length, 'points');
 		datasets.push({
 			label: 'Average Price',
 			type: 'line',
@@ -329,8 +327,6 @@
 			tension: 0,
 			parsing: false
 		});
-	} else {
-		console.log('[updateHistoryChart] no price data - hasPriceData:', hasPriceData);
 	}
 	if (volumeData.length > 0) {
 		datasets.push({
@@ -366,7 +362,6 @@
 	}
 
 	historyChart.data.datasets = datasets;
-	console.log('[updateHistoryChart] chart datasets:', historyChart.data.datasets.length, 'with types:', historyChart.data.datasets.map((d: any) => d.type));
 
 	const xScale = historyChart.options.scales?.x as { min?: number; max?: number; time?: { unit?: string; stepSize?: number } };
 	if (xScale) {
@@ -427,10 +422,8 @@
                 const ctx = depthCanvas.getContext('2d');
                 if (!ctx) return;
 
-                console.log('[updateDepthChart] depth prop:', { bidsCount: depth.bids.length, asksCount: depth.asks.length });
                 let bidsData = buildDepthDataset(depth.bids, 'bids');
                 let asksData = buildDepthDataset(depth.asks, 'asks');
-                console.log('[updateDepthChart] after buildDepthDataset:', { bidsDataCount: bidsData.length, asksDataCount: asksData.length });
 
                 const allVolumes = [...bidsData, ...asksData].map((point) => point.y);
                 const maxVolume = allVolumes.length ? Math.max(...allVolumes) : 0;
@@ -587,7 +580,6 @@
         });
 
         $: if (ChartCtor && browser) {
-                console.log('[child reactive] triggered with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs, 'historyRange:', historyRange, 'averagePrices:', averagePrices.length, 'volumeBuckets:', volumeBuckets.length);
                 void tradeHistory;
                 void volumeBuckets;
                 void depth;
@@ -595,27 +587,22 @@
                 void rangeEndMs;
                 void historyRange;
                 void averagePrices;
+                chartsReady = false;
                 tick().then(() => {
                         if (ChartCtor && browser) {
-                                console.log('[child tick callback] calling updateCharts with rangeStartMs:', rangeStartMs, 'rangeEndMs:', rangeEndMs);
-                console.log("[child tick] depth prop at tick time:", { bidsCount: depth.bids.length, asksCount: depth.asks.length });
                                 updateCharts();
+                                // Only mark as ready if we have actual data OR we're done loading
+                                const hasData = averagePrices.length > 0 || (depth.bids.length > 0 || depth.asks.length > 0);
+                                const doneLoading = !isLoading && !libraryLoading;
+                                chartsReady = hasData || doneLoading;
                         }
                 });
         }
 
         $: historyEmpty = averagePrices.length === 0 && volumeBuckets.length === 0;
         $: depthEmpty = depth.bids.length === 0 && depth.asks.length === 0;
-        $: if (depthEmpty) {
-                console.log("[loading state] depthEmpty: true, isLoading:", isLoading, "libraryLoading:", libraryLoading);
-        }
         $: combinedError = error ?? chartLibError;
         $: libraryLoading = loadingChartLib && !ChartCtor;
-        $: {
-                if (historyEmpty) {
-                        console.log('[loading state] historyEmpty: true, isLoading:', isLoading, 'libraryLoading:', libraryLoading, 'loadingChartLib:', loadingChartLib, 'ChartCtor:', !!ChartCtor);
-                }
-        }
 </script>
 
 <div class="space-y-6">
@@ -671,11 +658,11 @@
                                 {:else}
                                         <div class="relative h-96 lg:h-80">
                                                 <canvas bind:this={historyCanvas} class="absolute inset-0 h-full w-full"></canvas>
-                                                {#if (isLoading || libraryLoading) && historyEmpty}
-                                                        <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-sm text-gray-400">
-                                                                Loading chart data...
+                                                {#if !chartsReady}
+                                                        <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60">
+                                                                <LoadingSpinner variant="inline" size="md" text="Loading chart data..." />
                                                         </div>
-                                                {:else if (!isLoading && !libraryLoading && historyEmpty)}
+                                                {:else if chartsReady && historyEmpty}
                                                         <div class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-gray-400">
                                                                 No on-chain trades recorded for this token during the selected period.
                                                         </div>
@@ -699,11 +686,11 @@
                                 {:else}
                                         <div class="relative w-full h-full">
                                                 <canvas bind:this={depthCanvas} class="absolute inset-0 h-full w-full"></canvas>
-                                                {#if (isLoading || libraryLoading) && depthEmpty}
-                                                        <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60 text-sm text-gray-400">
-                                                                Loading orderbook data...
+                                                {#if !chartsReady}
+                                                        <div class="absolute inset-0 flex items-center justify-center bg-gray-900/60">
+                                                                <LoadingSpinner variant="inline" size="md" text="Loading orderbook data..." />
                                                         </div>
-                                                {:else if (!isLoading && !libraryLoading && depthEmpty)}
+                                                {:else if chartsReady && depthEmpty}
                                                         <div class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-gray-400">
                                                                 No active on-chain quotes available for this token.
                                                         </div>

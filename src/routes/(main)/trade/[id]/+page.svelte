@@ -452,7 +452,6 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                 const rangeEnd = Math.max(nowMs, latestTradeMs || nowMs);
                 const rangeStart = Math.max(0, rangeEnd - rangeSeconds * 1000);
 
-                console.log('[parent reactive] historyRange:', historyRange, 'rangeStart:', new Date(rangeStart).toISOString(), 'rangeEnd:', new Date(rangeEnd).toISOString(), 'tradeHistoryPoints:', tradeHistoryPoints.length);
 
                 // Determine bucket resolution (1 minute for 1D, 15 min for 7D, 1 hour for 30D)
                 let candleBucketSeconds = OHLC_BUCKET_SECONDS;
@@ -464,18 +463,13 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 
                 historyRangeStartMs = rangeStart;
                 historyRangeEndMs = rangeEnd;
-                console.log('[parent state update] historyRangeStartMs:', new Date(historyRangeStartMs).toISOString(), 'historyRangeEndMs:', new Date(historyRangeEndMs).toISOString());
 
                 visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
-                console.log('[parent filter] visibleTradeHistoryPoints:', visibleTradeHistoryPoints.length);
                 if (visibleTradeHistoryPoints.length > 0) {
-                        console.log('[parent filter] first trade:', {ts: new Date(visibleTradeHistoryPoints[0].timestamp).toISOString(), price: visibleTradeHistoryPoints[0].price});
                 }
 
                 averagePrices = tradesToAveragePrices(visibleTradeHistoryPoints, candleBucketSeconds);
-                console.log('[parent avg] averagePrices:', averagePrices.length, 'bucketSeconds:', candleBucketSeconds);
                 if (averagePrices.length > 0) {
-                        console.log('[parent avg] first price:', {x: new Date(averagePrices[0].x).toISOString(), y: averagePrices[0].y});
                 }
 
                 const bucketSeconds = getVolumeBucketSeconds(historyRange);
@@ -530,34 +524,27 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                                         return;
                                 }
                                 const orderValue = price * tokenAmount;
-                                console.log(`[orderbookDepth ask ${idx}] tokenAmount: ${tokenAmount.toFixed(6)}, price: ${price.toFixed(6)}, orderValue: ${orderValue.toFixed(2)}`);
                                 if (!Number.isFinite(orderValue) || orderValue < 2) {
-                                        console.log(`[orderbookDepth ask ${idx}] FILTERED (dust)`);
                                         return;
                                 }
                                 asks.push({ price, quantity: tokenAmount });
-                                console.log(`[orderbookDepth ask ${idx}] ADDED`);
                                 return;
                         }
 
                         if (inputAddress === assetAddress && outputAddress === usdcAddress) {
                                 const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals + 12));
                                 if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) {
-                                        console.log(`[orderbookDepth bid ${idx}] usdcAmount invalid: ${usdcAmount}`);
                                         return;
                                 }
                                 const price = 1 / ratio;
                                 if (!Number.isFinite(price) || price <= 0) return;
                                 const tokenAmount = usdcAmount / price;
                                 const orderValue = price * tokenAmount;
-                                console.log(`[orderbookDepth bid ${idx}] usdcAmount: ${usdcAmount.toFixed(6)}, price: ${price.toFixed(6)}, tokenAmount: ${tokenAmount.toFixed(6)}, orderValue: ${orderValue.toFixed(2)}`);
                                 if (!Number.isFinite(orderValue) || orderValue < 2) {
-                                        console.log(`[orderbookDepth bid ${idx}] FILTERED (dust)`);
                                         return;
                                 }
                                 if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
                                 bids.push({ price, quantity: tokenAmount });
-                                console.log(`[orderbookDepth bid ${idx}] ADDED`);
                         }
                 });
 
