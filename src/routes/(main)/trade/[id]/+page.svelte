@@ -461,14 +461,12 @@
                         candleBucketSeconds = 60 * 60;
                 }
 
-                const bucketedCandles = tradesToOHLC(visibleTradeHistoryPoints, candleBucketSeconds);
-
                 historyRangeStartMs = rangeStart;
                 historyRangeEndMs = rangeEnd;
 
                 visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
 
-                ohlcCandles = bucketedCandles;
+                ohlcCandles = tradesToOHLC(visibleTradeHistoryPoints, candleBucketSeconds);
 
                 const bucketSeconds = getVolumeBucketSeconds(historyRange);
                 const bucketStartTime = Math.max(rangeStart, rangeEnd - rangeSeconds * 1000);
@@ -479,7 +477,7 @@
                 }
 
                 for (const point of visibleTradeHistoryPoints) {
-                const bucketStart = Math.floor(point.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
+                        const bucketStart = Math.floor(point.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
                         const clampedBucket = Math.max(bucketStart, bucketStartTime);
                         bucketMap.set(clampedBucket, (bucketMap.get(clampedBucket) ?? 0) + point.tokens);
                 }
@@ -520,6 +518,8 @@
                                 if (!Number.isFinite(tokenAmount) || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
                                         return;
                                 }
+                                const orderValue = price * tokenAmount;
+                                if (!Number.isFinite(orderValue) || orderValue < 2) return;
                                 asks.push({ price, quantity: tokenAmount });
                                 return;
                         }
@@ -529,7 +529,9 @@
                                 if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) return;
                                 const price = 1 / ratio;
                                 if (!Number.isFinite(price) || price <= 0) return;
-                                const tokenAmount = (usdcAmount / 1e12) / price;
+                                const tokenAmount = usdcAmount / price;
+                                const orderValue = price * tokenAmount;
+                                if (!Number.isFinite(orderValue) || orderValue < 2) return;
                                 if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
                                 bids.push({ price, quantity: tokenAmount });
                         }
@@ -730,42 +732,19 @@
                 </Section>
 
                 <Section>
-                        <div class="space-y-4">
-                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                                        <div>
-                                                <h2 class="text-base font-semibold text-white">On-chain Activity</h2>
-                                                <p class="text-sm text-gray-400">
-                                                        Visualize recent trades and current liquidity sourced directly from the on-chain orderbook.
-                                                </p>
-                                        </div>
-                                        <div class="flex items-center gap-2 self-start">
-                                                {#each HISTORY_RANGE_OPTIONS as option}
-                                                        <button
-                                                                type="button"
-                                                                class={`rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
-                                                                        historyRange === option.key
-                                                                                ? 'border-blue-400/60 bg-blue-500/20 text-blue-200'
-                                                                                : 'border-white/10 text-gray-400 hover:border-white/25 hover:text-white'
-                                                                }`}
-                                                                aria-pressed={historyRange === option.key}
-                                                                on:click={() => (historyRange = option.key)}
-                                                        >
-                                                                {option.label}
-                                                        </button>
-                                                {/each}
-                                        </div>
-                                </div>
-                                <TokenMarketCharts
-                                        tradeHistory={visibleTradeHistoryPoints}
-                                        volumeBuckets={tradeVolumeBuckets}
-                                        depth={orderbookDepth}
-                                        ohlcCandles={ohlcCandles}
-                                        rangeStartMs={historyRangeStartMs}
-                                        rangeEndMs={historyRangeEndMs}
-                                        isLoading={chartsLoading}
-                                        error={tradeQueryError}
-                                />
-                        </div>
+                        <TokenMarketCharts
+                                tradeHistory={visibleTradeHistoryPoints}
+                                volumeBuckets={tradeVolumeBuckets}
+                                depth={orderbookDepth}
+                                ohlcCandles={ohlcCandles}
+                                rangeStartMs={historyRangeStartMs}
+                                rangeEndMs={historyRangeEndMs}
+                                isLoading={chartsLoading}
+                                error={tradeQueryError}
+                                historyRange={historyRange}
+                                historyRangeOptions={HISTORY_RANGE_OPTIONS}
+                                on:rangeChange={(e) => (historyRange = e.detail.key)}
+                        />
                 </Section>
 
                 <!-- Tabbed Information Section (collapsible) -->

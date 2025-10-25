@@ -1,6 +1,6 @@
 <script lang="ts">
         import { browser } from '$app/environment';
-        import { onDestroy, onMount } from 'svelte';
+        import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
         import { containerStyles } from '$lib/utils/styles';
         import type {
                 DepthSeries,
@@ -17,6 +17,9 @@
                 };
         } | null;
 
+        type HistoryRangeKey = '1D' | '7D' | '30D';
+        type HistoryRangeOption = { key: HistoryRangeKey; label: string };
+
         export let tradeHistory: TradeHistoryPoint[] = [];
         export let volumeBuckets: VolumeBucket[] = [];
         export let depth: DepthSeries = { bids: [], asks: [] };
@@ -25,6 +28,10 @@
         export let ohlcCandles: Array<{ t: number; o: number; h: number; l: number; c: number }> = [];
         export let rangeStartMs: number | null = null;
         export let rangeEndMs: number | null = null;
+        export let historyRange: HistoryRangeKey = '7D';
+        export let historyRangeOptions: HistoryRangeOption[] = [];
+
+        const dispatch = createEventDispatcher<{ rangeChange: { key: HistoryRangeKey } }>();
 
         let historyCanvas: HTMLCanvasElement | null = null;
         let depthCanvas: HTMLCanvasElement | null = null;
@@ -85,11 +92,11 @@
                                                 dataset.data ?? [];
 
                                         const upColor = dataset.upColor ?? '#22c55e';
-                                        const downColor = dataset.downColor ?? '#ef4444';
-                                        const flatColor = dataset.unchangedColor ?? '#facc15';
-                                        const borderUp = dataset.borderUp ?? '#14532d';
-                                        const borderDown = dataset.borderDown ?? '#7f1d1d';
-                                        const borderFlat = dataset.borderFlat ?? '#854d0e';
+                                        const downColor = dataset.downColor ?? '#22c55e';
+                                        const flatColor = dataset.unchangedColor ?? upColor;
+                                        const borderUp = dataset.borderUp ?? '#166534';
+                                        const borderDown = dataset.borderDown ?? borderUp;
+                                        const borderFlat = dataset.borderFlat ?? borderUp;
 
                                         for (let i = 0; i < data.length; i += 1) {
                                                 const point = data[i];
@@ -137,7 +144,7 @@
                                                 const bodyHeight = Math.max(1, bodyBottom - bodyTop);
 
                                                 ctx.save();
-                                                ctx.lineWidth = 1;
+                                                ctx.lineWidth = 2;
                                                 ctx.strokeStyle = strokeColor;
                                                 ctx.fillStyle = fillColor;
 
@@ -267,245 +274,261 @@
 
         function formatYAxisValue(value: number, range: number): string {
                 if (!Number.isFinite(value) || !Number.isFinite(range)) return String(value);
-                // Use 1 decimal if range < 10, else use integers
-                if (range < 10) {
-                        return value.toFixed(1);
+
+                const absRange = Math.abs(range);
+                const absValue = Math.abs(value);
+
+                let decimals = 0;
+                if (absRange >= 1_000) {
+                        decimals = 0;
+                } else if (absRange >= 100) {
+                        decimals = absValue >= 10 ? 1 : 2;
+                } else if (absRange >= 10) {
+                        decimals = absValue >= 1 ? 2 : 3;
+                } else if (absRange >= 1) {
+                        decimals = absValue >= 1 ? 2 : 3;
+                } else if (absRange >= 0.1) {
+                        decimals = 3;
                 } else {
-                        return Math.round(value).toString();
+                        decimals = 4;
                 }
+
+                return value.toFixed(decimals);
         }
 
         function updateHistoryChart() {
-                if (!ChartCtor || !historyCanvas) return;
-                const ctx = historyCanvas.getContext('2d');
-                if (!ctx) return;
+	if (!ChartCtor || !historyCanvas) return;
+	const ctx = historyCanvas.getContext('2d');
+	if (!ctx) return;
 
-                const sortedCandles = [...ohlcCandles]
-                        .filter((candle) =>
-                                Number.isFinite(candle.t) &&
-                                Number.isFinite(candle.o) &&
-                                Number.isFinite(candle.h) &&
-                                Number.isFinite(candle.l) &&
-                                Number.isFinite(candle.c)
-                        )
-                        .sort((a, b) => a.t - b.t)
-                        .map((candle) => ({
-                                x: candle.t,
-                                y: candle.c,
-                                o: candle.o,
-                                h: candle.h,
-                                l: candle.l,
-                                c: candle.c
-                        }));
+	const sortedCandles = [...ohlcCandles]
+		.filter((candle) =>
+			Number.isFinite(candle.t) &&
+			Number.isFinite(candle.o) &&
+			Number.isFinite(candle.h) &&
+			Number.isFinite(candle.l) &&
+			Number.isFinite(candle.c)
+		)
+		.sort((a, b) => a.t - b.t)
+		.map((candle) => ({
+			x: candle.t,
+			o: candle.o,
+			h: candle.h,
+			l: candle.l,
+			c: candle.c
+		}));
 
-                const volumeData = volumeBuckets
-                        .filter((bucket) => Number.isFinite(bucket.start) && Number.isFinite(bucket.tokens))
-                        .sort((a, b) => a.start - b.start)
-                        .map((bucket) => ({ x: bucket.start, y: bucket.tokens }));
+	const volumeData = volumeBuckets
+		.filter((bucket) => Number.isFinite(bucket.start) && Number.isFinite(bucket.tokens))
+		.sort((a, b) => a.start - b.start)
+		.map((bucket) => ({ x: bucket.start, y: bucket.tokens }));
 
-                const allTimes: number[] = [];
-                for (const candle of sortedCandles) {
-                        allTimes.push(candle.x);
-                }
-                for (const bucket of volumeData) {
-                        allTimes.push(bucket.x);
-                }
-                for (const point of tradeHistory) {
-                        if (Number.isFinite(point.timestamp)) {
-                                allTimes.push(point.timestamp);
-                        }
-                }
+	const hasExplicitStart = typeof rangeStartMs === 'number' && Number.isFinite(rangeStartMs);
+	const hasExplicitEnd = typeof rangeEndMs === 'number' && Number.isFinite(rangeEndMs);
+	const fallbackEnd = hasExplicitEnd ? (rangeEndMs as number) : Date.now();
+	const fallbackStart = hasExplicitStart ? (rangeStartMs as number) : fallbackEnd - 7 * 24 * 60 * 60 * 1000;
 
-                const hasExplicitStart = typeof rangeStartMs === 'number' && Number.isFinite(rangeStartMs);
-                const hasExplicitEnd = typeof rangeEndMs === 'number' && Number.isFinite(rangeEndMs);
-                const fallbackEnd = hasExplicitEnd ? (rangeEndMs as number) : Date.now();
-                const fallbackStart = hasExplicitStart
-                        ? (rangeStartMs as number)
-                        : fallbackEnd - 7 * 24 * 60 * 60 * 1000;
+	let minTime = hasExplicitStart ? (rangeStartMs as number) : fallbackStart;
+	let maxTime = hasExplicitEnd ? (rangeEndMs as number) : fallbackEnd;
 
-                let minTime = allTimes.length ? Math.min(...allTimes) : fallbackStart;
-                let maxTime = allTimes.length ? Math.max(...allTimes) : fallbackEnd;
+	if (!Number.isFinite(minTime)) {
+		minTime = fallbackStart;
+	}
+	if (!Number.isFinite(maxTime) || maxTime <= minTime) {
+		maxTime = Math.max(fallbackEnd, minTime + 60 * 60 * 1000);
+	}
 
-                if (hasExplicitStart) {
-                        minTime = rangeStartMs as number;
-                }
-                if (hasExplicitEnd) {
-                        maxTime = rangeEndMs as number;
-                }
+	const volumeValues = volumeData.map((bucket) => bucket.y);
+	const volumeMax = volumeValues.length ? Math.max(...volumeValues) : 0;
+	const volumeRange = volumeMax > 0 ? volumeMax : 1;
+	const volumeAxisMax = roundToNiceNumber(volumeRange * 4);
+	const timeRangeMs = Math.max(1, maxTime - minTime);
+	const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+	let timeUnit: 'hour' | 'day' = 'hour';
+	let timeStep = 1;
+	if (timeRangeMs > ONE_DAY_MS * 14) {
+		timeUnit = 'day';
+		timeStep = 1;
+	} else if (timeRangeMs > ONE_DAY_MS * 2) {
+		timeUnit = 'hour';
+		timeStep = 6;
+	}
 
-                if (!Number.isFinite(minTime)) {
-                        minTime = fallbackStart;
-                }
-                if (!Number.isFinite(maxTime) || maxTime <= minTime) {
-                        maxTime = Math.max(fallbackEnd, minTime + 60 * 60 * 1000);
-                }
+	const hasCandles = sortedCandles.length > 0;
 
-                const volumeValues = volumeData.map((bucket) => bucket.y);
-                const volumeMax = volumeValues.length ? Math.max(...volumeValues) : 0;
-                const volumeRange = volumeMax > 0 ? volumeMax : 1;
-                const volumeAxisMax = roundToNiceNumber(volumeRange * 4);
+	if (historyChart) {
+		historyChart.destroy();
+		historyChart = null;
+	}
 
-                if (!historyChart) {
-                        historyChart = new ChartCtor(ctx, {
-                                type: 'scatter',
-                                data: { datasets: [] },
-                                options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        interaction: { mode: 'nearest', intersect: false },
-                                        plugins: {
-                                                legend: {
-                                                        labels: {
-                                                                color: '#d1d5db'
-                                                        }
-                                                },
-                                                tooltip: {
-                                                        callbacks: {
-                                                                title: (items: any[]) => {
-                                                                        if (items.length === 0) return '';
-                                                                        const time = items[0].raw?.x ?? items[0].parsed?.x;
-                                                                        if (!time) return '';
-                                                                        const date = new Date(time);
-                                                                        return date.toLocaleString('en-US', {
-                                                                                year: 'numeric',
-                                                                                month: '2-digit',
-                                                                                day: '2-digit',
-                                                                                hour: '2-digit',
-                                                                                minute: '2-digit',
-                                                                                hour12: false
-                                                                        });
-                                                                },
-                                                                label: (context: any) => {
-                                                                        if (context.dataset?.candlestick) {
-                                                                                const candle = context.raw;
-                                                                                if (!candle) return '';
-                                                                                const direction = candle.c >= candle.o ? '▲' : '▼';
-                                                                                return `${direction} O:${candle.o.toFixed(2)} H:${candle.h.toFixed(
-                                                                                        2
-                                                                                )} L:${candle.l.toFixed(2)} C:${candle.c.toFixed(2)}`;
-                                                                        }
-                                                                        const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
-                                                                        return `Volume: ${formatYAxisValue(volumeValue, volumeRange)}`;
-                                                                }
-                                                        }
-                                                }
-                                        },
-                                        scales: {
-                                                x: {
-                                                        type: 'time',
-                                                        time: {
-                                                                unit: 'hour',
-                                                                stepSize: 1,
-                                                                displayFormats: {
-                                                                        hour: 'MMM dd HH:00'
-                                                                }
-                                                        },
-                                                        ticks: {
-                                                                color: '#9ca3af',
-                                                                maxRotation: 0,
-                                                                autoSkip: false
-                                                        },
-                                                        grid: { color: 'rgba(148, 163, 184, 0.15)' },
-                                                        min: minTime,
-                                                        max: maxTime
-                                                },
-                                                yPrice: {
-                                                        position: 'left',
-                                                        ticks: {
-                                                                color: '#9ca3af',
-                                                                callback: (value: string | number) => {
-                                                                        const numeric = Number(value);
-                                                                        if (!Number.isFinite(numeric)) return value;
-                                                                        return `$${numeric.toFixed(2)}`;
-                                                                }
-                                                        },
-                                                        grid: { color: 'rgba(148, 163, 184, 0.1)' }
-                                                },
-                                                yVolume: {
-                                                        position: 'right',
-                                                        beginAtZero: true,
-                                                        grid: { drawOnChartArea: false },
-                                                        ticks: {
-                                                                color: '#9ca3af',
-                                                                callback: (value: string | number) => {
-                                                                        return formatYAxisValue(Number(value), volumeRange);
-                                                                }
-                                                        }
-                                                }
-                                        }
-                                }
-                        }) as ChartInstance;
-                }
+	historyChart = new ChartCtor(ctx, {
+		type: 'scatter',
+		data: { datasets: [] },
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			interaction: { mode: 'nearest', intersect: false },
+			plugins: {
+				legend: { labels: { color: '#d1d5db' } },
+				tooltip: {
+					callbacks: {
+						title: (items: any[]) => {
+							if (items.length === 0) return '';
+							const time = items[0].raw?.x ?? items[0].parsed?.x;
+							if (!time) return '';
+							const date = new Date(time);
+							return date.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+					},
+						label: (context: any) => {
+							if (context.dataset?.candlestick) {
+								const candle = context.raw;
+								if (!candle) return '';
+								const direction = candle.c >= candle.o ? '▲' : '▼';
+								return `${direction} O:${candle.o.toFixed(2)} H:${candle.h.toFixed(2)} L:${candle.l.toFixed(2)} C:${candle.c.toFixed(2)}`;
+							}
+							if (context.dataset?.label === 'Volume') {
+								const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
+								return `Volume: ${formatYAxisValue(volumeValue, volumeRange)}`;
+							}
+							return '';
+					}
+					}
+				}
+			},
+			scales: {
+				x: {
+					type: 'time',
+					time: { unit: timeUnit, stepSize: timeStep, displayFormats: { hour: 'MMM dd HH:00', day: 'MMM dd' } },
+					ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: false },
+					grid: { color: 'rgba(148, 163, 184, 0.15)' },
+					min: minTime,
+					max: maxTime
+				},
+				yPrice: {
+					position: 'left',
+					ticks: {
+						color: '#9ca3af',
+						callback: (value: string | number) => {
+							const numeric = Number(value);
+							if (!Number.isFinite(numeric)) return value;
+							return `$${numeric.toFixed(2)}`;
+						}
+					},
+					grid: { color: 'rgba(148, 163, 184, 0.1)' }
+				},
+				yVolume: {
+					position: 'right',
+					beginAtZero: true,
+					grid: { drawOnChartArea: false },
+					ticks: {
+						color: '#9ca3af',
+						callback: (value: string | number) => {
+							return formatYAxisValue(Number(value), volumeRange);
+						}
+					}
+				}
+			}
+		}
+	});
 
-                if (!historyChart) return;
+	if (!historyChart) return;
 
-                historyChart.data.datasets = [
-                        {
-                                label: 'Price',
-                                type: 'scatter',
-                                yAxisID: 'yPrice',
-                                candlestick: true,
-                                data: sortedCandles,
-                                upColor: '#22c55e',
-                                downColor: '#ef4444',
-                                unchangedColor: '#facc15',
-                                borderUp: '#14532d',
-                                borderDown: '#7f1d1d',
-                                borderFlat: '#854d0e',
-                                parsing: false,
-                                showLine: false,
-                                pointRadius: 0,
-                                pointHoverRadius: 0,
-                                pointHitRadius: 12
-                        },
-                        {
-                                label: 'Volume',
-                                type: 'bar',
-                                yAxisID: 'yVolume',
-                                data: volumeData,
-                                backgroundColor: 'rgba(14, 165, 233, 0.45)',
-                                borderColor: '#0ea5e9',
-                                borderWidth: 1,
-                                borderRadius: 4,
-                                maxBarThickness: 24,
-                                hoverBackgroundColor: 'rgba(14, 165, 233, 0.6)',
-                                parsing: false
-                        }
-                ];
+	const datasets: any[] = [];
+	if (hasCandles) {
+		datasets.push({
+			label: 'Candles',
+			type: 'scatter',
+			 yAxisID: 'yPrice',
+			 candlestick: true,
+			 data: sortedCandles,
+			 upColor: '#22c55e',
+			 downColor: '#22c55e',
+			 unchangedColor: '#22c55e',
+			 borderUp: '#166534',
+			 borderDown: '#166534',
+			 borderFlat: '#166534',
+			 parsing: false,
+			 showLine: false,
+			 pointRadius: 0,
+			 pointHoverRadius: 0,
+			 pointHitRadius: 12
+		});
+	}
+	if (volumeData.length > 0) {
+		datasets.push({
+			label: 'Volume',
+			type: 'bar',
+			yAxisID: 'yVolume',
+			data: volumeData,
+			backgroundColor: 'rgba(14, 165, 233, 0.45)',
+			borderColor: '#0ea5e9',
+			borderWidth: 1,
+			borderRadius: 0,
+			maxBarThickness: 24,
+			hoverBackgroundColor: 'rgba(14, 165, 233, 0.6)',
+			parsing: false
+		});
+	}
+	if (!hasCandles && volumeData.length === 0) {
+		datasets.push({
+			label: 'Placeholder',
+			type: 'line',
+			yAxisID: 'yPrice',
+			data: [
+				{ x: minTime, y: Number.NaN },
+				{ x: maxTime, y: Number.NaN }
+			],
+			borderColor: 'rgba(0,0,0,0)',
+			backgroundColor: 'rgba(0,0,0,0)',
+			pointRadius: 0,
+			pointHoverRadius: 0,
+			parsing: false,
+			spanGaps: true
+		});
+	}
 
-                // Update x-axis range
-                const xScale = historyChart.options.scales?.x;
-                if (xScale) {
-                        xScale.min = minTime;
-                        xScale.max = maxTime;
-                }
+	historyChart.data.datasets = datasets;
 
-                const priceScale = historyChart.options.scales?.yPrice;
-                if (priceScale) {
-                        priceScale.ticks = priceScale.ticks ?? {};
-                }
+	const xScale = historyChart.options.scales?.x as { min?: number; max?: number; time?: { unit?: string; stepSize?: number } };
+	if (xScale) {
+		if (xScale.time) {
+			xScale.time.unit = timeUnit;
+			xScale.time.stepSize = timeStep;
+		}
+		xScale.min = minTime;
+		xScale.max = maxTime;
+	}
 
-                const volumeScale = historyChart.options.scales?.yVolume;
-                if (volumeScale) {
-                        volumeScale.display = false;
-                        volumeScale.grid = { drawOnChartArea: false, display: false };
-                        volumeScale.suggestedMax = volumeAxisMax;
-                        volumeScale.min = 0;
-                }
+	const volumeScale = historyChart.options.scales?.yVolume;
+	if (volumeScale) {
+		volumeScale.display = false;
+		volumeScale.grid = { drawOnChartArea: false, display: false };
+		volumeScale.suggestedMax = volumeAxisMax;
+		volumeScale.min = 0;
+	}
 
-                historyChart.update();
-        }
+	historyChart.update();
+}
 
         function buildDepthDataset(points: DepthSeries['bids'], side: 'bids' | 'asks') {
-                const sorted = [...points]
-                        .filter((point) => Number.isFinite(point.price) && Number.isFinite(point.quantity) && point.quantity > 0)
-                        .sort((a, b) => (side === 'bids' ? a.price - b.price : a.price - b.price));
+                const filtered = points.filter(
+                        (point) => Number.isFinite(point.price) && Number.isFinite(point.quantity) && point.quantity > 0
+                );
+                const sorted = filtered.sort((a, b) => a.price - b.price);
 
                 const cumulative: Array<{ x: number; y: number }> = [];
                 let running = 0;
-                for (const point of sorted) {
+                const iterator = side === 'bids' ? [...sorted].reverse() : sorted;
+                const processed: Array<{ price: number; qty: number }> = [];
+
+                for (const point of iterator) {
                         running += point.quantity;
-                        cumulative.push({ x: point.price, y: running });
+                        processed.push({ price: point.price, qty: running });
+                }
+
+                const normalized = side === 'bids' ? processed.reverse() : processed;
+                for (const item of normalized) {
+                        cumulative.push({ x: item.price, y: item.qty });
                 }
 
                 return cumulative;
@@ -533,17 +556,13 @@
 
                 const extendWithTail = (data: Array<{ x: number; y: number }>) => {
                         if (!data.length) return data;
-                        const extended = [...data];
-                        if (extended[0].x > lowerTail) {
-                                extended.unshift({ x: lowerTail, y: 0 });
-                        } else {
-                                extended[0] = { x: extended[0].x, y: 0 };
-                        }
-                        if (extended[extended.length - 1].x < upperTail) {
-                                extended.push({ x: upperTail, y: 0 });
-                        } else {
-                                extended[extended.length - 1] = { x: extended[extended.length - 1].x, y: 0 };
-                        }
+                        const sorted = [...data].sort((a, b) => a.x - b.x);
+                        const extended: Array<{ x: number; y: number }> = [];
+                        extended.push({ x: lowerTail, y: 0 });
+                        extended.push({ x: sorted[0].x, y: 0 });
+                        extended.push(...sorted);
+                        extended.push({ x: sorted[sorted.length - 1].x, y: 0 });
+                        extended.push({ x: upperTail, y: 0 });
                         return extended;
                 };
 
@@ -686,7 +705,12 @@
                 void depth;
                 void rangeStartMs;
                 void rangeEndMs;
-                updateCharts();
+                void historyRange;
+                tick().then(() => {
+                        if (ChartCtor && browser) {
+                                updateCharts();
+                        }
+                });
         }
 
         $: historyEmpty = ohlcCandles.length === 0;
@@ -701,6 +725,34 @@
                         {combinedError}
                 </div>
         {/if}
+        <div>
+                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div>
+                                <h2 class="text-base font-semibold text-white">On-chain Activity</h2>
+                                <p class="text-sm text-gray-400">
+                                        Visualize recent trades and current liquidity sourced directly from the on-chain orderbook.
+                                </p>
+                        </div>
+                        {#if historyRangeOptions.length > 0}
+                                <div class="flex items-center gap-2 self-start">
+                                        {#each historyRangeOptions as option}
+                                                <button
+                                                        type="button"
+                                                        class={`rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+                                                                historyRange === option.key
+                                                                        ? 'border-blue-400/60 bg-blue-500/20 text-blue-200'
+                                                                        : 'border-white/10 text-gray-400 hover:border-white/25 hover:text-white'
+                                                        }`}
+                                                        aria-pressed={historyRange === option.key}
+                                                        on:click={() => dispatch('rangeChange', { key: option.key })}
+                                                >
+                                                        {option.label}
+                                                </button>
+                                        {/each}
+                                </div>
+                        {/if}
+                </div>
+        </div>
         <div class="grid gap-6 xl:grid-cols-3 xl:grid-rows-2">
                 <!-- Row 1: Trade History (2/3) -->
                 <div class={`${containerStyles.cardBordered} flex flex-col xl:col-span-2 xl:row-span-2`}>
