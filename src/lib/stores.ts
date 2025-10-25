@@ -8,7 +8,8 @@ import { networks } from './network';
 import {
         getResourceStore,
         type TimedResource,
-        type OrderbookQuoteCache
+        type OrderbookQuoteCache,
+        type TradeMetricPayload
 } from '$lib/stores/network-data-cache';
 import type { TokenPriceSummary } from '$lib/utils/quote';
 
@@ -39,6 +40,7 @@ export const wrongNetwork = derived(
 export const vaultSnapshotResource = createNetworkResourceStore<OffchainAssetReceiptVault[]>('vaultSnapshot');
 export const orderbookQuotesResource = createNetworkResourceStore<OrderbookQuoteCache>('orderbookQuotes');
 export const priceFeedsResource = createNetworkResourceStore<TradingViewQuote[]>('priceFeeds');
+export const tradeActivityResource = createNetworkResourceStore<TradeMetricPayload>('tradeActivity');
 
 export const sfts = derived(
         vaultSnapshotResource,

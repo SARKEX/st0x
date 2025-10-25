@@ -2,7 +2,7 @@
 	import axios from 'axios';
         import { browser } from '$app/environment';
         import { page } from '$app/stores';
-        import { currentNetwork, sfts, orderbookQuotesResource } from '$lib/stores';
+        import { currentNetwork, sfts, orderbookQuotesResource, tradeActivityResource } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS, USDC_TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -26,10 +26,6 @@
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
         import type { SgTrade } from '@rainlanguage/orderbook';
-        import type { QueryObserverResult } from '@tanstack/query-core';
-        import { createQuery } from '@tanstack/svelte-query';
-        import type { Readable } from 'svelte/store';
-import { getTrades } from '$lib/query';
 import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
 import type {
                 DepthSeries,
@@ -124,8 +120,6 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
         let chartsLoading = false;
         let tradeQueryError: string | null = null;
 
-        let tradeHistoryQuery: Readable<QueryObserverResult<SgTrade[] | undefined, Error | null>>;
-
         let oraclePriceData: { price: number; confidence: number } | null = null;
         let oracleLoading = false;
         let oracleError: string | null = null;
@@ -139,15 +133,24 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
 		oracleLoading = false;
 	}
 
-	function formatNumeric(value: number | null | undefined): string {
-		if (value === null || value === undefined || Number.isNaN(value)) {
-			return '—';
-		}
-		return new Intl.NumberFormat('en-US', {
-			minimumFractionDigits: value > 1 ? 2 : 4,
-			maximumFractionDigits: value > 1 ? 2 : 6
-		}).format(value);
-	}
+        function formatNumeric(value: number | null | undefined): string {
+                if (value === null || value === undefined || Number.isNaN(value)) {
+                        return '—';
+                }
+                return new Intl.NumberFormat('en-US', {
+                        minimumFractionDigits: value > 1 ? 2 : 4,
+                        maximumFractionDigits: value > 1 ? 2 : 6
+                }).format(value);
+        }
+
+        function formatResourceError(error: unknown, fallback: string): string {
+                if (!error) return fallback;
+                if (typeof error === 'string') return error;
+                if (error instanceof Error) {
+                        return error.message || fallback;
+                }
+                return fallback;
+        }
 
 	async function fetchOracleData(feedId: string) {
 		if (!browser) return;
@@ -261,33 +264,10 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
 		}
 	};
 
-        $: tradeHistoryQuery = createQuery({
-                queryKey: ['token-trade-history', currentToken?.address, $currentNetwork?.id],
-                enabled:
-                        browser &&
-                        !!currentToken?.address &&
-                        !!$currentNetwork?.orderbook_subgraph_url &&
-                        !!$currentNetwork?.chainId,
-                staleTime: 60_000,
-                refetchInterval: 60_000,
-                queryFn: async () => {
-                        if (!browser || !currentToken || !$currentNetwork) return [];
-                        try {
-                                const now = Math.floor(Date.now() / 1000);
-                                const since = now - TRADE_HISTORY_LOOKBACK_SECONDS;
-                                const trades = await getTrades(since, now, $currentNetwork);
-                                return trades;
-                        } catch (error) {
-                                console.warn('[trade-history] failed to fetch trades', error);
-                                return [];
-                        }
-                }
-        });
-
-	const resetOnChainPrices = () => {
-		buyPrice = null;
-		sellPrice = null;
-	};
+        const resetOnChainPrices = () => {
+                buyPrice = null;
+                sellPrice = null;
+        };
 
         $: {
                 if (!browser || !currentToken) {
@@ -313,13 +293,14 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
                 if (!assetAddress || !usdcAddress) return [];
                 const assetDecimals = Number(currentPythToken?.decimals ?? 18);
                 const usdcDecimals = Number(usdcToken.decimals ?? 6);
+                const cutoff = Date.now() - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
 
-                const trades = ($tradeHistoryQuery.data ?? []) as SgTrade[];
+                const trades = ($tradeActivityResource?.data?.trades ?? []) as SgTrade[];
                 return trades
                         .map((trade) =>
                                 tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals)
                         )
-                        .filter((point): point is TradeHistoryPoint => Boolean(point))
+                        .filter((point): point is TradeHistoryPoint => Boolean(point) && point.timestamp >= cutoff)
                         .sort((a, b) => a.timestamp - b.timestamp);
         })();
 
@@ -387,19 +368,20 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
         })();
 
         $: {
-                const tradeResult = $tradeHistoryQuery;
-                const tradeStatus = tradeResult?.status;
-                const tradeFetchStatus = tradeResult?.fetchStatus;
-                const quoteLoading = $orderbookQuotesResource?.status === 'loading';
+                const tradeResource = $tradeActivityResource;
+                const tradeStatus = tradeResource?.status ?? 'idle';
+                const quoteStatus = $orderbookQuotesResource?.status ?? 'idle';
+                const tradeHasData = (tradeResource?.data?.trades?.length ?? 0) > 0;
+                const quoteHasData = ($orderbookQuotesResource?.data?.quotes?.length ?? 0) > 0;
+                const tradeLoading = tradeStatus === 'loading' || (tradeStatus === 'idle' && !tradeHasData);
+                const quoteLoading = quoteStatus === 'loading' || (quoteStatus === 'idle' && !quoteHasData);
 
-                chartsLoading = Boolean(
-                        tradeStatus === 'pending' ||
-                                tradeFetchStatus === 'fetching' ||
-                                quoteLoading
-                );
+                chartsLoading = Boolean(tradeLoading || quoteLoading);
 
-                const err = tradeResult?.error;
-                tradeQueryError = err ? err.message ?? 'Failed to load trade history.' : null;
+                tradeQueryError =
+                        tradeStatus === 'error'
+                                ? formatResourceError(tradeResource?.error, 'Failed to load trade history.')
+                                : null;
         }
 
         $: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
