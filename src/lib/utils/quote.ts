@@ -142,8 +142,8 @@ function processQuotes(
                         }
 
                         processedQuotes.push(processedQuote);
-                } catch {
-			// Silently skip errors
+                } catch (error) {
+			// Skip quotes that fail to process (malformed data, decoding errors)
 		}
 	});
 

@@ -32,7 +32,7 @@ type TokenWithMarket = PythToken & {
 };
 
 const logReference = (tag: string, payload?: unknown) => {
-	if (typeof window === 'undefined') return;
+	if (typeof window === 'undefined' || !process.env.DEV) return;
 	console.log('[pyth-quotes]', tag, payload ?? '');
 };
 

@@ -3,14 +3,10 @@ import { formatUnits } from 'viem';
 export type AmountLike = bigint | string | number | null | undefined;
 
 export function normalizeAddress(value: string | null | undefined): string | null {
-        if (!value) return null;
-        try {
-                const trimmed = value.trim();
-                if (!trimmed) return null;
-                return trimmed.toLowerCase();
-        } catch {
-                return null;
-        }
+	if (!value) return null;
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+	return trimmed.toLowerCase();
 }
 
 export function addressesEqual(a: string | null | undefined, b: string | null | undefined): boolean {
