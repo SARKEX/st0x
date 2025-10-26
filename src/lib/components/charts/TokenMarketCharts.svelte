@@ -205,12 +205,15 @@
 
 	const priceLineData = [...averagePrices]
 		.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-		.sort((a, b) => a.x - b.x);
+		.sort((a, b) => a.x - b.x)
+		// Ensure all timestamps are treated as UTC milliseconds since epoch
+		.map((point) => ({ ...point, x: Math.trunc(point.x) }));
 
 	const volumeData = volumeBuckets
 		.filter((bucket) => Number.isFinite(bucket.start) && Number.isFinite(bucket.tokens))
 		.sort((a, b) => a.start - b.start)
-		.map((bucket) => ({ x: bucket.start, y: bucket.tokens }));
+		// Ensure all timestamps are treated as UTC milliseconds since epoch
+		.map((bucket) => ({ x: Math.trunc(bucket.start), y: bucket.tokens }));
 
 	const hasExplicitStart = typeof rangeStartMs === 'number' && Number.isFinite(rangeStartMs);
 	const hasExplicitEnd = typeof rangeEndMs === 'number' && Number.isFinite(rangeEndMs);
@@ -266,8 +269,9 @@
 							if (items.length === 0) return '';
 							const time = items[0].raw?.x ?? items[0].parsed?.x;
 							if (!time) return '';
-							const date = new Date(time);
-							return date.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+							// Convert UTC milliseconds to local timezone
+							const date = new Date(Math.trunc(time));
+							return date.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: undefined });
 					},
 						label: (context: any) => {
 							if (context.dataset?.candlestick) {

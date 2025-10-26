@@ -162,6 +162,22 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                 return pricePoints;
         };
 
+        // Aggregate volume by candlestick bucket size for proper alignment
+        const tradesToVolumeBuckets = (trades: TradeHistoryPoint[], bucketSeconds: number): VolumeBucket[] => {
+                if (trades.length === 0) return [];
+
+                const bucketMap = new Map<number, number>();
+
+                for (const trade of trades) {
+                        const bucketTime = Math.floor(trade.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
+                        bucketMap.set(bucketTime, (bucketMap.get(bucketTime) ?? 0) + trade.tokens);
+                }
+
+                return Array.from(bucketMap.entries())
+                        .sort((a, b) => a[0] - b[0])
+                        .map(([start, tokens]) => ({ start, tokens }));
+        };
+
         let historyRange: HistoryRangeKey = '7D';
         let historyRangeStartMs = 0;
         let historyRangeEndMs = 0;
@@ -381,12 +397,6 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                         .sort((a, b) => a.timestamp - b.timestamp);
         })();
 
-        function getVolumeBucketSeconds(range: HistoryRangeKey) {
-                if (range === '1D') return 60 * 60;
-                if (range === '7D') return 6 * 60 * 60;
-                return 24 * 60 * 60;
-        }
-
         $: {
                 const rangeSeconds = HISTORY_RANGE_CONFIG[historyRange].seconds;
                 const nowMs = Date.now();
@@ -395,7 +405,6 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                         : 0;
                 const rangeEnd = Math.max(nowMs, latestTradeMs || nowMs);
                 const rangeStart = Math.max(0, rangeEnd - rangeSeconds * 1000);
-
 
                 // Determine bucket resolution (1 minute for 1D, 15 min for 7D, 1 hour for 30D)
                 let candleBucketSeconds = OHLC_BUCKET_SECONDS;
@@ -409,30 +418,10 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                 historyRangeEndMs = rangeEnd;
 
                 visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
-                if (visibleTradeHistoryPoints.length > 0) {
-                }
 
+                // Calculate average prices and volume using the same candlestick bucket size
                 averagePrices = tradesToAveragePrices(visibleTradeHistoryPoints, candleBucketSeconds);
-                if (averagePrices.length > 0) {
-                }
-
-                const bucketSeconds = getVolumeBucketSeconds(historyRange);
-                const bucketStartTime = Math.max(rangeStart, rangeEnd - rangeSeconds * 1000);
-                const bucketMap = new Map<number, number>();
-
-                for (let ts = bucketStartTime; ts <= rangeEnd; ts += bucketSeconds * 1000) {
-                        bucketMap.set(ts, 0);
-                }
-
-                for (const point of visibleTradeHistoryPoints) {
-                        const bucketStart = Math.floor(point.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
-                        const clampedBucket = Math.max(bucketStart, bucketStartTime);
-                        bucketMap.set(clampedBucket, (bucketMap.get(clampedBucket) ?? 0) + point.tokens);
-                }
-
-                tradeVolumeBuckets = Array.from(bucketMap.entries())
-                        .sort((a, b) => a[0] - b[0])
-                        .map(([start, tokens]) => ({ start, tokens }));
+                tradeVolumeBuckets = tradesToVolumeBuckets(visibleTradeHistoryPoints, candleBucketSeconds);
         }
 
         $: orderbookDepth = (() => {
@@ -715,6 +704,9 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                                 historyRangeOptions={HISTORY_RANGE_OPTIONS}
                                 on:rangeChange={(e) => (historyRange = e.detail.key)}
                         />
+                        <div class="mt-2 text-xs text-gray-400">
+                                All times are displayed in your local timezone
+                        </div>
                 </Section>
 
                 <!-- Tabbed Information Section (collapsible) -->
