@@ -5,7 +5,8 @@ import {
         type DomainPayloads,
         type OrderbookQuoteCache,
         type TradeMetricPayload,
-        type PendingTradePayload
+        type PendingTradePayload,
+        type OracleQuote
 } from '$lib/data/domains';
 import {
         createPollingController,
@@ -20,10 +21,18 @@ const controllers: ControllerMap = {
         orderbookQuotes: createPollingController(DOMAIN_DEFINITIONS.orderbookQuotes),
         priceFeeds: createPollingController(DOMAIN_DEFINITIONS.priceFeeds),
         tradeActivity: createPollingController(DOMAIN_DEFINITIONS.tradeActivity),
-        pendingTrades: createPollingController(DOMAIN_DEFINITIONS.pendingTrades)
+        pendingTrades: createPollingController(DOMAIN_DEFINITIONS.pendingTrades),
+        oracleQuotes: createPollingController(DOMAIN_DEFINITIONS.oracleQuotes)
 };
 
-export type { TimedResource, OrderbookQuoteCache, TradeMetricPayload, PendingTradePayload, DomainKey };
+export type {
+        TimedResource,
+        OrderbookQuoteCache,
+        TradeMetricPayload,
+        PendingTradePayload,
+        DomainKey,
+        OracleQuote
+};
 
 export function getResourceStore<K extends DomainKey>(networkId: number, domain: K): Readable<TimedResource<DomainPayloads[K]>> {
         return controllers[domain].getStore(networkId);
@@ -36,4 +45,3 @@ export function ensureResource(networkId: number, domain: DomainKey, options?: {
 export function stopResourceTimer(networkId: number, domain: DomainKey) {
         controllers[domain].stop(networkId);
 }
-

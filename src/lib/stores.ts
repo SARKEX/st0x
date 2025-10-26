@@ -9,11 +9,17 @@ import {
         getResourceStore,
         type TimedResource,
         type OrderbookQuoteCache,
-        type TradeMetricPayload
+        type TradeMetricPayload,
+        type OracleQuote
 } from '$lib/stores/network-data-cache';
 import type { TokenPriceSummary } from '$lib/utils/quote';
 
-type DomainKey = 'vaultSnapshot' | 'orderbookQuotes' | 'priceFeeds' | 'tradeActivity';
+type DomainKey =
+	| 'vaultSnapshot'
+	| 'orderbookQuotes'
+	| 'priceFeeds'
+	| 'tradeActivity'
+	| 'oracleQuotes';
 
 function createNetworkResourceStore<T>(domain: DomainKey) {
         return derived(currentNetwork, ($network, set) => {
@@ -41,6 +47,7 @@ export const vaultSnapshotResource = createNetworkResourceStore<OffchainAssetRec
 export const orderbookQuotesResource = createNetworkResourceStore<OrderbookQuoteCache>('orderbookQuotes');
 export const priceFeedsResource = createNetworkResourceStore<TradingViewQuote[]>('priceFeeds');
 export const tradeActivityResource = createNetworkResourceStore<TradeMetricPayload>('tradeActivity');
+export const oracleQuotesResource = createNetworkResourceStore<Record<string, OracleQuote>>('oracleQuotes');
 
 export const sfts = derived(
         vaultSnapshotResource,
@@ -58,6 +65,11 @@ export const orderbookQuotes = derived(
         ($resource) => $resource?.data?.summary ?? {},
         {} as Record<string, TokenPriceSummary>
 );
+export const oracleQuotes = derived(
+        oracleQuotesResource,
+        ($resource) => $resource?.data ?? {},
+        {} as Record<string, OracleQuote>
+);
 
 // Store for Rainlang confirmation modal
 export const rainlangConfirmationModal = writable<{
@@ -71,4 +83,3 @@ export const rainlangConfirmationModal = writable<{
 	onDeploy: null,
 	onCancel: null
 });
-

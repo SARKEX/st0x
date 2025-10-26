@@ -9,28 +9,45 @@ import {
         type TokenPriceSummary,
         type ProcessedQuote
 } from '$lib/utils/quote';
-import { getPythQuotes } from '$lib/services/pyth';
+import {
+	getNetworkOracleSnapshots,
+	getPythQuotes,
+	type OracleSnapshot
+} from '$lib/services/pyth';
 import { getPrice } from '$lib/getPrice';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DomainFetcher, PollingOptions } from '$lib/data/polling-cache';
 import { EvmToken } from 'sushi/evm';
 import { evmChainIds } from 'sushi/evm';
 
-export type DomainKey = 'vaultSnapshot' | 'orderbookQuotes' | 'priceFeeds' | 'tradeActivity' | 'pendingTrades';
+export type DomainKey =
+	| 'vaultSnapshot'
+	| 'orderbookQuotes'
+	| 'priceFeeds'
+	| 'tradeActivity'
+	| 'pendingTrades'
+	| 'oracleQuotes';
 
-export interface TradeMetricPayload {
+interface TradeWindowPayload {
         trades: SgTrade[];
         range: { from: number; to: number };
 }
+
+export type TradeMetricPayload = TradeWindowPayload;
 
 export interface OrderbookQuoteCache {
         summary: Record<string, TokenPriceSummary>;
         quotes: ProcessedQuote[];
 }
 
-export interface PendingTradePayload {
-        trades: SgTrade[];
-        range: { from: number; to: number };
+export type PendingTradePayload = TradeWindowPayload;
+
+export interface OracleQuote {
+	feedId: string;
+	tokenAddress: string;
+	price: number | null;
+	confidence: number | null;
+	publishTime: number | null;
 }
 
 export interface DomainPayloads {
@@ -39,11 +56,16 @@ export interface DomainPayloads {
         priceFeeds: TradingViewQuote[];
         tradeActivity: TradeMetricPayload;
         pendingTrades: PendingTradePayload;
+        oracleQuotes: Record<string, OracleQuote>;
 }
 
 type DomainDefinition<K extends DomainKey> = PollingOptions<DomainPayloads[K]>;
 
 type DefinitionMap = { [K in DomainKey]: DomainDefinition<K> };
+
+function getTokensWithPriceFeed(network: Network) {
+	return TOKENS.filter((token) => token.chainId === network.chainId && token.priceFeedId);
+}
 
 const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (network) => {
         try {
@@ -75,11 +97,11 @@ const orderbookFetcher: DomainFetcher<OrderbookQuoteCache> = async (network) => 
 
 const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
         try {
-                const tokens = TOKENS.filter((token) => token.chainId === network.chainId && token.priceFeedId);
+                const tokens = getTokensWithPriceFeed(network);
                 if (!tokens.length) {
                         return [];
                 }
-                const pythQuotes = await getPythQuotes(tokens);
+                const pythQuotes = await getPythQuotes(tokens, network);
 
                 // Enrich with Sushi API prices as fallback for tokens without Pyth data
                 const pricesWithSushi: TradingViewQuote[] = [];
@@ -147,41 +169,56 @@ const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
         }
 };
 
-const tradeActivityFetcher: DomainFetcher<TradeMetricPayload> = async (network: Network) => {
-        try {
-                const now = Math.floor(Date.now() / 1000);
-                const monthAgo = now - 30 * 24 * 60 * 60;
-                const trades = await getTrades(monthAgo, now, network);
-                return {
-                        trades,
-                        range: { from: monthAgo, to: now }
-                } satisfies TradeMetricPayload;
-        } catch (error) {
-                console.error(`Failed to fetch trade activity for ${network.displayName}:`, error);
-                return {
-                        trades: [],
-                        range: { from: 0, to: 0 }
-                } satisfies TradeMetricPayload;
-        }
+const oracleQuoteFetcher: DomainFetcher<Record<string, OracleQuote>> = async (network: Network) => {
+	try {
+		const tokens = getTokensWithPriceFeed(network);
+		if (!tokens.length) {
+			return {};
+		}
+                const snapshots = await getNetworkOracleSnapshots(tokens, network);
+		const records: Record<string, OracleQuote> = {};
+		snapshots.forEach((snapshot: OracleSnapshot) => {
+			const address = snapshot.token.address?.toLowerCase?.() ?? snapshot.feedId;
+			records[address] = {
+				feedId: snapshot.feedId,
+				tokenAddress: snapshot.token.address,
+				price: snapshot.price,
+				confidence: snapshot.confidence,
+				publishTime: snapshot.publishTime
+			};
+		});
+		return records;
+	} catch (error) {
+		console.error(`Failed to fetch oracle quotes for ${network.displayName}:`, error);
+		return {};
+	}
 };
 
-const pendingTradesFetcher: DomainFetcher<PendingTradePayload> = async (network: Network) => {
-        try {
-                const now = Math.floor(Date.now() / 1000);
-                const tenMinutesAgo = now - 10 * 60;
-                const trades = await getTrades(tenMinutesAgo, now, network);
-                return {
-                        trades,
-                        range: { from: tenMinutesAgo, to: now }
-                } satisfies PendingTradePayload;
-        } catch (error) {
-                console.error(`Failed to fetch pending trades for ${network.displayName}:`, error);
-                return {
-                        trades: [],
-                        range: { from: 0, to: 0 }
-                } satisfies PendingTradePayload;
-        }
-};
+function createTradeFetcher(
+        windowSeconds: number,
+        label: string
+): DomainFetcher<TradeWindowPayload> {
+        return async (network: Network) => {
+                try {
+                        const now = Math.floor(Date.now() / 1000);
+                        const from = now - windowSeconds;
+                        const trades = await getTrades(from, now, network);
+                        return {
+                                trades,
+                                range: { from, to: now }
+                        } satisfies TradeWindowPayload;
+                } catch (error) {
+                        console.error(`Failed to fetch ${label} for ${network.displayName}:`, error);
+                        return {
+                                trades: [],
+                                range: { from: 0, to: 0 }
+                        } satisfies TradeWindowPayload;
+                }
+        };
+}
+
+const tradeActivityFetcher = createTradeFetcher(30 * 24 * 60 * 60, 'trade activity');
+const pendingTradesFetcher = createTradeFetcher(10 * 60, 'pending trades');
 
 export const DOMAIN_DEFINITIONS: DefinitionMap = {
         vaultSnapshot: {
@@ -210,5 +247,10 @@ export const DOMAIN_DEFINITIONS: DefinitionMap = {
                 autoPause: true,  // Stop polling when no subscribers
                 browserOnly: true,
                 fetcher: pendingTradesFetcher
+        },
+        oracleQuotes: {
+                refreshInterval: 15_000,
+                autoPause: true,
+                fetcher: oracleQuoteFetcher
         }
 };

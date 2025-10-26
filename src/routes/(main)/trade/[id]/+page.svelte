@@ -1,8 +1,14 @@
 <script lang="ts">
-	import axios from 'axios';
         import { browser } from '$app/environment';
         import { page } from '$app/stores';
-        import { currentNetwork, sfts, orderbookQuotesResource, tradeActivityResource } from '$lib/stores';
+        import {
+                currentNetwork,
+                sfts,
+                orderbookQuotesResource,
+                tradeActivityResource,
+                oracleQuotes,
+                oracleQuotesResource
+        } from '$lib/stores';
         import { ensureResource } from '$lib/stores/network-data-cache';
 	import { formatUnits } from 'viem';
 	import { TOKENS, USDC_TOKENS } from '$lib/network';
@@ -36,6 +42,7 @@
         import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
         import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
         import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/tokenMath';
+        import type { TimedResource, OracleQuote } from '$lib/stores/network-data-cache';
 
 	$: tokenId = $page.params.id;
         $: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -191,18 +198,13 @@ const pricePoints: Array<{ x: number; y: number }> = [];
         let tradeQueryError: string | null = null;
         let tradeHistoryRangeLabel = 'Last 30 days';
 
-        let oraclePriceData: { price: number; confidence: number } | null = null;
+        let oracleResource: TimedResource<Record<string, OracleQuote>> | null = null;
+        let oracleEntry: OracleQuote | undefined;
+        let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
         let oracleLoading = false;
         let oracleError: string | null = null;
-	let oracleRequestToken = 0;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
-
-	function resetOracleState() {
-		oraclePriceData = null;
-		oracleError = null;
-		oracleLoading = false;
-	}
 
         function formatNumeric(value: number | null | undefined): string {
                 if (value === null || value === undefined || Number.isNaN(value)) {
@@ -223,41 +225,31 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                 return fallback;
         }
 
-	async function fetchOracleData(feedId: string) {
-		if (!browser) return;
-		const requestId = ++oracleRequestToken;
-		oracleLoading = true;
-		oracleError = null;
-		oraclePriceData = null;
+        $: oracleResource = $oracleQuotesResource;
 
-		try {
-			const resp = await axios.get(
-				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`
-			);
-			if (requestId !== oracleRequestToken) return;
-			const parsed = resp.data.parsed?.[0]?.price;
-			if (parsed) {
-				const expo = Number(parsed.expo ?? 0);
-				const multiplier = Math.pow(10, expo);
-				oraclePriceData = {
-					price: Number(parsed.price) * multiplier,
-					confidence: Number(parsed.conf) * multiplier
-				};
-			} else {
-				oraclePriceData = null;
-			}
-		} catch (error) {
-			if (requestId === oracleRequestToken) {
-				console.warn('[oracle] failed to fetch price data', error);
-				oracleError = 'Failed to fetch oracle data';
-				oraclePriceData = null;
-			}
-		} finally {
-			if (requestId === oracleRequestToken) {
-				oracleLoading = false;
-			}
+	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
+	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
+
+	$: oraclePriceData = oracleEntry
+		? {
+			price: oracleEntry.price ?? null,
+			confidence: oracleEntry.confidence ?? null
 		}
-	}
+		: null;
+
+	$: oracleLoading = !!currentFeedId &&
+		(oracleResource?.status === 'idle' || oracleResource?.status === 'loading');
+
+	$: oracleError = (() => {
+		if (!currentFeedId) return null;
+		if (oracleResource?.status === 'error') {
+			return 'Failed to fetch oracle data';
+		}
+		if (oracleResource?.status === 'ready' && !oracleEntry) {
+			return 'Oracle data unavailable';
+		}
+		return null;
+	})();
 
 	onMount(() => {
 		if (typeof window !== 'undefined') {
@@ -275,11 +267,6 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 	};
 
 	$: currentFeedId = browser ? currentPythToken?.priceFeedId ?? null : null;
-	$: if (currentFeedId) {
-		fetchOracleData(currentFeedId);
-	} else {
-		resetOracleState();
-	}
 
 	const handleTokenTabChange = (event: CustomEvent<{ id: string }>) => {
 		const nextId = event.detail.id;
