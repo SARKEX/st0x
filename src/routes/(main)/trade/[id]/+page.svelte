@@ -3,6 +3,7 @@
         import { browser } from '$app/environment';
         import { page } from '$app/stores';
         import { currentNetwork, sfts, orderbookQuotesResource, tradeActivityResource } from '$lib/stores';
+        import { ensureResource } from '$lib/stores/network-data-cache';
 	import { formatUnits } from 'viem';
 	import { TOKENS, USDC_TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -26,15 +27,15 @@
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
         import type { SgTrade } from '@rainlanguage/orderbook';
-import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
-import type {
+        import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
+        import type {
                 DepthSeries,
                 TradeHistoryPoint,
                 VolumeBucket
         } from '$lib/components/charts/token-chart-types';
-import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
-import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
-import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/tokenMath';
+        import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+        import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
+        import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/tokenMath';
 
 	$: tokenId = $page.params.id;
         $: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -119,6 +120,7 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
         let orderbookDepth: DepthSeries = { bids: [], asks: [] };
         let chartsLoading = false;
         let tradeQueryError: string | null = null;
+        let tradeHistoryRangeLabel = 'Last 30 days';
 
         let oraclePriceData: { price: number; confidence: number } | null = null;
         let oracleLoading = false;
@@ -293,14 +295,36 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
                 if (!assetAddress || !usdcAddress) return [];
                 const assetDecimals = Number(currentPythToken?.decimals ?? 18);
                 const usdcDecimals = Number(usdcToken.decimals ?? 6);
-                const cutoff = Date.now() - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
+                const range = $tradeActivityResource?.data?.range ?? null;
+                const now = Date.now();
+                const cutoff = range
+                        ? range.from * 1000
+                        : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
+                const rangeEnd = range ? range.to * 1000 : now;
+                if (range) {
+                        const diffSeconds = Math.max(0, range.to - range.from);
+                        const approxDays = diffSeconds / (24 * 60 * 60);
+                        if (approxDays >= 2) {
+                                tradeHistoryRangeLabel = `Last ${Math.round(approxDays)} days`;
+                        } else if (approxDays >= 1) {
+                                tradeHistoryRangeLabel = 'Last 24 hours';
+                        } else if (diffSeconds > 0) {
+                                tradeHistoryRangeLabel = 'Recent activity';
+                        } else {
+                                tradeHistoryRangeLabel = 'Last 30 days';
+                        }
+                } else {
+                        tradeHistoryRangeLabel = 'Last 30 days';
+                }
 
                 const trades = ($tradeActivityResource?.data?.trades ?? []) as SgTrade[];
                 return trades
                         .map((trade) =>
                                 tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals)
                         )
-                        .filter((point): point is TradeHistoryPoint => Boolean(point) && point.timestamp >= cutoff)
+                        .filter((point): point is TradeHistoryPoint =>
+                                Boolean(point) && point.timestamp >= cutoff && point.timestamp <= rangeEnd
+                        )
                         .sort((a, b) => a.timestamp - b.timestamp);
         })();
 
@@ -384,19 +408,34 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
                                 : null;
         }
 
+        let ensuredNetworkId: number | null = null;
+
+        $: if (!browser) {
+                ensuredNetworkId = null;
+        } else {
+                const networkId = $currentNetwork?.id ?? null;
+                if (!networkId) {
+                        ensuredNetworkId = null;
+                } else if (ensuredNetworkId !== networkId) {
+                        ensuredNetworkId = networkId;
+                        void ensureResource(networkId, 'orderbookQuotes');
+                        void ensureResource(networkId, 'tradeActivity');
+                }
+        }
+
         $: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
-	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
-	$: pageTitle = `Trade ${tokenDisplayName}`;
-	$: modalTitle = tokenDisplaySymbol
-		? `Terminal View — ${tokenDisplayName} (${tokenDisplaySymbol})`
-		: `Terminal View — ${tokenDisplayName}`;
-	$: panelTokenLabel = tokenDisplaySymbol || currentToken?.symbol || tokenDisplayName;
-	$: panelSummaryVerb = panelOrderSide === 'Buy' ? 'Buying' : 'Selling';
-	$: panelSummaryPreposition = panelOrderSide === 'Buy' ? 'with' : 'for';
+        $: tokenDisplaySymbol = currentToken?.symbol ?? '';
+        $: pageTitle = `Trade ${tokenDisplayName}`;
+        $: modalTitle = tokenDisplaySymbol
+                ? `Terminal View — ${tokenDisplayName} (${tokenDisplaySymbol})`
+                : `Terminal View — ${tokenDisplayName}`;
+        $: panelTokenLabel = tokenDisplaySymbol || currentToken?.symbol || tokenDisplayName;
+        $: panelSummaryVerb = panelOrderSide === 'Buy' ? 'Buying' : 'Selling';
+        $: panelSummaryPreposition = panelOrderSide === 'Buy' ? 'with' : 'for';
 </script>
 
 <svelte:head>
-	<title>{pageTitle}</title>
+        <title>{pageTitle}</title>
 </svelte:head>
 
 <svelte:window on:keydown={handleGlobalKeydown} />
@@ -564,7 +603,7 @@ import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/to
                                                         Visualize recent trades and current liquidity sourced directly from the on-chain orderbook.
                                                 </p>
                                         </div>
-                                        <p class="text-xs uppercase tracking-wide text-gray-500">Last 30 days</p>
+                                        <p class="text-xs uppercase tracking-wide text-gray-500">{tradeHistoryRangeLabel}</p>
                                 </div>
                                 <TokenMarketCharts
                                         tradeHistory={tradeHistoryPoints}
