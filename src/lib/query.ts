@@ -389,7 +389,11 @@ export const getTrades = async (
 	}
 };
 
-export const getTradeByTransactionHash = async (transactionHash: string, orderHash: string) => {
+export const getTradeByTransactionHash = async (
+	transactionHash: string,
+	orderHash: string,
+	network: Network
+) => {
 	const tradeQuery = `{
  trades(
   where: {
@@ -430,11 +434,11 @@ export const getTradeByTransactionHash = async (transactionHash: string, orderHa
     outputVaultBalanceChange {
       amount
     }
-} 
+}
 }`;
 
 	const trades = await fetchAllPaginatedData(
-		get(currentNetwork).orderbook_subgraph_url,
+		network.orderbook_subgraph_url,
 		tradeQuery,
 		{},
 		'trades'

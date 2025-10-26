@@ -178,7 +178,9 @@ export function createPollingController<T>(options: PollingOptions<T>): PollingC
                 set.add(listener);
                 subscribers.set(networkId, set);
                 const state = getState(networkId);
-                updateState(networkId, { subscribers: state.subscribers + 1 });
+                const newSubscriberCount = state.subscribers + 1;
+                updateState(networkId, { subscribers: newSubscriberCount });
+                // If we just went from 0 subscribers to 1, fetch the data
                 if (state.subscribers === 0) {
                         ensure(networkId).catch(() => {});
                 }

@@ -173,7 +173,7 @@ import type { SgTrade } from '@rainlanguage/orderbook';
                                         if (seenTransactions.has(txId)) return;
                                         seenTransactions.add(txId);
                                 }
-                                const analysis = analyzeTrade(trade, network.usdcToken, tokenLookup);
+                                const analysis = analyzeTrade(trade as any, network.usdcToken, tokenLookup);
                                 if (!analysis) return;
                                 volume += analysis.usdc;
                         });
@@ -257,7 +257,7 @@ import type { SgTrade } from '@rainlanguage/orderbook';
 
                 const analyzed: Array<{ trade: SgTrade; analysis: TradeAnalysis }> = [];
                 networkTrades.forEach((trade) => {
-                        const analysis = analyzeTrade(trade, selectedNetwork.usdcToken, tokenLookup);
+                        const analysis = analyzeTrade(trade as any, selectedNetwork.usdcToken, tokenLookup);
                         if (!analysis) return;
                         analyzed.push({ trade, analysis });
                 });

@@ -26,7 +26,8 @@ import {
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
 import { rainlangConfirmationModal } from './stores';
-import { getTradeByTransactionHash } from './query';
+import { ensureResource, getResourceStore } from './stores/network-data-cache';
+import type { Network } from './network';
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
@@ -346,46 +347,76 @@ const transactionStore = () => {
 
 			await waitForTransactionReceipt(config, { hash });
 
-			const interval = setInterval(async () => {
-				const trade = await getTradeByTransactionHash(hash, raindexOrder.orderHash);
-				if (trade) {
-					clearInterval(interval);
-					const chainId = get(currentNetwork).id;
-					const tokenSold = `${parseFloat(
-						formatUnits(
-							BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-							trade.order.inputs[0].token.decimals
-						)
-					)} ${trade.order.inputs[0].token.symbol}`;
-					const tokenBought = `${parseFloat(
-						formatUnits(
-							BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-							trade.order.outputs[0].token.decimals
-						)
-					)} ${trade.order.outputs[0].token.symbol}`;
+			// Force refresh pending trades to pick up the new transaction
+			const network = get(currentNetwork) as Network;
+			const pendingTradesResult = ensureResource(network.id, 'pendingTrades', { force: true });
+			if (pendingTradesResult instanceof Promise) {
+				pendingTradesResult.catch(() => {});
+			}
 
-					const link = `
-						<div class="flex flex-col gap-2 text-center">
-							<div class="text-base text-gray-300">
-								${tokenBought} bought, ${tokenSold} sold
-							</div>
-							<a
-								target="_blank"
-								rel="noopener noreferrer"
-								class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-								href="https://raindex.finance/orders/${chainId}-${raindexOrder.orderbook.id}-${raindexOrder.orderHash}"
-								data-testid="raindex-link">
-								View order on Raindex
-								<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-								</svg>
-							</a>
+		// Subscribe to pending trades cache instead of polling directly
+		let unsubscribe: (() => void) | null = null;
+		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+		const cleanup = () => {
+			if (unsubscribe) unsubscribe();
+			if (timeoutId) clearTimeout(timeoutId);
+		};
+
+		unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
+			if (!$resource?.data?.trades) return;
+
+			// Search for our specific trade in the cached data
+			const trade = $resource.data.trades.find(
+				(t) =>
+					t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
+					t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
+			) as any;
+
+			if (trade) {
+				cleanup();
+				const chainId = network.id;
+				const tokenSold = `${parseFloat(
+					formatUnits(
+						BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
+						trade.order.inputs[0].token.decimals
+					)
+				)} ${trade.order.inputs[0].token.symbol}`;
+				const tokenBought = `${parseFloat(
+					formatUnits(
+						BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
+						trade.order.outputs[0].token.decimals
+					)
+				)} ${trade.order.outputs[0].token.symbol}`;
+
+				const link = `
+					<div class="flex flex-col gap-2 text-center">
+						<div class="text-base text-gray-300">
+							${tokenBought} bought, ${tokenSold} sold
 						</div>
-					`;
+						<a
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+							href="https://raindex.finance/orders/${chainId}-${raindexOrder.orderbook.id}-${raindexOrder.orderHash}"
+							data-testid="raindex-link">
+							View order on Raindex
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+							</svg>
+						</a>
+					</div>
+				`;
 
-					return transactionSuccess(hash, link);
-				}
-			}, 2000);
+				return transactionSuccess(hash, link);
+			}
+		});
+
+		// Safety timeout: give up after 3 minutes if trade not found
+		timeoutId = setTimeout(() => {
+			cleanup();
+			transactionError(TransactionErrorMessage.GENERIC, hash);
+		}, 180_000);
 		} catch (error) {
 			// @ts-expect-error Send transaction error
 			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);

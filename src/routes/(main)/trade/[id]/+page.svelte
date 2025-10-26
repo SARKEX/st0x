@@ -120,7 +120,7 @@
                         return tokensLookup(address);
                 };
 
-                const analysis = analyzeTrade(trade, quoteToken, lookup);
+                const analysis = analyzeTrade(trade as any, quoteToken, lookup);
                 if (!analysis) return null;
                 if (normalizedAsset && analysis.assetAddress !== normalizedAsset) return null;
 
@@ -376,7 +376,7 @@ const pricePoints: Array<{ x: number; y: number }> = [];
                                 tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals)
                         )
                         .filter((point): point is TradeHistoryPoint =>
-                                Boolean(point) && point.timestamp >= cutoff && point.timestamp <= rangeEnd
+                                point !== null && point.timestamp >= cutoff && point.timestamp <= rangeEnd
                         )
                         .sort((a, b) => a.timestamp - b.timestamp);
         })();

@@ -4,7 +4,8 @@ import {
         type DomainKey,
         type DomainPayloads,
         type OrderbookQuoteCache,
-        type TradeMetricPayload
+        type TradeMetricPayload,
+        type PendingTradePayload
 } from '$lib/data/domains';
 import {
         createPollingController,
@@ -18,10 +19,11 @@ const controllers: ControllerMap = {
         vaultSnapshot: createPollingController(DOMAIN_DEFINITIONS.vaultSnapshot),
         orderbookQuotes: createPollingController(DOMAIN_DEFINITIONS.orderbookQuotes),
         priceFeeds: createPollingController(DOMAIN_DEFINITIONS.priceFeeds),
-        tradeActivity: createPollingController(DOMAIN_DEFINITIONS.tradeActivity)
+        tradeActivity: createPollingController(DOMAIN_DEFINITIONS.tradeActivity),
+        pendingTrades: createPollingController(DOMAIN_DEFINITIONS.pendingTrades)
 };
 
-export type { TimedResource, OrderbookQuoteCache, TradeMetricPayload, DomainKey };
+export type { TimedResource, OrderbookQuoteCache, TradeMetricPayload, PendingTradePayload, DomainKey };
 
 export function getResourceStore<K extends DomainKey>(networkId: number, domain: K): Readable<TimedResource<DomainPayloads[K]>> {
         return controllers[domain].getStore(networkId);

@@ -135,7 +135,8 @@ function processQuotes(
                         );
                         if (metrics) {
                                 processedQuote.side = metrics.side;
-                                processedQuote.assetAddress = normalizeAddress(metrics.assetAddress) ?? metrics.assetAddress;
+                                const normalizedAsset = normalizeAddress(metrics.assetAddress);
+                                processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
                                 processedQuote.usdcPerToken = metrics.usdcPerToken;
                                 processedQuote.tokensPerUsdc = metrics.tokensPerUsdc;
                         }
@@ -240,14 +241,14 @@ export async function fetchAndQuoteUSDCOrders(
 
 			// Get input and output addresses from decoded order
 			const inputAddresses = orderData.validInputs.map((input: { token: string }) =>
-				input.token.toLowerCase()
+				normalizeAddress(input.token) ?? input.token
 			);
 			const outputAddresses = orderData.validOutputs.map((output: { token: string }) =>
-				output.token.toLowerCase()
+				normalizeAddress(output.token) ?? output.token
 			);
 
-			const usdcAddress = usdcToken.address.toLowerCase();
-			const stockAddresses = stockTokens.map((token) => token.address.toLowerCase());
+			const usdcAddress = normalizeAddress(usdcToken.address) ?? usdcToken.address.toLowerCase();
+			const stockAddresses = stockTokens.map((token) => normalizeAddress(token.address) ?? token.address.toLowerCase());
 
 			// Check if order has USDC as input and stock as output
 			const hasUSDCAsInputAndStockAsOutput =
@@ -296,18 +297,18 @@ export async function fetchAndQuoteUSDCOrders(
 
 			// Get input and output addresses from decoded order
 			const inputAddresses = orderData.validInputs.map((input: { token: string }) =>
-				input.token.toLowerCase()
+				normalizeAddress(input.token) ?? input.token
 			);
 			const outputAddresses = orderData.validOutputs.map((output: { token: string }) =>
-				output.token.toLowerCase()
+				normalizeAddress(output.token) ?? output.token
 			);
 
-			const usdcAddress = usdcToken.address.toLowerCase();
+			const usdcAddress = normalizeAddress(usdcToken.address) ?? usdcToken.address.toLowerCase();
 
 			// Create quote specs for each supported direction
 			// For each stock token, check if we can create a quote spec
 			stockTokens.forEach((stockToken) => {
-				const stockAddress = stockToken.address.toLowerCase();
+				const stockAddress = normalizeAddress(stockToken.address) ?? stockToken.address.toLowerCase();
 
 				// Check USDC -> Stock direction for this specific stock
 				const usdcInputIndex = inputAddresses.findIndex((addr: string) => addr === usdcAddress);
