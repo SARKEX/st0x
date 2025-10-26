@@ -495,23 +495,22 @@
 
 		const extendWithTail = (data: Array<{ x: number; y: number }>, side: 'bids' | 'asks') => {
 			if (!data.length) return data;
-			const sorted = [...data].sort((a, b) => a.x - b.x);
-			const extended: Array<{ x: number; y: number }> = [];
 
-			// Add all data points
-			extended.push(...sorted);
-
-			// Add horizontal tail at far price (but don't drop back to 0)
 			if (side === 'bids') {
-				// For bids, extend tail to lower prices at the final cumulative volume
-				extended.push({ x: lowerTail, y: sorted[sorted.length - 1].y });
+				// For bids: data comes in descending price order from buildDepthDataset
+				// Reverse to ascending order so step-before interpolation works correctly
+				const reversed = [...data].reverse();
+				// The first point in reversed (lowest price) has the highest cumulative volume
+				reversed.unshift({ x: lowerTail, y: reversed[0].y });
+				return reversed;
 			} else {
-				// For asks, extend tail to higher prices at the final cumulative volume
-				extended.push({ x: upperTail, y: sorted[sorted.length - 1].y });
+				// For asks: data already in ascending price order from buildDepthDataset
+				// Append tail at the highest price's cumulative volume
+				const extended = [...data];
+				extended.push({ x: upperTail, y: extended[extended.length - 1].y });
+				return extended;
 			}
-
-			return extended;
-		};
+	};
 
 		bidsData = extendWithTail(bidsData, 'bids');
 		asksData = extendWithTail(asksData, 'asks');
