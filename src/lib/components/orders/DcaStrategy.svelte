@@ -15,13 +15,11 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
 	import { hasValidPriceFeedId } from '$lib/derivations';
-	import { currentNetwork } from '$lib/stores';
+	import { currentNetwork, oracleQuotes } from '$lib/stores';
 	import { containerStyles } from '$lib/utils/styles';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
-	import { browser } from '$app/environment';
-	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -161,37 +159,22 @@
 	// Fetch oracle price on mount and when token changes
 	let lastFetchedTokenAddress = '';
 
-	async function fetchOraclePrice() {
-		if (!browser || !hasValidPriceFeedId(selectedInputToken) || selectedInitialRatio) return;
-
-		const feedId = (selectedInputToken as unknown as { priceFeedId?: string })?.priceFeedId;
-		if (!feedId || lastFetchedTokenAddress === selectedInputToken.address) return;
-
-		lastFetchedTokenAddress = selectedInputToken.address;
-
-		try {
-			const response = await fetch(
-				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`
-			);
-			const data = await response.json();
-			const parsed = data?.parsed?.[0]?.price;
-			if (parsed) {
-				const px = Number(parsed.price) * Math.pow(10, parsed.expo);
-				if (!Number.isNaN(px) && !selectedInitialRatio) {
-					selectedInitialRatio = String(px);
-				}
-			}
-		} catch {
-			// silently ignore; user can input manually
-		}
+	$: if (!selectedInitialRatio) {
+		lastFetchedTokenAddress = '';
 	}
 
-	onMount(() => {
-		fetchOraclePrice();
-	});
-
-	$: if (browser && selectedInputToken) {
-		fetchOraclePrice();
+	$: {
+		if (selectedInputToken && !selectedInitialRatio && hasValidPriceFeedId(selectedInputToken)) {
+			const address = selectedInputToken.address?.toLowerCase?.();
+			if (address && address !== lastFetchedTokenAddress) {
+				const oracleEntry = $oracleQuotes[address];
+				const price = oracleEntry?.price;
+				if (typeof price === 'number' && !Number.isNaN(price)) {
+					selectedInitialRatio = String(price);
+					lastFetchedTokenAddress = address;
+				}
+			}
+		}
 	}
 </script>
 

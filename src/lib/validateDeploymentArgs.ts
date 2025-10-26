@@ -1,35 +1,18 @@
 export type ValidateFunction = (value: string | undefined) => string | undefined;
 
-export const validateSelectedAmount: ValidateFunction = (selectedAmount) => {
-	if (selectedAmount === undefined || selectedAmount === '') {
-		return 'Amount is required';
-	}
-	if (Number(selectedAmount) <= 0) {
-		return 'Amount must be greater than 0';
-	}
-	return undefined;
+const createValidator = (fieldName: string, mustBePositive = false): ValidateFunction => {
+	return (value: string | undefined) => {
+		if (value === undefined || value === '') {
+			return `${fieldName} is required`;
+		}
+		if (mustBePositive && Number(value) <= 0) {
+			return `${fieldName} must be greater than 0`;
+		}
+		return undefined;
+	};
 };
 
-export const validatePeriod: ValidateFunction = (period) => {
-	if (period === undefined || period === '') {
-		return 'Period is required';
-	}
-	if (Number(period) <= 0) {
-		return 'Period must be greater than 0';
-	}
-	return undefined;
-};
-
-export const validateBaseline: ValidateFunction = (baseline) => {
-	if (baseline === undefined || baseline === '') {
-		return 'Baseline is required';
-	}
-	return undefined;
-};
-
-export const validateOverrideDepositAmount: ValidateFunction = (overrideDepositAmount) => {
-	if (overrideDepositAmount === undefined || overrideDepositAmount === '') {
-		return 'Override deposit amount is required';
-	}
-	return undefined;
-};
+export const validateSelectedAmount = createValidator('Amount', true);
+export const validatePeriod = createValidator('Period', true);
+export const validateBaseline = createValidator('Baseline', false);
+export const validateOverrideDepositAmount = createValidator('Override deposit amount', false);

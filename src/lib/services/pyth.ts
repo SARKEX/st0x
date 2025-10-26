@@ -1,3 +1,4 @@
+import type { Network } from '$lib/network';
 import type { PythToken } from '$lib/types';
 import type { TradingViewQuote } from './tradingview';
 
@@ -6,6 +7,7 @@ const HERMES_BASE_URL = 'https://hermes.pyth.network/v2/updates/price';
 interface PythPriceData {
 	price: number | string;
 	expo: number;
+	conf?: number | string;
 	publish_time?: number | string;
 }
 
@@ -21,6 +23,7 @@ interface ApiResponse<T> {
 
 type PricePoint = {
 	price: number | null;
+	confidence: number | null;
 	publishTime: number | null;
 };
 
@@ -29,7 +32,7 @@ type TokenWithMarket = PythToken & {
 };
 
 const logReference = (tag: string, payload?: unknown) => {
-	if (typeof window === 'undefined') return;
+	if (typeof window === 'undefined' || !process.env.DEV) return;
 	console.log('[pyth-quotes]', tag, payload ?? '');
 };
 
@@ -39,6 +42,14 @@ const normalisePrice = (data: PythPriceData | null | undefined): number | null =
 	const expo = typeof data.expo === 'number' ? data.expo : Number(data.expo);
 	if (!Number.isFinite(price) || !Number.isFinite(expo)) return null;
 	return price * Math.pow(10, expo);
+};
+
+const normaliseConfidence = (data: PythPriceData | null | undefined): number | null => {
+	if (!data) return null;
+	const confidence = typeof data.conf === 'number' ? data.conf : Number(data.conf);
+	const expo = typeof data.expo === 'number' ? data.expo : Number(data.expo);
+	if (!Number.isFinite(confidence) || !Number.isFinite(expo)) return null;
+	return confidence * Math.pow(10, expo);
 };
 
 const normalisePublishTime = (raw: number | string | undefined): number | null => {
@@ -72,7 +83,9 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 		if (!response.ok) {
 			logReference('batch-latest-fail', { count: feedIds.length, status: response.status });
 			// Return empty prices for all feeds
-			normalizedIds.forEach((id) => results.set(id, { price: null, publishTime: null }));
+			normalizedIds.forEach((id) =>
+				results.set(id, { price: null, confidence: null, publishTime: null })
+			);
 			return results;
 		}
 
@@ -83,6 +96,7 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 			const id = normaliseFeedId(entry.id);
 			results.set(id, {
 				price: normalisePrice(entry?.price),
+				confidence: normaliseConfidence(entry?.price),
 				publishTime: extractPublishTime(entry)
 			});
 		});
@@ -90,7 +104,7 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 		// Fill in missing entries with null
 		normalizedIds.forEach((id) => {
 			if (!results.has(id)) {
-				results.set(id, { price: null, publishTime: null });
+				results.set(id, { price: null, confidence: null, publishTime: null });
 			}
 		});
 
@@ -101,34 +115,58 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 	} catch (error) {
 		logReference('batch-latest-error', { count: feedIds.length, error });
 		// Return empty prices for all feeds
-		normalizedIds.forEach((id) => results.set(id, { price: null, publishTime: null }));
+		normalizedIds.forEach((id) =>
+			results.set(id, { price: null, confidence: null, publishTime: null })
+		);
 	}
 
 	return results;
 }
 
-export async function getPythQuotes(tokens: TokenWithMarket[]): Promise<TradingViewQuote[]> {
+const networkSnapshotPromises = new Map<number, Promise<OracleSnapshot[]>>();
+
+async function resolveNetworkSnapshots(tokens: TokenWithMarket[], networkId: number) {
+	if (!tokens.length) return [];
+
+	const existing = networkSnapshotPromises.get(networkId);
+	if (existing) return existing;
+
+	const promise = getOracleSnapshots(tokens).finally(() => {
+		networkSnapshotPromises.delete(networkId);
+	});
+
+	networkSnapshotPromises.set(networkId, promise);
+	return promise;
+}
+
+export async function getPythQuotes(
+	tokens: TokenWithMarket[],
+	network?: Network
+): Promise<TradingViewQuote[]> {
 	const tokensWithFeed = tokens.filter((token) => token.priceFeedId);
 	if (!tokensWithFeed.length) return [];
 
-	const feedIds = tokensWithFeed.map((token) => token.priceFeedId);
+	const snapshots = await (network
+		? resolveNetworkSnapshots(tokensWithFeed, network.id)
+		: getOracleSnapshots(tokensWithFeed));
+	logReference('pyth-prices-fetched', { count: snapshots.length });
 
-	// Fetch current prices from Pyth
-	const latestPrices = await fetchLatestBatch(feedIds);
-	logReference('pyth-prices-fetched', { count: feedIds.length });
+	const snapshotMap = new Map(
+		snapshots.map((snapshot) => [normaliseFeedId(snapshot.feedId), snapshot])
+	);
 
 	const results = tokensWithFeed.map((token) => {
 		const feedId = normaliseFeedId(token.priceFeedId);
-		const latest = latestPrices.get(feedId) ?? { price: null, publishTime: null };
-		if (latest.publishTime === null) {
-			logReference('latest-missing-publish-time', { feedId, latestPrice: latest.price });
+		const latest = snapshotMap.get(feedId);
+		if (latest?.publishTime === null) {
+			logReference('latest-missing-publish-time', { feedId, latestPrice: latest?.price });
 		}
-		if (latest.price === null) {
-			logReference('latest-missing-price', { feedId, publishTime: latest.publishTime });
+		if (latest?.price === null) {
+			logReference('latest-missing-price', { feedId, publishTime: latest?.publishTime });
 		}
 		return {
 			symbol: token.tradingViewSymbol ?? token.symbol ?? null,
-			close: latest.price,
+			close: latest?.price ?? null,
 			open: null,
 			high: null,
 			low: null,
@@ -144,4 +182,38 @@ export async function getPythQuotes(tokens: TokenWithMarket[]): Promise<TradingV
 	});
 
 	return results;
+}
+
+export interface OracleSnapshot {
+	feedId: string;
+	price: number | null;
+	confidence: number | null;
+	publishTime: number | null;
+	token: TokenWithMarket;
+}
+
+export async function getOracleSnapshots(tokens: TokenWithMarket[]): Promise<OracleSnapshot[]> {
+	const tokensWithFeed = tokens.filter((token) => token.priceFeedId);
+	if (!tokensWithFeed.length) return [];
+
+	const feedIds = tokensWithFeed.map((token) => token.priceFeedId);
+	const latestPrices = await fetchLatestBatch(feedIds);
+
+	return tokensWithFeed.map((token) => {
+		const feedId = normaliseFeedId(token.priceFeedId);
+		const latest =
+			latestPrices.get(feedId) ??
+			({ price: null, confidence: null, publishTime: null } satisfies PricePoint);
+		return {
+			feedId,
+			price: latest.price,
+			confidence: latest.confidence,
+			publishTime: latest.publishTime,
+			token
+		};
+	});
+}
+
+export async function getNetworkOracleSnapshots(tokens: TokenWithMarket[], network: Network) {
+	return resolveNetworkSnapshots(tokens, network.id);
 }

@@ -1,5 +1,4 @@
 <script lang="ts">
-	/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
@@ -9,37 +8,40 @@
 	import { gridStyles } from '$lib/utils/styles';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import {
+		analyticsDashboard,
+		loadAnalyticsDashboard,
+		type AnalyticsDashboardState
+	} from '$lib/stores/admin-analytics';
+	import { averageResultsPerSearch } from '$lib/utils/analytics';
 
 	export let data;
 
-	let serverStats: any = null;
-	let loading = true;
 	let password = '';
 	let loginError = false;
 
-	function getAverageResults(stats: any): number {
-		if (!stats || stats.totalSearches === 0) return 0;
-		return (
-			stats.recentSearches?.reduce(
-				(acc: number, s: { resultsCount?: number }) => acc + (s.resultsCount || 0),
-				0
-			) / stats.totalSearches || 0
-		);
-	}
+	let analyticsState: AnalyticsDashboardState = {
+		status: 'idle',
+		data: null,
+		error: null,
+		updatedAt: null
+	};
+	let analyticsData = analyticsState.data;
+	let analyticsLoading = false;
+	let analyticsError: string | null = null;
+	let averageResults = 0;
 
-	onMount(async () => {
-		// Only fetch stats if authenticated
+	$: analyticsState = $analyticsDashboard;
+	$: analyticsData = analyticsState?.data ?? null;
+	$: analyticsLoading = analyticsState?.status === 'loading';
+	$: analyticsError =
+		analyticsState?.status === 'error' ? analyticsState.error ?? 'Failed to load analytics' : null;
+	$: averageResults = averageResultsPerSearch(analyticsData);
+
+	onMount(() => {
 		if (data.authenticated) {
-			try {
-				const response = await fetch('/api/analytics');
-				if (response.ok) {
-					serverStats = await response.json();
-				}
-			} catch (error) {
-				console.error('Failed to fetch server analytics:', error);
-			}
+			loadAnalyticsDashboard();
 		}
-		loading = false;
 	});
 </script>
 
@@ -101,42 +103,42 @@
 				</form>
 			</div>
 
-			{#if loading}
+			{#if analyticsLoading}
 				<div class="flex min-h-[40vh] items-center justify-center">
 					<LoadingSpinner size="lg" text="Loading analytics..." />
 				</div>
-			{:else if serverStats}
+			{:else if analyticsData}
 				<div>
 					<h3 class="mb-6 text-lg font-semibold text-gray-300">Platform Search Analytics</h3>
 					<div class={gridStyles.responsive4 + ' mb-8'}>
 						<MetricCard
 							label="Total Searches"
-							value={serverStats.totalSearches?.toString() || '0'}
+							value={analyticsData.totalSearches?.toString() || '0'}
 							change="Total number of searches across all users (last 100)"
 						/>
 						<MetricCard
 							label="Unique Visitors Today"
-							value={serverStats.uniqueVisitorsToday?.toString() || '0'}
+							value={analyticsData.uniqueVisitorsToday?.toString() || '0'}
 							change="Number of unique users who searched today"
 						/>
 						<MetricCard
 							label="No Result Searches"
-							value={serverStats.searchesWithNoResults?.toString() || '0'}
+							value={analyticsData.searchesWithNoResults?.toString() || '0'}
 							change="Searches that returned zero matching assets"
 						/>
 						<MetricCard
 							label="Avg Results Count"
-							value={getAverageResults(serverStats).toFixed(1)}
+							value={averageResults.toFixed(1)}
 							change="Average number of results per search"
 						/>
 					</div>
 
 					<div class="grid gap-6 lg:grid-cols-2">
-						{#if serverStats.topSearchTerms?.length > 0}
+						{#if analyticsData.topSearchTerms?.length > 0}
 							<Card>
 								<h4 class="mb-3 font-semibold">Top Search Terms</h4>
 								<div class="space-y-2">
-									{#each serverStats.topSearchTerms.slice(0, 8) as term}
+									{#each analyticsData.topSearchTerms.slice(0, 8) as term}
 										<div
 											class="flex items-center justify-between rounded-lg bg-gray-800/50 px-3 py-2"
 										>
@@ -148,11 +150,11 @@
 							</Card>
 						{/if}
 
-						{#if serverStats.recentSearches?.length > 0}
+						{#if analyticsData.recentSearches?.length > 0}
 							<Card>
 								<h4 class="mb-3 font-semibold">Recent Searches</h4>
 								<div class="max-h-[320px] space-y-2 overflow-y-auto">
-									{#each serverStats.recentSearches.slice(0, 10) as search}
+									{#each analyticsData.recentSearches.slice(0, 10) as search}
 										<div
 											class="flex items-center justify-between rounded-lg bg-gray-800/50 px-3 py-2"
 										>
@@ -171,6 +173,10 @@
 							</Card>
 						{/if}
 					</div>
+				</div>
+			{:else if analyticsError}
+				<div class="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+					{analyticsError}
 				</div>
 			{:else}
 				<div

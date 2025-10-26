@@ -111,37 +111,3 @@ export const MAGIC_NUMBERS = {
 
 export const TRANSACTION_IN_PROGRESS_TEXT = 'Transaction taking place, please wait.';
 export const VIEW_ON_EXPLORER_TEXT = 'View on the block explorer';
-export const ROUTE_LABEL_MAP = new Map([
-	['#setup', 'Setup new SFT'],
-	['#roles', 'SFT roles'],
-	['#mint', 'Mint/Redeem'],
-	['#list', 'Home'],
-	['#members', 'Members'],
-	['#audit-history', 'Audit history'],
-	['#', 'Home'],
-	['#asset-classes', 'Metadata list'],
-	['#new-asset-class', 'New Metadata'],
-	['#receipt/:id', 'Receipt'],
-	['#sft-create-success', 'Sft created successfully'],
-	['#ipfs', 'IPFS'],
-	['#manual', 'Manual'],
-	['#asset-register', 'Asset register'],
-	['#asset-information', 'Asset information'],
-	['#token-overview', 'Token overview'],
-	['#new-revision', 'New revision'],
-	['#asset-history', 'Asset history'],
-	['#change-comparison', 'Change comparison'],
-	['#address-overview', 'Address overview'],
-	['#knowledgebase', 'Knowledgebase']
-]);
-
-export const landingPages = [
-	'',
-	'/',
-	'#',
-	'#transparency',
-	'#investors',
-	'#issuers',
-	'#curators',
-	'#auditors'
-];

@@ -1,29 +1,30 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
+	import {
+		currentNetwork,
+		sfts,
+		tokenGlobalQuote,
+		orderbookQuotes,
+		orderbookQuotesResource,
+		vaultSnapshotResource
+	} from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import ListCard from '$lib/components/ui/ListCard.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
-	import { createQuery } from '@tanstack/svelte-query';
-	import { getAllTokensByNetwork, USDC_TOKENS } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
-	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	// Consolidated table usage
 	import { containerStyles } from '$lib/utils/styles';
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
-	import {
-		fetchAndQuoteUSDCOrders,
-		buildTokenPriceMap,
-		type TokenPriceSummary
-	} from '$lib/utils/quote';
+	import type { TokenPriceSummary } from '$lib/utils/quote';
+	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	type VaultWithChange = OffchainAssetReceiptVault & { changePercent: number };
@@ -38,39 +39,33 @@
 	let biggestVolume: VaultWithVolume[] = [];
 	let recentlyAdded: OffchainAssetReceiptVault[] = [];
 
-	function baseFromSymbol(sym?: string) {
-		if (!sym) return undefined;
-		if (sym.includes('t')) return sym.split('t')[1];
-		return sym;
-	}
+	type TokenRow = {
+		id: string;
+		address: string;
+		name: string;
+		symbol: string;
+		price: number | null;
+		onChainPrice: number | null;
+		buyPrice: number | null;
+		sellPrice: number | null;
+		totalHolders: string;
+		totalSupply: string;
+		totalTransfers: string;
+		createdAt: string;
+		isSft: boolean;
+	};
 
-	function findTradingViewSymbol(symbol?: string) {
-		const base = baseFromSymbol(symbol);
-		if (!base) return undefined;
-		const match = ALL_TOKENS.find(
-			(token) => baseFromSymbol(token.symbol)?.toUpperCase() === base.toUpperCase()
-		);
-		return match?.tradingViewSymbol;
-	}
+	let processedTokens: TokenRow[] = [];
 
-	function findQuoteForSymbol(symbol?: string) {
-		if (!$tokenGlobalQuote?.length) return undefined;
-		const quotes = $tokenGlobalQuote as TradingViewQuote[];
-		const tradingSymbol = findTradingViewSymbol(symbol);
-		if (tradingSymbol) {
-			const tsUpper = tradingSymbol.toUpperCase();
-			const direct = quotes.find((q) => (q.symbol ?? '').toUpperCase() === tsUpper);
-			if (direct) return direct;
-		}
-		const base = baseFromSymbol(symbol)?.toUpperCase();
-		if (!base) return undefined;
-		return quotes.find((q) => {
-			const quoteSymbol = (q.symbol ?? '').toUpperCase();
-			if (quoteSymbol === base) return true;
-			const parts = quoteSymbol.split(':');
-			return parts[parts.length - 1] === base;
-		});
-	}
+	$: vaultStatus = $vaultSnapshotResource?.status ?? 'idle';
+	$: isVaultLoading =
+		(!$sfts || !$sfts.length) && (vaultStatus === 'idle' || vaultStatus === 'loading');
+	$: quotesRecord = $orderbookQuotes ?? {};
+	$: quotesStatus = $orderbookQuotesResource?.status ?? 'idle';
+	$: quotesHaveData = Object.keys(quotesRecord).length > 0;
+	$: quotesLoading = quotesStatus === 'loading' && !quotesHaveData;
+	$: quotesError =
+		$orderbookQuotesResource?.status === 'error' ? $orderbookQuotesResource.error : null;
 
 	// Scroll indicator for Discover section
 	let discoverScrollEl: HTMLDivElement;
@@ -149,7 +144,7 @@
 		// Calculate biggest movers based on TradingView daily change percentage
 		biggestMovers = [...st0xVaults]
 			.map((sft) => {
-				const quote = findQuoteForSymbol(sft.symbol);
+				const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
 				const changePercent = quote?.changePercent ?? 0;
 				return { ...sft, changePercent };
 			})
@@ -193,42 +188,18 @@
 		return buy ?? sell ?? null;
 	}
 
-	// Process tokens with quote data
-	$: query = createQuery({
-		queryKey: ['getSftsStocks', $currentNetwork?.id, $sfts?.length, $tokenGlobalQuote?.length],
-		enabled: !!($sfts && $currentNetwork?.chainId),
-		staleTime: 30_000,
-		refetchOnWindowFocus: false,
-		queryFn: async () => {
-			const sftVaults: OffchainAssetReceiptVault[] = $sfts || [];
-			const tokens = [];
-			const networkId = $currentNetwork?.chainId;
-			const usdcToken = networkId ? USDC_TOKENS[networkId] : undefined;
-			let priceMap: Map<string, TokenPriceSummary> | null = null;
-
-			if (browser && networkId && usdcToken) {
-				try {
-					const quotes = await fetchAndQuoteUSDCOrders(networkId);
-					priceMap = buildTokenPriceMap(quotes, usdcToken.address);
-				} catch (error) {
-					console.warn('[onchain-quotes] failed to fetch quotes', error);
-					priceMap = null;
-				}
-			}
-
-			// Process SFT vaults (from subgraph)
-			for (let sft of sftVaults) {
-				const quote = findQuoteForSymbol(sft.symbol);
-				const summary = priceMap?.get(sft.address.toLowerCase()) ?? null;
+	$: {
+		if ($sfts && $sfts.length) {
+			const rows: TokenRow[] = [];
+			for (const sft of $sfts) {
+				const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+				const summary = quotesRecord[sft.address.toLowerCase()] ?? null;
 				const buyPrice = summary?.buy ?? null;
 				const sellPrice = summary?.sell ?? null;
 				const onChainPrice = calculateMidPrice(summary);
-				const fallbackPrice = quote?.close ?? 0;
-				const price = onChainPrice ?? fallbackPrice;
-				if (browser && summary) {
-					// Logging removed after validation
-				}
-				tokens.push({
+				const fallbackPrice = quote?.close ?? null;
+				const price = onChainPrice ?? fallbackPrice ?? null;
+				rows.push({
 					id: sft.id,
 					address: sft.address,
 					name: sft.name,
@@ -246,13 +217,14 @@
 					isSft: true
 				});
 			}
-
-			return tokens;
+			processedTokens = rows;
+		} else {
+			processedTokens = [];
 		}
-	});
+	}
 </script>
 
-{#if !$sfts}
+{#if isVaultLoading}
 	<div class="flex w-full items-center justify-center p-8">
 		<LoadingSpinner
 			variant="fullscreen"
@@ -347,7 +319,7 @@
 							<ListCard
 								title="Biggest Movers (24H)"
 								items={biggestMovers.map((s) => {
-									const quote = findQuoteForSymbol(s.symbol);
+									const quote = findQuoteForSymbol(s.symbol, $tokenGlobalQuote, ALL_TOKENS);
 									const price = quote?.close ?? null;
 									const tokenInfo = ALL_TOKENS.find(
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
@@ -377,7 +349,7 @@
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
 									);
 									const volumeInShares = parseFloat(formatUnits(s.totalVolume, 18));
-									const quote = findQuoteForSymbol(s.symbol);
+									const quote = findQuoteForSymbol(s.symbol, $tokenGlobalQuote, ALL_TOKENS);
 									const price = quote?.close ?? 0;
 									const dollarVolume = volumeInShares * price;
 
@@ -459,11 +431,18 @@
 				<div class="mb-4 sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse</h2>
 				</div>
-				{#if $query.isLoading}
+				{#if quotesLoading}
 					<div class="flex w-full justify-center py-12">
 						<LoadingSpinner size="lg" text="Fetching on-chain prices..." />
 					</div>
 				{:else}
+					{#if quotesError}
+						<div
+							class="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
+						>
+							Unable to refresh on-chain quotes right now. Displayed prices may be stale.
+						</div>
+					{/if}
 					<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
 						<Table>
 							<thead>
@@ -491,14 +470,14 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#if !$query.data?.length}
+								{#if !processedTokens.length}
 									<tr>
 										<td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
 											No assets available.
 										</td>
 									</tr>
 								{:else}
-									{#each $query.data || [] as token (token.id)}
+									{#each processedTokens as token (token.id)}
 										{@const sft = $sfts.find((s) => s.id === token.id)}
 										{@const deposits = sft
 											? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))

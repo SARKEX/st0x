@@ -1,8 +1,15 @@
 <script lang="ts">
-	import axios from 'axios';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { currentNetwork, sfts } from '$lib/stores';
+	import {
+		currentNetwork,
+		sfts,
+		orderbookQuotesResource,
+		tradeActivityResource,
+		oracleQuotes,
+		oracleQuotesResource
+	} from '$lib/stores';
+	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { formatUnits } from 'viem';
 	import { TOKENS, USDC_TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -25,23 +32,22 @@
 	import { onMount } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
-        import type { SgTrade } from '@rainlanguage/orderbook';
-        import type { QueryObserverResult } from '@tanstack/query-core';
-        import { createQuery } from '@tanstack/svelte-query';
-        import type { ProcessedQuote } from '$lib/utils/quote';
-        import { fetchAndQuoteUSDCOrders, buildTokenPriceMap } from '$lib/utils/quote';
-        import type { Readable } from 'svelte/store';
-        import { getTrades } from '$lib/query';
-        import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
-        import type {
-                DepthSeries,
-                TradeHistoryPoint,
-                VolumeBucket
-        } from '$lib/components/charts/token-chart-types';
-        import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+	import type { SgTrade } from '@rainlanguage/orderbook';
+	import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
+	import type {
+		DepthSeries,
+		TradeHistoryPoint,
+		VolumeBucket
+	} from '$lib/components/charts/token-chart-types';
+	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+	import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
+	import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/tokenMath';
+	import type { TimedResource, OracleQuote } from '$lib/stores/network-data-cache';
 
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
+
+	const tokensLookup = createTokenLookup(TOKENS);
 
 	$: currentPythToken = TOKENS.find(
 		(token) =>
@@ -49,13 +55,7 @@
 			token.chainId === $currentNetwork?.chainId
 	);
 
-	function baseFromSymbol(sym?: string | null) {
-		if (!sym) return undefined;
-		if (sym.includes('t')) return sym.split('t')[1];
-		return sym;
-	}
-
-	$: baseSymbol = baseFromSymbol(currentToken?.symbol);
+	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
 
 	const ASSET_TABS = [
@@ -80,150 +80,143 @@
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
 	let panelStrategy: 'limit' | 'dca' | 'market' = 'limit';
 	let panelOpenedFromTerminal = false;
-        const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
-        const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
-        const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
+	const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
+	const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
+	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
 
-        const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60; // 30 days (max window)
-        const VOLUME_BUCKET_SECONDS = 24 * 60 * 60;
-        const OHLC_BUCKET_SECONDS = 60; // 1 minute buckets for candles
+	const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60; // 30 days (max window)
+	const OHLC_BUCKET_SECONDS = 60; // 1 minute buckets for candles
 
-        type HistoryRangeKey = '1D' | '7D' | '30D';
+	type HistoryRangeKey = '1D' | '7D' | '30D';
 
-        const HISTORY_RANGE_CONFIG: Record<HistoryRangeKey, { label: string; seconds: number }> = {
-                '1D': { label: '1D', seconds: 24 * 60 * 60 },
-                '7D': { label: '7D', seconds: 7 * 24 * 60 * 60 },
-                '30D': { label: '30D', seconds: 30 * 24 * 60 * 60 }
-        };
+	const HISTORY_RANGE_CONFIG: Record<HistoryRangeKey, { label: string; seconds: number }> = {
+		'1D': { label: '1D', seconds: 24 * 60 * 60 },
+		'7D': { label: '7D', seconds: 7 * 24 * 60 * 60 },
+		'30D': { label: '30D', seconds: 30 * 24 * 60 * 60 }
+	};
 
-        const HISTORY_RANGE_OPTIONS: Array<{ key: HistoryRangeKey; label: string }> = [
-                { key: '1D', label: '1D' },
-                { key: '7D', label: '7D' },
-                { key: '30D', label: '30D' }
-        ];
+	const HISTORY_RANGE_OPTIONS: Array<{ key: HistoryRangeKey; label: string }> = [
+		{ key: '1D', label: '1D' },
+		{ key: '7D', label: '7D' },
+		{ key: '30D', label: '30D' }
+	];
 
-        const parseAmount = (value: string | null | undefined, decimals: number): number => {
-                if (value === null || value === undefined) return 0;
-                try {
-                        const raw = BigInt(value);
-                        const magnitude = raw < 0n ? -raw : raw;
-                        return Number.parseFloat(formatUnits(magnitude, decimals));
-                } catch {
-                        return 0;
-                }
-        };
+	const tradeToPoint = (
+		trade: SgTrade,
+		assetAddress: string,
+		assetDecimals: number,
+		usdcAddress: string,
+		usdcDecimals: number
+	): TradeHistoryPoint | null => {
+		if (!trade) return null;
 
-        const tradeToPoint = (
-                trade: SgTrade,
-                assetAddress: string,
-                assetDecimals: number,
-                usdcAddress: string,
-                usdcDecimals: number
-        ): TradeHistoryPoint | null => {
-                if (!trade) return null;
+		const rawTimestamp = Number(trade.tradeEvent?.transaction?.timestamp ?? trade.timestamp ?? 0);
+		if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return null;
+		const timestamp = rawTimestamp * 1000;
 
-                const rawTimestamp = Number(
-                        trade.tradeEvent?.transaction?.timestamp ?? trade.timestamp ?? 0
-                );
-                if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return null;
-                const timestamp = rawTimestamp * 1000;
+		const normalizedAsset = normalizeAddress(assetAddress);
+		const quoteToken = { address: usdcAddress, decimals: usdcDecimals, symbol: 'USDC' as const };
+		const lookup = (address: string | null | undefined) => {
+			const normalized = normalizeAddress(address);
+			if (normalized && normalized === normalizedAsset) {
+				return { address: normalized, decimals: assetDecimals };
+			}
+			return tokensLookup(address);
+		};
 
-                const inputToken = trade.inputVaultBalanceChange?.vault?.token;
-                const outputToken = trade.outputVaultBalanceChange?.vault?.token;
+		const analysis = analyzeTrade(
+			trade as unknown as {
+				inputVaultBalanceChange?: {
+					vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
+					amount?: string;
+				};
+				outputVaultBalanceChange?: {
+					vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
+					amount?: string;
+				};
+			},
+			quoteToken,
+			lookup
+		);
+		if (!analysis) return null;
+		if (normalizedAsset && analysis.assetAddress !== normalizedAsset) return null;
 
-                const inputAddress = inputToken?.address?.toLowerCase();
-                const outputAddress = outputToken?.address?.toLowerCase();
+		const { tokens, usdc, price, side } = analysis;
+		if (!Number.isFinite(tokens) || !Number.isFinite(usdc) || !Number.isFinite(price)) return null;
 
-                if (!inputAddress || !outputAddress) return null;
+		return { timestamp, price, tokens, usdc, side };
+	};
 
-                if (inputAddress === usdcAddress && outputAddress === assetAddress) {
-                        const tokens = parseAmount(
-                                trade.outputVaultBalanceChange?.amount ?? null,
-                                Number(outputToken?.decimals ?? assetDecimals)
-                        );
-                        const usdc = parseAmount(
-                                trade.inputVaultBalanceChange?.amount ?? null,
-                                Number(inputToken?.decimals ?? usdcDecimals)
-                        );
-                        if (tokens <= 0 || usdc <= 0) return null;
-                        return { timestamp, price: usdc / tokens, tokens, usdc, side: 'buy' };
-                }
+	// Convert trade points to OHLC candles
+	const tradesToAveragePrices = (trades: TradeHistoryPoint[], bucketSeconds: number) => {
+		if (trades.length === 0) return [];
 
-                if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-                        const tokens = parseAmount(
-                                trade.inputVaultBalanceChange?.amount ?? null,
-                                Number(inputToken?.decimals ?? assetDecimals)
-                        );
-                        const usdc = parseAmount(
-                                trade.outputVaultBalanceChange?.amount ?? null,
-                                Number(outputToken?.decimals ?? usdcDecimals)
-                        );
-                        if (tokens <= 0 || usdc <= 0) return null;
-                        return { timestamp, price: usdc / tokens, tokens, usdc, side: 'sell' };
-                }
+		const buckets = new Map<number, TradeHistoryPoint[]>();
 
-                return null;
-        };
+		for (const trade of trades) {
+			const bucketTime = Math.floor(trade.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
+			if (!buckets.has(bucketTime)) {
+				buckets.set(bucketTime, []);
+			}
+			buckets.get(bucketTime)!.push(trade);
+		}
 
-        // Convert trade points to OHLC candles
-        const tradesToAveragePrices = (trades: TradeHistoryPoint[], bucketSeconds: number) => {
-                if (trades.length === 0) return [];
+		const pricePoints: Array<{ x: number; y: number }> = [];
+		const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
 
-                const buckets = new Map<number, TradeHistoryPoint[]>();
+		for (const [time, bucketTrades] of sortedBuckets) {
+			if (bucketTrades.length === 0) continue;
+			const prices = bucketTrades.map((t) => t.price).filter((p) => Number.isFinite(p));
+			if (prices.length === 0) continue;
 
-                for (const trade of trades) {
-                        const bucketTime = Math.floor(trade.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
-                        if (!buckets.has(bucketTime)) {
-                                buckets.set(bucketTime, []);
-                        }
-                        buckets.get(bucketTime)!.push(trade);
-                }
+			const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+			pricePoints.push({
+				x: time,
+				y: avgPrice
+			});
+		}
 
-const pricePoints: Array<{ x: number; y: number }> = [];
-                const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+		return pricePoints;
+	};
 
-                for (const [time, bucketTrades] of sortedBuckets) {
-                        if (bucketTrades.length === 0) continue;
-                        const prices = bucketTrades.map((t) => t.price).filter((p) => Number.isFinite(p));
-                        if (prices.length === 0) continue;
+	// Aggregate volume by candlestick bucket size for proper alignment
+	const tradesToVolumeBuckets = (
+		trades: TradeHistoryPoint[],
+		bucketSeconds: number
+	): VolumeBucket[] => {
+		if (trades.length === 0) return [];
 
-                        const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
-                        pricePoints.push({
-                                x: time,
-                                y: avgPrice
-                        });
-                }
+		const bucketMap = new Map<number, number>();
 
-                return pricePoints;
-        };
+		for (const trade of trades) {
+			const bucketTime = Math.floor(trade.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
+			bucketMap.set(bucketTime, (bucketMap.get(bucketTime) ?? 0) + trade.tokens);
+		}
 
-        let historyRange: HistoryRangeKey = '7D';
-        let historyRangeStartMs = 0;
-        let historyRangeEndMs = 0;
+		return Array.from(bucketMap.entries())
+			.sort((a, b) => a[0] - b[0])
+			.map(([start, tokens]) => ({ start, tokens }));
+	};
 
-        let tradeHistoryPoints: TradeHistoryPoint[] = [];
-        let visibleTradeHistoryPoints: TradeHistoryPoint[] = [];
-        let averagePrices: Array<{ x: number; y: number }> = [];
-        let tradeVolumeBuckets: VolumeBucket[] = [];
-        let orderbookDepth: DepthSeries = { bids: [], asks: [] };
-        let chartsLoading = false;
-        let tradeQueryError: string | null = null;
+	let historyRange: HistoryRangeKey = '7D';
+	let historyRangeStartMs = 0;
+	let historyRangeEndMs = 0;
 
-        let onChainQuoteQuery: Readable<QueryObserverResult<ProcessedQuote[] | undefined, Error | null>>;
-        let tradeHistoryQuery: Readable<QueryObserverResult<SgTrade[] | undefined, Error | null>>;
+	let tradeHistoryPoints: TradeHistoryPoint[] = [];
+	let visibleTradeHistoryPoints: TradeHistoryPoint[] = [];
+	let averagePrices: Array<{ x: number; y: number }> = [];
+	let tradeVolumeBuckets: VolumeBucket[] = [];
+	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
+	let chartsLoading = false;
+	let tradeQueryError: string | null = null;
 
-        let oraclePriceData: { price: number; confidence: number } | null = null;
-        let oracleLoading = false;
-        let oracleError: string | null = null;
-	let oracleRequestToken = 0;
+	let oracleResource: TimedResource<Record<string, OracleQuote>> | null = null;
+	let oracleEntry: OracleQuote | undefined;
+	let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
+	let oracleLoading = false;
+	let oracleError: string | null = null;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
-
-	function resetOracleState() {
-		oraclePriceData = null;
-		oracleError = null;
-		oracleLoading = false;
-	}
 
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
@@ -235,41 +228,40 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 		}).format(value);
 	}
 
-	async function fetchOracleData(feedId: string) {
-		if (!browser) return;
-		const requestId = ++oracleRequestToken;
-		oracleLoading = true;
-		oracleError = null;
-		oraclePriceData = null;
-
-		try {
-			const resp = await axios.get(
-				`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`
-			);
-			if (requestId !== oracleRequestToken) return;
-			const parsed = resp.data.parsed?.[0]?.price;
-			if (parsed) {
-				const expo = Number(parsed.expo ?? 0);
-				const multiplier = Math.pow(10, expo);
-				oraclePriceData = {
-					price: Number(parsed.price) * multiplier,
-					confidence: Number(parsed.conf) * multiplier
-				};
-			} else {
-				oraclePriceData = null;
-			}
-		} catch (error) {
-			if (requestId === oracleRequestToken) {
-				console.warn('[oracle] failed to fetch price data', error);
-				oracleError = 'Failed to fetch oracle data';
-				oraclePriceData = null;
-			}
-		} finally {
-			if (requestId === oracleRequestToken) {
-				oracleLoading = false;
-			}
+	function formatResourceError(error: unknown, fallback: string): string {
+		if (!error) return fallback;
+		if (typeof error === 'string') return error;
+		if (error instanceof Error) {
+			return error.message || fallback;
 		}
+		return fallback;
 	}
+
+	$: oracleResource = $oracleQuotesResource;
+
+	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
+	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
+
+	$: oraclePriceData = oracleEntry
+		? {
+				price: oracleEntry.price ?? null,
+				confidence: oracleEntry.confidence ?? null
+			}
+		: null;
+
+	$: oracleLoading =
+		!!currentFeedId && (oracleResource?.status === 'idle' || oracleResource?.status === 'loading');
+
+	$: oracleError = (() => {
+		if (!currentFeedId) return null;
+		if (oracleResource?.status === 'error') {
+			return 'Failed to fetch oracle data';
+		}
+		if (oracleResource?.status === 'ready' && !oracleEntry) {
+			return 'Oracle data unavailable';
+		}
+		return null;
+	})();
 
 	onMount(() => {
 		if (typeof window !== 'undefined') {
@@ -287,11 +279,6 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 	};
 
 	$: currentFeedId = browser ? currentPythToken?.priceFeedId ?? null : null;
-	$: if (currentFeedId) {
-		fetchOracleData(currentFeedId);
-	} else {
-		resetOracleState();
-	}
 
 	const handleTokenTabChange = (event: CustomEvent<{ id: string }>) => {
 		const nextId = event.detail.id;
@@ -347,47 +334,6 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 		}
 	};
 
-        $: onChainQuoteQuery = createQuery({
-                queryKey: ['fetchAndQuoteUSDCOrders', $currentNetwork?.id],
-                enabled: browser && !!$currentNetwork?.chainId,
-                staleTime: 5_000,
-                refetchInterval: 10_000,
-                queryFn: async () => {
-			if (!browser) return [];
-			const networkId = $currentNetwork?.chainId;
-			if (!networkId) return [];
-			try {
-				return await fetchAndQuoteUSDCOrders(networkId);
-			} catch (error) {
-				console.warn('[onchain-quotes] failed to fetch quotes', error);
-				return [];
-			}
-                }
-        });
-
-        $: tradeHistoryQuery = createQuery({
-                queryKey: ['token-trade-history', currentToken?.address, $currentNetwork?.id],
-                enabled:
-                        browser &&
-                        !!currentToken?.address &&
-                        !!$currentNetwork?.orderbook_subgraph_url &&
-                        !!$currentNetwork?.chainId,
-                staleTime: 60_000,
-                refetchInterval: 60_000,
-                queryFn: async () => {
-                        if (!browser || !currentToken || !$currentNetwork) return [];
-                        try {
-                                const now = Math.floor(Date.now() / 1000);
-                                const since = now - TRADE_HISTORY_LOOKBACK_SECONDS;
-                                const trades = await getTrades(since, now, $currentNetwork);
-                                return trades;
-                        } catch (error) {
-                                console.warn('[trade-history] failed to fetch trades', error);
-                                return [];
-                        }
-                }
-        });
-
 	const resetOnChainPrices = () => {
 		buyPrice = null;
 		sellPrice = null;
@@ -397,186 +343,165 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 		if (!browser || !currentToken) {
 			resetOnChainPrices();
 		} else {
-			const networkId = $currentNetwork?.chainId;
-			const usdcToken = networkId ? USDC_TOKENS[networkId] : undefined;
-			const quotes = $onChainQuoteQuery.data ?? [];
-
-			if (!usdcToken || !quotes.length) {
-				resetOnChainPrices();
-			} else {
-				const map = buildTokenPriceMap(quotes, usdcToken.address);
-				const summary = map.get(currentToken.address.toLowerCase()) ?? null;
-				buyPrice = summary?.buy ?? null;
-				sellPrice = summary?.sell ?? null;
-
-				if (browser) {
-					// Logging removed after validation
-				}
-			}
+			const summary =
+				$orderbookQuotesResource?.data?.summary?.[currentToken.address?.toLowerCase() ?? ''] ??
+				null;
+			buyPrice = summary?.buy ?? null;
+			sellPrice = summary?.sell ?? null;
 		}
-        }
+	}
 
-        $: tradeHistoryPoints = (() => {
-                if (!browser || !currentToken || !$currentNetwork) return [];
-                const usdcToken = $currentNetwork.chainId
-                        ? USDC_TOKENS[$currentNetwork.chainId]
-                        : undefined;
-                if (!usdcToken) return [];
-                const assetAddress = currentToken.address?.toLowerCase();
-                const usdcAddress = usdcToken.address?.toLowerCase();
-                if (!assetAddress || !usdcAddress) return [];
-                const assetDecimals = Number(currentPythToken?.decimals ?? 18);
-                const usdcDecimals = Number(usdcToken.decimals ?? 6);
+	$: tradeHistoryPoints = (() => {
+		if (!browser || !currentToken || !$currentNetwork) return [];
+		const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
+		if (!usdcToken) return [];
+		const assetAddress = currentToken.address?.toLowerCase();
+		const usdcAddress = usdcToken.address?.toLowerCase();
+		if (!assetAddress || !usdcAddress) return [];
+		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+		const usdcDecimals = Number(usdcToken.decimals ?? 6);
+		const range = $tradeActivityResource?.data?.range ?? null;
+		const now = Date.now();
+		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
+		const rangeEnd = range ? range.to * 1000 : now;
+		// TODO: Display range label in UI if needed
+		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
 
-                const trades = ($tradeHistoryQuery.data ?? []) as SgTrade[];
-                return trades
-                        .map((trade) =>
-                                tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals)
-                        )
-                        .filter((point): point is TradeHistoryPoint => Boolean(point))
-                        .sort((a, b) => a.timestamp - b.timestamp);
-        })();
+		const trades = ($tradeActivityResource?.data?.trades ?? []) as SgTrade[];
+		return trades
+			.map((trade) => tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals))
+			.filter(
+				(point): point is TradeHistoryPoint =>
+					point !== null && point.timestamp >= cutoff && point.timestamp <= rangeEnd
+			)
+			.sort((a, b) => a.timestamp - b.timestamp);
+	})();
 
-        function getVolumeBucketSeconds(range: HistoryRangeKey) {
-                if (range === '1D') return 60 * 60;
-                if (range === '7D') return 6 * 60 * 60;
-                return 24 * 60 * 60;
-        }
+	$: {
+		const rangeSeconds = HISTORY_RANGE_CONFIG[historyRange].seconds;
+		const nowMs = Date.now();
+		const latestTradeMs = tradeHistoryPoints.length
+			? tradeHistoryPoints[tradeHistoryPoints.length - 1].timestamp
+			: 0;
+		const rangeEnd = Math.max(nowMs, latestTradeMs || nowMs);
+		const rangeStart = Math.max(0, rangeEnd - rangeSeconds * 1000);
 
-        $: {
-                const rangeSeconds = HISTORY_RANGE_CONFIG[historyRange].seconds;
-                const nowMs = Date.now();
-                const latestTradeMs = tradeHistoryPoints.length
-                        ? tradeHistoryPoints[tradeHistoryPoints.length - 1].timestamp
-                        : 0;
-                const rangeEnd = Math.max(nowMs, latestTradeMs || nowMs);
-                const rangeStart = Math.max(0, rangeEnd - rangeSeconds * 1000);
+		// Determine bucket resolution (1 minute for 1D, 15 min for 7D, 1 hour for 30D)
+		let candleBucketSeconds = OHLC_BUCKET_SECONDS;
+		if (historyRange === '7D') {
+			candleBucketSeconds = 15 * 60;
+		} else if (historyRange === '30D') {
+			candleBucketSeconds = 60 * 60;
+		}
 
+		historyRangeStartMs = rangeStart;
+		historyRangeEndMs = rangeEnd;
 
-                // Determine bucket resolution (1 minute for 1D, 15 min for 7D, 1 hour for 30D)
-                let candleBucketSeconds = OHLC_BUCKET_SECONDS;
-                if (historyRange === '7D') {
-                        candleBucketSeconds = 15 * 60;
-                } else if (historyRange === '30D') {
-                        candleBucketSeconds = 60 * 60;
-                }
+		visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
 
-                historyRangeStartMs = rangeStart;
-                historyRangeEndMs = rangeEnd;
+		// Calculate average prices and volume using the same candlestick bucket size
+		averagePrices = tradesToAveragePrices(visibleTradeHistoryPoints, candleBucketSeconds);
+		tradeVolumeBuckets = tradesToVolumeBuckets(visibleTradeHistoryPoints, candleBucketSeconds);
+	}
 
-                visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
-                if (visibleTradeHistoryPoints.length > 0) {
-                }
+	$: orderbookDepth = (() => {
+		if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
+		const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+		if (!quotes.length) return { bids: [], asks: [] };
 
-                averagePrices = tradesToAveragePrices(visibleTradeHistoryPoints, candleBucketSeconds);
-                if (averagePrices.length > 0) {
-                }
+		const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
+		if (!usdcToken) return { bids: [], asks: [] };
+		const assetAddress = currentToken.address?.toLowerCase();
+		const usdcAddress = usdcToken.address?.toLowerCase();
+		if (!assetAddress || !usdcAddress) return { bids: [], asks: [] };
+		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+		const usdcDecimals = Number(usdcToken.decimals ?? 6);
 
-                const bucketSeconds = getVolumeBucketSeconds(historyRange);
-                const bucketStartTime = Math.max(rangeStart, rangeEnd - rangeSeconds * 1000);
-                const bucketMap = new Map<number, number>();
+		const bids: DepthSeries['bids'] = [];
+		const asks: DepthSeries['asks'] = [];
 
-                for (let ts = bucketStartTime; ts <= rangeEnd; ts += bucketSeconds * 1000) {
-                        bucketMap.set(ts, 0);
-                }
+		quotes.forEach((quote) => {
+			const ratio = Number(quote.ratio) / 1e18;
+			if (!Number.isFinite(ratio) || ratio <= 0) return;
+			const inputAddress = quote.inputTokenAddress.toLowerCase();
+			const outputAddress = quote.outputTokenAddress.toLowerCase();
+			if (!inputAddress || !outputAddress) return;
 
-                for (const point of visibleTradeHistoryPoints) {
-                        const bucketStart = Math.floor(point.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
-                        const clampedBucket = Math.max(bucketStart, bucketStartTime);
-                        bucketMap.set(clampedBucket, (bucketMap.get(clampedBucket) ?? 0) + point.tokens);
-                }
+			if (inputAddress === usdcAddress && outputAddress === assetAddress) {
+				const tokenAmount = Number.parseFloat(formatUnits(quote.maxOutput, assetDecimals));
+				const price = ratio;
+				if (
+					!Number.isFinite(tokenAmount) ||
+					!Number.isFinite(price) ||
+					tokenAmount <= 0 ||
+					price <= 0
+				) {
+					return;
+				}
+				const orderValue = price * tokenAmount;
+				if (!Number.isFinite(orderValue) || orderValue < 2) {
+					return;
+				}
+				asks.push({ price, quantity: tokenAmount });
+				return;
+			}
 
-                tradeVolumeBuckets = Array.from(bucketMap.entries())
-                        .sort((a, b) => a[0] - b[0])
-                        .map(([start, tokens]) => ({ start, tokens }));
-        }
+			if (inputAddress === assetAddress && outputAddress === usdcAddress) {
+				const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals + 12));
+				if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) {
+					return;
+				}
+				const price = 1 / ratio;
+				if (!Number.isFinite(price) || price <= 0) return;
+				const tokenAmount = usdcAmount / price;
+				const orderValue = price * tokenAmount;
+				if (!Number.isFinite(orderValue) || orderValue < 2) {
+					return;
+				}
+				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
+				bids.push({ price, quantity: tokenAmount });
+			}
+		});
 
-        $: orderbookDepth = (() => {
-                if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
-                const quotes = $onChainQuoteQuery.data ?? [];
-                if (!quotes.length) return { bids: [], asks: [] };
+		return { bids, asks };
+	})();
 
+	$: {
+		const tradeResource = $tradeActivityResource;
+		const tradeStatus = tradeResource?.status ?? 'idle';
+		const quoteStatus = $orderbookQuotesResource?.status ?? 'idle';
+		const tradeHasData = (tradeResource?.data?.trades?.length ?? 0) > 0;
+		const quoteHasData = ($orderbookQuotesResource?.data?.quotes?.length ?? 0) > 0;
+		const tradeLoading = tradeStatus === 'loading' || (tradeStatus === 'idle' && !tradeHasData);
+		const quoteLoading = quoteStatus === 'loading' || (quoteStatus === 'idle' && !quoteHasData);
 
-                const usdcToken = $currentNetwork.chainId
-                        ? USDC_TOKENS[$currentNetwork.chainId]
-                        : undefined;
-                if (!usdcToken) return { bids: [], asks: [] };
-                const assetAddress = currentToken.address?.toLowerCase();
-                const usdcAddress = usdcToken.address?.toLowerCase();
-                if (!assetAddress || !usdcAddress) return { bids: [], asks: [] };
-                const assetDecimals = Number(currentPythToken?.decimals ?? 18);
-                const usdcDecimals = Number(usdcToken.decimals ?? 6);
+		// Don't show loading if we have volume data OR orderbook depth data
+		const hasVolumeData = tradeVolumeBuckets.length > 0;
+		const hasDepthData = orderbookDepth.bids.length > 0 || orderbookDepth.asks.length > 0;
+		chartsLoading = Boolean((tradeLoading || quoteLoading) && !hasVolumeData && !hasDepthData);
 
-                const bids: DepthSeries['bids'] = [];
-                const asks: DepthSeries['asks'] = [];
+		tradeQueryError =
+			tradeStatus === 'error'
+				? formatResourceError(tradeResource?.error, 'Failed to load trade history.')
+				: null;
+	}
 
-                quotes.forEach((quote, idx) => {
-                        const ratio = Number(quote.ratio) / 1e18;
-                        if (!Number.isFinite(ratio) || ratio <= 0) return;
-                        const inputAddress = quote.inputTokenAddress.toLowerCase();
-                        const outputAddress = quote.outputTokenAddress.toLowerCase();
-                        if (!inputAddress || !outputAddress) return;
+	let ensuredNetworkId: number | null = null;
 
-                        if (inputAddress === usdcAddress && outputAddress === assetAddress) {
-                                const tokenAmount = Number.parseFloat(formatUnits(quote.maxOutput, assetDecimals));
-                                const price = ratio;
-                                if (!Number.isFinite(tokenAmount) || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
-                                        return;
-                                }
-                                const orderValue = price * tokenAmount;
-                                if (!Number.isFinite(orderValue) || orderValue < 2) {
-                                        return;
-                                }
-                                asks.push({ price, quantity: tokenAmount });
-                                return;
-                        }
+	$: if (!browser) {
+		ensuredNetworkId = null;
+	} else {
+		const networkId = $currentNetwork?.id ?? null;
+		if (!networkId) {
+			ensuredNetworkId = null;
+		} else if (ensuredNetworkId !== networkId) {
+			ensuredNetworkId = networkId;
+			void ensureResource(networkId, 'orderbookQuotes');
+			void ensureResource(networkId, 'tradeActivity');
+		}
+	}
 
-                        if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-                                const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals + 12));
-                                if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) {
-                                        return;
-                                }
-                                const price = 1 / ratio;
-                                if (!Number.isFinite(price) || price <= 0) return;
-                                const tokenAmount = usdcAmount / price;
-                                const orderValue = price * tokenAmount;
-                                if (!Number.isFinite(orderValue) || orderValue < 2) {
-                                        return;
-                                }
-                                if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
-                                bids.push({ price, quantity: tokenAmount });
-                        }
-                });
-
-                return { bids, asks };
-        })();
-
-        $: {
-                const tradeResult = $tradeHistoryQuery;
-                const quoteResult = $onChainQuoteQuery;
-
-                const tradeStatus = tradeResult?.status;
-                const quoteStatus = quoteResult?.status;
-                const tradeFetchStatus = tradeResult?.fetchStatus;
-                const quoteFetchStatus = quoteResult?.fetchStatus;
-
-                // Don't show loading if we have volume data OR orderbook depth data
-                const hasVolumeData = tradeVolumeBuckets.length > 0;
-                const hasDepthData = orderbookDepth.bids.length > 0 || orderbookDepth.asks.length > 0;
-                chartsLoading = Boolean(
-                        (tradeStatus === 'pending' ||
-                                tradeFetchStatus === 'fetching' ||
-                                quoteStatus === 'pending' ||
-                                quoteFetchStatus === 'fetching') &&
-                        !hasVolumeData &&
-                        !hasDepthData
-                );
-
-                const err = tradeResult?.error;
-                tradeQueryError = err ? err.message ?? 'Failed to load trade history.' : null;
-        }
-
-        $: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
+	$: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
 	$: pageTitle = `Trade ${tokenDisplayName}`;
 	$: modalTitle = tokenDisplaySymbol
@@ -608,11 +533,11 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 			</h1>
 		</div>
 		<!-- Header Section with Chart -->
-                <Section>
-                        <div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
-                                <!-- Left: Symbol info -->
-                                <div class="space-y-4 xl:col-span-2">
-                                        <div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+		<Section>
+			<div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
+				<!-- Left: Symbol info -->
+				<div class="space-y-4 xl:col-span-2">
+					<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
 						<div class="border-b border-white/10 bg-gray-900/60 px-4 py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
@@ -667,7 +592,7 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Bid Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
-									{#if $onChainQuoteQuery.isLoading}
+									{#if $orderbookQuotesResource?.status === 'loading'}
 										Loading...
 									{:else if buyPrice !== null}
 										${formatNumeric(buyPrice)}
@@ -679,7 +604,7 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Offer Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
-									{#if $onChainQuoteQuery.isLoading}
+									{#if $orderbookQuotesResource?.status === 'loading'}
 										Loading...
 									{:else if sellPrice !== null}
 										${formatNumeric(sellPrice)}
@@ -742,31 +667,32 @@ const pricePoints: Array<{ x: number; y: number }> = [];
 						>
 							Terminal View
 						</Button>
-                                        </div>
-                                </div>
-                        </div>
-                </Section>
+					</div>
+				</div>
+			</div>
+		</Section>
 
-                <Section>
-                        <TokenMarketCharts
-                                tradeHistory={visibleTradeHistoryPoints}
-                                volumeBuckets={tradeVolumeBuckets}
-                                depth={orderbookDepth}
-                                averagePrices={averagePrices}
-                                rangeStartMs={historyRangeStartMs}
-                                rangeEndMs={historyRangeEndMs}
-                                isLoading={chartsLoading}
-                                error={tradeQueryError}
-                                historyRange={historyRange}
-                                historyRangeOptions={HISTORY_RANGE_OPTIONS}
-                                on:rangeChange={(e) => (historyRange = e.detail.key)}
-                        />
-                </Section>
+		<Section>
+			<TokenMarketCharts
+				tradeHistory={visibleTradeHistoryPoints}
+				volumeBuckets={tradeVolumeBuckets}
+				depth={orderbookDepth}
+				{averagePrices}
+				rangeStartMs={historyRangeStartMs}
+				rangeEndMs={historyRangeEndMs}
+				isLoading={chartsLoading}
+				error={tradeQueryError}
+				{historyRange}
+				historyRangeOptions={HISTORY_RANGE_OPTIONS}
+				on:rangeChange={(e) => (historyRange = e.detail.key)}
+			/>
+			<div class="mt-2 text-xs text-gray-400">All times are displayed in your local timezone</div>
+		</Section>
 
-                <!-- Tabbed Information Section (collapsible) -->
-                <Section>
-                        <div class="mb-3 flex items-center justify-between">
-                                <h2 class="text-base font-semibold">Details</h2>
+		<!-- Tabbed Information Section (collapsible) -->
+		<Section>
+			<div class="mb-3 flex items-center justify-between">
+				<h2 class="text-base font-semibold">Details</h2>
 				<button
 					class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
 					aria-label={infoCollapsed ? 'Expand details' : 'Collapse details'}

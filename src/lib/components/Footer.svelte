@@ -4,10 +4,10 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import { MAILERLITE_RECAPTCHA_SITE_KEY } from '$lib/constants/newsletter';
 
-	type FormStatus = 'idle' | 'loading' | 'success' | 'error';
-
 	let showCaptcha = false;
-	let formState: { status: FormStatus; message?: string } = { status: 'idle' };
+	let formState: { status: 'idle' | 'loading' | 'success' | 'error'; message?: string } = {
+		status: 'idle'
+	};
 
 	function handleEmailInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;

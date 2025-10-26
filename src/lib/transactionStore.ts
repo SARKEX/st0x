@@ -26,7 +26,31 @@ import {
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
 import { rainlangConfirmationModal } from './stores';
-import { getTradeByTransactionHash } from './query';
+import { ensureResource, getResourceStore } from './stores/network-data-cache';
+import type { Network } from './network';
+
+// Helper function to create Raindex link HTML
+function createRaindexLink(
+	chainId: number,
+	orderbookId: string,
+	orderHashOrVaultId: string,
+	isVault = false
+): string {
+	const baseUrl = isVault ? 'https://v2.raindex.finance/orders' : 'https://raindex.finance/orders';
+	return `
+		<a
+			target="_blank"
+			rel="noopener noreferrer"
+			class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+			href="${baseUrl}/${chainId}-${orderbookId}-${orderHashOrVaultId}"
+			data-testid="raindex-link">
+			${isVault ? 'Manage your order on Raindex' : 'View order on Raindex'}
+			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+			</svg>
+		</a>
+	`;
+}
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
@@ -53,39 +77,28 @@ const transactionStore = () => {
 	const { subscribe, set, update } = writable(initialState);
 	const reset = () => set(initialState);
 
+	// Generic state update helper
+	const setState = (
+		status: TransactionStatus,
+		options: { message?: string; hash?: string; error?: string } = {}
+	) =>
+		update((state) => ({
+			...state,
+			status,
+			message: options.message ?? '',
+			hash: options.hash ?? '',
+			error: options.error ?? ''
+		}));
+
 	const checkingWalletAllowance = (message?: string) =>
-		update((state) => ({
-			...state,
-			status: TransactionStatus.CHECKING_ALLOWANCE,
-			message: message || ''
-		}));
+		setState(TransactionStatus.CHECKING_ALLOWANCE, { message });
 	const awaitWalletConfirmation = (message?: string) =>
-		update((state) => ({
-			...state,
-			status: TransactionStatus.PENDING_WALLET,
-			message: message || ''
-		}));
-	const awaitApprovalTx = (hash: string) =>
-		update((state) => ({
-			...state,
-			hash: hash,
-			status: TransactionStatus.PENDING_APPROVAL,
-			message: ''
-		}));
+		setState(TransactionStatus.PENDING_WALLET, { message });
+	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
 	const transactionSuccess = (hash: string, message?: string) =>
-		update((state) => ({
-			...state,
-			status: TransactionStatus.SUCCESS,
-			hash: hash,
-			message: message || ''
-		}));
+		setState(TransactionStatus.SUCCESS, { hash, message });
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
-		update((state) => ({
-			...state,
-			status: TransactionStatus.ERROR,
-			error: message,
-			hash: hash || ''
-		}));
+		setState(TransactionStatus.ERROR, { error: message, hash });
 
 	const handleWithdraw = async (vault: SgVault) => {
 		const config = get(wagmiConfig);
@@ -106,24 +119,15 @@ const transactionStore = () => {
 			});
 
 			const chainId = get(currentNetwork).id;
-			const link = `
-			<a
-				target="_blank"
-				rel="noopener noreferrer"
-				class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-				href="https://v2.raindex.finance/orders/${chainId}-${vault.orderbook.id}-${vault.id}"
-				data-testid="raindex-link">
-				Manage your order on Raindex
-				<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-				</svg>
-			</a>
-			`;
+			const link = createRaindexLink(chainId, vault.orderbook.id, vault.id, true);
 
 			return transactionSuccess(hash, link);
 		} catch (error) {
-			// @ts-expect-error Send transaction error
-			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+			const errorMessage =
+				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				TransactionErrorMessage.GENERIC;
+			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+			return transactionError(message);
 		}
 	};
 
@@ -143,8 +147,11 @@ const transactionStore = () => {
 						hash: hash
 					});
 				} catch (error) {
-					// @ts-expect-error Send transaction error
-					return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+					const errorMessage =
+						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+						TransactionErrorMessage.GENERIC;
+					const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+					return transactionError(message);
 				}
 			}
 		}
@@ -158,8 +165,11 @@ const transactionStore = () => {
 			});
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 		} catch (error) {
-			// @ts-expect-error Send transaction error
-			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+			const errorMessage =
+				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				TransactionErrorMessage.GENERIC;
+			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+			return transactionError(message);
 		}
 		// Poll for the order to be added to the orderbook
 		const interval = setInterval(async () => {
@@ -170,19 +180,7 @@ const transactionStore = () => {
 				const orderHash = orders[0].order.orderHash;
 				const orderbookId = orders[0].order.orderbook.id;
 				const chainId = get(currentNetwork).id;
-				const link = `
-				<a
-								target="_blank"
-								rel="noopener noreferrer"
-								class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-								href="https://v2.raindex.finance/orders/${chainId}-${orderbookId}-${orderHash}"
-								data-testid="raindex-link">
-								Manage your order on Raindex
-								<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-								</svg>
-							</a>
-				`;
+				const link = createRaindexLink(chainId, orderbookId, orderHash, true);
 
 				return transactionSuccess(hash, link);
 			}
@@ -308,22 +306,16 @@ const transactionStore = () => {
 			result = getTakeOrders2Calldata(args);
 
 			if (result.error) {
-				console.log('result.error', result.error);
 				return transactionError(result.error as unknown as TransactionErrorMessage);
 			}
 
 			if (!result.value) {
-				console.log('result.value', result.value);
 				return transactionError(
-					'Failed to generate transaction calldata x1' as TransactionErrorMessage
+					'Failed to generate transaction calldata' as TransactionErrorMessage
 				);
 			}
-		} catch (error) {
-			// void error;
-			console.log('error', error);
-			return transactionError(
-				'Failed to generate transaction calldata x2' as TransactionErrorMessage
-			);
+		} catch {
+			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
 		}
 
 		try {
@@ -346,49 +338,87 @@ const transactionStore = () => {
 
 			await waitForTransactionReceipt(config, { hash });
 
-			const interval = setInterval(async () => {
-				const trade = await getTradeByTransactionHash(hash, raindexOrder.orderHash);
-				if (trade) {
-					clearInterval(interval);
-					const chainId = get(currentNetwork).id;
+			// Force refresh pending trades to pick up the new transaction
+			const network = get(currentNetwork) as Network;
+			const pendingTradesResult = ensureResource(network.id, 'pendingTrades', { force: true });
+			if (pendingTradesResult instanceof Promise) {
+				pendingTradesResult.catch(() => {});
+			}
+
+			// Subscribe to pending trades cache instead of polling directly
+			let unsubscribe: (() => void) | null = null;
+			let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+			const cleanup = () => {
+				if (unsubscribe) unsubscribe();
+				if (timeoutId) clearTimeout(timeoutId);
+			};
+
+			unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
+				if (!$resource?.data?.trades) return;
+
+				// Search for our specific trade in the cached data
+				const trade = $resource.data.trades.find(
+					(t) =>
+						t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
+						t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
+				) as unknown as {
+					tradeEvent?: { transaction?: { id?: string } };
+					order?: {
+						orderHash?: string;
+						inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
+						outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
+					};
+					inputVaultBalanceChange?: { amount?: string | number };
+					outputVaultBalanceChange?: { amount?: string | number };
+				};
+
+				if (trade && trade.inputVaultBalanceChange && trade.outputVaultBalanceChange && trade.order?.inputs?.[0]?.token && trade.order?.outputs?.[0]?.token) {
+					cleanup();
+					const chainId = network.id;
 					const tokenSold = `${parseFloat(
 						formatUnits(
 							BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-							trade.order.inputs[0].token.decimals
+							trade.order.inputs[0].token.decimals ?? 18
 						)
 					)} ${trade.order.inputs[0].token.symbol}`;
 					const tokenBought = `${parseFloat(
 						formatUnits(
 							BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-							trade.order.outputs[0].token.decimals
+							trade.order.outputs[0].token.decimals ?? 18
 						)
 					)} ${trade.order.outputs[0].token.symbol}`;
 
+					const orderLink = createRaindexLink(
+						chainId,
+						raindexOrder.orderbook.id,
+						raindexOrder.orderHash,
+						false
+					);
 					const link = `
-						<div class="flex flex-col gap-2 text-center">
-							<div class="text-base text-gray-300">
-								${tokenBought} bought, ${tokenSold} sold
-							</div>
-							<a
-								target="_blank"
-								rel="noopener noreferrer"
-								class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-								href="https://raindex.finance/orders/${chainId}-${raindexOrder.orderbook.id}-${raindexOrder.orderHash}"
-								data-testid="raindex-link">
-								View order on Raindex
-								<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-								</svg>
-							</a>
+					<div class="flex flex-col gap-2 text-center">
+						<div class="text-base text-gray-300">
+							${tokenBought} bought, ${tokenSold} sold
 						</div>
-					`;
+						${orderLink}
+					</div>
+				`;
 
 					return transactionSuccess(hash, link);
 				}
-			}, 2000);
+			});
+
+			// Safety timeout: give up after 3 minutes if trade not found
+			timeoutId = setTimeout(() => {
+				cleanup();
+				transactionError(TransactionErrorMessage.GENERIC, hash);
+			}, 180_000);
 		} catch (error) {
-			// @ts-expect-error Send transaction error
-			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+			const errorMessage =
+				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				TransactionErrorMessage.GENERIC;
+			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+			return transactionError(message);
 		}
 	};
 
