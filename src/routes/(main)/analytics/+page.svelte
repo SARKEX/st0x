@@ -1,5 +1,4 @@
 <script lang="ts">
-	/* eslint-disable @typescript-eslint/no-explicit-any */
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
@@ -9,12 +8,12 @@
 	import { gridStyles } from '$lib/utils/styles';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-import {
-	analyticsDashboard,
-	loadAnalyticsDashboard,
-	type AnalyticsDashboardState
-} from '$lib/stores/admin-analytics';
-import { averageResultsPerSearch } from '$lib/utils/analytics';
+	import {
+		analyticsDashboard,
+		loadAnalyticsDashboard,
+		type AnalyticsDashboardState
+	} from '$lib/stores/admin-analytics';
+	import { averageResultsPerSearch } from '$lib/utils/analytics';
 
 	export let data;
 

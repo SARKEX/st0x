@@ -1,15 +1,13 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { TOKENS } from './network';
 import axios from 'axios';
-import { get } from 'svelte/store';
 import type { Network } from './network';
 import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
-import { currentNetwork } from './stores';
 
 export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVault[]> => {
-        const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
+	const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
 
-        const subgraphUrl = network.subgraph_url;
+	const subgraphUrl = network.subgraph_url;
 
 	const query = `
     {
@@ -228,7 +226,7 @@ export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVau
 	});
 
 	const json = await response.json();
-        return (json.data.offchainAssetReceiptVaults ?? []) as OffchainAssetReceiptVault[];
+	return (json.data.offchainAssetReceiptVaults ?? []) as OffchainAssetReceiptVault[];
 };
 
 export const getTrades = async (

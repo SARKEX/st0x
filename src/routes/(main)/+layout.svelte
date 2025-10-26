@@ -1,14 +1,14 @@
 <script lang="ts">
 	import '../../app.css';
 	import { wagmiConfig } from 'svelte-wagmi';
-        import TransactionModal from '$lib/components/TransactionModal.svelte';
-        import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
-        import Sidebar from '$lib/components/Sidebar.svelte';
-        import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-        import Header from '$lib/components/Header.svelte';
-        import { page } from '$app/stores';
-        import { browser } from '$app/environment';
-        import { sfts, rainlangConfirmationModal } from '$lib/stores';
+	import TransactionModal from '$lib/components/TransactionModal.svelte';
+	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
+	import Sidebar from '$lib/components/Sidebar.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Header from '$lib/components/Header.svelte';
+	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
+	import { sfts, rainlangConfirmationModal } from '$lib/stores';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
@@ -89,7 +89,6 @@
 				return 'ST0x Platform';
 		}
 	}
-
 </script>
 
 {#if $wagmiConfig}

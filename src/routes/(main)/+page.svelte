@@ -1,30 +1,30 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-        import {
-                currentNetwork,
-                sfts,
-                tokenGlobalQuote,
-                orderbookQuotes,
-                orderbookQuotesResource,
-                vaultSnapshotResource
-        } from '$lib/stores';
+	import {
+		currentNetwork,
+		sfts,
+		tokenGlobalQuote,
+		orderbookQuotes,
+		orderbookQuotesResource,
+		vaultSnapshotResource
+	} from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import ListCard from '$lib/components/ui/ListCard.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { searchAnalytics, trackSearchDebounced } from '$lib/analytics';
-        import { getAllTokensByNetwork } from '$lib/network';
-        import { formatUnits } from 'viem';
-        import { goto } from '$app/navigation';
-        import PageContainer from '$lib/components/ui/PageContainer.svelte';
-        import Table from '$lib/components/ui/table/Table.svelte';
+	import { getAllTokensByNetwork } from '$lib/network';
+	import { formatUnits } from 'viem';
+	import { goto } from '$app/navigation';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import Table from '$lib/components/ui/table/Table.svelte';
 	// Consolidated table usage
 	import { containerStyles } from '$lib/utils/styles';
-import { onMount } from 'svelte';
-import type { TokenPriceSummary } from '$lib/utils/quote';
-import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { onMount } from 'svelte';
+	import type { TokenPriceSummary } from '$lib/utils/quote';
+	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
 	let st0xVaults: OffchainAssetReceiptVault[] = [];
 	type VaultWithChange = OffchainAssetReceiptVault & { changePercent: number };
@@ -34,36 +34,38 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	let searchTerm = '';
-        let filteredSfts: OffchainAssetReceiptVault[] = [];
-        let biggestMovers: VaultWithChange[] = [];
-        let biggestVolume: VaultWithVolume[] = [];
-        let recentlyAdded: OffchainAssetReceiptVault[] = [];
+	let filteredSfts: OffchainAssetReceiptVault[] = [];
+	let biggestMovers: VaultWithChange[] = [];
+	let biggestVolume: VaultWithVolume[] = [];
+	let recentlyAdded: OffchainAssetReceiptVault[] = [];
 
-        type TokenRow = {
-                id: string;
-                address: string;
-                name: string;
-                symbol: string;
-                price: number | null;
-                onChainPrice: number | null;
-                buyPrice: number | null;
-                sellPrice: number | null;
-                totalHolders: string;
-                totalSupply: string;
-                totalTransfers: string;
-                createdAt: string;
-                isSft: boolean;
-        };
+	type TokenRow = {
+		id: string;
+		address: string;
+		name: string;
+		symbol: string;
+		price: number | null;
+		onChainPrice: number | null;
+		buyPrice: number | null;
+		sellPrice: number | null;
+		totalHolders: string;
+		totalSupply: string;
+		totalTransfers: string;
+		createdAt: string;
+		isSft: boolean;
+	};
 
-        let processedTokens: TokenRow[] = [];
+	let processedTokens: TokenRow[] = [];
 
-        $: vaultStatus = $vaultSnapshotResource?.status ?? 'idle';
-        $: isVaultLoading = (!$sfts || !$sfts.length) && (vaultStatus === 'idle' || vaultStatus === 'loading');
-        $: quotesRecord = $orderbookQuotes ?? {};
-        $: quotesStatus = $orderbookQuotesResource?.status ?? 'idle';
-        $: quotesHaveData = Object.keys(quotesRecord).length > 0;
-        $: quotesLoading = quotesStatus === 'loading' && !quotesHaveData;
-        $: quotesError = $orderbookQuotesResource?.status === 'error' ? $orderbookQuotesResource.error : null;
+	$: vaultStatus = $vaultSnapshotResource?.status ?? 'idle';
+	$: isVaultLoading =
+		(!$sfts || !$sfts.length) && (vaultStatus === 'idle' || vaultStatus === 'loading');
+	$: quotesRecord = $orderbookQuotes ?? {};
+	$: quotesStatus = $orderbookQuotesResource?.status ?? 'idle';
+	$: quotesHaveData = Object.keys(quotesRecord).length > 0;
+	$: quotesLoading = quotesStatus === 'loading' && !quotesHaveData;
+	$: quotesError =
+		$orderbookQuotesResource?.status === 'error' ? $orderbookQuotesResource.error : null;
 
 	// Scroll indicator for Discover section
 	let discoverScrollEl: HTMLDivElement;
@@ -141,8 +143,8 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
 		// Calculate biggest movers based on TradingView daily change percentage
 		biggestMovers = [...st0xVaults]
-                        .map((sft) => {
-                                const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+			.map((sft) => {
+				const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
 				const changePercent = quote?.changePercent ?? 0;
 				return { ...sft, changePercent };
 			})
@@ -177,59 +179,59 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 			.slice(0, 5);
 	}
 
-        function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
-                if (!summary) return null;
-                const { buy, sell } = summary;
-                if (buy != null && sell != null) {
-                        return (buy + sell) / 2;
-                }
-                return buy ?? sell ?? null;
-        }
+	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
+		if (!summary) return null;
+		const { buy, sell } = summary;
+		if (buy != null && sell != null) {
+			return (buy + sell) / 2;
+		}
+		return buy ?? sell ?? null;
+	}
 
-        $: {
-                if ($sfts && $sfts.length) {
-                        const rows: TokenRow[] = [];
-                        for (const sft of $sfts) {
-                                const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
-                                const summary = quotesRecord[sft.address.toLowerCase()] ?? null;
-                                const buyPrice = summary?.buy ?? null;
-                                const sellPrice = summary?.sell ?? null;
-                                const onChainPrice = calculateMidPrice(summary);
-                                const fallbackPrice = quote?.close ?? null;
-                                const price = onChainPrice ?? fallbackPrice ?? null;
-                                rows.push({
-                                        id: sft.id,
-                                        address: sft.address,
-                                        name: sft.name,
-                                        symbol: sft.symbol,
-                                        price,
-                                        onChainPrice,
-                                        buyPrice,
-                                        sellPrice,
-                                        totalHolders: sft.tokenHolders
-                                                .filter((holder) => BigInt(holder.balance) > BigInt(0))
-                                                .length.toString(),
-                                        totalSupply: formatUnits(BigInt(sft.totalShares), 18),
-                                        totalTransfers: sft.shareTransfers.length.toString(),
-                                        createdAt: sft.deployTimestamp,
-                                        isSft: true
-                                });
-                        }
-                        processedTokens = rows;
-                } else {
-                        processedTokens = [];
-                }
-        }
+	$: {
+		if ($sfts && $sfts.length) {
+			const rows: TokenRow[] = [];
+			for (const sft of $sfts) {
+				const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+				const summary = quotesRecord[sft.address.toLowerCase()] ?? null;
+				const buyPrice = summary?.buy ?? null;
+				const sellPrice = summary?.sell ?? null;
+				const onChainPrice = calculateMidPrice(summary);
+				const fallbackPrice = quote?.close ?? null;
+				const price = onChainPrice ?? fallbackPrice ?? null;
+				rows.push({
+					id: sft.id,
+					address: sft.address,
+					name: sft.name,
+					symbol: sft.symbol,
+					price,
+					onChainPrice,
+					buyPrice,
+					sellPrice,
+					totalHolders: sft.tokenHolders
+						.filter((holder) => BigInt(holder.balance) > BigInt(0))
+						.length.toString(),
+					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
+					totalTransfers: sft.shareTransfers.length.toString(),
+					createdAt: sft.deployTimestamp,
+					isSft: true
+				});
+			}
+			processedTokens = rows;
+		} else {
+			processedTokens = [];
+		}
+	}
 </script>
 
 {#if isVaultLoading}
-        <div class="flex w-full items-center justify-center p-8">
-                <LoadingSpinner
-                        variant="fullscreen"
-                        size="lg"
-                        text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
-                />
-        </div>
+	<div class="flex w-full items-center justify-center p-8">
+		<LoadingSpinner
+			variant="fullscreen"
+			size="lg"
+			text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
+		/>
+	</div>
 {:else if $sfts.length > 0}
 	<div>
 		<PageContainer>
@@ -317,11 +319,7 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 							<ListCard
 								title="Biggest Movers (24H)"
 								items={biggestMovers.map((s) => {
-                                                                    const quote = findQuoteForSymbol(
-                                                                            s.symbol,
-                                                                            $tokenGlobalQuote,
-                                                                            ALL_TOKENS
-                                                                    );
+									const quote = findQuoteForSymbol(s.symbol, $tokenGlobalQuote, ALL_TOKENS);
 									const price = quote?.close ?? null;
 									const tokenInfo = ALL_TOKENS.find(
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
@@ -351,11 +349,7 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 										(t) => t.address.toLowerCase() === s.address.toLowerCase()
 									);
 									const volumeInShares = parseFloat(formatUnits(s.totalVolume, 18));
-                                                                    const quote = findQuoteForSymbol(
-                                                                            s.symbol,
-                                                                            $tokenGlobalQuote,
-                                                                            ALL_TOKENS
-                                                                    );
+									const quote = findQuoteForSymbol(s.symbol, $tokenGlobalQuote, ALL_TOKENS);
 									const price = quote?.close ?? 0;
 									const dollarVolume = volumeInShares * price;
 
@@ -437,18 +431,20 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 				<div class="mb-4 sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse</h2>
 				</div>
-                                {#if quotesLoading}
-                                        <div class="flex w-full justify-center py-12">
-                                                <LoadingSpinner size="lg" text="Fetching on-chain prices..." />
-                                        </div>
-                                {:else}
-                                        {#if quotesError}
-                                                <div class="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-                                                        Unable to refresh on-chain quotes right now. Displayed prices may be stale.
-                                                </div>
-                                        {/if}
-                                        <div class={'overflow-x-auto ' + containerStyles.cardBordered}>
-                                                <Table>
+				{#if quotesLoading}
+					<div class="flex w-full justify-center py-12">
+						<LoadingSpinner size="lg" text="Fetching on-chain prices..." />
+					</div>
+				{:else}
+					{#if quotesError}
+						<div
+							class="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
+						>
+							Unable to refresh on-chain quotes right now. Displayed prices may be stale.
+						</div>
+					{/if}
+					<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
+						<Table>
 							<thead>
 								<tr class="border-b border-white/10">
 									<th
@@ -474,14 +470,14 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 								</tr>
 							</thead>
 							<tbody>
-                                                                {#if !processedTokens.length}
-                                                                        <tr>
-                                                                                <td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
-                                                                                        No assets available.
-                                                                                </td>
-                                                                        </tr>
-                                                                {:else}
-                                                                        {#each processedTokens as token (token.id)}
+								{#if !processedTokens.length}
+									<tr>
+										<td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
+											No assets available.
+										</td>
+									</tr>
+								{:else}
+									{#each processedTokens as token (token.id)}
 										{@const sft = $sfts.find((s) => s.id === token.id)}
 										{@const deposits = sft
 											? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))

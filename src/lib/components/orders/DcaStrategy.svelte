@@ -164,11 +164,7 @@
 	}
 
 	$: {
-		if (
-			selectedInputToken &&
-			!selectedInitialRatio &&
-			hasValidPriceFeedId(selectedInputToken)
-		) {
+		if (selectedInputToken && !selectedInitialRatio && hasValidPriceFeedId(selectedInputToken)) {
 			const address = selectedInputToken.address?.toLowerCase?.();
 			if (address && address !== lastFetchedTokenAddress) {
 				const oracleEntry = $oracleQuotes[address];

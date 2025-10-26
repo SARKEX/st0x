@@ -1,6 +1,8 @@
 import type { AnalyticsSearchSummary } from '$lib/stores/admin-analytics';
 
-export function averageResultsPerSearch(summary: AnalyticsSearchSummary | null | undefined): number {
+export function averageResultsPerSearch(
+	summary: AnalyticsSearchSummary | null | undefined
+): number {
 	if (!summary || summary.totalSearches === 0) {
 		return 0;
 	}

@@ -1,5 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { buildTradingViewScanBody, coerceTradingViewNumber, resolveMarketEndpoint } from '$lib/server/tradingview';
+import {
+	buildTradingViewScanBody,
+	coerceTradingViewNumber,
+	resolveMarketEndpoint
+} from '$lib/server/tradingview';
 import type { RequestHandler } from './$types';
 
 const DEFAULT_COLUMNS = [

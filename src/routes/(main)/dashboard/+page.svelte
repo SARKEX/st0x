@@ -14,8 +14,8 @@
 	import { textStyles, gridStyles } from '$lib/utils/styles';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
-import { getAllTokensByNetwork } from '$lib/network';
-import { goto } from '$app/navigation';
+	import { getAllTokensByNetwork } from '$lib/network';
+	import { goto } from '$app/navigation';
 	import { getOrders, getVaults } from '@rainlanguage/orderbook';
 	import type {
 		SgOrderWithSubgraphName,
@@ -26,11 +26,11 @@ import { goto } from '$app/navigation';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
 	import { evmChainIds, EvmToken } from 'sushi/evm';
-import { getPrice } from '$lib/getPrice';
-import Table from '$lib/components/ui/table/Table.svelte';
-import Button from '$lib/components/ui/Button.svelte';
-import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
-import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { getPrice } from '$lib/getPrice';
+	import Table from '$lib/components/ui/table/Table.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
+	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
 	function isUSDCPosition(token: { token: SgErc20 }) {
 		return (
@@ -101,7 +101,7 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
-                                        const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+					const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const priceChange = quote?.change ?? 0;
 					const priceChangePercent = quote?.changePercent ?? 0;
@@ -251,9 +251,9 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 					token.symbol?.toUpperCase() === 'USDC' ||
 					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
 
-                            const quote = !isUSDC
-                                    ? findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS)
-                                    : null;
+				const quote = !isUSDC
+					? findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS)
+					: null;
 
 				let price: number;
 				if (isUSDC) {

@@ -1,322 +1,350 @@
 <script lang="ts">
-        import Footer from '$lib/components/Footer.svelte';
-        import { formatUnits } from 'viem';
-        import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-        import Section from '$lib/components/ui/Section.svelte';
-        import { getAllTokensByNetwork, networks } from '$lib/network';
-import type { TradingViewQuote } from '$lib/services/tradingview';
-import PageContainer from '$lib/components/ui/PageContainer.svelte';
-import MetricCard from '$lib/components/ui/MetricCard.svelte';
-import Table from '$lib/components/ui/table/Table.svelte';
-// Consolidated table component usage
-import EmptyState from '$lib/components/ui/EmptyState.svelte';
-import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
-import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-import { derived } from 'svelte/store';
-import { onMount } from 'svelte';
-import {
-                getResourceStore,
-                ensureResource,
-                type TimedResource,
-                type TradeMetricPayload
-        } from '$lib/stores/network-data-cache';
-import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
-import {
-        analyzeTrade,
-        createTokenLookup,
-        toDecimal,
-        type TradeAnalysis
-} from '$lib/utils/tokenMath';
-import type { SgTrade } from '@rainlanguage/orderbook';
+	import Footer from '$lib/components/Footer.svelte';
+	import { formatUnits } from 'viem';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import Section from '$lib/components/ui/Section.svelte';
+	import { getAllTokensByNetwork, networks } from '$lib/network';
+	import type { TradingViewQuote } from '$lib/services/tradingview';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import MetricCard from '$lib/components/ui/MetricCard.svelte';
+	import Table from '$lib/components/ui/table/Table.svelte';
+	// Consolidated table component usage
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import { derived } from 'svelte/store';
+	import { onMount } from 'svelte';
+	import {
+		getResourceStore,
+		ensureResource,
+		type TimedResource,
+		type TradeMetricPayload
+	} from '$lib/stores/network-data-cache';
+	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import {
+		analyzeTrade,
+		createTokenLookup,
+		toDecimal,
+		type TradeAnalysis
+	} from '$lib/utils/tokenMath';
+	import type { SgTrade } from '@rainlanguage/orderbook';
 
-        // State for network selector in token trading table
-        let selectedNetwork = networks[0];
+	// State for network selector in token trading table
+	let selectedNetwork = networks[0];
 
-        const vaultResourceStores = networks.map((network) =>
-                getResourceStore(network.id, 'vaultSnapshot')
-        );
-        const priceFeedResourceStores = networks.map((network) =>
-                getResourceStore(network.id, 'priceFeeds')
-        );
-        const tradeResourceStores = networks.map((network) =>
-                getResourceStore(network.id, 'tradeActivity')
-        );
+	const vaultResourceStores = networks.map((network) =>
+		getResourceStore(network.id, 'vaultSnapshot')
+	);
+	const priceFeedResourceStores = networks.map((network) =>
+		getResourceStore(network.id, 'priceFeeds')
+	);
+	const tradeResourceStores = networks.map((network) =>
+		getResourceStore(network.id, 'tradeActivity')
+	);
 
-        const allVaultResources = derived(
-                vaultResourceStores,
-                (resources) => resources,
-                vaultResourceStores.map(() => null as TimedResource<OffchainAssetReceiptVault[]> | null)
-        );
+	const allVaultResources = derived(
+		vaultResourceStores,
+		(resources) => resources,
+		vaultResourceStores.map(() => null as TimedResource<OffchainAssetReceiptVault[]> | null)
+	);
 
-        const allPriceFeedResources = derived(
-                priceFeedResourceStores,
-                (resources) => resources,
-                priceFeedResourceStores.map(() => null as TimedResource<TradingViewQuote[]> | null)
-        );
+	const allPriceFeedResources = derived(
+		priceFeedResourceStores,
+		(resources) => resources,
+		priceFeedResourceStores.map(() => null as TimedResource<TradingViewQuote[]> | null)
+	);
 
-        const allTradeResources = derived(
-                tradeResourceStores,
-                (resources) => resources,
-                tradeResourceStores.map(() => null as TimedResource<TradeMetricPayload> | null)
-        );
+	const allTradeResources = derived(
+		tradeResourceStores,
+		(resources) => resources,
+		tradeResourceStores.map(() => null as TimedResource<TradeMetricPayload> | null)
+	);
 
-        onMount(() => {
-                networks.forEach((network) => {
-                        ensureResource(network.id, 'vaultSnapshot');
-                        ensureResource(network.id, 'priceFeeds');
-                        ensureResource(network.id, 'tradeActivity');
-                });
-        });
+	onMount(() => {
+		networks.forEach((network) => {
+			ensureResource(network.id, 'vaultSnapshot');
+			ensureResource(network.id, 'priceFeeds');
+			ensureResource(network.id, 'tradeActivity');
+		});
+	});
 
-        $: vaultStates = networks.map((network, index) => ({
-                network,
-                resource: $allVaultResources[index]
-        }));
+	$: vaultStates = networks.map((network, index) => ({
+		network,
+		resource: $allVaultResources[index]
+	}));
 
-        $: priceFeedStates = networks.map((network, index) => ({
-                network,
-                resource: $allPriceFeedResources[index]
-        }));
+	$: priceFeedStates = networks.map((network, index) => ({
+		network,
+		resource: $allPriceFeedResources[index]
+	}));
 
-        $: tradeStates = networks.map((network, index) => ({
-                network,
-                resource: $allTradeResources[index]
-        }));
+	$: tradeStates = networks.map((network, index) => ({
+		network,
+		resource: $allTradeResources[index]
+	}));
 
-        let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
-        $: priceFeedByNetwork = (() => {
-                const map = new Map<number, TradingViewQuote[]>();
-                priceFeedStates.forEach(({ network, resource }) => {
-                        map.set(network.chainId, resource?.data ?? []);
-                });
-                return map;
-        })();
+	let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
+	$: priceFeedByNetwork = (() => {
+		const map = new Map<number, TradingViewQuote[]>();
+		priceFeedStates.forEach(({ network, resource }) => {
+			map.set(network.chainId, resource?.data ?? []);
+		});
+		return map;
+	})();
 
-        $: allNetworksSfts = (() => {
-                const aggregated: (OffchainAssetReceiptVault & { networkId: number })[] = [];
-                vaultStates.forEach(({ network, resource }) => {
-                        (resource?.data ?? []).forEach((sft) => {
-                                aggregated.push({ ...sft, networkId: network.chainId });
-                        });
-                });
-                return aggregated;
-        })();
+	$: allNetworksSfts = (() => {
+		const aggregated: (OffchainAssetReceiptVault & { networkId: number })[] = [];
+		vaultStates.forEach(({ network, resource }) => {
+			(resource?.data ?? []).forEach((sft) => {
+				aggregated.push({ ...sft, networkId: network.chainId });
+			});
+		});
+		return aggregated;
+	})();
 
-        $: allNetworksTrades = tradeStates.map(({ network, resource }) => ({
-                network,
-                trades: resource?.data?.trades ?? [],
-                range: resource?.data?.range,
-                status: resource?.status ?? 'idle'
-        }));
+	$: allNetworksTrades = tradeStates.map(({ network, resource }) => ({
+		network,
+		trades: resource?.data?.trades ?? [],
+		range: resource?.data?.range,
+		status: resource?.status ?? 'idle'
+	}));
 
-        function findNetworkQuote(symbol?: string, networkId?: number) {
-                if (networkId == null) return undefined;
-                const quotes = priceFeedByNetwork.get(networkId) ?? [];
-                if (!quotes.length) return undefined;
-                return findQuoteForSymbol(symbol, quotes, ALL_TOKENS);
-        }
+	function findNetworkQuote(symbol?: string, networkId?: number) {
+		if (networkId == null) return undefined;
+		const quotes = priceFeedByNetwork.get(networkId) ?? [];
+		if (!quotes.length) return undefined;
+		return findQuoteForSymbol(symbol, quotes, ALL_TOKENS);
+	}
 
 	// Get all tokens for logo URLs
-        $: ALL_TOKENS = (() => {
-                const allTokens: import('$lib/network').CategorizedToken[] = [];
-                networks.forEach((network) => {
-                        const networkTokens = getAllTokensByNetwork(network.chainId);
-                        allTokens.push(...networkTokens);
-                });
-                return allTokens.filter(
-                        (token, index, self) =>
-                                index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
-                );
-        })();
+	$: ALL_TOKENS = (() => {
+		const allTokens: import('$lib/network').CategorizedToken[] = [];
+		networks.forEach((network) => {
+			const networkTokens = getAllTokensByNetwork(network.chainId);
+			allTokens.push(...networkTokens);
+		});
+		return allTokens.filter(
+			(token, index, self) =>
+				index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
+		);
+	})();
 
-        let tokenLookup = createTokenLookup<import('$lib/network').CategorizedToken>([]);
-        $: tokenLookup = createTokenLookup(ALL_TOKENS);
+	let tokenLookup = createTokenLookup<import('$lib/network').CategorizedToken>([]);
+	$: tokenLookup = createTokenLookup(ALL_TOKENS);
 
-        // Calculate total TVL across all networks
-        $: totalTVL = (() => {
-                if (!allNetworksSfts.length) return 0;
+	// Calculate total TVL across all networks
+	$: totalTVL = (() => {
+		if (!allNetworksSfts.length) return 0;
 
-                let tlv = 0;
-                allNetworksSfts.forEach((sft) => {
-                        const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
-                        const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
-                        const circulating = deposits - withdraws;
+		let tlv = 0;
+		allNetworksSfts.forEach((sft) => {
+			const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
+			const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
+			const circulating = deposits - withdraws;
 
-                        const tokenInfo = tokenLookup(sft.address);
-                        const decimals = tokenInfo?.decimals ?? 18;
-                        const amount = toDecimal(circulating, decimals, { absolute: true, fallback: 0 }) ?? 0;
+			const tokenInfo = tokenLookup(sft.address);
+			const decimals = tokenInfo?.decimals ?? 18;
+			const amount = toDecimal(circulating, decimals, { absolute: true, fallback: 0 }) ?? 0;
 
-                        if (tokenInfo?.symbol) {
-                                const quote = findNetworkQuote(tokenInfo.symbol, sft.networkId);
-                                if (quote?.close != null) {
-                                        tlv += amount * quote.close;
-                                } else {
-                                        tlv += amount;
-                                }
-                        } else {
-                                tlv += amount;
-                        }
-                });
-                return tlv;
-        })();
+			if (tokenInfo?.symbol) {
+				const quote = findNetworkQuote(tokenInfo.symbol, sft.networkId);
+				if (quote?.close != null) {
+					tlv += amount * quote.close;
+				} else {
+					tlv += amount;
+				}
+			} else {
+				tlv += amount;
+			}
+		});
+		return tlv;
+	})();
 
-        // Calculate trading volume in USD (total volume from unique trades)
-        $: tradingVolume = (() => {
-                if (!allNetworksTrades.length) return 0;
+	// Calculate trading volume in USD (total volume from unique trades)
+	$: tradingVolume = (() => {
+		if (!allNetworksTrades.length) return 0;
 
-                let volume = 0;
-                allNetworksTrades.forEach(({ network, trades }) => {
-                        const seenTransactions = new Set<string>();
-                        trades.forEach((trade) => {
-                                const txId = trade.tradeEvent?.transaction?.id;
-                                if (txId) {
-                                        if (seenTransactions.has(txId)) return;
-                                        seenTransactions.add(txId);
-                                }
-                                const analysis = analyzeTrade(trade as any, network.usdcToken, tokenLookup);
-                                if (!analysis) return;
-                                volume += analysis.usdc;
-                        });
-                });
-                return volume;
-        })();
+		let volume = 0;
+		allNetworksTrades.forEach(({ network, trades }) => {
+			const seenTransactions = new Set<string>();
+			trades.forEach((trade) => {
+				const txId = trade.tradeEvent?.transaction?.id;
+				if (txId) {
+					if (seenTransactions.has(txId)) return;
+					seenTransactions.add(txId);
+				}
+				const analysis = analyzeTrade(
+					trade as unknown as {
+						inputVaultBalanceChange?: {
+							vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
+							amount?: string;
+						};
+						outputVaultBalanceChange?: {
+							vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
+							amount?: string;
+						};
+					},
+					network.usdcToken,
+					tokenLookup
+				);
+				if (!analysis) return;
+				volume += analysis.usdc;
+			});
+		});
+		return volume;
+	})();
 
-        // Calculate total trades
-        $: totalTrades = allNetworksTrades.reduce((sum, d) => sum + d.trades.length, 0);
+	// Calculate total trades
+	$: totalTrades = allNetworksTrades.reduce((sum, d) => sum + d.trades.length, 0);
 
-        // Calculate active ST0x tokens
-        $: activeST0x = allNetworksSfts.length;
+	// Calculate active ST0x tokens
+	$: activeST0x = allNetworksSfts.length;
 
-        function isVaultPending(resource: TimedResource<OffchainAssetReceiptVault[]> | null | undefined) {
-                const count = resource?.data?.length ?? 0;
-                return !resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0);
-        }
+	function isVaultPending(resource: TimedResource<OffchainAssetReceiptVault[]> | null | undefined) {
+		const count = resource?.data?.length ?? 0;
+		return (
+			!resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0)
+		);
+	}
 
-        function isTradePending(resource: TimedResource<TradeMetricPayload> | null | undefined) {
-                const count = resource?.data?.trades?.length ?? 0;
-                return !resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0);
-        }
+	function isTradePending(resource: TimedResource<TradeMetricPayload> | null | undefined) {
+		const count = resource?.data?.trades?.length ?? 0;
+		return (
+			!resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0)
+		);
+	}
 
-        $: vaultLoading = vaultStates.some(({ resource }) => isVaultPending(resource));
-        $: tradeLoading = tradeStates.some(({ resource }) => isTradePending(resource));
-        $: metricsLoading = vaultLoading || tradeLoading;
+	$: vaultLoading = vaultStates.some(({ resource }) => isVaultPending(resource));
+	$: tradeLoading = tradeStates.some(({ resource }) => isTradePending(resource));
+	$: metricsLoading = vaultLoading || tradeLoading;
 
-        // Calculate stats by network
-        $: networkStats = networks.map((network) => {
-                const networkSfts = allNetworksSfts.filter((sft) => sft.networkId === network.chainId);
+	// Calculate stats by network
+	$: networkStats = networks.map((network) => {
+		const networkSfts = allNetworksSfts.filter((sft) => sft.networkId === network.chainId);
 
-                let tvl = 0;
-                let totalDeposits = BigInt(0);
-                let totalWithdraws = BigInt(0);
-                const uniqueHolders = new Set<string>();
+		let tvl = 0;
+		let totalDeposits = BigInt(0);
+		let totalWithdraws = BigInt(0);
+		const uniqueHolders = new Set<string>();
 
-                networkSfts.forEach((sft) => {
-                        const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
-                        const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
-                        totalDeposits += deposits;
-                        totalWithdraws += withdraws;
+		networkSfts.forEach((sft) => {
+			const deposits = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
+			const withdraws = sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0));
+			totalDeposits += deposits;
+			totalWithdraws += withdraws;
 
-                        const circulating = deposits - withdraws;
-                        const tokenInfo = tokenLookup(sft.address);
-                        const decimals = tokenInfo?.decimals ?? 18;
-                        const amount = toDecimal(circulating, decimals, { absolute: true, fallback: 0 }) ?? 0;
-                        if (tokenInfo?.symbol) {
-                                const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
-                                if (quote?.close != null) {
-                                        tvl += amount * quote.close;
-                                } else {
-                                        tvl += amount;
-                                }
-                        } else {
-                                tvl += amount;
-                        }
+			const circulating = deposits - withdraws;
+			const tokenInfo = tokenLookup(sft.address);
+			const decimals = tokenInfo?.decimals ?? 18;
+			const amount = toDecimal(circulating, decimals, { absolute: true, fallback: 0 }) ?? 0;
+			if (tokenInfo?.symbol) {
+				const quote = findNetworkQuote(tokenInfo.symbol, network.chainId);
+				if (quote?.close != null) {
+					tvl += amount * quote.close;
+				} else {
+					tvl += amount;
+				}
+			} else {
+				tvl += amount;
+			}
 
-                        sft.tokenHolders.forEach((holder) => {
-                                if (BigInt(holder.balance) > BigInt(0)) {
-                                        uniqueHolders.add(holder.address);
-                                }
-                        });
-                });
+			sft.tokenHolders.forEach((holder) => {
+				if (BigInt(holder.balance) > BigInt(0)) {
+					uniqueHolders.add(holder.address);
+				}
+			});
+		});
 
-                return {
-                        network,
-                        tvl,
-                        st0xCount: networkSfts.length,
-                        tokensMinted: formatUnits(totalDeposits, 18),
-                        tokensRedeemed: formatUnits(totalWithdraws, 18),
-                        tokensCirculating: formatUnits(totalDeposits - totalWithdraws, 18),
-                        uniqueAddresses: uniqueHolders.size
-                };
-        });
+		return {
+			network,
+			tvl,
+			st0xCount: networkSfts.length,
+			tokensMinted: formatUnits(totalDeposits, 18),
+			tokensRedeemed: formatUnits(totalWithdraws, 18),
+			tokensCirculating: formatUnits(totalDeposits - totalWithdraws, 18),
+			uniqueAddresses: uniqueHolders.size
+		};
+	});
 
-        // Get token trading data for selected network
-        $: tokenTradingData = (() => {
-                const networkSfts = allNetworksSfts.filter((sft) => sft.networkId === selectedNetwork.chainId);
-                const networkTrades =
-                        allNetworksTrades.find((d) => d.network.chainId === selectedNetwork.chainId)?.trades || [];
+	// Get token trading data for selected network
+	$: tokenTradingData = (() => {
+		const networkSfts = allNetworksSfts.filter((sft) => sft.networkId === selectedNetwork.chainId);
+		const networkTrades =
+			allNetworksTrades.find((d) => d.network.chainId === selectedNetwork.chainId)?.trades || [];
 
-                const analyzed: Array<{ trade: SgTrade; analysis: TradeAnalysis }> = [];
-                networkTrades.forEach((trade) => {
-                        const analysis = analyzeTrade(trade as any, selectedNetwork.usdcToken, tokenLookup);
-                        if (!analysis) return;
-                        analyzed.push({ trade, analysis });
-                });
+		const analyzed: Array<{ trade: SgTrade; analysis: TradeAnalysis }> = [];
+		networkTrades.forEach((trade) => {
+			const analysis = analyzeTrade(
+				trade as unknown as {
+					inputVaultBalanceChange?: {
+						vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
+						amount?: string;
+					};
+					outputVaultBalanceChange?: {
+						vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
+						amount?: string;
+					};
+				},
+				selectedNetwork.usdcToken,
+				tokenLookup
+			);
+			if (!analysis) return;
+			analyzed.push({ trade, analysis });
+		});
 
-                return networkSfts
-                        .map((sft) => {
-                                const address = sft.address?.toLowerCase();
-                                const tokenInfo = tokenLookup(sft.address);
+		return networkSfts
+			.map((sft) => {
+				const address = sft.address?.toLowerCase();
+				const tokenInfo = tokenLookup(sft.address);
 
-                                const relevant = analyzed.filter(
-                                        ({ analysis }) => analysis.assetAddress === address
-                                );
+				const relevant = analyzed.filter(({ analysis }) => analysis.assetAddress === address);
 
-                                const inVolume = relevant
-                                        .filter(({ analysis }) => analysis.side === 'buy')
-                                        .reduce((sum, { analysis }) => sum + analysis.tokens, 0);
+				const inVolume = relevant
+					.filter(({ analysis }) => analysis.side === 'buy')
+					.reduce((sum, { analysis }) => sum + analysis.tokens, 0);
 
-                                const outVolume = relevant
-                                        .filter(({ analysis }) => analysis.side === 'sell')
-                                        .reduce((sum, { analysis }) => sum + analysis.tokens, 0);
+				const outVolume = relevant
+					.filter(({ analysis }) => analysis.side === 'sell')
+					.reduce((sum, { analysis }) => sum + analysis.tokens, 0);
 
-                                const netTradingVolume = inVolume - outVolume;
+				const netTradingVolume = inVolume - outVolume;
 
-                                const seenTransactions = new Set<string>();
-                                const uniqueEntries: Array<{ trade: SgTrade; analysis: TradeAnalysis }> = [];
-                                relevant.forEach((entry) => {
-                                        const txId = entry.trade.tradeEvent?.transaction?.id;
-                                        if (txId) {
-                                                if (seenTransactions.has(txId)) return;
-                                                seenTransactions.add(txId);
-                                        }
-                                        uniqueEntries.push(entry);
-                                });
+				const seenTransactions = new Set<string>();
+				const uniqueEntries: Array<{ trade: SgTrade; analysis: TradeAnalysis }> = [];
+				relevant.forEach((entry) => {
+					const txId = entry.trade.tradeEvent?.transaction?.id;
+					if (txId) {
+						if (seenTransactions.has(txId)) return;
+						seenTransactions.add(txId);
+					}
+					uniqueEntries.push(entry);
+				});
 
-                                const usdTradingVolume = uniqueEntries.reduce(
-                                        (sum, { analysis }) => sum + analysis.usdc,
-                                        0
-                                );
-                                const totalTradingVolume = inVolume + outVolume;
+				const usdTradingVolume = uniqueEntries.reduce(
+					(sum, { analysis }) => sum + analysis.usdc,
+					0
+				);
+				const totalTradingVolume = inVolume + outVolume;
 
-                                return {
-                                        symbol: sft.symbol,
-                                        name: sft.name,
-                                        logoUrl: tokenInfo?.logoUrl,
-                                        inVolume: inVolume.toFixed(3),
-                                        outVolume: outVolume.toFixed(3),
-                                        netVolume: netTradingVolume.toFixed(3),
-                                        totalVolume: totalTradingVolume.toFixed(3),
-                                        usdValue: usdTradingVolume > 0 ? `$${usdTradingVolume.toFixed(2)}` : 'N/A',
-                                        trades: uniqueEntries.length
-                                };
-                        })
-                        .sort((a, b) => b.trades - a.trades);
-        })();
+				return {
+					symbol: sft.symbol,
+					name: sft.name,
+					logoUrl: tokenInfo?.logoUrl,
+					inVolume: inVolume.toFixed(3),
+					outVolume: outVolume.toFixed(3),
+					netVolume: netTradingVolume.toFixed(3),
+					totalVolume: totalTradingVolume.toFixed(3),
+					usdValue: usdTradingVolume > 0 ? `$${usdTradingVolume.toFixed(2)}` : 'N/A',
+					trades: uniqueEntries.length
+				};
+			})
+			.sort((a, b) => b.trades - a.trades);
+	})();
 </script>
 
 <div class="min-h-screen bg-gray-900 text-white">
-        <PageContainer>
-                {#if metricsLoading}
+	<PageContainer>
+		{#if metricsLoading}
 			<div class="flex min-h-[60vh] items-center justify-center">
 				<LoadingSpinner size="lg" text="Loading metrics..." />
 			</div>

@@ -3,11 +3,11 @@
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
-import ShareButton from './ShareButton.svelte';
-import { getAllTokensByNetwork } from '$lib/network';
-import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-import { formatUnits } from 'viem';
-import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import ShareButton from './ShareButton.svelte';
+	import { getAllTokensByNetwork } from '$lib/network';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import { formatUnits } from 'viem';
+	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
@@ -41,7 +41,7 @@ import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 						BigInt(0)
 					);
 					const totalVolume = depositVolume + withdrawVolume;
-                                        const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+					const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;

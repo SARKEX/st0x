@@ -47,7 +47,8 @@
 	$: oracleResource = $oracleQuotesResource;
 	$: oracleEntry = tokenAddress ? $oracleQuotes[tokenAddress] : undefined;
 	$: oracleLoading =
-		(oracleResource?.status === 'idle' || oracleResource?.status === 'loading') && tokenAddress !== '';
+		(oracleResource?.status === 'idle' || oracleResource?.status === 'loading') &&
+		tokenAddress !== '';
 	$: oracleError = (() => {
 		if (!tokenAddress) return 'Token missing address';
 		if (oracleResource?.status === 'error') {
@@ -60,9 +61,9 @@
 	})();
 	$: priceData = oracleEntry
 		? {
-			price: oracleEntry.price ?? null,
-			confidence: oracleEntry.confidence ?? null
-		}
+				price: oracleEntry.price ?? null,
+				confidence: oracleEntry.confidence ?? null
+			}
 		: null;
 </script>
 

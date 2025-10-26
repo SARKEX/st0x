@@ -82,10 +82,10 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 		const response = await fetch(url);
 		if (!response.ok) {
 			logReference('batch-latest-fail', { count: feedIds.length, status: response.status });
-		// Return empty prices for all feeds
-		normalizedIds.forEach((id) =>
-			results.set(id, { price: null, confidence: null, publishTime: null })
-		);
+			// Return empty prices for all feeds
+			normalizedIds.forEach((id) =>
+				results.set(id, { price: null, confidence: null, publishTime: null })
+			);
 			return results;
 		}
 
@@ -115,7 +115,9 @@ async function fetchLatestBatch(feedIds: string[]): Promise<Map<string, PricePoi
 	} catch (error) {
 		logReference('batch-latest-error', { count: feedIds.length, error });
 		// Return empty prices for all feeds
-		normalizedIds.forEach((id) => results.set(id, { price: null, confidence: null, publishTime: null }));
+		normalizedIds.forEach((id) =>
+			results.set(id, { price: null, confidence: null, publishTime: null })
+		);
 	}
 
 	return results;
@@ -129,16 +131,18 @@ async function resolveNetworkSnapshots(tokens: TokenWithMarket[], networkId: num
 	const existing = networkSnapshotPromises.get(networkId);
 	if (existing) return existing;
 
-	const promise = getOracleSnapshots(tokens)
-		.finally(() => {
-			networkSnapshotPromises.delete(networkId);
-		});
+	const promise = getOracleSnapshots(tokens).finally(() => {
+		networkSnapshotPromises.delete(networkId);
+	});
 
 	networkSnapshotPromises.set(networkId, promise);
 	return promise;
 }
 
-export async function getPythQuotes(tokens: TokenWithMarket[], network?: Network): Promise<TradingViewQuote[]> {
+export async function getPythQuotes(
+	tokens: TokenWithMarket[],
+	network?: Network
+): Promise<TradingViewQuote[]> {
 	const tokensWithFeed = tokens.filter((token) => token.priceFeedId);
 	if (!tokensWithFeed.length) return [];
 
@@ -198,7 +202,8 @@ export async function getOracleSnapshots(tokens: TokenWithMarket[]): Promise<Ora
 	return tokensWithFeed.map((token) => {
 		const feedId = normaliseFeedId(token.priceFeedId);
 		const latest =
-			latestPrices.get(feedId) ?? ({ price: null, confidence: null, publishTime: null } satisfies PricePoint);
+			latestPrices.get(feedId) ??
+			({ price: null, confidence: null, publishTime: null } satisfies PricePoint);
 		return {
 			feedId,
 			price: latest.price,

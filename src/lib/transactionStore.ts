@@ -30,7 +30,12 @@ import { ensureResource, getResourceStore } from './stores/network-data-cache';
 import type { Network } from './network';
 
 // Helper function to create Raindex link HTML
-function createRaindexLink(chainId: number, orderbookId: string, orderHashOrVaultId: string, isVault = false): string {
+function createRaindexLink(
+	chainId: number,
+	orderbookId: string,
+	orderHashOrVaultId: string,
+	isVault = false
+): string {
 	const baseUrl = isVault ? 'https://v2.raindex.finance/orders' : 'https://raindex.finance/orders';
 	return `
 		<a
@@ -73,7 +78,10 @@ const transactionStore = () => {
 	const reset = () => set(initialState);
 
 	// Generic state update helper
-	const setState = (status: TransactionStatus, options: { message?: string; hash?: string; error?: string } = {}) =>
+	const setState = (
+		status: TransactionStatus,
+		options: { message?: string; hash?: string; error?: string } = {}
+	) =>
 		update((state) => ({
 			...state,
 			status,
@@ -86,8 +94,7 @@ const transactionStore = () => {
 		setState(TransactionStatus.CHECKING_ALLOWANCE, { message });
 	const awaitWalletConfirmation = (message?: string) =>
 		setState(TransactionStatus.PENDING_WALLET, { message });
-	const awaitApprovalTx = (hash: string) =>
-		setState(TransactionStatus.PENDING_APPROVAL, { hash });
+	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
 	const transactionSuccess = (hash: string, message?: string) =>
 		setState(TransactionStatus.SUCCESS, { hash, message });
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
@@ -116,7 +123,10 @@ const transactionStore = () => {
 
 			return transactionSuccess(hash, link);
 		} catch (error) {
-			const message = (error as any)?.cause?.details || TransactionErrorMessage.GENERIC;
+			const errorMessage =
+				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				TransactionErrorMessage.GENERIC;
+			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
 	};
@@ -137,7 +147,10 @@ const transactionStore = () => {
 						hash: hash
 					});
 				} catch (error) {
-					const message = (error as any)?.cause?.details || TransactionErrorMessage.GENERIC;
+					const errorMessage =
+						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+						TransactionErrorMessage.GENERIC;
+					const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
 					return transactionError(message);
 				}
 			}
@@ -152,7 +165,10 @@ const transactionStore = () => {
 			});
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 		} catch (error) {
-			const message = (error as any)?.cause?.details || TransactionErrorMessage.GENERIC;
+			const errorMessage =
+				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				TransactionErrorMessage.GENERIC;
+			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
 		// Poll for the order to be added to the orderbook
@@ -298,10 +314,8 @@ const transactionStore = () => {
 					'Failed to generate transaction calldata' as TransactionErrorMessage
 				);
 			}
-		} catch (error) {
-			return transactionError(
-				'Failed to generate transaction calldata' as TransactionErrorMessage
-			);
+		} catch {
+			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
 		}
 
 		try {
@@ -331,43 +345,57 @@ const transactionStore = () => {
 				pendingTradesResult.catch(() => {});
 			}
 
-		// Subscribe to pending trades cache instead of polling directly
-		let unsubscribe: (() => void) | null = null;
-		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+			// Subscribe to pending trades cache instead of polling directly
+			let unsubscribe: (() => void) | null = null;
+			let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-		const cleanup = () => {
-			if (unsubscribe) unsubscribe();
-			if (timeoutId) clearTimeout(timeoutId);
-		};
+			const cleanup = () => {
+				if (unsubscribe) unsubscribe();
+				if (timeoutId) clearTimeout(timeoutId);
+			};
 
-		unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
-			if (!$resource?.data?.trades) return;
+			unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
+				if (!$resource?.data?.trades) return;
 
-			// Search for our specific trade in the cached data
-			const trade = $resource.data.trades.find(
-				(t) =>
-					t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
-					t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
-			) as any;
+				// Search for our specific trade in the cached data
+				const trade = $resource.data.trades.find(
+					(t) =>
+						t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
+						t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
+				) as unknown as {
+					tradeEvent?: { transaction?: { id?: string } };
+					order?: {
+						orderHash?: string;
+						inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
+						outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
+					};
+					inputVaultBalanceChange?: { amount?: string | number };
+					outputVaultBalanceChange?: { amount?: string | number };
+				};
 
-			if (trade) {
-				cleanup();
-				const chainId = network.id;
-				const tokenSold = `${parseFloat(
-					formatUnits(
-						BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-						trade.order.inputs[0].token.decimals
-					)
-				)} ${trade.order.inputs[0].token.symbol}`;
-				const tokenBought = `${parseFloat(
-					formatUnits(
-						BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-						trade.order.outputs[0].token.decimals
-					)
-				)} ${trade.order.outputs[0].token.symbol}`;
+				if (trade && trade.inputVaultBalanceChange && trade.outputVaultBalanceChange && trade.order?.inputs?.[0]?.token && trade.order?.outputs?.[0]?.token) {
+					cleanup();
+					const chainId = network.id;
+					const tokenSold = `${parseFloat(
+						formatUnits(
+							BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
+							trade.order.inputs[0].token.decimals ?? 18
+						)
+					)} ${trade.order.inputs[0].token.symbol}`;
+					const tokenBought = `${parseFloat(
+						formatUnits(
+							BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
+							trade.order.outputs[0].token.decimals ?? 18
+						)
+					)} ${trade.order.outputs[0].token.symbol}`;
 
-				const orderLink = createRaindexLink(chainId, raindexOrder.orderbook.id, raindexOrder.orderHash, false);
-				const link = `
+					const orderLink = createRaindexLink(
+						chainId,
+						raindexOrder.orderbook.id,
+						raindexOrder.orderHash,
+						false
+					);
+					const link = `
 					<div class="flex flex-col gap-2 text-center">
 						<div class="text-base text-gray-300">
 							${tokenBought} bought, ${tokenSold} sold
@@ -376,17 +404,20 @@ const transactionStore = () => {
 					</div>
 				`;
 
-				return transactionSuccess(hash, link);
-			}
-		});
+					return transactionSuccess(hash, link);
+				}
+			});
 
-		// Safety timeout: give up after 3 minutes if trade not found
-		timeoutId = setTimeout(() => {
-			cleanup();
-			transactionError(TransactionErrorMessage.GENERIC, hash);
-		}, 180_000);
+			// Safety timeout: give up after 3 minutes if trade not found
+			timeoutId = setTimeout(() => {
+				cleanup();
+				transactionError(TransactionErrorMessage.GENERIC, hash);
+			}, 180_000);
 		} catch (error) {
-			const message = (error as any)?.cause?.details || TransactionErrorMessage.GENERIC;
+			const errorMessage =
+				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				TransactionErrorMessage.GENERIC;
+			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
 	};
