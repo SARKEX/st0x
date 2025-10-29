@@ -110,6 +110,8 @@
 	}));
 
 	function findNetworkQuote(symbol?: string, networkId?: number) {
+		console.log('symbol : ', symbol);
+		console.log('networkId : ', networkId);
 		if (networkId == null) return undefined;
 		const quotes = priceFeedByNetwork.get(networkId) ?? [];
 		if (!quotes.length) return undefined;
@@ -145,9 +147,13 @@
 			const tokenInfo = tokenLookup(sft.address);
 			const decimals = tokenInfo?.decimals ?? 18;
 			const amount = toDecimal(circulating, decimals, { absolute: true, fallback: 0 }) ?? 0;
+			console.log('amount : ', amount);
 
 			if (tokenInfo?.symbol) {
 				const quote = findNetworkQuote(tokenInfo.symbol, sft.networkId);
+				console.log('tokenInfo.symbol : ', tokenInfo.symbol);
+				console.log('quote : ', quote);
+
 				if (quote?.close != null) {
 					tlv += amount * quote.close;
 				} else {
@@ -188,7 +194,10 @@
 					tokenLookup
 				);
 				if (!analysis) return;
-				volume += analysis.usdc;
+				// Only add volume if it's reasonable
+				if (analysis.usdc > 0 && analysis.usdc < 1e10) {
+					volume += analysis.usdc;
+				}
 			});
 		});
 		return volume;

@@ -13,6 +13,8 @@
 	>;
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { containerStyles } from '$lib/utils/styles';
+
+	$: console.log($query.data);
 </script>
 
 {#if $query.isError}
@@ -124,7 +126,7 @@
 							</td>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
 								>{new Date(
-									Number(order.addEvents[0].transaction.timestamp) * 1000
+									Number(order.timestampAdded) * 1000
 								).toLocaleString()}</td
 							>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"

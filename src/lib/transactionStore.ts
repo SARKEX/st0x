@@ -3,17 +3,12 @@ import { currentNetwork } from '$lib/stores';
 import { encodeFunctionData, erc20Abi, formatUnits, type Hex } from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import {
-	getTakeOrders2Calldata,
+	getTakeOrders3Calldata,
 	type SgOrder,
-	type TakeOrdersConfigV3
+	type TakeOrdersConfigV4,
+	type DeploymentTransactionArgs
 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
-import {
-	getTransactionAddOrders,
-	getVaultWithdrawCalldata,
-	type DeploymentTransactionArgs,
-	type SgVault
-} from '@rainlanguage/orderbook';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
@@ -26,31 +21,8 @@ import {
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
 import { rainlangConfirmationModal } from './stores';
-import { ensureResource, getResourceStore } from './stores/network-data-cache';
-import type { Network } from './network';
-
-// Helper function to create Raindex link HTML
-function createRaindexLink(
-	chainId: number,
-	orderbookId: string,
-	orderHashOrVaultId: string,
-	isVault = false
-): string {
-	const baseUrl = isVault ? 'https://v2.raindex.finance/orders' : 'https://raindex.finance/orders';
-	return `
-		<a
-			target="_blank"
-			rel="noopener noreferrer"
-			class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-			href="${baseUrl}/${chainId}-${orderbookId}-${orderHashOrVaultId}"
-			data-testid="raindex-link">
-			${isVault ? 'Manage your order on Raindex' : 'View order on Raindex'}
-			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-			</svg>
-		</a>
-	`;
-}
+import { createRaindexClient } from './utils/raindexClient';
+import { decodeFunctionData } from 'viem';
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
@@ -100,40 +72,33 @@ const transactionStore = () => {
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
 
-	const handleWithdraw = async (vault: SgVault) => {
-		const config = get(wagmiConfig);
-		if (!config) throw new Error('Wagmi config not found');
-		const vaultWithdrawCalldata = await getVaultWithdrawCalldata(vault, vault.balance);
-		let hash: string;
-		try {
-			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
-
-			hash = await sendTransaction(config, {
-				data: vaultWithdrawCalldata.value as Hex,
-				to: vault.orderbook.id as `0x${string}`
-			});
-			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-
-			await waitForTransactionReceipt(config, {
-				hash: hash as `0x${string}`
-			});
-
-			const chainId = get(currentNetwork).id;
-			const link = createRaindexLink(chainId, vault.orderbook.id, vault.id, true);
-
-			return transactionSuccess(hash, link);
-		} catch (error) {
-			const errorMessage =
-				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
-				TransactionErrorMessage.GENERIC;
-			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
-			return transactionError(message);
-		}
-	};
-
 	const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
+		const $signerAddress = get(signerAddress);
+		if (!$signerAddress) throw new Error('Signer address not found');
+
+		if (deploymentArgs.approvals.length > 0) {
+			// Check token balances first
+			for (const approval of deploymentArgs.approvals) {
+				const balance = await readContract(config, {
+					abi: erc20Abi,
+					address: approval.token as `0x${string}`,
+					functionName: 'balanceOf',
+					args: [$signerAddress as Hex]
+				});
+				const { args } = decodeFunctionData({
+					abi: erc20Abi,
+					data: approval.calldata as Hex
+				});
+
+				if (balance < BigInt(args[1] as string)) {
+					return transactionError(
+						`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
+					);
+				}
+			}
+		}
 
 		if (deploymentArgs.approvals.length > 0) {
 			for (const approval of deploymentArgs.approvals) {
@@ -150,8 +115,7 @@ const transactionStore = () => {
 					const errorMessage =
 						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 						TransactionErrorMessage.GENERIC;
-					const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
-					return transactionError(message);
+					return transactionError(errorMessage as TransactionErrorMessage);
 				}
 			}
 		}
@@ -163,26 +127,79 @@ const transactionStore = () => {
 				data: deploymentArgs.deploymentCalldata as Hex,
 				to: deploymentArgs.orderbookAddress as `0x${string}`
 			});
-			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
-			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
-			return transactionError(message);
+			return transactionError(errorMessage as TransactionErrorMessage);
 		}
-		// Poll for the order to be added to the orderbook
-		const interval = setInterval(async () => {
-			const network = get(currentNetwork);
-			const orders = (await getTransactionAddOrders(network.orderbook_subgraph_url, hash)).value;
-			if (orders && orders.length > 0) {
-				clearInterval(interval);
-				const orderHash = orders[0].order.orderHash;
-				const orderbookId = orders[0].order.orderbook.id;
-				const chainId = get(currentNetwork).id;
-				const link = createRaindexLink(chainId, orderbookId, orderHash, true);
 
-				return transactionSuccess(hash, link);
+		// Poll for the order to be added to the orderbook
+		let attempts = 0;
+		const maxAttempts = 30; // 1 minute max (30 * 2 seconds)
+		const network = get(currentNetwork);
+
+		const interval = setInterval(async () => {
+			attempts++;
+
+			// Stop polling after max attempts
+			if (attempts >= maxAttempts) {
+				clearInterval(interval);
+				const orderLink = `
+					<a
+						target="_blank"
+						rel="noopener noreferrer"
+						class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+						href="https://v5.raindex.finance"
+						data-testid="raindex-link">
+						Manage your order on Raindex
+						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+						</svg>
+					</a>
+				`;
+				return transactionSuccess(hash, orderLink);
+			}
+
+			try {
+				// Get RaindexClient
+				const client = await createRaindexClient();
+
+				// Check for orders added in this transaction
+				const orders = await client.getAddOrdersForTransaction(
+					network.id,
+					deploymentArgs.orderbookAddress as `0x${string}`,
+					hash as `0x${string}`
+				);
+				
+				if (orders.error) {
+					return; // Continue polling
+				}
+
+				if (orders.value && orders.value.length > 0) {
+					clearInterval(interval);
+					const orderHash = orders.value[0].orderHash;
+					const orderbookId = orders.value[0].orderbook;
+					const chainId = network.id;
+					const link = `
+						<a
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+							href="https://v5.raindex.finance/orders/${chainId}-${orderbookId}-${orderHash}"
+							data-testid="raindex-link">
+							Manage your order on Raindex
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+							</svg>
+						</a>
+					`;
+
+					return transactionSuccess(hash, link);
+				}
+			} catch (error) {
+				// Continue polling
+				console.error('Error checking for orders:', error);
 			}
 		}, 2000);
 	};
@@ -243,9 +260,8 @@ const transactionStore = () => {
 	};
 
 	const handleTakeOrders = async (
-		args: TakeOrdersConfigV3,
-		raindexOrder: SgOrder,
-		marketPrice: bigint
+		args: TakeOrdersConfigV4,
+		orderbookAddress: `0x${string}`
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -258,31 +274,20 @@ const transactionStore = () => {
 			return transactionError('No input token found in order' as TransactionErrorMessage);
 		}
 
-		const outputToken = args.orders[0].order.validOutputs[0];
-		if (!outputToken) {
-			return transactionError('No input token found in order' as TransactionErrorMessage);
-		}
-
 		// Check current allowance
 		checkingWalletAllowance(`Checking token allowance...`);
 		const currentAllowance = await readContract(config, {
 			abi: erc20Abi,
 			address: inputToken.token as `0x${string}`,
 			functionName: 'allowance',
-			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
+			args: [$signerAddress as Hex, orderbookAddress]
 		});
 
 		// Calculate required amount from maxInput
-		const requiredAmount = BigInt(
-			BigInt(args.maximumInput) * BigInt(10 ** (18 - Number(outputToken.decimals)))
-		);
-		const requiredAmountFp18 = (requiredAmount * marketPrice) / 1000000000000000000n;
+		// Rounding up
+		const requiredAmount = BigInt(args.maximumInput) + 1n;
 
-		// rounding up
-		const requiredAmountFormattedDecimals =
-			requiredAmountFp18 / BigInt(10 ** (18 - Number(inputToken.decimals))) + 1n;
-
-		if (currentAllowance < BigInt(requiredAmountFormattedDecimals)) {
+		if (currentAllowance < requiredAmount) {
 			// Need to approve more tokens
 			awaitWalletConfirmation(`Approving token spend...`);
 
@@ -290,7 +295,7 @@ const transactionStore = () => {
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',
-					args: [raindexOrder.orderbook.id as `0x${string}`, requiredAmountFormattedDecimals]
+					args: [orderbookAddress, requiredAmount]
 				}) as Hex,
 				to: inputToken.token as `0x${string}`
 			});
@@ -299,11 +304,11 @@ const transactionStore = () => {
 		}
 
 		// Now take the order
-		awaitWalletConfirmation(`Executing market order...`);
+		awaitWalletConfirmation(`Taking order...`);
 
 		let result;
 		try {
-			result = getTakeOrders2Calldata(args);
+			result = getTakeOrders3Calldata(args);
 
 			if (result.error) {
 				return transactionError(result.error as unknown as TransactionErrorMessage);
@@ -314,7 +319,7 @@ const transactionStore = () => {
 					'Failed to generate transaction calldata' as TransactionErrorMessage
 				);
 			}
-		} catch {
+		} catch (error) {
 			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
 		}
 
@@ -333,92 +338,16 @@ const transactionStore = () => {
 
 			const hash = await sendTransaction(config, {
 				data: calldata as Hex,
-				to: raindexOrder.orderbook.id as `0x${string}`
+				to: orderbookAddress
 			});
 
 			await waitForTransactionReceipt(config, { hash });
-
-			// Force refresh pending trades to pick up the new transaction
-			const network = get(currentNetwork) as Network;
-			const pendingTradesResult = ensureResource(network.id, 'pendingTrades', { force: true });
-			if (pendingTradesResult instanceof Promise) {
-				pendingTradesResult.catch(() => {});
-			}
-
-			// Subscribe to pending trades cache instead of polling directly
-			let unsubscribe: (() => void) | null = null;
-			let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-			const cleanup = () => {
-				if (unsubscribe) unsubscribe();
-				if (timeoutId) clearTimeout(timeoutId);
-			};
-
-			unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
-				if (!$resource?.data?.trades) return;
-
-				// Search for our specific trade in the cached data
-				const trade = $resource.data.trades.find(
-					(t) =>
-						t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
-						t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
-				) as unknown as {
-					tradeEvent?: { transaction?: { id?: string } };
-					order?: {
-						orderHash?: string;
-						inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-						outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-					};
-					inputVaultBalanceChange?: { amount?: string | number };
-					outputVaultBalanceChange?: { amount?: string | number };
-				};
-
-				if (trade && trade.inputVaultBalanceChange && trade.outputVaultBalanceChange && trade.order?.inputs?.[0]?.token && trade.order?.outputs?.[0]?.token) {
-					cleanup();
-					const chainId = network.id;
-					const tokenSold = `${parseFloat(
-						formatUnits(
-							BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-							trade.order.inputs[0].token.decimals ?? 18
-						)
-					)} ${trade.order.inputs[0].token.symbol}`;
-					const tokenBought = `${parseFloat(
-						formatUnits(
-							BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-							trade.order.outputs[0].token.decimals ?? 18
-						)
-					)} ${trade.order.outputs[0].token.symbol}`;
-
-					const orderLink = createRaindexLink(
-						chainId,
-						raindexOrder.orderbook.id,
-						raindexOrder.orderHash,
-						false
-					);
-					const link = `
-					<div class="flex flex-col gap-2 text-center">
-						<div class="text-base text-gray-300">
-							${tokenBought} bought, ${tokenSold} sold
-						</div>
-						${orderLink}
-					</div>
-				`;
-
-					return transactionSuccess(hash, link);
-				}
-			});
-
-			// Safety timeout: give up after 3 minutes if trade not found
-			timeoutId = setTimeout(() => {
-				cleanup();
-				transactionError(TransactionErrorMessage.GENERIC, hash);
-			}, 180_000);
+			transactionSuccess(hash, `Order taken successfully!`);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
-			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
-			return transactionError(message);
+			return transactionError(errorMessage as TransactionErrorMessage);
 		}
 	};
 
@@ -430,6 +359,7 @@ const transactionStore = () => {
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
+
 	return {
 		subscribe,
 		reset,
@@ -442,7 +372,6 @@ const transactionStore = () => {
 		handleLimitDeploy,
 		handleDsfDeploy,
 		handleFolioDeploy,
-		handleWithdraw,
 		handleTakeOrders
 	};
 };

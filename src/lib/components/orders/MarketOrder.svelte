@@ -2,14 +2,12 @@
 	import type { CategorizedToken, LimitOrder } from '$lib/network';
 	import { currentNetwork } from '$lib/stores';
 	import { hexToBigInt, OrderV3_ABI } from '$lib/utils/quote';
+	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import {
-		doQuoteSpecs,
-		getOrders,
-		type OrderV3,
-		type QuoteSpec,
+		type OrderV4,
 		type SgOrder,
-		type TakeOrderConfigV3,
-		type TakeOrdersConfigV3
+		type TakeOrderConfigV4,
+		type TakeOrdersConfigV4
 	} from '@rainlanguage/orderbook';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { AbiCoder, ethers } from 'ethers';
@@ -31,7 +29,7 @@
 	let isLoadingPrice = true;
 	let priceError = false;
 	let raindexOrder: SgOrder | undefined = undefined;
-	let orderData: OrderV3 | undefined = undefined;
+	let orderData: OrderV4 | undefined = undefined;
 	let orderbook: string | undefined = undefined;
 	let ratioOrder: bigint = 0n;
 
@@ -84,78 +82,75 @@
 				return;
 			}
 
-			const ordersResult = await getOrders(
-				[
-					{
-						url: $currentNetwork.orderbook_subgraph_url,
-						name: $currentNetwork.raindexNetworkSlug
-					}
-				],
+			// Use the standard RaindexClient
+			const client = await createRaindexClient();
+
+			// Fetch the order by hash
+			const ordersResult = await client.getOrders(
+				[$currentNetwork.id],
 				{
 					active: true,
 					owners: [],
-					orderHash: limitOrders[0].orderHash
+					orderHash: limitOrders[0].orderHash as `0x${string}`
 				},
-				{
-					page: 1,
-					pageSize: 100
-				}
+				1
 			);
 
-			if (ordersResult.value && ordersResult.value.length > 0) {
-				const order = ordersResult.value[0];
-				raindexOrder = order.order;
-
-				const decodedOrder = AbiCoder.defaultAbiCoder().decode(
-					[OrderV3_ABI],
-					order.order.orderBytes
-				);
-				orderData = decodedOrder[0] as OrderV3;
-				orderbook = order.order.orderbook.id;
-				const quoteSpecs: QuoteSpec[] = [];
-				quoteSpecs.push({
-					orderHash: order.order.orderHash,
-					inputIOIndex: 0,
-					outputIOIndex: 0,
-					signedContext: [],
-					orderbook: orderbook
-				});
-
-				const quoteResult = await doQuoteSpecs(
-					quoteSpecs,
-					$currentNetwork.orderbook_subgraph_url,
-					$currentNetwork.fallbackRpcUrls
-				);
-
-				if (quoteResult.error || !quoteResult.value) {
-					priceError = true;
-					return;
-				}
-
-				const result = quoteResult.value[0];
-				if (result.error || !result.value) {
-					priceError = true;
-					return;
-				}
-
-				// eslint-disable-next-line @typescript-eslint/no-unused-vars
-				const { maxOutput, ratio } = result.value;
-
-				const ratioBigInt = hexToBigInt(ratio);
-
-				// Convert ratio to price based on order type using BigInt with 18 decimal precision
-				const PRECISION = BigInt(1e18);
-				ratioOrder = ratioBigInt;
-
-				if (limitOrders[0].type === 'Buy') {
-					// For buy orders, price is PRECISION/ratioBigInt
-					marketPrice = (PRECISION * PRECISION) / ratioBigInt;
-				} else {
-					// For sell orders, ratio is the price directly
-					marketPrice = ratioBigInt;
-				}
-			} else {
+			if (ordersResult.error || !ordersResult.value || ordersResult.value.length === 0) {
 				priceError = true;
+				return;
+			}
+
+			const raindexOrderObj = ordersResult.value[0];
+			
+			// Get quotes for this order
+			const quotesResult = await raindexOrderObj.getQuotes();
+			if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
+				priceError = true;
+				return;
+			}
+
+			// Convert RaindexOrder to SgOrder to get orderBytes
+			const sgOrderResult = raindexOrderObj.convertToSgOrder();
+			if (sgOrderResult.error || !sgOrderResult.value) {
+				priceError = true;
+				return;
+			}
+			raindexOrder = sgOrderResult.value;
+
+			if (!raindexOrder) {
+				priceError = true;
+				return;
+			}
+
+			const decodedOrder = AbiCoder.defaultAbiCoder().decode(
+				[OrderV3_ABI],
+				raindexOrder.orderBytes
+			);
+			orderData = decodedOrder[0] as OrderV4;
+			orderbook = raindexOrder.orderbook.id;
+
+			// Get the first valid quote
+			const quote = quotesResult.value.find((q: any) => q.success && q.data);
+			if (!quote || !quote.data) {
+				priceError = true;
+				return;
+			}
+
+			const { maxOutput, ratio } = quote.data;
+
+			const ratioBigInt = hexToBigInt(ratio);
+
+			// Convert ratio to price based on order type using BigInt with 18 decimal precision
+			const PRECISION = BigInt(1e18);
+			ratioOrder = ratioBigInt;
+
+			if (limitOrders[0].type === 'Buy') {
+				// For buy orders, price is PRECISION/ratioBigInt
+				marketPrice = (PRECISION * PRECISION) / ratioBigInt;
+			} else {
+				// For sell orders, ratio is the price directly
+				marketPrice = ratioBigInt;
 			}
 		} catch (error) {
 			console.error('Error fetching market price:', error);
@@ -176,48 +171,46 @@
 			return;
 		}
 
-		if (!orderData || !orderbook) {
+		if (!orderData || !orderbook || !raindexOrder) {
 			return;
 		}
 
-		const takeOrdersArg: TakeOrderConfigV3 = {
+		const takeOrdersArg: TakeOrderConfigV4 = {
 			order: {
-				owner: orderData?.owner,
-				evaluable: orderData?.evaluable,
+				owner: orderData.owner,
+				evaluable: orderData.evaluable,
 				validInputs: [
 					{
-						token: orderData?.validInputs[0].token,
-						decimals: Number(orderData?.validInputs[0].decimals),
-						vaultId: orderData?.validInputs[0].vaultId.toString()
+						token: orderData.validInputs[0].token,
+						vaultId: orderData.validInputs[0].vaultId.toString()
 					}
 				],
 				validOutputs: [
 					{
-						token: orderData?.validOutputs[0].token,
-						decimals: Number(orderData?.validOutputs[0].decimals),
-						vaultId: orderData?.validOutputs[0].vaultId.toString()
+						token: orderData.validOutputs[0].token,
+						vaultId: orderData.validOutputs[0].vaultId.toString()
 					}
 				],
-				nonce: orderData?.nonce
+				nonce: orderData.nonce
 			},
 			inputIOIndex: '0',
 			outputIOIndex: '0',
 			signedContext: []
 		};
 		if (orderSide === 'Buy') {
-			const takeOrdersArgs: TakeOrdersConfigV3 = {
+			const takeOrdersArgs: TakeOrdersConfigV4 = {
 				minimumInput: '0',
 				maximumInput: selectedAmount.toString(),
 				maximumIORatio: ethers.MaxUint256.toString(10),
 				orders: [takeOrdersArg],
 				data: '0x'
 			};
-			await transactionStore.handleTakeOrders(takeOrdersArgs, raindexOrder as SgOrder, marketPrice);
+			await transactionStore.handleTakeOrders(takeOrdersArgs, orderbook as `0x${string}`);
 		} else if (orderSide === 'Sell') {
 			const expectedInputAmount = (selectedAmount * marketPrice) / 1000000000000000000n;
 			const expectedInputInTokenTerms =
-				expectedInputAmount / BigInt(10 ** (18 - Number(orderData?.validOutputs[0].decimals)));
-			const takeOrdersArgs: TakeOrdersConfigV3 = {
+				expectedInputAmount / BigInt(10 ** (18 - 18));
+			const takeOrdersArgs: TakeOrdersConfigV4 = {
 				minimumInput: '0',
 				maximumInput: expectedInputInTokenTerms.toString(),
 				maximumIORatio: ethers.MaxUint256.toString(10),
@@ -226,8 +219,7 @@
 			};
 			await transactionStore.handleTakeOrders(
 				takeOrdersArgs,
-				raindexOrder as SgOrder,
-				ratioOrder || 0n
+				orderbook as `0x${string}`
 			);
 		}
 	};

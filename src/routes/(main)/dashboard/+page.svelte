@@ -16,11 +16,13 @@
 	import { formatUnits } from 'viem';
 	import { getAllTokensByNetwork } from '$lib/network';
 	import { goto } from '$app/navigation';
-	import { getOrders, getVaults } from '@rainlanguage/orderbook';
+	import { createRaindexClient } from '$lib/utils/raindexClient';
+	import { Float } from '@rainlanguage/float';
 	import type {
 		SgOrderWithSubgraphName,
 		SgErc20,
-		SgVaultWithSubgraphName
+		SgVaultWithSubgraphName,
+		SgVault
 	} from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
@@ -31,6 +33,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { formatWithFloat } from '$lib/utils/formatFloat';
 
 	function isUSDCPosition(token: { token: SgErc20 }) {
 		return (
@@ -140,32 +143,43 @@
 	$: ordersListQuery = createInfiniteQuery({
 		queryKey: ['orders', $currentNetwork?.id, ordersActiveFilter, orderHashFilter, showMyOrders],
 		queryFn: async ({ pageParam }) => {
-			const ordersResult = await getOrders(
-				[
-					{
-						url: $currentNetwork.orderbook_subgraph_url,
-						name: $currentNetwork.raindexNetworkSlug
-					}
-				],
+			const client = await createRaindexClient();
+			
+			const ordersResult = await client.getOrders(
+				[$currentNetwork.id],
 				{
-					owners: $signerAddress ? [$signerAddress.toLowerCase()] : [], // Always filter by user's address
-					active: ordersActiveFilter, // undefined shows all, true shows active, false shows inactive
-					orderHash: orderHashFilter === '' ? undefined : orderHashFilter
+					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
+					active: ordersActiveFilter,
+					orderHash: orderHashFilter === '' ? undefined : (orderHashFilter as `0x${string}`)
 				},
-				{ page: pageParam + 1, pageSize: ORDER_LIST_PAGE_SIZE }
+				pageParam + 1
 			);
 			if (ordersResult.error) throw new Error(ordersResult.error.readableMsg);
-			const allOrders: SgOrderWithSubgraphName[] = ordersResult.value;
+			
+			// Convert RaindexOrder[] to SgOrderWithSubgraphName[]
+			const allOrders: SgOrderWithSubgraphName[] = await Promise.all(
+				ordersResult.value.map(async (order) => {
+					const sgOrderResult = order.convertToSgOrder();
+					if (sgOrderResult.error || !sgOrderResult.value) {
+						throw new Error('Failed to convert order');
+					}
+					return {
+						order: sgOrderResult.value,
+						subgraphName: $currentNetwork.raindexNetworkSlug
+					};
+				})
+			);
 
 			// Filter orders that have any token from forexTokenList in either inputs or outputs
-			const filteredOrders = allOrders.filter(({ order }) => {
-				const inputAddresses = order.inputs.map((input) => input.token.address.toLowerCase());
-				const outputAddresses = order.outputs.map((output) => output.token.address.toLowerCase());
-				const filterAddresses = ALL_TOKENS.map((token) => token.address.toLowerCase());
-				const hasTokenInInputs = inputAddresses.some((addr) => filterAddresses.includes(addr));
-				const hasTokenInOutputs = outputAddresses.some((addr) => filterAddresses.includes(addr));
-				return hasTokenInInputs || hasTokenInOutputs;
-			});
+			// const filteredOrders = allOrders.filter(({ order }) => {
+			// 	const inputAddresses = order.inputs.map((input) => input.token.address.toLowerCase());
+			// 	const outputAddresses = order.outputs.map((output) => output.token.address.toLowerCase());
+			// 	const filterAddresses = ALL_TOKENS.map((token) => token.address.toLowerCase());
+			// 	const hasTokenInInputs = inputAddresses.some((addr) => filterAddresses.includes(addr));
+			// 	const hasTokenInOutputs = outputAddresses.some((addr) => filterAddresses.includes(addr));
+			// 	return hasTokenInInputs || hasTokenInOutputs;
+			// });
+			const filteredOrders = allOrders
 
 			return {
 				orders: filteredOrders,
@@ -183,21 +197,49 @@
 	$: vaultsListQuery = createInfiniteQuery({
 		queryKey: ['vaults', $currentNetwork?.id, hideEmptyVaults, showMyVaults, $signerAddress],
 		queryFn: async ({ pageParam }) => {
-			const vaultsResult = await getVaults(
-				[
-					{
-						url: $currentNetwork.orderbook_subgraph_url,
-						name: $currentNetwork.raindexNetworkSlug
-					}
-				],
+			const client = await createRaindexClient();
+			
+			const vaultsResult = await client.getVaults(
+				[$currentNetwork.id],
 				{
-					owners: $signerAddress ? [$signerAddress.toLowerCase()] : [], // Always filter by user's address
+					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
 					hideZeroBalance: hideEmptyVaults ?? false
 				},
-				{ page: pageParam + 1, pageSize: VAULT_LIST_PAGE_SIZE }
+				pageParam + 1
 			);
 			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
-			const allVaults: SgVaultWithSubgraphName[] = vaultsResult.value;
+			
+			// Convert RaindexVaultsList.items (RaindexVault[]) to SgVaultWithSubgraphName[]
+			const allVaults: SgVaultWithSubgraphName[] = vaultsResult.value.items.map((vault) => {
+
+				let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
+				if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
+				
+				// Convert RaindexVault to SgVault
+				const sgVault: SgVault = {
+					id: vault.id as `0x${string}`,
+					owner: vault.owner,
+					vaultId: `0x${vault.vaultId.toString(16).padStart(64, '0')}`,
+					balance: vaultBalanceFloat.value!.toString(),
+					token: {
+						id: vault.token.id as `0x${string}`,
+						address: vault.token.address,
+						name: vault.token.name,
+						symbol: vault.token.symbol,
+						decimals: vault.token.decimals.toString() as `0x${string}`
+					},
+					orderbook: {
+						id: vault.orderbook
+					},
+					ordersAsOutput: vault.ordersAsOutput,
+					ordersAsInput: vault.ordersAsInput,
+					balanceChanges: []
+				};
+				return {
+					vault: sgVault,
+					subgraphName: $currentNetwork.raindexNetworkSlug
+				};
+			});
 			return {
 				vaults: allVaults,
 				hasMore: allVaults.length === VAULT_LIST_PAGE_SIZE
@@ -223,6 +265,7 @@
 		>();
 
 		for (const { vault } of $vaultsListQuery?.data?.pages?.[0]?.vaults || []) {
+			console.log('vault here : ', vault.balance);
 			if (
 				vault.owner.toLowerCase() === $signerAddress?.toLowerCase() &&
 				BigInt(vault.balance) > 0n

@@ -42,7 +42,7 @@ export const networks: Network[] = [
 		id: 8453,
 		chainId: 8453,
 		name: 'base',
-		raindexNetworkSlug: 'base2',
+		raindexNetworkSlug: 'base',
 		displayName: 'Base Mainnet',
 		currencySymbol: 'ETH',
 		blockExplorer: 'https://basescan.org',
@@ -63,7 +63,7 @@ export const networks: Network[] = [
 		metadata_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 		orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-08-18-2744/gn',
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-10-11-a62b/gn',
 		orderbook_subgraph_urls_inactive: [],
 		usdcToken: USDC_TOKENS[8453]
 	}
@@ -107,118 +107,8 @@ export interface CategorizedToken extends PythToken {
 export const TOKENS: CategorizedToken[] = [
 	{
 		chainId: base.id,
-		address: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
-		symbol: 'tNVDA',
-		decimals: 18,
-		name: 'NVIDIA Corporation ST0x',
-		logoUrl: '/images/NVDA.png',
-		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:NVDA',
-		tradingViewMarket: 'america',
-		limitOrders: [
-			{
-				orderHash: '0xc2ea2074815a79ed582a5820e8f3b8cccb74ebc90853c999d6c570be17b903a4',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0x5d592e69e1e99ed25f5f7bea7c6e7b75d4ea5ba2f9e1b1a85a0bb6344167c89e',
-				type: 'Buy'
-			}
-		]
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0x8d8c315db61f60dcc3c66cdb48ca87fc643e35ea',
-		symbol: 'tAMZN',
-		decimals: 18,
-		name: 'Amazon.com Inc ST0x',
-		logoUrl: '/images/AMZN.png',
-		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:AMZN',
-		tradingViewMarket: 'america',
-		limitOrders: [
-			{
-				orderHash: '0x5d9d96aaf146a0ab62132e54ec59e77efd57a2615d36492245747a17d695d491',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0x937d6f20a112af5d73e55b6c85b24dd132b18248e3f88db23f51eb0d2f1147f9',
-				type: 'Buy'
-			}
-		]
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0x470b06815a2e286df8c38c9c73280e0760088623',
-		symbol: 'tTSLA',
-		decimals: 18,
-		name: 'Tesla Inc ST0x',
-		logoUrl: '/images/TSLA.png',
-		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:TSLA',
-		tradingViewMarket: 'america',
-		limitOrders: [
-			{
-				orderHash: '0x04eb64b08271455a1ac7ac5474ed5b2c6635f61719b21ed5a55c9be6211e171d',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0x0f36b8633d3d2b22e18c2568e850eb8f05c41ca0ca0536c8a4a6efd3068c0999',
-				type: 'Buy'
-			}
-		]
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0xff647ad8c4b065bd746911bb9ea1a33c38c63604',
-		symbol: 'tMSTR',
-		decimals: 18,
-		name: 'MicroStrategy Incorporated ST0x',
-		logoUrl: '/images/MSTR.png',
-		priceFeedId: '0xe1e80251e5f5184f2195008382538e847fafc36f751896889dd3d1b1f6111f09',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:MSTR',
-		tradingViewMarket: 'america',
-		limitOrders: [
-			{
-				orderHash: '0xa3c151ec4714fcc33351f28becd49d9adee28278cb1d56d6484eafa9f5e55430',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0x55a894cf799cc9d5687690adbe9531ca15d2df2de80bfec7d23f2ea098697d20',
-				type: 'Buy'
-			}
-		]
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0x32f417da481b9d8d578ebeec54490886b9a1643a',
-		symbol: 'tBRK.B',
-		decimals: 18,
-		name: 'Berkshire Hathaway Inc ST0x',
-		logoUrl: '/images/BRK.B.png',
-		priceFeedId: '0xe21c688b7fc65b4606a50f3635f466f6986db129bf16979875d160f9c508e8c7',
-		category: 'ST0x',
-		tradingViewSymbol: 'NYSE:BRK.B',
-		tradingViewMarket: 'america',
-		limitOrders: [
-			{
-				orderHash: '0xbb3bc76a25fe7d8f5a3e14a1c7242c36aa722e5fd7049e06d30d92d6dd377254',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0x91ec29362a17f56830b79583cefbff081e989b084ab418e9620ff4be1a8ea7bb',
-				type: 'Buy'
-			}
-		]
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0xd0a90b7c9ae5facbe09ca4c576a3795eda53b397',
-		symbol: 'tIAU',
+		address: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+		symbol: 'tSTOX',
 		decimals: 18,
 		name: 'iShares Gold Trust ST0x',
 		logoUrl: '/images/IAU.png',
@@ -227,39 +117,176 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:IAU',
 		tradingViewMarket: 'america',
 		limitOrders: [
-			{
-				orderHash: '0x635591f73b2d85159418e96704d0b04175ef9bca75e29b944b87272152e3bace',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0xf9fabb91559e8a3347475a824eae124d1131a0a3bba103e52ba86f46980c0e60',
-				type: 'Buy'
-			}
+		//   {
+		// 	orderHash: '0x6cc741615bdc1d25dd5ef4c5099ae3774b8178e1bab62cae067b91d4eb107e07',
+		// 	type: 'Sell'
+		//   },
+		//   {
+		// 	orderHash: '0x5febc5e97fe5dccb8b6ab6f842386481637caa9ceaab58981d8aa9865e32d69e',
+		// 	type: 'Buy'
+		//   }
 		]
-	} as unknown as CategorizedToken,
-	{
-		chainId: base.id,
-		address: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
-		symbol: 'tSPLG',
-		decimals: 18,
-		name: 'SPDR Portfolio S&P 500 ETF ST0x',
-		logoUrl: '/images/SPLG.png',
-		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
-		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:SPLG',
-		tradingViewMarket: 'america',
-		limitOrders: [
-			{
-				orderHash: '0x03ccefaf1a12989190d8392f3fc5c2c347a8f157d143f29b3d6ca744f3d66829',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0xe88705033c55a50af86f340bf3b3e7c1e3af60fadf1005c4ed363ea127dd9607',
-				type: 'Buy'
-			}
-		]
-	} as unknown as CategorizedToken
-];
+	  } as unknown as CategorizedToken,
+	
+
+]
+
+// export const TOKENS: CategorizedToken[] = [
+// 	{
+// 		chainId: base.id,
+// 		address: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
+// 		symbol: 'tNVDA',
+// 		decimals: 18,
+// 		name: 'NVIDIA Corporation ST0x',
+// 		logoUrl: '/images/NVDA.png',
+// 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
+// 		category: 'ST0x',
+// 		tradingViewSymbol: 'NASDAQ:NVDA',
+// 		tradingViewMarket: 'america',
+// 		limitOrders: [
+// 			// {
+// 			// 	orderHash: '0xc2ea2074815a79ed582a5820e8f3b8cccb74ebc90853c999d6c570be17b903a4',
+// 			// 	type: 'Sell'
+// 			// },
+// 			// {
+// 			// 	orderHash: '0x5d592e69e1e99ed25f5f7bea7c6e7b75d4ea5ba2f9e1b1a85a0bb6344167c89e',
+// 			// 	type: 'Buy'
+// 			// }
+// 		]
+// 	} as unknown as CategorizedToken,
+// 	{
+// 		chainId: base.id,
+// 		address: '0x8d8c315db61f60dcc3c66cdb48ca87fc643e35ea',
+// 		symbol: 'tAMZN',
+// 		decimals: 18,
+// 		name: 'Amazon.com Inc ST0x',
+// 		logoUrl: '/images/AMZN.png',
+// 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
+// 		category: 'ST0x',
+// 		tradingViewSymbol: 'NASDAQ:AMZN',
+// 		tradingViewMarket: 'america',
+// 		limitOrders: [
+// 			// {
+// 			// 	orderHash: '0x5d9d96aaf146a0ab62132e54ec59e77efd57a2615d36492245747a17d695d491',
+// 			// 	type: 'Sell'
+// 			// },
+// 			// {
+// 			// 	orderHash: '0x937d6f20a112af5d73e55b6c85b24dd132b18248e3f88db23f51eb0d2f1147f9',
+// 			// 	type: 'Buy'
+// 			// }
+// 		]
+// 	} as unknown as CategorizedToken,
+// 	{
+// 		chainId: base.id,
+// 		address: '0x470b06815a2e286df8c38c9c73280e0760088623',
+// 		symbol: 'tTSLA',
+// 		decimals: 18,
+// 		name: 'Tesla Inc ST0x',
+// 		logoUrl: '/images/TSLA.png',
+// 		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
+// 		category: 'ST0x',
+// 		tradingViewSymbol: 'NASDAQ:TSLA',
+// 		tradingViewMarket: 'america',
+// 		limitOrders: [
+// 			// {
+// 			// 	orderHash: '0x04eb64b08271455a1ac7ac5474ed5b2c6635f61719b21ed5a55c9be6211e171d',
+// 			// 	type: 'Sell'
+// 			// },
+// 			// {
+// 			// 	orderHash: '0x0f36b8633d3d2b22e18c2568e850eb8f05c41ca0ca0536c8a4a6efd3068c0999',
+// 			// 	type: 'Buy'
+// 			// }
+// 		]
+// 	} as unknown as CategorizedToken,
+// 	{
+// 		chainId: base.id,
+// 		address: '0xff647ad8c4b065bd746911bb9ea1a33c38c63604',
+// 		symbol: 'tMSTR',
+// 		decimals: 18,
+// 		name: 'MicroStrategy Incorporated ST0x',
+// 		logoUrl: '/images/MSTR.png',
+// 		priceFeedId: '0xe1e80251e5f5184f2195008382538e847fafc36f751896889dd3d1b1f6111f09',
+// 		category: 'ST0x',
+// 		tradingViewSymbol: 'NASDAQ:MSTR',
+// 		tradingViewMarket: 'america',
+// 		limitOrders: [
+// 			// {
+// 			// 	orderHash: '0xa3c151ec4714fcc33351f28becd49d9adee28278cb1d56d6484eafa9f5e55430',
+// 			// 	type: 'Sell'
+// 			// },
+// 			// {
+// 			// 	orderHash: '0x55a894cf799cc9d5687690adbe9531ca15d2df2de80bfec7d23f2ea098697d20',
+// 			// 	type: 'Buy'
+// 			// }
+// 		]
+// 	} as unknown as CategorizedToken,
+// 	{
+// 		chainId: base.id,
+// 		address: '0x32f417da481b9d8d578ebeec54490886b9a1643a',
+// 		symbol: 'tBRK.B',
+// 		decimals: 18,
+// 		name: 'Berkshire Hathaway Inc ST0x',
+// 		logoUrl: '/images/BRK.B.png',
+// 		priceFeedId: '0xe21c688b7fc65b4606a50f3635f466f6986db129bf16979875d160f9c508e8c7',
+// 		category: 'ST0x',
+// 		tradingViewSymbol: 'NYSE:BRK.B',
+// 		tradingViewMarket: 'america',
+// 		limitOrders: [
+// 			// {
+// 			// 	orderHash: '0xbb3bc76a25fe7d8f5a3e14a1c7242c36aa722e5fd7049e06d30d92d6dd377254',
+// 			// 	type: 'Sell'
+// 			// },
+// 			// {
+// 			// 	orderHash: '0x91ec29362a17f56830b79583cefbff081e989b084ab418e9620ff4be1a8ea7bb',
+// 			// 	type: 'Buy'
+// 			// }
+// 		]
+// 	} as unknown as CategorizedToken,
+// 	{
+// 		chainId: base.id,
+// 		address: '0xd0a90b7c9ae5facbe09ca4c576a3795eda53b397',
+// 		symbol: 'tIAU',
+// 		decimals: 18,
+// 		name: 'iShares Gold Trust ST0x',
+// 		logoUrl: '/images/IAU.png',
+// 		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
+// 		category: 'ST0x',
+// 		tradingViewSymbol: 'AMEX:IAU',
+// 		tradingViewMarket: 'america',
+// 		limitOrders: [
+// 			// {
+// 			// 	orderHash: '0x635591f73b2d85159418e96704d0b04175ef9bca75e29b944b87272152e3bace',
+// 			// 	type: 'Sell'
+// 			// },
+// 			// {
+// 			// 	orderHash: '0xf9fabb91559e8a3347475a824eae124d1131a0a3bba103e52ba86f46980c0e60',
+// 			// 	type: 'Buy'
+// 			// }
+// 		]
+// 	} as unknown as CategorizedToken,
+// 	{
+// 		chainId: base.id,
+// 		address: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
+// 		symbol: 'tSPLG',
+// 		decimals: 18,
+// 		name: 'SPDR Portfolio S&P 500 ETF ST0x',
+// 		logoUrl: '/images/SPLG.png',
+// 		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
+// 		category: 'ST0x',
+// 		tradingViewSymbol: 'AMEX:SPLG',
+// 		tradingViewMarket: 'america',
+// 		limitOrders: [
+// 			{
+// 				orderHash: '0x03ccefaf1a12989190d8392f3fc5c2c347a8f157d143f29b3d6ca744f3d66829',
+// 				type: 'Sell'
+// 			},
+// 			{
+// 				orderHash: '0xe88705033c55a50af86f340bf3b3e7c1e3af60fadf1005c4ed363ea127dd9607',
+// 				type: 'Buy'
+// 			}
+// 		]
+// 	} as unknown as CategorizedToken
+// ];
 
 export const CRYPTO_TOKENS: CategorizedToken[] = [
 	// CRYPTO tokens

@@ -1,4 +1,5 @@
 import { formatUnits } from 'viem';
+import { Float } from '@rainlanguage/float';
 
 export type AmountLike = bigint | string | number | null | undefined;
 
@@ -56,13 +57,74 @@ export function toDecimal(
 	options: DecimalOptions = {}
 ): number | null {
 	const { absolute = false, fallback = null } = options;
+	
+	// Check if this is a Float hex string (32 bytes = 64 hex chars + '0x')
+	const valueStr = typeof value === 'string' ? value : value?.toString() ?? '';
+	if (valueStr.startsWith('0x') && valueStr.length === 66) {
+		// This is a Float hex value, convert it using Float API
+		try {
+			const hexValue = valueStr as `0x${string}`;
+			const floatResult = Float.fromHex(hexValue);
+			if (floatResult.error) {
+				console.warn('Float conversion error:', floatResult.error);
+				return fallback ?? null;
+			}
+			
+			// Convert to fixed decimal using the Float API
+			const parsedDecimals = Number(decimals ?? 0);
+			console.log('floatResult.value : ', floatResult.value	);
+			const fixedDecimalResult = floatResult.value.toFixedDecimalLossy(parsedDecimals);
+			
+			if (fixedDecimalResult.error) {
+				console.warn('Float toFixedDecimal error:', fixedDecimalResult.error);
+				return fallback ?? null;
+			}
+			
+			const fixedValue = fixedDecimalResult.value.value;
+			const strValue = fixedValue.toString();
+			
+			// Format with decimals
+			if (strValue.length <= parsedDecimals) {
+				const result = Number.parseFloat('0.' + '0'.repeat(parsedDecimals - strValue.length) + strValue);
+				return Number.isFinite(result) ? result : fallback ?? null;
+			}
+			
+			const intPart = strValue.slice(0, strValue.length - parsedDecimals);
+			const decPart = strValue.slice(strValue.length - parsedDecimals);
+			const result = Number.parseFloat(intPart + '.' + decPart);
+			
+			// Check if value is reasonable
+			if (Number.isFinite(result) && result > 0 && result < 1e15) {
+				return result;
+			}
+			return fallback ?? null;
+		} catch (error) {
+			console.warn('Float conversion failed:', error);
+			return fallback ?? null;
+		}
+	}
+	
+	// Standard bigint conversion for regular amounts
 	const big = toBigInt(value);
 	if (big === null) return fallback ?? null;
 	const normalised = absolute ? absBigInt(big) : big;
 	const parsedDecimals = Number(decimals ?? 0);
+	
+	// Check for astronomically large values  
+	const maxSafeNumber = BigInt('1000000000000000000000'); // 1e21, reasonable maximum
+	if (normalised > maxSafeNumber) {
+		console.warn('Value too large for safe conversion:', normalised);
+		return fallback ?? null;
+	}
+	
 	try {
 		const formatted = Number.parseFloat(formatUnits(normalised, parsedDecimals));
 		if (!Number.isFinite(formatted)) {
+			return fallback ?? null;
+		}
+		// Additional sanity check for the final result
+		if (formatted > 1e15) {
+			console.warn('Converted value suspiciously large:', formatted);
 			return fallback ?? null;
 		}
 		return formatted;
