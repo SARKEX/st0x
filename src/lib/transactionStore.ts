@@ -126,7 +126,10 @@ const transactionStore = () => {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
-			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+			const message =
+				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+					? (errorMessage as TransactionErrorMessage)
+					: TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
 	};
@@ -150,7 +153,10 @@ const transactionStore = () => {
 					const errorMessage =
 						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 						TransactionErrorMessage.GENERIC;
-					const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+					const message =
+						typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+							? (errorMessage as TransactionErrorMessage)
+							: TransactionErrorMessage.GENERIC;
 					return transactionError(message);
 				}
 			}
@@ -168,7 +174,10 @@ const transactionStore = () => {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
-			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+			const message =
+				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+					? (errorMessage as TransactionErrorMessage)
+					: TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
 		// Poll for the order to be added to the orderbook
@@ -373,7 +382,13 @@ const transactionStore = () => {
 					outputVaultBalanceChange?: { amount?: string | number };
 				};
 
-				if (trade && trade.inputVaultBalanceChange && trade.outputVaultBalanceChange && trade.order?.inputs?.[0]?.token && trade.order?.outputs?.[0]?.token) {
+				if (
+					trade &&
+					trade.inputVaultBalanceChange &&
+					trade.outputVaultBalanceChange &&
+					trade.order?.inputs?.[0]?.token &&
+					trade.order?.outputs?.[0]?.token
+				) {
 					cleanup();
 					const chainId = network.id;
 					const tokenSold = `${parseFloat(
@@ -417,7 +432,10 @@ const transactionStore = () => {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
-			const message = typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC ? (errorMessage as TransactionErrorMessage) : TransactionErrorMessage.GENERIC;
+			const message =
+				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+					? (errorMessage as TransactionErrorMessage)
+					: TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
 	};

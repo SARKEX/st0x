@@ -319,9 +319,13 @@
 					</svg>
 				</div>
 				<div>
-					<h3 class="font-semibold text-yellow-200">Price significantly {orderSide === 'Buy' ? 'above best offer' : 'below best bid'}</h3>
+					<h3 class="font-semibold text-yellow-200">
+						Price significantly {orderSide === 'Buy' ? 'above best offer' : 'below best bid'}
+					</h3>
 					<p class="mt-2 text-sm text-yellow-100">
-						Your limit price is set significantly {orderSide === 'Buy' ? 'above' : 'below'} the current best {orderSide === 'Buy' ? 'offer' : 'bid'}. You won't get the best possible price. We recommend using a market order instead.
+						Your limit price is set significantly {orderSide === 'Buy' ? 'above' : 'below'} the current
+						best {orderSide === 'Buy' ? 'offer' : 'bid'}. You won't get the best possible price. We
+						recommend using a market order instead.
 					</p>
 				</div>
 			</div>

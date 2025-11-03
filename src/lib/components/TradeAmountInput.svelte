@@ -56,17 +56,19 @@
 		return { balance, decimals };
 	})();
 
-	$: balancePromise.then((data) => {
-		if (!data) return;
-		balance = data.balance;
-		decimals = data.decimals;
-		// Re-parse the input amount now that decimals are loaded
-		if (inputAmount && decimals > 0) {
-			amount = parseUnits(inputAmount, decimals);
-		}
-	}).catch(() => {
-		// Handle promise rejection silently
-	});
+	$: balancePromise
+		.then((data) => {
+			if (!data) return;
+			balance = data.balance;
+			decimals = data.decimals;
+			// Re-parse the input amount now that decimals are loaded
+			if (inputAmount && decimals > 0) {
+				amount = parseUnits(inputAmount, decimals);
+			}
+		})
+		.catch(() => {
+			// Handle promise rejection silently
+		});
 
 	const setValueToMax = () => {
 		inputAmount = formatUnits(balance, decimals);

@@ -674,7 +674,6 @@
 
 		<Section>
 			<TokenMarketCharts
-				tradeHistory={visibleTradeHistoryPoints}
 				volumeBuckets={tradeVolumeBuckets}
 				depth={orderbookDepth}
 				{averagePrices}
