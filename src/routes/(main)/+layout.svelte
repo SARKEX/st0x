@@ -1,7 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
 	import { wagmiConfig } from 'svelte-wagmi';
-	import { createQuery } from '@tanstack/svelte-query';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
@@ -9,12 +8,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-
-	import { getSfts } from '$lib/query';
-	import type { TradingViewQuote } from '$lib/services/tradingview';
-	import { getPythQuotes } from '$lib/services/pyth';
-	import { sfts, rainlangConfirmationModal, tokenGlobalQuote, currentNetwork } from '$lib/stores';
-	import { TOKENS, type CategorizedToken } from '$lib/network';
+	import { sfts, rainlangConfirmationModal } from '$lib/stores';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
@@ -95,34 +89,6 @@
 				return 'ST0x Platform';
 		}
 	}
-
-	$: vaultQuery = createQuery({
-		queryKey: ['getSfts', $currentNetwork?.id],
-		queryFn: () => {
-			return getSfts();
-		},
-		enabled: !!$currentNetwork?.subgraph_url
-	});
-
-	let networkTokensForQuotes: CategorizedToken[] = [];
-	$: networkTokensForQuotes = TOKENS.filter(
-		(token) => token.chainId === $currentNetwork?.chainId && token.priceFeedId
-	) as CategorizedToken[];
-	$: networkFeedKey = networkTokensForQuotes
-		.map((token) => token.priceFeedId.toLowerCase())
-		.sort()
-		.join(',');
-	$: tokenGlobalQuoteQuery = createQuery({
-		queryKey: ['tokenGlobalQuote-pyth', $currentNetwork?.id, networkFeedKey],
-		queryFn: async () => {
-			if (!browser || !networkTokensForQuotes.length) return [] as TradingViewQuote[];
-			return getPythQuotes(networkTokensForQuotes);
-		},
-		enabled: browser && networkTokensForQuotes.length > 0
-	});
-
-	$: sfts.set($vaultQuery.data);
-	$: tokenGlobalQuote.set(($tokenGlobalQuoteQuery.data as unknown as TradingViewQuote[]) ?? []);
 </script>
 
 {#if $wagmiConfig}

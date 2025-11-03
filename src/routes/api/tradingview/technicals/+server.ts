@@ -1,27 +1,13 @@
 import { json } from '@sveltejs/kit';
+import {
+	buildTradingViewScanBody,
+	coerceTradingViewNumber as coerceNumber,
+	postTradingViewScan,
+	resolveMarketEndpoint
+} from '$lib/server/tradingview';
 import type { RequestHandler } from './$types';
 
 const TECHNICAL_COLUMNS = ['MACD.macd', 'MACD.signal', 'MACD.histogram', 'RSI', 'OBV'];
-
-function coerceNumber(value: unknown): number | null {
-	if (value === null || value === undefined) return null;
-	const num = typeof value === 'number' ? value : Number(value);
-	return Number.isFinite(num) ? num : null;
-}
-
-const MARKET_ENDPOINTS: Record<string, string> = {
-	america: 'https://scanner.tradingview.com/america/scan',
-	crypto: 'https://scanner.tradingview.com/crypto/scan',
-	forex: 'https://scanner.tradingview.com/forex/scan',
-	indices: 'https://scanner.tradingview.com/indices/scan',
-	futures: 'https://scanner.tradingview.com/futures/scan',
-	global: 'https://scanner.tradingview.com/tradingview/scan'
-};
-
-function resolveEndpoint(market: string | null): string {
-	if (market && MARKET_ENDPOINTS[market]) return MARKET_ENDPOINTS[market];
-	return MARKET_ENDPOINTS.america;
-}
 
 export const GET: RequestHandler = async ({ url, fetch }) => {
 	const symbol = url.searchParams.get('symbol');
@@ -31,25 +17,12 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 		return json({ technicals: null });
 	}
 
-	const endpoint = resolveEndpoint(marketParam);
-
-	const body = {
-		symbols: {
-			tickers: [symbol],
-			query: {
-				types: []
-			}
-		},
-		columns: TECHNICAL_COLUMNS
-	};
-
-	const response = await fetch(endpoint, {
-		method: 'POST',
-		headers: {
-			'content-type': 'application/json'
-		},
-		body: JSON.stringify(body)
-	});
+	const endpoint = resolveMarketEndpoint(marketParam);
+	const response = await postTradingViewScan(
+		endpoint,
+		fetch,
+		buildTradingViewScanBody([symbol], TECHNICAL_COLUMNS)
+	);
 
 	if (!response.ok) {
 		return json({ technicals: null });

@@ -8,6 +8,7 @@ import type {
 import { doQuoteSpecs, getOrders } from '@rainlanguage/orderbook';
 import { networks, TOKENS, USDC_TOKENS } from '$lib/network';
 import { AbiCoder } from 'ethers';
+import { describeQuote, normalizeAddress, type MarketSide } from '$lib/utils/tokenMath';
 
 // ABI types for decoding order bytes
 export const IO = '(address token, uint8 decimals, uint256 vaultId)';
@@ -23,6 +24,12 @@ export interface ProcessedQuote {
 	outputTokenSymbol: string;
 	inputTokenAddress: string;
 	outputTokenAddress: string;
+	inputTokenDecimals?: number;
+	outputTokenDecimals?: number;
+	assetAddress?: string;
+	side?: MarketSide;
+	usdcPerToken?: number;
+	tokensPerUsdc?: number;
 }
 
 // Helper function to convert hex string to BigInt
@@ -47,8 +54,6 @@ type QuoteResultWithSpec = {
 	result: QuoteResultEnum;
 	spec: QuoteSpec;
 };
-
-const RATIO_SCALE = 1e18;
 
 function processQuotes(
 	quoteResults: QuoteResultWithSpec[],
@@ -105,6 +110,9 @@ function processQuotes(
 			const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [usdcToken, ...stockTokens]);
 			const outputTokenSymbol = getTokenSymbol(outputTokenAddress, [usdcToken, ...stockTokens]);
 
+			const inputDecimals = Number(inputDefinition.decimals ?? 0);
+			const outputDecimals = Number(outputDefinition.decimals ?? 0);
+
 			const processedQuote: ProcessedQuote = {
 				orderHash: order.orderHash,
 				maxOutput: maxOutputBigInt,
@@ -112,12 +120,23 @@ function processQuotes(
 				inputTokenSymbol,
 				outputTokenSymbol,
 				inputTokenAddress,
-				outputTokenAddress
+				outputTokenAddress,
+				inputTokenDecimals: Number.isFinite(inputDecimals) ? inputDecimals : undefined,
+				outputTokenDecimals: Number.isFinite(outputDecimals) ? outputDecimals : undefined
 			};
+
+			const metrics = describeQuote(processedQuote, usdcToken.address);
+			if (metrics) {
+				processedQuote.side = metrics.side;
+				const normalizedAsset = normalizeAddress(metrics.assetAddress);
+				processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
+				processedQuote.usdcPerToken = metrics.usdcPerToken;
+				processedQuote.tokensPerUsdc = metrics.tokensPerUsdc;
+			}
 
 			processedQuotes.push(processedQuote);
 		} catch {
-			// Silently skip errors
+			// Skip quotes that fail to process (malformed data, decoding errors)
 		}
 	});
 
@@ -214,15 +233,17 @@ export async function fetchAndQuoteUSDCOrders(
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order
-			const inputAddresses = orderData.validInputs.map((input: { token: string }) =>
-				input.token.toLowerCase()
+			const inputAddresses = orderData.validInputs.map(
+				(input: { token: string }) => normalizeAddress(input.token) ?? input.token
 			);
-			const outputAddresses = orderData.validOutputs.map((output: { token: string }) =>
-				output.token.toLowerCase()
+			const outputAddresses = orderData.validOutputs.map(
+				(output: { token: string }) => normalizeAddress(output.token) ?? output.token
 			);
 
-			const usdcAddress = usdcToken.address.toLowerCase();
-			const stockAddresses = stockTokens.map((token) => token.address.toLowerCase());
+			const usdcAddress = normalizeAddress(usdcToken.address) ?? usdcToken.address.toLowerCase();
+			const stockAddresses = stockTokens.map(
+				(token) => normalizeAddress(token.address) ?? token.address.toLowerCase()
+			);
 
 			// Check if order has USDC as input and stock as output
 			const hasUSDCAsInputAndStockAsOutput =
@@ -270,19 +291,20 @@ export async function fetchAndQuoteUSDCOrders(
 			const orderData = decodedOrder[0] as OrderV3;
 
 			// Get input and output addresses from decoded order
-			const inputAddresses = orderData.validInputs.map((input: { token: string }) =>
-				input.token.toLowerCase()
+			const inputAddresses = orderData.validInputs.map(
+				(input: { token: string }) => normalizeAddress(input.token) ?? input.token
 			);
-			const outputAddresses = orderData.validOutputs.map((output: { token: string }) =>
-				output.token.toLowerCase()
+			const outputAddresses = orderData.validOutputs.map(
+				(output: { token: string }) => normalizeAddress(output.token) ?? output.token
 			);
 
-			const usdcAddress = usdcToken.address.toLowerCase();
+			const usdcAddress = normalizeAddress(usdcToken.address) ?? usdcToken.address.toLowerCase();
 
 			// Create quote specs for each supported direction
 			// For each stock token, check if we can create a quote spec
 			stockTokens.forEach((stockToken) => {
-				const stockAddress = stockToken.address.toLowerCase();
+				const stockAddress =
+					normalizeAddress(stockToken.address) ?? stockToken.address.toLowerCase();
 
 				// Check USDC -> Stock direction for this specific stock
 				const usdcInputIndex = inputAddresses.findIndex((addr: string) => addr === usdcAddress);
@@ -347,17 +369,11 @@ export async function fetchAndQuoteUSDCOrders(
 	return processedQuotes;
 }
 
-const normaliseRatio = (value: bigint): number => {
-	const ratio = Number(value);
-	if (!Number.isFinite(ratio)) {
-		return NaN;
-	}
-	return ratio / RATIO_SCALE;
-};
-
 export type TokenPriceSummary = {
 	buy?: number;
 	sell?: number;
+	buyTokensPerUsdc?: number;
+	sellTokensPerUsdc?: number;
 };
 
 const chooseBestPrice = (
@@ -379,42 +395,66 @@ export const buildTokenPriceMap = (
 	usdcAddressRaw: string
 ): Map<string, TokenPriceSummary> => {
 	const priceMap = new Map<string, TokenPriceSummary>();
-	const usdcAddress = usdcAddressRaw.toLowerCase();
+	const usdcAddress = normalizeAddress(usdcAddressRaw);
 
 	quotes.forEach((quote) => {
-		const ratio = normaliseRatio(quote.ratio);
-		if (!Number.isFinite(ratio) || ratio <= 0) return;
+		const metrics =
+			quote.side && quote.assetAddress
+				? {
+						assetAddress: quote.assetAddress,
+						side: quote.side,
+						usdcPerToken: quote.usdcPerToken,
+						tokensPerUsdc: quote.tokensPerUsdc
+					}
+				: describeQuote(quote, usdcAddressRaw);
+		if (!metrics) return;
 
-		const inputAddress = quote.inputTokenAddress.toLowerCase();
-		const outputAddress = quote.outputTokenAddress.toLowerCase();
-		const inputIsUsdc =
-			inputAddress === usdcAddress || quote.inputTokenSymbol?.toUpperCase() === 'USDC';
-		const outputIsUsdc =
-			outputAddress === usdcAddress || quote.outputTokenSymbol?.toUpperCase() === 'USDC';
+		const assetAddress = normalizeAddress(metrics.assetAddress);
+		if (!assetAddress || assetAddress === usdcAddress) return;
 
-		if (outputIsUsdc) {
-			const assetAddress = inputAddress;
-			if (assetAddress !== usdcAddress) {
-				const price = ratio === 0 ? NaN : 1 / ratio;
-				if (Number.isFinite(price) && price > 0) {
-					const existing = priceMap.get(assetAddress) ?? {};
-					existing.buy = chooseBestPrice(existing.buy, price, 'max');
-					priceMap.set(assetAddress, existing);
-				}
+		const existing = priceMap.get(assetAddress) ?? {};
+
+		if (metrics.side === 'buy') {
+			if (
+				Number.isFinite(metrics.usdcPerToken) &&
+				metrics.usdcPerToken &&
+				metrics.usdcPerToken > 0
+			) {
+				existing.buy = chooseBestPrice(existing.buy, metrics.usdcPerToken, 'min');
+			}
+			if (
+				Number.isFinite(metrics.tokensPerUsdc) &&
+				metrics.tokensPerUsdc &&
+				metrics.tokensPerUsdc > 0
+			) {
+				existing.buyTokensPerUsdc = chooseBestPrice(
+					existing.buyTokensPerUsdc,
+					metrics.tokensPerUsdc,
+					'max'
+				);
+			}
+		} else {
+			if (
+				Number.isFinite(metrics.usdcPerToken) &&
+				metrics.usdcPerToken &&
+				metrics.usdcPerToken > 0
+			) {
+				existing.sell = chooseBestPrice(existing.sell, metrics.usdcPerToken, 'max');
+			}
+			if (
+				Number.isFinite(metrics.tokensPerUsdc) &&
+				metrics.tokensPerUsdc &&
+				metrics.tokensPerUsdc > 0
+			) {
+				existing.sellTokensPerUsdc = chooseBestPrice(
+					existing.sellTokensPerUsdc,
+					metrics.tokensPerUsdc,
+					'min'
+				);
 			}
 		}
 
-		if (inputIsUsdc) {
-			const assetAddress = outputAddress;
-			if (assetAddress !== usdcAddress) {
-				const price = ratio;
-				if (Number.isFinite(price) && price > 0) {
-					const existing = priceMap.get(assetAddress) ?? {};
-					existing.sell = chooseBestPrice(existing.sell, price, 'min');
-					priceMap.set(assetAddress, existing);
-				}
-			}
-		}
+		priceMap.set(assetAddress, existing);
 	});
 
 	return priceMap;
