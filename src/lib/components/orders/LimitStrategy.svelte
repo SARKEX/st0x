@@ -18,6 +18,8 @@
 	export let passedOutputToken: PythToken | undefined; // The token we're trading
 	export let currentPrice: string | undefined = undefined; // Current market price
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
+	export let buyPrice: number | null = null; // Best bid price (what you get when selling)
+	export let sellPrice: number | null = null; // Best ask price (what you pay when buying)
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -80,6 +82,16 @@
 			return;
 		}
 
+		// Prepare deploy data
+		let deployData: {
+			inputToken: CategorizedToken;
+			outputToken: CategorizedToken;
+			ioRatio: string;
+			depositAmount: bigint;
+			inputVaultId: Hex | undefined;
+			outputVaultId: Hex | undefined;
+		};
+
 		if (orderSide === 'Buy') {
 			// Buy: input is asset, output is USDC
 			// We're buying the asset, so we deposit USDC and receive asset
@@ -89,7 +101,7 @@
 			const usdcNeeded = parseFloat(assetQuantity) * price;
 			const usdcAmount = parseUnits(usdcNeeded.toString(), selectedInputToken?.decimals || 6);
 
-			transactionStore.handleLimitDeploy({
+			deployData = {
 				inputToken: selectedOutputToken, // Asset is input (token1)
 				outputToken: selectedInputToken, // USDC is output (token2)
 				// For Buy: ratio should be asset/USDC = 1/price
@@ -97,11 +109,11 @@
 				depositAmount: usdcAmount, // Deposit USDC amount in USDC wei
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
-			});
+			};
 		} else {
 			// Sell: input is USDC, output is asset
 			// We're selling the asset, so we deposit asset and receive USDC
-			transactionStore.handleLimitDeploy({
+			deployData = {
 				inputToken: selectedInputToken, // USDC is input (token1)
 				outputToken: selectedOutputToken, // Asset is output (token2)
 				// For Sell: ratio should be USDC/asset = price
@@ -109,12 +121,67 @@
 				depositAmount: selectedAmount, // Deposit asset amount in asset wei
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
-			});
+			};
+		}
+
+		// Check if price warning is needed
+		if (checkPriceWarning()) {
+			pendingDeployData = deployData;
+			showPriceWarning = true;
+		} else {
+			transactionStore.handleLimitDeploy(deployData);
 		}
 	};
 
 	// Wallet connect modal state
 	let showConnectModal = false;
+
+	// Price warning modal state
+	let showPriceWarning = false;
+	let userAcknowledgesWarning = false;
+	let pendingDeployData: {
+		inputToken: CategorizedToken;
+		outputToken: CategorizedToken;
+		ioRatio: string;
+		depositAmount: bigint;
+		inputVaultId: Hex | undefined;
+		outputVaultId: Hex | undefined;
+	} | null = null;
+
+	// Check if limit price is significantly off market price
+	const checkPriceWarning = (): boolean => {
+		const price = parseFloat(selectedInitialRatio || '0');
+		if (!price || price <= 0) return false;
+
+		if (orderSide === 'Buy') {
+			// When buying, check against sellPrice (best ask)
+			if (sellPrice !== null && sellPrice > 0) {
+				const threshold = sellPrice * 1.01; // 1% above best ask
+				return price > threshold;
+			}
+		} else {
+			// When selling, check against buyPrice (best bid)
+			if (buyPrice !== null && buyPrice > 0) {
+				const threshold = buyPrice * 0.99; // 1% below best bid
+				return price < threshold;
+			}
+		}
+		return false;
+	};
+
+	const proceedWithDeploy = () => {
+		if (!pendingDeployData) return;
+		transactionStore.handleLimitDeploy(pendingDeployData);
+		showPriceWarning = false;
+		userAcknowledgesWarning = false;
+		pendingDeployData = null;
+	};
+
+	const cancelDeploy = () => {
+		showPriceWarning = false;
+		userAcknowledgesWarning = false;
+		pendingDeployData = null;
+	};
 
 	// Calculate total cost
 	$: totalCost =
@@ -229,5 +296,66 @@
 			showSection={false}
 			minHeight={false}
 		/>
+	</div>
+</Modal>
+
+<!-- Price Warning Modal -->
+<Modal
+	show={showPriceWarning}
+	title="Unfavorable Limit Price"
+	maxWidthClass="max-w-lg"
+	onClose={cancelDeploy}
+>
+	<div class="space-y-6">
+		<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+			<div class="flex gap-3">
+				<div class="flex-shrink-0">
+					<svg class="h-5 w-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+						<path
+							fill-rule="evenodd"
+							d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+				</div>
+				<div>
+					<h3 class="font-semibold text-yellow-200">Price significantly {orderSide === 'Buy' ? 'above best offer' : 'below best bid'}</h3>
+					<p class="mt-2 text-sm text-yellow-100">
+						Your limit price is set significantly {orderSide === 'Buy' ? 'above' : 'below'} the current best {orderSide === 'Buy' ? 'offer' : 'bid'}. You won't get the best possible price. We recommend using a market order instead.
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<label class="flex items-center gap-3">
+			<input
+				type="checkbox"
+				bind:checked={userAcknowledgesWarning}
+				class="h-4 w-4 rounded border-gray-300 bg-gray-800 text-yellow-500 focus:ring-yellow-500"
+			/>
+			<span class="text-sm text-gray-300">I understand and wish to continue</span>
+		</label>
+
+		<div class="flex gap-3">
+			<button
+				type="button"
+				on:click={cancelDeploy}
+				class="flex-1 rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 transition hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+			>
+				Cancel
+			</button>
+			<button
+				type="button"
+				on:click={proceedWithDeploy}
+				disabled={!userAcknowledgesWarning}
+				class={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 ${
+					userAcknowledgesWarning
+						? 'bg-yellow-500 text-gray-900 hover:bg-yellow-600 focus:ring-yellow-400'
+						: 'cursor-not-allowed bg-gray-600 text-gray-400 opacity-50'
+				}`}
+			>
+				Continue
+			</button>
+		</div>
 	</div>
 </Modal>

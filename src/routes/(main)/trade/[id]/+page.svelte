@@ -78,7 +78,7 @@
 	let infoCollapsed = false;
 	let showTradePanel = false;
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
-	let panelStrategy: 'limit' | 'dca' | 'market' = 'limit';
+	let panelStrategy: 'limit' | 'dca' | 'market' = 'market';
 	let panelOpenedFromTerminal = false;
 	const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
 	const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
@@ -308,7 +308,7 @@
 
 	const openTradePanel = (side: 'Buy' | 'Sell', options: { closeTerminal?: boolean } = {}) => {
 		panelOrderSide = side;
-		panelStrategy = 'limit';
+		panelStrategy = 'market';
 		const shouldCloseTerminal = options.closeTerminal ?? true;
 		panelOpenedFromTerminal = !shouldCloseTerminal;
 		showTradePanel = true;
@@ -1042,7 +1042,12 @@
 							</label>
 							<div>
 								{#if panelStrategy === 'limit'}
-									<LimitStrategy orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
+									<LimitStrategy
+										orderSide={panelOrderSide}
+										passedOutputToken={currentPythToken}
+										{buyPrice}
+										{sellPrice}
+									/>
 								{:else if panelStrategy === 'market'}
 									<MarketOrder orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
 								{:else}

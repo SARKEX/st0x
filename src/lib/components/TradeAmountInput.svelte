@@ -32,7 +32,7 @@
 		amount = undefined;
 	};
 
-	$: if (inputAmount) {
+	$: if (inputAmount && decimals > 0) {
 		amount = parseUnits(inputAmount, decimals);
 	}
 
@@ -60,6 +60,12 @@
 		if (!data) return;
 		balance = data.balance;
 		decimals = data.decimals;
+		// Re-parse the input amount now that decimals are loaded
+		if (inputAmount && decimals > 0) {
+			amount = parseUnits(inputAmount, decimals);
+		}
+	}).catch(() => {
+		// Handle promise rejection silently
 	});
 
 	const setValueToMax = () => {
