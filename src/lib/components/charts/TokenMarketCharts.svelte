@@ -3,11 +3,7 @@
 	import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
 	import { containerStyles } from '$lib/utils/styles';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import type {
-		DepthSeries,
-		TradeHistoryPoint,
-		VolumeBucket
-	} from '$lib/components/charts/token-chart-types';
+	import type { DepthSeries, VolumeBucket } from '$lib/components/charts/token-chart-types';
 
 	type ChartInstance = {
 		destroy: () => void;
@@ -37,7 +33,6 @@
 	type HistoryRangeOption = { key: HistoryRangeKey; label: string };
 
 	// Used for reactive chart updates (via $: reactive statement)
-	export let tradeHistory: TradeHistoryPoint[] = [];
 	export let volumeBuckets: VolumeBucket[] = [];
 	export let depth: DepthSeries = { bids: [], asks: [] };
 	export let isLoading = false;
@@ -640,7 +635,6 @@
 	});
 
 	$: if (ChartCtor && browser) {
-		void tradeHistory;
 		void volumeBuckets;
 		void depth;
 		void rangeStartMs;

@@ -21,10 +21,35 @@
 	export let showMaxButton: boolean = true;
 
 	let balance: bigint = 0n;
-	let decimals: number = 0;
+	let decimals: number | null = null;
+	let tokenFingerprint: string | undefined;
+
+	const parseDecimals = (value: unknown): number | null => {
+		if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+			return value;
+		}
+		if (typeof value === 'string' && value.trim().length > 0) {
+			const parsed = Number(value);
+			return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+		}
+		return null;
+	};
+
+	const canParseDecimals = (value: number | null | undefined): value is number =>
+		typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
 	$: if (amountToken) {
 		resetInputAmount();
+	}
+
+	$: if (amountToken) {
+		const fingerprint = `${amountToken.address ?? ''}:${amountToken.chainId ?? ''}`;
+		const fallbackDecimals = parseDecimals((amountToken as Partial<Token>).decimals);
+		const tokenChanged = tokenFingerprint !== fingerprint;
+		tokenFingerprint = fingerprint;
+		if (tokenChanged || !canParseDecimals(decimals)) {
+			decimals = fallbackDecimals;
+		}
 	}
 
 	const resetInputAmount = () => {
@@ -32,8 +57,12 @@
 		amount = undefined;
 	};
 
-	$: if (inputAmount) {
-		amount = parseUnits(inputAmount, decimals);
+	$: if (inputAmount && canParseDecimals(decimals)) {
+		try {
+			amount = parseUnits(inputAmount, decimals);
+		} catch {
+			amount = undefined;
+		}
 	}
 
 	$: balancePromise = (async () => {
@@ -56,13 +85,30 @@
 		return { balance, decimals };
 	})();
 
-	$: balancePromise.then((data) => {
-		if (!data) return;
-		balance = data.balance;
-		decimals = data.decimals;
-	});
+	$: balancePromise
+		.then((data) => {
+			if (!data) return;
+			balance = data.balance;
+			const resolvedDecimals = parseDecimals(data.decimals);
+			if (resolvedDecimals !== null) {
+				decimals = resolvedDecimals;
+			}
+			if (inputAmount && canParseDecimals(decimals)) {
+				try {
+					amount = parseUnits(inputAmount, decimals);
+				} catch {
+					amount = undefined;
+				}
+			}
+		})
+		.catch(() => {
+			// Handle promise rejection silently
+		});
 
 	const setValueToMax = () => {
+		if (!canParseDecimals(decimals)) {
+			return;
+		}
 		inputAmount = formatUnits(balance, decimals);
 		amount = balance;
 	};
