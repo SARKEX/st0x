@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import transactionStore from './transactionStore';
-import { sendTransaction } from '@wagmi/core';
-import { getTransactionAddOrders } from '@rainlanguage/orderbook';
-import { mockWagmiConfigStore } from '$lib/mocks/mockStores';
+import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import { STOXs, USDC_TOKENS } from './network';
 import { rainlangConfirmationModal, currentNetwork } from './stores';
 import {
@@ -13,6 +11,8 @@ import {
 	getFolioDeploymentArgs
 } from './getDeploymentArgs';
 import { mockCurrentNetwork } from './mocks/mockCurrentNetwork';
+import { createRaindexClient } from './utils/raindexClient';
+import { decodeFunctionData } from 'viem';
 
 // Shared mock network object to avoid repetition
 const mockNetwork = mockCurrentNetwork;
@@ -29,27 +29,84 @@ vi.mock('./getDeploymentArgs', async (importOriginal) => {
 	};
 });
 
-vi.mock('@rainlanguage/orderbook', () => ({
-	getTransactionAddOrders: vi.fn()
+vi.mock('./utils/raindexClient', () => ({
+	createRaindexClient: vi.fn()
 }));
 
 vi.mock('@wagmi/core', () => ({
 	sendTransaction: vi.fn(),
-	waitForTransactionReceipt: vi.fn()
+	waitForTransactionReceipt: vi.fn(),
+	readContract: vi.fn()
 }));
+
+vi.mock('viem', async (importOriginal) => {
+	const actual = (await importOriginal()) as object;
+	return {
+		...actual,
+		decodeFunctionData: vi.fn()
+	};
+});
+
+vi.mock('svelte-wagmi', async () => {
+	// Import the mock stores INSIDE the factory (don’t capture top-level vars)
+	const {
+		web3ModalStore,
+		mockWagmiConfigStore,
+		mockSignerAddressStore,
+		mockChainIdStore,
+		mockConnectedStore
+	} = await import('$lib/mocks/mockStores');
+
+	return {
+		web3Modal: web3ModalStore,
+		wagmiConfig: mockWagmiConfigStore,
+		signerAddress: mockSignerAddressStore,
+		chainId: mockChainIdStore,
+		connected: mockConnectedStore
+	};
+});
 
 vi.mock('svelte/store', async () => {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const actual = (await vi.importActual('svelte/store')) as any;
+	// Import stores to check against them
+	const { mockSignerAddressStore, mockWagmiConfigStore, mockChainIdStore } = await import(
+		'$lib/mocks/mockStores'
+	);
 	return {
 		...actual,
-		get: vi.fn().mockImplementation((store) => {
+		get: vi.fn().mockImplementation((store: unknown) => {
 			if (store === transactionStore) return transactionStore;
 			if (store === rainlangConfirmationModal) return actual.get(store);
 			if (store === currentNetwork) {
 				return mockCurrentNetwork;
 			}
-			return mockWagmiConfigStore;
+			// For writable stores from mockStores, manually get the value
+			if (
+				store === mockSignerAddressStore ||
+				store === mockWagmiConfigStore ||
+				store === mockChainIdStore
+			) {
+				let value: unknown;
+				const unsubscribe = (
+					store as { subscribe: (fn: (v: unknown) => void) => () => void }
+				).subscribe((v: unknown) => {
+					value = v;
+				});
+				unsubscribe();
+				return value;
+			}
+			// For other stores with subscribe, use the actual get function
+			if (
+				store &&
+				typeof store === 'object' &&
+				'subscribe' in store &&
+				typeof (store as { subscribe: unknown }).subscribe === 'function'
+			) {
+				return actual.get(store);
+			}
+			// Fallback
+			return undefined;
 		})
 	};
 });
@@ -151,43 +208,49 @@ describe('transactionStore tests', () => {
 		}
 	};
 
-	beforeEach(() => {
+	let mockGetAddOrdersForTransaction: ReturnType<typeof vi.fn>;
+
+	beforeEach(async () => {
 		vi.clearAllMocks();
 		transactionStore.reset();
+
+		// Set up the mock stores with proper values
+		const { mockSignerAddressStore, mockWagmiConfigStore } = await import('$lib/mocks/mockStores');
+		const { mockWeb3Config } = await import('$lib/mocks/mockWagmiConfig');
+		mockSignerAddressStore.set('0x1234567890123456789012345678901234567890');
+		mockWagmiConfigStore.set(mockWeb3Config);
 
 		vi.mocked(getMarketMakingDeploymentArgs).mockResolvedValue(mockDeploymentArgsMarketMaking);
 		vi.mocked(getDcaDeploymentArgs).mockResolvedValue(mockDeploymentArgsDca);
 		vi.mocked(getLimitOrderDeploymentArgs).mockResolvedValue(mockDeploymentArgsLimitOrder);
 		vi.mocked(getFolioDeploymentArgs).mockResolvedValue(mockDeploymentArgsFolio);
 		vi.mocked(sendTransaction).mockResolvedValue('0xtxhash');
-		vi.mocked(getTransactionAddOrders).mockResolvedValue({
+		vi.mocked(waitForTransactionReceipt).mockResolvedValue({
+			transactionHash: '0xtxhash',
+			status: 'success'
+		} as unknown as Awaited<ReturnType<typeof waitForTransactionReceipt>>);
+		vi.mocked(readContract).mockResolvedValue(1000000000000000000n);
+		vi.mocked(decodeFunctionData).mockReturnValue({
+			functionName: 'approve',
+			args: ['0x1234', '0xde0b6b3a7640000'] // 1000000000000000000n in hex
+		} as unknown as ReturnType<typeof decodeFunctionData>);
+
+		// Mock createRaindexClient
+		mockGetAddOrdersForTransaction = vi.fn().mockResolvedValue({
 			value: [
 				{
-					transaction: {
-						id: '0xtxid',
-						from: '0xfrom',
-						blockNumber: '123456',
-						timestamp: '1234567890'
-					},
-					order: {
-						id: '0xorderid',
-						orderBytes: '0xorderbytes',
-						orderHash: '0xorderhash',
-						owner: '0xowner',
-						outputs: [],
-						inputs: [],
-						orderbook: { id: '0xorderbook' },
-						active: true,
-						timestampAdded: '1234567890',
-						meta: undefined,
-						addEvents: [],
-						trades: [],
-						removeEvents: []
-					}
+					orderHash: '0xorderhash',
+					orderbook: '0xorderbook'
 				}
 			],
 			error: undefined
 		});
+		const mockClient = {
+			getAddOrdersForTransaction: mockGetAddOrdersForTransaction
+		};
+		vi.mocked(createRaindexClient).mockResolvedValue(
+			mockClient as unknown as Awaited<ReturnType<typeof createRaindexClient>>
+		);
 
 		// Mock setInterval and clearInterval
 		vi.useFakeTimers();
@@ -384,25 +447,37 @@ describe('transactionStore tests', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await deployPromise;
+
+		// Wait for async operations to complete by polling
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 3 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
 
 		expect(sendTransaction).toHaveBeenCalledTimes(3);
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval0',
 			to: '0xtoken0'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval1',
 			to: '0xtoken1'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xabcdef',
 			to: '0x1234'
 		});
@@ -424,21 +499,33 @@ describe('transactionStore tests', () => {
 			depositAmount: 2000000000000000000n
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await deployPromise;
+
+		// Wait for async operations to complete by polling
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
 
 		expect(sendTransaction).toHaveBeenCalledTimes(2);
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xabcdef',
 			to: '0x1234'
 		});
@@ -454,21 +541,33 @@ describe('transactionStore tests', () => {
 			outputVaultId: undefined
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await deployPromise;
+
+		// Wait for async operations to complete by polling
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
 
 		expect(sendTransaction).toHaveBeenCalledTimes(2);
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xabcdef',
 			to: '0x1234'
 		});
@@ -508,45 +607,57 @@ describe('transactionStore tests', () => {
 			outputVaultId7: undefined
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await deployPromise;
+
+		// Wait for async operations to complete by polling
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 8 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
 
 		expect(sendTransaction).toHaveBeenCalledTimes(8);
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken1'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken2'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken3'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken4'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken5'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xapproval',
 			to: '0xtoken6'
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(mockWagmiConfigStore, {
+		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
 			data: '0xabcdef',
 			to: '0x1234'
 		});
@@ -569,18 +680,34 @@ describe('transactionStore tests', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await vi.advanceTimersByTimeAsync(2000);
-		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(
-			mockNetwork.orderbook_subgraph_url,
+		// Wait for all transactions to complete first
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 3 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
+
+		// Advance timer to trigger the polling interval
+		await vi.advanceTimersByTimeAsync(2000);
+
+		expect(createRaindexClient).toHaveBeenCalled();
+		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
+			mockNetwork.id,
+			'0x1234',
 			'0xtxhash'
 		);
 	});
@@ -601,18 +728,34 @@ describe('transactionStore tests', () => {
 			depositAmount: 1000000000000000000n
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await vi.advanceTimersByTimeAsync(2000);
-		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(
-			mockNetwork.orderbook_subgraph_url,
+		// Wait for all transactions to complete first
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
+
+		// Advance timer to trigger the polling interval
+		await vi.advanceTimersByTimeAsync(2000);
+
+		expect(createRaindexClient).toHaveBeenCalled();
+		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
+			mockNetwork.id,
+			'0x1234',
 			'0xtxhash'
 		);
 	});
@@ -627,18 +770,34 @@ describe('transactionStore tests', () => {
 			outputVaultId: undefined
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await vi.advanceTimersByTimeAsync(2000);
-		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(
-			mockNetwork.orderbook_subgraph_url,
+		// Wait for all transactions to complete first
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
+
+		// Advance timer to trigger the polling interval
+		await vi.advanceTimersByTimeAsync(2000);
+
+		expect(createRaindexClient).toHaveBeenCalled();
+		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
+			mockNetwork.id,
+			'0x1234',
 			'0xtxhash'
 		);
 	});
@@ -677,18 +836,34 @@ describe('transactionStore tests', () => {
 			outputVaultId7: undefined
 		});
 
-		await vi.runAllTimersAsync();
+		await deployPromise;
 
 		// Simulate user clicking deploy button
 		const modal = get(rainlangConfirmationModal);
 		modal.onDeploy?.();
 
+		// Flush initial async operations
+		await Promise.resolve();
+		await Promise.resolve();
 		await vi.runAllTimersAsync();
-		await vi.advanceTimersByTimeAsync(2000);
-		await deployPromise;
 
-		expect(getTransactionAddOrders).toHaveBeenCalledWith(
-			mockNetwork.orderbook_subgraph_url,
+		// Wait for all transactions to complete first
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < 8 && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve(); // Allow pending promises to resolve
+			await Promise.resolve(); // Double flush to ensure all microtasks complete
+			attempts++;
+		}
+
+		// Advance timer to trigger the polling interval
+		await vi.advanceTimersByTimeAsync(2000);
+
+		expect(createRaindexClient).toHaveBeenCalled();
+		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
+			mockNetwork.id,
+			'0x1234',
 			'0xtxhash'
 		);
 	});

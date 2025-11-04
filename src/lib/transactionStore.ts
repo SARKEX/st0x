@@ -1,13 +1,12 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import { encodeFunctionData, erc20Abi, formatUnits, type Hex } from 'viem';
+import { encodeFunctionData, erc20Abi, type Hex } from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import {
 	getTakeOrders3Calldata,
 	type SgOrder,
 	type TakeOrdersConfigV4,
 	type DeploymentTransactionArgs,
-	type SgVault,
 	RaindexVault
 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
@@ -25,7 +24,6 @@ import {
 import { rainlangConfirmationModal } from './stores';
 import { createRaindexClient } from './utils/raindexClient';
 import { decodeFunctionData } from 'viem';
-
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
@@ -175,7 +173,7 @@ const transactionStore = () => {
 					deploymentArgs.orderbookAddress as `0x${string}`,
 					hash as `0x${string}`
 				);
-				
+
 				if (orders.error) {
 					return; // Continue polling
 				}
@@ -266,7 +264,7 @@ const transactionStore = () => {
 	const handleWithdraw = async (vault: RaindexVault) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
-		
+
 		// vault.balance is already a Float instance, use it directly
 		const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
 		if (vaultWithdrawCalldata.error) throw new Error(vaultWithdrawCalldata.error.readableMsg);
@@ -337,8 +335,6 @@ const transactionStore = () => {
 			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
 
-		
-
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
 			awaitWalletConfirmation(`Approving token spend...`);
@@ -371,7 +367,7 @@ const transactionStore = () => {
 					'Failed to generate transaction calldata' as TransactionErrorMessage
 				);
 			}
-		} catch (error) {
+		} catch {
 			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
 		}
 

@@ -36,7 +36,10 @@ vi.mock('./getPrice', () => ({
 // Mock the svelte-wagmi module
 vi.mock('svelte-wagmi', () => ({
 	signerAddress: {
-		subscribe: vi.fn()
+		subscribe: vi.fn((callback) => {
+			callback('0x1234567890123456789012345678901234567890');
+			return () => {};
+		})
 	},
 	chainId: {
 		subscribe: vi.fn()
@@ -66,10 +69,10 @@ vi.mock('svelte/store', async () => {
 
 describe('getDeploymentArgs', () => {
 	const mockGui = {
-		saveSelectToken: vi.fn().mockResolvedValue(undefined),
-		saveFieldValue: vi.fn().mockResolvedValue(undefined),
-		saveDeposit: vi.fn().mockResolvedValue(undefined),
-		setVaultId: vi.fn().mockResolvedValue(undefined),
+		setSelectToken: vi.fn().mockResolvedValue(undefined),
+		setFieldValue: vi.fn(),
+		setDeposit: vi.fn(),
+		setVaultId: vi.fn(),
 		getDeploymentTransactionArgs: vi.fn().mockResolvedValue({
 			value: {
 				to: '0x1234567890123456789012345678901234567890',
@@ -148,37 +151,37 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', USDC_TOKEN.address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', STOXs[0].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', USDC_TOKEN.address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', STOXs[0].address);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('amount-is-fast-exit', '1');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('amount-is-fast-exit', '1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('not-amount-is-fast-exit', '0');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('not-amount-is-fast-exit', '0');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('initial-io', '0.1');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('initial-io', '0.1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'max-amount',
 			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
 		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'min-amount',
 			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
 		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('next-trade-multiplier', '1.01');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('next-trade-multiplier', '1.01');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('cost-basis-multiplier', '1');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('cost-basis-multiplier', '1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-epoch', '3600');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-epoch', '3600');
 
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token1',
 			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
 		);
 
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token2',
 			formatUnits(1000000000000000000n, STOXs[0].decimals)
 		);
@@ -200,31 +203,34 @@ describe('getDeploymentArgs', () => {
 			depositAmount: 4000000000000000000n
 		});
 
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('output', USDC_TOKEN.address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('input', STOXs[0].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('output', USDC_TOKEN.address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('input', STOXs[0].address);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '86400');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '86400');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-trade-epoch', '3600');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('next-trade-multiplier', '1.01');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('next-trade-baseline-multiplier', '0');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'amount-per-epoch',
 			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
 		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'max-trade-amount',
 			formatUnits(3000000000000000000n, USDC_TOKEN.decimals)
 		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith(
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'min-trade-amount',
 			formatUnits(2000000000000000000n, USDC_TOKEN.decimals)
 		);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('baseline', '0.9');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('baseline', '0.9');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('initial-io', '1.2');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('initial-io', '1.2');
 
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'output',
 			formatUnits(4000000000000000000n, USDC_TOKEN.decimals)
 		);
@@ -249,8 +255,8 @@ describe('getDeploymentArgs', () => {
 			depositAmount: 4000000000000000000n
 		});
 
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(true, 0, inputVaultId);
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(false, 0, outputVaultId);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith('input', STOXs[0].address, inputVaultId);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith('output', USDC_TOKEN.address, outputVaultId);
 	});
 
 	it('should handle getLimitOrderDeploymentArgs strategy correctly', async () => {
@@ -263,12 +269,12 @@ describe('getDeploymentArgs', () => {
 			outputVaultId: undefined
 		});
 
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', STOXs[0].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', USDC_TOKEN.address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', STOXs[0].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', USDC_TOKEN.address);
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fixed-io', '0.1');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('fixed-io', '0.1');
 
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token2',
 			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
 		);
@@ -308,43 +314,43 @@ describe('getDeploymentArgs', () => {
 			outputVaultId7: undefined
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('threshold', '0.1');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('threshold', '0.1');
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fee', '0.1');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('fee', '0.1');
 
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token1', ALL_TOKENS[0].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token2', ALL_TOKENS[1].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token3', ALL_TOKENS[2].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token4', ALL_TOKENS[3].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token5', ALL_TOKENS[4].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token6', ALL_TOKENS[5].address);
-		expect(mockGui.saveSelectToken).toHaveBeenCalledWith('token7', ALL_TOKENS[6].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', ALL_TOKENS[0].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', ALL_TOKENS[1].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token3', ALL_TOKENS[2].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token4', ALL_TOKENS[3].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token5', ALL_TOKENS[4].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token6', ALL_TOKENS[5].address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token7', ALL_TOKENS[6].address);
 
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token1',
 			formatUnits(1000000000000000000n, ALL_TOKENS[0].decimals)
 		);
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token2',
 			formatUnits(2000000000000000000n, ALL_TOKENS[1].decimals)
 		);
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token3',
 			formatUnits(3000000000000000000n, ALL_TOKENS[2].decimals)
 		);
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token4',
 			formatUnits(4000000000000000000n, ALL_TOKENS[3].decimals)
 		);
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token5',
 			formatUnits(5000000000000000000n, ALL_TOKENS[4].decimals)
 		);
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token6',
 			formatUnits(6000000000000000000n, ALL_TOKENS[5].decimals)
 		);
-		expect(mockGui.saveDeposit).toHaveBeenCalledWith(
+		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token7',
 			formatUnits(7000000000000000000n, ALL_TOKENS[6].decimals)
 		);
@@ -375,6 +381,9 @@ describe('getDeploymentArgs', () => {
 				value: 0n
 			}
 		});
+		expect(mockGui.getDeploymentTransactionArgs).toHaveBeenCalledWith(
+			'0x1234567890123456789012345678901234567890'
+		);
 	});
 
 	it('should return getDcaDeploymentArgs deployment args', async () => {
@@ -401,6 +410,9 @@ describe('getDeploymentArgs', () => {
 				value: 0n
 			}
 		});
+		expect(mockGui.getDeploymentTransactionArgs).toHaveBeenCalledWith(
+			'0x1234567890123456789012345678901234567890'
+		);
 	});
 
 	it('should return getLimitOrderDeploymentArgs deployment args', async () => {
@@ -421,6 +433,9 @@ describe('getDeploymentArgs', () => {
 				value: 0n
 			}
 		});
+		expect(mockGui.getDeploymentTransactionArgs).toHaveBeenCalledWith(
+			'0x1234567890123456789012345678901234567890'
+		);
 	});
 
 	it('should return getFolioDeploymentArgs deployment args', async () => {
@@ -465,6 +480,9 @@ describe('getDeploymentArgs', () => {
 				value: 0n
 			}
 		});
+		expect(mockGui.getDeploymentTransactionArgs).toHaveBeenCalledWith(
+			'0x1234567890123456789012345678901234567890'
+		);
 	});
 
 	it('should handle vault IDs correctly in getMarketMakingDeploymentArgs', async () => {
@@ -489,10 +507,22 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: outputVaultIdToken2
 		});
 
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(true, 0, inputVaultIdToken1);
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(true, 1, inputVaultIdToken2);
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(false, 0, outputVaultIdToken1);
-		expect(mockGui.setVaultId).toHaveBeenCalledWith(false, 1, outputVaultIdToken2);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(
+			'input',
+			USDC_TOKEN.address,
+			inputVaultIdToken1
+		);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith('input', STOXs[0].address, inputVaultIdToken2);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(
+			'output',
+			USDC_TOKEN.address,
+			outputVaultIdToken1
+		);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith(
+			'output',
+			STOXs[0].address,
+			outputVaultIdToken2
+		);
 	});
 
 	it('should handle different period units in getDcaDeploymentArgs', async () => {
@@ -511,7 +541,10 @@ describe('getDeploymentArgs', () => {
 			depositAmount: 4000000000000000000n
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '60');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '60');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-trade-epoch', '3600');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('next-trade-multiplier', '1.01');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('next-trade-baseline-multiplier', '0');
 	});
 
 	it('should handle missing signer address', async () => {
@@ -577,7 +610,7 @@ describe('getDeploymentArgs', () => {
 			outputVaultId7: undefined
 		});
 
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('threshold', '0.05');
-		expect(mockGui.saveFieldValue).toHaveBeenCalledWith('fee', '0.003');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('threshold', '0.05');
+		expect(mockGui.setFieldValue).toHaveBeenCalledWith('fee', '0.003');
 	});
 });

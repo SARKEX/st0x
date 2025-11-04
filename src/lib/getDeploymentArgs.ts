@@ -6,7 +6,6 @@ import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from './derivations';
 import { currentNetwork } from './stores';
-import { type VaultType } from '@rainlanguage/orderbook';
 import { RAIN_STRATEGIES_COMMIT } from './utils/raindexClient';
 
 export type DcaDeploymentArgs = {
@@ -45,7 +44,10 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 
 	gui.setFieldValue('amount-per-epoch', formatUnits(args.budgetAmount, args.outputToken.decimals));
 
-	gui.setFieldValue('max-trade-amount', formatUnits(args.maxTradeAmount, args.outputToken.decimals));
+	gui.setFieldValue(
+		'max-trade-amount',
+		formatUnits(args.maxTradeAmount, args.outputToken.decimals)
+	);
 
 	gui.setFieldValue(
 		'min-trade-amount',
@@ -59,11 +61,11 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
 	if (args.inputVaultId) {
-		gui.setVaultId("input", args.inputToken.address, args.inputVaultId);
+		gui.setVaultId('input', args.inputToken.address, args.inputVaultId);
 	}
 
 	if (args.outputVaultId) {
-		gui.setVaultId("output", args.outputToken.address, args.outputVaultId);
+		gui.setVaultId('output', args.outputToken.address, args.outputVaultId);
 	}
 
 	const $signerAddress = get(signerAddress);
@@ -115,11 +117,11 @@ export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs
 	gui.setDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
 
 	if (args.inputVaultId) {
-		gui.setVaultId("input", args.inputToken.address, args.inputVaultId);
+		gui.setVaultId('input', args.inputToken.address, args.inputVaultId);
 	}
 
 	if (args.outputVaultId) {
-		gui.setVaultId("output", args.outputToken.address, args.outputVaultId);
+		gui.setVaultId('output', args.outputToken.address, args.outputVaultId);
 	}
 
 	const $signerAddress = get(signerAddress);
@@ -192,16 +194,16 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
 
 	if (args.inputVaultIdToken1) {
-		gui.setVaultId("input", args.token1.address, args.inputVaultIdToken1);
+		gui.setVaultId('input', args.token1.address, args.inputVaultIdToken1);
 	}
 	if (args.inputVaultIdToken2) {
-		gui.setVaultId("input", args.token2.address, args.inputVaultIdToken2);
+		gui.setVaultId('input', args.token2.address, args.inputVaultIdToken2);
 	}
 	if (args.outputVaultIdToken1) {
-		gui.setVaultId("output", args.token1.address, args.outputVaultIdToken1);
+		gui.setVaultId('output', args.token1.address, args.outputVaultIdToken1);
 	}
 	if (args.outputVaultIdToken2) {
-		gui.setVaultId("output", args.token2.address, args.outputVaultIdToken2);
+		gui.setVaultId('output', args.token2.address, args.outputVaultIdToken2);
 	}
 
 	const $signerAddress = get(signerAddress);
@@ -212,8 +214,7 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 	const composedRainlang = composedRainlangResult.value;
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
-	if (deploymentArgsResult.error){
-		console.log('deploymentArgsResult.error : ', deploymentArgsResult.error);
+	if (deploymentArgsResult.error) {
 		throw new Error(deploymentArgsResult.error.readableMsg);
 	}
 	const deploymentArgs = deploymentArgsResult.value;
@@ -258,8 +259,6 @@ export type FolioDeploymentArgs = {
 };
 
 export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
-
-	console.log('folio args : ', args);
 	const network = get(currentNetwork);
 	const folioStrategy = await (
 		await fetch(
@@ -302,59 +301,59 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	gui.setDeposit('token7', formatUnits(args.depositAmount7, args.selectedToken7.decimals));
 
 	if (args.inputVaultId1) {
-		gui.setVaultId("input", args.selectedToken1.address, args.inputVaultId1);
+		gui.setVaultId('input', args.selectedToken1.address, args.inputVaultId1);
 	}
 
 	if (args.inputVaultId2) {
-		gui.setVaultId("input", args.selectedToken2.address, args.inputVaultId2);
+		gui.setVaultId('input', args.selectedToken2.address, args.inputVaultId2);
 	}
 
 	if (args.inputVaultId3) {
-		gui.setVaultId("input", args.selectedToken3.address, args.inputVaultId3);
+		gui.setVaultId('input', args.selectedToken3.address, args.inputVaultId3);
 	}
 
 	if (args.inputVaultId4) {
-		gui.setVaultId("input", args.selectedToken4.address, args.inputVaultId4);
+		gui.setVaultId('input', args.selectedToken4.address, args.inputVaultId4);
 	}
 
 	if (args.inputVaultId5) {
-		gui.setVaultId("input", args.selectedToken5.address, args.inputVaultId5);
+		gui.setVaultId('input', args.selectedToken5.address, args.inputVaultId5);
 	}
 
 	if (args.inputVaultId6) {
-		gui.setVaultId("input", args.selectedToken6.address, args.inputVaultId6);
+		gui.setVaultId('input', args.selectedToken6.address, args.inputVaultId6);
 	}
 
 	if (args.inputVaultId7) {
-		gui.setVaultId("input", args.selectedToken7.address, args.inputVaultId7);
+		gui.setVaultId('input', args.selectedToken7.address, args.inputVaultId7);
 	}
 
 	if (args.outputVaultId1) {
-		gui.setVaultId("output", args.selectedToken1.address, args.outputVaultId1);
+		gui.setVaultId('output', args.selectedToken1.address, args.outputVaultId1);
 	}
 
 	if (args.outputVaultId2) {
-		gui.setVaultId("output", args.selectedToken2.address, args.outputVaultId2);
+		gui.setVaultId('output', args.selectedToken2.address, args.outputVaultId2);
 	}
 
 	if (args.outputVaultId3) {
-		gui.setVaultId("output", args.selectedToken3.address, args.outputVaultId3);
+		gui.setVaultId('output', args.selectedToken3.address, args.outputVaultId3);
 	}
 
 	if (args.outputVaultId4) {
-		gui.setVaultId("output", args.selectedToken4.address, args.outputVaultId4);
+		gui.setVaultId('output', args.selectedToken4.address, args.outputVaultId4);
 	}
 
 	if (args.outputVaultId5) {
-		gui.setVaultId("output", args.selectedToken5.address, args.outputVaultId5);
+		gui.setVaultId('output', args.selectedToken5.address, args.outputVaultId5);
 	}
 
 	if (args.outputVaultId6) {
-		gui.setVaultId("output", args.selectedToken6.address, args.outputVaultId6);
+		gui.setVaultId('output', args.selectedToken6.address, args.outputVaultId6);
 	}
 
 	if (args.outputVaultId7) {
-		gui.setVaultId("output", args.selectedToken7.address, args.outputVaultId7);
+		gui.setVaultId('output', args.selectedToken7.address, args.outputVaultId7);
 	}
 
 	const $signerAddress = get(signerAddress);
@@ -367,8 +366,6 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
-
-	console.log('deploymentArgs : ', JSON.stringify(deploymentArgs));
 
 	return {
 		composedRainlang,
