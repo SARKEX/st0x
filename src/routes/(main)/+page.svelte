@@ -193,7 +193,8 @@
 			const rows: TokenRow[] = [];
 			for (const sft of $sfts) {
 				const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
-				const summary = quotesRecord[sft.address.toLowerCase()] ?? null;
+				const lookupAddress = sft.address.toLowerCase();
+				const summary = quotesRecord[lookupAddress] ?? null;
 				const buyPrice = summary?.buy ?? null;
 				const sellPrice = summary?.sell ?? null;
 				const onChainPrice = calculateMidPrice(summary);

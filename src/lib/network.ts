@@ -26,7 +26,7 @@ export interface Network {
 export const USDC_TOKENS: { [chainId: number]: PythToken } = {
 	8453: {
 		chainId: 8453,
-		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+		address: '0xE1d3ECe2425F8F350b8d2b8CB179D5a36AeE1c58',
 		symbol: 'USDC',
 		decimals: 6,
 		name: 'USD Coin',

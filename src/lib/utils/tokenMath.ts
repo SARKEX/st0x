@@ -72,11 +72,9 @@ export function toDecimal(
 			
 			// Convert to fixed decimal using the Float API
 			const parsedDecimals = Number(decimals ?? 0);
-			console.log('floatResult.value : ', floatResult.value	);
 			const fixedDecimalResult = floatResult.value.toFixedDecimalLossy(parsedDecimals);
 			
 			if (fixedDecimalResult.error) {
-				console.warn('Float toFixedDecimal error:', fixedDecimalResult.error);
 				return fallback ?? null;
 			}
 			

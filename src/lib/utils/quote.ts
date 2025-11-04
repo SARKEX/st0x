@@ -10,12 +10,12 @@ import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress, type MarketSide } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
 import { createRaindexClient } from '$lib/utils/raindexClient';
+import { Float } from '@rainlanguage/float';
 
 // ABI types for decoding order bytes
 const IOV2 = '(address token, bytes32 vaultId)';
 const EvaluableV4 = '(address interpreter, address store, bytes bytecode)';
-const OrderV4_ABI = `(address owner, ${EvaluableV4} evaluable, ${IOV2}[] validInputs, ${IOV2}[] validOutputs, bytes32 nonce)`;
-const OrderV3_ABI = OrderV4_ABI; // Alias for backward compatibility
+export const OrderV4_ABI = `(address owner, ${EvaluableV4} evaluable, ${IOV2}[] validInputs, ${IOV2}[] validOutputs, bytes32 nonce)`;
 
 // Types for processed quotes
 export interface ProcessedQuote {
@@ -42,8 +42,6 @@ export function hexToBigInt(hex: string): bigint {
 	return BigInt(`0x${hex}`);
 }
 
-// Also export ABI constants for use in other files
-export { OrderV4_ABI, OrderV3_ABI };
 
 // Helper function to get token symbol by address
 function getTokenSymbol(address: string, tokens: PythToken[]): string {
@@ -91,8 +89,21 @@ function processOrdersWithQuotes(
 					const { maxOutput, ratio } = quote.data;
 
 					// Convert hex to BigInt
-					const maxOutputBigInt = hexToBigInt(maxOutput);
-					const ratioBigInt = hexToBigInt(ratio);
+					// const maxOutputBigInt = hexToBigInt(maxOutput);
+					// const ratioBigInt = hexToBigInt(ratio);
+
+					const ratioBigInt = BigInt(Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value);
+					const maxOutputBigInt = BigInt(Float.fromHex(maxOutput as `0x${string}`).value!.toFixedDecimalLossy(
+						Number(orderData.validOutputs[quote.pair.outputIndex]?.token?.decimals)
+					).value!.value);
+
+					// console.log('-----------------------');
+					// console.log('orderHash : ', sgOrder.orderHash);
+					// console.log('maxOutputBigInt : ', maxOutputBigInt);
+					// console.log('ratioBigInt : ', ratioBigInt);
+					// console.log('maxOutput : ', maxOutput);
+					// console.log('ratio : ', ratio);
+
 
 					// Skip if maxOutput is 0
 					if (maxOutputBigInt === 0n) {
@@ -108,6 +119,33 @@ function processOrdersWithQuotes(
 					// Use the input/output indexes from the quote pair
 					const inputTokenAddress = inputDefinition.token;
 					const outputTokenAddress = outputDefinition.token;
+					
+					// Debug: Check if this is a tSTOX order
+					const tstoxAddress = '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88';
+					const isTstoxOrder = 
+						inputTokenAddress.toLowerCase() === tstoxAddress.toLowerCase() ||
+						outputTokenAddress.toLowerCase() === tstoxAddress.toLowerCase();
+					
+					if (isTstoxOrder) {
+						console.log('tSTOX Order Found:', {
+							orderHash: sgOrder.orderHash,
+							inputTokenAddress,
+							outputTokenAddress,
+							maxOutputBigInt: maxOutputBigInt.toString(),
+							maxOutput,
+							ratioBigInt: ratioBigInt.toString(),
+							ratio,
+							willSkip: maxOutputBigInt === 0n
+						});
+					}
+
+					// Skip if maxOutput is 0
+					if (maxOutputBigInt === 0n) {
+						if (isTstoxOrder) {
+							console.log('tSTOX order skipped: maxOutput is 0');
+						}
+						return;
+					}
 
 					// Get token symbols - need to check both USDC and stock tokens for both input and output
 					const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [usdcToken, ...stockTokens]);
@@ -128,6 +166,17 @@ function processOrdersWithQuotes(
 						outputTokenDecimals: Number.isFinite(outputDecimals) ? outputDecimals : undefined
 					};
 
+					if (isTstoxOrder) {
+						console.log('tSTOX before describeQuote:', {
+							inputTokenAddress,
+							outputTokenAddress,
+							usdcAddress: usdcToken.address,
+							ratio: ratioBigInt.toString(),
+							ratioBigInt,
+							processedQuote
+						});
+					}
+					
 					const metrics = describeQuote(processedQuote, usdcToken.address);
 					if (metrics) {
 						processedQuote.side = metrics.side;
@@ -135,6 +184,27 @@ function processOrdersWithQuotes(
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
 						processedQuote.usdcPerToken = metrics.usdcPerToken;
 						processedQuote.tokensPerUsdc = metrics.tokensPerUsdc;
+						
+						if (isTstoxOrder) {
+							console.log('tSTOX quote metrics:', {
+								metrics,
+								assetAddress: processedQuote.assetAddress,
+								normalizedAsset,
+								side: processedQuote.side,
+								usdcPerToken: processedQuote.usdcPerToken,
+								tokensPerUsdc: processedQuote.tokensPerUsdc
+							});
+						}
+					} else {
+						if (isTstoxOrder) {
+							console.log('tSTOX quote: describeQuote returned null', {
+								inputTokenAddress,
+								outputTokenAddress,
+								usdcAddress: usdcToken.address,
+								ratio: ratioBigInt.toString(),
+								ratioBigInt
+							});
+						}
 					}
 
 					processedQuotes.push(processedQuote);
@@ -178,6 +248,16 @@ export async function fetchAndQuoteUSDCOrders(
 	const stockTokens = TOKENS.filter(
 		(token) => token.chainId === networkId && token.category === 'ST0x'
 	);
+	
+	// Debug: Check if tSTOX is in stockTokens
+	const tstoxAddress = '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88';
+	const tstoxToken = stockTokens.find(t => t.address.toLowerCase() === tstoxAddress.toLowerCase());
+	console.log('tSTOX token in stockTokens:', {
+		found: !!tstoxToken,
+		stockTokenCount: stockTokens.length,
+		stockTokenSymbols: stockTokens.map(t => t.symbol),
+		tstoxToken
+	});
 
 	// Create RaindexClient using standard configuration
 	const client = await createRaindexClient();
@@ -200,6 +280,12 @@ export async function fetchAndQuoteUSDCOrders(
 				usdcToken.address,
 				...stockTokens.map((t) => t.address)
 			] as `0x${string}`[];
+			
+			// Debug: Check if tSTOX address is in tokenAddresses
+			const tstoxInFilter = tokenAddresses.some(addr => addr.toLowerCase() === tstoxAddress.toLowerCase());
+			if (page === 1) {
+				console.log('tSTOX in token filter:', tstoxInFilter, 'tokenAddresses:', tokenAddresses.map(a => a.toLowerCase()));
+			}
 
 			filters.tokens = tokenAddresses as `0x${string}`[];
 
@@ -244,6 +330,8 @@ export async function fetchAndQuoteUSDCOrders(
 			if (quotesResult.error) {
 				continue;
 			}
+
+			// console.log('quotesResult : ', quotesResult);
 			
 			if (quotesResult.value && quotesResult.value.length > 0) {
 				quotesMap.set(order, quotesResult.value);

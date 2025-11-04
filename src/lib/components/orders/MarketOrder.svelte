@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { CategorizedToken, LimitOrder } from '$lib/network';
 	import { currentNetwork } from '$lib/stores';
-	import { OrderV3_ABI } from '$lib/utils/quote';
+	import { OrderV4_ABI } from '$lib/utils/quote';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import {
 		type OrderV4,
@@ -126,7 +126,7 @@
 			}
 
 			const decodedOrder = AbiCoder.defaultAbiCoder().decode(
-				[OrderV3_ABI],
+				[OrderV4_ABI],
 				raindexOrder.orderBytes
 			);
 			orderData = decodedOrder[0] as OrderV4;
