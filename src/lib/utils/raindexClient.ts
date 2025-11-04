@@ -13,7 +13,7 @@ import { RaindexClient } from '@rainlanguage/orderbook';
  * - Reusable across different components
  */
 
-export const RAIN_STRATEGIES_COMMIT = 'c7dbf55fa24d42863b173e39bcd8d67a092dfbfc';
+export const RAIN_STRATEGIES_COMMIT = 'b2e056bb58f0e467a515132ce7a1b25bc624bd09';
 export const RAIN_STRATEGIES_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/settings.yaml`;
 
 /**

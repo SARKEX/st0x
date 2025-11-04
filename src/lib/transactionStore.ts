@@ -6,7 +6,9 @@ import {
 	getTakeOrders3Calldata,
 	type SgOrder,
 	type TakeOrdersConfigV4,
-	type DeploymentTransactionArgs
+	type DeploymentTransactionArgs,
+	type SgVault,
+	RaindexVault
 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -23,6 +25,7 @@ import {
 import { rainlangConfirmationModal } from './stores';
 import { createRaindexClient } from './utils/raindexClient';
 import { decodeFunctionData } from 'viem';
+
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
@@ -103,6 +106,7 @@ const transactionStore = () => {
 		if (deploymentArgs.approvals.length > 0) {
 			for (const approval of deploymentArgs.approvals) {
 				try {
+					console.log('approval : ', approval);
 					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
 					const hash = await sendTransaction(config, {
 						data: approval.calldata as Hex,
@@ -259,18 +263,68 @@ const transactionStore = () => {
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
+	const handleWithdraw = async (vault: RaindexVault) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		
+		// vault.balance is already a Float instance, use it directly
+		const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
+		if (vaultWithdrawCalldata.error) throw new Error(vaultWithdrawCalldata.error.readableMsg);
+		let hash: string;
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
+
+			hash = await sendTransaction(config, {
+				data: vaultWithdrawCalldata.value as Hex,
+				to: vault.orderbook as `0x${string}`
+			});
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+
+			await waitForTransactionReceipt(config, {
+				hash: hash as `0x${string}`
+			});
+
+			const chainId = get(currentNetwork).id;
+			const link = `
+			<a
+				target="_blank"
+				rel="noopener noreferrer"
+				class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+				href="https://v5.raindex.finance/orders/${chainId}-${vault.orderbook}-${vault.id}"
+				data-testid="raindex-link">
+				Manage your order on Raindex
+				<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+				</svg>
+			</a>
+			`;
+
+			return transactionSuccess(hash, link);
+		} catch (error) {
+			// @ts-expect-error Send transaction error
+			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+		}
+	};
+
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV4,
-		orderbookAddress: `0x${string}`
+		raindexOrder: SgOrder,
+		requiredApprovalAmount: bigint
 	) => {
+		console.log('args : ', args);
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
 
 		// Get the input token from the first order
-		const inputToken = args.orders[0].order.validInputs[0];
+		const inputToken = raindexOrder.inputs[0];
 		if (!inputToken) {
+			return transactionError('No input token found in order' as TransactionErrorMessage);
+		}
+
+		const outputToken = raindexOrder.outputs[0];
+		if (!outputToken) {
 			return transactionError('No input token found in order' as TransactionErrorMessage);
 		}
 
@@ -278,16 +332,14 @@ const transactionStore = () => {
 		checkingWalletAllowance(`Checking token allowance...`);
 		const currentAllowance = await readContract(config, {
 			abi: erc20Abi,
-			address: inputToken.token as `0x${string}`,
+			address: inputToken.token.address as `0x${string}`,
 			functionName: 'allowance',
-			args: [$signerAddress as Hex, orderbookAddress]
+			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
 
-		// Calculate required amount from maxInput
-		// Rounding up
-		const requiredAmount = BigInt(args.maximumInput) + 1n;
+		
 
-		if (currentAllowance < requiredAmount) {
+		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
 			awaitWalletConfirmation(`Approving token spend...`);
 
@@ -295,9 +347,9 @@ const transactionStore = () => {
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',
-					args: [orderbookAddress, requiredAmount]
+					args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
 				}) as Hex,
-				to: inputToken.token as `0x${string}`
+				to: inputToken.token.address as `0x${string}`
 			});
 
 			await waitForTransactionReceipt(config, { hash: approvalHash });
@@ -338,7 +390,7 @@ const transactionStore = () => {
 
 			const hash = await sendTransaction(config, {
 				data: calldata as Hex,
-				to: orderbookAddress
+				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
 			await waitForTransactionReceipt(config, { hash });
@@ -372,7 +424,8 @@ const transactionStore = () => {
 		handleLimitDeploy,
 		handleDsfDeploy,
 		handleFolioDeploy,
-		handleTakeOrders
+		handleTakeOrders,
+		handleWithdraw
 	};
 };
 

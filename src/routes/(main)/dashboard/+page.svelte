@@ -22,7 +22,8 @@
 		SgOrderWithSubgraphName,
 		SgErc20,
 		SgVaultWithSubgraphName,
-		SgVault
+		SgVault,
+		RaindexVault
 	} from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
@@ -33,7 +34,6 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
-	import { formatWithFloat } from '$lib/utils/formatFloat';
 
 	function isUSDCPosition(token: { token: SgErc20 }) {
 		return (
@@ -209,10 +209,11 @@
 			);
 			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
 			
-			// Convert RaindexVaultsList.items (RaindexVault[]) to SgVaultWithSubgraphName[]
-			const allVaults: SgVaultWithSubgraphName[] = vaultsResult.value.items.map((vault) => {
+			// Convert RaindexVaultsList.items (RaindexVault[]) to objects with vault, raindexVault, and subgraphName
+			const allVaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[] = vaultsResult.value.items.map((vault) => {
 
 				let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
+				console.log('vaultBalanceFloat : ', vaultBalanceFloat);
 				if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
 				
 				// Convert RaindexVault to SgVault
@@ -220,7 +221,7 @@
 					id: vault.id as `0x${string}`,
 					owner: vault.owner,
 					vaultId: `0x${vault.vaultId.toString(16).padStart(64, '0')}`,
-					balance: vaultBalanceFloat.value!.toString(),
+					balance: vaultBalanceFloat.value!.value.toString(),
 					token: {
 						id: vault.token.id as `0x${string}`,
 						address: vault.token.address,
@@ -237,6 +238,7 @@
 				};
 				return {
 					vault: sgVault,
+					raindexVault: vault,
 					subgraphName: $currentNetwork.raindexNetworkSlug
 				};
 			});
@@ -265,7 +267,7 @@
 		>();
 
 		for (const { vault } of $vaultsListQuery?.data?.pages?.[0]?.vaults || []) {
-			console.log('vault here : ', vault.balance);
+			console.log('vault here : ', vault);
 			if (
 				vault.owner.toLowerCase() === $signerAddress?.toLowerCase() &&
 				BigInt(vault.balance) > 0n

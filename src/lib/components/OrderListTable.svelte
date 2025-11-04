@@ -90,7 +90,7 @@
 								<!-- Mobile: last 6 only -->
 								<div class="sm:hidden">
 									<ExternalLink
-										href={`https://v2.raindex.finance/orders/${
+										href={`https://v5.raindex.finance/orders/${
 											$currentNetwork.id
 										}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
 										label={order.orderHash.toString()}
@@ -101,7 +101,7 @@
 								<!-- Desktop: 6...4 -->
 								<div class="hidden sm:block">
 									<ExternalLink
-										href={`https://v2.raindex.finance/orders/${
+										href={`https://v5.raindex.finance/orders/${
 											$currentNetwork.id
 										}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
 										label={order.orderHash.toString()}

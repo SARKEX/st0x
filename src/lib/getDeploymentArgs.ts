@@ -7,6 +7,7 @@ import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from './derivations';
 import { currentNetwork } from './stores';
 import { type VaultType } from '@rainlanguage/orderbook';
+import { RAIN_STRATEGIES_COMMIT } from './utils/raindexClient';
 
 export type DcaDeploymentArgs = {
 	outputToken: Token;
@@ -26,7 +27,7 @@ export type DcaDeploymentArgs = {
 export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 	const dcaStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/8cb9d85afe52f044083462f2562cdd0061f95bb8/src/auction-dca.rain'
+			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/auction-dca.rain`
 		)
 	).text();
 	const network = get(currentNetwork);
@@ -94,7 +95,7 @@ export type LimitOrderDeploymentArgs = {
 export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs) => {
 	const limitStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/8cb9d85afe52f044083462f2562cdd0061f95bb8/src/fixed-limit.rain'
+			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/fixed-limit.rain`
 		)
 	).text();
 	const network = get(currentNetwork);
@@ -157,7 +158,7 @@ export type MarketMakingDeploymentArgs = {
 export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeploymentArgs) => {
 	const dsfStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/8cb9d85afe52f044083462f2562cdd0061f95bb8/src/dynamic-spread.rain'
+			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/dynamic-spread.rain`
 		)
 	).text();
 	const network = get(currentNetwork);
@@ -211,7 +212,10 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 	const composedRainlang = composedRainlangResult.value;
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
-	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
+	if (deploymentArgsResult.error){
+		console.log('deploymentArgsResult.error : ', deploymentArgsResult.error);
+		throw new Error(deploymentArgsResult.error.readableMsg);
+	}
 	const deploymentArgs = deploymentArgsResult.value;
 
 	return {
@@ -254,10 +258,12 @@ export type FolioDeploymentArgs = {
 };
 
 export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
+
+	console.log('folio args : ', args);
 	const network = get(currentNetwork);
 	const folioStrategy = await (
 		await fetch(
-			'https://raw.githubusercontent.com/rainlanguage/rain.strategies/8d71d26409cc882d41b695db46639b33b4410590/src/folio.rain'
+			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/folio.rain`
 		)
 	).text();
 	const guiResult = await DotrainOrderGui.newWithDeployment(
@@ -361,6 +367,8 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
+
+	console.log('deploymentArgs : ', JSON.stringify(deploymentArgs));
 
 	return {
 		composedRainlang,

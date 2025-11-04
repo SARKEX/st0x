@@ -2,7 +2,7 @@
 	import { currentNetwork } from '$lib/stores';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import { ArrowUpFromBracketOutline } from 'flowbite-svelte-icons';
-	import type { SgVaultWithSubgraphName, SgVault } from '@rainlanguage/orderbook';
+	import type { SgVaultWithSubgraphName, SgVault, RaindexVault } from '@rainlanguage/orderbook';
 	import { formatUnits } from 'viem';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -10,14 +10,14 @@
 	// Consolidated table: use native thead/tr/th/td
 
 	export let query: CreateInfiniteQueryResult<
-		InfiniteData<{ vaults: SgVaultWithSubgraphName[] }, unknown>,
+		InfiniteData<{ vaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[]; hasMore: boolean }, unknown>,
 		Error
 	>;
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { containerStyles } from '$lib/utils/styles';
 	import transactionStore from '$lib/transactionStore';
 
-	async function withdraw(vault: SgVault) {
+	async function withdraw(vault: RaindexVault) {
 		transactionStore.handleWithdraw(vault);
 	}
 </script>
@@ -75,7 +75,7 @@
 			</thead>
 			<tbody>
 				{#each $query.data.pages as page}
-					{#each page.vaults as { vault, subgraphName }}
+					{#each page.vaults as { vault, raindexVault, subgraphName }}
 						<tr
 							class="border-b border-white/10 bg-gray-800/80 text-center text-gray-100 last:border-0"
 						>
@@ -117,7 +117,7 @@
 									<!-- Mobile: last 6 only -->
 									<div class="sm:hidden">
 										<ExternalLink
-											href={`https://v2.raindex.finance/orders/${
+											href={`https://v5.raindex.finance/orders/${
 												$currentNetwork.id
 											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
 											label={order.orderHash.toString()}
@@ -128,7 +128,7 @@
 									<!-- Desktop: 6...4 -->
 									<div class="hidden sm:block">
 										<ExternalLink
-											href={`https://v2.raindex.finance/orders/${
+											href={`https://v5.raindex.finance/orders/${
 												$currentNetwork.id
 											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
 											label={order.orderHash.toString()}
@@ -143,7 +143,7 @@
 									<!-- Mobile: last 6 only -->
 									<div class="sm:hidden">
 										<ExternalLink
-											href={`https://v2.raindex.finance/orders/${
+											href={`https://v5.raindex.finance/orders/${
 												$currentNetwork.id
 											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
 											label={order.orderHash.toString()}
@@ -154,7 +154,7 @@
 									<!-- Desktop: 6...4 -->
 									<div class="hidden sm:block">
 										<ExternalLink
-											href={`https://v2.raindex.finance/orders/${
+											href={`https://v5.raindex.finance/orders/${
 												$currentNetwork.id
 											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
 											label={order.orderHash.toString()}
@@ -166,7 +166,7 @@
 							</td>
 							<td class="p-2 text-center text-xs sm:p-3 sm:text-sm">
 								<button
-									on:click={() => withdraw(vault)}
+									on:click={() => withdraw(raindexVault)}
 									class="inline-flex items-center justify-center rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 									title="Withdraw"
 								>
