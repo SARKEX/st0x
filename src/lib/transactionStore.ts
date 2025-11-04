@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import { encodeFunctionData, erc20Abi, type Hex } from 'viem';
+import { encodeFunctionData, erc20Abi, formatUnits, type Hex } from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import {
 	getTakeOrders3Calldata,
@@ -24,6 +24,30 @@ import {
 import { rainlangConfirmationModal } from './stores';
 import { createRaindexClient } from './utils/raindexClient';
 import { decodeFunctionData } from 'viem';
+import { ensureResource, getResourceStore } from './stores/network-data-cache';
+import type { Network } from './network';
+
+// Helper function to create Raindex v5 link HTML
+function createRaindexLink(
+	chainId: number,
+	orderbookId: string,
+	orderHashOrVaultId: string,
+	linkText = 'Manage your order on Raindex'
+): string {
+	return `
+		<a
+			target="_blank"
+			rel="noopener noreferrer"
+			class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+			href="https://v5.raindex.finance/orders/${chainId}-${orderbookId}-${orderHashOrVaultId}"
+			data-testid="raindex-link">
+			${linkText}
+			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+			</svg>
+		</a>
+	`;
+}
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
@@ -117,7 +141,11 @@ const transactionStore = () => {
 					const errorMessage =
 						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 						TransactionErrorMessage.GENERIC;
-					return transactionError(errorMessage as TransactionErrorMessage);
+					const message =
+						typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+							? (errorMessage as TransactionErrorMessage)
+							: TransactionErrorMessage.GENERIC;
+					return transactionError(message);
 				}
 			}
 		}
@@ -133,7 +161,11 @@ const transactionStore = () => {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
-			return transactionError(errorMessage as TransactionErrorMessage);
+			const message =
+				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+					? (errorMessage as TransactionErrorMessage)
+					: TransactionErrorMessage.GENERIC;
+			return transactionError(message);
 		}
 
 		// Poll for the order to be added to the orderbook
@@ -147,20 +179,7 @@ const transactionStore = () => {
 			// Stop polling after max attempts
 			if (attempts >= maxAttempts) {
 				clearInterval(interval);
-				const orderLink = `
-					<a
-						target="_blank"
-						rel="noopener noreferrer"
-						class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-						href="https://v5.raindex.finance"
-						data-testid="raindex-link">
-						Manage your order on Raindex
-						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-						</svg>
-					</a>
-				`;
-				return transactionSuccess(hash, orderLink);
+				return transactionSuccess(hash, 'Order deployed successfully!');
 			}
 
 			try {
@@ -183,19 +202,7 @@ const transactionStore = () => {
 					const orderHash = orders.value[0].orderHash;
 					const orderbookId = orders.value[0].orderbook;
 					const chainId = network.id;
-					const link = `
-						<a
-							target="_blank"
-							rel="noopener noreferrer"
-							class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-							href="https://v5.raindex.finance/orders/${chainId}-${orderbookId}-${orderHash}"
-							data-testid="raindex-link">
-							Manage your order on Raindex
-							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-							</svg>
-						</a>
-					`;
+					const link = createRaindexLink(chainId, orderbookId, orderHash);
 
 					return transactionSuccess(hash, link);
 				}
@@ -283,19 +290,7 @@ const transactionStore = () => {
 			});
 
 			const chainId = get(currentNetwork).id;
-			const link = `
-			<a
-				target="_blank"
-				rel="noopener noreferrer"
-				class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-				href="https://v5.raindex.finance/orders/${chainId}-${vault.orderbook}-${vault.id}"
-				data-testid="raindex-link">
-				Manage your order on Raindex
-				<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-				</svg>
-			</a>
-			`;
+			const link = createRaindexLink(chainId, vault.orderbook, vault.id);
 
 			return transactionSuccess(hash, link);
 		} catch (error) {
@@ -371,6 +366,7 @@ const transactionStore = () => {
 			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
 		}
 
+		let hash: string;
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
@@ -384,19 +380,99 @@ const transactionStore = () => {
 					})
 					.join('');
 
-			const hash = await sendTransaction(config, {
+			hash = await sendTransaction(config, {
 				data: calldata as Hex,
 				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
 			await waitForTransactionReceipt(config, { hash });
-			transactionSuccess(hash, `Order taken successfully!`);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
-			return transactionError(errorMessage as TransactionErrorMessage);
+			const message =
+				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+					? (errorMessage as TransactionErrorMessage)
+					: TransactionErrorMessage.GENERIC;
+			return transactionError(message);
 		}
+
+		// Force refresh pending trades to pick up the new transaction
+		const network = get(currentNetwork) as Network;
+		const pendingTradesResult = ensureResource(network.id, 'pendingTrades', { force: true });
+		if (pendingTradesResult instanceof Promise) {
+			pendingTradesResult.catch(() => {});
+		}
+
+		// Subscribe to pending trades cache instead of polling directly
+		let unsubscribe: (() => void) | null = null;
+		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+		const cleanup = () => {
+			if (unsubscribe) unsubscribe();
+			if (timeoutId) clearTimeout(timeoutId);
+		};
+
+		unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
+			if (!$resource?.data?.trades) return;
+
+			// Search for our specific trade in the cached data
+			const trade = $resource.data.trades.find(
+				(t) =>
+					t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
+					t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
+			) as unknown as {
+				tradeEvent?: { transaction?: { id?: string } };
+				order?: {
+					orderHash?: string;
+					inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
+					outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
+				};
+				inputVaultBalanceChange?: { amount?: string | number };
+				outputVaultBalanceChange?: { amount?: string | number };
+			};
+
+			if (
+				trade &&
+				trade.inputVaultBalanceChange &&
+				trade.outputVaultBalanceChange &&
+				trade.order?.inputs?.[0]?.token &&
+				trade.order?.outputs?.[0]?.token
+			) {
+				cleanup();
+				const chainId = network.id;
+				const tokenSold = `${parseFloat(
+					formatUnits(
+						BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
+						trade.order.inputs[0].token.decimals ?? 18
+					)
+				)} ${trade.order.inputs[0].token.symbol}`;
+				const tokenBought = `${parseFloat(
+					formatUnits(
+						BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
+						trade.order.outputs[0].token.decimals ?? 18
+					)
+				)} ${trade.order.outputs[0].token.symbol}`;
+
+				const orderLink = createRaindexLink(chainId, raindexOrder.orderbook.id, raindexOrder.orderHash, 'View order on Raindex');
+				const link = `
+				<div class="flex flex-col gap-2 text-center">
+					<div class="text-base text-gray-300">
+						${tokenBought} bought, ${tokenSold} sold
+					</div>
+					${orderLink}
+				</div>
+			`;
+
+				return transactionSuccess(hash, link);
+			}
+		});
+
+		// Safety timeout: give up after 3 minutes if trade not found
+		timeoutId = setTimeout(() => {
+			cleanup();
+			transactionError(TransactionErrorMessage.GENERIC, hash);
+		}, 180_000);
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
