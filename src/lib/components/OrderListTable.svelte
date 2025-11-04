@@ -62,10 +62,6 @@
 						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 						>Selling</th
 					>
-					<th
-						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-						>Trades</th
-					>
 				</tr>
 			</thead>
 			<tbody>
@@ -132,9 +128,6 @@
 							>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
 								>{order.outputs.map((output) => output.token.symbol).join(', ')}</td
-							>
-							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
-								>{order.trades.length > 99 ? '>99' : order.trades.length}</td
 							>
 						</tr>
 					{/each}

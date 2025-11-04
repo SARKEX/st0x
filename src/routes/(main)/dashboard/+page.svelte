@@ -142,6 +142,7 @@
 		queryKey: ['orders', $currentNetwork?.id, ordersActiveFilter, orderHashFilter, showMyOrders],
 		queryFn: async ({ pageParam }) => {
 			const client = await createRaindexClient();
+			const filterTokens = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 			const ordersResult = await client.getOrders(
 				[$currentNetwork.id],
@@ -149,7 +150,8 @@
 					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
 					active: ordersActiveFilter,
 					orderHash:
-						orderHashFilter === '' ? undefined : (orderHashFilter as unknown as `0x${string}`)
+						orderHashFilter === '' ? undefined : (orderHashFilter as unknown as `0x${string}`),
+					tokens: filterTokens.map((token) => token.address) as `0x${string}`[]
 				},
 				pageParam + 1
 			);
@@ -169,19 +171,8 @@
 				})
 			);
 
-			// Filter orders that have any token from forexTokenList in either inputs or outputs
-			// const filteredOrders = allOrders.filter(({ order }) => {
-			// 	const inputAddresses = order.inputs.map((input) => input.token.address.toLowerCase());
-			// 	const outputAddresses = order.outputs.map((output) => output.token.address.toLowerCase());
-			// 	const filterAddresses = ALL_TOKENS.map((token) => token.address.toLowerCase());
-			// 	const hasTokenInInputs = inputAddresses.some((addr) => filterAddresses.includes(addr));
-			// 	const hasTokenInOutputs = outputAddresses.some((addr) => filterAddresses.includes(addr));
-			// 	return hasTokenInInputs || hasTokenInOutputs;
-			// });
-			const filteredOrders = allOrders;
-
 			return {
-				orders: filteredOrders,
+				orders: allOrders,
 				hasMore: allOrders.length === ORDER_LIST_PAGE_SIZE
 			};
 		},
@@ -266,7 +257,6 @@
 		>();
 
 		for (const { vault } of $vaultsListQuery?.data?.pages?.[0]?.vaults || []) {
-			console.log('vault here : ', vault);
 			if (
 				vault.owner.toLowerCase() === $signerAddress?.toLowerCase() &&
 				BigInt(vault.balance) > 0n
