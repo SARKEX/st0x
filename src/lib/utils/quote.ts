@@ -1,10 +1,4 @@
-import type {
-	SgOrderWithSubgraphName,
-	RaindexOrder,
-	RaindexOrderQuote,
-	GetOrdersFilters,
-	SgOrder
-} from '@rainlanguage/orderbook';
+import type { RaindexOrder, RaindexOrderQuote, GetOrdersFilters } from '@rainlanguage/orderbook';
 import { networks, TOKENS, USDC_TOKENS } from '$lib/network';
 import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress, type MarketSide } from '$lib/utils/tokenMath';
@@ -41,7 +35,6 @@ export function hexToBigInt(hex: string): bigint {
 	}
 	return BigInt(`0x${hex}`);
 }
-
 
 // Helper function to get token symbol by address
 function getTokenSymbol(address: string, tokens: PythToken[]): string {
@@ -92,10 +85,14 @@ function processOrdersWithQuotes(
 					// const maxOutputBigInt = hexToBigInt(maxOutput);
 					// const ratioBigInt = hexToBigInt(ratio);
 
-					const ratioBigInt = BigInt(Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value);
-					const maxOutputBigInt = BigInt(Float.fromHex(maxOutput as `0x${string}`).value!.toFixedDecimalLossy(
-						Number(orderData.validOutputs[quote.pair.outputIndex]?.token?.decimals)
-					).value!.value);
+					const ratioBigInt = BigInt(
+						Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value
+					);
+					const maxOutputBigInt = BigInt(
+						Float.fromHex(maxOutput as `0x${string}`).value!.toFixedDecimalLossy(
+							Number(orderData.validOutputs[quote.pair.outputIndex]?.token?.decimals)
+						).value!.value
+					);
 
 					// console.log('-----------------------');
 					// console.log('orderHash : ', sgOrder.orderHash);
@@ -103,7 +100,6 @@ function processOrdersWithQuotes(
 					// console.log('ratioBigInt : ', ratioBigInt);
 					// console.log('maxOutput : ', maxOutput);
 					// console.log('ratio : ', ratio);
-
 
 					// Skip if maxOutput is 0
 					if (maxOutputBigInt === 0n) {
@@ -119,13 +115,13 @@ function processOrdersWithQuotes(
 					// Use the input/output indexes from the quote pair
 					const inputTokenAddress = inputDefinition.token;
 					const outputTokenAddress = outputDefinition.token;
-					
+
 					// Debug: Check if this is a tSTOX order
 					const tstoxAddress = '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88';
-					const isTstoxOrder = 
+					const isTstoxOrder =
 						inputTokenAddress.toLowerCase() === tstoxAddress.toLowerCase() ||
 						outputTokenAddress.toLowerCase() === tstoxAddress.toLowerCase();
-					
+
 					if (isTstoxOrder) {
 						console.log('tSTOX Order Found:', {
 							orderHash: sgOrder.orderHash,
@@ -176,7 +172,7 @@ function processOrdersWithQuotes(
 							processedQuote
 						});
 					}
-					
+
 					const metrics = describeQuote(processedQuote, usdcToken.address);
 					if (metrics) {
 						processedQuote.side = metrics.side;
@@ -184,7 +180,7 @@ function processOrdersWithQuotes(
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
 						processedQuote.usdcPerToken = metrics.usdcPerToken;
 						processedQuote.tokensPerUsdc = metrics.tokensPerUsdc;
-						
+
 						if (isTstoxOrder) {
 							console.log('tSTOX quote metrics:', {
 								metrics,
@@ -248,14 +244,16 @@ export async function fetchAndQuoteUSDCOrders(
 	const stockTokens = TOKENS.filter(
 		(token) => token.chainId === networkId && token.category === 'ST0x'
 	);
-	
+
 	// Debug: Check if tSTOX is in stockTokens
 	const tstoxAddress = '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88';
-	const tstoxToken = stockTokens.find(t => t.address.toLowerCase() === tstoxAddress.toLowerCase());
+	const tstoxToken = stockTokens.find(
+		(t) => t.address.toLowerCase() === tstoxAddress.toLowerCase()
+	);
 	console.log('tSTOX token in stockTokens:', {
 		found: !!tstoxToken,
 		stockTokenCount: stockTokens.length,
-		stockTokenSymbols: stockTokens.map(t => t.symbol),
+		stockTokenSymbols: stockTokens.map((t) => t.symbol),
 		tstoxToken
 	});
 
@@ -280,11 +278,18 @@ export async function fetchAndQuoteUSDCOrders(
 				usdcToken.address,
 				...stockTokens.map((t) => t.address)
 			] as `0x${string}`[];
-			
+
 			// Debug: Check if tSTOX address is in tokenAddresses
-			const tstoxInFilter = tokenAddresses.some(addr => addr.toLowerCase() === tstoxAddress.toLowerCase());
+			const tstoxInFilter = tokenAddresses.some(
+				(addr) => addr.toLowerCase() === tstoxAddress.toLowerCase()
+			);
 			if (page === 1) {
-				console.log('tSTOX in token filter:', tstoxInFilter, 'tokenAddresses:', tokenAddresses.map(a => a.toLowerCase()));
+				console.log(
+					'tSTOX in token filter:',
+					tstoxInFilter,
+					'tokenAddresses:',
+					tokenAddresses.map((a) => a.toLowerCase())
+				);
 			}
 
 			filters.tokens = tokenAddresses as `0x${string}`[];
@@ -323,7 +328,7 @@ export async function fetchAndQuoteUSDCOrders(
 
 	// Get quotes for all orders and store them in a map
 	const quotesMap = new Map<RaindexOrder, RaindexOrderQuote[]>();
-	
+
 	for (const order of allOrders) {
 		try {
 			const quotesResult = await order.getQuotes();
@@ -332,7 +337,7 @@ export async function fetchAndQuoteUSDCOrders(
 			}
 
 			// console.log('quotesResult : ', quotesResult);
-			
+
 			if (quotesResult.value && quotesResult.value.length > 0) {
 				quotesMap.set(order, quotesResult.value);
 			}

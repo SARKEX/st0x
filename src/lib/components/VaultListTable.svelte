@@ -2,7 +2,7 @@
 	import { currentNetwork } from '$lib/stores';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import { ArrowUpFromBracketOutline } from 'flowbite-svelte-icons';
-	import type { SgVaultWithSubgraphName, SgVault, RaindexVault } from '@rainlanguage/orderbook';
+	import type { SgVault, RaindexVault } from '@rainlanguage/orderbook';
 	import { formatUnits } from 'viem';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -10,7 +10,13 @@
 	// Consolidated table: use native thead/tr/th/td
 
 	export let query: CreateInfiniteQueryResult<
-		InfiniteData<{ vaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[]; hasMore: boolean }, unknown>,
+		InfiniteData<
+			{
+				vaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[];
+				hasMore: boolean;
+			},
+			unknown
+		>,
 		Error
 	>;
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';

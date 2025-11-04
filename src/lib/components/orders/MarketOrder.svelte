@@ -5,12 +5,13 @@
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import {
 		type OrderV4,
+		type RaindexOrderQuote,
 		type SgOrder,
 		type TakeOrderConfigV4,
 		type TakeOrdersConfigV4
 	} from '@rainlanguage/orderbook';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import { AbiCoder, ethers } from 'ethers';
+	import { AbiCoder } from 'ethers';
 	import { formatUnits } from 'viem';
 	import { containerStyles } from '$lib/utils/styles';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -32,7 +33,6 @@
 	let raindexOrder: SgOrder | undefined = undefined;
 	let orderData: OrderV4 | undefined = undefined;
 	let orderbook: string | undefined = undefined;
-	let ratioOrder: bigint = 0n;
 	let quoteData: { maxOutput: string; ratio: string } | undefined = undefined;
 
 	// Errors
@@ -104,7 +104,7 @@
 			}
 
 			const raindexOrderObj = ordersResult.value[0];
-			
+
 			// Get quotes for this order
 			const quotesResult = await raindexOrderObj.getQuotes();
 			if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
@@ -133,7 +133,7 @@
 			orderbook = raindexOrder.orderbook.id;
 
 			// Get the first valid quote
-			const quote = quotesResult.value.find((q: any) => q.success && q.data);
+			const quote = quotesResult.value.find((q: RaindexOrderQuote) => q.success && q.data);
 			if (!quote || !quote.data) {
 				priceError = true;
 				return;
@@ -155,12 +155,11 @@
 			}
 			// Convert bigint to string with decimal formatting
 			const bigIntValue = fixedDecimalResult.value!;
-		
+
 			const ratioBigInt = BigInt(bigIntValue.value);
 
 			// Convert ratio to price based on order type using BigInt with 18 decimal precision
 			const PRECISION = BigInt(1e18);
-			ratioOrder = ratioBigInt;
 
 			if (limitOrders[0].type === 'Buy') {
 				// For buy orders, price is PRECISION/ratioBigInt
@@ -194,19 +193,23 @@
 
 		// Get fresh quotes with the selected amount
 		const client = await createRaindexClient();
-		const ordersResult = await client.getOrders([$currentNetwork.id], {
-			active: true,
-			owners: [],
-			orderHash: raindexOrder.orderHash as `0x${string}`
-		}, 1);
-		
+		const ordersResult = await client.getOrders(
+			[$currentNetwork.id],
+			{
+				active: true,
+				owners: [],
+				orderHash: raindexOrder.orderHash as `0x${string}`
+			},
+			1
+		);
+
 		if (ordersResult.error || !ordersResult.value || ordersResult.value.length === 0) {
 			console.error('Failed to fetch order for quotes');
 			return;
 		}
 
 		const orderObj = ordersResult.value[0];
-		
+
 		// Get quotes with the desired input amount
 		const quotesResult = await orderObj.getQuotes();
 		if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
@@ -214,17 +217,14 @@
 			return;
 		}
 
-		const quote = quotesResult.value.find((q: any) => q.success && q.data);
+		const quote = quotesResult.value.find((q: RaindexOrderQuote) => q.success && q.data);
 		if (!quote || !quote.data) {
 			console.error('No valid quote found');
 			return;
 		}
 
-		const { maxInput, ratio } = quote.data;
+		const { ratio } = quote.data;
 		const floatRatio = Float.fromHex(ratio as `0x${string}`).value!.asHex();
-		// const floatMaxInput = Float.fromHex(maxInput as `0x${string}`).value!.toFixedDecimalLossy(
-		// 	Number(raindexOrder.inputs[0]?.token?.decimals)
-		// ).value!;
 
 		const takeOrderConfig: TakeOrderConfigV4 = {
 			order: {
@@ -249,10 +249,12 @@
 			signedContext: []
 		};
 
-		if(orderSide === 'Buy') {
-			
-			const selectedFloatAmount = Float.fromFixedDecimalLossy(selectedAmount, Number(raindexOrder.outputs[0]?.token?.decimals));
-			
+		if (orderSide === 'Buy') {
+			const selectedFloatAmount = Float.fromFixedDecimalLossy(
+				selectedAmount,
+				Number(raindexOrder.outputs[0]?.token?.decimals)
+			);
+
 			const takeOrdersConfig: TakeOrdersConfigV4 = {
 				minimumInput: selectedFloatAmount.float.asHex(),
 				maximumInput: selectedFloatAmount.float.asHex(),
@@ -260,10 +262,15 @@
 				orders: [takeOrderConfig],
 				data: '0x'
 			};
-			const maxInputFloat = BigInt(selectedFloatAmount.float.toFixedDecimalLossy(Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)).value!.value);
+			const maxInputFloat = BigInt(
+				selectedFloatAmount.float.toFixedDecimalLossy(
+					Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)
+				).value!.value
+			);
 
 			const requiredAmount = BigInt(
-				BigInt(maxInputFloat) * BigInt(10 ** (18 - Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)))
+				BigInt(maxInputFloat) *
+					BigInt(10 ** (18 - Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)))
 			);
 			const requiredAmountFp18 = (requiredAmount * marketPrice) / 1000000000000000000n;
 
@@ -272,19 +279,23 @@
 				requiredAmountFp18 / BigInt(10 ** (18 - Number(raindexOrder.inputs[0]?.token?.decimals)));
 
 			if (selectedFloatAmount.lossless) {
-				
 				requiredAmountFormattedDecimals = requiredAmountFormattedDecimals + 1n;
-				
 			}
-			await transactionStore.handleTakeOrders(takeOrdersConfig, raindexOrder, requiredAmountFormattedDecimals);
-
-		} else if(orderSide === 'Sell') {
+			await transactionStore.handleTakeOrders(
+				takeOrdersConfig,
+				raindexOrder,
+				requiredAmountFormattedDecimals
+			);
+		} else if (orderSide === 'Sell') {
 			const expectedInputAmount = (selectedAmount * marketPrice) / 1000000000000000000n;
 			const expectedInputInTokenTerms =
-				expectedInputAmount / BigInt(10 ** (18 - Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)));
-			
-			const selectedFloatAmount = Float.fromFixedDecimalLossy(expectedInputInTokenTerms, Number(raindexOrder.outputs[0]?.token?.decimals));
-		
+				expectedInputAmount /
+				BigInt(10 ** (18 - Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)));
+
+			const selectedFloatAmount = Float.fromFixedDecimalLossy(
+				expectedInputInTokenTerms,
+				Number(raindexOrder.outputs[0]?.token?.decimals)
+			);
 
 			const takeOrdersConfig: TakeOrdersConfigV4 = {
 				minimumInput: selectedFloatAmount.float.asHex(),
@@ -294,7 +305,11 @@
 				data: '0x'
 			};
 
-			await transactionStore.handleTakeOrders(takeOrdersConfig, raindexOrder, selectedFloatAmount.lossless ? selectedAmount + 1n : selectedAmount);
+			await transactionStore.handleTakeOrders(
+				takeOrdersConfig,
+				raindexOrder,
+				selectedFloatAmount.lossless ? selectedAmount + 1n : selectedAmount
+			);
 		}
 	};
 </script>

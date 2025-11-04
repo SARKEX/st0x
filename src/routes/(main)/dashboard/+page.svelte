@@ -17,11 +17,9 @@
 	import { getAllTokensByNetwork } from '$lib/network';
 	import { goto } from '$app/navigation';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
-	import { Float } from '@rainlanguage/float';
 	import type {
 		SgOrderWithSubgraphName,
 		SgErc20,
-		SgVaultWithSubgraphName,
 		SgVault,
 		RaindexVault
 	} from '@rainlanguage/orderbook';
@@ -144,18 +142,19 @@
 		queryKey: ['orders', $currentNetwork?.id, ordersActiveFilter, orderHashFilter, showMyOrders],
 		queryFn: async ({ pageParam }) => {
 			const client = await createRaindexClient();
-			
+
 			const ordersResult = await client.getOrders(
 				[$currentNetwork.id],
 				{
 					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
 					active: ordersActiveFilter,
-					orderHash: orderHashFilter === '' ? undefined : (orderHashFilter as `0x${string}`)
+					orderHash:
+						orderHashFilter === '' ? undefined : (orderHashFilter as unknown as `0x${string}`)
 				},
 				pageParam + 1
 			);
 			if (ordersResult.error) throw new Error(ordersResult.error.readableMsg);
-			
+
 			// Convert RaindexOrder[] to SgOrderWithSubgraphName[]
 			const allOrders: SgOrderWithSubgraphName[] = await Promise.all(
 				ordersResult.value.map(async (order) => {
@@ -179,7 +178,7 @@
 			// 	const hasTokenInOutputs = outputAddresses.some((addr) => filterAddresses.includes(addr));
 			// 	return hasTokenInInputs || hasTokenInOutputs;
 			// });
-			const filteredOrders = allOrders
+			const filteredOrders = allOrders;
 
 			return {
 				orders: filteredOrders,
@@ -198,7 +197,7 @@
 		queryKey: ['vaults', $currentNetwork?.id, hideEmptyVaults, showMyVaults, $signerAddress],
 		queryFn: async ({ pageParam }) => {
 			const client = await createRaindexClient();
-			
+
 			const vaultsResult = await client.getVaults(
 				[$currentNetwork.id],
 				{
@@ -208,40 +207,40 @@
 				pageParam + 1
 			);
 			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
-			
-			// Convert RaindexVaultsList.items (RaindexVault[]) to objects with vault, raindexVault, and subgraphName
-			const allVaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[] = vaultsResult.value.items.map((vault) => {
 
-				let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
-				console.log('vaultBalanceFloat : ', vaultBalanceFloat);
-				if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
-				
-				// Convert RaindexVault to SgVault
-				const sgVault: SgVault = {
-					id: vault.id as `0x${string}`,
-					owner: vault.owner,
-					vaultId: `0x${vault.vaultId.toString(16).padStart(64, '0')}`,
-					balance: vaultBalanceFloat.value!.value.toString(),
-					token: {
-						id: vault.token.id as `0x${string}`,
-						address: vault.token.address,
-						name: vault.token.name,
-						symbol: vault.token.symbol,
-						decimals: vault.token.decimals.toString() as `0x${string}`
-					},
-					orderbook: {
-						id: vault.orderbook
-					},
-					ordersAsOutput: vault.ordersAsOutput,
-					ordersAsInput: vault.ordersAsInput,
-					balanceChanges: []
-				};
-				return {
-					vault: sgVault,
-					raindexVault: vault,
-					subgraphName: $currentNetwork.raindexNetworkSlug
-				};
-			});
+			// Convert RaindexVaultsList.items (RaindexVault[]) to objects with vault, raindexVault, and subgraphName
+			const allVaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[] =
+				vaultsResult.value.items.map((vault) => {
+					let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
+					console.log('vaultBalanceFloat : ', vaultBalanceFloat);
+					if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
+
+					// Convert RaindexVault to SgVault
+					const sgVault: SgVault = {
+						id: vault.id as `0x${string}`,
+						owner: vault.owner,
+						vaultId: `0x${vault.vaultId.toString(16).padStart(64, '0')}`,
+						balance: vaultBalanceFloat.value!.value.toString(),
+						token: {
+							id: vault.token.id as `0x${string}`,
+							address: vault.token.address,
+							name: vault.token.name,
+							symbol: vault.token.symbol,
+							decimals: vault.token.decimals.toString() as `0x${string}`
+						},
+						orderbook: {
+							id: vault.orderbook
+						},
+						ordersAsOutput: vault.ordersAsOutput,
+						ordersAsInput: vault.ordersAsInput,
+						balanceChanges: []
+					};
+					return {
+						vault: sgVault,
+						raindexVault: vault,
+						subgraphName: $currentNetwork.raindexNetworkSlug
+					};
+				});
 			return {
 				vaults: allVaults,
 				hasMore: allVaults.length === VAULT_LIST_PAGE_SIZE

@@ -125,9 +125,7 @@
 								>
 							</td>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
-								>{new Date(
-									Number(order.timestampAdded) * 1000
-								).toLocaleString()}</td
+								>{new Date(Number(order.timestampAdded) * 1000).toLocaleString()}</td
 							>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
 								>{order.inputs.map((input) => input.token.symbol).join(', ')}</td

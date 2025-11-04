@@ -293,24 +293,26 @@
 								});
 							},
 							label: (context: {
-							dataset?: { candlestick?: boolean; label?: string };
-							raw?: { o?: number; h?: number; l?: number; c?: number; x?: number; y?: number };
-							parsed?: { x?: number; y?: number };
-						}) => {
-							if (context.dataset?.candlestick) {
-								const candle = context.raw as { o?: number; h?: number; l?: number; c?: number } | undefined;
-								if (!candle?.c || !candle?.o) return '';
-								const direction = candle.c >= candle.o ? '▲' : '▼';
-								return `${direction} O:${candle.o.toFixed(2)} H:${candle.h?.toFixed(
-									2
-								)} L:${candle.l?.toFixed(2)} C:${candle.c.toFixed(2)}`;
+								dataset?: { candlestick?: boolean; label?: string };
+								raw?: { o?: number; h?: number; l?: number; c?: number; x?: number; y?: number };
+								parsed?: { x?: number; y?: number };
+							}) => {
+								if (context.dataset?.candlestick) {
+									const candle = context.raw as
+										| { o?: number; h?: number; l?: number; c?: number }
+										| undefined;
+									if (!candle?.c || !candle?.o) return '';
+									const direction = candle.c >= candle.o ? '▲' : '▼';
+									return `${direction} O:${candle.o.toFixed(2)} H:${candle.h?.toFixed(
+										2
+									)} L:${candle.l?.toFixed(2)} C:${candle.c.toFixed(2)}`;
+								}
+								if (context.dataset?.label === 'Volume') {
+									const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
+									return `Volume: ${formatYAxisValue(volumeValue, volumeRange)}`;
+								}
+								return '';
 							}
-							if (context.dataset?.label === 'Volume') {
-								const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
-								return `Volume: ${formatYAxisValue(volumeValue, volumeRange)}`;
-							}
-							return '';
-						}
 						}
 					}
 				},
@@ -510,7 +512,7 @@
 				extended.push({ x: upperTail, y: extended[extended.length - 1].y });
 				return extended;
 			}
-	};
+		};
 
 		bidsData = extendWithTail(bidsData, 'bids');
 		asksData = extendWithTail(asksData, 'asks');
@@ -529,10 +531,10 @@
 						tooltip: {
 							callbacks: {
 								label: (context: {
-								dataset?: { candlestick?: boolean; label?: string };
-								raw?: { o?: number; h?: number; l?: number; c?: number; x?: number; y?: number };
-								parsed?: { x?: number; y?: number };
-							}) => {
+									dataset?: { candlestick?: boolean; label?: string };
+									raw?: { o?: number; h?: number; l?: number; c?: number; x?: number; y?: number };
+									parsed?: { x?: number; y?: number };
+								}) => {
 									const label = context.dataset?.label || '';
 									const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
 									const price = Number(context.raw?.x ?? context.parsed?.x ?? 0).toFixed(2);

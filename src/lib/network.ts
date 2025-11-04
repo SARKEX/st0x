@@ -117,16 +117,16 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:IAU',
 		tradingViewMarket: 'america',
 		limitOrders: [
-		  {
-			orderHash: '0xdc757a5df00a42eda0a0dd742e6b97c0d99450a35fc27c4f8f43987cbda99ccd',
-			type: 'Sell'
-		  },
-		  {
-			orderHash: '0x00d18ccc48ef0ec1102046454f2d615785c658f2e7d6b4d7d6d85ed420d07b6f',
-			type: 'Buy'
-		  }
+			{
+				orderHash: '0xdc757a5df00a42eda0a0dd742e6b97c0d99450a35fc27c4f8f43987cbda99ccd',
+				type: 'Sell'
+			},
+			{
+				orderHash: '0x00d18ccc48ef0ec1102046454f2d615785c658f2e7d6b4d7d6d85ed420d07b6f',
+				type: 'Buy'
+			}
 		]
-	  } as unknown as CategorizedToken,
+	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
 		address: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
