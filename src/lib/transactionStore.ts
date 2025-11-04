@@ -468,11 +468,12 @@ const transactionStore = () => {
 			}
 		});
 
-		// Safety timeout: give up after 3 minutes if trade not found
+		// Safety timeout: give up after 5 minutes if trade not found
+		// This gives the subgraph time to index the transaction and trade
 		timeoutId = setTimeout(() => {
 			cleanup();
 			transactionError(TransactionErrorMessage.GENERIC, hash);
-		}, 180_000);
+		}, 300_000);
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {

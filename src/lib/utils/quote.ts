@@ -116,30 +116,8 @@ function processOrdersWithQuotes(
 					const inputTokenAddress = inputDefinition.token;
 					const outputTokenAddress = outputDefinition.token;
 
-					// Debug: Check if this is a tSTOX order
-					const tstoxAddress = '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88';
-					const isTstoxOrder =
-						inputTokenAddress.toLowerCase() === tstoxAddress.toLowerCase() ||
-						outputTokenAddress.toLowerCase() === tstoxAddress.toLowerCase();
-
-					if (isTstoxOrder) {
-						console.log('tSTOX Order Found:', {
-							orderHash: sgOrder.orderHash,
-							inputTokenAddress,
-							outputTokenAddress,
-							maxOutputBigInt: maxOutputBigInt.toString(),
-							maxOutput,
-							ratioBigInt: ratioBigInt.toString(),
-							ratio,
-							willSkip: maxOutputBigInt === 0n
-						});
-					}
-
 					// Skip if maxOutput is 0
 					if (maxOutputBigInt === 0n) {
-						if (isTstoxOrder) {
-							console.log('tSTOX order skipped: maxOutput is 0');
-						}
 						return;
 					}
 
@@ -162,46 +140,13 @@ function processOrdersWithQuotes(
 						outputTokenDecimals: Number.isFinite(outputDecimals) ? outputDecimals : undefined
 					};
 
-					if (isTstoxOrder) {
-						console.log('tSTOX before describeQuote:', {
-							inputTokenAddress,
-							outputTokenAddress,
-							usdcAddress: usdcToken.address,
-							ratio: ratioBigInt.toString(),
-							ratioBigInt,
-							processedQuote
-						});
-					}
-
 					const metrics = describeQuote(processedQuote, usdcToken.address);
 					if (metrics) {
 						processedQuote.side = metrics.side;
 						const normalizedAsset = normalizeAddress(metrics.assetAddress);
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
 						processedQuote.usdcPerToken = metrics.usdcPerToken;
-						processedQuote.tokensPerUsdc = metrics.tokensPerUsdc;
-
-						if (isTstoxOrder) {
-							console.log('tSTOX quote metrics:', {
-								metrics,
-								assetAddress: processedQuote.assetAddress,
-								normalizedAsset,
-								side: processedQuote.side,
-								usdcPerToken: processedQuote.usdcPerToken,
-								tokensPerUsdc: processedQuote.tokensPerUsdc
-							});
-						}
-					} else {
-						if (isTstoxOrder) {
-							console.log('tSTOX quote: describeQuote returned null', {
-								inputTokenAddress,
-								outputTokenAddress,
-								usdcAddress: usdcToken.address,
-								ratio: ratioBigInt.toString(),
-								ratioBigInt
-							});
-						}
-					}
+					} 
 
 					processedQuotes.push(processedQuote);
 				} catch (error) {
@@ -245,18 +190,6 @@ export async function fetchAndQuoteUSDCOrders(
 		(token) => token.chainId === networkId && token.category === 'ST0x'
 	);
 
-	// Debug: Check if tSTOX is in stockTokens
-	const tstoxAddress = '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88';
-	const tstoxToken = stockTokens.find(
-		(t) => t.address.toLowerCase() === tstoxAddress.toLowerCase()
-	);
-	console.log('tSTOX token in stockTokens:', {
-		found: !!tstoxToken,
-		stockTokenCount: stockTokens.length,
-		stockTokenSymbols: stockTokens.map((t) => t.symbol),
-		tstoxToken
-	});
-
 	// Create RaindexClient using standard configuration
 	const client = await createRaindexClient();
 
@@ -278,19 +211,6 @@ export async function fetchAndQuoteUSDCOrders(
 				usdcToken.address,
 				...stockTokens.map((t) => t.address)
 			] as `0x${string}`[];
-
-			// Debug: Check if tSTOX address is in tokenAddresses
-			const tstoxInFilter = tokenAddresses.some(
-				(addr) => addr.toLowerCase() === tstoxAddress.toLowerCase()
-			);
-			if (page === 1) {
-				console.log(
-					'tSTOX in token filter:',
-					tstoxInFilter,
-					'tokenAddresses:',
-					tokenAddresses.map((a) => a.toLowerCase())
-				);
-			}
 
 			filters.tokens = tokenAddresses as `0x${string}`[];
 
@@ -326,6 +246,8 @@ export async function fetchAndQuoteUSDCOrders(
 		}
 	}
 
+	console.log('🔍 fetchAndQuoteUSDCOrders - Total orders fetched:', allOrders.length);
+
 	// Get quotes for all orders and store them in a map
 	const quotesMap = new Map<RaindexOrder, RaindexOrderQuote[]>();
 
@@ -333,10 +255,9 @@ export async function fetchAndQuoteUSDCOrders(
 		try {
 			const quotesResult = await order.getQuotes();
 			if (quotesResult.error) {
+				console.warn('❌ Error getting quotes for order:', order.orderHash, quotesResult.error);
 				continue;
 			}
-
-			// console.log('quotesResult : ', quotesResult);
 
 			if (quotesResult.value && quotesResult.value.length > 0) {
 				quotesMap.set(order, quotesResult.value);
@@ -347,8 +268,12 @@ export async function fetchAndQuoteUSDCOrders(
 		}
 	}
 
+	console.log('📦 Total quotes fetched:', quotesMap.size, 'orders with quotes');
+
 	// Process and filter the quotes
 	const processedQuotes = processOrdersWithQuotes(allOrders, quotesMap, usdcToken, stockTokens);
+
+	console.log('🎯 Final processed quotes:', processedQuotes.length);
 
 	return processedQuotes;
 }

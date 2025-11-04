@@ -340,14 +340,55 @@
 	};
 
 	$: {
-		if (!browser || !currentToken) {
+		if (!browser || !currentToken || !$currentNetwork) {
 			resetOnChainPrices();
 		} else {
-			const summary =
-				$orderbookQuotesResource?.data?.summary?.[currentToken.address?.toLowerCase() ?? ''] ??
-				null;
-			buyPrice = summary?.buy ?? null;
-			sellPrice = summary?.sell ?? null;
+			const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
+			if (!usdcToken) {
+				resetOnChainPrices();
+			} else {
+				const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+				const assetAddress = currentToken.address?.toLowerCase();
+				const usdcAddress = usdcToken.address?.toLowerCase();
+				const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+				const usdcDecimals = Number(usdcToken.decimals ?? 6);
+
+				let bestBid: number | null = null;
+				let bestAsk: number | null = null;
+
+				quotes.forEach((quote, qIndex) => {
+					const ratio = Number(quote.ratio) / 1e18;
+					if (!Number.isFinite(ratio) || ratio <= 0) return;
+					const inputAddress = quote.inputTokenAddress.toLowerCase();
+					const outputAddress = quote.outputTokenAddress.toLowerCase();
+
+					// ASK: USDC -> asset (what you pay when buying)
+					if (inputAddress === usdcAddress && outputAddress === assetAddress) {
+						const tokenAmount = Number(quote.maxOutput);
+						const price = ratio;
+						if (Number.isFinite(tokenAmount) && Number.isFinite(price) && tokenAmount > 0 && price > 0) {
+							bestAsk = bestAsk === null ? price : Math.min(bestAsk, price);
+						}
+					}
+
+					// BID: asset -> USDC (what you get when selling)
+					if (inputAddress === assetAddress && outputAddress === usdcAddress) {
+						const usdcAmount = Number(quote.maxOutput);
+						const price = 1 / ratio;
+						if (Number.isFinite(usdcAmount) && usdcAmount > 0) {
+							if (Number.isFinite(price) && price > 0) {
+								const tokenAmount = usdcAmount / price;
+								if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
+									bestBid = bestBid === null ? price : Math.max(bestBid, price);
+								}
+							}
+						}
+					}
+				});
+
+				buyPrice = bestBid;    // Best bid - what you get when selling
+				sellPrice = bestAsk;   // Best ask - what you pay when buying
+			}
 		}
 	}
 
@@ -407,28 +448,39 @@
 	$: orderbookDepth = (() => {
 		if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
 		const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
-		if (!quotes.length) return { bids: [], asks: [] };
+		if (!quotes.length) {
+			return { bids: [], asks: [] };
+		}
 
 		const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
 		if (!usdcToken) return { bids: [], asks: [] };
 		const assetAddress = currentToken.address?.toLowerCase();
 		const usdcAddress = usdcToken.address?.toLowerCase();
-		if (!assetAddress || !usdcAddress) return { bids: [], asks: [] };
+		if (!assetAddress || !usdcAddress) {
+			return { bids: [], asks: [] };
+		}
 		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
 		const usdcDecimals = Number(usdcToken.decimals ?? 6);
 
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
+		let skippedQuotes = 0;
 
-		quotes.forEach((quote) => {
+		quotes.forEach((quote, index) => {
 			const ratio = Number(quote.ratio) / 1e18;
-			if (!Number.isFinite(ratio) || ratio <= 0) return;
+			if (!Number.isFinite(ratio) || ratio <= 0) {
+				skippedQuotes++;
+				return;
+			}
 			const inputAddress = quote.inputTokenAddress.toLowerCase();
 			const outputAddress = quote.outputTokenAddress.toLowerCase();
-			if (!inputAddress || !outputAddress) return;
+			if (!inputAddress || !outputAddress) {
+				skippedQuotes++;
+				return;
+			}
 
 			if (inputAddress === usdcAddress && outputAddress === assetAddress) {
-				const tokenAmount = Number.parseFloat(formatUnits(quote.maxOutput, assetDecimals));
+				const tokenAmount = Number(quote.maxOutput);
 				const price = ratio;
 				if (
 					!Number.isFinite(tokenAmount) ||
@@ -436,10 +488,7 @@
 					tokenAmount <= 0 ||
 					price <= 0
 				) {
-					return;
-				}
-				const orderValue = price * tokenAmount;
-				if (!Number.isFinite(orderValue) || orderValue < 2) {
+					skippedQuotes++;
 					return;
 				}
 				asks.push({ price, quantity: tokenAmount });
@@ -447,21 +496,29 @@
 			}
 
 			if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-				const usdcAmount = Number.parseFloat(formatUnits(quote.maxOutput, usdcDecimals + 12));
+				const usdcAmount = Number(quote.maxOutput);
 				if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) {
+					skippedQuotes++;
 					return;
 				}
 				const price = 1 / ratio;
-				if (!Number.isFinite(price) || price <= 0) return;
-				const tokenAmount = usdcAmount / price;
-				const orderValue = price * tokenAmount;
-				if (!Number.isFinite(orderValue) || orderValue < 2) {
+				if (!Number.isFinite(price) || price <= 0) {
+					skippedQuotes++;
 					return;
 				}
-				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
+				const tokenAmount = usdcAmount / price;
+				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
+					skippedQuotes++;
+					return;
+				}
 				bids.push({ price, quantity: tokenAmount });
+				return;
 			}
+
+			skippedQuotes++;
 		});
+
+		console.log(`📈 ${currentToken.symbol} Depth: ${bids.length} bids, ${asks.length} asks`);
 
 		return { bids, asks };
 	})();

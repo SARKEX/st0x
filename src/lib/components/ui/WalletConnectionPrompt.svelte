@@ -7,6 +7,7 @@
 	export let description: string = '';
 	export let showSection: boolean = true;
 	export let minHeight: boolean = true;
+	export let onConnect: (() => void) | undefined = undefined;
 
 	$: defaultDescription =
 		description ||
@@ -42,7 +43,7 @@
 					</p>
 				</div>
 
-				<WalletConnect />
+				<WalletConnect {onConnect} />
 
 				{#if $$slots.extra}
 					<slot name="extra" />
@@ -74,7 +75,7 @@
 				</p>
 			</div>
 
-			<WalletConnect />
+			<WalletConnect {onConnect} />
 
 			{#if $$slots.extra}
 				<slot name="extra" />
