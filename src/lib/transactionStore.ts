@@ -1,6 +1,13 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import { decodeFunctionData, encodeFunctionData, erc20Abi, formatUnits, type Hash, type Hex } from 'viem';
+import {
+	decodeFunctionData,
+	encodeFunctionData,
+	erc20Abi,
+	formatUnits,
+	type Hash,
+	type Hex
+} from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import {
 	getTakeOrders3Calldata,
@@ -453,7 +460,12 @@ const transactionStore = () => {
 					)
 				)} ${trade.order.outputs[0].token.symbol}`;
 
-				const orderLink = createRaindexLink(chainId, raindexOrder.orderbook.id, raindexOrder.orderHash, 'View order on Raindex');
+				const orderLink = createRaindexLink(
+					chainId,
+					raindexOrder.orderbook.id,
+					raindexOrder.orderHash,
+					'View order on Raindex'
+				);
 				const link = `
 				<div class="flex flex-col gap-2 text-center">
 					<div class="text-base text-gray-300">

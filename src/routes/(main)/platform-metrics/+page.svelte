@@ -7,7 +7,6 @@
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { derived } from 'svelte/store';
@@ -30,17 +29,6 @@
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
-
-	type TokenTradingRow = {
-		symbol?: string;
-		name?: string;
-		logoUrl?: string;
-		inVolume: number;
-		outVolume: number;
-		totalVolume: number;
-		usdValue: string;
-		trades: number;
-	};
 
 	type AnalyzedTrade = {
 		trade: SgTrade;
@@ -189,7 +177,9 @@
 
 	// Create canonical token set (both ST0x and Crypto tokens)
 	$: canonicalTokens = new Set<string>(
-		[...TOKENS, ...CRYPTO_TOKENS].map((token) => normalizeAddress(token.address)).filter(Boolean) as string[]
+		[...TOKENS, ...CRYPTO_TOKENS]
+			.map((token) => normalizeAddress(token.address))
+			.filter(Boolean) as string[]
 	);
 
 	// Analyze trades once per network for reuse
@@ -265,7 +255,8 @@
 	function getMidPrice(networkId: number, tokenAddress: string | null): number | null {
 		if (!tokenAddress) return null;
 		const summary =
-			orderbookStates.find(({ network }) => network.chainId === networkId)?.resource?.data?.summary ?? {};
+			orderbookStates.find(({ network }) => network.chainId === networkId)?.resource?.data
+				?.summary ?? {};
 		const metrics = summary[tokenAddress] ?? summary[tokenAddress.toLowerCase()];
 		if (!metrics) return null;
 		const { bid, ask } = metrics;
@@ -408,7 +399,11 @@
 			tvl += balance * price;
 		});
 
-		console.log(`TVL calc for ${network.displayName}: ${performance.now() - startTime}ms, vaults processed: ${vaults.length}, unique tokens: ${uniqueTokens.size}`);
+		console.log(
+			`TVL calc for ${network.displayName}: ${performance.now() - startTime}ms, vaults processed: ${
+				vaults.length
+			}, unique tokens: ${uniqueTokens.size}`
+		);
 
 		const trades = analyzedTradesByNetwork.get(network.chainId) ?? [];
 		let tradingVolume = 0;
@@ -445,16 +440,19 @@
 
 	$: tokenTradingData = (() => {
 		const entries = analyzedTradesByNetwork.get(selectedNetwork.chainId) ?? [];
-		const aggregated = new Map<string, {
-			symbol?: string;
-			name?: string;
-			logoUrl?: string;
-			inVolume: number;
-			outVolume: number;
-			totalVolume: number;
-			usdVolume: number;
-			transactions: Set<string>;
-		}>();
+		const aggregated = new Map<
+			string,
+			{
+				symbol?: string;
+				name?: string;
+				logoUrl?: string;
+				inVolume: number;
+				outVolume: number;
+				totalVolume: number;
+				usdVolume: number;
+				transactions: Set<string>;
+			}
+		>();
 
 		// Initialize all canonical tokens for the selected network
 		[...TOKENS, ...CRYPTO_TOKENS]
@@ -519,7 +517,9 @@
 
 	$: tradeLoading = tradeStates.some(({ resource }) => {
 		const count = resource?.data?.trades?.length ?? 0;
-		return !resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0);
+		return (
+			!resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0)
+		);
 	});
 
 	$: metricsLoading = vaultsLoading || tradeLoading;
@@ -539,11 +539,7 @@
 			/>
 
 			{#if vaultsError}
-				<InfoBlock
-					variant="warning"
-					title="Vault data incomplete"
-					description={vaultsError}
-				/>
+				<InfoBlock variant="warning" title="Vault data incomplete" description={vaultsError} />
 			{/if}
 
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -598,7 +594,9 @@
 				<div class="mb-6 flex items-center justify-between">
 					<div>
 						<h2 class="text-xl font-semibold">Stats by Network</h2>
-						<p class="mt-1 text-sm text-gray-400">Live metrics sourced from active orderbook vaults</p>
+						<p class="mt-1 text-sm text-gray-400">
+							Live metrics sourced from active orderbook vaults
+						</p>
 					</div>
 					<div class="flex items-center gap-2 text-sm text-green-400">
 						<div class="h-2 w-2 rounded-full bg-green-400"></div>
@@ -609,19 +607,29 @@
 				<Table>
 					<thead>
 						<tr class="border-b border-white/10">
-							<th class="sticky left-0 z-10 bg-gray-800 p-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3">
+							<th
+								class="sticky left-0 z-10 bg-gray-800 p-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+							>
 								Network
 							</th>
-							<th class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3">
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+							>
 								TVL
 							</th>
-							<th class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3">
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+							>
 								Active Tokens
 							</th>
-							<th class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3">
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+							>
 								Trading Volume
 							</th>
-							<th class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3">
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+							>
 								Deployed Orders
 							</th>
 						</tr>
@@ -644,7 +652,8 @@
 											<div class="truncate font-medium">{stats.network.displayName}</div>
 											<div class="hidden text-xs text-gray-400 sm:block">{stats.network.name}</div>
 										</div>
-								</td>
+									</div></td
+								>
 								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm">
 									${formatUsd(stats.tvl)}
 								</td>
@@ -679,43 +688,49 @@
 					</div>
 				</div>
 
-			<div class="overflow-x-auto">
-				<table class="w-full">
-					<thead>
-						<tr class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
-							<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
-							<th class="p-2 text-right sm:p-3">Total Volume</th>
-							<th class="p-2 text-right sm:p-3">USD Value</th>
-							<th class="p-2 text-right sm:p-3">Trades</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each tokenTradingData as token}
-							<tr class="border-b border-white/5 hover:bg-white/5">
-								<td class="sticky left-0 bg-gray-800 p-2 sm:p-3">
-									<div class="flex items-center gap-3">
-										{#if token.logoUrl}
-											<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
-										{:else}
-											<div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold">
-												{token.symbol?.charAt(0)}
-											</div>
-										{/if}
-										<div>
-											<div class="text-xs font-medium sm:text-sm">{token.symbol}</div>
-											<div class="hidden text-[11px] text-gray-400 sm:block">{token.name}</div>
-										</div>
-									</div>
-								</td>
-								<td class="p-2 text-right text-yellow-400 sm:p-3">{token.totalVolume.toFixed(3)}</td>
-								<td class="p-2 text-right font-medium sm:p-3">{token.usdValue}</td>
-								<td class="p-2 text-right sm:p-3">{token.trades}</td>
+				<div class="overflow-x-auto">
+					<table class="w-full">
+						<thead>
+							<tr
+								class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
+							>
+								<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
+								<th class="p-2 text-right sm:p-3">Total Volume</th>
+								<th class="p-2 text-right sm:p-3">USD Value</th>
+								<th class="p-2 text-right sm:p-3">Trades</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		</Section>
+						</thead>
+						<tbody>
+							{#each tokenTradingData as token}
+								<tr class="border-b border-white/5 hover:bg-white/5">
+									<td class="sticky left-0 bg-gray-800 p-2 sm:p-3">
+										<div class="flex items-center gap-3">
+											{#if token.logoUrl}
+												<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
+											{:else}
+												<div
+													class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold"
+												>
+													{token.symbol?.charAt(0)}
+												</div>
+											{/if}
+											<div>
+												<div class="text-xs font-medium sm:text-sm">{token.symbol}</div>
+												<div class="hidden text-[11px] text-gray-400 sm:block">{token.name}</div>
+											</div>
+										</div>
+									</td>
+									<td class="p-2 text-right text-yellow-400 sm:p-3"
+										>{token.totalVolume.toFixed(3)}</td
+									>
+									<td class="p-2 text-right font-medium sm:p-3">{token.usdValue}</td>
+									<td class="p-2 text-right sm:p-3">{token.trades}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</Section>
 		{/if}
 	</PageContainer>
 

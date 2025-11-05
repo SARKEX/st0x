@@ -85,9 +85,9 @@ function processOrdersWithQuotes(
 					// const maxOutputBigInt = hexToBigInt(maxOutput);
 					// const ratioBigInt = hexToBigInt(ratio);
 
-				const ratioBigInt = BigInt(
-					Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value
-				);
+					const ratioBigInt = BigInt(
+						Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value
+					);
 					const maxOutputBigInt = BigInt(
 						Float.fromHex(maxOutput as `0x${string}`).value!.toFixedDecimalLossy(
 							Number(orderData.validOutputs[quote.pair.outputIndex]?.token?.decimals)
@@ -146,7 +146,7 @@ function processOrdersWithQuotes(
 						const normalizedAsset = normalizeAddress(metrics.assetAddress);
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
 						processedQuote.usdcPerToken = metrics.usdcPerToken;
-					} 
+					}
 
 					processedQuotes.push(processedQuote);
 				} catch (error) {

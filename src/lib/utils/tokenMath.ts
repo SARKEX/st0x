@@ -103,9 +103,7 @@ export function toDecimal(
 
 			// Format with decimals
 			if (strValue.length <= parsedDecimals) {
-				result = Number.parseFloat(
-					'0.' + '0'.repeat(parsedDecimals - strValue.length) + strValue
-				);
+				result = Number.parseFloat('0.' + '0'.repeat(parsedDecimals - strValue.length) + strValue);
 			} else {
 				const intPart = strValue.slice(0, strValue.length - parsedDecimals);
 				const decPart = strValue.slice(strValue.length - parsedDecimals);
