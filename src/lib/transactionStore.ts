@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import { encodeFunctionData, erc20Abi, formatUnits, type Hex } from 'viem';
+import { decodeFunctionData, encodeFunctionData, erc20Abi, formatUnits, type Hash, type Hex } from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import {
 	getTakeOrders3Calldata,
@@ -23,7 +23,6 @@ import {
 } from './getDeploymentArgs';
 import { rainlangConfirmationModal } from './stores';
 import { createRaindexClient } from './utils/raindexClient';
-import { decodeFunctionData } from 'viem';
 import { ensureResource, getResourceStore } from './stores/network-data-cache';
 import type { Network } from './network';
 
@@ -149,7 +148,7 @@ const transactionStore = () => {
 				}
 			}
 		}
-		let hash: string;
+		let hash: Hash;
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
@@ -275,7 +274,7 @@ const transactionStore = () => {
 		// vault.balance is already a Float instance, use it directly
 		const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
 		if (vaultWithdrawCalldata.error) throw new Error(vaultWithdrawCalldata.error.readableMsg);
-		let hash: string;
+		let hash: Hash;
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
 
@@ -366,7 +365,7 @@ const transactionStore = () => {
 			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
 		}
 
-		let hash: string;
+		let hash: Hash;
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
