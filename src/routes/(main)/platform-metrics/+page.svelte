@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import { getAllTokensByNetwork, networks } from '$lib/network';
+	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/network';
 	import type { CategorizedToken } from '$lib/network';
 	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
@@ -53,7 +53,6 @@
 		tokenCount: number;
 		tradingVolume: number;
 		orderCount: number;
-		uniqueAddresses: number;
 	};
 
 	let selectedNetwork = networks[0];
@@ -188,6 +187,11 @@
 	let tokenLookup: TokenLookup<CategorizedToken> = createTokenLookup([]);
 	$: tokenLookup = createTokenLookup(ALL_TOKENS);
 
+	// Create canonical token set (both ST0x and Crypto tokens)
+	$: canonicalTokens = new Set<string>(
+		[...TOKENS, ...CRYPTO_TOKENS].map((token) => normalizeAddress(token.address)).filter(Boolean) as string[]
+	);
+
 	// Analyze trades once per network for reuse
 	$: analyzedTradesByNetwork = (() => {
 		const map = new Map<number, AnalyzedTrade[]>();
@@ -218,6 +222,7 @@
 	})();
 
 	// Identify tokens that are active on the current orderbook/trade activity
+	// Only include tokens from the canonical list
 	$: activeTokensByNetwork = (() => {
 		const map = new Map<number, Set<string>>();
 		networks.forEach((network) => {
@@ -230,7 +235,7 @@
 			const summary = resource?.data?.summary ?? {};
 			Object.keys(summary).forEach((address) => {
 				const normalised = normalizeAddress(address);
-				if (normalised) {
+				if (normalised && canonicalTokens.has(normalised)) {
 					set.add(normalised);
 				}
 			});
@@ -241,7 +246,7 @@
 			if (!set) return;
 			entries.forEach(({ analysis }) => {
 				const addr = normalizeAddress(analysis.assetAddress);
-				if (addr) {
+				if (addr && canonicalTokens.has(addr)) {
 					set.add(addr);
 				}
 			});
@@ -263,9 +268,9 @@
 			orderbookStates.find(({ network }) => network.chainId === networkId)?.resource?.data?.summary ?? {};
 		const metrics = summary[tokenAddress] ?? summary[tokenAddress.toLowerCase()];
 		if (!metrics) return null;
-		const { buy, sell } = metrics;
-		if (buy && sell) return (buy + sell) / 2;
-		return buy ?? sell ?? null;
+		const { bid, ask } = metrics;
+		if (bid && ask) return (bid + ask) / 2;
+		return bid ?? ask ?? null;
 	}
 
 	function vaultBalanceToNumber(vault: RaindexVault): number {
@@ -371,19 +376,28 @@
 	}
 
 	$: networkStats = networks.map<NetworkStat>((network) => {
+		const startTime = performance.now();
 		const vaults = getActiveVaultsForNetwork(network.chainId);
-		let tvl = 0;
+
+		// Aggregate vault balances by token
+		const tokenBalances = new Map<string, number>();
 		const uniqueTokens = new Set<string>();
-		const uniqueAddresses = new Set<string>();
+
 		vaults.forEach((vault) => {
 			const address = normalizeAddress(vault.token.address);
 			if (!address) return;
 			const balance = vaultBalanceToNumber(vault);
 			if (balance <= 0) return;
+
 			uniqueTokens.add(address);
-			uniqueAddresses.add(vault.owner.toLowerCase());
+			tokenBalances.set(address, (tokenBalances.get(address) ?? 0) + balance);
+		});
+
+		// Calculate TVL using aggregated balances - one price lookup per token
+		let tvl = 0;
+		tokenBalances.forEach((balance, address) => {
 			const tokenInfo = tokenLookup(address);
-			const symbol = tokenInfo?.symbol ?? vault.token.symbol;
+			const symbol = tokenInfo?.symbol;
 			let price = symbol ? findNetworkQuote(symbol, network.chainId)?.close ?? null : null;
 			if (price == null) {
 				price = getMidPrice(network.chainId, address);
@@ -393,6 +407,8 @@
 			}
 			tvl += balance * price;
 		});
+
+		console.log(`TVL calc for ${network.displayName}: ${performance.now() - startTime}ms, vaults processed: ${vaults.length}, unique tokens: ${uniqueTokens.size}`);
 
 		const trades = analyzedTradesByNetwork.get(network.chainId) ?? [];
 		let tradingVolume = 0;
@@ -423,14 +439,12 @@
 			tvl,
 			tokenCount: uniqueTokens.size,
 			tradingVolume,
-			orderCount: orderHashes.size,
-			uniqueAddresses: uniqueAddresses.size
+			orderCount: orderHashes.size
 		};
 	});
 
 	$: tokenTradingData = (() => {
 		const entries = analyzedTradesByNetwork.get(selectedNetwork.chainId) ?? [];
-		const activeSet = activeTokensByNetwork.get(selectedNetwork.chainId);
 		const aggregated = new Map<string, {
 			symbol?: string;
 			name?: string;
@@ -442,29 +456,35 @@
 			transactions: Set<string>;
 		}>();
 
+		// Initialize all canonical tokens for the selected network
+		[...TOKENS, ...CRYPTO_TOKENS]
+			.filter((token) => token.chainId === selectedNetwork.chainId)
+			.forEach((token) => {
+				const address = normalizeAddress(token.address);
+				if (address) {
+					aggregated.set(address, {
+						symbol: token.symbol,
+						name: token.name,
+						logoUrl: token.logoUrl,
+						inVolume: 0,
+						outVolume: 0,
+						totalVolume: 0,
+						usdVolume: 0,
+						transactions: new Set<string>()
+					});
+				}
+			});
+
+		// Populate with trade data
 		entries.forEach(({ trade, analysis }) => {
 			const address = normalizeAddress(analysis.assetAddress);
-			if (!address) return;
-			if (activeSet && activeSet.size > 0 && !activeSet.has(address)) return;
-			let record = aggregated.get(address);
-			if (!record) {
-				const tokenInfo = tokenLookup(address);
-				record = {
-					symbol: tokenInfo?.symbol ?? analysis.assetSymbol ?? '—',
-					name: tokenInfo?.name ?? tokenInfo?.symbol ?? analysis.assetSymbol ?? '—',
-					logoUrl: tokenInfo?.logoUrl,
-					inVolume: 0,
-					outVolume: 0,
-					totalVolume: 0,
-					usdVolume: 0,
-					transactions: new Set<string>()
-				};
-				aggregated.set(address, record);
-			}
+			if (!address || !aggregated.has(address)) return;
+			const record = aggregated.get(address);
+			if (!record) return;
 
-			if (analysis.side === 'buy') {
+			if (analysis.side === 'bid') {
 				record.inVolume += analysis.tokens;
-			} else if (analysis.side === 'sell') {
+			} else if (analysis.side === 'ask') {
 				record.outVolume += analysis.tokens;
 			}
 			record.totalVolume += analysis.tokens;
@@ -484,7 +504,7 @@
 				inVolume: record.inVolume,
 				outVolume: record.outVolume,
 				totalVolume: record.totalVolume,
-				usdValue: record.transactions.size > 0 ? `$${record.usdVolume.toFixed(2)}` : 'N/A',
+				usdValue: `$${record.usdVolume.toFixed(2)}`,
 				trades: record.transactions.size
 			}))
 			.sort((a, b) => b.trades - a.trades);
@@ -497,12 +517,12 @@
 		});
 	}
 
-	const tradeLoading = tradeStates.some(({ resource }) => {
+	$: tradeLoading = tradeStates.some(({ resource }) => {
 		const count = resource?.data?.trades?.length ?? 0;
 		return !resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0);
 	});
 
-	const metricsLoading = vaultsLoading || tradeLoading;
+	$: metricsLoading = vaultsLoading || tradeLoading;
 </script>
 
 <div class="min-h-screen bg-gray-900 text-white">
@@ -604,9 +624,6 @@
 							<th class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3">
 								Deployed Orders
 							</th>
-							<th class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3">
-								Unique Addresses
-							</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -636,7 +653,6 @@
 									${formatUsd(stats.tradingVolume)}
 								</td>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.orderCount}</td>
-								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.uniqueAddresses}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -663,50 +679,43 @@
 					</div>
 				</div>
 
-				{#if tokenTradingData.length > 0}
-					<div class="overflow-x-auto">
-						<table class="w-full">
-							<thead>
-								<tr class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
-									<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
-									<th class="p-2 text-right sm:p-3">Total Volume</th>
-									<th class="p-2 text-right sm:p-3">USD Value</th>
-									<th class="p-2 text-right sm:p-3">Trades</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each tokenTradingData as token}
-									<tr class="border-b border-white/5 hover:bg-white/5">
-										<td class="sticky left-0 bg-gray-800 p-2 sm:p-3">
-											<div class="flex items-center gap-3">
-												{#if token.logoUrl}
-													<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
-												{:else}
-													<div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold">
-														{token.symbol?.charAt(0)}
-													</div>
-												{/if}
-												<div>
-													<div class="text-xs font-medium sm:text-sm">{token.symbol}</div>
-													<div class="hidden text-[11px] text-gray-400 sm:block">{token.name}</div>
-												</div>
+			<div class="overflow-x-auto">
+				<table class="w-full">
+					<thead>
+						<tr class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+							<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
+							<th class="p-2 text-right sm:p-3">Total Volume</th>
+							<th class="p-2 text-right sm:p-3">USD Value</th>
+							<th class="p-2 text-right sm:p-3">Trades</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each tokenTradingData as token}
+							<tr class="border-b border-white/5 hover:bg-white/5">
+								<td class="sticky left-0 bg-gray-800 p-2 sm:p-3">
+									<div class="flex items-center gap-3">
+										{#if token.logoUrl}
+											<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
+										{:else}
+											<div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-bold">
+												{token.symbol?.charAt(0)}
 											</div>
-										</td>
-										<td class="p-2 text-right text-yellow-400 sm:p-3">{token.totalVolume.toFixed(3)}</td>
-										<td class="p-2 text-right font-medium sm:p-3">{token.usdValue}</td>
-										<td class="p-2 text-right sm:p-3">{token.trades}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				{:else}
-					<EmptyState
-						description={`No trading data available for ${selectedNetwork.displayName}`}
-						showBorder={true}
-					/>
-				{/if}
-			</Section>
+										{/if}
+										<div>
+											<div class="text-xs font-medium sm:text-sm">{token.symbol}</div>
+											<div class="hidden text-[11px] text-gray-400 sm:block">{token.name}</div>
+										</div>
+									</div>
+								</td>
+								<td class="p-2 text-right text-yellow-400 sm:p-3">{token.totalVolume.toFixed(3)}</td>
+								<td class="p-2 text-right font-medium sm:p-3">{token.usdValue}</td>
+								<td class="p-2 text-right sm:p-3">{token.trades}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</Section>
 		{/if}
 	</PageContainer>
 

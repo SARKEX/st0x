@@ -85,9 +85,9 @@ function processOrdersWithQuotes(
 					// const maxOutputBigInt = hexToBigInt(maxOutput);
 					// const ratioBigInt = hexToBigInt(ratio);
 
-					const ratioBigInt = BigInt(
-						Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value
-					);
+				const ratioBigInt = BigInt(
+					Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value
+				);
 					const maxOutputBigInt = BigInt(
 						Float.fromHex(maxOutput as `0x${string}`).value!.toFixedDecimalLossy(
 							Number(orderData.validOutputs[quote.pair.outputIndex]?.token?.decimals)
@@ -279,10 +279,10 @@ export async function fetchAndQuoteUSDCOrders(
 }
 
 export type TokenPriceSummary = {
-	buy?: number;
-	sell?: number;
-	buyTokensPerUsdc?: number;
-	sellTokensPerUsdc?: number;
+	bid?: number;
+	ask?: number;
+	bidTokensPerUsdc?: number;
+	askTokensPerUsdc?: number;
 };
 
 const chooseBestPrice = (
@@ -323,40 +323,42 @@ export const buildTokenPriceMap = (
 
 		const existing = priceMap.get(assetAddress) ?? {};
 
-		if (metrics.side === 'buy') {
+		if (metrics.side === 'ask') {
+			// Ask side = asks (what sellers are offering)
 			if (
 				Number.isFinite(metrics.usdcPerToken) &&
 				metrics.usdcPerToken &&
 				metrics.usdcPerToken > 0
 			) {
-				existing.buy = chooseBestPrice(existing.buy, metrics.usdcPerToken, 'min');
+				existing.ask = chooseBestPrice(existing.ask, metrics.usdcPerToken, 'min');
 			}
 			if (
 				Number.isFinite(metrics.tokensPerUsdc) &&
 				metrics.tokensPerUsdc &&
 				metrics.tokensPerUsdc > 0
 			) {
-				existing.buyTokensPerUsdc = chooseBestPrice(
-					existing.buyTokensPerUsdc,
+				existing.askTokensPerUsdc = chooseBestPrice(
+					existing.askTokensPerUsdc,
 					metrics.tokensPerUsdc,
 					'max'
 				);
 			}
 		} else {
+			// Bid side = bids (what buyers are offering)
 			if (
 				Number.isFinite(metrics.usdcPerToken) &&
 				metrics.usdcPerToken &&
 				metrics.usdcPerToken > 0
 			) {
-				existing.sell = chooseBestPrice(existing.sell, metrics.usdcPerToken, 'max');
+				existing.bid = chooseBestPrice(existing.bid, metrics.usdcPerToken, 'max');
 			}
 			if (
 				Number.isFinite(metrics.tokensPerUsdc) &&
 				metrics.tokensPerUsdc &&
 				metrics.tokensPerUsdc > 0
 			) {
-				existing.sellTokensPerUsdc = chooseBestPrice(
-					existing.sellTokensPerUsdc,
+				existing.bidTokensPerUsdc = chooseBestPrice(
+					existing.bidTokensPerUsdc,
 					metrics.tokensPerUsdc,
 					'min'
 				);

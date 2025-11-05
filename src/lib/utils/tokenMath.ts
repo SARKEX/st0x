@@ -210,7 +210,7 @@ export interface PairDescriptor {
 	quote: TokenDescriptor;
 }
 
-export type MarketSide = 'buy' | 'sell';
+export type MarketSide = 'bid' | 'ask';
 
 export function classifyFlow(
 	inputAddress: string | null | undefined,
@@ -222,8 +222,8 @@ export function classifyFlow(
 	const asset = normalizeAddress(pair.asset.address);
 	const quote = normalizeAddress(pair.quote.address);
 	if (!input || !output || !asset || !quote) return null;
-	if (input === quote && output === asset) return 'buy';
-	if (input === asset && output === quote) return 'sell';
+	if (input === quote && output === asset) return 'bid';
+	if (input === asset && output === quote) return 'ask';
 	return null;
 }
 
@@ -264,16 +264,16 @@ export function parseTradeAmounts(
 	const quoteDecimals = Number(pair.quote.decimals ?? 6);
 
 	const inputDecimals = Number(
-		inputChange?.vault?.token?.decimals ?? (side === 'sell' ? assetDecimals : quoteDecimals)
+		inputChange?.vault?.token?.decimals ?? (side === 'ask' ? assetDecimals : quoteDecimals)
 	);
 	const outputDecimals = Number(
-		outputChange?.vault?.token?.decimals ?? (side === 'sell' ? quoteDecimals : assetDecimals)
+		outputChange?.vault?.token?.decimals ?? (side === 'ask' ? quoteDecimals : assetDecimals)
 	);
 
 	let tokens: number | null = null;
 	let usdc: number | null = null;
 
-	if (side === 'buy') {
+	if (side === 'bid') {
 		usdc = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
 		tokens = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
 	} else {
@@ -324,26 +324,28 @@ export function describeQuote(quote: QuoteLike, usdcAddress: string): QuoteMetri
 	if (ratio === null) return null;
 
 	if (input === usdc && output !== usdc) {
-		const tokensPerUsdc = ratio;
-		if (!Number.isFinite(tokensPerUsdc) || tokensPerUsdc <= 0) return null;
-		const usdcPerToken = tokensPerUsdc === 0 ? NaN : 1 / tokensPerUsdc;
+		// ASK order: giving away output token to acquire USDC input (seller offering to sell)
+		const usdcPerToken = ratio;
 		if (!Number.isFinite(usdcPerToken) || usdcPerToken <= 0) return null;
+		const tokensPerUsdc = usdcPerToken === 0 ? NaN : 1 / usdcPerToken;
+		if (!Number.isFinite(tokensPerUsdc) || tokensPerUsdc <= 0) return null;
 		return {
 			assetAddress: output,
-			side: 'buy',
+			side: 'ask',
 			usdcPerToken,
 			tokensPerUsdc
 		};
 	}
 
 	if (output === usdc && input !== usdc) {
-		const usdcPerToken = ratio;
+		// BID order: giving away input token to acquire USDC output (buyer offering to buy)
+		const usdcPerToken = 1 / ratio;
 		if (!Number.isFinite(usdcPerToken) || usdcPerToken <= 0) return null;
-		const tokensPerUsdc = 1 / usdcPerToken;
+		const tokensPerUsdc = usdcPerToken === 0 ? NaN : 1 / usdcPerToken;
 		if (!Number.isFinite(tokensPerUsdc) || tokensPerUsdc <= 0) return null;
 		return {
 			assetAddress: input,
-			side: 'sell',
+			side: 'bid',
 			usdcPerToken,
 			tokensPerUsdc
 		};
