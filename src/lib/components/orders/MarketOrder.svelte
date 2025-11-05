@@ -431,6 +431,7 @@
 			description="Connect your wallet to continue. After connecting, click Place again to submit your order."
 			showSection={false}
 			minHeight={false}
+			onConnect={() => (showConnectModal = false)}
 		/>
 	</div>
 </Modal>

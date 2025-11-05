@@ -3,7 +3,7 @@ export type TradeHistoryPoint = {
 	price: number;
 	tokens: number;
 	usdc: number;
-	side: 'buy' | 'sell';
+	side: 'bid' | 'ask';
 };
 
 export type VolumeBucket = {

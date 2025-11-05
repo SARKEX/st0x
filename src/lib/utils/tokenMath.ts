@@ -65,33 +65,60 @@ export function toDecimal(
 		try {
 			const hexValue = valueStr as `0x${string}`;
 			const floatResult = Float.fromHex(hexValue);
-			if (floatResult.error) {
+			if (floatResult.error || !floatResult.value) {
 				console.warn('Float conversion error:', floatResult.error);
 				return fallback ?? null;
 			}
 
-			// Convert to fixed decimal using the Float API
 			const parsedDecimals = Number(decimals ?? 0);
-			const fixedDecimalResult = floatResult.value.toFixedDecimalLossy(parsedDecimals);
+			let floatValue = floatResult.value;
+			let isNegative = false;
 
-			if (fixedDecimalResult.error) {
+			const zeroResult = Float.fromHex(
+				'0x0000000000000000000000000000000000000000000000000000000000000000'
+			);
+			if (!zeroResult.error && zeroResult.value) {
+				const comparison = floatValue.lt(zeroResult.value);
+				if (!comparison.error) {
+					isNegative = comparison.value;
+				}
+			}
+
+			if (isNegative) {
+				const absResult = floatValue.abs();
+				if (absResult.error || !absResult.value) {
+					return fallback ?? null;
+				}
+				floatValue = absResult.value;
+			}
+
+			const fixedDecimalResult = floatValue.toFixedDecimalLossy(parsedDecimals);
+			if (fixedDecimalResult.error || !fixedDecimalResult.value) {
 				return fallback ?? null;
 			}
 
 			const fixedValue = fixedDecimalResult.value.value;
 			const strValue = fixedValue.toString();
+			let result: number;
 
 			// Format with decimals
 			if (strValue.length <= parsedDecimals) {
-				const result = Number.parseFloat(
-					'0.' + '0'.repeat(parsedDecimals - strValue.length) + strValue
-				);
-				return Number.isFinite(result) ? result : fallback ?? null;
+				result = Number.parseFloat('0.' + '0'.repeat(parsedDecimals - strValue.length) + strValue);
+			} else {
+				const intPart = strValue.slice(0, strValue.length - parsedDecimals);
+				const decPart = strValue.slice(strValue.length - parsedDecimals);
+				result = Number.parseFloat(intPart + '.' + decPart);
 			}
 
-			const intPart = strValue.slice(0, strValue.length - parsedDecimals);
-			const decPart = strValue.slice(strValue.length - parsedDecimals);
-			const result = Number.parseFloat(intPart + '.' + decPart);
+			if (!Number.isFinite(result)) {
+				return fallback ?? null;
+			}
+
+			if (isNegative && !absolute) {
+				result = -result;
+			} else if (absolute) {
+				result = Math.abs(result);
+			}
 
 			// Check if value is reasonable
 			if (Number.isFinite(result) && result > 0 && result < 1e15) {
@@ -104,16 +131,41 @@ export function toDecimal(
 		}
 	}
 
+	// Check if this is already a decimal string (from subgraph/API, not wei-scaled)
+	// Decimal strings are typically small numbers like "1", "75", "123.45"
+	if (typeof value === 'string') {
+		const trimmed = value.trim();
+		const num = Number.parseFloat(trimmed);
+		if (Number.isFinite(num) && num > 0) {
+			// Check if this looks like a decimal value rather than wei
+			// Wei values are typically very large (18+ digits), decimal strings are typically < 15 digits
+			const isLikelyWei = trimmed.length > 15 && !trimmed.includes('.');
+			if (!isLikelyWei && trimmed.length <= 30) {
+				// This looks like a decimal value, return as-is
+				return absolute && num < 0 ? Math.abs(num) : num;
+			}
+		}
+	}
+
 	// Standard bigint conversion for regular amounts
 	const big = toBigInt(value);
 	if (big === null) return fallback ?? null;
 	const normalised = absolute ? absBigInt(big) : big;
 	const parsedDecimals = Number(decimals ?? 0);
 
+	// Validate decimals is reasonable (typically 0-18 for tokens, up to 30 for edge cases)
+	if (!Number.isFinite(parsedDecimals) || parsedDecimals < 0 || parsedDecimals > 30) {
+		console.warn('Invalid decimals value:', parsedDecimals);
+		return fallback ?? null;
+	}
+
 	// Check for astronomically large values
-	const maxSafeNumber = BigInt('1000000000000000000000'); // 1e21, reasonable maximum
-	if (normalised > maxSafeNumber) {
-		console.warn('Value too large for safe conversion:', normalised);
+	// Calculate max based on decimals: allow up to 1e15 as final result
+	// For 18 decimals: 1e15 * 1e18 = 1e33, but cap at 1e24 (practical max)
+	// For 6 decimals: 1e15 * 1e6 = 1e21
+	const maxWeiValue = BigInt('1000000000000000000000000'); // 1e24 - absolute maximum
+	if (normalised > maxWeiValue) {
+		console.warn('Value exceeds maximum safe wei:', normalised);
 		return fallback ?? null;
 	}
 
@@ -124,7 +176,7 @@ export function toDecimal(
 		}
 		// Additional sanity check for the final result
 		if (formatted > 1e15) {
-			console.warn('Converted value suspiciously large:', formatted);
+			console.warn('Converted value suspiciously large:', formatted, 'decimals:', parsedDecimals);
 			return fallback ?? null;
 		}
 		return formatted;
@@ -156,7 +208,7 @@ export interface PairDescriptor {
 	quote: TokenDescriptor;
 }
 
-export type MarketSide = 'buy' | 'sell';
+export type MarketSide = 'bid' | 'ask';
 
 export function classifyFlow(
 	inputAddress: string | null | undefined,
@@ -168,8 +220,8 @@ export function classifyFlow(
 	const asset = normalizeAddress(pair.asset.address);
 	const quote = normalizeAddress(pair.quote.address);
 	if (!input || !output || !asset || !quote) return null;
-	if (input === quote && output === asset) return 'buy';
-	if (input === asset && output === quote) return 'sell';
+	if (input === quote && output === asset) return 'bid';
+	if (input === asset && output === quote) return 'ask';
 	return null;
 }
 
@@ -210,16 +262,16 @@ export function parseTradeAmounts(
 	const quoteDecimals = Number(pair.quote.decimals ?? 6);
 
 	const inputDecimals = Number(
-		inputChange?.vault?.token?.decimals ?? (side === 'sell' ? assetDecimals : quoteDecimals)
+		inputChange?.vault?.token?.decimals ?? (side === 'ask' ? assetDecimals : quoteDecimals)
 	);
 	const outputDecimals = Number(
-		outputChange?.vault?.token?.decimals ?? (side === 'sell' ? quoteDecimals : assetDecimals)
+		outputChange?.vault?.token?.decimals ?? (side === 'ask' ? quoteDecimals : assetDecimals)
 	);
 
 	let tokens: number | null = null;
 	let usdc: number | null = null;
 
-	if (side === 'buy') {
+	if (side === 'bid') {
 		usdc = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
 		tokens = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
 	} else {
@@ -270,26 +322,28 @@ export function describeQuote(quote: QuoteLike, usdcAddress: string): QuoteMetri
 	if (ratio === null) return null;
 
 	if (input === usdc && output !== usdc) {
-		const tokensPerUsdc = ratio;
-		if (!Number.isFinite(tokensPerUsdc) || tokensPerUsdc <= 0) return null;
-		const usdcPerToken = tokensPerUsdc === 0 ? NaN : 1 / tokensPerUsdc;
+		// ASK order: giving away output token to acquire USDC input (seller offering to sell)
+		const usdcPerToken = ratio;
 		if (!Number.isFinite(usdcPerToken) || usdcPerToken <= 0) return null;
+		const tokensPerUsdc = usdcPerToken === 0 ? NaN : 1 / usdcPerToken;
+		if (!Number.isFinite(tokensPerUsdc) || tokensPerUsdc <= 0) return null;
 		return {
 			assetAddress: output,
-			side: 'buy',
+			side: 'ask',
 			usdcPerToken,
 			tokensPerUsdc
 		};
 	}
 
 	if (output === usdc && input !== usdc) {
-		const usdcPerToken = ratio;
+		// BID order: giving away input token to acquire USDC output (buyer offering to buy)
+		const usdcPerToken = 1 / ratio;
 		if (!Number.isFinite(usdcPerToken) || usdcPerToken <= 0) return null;
-		const tokensPerUsdc = 1 / usdcPerToken;
+		const tokensPerUsdc = usdcPerToken === 0 ? NaN : 1 / usdcPerToken;
 		if (!Number.isFinite(tokensPerUsdc) || tokensPerUsdc <= 0) return null;
 		return {
 			assetAddress: input,
-			side: 'sell',
+			side: 'bid',
 			usdcPerToken,
 			tokensPerUsdc
 		};
