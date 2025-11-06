@@ -1,5 +1,10 @@
 import type { RaindexOrder, RaindexOrderQuote, GetOrdersFilters } from '@rainlanguage/orderbook';
-import { networks, TOKENS, USDC_TOKENS } from '$lib/network';
+import {
+	networks,
+	TOKENS,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from '$lib/network';
 import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress, type MarketSide } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
@@ -24,8 +29,8 @@ export interface ProcessedQuote {
 	outputTokenDecimals?: number;
 	assetAddress?: string;
 	side?: MarketSide;
-	usdcPerToken?: number;
-	tokensPerUsdc?: number;
+	quotePerAsset?: number;
+	assetPerQuote?: number;
 }
 
 // Helper function to convert hex string to BigInt
@@ -46,7 +51,7 @@ function getTokenSymbol(address: string, tokens: PythToken[]): string {
 function processOrdersWithQuotes(
 	orders: RaindexOrder[],
 	quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>,
-	usdcToken: PythToken,
+	quoteToken: PythToken,
 	stockTokens: PythToken[]
 ): ProcessedQuote[] {
 	const processedQuotes: ProcessedQuote[] = [];
@@ -121,9 +126,9 @@ function processOrdersWithQuotes(
 						return;
 					}
 
-					// Get token symbols - need to check both USDC and stock tokens for both input and output
-					const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [usdcToken, ...stockTokens]);
-					const outputTokenSymbol = getTokenSymbol(outputTokenAddress, [usdcToken, ...stockTokens]);
+					// Get token symbols - need to check both settlement token and stock tokens for both input and output
+					const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [quoteToken, ...stockTokens]);
+					const outputTokenSymbol = getTokenSymbol(outputTokenAddress, [quoteToken, ...stockTokens]);
 
 					const inputDecimals = Number(inputDefinition.decimals ?? 0);
 					const outputDecimals = Number(outputDefinition.decimals ?? 0);
@@ -140,12 +145,13 @@ function processOrdersWithQuotes(
 						outputTokenDecimals: Number.isFinite(outputDecimals) ? outputDecimals : undefined
 					};
 
-					const metrics = describeQuote(processedQuote, usdcToken.address);
+					const metrics = describeQuote(processedQuote, quoteToken.address);
 					if (metrics) {
 						processedQuote.side = metrics.side;
 						const normalizedAsset = normalizeAddress(metrics.assetAddress);
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
-						processedQuote.usdcPerToken = metrics.usdcPerToken;
+						processedQuote.quotePerAsset = metrics.quotePerAsset;
+						processedQuote.assetPerQuote = metrics.assetPerQuote;
 					}
 
 					processedQuotes.push(processedQuote);
@@ -164,12 +170,13 @@ function processOrdersWithQuotes(
 }
 
 /**
- * Fetches all orders from subgraph, filters orders with USDC as input and stock tokens as output,
- * and quotes all filtered orders using the new RaindexClient API
+ * Fetches all orders from subgraph, filters orders that involve the configured payment token and stock tokens,
+ * and quotes all filtered orders using the RaindexClient API.
  */
-export async function fetchAndQuoteUSDCOrders(
+export async function fetchAndQuotePaymentTokenOrders(
 	networkId: number = 8453,
-	options: { maxPages?: number; pageSize?: number } = {}
+	options: { maxPages?: number; pageSize?: number } = {},
+	overridePaymentToken?: PythToken
 ) {
 	const { maxPages = 100, pageSize = 1000 } = options;
 
@@ -179,10 +186,13 @@ export async function fetchAndQuoteUSDCOrders(
 		throw new Error(`Network with id ${networkId} not found`);
 	}
 
-	// Get USDC token address for the network
-	const usdcToken = USDC_TOKENS[networkId];
-	if (!usdcToken) {
-		throw new Error(`USDC token not found for network ${networkId}`);
+	// Determine the payment token for the network
+	const defaultPaymentToken =
+		overridePaymentToken ??
+		getDefaultPaymentTokenForNetwork(networkId) ??
+		DEFAULT_PAYMENT_TOKENS[networkId];
+	if (!defaultPaymentToken) {
+		throw new Error(`Payment token not found for network ${networkId}`);
 	}
 
 	// Get stock tokens for the network
@@ -206,9 +216,9 @@ export async function fetchAndQuoteUSDCOrders(
 				owners: []
 			};
 
-			// Add token filters for USDC and stock tokens
+			// Add token filters for payment token and stock tokens
 			const tokenAddresses: string[] = [
-				usdcToken.address,
+				defaultPaymentToken.address,
 				...stockTokens.map((t) => t.address)
 			] as `0x${string}`[];
 
@@ -246,7 +256,7 @@ export async function fetchAndQuoteUSDCOrders(
 		}
 	}
 
-	console.log('🔍 fetchAndQuoteUSDCOrders - Total orders fetched:', allOrders.length);
+	console.log('🔍 fetchAndQuotePaymentTokenOrders - Total orders fetched:', allOrders.length);
 
 	// Get quotes for all orders and store them in a map
 	const quotesMap = new Map<RaindexOrder, RaindexOrderQuote[]>();
@@ -271,7 +281,7 @@ export async function fetchAndQuoteUSDCOrders(
 	console.log('📦 Total quotes fetched:', quotesMap.size, 'orders with quotes');
 
 	// Process and filter the quotes
-	const processedQuotes = processOrdersWithQuotes(allOrders, quotesMap, usdcToken, stockTokens);
+	const processedQuotes = processOrdersWithQuotes(allOrders, quotesMap, defaultPaymentToken, stockTokens);
 
 	console.log('🎯 Final processed quotes:', processedQuotes.length);
 
@@ -281,8 +291,8 @@ export async function fetchAndQuoteUSDCOrders(
 export type TokenPriceSummary = {
 	bid?: number;
 	ask?: number;
-	bidTokensPerUsdc?: number;
-	askTokensPerUsdc?: number;
+	bidAssetPerQuote?: number;
+	askAssetPerQuote?: number;
 };
 
 const chooseBestPrice = (
@@ -301,10 +311,10 @@ const chooseBestPrice = (
 
 export const buildTokenPriceMap = (
 	quotes: ProcessedQuote[],
-	usdcAddressRaw: string
+	quoteAddressRaw: string
 ): Map<string, TokenPriceSummary> => {
 	const priceMap = new Map<string, TokenPriceSummary>();
-	const usdcAddress = normalizeAddress(usdcAddressRaw);
+	const quoteAddress = normalizeAddress(quoteAddressRaw);
 
 	quotes.forEach((quote) => {
 		const metrics =
@@ -312,54 +322,54 @@ export const buildTokenPriceMap = (
 				? {
 						assetAddress: quote.assetAddress,
 						side: quote.side,
-						usdcPerToken: quote.usdcPerToken,
-						tokensPerUsdc: quote.tokensPerUsdc
+						quotePerAsset: quote.quotePerAsset,
+						assetPerQuote: quote.assetPerQuote
 					}
-				: describeQuote(quote, usdcAddressRaw);
+				: describeQuote(quote, quoteAddressRaw);
 		if (!metrics) return;
 
 		const assetAddress = normalizeAddress(metrics.assetAddress);
-		if (!assetAddress || assetAddress === usdcAddress) return;
+		if (!assetAddress || assetAddress === quoteAddress) return;
 
 		const existing = priceMap.get(assetAddress) ?? {};
 
 		if (metrics.side === 'ask') {
 			// Ask side = asks (what sellers are offering)
 			if (
-				Number.isFinite(metrics.usdcPerToken) &&
-				metrics.usdcPerToken &&
-				metrics.usdcPerToken > 0
+				Number.isFinite(metrics.quotePerAsset) &&
+				metrics.quotePerAsset &&
+				metrics.quotePerAsset > 0
 			) {
-				existing.ask = chooseBestPrice(existing.ask, metrics.usdcPerToken, 'min');
+				existing.ask = chooseBestPrice(existing.ask, metrics.quotePerAsset, 'min');
 			}
 			if (
-				Number.isFinite(metrics.tokensPerUsdc) &&
-				metrics.tokensPerUsdc &&
-				metrics.tokensPerUsdc > 0
+				Number.isFinite(metrics.assetPerQuote) &&
+				metrics.assetPerQuote &&
+				metrics.assetPerQuote > 0
 			) {
-				existing.askTokensPerUsdc = chooseBestPrice(
-					existing.askTokensPerUsdc,
-					metrics.tokensPerUsdc,
+				existing.askAssetPerQuote = chooseBestPrice(
+					existing.askAssetPerQuote,
+					metrics.assetPerQuote,
 					'max'
 				);
 			}
 		} else {
 			// Bid side = bids (what buyers are offering)
 			if (
-				Number.isFinite(metrics.usdcPerToken) &&
-				metrics.usdcPerToken &&
-				metrics.usdcPerToken > 0
+				Number.isFinite(metrics.quotePerAsset) &&
+				metrics.quotePerAsset &&
+				metrics.quotePerAsset > 0
 			) {
-				existing.bid = chooseBestPrice(existing.bid, metrics.usdcPerToken, 'max');
+				existing.bid = chooseBestPrice(existing.bid, metrics.quotePerAsset, 'max');
 			}
 			if (
-				Number.isFinite(metrics.tokensPerUsdc) &&
-				metrics.tokensPerUsdc &&
-				metrics.tokensPerUsdc > 0
+				Number.isFinite(metrics.assetPerQuote) &&
+				metrics.assetPerQuote &&
+				metrics.assetPerQuote > 0
 			) {
-				existing.bidTokensPerUsdc = chooseBestPrice(
-					existing.bidTokensPerUsdc,
-					metrics.tokensPerUsdc,
+				existing.bidAssetPerQuote = chooseBestPrice(
+					existing.bidAssetPerQuote,
+					metrics.assetPerQuote,
 					'min'
 				);
 			}

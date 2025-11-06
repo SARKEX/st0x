@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import transactionStore from './transactionStore';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
-import { STOXs, USDC_TOKENS } from './network';
+import {
+	STOXs,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from './network';
 import { rainlangConfirmationModal, currentNetwork } from './stores';
 import {
 	getMarketMakingDeploymentArgs,
@@ -17,7 +21,13 @@ import { decodeFunctionData } from 'viem';
 // Shared mock network object to avoid repetition
 const mockNetwork = mockCurrentNetwork;
 
-const USDC_TOKEN = USDC_TOKENS[mockNetwork.id];
+const PAYMENT_TOKEN =
+	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ??
+	getDefaultPaymentTokenForNetwork(mockNetwork.id);
+
+if (!PAYMENT_TOKEN) {
+	throw new Error('Missing default payment token for mock network');
+}
 
 vi.mock('./getDeploymentArgs', async (importOriginal) => {
 	return {
@@ -262,7 +272,7 @@ describe('transactionStore tests', () => {
 
 	it('should call handleDsfDeploy', async () => {
 		const deployPromise = transactionStore.handleDsfDeploy({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -282,7 +292,7 @@ describe('transactionStore tests', () => {
 		await deployPromise;
 
 		expect(getMarketMakingDeploymentArgs).toHaveBeenCalledWith({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -300,7 +310,7 @@ describe('transactionStore tests', () => {
 
 	it('should call handleDcaDeploy', async () => {
 		const deployPromise = transactionStore.handleDcaDeploy({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -319,7 +329,7 @@ describe('transactionStore tests', () => {
 		await deployPromise;
 
 		expect(getDcaDeploymentArgs).toHaveBeenCalledWith({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -336,7 +346,7 @@ describe('transactionStore tests', () => {
 
 	it('should call handleLimitOrderDeploy', async () => {
 		const deployPromise = transactionStore.handleLimitDeploy({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			ioRatio: '0.1',
 			depositAmount: 1000000000000000000n,
@@ -349,7 +359,7 @@ describe('transactionStore tests', () => {
 		await deployPromise;
 
 		expect(getLimitOrderDeploymentArgs).toHaveBeenCalledWith({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			ioRatio: '0.1',
 			depositAmount: 1000000000000000000n,
@@ -432,7 +442,7 @@ describe('transactionStore tests', () => {
 
 	it('should call sendTransaction for approval and deployment handleDsfDeploy', async () => {
 		const deployPromise = transactionStore.handleDsfDeploy({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -485,7 +495,7 @@ describe('transactionStore tests', () => {
 
 	it('should call sendTransaction for approval and deployment handleDcaDeploy', async () => {
 		const deployPromise = transactionStore.handleDcaDeploy({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -533,7 +543,7 @@ describe('transactionStore tests', () => {
 
 	it('should call sendTransaction for approval and deployment handleLimitOrderDeploy', async () => {
 		const deployPromise = transactionStore.handleLimitDeploy({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			ioRatio: '0.1',
 			depositAmount: 2000000000000000000n,
@@ -665,7 +675,7 @@ describe('transactionStore tests', () => {
 
 	it('should call transactionSuccess with the correct arguments handleDsfDeploy', async () => {
 		const deployPromise = transactionStore.handleDsfDeploy({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -714,7 +724,7 @@ describe('transactionStore tests', () => {
 
 	it('should call transactionSuccess with the correct arguments handleDcaDeploy', async () => {
 		const deployPromise = transactionStore.handleDcaDeploy({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -762,7 +772,7 @@ describe('transactionStore tests', () => {
 
 	it('should call transactionSuccess with the correct arguments handleLimitOrderDeploy', async () => {
 		const deployPromise = transactionStore.handleLimitDeploy({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			ioRatio: '1',
 			depositAmount: 1000000000000000000n,

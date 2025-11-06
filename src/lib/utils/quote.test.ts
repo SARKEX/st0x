@@ -142,8 +142,8 @@ describe('quote utilities', () => {
 				mockDescribeQuote.mockReturnValue({
 					side: 'ask',
 					assetAddress: '0xAsset',
-					usdcPerToken: 100,
-					tokensPerUsdc: 0.01
+					quotePerAsset: 100,
+					assetPerQuote: 0.01
 				});
 
 				const quotes: ProcessedQuote[] = [
@@ -165,7 +165,7 @@ describe('quote utilities', () => {
 
 				expect(assetPrice).toBeDefined();
 				expect(assetPrice?.ask).toBe(100);
-				expect(assetPrice?.askTokensPerUsdc).toBe(0.01);
+				expect(assetPrice?.askAssetPerQuote).toBe(0.01);
 			});
 
 			it('should process BID side quote (buy order)', () => {
@@ -173,8 +173,8 @@ describe('quote utilities', () => {
 				mockDescribeQuote.mockReturnValue({
 					side: 'bid',
 					assetAddress: '0xAsset',
-					usdcPerToken: 50,
-					tokensPerUsdc: 0.02
+					quotePerAsset: 50,
+					assetPerQuote: 0.02
 				});
 
 				const quotes: ProcessedQuote[] = [
@@ -196,7 +196,7 @@ describe('quote utilities', () => {
 
 				expect(assetPrice).toBeDefined();
 				expect(assetPrice?.bid).toBe(50);
-				expect(assetPrice?.bidTokensPerUsdc).toBe(0.02);
+				expect(assetPrice?.bidAssetPerQuote).toBe(0.02);
 			});
 
 			it('should use cached metrics if available', () => {
@@ -211,8 +211,8 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: 100,
-						tokensPerUsdc: 0.01
+						quotePerAsset: 100,
+						assetPerQuote: 0.01
 					}
 				];
 
@@ -240,7 +240,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: 100
+						quotePerAsset: 100
 					},
 					{
 						orderHash: '0x2',
@@ -252,7 +252,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: 80
+						quotePerAsset: 80
 					}
 				];
 
@@ -274,7 +274,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xUSDC',
 						side: 'bid',
 						assetAddress: '0xAsset',
-						usdcPerToken: 50
+						quotePerAsset: 50
 					},
 					{
 						orderHash: '0x2',
@@ -286,7 +286,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xUSDC',
 						side: 'bid',
 						assetAddress: '0xAsset',
-						usdcPerToken: 60
+						quotePerAsset: 60
 					}
 				];
 
@@ -308,7 +308,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: 100
+						quotePerAsset: 100
 					},
 					{
 						orderHash: '0x2',
@@ -320,7 +320,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xUSDC',
 						side: 'bid',
 						assetAddress: '0xAsset',
-						usdcPerToken: 50
+						quotePerAsset: 50
 					}
 				];
 
@@ -345,7 +345,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken1',
 						side: 'ask',
 						assetAddress: '0xAsset1',
-						usdcPerToken: 100
+						quotePerAsset: 100
 					},
 					{
 						orderHash: '0x2',
@@ -357,7 +357,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken2',
 						side: 'ask',
 						assetAddress: '0xAsset2',
-						usdcPerToken: 200
+						quotePerAsset: 200
 					}
 				];
 
@@ -402,7 +402,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xUSDC',
 						side: 'ask',
 						assetAddress: '0xUSDC',
-						usdcPerToken: 1
+						quotePerAsset: 1
 					}
 				];
 
@@ -422,7 +422,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: Infinity
+						quotePerAsset: Infinity
 					}
 				];
 
@@ -444,7 +444,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: 0
+						quotePerAsset: 0
 					},
 					{
 						orderHash: '0x2',
@@ -456,7 +456,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: -50
+						quotePerAsset: -50
 					}
 				];
 
@@ -467,8 +467,8 @@ describe('quote utilities', () => {
 			});
 		});
 
-		describe('tokensPerUsdc metric', () => {
-			it('should select maximum tokensPerUsdc for ASK side', () => {
+		describe('assetPerQuote metric', () => {
+			it('should select maximum assetPerQuote for ASK side', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
@@ -480,7 +480,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						tokensPerUsdc: 0.02
+						assetPerQuote: 0.02
 					},
 					{
 						orderHash: '0x2',
@@ -492,17 +492,17 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						tokensPerUsdc: 0.01
+						assetPerQuote: 0.01
 					}
 				];
 
 				const result = buildTokenPriceMap(quotes, '0xUSDC');
 				const assetPrice = result.get('0xasset');
 
-				expect(assetPrice?.askTokensPerUsdc).toBe(0.02); // Should pick higher tokensPerUsdc (max)
+				expect(assetPrice?.askAssetPerQuote).toBe(0.02); // Should pick higher assetPerQuote (max)
 			});
 
-			it('should select minimum tokensPerUsdc for BID side', () => {
+			it('should select minimum assetPerQuote for BID side', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
@@ -514,7 +514,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xUSDC',
 						side: 'bid',
 						assetAddress: '0xAsset',
-						tokensPerUsdc: 0.01
+						assetPerQuote: 0.01
 					},
 					{
 						orderHash: '0x2',
@@ -526,14 +526,14 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xUSDC',
 						side: 'bid',
 						assetAddress: '0xAsset',
-						tokensPerUsdc: 0.02
+						assetPerQuote: 0.02
 					}
 				];
 
 				const result = buildTokenPriceMap(quotes, '0xUSDC');
 				const assetPrice = result.get('0xasset');
 
-				expect(assetPrice?.bidTokensPerUsdc).toBe(0.01); // Should pick lower tokensPerUsdc (min)
+				expect(assetPrice?.bidAssetPerQuote).toBe(0.01); // Should pick lower assetPerQuote (min)
 			});
 		});
 
@@ -550,7 +550,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: 100
+						quotePerAsset: 100
 					}
 				];
 
@@ -571,7 +571,7 @@ describe('quote utilities', () => {
 						outputTokenAddress: '0xToken',
 						side: 'ask',
 						assetAddress: '0xAsset',
-						usdcPerToken: 100
+						quotePerAsset: 100
 					}
 				];
 

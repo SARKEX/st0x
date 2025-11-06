@@ -33,14 +33,24 @@
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
-	// Initialize tokens - accumulating token from prop, USDC for payment
+	// Initialize tokens - accumulating token from prop, settlement token for settlement
 	let selectedInputToken: CategorizedToken;
 	let selectedOutputToken: CategorizedToken;
+	$: settlementSymbol = selectedOutputToken?.symbol ?? '';
+	$: settlementLabel = settlementSymbol || 'Quote';
 
 	// Resolve tokens whenever network, token list, or prop changes
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
-		const usdcToken = ALL_TOKENS.find((t) => t.symbol?.toUpperCase() === 'USDC');
-		selectedOutputToken = usdcToken || ALL_TOKENS[0];
+		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
+		if (settlementTokenConfig) {
+			const match = ALL_TOKENS.find(
+				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
+			);
+			selectedOutputToken =
+				match || (settlementTokenConfig as unknown as CategorizedToken) || selectedOutputToken || ALL_TOKENS[0];
+		} else {
+			selectedOutputToken = selectedOutputToken || ALL_TOKENS[0];
+		}
 		selectedInputToken =
 			(passedInputToken as unknown as CategorizedToken) || selectedInputToken || ALL_TOKENS[0];
 	}
@@ -109,8 +119,8 @@
 			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
 			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 
-			// Bid (buying): Accumulate asset over time with USDC
-			// Ask (selling): Accumulate USDC over time by selling asset
+			// Bid (buying): Accumulate asset over time using the settlement token
+			// Ask (selling): Accumulate the settlement token over time by selling the asset
 			const inputTok = orderType === 'Bid' ? selectedInputToken : selectedOutputToken;
 			const outputTok = orderType === 'Bid' ? selectedOutputToken : selectedInputToken;
 			transactionStore.handleDcaDeploy({
@@ -120,8 +130,8 @@
 				selectedPeriod: selectedPeriod,
 				selectedPeriodUnit: selectedPeriodUnit,
 				// DCA price inversion logic:
-				// Bid (buying): User specifies price as "USDC per asset", orderbook needs "asset/USDC" → invert
-				// Ask (selling): User specifies price as "USDC per asset", orderbook needs "USDC/asset" → no invert
+				// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
+				// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
 				baseline:
 					orderType === 'Bid'
 						? invertAndNormalize(selectedBaseline)
@@ -152,7 +162,7 @@
 		const amount = parseFloat(formatUnits(selectedAmount, decimals));
 		const periods = parseFloat(selectedPeriod || '1');
 		if (!Number.isFinite(amount) || !Number.isFinite(periods) || periods === 0) return '0.00';
-		const dp = orderSide === 'Buy' ? 2 : 6; // Preserve 2dp for Buy (USDC), higher precision for Sell
+		const dp = orderSide === 'Buy' ? 2 : 6; // Preserve fewer decimals for Buy (quote), higher precision for Sell
 		return (amount / periods).toFixed(dp);
 	})();
 
@@ -189,7 +199,7 @@
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Target Amount
 					<span class="ml-1 text-xs text-gray-500"
-						>({orderSide === 'Buy' ? 'USDC' : selectedInputToken.symbol})</span
+						>({orderSide === 'Buy' ? settlementLabel : selectedInputToken.symbol})</span
 					>
 				</div>
 				<TradeAmountInput
@@ -231,7 +241,7 @@
 				<Input
 					aria-label="Start Price"
 					type="number"
-					unit="USDC"
+						unit={settlementLabel}
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -244,7 +254,7 @@
 				<Input
 					aria-label={orderSide === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
 					type="number"
-					unit="USDC"
+						unit={settlementLabel}
 					bind:amount={selectedBaseline}
 					validate={validateBaseline}
 					bind:isError={selectedBaselineError}
@@ -260,7 +270,7 @@
 					<span class="text-gray-400">Target Amount</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
-							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
+							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} {settlementLabel}
 						{:else}
 							{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}
@@ -278,7 +288,7 @@
 					<span class="text-gray-400">Average per period</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
-							~{avgPricePerPeriod} USDC
+							~{avgPricePerPeriod} {settlementLabel}
 						{:else}
 							~{avgPricePerPeriod} {selectedInputToken.symbol}
 						{/if}
@@ -288,7 +298,7 @@
 					<span class="text-gray-400">Min trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
-							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} {settlementLabel}
 						{:else}
 							{minTradeAmount ? formatUnits(minTradeAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}
@@ -299,7 +309,7 @@
 					<span class="text-gray-400">Max trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
-							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} {settlementLabel}
 						{:else}
 							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}

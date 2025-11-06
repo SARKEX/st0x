@@ -6,10 +6,13 @@ import type { SwapResponse } from 'sushi/evm';
 
 export const getPrice = async (baseToken: EvmToken, quoteToken: EvmToken): Promise<string> => {
 	const network = get(currentNetwork);
-	const usdcToken = network.usdcToken;
+	const defaultPaymentToken = network.defaultPaymentToken || network.defaultSettlementToken;
+	if (!defaultPaymentToken) {
+		throw new Error('No default payment token configured for current network');
+	}
 	if (
-		baseToken.address.toLowerCase() === usdcToken.address.toLowerCase() &&
-		quoteToken.address.toLowerCase() === usdcToken.address.toLowerCase()
+		baseToken.address.toLowerCase() === defaultPaymentToken.address.toLowerCase() &&
+		quoteToken.address.toLowerCase() === defaultPaymentToken.address.toLowerCase()
 	) {
 		return '1';
 	}

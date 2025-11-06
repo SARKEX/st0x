@@ -5,14 +5,14 @@ import {
 	getNetworkById,
 	getNetworkByChainId,
 	getNetworkByName,
-	getUsdcTokenForNetwork,
+	getDefaultPaymentTokenForNetwork,
 	getTokensByCategory,
 	getAllTokens,
 	getTokensByNetwork,
 	getCryptoTokensByNetwork,
 	getAllTokensByNetwork,
 	networks,
-	USDC_TOKENS,
+	DEFAULT_PAYMENT_TOKENS,
 	TOKENS,
 	CRYPTO_TOKENS
 } from './network';
@@ -84,22 +84,22 @@ describe('network', () => {
 		});
 	});
 
-	describe('getUsdcTokenForNetwork', () => {
-		it('should get USDC token for Base', () => {
-			const token = getUsdcTokenForNetwork(8453);
+	describe('getDefaultPaymentTokenForNetwork', () => {
+		it('should get payment token for Base', () => {
+			const token = getDefaultPaymentTokenForNetwork(8453);
 			expect(token).toBeDefined();
 			expect(token?.symbol).toBe('USDC');
 			expect(token?.decimals).toBe(6);
 			expect(token?.chainId).toBe(8453);
 		});
 
-		it('should return undefined for network without USDC', () => {
-			const token = getUsdcTokenForNetwork(9999);
+		it('should return undefined for network without configured payment token', () => {
+			const token = getDefaultPaymentTokenForNetwork(9999);
 			expect(token).toBeUndefined();
 		});
 
 		it('should have valid token properties', () => {
-			const token = getUsdcTokenForNetwork(8453);
+			const token = getDefaultPaymentTokenForNetwork(8453);
 			expect(token?.address).toBeDefined();
 			expect(token?.name).toBeDefined();
 			expect(token?.priceFeedId).toBeDefined();
@@ -308,16 +308,16 @@ describe('network', () => {
 		});
 	});
 
-	describe('USDC_TOKENS configuration', () => {
-		it('should have USDC token for Base', () => {
-			expect(USDC_TOKENS[8453]).toBeDefined();
-			expect(USDC_TOKENS[8453].symbol).toBe('USDC');
+	describe('payment token configuration', () => {
+		it('should have default payment token for Base', () => {
+			expect(DEFAULT_PAYMENT_TOKENS[8453]).toBeDefined();
+			expect(DEFAULT_PAYMENT_TOKENS[8453].symbol).toBe('USDC');
 		});
 
-		it('should match network USDC token', () => {
+		it('should match network default payment token', () => {
 			const network = getNetworkById(8453);
-			const token = getUsdcTokenForNetwork(8453);
-			expect(network?.usdcToken).toEqual(token);
+			const token = getDefaultPaymentTokenForNetwork(8453);
+			expect(network?.defaultPaymentToken).toEqual(token);
 		});
 	});
 });

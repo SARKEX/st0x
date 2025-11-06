@@ -50,6 +50,9 @@
 		  }
 		| undefined = undefined;
 
+	$: settlementToken = $currentNetwork?.defaultPaymentToken;
+	$: settlementSymbol = settlementToken?.symbol ?? 'Quote';
+
 	// Errors
 	let selectedAmountError: boolean = false;
 
@@ -75,7 +78,8 @@
 			formatUnits(selectedAmount, passedOutputToken?.decimals || 18)
 		);
 		const pricePerToken = Number(marketPrice) / 1e18;
-		return (outputInTokens * pricePerToken).toFixed(2);
+		const total = outputInTokens * pricePerToken;
+		return `${total.toFixed(2)} ${settlementSymbol}`;
 	})();
 
 	// Wallet connect modal state
@@ -174,7 +178,7 @@
 					const outputDecimals = Number(sgOrder.outputs[0]?.token?.decimals) || 18;
 
 					// For Sell orders (market sell takes bid orders):
-					// Bid ioRatio is stored as tokens/USDC, invert to get USDC/token
+					// Bid ioRatio is stored as tokens/quote, invert to get quote/token
 					if (orderSide === 'Sell') {
 						ratioBigInt = (PRECISION * PRECISION) / ratioBigInt;
 					}
@@ -438,7 +442,7 @@
 							? 'Loading...'
 							: priceError
 								? 'Price unavailable'
-								: (Number(marketPrice) / 1e18).toFixed(6)}
+								: `${(Number(marketPrice) / 1e18).toFixed(6)} ${settlementSymbol}`}
 						disabled
 						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 					/>
@@ -469,7 +473,7 @@
 							? 'Loading...'
 							: priceError
 								? 'N/A'
-								: (Number(marketPrice) / 1e18).toFixed(6)} per {passedOutputToken.symbol}
+								: `${(Number(marketPrice) / 1e18).toFixed(6)} ${settlementSymbol}`} per {passedOutputToken.symbol}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">

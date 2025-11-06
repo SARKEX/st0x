@@ -16,7 +16,18 @@ export const mockCurrentNetwork = {
 		'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 	orderbook_subgraph_url:
 		'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-08-18-2744/gn',
-	usdcToken: {
+	paymentTokens: [
+		{
+			chainId: 8453,
+			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+			symbol: 'USDC',
+			decimals: 6,
+			name: 'USD Coin',
+			logoUrl: '/images/USDC.png',
+			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+		}
+	],
+	defaultPaymentToken: {
 		chainId: 8453,
 		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 		symbol: 'USDC',
@@ -26,3 +37,6 @@ export const mockCurrentNetwork = {
 		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
 	}
 };
+
+(mockCurrentNetwork as any).settlementTokens = mockCurrentNetwork.paymentTokens;
+(mockCurrentNetwork as any).defaultSettlementToken = mockCurrentNetwork.defaultPaymentToken;

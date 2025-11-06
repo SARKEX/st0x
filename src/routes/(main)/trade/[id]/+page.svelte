@@ -11,7 +11,7 @@
 	} from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { formatUnits } from 'viem';
-	import { TOKENS, USDC_TOKENS } from '$lib/network';
+import { TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
@@ -79,6 +79,9 @@
 	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
 	const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60; // 30 days (max window)
 	const OHLC_BUCKET_SECONDS = 60; // 1 minute buckets for candles
+	$: settlementTokenConfig = $currentNetwork?.defaultPaymentToken;
+	$: settlementTokenSymbol = settlementTokenConfig?.symbol ?? 'Quote';
+	$: settlementTokenLogo = settlementTokenConfig?.logoUrl ?? '/images/USDC.png';
 	type HistoryRangeKey = '1D' | '7D' | '30D';
 	const HISTORY_RANGE_CONFIG: Record<HistoryRangeKey, { label: string; seconds: number }> = {
 		'1D': { label: '1D', seconds: 24 * 60 * 60 },
@@ -94,15 +97,13 @@
 		trade: SgTrade,
 		assetAddress: string,
 		assetDecimals: number,
-		usdcAddress: string,
-		usdcDecimals: number
+		quoteToken: { address: string; decimals: number; symbol: string }
 	): TradeHistoryPoint | null => {
 		if (!trade) return null;
 		const rawTimestamp = Number(trade.tradeEvent?.transaction?.timestamp ?? trade.timestamp ?? 0);
 		if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return null;
 		const timestamp = rawTimestamp * 1000;
 		const normalizedAsset = normalizeAddress(assetAddress);
-		const quoteToken = { address: usdcAddress, decimals: usdcDecimals, symbol: 'USDC' as const };
 		const lookup = (address: string | null | undefined) => {
 			const normalized = normalizeAddress(address);
 			if (normalized && normalized === normalizedAsset) {
@@ -126,9 +127,9 @@
 		);
 		if (!analysis) return null;
 		if (normalizedAsset && analysis.assetAddress !== normalizedAsset) return null;
-		const { tokens, usdc, price, side } = analysis;
-		if (!Number.isFinite(tokens) || !Number.isFinite(usdc) || !Number.isFinite(price)) return null;
-		return { timestamp, price, tokens, usdc, side };
+		const { tokens, quote, price, side } = analysis;
+		if (!Number.isFinite(tokens) || !Number.isFinite(quote) || !Number.isFinite(price)) return null;
+		return { timestamp, price, tokens, quote, side };
 	};
 	// Convert trade points to OHLC candles
 	const tradesToAveragePrices = (trades: TradeHistoryPoint[], bucketSeconds: number) => {
@@ -293,62 +294,62 @@
 	$: {
 		if (!browser || !currentToken || !$currentNetwork) {
 			resetOnChainPrices();
+	} else {
+		const settlementToken = $currentNetwork.defaultPaymentToken;
+		if (!settlementToken) {
+			resetOnChainPrices();
 		} else {
-			const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
-			if (!usdcToken) {
-				resetOnChainPrices();
-			} else {
-				const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
-				const assetAddress = currentToken.address?.toLowerCase();
-				const usdcAddress = usdcToken.address?.toLowerCase();
-				let bestBid: number | null = null;
-				let bestAsk: number | null = null;
-				quotes.forEach((quote) => {
-					const ratio = Number(quote.ratio) / 1e18;
-					if (!Number.isFinite(ratio) || ratio <= 0) return;
-					const inputAddress = quote.inputTokenAddress.toLowerCase();
-					const outputAddress = quote.outputTokenAddress.toLowerCase();
-					// ASK: USDC -> asset (what you pay when buying)
-					if (inputAddress === usdcAddress && outputAddress === assetAddress) {
-						const tokenAmount = Number(quote.maxOutput);
-						const price = ratio;
-						if (
-							Number.isFinite(tokenAmount) &&
-							Number.isFinite(price) &&
-							tokenAmount > 0 &&
-							price > 0
-						) {
-							bestAsk = bestAsk === null ? price : Math.min(bestAsk, price);
-						}
+			const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+			const assetAddress = currentToken.address?.toLowerCase();
+			const quoteAddress = settlementToken.address?.toLowerCase();
+			let bestBid: number | null = null;
+			let bestAsk: number | null = null;
+			quotes.forEach((quote) => {
+				const ratio = Number(quote.ratio) / 1e18;
+				if (!Number.isFinite(ratio) || ratio <= 0) return;
+				const inputAddress = quote.inputTokenAddress.toLowerCase();
+				const outputAddress = quote.outputTokenAddress.toLowerCase();
+				// ASK: quote token -> asset (what you pay when buying)
+				if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+					const tokenAmount = Number(quote.maxOutput);
+					const price = ratio;
+					if (
+						Number.isFinite(tokenAmount) &&
+						Number.isFinite(price) &&
+						tokenAmount > 0 &&
+						price > 0
+					) {
+						bestAsk = bestAsk === null ? price : Math.min(bestAsk, price);
 					}
-					// BID: asset -> USDC (what you get when selling)
-					if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-						const usdcAmount = Number(quote.maxOutput);
-						const price = 1 / ratio;
-						if (Number.isFinite(usdcAmount) && usdcAmount > 0) {
-							if (Number.isFinite(price) && price > 0) {
-								const tokenAmount = usdcAmount / price;
-								if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
-									bestBid = bestBid === null ? price : Math.max(bestBid, price);
-								}
+				}
+				// BID: asset -> quote token (what you get when selling)
+				if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+					const quoteAmount = Number(quote.maxOutput);
+					const price = 1 / ratio;
+					if (Number.isFinite(quoteAmount) && quoteAmount > 0) {
+						if (Number.isFinite(price) && price > 0) {
+							const tokenAmount = quoteAmount / price;
+							if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
+								bestBid = bestBid === null ? price : Math.max(bestBid, price);
 							}
 						}
 					}
-				});
-				buyPrice = bestBid; // Best bid - what you get when selling
-				sellPrice = bestAsk; // Best ask - what you pay when buying
-			}
+				}
+			});
+			buyPrice = bestBid; // Best bid - what you get when selling
+			sellPrice = bestAsk; // Best ask - what you pay when buying
 		}
 	}
+}
 	$: tradeHistoryPoints = (() => {
 		if (!browser || !currentToken || !$currentNetwork) return [];
-		const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
-		if (!usdcToken) return [];
-		const assetAddress = currentToken.address?.toLowerCase();
-		const usdcAddress = usdcToken.address?.toLowerCase();
-		if (!assetAddress || !usdcAddress) return [];
-		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
-		const usdcDecimals = Number(usdcToken.decimals ?? 6);
+	const settlementToken = $currentNetwork.defaultPaymentToken;
+	if (!settlementToken) return [];
+	const assetAddress = currentToken.address?.toLowerCase();
+	const quoteAddress = settlementToken.address;
+	if (!assetAddress || !quoteAddress) return [];
+	const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+	const quoteDecimals = Number(settlementToken.decimals ?? 6);
 		const range = $tradeActivityResource?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
@@ -357,7 +358,13 @@
 		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
 		const trades = ($tradeActivityResource?.data?.trades ?? []) as SgTrade[];
 		return trades
-			.map((trade) => tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals))
+			.map((trade) =>
+				tradeToPoint(trade, assetAddress, assetDecimals, {
+					address: quoteAddress,
+					decimals: quoteDecimals,
+					symbol: settlementToken.symbol || ''
+				})
+			)
 			.filter(
 				(point): point is TradeHistoryPoint =>
 					point !== null && point.timestamp >= cutoff && point.timestamp <= rangeEnd
@@ -392,11 +399,11 @@
 		if (!quotes.length) {
 			return { bids: [], asks: [] };
 		}
-		const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
-		if (!usdcToken) return { bids: [], asks: [] };
+		const settlementToken = $currentNetwork.defaultPaymentToken;
+		if (!settlementToken) return { bids: [], asks: [] };
 		const assetAddress = currentToken.address?.toLowerCase();
-		const usdcAddress = usdcToken.address?.toLowerCase();
-		if (!assetAddress || !usdcAddress) {
+		const quoteAddress = settlementToken.address?.toLowerCase();
+		if (!assetAddress || !quoteAddress) {
 			return { bids: [], asks: [] };
 		}
 		const bids: DepthSeries['bids'] = [];
@@ -411,7 +418,7 @@
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
-			if (inputAddress === usdcAddress && outputAddress === assetAddress) {
+			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
 				const tokenAmount = Number(quote.maxOutput);
 				const price = ratio;
 				if (
@@ -425,16 +432,16 @@
 				asks.push({ price, quantity: tokenAmount });
 				return;
 			}
-			if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-				const usdcAmount = Number(quote.maxOutput);
-				if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) {
+			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+				const quoteAmount = Number(quote.maxOutput);
+				if (!Number.isFinite(quoteAmount) || quoteAmount <= 0) {
 					return;
 				}
 				const price = 1 / ratio;
 				if (!Number.isFinite(price) || price <= 0) {
 					return;
 				}
-				const tokenAmount = usdcAmount / price;
+				const tokenAmount = quoteAmount / price;
 				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
 					return;
 				}
@@ -977,8 +984,8 @@
 								<span>{panelSummaryVerb} {panelTokenLabel}</span>
 								<span class="text-gray-500">{panelSummaryPreposition}</span>
 								<span class="inline-flex items-center gap-1 text-gray-200">
-									USDC
-									<img src="/images/USDC.png" alt="USDC" class="h-4 w-4" />
+									{settlementTokenSymbol}
+									<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-4 w-4" />
 								</span>
 							</div>
 							<label class="block space-y-2" for={PANEL_STRATEGY_SELECT_ID}>

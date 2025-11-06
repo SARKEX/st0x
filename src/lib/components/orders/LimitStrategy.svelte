@@ -24,20 +24,36 @@
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
-	// Initialize tokens - trading token from prop, USDC for payment
-	let selectedOutputToken: CategorizedToken;
-	let selectedInputToken: CategorizedToken;
+	// Initialize tokens - trading token from prop, settlement token for settlement
+	let assetToken: CategorizedToken | undefined;
+	let settlementToken: CategorizedToken | undefined;
+	let selectedInputToken: CategorizedToken | undefined;
+	let selectedOutputToken: CategorizedToken | undefined;
+	$: settlementSymbol = settlementToken?.symbol ?? '';
+	$: settlementLabel = settlementSymbol || 'Quote';
 
-	// Always use USDC for payment
+	// Always use the network's default settlement token for settlement
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
-		const usdcToken = ALL_TOKENS.find((t) => t.symbol === 'USDC');
-		selectedInputToken = usdcToken || ALL_TOKENS[0];
+		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
+		if (settlementTokenConfig) {
+			const match = ALL_TOKENS.find(
+				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
+			);
+			settlementToken = match || (settlementTokenConfig as unknown as CategorizedToken);
+		} else {
+			settlementToken = ALL_TOKENS[0];
+		}
 
-		// Update selectedOutputToken if network changes
-		if (passedOutputToken && !selectedOutputToken) {
-			selectedOutputToken = passedOutputToken as unknown as CategorizedToken;
+		// Update asset token if network changes
+		if (passedOutputToken && !assetToken) {
+			assetToken = passedOutputToken as unknown as CategorizedToken;
 		}
 	}
+
+	$: selectedInputToken =
+		orderSide === 'Buy' ? assetToken : settlementToken;
+	$: selectedOutputToken =
+		orderSide === 'Buy' ? settlementToken : assetToken;
 
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
@@ -56,7 +72,7 @@
 	let outputVaultId: Hex | undefined;
 
 	$: isInputTokenSameAsOutputToken =
-		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
+		selectedInputToken?.address.toLowerCase() === selectedOutputToken?.address.toLowerCase();
 
 	// errors
 	let selectedInitialRatioError: boolean = false;
@@ -69,6 +85,7 @@
 		!selectedInitialRatio ||
 		!selectedInputToken ||
 		!selectedOutputToken ||
+		!assetToken ||
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		selectedAmountError ||
@@ -76,7 +93,7 @@
 		outputVaultIdError;
 
 	const handleDeploy = async () => {
-		if (!selectedInputToken || !selectedOutputToken) return;
+		if (!selectedInputToken || !selectedOutputToken || !assetToken || !settlementToken) return;
 		if (!$connected) {
 			showConnectModal = true;
 			return;
@@ -96,32 +113,32 @@
 		const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 
 		if (orderType === 'Bid') {
-			// Bid order (user buying): Places order to buy asset with USDC
+			// Bid order (user buying): Places order to buy asset with the settlement token
 			// User specifies quantity to acquire and price willing to pay
-			// Price interpretation: "I pay X USDC per 1 asset"
+			// Price interpretation: "I pay X quote tokens per 1 asset"
 			// The deployed order uses inverted ratio: 1/X (this is what getBaseline does)
-			const assetQuantity = formatUnits(selectedAmount || 0n, selectedOutputToken?.decimals || 18);
+			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken?.decimals || 18);
 			const price = parseFloat(selectedInitialRatio || '0');
-			const usdcNeeded = parseFloat(assetQuantity) * price;
-			const usdcAmount = parseUnits(usdcNeeded.toString(), selectedInputToken?.decimals || 6);
+			const settlementNeeded = parseFloat(assetQuantity) * price;
+			const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken?.decimals || 6);
 
 			deployData = {
-				inputToken: selectedOutputToken, // Asset (token to be acquired, used for IO ratio)
-				outputToken: selectedInputToken, // USDC (token to be deposited as payment)
+				inputToken: selectedInputToken, // Asset (token to be acquired, used for IO ratio)
+				outputToken: selectedOutputToken, // payment token (token to be deposited as payment)
 				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
 				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toFixed(18).toString(),
-				depositAmount: usdcAmount, // USDC payment amount
+				depositAmount: settlementAmount, // Payment amount in settlement token
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
 			};
 		} else {
-			// Ask order (user selling): Places order to sell asset for USDC
+			// Ask order (user selling): Places order to sell asset for the settlement token
 			// User specifies quantity to offer and price willing to receive
-			// Price interpretation: "I receive X USDC per 1 asset"
+			// Price interpretation: "I receive X quote tokens per 1 asset"
 			// The deployed order uses direct ratio: X (this is what getBaseline does)
 			deployData = {
-				inputToken: selectedOutputToken, // Asset (token being offered for sale)
-				outputToken: selectedInputToken, // USDC (token to be deposited as what we'd receive)
+				inputToken: selectedInputToken, // payment token (token expected in return)
+				outputToken: selectedOutputToken, // Asset (token being offered for sale)
 				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
 				ioRatio: selectedInitialRatio,
 				depositAmount: selectedAmount, // Asset amount being offered
@@ -196,15 +213,15 @@
 
 	// Calculate total cost
 	$: totalCost =
-		selectedAmount && selectedInitialRatio
+		selectedAmount && selectedInitialRatio && assetToken
 			? (
-					parseFloat(formatUnits(selectedAmount, selectedOutputToken?.decimals || 18)) *
+					parseFloat(formatUnits(selectedAmount, assetToken.decimals)) *
 					parseFloat(selectedInitialRatio)
 				).toFixed(2)
 			: '0.00';
 </script>
 
-{#if $currentNetwork && ALL_TOKENS.length > 0 && selectedOutputToken && selectedInputToken}
+{#if $currentNetwork && ALL_TOKENS.length > 0 && selectedInputToken && selectedOutputToken && assetToken}
 	<div class="space-y-4">
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
@@ -212,7 +229,7 @@
 				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
 				<TradeAmountInput
 					aria-label="Quantity"
-					amountToken={selectedOutputToken}
+					amountToken={assetToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
@@ -223,12 +240,12 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Limit Price
-					<span class="ml-1 text-xs text-gray-500">(USDC per {selectedOutputToken.symbol})</span>
+					<span class="ml-1 text-xs text-gray-500">({settlementLabel} per {assetToken.symbol})</span>
 				</div>
-				<Input
-					aria-label="Limit Price"
-					type="number"
-					unit="USDC"
+					<Input
+						aria-label="Limit Price"
+						type="number"
+						unit={settlementLabel}
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -237,27 +254,27 @@
 		</div>
 
 		<!-- Order summary -->
-		<div class={containerStyles.cardBordered}>
-			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
-			<div class="space-y-2 text-sm">
-				<div class="flex justify-between">
-					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-					<span class="font-medium">
-						{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
-						{selectedOutputToken.symbol}
-					</span>
-				</div>
+			<div class={containerStyles.cardBordered}>
+				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+				<div class="space-y-2 text-sm">
+					<div class="flex justify-between">
+						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+						<span class="font-medium">
+							{selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0'}
+							{assetToken.symbol}
+						</span>
+					</div>
 				<div class="flex justify-between">
 					<span class="text-gray-400">At price</span>
-					<span class="font-medium">
-						{selectedInitialRatio || '0'} USDC
+						<span class="font-medium">
+							{selectedInitialRatio || '0'} {settlementLabel}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
 					<div class="flex justify-between">
 						<span class="text-gray-400">Total</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{totalCost} USDC
+							{totalCost} {settlementLabel}
 						</span>
 					</div>
 				</div>

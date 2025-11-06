@@ -227,7 +227,7 @@ describe('tokenMath', () => {
 			const result = parseTradeAmounts(trade, pair);
 			expect(result).not.toBeNull();
 			expect(result?.side).toBe('bid');
-			expect(result?.usdc).toBe(1);
+			expect(result?.quote).toBe(1);
 			expect(result?.tokens).toBe(1);
 			expect(result?.price).toBe(1);
 		});
@@ -252,7 +252,7 @@ describe('tokenMath', () => {
 			expect(result).not.toBeNull();
 			expect(result?.side).toBe('ask');
 			expect(result?.tokens).toBe(1);
-			expect(result?.usdc).toBe(5);
+			expect(result?.quote).toBe(5);
 			expect(result?.price).toBe(5);
 		});
 
@@ -300,7 +300,7 @@ describe('tokenMath', () => {
 	});
 
 	describe('describeQuote', () => {
-		const usdcAddress = '0xUSDC';
+		const quoteAddress = '0xUSDC';
 
 		it('should describe ASK quote (USDC -> TOKEN)', () => {
 			const quote = {
@@ -309,11 +309,11 @@ describe('tokenMath', () => {
 				ratio: BigInt(2e18) // 2 USDC per TOKEN
 			};
 
-			const result = describeQuote(quote, usdcAddress);
+			const result = describeQuote(quote, quoteAddress);
 			expect(result).not.toBeNull();
 			expect(result?.side).toBe('ask');
-			expect(result?.usdcPerToken).toBe(2);
-			expect(result?.tokensPerUsdc).toBe(0.5);
+			expect(result?.quotePerAsset).toBe(2);
+			expect(result?.assetPerQuote).toBe(0.5);
 		});
 
 		it('should describe BID quote (TOKEN -> USDC)', () => {
@@ -323,23 +323,23 @@ describe('tokenMath', () => {
 				ratio: BigInt(0.5e18) // 0.5 USDC per TOKEN (inverted)
 			};
 
-			const result = describeQuote(quote, usdcAddress);
+			const result = describeQuote(quote, quoteAddress);
 			expect(result).not.toBeNull();
 			expect(result?.side).toBe('bid');
-			expect(result?.usdcPerToken).toBe(2); // 1 / 0.5 = 2
+			expect(result?.quotePerAsset).toBe(2); // 1 / 0.5 = 2
 		});
 
 		it('should return null for invalid quotes', () => {
 			expect(
 				describeQuote(
 					{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: BigInt(1e18) },
-					usdcAddress
+					quoteAddress
 				)
 			).toBeNull(); // both USDC
 			expect(
 				describeQuote(
 					{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: BigInt(1e18) },
-					usdcAddress
+					quoteAddress
 				)
 			).toBeNull();
 		});
@@ -400,7 +400,7 @@ describe('tokenMath', () => {
 			expect(result?.assetAddress).toBe('0xasset');
 			expect(result?.assetSymbol).toBe('ASSET');
 			expect(result?.side).toBe('bid');
-			expect(result?.usdc).toBe(1);
+			expect(result?.quote).toBe(1);
 			expect(result?.tokens).toBe(1);
 			expect(result?.price).toBe(1);
 		});

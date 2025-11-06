@@ -8,7 +8,12 @@ import {
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { getPrice } from './getPrice';
 import { formatUnits } from 'viem';
-import { getAllTokensByNetwork, STOXs, USDC_TOKENS } from './network';
+import {
+	getAllTokensByNetwork,
+	STOXs,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from './network';
 import { currentNetwork } from './stores';
 import { get } from 'svelte/store';
 import { mockCurrentNetwork } from './mocks/mockCurrentNetwork';
@@ -19,7 +24,13 @@ vi.stubGlobal('fetch', mockFetch);
 // Shared mock network object to avoid repetition
 const mockNetwork = mockCurrentNetwork;
 const ALL_TOKENS = getAllTokensByNetwork(mockNetwork.id);
-const USDC_TOKEN = USDC_TOKENS[mockNetwork.id];
+const PAYMENT_TOKEN =
+	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ??
+	getDefaultPaymentTokenForNetwork(mockNetwork.id);
+
+if (!PAYMENT_TOKEN) {
+	throw new Error('Missing default payment token for mock network');
+}
 
 // Mock the DotrainOrderGui
 vi.mock('@rainlanguage/orderbook', () => ({
@@ -113,7 +124,7 @@ describe('getDeploymentArgs', () => {
 
 	it('should call DotrainOrderGui.newWithDeployment with the correct arguments', async () => {
 		await getMarketMakingDeploymentArgs({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -136,7 +147,7 @@ describe('getDeploymentArgs', () => {
 
 	it('should handle getMarketMakingDeploymentArgs strategy correctly', async () => {
 		await getMarketMakingDeploymentArgs({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -151,7 +162,7 @@ describe('getDeploymentArgs', () => {
 			outputVaultIdToken2: undefined
 		});
 
-		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', USDC_TOKEN.address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', PAYMENT_TOKEN.address);
 		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', STOXs[0].address);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith('amount-is-fast-exit', '1');
@@ -162,12 +173,12 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'max-amount',
-			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(1000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'min-amount',
-			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(1000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith('next-trade-multiplier', '1.01');
@@ -178,7 +189,7 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token1',
-			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(1000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 
 		expect(mockGui.setDeposit).toHaveBeenCalledWith(
@@ -189,7 +200,7 @@ describe('getDeploymentArgs', () => {
 
 	it('should handle getDcaDeploymentArgs strategy correctly', async () => {
 		await getDcaDeploymentArgs({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -203,7 +214,7 @@ describe('getDeploymentArgs', () => {
 			depositAmount: 4000000000000000000n
 		});
 
-		expect(mockGui.setSelectToken).toHaveBeenCalledWith('output', USDC_TOKEN.address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('output', PAYMENT_TOKEN.address);
 		expect(mockGui.setSelectToken).toHaveBeenCalledWith('input', STOXs[0].address);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '86400');
@@ -213,17 +224,17 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'amount-per-epoch',
-			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(1000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'max-trade-amount',
-			formatUnits(3000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(3000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith(
 			'min-trade-amount',
-			formatUnits(2000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(2000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith('baseline', '0.9');
@@ -232,7 +243,7 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'output',
-			formatUnits(4000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(4000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 	});
 
@@ -241,7 +252,7 @@ describe('getDeploymentArgs', () => {
 		const outputVaultId = '0x1234567890123456789012345678901234567896';
 
 		await getDcaDeploymentArgs({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -256,12 +267,12 @@ describe('getDeploymentArgs', () => {
 		});
 
 		expect(mockGui.setVaultId).toHaveBeenCalledWith('input', STOXs[0].address, inputVaultId);
-		expect(mockGui.setVaultId).toHaveBeenCalledWith('output', USDC_TOKEN.address, outputVaultId);
+		expect(mockGui.setVaultId).toHaveBeenCalledWith('output', PAYMENT_TOKEN.address, outputVaultId);
 	});
 
 	it('should handle getLimitOrderDeploymentArgs strategy correctly', async () => {
 		await getLimitOrderDeploymentArgs({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			ioRatio: '0.1',
 			depositAmount: 1000000000000000000n,
@@ -270,13 +281,13 @@ describe('getDeploymentArgs', () => {
 		});
 
 		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', STOXs[0].address);
-		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', USDC_TOKEN.address);
+		expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', PAYMENT_TOKEN.address);
 
 		expect(mockGui.setFieldValue).toHaveBeenCalledWith('fixed-io', '0.1');
 
 		expect(mockGui.setDeposit).toHaveBeenCalledWith(
 			'token2',
-			formatUnits(1000000000000000000n, USDC_TOKEN.decimals)
+			formatUnits(1000000000000000000n, PAYMENT_TOKEN.decimals)
 		);
 	});
 
@@ -358,7 +369,7 @@ describe('getDeploymentArgs', () => {
 
 	it('should return getMarketMakingDeploymentArgs deployment args', async () => {
 		const result = await getMarketMakingDeploymentArgs({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -388,7 +399,7 @@ describe('getDeploymentArgs', () => {
 
 	it('should return getDcaDeploymentArgs deployment args', async () => {
 		const result = await getDcaDeploymentArgs({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -417,7 +428,7 @@ describe('getDeploymentArgs', () => {
 
 	it('should return getLimitOrderDeploymentArgs deployment args', async () => {
 		const result = await getLimitOrderDeploymentArgs({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			ioRatio: '0.1',
 			depositAmount: 1000000000000000000n,
@@ -492,7 +503,7 @@ describe('getDeploymentArgs', () => {
 		const outputVaultIdToken2 = '0x1234567890123456789012345678901234567894';
 
 		await getMarketMakingDeploymentArgs({
-			token1: USDC_TOKEN,
+			token1: PAYMENT_TOKEN,
 			token2: STOXs[0],
 			amountIsFastExit: true,
 			notAmountIsFastExit: false,
@@ -509,13 +520,13 @@ describe('getDeploymentArgs', () => {
 
 		expect(mockGui.setVaultId).toHaveBeenCalledWith(
 			'input',
-			USDC_TOKEN.address,
+			PAYMENT_TOKEN.address,
 			inputVaultIdToken1
 		);
 		expect(mockGui.setVaultId).toHaveBeenCalledWith('input', STOXs[0].address, inputVaultIdToken2);
 		expect(mockGui.setVaultId).toHaveBeenCalledWith(
 			'output',
-			USDC_TOKEN.address,
+			PAYMENT_TOKEN.address,
 			outputVaultIdToken1
 		);
 		expect(mockGui.setVaultId).toHaveBeenCalledWith(
@@ -527,7 +538,7 @@ describe('getDeploymentArgs', () => {
 
 	it('should handle different period units in getDcaDeploymentArgs', async () => {
 		await getDcaDeploymentArgs({
-			outputToken: USDC_TOKEN,
+			outputToken: PAYMENT_TOKEN,
 			inputToken: STOXs[0],
 			budgetAmount: 1000000000000000000n,
 			selectedPeriod: '1',
@@ -559,7 +570,7 @@ describe('getDeploymentArgs', () => {
 
 		await expect(
 			getMarketMakingDeploymentArgs({
-				token1: USDC_TOKEN,
+				token1: PAYMENT_TOKEN,
 				token2: STOXs[0],
 				amountIsFastExit: true,
 				notAmountIsFastExit: false,

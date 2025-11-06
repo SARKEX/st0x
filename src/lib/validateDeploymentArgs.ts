@@ -2,11 +2,14 @@ export type ValidateFunction = (value: string | undefined) => string | undefined
 
 const createValidator = (fieldName: string, mustBePositive = false): ValidateFunction => {
 	return (value: string | undefined) => {
-		if (value === undefined || value === '') {
+		if (value === undefined || value === '' || (typeof value === 'string' && value.trim() === '')) {
 			return `${fieldName} is required`;
 		}
-		if (mustBePositive && Number(value) <= 0) {
-			return `${fieldName} must be greater than 0`;
+		if (mustBePositive) {
+			const num = Number(value);
+			if (!Number.isFinite(num) || num <= 0) {
+				return `${fieldName} must be greater than 0`;
+			}
 		}
 		return undefined;
 	};
