@@ -22,6 +22,7 @@
 	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import transactionStore from '$lib/transactionStore';
 	import { Float } from '@rainlanguage/float';
+	import { describeQuote } from '$lib/utils/tokenMath';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let passedOutputToken: CategorizedToken | undefined;
@@ -50,8 +51,8 @@
 		  }
 		| undefined = undefined;
 
-	$: settlementToken = $currentNetwork?.defaultPaymentToken;
-	$: settlementSymbol = settlementToken?.symbol ?? 'Quote';
+	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.defaultSettlementToken;
+	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
 
 	// Errors
 	let selectedAmountError: boolean = false;
@@ -79,7 +80,7 @@
 		);
 		const pricePerToken = Number(marketPrice) / 1e18;
 		const total = outputInTokens * pricePerToken;
-		return `${total.toFixed(2)} ${settlementSymbol}`;
+		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
 	})();
 
 	// Wallet connect modal state
@@ -94,6 +95,13 @@
 		try {
 			isLoadingPrice = true;
 			priceError = false;
+
+			const paymentTokenAddress = paymentToken?.address?.toLowerCase();
+			if (!paymentTokenAddress) {
+				priceError = true;
+				isLoadingPrice = false;
+				return;
+			}
 
 			const limitOrders = passedOutputToken.limitOrders.filter(
 				(order: LimitOrder) => order.type !== orderSide
@@ -132,7 +140,6 @@
 
 			const tempAvailableOrders: typeof availableOrders = [];
 			let totalWeightedPrice = 0n;
-			let totalWeight = 0n;
 			const PRECISION = BigInt(1e18);
 
 			// Process each order
@@ -161,32 +168,36 @@
 				// Use first valid quote to get price
 				const quote = validQuotes[0];
 				const ratio = quote.data?.ratio;
-				if (!ratio) continue;
+				if (!ratio || !paymentToken?.address) continue;
 
 				try {
-					// Convert Float ratio to 18-decimal BigInt
 					const floatResult = Float.fromHex(ratio as `0x${string}`);
-					if (floatResult.error) continue;
+					if (floatResult.error || !floatResult.value) continue;
 
-					const fixedDecimalResult = floatResult.value!.abs().value!.toFixedDecimalLossy(18);
-					if (fixedDecimalResult.error) continue;
+					const fixedDecimalResult = floatResult.value
+						.abs()
+						.value!
+						.toFixedDecimalLossy(18);
+					if (fixedDecimalResult.error || !fixedDecimalResult.value) continue;
 
-					let ratioBigInt = BigInt(fixedDecimalResult.value!.value);
+					const rawRatioBigInt = BigInt(fixedDecimalResult.value.value);
+					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
+					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
+					if (!inputDefinition || !outputDefinition) continue;
 
-					// Get token decimals for decimal scaling
-					const inputDecimals = Number(sgOrder.inputs[0]?.token?.decimals) || 18;
-					const outputDecimals = Number(sgOrder.outputs[0]?.token?.decimals) || 18;
-
-					// For Sell orders (market sell takes bid orders):
-					// Bid ioRatio is stored as tokens/quote, invert to get quote/token
-					if (orderSide === 'Sell') {
-						ratioBigInt = (PRECISION * PRECISION) / ratioBigInt;
+					const metrics = describeQuote(
+						{
+							inputTokenAddress: inputDefinition.token,
+							outputTokenAddress: outputDefinition.token,
+							ratio: rawRatioBigInt
+						},
+						paymentTokenAddress
+					);
+					if (!metrics || !Number.isFinite(metrics.quotePerAsset) || metrics.quotePerAsset <= 0) {
+						continue;
 					}
 
-					// Encode decimal differences into the price
-					// Formula: price * 10^(inputDecimals - outputDecimals)
-					const decimalScaling = BigInt(10 ** (inputDecimals - outputDecimals));
-					const encodedPrice = ratioBigInt * decimalScaling;
+					const encodedPrice = BigInt(Math.round(metrics.quotePerAsset * 1e18));
 
 					// Store order and its data
 					tempAvailableOrders.push({
@@ -198,7 +209,6 @@
 
 					// Accumulate for weighted average
 					totalWeightedPrice = totalWeightedPrice + encodedPrice;
-					totalWeight = totalWeight + PRECISION;
 				} catch {
 					// Skip this order if there's any error processing it
 					continue;
@@ -442,7 +452,7 @@
 							? 'Loading...'
 							: priceError
 								? 'Price unavailable'
-								: `${(Number(marketPrice) / 1e18).toFixed(6)} ${settlementSymbol}`}
+								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`}
 						disabled
 						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 					/>
@@ -473,7 +483,7 @@
 							? 'Loading...'
 							: priceError
 								? 'N/A'
-								: `${(Number(marketPrice) / 1e18).toFixed(6)} ${settlementSymbol}`} per {passedOutputToken.symbol}
+								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`} per {passedOutputToken.symbol}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
