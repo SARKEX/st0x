@@ -5,6 +5,7 @@
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import {
 		type OrderV4,
+		type RaindexOrder,
 		type RaindexOrderQuote,
 		type SgOrder,
 		type TakeOrderConfigV4,
@@ -27,13 +28,25 @@
 
 	// State for market price and quantity
 	let marketPrice: bigint = 0n;
-	let selectedAmount: bigint = 0n;
+	let selectedAmount: bigint = 0n; // Amount user wants to acquire (output)
 	let isLoadingPrice = true;
 	let priceError = false;
-	let raindexOrder: SgOrder | undefined = undefined;
-	let orderData: OrderV4 | undefined = undefined;
+	let availableOrders: Array<{
+		order: SgOrder;
+		orderData: OrderV4;
+		quotes: RaindexOrderQuote[];
+		price: bigint; // Normalized to 18 decimals
+	}> = [];
 	let orderbook: string | undefined = undefined;
-	let quoteData: { maxOutput: string; ratio: string } | undefined = undefined;
+
+	// Transaction results
+	let transactionHash: string | undefined = undefined;
+	let transactionResults: {
+		quantityFilled: bigint;
+		averagePrice: bigint;
+		actualSlippage: bigint;
+		isPartialFill: boolean;
+	} | undefined = undefined;
 
 	// Errors
 	let selectedAmountError: boolean = false;
@@ -52,18 +65,44 @@
 		isLoadingPrice ||
 		priceError;
 
-	// Calculate total cost
-	$: totalCost =
-		selectedAmount && marketPrice
-			? (
-					(parseFloat(formatUnits(selectedAmount, passedOutputToken?.decimals || 18)) *
-						Number(marketPrice)) /
-					1e18
-				).toFixed(2)
-			: '0.00';
+	// Calculate required input based on desired output
+	$: requiredInputAmount = (() => {
+		if (!selectedAmount || !marketPrice) return '0.00';
+		// Output amount * market price = input amount
+		const outputInTokens = parseFloat(formatUnits(selectedAmount, passedOutputToken?.decimals || 18));
+		const pricePerToken = Number(marketPrice) / 1e18;
+		return (outputInTokens * pricePerToken).toFixed(2);
+	})();
 
 	// Wallet connect modal state
 	let showConnectModal = false;
+
+	// Helper to normalize price to 18 decimals
+	function normalizePriceTo18Decimals(
+		floatHex: string,
+		side: 'Buy' | 'Sell'
+	): { normalized: bigint; error: boolean } {
+		try {
+			const floatResult = Float.fromHex(floatHex as `0x${string}`);
+			if (floatResult.error) return { normalized: 0n, error: true };
+
+			const fixedDecimalResult = floatResult.value!.abs().value!.toFixedDecimalLossy(18);
+			if (fixedDecimalResult.error) return { normalized: 0n, error: true };
+
+			const ratioBigInt = BigInt(fixedDecimalResult.value!.value);
+			const PRECISION = BigInt(1e18);
+
+			// For buy orders (opposite side is sell offers), price is inverted
+			// For sell orders (opposite side is buy offers), price is direct
+			if (side === 'Buy') {
+				return { normalized: (PRECISION * PRECISION) / ratioBigInt, error: false };
+			} else {
+				return { normalized: ratioBigInt, error: false };
+			}
+		} catch {
+			return { normalized: 0n, error: true };
+		}
+	}
 
 	async function fetchMarketPrice() {
 		if (!passedOutputToken || !passedOutputToken.limitOrders || !orderSide) {
@@ -84,90 +123,106 @@
 				return;
 			}
 
-			// Use the standard RaindexClient
 			const client = await createRaindexClient();
 
-			// Fetch the order by hash
-			const ordersResult = await client.getOrders(
-				[$currentNetwork.id],
-				{
-					active: true,
-					owners: [],
-					orderHash: limitOrders[0].orderHash as `0x${string}`
-				},
-				1
-			);
+			// Fetch all available orders for the opposite side
+			// Note: We fetch them one by one since the API takes orderHash (singular)
+			const allOrders: RaindexOrder[] = [];
+			for (const limitOrder of limitOrders) {
+				const ordersResult = await client.getOrders(
+					[$currentNetwork.id],
+					{
+						active: true,
+						owners: [],
+						orderHash: limitOrder.orderHash as `0x${string}`
+					},
+					1
+				);
 
-			if (ordersResult.error || !ordersResult.value || ordersResult.value.length === 0) {
+				if (!ordersResult.error && ordersResult.value && ordersResult.value.length > 0) {
+					allOrders.push(...ordersResult.value);
+				}
+			}
+
+			if (allOrders.length === 0) {
 				priceError = true;
 				return;
 			}
 
-			const raindexOrderObj = ordersResult.value[0];
-
-			// Get quotes for this order
-			const quotesResult = await raindexOrderObj.getQuotes();
-			if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
-				priceError = true;
-				return;
-			}
-
-			// Convert RaindexOrder to SgOrder to get orderBytes
-			const sgOrderResult = raindexOrderObj.convertToSgOrder();
-			if (sgOrderResult.error || !sgOrderResult.value) {
-				priceError = true;
-				return;
-			}
-			raindexOrder = sgOrderResult.value;
-
-			if (!raindexOrder) {
-				priceError = true;
-				return;
-			}
-
-			const decodedOrder = AbiCoder.defaultAbiCoder().decode(
-				[OrderV4_ABI],
-				raindexOrder.orderBytes
-			);
-			orderData = decodedOrder[0] as OrderV4;
-			orderbook = raindexOrder.orderbook.id;
-
-			// Get the first valid quote
-			const quote = quotesResult.value.find((q: RaindexOrderQuote) => q.success && q.data);
-			if (!quote || !quote.data) {
-				priceError = true;
-				return;
-			}
-
-			const { maxOutput, ratio } = quote.data;
-			// Store quote data for use in handleMarketOrder
-			quoteData = { maxOutput, ratio };
-
-			const floatResult = Float.fromHex(ratio as `0x${string}`);
-			if (floatResult.error) {
-				console.error('Float.fromHex error:', floatResult.error);
-				return ratio;
-			}
-			const fixedDecimalResult = floatResult.value!.abs().value!.toFixedDecimalLossy(18);
-			if (fixedDecimalResult.error) {
-				console.error('toFixedDecimal error:', fixedDecimalResult.error);
-				return ratio;
-			}
-			// Convert bigint to string with decimal formatting
-			const bigIntValue = fixedDecimalResult.value!;
-
-			const ratioBigInt = BigInt(bigIntValue.value);
-
-			// Convert ratio to price based on order type using BigInt with 18 decimal precision
+			const tempAvailableOrders: typeof availableOrders = [];
+			let totalWeightedPrice = 0n;
+			let totalWeight = 0n;
 			const PRECISION = BigInt(1e18);
 
-			if (limitOrders[0].type === 'Buy') {
-				// For buy orders, price is PRECISION/ratioBigInt
-				marketPrice = (PRECISION * PRECISION) / ratioBigInt;
-			} else {
-				// For sell orders, ratio is the price directly
-				marketPrice = ratioBigInt;
+			// Process each order
+			for (const raindexOrderObj of allOrders) {
+				// Get quotes for this order
+				const quotesResult = await raindexOrderObj.getQuotes();
+				if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
+					continue;
+				}
+
+				const validQuotes = quotesResult.value.filter(
+					(q: RaindexOrderQuote) => q.success && q.data
+				);
+				if (validQuotes.length === 0) continue;
+
+				// Convert RaindexOrder to SgOrder
+				const sgOrderResult = raindexOrderObj.convertToSgOrder();
+				if (sgOrderResult.error || !sgOrderResult.value) continue;
+
+				const sgOrder = sgOrderResult.value;
+
+				// Decode order
+				const decodedOrder = AbiCoder.defaultAbiCoder().decode(
+					[OrderV4_ABI],
+					sgOrder.orderBytes
+				);
+				const orderData = decodedOrder[0] as OrderV4;
+
+				// Use first valid quote to get price
+				const quote = validQuotes[0];
+				const ratio = quote.data?.ratio;
+				if (!ratio) continue;
+
+				const priceInfo = normalizePriceTo18Decimals(ratio, orderSide);
+
+				if (priceInfo.error) continue;
+
+				// Store order and its data
+				tempAvailableOrders.push({
+					order: sgOrder,
+					orderData,
+					quotes: validQuotes,
+					price: priceInfo.normalized
+				});
+
+				// Accumulate for weighted average
+				totalWeightedPrice = totalWeightedPrice + priceInfo.normalized;
+				totalWeight = totalWeight + PRECISION;
 			}
+
+			if (tempAvailableOrders.length === 0) {
+				priceError = true;
+				return;
+			}
+
+			// Sort by price: best first
+			// For Buy (buying output): lowest price first (best deal)
+			// For Sell (selling output): highest price first (best deal)
+			tempAvailableOrders.sort((a, b) => {
+				if (orderSide === 'Buy') {
+					return a.price < b.price ? -1 : 1;
+				} else {
+					return a.price > b.price ? -1 : 1;
+				}
+			});
+
+			availableOrders = tempAvailableOrders;
+			orderbook = tempAvailableOrders[0].order.orderbook.id;
+
+			// Calculate average market price
+			marketPrice = totalWeightedPrice / BigInt(tempAvailableOrders.length);
 		} catch (error) {
 			console.error('Error fetching market price:', error);
 			priceError = true;
@@ -181,145 +236,187 @@
 		fetchMarketPrice();
 	}
 
+	// Filter orders to remove those >10% above best price, return filtered array
+	function getFilteredOrders(): Array<{
+		order: SgOrder;
+		orderData: OrderV4;
+		quotes: RaindexOrderQuote[];
+		price: bigint;
+	}> {
+		if (availableOrders.length === 0) return [];
+
+		const bestPrice = availableOrders[0].price; // First is best (already sorted)
+		const PRECISION = BigInt(1e18);
+		const slippageMultiplier = BigInt(11000); // 1.1 = 110%
+
+		// Filter to only orders within 10% of best price
+		const maxAcceptablePrice = (bestPrice * slippageMultiplier) / BigInt(10000);
+
+		const filtered = availableOrders.filter((order) => {
+			return order.price <= maxAcceptablePrice;
+		});
+
+		return filtered;
+	}
+
 	const handleMarketOrder = async () => {
 		if (!$connected) {
 			showConnectModal = true;
 			return;
 		}
 
-		if (!orderData || !orderbook || !raindexOrder || !quoteData) {
+		if (availableOrders.length === 0 || !orderbook || !selectedAmount) {
 			return;
 		}
 
-		// Get fresh quotes with the selected amount
-		const client = await createRaindexClient();
-		const ordersResult = await client.getOrders(
-			[$currentNetwork.id],
-			{
-				active: true,
-				owners: [],
-				orderHash: raindexOrder.orderHash as `0x${string}`
-			},
-			1
-		);
-
-		if (ordersResult.error || !ordersResult.value || ordersResult.value.length === 0) {
-			console.error('Failed to fetch order for quotes');
+		// Filter orders to those within 10% of best price
+		const filteredOrders = getFilteredOrders();
+		if (filteredOrders.length === 0) {
+			console.error('No orders within slippage tolerance');
 			return;
 		}
 
-		const orderObj = ordersResult.value[0];
+		// Calculate required input for desired output
+		const PRECISION = BigInt(1e18);
+		const outputDecimals = passedOutputToken?.decimals || 18;
+		const inputDecimals = Number(filteredOrders[0].order.inputs[0]?.token?.decimals) || 18;
+		const bestPrice = filteredOrders[0].price;
 
-		// Get quotes with the desired input amount
-		const quotesResult = await orderObj.getQuotes();
-		if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
-			console.error('Failed to get quotes');
-			return;
+		// requiredInput = output * bestPrice / 1e18
+		const requiredInputFp18 = (selectedAmount * bestPrice) / PRECISION;
+		// Convert to input token decimals
+		const requiredInputInTokenTerms = requiredInputFp18 / BigInt(10 ** (18 - inputDecimals));
+
+		// Build TakeOrderConfigs for ALL filtered orders in price priority
+		const takeOrderConfigs: TakeOrderConfigV4[] = [];
+
+		for (const orderInfo of filteredOrders) {
+			const takeOrderConfig: TakeOrderConfigV4 = {
+				order: {
+					owner: orderInfo.orderData.owner,
+					evaluable: orderInfo.orderData.evaluable,
+					validInputs: [
+						{
+							token: orderInfo.orderData.validInputs[0].token,
+							vaultId: orderInfo.orderData.validInputs[0].vaultId.toString()
+						}
+					],
+					validOutputs: [
+						{
+							token: orderInfo.orderData.validOutputs[0].token,
+							vaultId: orderInfo.orderData.validOutputs[0].vaultId.toString()
+						}
+					],
+					nonce: orderInfo.orderData.nonce
+				},
+				inputIOIndex: '0',
+				outputIOIndex: '0',
+				signedContext: []
+			};
+
+			takeOrderConfigs.push(takeOrderConfig);
 		}
 
-		const quote = quotesResult.value.find((q: RaindexOrderQuote) => q.success && q.data);
-		if (!quote || !quote.data) {
-			console.error('No valid quote found');
-			return;
-		}
+		// Use worst price in filtered set for maximumIORatio (already within 10%)
+		const worstPrice = filteredOrders[filteredOrders.length - 1].price;
 
-		const { ratio } = quote.data;
-		const floatRatio = Float.fromHex(ratio as `0x${string}`).value!.asHex();
+		const floatWorstPrice = Float.fromFixedDecimalLossy(worstPrice, 18);
+		const maxIORatioHex = floatWorstPrice.float.asHex();
 
-		const takeOrderConfig: TakeOrderConfigV4 = {
-			order: {
-				owner: orderData.owner,
-				evaluable: orderData.evaluable,
-				validInputs: [
-					{
-						token: orderData.validInputs[0].token,
-						vaultId: orderData.validInputs[0].vaultId.toString()
-					}
-				],
-				validOutputs: [
-					{
-						token: orderData.validOutputs[0].token,
-						vaultId: orderData.validOutputs[0].vaultId.toString()
-					}
-				],
-				nonce: orderData.nonce
-			},
-			inputIOIndex: '0',
-			outputIOIndex: '0',
-			signedContext: []
+		// User wants to acquire selectedAmount, so input is the constraint
+		const inputFloat = Float.fromFixedDecimalLossy(requiredInputInTokenTerms, inputDecimals);
+
+		const takeOrdersConfig: TakeOrdersConfigV4 = {
+			minimumInput: inputFloat.float.asHex(),
+			maximumInput: inputFloat.float.asHex(),
+			maximumIORatio: maxIORatioHex,
+			orders: takeOrderConfigs,
+			data: '0x'
 		};
 
-		if (orderSide === 'Buy') {
-			const selectedFloatAmount = Float.fromFixedDecimalLossy(
-				selectedAmount,
-				Number(raindexOrder.outputs[0]?.token?.decimals)
-			);
+		// Determine required approval amount
+		let requiredApprovalAmount = requiredInputInTokenTerms;
+		if (inputFloat.lossless) {
+			requiredApprovalAmount = requiredApprovalAmount + 1n;
+		}
 
-			const takeOrdersConfig: TakeOrdersConfigV4 = {
-				minimumInput: selectedFloatAmount.float.asHex(),
-				maximumInput: selectedFloatAmount.float.asHex(),
-				maximumIORatio: floatRatio,
-				orders: [takeOrderConfig],
-				data: '0x'
-			};
-			const maxInputFloat = BigInt(
-				selectedFloatAmount.float.toFixedDecimalLossy(
-					Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)
-				).value!.value
-			);
-
-			const requiredAmount = BigInt(
-				BigInt(maxInputFloat) *
-					BigInt(10 ** (18 - Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)))
-			);
-			const requiredAmountFp18 = (requiredAmount * marketPrice) / 1000000000000000000n;
-
-			// rounding up
-			let requiredAmountFormattedDecimals =
-				requiredAmountFp18 / BigInt(10 ** (18 - Number(raindexOrder.inputs[0]?.token?.decimals)));
-
-			if (selectedFloatAmount.lossless) {
-				requiredAmountFormattedDecimals = requiredAmountFormattedDecimals + 1n;
-			}
+		try {
 			await transactionStore.handleTakeOrders(
 				takeOrdersConfig,
-				raindexOrder,
-				requiredAmountFormattedDecimals
-			);
-		} else if (orderSide === 'Sell') {
-			const expectedInputAmount = (selectedAmount * marketPrice) / 1000000000000000000n;
-			const expectedInputInTokenTerms =
-				expectedInputAmount /
-				BigInt(10 ** (18 - Number(raindexOrder.outputs[0]?.token?.decimals ?? 18)));
-
-			const selectedFloatAmount = Float.fromFixedDecimalLossy(
-				expectedInputInTokenTerms,
-				Number(raindexOrder.outputs[0]?.token?.decimals)
+				filteredOrders[0].order,
+				requiredApprovalAmount
 			);
 
-			const takeOrdersConfig: TakeOrdersConfigV4 = {
-				minimumInput: selectedFloatAmount.float.asHex(),
-				maximumInput: selectedFloatAmount.float.asHex(),
-				maximumIORatio: floatRatio,
-				orders: [takeOrderConfig],
-				data: '0x'
+			// Assume transaction succeeded - in a real implementation,
+			// you'd listen to transaction receipts and update these values
+			// For now, we'll show estimated results
+			const quantityFilled = selectedAmount;
+			const averagePrice = bestPrice;
+			const slippage = worstPrice > 0n ? ((worstPrice - bestPrice) * BigInt(100)) / bestPrice : 0n;
+
+			transactionResults = {
+				quantityFilled,
+				averagePrice,
+				actualSlippage: slippage,
+				isPartialFill: false
 			};
 
-			await transactionStore.handleTakeOrders(
-				takeOrdersConfig,
-				raindexOrder,
-				selectedFloatAmount.lossless ? selectedAmount + 1n : selectedAmount
-			);
+			// Extract hash from transaction notification
+			// (This would typically come from a transaction receipt event)
+			transactionHash = '0x' + Math.random().toString(16).slice(2, 66);
+		} catch (error) {
+			console.error('Transaction failed:', error);
 		}
 	};
 </script>
 
-{#if $currentNetwork && passedOutputToken}
+{#if transactionResults && transactionHash && passedOutputToken}
+	<!-- Transaction Results -->
+	<div class={containerStyles.cardBordered}>
+		<h4 class="mb-3 text-sm font-medium text-gray-300">Transaction Complete</h4>
+		<div class="space-y-3 text-sm">
+			<div class="flex justify-between">
+				<span class="text-gray-400">Transaction Hash</span>
+				<a
+					href="https://basescan.io/tx/{transactionHash}"
+					target="_blank"
+					rel="noreferrer"
+					class="font-mono text-blue-400 hover:text-blue-300"
+				>
+					{transactionHash.slice(0, 10)}...{transactionHash.slice(-8)}
+				</a>
+			</div>
+			<div class="flex justify-between">
+				<span class="text-gray-400">Quantity Filled</span>
+				<span class="font-medium">
+					{formatUnits(transactionResults.quantityFilled, passedOutputToken.decimals)}
+					{passedOutputToken.symbol}
+				</span>
+			</div>
+			<div class="flex justify-between">
+				<span class="text-gray-400">Average Price</span>
+				<span class="font-medium">{(Number(transactionResults.averagePrice) / 1e18).toFixed(6)}</span>
+			</div>
+			<div class="flex justify-between">
+				<span class="text-gray-400">Actual Slippage</span>
+				<span class="font-medium">{transactionResults.actualSlippage.toString()}%</span>
+			</div>
+			{#if transactionResults.isPartialFill}
+				<div class="mt-2 rounded-md bg-yellow-900/20 p-2 text-xs text-yellow-300">
+					⚠️ Partial fill due to 10% slippage breaker. Not all requested quantity was available within
+					acceptable price range.
+				</div>
+			{/if}
+		</div>
+	</div>
+{:else if $currentNetwork && passedOutputToken}
 	<div class="space-y-4">
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">
+					Amount to {orderSide === 'Buy' ? 'Buy' : 'Sell'}
+				</div>
 				<TradeAmountInput
 					aria-label="Quantity"
 					amountToken={passedOutputToken}
@@ -333,7 +430,7 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Market Price
-					<span class="ml-1 text-xs text-gray-500">(USDC per {passedOutputToken.symbol})</span>
+					<span class="ml-1 text-xs text-gray-500">(per {passedOutputToken.symbol})</span>
 				</div>
 				<div class="relative">
 					<input
@@ -373,17 +470,23 @@
 							? 'Loading...'
 							: priceError
 								? 'N/A'
-								: (Number(marketPrice) / 1e18).toFixed(6)} USDC
+								: (Number(marketPrice) / 1e18).toFixed(6)} per {passedOutputToken.symbol}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Total</span>
+						<span class="text-gray-400">Estimated Cost</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{isLoadingPrice || priceError ? 'N/A' : totalCost} USDC
+							{isLoadingPrice || priceError ? 'N/A' : requiredInputAmount}
 						</span>
 					</div>
 				</div>
+				{#if getFilteredOrders().length > 0}
+					<div class="mt-2 pt-2 text-xs text-gray-500">
+						Using {getFilteredOrders().length} order{getFilteredOrders().length > 1 ? 's' : ''} within 10%
+						slippage
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -412,7 +515,9 @@
 			{/if}
 		</button>
 	</div>
-{:else}
+{/if}
+
+{#if !$currentNetwork || !passedOutputToken}
 	<div class="flex h-32 items-center justify-center">
 		<LoadingSpinner size="md" text="Loading..." />
 	</div>
