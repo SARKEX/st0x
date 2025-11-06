@@ -1,21 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-	mapOrder,
-	formatDate,
-	convertDotNotationToObject,
-	mapRoles,
-	type Role
-} from './helpers';
+import { mapOrder, formatDate, convertDotNotationToObject, mapRoles, type Role } from './helpers';
 
 // Mock data
 const mockRoles: Role[] = [
 	{
 		roleName: 'DEPOSIT',
 		roleHash: '0xhash1',
-		roleHolders: [
-			{ account: { address: '0x1234' } },
-			{ account: { address: '0x5678' } }
-		]
+		roleHolders: [{ account: { address: '0x1234' } }, { account: { address: '0x5678' } }]
 	},
 	{
 		roleName: 'DEPOSIT_ADMIN',
@@ -61,11 +54,7 @@ describe('helpers', () => {
 		});
 
 		it('should handle missing items in order', () => {
-			const array = [
-				{ type: 'A' },
-				{ type: 'B' },
-				{ type: 'C' }
-			];
+			const array = [{ type: 'A' }, { type: 'B' }, { type: 'C' }];
 			const order = ['B'];
 
 			const result = mapOrder(array, order, 'type');
@@ -90,11 +79,7 @@ describe('helpers', () => {
 		});
 
 		it('should mutate the original array', () => {
-			const array = [
-				{ priority: 'low' },
-				{ priority: 'high' },
-				{ priority: 'medium' }
-			];
+			const array = [{ priority: 'low' }, { priority: 'high' }, { priority: 'medium' }];
 			const order = ['high', 'medium', 'low'];
 
 			const result = mapOrder(array, order, 'priority');
@@ -198,7 +183,7 @@ describe('helpers', () => {
 
 		it('should overwrite non-object values when converting', () => {
 			const input = {
-				'a': 'string',
+				a: 'string',
 				'a.b': 'nested'
 			};
 
@@ -272,18 +257,12 @@ describe('helpers', () => {
 				{
 					roleName: 'CERTIFY',
 					roleHash: '0xhash3',
-					roleHolders: [
-						{ account: { address: '0xaaaa' } },
-						{ account: { address: '0xbbbb' } }
-					]
+					roleHolders: [{ account: { address: '0xaaaa' } }, { account: { address: '0xbbbb' } }]
 				},
 				{
 					roleName: 'CERTIFY_ADMIN',
 					roleHash: '0xhash3_admin',
-					roleHolders: [
-						{ account: { address: '0xcccc' } },
-						{ account: { address: '0xdddd' } }
-					]
+					roleHolders: [{ account: { address: '0xcccc' } }, { account: { address: '0xdddd' } }]
 				}
 			];
 
@@ -318,10 +297,7 @@ describe('helpers', () => {
 				{
 					roleName: 'WITHDRAW',
 					roleHash: '0xhash2',
-					roleHolders: [
-						{ account: { address: '0xtest1' } },
-						{ account: { address: '0xtest2' } }
-					]
+					roleHolders: [{ account: { address: '0xtest1' } }, { account: { address: '0xtest2' } }]
 				}
 			];
 

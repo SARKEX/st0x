@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { hexToBigInt, buildTokenPriceMap, type ProcessedQuote } from './quote';
 import * as tokenMath from './tokenMath';

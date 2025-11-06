@@ -106,25 +106,28 @@
 			return;
 		}
 		if ($connected) {
-			// For Buy: input is asset (what we're accumulating), output is USDC (what we're spending)
-			// For Sell: input is USDC (what we're accumulating), output is asset (what we're spending)
-			const inputTok = orderSide === 'Buy' ? selectedInputToken : selectedOutputToken;
-			const outputTok = orderSide === 'Buy' ? selectedOutputToken : selectedInputToken;
+			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
+			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+
+			// Bid (buying): Accumulate asset over time with USDC
+			// Ask (selling): Accumulate USDC over time by selling asset
+			const inputTok = orderType === 'Bid' ? selectedInputToken : selectedOutputToken;
+			const outputTok = orderType === 'Bid' ? selectedOutputToken : selectedInputToken;
 			transactionStore.handleDcaDeploy({
 				outputToken: outputTok,
 				inputToken: inputTok,
 				budgetAmount: selectedAmount,
 				selectedPeriod: selectedPeriod,
 				selectedPeriodUnit: selectedPeriodUnit,
-				// For DCA, prices need to be inverted for Buy orders (not Sell)
-				// Buy: User enters USDC price, but Rain expects asset/USDC ratio
-				// Sell: User enters USDC price, Rain expects USDC/asset ratio (same as entered)
+				// DCA price inversion logic:
+				// Bid (buying): User specifies price as "USDC per asset", orderbook needs "asset/USDC" → invert
+				// Ask (selling): User specifies price as "USDC per asset", orderbook needs "USDC/asset" → no invert
 				baseline:
-					orderSide === 'Buy'
+					orderType === 'Bid'
 						? invertAndNormalize(selectedBaseline)
 						: normalizeDecimal(selectedBaseline),
 				kickoff:
-					orderSide === 'Buy'
+					orderType === 'Bid'
 						? invertAndNormalize(selectedInitialRatio)
 						: normalizeDecimal(selectedInitialRatio),
 				minTradeAmount: minTradeAmount,

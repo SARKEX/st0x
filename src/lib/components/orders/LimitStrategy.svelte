@@ -92,33 +92,39 @@
 			outputVaultId: Hex | undefined;
 		};
 
-		if (orderSide === 'Buy') {
-			// Buy: input is asset, output is USDC
-			// We're buying the asset, so we deposit USDC and receive asset
-			// Calculate USDC amount needed
+		// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
+		const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+
+		if (orderType === 'Bid') {
+			// Bid order (user buying): Places order to buy asset with USDC
+			// User specifies quantity to acquire and price willing to pay
+			// Price interpretation: "I pay X USDC per 1 asset"
+			// The deployed order uses inverted ratio: 1/X (this is what getBaseline does)
 			const assetQuantity = formatUnits(selectedAmount || 0n, selectedOutputToken?.decimals || 18);
 			const price = parseFloat(selectedInitialRatio || '0');
 			const usdcNeeded = parseFloat(assetQuantity) * price;
 			const usdcAmount = parseUnits(usdcNeeded.toString(), selectedInputToken?.decimals || 6);
 
 			deployData = {
-				inputToken: selectedOutputToken, // Asset is input (token1)
-				outputToken: selectedInputToken, // USDC is output (token2)
-				// For Buy: ratio should be asset/USDC = 1/price
+				inputToken: selectedOutputToken, // Asset (token to be acquired, used for IO ratio)
+				outputToken: selectedInputToken, // USDC (token to be deposited as payment)
+				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
 				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toFixed(18).toString(),
-				depositAmount: usdcAmount, // Deposit USDC amount in USDC wei
+				depositAmount: usdcAmount, // USDC payment amount
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
 			};
 		} else {
-			// Sell: input is USDC, output is asset
-			// We're selling the asset, so we deposit asset and receive USDC
+			// Ask order (user selling): Places order to sell asset for USDC
+			// User specifies quantity to offer and price willing to receive
+			// Price interpretation: "I receive X USDC per 1 asset"
+			// The deployed order uses direct ratio: X (this is what getBaseline does)
 			deployData = {
-				inputToken: selectedInputToken, // USDC is input (token1)
-				outputToken: selectedOutputToken, // Asset is output (token2)
-				// For Sell: ratio should be USDC/asset = price
+				inputToken: selectedOutputToken, // Asset (token being offered for sale)
+				outputToken: selectedInputToken, // USDC (token to be deposited as what we'd receive)
+				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
 				ioRatio: selectedInitialRatio,
-				depositAmount: selectedAmount, // Deposit asset amount in asset wei
+				depositAmount: selectedAmount, // Asset amount being offered
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
 			};
@@ -153,16 +159,21 @@
 		const price = parseFloat(selectedInitialRatio || '0');
 		if (!price || price <= 0) return false;
 
-		if (orderSide === 'Buy') {
-			// When buying, check against sellPrice (best ask)
+		// Convert to order terminology for clarity
+		const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+
+		if (orderType === 'Bid') {
+			// Bid order (buying): Check against best Ask (sellPrice)
+			// User's price should be near or below current best ask
 			if (sellPrice !== null && sellPrice > 0) {
-				const threshold = sellPrice * 1.01; // 1% above best ask
+				const threshold = sellPrice * 1.01; // 1% above best ask is risky
 				return price > threshold;
 			}
 		} else {
-			// When selling, check against buyPrice (best bid)
+			// Ask order (selling): Check against best Bid (buyPrice)
+			// User's price should be near or above current best bid
 			if (buyPrice !== null && buyPrice > 0) {
-				const threshold = buyPrice * 0.99; // 1% below best bid
+				const threshold = buyPrice * 0.99; // 1% below best bid is risky
 				return price < threshold;
 			}
 		}

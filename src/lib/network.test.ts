@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, it, expect } from 'vitest';
 import {
 	getNetworkById,
@@ -134,7 +136,7 @@ describe('network', () => {
 			const addresses = tokens.map((t) => t.address.toLowerCase());
 			const uniqueAddresses = new Set(addresses);
 			// If there are duplicates, length would be > uniqueAddresses.size
-		expect(addresses.length).toBe(uniqueAddresses.size);
+			expect(addresses.length).toBe(uniqueAddresses.size);
 		});
 	});
 

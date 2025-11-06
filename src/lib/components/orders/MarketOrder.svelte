@@ -28,7 +28,7 @@
 
 	// State for market price and quantity
 	let marketPrice: bigint = 0n;
-	let selectedAmount: bigint = 0n; // Amount user wants to acquire (output)
+	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
 	let isLoadingPrice = true;
 	let priceError = false;
 	let availableOrders: Array<{
@@ -41,12 +41,14 @@
 
 	// Transaction results
 	let transactionHash: string | undefined = undefined;
-	let transactionResults: {
-		quantityFilled: bigint;
-		averagePrice: bigint;
-		actualSlippage: bigint;
-		isPartialFill: boolean;
-	} | undefined = undefined;
+	let transactionResults:
+		| {
+				quantityFilled: bigint;
+				averagePrice: bigint;
+				actualSlippage: bigint;
+				isPartialFill: boolean;
+		  }
+		| undefined = undefined;
 
 	// Errors
 	let selectedAmountError: boolean = false;
@@ -69,40 +71,15 @@
 	$: requiredInputAmount = (() => {
 		if (!selectedAmount || !marketPrice) return '0.00';
 		// Output amount * market price = input amount
-		const outputInTokens = parseFloat(formatUnits(selectedAmount, passedOutputToken?.decimals || 18));
+		const outputInTokens = parseFloat(
+			formatUnits(selectedAmount, passedOutputToken?.decimals || 18)
+		);
 		const pricePerToken = Number(marketPrice) / 1e18;
 		return (outputInTokens * pricePerToken).toFixed(2);
 	})();
 
 	// Wallet connect modal state
 	let showConnectModal = false;
-
-	// Helper to normalize price to 18 decimals
-	function normalizePriceTo18Decimals(
-		floatHex: string,
-		side: 'Buy' | 'Sell'
-	): { normalized: bigint; error: boolean } {
-		try {
-			const floatResult = Float.fromHex(floatHex as `0x${string}`);
-			if (floatResult.error) return { normalized: 0n, error: true };
-
-			const fixedDecimalResult = floatResult.value!.abs().value!.toFixedDecimalLossy(18);
-			if (fixedDecimalResult.error) return { normalized: 0n, error: true };
-
-			const ratioBigInt = BigInt(fixedDecimalResult.value!.value);
-			const PRECISION = BigInt(1e18);
-
-			// For buy orders (opposite side is sell offers), price is inverted
-			// For sell orders (opposite side is buy offers), price is direct
-			if (side === 'Buy') {
-				return { normalized: (PRECISION * PRECISION) / ratioBigInt, error: false };
-			} else {
-				return { normalized: ratioBigInt, error: false };
-			}
-		} catch {
-			return { normalized: 0n, error: true };
-		}
-	}
 
 	async function fetchMarketPrice() {
 		if (!passedOutputToken || !passedOutputToken.limitOrders || !orderSide) {
@@ -174,10 +151,7 @@
 				const sgOrder = sgOrderResult.value;
 
 				// Decode order
-				const decodedOrder = AbiCoder.defaultAbiCoder().decode(
-					[OrderV4_ABI],
-					sgOrder.orderBytes
-				);
+				const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
 				const orderData = decodedOrder[0] as OrderV4;
 
 				// Use first valid quote to get price
@@ -185,21 +159,46 @@
 				const ratio = quote.data?.ratio;
 				if (!ratio) continue;
 
-				const priceInfo = normalizePriceTo18Decimals(ratio, orderSide);
+				try {
+					// Convert Float ratio to 18-decimal BigInt
+					const floatResult = Float.fromHex(ratio as `0x${string}`);
+					if (floatResult.error) continue;
 
-				if (priceInfo.error) continue;
+					const fixedDecimalResult = floatResult.value!.abs().value!.toFixedDecimalLossy(18);
+					if (fixedDecimalResult.error) continue;
 
-				// Store order and its data
-				tempAvailableOrders.push({
-					order: sgOrder,
-					orderData,
-					quotes: validQuotes,
-					price: priceInfo.normalized
-				});
+					let ratioBigInt = BigInt(fixedDecimalResult.value!.value);
 
-				// Accumulate for weighted average
-				totalWeightedPrice = totalWeightedPrice + priceInfo.normalized;
-				totalWeight = totalWeight + PRECISION;
+					// Get token decimals for decimal scaling
+					const inputDecimals = Number(sgOrder.inputs[0]?.token?.decimals) || 18;
+					const outputDecimals = Number(sgOrder.outputs[0]?.token?.decimals) || 18;
+
+					// For Sell orders (market sell takes bid orders):
+					// Bid ioRatio is stored as tokens/USDC, invert to get USDC/token
+					if (orderSide === 'Sell') {
+						ratioBigInt = (PRECISION * PRECISION) / ratioBigInt;
+					}
+
+					// Encode decimal differences into the price
+					// Formula: price * 10^(inputDecimals - outputDecimals)
+					const decimalScaling = BigInt(10 ** (inputDecimals - outputDecimals));
+					const encodedPrice = ratioBigInt * decimalScaling;
+
+					// Store order and its data
+					tempAvailableOrders.push({
+						order: sgOrder,
+						orderData,
+						quotes: validQuotes,
+						price: encodedPrice
+					});
+
+					// Accumulate for weighted average
+					totalWeightedPrice = totalWeightedPrice + encodedPrice;
+					totalWeight = totalWeight + PRECISION;
+				} catch {
+					// Skip this order if there's any error processing it
+					continue;
+				}
 			}
 
 			if (tempAvailableOrders.length === 0) {
@@ -208,8 +207,8 @@
 			}
 
 			// Sort by price: best first
-			// For Buy (buying output): lowest price first (best deal)
-			// For Sell (selling output): highest price first (best deal)
+			// When market order is Buy: we take from Sell limit orders, want lowest price
+			// When market order is Sell: we take from Buy limit orders, want highest price
 			tempAvailableOrders.sort((a, b) => {
 				if (orderSide === 'Buy') {
 					return a.price < b.price ? -1 : 1;
@@ -246,7 +245,6 @@
 		if (availableOrders.length === 0) return [];
 
 		const bestPrice = availableOrders[0].price; // First is best (already sorted)
-		const PRECISION = BigInt(1e18);
 		const slippageMultiplier = BigInt(11000); // 1.1 = 110%
 
 		// Filter to only orders within 10% of best price
@@ -278,14 +276,11 @@
 
 		// Calculate required input for desired output
 		const PRECISION = BigInt(1e18);
-		const outputDecimals = passedOutputToken?.decimals || 18;
-		const inputDecimals = Number(filteredOrders[0].order.inputs[0]?.token?.decimals) || 18;
 		const bestPrice = filteredOrders[0].price;
 
-		// requiredInput = output * bestPrice / 1e18
-		const requiredInputFp18 = (selectedAmount * bestPrice) / PRECISION;
-		// Convert to input token decimals
-		const requiredInputInTokenTerms = requiredInputFp18 / BigInt(10 ** (18 - inputDecimals));
+		// bestPrice is already encoded with decimal scaling from fetchMarketPrice
+		// Formula: requiredInput = encodedPrice * selectedAmount / 1e18
+		const requiredInputInTokenTerms = (bestPrice * selectedAmount) / PRECISION;
 
 		// Build TakeOrderConfigs for ALL filtered orders in price priority
 		const takeOrderConfigs: TakeOrderConfigV4[] = [];
@@ -324,7 +319,9 @@
 		const maxIORatioHex = floatWorstPrice.float.asHex();
 
 		// User wants to acquire selectedAmount, so input is the constraint
-		const inputFloat = Float.fromFixedDecimalLossy(requiredInputInTokenTerms, inputDecimals);
+		// Get input token decimals from the first order's input token
+		const inputTokenDecimals = Number(filteredOrders[0].order.inputs[0]?.token?.decimals) || 18;
+		const inputFloat = Float.fromFixedDecimalLossy(requiredInputInTokenTerms, inputTokenDecimals);
 
 		const takeOrdersConfig: TakeOrdersConfigV4 = {
 			minimumInput: inputFloat.float.asHex(),
@@ -395,7 +392,9 @@
 			</div>
 			<div class="flex justify-between">
 				<span class="text-gray-400">Average Price</span>
-				<span class="font-medium">{(Number(transactionResults.averagePrice) / 1e18).toFixed(6)}</span>
+				<span class="font-medium"
+					>{(Number(transactionResults.averagePrice) / 1e18).toFixed(6)}</span
+				>
 			</div>
 			<div class="flex justify-between">
 				<span class="text-gray-400">Actual Slippage</span>
@@ -403,8 +402,8 @@
 			</div>
 			{#if transactionResults.isPartialFill}
 				<div class="mt-2 rounded-md bg-yellow-900/20 p-2 text-xs text-yellow-300">
-					⚠️ Partial fill due to 10% slippage breaker. Not all requested quantity was available within
-					acceptable price range.
+					⚠️ Partial fill due to 10% slippage breaker. Not all requested quantity was available
+					within acceptable price range.
 				</div>
 			{/if}
 		</div>
@@ -483,8 +482,8 @@
 				</div>
 				{#if getFilteredOrders().length > 0}
 					<div class="mt-2 pt-2 text-xs text-gray-500">
-						Using {getFilteredOrders().length} order{getFilteredOrders().length > 1 ? 's' : ''} within 10%
-						slippage
+						Using {getFilteredOrders().length} order{getFilteredOrders().length > 1 ? 's' : ''} within
+						10% slippage
 					</div>
 				{/if}
 			</div>

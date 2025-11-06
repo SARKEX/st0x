@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { describe, it, expect, vi } from 'vitest';
 import {
 	normalizeAddress,
@@ -261,7 +263,10 @@ describe('tokenMath', () => {
 
 		it('should return null if amounts cannot be parsed', () => {
 			const trade = {
-				inputVaultBalanceChange: { amount: null, vault: { token: { address: '0xQUOTE', decimals: 6 } } },
+				inputVaultBalanceChange: {
+					amount: null,
+					vault: { token: { address: '0xQUOTE', decimals: 6 } }
+				},
 				outputVaultBalanceChange: {
 					amount: '1000000000000000000',
 					vault: { token: { address: '0xASSET', decimals: 18 } }
@@ -325,8 +330,18 @@ describe('tokenMath', () => {
 		});
 
 		it('should return null for invalid quotes', () => {
-			expect(describeQuote({ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: BigInt(1e18) }, usdcAddress)).toBeNull(); // both USDC
-			expect(describeQuote({ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: BigInt(1e18) }, usdcAddress)).toBeNull();
+			expect(
+				describeQuote(
+					{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: BigInt(1e18) },
+					usdcAddress
+				)
+			).toBeNull(); // both USDC
+			expect(
+				describeQuote(
+					{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: BigInt(1e18) },
+					usdcAddress
+				)
+			).toBeNull();
 		});
 	});
 
@@ -399,7 +414,10 @@ describe('tokenMath', () => {
 		it('should return null if quote token is invalid', () => {
 			const quoteToken: TokenDescriptor = { address: '', decimals: 6 };
 			const trade = {
-				inputVaultBalanceChange: { amount: '1000000', vault: { token: { address: '0xUSDC', decimals: 6 } } },
+				inputVaultBalanceChange: {
+					amount: '1000000',
+					vault: { token: { address: '0xUSDC', decimals: 6 } }
+				},
 				outputVaultBalanceChange: {
 					amount: '1000000000000000000',
 					vault: { token: { address: '0xASSET', decimals: 18 } }

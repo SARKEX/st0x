@@ -1,106 +1,109 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 import { getBaseline, getPeriodInSeconds, hasValidPriceFeedId } from './derivations';
 
 describe('derivations', () => {
 	describe('getBaseline', () => {
-		describe('Buy orders', () => {
-			it('should return the ratio unchanged for Buy orders', () => {
-				expect(getBaseline('Buy', '1.5')).toBe('1.5');
-				expect(getBaseline('Buy', '100')).toBe('100');
-				expect(getBaseline('Buy', '0.001')).toBe('0.001');
+		describe('Bid orders (user buying)', () => {
+			it('should invert the ratio for Bid orders', () => {
+				// User says "buy at price 2" → ratio must be inverted to 0.5
+				expect(getBaseline('Bid', '2')).toBe('0.5');
+				expect(getBaseline('Bid', '4')).toBe('0.25');
+				expect(getBaseline('Bid', '0.5')).toBe('2');
 			});
 
-			it('should handle Buy with decimal values', () => {
-				expect(getBaseline('Buy', '2.5')).toBe('2.5');
-				expect(getBaseline('Buy', '0.25')).toBe('0.25');
+			it('should handle Bid with decimal values', () => {
+				expect(getBaseline('Bid', '1.5')).toBe(String(1 / 1.5));
+				expect(getBaseline('Bid', '2.5')).toBe(String(1 / 2.5));
 			});
 
-			it('should trim whitespace for Buy', () => {
-				expect(getBaseline('Buy', '  1.5  ')).toBe('1.5');
-				expect(getBaseline('Buy', '\t100\n')).toBe('100');
-			});
-		});
-
-		describe('Sell orders', () => {
-			it('should invert the ratio for Sell orders', () => {
-				expect(getBaseline('Sell', '2')).toBe('0.5');
-				expect(getBaseline('Sell', '4')).toBe('0.25');
-				expect(getBaseline('Sell', '0.5')).toBe('2');
-			});
-
-			it('should handle Sell with decimal values', () => {
-				expect(getBaseline('Sell', '1.5')).toBe(String(1 / 1.5));
-				expect(getBaseline('Sell', '2.5')).toBe(String(1 / 2.5));
-			});
-
-			it('should trim whitespace for Sell', () => {
-				expect(getBaseline('Sell', '  2  ')).toBe('0.5');
-				expect(getBaseline('Sell', '\t4\n')).toBe('0.25');
+			it('should trim whitespace for Bid', () => {
+				expect(getBaseline('Bid', '  2  ')).toBe('0.5');
+				expect(getBaseline('Bid', '\t4\n')).toBe('0.25');
 			});
 
 			it('should return the input unchanged if ratio is zero', () => {
-				expect(getBaseline('Sell', '0')).toBe('0');
+				expect(getBaseline('Bid', '0')).toBe('0');
 			});
 
 			it('should return the input unchanged if ratio is not a finite number', () => {
-				expect(getBaseline('Sell', 'invalid')).toBe('invalid');
-				expect(getBaseline('Sell', 'NaN')).toBe('NaN');
+				expect(getBaseline('Bid', 'invalid')).toBe('invalid');
+				expect(getBaseline('Bid', 'NaN')).toBe('NaN');
+			});
+		});
+
+		describe('Ask orders (user selling)', () => {
+			it('should return the ratio unchanged for Ask orders', () => {
+				// User says "sell at price 1.5" → ratio remains 1.5
+				expect(getBaseline('Ask', '1.5')).toBe('1.5');
+				expect(getBaseline('Ask', '100')).toBe('100');
+				expect(getBaseline('Ask', '0.001')).toBe('0.001');
+			});
+
+			it('should handle Ask with decimal values', () => {
+				expect(getBaseline('Ask', '2.5')).toBe('2.5');
+				expect(getBaseline('Ask', '0.25')).toBe('0.25');
+			});
+
+			it('should trim whitespace for Ask', () => {
+				expect(getBaseline('Ask', '  1.5  ')).toBe('1.5');
+				expect(getBaseline('Ask', '\t100\n')).toBe('100');
 			});
 		});
 
 		describe('Edge cases', () => {
 			it('should handle empty string', () => {
-				expect(getBaseline('Buy', '')).toBe('');
-				expect(getBaseline('Sell', '')).toBe('');
+				expect(getBaseline('Bid', '')).toBe('');
+				expect(getBaseline('Ask', '')).toBe('');
 			});
 
 			it('should handle undefined/null as empty string', () => {
-				expect(getBaseline('Buy', undefined as any)).toBe('');
-				expect(getBaseline('Sell', null as any)).toBe('');
+				expect(getBaseline('Bid', undefined as any)).toBe('');
+				expect(getBaseline('Ask', null as any)).toBe('');
 			});
 
 			it('should handle very small numbers', () => {
 				const smallNum = '0.0001';
-				const result = getBaseline('Sell', smallNum);
+				const result = getBaseline('Bid', smallNum);
 				expect(Number(result)).toBe(1 / 0.0001);
 			});
 
 			it('should handle very large numbers', () => {
 				const largeNum = '1000000';
-				const result = getBaseline('Sell', largeNum);
+				const result = getBaseline('Bid', largeNum);
 				expect(Number(result)).toBe(1 / 1000000);
 			});
 
 			it('should handle scientific notation', () => {
 				const scientific = '1e3'; // 1000
-				const result = getBaseline('Sell', scientific);
+				const result = getBaseline('Bid', scientific);
 				expect(Number(result)).toBe(1 / 1000);
 			});
 
 			it('should handle negative numbers', () => {
 				const negative = '-2';
-				const result = getBaseline('Sell', negative);
+				const result = getBaseline('Bid', negative);
 				expect(Number(result)).toBe(-0.5);
 			});
 
 			it('should handle ratio of 1', () => {
-				expect(getBaseline('Buy', '1')).toBe('1');
-				expect(getBaseline('Sell', '1')).toBe('1');
+				expect(getBaseline('Bid', '1')).toBe('1');
+				expect(getBaseline('Ask', '1')).toBe('1');
 			});
 
 			it('should handle ratio strings with leading zeros', () => {
-				expect(getBaseline('Sell', '00100')).toBe('0.01');
+				expect(getBaseline('Bid', '00100')).toBe('0.01');
 			});
 		});
 
 		describe('Precision', () => {
-			it('should maintain precision for Buy orders', () => {
+			it('should maintain precision for Ask orders (no inversion)', () => {
 				const precision = '123.456789';
-				expect(getBaseline('Buy', precision)).toBe(precision);
+				expect(getBaseline('Ask', precision)).toBe(precision);
 			});
 
-			it('should have acceptable precision loss for Sell orders', () => {
-				const result = getBaseline('Sell', '3');
+			it('should have acceptable precision loss for Bid orders (after inversion)', () => {
+				const result = getBaseline('Bid', '3');
 				const parsed = Number(result);
 				expect(parsed).toBeCloseTo(0.3333333, 6);
 			});
