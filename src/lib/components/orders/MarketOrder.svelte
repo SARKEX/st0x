@@ -1,8 +1,10 @@
 <script lang="ts">
-	import type { CategorizedToken, LimitOrder } from '$lib/network';
-	import { currentNetwork } from '$lib/stores';
-	import { OrderV4_ABI } from '$lib/utils/quote';
+	import type { CategorizedToken } from '$lib/network';
+	import { currentNetwork, orderbookQuotesResource } from '$lib/stores';
+	import { ensureResource } from '$lib/stores/network-data-cache';
+	import { OrderV4_ABI, type ProcessedQuote } from '$lib/utils/quote';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
+	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import {
 		type OrderV4,
 		type RaindexOrder,
@@ -22,9 +24,12 @@
 	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import transactionStore from '$lib/transactionStore';
 	import { Float } from '@rainlanguage/float';
-	import { describeQuote } from '$lib/utils/tokenMath';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
+	// assetToken: The non-settlement token being traded (tSTOX, tNVDA, etc.)
+	// Note: Naming clarification - this is the asset token, not output token in the traditional sense
+	// Buy order: assetToken is INPUT (what we want), paymentToken is OUTPUT (what we give)
+	// Sell order: assetToken is OUTPUT (what we give), paymentToken is INPUT (what we want)
 	export let passedOutputToken: CategorizedToken | undefined;
 
 	// State for market price and quantity
@@ -87,7 +92,7 @@
 	let showConnectModal = false;
 
 	async function fetchMarketPrice() {
-		if (!passedOutputToken || !passedOutputToken.limitOrders || !orderSide) {
+		if (!passedOutputToken || !orderSide) {
 			isLoadingPrice = false;
 			return;
 		}
@@ -103,141 +108,162 @@
 				return;
 			}
 
-			const limitOrders = passedOutputToken.limitOrders.filter(
-				(order: LimitOrder) => order.type !== orderSide
-			);
-			if (limitOrders.length === 0) {
+			// Get quotes from the orderbook store (cached - no external calls)
+			const allQuotes = $orderbookQuotesResource?.data?.quotes ?? [];
+
+			// Determine what we need as OUTPUT from counterparty orders
+			// INPUT/OUTPUT semantics:
+			// - INPUT: token the counterparty order requires as input
+			// - OUTPUT: token the counterparty order provides as output
+			//
+			// For Buy orders: assetToken is INPUT (we want to get it), paymentToken is OUTPUT (we give)
+			//   Counterparty ask orders: OUTPUT=assetToken, INPUT=paymentToken ✓
+			// For Sell orders: assetToken is OUTPUT (we give), paymentToken is INPUT (we want)
+			//   Counterparty bid orders: OUTPUT=paymentToken, INPUT=assetToken ✓
+			const assetAddressNormalized = normalizeAddress(passedOutputToken.address);
+			const paymentTokenAddressNormalized = normalizeAddress(paymentTokenAddress);
+
+			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
+				const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
+				const targetOutputAddress =
+					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
+				const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
+
+				return (
+					quoteOutputAddressNormalized === targetOutputAddress &&
+					quote.side === targetSide &&
+					Number.isFinite(quote.quotePerAsset) &&
+					quote.quotePerAsset > 0
+				);
+			});
+
+			if (relevantQuotes.length === 0) {
+				console.warn('No relevant quotes found', {
+					orderSide,
+					assetAddressNormalized,
+					paymentTokenAddressNormalized,
+					allQuotesCount: allQuotes.length,
+					allQuotes: allQuotes.slice(0, 3).map(q => ({
+						outputToken: q.outputTokenAddress,
+						side: q.side,
+						quotePerAsset: q.quotePerAsset
+					}))
+				});
 				priceError = true;
 				isLoadingPrice = false;
 				return;
 			}
 
-			const client = await createRaindexClient();
-
-			// Fetch all available orders for the opposite side
-			// Note: We fetch them one by one since the API takes orderHash (singular)
-			const allOrders: RaindexOrder[] = [];
-			for (const limitOrder of limitOrders) {
-				const ordersResult = await client.getOrders(
-					[$currentNetwork.id],
-					{
-						active: true,
-						owners: [],
-						orderHash: limitOrder.orderHash as `0x${string}`
-					},
-					1
-				);
-
-				if (!ordersResult.error && ordersResult.value && ordersResult.value.length > 0) {
-					allOrders.push(...ordersResult.value);
-				}
-			}
-
-			if (allOrders.length === 0) {
-				priceError = true;
-				return;
-			}
-
-			const tempAvailableOrders: typeof availableOrders = [];
-			let totalWeightedPrice = 0n;
-			const PRECISION = BigInt(1e18);
-
-			// Process each order
-			for (const raindexOrderObj of allOrders) {
-				// Get quotes for this order
-				const quotesResult = await raindexOrderObj.getQuotes();
-				if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
-					continue;
-				}
-
-				const validQuotes = quotesResult.value.filter(
-					(q: RaindexOrderQuote) => q.success && q.data
-				);
-				if (validQuotes.length === 0) continue;
-
-				// Convert RaindexOrder to SgOrder
-				const sgOrderResult = raindexOrderObj.convertToSgOrder();
-				if (sgOrderResult.error || !sgOrderResult.value) continue;
-
-				const sgOrder = sgOrderResult.value;
-
-				// Decode order
-				const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
-				const orderData = decodedOrder[0] as OrderV4;
-
-				// Use first valid quote to get price
-				const quote = validQuotes[0];
-				const ratio = quote.data?.ratio;
-				if (!ratio || !paymentToken?.address) continue;
-
-				try {
-					const floatResult = Float.fromHex(ratio as `0x${string}`);
-					if (floatResult.error || !floatResult.value) continue;
-
-					const fixedDecimalResult = floatResult.value
-						.abs()
-						.value!
-						.toFixedDecimalLossy(18);
-					if (fixedDecimalResult.error || !fixedDecimalResult.value) continue;
-
-					const rawRatioBigInt = BigInt(fixedDecimalResult.value.value);
-					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
-					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
-					if (!inputDefinition || !outputDefinition) continue;
-
-					const metrics = describeQuote(
-						{
-							inputTokenAddress: inputDefinition.token,
-							outputTokenAddress: outputDefinition.token,
-							ratio: rawRatioBigInt
-						},
-						paymentTokenAddress
-					);
-					if (!metrics || !Number.isFinite(metrics.quotePerAsset) || metrics.quotePerAsset <= 0) {
-						continue;
-					}
-
-					const encodedPrice = BigInt(Math.round(metrics.quotePerAsset * 1e18));
-
-					// Store order and its data
-					tempAvailableOrders.push({
-						order: sgOrder,
-						orderData,
-						quotes: validQuotes,
-						price: encodedPrice
-					});
-
-					// Accumulate for weighted average
-					totalWeightedPrice = totalWeightedPrice + encodedPrice;
-				} catch {
-					// Skip this order if there's any error processing it
-					continue;
-				}
-			}
-
-			if (tempAvailableOrders.length === 0) {
-				priceError = true;
-				return;
-			}
-
-			// Sort by price: best first
-			// When market order is Buy: we take from Sell limit orders, want lowest price
-			// When market order is Sell: we take from Buy limit orders, want highest price
-			tempAvailableOrders.sort((a, b) => {
+			// Calculate prices directly from cached ProcessedQuotes (no external API calls needed)
+			// Sort by quotePerAsset to get best prices first
+			const sortedQuotes = [...relevantQuotes].sort((a, b) => {
 				if (orderSide === 'Buy') {
-					return a.price < b.price ? -1 : 1;
+					// For Buy: want lowest prices (best deal for buyer)
+					return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
 				} else {
-					return a.price > b.price ? -1 : 1;
+					// For Sell: want highest prices (best deal for seller)
+					return (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0);
 				}
 			});
 
-			availableOrders = tempAvailableOrders;
-			orderbook = tempAvailableOrders[0].order.orderbook.id;
+			// If no selected amount, don't calculate a price estimate
+			if (!selectedAmount || selectedAmount === 0n) {
+				marketPrice = 0n;
+				availableOrders = [];
+				orderbook = undefined;
+				return;
+			}
 
-			// Calculate average market price
-			marketPrice = totalWeightedPrice / BigInt(tempAvailableOrders.length);
+			// Walk the orderbook to calculate the market price for the selected quantity
+			// We need to account for available liquidity at each price level
+			let quantityFilled = 0n;
+			let weightedCost = 0n;
+			const PRECISION = BigInt(1e18);
+			const filteredForQuantity: Array<{
+				order: SgOrder;
+				orderData: OrderV4;
+				quotes: RaindexOrderQuote[];
+				price: bigint;
+			}> = [];
+
+			for (const quote of sortedQuotes) {
+				if (quantityFilled >= selectedAmount) break;
+
+			// maxOutput is already in the output token's decimal scale (from quote processing)
+			// selectedAmount is in 1e18 scale (user input)
+			// We need to scale maxOutput to 1e18 for comparison
+			const outputTokenDecimals = quote.outputTokenDecimals ?? 18;
+			const maxQuantityInOutputDecimals = quote.maxOutput;
+			const maxQuantityScaled = maxQuantityInOutputDecimals * BigInt(10 ** (18 - outputTokenDecimals));
+
+				// How much can we fill from this order?
+				const remainingNeeded = selectedAmount - quantityFilled;
+				const quantityFromThisOrder = remainingNeeded < maxQuantityScaled
+					? remainingNeeded
+					: maxQuantityScaled;
+
+				if (quantityFromThisOrder <= 0n) continue;
+
+				// Calculate cost/payment for this order
+				// Cost = quantity * price (both in 1e18 precision)
+				const encodedPrice = BigInt(Math.round(quote.quotePerAsset! * 1e18));
+				const costForThisOrder = (quantityFromThisOrder * encodedPrice) / PRECISION;
+
+				weightedCost = weightedCost + costForThisOrder;
+				quantityFilled = quantityFilled + quantityFromThisOrder;
+
+				// Add to available orders
+				filteredForQuantity.push({
+					order: {
+						orderHash: quote.orderHash,
+						orderbook: { id: 'cached' }
+					} as any as SgOrder,
+					orderData: {} as any as OrderV4,
+					quotes: [] as RaindexOrderQuote[],
+					price: encodedPrice
+				});
+			}
+
+			// Calculate market price based on quantity filled
+			if (quantityFilled > 0n) {
+				// Average price = total cost / total quantity
+				// Both are in precise terms, so: (weightedCost * PRECISION) / quantityFilled
+				marketPrice = (weightedCost * PRECISION) / quantityFilled;
+
+			console.log('ORDERS USED FOR ' + orderSide.toUpperCase(), {
+				orderCount: filteredForQuantity.length,
+				orders: filteredForQuantity.map(o => ({
+					orderHash: o.order.orderHash.slice(0, 8),
+					price: o.price.toString()
+				}))
+			});
+
+			console.log('MARKET ORDER PRICE CALCULATION', {
+				orderSide,
+				selectedAmount: selectedAmount.toString(),
+				quantityFilled: quantityFilled.toString(),
+				weightedCost: weightedCost.toString(),
+				PRECISION: PRECISION.toString(),
+				calculation: `(${weightedCost} * ${PRECISION}) / ${quantityFilled}`,
+				marketPrice: marketPrice.toString(),
+				marketPriceFormatted: `$${(Number(marketPrice) / 1e18).toFixed(2)}`
+			});
+
+			} else {
+				console.warn('No quantity filled from orderbook', {
+					selectedAmount: selectedAmount.toString(),
+					ordersWalked: filteredForQuantity.length,
+					relevantQuotesCount: relevantQuotes.length
+				});
+				priceError = true;
+				isLoadingPrice = false;
+				return;
+			}
+
+			availableOrders = filteredForQuantity;
+			orderbook = 'cached';
 		} catch (error) {
-			console.error('Error fetching market price:', error);
+			console.error('Error calculating market price:', error);
 			priceError = true;
 		} finally {
 			isLoadingPrice = false;
@@ -245,8 +271,15 @@
 	}
 
 	// Fetch market price when component mounts or dependencies change
-	$: if (passedOutputToken && orderSide) {
+	// Only calculates price when user has entered a quantity (selectedAmount > 0)
+	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
+	$: if (passedOutputToken && orderSide && selectedAmount > 0n && $orderbookQuotesResource?.data?.quotes) {
 		fetchMarketPrice();
+	} else if (!selectedAmount || selectedAmount === 0n) {
+		// Clear price when quantity is cleared
+		marketPrice = 0n;
+		availableOrders = [];
+		orderbook = undefined;
 	}
 
 	// Filter orders to remove those >10% above best price, return filtered array
@@ -281,10 +314,93 @@
 			return;
 		}
 
+		try {
+			// Force refresh orderbook quotes to get latest orders and prices
+			// This ensures we have the most current data before executing the transaction
+			isLoadingPrice = true;
+			priceError = false;
+			await ensureResource($currentNetwork.id, 'orderbookQuotes', { force: true });
+
+			// Recalculate prices with fresh data
+			await fetchMarketPrice();
+
+			// If prices couldn't be calculated after refresh, abort
+			if (priceError) {
+				console.error('Price unavailable after refresh');
+				return;
+			}
+		} catch (error) {
+			console.error('Error refreshing orderbook data:', error);
+			priceError = true;
+			isLoadingPrice = false;
+			return;
+		}
+
 		// Filter orders to those within 10% of best price
 		const filteredOrders = getFilteredOrders();
 		if (filteredOrders.length === 0) {
 			console.error('No orders within slippage tolerance');
+			return;
+		}
+
+		// Fetch the actual order details needed for transaction execution
+		// These weren't fetched during price estimation (which used cached data)
+		try {
+			const client = await createRaindexClient();
+
+			for (const orderInfo of filteredOrders) {
+				// Skip if we already have the order data
+				if (orderInfo.orderData.owner) {
+					continue;
+				}
+
+				// Fetch the order by hash
+				const ordersResult = await client.getOrders(
+					[$currentNetwork.id],
+					{
+						active: true,
+						owners: [],
+						orderHash: orderInfo.order.orderHash as `0x${string}`
+					},
+					1
+				);
+
+				if (ordersResult.error || !ordersResult.value || ordersResult.value.length === 0) {
+					console.error('Failed to fetch order:', orderInfo.order.orderHash);
+					continue;
+				}
+
+				const raindexOrderObj = ordersResult.value[0];
+
+				// Get quotes for the order
+				const quotesResult = await raindexOrderObj.getQuotes();
+				if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
+					continue;
+				}
+
+				const validQuotes = quotesResult.value.filter(
+					(q: RaindexOrderQuote) => q.success && q.data
+				);
+				if (validQuotes.length === 0) continue;
+
+				// Convert to SgOrder and decode
+				const sgOrderResult = raindexOrderObj.convertToSgOrder();
+				if (sgOrderResult.error || !sgOrderResult.value) continue;
+
+				const sgOrder = sgOrderResult.value;
+				const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
+				const orderData = decodedOrder[0] as OrderV4;
+
+				// Update the order info with actual data
+				orderInfo.order = sgOrder;
+				orderInfo.orderData = orderData;
+				orderInfo.quotes = validQuotes;
+				orderbook = sgOrder.orderbook.id;
+			}
+		} catch (error) {
+			console.error('Error fetching order details:', error);
+			priceError = true;
+			isLoadingPrice = false;
 			return;
 		}
 
@@ -448,15 +564,17 @@
 				<div class="relative">
 					<input
 						type="text"
-						value={isLoadingPrice
-							? 'Loading...'
-							: priceError
-								? 'Price unavailable'
-								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`}
+						value={!selectedAmount || selectedAmount === 0n
+							? ''
+							: isLoadingPrice
+								? 'Loading...'
+								: priceError
+									? 'Price unavailable'
+									: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`}
 						disabled
 						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 					/>
-					{#if isLoadingPrice}
+					{#if isLoadingPrice && selectedAmount > 0n}
 						<div class="absolute right-3 top-1/2 -translate-y-1/2">
 							<LoadingSpinner size="sm" />
 						</div>
@@ -483,7 +601,7 @@
 							? 'Loading...'
 							: priceError
 								? 'N/A'
-								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`} per {passedOutputToken.symbol}
+								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">

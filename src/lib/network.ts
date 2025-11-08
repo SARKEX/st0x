@@ -153,16 +153,7 @@ export const TOKENS: CategorizedToken[] = [
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:IAU',
 		tradingViewMarket: 'america',
-		limitOrders: [
-			{
-				orderHash: '0xdc757a5df00a42eda0a0dd742e6b97c0d99450a35fc27c4f8f43987cbda99ccd',
-				type: 'Sell'
-			},
-			{
-				orderHash: '0x00d18ccc48ef0ec1102046454f2d615785c658f2e7d6b4d7d6d85ed420d07b6f',
-				type: 'Buy'
-			}
-		]
+		limitOrders: []
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
