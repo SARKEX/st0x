@@ -41,7 +41,7 @@ import { TOKENS } from '$lib/network';
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
-	import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/tokenMath';
+	import { analyzeTrade, createTokenLookup, normalizeAddress, ratioToNumber } from '$lib/utils/tokenMath';
 	import type { TimedResource, OracleQuote } from '$lib/stores/network-data-cache';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -305,7 +305,8 @@ import { TOKENS } from '$lib/network';
 			let bestBid: number | null = null;
 			let bestAsk: number | null = null;
 			quotes.forEach((quote) => {
-				const ratio = Number(quote.ratio) / 1e18;
+				const ratioValue = ratioToNumber(quote.ratio);
+			const ratio = ratioValue ?? 0;
 				if (!Number.isFinite(ratio) || ratio <= 0) return;
 				const inputAddress = quote.inputTokenAddress.toLowerCase();
 				const outputAddress = quote.outputTokenAddress.toLowerCase();
@@ -409,7 +410,8 @@ import { TOKENS } from '$lib/network';
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
 		quotes.forEach((quote) => {
-			const ratio = Number(quote.ratio) / 1e18;
+			const ratioValue = ratioToNumber(quote.ratio);
+			const ratio = ratioValue ?? 0;
 			if (!Number.isFinite(ratio) || ratio <= 0) {
 				return;
 			}

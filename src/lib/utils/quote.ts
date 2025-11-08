@@ -19,8 +19,8 @@ export const OrderV4_ABI = `(address owner, ${EvaluableV4} evaluable, ${IOV2}[] 
 // Types for processed quotes
 export interface ProcessedQuote {
 	orderHash: string;
-	maxOutput: bigint;
-	ratio: bigint;
+	maxOutput: string; // Hex-encoded Float (64 hex chars + 0x prefix)
+	ratio: string; // Hex-encoded Float (64 hex chars + 0x prefix)
 	inputTokenSymbol: string;
 	outputTokenSymbol: string;
 	inputTokenAddress: string;
@@ -86,29 +86,35 @@ function processOrdersWithQuotes(
 
 					const { maxOutput, ratio } = quote.data;
 
-					// Convert hex to BigInt
-					// const maxOutputBigInt = hexToBigInt(maxOutput);
-					// const ratioBigInt = hexToBigInt(ratio);
-
-					const ratioBigInt = BigInt(
-						Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value
-					);
-					const maxOutputBigInt = BigInt(
-						Float.fromHex(maxOutput as `0x${string}`).value!.toFixedDecimalLossy(
-							Number(orderData.validOutputs[quote.pair.outputIndex]?.token?.decimals)
-						).value!.value
-					);
-
-					// console.log('-----------------------');
-					// console.log('orderHash : ', sgOrder.orderHash);
-					// console.log('maxOutputBigInt : ', maxOutputBigInt);
-					// console.log('ratioBigInt : ', ratioBigInt);
-					// console.log('maxOutput : ', maxOutput);
-					// console.log('ratio : ', ratio);
-
-					// Skip if maxOutput is 0
-					if (maxOutputBigInt === 0n) {
+					// Validate that we have valid hex-encoded Float values (0x + 64 hex chars = 66 chars total)
+					if (
+						typeof ratio !== 'string' ||
+						!ratio.startsWith('0x') ||
+						ratio.length !== 66 ||
+						typeof maxOutput !== 'string' ||
+						!maxOutput.startsWith('0x') ||
+						maxOutput.length !== 66
+					) {
+						console.warn('Invalid Float hex format for ratio or maxOutput:', { ratio, maxOutput });
 						return;
+					}
+
+					// Verify maxOutput is not zero by converting to Float and checking
+					const maxOutputFloat = Float.fromHex(maxOutput as `0x${string}`);
+					if (maxOutputFloat.error || !maxOutputFloat.value) {
+						console.warn('Failed to parse maxOutput Float:', maxOutputFloat.error);
+						return;
+					}
+
+					// Check if maxOutput is zero
+					const zeroFloat = Float.fromHex(
+						'0x0000000000000000000000000000000000000000000000000000000000000000'
+					);
+					if (!zeroFloat.error && zeroFloat.value) {
+						const isZero = maxOutputFloat.value.eq(zeroFloat.value);
+						if (!isZero.error && isZero.value) {
+							return;
+						}
 					}
 
 					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
@@ -121,11 +127,6 @@ function processOrdersWithQuotes(
 					const inputTokenAddress = inputDefinition.token;
 					const outputTokenAddress = outputDefinition.token;
 
-					// Skip if maxOutput is 0
-					if (maxOutputBigInt === 0n) {
-						return;
-					}
-
 					// Get token symbols - need to check both settlement token and stock tokens for both input and output
 					const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [quoteToken, ...stockTokens]);
 					const outputTokenSymbol = getTokenSymbol(outputTokenAddress, [quoteToken, ...stockTokens]);
@@ -135,8 +136,8 @@ function processOrdersWithQuotes(
 
 					const processedQuote: ProcessedQuote = {
 						orderHash: sgOrder.orderHash,
-						maxOutput: maxOutputBigInt,
-						ratio: ratioBigInt,
+						maxOutput,
+						ratio,
 						inputTokenSymbol,
 						outputTokenSymbol,
 						inputTokenAddress,

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { describe, it, expect, vi } from 'vitest';
+import { Float } from '@rainlanguage/float';
+import { describe, it, expect } from 'vitest';
 import {
 	normalizeAddress,
 	addressesEqual,
@@ -15,9 +16,16 @@ import {
 	analyzeTrade,
 	createTokenLookup,
 	type PairDescriptor,
-	RATIO_SCALE,
 	type TokenDescriptor
 } from './tokenMath';
+
+function floatHex(value: string): string {
+	const parsed = Float.parse(value);
+	if (parsed.error || !parsed.value) {
+		throw new Error(`Failed to prepare Float hex for ${value}`);
+	}
+	return parsed.value.asHex();
+}
 
 describe('tokenMath', () => {
 	describe('normalizeAddress', () => {
@@ -144,7 +152,16 @@ describe('tokenMath', () => {
 
 		it('should return null for astronomically large values', () => {
 			const maxWei = BigInt('1000000000000000000000000'); // 1e24
-			expect(toDecimal(maxWei + 1n, 18)).toBeNull();
+		expect(toDecimal(maxWei + 1n, 18)).toBeNull();
+		});
+
+		it('should decode Float hex values directly', () => {
+			const floatResult = Float.parse('123.456');
+			if (floatResult.error || !floatResult.value) {
+				throw new Error('Failed to prepare Float test value');
+			}
+			const hexValue = floatResult.value.asHex();
+			expect(toDecimal(hexValue, 18, { absolute: true })).toBeCloseTo(123.456, 6);
 		});
 	});
 
@@ -278,10 +295,10 @@ describe('tokenMath', () => {
 	});
 
 	describe('ratioToNumber', () => {
-		it('should convert ratio bigint to number', () => {
-			expect(ratioToNumber(BigInt(1e18))).toBe(1);
-			expect(ratioToNumber(BigInt(5e18))).toBe(5);
-			expect(ratioToNumber(BigInt(1.5e18))).toBe(1.5);
+		it('should convert Float hex ratios to numbers', () => {
+			expect(ratioToNumber(floatHex('1'))).toBeCloseTo(1, 6);
+			expect(ratioToNumber(floatHex('5'))).toBeCloseTo(5, 6);
+			expect(ratioToNumber(floatHex('1.5'))).toBeCloseTo(1.5, 6);
 		});
 
 		it('should return null for null/undefined', () => {
@@ -290,60 +307,62 @@ describe('tokenMath', () => {
 		});
 
 		it('should return null for non-positive values', () => {
-			expect(ratioToNumber(0n)).toBeNull();
-			expect(ratioToNumber(-1n)).toBeNull();
+			const zeroHex = floatHex('0');
+			expect(ratioToNumber(zeroHex)).toBeNull();
 		});
 
-		it('should return null for values that result in non-finite numbers', () => {
-			expect(ratioToNumber(BigInt('99999999999999999999999999999999'))).toBeNull();
+		it('should return null for excessively large ratios', () => {
+			const hugeHex = floatHex('1000000000000000'); // 1e15
+			expect(ratioToNumber(hugeHex)).toBeNull();
 		});
+
 	});
 
-	describe('describeQuote', () => {
-		const quoteAddress = '0xUSDC';
+		describe('describeQuote', () => {
+			const quoteAddress = '0xUSDC';
 
-		it('should describe ASK quote (USDC -> TOKEN)', () => {
-			const quote = {
-				inputTokenAddress: '0xUSDC',
-				outputTokenAddress: '0xTOKEN',
-				ratio: BigInt(2e18) // 2 USDC per TOKEN
-			};
+			it('should describe ASK quote (USDC -> TOKEN)', () => {
+				const quote = {
+					inputTokenAddress: '0xUSDC',
+					outputTokenAddress: '0xTOKEN',
+					ratio: floatHex('2') // 2 USDC per TOKEN
+				};
 
-			const result = describeQuote(quote, quoteAddress);
-			expect(result).not.toBeNull();
-			expect(result?.side).toBe('ask');
-			expect(result?.quotePerAsset).toBe(2);
-			expect(result?.assetPerQuote).toBe(0.5);
+				const result = describeQuote(quote, quoteAddress);
+				expect(result).not.toBeNull();
+				expect(result?.side).toBe('ask');
+				expect(result?.quotePerAsset).toBe(2);
+				expect(result?.assetPerQuote).toBe(0.5);
+			});
+
+			it('should describe BID quote (TOKEN -> USDC)', () => {
+				const quote = {
+					inputTokenAddress: '0xTOKEN',
+					outputTokenAddress: '0xUSDC',
+					ratio: floatHex('0.5') // 0.5 USDC per TOKEN (inverted)
+				};
+
+				const result = describeQuote(quote, quoteAddress);
+				expect(result).not.toBeNull();
+				expect(result?.side).toBe('bid');
+				expect(result?.quotePerAsset).toBe(2); // 1 / 0.5 = 2
+			});
+
+			it('should return null for invalid quotes', () => {
+				expect(
+					describeQuote(
+						{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: floatHex('1') },
+						quoteAddress
+					)
+				).toBeNull(); // both USDC
+				expect(
+					describeQuote(
+						{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: floatHex('1') },
+						quoteAddress
+					)
+				).toBeNull();
+			});
 		});
-
-		it('should describe BID quote (TOKEN -> USDC)', () => {
-			const quote = {
-				inputTokenAddress: '0xTOKEN',
-				outputTokenAddress: '0xUSDC',
-				ratio: BigInt(0.5e18) // 0.5 USDC per TOKEN (inverted)
-			};
-
-			const result = describeQuote(quote, quoteAddress);
-			expect(result).not.toBeNull();
-			expect(result?.side).toBe('bid');
-			expect(result?.quotePerAsset).toBe(2); // 1 / 0.5 = 2
-		});
-
-		it('should return null for invalid quotes', () => {
-			expect(
-				describeQuote(
-					{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: BigInt(1e18) },
-					quoteAddress
-				)
-			).toBeNull(); // both USDC
-			expect(
-				describeQuote(
-					{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: BigInt(1e18) },
-					quoteAddress
-				)
-			).toBeNull();
-		});
-	});
 
 	describe('createTokenLookup', () => {
 		it('should create a lookup function that finds tokens by address', () => {
@@ -428,9 +447,4 @@ describe('tokenMath', () => {
 		});
 	});
 
-	describe('RATIO_SCALE constant', () => {
-		it('should be 1e18', () => {
-			expect(RATIO_SCALE).toBe(1e18);
-		});
-	});
 });

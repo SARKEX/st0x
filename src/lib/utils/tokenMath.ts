@@ -61,7 +61,6 @@ export function toDecimal(
 	// Check if this is a Float hex string (32 bytes = 64 hex chars + '0x')
 	const valueStr = typeof value === 'string' ? value : value?.toString() ?? '';
 	if (valueStr.startsWith('0x') && valueStr.length === 66) {
-		// This is a Float hex value, convert it using Float API
 		try {
 			const hexValue = valueStr as `0x${string}`;
 			const floatResult = Float.fromHex(hexValue);
@@ -70,58 +69,24 @@ export function toDecimal(
 				return fallback ?? null;
 			}
 
-			const parsedDecimals = Number(decimals ?? 0);
-			let floatValue = floatResult.value;
-			let isNegative = false;
-
-			const zeroResult = Float.fromHex(
-				'0x0000000000000000000000000000000000000000000000000000000000000000'
-			);
-			if (!zeroResult.error && zeroResult.value) {
-				const comparison = floatValue.lt(zeroResult.value);
-				if (!comparison.error) {
-					isNegative = comparison.value;
-				}
-			}
-
-			if (isNegative) {
-				const absResult = floatValue.abs();
-				if (absResult.error || !absResult.value) {
-					return fallback ?? null;
-				}
-				floatValue = absResult.value;
-			}
-
-			const fixedDecimalResult = floatValue.toFixedDecimalLossy(parsedDecimals);
-			if (fixedDecimalResult.error || !fixedDecimalResult.value) {
+			const formattedResult = floatResult.value.format();
+			if (formattedResult.error || !formattedResult.value) {
+				console.warn('Float formatting error:', formattedResult.error);
 				return fallback ?? null;
 			}
 
-			const fixedValue = fixedDecimalResult.value.value;
-			const strValue = fixedValue.toString();
-			let result: number;
-
-			// Format with decimals
-			if (strValue.length <= parsedDecimals) {
-				result = Number.parseFloat('0.' + '0'.repeat(parsedDecimals - strValue.length) + strValue);
-			} else {
-				const intPart = strValue.slice(0, strValue.length - parsedDecimals);
-				const decPart = strValue.slice(strValue.length - parsedDecimals);
-				result = Number.parseFloat(intPart + '.' + decPart);
-			}
-
+			let result = Number.parseFloat(formattedResult.value.toString());
 			if (!Number.isFinite(result)) {
 				return fallback ?? null;
 			}
 
-			if (isNegative && !absolute) {
-				result = -result;
-			} else if (absolute) {
+			if (absolute) {
 				result = Math.abs(result);
+			} else if (result < 0) {
+				return fallback ?? null;
 			}
 
-			// Check if value is reasonable
-			if (Number.isFinite(result) && result > 0 && result < 1e15) {
+			if (result > 0 && result < 1e15) {
 				return result;
 			}
 			return fallback ?? null;
@@ -285,23 +250,44 @@ export function parseTradeAmounts(
 	return { side, tokens, quote: quoteAmount, price };
 }
 
-export const RATIO_SCALE = 1e18;
 
-export function ratioToNumber(value: bigint | null | undefined): number | null {
-	if (value === null || value === undefined) return null;
-	const numeric = Number(value);
-	if (!Number.isFinite(numeric)) return null;
-	const scaled = numeric / RATIO_SCALE;
-	if (!Number.isFinite(scaled) || scaled <= 0) return null;
-	// Additional sanity check: the result should be a reasonable number
-	if (scaled >= 1e14) return null;
-	return scaled;
+export function ratioToNumber(value: string | null | undefined): number | null {
+	if (typeof value !== 'string' || value.length === 0) return null;
+
+	// Handle hex-encoded Float strings (0x + 64 hex chars)
+	if (value.startsWith('0x') && value.length === 66) {
+		try {
+			const floatResult = Float.fromHex(value as `0x${string}`);
+			if (floatResult.error || !floatResult.value) {
+				console.warn('Float conversion error:', floatResult.error);
+				return null;
+			}
+
+			const formattedResult = floatResult.value.format();
+			if (formattedResult.error || !formattedResult.value) {
+				console.warn('Float ratio formatting error:', formattedResult.error);
+				return null;
+			}
+
+			const numeric = Number.parseFloat(formattedResult.value.toString());
+			if (!Number.isFinite(numeric)) return null;
+			if (numeric <= 0) return null;
+			// Additional sanity check: the result should be a reasonable number
+			if (numeric >= 1e14) return null;
+			return numeric;
+		} catch (error) {
+			console.warn('Float ratio conversion failed:', error);
+			return null;
+		}
+	}
+
+	return null;
 }
 
 export interface QuoteLike {
 	inputTokenAddress: string;
 	outputTokenAddress: string;
-	ratio: bigint;
+	ratio: string; // Hex-encoded Float string
 }
 
 

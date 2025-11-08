@@ -4,6 +4,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { hexToBigInt, buildTokenPriceMap, type ProcessedQuote } from './quote';
 import * as tokenMath from './tokenMath';
 
+// Helper to convert bigint to hex-encoded Float string for tests
+function bigintToHexFloat(value: bigint): string {
+	// Pad the value to 64 hex chars (32 bytes)
+	const hex = value.toString(16).padStart(64, '0');
+	return '0x' + hex;
+}
+
 // Mock the tokenMath module
 vi.mock('./tokenMath', () => ({
 	normalizeAddress: vi.fn((addr: string) => {
@@ -149,8 +156,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x123',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -180,8 +187,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x123',
-						maxOutput: 500000n,
-						ratio: 50000000000000000n,
+						maxOutput: bigintToHexFloat(500000n),
+						ratio: bigintToHexFloat(50000000000000000n),
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -203,8 +210,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x123',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -232,8 +239,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -244,8 +251,8 @@ describe('quote utilities', () => {
 					},
 					{
 						orderHash: '0x2',
-						maxOutput: 1000000n,
-						ratio: 80000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(80000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -266,8 +273,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(50000000000000000n),
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -278,8 +285,8 @@ describe('quote utilities', () => {
 					},
 					{
 						orderHash: '0x2',
-						maxOutput: 2000000n,
-						ratio: 60000000000000000n,
+						maxOutput: bigintToHexFloat(2000000n),
+						ratio: bigintToHexFloat(60000000000000000n),
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -300,8 +307,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -312,8 +319,8 @@ describe('quote utilities', () => {
 					},
 					{
 						orderHash: '0x2',
-						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(50000000000000000n),
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -337,8 +344,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN1',
 						inputTokenAddress: '0xUSDC',
@@ -349,8 +356,8 @@ describe('quote utilities', () => {
 					},
 					{
 						orderHash: '0x2',
-						maxOutput: 2000000n,
-						ratio: 200000000000000000n,
+						maxOutput: bigintToHexFloat(2000000n),
+						ratio: bigintToHexFloat(200000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN2',
 						inputTokenAddress: '0xUSDC',
@@ -377,8 +384,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -394,8 +401,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xUSDC',
@@ -414,8 +421,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -436,8 +443,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -448,8 +455,8 @@ describe('quote utilities', () => {
 					},
 					{
 						orderHash: '0x2',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -472,8 +479,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -484,8 +491,8 @@ describe('quote utilities', () => {
 					},
 					{
 						orderHash: '0x2',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -506,8 +513,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(50000000000000000n),
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -518,8 +525,8 @@ describe('quote utilities', () => {
 					},
 					{
 						orderHash: '0x2',
-						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(50000000000000000n),
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -542,8 +549,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -563,8 +570,8 @@ describe('quote utilities', () => {
 				const quotes: ProcessedQuote[] = [
 					{
 						orderHash: '0x1',
-						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						maxOutput: bigintToHexFloat(1000000n),
+						ratio: bigintToHexFloat(100000000000000000n),
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',

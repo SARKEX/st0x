@@ -3,6 +3,7 @@
 	import { currentNetwork, orderbookQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { OrderV4_ABI, type ProcessedQuote } from '$lib/utils/quote';
+	import { FIXED_POINT_SCALE, scaleAmount, walkOrderbook } from '$lib/utils/marketPrice';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import {
@@ -33,7 +34,7 @@
 	export let passedOutputToken: CategorizedToken | undefined;
 
 	// State for market price and quantity
-	let marketPrice: bigint = 0n;
+	let marketPrice: number = 0; // Human-readable price (quote per asset)
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
 	let isLoadingPrice = true;
 	let priceError = false;
@@ -41,7 +42,7 @@
 		order: SgOrder;
 		orderData: OrderV4;
 		quotes: RaindexOrderQuote[];
-		price: bigint; // Normalized to 18 decimals
+		price: number; // Human-readable price (quote per asset)
 	}> = [];
 	let orderbook: string | undefined = undefined;
 
@@ -50,7 +51,7 @@
 	let transactionResults:
 		| {
 				quantityFilled: bigint;
-				averagePrice: bigint;
+				averagePrice: number; // Human-readable price
 				actualSlippage: bigint;
 				isPartialFill: boolean;
 		  }
@@ -83,8 +84,7 @@
 		const outputInTokens = parseFloat(
 			formatUnits(selectedAmount, passedOutputToken?.decimals || 18)
 		);
-		const pricePerToken = Number(marketPrice) / 1e18;
-		const total = outputInTokens * pricePerToken;
+		const total = outputInTokens * marketPrice;
 		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
 	})();
 
@@ -168,100 +168,61 @@
 
 			// If no selected amount, don't calculate a price estimate
 			if (!selectedAmount || selectedAmount === 0n) {
-				marketPrice = 0n;
+				marketPrice = 0;
 				availableOrders = [];
 				orderbook = undefined;
 				return;
 			}
 
-			// Walk the orderbook to calculate the market price for the selected quantity
-			// We need to account for available liquidity at each price level
-			let quantityFilled = 0n;
-			let weightedCost = 0n;
-			const PRECISION = BigInt(1e18);
-			const filteredForQuantity: Array<{
-				order: SgOrder;
-				orderData: OrderV4;
-				quotes: RaindexOrderQuote[];
-				price: bigint;
-			}> = [];
+			const walkResult = walkOrderbook({
+				quotes: sortedQuotes,
+				orderSide,
+				selectedAmount,
+				assetDecimals: passedOutputToken.decimals ?? 18
+			});
 
-			for (const quote of sortedQuotes) {
-				if (quantityFilled >= selectedAmount) break;
+			const { quantityFilled, weightedAveragePrice, fills } = walkResult;
 
-			// maxOutput is already in the output token's decimal scale (from quote processing)
-			// selectedAmount is in 1e18 scale (user input)
-			// We need to scale maxOutput to 1e18 for comparison
-			const outputTokenDecimals = quote.outputTokenDecimals ?? 18;
-			const maxQuantityInOutputDecimals = quote.maxOutput;
-			const maxQuantityScaled = maxQuantityInOutputDecimals * BigInt(10 ** (18 - outputTokenDecimals));
+			if (quantityFilled > 0n) {
+				marketPrice = weightedAveragePrice;
 
-				// How much can we fill from this order?
-				const remainingNeeded = selectedAmount - quantityFilled;
-				const quantityFromThisOrder = remainingNeeded < maxQuantityScaled
-					? remainingNeeded
-					: maxQuantityScaled;
-
-				if (quantityFromThisOrder <= 0n) continue;
-
-				// Calculate cost/payment for this order
-				// Cost = quantity * price (both in 1e18 precision)
-				const encodedPrice = BigInt(Math.round(quote.quotePerAsset! * 1e18));
-				const costForThisOrder = (quantityFromThisOrder * encodedPrice) / PRECISION;
-
-				weightedCost = weightedCost + costForThisOrder;
-				quantityFilled = quantityFilled + quantityFromThisOrder;
-
-				// Add to available orders
-				filteredForQuantity.push({
+				availableOrders = fills.map((fill) => ({
 					order: {
-						orderHash: quote.orderHash,
+						orderHash: fill.quote.orderHash,
 						orderbook: { id: 'cached' }
 					} as any as SgOrder,
 					orderData: {} as any as OrderV4,
 					quotes: [] as RaindexOrderQuote[],
-					price: encodedPrice
+					price: fill.price
+				}));
+				orderbook = 'cached';
+
+				console.log('ORDERS USED FOR ' + orderSide.toUpperCase(), {
+					orderCount: fills.length,
+					orders: fills.map((fill) => ({
+						orderHash: fill.quote.orderHash.slice(0, 8),
+						price: fill.price
+					}))
 				});
-			}
 
-			// Calculate market price based on quantity filled
-			if (quantityFilled > 0n) {
-				// Average price = total cost / total quantity
-				// Both are in precise terms, so: (weightedCost * PRECISION) / quantityFilled
-				marketPrice = (weightedCost * PRECISION) / quantityFilled;
-
-			console.log('ORDERS USED FOR ' + orderSide.toUpperCase(), {
-				orderCount: filteredForQuantity.length,
-				orders: filteredForQuantity.map(o => ({
-					orderHash: o.order.orderHash.slice(0, 8),
-					price: o.price.toString()
-				}))
-			});
-
-			console.log('MARKET ORDER PRICE CALCULATION', {
-				orderSide,
-				selectedAmount: selectedAmount.toString(),
-				quantityFilled: quantityFilled.toString(),
-				weightedCost: weightedCost.toString(),
-				PRECISION: PRECISION.toString(),
-				calculation: `(${weightedCost} * ${PRECISION}) / ${quantityFilled}`,
-				marketPrice: marketPrice.toString(),
-				marketPriceFormatted: `$${(Number(marketPrice) / 1e18).toFixed(2)}`
-			});
-
+				console.log('MARKET ORDER PRICE CALCULATION', {
+					orderSide,
+					selectedAmount: selectedAmount.toString(),
+					quantityFilled: quantityFilled.toString(),
+					weightedAveragePrice,
+					marketPrice,
+					marketPriceFormatted: `$${marketPrice.toFixed(2)}`
+				});
 			} else {
 				console.warn('No quantity filled from orderbook', {
 					selectedAmount: selectedAmount.toString(),
-					ordersWalked: filteredForQuantity.length,
+					ordersWalked: fills.length,
 					relevantQuotesCount: relevantQuotes.length
 				});
 				priceError = true;
 				isLoadingPrice = false;
 				return;
 			}
-
-			availableOrders = filteredForQuantity;
-			orderbook = 'cached';
 		} catch (error) {
 			console.error('Error calculating market price:', error);
 			priceError = true;
@@ -277,7 +238,7 @@
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
-		marketPrice = 0n;
+		marketPrice = 0;
 		availableOrders = [];
 		orderbook = undefined;
 	}
@@ -287,15 +248,15 @@
 		order: SgOrder;
 		orderData: OrderV4;
 		quotes: RaindexOrderQuote[];
-		price: bigint;
+		price: number;
 	}> {
 		if (availableOrders.length === 0) return [];
 
-		const bestPrice = availableOrders[0].price; // First is best (already sorted)
-		const slippageMultiplier = BigInt(11000); // 1.1 = 110%
+		const bestPrice = availableOrders[0].price; // First is best (already sorted) - human-readable
+		const slippageMultiplier = 1.1; // 1.1 = 110%
 
 		// Filter to only orders within 10% of best price
-		const maxAcceptablePrice = (bestPrice * slippageMultiplier) / BigInt(10000);
+		const maxAcceptablePrice = bestPrice * slippageMultiplier;
 
 		const filtered = availableOrders.filter((order) => {
 			return order.price <= maxAcceptablePrice;
@@ -405,12 +366,14 @@
 		}
 
 		// Calculate required input for desired output
-		const PRECISION = BigInt(1e18);
-		const bestPrice = filteredOrders[0].price;
+		const bestPrice = filteredOrders[0].price; // Human-readable price (quote per asset)
 
-		// bestPrice is already encoded with decimal scaling from fetchMarketPrice
-		// Formula: requiredInput = encodedPrice * selectedAmount / 1e18
-		const requiredInputInTokenTerms = (bestPrice * selectedAmount) / PRECISION;
+		// Convert selected amount to human-readable tokens and calculate cost
+		// selectedAmount is in native token decimals, formatUnits handles the conversion
+		const selectedAmountInTokens = parseFloat(
+			formatUnits(selectedAmount, passedOutputToken.decimals ?? 18)
+		);
+		const requiredInputInTokenTerms = selectedAmountInTokens * bestPrice;
 
 		// Build TakeOrderConfigs for ALL filtered orders in price priority
 		const takeOrderConfigs: TakeOrderConfigV4[] = [];
@@ -444,14 +407,22 @@
 
 		// Use worst price in filtered set for maximumIORatio (already within 10%)
 		const worstPrice = filteredOrders[filteredOrders.length - 1].price;
-
-		const floatWorstPrice = Float.fromFixedDecimalLossy(worstPrice, 18);
-		const maxIORatioHex = floatWorstPrice.float.asHex();
+		const floatWorstPriceResult = Float.parse(worstPrice.toString());
+		if (floatWorstPriceResult.error || !floatWorstPriceResult.value) {
+			console.error('Failed to encode worst price as Float:', floatWorstPriceResult.error);
+			priceError = true;
+			isLoadingPrice = false;
+			return;
+		}
+		const maxIORatioHex = floatWorstPriceResult.value.asHex();
 
 		// User wants to acquire selectedAmount, so input is the constraint
 		// Get input token decimals from the first order's input token
 		const inputTokenDecimals = Number(filteredOrders[0].order.inputs[0]?.token?.decimals) || 18;
-		const inputFloat = Float.fromFixedDecimalLossy(requiredInputInTokenTerms, inputTokenDecimals);
+		// Convert human-readable amount to token's native scale (e.g., 1.5 USDC -> 1500000 for 6-decimal token)
+		const inputTokenScale = 10n ** BigInt(inputTokenDecimals);
+		const requiredInputBigInt = BigInt(Math.round(requiredInputInTokenTerms * Number(inputTokenScale)));
+		const inputFloat = Float.fromFixedDecimalLossy(requiredInputBigInt, inputTokenDecimals);
 
 		const takeOrdersConfig: TakeOrdersConfigV4 = {
 			minimumInput: inputFloat.float.asHex(),
@@ -462,7 +433,7 @@
 		};
 
 		// Determine required approval amount
-		let requiredApprovalAmount = requiredInputInTokenTerms;
+		let requiredApprovalAmount = requiredInputBigInt;
 		if (inputFloat.lossless) {
 			requiredApprovalAmount = requiredApprovalAmount + 1n;
 		}
@@ -479,7 +450,9 @@
 			// For now, we'll show estimated results
 			const quantityFilled = selectedAmount;
 			const averagePrice = bestPrice;
-			const slippage = worstPrice > 0n ? ((worstPrice - bestPrice) * BigInt(100)) / bestPrice : 0n;
+			// Calculate slippage as percentage: ((worst - best) / best) * 100
+			const slippagePercent = worstPrice > 0 ? ((worstPrice - bestPrice) / bestPrice) * 100 : 0;
+			const slippage = BigInt(Math.round(slippagePercent));
 
 			transactionResults = {
 				quantityFilled,
@@ -523,7 +496,7 @@
 			<div class="flex justify-between">
 				<span class="text-gray-400">Average Price</span>
 				<span class="font-medium"
-					>{(Number(transactionResults.averagePrice) / 1e18).toFixed(6)}</span
+					>{transactionResults.averagePrice.toFixed(6)}</span
 				>
 			</div>
 			<div class="flex justify-between">
@@ -570,7 +543,7 @@
 								? 'Loading...'
 								: priceError
 									? 'Price unavailable'
-									: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`}
+									: `~${marketPrice.toFixed(2)} ${paymentTokenSymbol}`}
 						disabled
 						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 					/>
@@ -601,7 +574,7 @@
 							? 'Loading...'
 							: priceError
 								? 'N/A'
-								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`}
+								: `~${marketPrice.toFixed(2)} ${paymentTokenSymbol}`}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
