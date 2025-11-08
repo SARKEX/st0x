@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { Network } from '$lib/network';
 
 
@@ -48,6 +48,16 @@ const {
 		logoUrl: '/images/USDC.png'
 	};
 
+	type PaymentTokenType = typeof paymentToken;
+	const getDefaultPaymentTokenForNetwork = vi.fn() as Mock<
+		[number],
+		PaymentTokenType | undefined
+	>;
+	const getDefaultSettlementTokenForNetwork = vi.fn() as Mock<
+		[number],
+		PaymentTokenType | undefined
+	>;
+
 	const networkModule = {
 		TOKENS: mockTokens,
 		DEFAULT_PAYMENT_TOKENS: {
@@ -56,14 +66,10 @@ const {
 		PAYMENT_TOKENS_BY_NETWORK: {
 			[network.id]: [paymentToken]
 		},
-		getDefaultPaymentTokenForNetwork: vi.fn((chainId: number) => {
-			return (networkModule.DEFAULT_PAYMENT_TOKENS as Record<number, typeof paymentToken>)[chainId];
-		}),
-		DEFAULT_SETTLEMENT_TOKENS: {} as Record<number, typeof paymentToken>,
-		SETTLEMENT_TOKENS_BY_NETWORK: {} as Record<number, typeof paymentToken[]>,
-		getDefaultSettlementTokenForNetwork: vi.fn((chainId: number) => {
-			return (networkModule.DEFAULT_SETTLEMENT_TOKENS as Record<number, typeof paymentToken>)[chainId];
-		})
+		DEFAULT_SETTLEMENT_TOKENS: {} as Record<number, PaymentTokenType>,
+		SETTLEMENT_TOKENS_BY_NETWORK: {} as Record<number, PaymentTokenType[]>,
+		getDefaultPaymentTokenForNetwork,
+		getDefaultSettlementTokenForNetwork
 	};
 
 	networkModule.DEFAULT_SETTLEMENT_TOKENS = networkModule.DEFAULT_PAYMENT_TOKENS;

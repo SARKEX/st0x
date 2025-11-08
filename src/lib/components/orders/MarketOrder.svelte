@@ -3,12 +3,11 @@
 	import { currentNetwork, orderbookQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { OrderV4_ABI, type ProcessedQuote } from '$lib/utils/quote';
-	import { FIXED_POINT_SCALE, scaleAmount, walkOrderbook } from '$lib/utils/marketPrice';
+	import { walkOrderbook } from '$lib/utils/marketPrice';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import {
 		type OrderV4,
-		type RaindexOrder,
 		type RaindexOrderQuote,
 		type SgOrder,
 		type TakeOrderConfigV4,
@@ -57,7 +56,7 @@
 		  }
 		| undefined = undefined;
 
-	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.defaultSettlementToken;
+	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.paymentTokens?.[0];
 	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
 
 	// Errors
@@ -123,19 +122,21 @@
 			const assetAddressNormalized = normalizeAddress(passedOutputToken.address);
 			const paymentTokenAddressNormalized = normalizeAddress(paymentTokenAddress);
 
-			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-				const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-				const targetOutputAddress =
-					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
-				const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
+				const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
+					const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
+					const targetOutputAddress =
+						orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
+					const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
+ 					const quotePerAsset = quote.quotePerAsset;
 
-				return (
-					quoteOutputAddressNormalized === targetOutputAddress &&
-					quote.side === targetSide &&
-					Number.isFinite(quote.quotePerAsset) &&
-					quote.quotePerAsset > 0
-				);
-			});
+					return (
+						quoteOutputAddressNormalized === targetOutputAddress &&
+						quote.side === targetSide &&
+						quotePerAsset !== undefined &&
+						Number.isFinite(quotePerAsset) &&
+						quotePerAsset > 0
+					);
+				});
 
 			if (relevantQuotes.length === 0) {
 				console.warn('No relevant quotes found', {
@@ -190,8 +191,8 @@
 					order: {
 						orderHash: fill.quote.orderHash,
 						orderbook: { id: 'cached' }
-					} as any as SgOrder,
-					orderData: {} as any as OrderV4,
+					} as unknown as SgOrder,
+					orderData: {} as unknown as OrderV4,
 					quotes: [] as RaindexOrderQuote[],
 					price: fill.price
 				}));
@@ -371,7 +372,7 @@
 		// Convert selected amount to human-readable tokens and calculate cost
 		// selectedAmount is in native token decimals, formatUnits handles the conversion
 		const selectedAmountInTokens = parseFloat(
-			formatUnits(selectedAmount, passedOutputToken.decimals ?? 18)
+			formatUnits(selectedAmount, passedOutputToken?.decimals ?? 18)
 		);
 		const requiredInputInTokenTerms = selectedAmountInTokens * bestPrice;
 

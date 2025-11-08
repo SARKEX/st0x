@@ -38,5 +38,7 @@ export const mockCurrentNetwork = {
 	}
 };
 
-(mockCurrentNetwork as any).settlementTokens = mockCurrentNetwork.paymentTokens;
-(mockCurrentNetwork as any).defaultSettlementToken = mockCurrentNetwork.defaultPaymentToken;
+Object.assign(mockCurrentNetwork, {
+	settlementTokens: mockCurrentNetwork.paymentTokens,
+	defaultSettlementToken: mockCurrentNetwork.defaultPaymentToken
+});

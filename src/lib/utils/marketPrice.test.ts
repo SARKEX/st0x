@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { Float } from '@rainlanguage/float';
 import type { ProcessedQuote } from '$lib/utils/quote';
-import { FIXED_POINT_SCALE, scaleAmount, walkOrderbook } from './marketPrice';
+import { scaleAmount, walkOrderbook } from './marketPrice';
 
 const ONE = 10n ** 18n;
+const ONE_FLOAT_HEX = Float.parse('1').value!.asHex();
+
+function fixedToFloatHex(value: bigint, decimals = 18): string {
+	const result = Float.fromFixedDecimalLossy(value, decimals);
+	return result.float.asHex();
+}
 
 describe('scaleAmount', () => {
 	it('scales up when target decimals are higher', () => {
@@ -24,8 +31,8 @@ describe('walkOrderbook', () => {
 		const quotes: ProcessedQuote[] = [
 			{
 				orderHash: '0x1',
-				maxOutput: 5n * 10n ** 17n, // 0.5 quote tokens in 1e18 scale
-				ratio: '0x0',
+				maxOutput: fixedToFloatHex(5n * 10n ** 17n), // 0.5 quote tokens in 1e18 scale
+				ratio: ONE_FLOAT_HEX,
 				inputTokenSymbol: 'ASSET',
 				outputTokenSymbol: 'QUOTE',
 				inputTokenAddress: '0xasset',
@@ -36,8 +43,8 @@ describe('walkOrderbook', () => {
 			},
 			{
 				orderHash: '0x2',
-				maxOutput: 1n * 10n ** 19n, // 10 quote tokens in 1e18 scale
-				ratio: '0x0',
+				maxOutput: fixedToFloatHex(1n * 10n ** 19n), // 10 quote tokens in 1e18 scale
+				ratio: ONE_FLOAT_HEX,
 				inputTokenSymbol: 'ASSET',
 				outputTokenSymbol: 'QUOTE',
 				inputTokenAddress: '0xasset',
@@ -69,8 +76,8 @@ describe('walkOrderbook', () => {
 		const quotes: ProcessedQuote[] = [
 			{
 				orderHash: '0xa',
-				maxOutput: ONE, // can sell exactly 1 asset
-				ratio: '0x0',
+				maxOutput: fixedToFloatHex(ONE), // can sell exactly 1 asset
+				ratio: ONE_FLOAT_HEX,
 				inputTokenSymbol: 'QUOTE',
 				outputTokenSymbol: 'ASSET',
 				inputTokenAddress: '0xquote',
@@ -81,8 +88,8 @@ describe('walkOrderbook', () => {
 			},
 			{
 				orderHash: '0xb',
-				maxOutput: ONE + half, // 1.5 assets
-				ratio: '0x0',
+				maxOutput: fixedToFloatHex(ONE + half), // 1.5 assets
+				ratio: ONE_FLOAT_HEX,
 				inputTokenSymbol: 'QUOTE',
 				outputTokenSymbol: 'ASSET',
 				inputTokenAddress: '0xquote',

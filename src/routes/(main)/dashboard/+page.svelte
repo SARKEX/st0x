@@ -323,7 +323,8 @@
 							})
 						);
 						price = parseFloat(priceStr);
-					} catch (error) {
+					} catch (priceError) {
+						console.warn('Failed to fetch price from swap API', priceError);
 						price = null;
 					}
 				}
