@@ -10,12 +10,10 @@ import {
 	computePrice,
 	classifyFlow,
 	parseTradeAmounts,
-	ratioToNumber,
 	describeQuote,
 	analyzeTrade,
 	createTokenLookup,
 	type PairDescriptor,
-	RATIO_SCALE,
 	type TokenDescriptor
 } from './tokenMath';
 
@@ -277,28 +275,6 @@ describe('tokenMath', () => {
 		});
 	});
 
-	describe('ratioToNumber', () => {
-		it('should convert ratio bigint to number', () => {
-			expect(ratioToNumber(BigInt(1e18))).toBe(1);
-			expect(ratioToNumber(BigInt(5e18))).toBe(5);
-			expect(ratioToNumber(BigInt(1.5e18))).toBe(1.5);
-		});
-
-		it('should return null for null/undefined', () => {
-			expect(ratioToNumber(null)).toBeNull();
-			expect(ratioToNumber(undefined)).toBeNull();
-		});
-
-		it('should return null for non-positive values', () => {
-			expect(ratioToNumber(0n)).toBeNull();
-			expect(ratioToNumber(-1n)).toBeNull();
-		});
-
-		it('should return null for values that result in non-finite numbers', () => {
-			expect(ratioToNumber(BigInt('99999999999999999999999999999999'))).toBeNull();
-		});
-	});
-
 	describe('describeQuote', () => {
 		const quoteAddress = '0xUSDC';
 
@@ -306,7 +282,7 @@ describe('tokenMath', () => {
 			const quote = {
 				inputTokenAddress: '0xUSDC',
 				outputTokenAddress: '0xTOKEN',
-				ratio: BigInt(2e18) // 2 USDC per TOKEN
+				ratio: 2 // 2 USDC per TOKEN
 			};
 
 			const result = describeQuote(quote, quoteAddress);
@@ -320,7 +296,7 @@ describe('tokenMath', () => {
 			const quote = {
 				inputTokenAddress: '0xTOKEN',
 				outputTokenAddress: '0xUSDC',
-				ratio: BigInt(0.5e18) // 0.5 USDC per TOKEN (inverted)
+				ratio: 0.5 // 0.5 USDC per TOKEN (inverted)
 			};
 
 			const result = describeQuote(quote, quoteAddress);
@@ -332,13 +308,13 @@ describe('tokenMath', () => {
 		it('should return null for invalid quotes', () => {
 			expect(
 				describeQuote(
-					{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: BigInt(1e18) },
+					{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: 1 },
 					quoteAddress
 				)
 			).toBeNull(); // both USDC
 			expect(
 				describeQuote(
-					{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: BigInt(1e18) },
+					{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: 1 },
 					quoteAddress
 				)
 			).toBeNull();
@@ -425,12 +401,6 @@ describe('tokenMath', () => {
 			};
 
 			expect(analyzeTrade(trade, quoteToken)).toBeNull();
-		});
-	});
-
-	describe('RATIO_SCALE constant', () => {
-		it('should be 1e18', () => {
-			expect(RATIO_SCALE).toBe(1e18);
 		});
 	});
 });

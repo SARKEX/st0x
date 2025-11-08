@@ -285,23 +285,11 @@ export function parseTradeAmounts(
 	return { side, tokens, quote: quoteAmount, price };
 }
 
-export const RATIO_SCALE = 1e18;
-
-export function ratioToNumber(value: bigint | null | undefined): number | null {
-	if (value === null || value === undefined) return null;
-	const numeric = Number(value);
-	if (!Number.isFinite(numeric)) return null;
-	const scaled = numeric / RATIO_SCALE;
-	if (!Number.isFinite(scaled) || scaled <= 0) return null;
-	// Additional sanity check: the result should be a reasonable number
-	if (scaled >= 1e14) return null;
-	return scaled;
-}
 
 export interface QuoteLike {
 	inputTokenAddress: string;
 	outputTokenAddress: string;
-	ratio: bigint;
+	ratio: number;
 }
 
 
@@ -317,8 +305,8 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 	const output = normalizeAddress(quote.outputTokenAddress);
 	const quoteAddress = normalizeAddress(quoteTokenAddress);
 	if (!input || !output || !quoteAddress) return null;
-	const ratio = ratioToNumber(quote.ratio);
-	if (ratio === null) return null;
+	const ratio = quote.ratio;
+	if (!Number.isFinite(ratio) || ratio <= 0) return null;
 
 	if (input === quoteAddress && output !== quoteAddress) {
 		// ASK order: giving away output token to acquire quote token input (seller offering to sell)
@@ -422,4 +410,38 @@ export function analyzeTrade(
 		assetSymbol: pair.asset.symbol,
 		...parsed
 	};
+}
+
+
+/**
+ * Convert a human-readable price to an ioratio, accounting for order side.
+ *
+ * Price = settlement tokens per asset (a human concept)
+ * ioratio = input / output, where input is what you GET and output is what you GIVE
+ *
+ * For a BUY order (buying assets with settlement):
+ * - input (what you GET) = asset
+ * - output (what you GIVE) = settlement
+ * - ioratio = asset / settlement = 1 / price
+ *
+ * For a SELL order (selling assets for settlement):
+ * - input (what you GET) = settlement
+ * - output (what you GIVE) = asset
+ * - ioratio = settlement / asset = price
+ *
+ * @param price The human-readable price (settlement per asset)
+ * @param orderSide 'Buy' or 'Sell'
+ * @returns The ioratio, or null if invalid
+ */
+export function priceToIoratio(price: number | null | undefined, orderSide: 'Buy' | 'Sell'): number | null {
+	if (price === null || price === undefined) return null;
+	if (!Number.isFinite(price) || price <= 0) return null;
+
+	if (orderSide === 'Buy') {
+		// For BUY: ioratio = asset / settlement = 1 / price
+		return 1 / price;
+	} else {
+		// For SELL: ioratio = settlement / asset = price
+		return price;
+	}
 }

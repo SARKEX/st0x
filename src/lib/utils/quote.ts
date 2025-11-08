@@ -2,8 +2,8 @@ import type { RaindexOrder, RaindexOrderQuote, GetOrdersFilters } from '@rainlan
 import {
 	networks,
 	TOKENS,
-	DEFAULT_PAYMENT_TOKENS,
-	getDefaultPaymentTokenForNetwork
+	DEFAULT_SETTLEMENT_TOKENS,
+	getDefaultSettlementTokenForNetwork
 } from '$lib/network';
 import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress, type MarketSide } from '$lib/utils/tokenMath';
@@ -20,7 +20,7 @@ export const OrderV4_ABI = `(address owner, ${EvaluableV4} evaluable, ${IOV2}[] 
 export interface ProcessedQuote {
 	orderHash: string;
 	maxOutput: bigint;
-	ratio: bigint;
+	ratio: number;
 	inputTokenSymbol: string;
 	outputTokenSymbol: string;
 	inputTokenAddress: string;
@@ -86,25 +86,21 @@ function processOrdersWithQuotes(
 
 					const { maxOutput, ratio } = quote.data;
 
-					// Convert hex to BigInt
-					// const maxOutputBigInt = hexToBigInt(maxOutput);
-					// const ratioBigInt = hexToBigInt(ratio);
-
-					const ratioBigInt = BigInt(
-						Float.fromHex(ratio as `0x${string}`).value!.toFixedDecimalLossy(18).value!.value
+					// Convert Float hex to number with high precision
+				// Ratios are dimensionless, so we use 30 decimals to preserve accuracy without forcing any scale
+					const floatRatioResult = Float.fromHex(ratio as `0x${string}`);
+					if (floatRatioResult.error || !floatRatioResult.value) {
+						return;
+					}
+					const ratioNumber = Number(
+						floatRatioResult.value.toFixedDecimalLossy(30).value?.value ?? 0
 					);
+
 					const maxOutputBigInt = BigInt(
 						Float.fromHex(maxOutput as `0x${string}`).value!.toFixedDecimalLossy(
 							Number(orderData.validOutputs[quote.pair.outputIndex]?.token?.decimals)
 						).value!.value
 					);
-
-					// console.log('-----------------------');
-					// console.log('orderHash : ', sgOrder.orderHash);
-					// console.log('maxOutputBigInt : ', maxOutputBigInt);
-					// console.log('ratioBigInt : ', ratioBigInt);
-					// console.log('maxOutput : ', maxOutput);
-					// console.log('ratio : ', ratio);
 
 					// Skip if maxOutput is 0
 					if (maxOutputBigInt === 0n) {
@@ -136,7 +132,7 @@ function processOrdersWithQuotes(
 					const processedQuote: ProcessedQuote = {
 						orderHash: sgOrder.orderHash,
 						maxOutput: maxOutputBigInt,
-						ratio: ratioBigInt,
+						ratio: ratioNumber,
 						inputTokenSymbol,
 						outputTokenSymbol,
 						inputTokenAddress,
@@ -170,13 +166,13 @@ function processOrdersWithQuotes(
 }
 
 /**
- * Fetches all orders from subgraph, filters orders that involve the configured payment token and stock tokens,
+ * Fetches all orders from subgraph, filters orders that involve the configured settlement token and stock tokens,
  * and quotes all filtered orders using the RaindexClient API.
  */
-export async function fetchAndQuotePaymentTokenOrders(
+export async function fetchAndQuoteSettlementTokenOrders(
 	networkId: number = 8453,
 	options: { maxPages?: number; pageSize?: number } = {},
-	overridePaymentToken?: PythToken
+	overrideSettlementToken?: PythToken
 ) {
 	const { maxPages = 100, pageSize = 1000 } = options;
 
@@ -186,12 +182,12 @@ export async function fetchAndQuotePaymentTokenOrders(
 		throw new Error(`Network with id ${networkId} not found`);
 	}
 
-	// Determine the payment token for the network
-	const defaultPaymentToken =
-		overridePaymentToken ??
-		getDefaultPaymentTokenForNetwork(networkId) ??
-		DEFAULT_PAYMENT_TOKENS[networkId];
-	if (!defaultPaymentToken) {
+	// Determine the settlement token for the network
+	const defaultSettlementToken =
+		overrideSettlementToken ??
+		getDefaultSettlementTokenForNetwork(networkId) ??
+		DEFAULT_SETTLEMENT_TOKENS[networkId];
+	if (!defaultSettlementToken) {
 		throw new Error(`Payment token not found for network ${networkId}`);
 	}
 
@@ -216,9 +212,9 @@ export async function fetchAndQuotePaymentTokenOrders(
 				owners: []
 			};
 
-			// Add token filters for payment token and stock tokens
+			// Add token filters for settlement token and stock tokens
 			const tokenAddresses: string[] = [
-				defaultPaymentToken.address,
+				defaultSettlementToken.address,
 				...stockTokens.map((t) => t.address)
 			] as `0x${string}`[];
 
@@ -256,7 +252,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 		}
 	}
 
-	console.log('🔍 fetchAndQuotePaymentTokenOrders - Total orders fetched:', allOrders.length);
+	console.log('🔍 fetchAndQuoteSettlementTokenOrders - Total orders fetched:', allOrders.length);
 
 	// Get quotes for all orders and store them in a map
 	const quotesMap = new Map<RaindexOrder, RaindexOrderQuote[]>();
@@ -281,7 +277,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 	console.log('📦 Total quotes fetched:', quotesMap.size, 'orders with quotes');
 
 	// Process and filter the quotes
-	const processedQuotes = processOrdersWithQuotes(allOrders, quotesMap, defaultPaymentToken, stockTokens);
+	const processedQuotes = processOrdersWithQuotes(allOrders, quotesMap, defaultSettlementToken, stockTokens);
 
 	console.log('🎯 Final processed quotes:', processedQuotes.length);
 

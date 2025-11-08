@@ -33,8 +33,8 @@
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
-	function isPaymentTokenPosition(token: { token: SgErc20 }) {
-		const settlementToken = $currentNetwork?.defaultPaymentToken;
+	function isSettlementTokenPosition(token: { token: SgErc20 }) {
+		const settlementToken = $currentNetwork?.defaultSettlementToken;
 		if (!settlementToken) return false;
 		const symbolMatch =
 			token.token.symbol?.toUpperCase() === settlementToken.symbol?.toUpperCase();
@@ -283,7 +283,7 @@
 		// Convert map to array and format balances
 		const balancePromises = Array.from(tokenBalances.values()).map(
 			async ({ token, totalBalance, vaultIds }) => {
-				const settlementToken = $currentNetwork?.defaultPaymentToken;
+				const settlementToken = $currentNetwork?.defaultSettlementToken;
 				if (!settlementToken) {
 					const balance = parseFloat(formatUnits(totalBalance, Number(token.decimals ?? 18)));
 					return {
@@ -292,12 +292,12 @@
 						vaultIds,
 						price: '0.000000',
 						estimatedValue: '0.000000',
-						isPaymentToken: false
+						isSettlementToken: false
 					};
 				}
 				const settlementSymbol = settlementToken.symbol?.toUpperCase();
 				const settlementAddress = settlementToken.address?.toLowerCase();
-				const isPaymentToken =
+				const isSettlementToken =
 					token.symbol?.toUpperCase() === settlementSymbol ||
 					token.id.toLowerCase() === settlementAddress;
 
@@ -323,13 +323,13 @@
 							})
 						);
 						price = parseFloat(priceStr);
-					} catch (error) {
+					} catch {
 						price = null;
 					}
 				}
 
 				if (!price || !Number.isFinite(price) || price <= 0) {
-					if (isPaymentToken) {
+					if (isSettlementToken) {
 						price = 1;
 					} else {
 						price = 0;
@@ -345,7 +345,7 @@
 					vaultIds,
 					price: price.toFixed(6),
 					estimatedValue,
-					isPaymentToken
+					isSettlementToken
 				};
 			}
 		);
@@ -614,7 +614,7 @@
 											<!-- Token Info -->
 											<div class="flex items-start gap-3 sm:gap-4">
 												<div
-													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {isPaymentTokenPosition(
+													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {isSettlementTokenPosition(
 														token
 													)
 														? 'bg-gradient-to-br from-green-600/20 to-emerald-700/20'
@@ -630,7 +630,7 @@
 														<p class="{textStyles.label} sm:text-sm">
 															{token.token.symbol ?? '???'}
 														</p>
-														{#if isPaymentTokenPosition(token)}
+														{#if isSettlementTokenPosition(token)}
 															<span
 																class="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400"
 															>
@@ -656,7 +656,7 @@
 												<div class="flex items-center justify-between">
 													<span class="{textStyles.label} sm:text-sm">Estimated Value</span>
 													<span
-														class="text-xs font-medium {isPaymentTokenPosition(token)
+														class="text-xs font-medium {isSettlementTokenPosition(token)
 															? 'text-emerald-400'
 															: 'text-green-400'} sm:text-sm">${token.estimatedValue}</span
 													>

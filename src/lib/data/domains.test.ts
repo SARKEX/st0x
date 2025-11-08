@@ -7,7 +7,7 @@ const {
 	networkWithoutUsdc,
 	mockTokens,
 	networkModule,
-	paymentToken,
+	settlementToken,
 	mockGetSfts,
 	mockGetTrades,
 	mockFetchOrders,
@@ -38,7 +38,7 @@ const {
 		}
 	];
 
-	const paymentToken = {
+	const settlementToken = {
 		chainId: network.chainId,
 		address: '0xUSDC',
 		symbol: 'USDC',
@@ -48,33 +48,33 @@ const {
 		logoUrl: '/images/USDC.png'
 	};
 
-	const networkModule = {
-		TOKENS: mockTokens,
-		DEFAULT_PAYMENT_TOKENS: {
-			[network.id]: paymentToken
-		},
-		PAYMENT_TOKENS_BY_NETWORK: {
-			[network.id]: [paymentToken]
-		},
-		getDefaultPaymentTokenForNetwork: vi.fn((chainId: number) => {
-			return (networkModule.DEFAULT_PAYMENT_TOKENS as Record<number, typeof paymentToken>)[chainId];
-		}),
-		DEFAULT_SETTLEMENT_TOKENS: {} as Record<number, typeof paymentToken>,
-		SETTLEMENT_TOKENS_BY_NETWORK: {} as Record<number, typeof paymentToken[]>,
-		getDefaultSettlementTokenForNetwork: vi.fn((chainId: number) => {
-			return (networkModule.DEFAULT_SETTLEMENT_TOKENS as Record<number, typeof paymentToken>)[chainId];
-		})
+	const defaultSettlementTokens: Record<number, typeof settlementToken> = {
+		[network.id]: settlementToken
+	};
+	const settlementTokensByNetwork: Record<number, Array<typeof settlementToken>> = {
+		[network.id]: [settlementToken]
 	};
 
-	networkModule.DEFAULT_SETTLEMENT_TOKENS = networkModule.DEFAULT_PAYMENT_TOKENS;
-	networkModule.SETTLEMENT_TOKENS_BY_NETWORK = networkModule.PAYMENT_TOKENS_BY_NETWORK;
+	const networkModule = {
+		TOKENS: mockTokens,
+		DEFAULT_SETTLEMENT_TOKENS: defaultSettlementTokens,
+		SETTLEMENT_TOKENS_BY_NETWORK: settlementTokensByNetwork,
+		getDefaultSettlementTokenForNetwork: vi.fn((chainId: number) => {
+			return defaultSettlementTokens[chainId];
+		}),
+		DEFAULT_SETTLEMENT_TOKENS: defaultSettlementTokens,
+		SETTLEMENT_TOKENS_BY_NETWORK: settlementTokensByNetwork,
+		getDefaultSettlementTokenForNetwork: vi.fn((chainId: number) => {
+			return defaultSettlementTokens[chainId];
+		})
+	};
 
 	return {
 		network,
 		networkWithoutUsdc,
 		mockTokens,
 		networkModule,
-		paymentToken,
+		settlementToken,
 		mockGetSfts: vi.fn(),
 		mockGetTrades: vi.fn(),
 		mockFetchOrders: vi.fn(),
@@ -91,7 +91,7 @@ vi.mock('$lib/query', () => ({
 	getTrades: mockGetTrades
 }));
 vi.mock('$lib/utils/quote', () => ({
-	fetchAndQuotePaymentTokenOrders: mockFetchOrders,
+	fetchAndQuoteSettlementTokenOrders: mockFetchOrders,
 	buildTokenPriceMap: mockBuildTokenMap
 }));
 vi.mock('$lib/services/pyth', () => ({
@@ -117,12 +117,12 @@ describe('domain fetchers', () => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
-		networkModule.DEFAULT_PAYMENT_TOKENS[network.id] = paymentToken;
-		networkModule.PAYMENT_TOKENS_BY_NETWORK[network.id] = [paymentToken];
-		networkModule.DEFAULT_SETTLEMENT_TOKENS[network.id] = paymentToken;
-		networkModule.SETTLEMENT_TOKENS_BY_NETWORK[network.id] = [paymentToken];
-		networkModule.getDefaultPaymentTokenForNetwork.mockImplementation((chainId: number) =>
-			networkModule.DEFAULT_PAYMENT_TOKENS[chainId]
+		networkModule.DEFAULT_SETTLEMENT_TOKENS[network.id] = settlementToken;
+		networkModule.SETTLEMENT_TOKENS_BY_NETWORK[network.id] = [settlementToken];
+		networkModule.DEFAULT_SETTLEMENT_TOKENS[network.id] = settlementToken;
+		networkModule.SETTLEMENT_TOKENS_BY_NETWORK[network.id] = [settlementToken];
+		networkModule.getDefaultSettlementTokenForNetwork.mockImplementation((chainId: number) =>
+			networkModule.DEFAULT_SETTLEMENT_TOKENS[chainId]
 		);
 		networkModule.getDefaultSettlementTokenForNetwork.mockImplementation((chainId: number) =>
 			networkModule.DEFAULT_SETTLEMENT_TOKENS[chainId]
@@ -149,7 +149,7 @@ describe('domain fetchers', () => {
 		consoleSpy.mockRestore();
 	});
 
-	it('builds a summary map for orderbook quotes and handles missing payment token', async () => {
+	it('builds a summary map for orderbook quotes and handles missing settlement token', async () => {
 		const orderbookFetcher = DOMAIN_DEFINITIONS.orderbookQuotes.fetcher;
 		const quotes = [{ id: 'q1' }];
 		const summaryValue = { midPrice: 1.23 };
@@ -158,7 +158,7 @@ describe('domain fetchers', () => {
 
 		const result = await orderbookFetcher(network);
 		expect(mockFetchOrders).toHaveBeenCalledWith(network.id);
-		expect(mockBuildTokenMap).toHaveBeenCalledWith(quotes, paymentToken.address);
+		expect(mockBuildTokenMap).toHaveBeenCalledWith(quotes, settlementToken.address);
 		expect(result.summary).toEqual({ '0xtoken1': summaryValue });
 		expect(result.quotes).toBe(quotes);
 

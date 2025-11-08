@@ -19,11 +19,11 @@ export interface Network {
 	metadata_subgraph_url: string;
 	orderbook_subgraph_url: string;
 	orderbook_subgraph_urls_inactive: string[];
-	paymentTokens: PythToken[];
-	defaultPaymentToken: PythToken;
+	settlementTokens: PythToken[];
+	defaultSettlementToken: PythToken;
 }
 
-export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
+export const SETTLEMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
 		{
 			chainId: 8453,
@@ -37,19 +37,19 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	]
 };
 
-export const DEFAULT_PAYMENT_TOKENS: Record<number, PythToken> = Object.fromEntries(
-	Object.entries(PAYMENT_TOKENS_BY_NETWORK).map(([chainId, tokens]) => [
+export const DEFAULT_SETTLEMENT_TOKENS: Record<number, PythToken> = Object.fromEntries(
+	Object.entries(SETTLEMENT_TOKENS_BY_NETWORK).map(([chainId, tokens]) => [
 		Number(chainId),
 		tokens[0] as PythToken
 	])
 );
 
-export const USDC_TOKENS = PAYMENT_TOKENS_BY_NETWORK;
+export const USDC_TOKENS = SETTLEMENT_TOKENS_BY_NETWORK;
 
 // Networks configuration
 
-const basePaymentTokens = PAYMENT_TOKENS_BY_NETWORK[8453] ?? [];
-const baseDefaultPaymentToken = DEFAULT_PAYMENT_TOKENS[8453];
+const baseSettlementTokens = SETTLEMENT_TOKENS_BY_NETWORK[8453] ?? [];
+const baseDefaultSettlementToken = DEFAULT_SETTLEMENT_TOKENS[8453];
 
 export const networks: Network[] = [
 	{
@@ -79,8 +79,8 @@ export const networks: Network[] = [
 		orderbook_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-10-11-a62b/gn',
 		orderbook_subgraph_urls_inactive: [],
-		paymentTokens: basePaymentTokens,
-		defaultPaymentToken: baseDefaultPaymentToken!
+		settlementTokens: baseSettlementTokens,
+		defaultSettlementToken: baseDefaultSettlementToken!
 	}
 ];
 
@@ -98,30 +98,18 @@ export function getNetworkByName(name: string): Network | undefined {
 }
 
 // Helper function to get settlement tokens for a specific network
-export function getPaymentTokensForNetwork(chainId: number): PythToken[] {
-	return PAYMENT_TOKENS_BY_NETWORK[chainId] ?? [];
+export function getSettlementTokensForNetwork(chainId: number): PythToken[] {
+	return SETTLEMENT_TOKENS_BY_NETWORK[chainId] ?? [];
 }
 
 // Helper function to get default settlement token for a specific network
-export function getDefaultPaymentTokenForNetwork(chainId: number): PythToken | undefined {
-	const [first] = getPaymentTokensForNetwork(chainId);
+export function getDefaultSettlementTokenForNetwork(chainId: number): PythToken | undefined {
+	const [first] = getSettlementTokensForNetwork(chainId);
 	return first;
 }
 
-// Back-compat exports for legacy settlement naming and USDC helpers
-export const SETTLEMENT_TOKENS_BY_NETWORK = PAYMENT_TOKENS_BY_NETWORK;
-export const DEFAULT_SETTLEMENT_TOKENS = DEFAULT_PAYMENT_TOKENS;
-
-export function getSettlementTokensForNetwork(chainId: number): PythToken[] {
-	return getPaymentTokensForNetwork(chainId);
-}
-
-export function getDefaultSettlementTokenForNetwork(chainId: number): PythToken | undefined {
-	return getDefaultPaymentTokenForNetwork(chainId);
-}
-
 export function getUsdcTokenForNetwork(chainId: number): PythToken | undefined {
-	return getDefaultPaymentTokenForNetwork(chainId);
+	return getDefaultSettlementTokenForNetwork(chainId);
 }
 
 // Define token categories

@@ -11,8 +11,8 @@ import { formatUnits } from 'viem';
 import {
 	getAllTokensByNetwork,
 	STOXs,
-	DEFAULT_PAYMENT_TOKENS,
-	getDefaultPaymentTokenForNetwork
+	DEFAULT_SETTLEMENT_TOKENS,
+	getDefaultSettlementTokenForNetwork
 } from './network';
 import { currentNetwork } from './stores';
 import { get } from 'svelte/store';
@@ -25,11 +25,11 @@ vi.stubGlobal('fetch', mockFetch);
 const mockNetwork = mockCurrentNetwork;
 const ALL_TOKENS = getAllTokensByNetwork(mockNetwork.id);
 const PAYMENT_TOKEN =
-	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ??
-	getDefaultPaymentTokenForNetwork(mockNetwork.id);
+	DEFAULT_SETTLEMENT_TOKENS[mockNetwork.id] ??
+	getDefaultSettlementTokenForNetwork(mockNetwork.id);
 
 if (!PAYMENT_TOKEN) {
-	throw new Error('Missing default payment token for mock network');
+	throw new Error('Missing default settlement token for mock network');
 }
 
 // Mock the DotrainOrderGui

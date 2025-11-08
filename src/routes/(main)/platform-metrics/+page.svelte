@@ -199,7 +199,7 @@ import type { CategorizedToken, Network } from '$lib/network';
 							amount?: string;
 						};
 					},
-					network.defaultPaymentToken,
+					network.defaultSettlementToken,
 					tokenLookup
 				);
 				if (analysis) {
@@ -516,7 +516,7 @@ import type { CategorizedToken, Network } from '$lib/network';
 	}
 
 	function formatQuoteDisplay(value: number) {
-		const symbol = selectedNetwork.defaultPaymentToken?.symbol ?? 'Quote';
+		const symbol = selectedNetwork.defaultSettlementToken?.symbol ?? 'Quote';
 		const formatted = formatQuote(value);
 		const normalised = symbol.toUpperCase();
 		if (normalised === 'USD' || normalised === 'USDC') {
@@ -526,7 +526,7 @@ import type { CategorizedToken, Network } from '$lib/network';
 	}
 
 	function formatQuoteDisplayWithNetwork(value: number, network: Network) {
-		const symbol = network.defaultPaymentToken?.symbol ?? 'Quote';
+		const symbol = network.defaultSettlementToken?.symbol ?? 'Quote';
 		const formatted = formatQuote(value);
 		const normalised = symbol.toUpperCase();
 		if (normalised === 'USD' || normalised === 'USDC') {

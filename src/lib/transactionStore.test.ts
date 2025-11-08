@@ -4,8 +4,8 @@ import transactionStore from './transactionStore';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import {
 	STOXs,
-	DEFAULT_PAYMENT_TOKENS,
-	getDefaultPaymentTokenForNetwork
+	DEFAULT_SETTLEMENT_TOKENS,
+	getDefaultSettlementTokenForNetwork
 } from './network';
 import { rainlangConfirmationModal, currentNetwork } from './stores';
 import {
@@ -22,11 +22,11 @@ import { decodeFunctionData } from 'viem';
 const mockNetwork = mockCurrentNetwork;
 
 const PAYMENT_TOKEN =
-	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ??
-	getDefaultPaymentTokenForNetwork(mockNetwork.id);
+	DEFAULT_SETTLEMENT_TOKENS[mockNetwork.id] ??
+	getDefaultSettlementTokenForNetwork(mockNetwork.id);
 
 if (!PAYMENT_TOKEN) {
-	throw new Error('Missing default payment token for mock network');
+	throw new Error('Missing default settlement token for mock network');
 }
 
 vi.mock('./getDeploymentArgs', async (importOriginal) => {

@@ -3,12 +3,12 @@ import type { TradingViewQuote } from '$lib/services/tradingview';
 import type { Network } from '$lib/network';
 import {
 	TOKENS,
-	DEFAULT_PAYMENT_TOKENS,
-	getDefaultPaymentTokenForNetwork
+	DEFAULT_SETTLEMENT_TOKENS,
+	getDefaultSettlementTokenForNetwork
 } from '$lib/network';
 import { getSfts, getTrades } from '$lib/query';
 import {
-	fetchAndQuotePaymentTokenOrders,
+	fetchAndQuoteSettlementTokenOrders,
 	buildTokenPriceMap,
 	type TokenPriceSummary,
 	type ProcessedQuote
@@ -78,13 +78,13 @@ const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (
 
 const orderbookFetcher: DomainFetcher<OrderbookQuoteCache> = async (network) => {
 	try {
-		const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
-		const paymentToken =
-			getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
-		if (!paymentToken?.address) {
+		const quotes = await fetchAndQuoteSettlementTokenOrders(network.id);
+		const settlementToken =
+			getDefaultSettlementTokenForNetwork(network.id) ?? DEFAULT_SETTLEMENT_TOKENS[network.id];
+		if (!settlementToken?.address) {
 			return { summary: {}, quotes } satisfies OrderbookQuoteCache;
 		}
-		const map = buildTokenPriceMap(quotes, paymentToken.address);
+		const map = buildTokenPriceMap(quotes, settlementToken.address);
 		const summary: Record<string, TokenPriceSummary> = {};
 		for (const [address, value] of map.entries()) {
 			summary[address.toLowerCase()] = value;
@@ -112,9 +112,9 @@ const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
 
 		// Try to fetch Sushi prices for any tokens missing from Pyth
 		try {
-			const paymentToken =
-				getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
-			if (paymentToken && evmChainIds[network.chainId]) {
+			const settlementToken =
+				getDefaultSettlementTokenForNetwork(network.id) ?? DEFAULT_SETTLEMENT_TOKENS[network.id];
+			if (settlementToken && evmChainIds[network.chainId]) {
 				for (const token of tokens) {
 					const hasPythData = pythQuotes.some((q) => q.symbol === token.symbol);
 					if (!hasPythData) {
@@ -129,10 +129,10 @@ const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
 								}),
 								new EvmToken({
 									chainId: evmChainIds[network.chainId],
-									address: paymentToken.address as `0x${string}`,
-									symbol: paymentToken.symbol || '',
-									name: paymentToken.name || paymentToken.symbol || '',
-									decimals: paymentToken.decimals || 6
+									address: settlementToken.address as `0x${string}`,
+									symbol: settlementToken.symbol || '',
+									name: settlementToken.name || settlementToken.symbol || '',
+									decimals: settlementToken.decimals || 6
 								})
 							);
 							const price = parseFloat(priceStr) || 0;

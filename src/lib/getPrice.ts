@@ -6,13 +6,13 @@ import type { SwapResponse } from 'sushi/evm';
 
 export const getPrice = async (baseToken: EvmToken, quoteToken: EvmToken): Promise<string> => {
 	const network = get(currentNetwork);
-	const defaultPaymentToken = network.defaultPaymentToken || network.defaultSettlementToken;
-	if (!defaultPaymentToken) {
-		throw new Error('No default payment token configured for current network');
+	const defaultSettlementToken = network.defaultSettlementToken;
+	if (!defaultSettlementToken) {
+		throw new Error('No default settlement token configured for current network');
 	}
 	if (
-		baseToken.address.toLowerCase() === defaultPaymentToken.address.toLowerCase() &&
-		quoteToken.address.toLowerCase() === defaultPaymentToken.address.toLowerCase()
+		baseToken.address.toLowerCase() === defaultSettlementToken.address.toLowerCase() &&
+		quoteToken.address.toLowerCase() === defaultSettlementToken.address.toLowerCase()
 	) {
 		return '1';
 	}
@@ -45,9 +45,20 @@ export const getPrice = async (baseToken: EvmToken, quoteToken: EvmToken): Promi
 	const data = (await res.json()) as SwapResponse;
 
 	if (data.status === 'Success') {
-		const amountIn = BigInt(data.amountIn) * BigInt(10 ** (18 - baseToken.decimals));
-		const amountOut = BigInt(data.assumedAmountOut) * BigInt(10 ** (18 - quoteToken.decimals));
-		const price = (amountOut * BigInt(10 ** 18)) / amountIn;
+		const amountIn = BigInt(data.amountIn);
+		const amountOut = BigInt(data.assumedAmountOut);
+
+		// Price = (amountOut / amountIn) * 10^(baseDecimals - quoteDecimals)
+		// Both amountIn and amountOut are in wei
+		const decimalDiff = baseToken.decimals - quoteToken.decimals;
+		const scaleFactor = 10n ** BigInt(Math.abs(decimalDiff));
+
+		let price: bigint;
+		if (decimalDiff >= 0) {
+			price = (amountOut * scaleFactor) / amountIn;
+		} else {
+			price = amountOut / (amountIn * scaleFactor);
+		}
 
 		// Guard rail: ensure price is never zero
 		if (price === 0n) {
@@ -56,7 +67,8 @@ export const getPrice = async (baseToken: EvmToken, quoteToken: EvmToken): Promi
 			);
 		}
 
-		return formatUnits(price, 18);
+		// Return as decimal string with appropriate precision
+		return formatUnits(price, Math.abs(decimalDiff));
 	}
 
 	throw new Error(`Swap API returned unsuccessful status: ${data.status}`);

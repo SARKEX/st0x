@@ -1,12 +1,11 @@
 <script lang="ts">
-	import type { CategorizedToken, LimitOrder } from '$lib/network';
-	import { currentNetwork } from '$lib/stores';
-	import { OrderV4_ABI } from '$lib/utils/quote';
+	import type { CategorizedToken } from '$lib/network';
+	import { currentNetwork, orderbookQuotesResource } from '$lib/stores';
+	import { ensureResource } from '$lib/stores/network-data-cache';
+	import { OrderV4_ABI, type ProcessedQuote } from '$lib/utils/quote';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import {
 		type OrderV4,
-		type RaindexOrder,
-		type RaindexOrderQuote,
 		type SgOrder,
 		type TakeOrderConfigV4,
 		type TakeOrdersConfigV4
@@ -15,6 +14,7 @@
 	import { AbiCoder } from 'ethers';
 	import { formatUnits } from 'viem';
 	import { containerStyles } from '$lib/utils/styles';
+	import { priceToIoratio } from '$lib/utils/tokenMath';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
 	import Modal from '$lib/components/ui/Modal.svelte';
@@ -22,7 +22,6 @@
 	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
 	import transactionStore from '$lib/transactionStore';
 	import { Float } from '@rainlanguage/float';
-	import { describeQuote } from '$lib/utils/tokenMath';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let passedOutputToken: CategorizedToken | undefined;
@@ -32,27 +31,11 @@
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
 	let isLoadingPrice = true;
 	let priceError = false;
-	let availableOrders: Array<{
-		order: SgOrder;
-		orderData: OrderV4;
-		quotes: RaindexOrderQuote[];
-		price: bigint; // Normalized to 18 decimals
-	}> = [];
+	let availableQuotes: ProcessedQuote[] = [];
 	let orderbook: string | undefined = undefined;
 
-	// Transaction results
-	let transactionHash: string | undefined = undefined;
-	let transactionResults:
-		| {
-				quantityFilled: bigint;
-				averagePrice: bigint;
-				actualSlippage: bigint;
-				isPartialFill: boolean;
-		  }
-		| undefined = undefined;
-
-	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.defaultSettlementToken;
-	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
+	$: settlementToken = $currentNetwork?.defaultSettlementToken;
+	$: settlementTokenSymbol = settlementToken?.symbol ?? 'Quote';
 
 	// Errors
 	let selectedAmountError: boolean = false;
@@ -71,201 +54,98 @@
 		isLoadingPrice ||
 		priceError;
 
-	// Calculate required input based on desired output
+	// Calculate required input to take from the order's output
 	$: requiredInputAmount = (() => {
 		if (!selectedAmount || !marketPrice) return '0.00';
 		// Output amount * market price = input amount
 		const outputInTokens = parseFloat(
 			formatUnits(selectedAmount, passedOutputToken?.decimals || 18)
 		);
-		const pricePerToken = Number(marketPrice) / 1e18;
+		const settlementDecimals = settlementToken?.decimals ?? 18;
+		const pricePerToken = Number(marketPrice) / Math.pow(10, settlementDecimals);
 		const total = outputInTokens * pricePerToken;
-		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
+		return `~${total.toFixed(2)} ${settlementTokenSymbol}`;
 	})();
 
 	// Wallet connect modal state
 	let showConnectModal = false;
 
-	async function fetchMarketPrice() {
-		if (!passedOutputToken || !passedOutputToken.limitOrders || !orderSide) {
-			isLoadingPrice = false;
-			return;
-		}
+	// Filter and process quotes when orderbookQuotesResource or orderSide changes
+	$: {
+		isLoadingPrice = $orderbookQuotesResource?.status === 'loading' || $orderbookQuotesResource?.status === 'idle';
+		priceError = false;
 
-		try {
-			isLoadingPrice = true;
-			priceError = false;
+		const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+		const assetAddress = passedOutputToken?.address?.toLowerCase();
+		const settlementTokenAddress = settlementToken?.address?.toLowerCase();
 
-			const paymentTokenAddress = paymentToken?.address?.toLowerCase();
-			if (!paymentTokenAddress) {
+		if (!passedOutputToken || !orderSide || quotes.length === 0 || !assetAddress || !settlementTokenAddress) {
+			if (!isLoadingPrice && quotes.length === 0) {
 				priceError = true;
-				isLoadingPrice = false;
-				return;
 			}
+			availableQuotes = [];
+			marketPrice = 0n;
+		} else {
+			// Filter quotes for the current token and opposite side
+			// For Buy: we want ask-side quotes (orders selling the asset)
+			// For Sell: we want bid-side quotes (orders buying the asset)
+			const filteredQuotes = quotes.filter((quote) => {
+				const isCorrectAsset = quote.assetAddress?.toLowerCase() === assetAddress;
+				const isOppositeSide =
+					(orderSide === 'Buy' && quote.side === 'ask') ||
+					(orderSide === 'Sell' && quote.side === 'bid');
+				const hasValidPrice = quote.quotePerAsset !== undefined && quote.quotePerAsset > 0;
 
-			const limitOrders = passedOutputToken.limitOrders.filter(
-				(order: LimitOrder) => order.type !== orderSide
-			);
-			if (limitOrders.length === 0) {
-				priceError = true;
-				isLoadingPrice = false;
-				return;
-			}
-
-			const client = await createRaindexClient();
-
-			// Fetch all available orders for the opposite side
-			// Note: We fetch them one by one since the API takes orderHash (singular)
-			const allOrders: RaindexOrder[] = [];
-			for (const limitOrder of limitOrders) {
-				const ordersResult = await client.getOrders(
-					[$currentNetwork.id],
-					{
-						active: true,
-						owners: [],
-						orderHash: limitOrder.orderHash as `0x${string}`
-					},
-					1
-				);
-
-				if (!ordersResult.error && ordersResult.value && ordersResult.value.length > 0) {
-					allOrders.push(...ordersResult.value);
-				}
-			}
-
-			if (allOrders.length === 0) {
-				priceError = true;
-				return;
-			}
-
-			const tempAvailableOrders: typeof availableOrders = [];
-			let totalWeightedPrice = 0n;
-			const PRECISION = BigInt(1e18);
-
-			// Process each order
-			for (const raindexOrderObj of allOrders) {
-				// Get quotes for this order
-				const quotesResult = await raindexOrderObj.getQuotes();
-				if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
-					continue;
-				}
-
-				const validQuotes = quotesResult.value.filter(
-					(q: RaindexOrderQuote) => q.success && q.data
-				);
-				if (validQuotes.length === 0) continue;
-
-				// Convert RaindexOrder to SgOrder
-				const sgOrderResult = raindexOrderObj.convertToSgOrder();
-				if (sgOrderResult.error || !sgOrderResult.value) continue;
-
-				const sgOrder = sgOrderResult.value;
-
-				// Decode order
-				const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
-				const orderData = decodedOrder[0] as OrderV4;
-
-				// Use first valid quote to get price
-				const quote = validQuotes[0];
-				const ratio = quote.data?.ratio;
-				if (!ratio || !paymentToken?.address) continue;
-
-				try {
-					const floatResult = Float.fromHex(ratio as `0x${string}`);
-					if (floatResult.error || !floatResult.value) continue;
-
-					const fixedDecimalResult = floatResult.value
-						.abs()
-						.value!
-						.toFixedDecimalLossy(18);
-					if (fixedDecimalResult.error || !fixedDecimalResult.value) continue;
-
-					const rawRatioBigInt = BigInt(fixedDecimalResult.value.value);
-					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
-					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
-					if (!inputDefinition || !outputDefinition) continue;
-
-					const metrics = describeQuote(
-						{
-							inputTokenAddress: inputDefinition.token,
-							outputTokenAddress: outputDefinition.token,
-							ratio: rawRatioBigInt
-						},
-						paymentTokenAddress
-					);
-					if (!metrics || !Number.isFinite(metrics.quotePerAsset) || metrics.quotePerAsset <= 0) {
-						continue;
-					}
-
-					const encodedPrice = BigInt(Math.round(metrics.quotePerAsset * 1e18));
-
-					// Store order and its data
-					tempAvailableOrders.push({
-						order: sgOrder,
-						orderData,
-						quotes: validQuotes,
-						price: encodedPrice
-					});
-
-					// Accumulate for weighted average
-					totalWeightedPrice = totalWeightedPrice + encodedPrice;
-				} catch {
-					// Skip this order if there's any error processing it
-					continue;
-				}
-			}
-
-			if (tempAvailableOrders.length === 0) {
-				priceError = true;
-				return;
-			}
-
-			// Sort by price: best first
-			// When market order is Buy: we take from Sell limit orders, want lowest price
-			// When market order is Sell: we take from Buy limit orders, want highest price
-			tempAvailableOrders.sort((a, b) => {
-				if (orderSide === 'Buy') {
-					return a.price < b.price ? -1 : 1;
-				} else {
-					return a.price > b.price ? -1 : 1;
-				}
+				return isCorrectAsset && isOppositeSide && hasValidPrice;
 			});
 
-			availableOrders = tempAvailableOrders;
-			orderbook = tempAvailableOrders[0].order.orderbook.id;
+			if (filteredQuotes.length === 0) {
+				priceError = !isLoadingPrice;
+				availableQuotes = [];
+				marketPrice = 0n;
+			} else {
+				// Sort by price: best first
+				// When market order is Buy: want lowest price (best for buyer)
+				// When market order is Sell: want highest price (best for seller)
+				const sortedQuotes = [...filteredQuotes].sort((a, b) => {
+					const priceA = a.quotePerAsset ?? 0;
+					const priceB = b.quotePerAsset ?? 0;
+					if (orderSide === 'Buy') {
+						return priceA - priceB; // Lowest first
+					} else {
+						return priceB - priceA; // Highest first
+					}
+				});
 
-			// Calculate average market price
-			marketPrice = totalWeightedPrice / BigInt(tempAvailableOrders.length);
-		} catch (error) {
-			console.error('Error fetching market price:', error);
-			priceError = true;
-		} finally {
-			isLoadingPrice = false;
+				availableQuotes = sortedQuotes;
+
+				// Calculate average market price from sorted quotes
+				// Store in settlement token's lowest denomination
+				const totalPrice = sortedQuotes.reduce((sum, q) => sum + (q.quotePerAsset ?? 0), 0);
+				const averagePrice = totalPrice / sortedQuotes.length;
+				const settlementPriceDecimals = settlementToken?.decimals ?? 18;
+				marketPrice = BigInt(Math.round(averagePrice * Math.pow(10, settlementPriceDecimals)));
+
+				// Set orderbook from first quote (for reference)
+				orderbook = sortedQuotes[0].orderHash;
+			}
 		}
+
+		isLoadingPrice = false;
 	}
 
-	// Fetch market price when component mounts or dependencies change
-	$: if (passedOutputToken && orderSide) {
-		fetchMarketPrice();
-	}
+	// Filter quotes to remove those >10% above best price, return filtered array
+	function getFilteredQuotes(): ProcessedQuote[] {
+		if (availableQuotes.length === 0) return [];
 
-	// Filter orders to remove those >10% above best price, return filtered array
-	function getFilteredOrders(): Array<{
-		order: SgOrder;
-		orderData: OrderV4;
-		quotes: RaindexOrderQuote[];
-		price: bigint;
-	}> {
-		if (availableOrders.length === 0) return [];
+		const bestPrice = availableQuotes[0].quotePerAsset ?? 0; // First is best (already sorted)
+		const slippageMultiplier = 1.1; // 10% slippage
 
-		const bestPrice = availableOrders[0].price; // First is best (already sorted)
-		const slippageMultiplier = BigInt(11000); // 1.1 = 110%
+		// Filter to only quotes within 10% of best price
+		const maxAcceptablePrice = bestPrice * slippageMultiplier;
 
-		// Filter to only orders within 10% of best price
-		const maxAcceptablePrice = (bestPrice * slippageMultiplier) / BigInt(10000);
-
-		const filtered = availableOrders.filter((order) => {
-			return order.price <= maxAcceptablePrice;
+		const filtered = availableQuotes.filter((quote) => {
+			return (quote.quotePerAsset ?? 0) <= maxAcceptablePrice;
 		});
 
 		return filtered;
@@ -277,152 +157,192 @@
 			return;
 		}
 
-		if (availableOrders.length === 0 || !orderbook || !selectedAmount) {
+		if (availableQuotes.length === 0 || !orderbook || !selectedAmount) {
 			return;
-		}
-
-		// Filter orders to those within 10% of best price
-		const filteredOrders = getFilteredOrders();
-		if (filteredOrders.length === 0) {
-			console.error('No orders within slippage tolerance');
-			return;
-		}
-
-		// Calculate required input for desired output
-		const PRECISION = BigInt(1e18);
-		const bestPrice = filteredOrders[0].price;
-
-		// bestPrice is already encoded with decimal scaling from fetchMarketPrice
-		// Formula: requiredInput = encodedPrice * selectedAmount / 1e18
-		const requiredInputInTokenTerms = (bestPrice * selectedAmount) / PRECISION;
-
-		// Build TakeOrderConfigs for ALL filtered orders in price priority
-		const takeOrderConfigs: TakeOrderConfigV4[] = [];
-
-		for (const orderInfo of filteredOrders) {
-			const takeOrderConfig: TakeOrderConfigV4 = {
-				order: {
-					owner: orderInfo.orderData.owner,
-					evaluable: orderInfo.orderData.evaluable,
-					validInputs: [
-						{
-							token: orderInfo.orderData.validInputs[0].token,
-							vaultId: orderInfo.orderData.validInputs[0].vaultId.toString()
-						}
-					],
-					validOutputs: [
-						{
-							token: orderInfo.orderData.validOutputs[0].token,
-							vaultId: orderInfo.orderData.validOutputs[0].vaultId.toString()
-						}
-					],
-					nonce: orderInfo.orderData.nonce
-				},
-				inputIOIndex: '0',
-				outputIOIndex: '0',
-				signedContext: []
-			};
-
-			takeOrderConfigs.push(takeOrderConfig);
-		}
-
-		// Use worst price in filtered set for maximumIORatio (already within 10%)
-		const worstPrice = filteredOrders[filteredOrders.length - 1].price;
-
-		const floatWorstPrice = Float.fromFixedDecimalLossy(worstPrice, 18);
-		const maxIORatioHex = floatWorstPrice.float.asHex();
-
-		// User wants to acquire selectedAmount, so input is the constraint
-		// Get input token decimals from the first order's input token
-		const inputTokenDecimals = Number(filteredOrders[0].order.inputs[0]?.token?.decimals) || 18;
-		const inputFloat = Float.fromFixedDecimalLossy(requiredInputInTokenTerms, inputTokenDecimals);
-
-		const takeOrdersConfig: TakeOrdersConfigV4 = {
-			minimumInput: inputFloat.float.asHex(),
-			maximumInput: inputFloat.float.asHex(),
-			maximumIORatio: maxIORatioHex,
-			orders: takeOrderConfigs,
-			data: '0x'
-		};
-
-		// Determine required approval amount
-		let requiredApprovalAmount = requiredInputInTokenTerms;
-		if (inputFloat.lossless) {
-			requiredApprovalAmount = requiredApprovalAmount + 1n;
 		}
 
 		try {
-			await transactionStore.handleTakeOrders(
-				takeOrdersConfig,
-				filteredOrders[0].order,
-				requiredApprovalAmount
+			// Force refresh of the orderbook quotes dataStore to get latest orders
+			await ensureResource($currentNetwork.id, 'orderbookQuotes', { force: true });
+
+			// Get fresh quotes from the updated dataStore
+			const freshQuotes = $orderbookQuotesResource?.data?.quotes ?? [];
+
+			// Re-filter fresh quotes for the current token and opposite side
+			const assetAddress = passedOutputToken?.address?.toLowerCase();
+			const freshFilteredQuotes = freshQuotes.filter((quote) => {
+				const isCorrectAsset = quote.assetAddress?.toLowerCase() === assetAddress;
+				const isOppositeSide =
+					(orderSide === 'Buy' && quote.side === 'ask') ||
+					(orderSide === 'Sell' && quote.side === 'bid');
+				const hasValidPrice = quote.quotePerAsset !== undefined && quote.quotePerAsset > 0;
+
+				return isCorrectAsset && isOppositeSide && hasValidPrice;
+			});
+
+			// Sort fresh quotes by price
+			const sortedFreshQuotes = [...freshFilteredQuotes].sort((a, b) => {
+				const priceA = a.quotePerAsset ?? 0;
+				const priceB = b.quotePerAsset ?? 0;
+				if (orderSide === 'Buy') {
+					return priceA - priceB; // Lowest first
+				} else {
+					return priceB - priceA; // Highest first
+				}
+			});
+
+			if (sortedFreshQuotes.length === 0) {
+				console.error('No orders available at execution time');
+				return;
+			}
+
+			// Apply slippage filter to fresh quotes
+			const bestFreshPrice = sortedFreshQuotes[0].quotePerAsset ?? 0;
+			const slippageMultiplier = 1.1;
+			const maxAcceptablePrice = bestFreshPrice * slippageMultiplier;
+			const quotesToExecute = sortedFreshQuotes.filter(
+				(quote) => (quote.quotePerAsset ?? 0) <= maxAcceptablePrice
 			);
 
-			// Assume transaction succeeded - in a real implementation,
-			// you'd listen to transaction receipts and update these values
-			// For now, we'll show estimated results
-			const quantityFilled = selectedAmount;
-			const averagePrice = bestPrice;
-			const slippage = worstPrice > 0n ? ((worstPrice - bestPrice) * BigInt(100)) / bestPrice : 0n;
+			if (quotesToExecute.length === 0) {
+				console.error('No orders within slippage tolerance at execution time');
+				return;
+			}
 
-			transactionResults = {
-				quantityFilled,
-				averagePrice,
-				actualSlippage: slippage,
-				isPartialFill: false
+			// Fetch full order data for all filtered quotes
+			const client = await createRaindexClient();
+			const ordersToExecute: Array<{ quote: ProcessedQuote; order: SgOrder; orderData: OrderV4 }> = [];
+
+			for (const quote of quotesToExecute) {
+				try {
+					const ordersResult = await client.getOrders(
+						[$currentNetwork.id],
+						{
+							active: true,
+							owners: [],
+							orderHash: quote.orderHash as `0x${string}`
+						},
+						1
+					);
+
+					if (!ordersResult.error && ordersResult.value && ordersResult.value.length > 0) {
+						const raindexOrder = ordersResult.value[0];
+						const sgOrderResult = raindexOrder.convertToSgOrder();
+						if (!sgOrderResult.error && sgOrderResult.value) {
+							const sgOrder = sgOrderResult.value;
+							const decodedOrder = AbiCoder.defaultAbiCoder().decode(
+								[OrderV4_ABI],
+								sgOrder.orderBytes
+							);
+							const orderData = decodedOrder[0] as OrderV4;
+							ordersToExecute.push({ quote, order: sgOrder, orderData });
+						}
+					}
+				} catch (error) {
+					console.warn(`Failed to fetch order ${quote.orderHash}:`, error);
+					// Continue with next order
+					continue;
+				}
+			}
+
+			if (ordersToExecute.length === 0) {
+				console.error('Failed to fetch order data for any filtered quotes');
+				return;
+			}
+
+			// Calculate required input for desired output using fresh prices
+			const bestPrice = sortedFreshQuotes[0].quotePerAsset ?? 0;
+			const assetDecimals = passedOutputToken?.decimals ?? 18;
+			const settlementTokenDecimals = settlementToken?.decimals ?? 18;
+
+			// For a BUY order:
+			// requiredInput (in settlement wei) = selectedAmount (in asset wei) * bestPrice * 10^settlementDecimals / 10^assetDecimals
+			// We calculate this as: selectedAmount * bestPrice * 10^(settlementDecimals - assetDecimals)
+			const requiredInputAmount =
+				orderSide === 'Buy'
+					? BigInt(Math.round(Number(selectedAmount) * bestPrice * Math.pow(10, settlementTokenDecimals - assetDecimals)))
+					: selectedAmount;
+
+			// Build TakeOrderConfigs for ALL orders we fetched
+			const takeOrderConfigs: TakeOrderConfigV4[] = [];
+
+			for (const { orderData } of ordersToExecute) {
+				const takeOrderConfig: TakeOrderConfigV4 = {
+					order: {
+						owner: orderData.owner,
+						evaluable: orderData.evaluable,
+						validInputs: [
+							{
+								token: orderData.validInputs[0].token,
+								vaultId: orderData.validInputs[0].vaultId.toString()
+							}
+						],
+						validOutputs: [
+							{
+								token: orderData.validOutputs[0].token,
+								vaultId: orderData.validOutputs[0].vaultId.toString()
+							}
+						],
+						nonce: orderData.nonce
+					},
+					inputIOIndex: '0',
+					outputIOIndex: '0',
+					signedContext: []
+				};
+
+				takeOrderConfigs.push(takeOrderConfig);
+			}
+
+			// Use worst price in filtered set for maximumIORatio (already within 10%)
+			const worstPrice = sortedFreshQuotes[sortedFreshQuotes.length - 1].quotePerAsset ?? 0;
+			const worstIoratio = priceToIoratio(worstPrice, orderSide);
+
+			if (worstIoratio === null) {
+				console.error('Failed to calculate worst ioratio from price');
+				return;
+			}
+
+			// For a BUY order: input (GET) = asset, output (GIVE) = settlement
+			// For a SELL order: input (GET) = settlement, output (GIVE) = asset
+			const inputTokenDecimals = orderSide === 'Buy' ? assetDecimals : settlementTokenDecimals;
+			const outputTokenDecimals = orderSide === 'Buy' ? settlementTokenDecimals : assetDecimals;
+			const decimalDiff = inputTokenDecimals - outputTokenDecimals;
+
+			// ioratio in wei scale = ioratio * 10^(inputDecimals - outputDecimals)
+			const worstIoratioBigInt = BigInt(Math.round(worstIoratio * Math.pow(10, decimalDiff)));
+			const floatWorstPrice = Float.fromFixedDecimalLossy(worstIoratioBigInt, decimalDiff);
+			const maxIORatioHex = floatWorstPrice.float.asHex();
+
+			// Use settlement token decimals for input amount (input token is always the settlement token)
+			const inputFloat = Float.fromFixedDecimalLossy(requiredInputAmount, settlementTokenDecimals);
+
+			const zeroFloat = Float.fromFixedDecimalLossy(0n, 0);
+			const takeOrdersConfig: TakeOrdersConfigV4 = {
+				minimumInput: zeroFloat.float.asHex(),
+				maximumInput: inputFloat.float.asHex(),
+				maximumIORatio: maxIORatioHex,
+				orders: takeOrderConfigs,
+				data: '0x'
 			};
 
-			// Extract hash from transaction notification
-			// (This would typically come from a transaction receipt event)
-			transactionHash = '0x' + Math.random().toString(16).slice(2, 66);
+			// Determine required approval amount
+			let requiredApprovalAmount = requiredInputAmount;
+			if (inputFloat.lossless) {
+				requiredApprovalAmount = requiredApprovalAmount + 1n;
+			}
+
+			await transactionStore.handleTakeOrders(
+				takeOrdersConfig,
+				ordersToExecute[0].order,
+				requiredApprovalAmount
+			);
 		} catch (error) {
 			console.error('Transaction failed:', error);
 		}
 	};
 </script>
 
-{#if transactionResults && transactionHash && passedOutputToken}
-	<!-- Transaction Results -->
-	<div class={containerStyles.cardBordered}>
-		<h4 class="mb-3 text-sm font-medium text-gray-300">Transaction Complete</h4>
-		<div class="space-y-3 text-sm">
-			<div class="flex justify-between">
-				<span class="text-gray-400">Transaction Hash</span>
-				<a
-					href="https://basescan.io/tx/{transactionHash}"
-					target="_blank"
-					rel="noreferrer"
-					class="font-mono text-blue-400 hover:text-blue-300"
-				>
-					{transactionHash.slice(0, 10)}...{transactionHash.slice(-8)}
-				</a>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Quantity Filled</span>
-				<span class="font-medium">
-					{formatUnits(transactionResults.quantityFilled, passedOutputToken.decimals)}
-					{passedOutputToken.symbol}
-				</span>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Average Price</span>
-				<span class="font-medium"
-					>{(Number(transactionResults.averagePrice) / 1e18).toFixed(6)}</span
-				>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Actual Slippage</span>
-				<span class="font-medium">{transactionResults.actualSlippage.toString()}%</span>
-			</div>
-			{#if transactionResults.isPartialFill}
-				<div class="mt-2 rounded-md bg-yellow-900/20 p-2 text-xs text-yellow-300">
-					⚠️ Partial fill due to 10% slippage breaker. Not all requested quantity was available
-					within acceptable price range.
-				</div>
-			{/if}
-		</div>
-	</div>
-{:else if $currentNetwork && passedOutputToken}
+{#if $currentNetwork && passedOutputToken}
 	<div class="space-y-4">
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
@@ -443,7 +363,6 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Market Price
-					<span class="ml-1 text-xs text-gray-500">(per {passedOutputToken.symbol})</span>
 				</div>
 				<div class="relative">
 					<input
@@ -452,7 +371,7 @@
 							? 'Loading...'
 							: priceError
 								? 'Price unavailable'
-								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`}
+								: `~${(Number(marketPrice) / Math.pow(10, settlementToken?.decimals ?? 18)).toFixed(2)} ${settlementTokenSymbol}`}
 						disabled
 						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 					/>
@@ -483,7 +402,7 @@
 							? 'Loading...'
 							: priceError
 								? 'N/A'
-								: `~${(Number(marketPrice) / 1e18).toFixed(2)} ${paymentTokenSymbol}`} per {passedOutputToken.symbol}
+								: `~${(Number(marketPrice) / Math.pow(10, settlementToken?.decimals ?? 18)).toFixed(2)} ${settlementTokenSymbol}`}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
@@ -494,9 +413,9 @@
 						</span>
 					</div>
 				</div>
-				{#if getFilteredOrders().length > 0}
+				{#if getFilteredQuotes().length > 0}
 					<div class="mt-2 pt-2 text-xs text-gray-500">
-						Using {getFilteredOrders().length} order{getFilteredOrders().length > 1 ? 's' : ''} within
+						Using {getFilteredQuotes().length} order{getFilteredQuotes().length > 1 ? 's' : ''} within
 						10% slippage
 					</div>
 				{/if}

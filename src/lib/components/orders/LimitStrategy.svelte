@@ -34,7 +34,7 @@
 
 	// Always use the network's default settlement token for settlement
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
-		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
+		const settlementTokenConfig = $currentNetwork.defaultSettlementToken;
 		if (settlementTokenConfig) {
 			const match = ALL_TOKENS.find(
 				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
@@ -124,9 +124,9 @@
 
 			deployData = {
 				inputToken: selectedInputToken, // Asset (token to be acquired, used for IO ratio)
-				outputToken: selectedOutputToken, // payment token (token to be deposited as payment)
+				outputToken: selectedOutputToken, // settlement token (token to be deposited as settlement)
 				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
-				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toFixed(18).toString(),
+				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toString(),
 				depositAmount: settlementAmount, // Payment amount in settlement token
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
@@ -137,7 +137,7 @@
 			// Price interpretation: "I receive X quote tokens per 1 asset"
 			// The deployed order uses direct ratio: X (this is what getBaseline does)
 			deployData = {
-				inputToken: selectedInputToken, // payment token (token expected in return)
+				inputToken: selectedInputToken, // settlement token (token expected in return)
 				outputToken: selectedOutputToken, // Asset (token being offered for sale)
 				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
 				ioRatio: selectedInitialRatio,

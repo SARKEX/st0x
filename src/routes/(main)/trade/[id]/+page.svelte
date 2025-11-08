@@ -79,7 +79,7 @@ import { TOKENS } from '$lib/network';
 	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
 	const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60; // 30 days (max window)
 	const OHLC_BUCKET_SECONDS = 60; // 1 minute buckets for candles
-	$: settlementTokenConfig = $currentNetwork?.defaultPaymentToken;
+	$: settlementTokenConfig = $currentNetwork?.defaultSettlementToken;
 	$: settlementTokenSymbol = settlementTokenConfig?.symbol ?? 'Quote';
 	$: settlementTokenLogo = settlementTokenConfig?.logoUrl ?? '/images/USDC.png';
 	type HistoryRangeKey = '1D' | '7D' | '30D';
@@ -295,7 +295,7 @@ import { TOKENS } from '$lib/network';
 		if (!browser || !currentToken || !$currentNetwork) {
 			resetOnChainPrices();
 	} else {
-		const settlementToken = $currentNetwork.defaultPaymentToken;
+		const settlementToken = $currentNetwork.defaultSettlementToken;
 		if (!settlementToken) {
 			resetOnChainPrices();
 		} else {
@@ -305,7 +305,7 @@ import { TOKENS } from '$lib/network';
 			let bestBid: number | null = null;
 			let bestAsk: number | null = null;
 			quotes.forEach((quote) => {
-				const ratio = Number(quote.ratio) / 1e18;
+				const ratio = quote.ratio;
 				if (!Number.isFinite(ratio) || ratio <= 0) return;
 				const inputAddress = quote.inputTokenAddress.toLowerCase();
 				const outputAddress = quote.outputTokenAddress.toLowerCase();
@@ -343,7 +343,7 @@ import { TOKENS } from '$lib/network';
 }
 	$: tradeHistoryPoints = (() => {
 		if (!browser || !currentToken || !$currentNetwork) return [];
-	const settlementToken = $currentNetwork.defaultPaymentToken;
+	const settlementToken = $currentNetwork.defaultSettlementToken;
 	if (!settlementToken) return [];
 	const assetAddress = currentToken.address?.toLowerCase();
 	const quoteAddress = settlementToken.address;
@@ -399,7 +399,7 @@ import { TOKENS } from '$lib/network';
 		if (!quotes.length) {
 			return { bids: [], asks: [] };
 		}
-		const settlementToken = $currentNetwork.defaultPaymentToken;
+		const settlementToken = $currentNetwork.defaultSettlementToken;
 		if (!settlementToken) return { bids: [], asks: [] };
 		const assetAddress = currentToken.address?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
@@ -409,7 +409,7 @@ import { TOKENS } from '$lib/network';
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
 		quotes.forEach((quote) => {
-			const ratio = Number(quote.ratio) / 1e18;
+			const ratio = quote.ratio;
 			if (!Number.isFinite(ratio) || ratio <= 0) {
 				return;
 			}

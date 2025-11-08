@@ -41,7 +41,7 @@
 
 	// Resolve tokens whenever network, token list, or prop changes
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
-		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
+		const settlementTokenConfig = $currentNetwork.defaultSettlementToken;
 		if (settlementTokenConfig) {
 			const match = ALL_TOKENS.find(
 				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
@@ -93,22 +93,10 @@
 		selectedInitialRatioError;
 
 	const handleDcaDeploy = () => {
-		const normalizeDecimal = (v: string): string => {
-			if (!v) return v;
-			const n = Number(v);
-			if (!Number.isFinite(n)) return v;
-			// format to 18 fractional digits, then trim trailing zeros and dot
-			return n
-				.toFixed(18)
-				.replace(/\.0+$/, '')
-				.replace(/\.(.*?)(0+)$/, (m, p1) => (p1 ? `.${p1}`.replace(/\.$/, '') : ''))
-				.replace(/\.$/, '');
-		};
-
 		const invertAndNormalize = (v: string): string => {
 			const n = Number(v || '0');
 			if (!Number.isFinite(n) || n === 0) return '0';
-			return normalizeDecimal(String(1 / n));
+			return (1 / n).toString();
 		};
 
 		if (!$connected) {
@@ -135,11 +123,11 @@
 				baseline:
 					orderType === 'Bid'
 						? invertAndNormalize(selectedBaseline)
-						: normalizeDecimal(selectedBaseline),
+						: selectedBaseline,
 				kickoff:
 					orderType === 'Bid'
 						? invertAndNormalize(selectedInitialRatio)
-						: normalizeDecimal(selectedInitialRatio),
+						: selectedInitialRatio,
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
 				inputVaultId: inputVaultId,

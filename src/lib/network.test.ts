@@ -5,14 +5,14 @@ import {
 	getNetworkById,
 	getNetworkByChainId,
 	getNetworkByName,
-	getDefaultPaymentTokenForNetwork,
+	getDefaultSettlementTokenForNetwork,
 	getTokensByCategory,
 	getAllTokens,
 	getTokensByNetwork,
 	getCryptoTokensByNetwork,
 	getAllTokensByNetwork,
 	networks,
-	DEFAULT_PAYMENT_TOKENS,
+	DEFAULT_SETTLEMENT_TOKENS,
 	TOKENS,
 	CRYPTO_TOKENS
 } from './network';
@@ -84,22 +84,22 @@ describe('network', () => {
 		});
 	});
 
-	describe('getDefaultPaymentTokenForNetwork', () => {
-		it('should get payment token for Base', () => {
-			const token = getDefaultPaymentTokenForNetwork(8453);
+	describe('getDefaultSettlementTokenForNetwork', () => {
+		it('should get settlement token for Base', () => {
+			const token = getDefaultSettlementTokenForNetwork(8453);
 			expect(token).toBeDefined();
 			expect(token?.symbol).toBe('USDC');
 			expect(token?.decimals).toBe(6);
 			expect(token?.chainId).toBe(8453);
 		});
 
-		it('should return undefined for network without configured payment token', () => {
-			const token = getDefaultPaymentTokenForNetwork(9999);
+		it('should return undefined for network without configured settlement token', () => {
+			const token = getDefaultSettlementTokenForNetwork(9999);
 			expect(token).toBeUndefined();
 		});
 
 		it('should have valid token properties', () => {
-			const token = getDefaultPaymentTokenForNetwork(8453);
+			const token = getDefaultSettlementTokenForNetwork(8453);
 			expect(token?.address).toBeDefined();
 			expect(token?.name).toBeDefined();
 			expect(token?.priceFeedId).toBeDefined();
@@ -308,16 +308,16 @@ describe('network', () => {
 		});
 	});
 
-	describe('payment token configuration', () => {
-		it('should have default payment token for Base', () => {
-			expect(DEFAULT_PAYMENT_TOKENS[8453]).toBeDefined();
-			expect(DEFAULT_PAYMENT_TOKENS[8453].symbol).toBe('USDC');
+	describe('settlement token configuration', () => {
+		it('should have default settlement token for Base', () => {
+			expect(DEFAULT_SETTLEMENT_TOKENS[8453]).toBeDefined();
+			expect(DEFAULT_SETTLEMENT_TOKENS[8453].symbol).toBe('USDC');
 		});
 
-		it('should match network default payment token', () => {
+		it('should match network default settlement token', () => {
 			const network = getNetworkById(8453);
-			const token = getDefaultPaymentTokenForNetwork(8453);
-			expect(network?.defaultPaymentToken).toEqual(token);
+			const token = getDefaultSettlementTokenForNetwork(8453);
+			expect(network?.defaultSettlementToken).toEqual(token);
 		});
 	});
 });

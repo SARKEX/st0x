@@ -150,7 +150,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x123',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -181,7 +181,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x123',
 						maxOutput: 500000n,
-						ratio: 50000000000000000n,
+						ratio: 0.05,
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -204,7 +204,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x123',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -233,7 +233,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -245,7 +245,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x2',
 						maxOutput: 1000000n,
-						ratio: 80000000000000000n,
+						ratio: 0.08,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -267,7 +267,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						ratio: 0.05,
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -279,7 +279,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x2',
 						maxOutput: 2000000n,
-						ratio: 60000000000000000n,
+						ratio: 0.06,
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -301,7 +301,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -313,7 +313,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x2',
 						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						ratio: 0.05,
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -338,7 +338,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN1',
 						inputTokenAddress: '0xUSDC',
@@ -350,7 +350,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x2',
 						maxOutput: 2000000n,
-						ratio: 200000000000000000n,
+						ratio: 0.2,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN2',
 						inputTokenAddress: '0xUSDC',
@@ -378,7 +378,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -395,7 +395,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xUSDC',
@@ -415,7 +415,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -437,7 +437,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -449,7 +449,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x2',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -473,7 +473,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -485,7 +485,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x2',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -507,7 +507,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						ratio: 0.05,
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -519,7 +519,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x2',
 						maxOutput: 1000000n,
-						ratio: 50000000000000000n,
+						ratio: 0.05,
 						inputTokenSymbol: 'TOKEN',
 						outputTokenSymbol: 'USDC',
 						inputTokenAddress: '0xToken',
@@ -543,7 +543,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',
@@ -564,7 +564,7 @@ describe('quote utilities', () => {
 					{
 						orderHash: '0x1',
 						maxOutput: 1000000n,
-						ratio: 100000000000000000n,
+						ratio: 0.1,
 						inputTokenSymbol: 'USDC',
 						outputTokenSymbol: 'TOKEN',
 						inputTokenAddress: '0xUSDC',

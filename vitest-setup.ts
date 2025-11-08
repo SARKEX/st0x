@@ -37,7 +37,7 @@ vi.mock('$lib/stores', async (importOriginal) => {
 					subgraph_url: 'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-arbitrum-one/1.0.1/gn',
 					metadata_subgraph_url: 'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-arbitrum-one/2025-07-06-135f/gn',
 					orderbook_subgraph_url: 'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-arbitrum-one/2025-07-03-9be9/gn',
-					paymentTokens: [
+					settlementTokens: [
 						{
 							chainId: 42161,
 							address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
@@ -48,7 +48,7 @@ vi.mock('$lib/stores', async (importOriginal) => {
 							priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
 						}
 					],
-					defaultPaymentToken: {
+					defaultSettlementToken: {
 						chainId: 42161,
 						address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
 						symbol: 'USDC',
