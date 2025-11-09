@@ -24,13 +24,13 @@ export type DcaDeploymentArgs = {
 };
 
 export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
-	const dcaStrategy = await (
+	const dcaOrder = await (
 		await fetch(
 			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/auction-dca.rain`
 		)
 	).text();
 	const network = get(currentNetwork);
-	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, network.raindexNetworkSlug))
+	const gui = (await DotrainOrderGui.newWithDeployment(dcaOrder, network.raindexNetworkSlug))
 		.value as DotrainOrderGui;
 
 	await gui.setSelectToken('output', args.outputToken.address);
@@ -95,14 +95,14 @@ export type LimitOrderDeploymentArgs = {
 };
 
 export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs) => {
-	const limitStrategy = await (
+	const limitOrder = await (
 		await fetch(
 			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/fixed-limit.rain`
 		)
 	).text();
 	const network = get(currentNetwork);
 	const guiResult = await DotrainOrderGui.newWithDeployment(
-		limitStrategy,
+		limitOrder,
 		network.raindexNetworkSlug
 	);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);

@@ -15,7 +15,7 @@ import { TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';
+	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
 	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
 	import TradingViewSymbolOverview from '$lib/components/charts/TradingViewSymbolOverview.svelte';
@@ -1015,7 +1015,7 @@ import { TOKENS } from '$lib/network';
 							</label>
 							<div>
 								{#if panelStrategy === 'limit'}
-									<LimitStrategy
+									<LimitOrder
 										orderSide={panelOrderSide}
 										passedOutputToken={currentPythToken}
 										{buyPrice}
