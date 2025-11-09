@@ -142,48 +142,39 @@ function createMockDeploymentArgs(overrides = {}) {
 }
 
 describe('transactionStore tests', () => {
-	const mockDeploymentArgsMarketMaking = createMockDeploymentArgs({
-		composedRainlang: 'mock rainlang code for market making',
-		deploymentArgs: {
-			deploymentCalldata: '0xabcdef',
-			orderbookAddress: '0x1234',
-			approvals: [
-				{
-					calldata: '0xapproval0',
-					token: '0xtoken0',
-					symbol: 'TEST0'
-				},
-				{
-					calldata: '0xapproval1',
-					token: '0xtoken1',
-					symbol: 'TEST1'
+	// Factory for creating mock deployment args with type-specific overrides
+	function createDeploymentArgsByType(type: 'DSF' | 'DCA' | 'LIMIT' | 'FOLIO') {
+		const approvalCounts: Record<string, number> = { DSF: 2, DCA: 1, LIMIT: 1, FOLIO: 7 };
+		const approvalCount = approvalCounts[type];
+
+		const composedRainlangMap: Record<string, string> = {
+			DSF: 'mock rainlang code for market making',
+			DCA: 'mock rainlang code for dca',
+			LIMIT: 'mock rainlang code for limit order',
+			FOLIO: 'mock rainlang code for folio'
+		};
+
+		return createMockDeploymentArgs({
+			composedRainlang: composedRainlangMap[type],
+			...(approvalCount > 1 && {
+				deploymentArgs: {
+					deploymentCalldata: '0xabcdef',
+					orderbookAddress: '0x1234',
+					approvals: Array.from({ length: approvalCount }, (_, i) => ({
+						calldata: approvalCount === 2 ? `0xapproval${i}` : '0xapproval',
+						token: approvalCount === 2 ? `0xtoken${i}` : `0xtoken${i}`,
+						symbol: approvalCount === 2 ? `TEST${i}` : `TEST${i}`
+					})),
+					chainId: 8453
 				}
-			],
-			chainId: 8453
-		}
-	});
+			})
+		});
+	}
 
-	const mockDeploymentArgsDca = createMockDeploymentArgs({
-		composedRainlang: 'mock rainlang code for dca'
-	});
-
-	const mockDeploymentArgsLimitOrder = createMockDeploymentArgs({
-		composedRainlang: 'mock rainlang code for limit order'
-	});
-
-	const mockDeploymentArgsFolio = createMockDeploymentArgs({
-		composedRainlang: 'mock rainlang code for folio',
-		deploymentArgs: {
-			deploymentCalldata: '0xabcdef',
-			orderbookAddress: '0x1234',
-			approvals: Array.from({ length: 7 }, (_, i) => ({
-				calldata: '0xapproval',
-				token: `0xtoken${i}`,
-				symbol: `TEST${i}`
-			})),
-			chainId: 8453
-		}
-	});
+	const mockDeploymentArgsMarketMaking = createDeploymentArgsByType('DSF');
+	const mockDeploymentArgsDca = createDeploymentArgsByType('DCA');
+	const mockDeploymentArgsLimitOrder = createDeploymentArgsByType('LIMIT');
+	const mockDeploymentArgsFolio = createDeploymentArgsByType('FOLIO');
 
 	let mockGetAddOrdersForTransaction: ReturnType<typeof vi.fn>;
 
@@ -330,6 +321,19 @@ describe('transactionStore tests', () => {
 		}
 	];
 
+	// Helper to wait for transactions to complete
+	async function waitForTransactionCompletion(expectedCallCount: number) {
+		const sendTransactionMock = vi.mocked(sendTransaction);
+		let attempts = 0;
+		while (sendTransactionMock.mock.calls.length < expectedCallCount && attempts < 100) {
+			await vi.runAllTimersAsync();
+			await Promise.resolve();
+			await Promise.resolve();
+			attempts++;
+		}
+	}
+
+	// Unified parameterized tests for all deployment handlers
 	deploymentHandlers.forEach(({ name, handler, expectedFn }) => {
 		it(`should call handle${name}Deploy`, async () => {
 			const deployPromise = handler(transactionStore);
@@ -337,13 +341,9 @@ describe('transactionStore tests', () => {
 			await deployPromise;
 			expect(expectedFn).toHaveBeenCalled();
 		});
-	});
 
-	// Parameterized tests for approval and deployment
-	deploymentHandlers.forEach(({ name, handler, expectedFn }) => {
 		it(`should call sendTransaction for approval and deployment handle${name}Deploy`, async () => {
 			const deployPromise = handler(transactionStore);
-
 			await deployPromise;
 
 			// Simulate user clicking deploy button
@@ -357,26 +357,13 @@ describe('transactionStore tests', () => {
 
 			// Determine expected call count based on deployment type
 			const expectedCallCount = name === 'Folio' ? 8 : name === 'DSF' ? 3 : 2;
-
-			// Wait for all transactions to complete
-			const sendTransactionMock = vi.mocked(sendTransaction);
-			let attempts = 0;
-			while (sendTransactionMock.mock.calls.length < expectedCallCount && attempts < 100) {
-				await vi.runAllTimersAsync();
-				await Promise.resolve();
-				await Promise.resolve();
-				attempts++;
-			}
+			await waitForTransactionCompletion(expectedCallCount);
 
 			expect(sendTransaction).toHaveBeenCalled();
 		});
-	});
 
-	// Parameterized tests for transaction success
-	deploymentHandlers.forEach(({ name, handler }) => {
 		it(`should call transactionSuccess with the correct arguments handle${name}Deploy`, async () => {
 			const deployPromise = handler(transactionStore);
-
 			await deployPromise;
 
 			// Simulate user clicking deploy button
@@ -390,16 +377,7 @@ describe('transactionStore tests', () => {
 
 			// Determine expected call count based on deployment type
 			const expectedCallCount = name === 'Folio' ? 8 : name === 'DSF' ? 3 : 2;
-
-			// Wait for all transactions to complete first
-			const sendTransactionMock = vi.mocked(sendTransaction);
-			let attempts = 0;
-			while (sendTransactionMock.mock.calls.length < expectedCallCount && attempts < 100) {
-				await vi.runAllTimersAsync();
-				await Promise.resolve();
-				await Promise.resolve();
-				attempts++;
-			}
+			await waitForTransactionCompletion(expectedCallCount);
 
 			// Advance timer to trigger the polling interval
 			await vi.advanceTimersByTimeAsync(2000);
