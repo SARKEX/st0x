@@ -119,8 +119,10 @@ describe('tokenMath', () => {
 			expect(toDecimal(value, decimals)).toBe(expected);
 		});
 
-		it('should handle absolute option', () => {
-			expect(toDecimal(1000000000000000000n, 18, { absolute: true })).toBe(1);
+		it('should handle absolute option for negative numbers', () => {
+			// Test that absolute: true converts negative values to positive
+			const negativeResult = toDecimal(-1000000000000000000n, 18, { absolute: true });
+			expect(negativeResult).toBe(1);
 		});
 
 		it.each([

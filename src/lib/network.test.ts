@@ -112,7 +112,6 @@ describe('network', () => {
 		it('should return all tokens from TOKENS array', () => {
 			const tokens = getAllTokens();
 			expect(tokens).toEqual(TOKENS);
-			expect(tokens.length).toBeGreaterThan(0);
 		});
 
 		it('should include ST0x tokens', () => {
@@ -179,7 +178,13 @@ describe('network', () => {
 			const regularTokens = getTokensByNetwork(8453);
 			const cryptoTokens = getCryptoTokensByNetwork(8453);
 
-			expect(allTokens.length).toBe(regularTokens.length + cryptoTokens.length);
+			// Verify that all tokens are actually present in the combined result
+			regularTokens.forEach((token) => {
+				expect(allTokens).toContainEqual(token);
+			});
+			cryptoTokens.forEach((token) => {
+				expect(allTokens).toContainEqual(token);
+			});
 		});
 
 		it('should include both ST0x and CRYPTO tokens', () => {

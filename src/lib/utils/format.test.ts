@@ -95,10 +95,11 @@ describe('format utilities', () => {
 		});
 
 		it.each([
-			[Infinity],
-			[NaN]
-		])('should handle special number values: %s', (value) => {
-			expect(formatCompact(value)).toMatch(/Infinity|inf|NaN|nan/i);
+			[Infinity, 'Infinity'],
+			[NaN, 'NaN']
+		])('should handle special number values: %s -> %s', (value, expected) => {
+			const result = formatCompact(value);
+			expect(result.toLowerCase()).toBe(expected.toLowerCase());
 		});
 	});
 });

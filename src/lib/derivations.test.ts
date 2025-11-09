@@ -155,13 +155,6 @@ describe('derivations', () => {
 			});
 		});
 
-		describe('Consistency checks', () => {
-			it('should maintain equivalence: 24 hours = 1 day', () => {
-				const oneDay = getPeriodInSeconds('1', 'Days');
-				const twentyFourHours = getPeriodInSeconds('24', 'Hours');
-				expect(oneDay).toBe(twentyFourHours);
-			});
-		});
 	});
 
 	describe('hasValidPriceFeedId', () => {

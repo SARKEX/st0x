@@ -171,29 +171,4 @@ describe('MarketOrder price calculations', () => {
 		});
 	});
 
-	describe('Decimal scaling correctness', () => {
-		it.each([
-			{
-				desc: 'inputDecimals > outputDecimals (18 vs 6)',
-				inputDec: 18,
-				outputDec: 6,
-				expected: BigInt(1e12)
-			},
-			{
-				desc: 'inputDecimals === outputDecimals',
-				inputDec: 18,
-				outputDec: 18,
-				expected: BigInt(1)
-			},
-			{
-				desc: '18 vs 8 decimals',
-				inputDec: 18,
-				outputDec: 8,
-				expected: BigInt(1e10)
-			}
-		])('should correctly scale $desc', ({ inputDec, outputDec, expected }) => {
-			const decimalScaling = BigInt(10 ** (inputDec - outputDec));
-			expect(decimalScaling).toBe(expected);
-		});
-	});
 });

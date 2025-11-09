@@ -75,11 +75,13 @@ describe('helpers', () => {
 			expect(result).toEqual([{ id: 'a' }]);
 		});
 
-		it('should mutate the original array', () => {
+		it('should sort the array in-place and verify sorting works', () => {
 			const array = [{ priority: 'low' }, { priority: 'high' }, { priority: 'medium' }];
 			const result = mapOrder(array, ['high', 'medium', 'low'], 'priority');
 			expect(result).toBe(array);
-			expect(array[0].priority).toBe('high');
+			expect(result[0].priority).toBe('high');
+			expect(result[1].priority).toBe('medium');
+			expect(result[2].priority).toBe('low');
 		});
 	});
 

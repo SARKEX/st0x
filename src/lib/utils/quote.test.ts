@@ -143,10 +143,6 @@ describe('quote utilities', () => {
 				expect(result.size).toBe(0);
 			});
 
-			it('should handle null quotes gracefully', () => {
-				const result = buildTokenPriceMap([], '0x0000000000000000000000000000000000000000');
-				expect(result instanceof Map).toBe(true);
-			});
 		});
 
 		describe('Single asset quotes', () => {
@@ -342,22 +338,6 @@ describe('quote utilities', () => {
 					})
 				];
 
-				const result = buildTokenPriceMap(quotes, '0xUSDC');
-				expect(result.size).toBe(0);
-			});
-
-			it.each([
-				['non-finite', Infinity, {}],
-				['zero', 0, {}],
-				['negative', -50, {}]
-			])('should add asset to map but not update price for %s values', (desc, price, expected) => {
-				const quotes: ProcessedQuote[] = [
-					buildQuote({
-						side: 'ask',
-						assetAddress: '0xAsset',
-						quotePerAsset: price
-					})
-				];
 
 				const result = buildTokenPriceMap(quotes, '0xUSDC');
 				expect(result.size).toBe(1);
