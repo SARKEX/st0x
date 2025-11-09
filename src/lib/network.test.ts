@@ -26,19 +26,12 @@ describe('network', () => {
 			expect(network?.name).toBe('base');
 		});
 
-		it('should return undefined for unknown network id', () => {
-			const network = getNetworkById(9999);
-			expect(network).toBeUndefined();
-		});
-
-		it('should handle negative ids', () => {
-			const network = getNetworkById(-1);
-			expect(network).toBeUndefined();
-		});
-
-		it('should handle zero', () => {
-			const network = getNetworkById(0);
-			expect(network).toBeUndefined();
+		it.each([
+			[9999],
+			[-1],
+			[0]
+		])('should return undefined for invalid network id: %s', (id) => {
+			expect(getNetworkById(id)).toBeUndefined();
 		});
 	});
 
@@ -49,14 +42,11 @@ describe('network', () => {
 			expect(network?.chainId).toBe(8453);
 		});
 
-		it('should return undefined for unknown chainId', () => {
-			const network = getNetworkByChainId(9999);
-			expect(network).toBeUndefined();
-		});
-
-		it('should handle negative chainIds', () => {
-			const network = getNetworkByChainId(-1);
-			expect(network).toBeUndefined();
+		it.each([
+			[9999],
+			[-1]
+		])('should return undefined for invalid chainId: %s', (chainId) => {
+			expect(getNetworkByChainId(chainId)).toBeUndefined();
 		});
 	});
 
@@ -68,19 +58,12 @@ describe('network', () => {
 			expect(network?.displayName).toBe('Base Mainnet');
 		});
 
-		it('should be case-sensitive', () => {
-			const network = getNetworkByName('Base');
-			expect(network).toBeUndefined();
-		});
-
-		it('should return undefined for unknown name', () => {
-			const network = getNetworkByName('unknown');
-			expect(network).toBeUndefined();
-		});
-
-		it('should handle empty string', () => {
-			const network = getNetworkByName('');
-			expect(network).toBeUndefined();
+		it.each([
+			['Base'], // case-sensitive
+			['unknown'],
+			['']
+		])('should return undefined for invalid name: %s', (name) => {
+			expect(getNetworkByName(name)).toBeUndefined();
 		});
 	});
 
@@ -94,8 +77,7 @@ describe('network', () => {
 		});
 
 		it('should return undefined for network without configured payment token', () => {
-			const token = getDefaultPaymentTokenForNetwork(9999);
-			expect(token).toBeUndefined();
+			expect(getDefaultPaymentTokenForNetwork(9999)).toBeUndefined();
 		});
 
 		it('should have valid token properties', () => {
@@ -107,35 +89,21 @@ describe('network', () => {
 	});
 
 	describe('getTokensByCategory', () => {
-		it('should get all ST0x tokens', () => {
-			const tokens = getTokensByCategory('ST0x');
-			expect(tokens.length).toBeGreaterThan(0);
-			expect(tokens.every((t) => t.category === 'ST0x')).toBe(true);
-		});
-
-		it('should get all ETFs tokens', () => {
-			const tokens = getTokensByCategory('ETFs');
-			// ETFs category may be empty in current config
-			expect(Array.isArray(tokens)).toBe(true);
-			expect(tokens.every((t) => t.category === 'ETFs')).toBe(true);
-		});
-
-		it('should not find CRYPTO tokens in TOKENS array (they are in separate CRYPTO_TOKENS)', () => {
-			const tokens = getTokensByCategory('CRYPTO');
-			// CRYPTO tokens are in separate CRYPTO_TOKENS array, not TOKENS
-			expect(tokens.length).toBe(0);
-		});
-
-		it('should return empty array for unknown category', () => {
-			const tokens = getTokensByCategory('UNKNOWN' as any);
-			expect(tokens).toEqual([]);
+		it.each([
+			['ST0x', (tokens: any[]) => tokens.length > 0],
+			['ETFs', (tokens: any[]) => Array.isArray(tokens)],
+			['CRYPTO' as any, (tokens: any[]) => tokens.length === 0], // CRYPTO tokens in separate array
+			['UNKNOWN' as any, (tokens: any[]) => tokens.length === 0]
+		])('should get tokens for category %s', (category, validator) => {
+			const tokens = getTokensByCategory(category);
+			expect(validator(tokens)).toBe(true);
+			expect(tokens.every((t) => t.category === category || category === 'CRYPTO' || category === 'UNKNOWN')).toBe(true);
 		});
 
 		it('should not include duplicate tokens', () => {
 			const tokens = getTokensByCategory('ST0x');
 			const addresses = tokens.map((t) => t.address.toLowerCase());
 			const uniqueAddresses = new Set(addresses);
-			// If there are duplicates, length would be > uniqueAddresses.size
 			expect(addresses.length).toBe(uniqueAddresses.size);
 		});
 	});
@@ -157,7 +125,6 @@ describe('network', () => {
 			const allTokens = getAllTokens();
 			const cryptoTokensSet = new Set(CRYPTO_TOKENS.map((t) => t.address.toLowerCase()));
 			const hasCrypto = allTokens.some((t) => cryptoTokensSet.has(t.address.toLowerCase()));
-			// TOKENS doesn't include CRYPTO_TOKENS, they're separate
 			expect(hasCrypto).toBe(false);
 		});
 	});
@@ -169,32 +136,28 @@ describe('network', () => {
 			expect(tokens.every((t) => t.chainId === 8453)).toBe(true);
 		});
 
-		it('should return empty array for unknown network', () => {
-			const tokens = getTokensByNetwork(9999);
-			expect(tokens).toEqual([]);
-		});
-
 		it('should include tSTOX for Base', () => {
 			const tokens = getTokensByNetwork(8453);
 			const tSTOX = tokens.find((t) => t.symbol === 'tSTOX');
 			expect(tSTOX).toBeDefined();
 		});
+
+		it('should return empty array for unknown network', () => {
+			expect(getTokensByNetwork(9999)).toEqual([]);
+		});
 	});
 
 	describe('getCryptoTokensByNetwork', () => {
-		it('should get crypto tokens for Base', () => {
-			const tokens = getCryptoTokensByNetwork(8453);
+		it.each([
+			[8453], // Base
+			[42161] // Arbitrum
+		])('should get crypto tokens for network %s', (chainId) => {
+			const tokens = getCryptoTokensByNetwork(chainId);
 			expect(tokens.length).toBeGreaterThan(0);
-			expect(tokens.every((t) => t.chainId === 8453)).toBe(true);
+			expect(tokens.every((t) => t.chainId === chainId)).toBe(true);
 		});
 
-		it('should get crypto tokens for Arbitrum', () => {
-			const tokens = getCryptoTokensByNetwork(42161);
-			expect(tokens.length).toBeGreaterThan(0);
-			expect(tokens.every((t) => t.chainId === 42161)).toBe(true);
-		});
-
-		it('should include USDC for both networks', () => {
+		it('should include USDC for both Base and Arbitrum', () => {
 			const baseTokens = getCryptoTokensByNetwork(8453);
 			const arbTokens = getCryptoTokensByNetwork(42161);
 
@@ -206,8 +169,7 @@ describe('network', () => {
 		});
 
 		it('should return empty array for unknown network', () => {
-			const tokens = getCryptoTokensByNetwork(9999);
-			expect(tokens).toEqual([]);
+			expect(getCryptoTokensByNetwork(9999)).toEqual([]);
 		});
 	});
 
@@ -238,8 +200,7 @@ describe('network', () => {
 		});
 
 		it('should return empty array for unknown network', () => {
-			const allTokens = getAllTokensByNetwork(9999);
-			expect(allTokens).toEqual([]);
+			expect(getAllTokensByNetwork(9999)).toEqual([]);
 		});
 	});
 

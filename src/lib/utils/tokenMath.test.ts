@@ -1,4 +1,4 @@
- 
+
 
 import { Float } from '@rainlanguage/float';
 import { describe, it, expect } from 'vitest';
@@ -29,130 +29,125 @@ function floatHex(value: string): string {
 
 describe('tokenMath', () => {
 	describe('normalizeAddress', () => {
-		it('should normalize valid addresses to lowercase', () => {
-			expect(normalizeAddress('0xABCDEF123456')).toBe('0xabcdef123456');
-			expect(normalizeAddress('0xABCD')).toBe('0xabcd');
+		it.each([
+			['0xABCDEF123456', '0xabcdef123456'],
+			['0xABCD', '0xabcd'],
+			['  0xABCDEF  ', '0xabcdef'],
+			['\t0xABCDEF\n', '0xabcdef']
+		])('should normalize %s to %s', (input, expected) => {
+			expect(normalizeAddress(input)).toBe(expected);
 		});
 
-		it('should trim whitespace', () => {
-			expect(normalizeAddress('  0xABCDEF  ')).toBe('0xabcdef');
-			expect(normalizeAddress('\t0xABCDEF\n')).toBe('0xabcdef');
-		});
-
-		it('should return null for empty or whitespace-only strings', () => {
-			expect(normalizeAddress('')).toBeNull();
-			expect(normalizeAddress('   ')).toBeNull();
-			expect(normalizeAddress('\t\n')).toBeNull();
-		});
-
-		it('should return null for null and undefined', () => {
-			expect(normalizeAddress(null)).toBeNull();
-			expect(normalizeAddress(undefined)).toBeNull();
+		it.each([
+			['', null],
+			['   ', null],
+			['\t\n', null],
+			[null, null],
+			[undefined, null]
+		])('should return null for invalid input: %s', (input, expected) => {
+			expect(normalizeAddress(input)).toBe(expected);
 		});
 	});
 
 	describe('addressesEqual', () => {
-		it('should return true for same addresses with different casing', () => {
-			expect(addressesEqual('0xABCDEF', '0xabcdef')).toBe(true);
+		it.each([
+			['0xABCDEF', '0xabcdef', true],
+			['  0xABCDEF  ', '0xabcdef', true],
+			['0xAAAAA', '0xBBBBB', false]
+		])('should compare %s and %s: %s', (addr1, addr2, expected) => {
+			expect(addressesEqual(addr1, addr2)).toBe(expected);
 		});
 
-		it('should return true for same addresses with whitespace', () => {
-			expect(addressesEqual('  0xABCDEF  ', '0xabcdef')).toBe(true);
-		});
-
-		it('should return false for different addresses', () => {
-			expect(addressesEqual('0xAAAAA', '0xBBBBB')).toBe(false);
-		});
-
-		it('should return false if either address is null/undefined', () => {
-			expect(addressesEqual('0xABCDEF', null)).toBe(false);
-			expect(addressesEqual(null, '0xABCDEF')).toBe(false);
-			expect(addressesEqual(null, undefined)).toBe(false);
+		it.each([
+			['0xABCDEF', null],
+			[null, '0xABCDEF'],
+			[null, undefined]
+		])('should return false for null/undefined: %s, %s', (addr1, addr2) => {
+			expect(addressesEqual(addr1, addr2)).toBe(false);
 		});
 	});
 
 	describe('toBigInt', () => {
-		it('should convert bigint to bigint', () => {
-			expect(toBigInt(123n)).toBe(123n);
+		it.each([
+			[123n, 123n],
+			['123', 123n],
+			['0', 0n],
+			[123, 123n],
+			[123.9, 123n],
+			[0, 0n],
+			['  123  ', 123n]
+		])('should convert %s to %s', (input, expected) => {
+			expect(toBigInt(input)).toBe(expected);
 		});
 
-		it('should convert string to bigint', () => {
-			expect(toBigInt('123')).toBe(123n);
-			expect(toBigInt('0')).toBe(0n);
-		});
-
-		it('should convert number to bigint (truncating decimals)', () => {
-			expect(toBigInt(123)).toBe(123n);
-			expect(toBigInt(123.9)).toBe(123n);
-			expect(toBigInt(0)).toBe(0n);
-		});
-
-		it('should trim whitespace from strings', () => {
-			expect(toBigInt('  123  ')).toBe(123n);
-		});
-
-		it('should return null for invalid inputs', () => {
-			expect(toBigInt(null)).toBeNull();
-			expect(toBigInt(undefined)).toBeNull();
-			expect(toBigInt('')).toBeNull();
-			expect(toBigInt('   ')).toBeNull();
-			expect(toBigInt('invalid')).toBeNull();
-			expect(toBigInt(NaN)).toBeNull();
-			expect(toBigInt(Infinity)).toBeNull();
+		it.each([
+			[null],
+			[undefined],
+			[''],
+			['   '],
+			['invalid'],
+			[NaN],
+			[Infinity]
+		])('should return null for invalid input: %s', (input) => {
+			expect(toBigInt(input)).toBeNull();
 		});
 	});
 
 	describe('absBigInt', () => {
-		it('should return positive value for positive input', () => {
-			expect(absBigInt(123n)).toBe(123n);
-		});
-
-		it('should return positive value for negative input', () => {
-			expect(absBigInt(-123n)).toBe(123n);
-		});
-
-		it('should return zero for zero', () => {
-			expect(absBigInt(0n)).toBe(0n);
+		it.each([
+			[123n, 123n],
+			[-123n, 123n],
+			[0n, 0n]
+		])('should return absolute value: abs(%s) = %s', (input, expected) => {
+			expect(absBigInt(input)).toBe(expected);
 		});
 	});
 
 	describe('toDecimal', () => {
-		it('should convert bigint to decimal with correct decimals', () => {
-			expect(toDecimal(1000000000000000000n, 18)).toBe(1);
-			expect(toDecimal(5000000000000000000n, 18)).toBe(5);
-			expect(toDecimal(1000000n, 6)).toBe(1);
+		it.each([
+			[1000000000000000000n, 18, 1],
+			[5000000000000000000n, 18, 5],
+			[1000000n, 6, 1]
+		])('should convert %s with %s decimals to %s', (value, decimals, expected) => {
+			expect(toDecimal(value, decimals)).toBe(expected);
 		});
 
-		it('should return null for invalid inputs', () => {
-			expect(toDecimal(null, 18)).toBeNull();
-			expect(toDecimal(undefined, 18)).toBeNull();
+		it.each([
+			[null, 18, null],
+			[undefined, 18, null]
+		])('should return null for invalid inputs: %s', (value, decimals, expected) => {
+			expect(toDecimal(value, decimals)).toBe(expected);
 		});
 
 		it('should handle absolute option', () => {
-			// Note: viem's formatUnits may not support negative bigints directly
-			// but the function logic should handle the absolute flag
 			expect(toDecimal(1000000000000000000n, 18, { absolute: true })).toBe(1);
 		});
 
-		it('should use fallback value for invalid conversions', () => {
-			expect(toDecimal(null, 18, { fallback: 0 })).toBe(0);
-			expect(toDecimal('invalid', 18, { fallback: -1 })).toBe(-1);
+		it.each([
+			[null, 18, { fallback: 0 }, 0],
+			['invalid', 18, { fallback: -1 }, -1]
+		])('should use fallback value for invalid conversions', (value, decimals, options, expected) => {
+			expect(toDecimal(value, decimals, options)).toBe(expected);
 		});
 
-		it('should handle decimal strings directly', () => {
-			expect(toDecimal('100', 0)).toBe(100);
-			expect(toDecimal('1.5', 0)).toBe(1.5);
+		it.each([
+			['100', 0, 100],
+			['1.5', 0, 1.5]
+		])('should handle decimal strings: %s', (value, decimals, expected) => {
+			expect(toDecimal(value, decimals)).toBe(expected);
 		});
 
-		it('should validate decimals parameter', () => {
-			expect(toDecimal(1000000000000000000n, -1)).toBeNull();
-			expect(toDecimal(1000000000000000000n, 31)).toBeNull(); // > 30 is invalid
-			expect(toDecimal(1000000000000000000n, NaN)).toBeNull();
+		it.each([
+			[-1],
+			[31],
+			[NaN]
+		])('should validate decimals parameter: %s', (decimals) => {
+			expect(toDecimal(1000000000000000000n, decimals)).toBeNull();
 		});
 
 		it('should return null for astronomically large values', () => {
 			const maxWei = BigInt('1000000000000000000000000'); // 1e24
-		expect(toDecimal(maxWei + 1n, 18)).toBeNull();
+			expect(toDecimal(maxWei + 1n, 18)).toBeNull();
 		});
 
 		it('should decode Float hex values directly', () => {
@@ -166,30 +161,28 @@ describe('tokenMath', () => {
 	});
 
 	describe('computePrice', () => {
-		it('should compute price correctly', () => {
-			expect(computePrice(100, 10)).toBe(10);
-			expect(computePrice(50, 5)).toBe(10);
-			expect(computePrice(1, 1)).toBe(1);
+		it.each([
+			[100, 10, 10],
+			[50, 5, 10],
+			[1, 1, 1]
+		])('should compute price: %s / %s = %s', (quote, tokens, expected) => {
+			expect(computePrice(quote, tokens)).toBe(expected);
 		});
 
-		it('should return null for invalid inputs', () => {
-			expect(computePrice(null, 10)).toBeNull();
-			expect(computePrice(100, null)).toBeNull();
-			expect(computePrice(undefined, 10)).toBeNull();
-			expect(computePrice(100, undefined)).toBeNull();
-		});
-
-		it('should return null for non-finite values', () => {
-			expect(computePrice(NaN, 10)).toBeNull();
-			expect(computePrice(100, Infinity)).toBeNull();
-			expect(computePrice(Infinity, 10)).toBeNull();
-		});
-
-		it('should return null for non-positive values', () => {
-			expect(computePrice(0, 10)).toBeNull();
-			expect(computePrice(100, 0)).toBeNull();
-			expect(computePrice(-10, 10)).toBeNull();
-			expect(computePrice(10, -10)).toBeNull();
+		it.each([
+			[null, 10],
+			[100, null],
+			[undefined, 10],
+			[100, undefined],
+			[NaN, 10],
+			[100, Infinity],
+			[Infinity, 10],
+			[0, 10],
+			[100, 0],
+			[-10, 10],
+			[10, -10]
+		])('should return null for invalid inputs: computePrice(%s, %s)', (quote, tokens) => {
+			expect(computePrice(quote, tokens)).toBeNull();
 		});
 	});
 
@@ -199,23 +192,21 @@ describe('tokenMath', () => {
 			quote: { address: '0xQUOTE', decimals: 6 }
 		};
 
-		it('should classify BID flow (QUOTE -> ASSET)', () => {
-			expect(classifyFlow('0xQUOTE', '0xASSET', pair)).toBe('bid');
-			expect(classifyFlow('0xquote', '0xasset', pair)).toBe('bid'); // case insensitive
+		it.each([
+			['0xQUOTE', '0xASSET', 'bid'],
+			['0xquote', '0xasset', 'bid'], // case insensitive
+			['0xASSET', '0xQUOTE', 'ask']
+		])('should classify flow: %s -> %s = %s', (input, output, expected) => {
+			expect(classifyFlow(input, output, pair)).toBe(expected);
 		});
 
-		it('should classify ASK flow (ASSET -> QUOTE)', () => {
-			expect(classifyFlow('0xASSET', '0xQUOTE', pair)).toBe('ask');
-		});
-
-		it('should return null for invalid flows', () => {
-			expect(classifyFlow('0xOTHER', '0xASSET', pair)).toBeNull();
-			expect(classifyFlow('0xASSET', '0xOTHER', pair)).toBeNull();
-		});
-
-		it('should return null for null/undefined inputs', () => {
-			expect(classifyFlow(null, '0xASSET', pair)).toBeNull();
-			expect(classifyFlow('0xQUOTE', null, pair)).toBeNull();
+		it.each([
+			['0xOTHER', '0xASSET'],
+			['0xASSET', '0xOTHER'],
+			[null, '0xASSET'],
+			['0xQUOTE', null]
+		])('should return null for invalid flows: %s -> %s', (input, output) => {
+			expect(classifyFlow(input, output, pair)).toBeNull();
 		});
 	});
 
@@ -273,9 +264,11 @@ describe('tokenMath', () => {
 			expect(result?.price).toBe(5);
 		});
 
-		it('should return null for invalid trades', () => {
-			expect(parseTradeAmounts(null, pair)).toBeNull();
-			expect(parseTradeAmounts(undefined, pair)).toBeNull();
+		it.each([
+			[null],
+			[undefined]
+		])('should return null for invalid trades: %s', (trade) => {
+			expect(parseTradeAmounts(trade, pair)).toBeNull();
 		});
 
 		it('should return null if amounts cannot be parsed', () => {
@@ -295,15 +288,19 @@ describe('tokenMath', () => {
 	});
 
 	describe('ratioToNumber', () => {
-		it('should convert Float hex ratios to numbers', () => {
-			expect(ratioToNumber(floatHex('1'))).toBeCloseTo(1, 6);
-			expect(ratioToNumber(floatHex('5'))).toBeCloseTo(5, 6);
-			expect(ratioToNumber(floatHex('1.5'))).toBeCloseTo(1.5, 6);
+		it.each([
+			['1', 1],
+			['5', 5],
+			['1.5', 1.5]
+		])('should convert Float hex ratio %s to number', (value, expected) => {
+			expect(ratioToNumber(floatHex(value))).toBeCloseTo(expected, 6);
 		});
 
-		it('should return null for null/undefined', () => {
-			expect(ratioToNumber(null)).toBeNull();
-			expect(ratioToNumber(undefined)).toBeNull();
+		it.each([
+			[null],
+			[undefined]
+		])('should return null for %s', (value) => {
+			expect(ratioToNumber(value)).toBeNull();
 		});
 
 		it('should return null for non-positive values', () => {
@@ -315,54 +312,51 @@ describe('tokenMath', () => {
 			const hugeHex = floatHex('1000000000000000'); // 1e15
 			expect(ratioToNumber(hugeHex)).toBeNull();
 		});
-
 	});
 
-		describe('describeQuote', () => {
-			const quoteAddress = '0xUSDC';
+	describe('describeQuote', () => {
+		const quoteAddress = '0xUSDC';
 
-			it('should describe ASK quote (USDC -> TOKEN)', () => {
-				const quote = {
-					inputTokenAddress: '0xUSDC',
-					outputTokenAddress: '0xTOKEN',
-					ratio: floatHex('2') // 2 USDC per TOKEN
-				};
+		it('should describe ASK quote (USDC -> TOKEN)', () => {
+			const quote = {
+				inputTokenAddress: '0xUSDC',
+				outputTokenAddress: '0xTOKEN',
+				ratio: floatHex('2') // 2 USDC per TOKEN
+			};
 
-				const result = describeQuote(quote, quoteAddress);
-				expect(result).not.toBeNull();
-				expect(result?.side).toBe('ask');
-				expect(result?.quotePerAsset).toBe(2);
-				expect(result?.assetPerQuote).toBe(0.5);
-			});
-
-			it('should describe BID quote (TOKEN -> USDC)', () => {
-				const quote = {
-					inputTokenAddress: '0xTOKEN',
-					outputTokenAddress: '0xUSDC',
-					ratio: floatHex('0.5') // 0.5 USDC per TOKEN (inverted)
-				};
-
-				const result = describeQuote(quote, quoteAddress);
-				expect(result).not.toBeNull();
-				expect(result?.side).toBe('bid');
-				expect(result?.quotePerAsset).toBe(2); // 1 / 0.5 = 2
-			});
-
-			it('should return null for invalid quotes', () => {
-				expect(
-					describeQuote(
-						{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: floatHex('1') },
-						quoteAddress
-					)
-				).toBeNull(); // both USDC
-				expect(
-					describeQuote(
-						{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: floatHex('1') },
-						quoteAddress
-					)
-				).toBeNull();
-			});
+			const result = describeQuote(quote, quoteAddress);
+			expect(result).not.toBeNull();
+			expect(result?.side).toBe('ask');
+			expect(result?.quotePerAsset).toBe(2);
+			expect(result?.assetPerQuote).toBe(0.5);
 		});
+
+		it('should describe BID quote (TOKEN -> USDC)', () => {
+			const quote = {
+				inputTokenAddress: '0xTOKEN',
+				outputTokenAddress: '0xUSDC',
+				ratio: floatHex('0.5') // 0.5 USDC per TOKEN (inverted)
+			};
+
+			const result = describeQuote(quote, quoteAddress);
+			expect(result).not.toBeNull();
+			expect(result?.side).toBe('bid');
+			expect(result?.quotePerAsset).toBe(2); // 1 / 0.5 = 2
+		});
+
+		it.each([
+			[
+				'both same token',
+				{ inputTokenAddress: '0xUSDC', outputTokenAddress: '0xUSDC', ratio: floatHex('1') }
+			],
+			[
+				'empty input address',
+				{ inputTokenAddress: '', outputTokenAddress: '0xTOKEN', ratio: floatHex('1') }
+			]
+		])('should return null for invalid quotes: %s', (desc, quote) => {
+			expect(describeQuote(quote, quoteAddress)).toBeNull();
+		});
+	});
 
 	describe('createTokenLookup', () => {
 		it('should create a lookup function that finds tokens by address', () => {
@@ -377,13 +371,14 @@ describe('tokenMath', () => {
 			expect(lookup('0x1234')).toEqual(tokens[1]);
 		});
 
-		it('should return undefined for unknown addresses', () => {
+		it.each([
+			['0xUNKNOWN'],
+			[null],
+			[undefined]
+		])('should return undefined for unknown addresses: %s', (address) => {
 			const tokens: TokenDescriptor[] = [{ address: '0xABCD', decimals: 18 }];
 			const lookup = createTokenLookup(tokens);
-
-			expect(lookup('0xUNKNOWN')).toBeUndefined();
-			expect(lookup(null)).toBeUndefined();
-			expect(lookup(undefined)).toBeUndefined();
+			expect(lookup(address)).toBeUndefined();
 		});
 
 		it('should handle empty token list', () => {
@@ -424,10 +419,12 @@ describe('tokenMath', () => {
 			expect(result?.price).toBe(1);
 		});
 
-		it('should return null for null/undefined trade', () => {
+		it.each([
+			[null],
+			[undefined]
+		])('should return null for null/undefined trade: %s', (trade) => {
 			const quoteToken: TokenDescriptor = { address: '0xUSDC', decimals: 6 };
-			expect(analyzeTrade(null, quoteToken)).toBeNull();
-			expect(analyzeTrade(undefined, quoteToken)).toBeNull();
+			expect(analyzeTrade(trade, quoteToken)).toBeNull();
 		});
 
 		it('should return null if quote token is invalid', () => {
@@ -446,5 +443,4 @@ describe('tokenMath', () => {
 			expect(analyzeTrade(trade, quoteToken)).toBeNull();
 		});
 	});
-
 });

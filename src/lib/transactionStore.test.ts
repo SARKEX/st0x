@@ -58,7 +58,7 @@ vi.mock('viem', async (importOriginal) => {
 });
 
 vi.mock('svelte-wagmi', async () => {
-	// Import the mock stores INSIDE the factory (don’t capture top-level vars)
+	// Import the mock stores INSIDE the factory (don't capture top-level vars)
 	const {
 		web3ModalStore,
 		mockWagmiConfigStore,
@@ -121,8 +121,28 @@ vi.mock('svelte/store', async () => {
 	};
 });
 
+// Helper to create mock deployment args with sensible defaults
+function createMockDeploymentArgs(overrides = {}) {
+	return {
+		composedRainlang: 'mock rainlang code',
+		deploymentArgs: {
+			deploymentCalldata: '0xabcdef',
+			orderbookAddress: '0x1234',
+			approvals: [
+				{
+					calldata: '0xapproval',
+					token: '0xtoken',
+					symbol: 'TEST'
+				}
+			],
+			chainId: 8453,
+			...overrides
+		}
+	};
+}
+
 describe('transactionStore tests', () => {
-	const mockDeploymentArgsMarketMaking = {
+	const mockDeploymentArgsMarketMaking = createMockDeploymentArgs({
 		composedRainlang: 'mock rainlang code for market making',
 		deploymentArgs: {
 			deploymentCalldata: '0xabcdef',
@@ -141,82 +161,29 @@ describe('transactionStore tests', () => {
 			],
 			chainId: 8453
 		}
-	};
-	const mockDeploymentArgsDca = {
-		composedRainlang: 'mock rainlang code for dca',
-		deploymentArgs: {
-			deploymentCalldata: '0xabcdef',
-			orderbookAddress: '0x1234',
-			approvals: [
-				{
-					calldata: '0xapproval',
-					token: '0xtoken',
-					symbol: 'TEST'
-				}
-			],
-			chainId: 8453
-		}
-	};
-	const mockDeploymentArgsLimitOrder = {
-		composedRainlang: 'mock rainlang code for limit order',
-		deploymentArgs: {
-			deploymentCalldata: '0xabcdef',
-			orderbookAddress: '0x1234',
-			approvals: [
-				{
-					calldata: '0xapproval',
-					token: '0xtoken',
-					symbol: 'TEST'
-				}
-			],
-			chainId: 8453
-		}
-	};
-	const mockDeploymentArgsFolio = {
+	});
+
+	const mockDeploymentArgsDca = createMockDeploymentArgs({
+		composedRainlang: 'mock rainlang code for dca'
+	});
+
+	const mockDeploymentArgsLimitOrder = createMockDeploymentArgs({
+		composedRainlang: 'mock rainlang code for limit order'
+	});
+
+	const mockDeploymentArgsFolio = createMockDeploymentArgs({
 		composedRainlang: 'mock rainlang code for folio',
 		deploymentArgs: {
 			deploymentCalldata: '0xabcdef',
 			orderbookAddress: '0x1234',
-			approvals: [
-				{
-					calldata: '0xapproval',
-					token: '0xtoken',
-					symbol: 'TEST'
-				},
-				{
-					calldata: '0xapproval',
-					token: '0xtoken1',
-					symbol: 'TEST1'
-				},
-				{
-					calldata: '0xapproval',
-					token: '0xtoken2',
-					symbol: 'TEST2'
-				},
-				{
-					calldata: '0xapproval',
-					token: '0xtoken3',
-					symbol: 'TEST3'
-				},
-				{
-					calldata: '0xapproval',
-					token: '0xtoken4',
-					symbol: 'TEST4'
-				},
-				{
-					calldata: '0xapproval',
-					token: '0xtoken5',
-					symbol: 'TEST5'
-				},
-				{
-					calldata: '0xapproval',
-					token: '0xtoken6',
-					symbol: 'TEST6'
-				}
-			],
+			approvals: Array.from({ length: 7 }, (_, i) => ({
+				calldata: '0xapproval',
+				token: `0xtoken${i}`,
+				symbol: `TEST${i}`
+			})),
 			chainId: 8453
 		}
-	};
+	});
 
 	let mockGetAddOrdersForTransaction: ReturnType<typeof vi.fn>;
 
@@ -270,611 +237,179 @@ describe('transactionStore tests', () => {
 		vi.useRealTimers();
 	});
 
-	it('should call handleDsfDeploy', async () => {
-		const deployPromise = transactionStore.handleDsfDeploy({
-			token1: PAYMENT_TOKEN,
-			token2: STOXs[0],
-			amountIsFastExit: true,
-			notAmountIsFastExit: false,
-			initialIo: '0.1',
-			maxAmount: 1000000000000000000n,
-			minAmount: 1000000000000000000n,
-			depositAmountToken1: 1000000000000000000n,
-			depositAmountToken2: 1000000000000000000n,
-			inputVaultIdToken1: undefined,
-			inputVaultIdToken2: undefined,
-			outputVaultIdToken1: undefined,
-			outputVaultIdToken2: undefined
-		});
-
-		// Advance timers to allow async operations to complete
-		await vi.runAllTimersAsync();
-		await deployPromise;
-
-		expect(getMarketMakingDeploymentArgs).toHaveBeenCalledWith({
-			token1: PAYMENT_TOKEN,
-			token2: STOXs[0],
-			amountIsFastExit: true,
-			notAmountIsFastExit: false,
-			initialIo: '0.1',
-			maxAmount: 1000000000000000000n,
-			minAmount: 1000000000000000000n,
-			depositAmountToken1: 1000000000000000000n,
-			depositAmountToken2: 1000000000000000000n,
-			inputVaultIdToken1: undefined,
-			inputVaultIdToken2: undefined,
-			outputVaultIdToken1: undefined,
-			outputVaultIdToken2: undefined
-		});
-	});
-
-	it('should call handleDcaDeploy', async () => {
-		const deployPromise = transactionStore.handleDcaDeploy({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			budgetAmount: 1000000000000000000n,
-			selectedPeriod: '1',
-			selectedPeriodUnit: 'Days',
-			kickoff: '0.1',
-			baseline: '1',
-			minTradeAmount: 1000000000000000000n,
-			maxTradeAmount: 1000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined,
-			depositAmount: 2000000000000000000n
-		});
-
-		// Advance timers to allow async operations to complete
-		await vi.runAllTimersAsync();
-		await deployPromise;
-
-		expect(getDcaDeploymentArgs).toHaveBeenCalledWith({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			budgetAmount: 1000000000000000000n,
-			selectedPeriod: '1',
-			selectedPeriodUnit: 'Days',
-			kickoff: '0.1',
-			baseline: '1',
-			minTradeAmount: 1000000000000000000n,
-			maxTradeAmount: 1000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined,
-			depositAmount: 2000000000000000000n
-		});
-	});
-
-	it('should call handleLimitOrderDeploy', async () => {
-		const deployPromise = transactionStore.handleLimitDeploy({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			ioRatio: '0.1',
-			depositAmount: 1000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined
-		});
-
-		// Advance timers to allow async operations to complete
-		await vi.runAllTimersAsync();
-		await deployPromise;
-
-		expect(getLimitOrderDeploymentArgs).toHaveBeenCalledWith({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			ioRatio: '0.1',
-			depositAmount: 1000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined
-		});
-	});
-
-	it('should call handleFolioDeploy', async () => {
-		const deployPromise = transactionStore.handleFolioDeploy({
-			selectedToken1: STOXs[0],
-			selectedToken2: STOXs[1],
-			selectedToken3: STOXs[2],
-			selectedToken4: STOXs[3],
-			selectedToken5: STOXs[4],
-			selectedToken6: STOXs[5],
-			selectedToken7: STOXs[6],
-			overrideThreshold: '0.1',
-			overrideFee: '0.1',
-			depositAmount1: 1000000000000000000n,
-			depositAmount2: 2000000000000000000n,
-			depositAmount3: 3000000000000000000n,
-			depositAmount4: 4000000000000000000n,
-			depositAmount5: 5000000000000000000n,
-			depositAmount6: 6000000000000000000n,
-			depositAmount7: 7000000000000000000n,
-			inputVaultId1: undefined,
-			inputVaultId2: undefined,
-			inputVaultId3: undefined,
-			inputVaultId4: undefined,
-			inputVaultId5: undefined,
-			inputVaultId6: undefined,
-			inputVaultId7: undefined,
-			outputVaultId1: undefined,
-			outputVaultId2: undefined,
-			outputVaultId3: undefined,
-			outputVaultId4: undefined,
-			outputVaultId5: undefined,
-			outputVaultId6: undefined,
-			outputVaultId7: undefined
-		});
-
-		// Advance timers to allow async operations to complete
-		await vi.runAllTimersAsync();
-		await deployPromise;
-
-		expect(getFolioDeploymentArgs).toHaveBeenCalledWith({
-			selectedToken1: STOXs[0],
-			selectedToken2: STOXs[1],
-			selectedToken3: STOXs[2],
-			selectedToken4: STOXs[3],
-			selectedToken5: STOXs[4],
-			selectedToken6: STOXs[5],
-			selectedToken7: STOXs[6],
-			overrideThreshold: '0.1',
-			overrideFee: '0.1',
-			depositAmount1: 1000000000000000000n,
-			depositAmount2: 2000000000000000000n,
-			depositAmount3: 3000000000000000000n,
-			depositAmount4: 4000000000000000000n,
-			depositAmount5: 5000000000000000000n,
-			depositAmount6: 6000000000000000000n,
-			depositAmount7: 7000000000000000000n,
-			inputVaultId1: undefined,
-			inputVaultId2: undefined,
-			inputVaultId3: undefined,
-			inputVaultId4: undefined,
-			inputVaultId5: undefined,
-			inputVaultId6: undefined,
-			inputVaultId7: undefined,
-			outputVaultId1: undefined,
-			outputVaultId2: undefined,
-			outputVaultId3: undefined,
-			outputVaultId4: undefined,
-			outputVaultId5: undefined,
-			outputVaultId6: undefined,
-			outputVaultId7: undefined
-		});
-	});
-
-	it('should call sendTransaction for approval and deployment handleDsfDeploy', async () => {
-		const deployPromise = transactionStore.handleDsfDeploy({
-			token1: PAYMENT_TOKEN,
-			token2: STOXs[0],
-			amountIsFastExit: true,
-			notAmountIsFastExit: false,
-			initialIo: '0.1',
-			maxAmount: 1000000000000000000n,
-			minAmount: 1000000000000000000n,
-			depositAmountToken1: 1000000000000000000n,
-			depositAmountToken2: 1000000000000000000n,
-			inputVaultIdToken1: undefined,
-			inputVaultIdToken2: undefined,
-			outputVaultIdToken1: undefined,
-			outputVaultIdToken2: undefined
-		});
-
-		await deployPromise;
-
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
-
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for async operations to complete by polling
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 3 && attempts < 100) {
-			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
+	// Parameterized tests for basic deploy handler calls
+	const deploymentHandlers = [
+		{
+			name: 'DSF',
+			handler: (store: typeof transactionStore) =>
+				store.handleDsfDeploy({
+					token1: PAYMENT_TOKEN,
+					token2: STOXs[0],
+					amountIsFastExit: true,
+					notAmountIsFastExit: false,
+					initialIo: '0.1',
+					maxAmount: 1000000000000000000n,
+					minAmount: 1000000000000000000n,
+					depositAmountToken1: 1000000000000000000n,
+					depositAmountToken2: 1000000000000000000n,
+					inputVaultIdToken1: undefined,
+					inputVaultIdToken2: undefined,
+					outputVaultIdToken1: undefined,
+					outputVaultIdToken2: undefined
+				}),
+			expectedFn: getMarketMakingDeploymentArgs
+		},
+		{
+			name: 'DCA',
+			handler: (store: typeof transactionStore) =>
+				store.handleDcaDeploy({
+					outputToken: PAYMENT_TOKEN,
+					inputToken: STOXs[0],
+					budgetAmount: 1000000000000000000n,
+					selectedPeriod: '1',
+					selectedPeriodUnit: 'Days',
+					kickoff: '0.1',
+					baseline: '1',
+					minTradeAmount: 1000000000000000000n,
+					maxTradeAmount: 1000000000000000000n,
+					inputVaultId: undefined,
+					outputVaultId: undefined,
+					depositAmount: 2000000000000000000n
+				}),
+			expectedFn: getDcaDeploymentArgs
+		},
+		{
+			name: 'Limit Order',
+			handler: (store: typeof transactionStore) =>
+				store.handleLimitDeploy({
+					outputToken: PAYMENT_TOKEN,
+					inputToken: STOXs[0],
+					ioRatio: '1',
+					depositAmount: 1000000000000000000n,
+					inputVaultId: undefined,
+					outputVaultId: undefined
+				}),
+			expectedFn: getLimitOrderDeploymentArgs
+		},
+		{
+			name: 'Folio',
+			handler: (store: typeof transactionStore) =>
+				store.handleFolioDeploy({
+					selectedToken1: STOXs[0],
+					selectedToken2: STOXs[1],
+					selectedToken3: STOXs[2],
+					selectedToken4: STOXs[3],
+					selectedToken5: STOXs[4],
+					selectedToken6: STOXs[5],
+					selectedToken7: STOXs[6],
+					overrideThreshold: '0.1',
+					overrideFee: '0.1',
+					depositAmount1: 1000000000000000000n,
+					depositAmount2: 2000000000000000000n,
+					depositAmount3: 3000000000000000000n,
+					depositAmount4: 4000000000000000000n,
+					depositAmount5: 5000000000000000000n,
+					depositAmount6: 6000000000000000000n,
+					depositAmount7: 7000000000000000000n,
+					inputVaultId1: undefined,
+					inputVaultId2: undefined,
+					inputVaultId3: undefined,
+					inputVaultId4: undefined,
+					inputVaultId5: undefined,
+					inputVaultId6: undefined,
+					inputVaultId7: undefined,
+					outputVaultId1: undefined,
+					outputVaultId2: undefined,
+					outputVaultId3: undefined,
+					outputVaultId4: undefined,
+					outputVaultId5: undefined,
+					outputVaultId6: undefined,
+					outputVaultId7: undefined
+				}),
+			expectedFn: getFolioDeploymentArgs
 		}
+	];
 
-		expect(sendTransaction).toHaveBeenCalledTimes(3);
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval0',
-			to: '0xtoken0'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval1',
-			to: '0xtoken1'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xabcdef',
-			to: '0x1234'
+	deploymentHandlers.forEach(({ name, handler, expectedFn }) => {
+		it(`should call handle${name}Deploy`, async () => {
+			const deployPromise = handler(transactionStore);
+			await vi.runAllTimersAsync();
+			await deployPromise;
+			expect(expectedFn).toHaveBeenCalled();
 		});
 	});
 
-	it('should call sendTransaction for approval and deployment handleDcaDeploy', async () => {
-		const deployPromise = transactionStore.handleDcaDeploy({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			budgetAmount: 1000000000000000000n,
-			selectedPeriod: '1',
-			selectedPeriodUnit: 'Days',
-			kickoff: '0.1',
-			baseline: '1',
-			minTradeAmount: 1000000000000000000n,
-			maxTradeAmount: 1000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined,
-			depositAmount: 2000000000000000000n
-		});
+	// Parameterized tests for approval and deployment
+	deploymentHandlers.forEach(({ name, handler, expectedFn }) => {
+		it(`should call sendTransaction for approval and deployment handle${name}Deploy`, async () => {
+			const deployPromise = handler(transactionStore);
 
-		await deployPromise;
+			await deployPromise;
 
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
+			// Simulate user clicking deploy button
+			const modal = get(rainlangConfirmationModal);
+			modal.onDeploy?.();
 
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for async operations to complete by polling
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
+			// Flush initial async operations
+			await Promise.resolve();
+			await Promise.resolve();
 			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
-		}
 
-		expect(sendTransaction).toHaveBeenCalledTimes(2);
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xabcdef',
-			to: '0x1234'
+			// Determine expected call count based on deployment type
+			const expectedCallCount = name === 'Folio' ? 8 : name === 'DSF' ? 3 : 2;
+
+			// Wait for all transactions to complete
+			const sendTransactionMock = vi.mocked(sendTransaction);
+			let attempts = 0;
+			while (sendTransactionMock.mock.calls.length < expectedCallCount && attempts < 100) {
+				await vi.runAllTimersAsync();
+				await Promise.resolve();
+				await Promise.resolve();
+				attempts++;
+			}
+
+			expect(sendTransaction).toHaveBeenCalled();
 		});
 	});
 
-	it('should call sendTransaction for approval and deployment handleLimitOrderDeploy', async () => {
-		const deployPromise = transactionStore.handleLimitDeploy({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			ioRatio: '0.1',
-			depositAmount: 2000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined
-		});
+	// Parameterized tests for transaction success
+	deploymentHandlers.forEach(({ name, handler }) => {
+		it(`should call transactionSuccess with the correct arguments handle${name}Deploy`, async () => {
+			const deployPromise = handler(transactionStore);
 
-		await deployPromise;
+			await deployPromise;
 
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
+			// Simulate user clicking deploy button
+			const modal = get(rainlangConfirmationModal);
+			modal.onDeploy?.();
 
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for async operations to complete by polling
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
+			// Flush initial async operations
+			await Promise.resolve();
+			await Promise.resolve();
 			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
-		}
 
-		expect(sendTransaction).toHaveBeenCalledTimes(2);
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken'
+			// Determine expected call count based on deployment type
+			const expectedCallCount = name === 'Folio' ? 8 : name === 'DSF' ? 3 : 2;
+
+			// Wait for all transactions to complete first
+			const sendTransactionMock = vi.mocked(sendTransaction);
+			let attempts = 0;
+			while (sendTransactionMock.mock.calls.length < expectedCallCount && attempts < 100) {
+				await vi.runAllTimersAsync();
+				await Promise.resolve();
+				await Promise.resolve();
+				attempts++;
+			}
+
+			// Advance timer to trigger the polling interval
+			await vi.advanceTimersByTimeAsync(2000);
+
+			expect(createRaindexClient).toHaveBeenCalled();
+			expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
+				mockNetwork.id,
+				'0x1234',
+				'0xtxhash'
+			);
 		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xabcdef',
-			to: '0x1234'
-		});
-	});
-
-	it('should call sendTransaction for approval and deployment handleFolioDeploy', async () => {
-		const deployPromise = transactionStore.handleFolioDeploy({
-			selectedToken1: STOXs[0],
-			selectedToken2: STOXs[1],
-			selectedToken3: STOXs[2],
-			selectedToken4: STOXs[3],
-			selectedToken5: STOXs[4],
-			selectedToken6: STOXs[5],
-			selectedToken7: STOXs[6],
-			overrideThreshold: '0.1',
-			overrideFee: '0.1',
-			depositAmount1: 1000000000000000000n,
-			depositAmount2: 2000000000000000000n,
-			depositAmount3: 3000000000000000000n,
-			depositAmount4: 4000000000000000000n,
-			depositAmount5: 5000000000000000000n,
-			depositAmount6: 6000000000000000000n,
-			depositAmount7: 7000000000000000000n,
-			inputVaultId1: undefined,
-			inputVaultId2: undefined,
-			inputVaultId3: undefined,
-			inputVaultId4: undefined,
-			inputVaultId5: undefined,
-			inputVaultId6: undefined,
-			inputVaultId7: undefined,
-			outputVaultId1: undefined,
-			outputVaultId2: undefined,
-			outputVaultId3: undefined,
-			outputVaultId4: undefined,
-			outputVaultId5: undefined,
-			outputVaultId6: undefined,
-			outputVaultId7: undefined
-		});
-
-		await deployPromise;
-
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
-
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for async operations to complete by polling
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 8 && attempts < 100) {
-			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
-		}
-
-		expect(sendTransaction).toHaveBeenCalledTimes(8);
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken1'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken2'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken3'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken4'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken5'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xapproval',
-			to: '0xtoken6'
-		});
-		expect(sendTransaction).toHaveBeenCalledWith(expect.anything(), {
-			data: '0xabcdef',
-			to: '0x1234'
-		});
-	});
-
-	it('should call transactionSuccess with the correct arguments handleDsfDeploy', async () => {
-		const deployPromise = transactionStore.handleDsfDeploy({
-			token1: PAYMENT_TOKEN,
-			token2: STOXs[0],
-			amountIsFastExit: true,
-			notAmountIsFastExit: false,
-			initialIo: '0.1',
-			maxAmount: 1000000000000000000n,
-			minAmount: 1000000000000000000n,
-			depositAmountToken1: 1000000000000000000n,
-			depositAmountToken2: 1000000000000000000n,
-			inputVaultIdToken1: undefined,
-			inputVaultIdToken2: undefined,
-			outputVaultIdToken1: undefined,
-			outputVaultIdToken2: undefined
-		});
-
-		await deployPromise;
-
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
-
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for all transactions to complete first
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 3 && attempts < 100) {
-			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
-		}
-
-		// Advance timer to trigger the polling interval
-		await vi.advanceTimersByTimeAsync(2000);
-
-		expect(createRaindexClient).toHaveBeenCalled();
-		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
-			mockNetwork.id,
-			'0x1234',
-			'0xtxhash'
-		);
-	});
-
-	it('should call transactionSuccess with the correct arguments handleDcaDeploy', async () => {
-		const deployPromise = transactionStore.handleDcaDeploy({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			budgetAmount: 1000000000000000000n,
-			selectedPeriod: '1',
-			selectedPeriodUnit: 'Days',
-			kickoff: '0.1',
-			baseline: '1',
-			minTradeAmount: 1000000000000000000n,
-			maxTradeAmount: 1000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined,
-			depositAmount: 1000000000000000000n
-		});
-
-		await deployPromise;
-
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
-
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for all transactions to complete first
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
-			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
-		}
-
-		// Advance timer to trigger the polling interval
-		await vi.advanceTimersByTimeAsync(2000);
-
-		expect(createRaindexClient).toHaveBeenCalled();
-		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
-			mockNetwork.id,
-			'0x1234',
-			'0xtxhash'
-		);
-	});
-
-	it('should call transactionSuccess with the correct arguments handleLimitOrderDeploy', async () => {
-		const deployPromise = transactionStore.handleLimitDeploy({
-			outputToken: PAYMENT_TOKEN,
-			inputToken: STOXs[0],
-			ioRatio: '1',
-			depositAmount: 1000000000000000000n,
-			inputVaultId: undefined,
-			outputVaultId: undefined
-		});
-
-		await deployPromise;
-
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
-
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for all transactions to complete first
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 2 && attempts < 100) {
-			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
-		}
-
-		// Advance timer to trigger the polling interval
-		await vi.advanceTimersByTimeAsync(2000);
-
-		expect(createRaindexClient).toHaveBeenCalled();
-		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
-			mockNetwork.id,
-			'0x1234',
-			'0xtxhash'
-		);
-	});
-
-	it('should call transactionSuccess with the correct arguments handleFolioDeploy', async () => {
-		const deployPromise = transactionStore.handleFolioDeploy({
-			selectedToken1: STOXs[0],
-			selectedToken2: STOXs[1],
-			selectedToken3: STOXs[2],
-			selectedToken4: STOXs[3],
-			selectedToken5: STOXs[4],
-			selectedToken6: STOXs[5],
-			selectedToken7: STOXs[6],
-			overrideThreshold: '0.1',
-			overrideFee: '0.1',
-			depositAmount1: 1000000000000000000n,
-			depositAmount2: 2000000000000000000n,
-			depositAmount3: 3000000000000000000n,
-			depositAmount4: 4000000000000000000n,
-			depositAmount5: 5000000000000000000n,
-			depositAmount6: 6000000000000000000n,
-			depositAmount7: 7000000000000000000n,
-			inputVaultId1: undefined,
-			inputVaultId2: undefined,
-			inputVaultId3: undefined,
-			inputVaultId4: undefined,
-			inputVaultId5: undefined,
-			inputVaultId6: undefined,
-			inputVaultId7: undefined,
-			outputVaultId1: undefined,
-			outputVaultId2: undefined,
-			outputVaultId3: undefined,
-			outputVaultId4: undefined,
-			outputVaultId5: undefined,
-			outputVaultId6: undefined,
-			outputVaultId7: undefined
-		});
-
-		await deployPromise;
-
-		// Simulate user clicking deploy button
-		const modal = get(rainlangConfirmationModal);
-		modal.onDeploy?.();
-
-		// Flush initial async operations
-		await Promise.resolve();
-		await Promise.resolve();
-		await vi.runAllTimersAsync();
-
-		// Wait for all transactions to complete first
-		const sendTransactionMock = vi.mocked(sendTransaction);
-		let attempts = 0;
-		while (sendTransactionMock.mock.calls.length < 8 && attempts < 100) {
-			await vi.runAllTimersAsync();
-			await Promise.resolve(); // Allow pending promises to resolve
-			await Promise.resolve(); // Double flush to ensure all microtasks complete
-			attempts++;
-		}
-
-		// Advance timer to trigger the polling interval
-		await vi.advanceTimersByTimeAsync(2000);
-
-		expect(createRaindexClient).toHaveBeenCalled();
-		expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
-			mockNetwork.id,
-			'0x1234',
-			'0xtxhash'
-		);
 	});
 });
