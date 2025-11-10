@@ -3,7 +3,7 @@
 	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { OrderV4_ABI, type ProcessedQuote } from '$lib/utils/quote';
-	import { walkOrderbook } from '$lib/utils/marketPrice';
+	import { scaleAmount, walkOrderbook } from '$lib/utils/marketPrice';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import {
@@ -385,12 +385,11 @@
 		// Calculate required input for desired output
 		const bestPrice = filteredOrders[0].price; // Human-readable price (quote per asset)
 
-		// Convert selected amount to human-readable tokens and calculate cost
+		// Convert selected amount to human-readable tokens for buy-side cost math
 		// selectedAmount is in native token decimals, formatUnits handles the conversion
 		const selectedAmountInTokens = parseFloat(
 			formatUnits(selectedAmount, passedOutputToken?.decimals ?? 18)
 		);
-		const requiredInputInTokenTerms = selectedAmountInTokens * bestPrice;
 
 		// Build TakeOrderConfigs for ALL filtered orders in price priority
 		const takeOrderConfigs: TakeOrderConfigV4[] = [];
@@ -433,12 +432,19 @@
 		}
 		const maxIORatioHex = floatWorstPriceResult.value.asHex();
 
-		// User wants to acquire selectedAmount, so input is the constraint
-		// Get input token decimals from the first order's input token
+		// The takeOrders input token is what we spend (quote for buys, asset for sells)
 		const inputTokenDecimals = Number(filteredOrders[0].order.inputs[0]?.token?.decimals) || 18;
-		// Convert human-readable amount to token's native scale (e.g., 1.5 USDC -> 1500000 for 6-decimal token)
 		const inputTokenScale = 10n ** BigInt(inputTokenDecimals);
-		const requiredInputBigInt = BigInt(Math.round(requiredInputInTokenTerms * Number(inputTokenScale)));
+		const requiredInputBigInt =
+			orderSide === 'Buy'
+				? BigInt(
+					Math.round(selectedAmountInTokens * bestPrice * Number(inputTokenScale))
+				  )
+				: scaleAmount(
+					selectedAmount,
+					passedOutputToken?.decimals ?? 18,
+					inputTokenDecimals
+				  );
 		const inputFloat = Float.fromFixedDecimalLossy(requiredInputBigInt, inputTokenDecimals);
 
 		const takeOrdersConfig: TakeOrdersConfigV4 = {

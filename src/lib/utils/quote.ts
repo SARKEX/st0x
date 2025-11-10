@@ -42,9 +42,12 @@ export function hexToBigInt(hex: string): bigint {
 }
 
 // Helper function to get token symbol by address
-function getTokenSymbol(address: string, tokens: PythToken[]): string {
+function getTokenMetadata(address: string, tokens: PythToken[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
-	return token?.symbol || 'UNKNOWN';
+	return {
+		symbol: token?.symbol ?? 'UNKNOWN',
+		decimals: token?.decimals
+	};
 }
 
 // Process orders with their quotes
@@ -127,23 +130,35 @@ function processOrdersWithQuotes(
 					const inputTokenAddress = inputDefinition.token;
 					const outputTokenAddress = outputDefinition.token;
 
-					// Get token symbols - need to check both settlement token and stock tokens for both input and output
-					const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [quoteToken, ...stockTokens]);
-					const outputTokenSymbol = getTokenSymbol(outputTokenAddress, [quoteToken, ...stockTokens]);
+					const allTokens = [quoteToken, ...stockTokens];
+					const inputTokenMeta = getTokenMetadata(inputTokenAddress, allTokens);
+					const outputTokenMeta = getTokenMetadata(outputTokenAddress, allTokens);
 
-					const inputDecimals = Number(inputDefinition.decimals ?? 0);
-					const outputDecimals = Number(outputDefinition.decimals ?? 0);
+					const inputDecimals = Number.isFinite(inputTokenMeta.decimals)
+						? Number(inputTokenMeta.decimals)
+						: undefined;
+					const outputDecimals = Number.isFinite(outputTokenMeta.decimals)
+						? Number(outputTokenMeta.decimals)
+						: undefined;
 
 					const processedQuote: ProcessedQuote = {
 						orderHash: sgOrder.orderHash,
 						maxOutput,
 						ratio,
-						inputTokenSymbol,
-						outputTokenSymbol,
+						inputTokenSymbol: inputTokenMeta.symbol,
+						outputTokenSymbol: outputTokenMeta.symbol,
 						inputTokenAddress,
 						outputTokenAddress,
-						inputTokenDecimals: Number.isFinite(inputDecimals) ? inputDecimals : undefined,
-						outputTokenDecimals: Number.isFinite(outputDecimals) ? outputDecimals : undefined
+						inputTokenDecimals:
+							inputDecimals ??
+							(normalizeAddress(inputTokenAddress) === normalizeAddress(quoteToken.address)
+								? quoteToken.decimals ?? 18
+								: 18),
+						outputTokenDecimals:
+							outputDecimals ??
+							(normalizeAddress(outputTokenAddress) === normalizeAddress(quoteToken.address)
+								? quoteToken.decimals ?? 18
+								: 18)
 					};
 
 					const metrics = describeQuote(processedQuote, quoteToken.address);
