@@ -203,22 +203,6 @@
 				}));
 				orderbook = 'cached';
 
-				console.log('ORDERS USED FOR ' + orderSide.toUpperCase(), {
-					orderCount: fills.length,
-					orders: fills.map((fill) => ({
-						orderHash: fill.quote.orderHash.slice(0, 8),
-						price: fill.price
-					}))
-				});
-
-				console.log('MARKET ORDER PRICE CALCULATION', {
-					orderSide,
-					selectedAmount: selectedAmount.toString(),
-					quantityFilled: quantityFilled.toString(),
-					weightedAveragePrice,
-					marketPrice,
-					marketPriceFormatted: `$${marketPrice.toFixed(2)}`
-				});
 			} else {
 				console.warn('No quantity filled from orderbook', {
 					selectedAmount: selectedAmount.toString(),
@@ -261,7 +245,8 @@
 		const slippageMultiplier = 1.05; // 1.05 = 105% (5% tolerance)
 
 		// Try to get oracle price as reference
-		const oracleEntry = passedOutputToken.address ? $oracleQuotesResource?.data?.[passedOutputToken.address?.toLowerCase()] : null;
+		const oracleAddress = passedOutputToken?.address?.toLowerCase();
+		const oracleEntry = oracleAddress ? $oracleQuotesResource?.data?.[oracleAddress] : null;
 		const oraclePrice = oracleEntry?.price;
 
 		let referencePrice = availableOrders[0].price; // Fallback to best BBO price
@@ -545,6 +530,7 @@
 				<TradeAmountInput
 					aria-label="Quantity"
 					amountToken={passedOutputToken}
+					balanceToken={orderSide === 'Buy' ? paymentToken : passedOutputToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}

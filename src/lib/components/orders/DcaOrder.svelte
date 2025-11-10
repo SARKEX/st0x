@@ -205,6 +205,7 @@
 				<TradeAmountInput
 					aria-label="Target Amount"
 					amountToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
+					balanceToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}

@@ -230,6 +230,7 @@
 				<TradeAmountInput
 					aria-label="Quantity"
 					amountToken={assetToken}
+					balanceToken={orderSide === 'Buy' ? settlementToken : assetToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
