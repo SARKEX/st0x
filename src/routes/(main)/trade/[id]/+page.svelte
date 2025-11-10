@@ -48,7 +48,12 @@
 		ratioToNumber,
 		toDecimal
 	} from '$lib/utils/tokenMath';
-	import type { TimedResource, OracleQuote } from '$lib/stores/network-data-cache';
+	import type {
+		TimedResource,
+		OracleQuote,
+		OrderbookQuoteCache
+	} from '$lib/stores/network-data-cache';
+	import type { ResourceStatus } from '$lib/data/polling-cache';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
@@ -194,6 +199,24 @@
 	let oracleError: string | null = null;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
+	type OrderbookQuoteUiState = {
+		status: ResourceStatus;
+		hasData: boolean;
+		loadingWithoutData: boolean;
+	};
+	const mapOrderbookQuoteState = (
+		resource: TimedResource<OrderbookQuoteCache> | null
+	): OrderbookQuoteUiState => {
+		const status = resource?.status ?? 'idle';
+		const hasData = (resource?.data?.quotes?.length ?? 0) > 0;
+		return {
+			status,
+			hasData,
+			loadingWithoutData: status === 'loading' && !hasData
+		};
+	};
+	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState(null);
+	$: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesResource);
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
 			return '—';
@@ -466,11 +489,11 @@
 	$: {
 		const tradeResource = $tradeActivityResource;
 		const tradeStatus = tradeResource?.status ?? 'idle';
-		const quoteStatus = $orderbookQuotesResource?.status ?? 'idle';
 		const tradeHasData = (tradeResource?.data?.trades?.length ?? 0) > 0;
-		const quoteHasData = ($orderbookQuotesResource?.data?.quotes?.length ?? 0) > 0;
 		const tradeLoading = tradeStatus === 'loading' || (tradeStatus === 'idle' && !tradeHasData);
-		const quoteLoading = quoteStatus === 'loading' || (quoteStatus === 'idle' && !quoteHasData);
+		const quoteLoading =
+			orderbookQuoteUiState.loadingWithoutData ||
+			(orderbookQuoteUiState.status === 'idle' && !orderbookQuoteUiState.hasData);
 		// Don't show loading if we have volume data OR orderbook depth data
 		const hasVolumeData = tradeVolumeBuckets.length > 0;
 		const hasDepthData = orderbookDepth.bids.length > 0 || orderbookDepth.asks.length > 0;
@@ -581,7 +604,7 @@
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Bid Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
-									{#if $orderbookQuotesResource?.status === 'loading'}
+									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
 										${formatNumeric(buyPrice)}
@@ -593,7 +616,7 @@
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Offer Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
-									{#if $orderbookQuotesResource?.status === 'loading'}
+									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
 										${formatNumeric(sellPrice)}

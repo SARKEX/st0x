@@ -39,14 +39,13 @@
 		typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
 	$: if (amountToken) {
-		resetInputAmount();
-	}
-
-	$: if (amountToken) {
 		const fingerprint = `${amountToken.address ?? ''}:${amountToken.chainId ?? ''}`;
 		const fallbackDecimals = parseDecimals((amountToken as Partial<Token>).decimals);
 		const tokenChanged = tokenFingerprint !== fingerprint;
 		tokenFingerprint = fingerprint;
+		if (tokenChanged) {
+			resetInputAmount();
+		}
 		if (tokenChanged || !canParseDecimals(decimals)) {
 			decimals = fallbackDecimals;
 		}
