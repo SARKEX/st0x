@@ -86,7 +86,9 @@ function computeAvailableQuantity(
 	// maxOutputScaled is in 1e18 scale, price is human-readable
 	// Scale price to 1e18 to maintain precision when dividing: (quoteAmount / price)
 	const scaledPrice = BigInt(Math.round(price * 1e18));
-	return maxOutputScaled / scaledPrice;
+	if (scaledPrice <= 0n) return 0n;
+	// Multiply numerator before dividing so the result stays in 1e18 asset scale
+	return (maxOutputScaled * FIXED_POINT_SCALE) / scaledPrice;
 }
 
 export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {

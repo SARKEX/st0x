@@ -67,10 +67,42 @@ describe('walkOrderbook', () => {
 		expect(result.fills.length).toBe(2);
 		expect(result.fills[0].quote.orderHash).toBe('0x1');
 		expect(result.fills[1].quote.orderHash).toBe('0x2');
+		expect(result.fills[0].quantityFilled).toBe(ONE);
+		expect(result.fills[1].quantityFilled).toBe(ONE);
 		// Total quantity should be 2 assets
-		expect(result.quantityFilled).toBe(2n);
+		expect(result.quantityFilled).toBe(2n * ONE);
 		// Average of 1 asset at price 1 and 1 asset at price 2 = (1 + 2) / 2 = 1.5
 		expect(result.weightedAveragePrice).toBeCloseTo(1.5, 6);
+	});
+
+	it('keeps sell-side availability scaled to 1e18 even when quote decimals differ', () => {
+		const quotes: ProcessedQuote[] = [
+			{
+				orderHash: '0xdecimals',
+				maxOutput: fixedToFloatHex(26n * 10n ** 6n, 6), // 26 quote tokens with 6 decimals
+				ratio: ONE_FLOAT_HEX,
+				inputTokenSymbol: 'ASSET',
+				outputTokenSymbol: 'QUOTE6',
+				inputTokenAddress: '0xasset',
+				outputTokenAddress: '0xquote6',
+				inputTokenDecimals: 18,
+				outputTokenDecimals: 6,
+				quotePerAsset: 2
+			}
+		];
+
+		const selectedAmount = ONE; // Want to sell 1 asset
+		const result = walkOrderbook({
+			quotes,
+			orderSide: 'Sell',
+			selectedAmount,
+			assetDecimals: 18
+		});
+
+		expect(result.fills).toHaveLength(1);
+		expect(result.fills[0].quantityFilled).toBe(ONE);
+		expect(result.quantityFilled).toBe(ONE);
+		expect(result.weightedAveragePrice).toBeCloseTo(2, 6);
 	});
 
 	it('respects per-order liquidity when buying', () => {
