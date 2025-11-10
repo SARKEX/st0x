@@ -1,4 +1,10 @@
-import type { RaindexOrder, RaindexOrderQuote, GetOrdersFilters } from '@rainlanguage/orderbook';
+import type {
+	RaindexOrder,
+	RaindexOrderQuote,
+	GetOrdersFilters,
+	OrderV4,
+	SgOrder
+} from '@rainlanguage/orderbook';
 import {
 	networks,
 	TOKENS,
@@ -25,6 +31,13 @@ export interface ProcessedQuote {
 	outputTokenSymbol: string;
 	inputTokenAddress: string;
 	outputTokenAddress: string;
+	inputIOIndex: number;
+	outputIOIndex: number;
+	inputVaultId?: string;
+	outputVaultId?: string;
+	orderData?: OrderV4;
+	sgOrder?: SgOrder;
+	orderbookId?: string;
 	inputTokenDecimals?: number;
 	outputTokenDecimals?: number;
 	assetAddress?: string;
@@ -76,8 +89,8 @@ function processOrdersWithQuotes(
 
 			// Decode order to get token addresses
 			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
-			const orderData = decodedOrder[0];
+					const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
+					const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
 			// Process each quote for this order
 			quotes.forEach((quote) => {
@@ -149,6 +162,13 @@ function processOrdersWithQuotes(
 						outputTokenSymbol: outputTokenMeta.symbol,
 						inputTokenAddress,
 						outputTokenAddress,
+						inputIOIndex: quote.pair.inputIndex ?? 0,
+						outputIOIndex: quote.pair.outputIndex ?? 0,
+						inputVaultId: inputDefinition.vaultId?.toString?.() ?? inputDefinition.vaultId,
+						outputVaultId: outputDefinition.vaultId?.toString?.() ?? outputDefinition.vaultId,
+						orderData,
+						sgOrder,
+						orderbookId: sgOrder.orderbook.id,
 						inputTokenDecimals:
 							inputDecimals ??
 							(normalizeAddress(inputTokenAddress) === normalizeAddress(quoteToken.address)
@@ -396,3 +416,20 @@ export const buildTokenPriceMap = (
 
 	return priceMap;
 };
+export const normalizeOrderData = (orderData: OrderV4): OrderV4 => ({
+	owner: orderData.owner,
+	evaluable: {
+		interpreter: orderData.evaluable.interpreter,
+		store: orderData.evaluable.store,
+		bytecode: orderData.evaluable.bytecode
+	},
+	validInputs: orderData.validInputs.map((input) => ({
+		token: input.token,
+		vaultId: input.vaultId?.toString?.() ?? input.vaultId
+	})),
+	validOutputs: orderData.validOutputs.map((output) => ({
+		token: output.token,
+		vaultId: output.vaultId?.toString?.() ?? output.vaultId
+	})),
+	nonce: orderData.nonce
+});

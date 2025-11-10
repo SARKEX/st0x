@@ -37,6 +37,8 @@ describe('walkOrderbook', () => {
 				outputTokenSymbol: 'QUOTE',
 				inputTokenAddress: '0xasset',
 				outputTokenAddress: '0xquote',
+				inputIOIndex: 0,
+				outputIOIndex: 0,
 				inputTokenDecimals: 18,
 				outputTokenDecimals: 18,
 				quotePerAsset: 1 // Price: 1 QUOTE per asset
@@ -49,6 +51,8 @@ describe('walkOrderbook', () => {
 				outputTokenSymbol: 'QUOTE',
 				inputTokenAddress: '0xasset',
 				outputTokenAddress: '0xquote',
+				inputIOIndex: 0,
+				outputIOIndex: 0,
 				inputTokenDecimals: 18,
 				outputTokenDecimals: 18,
 				quotePerAsset: 2 // Price: 2 QUOTE per asset
@@ -85,6 +89,8 @@ describe('walkOrderbook', () => {
 				outputTokenSymbol: 'QUOTE6',
 				inputTokenAddress: '0xasset',
 				outputTokenAddress: '0xquote6',
+				inputIOIndex: 0,
+				outputIOIndex: 0,
 				inputTokenDecimals: 18,
 				outputTokenDecimals: 6,
 				quotePerAsset: 2
@@ -116,6 +122,8 @@ describe('walkOrderbook', () => {
 				outputTokenSymbol: 'ASSET',
 				inputTokenAddress: '0xquote',
 				outputTokenAddress: '0xasset',
+				inputIOIndex: 0,
+				outputIOIndex: 0,
 				inputTokenDecimals: 18,
 				outputTokenDecimals: 18,
 				quotePerAsset: 1.5 // Price: 1.5 QUOTE per asset
@@ -128,6 +136,8 @@ describe('walkOrderbook', () => {
 				outputTokenSymbol: 'ASSET',
 				inputTokenAddress: '0xquote',
 				outputTokenAddress: '0xasset',
+				inputIOIndex: 0,
+				outputIOIndex: 0,
 				inputTokenDecimals: 18,
 				outputTokenDecimals: 18,
 				quotePerAsset: 2 // Price: 2 QUOTE per asset

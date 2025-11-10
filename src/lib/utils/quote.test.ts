@@ -30,6 +30,10 @@ function buildQuote(overrides: Partial<ProcessedQuote>): ProcessedQuote {
 		outputTokenSymbol: 'TOKEN',
 		inputTokenAddress: '0xUSDC',
 		outputTokenAddress: '0xToken',
+		inputIOIndex: 0,
+		outputIOIndex: 0,
+		inputVaultId: '0x01',
+		outputVaultId: '0x02',
 		inputTokenDecimals: 6,
 		outputTokenDecimals: 18,
 		...overrides

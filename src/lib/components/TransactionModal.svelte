@@ -2,15 +2,17 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import transactionStore from '$lib/transactionStore';
-	import { TransactionStatus } from '$lib/transactionStore';
+	import transactionStore, { TransactionStatus } from '$lib/transactionStore';
 	import { TransactionErrorMessage } from '$lib/types/errors';
 	// currentNetwork not needed directly; TxLink uses it from store
 	import TxLink from '$lib/components/ui/TxLink.svelte';
+	import { formatUnits } from 'viem';
 
 	const handleClose = () => {
 		return transactionStore.reset();
 	};
+
+	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
 </script>
 
 <Modal
@@ -86,6 +88,43 @@
 						<div class="text-base text-gray-300" data-testid="success-message">
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 							{@html $transactionStore.message}
+						</div>
+					{/if}
+
+					{#if marketOrderSummary}
+						<div class="w-full rounded-md border border-white/10 bg-gray-900/50 p-4 text-left text-sm text-gray-200">
+							<div class="mb-3 text-xs uppercase tracking-wide text-gray-500">
+								Market Order Summary
+							</div>
+							<div class="flex justify-between">
+								<span class="text-gray-400">Side</span>
+								<span class="font-medium">{marketOrderSummary.orderSide}</span>
+							</div>
+							<div class="mt-2 flex justify-between">
+								<span class="text-gray-400">Quantity Filled</span>
+								<span class="font-medium">
+									{formatUnits(
+										marketOrderSummary.quantityFilled,
+										marketOrderSummary.outputTokenDecimals
+									)}
+									{marketOrderSummary.outputTokenSymbol}
+								</span>
+							</div>
+							<div class="mt-2 flex justify-between">
+								<span class="text-gray-400">Average Price</span>
+								<span class="font-medium">
+									{marketOrderSummary.averagePrice.toFixed(6)} {marketOrderSummary.paymentTokenSymbol}
+								</span>
+							</div>
+							<div class="mt-2 flex justify-between">
+								<span class="text-gray-400">Slippage</span>
+								<span class="font-medium">{marketOrderSummary.actualSlippage.toString()}%</span>
+							</div>
+							{#if marketOrderSummary.isPartialFill}
+								<div class="mt-3 rounded-md bg-yellow-900/30 p-2 text-xs text-yellow-200">
+									Partial fill: not all requested quantity was available within the selected slippage.
+								</div>
+							{/if}
 						</div>
 					{/if}
 

@@ -67,11 +67,26 @@ export enum TransactionStatus {
 	ERROR = 'Something went wrong'
 }
 
+export interface MarketOrderSummary {
+	orderSide: 'Buy' | 'Sell';
+	quantityFilled: bigint;
+	outputTokenDecimals: number;
+	outputTokenSymbol: string;
+	averagePrice: number;
+	paymentTokenSymbol: string;
+	actualSlippage: bigint;
+	isPartialFill: boolean;
+}
+
+export interface TransactionMetadata {
+	marketOrderSummary?: MarketOrderSummary;
+}
+
 const initialState = {
 	status: TransactionStatus.IDLE,
 	error: '',
 	hash: '',
-	data: null,
+	data: null as TransactionMetadata | null,
 	functionName: '',
 	message: ''
 };
@@ -80,17 +95,28 @@ const transactionStore = () => {
 	const { subscribe, set, update } = writable(initialState);
 	const reset = () => set(initialState);
 
+	const normalizeCalldata = (value: string | Uint8Array): `0x${string}` => {
+		if (typeof value === 'string') {
+			return (value.startsWith('0x') ? value : `0x${value}`) as `0x${string}`;
+		}
+		const hex = Array.from(value)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join('');
+		return `0x${hex}` as `0x${string}`;
+	};
+
 	// Generic state update helper
 	const setState = (
 		status: TransactionStatus,
-		options: { message?: string; hash?: string; error?: string } = {}
+		options: { message?: string; hash?: string; error?: string; data?: TransactionMetadata | null } = {}
 	) =>
 		update((state) => ({
 			...state,
 			status,
 			message: options.message ?? '',
 			hash: options.hash ?? '',
-			error: options.error ?? ''
+			error: options.error ?? '',
+			data: options.data ?? null
 		}));
 
 	const checkingWalletAllowance = (message?: string) =>
@@ -98,8 +124,8 @@ const transactionStore = () => {
 	const awaitWalletConfirmation = (message?: string) =>
 		setState(TransactionStatus.PENDING_WALLET, { message });
 	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
-	const transactionSuccess = (hash: string, message?: string) =>
-		setState(TransactionStatus.SUCCESS, { hash, message });
+	const transactionSuccess = (hash: string, message?: string, data?: TransactionMetadata) =>
+		setState(TransactionStatus.SUCCESS, { hash, message, data });
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
 
@@ -308,21 +334,26 @@ const transactionStore = () => {
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV4,
 		raindexOrder: SgOrder,
-		requiredApprovalAmount: bigint
+		requiredApprovalAmount: bigint,
+		options?: {
+			ioIndexes?: { input: number; output: number };
+			summary?: MarketOrderSummary;
+		}
 	) => {
-		console.log('args : ', args);
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
+		const inputIndex = options?.ioIndexes?.input ?? 0;
+		const outputIndex = options?.ioIndexes?.output ?? 0;
 
 		// Get the input token from the first order
-		const inputToken = raindexOrder.inputs[0];
+		const inputToken = raindexOrder.inputs[inputIndex];
 		if (!inputToken) {
 			return transactionError('No input token found in order' as TransactionErrorMessage);
 		}
 
-		const outputToken = raindexOrder.outputs[0];
+		const outputToken = raindexOrder.outputs[outputIndex];
 		if (!outputToken) {
 			return transactionError('No input token found in order' as TransactionErrorMessage);
 		}
@@ -376,16 +407,7 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
-			// Convert Uint8Array to hex string
-			const calldata =
-				'0x' +
-				Array.from(result.value)
-					.map((b) => {
-						const hex = Number(b).toString(16);
-						return hex.length === 1 ? '0' + hex : hex;
-					})
-					.join('');
-
+			const calldata = normalizeCalldata(result.value as string | Uint8Array);
 			hash = await sendTransaction(config, {
 				data: calldata as Hex,
 				to: raindexOrder.orderbook.id as `0x${string}`
@@ -423,61 +445,65 @@ const transactionStore = () => {
 			if (!$resource?.data?.trades) return;
 
 			// Search for our specific trade in the cached data
-			const trade = $resource.data.trades.find(
-				(t) =>
-					t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
-					t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
-			) as unknown as {
-				tradeEvent?: { transaction?: { id?: string } };
-				order?: {
-					orderHash?: string;
-					inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-					outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-				};
-				inputVaultBalanceChange?: { amount?: string | number };
-				outputVaultBalanceChange?: { amount?: string | number };
+		const trade = $resource.data.trades.find(
+			(t) =>
+				t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
+				t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
+		) as unknown as {
+			tradeEvent?: { transaction?: { id?: string } };
+			order?: {
+				orderHash?: string;
+				inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
+				outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
 			};
+			inputVaultBalanceChange?: { amount?: string | number };
+			outputVaultBalanceChange?: { amount?: string | number };
+		};
 
-			if (
-				trade &&
-				trade.inputVaultBalanceChange &&
-				trade.outputVaultBalanceChange &&
-				trade.order?.inputs?.[0]?.token &&
-				trade.order?.outputs?.[0]?.token
-			) {
-				cleanup();
-				const chainId = network.id;
-				const tokenSold = `${parseFloat(
-					formatUnits(
-						BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-						trade.order.inputs[0].token.decimals ?? 18
-					)
-				)} ${trade.order.inputs[0].token.symbol}`;
-				const tokenBought = `${parseFloat(
-					formatUnits(
-						BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-						trade.order.outputs[0].token.decimals ?? 18
-					)
-				)} ${trade.order.outputs[0].token.symbol}`;
+		if (
+			trade &&
+			trade.inputVaultBalanceChange &&
+			trade.outputVaultBalanceChange &&
+			trade.order?.inputs?.[inputIndex]?.token &&
+			trade.order?.outputs?.[outputIndex]?.token
+		) {
+			cleanup();
+			const chainId = network.id;
+			const tokenSold = `${parseFloat(
+				formatUnits(
+					BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
+					trade.order.inputs[inputIndex].token.decimals ?? 18
+				)
+			)} ${trade.order.inputs[inputIndex].token.symbol}`;
+			const tokenBought = `${parseFloat(
+				formatUnits(
+					BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
+					trade.order.outputs[outputIndex].token.decimals ?? 18
+				)
+			)} ${trade.order.outputs[outputIndex].token.symbol}`;
 
-				const orderLink = createRaindexLink(
-					chainId,
-					raindexOrder.orderbook.id,
-					raindexOrder.orderHash,
-					'View order on Raindex'
-				);
-				const link = `
-				<div class="flex flex-col gap-2 text-center">
-					<div class="text-base text-gray-300">
-						${tokenBought} bought, ${tokenSold} sold
-					</div>
-					${orderLink}
+			const orderLink = createRaindexLink(
+				chainId,
+				raindexOrder.orderbook.id,
+				raindexOrder.orderHash,
+				'View order on Raindex'
+			);
+			const link = `
+			<div class="flex flex-col gap-2 text-center">
+				<div class="text-base text-gray-300">
+					${tokenBought} bought, ${tokenSold} sold
 				</div>
-			`;
+				${orderLink}
+			</div>
+		`;
 
-				return transactionSuccess(hash, link);
-			}
-		});
+			return transactionSuccess(
+				hash,
+				link,
+				options?.summary ? { marketOrderSummary: options.summary } : undefined
+			);
+		}
+	});
 
 		// Safety timeout: give up after 5 minutes if trade not found
 		// This gives the subgraph time to index the transaction and trade

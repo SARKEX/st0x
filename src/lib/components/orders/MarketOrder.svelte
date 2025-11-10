@@ -2,7 +2,7 @@
 	import type { CategorizedToken } from '$lib/network';
 	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
-	import { OrderV4_ABI, type ProcessedQuote } from '$lib/utils/quote';
+	import { OrderV4_ABI, normalizeOrderData, type ProcessedQuote } from '$lib/utils/quote';
 	import { scaleAmount, walkOrderbook } from '$lib/utils/marketPrice';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
@@ -22,7 +22,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
-	import transactionStore from '$lib/transactionStore';
+import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore';
 	import { Float } from '@rainlanguage/float';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -31,6 +31,8 @@
 	// Buy order: assetToken is INPUT (what we want), paymentToken is OUTPUT (what we give)
 	// Sell order: assetToken is OUTPUT (what we give), paymentToken is INPUT (what we want)
 	export let passedOutputToken: CategorizedToken | undefined;
+
+	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
@@ -42,19 +44,10 @@
 		orderData: OrderV4;
 		quotes: RaindexOrderQuote[];
 		price: number; // Human-readable price (quote per asset)
+		inputIOIndex: number;
+		outputIOIndex: number;
 	}> = [];
 	let orderbook: string | undefined = undefined;
-
-	// Transaction results
-	let transactionHash: string | undefined = undefined;
-	let transactionResults:
-		| {
-				quantityFilled: bigint;
-				averagePrice: number; // Human-readable price
-				actualSlippage: bigint;
-				isPartialFill: boolean;
-		  }
-		| undefined = undefined;
 
 	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.paymentTokens?.[0];
 	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
@@ -193,15 +186,18 @@
 				marketPrice = weightedAveragePrice;
 
 				availableOrders = fills.map((fill) => ({
-					order: {
-						orderHash: fill.quote.orderHash,
-						orderbook: { id: 'cached' }
-					} as unknown as SgOrder,
-					orderData: {} as unknown as OrderV4,
+					order: (fill.quote.sgOrder as SgOrder) ??
+						({
+							orderHash: fill.quote.orderHash,
+							orderbook: { id: fill.quote.orderbookId ?? 'cached' }
+						} as unknown as SgOrder),
+					orderData: (fill.quote.orderData as OrderV4) ?? ({} as OrderV4),
 					quotes: [] as RaindexOrderQuote[],
-					price: fill.price
+					price: fill.price,
+					inputIOIndex: fill.quote.inputIOIndex ?? 0,
+					outputIOIndex: fill.quote.outputIOIndex ?? 0
 				}));
-				orderbook = 'cached';
+				orderbook = fills[0]?.quote.orderbookId ?? 'cached';
 
 			} else {
 				console.warn('No quantity filled from orderbook', {
@@ -278,11 +274,14 @@
 		}
 
 		try {
-			// Force refresh orderbook quotes to get latest orders and prices
-			// This ensures we have the most current data before executing the transaction
+			// Refresh orderbook quotes only if data is stale (>20s) to avoid extra latency
 			isLoadingPrice = true;
 			priceError = false;
-			await ensureResource($currentNetwork.id, 'orderbookQuotes', { force: true });
+			const lastUpdated = $orderbookQuotesResource?.updatedAt ?? 0;
+			const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
+			await ensureResource($currentNetwork.id, 'orderbookQuotes', {
+				force: isStaleQuotes
+			});
 
 			// Recalculate prices with fresh data
 			await fetchMarketPrice();
@@ -306,60 +305,70 @@
 			return;
 		}
 
+		let executableOrders = filteredOrders;
+
 		// Fetch the actual order details needed for transaction execution
 		// These weren't fetched during price estimation (which used cached data)
 		try {
 			const client = await createRaindexClient();
 
-			for (const orderInfo of filteredOrders) {
-				// Skip if we already have the order data
-				if (orderInfo.orderData.owner) {
-					continue;
-				}
+			await Promise.all(
+				filteredOrders.map(async (orderInfo) => {
+					if (orderInfo.orderData.owner) return;
 
-				// Fetch the order by hash
-				const ordersResult = await client.getOrders(
-					[$currentNetwork.id],
-					{
-						active: true,
-						owners: [],
-						orderHash: orderInfo.order.orderHash as `0x${string}`
-					},
-					1
-				);
+					try {
+						const ordersResult = await client.getOrders(
+							[$currentNetwork.id],
+							{
+								active: true,
+								owners: [],
+								orderHash: orderInfo.order.orderHash as `0x${string}`
+							},
+							1
+						);
 
-				if (ordersResult.error || !ordersResult.value || ordersResult.value.length === 0) {
-					console.error('Failed to fetch order:', orderInfo.order.orderHash);
-					continue;
-				}
+						if (ordersResult.error || !ordersResult.value || ordersResult.value.length === 0) {
+							console.error('Failed to fetch order:', orderInfo.order.orderHash);
+							return;
+						}
 
-				const raindexOrderObj = ordersResult.value[0];
+						const raindexOrderObj = ordersResult.value[0];
+						const quotesResult = await raindexOrderObj.getQuotes();
+						if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
+							return;
+						}
 
-				// Get quotes for the order
-				const quotesResult = await raindexOrderObj.getQuotes();
-				if (quotesResult.error || !quotesResult.value || quotesResult.value.length === 0) {
-					continue;
-				}
+						const validQuotes = quotesResult.value.filter(
+							(q: RaindexOrderQuote) => q.success && q.data
+						);
+						if (validQuotes.length === 0) return;
 
-				const validQuotes = quotesResult.value.filter(
-					(q: RaindexOrderQuote) => q.success && q.data
-				);
-				if (validQuotes.length === 0) continue;
+						const sgOrderResult = raindexOrderObj.convertToSgOrder();
+						if (sgOrderResult.error || !sgOrderResult.value) return;
 
-				// Convert to SgOrder and decode
-				const sgOrderResult = raindexOrderObj.convertToSgOrder();
-				if (sgOrderResult.error || !sgOrderResult.value) continue;
+						const sgOrder = sgOrderResult.value;
+						const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
+						const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
-				const sgOrder = sgOrderResult.value;
-				const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
-				const orderData = decodedOrder[0] as OrderV4;
+						orderInfo.order = sgOrder;
+						orderInfo.orderData = orderData;
+						orderInfo.quotes = validQuotes;
+					} catch (orderError) {
+						console.error('Error hydrating order', orderInfo.order.orderHash, orderError);
+					}
+				})
+			);
 
-				// Update the order info with actual data
-				orderInfo.order = sgOrder;
-				orderInfo.orderData = orderData;
-				orderInfo.quotes = validQuotes;
-				orderbook = sgOrder.orderbook.id;
+			const hydrated = filteredOrders.filter((info) => info.orderData?.owner);
+			if (!hydrated.length) {
+				console.error('No executable orders available after hydration');
+				priceError = true;
+				isLoadingPrice = false;
+				return;
 			}
+
+			orderbook = hydrated[0].order.orderbook.id;
+			executableOrders = hydrated;
 		} catch (error) {
 			console.error('Error fetching order details:', error);
 			priceError = true;
@@ -368,7 +377,9 @@
 		}
 
 		// Calculate required input for desired output
-		const bestPrice = filteredOrders[0].price; // Human-readable price (quote per asset)
+		const bestPrice = executableOrders[0].price; // Human-readable price (quote per asset)
+		const primaryInputIndex = executableOrders[0].inputIOIndex ?? 0;
+		const primaryOutputIndex = executableOrders[0].outputIOIndex ?? 0;
 
 		// Convert selected amount to human-readable tokens for buy-side cost math
 		// selectedAmount is in native token decimals, formatUnits handles the conversion
@@ -379,35 +390,44 @@
 		// Build TakeOrderConfigs for ALL filtered orders in price priority
 		const takeOrderConfigs: TakeOrderConfigV4[] = [];
 
-		for (const orderInfo of filteredOrders) {
+		for (const orderInfo of executableOrders) {
+			if (!orderInfo.orderData?.validInputs?.length || !orderInfo.orderData?.validOutputs?.length) {
+				console.warn('Skipping order without IO definitions', orderInfo.order.orderHash);
+				continue;
+			}
+
+			const inputIndex = orderInfo.inputIOIndex ?? 0;
+			const outputIndex = orderInfo.outputIOIndex ?? 0;
+			const hasInput = orderInfo.orderData.validInputs[inputIndex];
+			const hasOutput = orderInfo.orderData.validOutputs[outputIndex];
+			if (!hasInput || !hasOutput) {
+				console.warn('Skipping order with mismatched IO indexes', {
+					orderHash: orderInfo.order.orderHash,
+					inputIndex,
+					outputIndex
+				});
+				continue;
+			}
+
 			const takeOrderConfig: TakeOrderConfigV4 = {
-				order: {
-					owner: orderInfo.orderData.owner,
-					evaluable: orderInfo.orderData.evaluable,
-					validInputs: [
-						{
-							token: orderInfo.orderData.validInputs[0].token,
-							vaultId: orderInfo.orderData.validInputs[0].vaultId.toString()
-						}
-					],
-					validOutputs: [
-						{
-							token: orderInfo.orderData.validOutputs[0].token,
-							vaultId: orderInfo.orderData.validOutputs[0].vaultId.toString()
-						}
-					],
-					nonce: orderInfo.orderData.nonce
-				},
-				inputIOIndex: '0',
-				outputIOIndex: '0',
+				order: orderInfo.orderData,
+				inputIOIndex: inputIndex.toString(),
+				outputIOIndex: outputIndex.toString(),
 				signedContext: []
 			};
 
 			takeOrderConfigs.push(takeOrderConfig);
 		}
 
+		if (takeOrderConfigs.length === 0) {
+			console.error('Unable to build take order configs for selected liquidity');
+			priceError = true;
+			isLoadingPrice = false;
+			return;
+		}
+
 		// Use worst price in filtered set for maximumIORatio (already within 10%)
-		const worstPrice = filteredOrders[filteredOrders.length - 1].price;
+		const worstPrice = executableOrders[executableOrders.length - 1].price;
 		const floatWorstPriceResult = Float.parse(worstPrice.toString());
 		if (floatWorstPriceResult.error || !floatWorstPriceResult.value) {
 			console.error('Failed to encode worst price as Float:', floatWorstPriceResult.error);
@@ -418,7 +438,9 @@
 		const maxIORatioHex = floatWorstPriceResult.value.asHex();
 
 		// The takeOrders input token is what we spend (quote for buys, asset for sells)
-		const inputTokenDecimals = Number(filteredOrders[0].order.inputs[0]?.token?.decimals) || 18;
+		const inputTokenDecimals = Number(
+			executableOrders[0].order.inputs[primaryInputIndex]?.token?.decimals
+		) || 18;
 		const inputTokenScale = 10n ** BigInt(inputTokenDecimals);
 		const requiredInputBigInt =
 			orderSide === 'Buy'
@@ -432,8 +454,9 @@
 				  );
 		const inputFloat = Float.fromFixedDecimalLossy(requiredInputBigInt, inputTokenDecimals);
 
+		const zeroFloatHex = Float.fromBigint(0n).asHex();
 		const takeOrdersConfig: TakeOrdersConfigV4 = {
-			minimumInput: inputFloat.float.asHex(),
+			minimumInput: zeroFloatHex,
 			maximumInput: inputFloat.float.asHex(),
 			maximumIORatio: maxIORatioHex,
 			orders: takeOrderConfigs,
@@ -446,80 +469,38 @@
 			requiredApprovalAmount = requiredApprovalAmount + 1n;
 		}
 
+		const quantityFilled = selectedAmount;
+		const averagePrice = bestPrice;
+		const slippagePercent = worstPrice > 0 ? ((worstPrice - bestPrice) / bestPrice) * 100 : 0;
+		const slippage = BigInt(Math.round(slippagePercent));
+		const summary: MarketOrderSummary = {
+			orderSide,
+			quantityFilled,
+			outputTokenDecimals: passedOutputToken.decimals,
+			outputTokenSymbol: passedOutputToken.symbol,
+			averagePrice,
+			paymentTokenSymbol,
+			actualSlippage: slippage,
+			isPartialFill: false
+		};
+
 		try {
 			await transactionStore.handleTakeOrders(
 				takeOrdersConfig,
-				filteredOrders[0].order,
-				requiredApprovalAmount
+				executableOrders[0].order,
+				requiredApprovalAmount,
+				{
+					ioIndexes: { input: primaryInputIndex, output: primaryOutputIndex },
+					summary
+				}
 			);
-
-			// Assume transaction succeeded - in a real implementation,
-			// you'd listen to transaction receipts and update these values
-			// For now, we'll show estimated results
-			const quantityFilled = selectedAmount;
-			const averagePrice = bestPrice;
-			// Calculate slippage as percentage: ((worst - best) / best) * 100
-			const slippagePercent = worstPrice > 0 ? ((worstPrice - bestPrice) / bestPrice) * 100 : 0;
-			const slippage = BigInt(Math.round(slippagePercent));
-
-			transactionResults = {
-				quantityFilled,
-				averagePrice,
-				actualSlippage: slippage,
-				isPartialFill: false
-			};
-
-			// Extract hash from transaction notification
-			// (This would typically come from a transaction receipt event)
-			transactionHash = '0x' + Math.random().toString(16).slice(2, 66);
 		} catch (error) {
 			console.error('Transaction failed:', error);
 		}
 	};
 </script>
 
-{#if transactionResults && transactionHash && passedOutputToken}
-	<!-- Transaction Results -->
-	<div class={containerStyles.cardBordered}>
-		<h4 class="mb-3 text-sm font-medium text-gray-300">Transaction Complete</h4>
-		<div class="space-y-3 text-sm">
-			<div class="flex justify-between">
-				<span class="text-gray-400">Transaction Hash</span>
-				<a
-					href="https://basescan.io/tx/{transactionHash}"
-					target="_blank"
-					rel="noreferrer"
-					class="font-mono text-blue-400 hover:text-blue-300"
-				>
-					{transactionHash.slice(0, 10)}...{transactionHash.slice(-8)}
-				</a>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Quantity Filled</span>
-				<span class="font-medium">
-					{formatUnits(transactionResults.quantityFilled, passedOutputToken.decimals)}
-					{passedOutputToken.symbol}
-				</span>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Average Price</span>
-				<span class="font-medium"
-					>{transactionResults.averagePrice.toFixed(6)}</span
-				>
-			</div>
-			<div class="flex justify-between">
-				<span class="text-gray-400">Actual Slippage</span>
-				<span class="font-medium">{transactionResults.actualSlippage.toString()}%</span>
-			</div>
-			{#if transactionResults.isPartialFill}
-				<div class="mt-2 rounded-md bg-yellow-900/20 p-2 text-xs text-yellow-300">
-					⚠️ Partial fill due to 10% slippage breaker. Not all requested quantity was available
-					within acceptable price range.
-				</div>
-			{/if}
-		</div>
-	</div>
-{:else if $currentNetwork && passedOutputToken}
+	{#if $currentNetwork && passedOutputToken}
 	<div class="space-y-4">
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
@@ -628,9 +609,7 @@
 			{/if}
 		</button>
 	</div>
-{/if}
-
-{#if !$currentNetwork || !passedOutputToken}
+{:else}
 	<div class="flex h-32 items-center justify-center">
 		<LoadingSpinner size="md" text="Loading..." />
 	</div>
