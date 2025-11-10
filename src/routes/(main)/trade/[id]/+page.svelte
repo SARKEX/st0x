@@ -11,7 +11,7 @@
 	} from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { formatUnits } from 'viem';
-import { TOKENS } from '$lib/network';
+	import { TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
@@ -41,7 +41,13 @@ import { TOKENS } from '$lib/network';
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
-	import { analyzeTrade, createTokenLookup, normalizeAddress, ratioToNumber } from '$lib/utils/tokenMath';
+	import {
+		analyzeTrade,
+		createTokenLookup,
+		normalizeAddress,
+		ratioToNumber,
+		toDecimal
+	} from '$lib/utils/tokenMath';
 	import type { TimedResource, OracleQuote } from '$lib/stores/network-data-cache';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -312,10 +318,10 @@ import { TOKENS } from '$lib/network';
 				const outputAddress = quote.outputTokenAddress.toLowerCase();
 				// ASK: quote token -> asset (what you pay when buying)
 				if (inputAddress === quoteAddress && outputAddress === assetAddress) {
-					const tokenAmount = Number(quote.maxOutput);
+					const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 					const price = ratio;
 					if (
-						Number.isFinite(tokenAmount) &&
+						tokenAmount !== null &&
 						Number.isFinite(price) &&
 						tokenAmount > 0 &&
 						price > 0
@@ -325,14 +331,17 @@ import { TOKENS } from '$lib/network';
 				}
 				// BID: asset -> quote token (what you get when selling)
 				if (inputAddress === assetAddress && outputAddress === quoteAddress) {
-					const quoteAmount = Number(quote.maxOutput);
+					const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 					const price = 1 / ratio;
-					if (Number.isFinite(quoteAmount) && quoteAmount > 0) {
-						if (Number.isFinite(price) && price > 0) {
-							const tokenAmount = quoteAmount / price;
-							if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
-								bestBid = bestBid === null ? price : Math.max(bestBid, price);
-							}
+					if (
+						quoteAmount !== null &&
+						quoteAmount > 0 &&
+						Number.isFinite(price) &&
+						price > 0
+					) {
+						const tokenAmount = quoteAmount / price;
+						if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
+							bestBid = bestBid === null ? price : Math.max(bestBid, price);
 						}
 					}
 				}
@@ -420,23 +429,23 @@ import { TOKENS } from '$lib/network';
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
-			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
-				const tokenAmount = Number(quote.maxOutput);
-				const price = ratio;
-				if (
-					!Number.isFinite(tokenAmount) ||
-					!Number.isFinite(price) ||
-					tokenAmount <= 0 ||
-					price <= 0
-				) {
+				if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+					const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
+					const price = ratio;
+					if (
+						tokenAmount === null ||
+						!Number.isFinite(price) ||
+						tokenAmount <= 0 ||
+						price <= 0
+					) {
+						return;
+					}
+					asks.push({ price, quantity: tokenAmount });
 					return;
 				}
-				asks.push({ price, quantity: tokenAmount });
-				return;
-			}
 			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
-				const quoteAmount = Number(quote.maxOutput);
-				if (!Number.isFinite(quoteAmount) || quoteAmount <= 0) {
+				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
+				if (quoteAmount === null || quoteAmount <= 0) {
 					return;
 				}
 				const price = 1 / ratio;
