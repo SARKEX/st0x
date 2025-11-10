@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { CategorizedToken } from '$lib/network';
-	import { currentNetwork, orderbookQuotesResource } from '$lib/stores';
+	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { OrderV4_ABI, type ProcessedQuote } from '$lib/utils/quote';
 	import { walkOrderbook } from '$lib/utils/marketPrice';
@@ -122,21 +122,26 @@
 			const assetAddressNormalized = normalizeAddress(passedOutputToken.address);
 			const paymentTokenAddressNormalized = normalizeAddress(paymentTokenAddress);
 
-				const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-					const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-					const targetOutputAddress =
-						orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
-					const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
- 					const quotePerAsset = quote.quotePerAsset;
+			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
+				const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
+				const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+				const targetOutputAddress =
+					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
+				const targetInputAddress =
+					orderSide === 'Buy' ? paymentTokenAddressNormalized : assetAddressNormalized;
+				const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
+				const quotePerAsset = quote.quotePerAsset;
 
-					return (
-						quoteOutputAddressNormalized === targetOutputAddress &&
-						quote.side === targetSide &&
-						quotePerAsset !== undefined &&
-						Number.isFinite(quotePerAsset) &&
-						quotePerAsset > 0
-					);
-				});
+				return (
+					quoteOutputAddressNormalized === targetOutputAddress &&
+					quoteInputAddressNormalized === targetInputAddress &&
+					quote.side === targetSide &&
+					quotePerAsset !== undefined &&
+					Number.isFinite(quotePerAsset) &&
+					quotePerAsset > 0
+				);
+			});
+
 
 			if (relevantQuotes.length === 0) {
 				console.warn('No relevant quotes found', {
@@ -244,7 +249,7 @@
 		orderbook = undefined;
 	}
 
-	// Filter orders to remove those >10% above best price, return filtered array
+	// Filter orders to remove those >5% from oracle price, return filtered array
 	function getFilteredOrders(): Array<{
 		order: SgOrder;
 		orderData: OrderV4;
@@ -253,11 +258,22 @@
 	}> {
 		if (availableOrders.length === 0) return [];
 
-		const bestPrice = availableOrders[0].price; // First is best (already sorted) - human-readable
-		const slippageMultiplier = 1.1; // 1.1 = 110%
+		const slippageMultiplier = 1.05; // 1.05 = 105% (5% tolerance)
 
-		// Filter to only orders within 10% of best price
-		const maxAcceptablePrice = bestPrice * slippageMultiplier;
+		// Try to get oracle price as reference
+		const oracleEntry = passedOutputToken.address ? $oracleQuotesResource?.data?.[passedOutputToken.address?.toLowerCase()] : null;
+		const oraclePrice = oracleEntry?.price;
+
+		let referencePrice = availableOrders[0].price; // Fallback to best BBO price
+		let priceSource = 'BBO';
+
+		if (oraclePrice && Number.isFinite(oraclePrice) && oraclePrice > 0) {
+			referencePrice = oraclePrice;
+			priceSource = 'Oracle';
+		}
+
+		// Filter to only orders within 10% of reference price
+		const maxAcceptablePrice = referencePrice * slippageMultiplier;
 
 		const filtered = availableOrders.filter((order) => {
 			return order.price <= maxAcceptablePrice;
