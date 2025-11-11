@@ -26,11 +26,7 @@ describe('network', () => {
 			expect(network?.name).toBe('base');
 		});
 
-		it.each([
-			[9999],
-			[-1],
-			[0]
-		])('should return undefined for invalid network id: %s', (id) => {
+		it.each([[9999], [-1], [0]])('should return undefined for invalid network id: %s', (id) => {
 			expect(getNetworkById(id)).toBeUndefined();
 		});
 	});
@@ -42,10 +38,7 @@ describe('network', () => {
 			expect(network?.chainId).toBe(8453);
 		});
 
-		it.each([
-			[9999],
-			[-1]
-		])('should return undefined for invalid chainId: %s', (chainId) => {
+		it.each([[9999], [-1]])('should return undefined for invalid chainId: %s', (chainId) => {
 			expect(getNetworkByChainId(chainId)).toBeUndefined();
 		});
 	});
@@ -97,7 +90,11 @@ describe('network', () => {
 		])('should get tokens for category %s', (category, validator) => {
 			const tokens = getTokensByCategory(category);
 			expect(validator(tokens)).toBe(true);
-			expect(tokens.every((t) => t.category === category || category === 'CRYPTO' || category === 'UNKNOWN')).toBe(true);
+			expect(
+				tokens.every(
+					(t) => t.category === category || category === 'CRYPTO' || category === 'UNKNOWN'
+				)
+			).toBe(true);
 		});
 
 		it('should not include duplicate tokens', () => {

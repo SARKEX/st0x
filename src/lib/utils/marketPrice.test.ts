@@ -152,11 +152,11 @@ describe('walkOrderbook', () => {
 			assetDecimals: 18
 		});
 
-	// Quote 1 can provide 1 asset, Quote 2 can provide 1.5, together they fill 2.5
-	expect(result.fills.length).toBe(2);
-	expect(result.quantityFilled).toBe((5n * ONE) / 2n); // 2.5 * ONE
-	expect(result.fills[0].quantityFilled).toBe(ONE); // 1 token from quote 1
-	expect(result.fills[1].quantityFilled).toBe(ONE + half); // 1.5 tokens from quote 2
+		// Quote 1 can provide 1 asset, Quote 2 can provide 1.5, together they fill 2.5
+		expect(result.fills.length).toBe(2);
+		expect(result.quantityFilled).toBe((5n * ONE) / 2n); // 2.5 * ONE
+		expect(result.fills[0].quantityFilled).toBe(ONE); // 1 token from quote 1
+		expect(result.fills[1].quantityFilled).toBe(ONE + half); // 1.5 tokens from quote 2
 		// Buying 1 at 1.5 QUOTE = 1.5, buying 1.5 at 2 QUOTE = 3, total 4.5 QUOTE for 2.5 assets = 1.8
 		expect(result.weightedAveragePrice).toBeCloseTo(1.8, 6);
 	});

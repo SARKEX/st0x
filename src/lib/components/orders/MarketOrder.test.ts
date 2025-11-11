@@ -170,5 +170,4 @@ describe('MarketOrder price calculations', () => {
 			expect(result).toBe(expected);
 		});
 	});
-
 });

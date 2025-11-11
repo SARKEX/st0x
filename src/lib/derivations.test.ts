@@ -154,7 +154,6 @@ describe('derivations', () => {
 				expect(getPeriodInSeconds('999999', 'Days')).toBe(86399913600);
 			});
 		});
-
 	});
 
 	describe('hasValidPriceFeedId', () => {

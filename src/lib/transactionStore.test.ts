@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import transactionStore from './transactionStore';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
-import {
-	STOXs,
-	DEFAULT_PAYMENT_TOKENS,
-	getDefaultPaymentTokenForNetwork
-} from './network';
+import { STOXs, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from './network';
 import { rainlangConfirmationModal, currentNetwork } from './stores';
 import {
 	getMarketMakingDeploymentArgs,
@@ -22,8 +18,7 @@ import { decodeFunctionData } from 'viem';
 const mockNetwork = mockCurrentNetwork;
 
 const PAYMENT_TOKEN =
-	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ??
-	getDefaultPaymentTokenForNetwork(mockNetwork.id);
+	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ?? getDefaultPaymentTokenForNetwork(mockNetwork.id);
 
 if (!PAYMENT_TOKEN) {
 	throw new Error('Missing default payment token for mock network');

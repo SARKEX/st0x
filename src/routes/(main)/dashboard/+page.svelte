@@ -36,10 +36,8 @@
 	function isPaymentTokenPosition(token: { token: SgErc20 }) {
 		const settlementToken = $currentNetwork?.defaultPaymentToken;
 		if (!settlementToken) return false;
-		const symbolMatch =
-			token.token.symbol?.toUpperCase() === settlementToken.symbol?.toUpperCase();
-		const addressMatch =
-			token.token.id?.toLowerCase() === settlementToken.address?.toLowerCase();
+		const symbolMatch = token.token.symbol?.toUpperCase() === settlementToken.symbol?.toUpperCase();
+		const addressMatch = token.token.id?.toLowerCase() === settlementToken.address?.toLowerCase();
 		return Boolean(symbolMatch || addressMatch);
 	}
 

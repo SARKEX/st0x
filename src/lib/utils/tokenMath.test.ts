@@ -1,5 +1,3 @@
-
-
 import { Float } from '@rainlanguage/float';
 import { describe, it, expect } from 'vitest';
 import {
@@ -80,17 +78,12 @@ describe('tokenMath', () => {
 			expect(toBigInt(input)).toBe(expected);
 		});
 
-		it.each([
-			[null],
-			[undefined],
-			[''],
-			['   '],
-			['invalid'],
-			[NaN],
-			[Infinity]
-		])('should return null for invalid input: %s', (input) => {
-			expect(toBigInt(input)).toBeNull();
-		});
+		it.each([[null], [undefined], [''], ['   '], ['invalid'], [NaN], [Infinity]])(
+			'should return null for invalid input: %s',
+			(input) => {
+				expect(toBigInt(input)).toBeNull();
+			}
+		);
 	});
 
 	describe('absBigInt', () => {
@@ -128,9 +121,12 @@ describe('tokenMath', () => {
 		it.each([
 			[null, 18, { fallback: 0 }, 0],
 			['invalid', 18, { fallback: -1 }, -1]
-		])('should use fallback value for invalid conversions', (value, decimals, options, expected) => {
-			expect(toDecimal(value, decimals, options)).toBe(expected);
-		});
+		])(
+			'should use fallback value for invalid conversions',
+			(value, decimals, options, expected) => {
+				expect(toDecimal(value, decimals, options)).toBe(expected);
+			}
+		);
 
 		it.each([
 			['100', 0, 100],
@@ -139,11 +135,7 @@ describe('tokenMath', () => {
 			expect(toDecimal(value, decimals)).toBe(expected);
 		});
 
-		it.each([
-			[-1],
-			[31],
-			[NaN]
-		])('should validate decimals parameter: %s', (decimals) => {
+		it.each([[-1], [31], [NaN]])('should validate decimals parameter: %s', (decimals) => {
 			expect(toDecimal(1000000000000000000n, decimals)).toBeNull();
 		});
 
@@ -266,10 +258,7 @@ describe('tokenMath', () => {
 			expect(result?.price).toBe(5);
 		});
 
-		it.each([
-			[null],
-			[undefined]
-		])('should return null for invalid trades: %s', (trade) => {
+		it.each([[null], [undefined]])('should return null for invalid trades: %s', (trade) => {
 			expect(parseTradeAmounts(trade, pair)).toBeNull();
 		});
 
@@ -298,10 +287,7 @@ describe('tokenMath', () => {
 			expect(ratioToNumber(floatHex(value))).toBeCloseTo(expected, 6);
 		});
 
-		it.each([
-			[null],
-			[undefined]
-		])('should return null for %s', (value) => {
+		it.each([[null], [undefined]])('should return null for %s', (value) => {
 			expect(ratioToNumber(value)).toBeNull();
 		});
 
@@ -373,15 +359,14 @@ describe('tokenMath', () => {
 			expect(lookup('0x1234')).toEqual(tokens[1]);
 		});
 
-		it.each([
-			['0xUNKNOWN'],
-			[null],
-			[undefined]
-		])('should return undefined for unknown addresses: %s', (address) => {
-			const tokens: TokenDescriptor[] = [{ address: '0xABCD', decimals: 18 }];
-			const lookup = createTokenLookup(tokens);
-			expect(lookup(address)).toBeUndefined();
-		});
+		it.each([['0xUNKNOWN'], [null], [undefined]])(
+			'should return undefined for unknown addresses: %s',
+			(address) => {
+				const tokens: TokenDescriptor[] = [{ address: '0xABCD', decimals: 18 }];
+				const lookup = createTokenLookup(tokens);
+				expect(lookup(address)).toBeUndefined();
+			}
+		);
 
 		it('should handle empty token list', () => {
 			const lookup = createTokenLookup([]);
@@ -421,10 +406,7 @@ describe('tokenMath', () => {
 			expect(result?.price).toBe(1);
 		});
 
-		it.each([
-			[null],
-			[undefined]
-		])('should return null for null/undefined trade: %s', (trade) => {
+		it.each([[null], [undefined]])('should return null for null/undefined trade: %s', (trade) => {
 			const quoteToken: TokenDescriptor = { address: '0xUSDC', decimals: 6 };
 			expect(analyzeTrade(trade, quoteToken)).toBeNull();
 		});

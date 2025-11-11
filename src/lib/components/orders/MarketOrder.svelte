@@ -22,7 +22,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
-import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore';
+	import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore';
 	import { Float } from '@rainlanguage/float';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -121,7 +121,8 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 				estimatedQuoteCostScaled = totalCostScaled;
 
 				availableOrders = fills.map((fill) => ({
-					order: (fill.quote.sgOrder as SgOrder) ??
+					order:
+						(fill.quote.sgOrder as SgOrder) ??
 						({
 							orderHash: fill.quote.orderHash,
 							orderbook: { id: fill.quote.orderbookId ?? 'cached' }
@@ -133,7 +134,6 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 					outputIOIndex: fill.quote.outputIOIndex ?? 0
 				}));
 				orderbook = fills[0]?.quote.orderbookId ?? 'cached';
-
 			} else {
 				estimatedQuoteCostScaled = 0n;
 				console.warn('No quantity filled from orderbook', {
@@ -156,7 +156,12 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 	// Fetch market price when component mounts or dependencies change
 	// Only calculates price when user has entered a quantity (selectedAmount > 0)
 	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (passedOutputToken && orderSide && selectedAmount > 0n && $orderbookQuotesResource?.data?.quotes) {
+	$: if (
+		passedOutputToken &&
+		orderSide &&
+		selectedAmount > 0n &&
+		$orderbookQuotesResource?.data?.quotes
+	) {
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
@@ -174,7 +179,9 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 
 		const allQuotes = $orderbookQuotesResource?.data?.quotes ?? [];
 		const assetAddressNormalized = normalizeAddress(passedOutputToken.address);
-		const paymentTokenAddressNormalized = normalizeAddress(paymentToken?.address?.toLowerCase() || '');
+		const paymentTokenAddressNormalized = normalizeAddress(
+			paymentToken?.address?.toLowerCase() || ''
+		);
 
 		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
 			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
@@ -222,6 +229,8 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 		orderData: OrderV4;
 		quotes: RaindexOrderQuote[];
 		price: number;
+		inputIOIndex: number;
+		outputIOIndex: number;
 	}> {
 		if (availableOrders.length === 0) return [];
 
@@ -246,11 +255,9 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 		const maxAcceptablePrice = referencePrice * slippageMultiplier; // For BUY
 		const minAcceptablePrice = referencePrice / slippageMultiplier; // For SELL
 
-
 		const filtered = availableOrders.filter((order) => {
-			const passes = orderSide === 'Buy'
-				? order.price <= maxAcceptablePrice
-				: order.price >= minAcceptablePrice;
+			const passes =
+				orderSide === 'Buy' ? order.price <= maxAcceptablePrice : order.price >= minAcceptablePrice;
 			return passes;
 		});
 
@@ -317,14 +324,19 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 						const quotesResult = await raindexOrderObj.getQuotes();
 						if (quotesResult.error || !quotesResult.value?.length) return;
 
-						const validQuotes = quotesResult.value.filter((q: RaindexOrderQuote) => q.success && q.data);
+						const validQuotes = quotesResult.value.filter(
+							(q: RaindexOrderQuote) => q.success && q.data
+						);
 						if (validQuotes.length === 0) return;
 
 						const sgOrderResult = raindexOrderObj.convertToSgOrder();
 						if (sgOrderResult.error || !sgOrderResult.value) return;
 
 						const sgOrder = sgOrderResult.value;
-						const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
+						const decodedOrder = AbiCoder.defaultAbiCoder().decode(
+							[OrderV4_ABI],
+							sgOrder.orderBytes
+						);
 						const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
 						orderInfo.order = sgOrder;
@@ -345,7 +357,10 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 			// Build TakeOrderConfigs from executable orders
 			const takeOrderConfigs: TakeOrderConfigV4[] = [];
 			for (const orderInfo of executableOrders) {
-				if (!orderInfo.orderData?.validInputs?.length || !orderInfo.orderData?.validOutputs?.length) {
+				if (
+					!orderInfo.orderData?.validInputs?.length ||
+					!orderInfo.orderData?.validOutputs?.length
+				) {
 					console.warn('Skipping order without IO definitions', orderInfo.order.orderHash);
 					continue;
 				}
@@ -396,7 +411,9 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 				return;
 			}
 			const { totalCostScaled, quantityFilled } = walkResult;
-			const derivedInputDecimals = primaryOrder.inputs[primaryInputIndex]?.token?.decimals ?? 18;
+			const derivedInputDecimals = Number(
+				primaryOrder.inputs[primaryInputIndex]?.token?.decimals ?? 18
+			);
 			const requiredInputBigInt =
 				orderSide === 'Buy'
 					? scaleAmount(totalCostScaled, 18, derivedInputDecimals)
@@ -409,13 +426,16 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 			}
 
 			// Calculate maximumInput based on walk result
-			const maximumInputAmount = orderSide === 'Sell'
-				? scaleAmount(totalCostScaled, 18, paymentToken?.decimals ?? 6)
-				: quantityFilled;
-			const maximumInputDecimals = orderSide === 'Sell'
-				? (paymentToken?.decimals ?? 6)
-				: (passedOutputToken?.decimals ?? 18);
-			const maximumInputFloat = Float.fromFixedDecimalLossy(maximumInputAmount, maximumInputDecimals);
+			const maximumInputAmount =
+				orderSide === 'Sell'
+					? scaleAmount(totalCostScaled, 18, paymentToken?.decimals ?? 6)
+					: quantityFilled;
+			const maximumInputDecimals =
+				orderSide === 'Sell' ? paymentToken?.decimals ?? 6 : passedOutputToken?.decimals ?? 18;
+			const maximumInputFloat = Float.fromFixedDecimalLossy(
+				maximumInputAmount,
+				maximumInputDecimals
+			);
 
 			const takeOrdersConfig: TakeOrdersConfigV4 = {
 				minimumInput: Float.fromBigint(0n).asHex(),
@@ -443,7 +463,7 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 	};
 </script>
 
-	{#if $currentNetwork && passedOutputToken}
+{#if $currentNetwork && passedOutputToken}
 	<div class="space-y-4">
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
@@ -520,7 +540,6 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 				</div>
 			</div>
 		</div>
-
 
 		<!-- Market Order Button -->
 		<button

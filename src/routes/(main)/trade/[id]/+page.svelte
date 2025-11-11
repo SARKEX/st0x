@@ -40,6 +40,7 @@
 		VolumeBucket
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
 	import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
 	import {
 		analyzeTrade,
@@ -323,66 +324,56 @@
 	$: {
 		if (!browser || !currentToken || !$currentNetwork) {
 			resetOnChainPrices();
-	} else {
-		const settlementToken = $currentNetwork.defaultPaymentToken;
-		if (!settlementToken) {
-			resetOnChainPrices();
 		} else {
-			const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
-			const assetAddress = currentToken.address?.toLowerCase();
-			const quoteAddress = settlementToken.address?.toLowerCase();
-			let bestBid: number | null = null;
-			let bestAsk: number | null = null;
-			quotes.forEach((quote) => {
-				const ratioValue = ratioToNumber(quote.ratio);
-			const ratio = ratioValue ?? 0;
-				if (!Number.isFinite(ratio) || ratio <= 0) return;
-				const inputAddress = quote.inputTokenAddress.toLowerCase();
-				const outputAddress = quote.outputTokenAddress.toLowerCase();
-				// ASK: quote token -> asset (what you pay when buying)
-				if (inputAddress === quoteAddress && outputAddress === assetAddress) {
-					const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
-					const price = ratio;
-					if (
-						tokenAmount !== null &&
-						Number.isFinite(price) &&
-						tokenAmount > 0 &&
-						price > 0
-					) {
-						bestAsk = bestAsk === null ? price : Math.min(bestAsk, price);
-					}
-				}
-				// BID: asset -> quote token (what you get when selling)
-				if (inputAddress === assetAddress && outputAddress === quoteAddress) {
-					const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
-					const price = 1 / ratio;
-					if (
-						quoteAmount !== null &&
-						quoteAmount > 0 &&
-						Number.isFinite(price) &&
-						price > 0
-					) {
-						const tokenAmount = quoteAmount / price;
-						if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
-							bestBid = bestBid === null ? price : Math.max(bestBid, price);
+			const settlementToken = $currentNetwork.defaultPaymentToken;
+			if (!settlementToken) {
+				resetOnChainPrices();
+			} else {
+				const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+				const assetAddress = currentToken.address?.toLowerCase();
+				const quoteAddress = settlementToken.address?.toLowerCase();
+				let bestBid: number | null = null;
+				let bestAsk: number | null = null;
+				quotes.forEach((quote) => {
+					const ratioValue = ratioToNumber(quote.ratio);
+					const ratio = ratioValue ?? 0;
+					if (!Number.isFinite(ratio) || ratio <= 0) return;
+					const inputAddress = quote.inputTokenAddress.toLowerCase();
+					const outputAddress = quote.outputTokenAddress.toLowerCase();
+					// ASK: quote token -> asset (what you pay when buying)
+					if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+						const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
+						const price = ratio;
+						if (tokenAmount !== null && Number.isFinite(price) && tokenAmount > 0 && price > 0) {
+							bestAsk = bestAsk === null ? price : Math.min(bestAsk, price);
 						}
 					}
-				}
-			});
-			buyPrice = bestBid; // Best bid - what you get when selling
-			sellPrice = bestAsk; // Best ask - what you pay when buying
+					// BID: asset -> quote token (what you get when selling)
+					if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+						const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
+						const price = 1 / ratio;
+						if (quoteAmount !== null && quoteAmount > 0 && Number.isFinite(price) && price > 0) {
+							const tokenAmount = quoteAmount / price;
+							if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
+								bestBid = bestBid === null ? price : Math.max(bestBid, price);
+							}
+						}
+					}
+				});
+				buyPrice = bestBid; // Best bid - what you get when selling
+				sellPrice = bestAsk; // Best ask - what you pay when buying
+			}
 		}
 	}
-}
 	$: tradeHistoryPoints = (() => {
 		if (!browser || !currentToken || !$currentNetwork) return [];
-	const settlementToken = $currentNetwork.defaultPaymentToken;
-	if (!settlementToken) return [];
-	const assetAddress = currentToken.address?.toLowerCase();
-	const quoteAddress = settlementToken.address;
-	if (!assetAddress || !quoteAddress) return [];
-	const assetDecimals = Number(currentPythToken?.decimals ?? 18);
-	const quoteDecimals = Number(settlementToken.decimals ?? 6);
+		const settlementToken = $currentNetwork.defaultPaymentToken;
+		if (!settlementToken) return [];
+		const assetAddress = currentToken.address?.toLowerCase();
+		const quoteAddress = settlementToken.address;
+		if (!assetAddress || !quoteAddress) return [];
+		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+		const quoteDecimals = Number(settlementToken.decimals ?? 6);
 		const range = $tradeActivityResource?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
@@ -452,20 +443,15 @@
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
-				if (inputAddress === quoteAddress && outputAddress === assetAddress) {
-					const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
-					const price = ratio;
-					if (
-						tokenAmount === null ||
-						!Number.isFinite(price) ||
-						tokenAmount <= 0 ||
-						price <= 0
-					) {
-						return;
-					}
-					asks.push({ price, quantity: tokenAmount });
+			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+				const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
+				const price = ratio;
+				if (tokenAmount === null || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
 					return;
 				}
+				asks.push({ price, quantity: tokenAmount });
+				return;
+			}
 			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
 				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				if (quoteAmount === null || quoteAmount <= 0) {
@@ -1055,23 +1041,8 @@
 									/>
 								{:else if panelStrategy === 'market'}
 									<MarketOrder orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
-								{:else}
-									<div
-										class="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-gray-400"
-									>
-										<div class="flex items-center justify-between">
-											<span class="font-semibold text-gray-300">DCA orders</span>
-											<span
-												class="rounded-full bg-yellow-400/10 px-2 py-0.5 text-xs font-semibold text-yellow-300"
-											>
-												Coming soon
-											</span>
-										</div>
-										<p class="mt-2 text-xs text-gray-500">
-											Automated DCA flows are on the way. Stay tuned, or place a limit order in the
-											meantime.
-										</p>
-									</div>
+								{:else if panelStrategy === 'dca'}
+									<DcaOrder orderSide={panelOrderSide} passedInputToken={currentPythToken} />
 								{/if}
 							</div>
 						</div>

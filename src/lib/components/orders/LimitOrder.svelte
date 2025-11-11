@@ -50,10 +50,8 @@
 		}
 	}
 
-	$: selectedInputToken =
-		orderSide === 'Buy' ? assetToken : settlementToken;
-	$: selectedOutputToken =
-		orderSide === 'Buy' ? settlementToken : assetToken;
+	$: selectedInputToken = orderSide === 'Buy' ? assetToken : settlementToken;
+	$: selectedOutputToken = orderSide === 'Buy' ? settlementToken : assetToken;
 
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
@@ -120,7 +118,10 @@
 			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken?.decimals || 18);
 			const price = parseFloat(selectedInitialRatio || '0');
 			const settlementNeeded = parseFloat(assetQuantity) * price;
-			const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken?.decimals || 6);
+			const settlementAmount = parseUnits(
+				settlementNeeded.toString(),
+				settlementToken?.decimals || 6
+			);
 
 			deployData = {
 				inputToken: selectedInputToken, // Asset (token to be acquired, used for IO ratio)
@@ -241,12 +242,13 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Limit Price
-					<span class="ml-1 text-xs text-gray-500">({settlementLabel} per {assetToken.symbol})</span>
+					<span class="ml-1 text-xs text-gray-500">({settlementLabel} per {assetToken.symbol})</span
+					>
 				</div>
-					<Input
-						aria-label="Limit Price"
-						type="number"
-						unit={settlementLabel}
+				<Input
+					aria-label="Limit Price"
+					type="number"
+					unit={settlementLabel}
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -255,27 +257,29 @@
 		</div>
 
 		<!-- Order summary -->
-			<div class={containerStyles.cardBordered}>
-				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
-				<div class="space-y-2 text-sm">
-					<div class="flex justify-between">
-						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-						<span class="font-medium">
-							{selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0'}
-							{assetToken.symbol}
-						</span>
-					</div>
+		<div class={containerStyles.cardBordered}>
+			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+			<div class="space-y-2 text-sm">
+				<div class="flex justify-between">
+					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+					<span class="font-medium">
+						{selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0'}
+						{assetToken.symbol}
+					</span>
+				</div>
 				<div class="flex justify-between">
 					<span class="text-gray-400">At price</span>
-						<span class="font-medium">
-							{selectedInitialRatio || '0'} {settlementLabel}
+					<span class="font-medium">
+						{selectedInitialRatio || '0'}
+						{settlementLabel}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
 					<div class="flex justify-between">
 						<span class="text-gray-400">Total</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{totalCost} {settlementLabel}
+							{totalCost}
+							{settlementLabel}
 						</span>
 					</div>
 				</div>

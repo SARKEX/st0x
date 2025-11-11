@@ -121,7 +121,8 @@
 						</div>
 					{/if}
 
-					{#if false}
+					<!-- Disabled market order summary
+				{#if marketOrderSummary && false}
 						<div class="w-full rounded-md border border-white/10 bg-gray-900/50 p-4 text-left text-sm text-gray-200">
 							<div class="mb-3 text-xs uppercase tracking-wide text-gray-500">
 								Market Order Summary
@@ -156,6 +157,7 @@
 							{/if}
 						</div>
 					{/if}
+				-->
 
 					{#if $transactionStore.hash}
 						<div class="flex flex-col gap-2">

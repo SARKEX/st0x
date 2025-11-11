@@ -28,7 +28,11 @@ export interface WalkQuotesResult {
 	totalCostScaled: bigint; // Total quote tokens (1e18 scale)
 }
 
-export function scaleAmount(amount: bigint, fromDecimals?: number, toDecimals: number = 18): bigint {
+export function scaleAmount(
+	amount: bigint,
+	fromDecimals?: number,
+	toDecimals: number = 18
+): bigint {
 	if (!amount) return 0n;
 	const from = BigInt(fromDecimals ?? toDecimals);
 	const to = BigInt(toDecimals);
@@ -98,7 +102,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 	const { quotes, orderSide, selectedAmount } = options;
 	const assetDecimals = options.assetDecimals ?? 18;
 	if (selectedAmount <= 0n || !quotes.length) {
-		return { quantityFilled: 0n, weightedAveragePrice: 0, fills: [] };
+		return { quantityFilled: 0n, weightedAveragePrice: 0, fills: [], totalCostScaled: 0n };
 	}
 
 	const targetAmount = scaleAmount(selectedAmount, assetDecimals, 18);
@@ -128,9 +132,8 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		fills.push({ quote, price, quantityFilled: quantityFromQuote, cost: costBigInt });
 	}
 
-	const weightedAveragePrice = quantityFilled > 0n
-		? Number(totalCostScaled) / Number(quantityFilled)
-		: 0;
+	const weightedAveragePrice =
+		quantityFilled > 0n ? Number(totalCostScaled) / Number(quantityFilled) : 0;
 
 	return { quantityFilled, weightedAveragePrice, fills, totalCostScaled };
 }

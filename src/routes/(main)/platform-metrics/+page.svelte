@@ -2,7 +2,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/network';
-import type { CategorizedToken, Network } from '$lib/network';
+	import type { CategorizedToken, Network } from '$lib/network';
 	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
@@ -743,7 +743,7 @@ import type { CategorizedToken, Network } from '$lib/network';
 									<td class="p-2 text-right text-yellow-400 sm:p-3"
 										>{token.totalVolume.toFixed(3)}</td
 									>
-								<td class="p-2 text-right font-medium sm:p-3">{token.quoteValue}</td>
+									<td class="p-2 text-right font-medium sm:p-3">{token.quoteValue}</td>
 									<td class="p-2 text-right sm:p-3">{token.trades}</td>
 								</tr>
 							{/each}

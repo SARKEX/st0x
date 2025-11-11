@@ -250,7 +250,6 @@ export function parseTradeAmounts(
 	return { side, tokens, quote: quoteAmount, price };
 }
 
-
 export function ratioToNumber(value: string | null | undefined): number | null {
 	if (typeof value !== 'string' || value.length === 0) return null;
 
@@ -289,7 +288,6 @@ export interface QuoteLike {
 	outputTokenAddress: string;
 	ratio: string; // Hex-encoded Float string
 }
-
 
 export interface QuoteMetrics {
 	assetAddress: string;

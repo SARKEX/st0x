@@ -89,8 +89,8 @@ function processOrdersWithQuotes(
 
 			// Decode order to get token addresses
 			const abiCoder = AbiCoder.defaultAbiCoder();
-					const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
-					const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
+			const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
+			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
 			// Process each quote for this order
 			quotes.forEach((quote) => {
@@ -317,7 +317,12 @@ export async function fetchAndQuotePaymentTokenOrders(
 	console.log('📦 Total quotes fetched:', quotesMap.size, 'orders with quotes');
 
 	// Process and filter the quotes
-	const processedQuotes = processOrdersWithQuotes(allOrders, quotesMap, defaultPaymentToken, stockTokens);
+	const processedQuotes = processOrdersWithQuotes(
+		allOrders,
+		quotesMap,
+		defaultPaymentToken,
+		stockTokens
+	);
 
 	console.log('🎯 Final processed quotes:', processedQuotes.length);
 

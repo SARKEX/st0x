@@ -47,7 +47,10 @@
 				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
 			);
 			selectedOutputToken =
-				match || (settlementTokenConfig as unknown as CategorizedToken) || selectedOutputToken || ALL_TOKENS[0];
+				match ||
+				(settlementTokenConfig as unknown as CategorizedToken) ||
+				selectedOutputToken ||
+				ALL_TOKENS[0];
 		} else {
 			selectedOutputToken = selectedOutputToken || ALL_TOKENS[0];
 		}
@@ -242,7 +245,7 @@
 				<Input
 					aria-label="Start Price"
 					type="number"
-						unit={settlementLabel}
+					unit={settlementLabel}
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -255,7 +258,7 @@
 				<Input
 					aria-label={orderSide === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
 					type="number"
-						unit={settlementLabel}
+					unit={settlementLabel}
 					bind:amount={selectedBaseline}
 					validate={validateBaseline}
 					bind:isError={selectedBaselineError}
@@ -271,7 +274,8 @@
 					<span class="text-gray-400">Target Amount</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
-							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} {settlementLabel}
+							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
+							{settlementLabel}
 						{:else}
 							{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}
@@ -299,7 +303,8 @@
 					<span class="text-gray-400">Min trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
-							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} {settlementLabel}
+							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'}
+							{settlementLabel}
 						{:else}
 							{minTradeAmount ? formatUnits(minTradeAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}
@@ -310,7 +315,8 @@
 					<span class="text-gray-400">Max trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
-							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} {settlementLabel}
+							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'}
+							{settlementLabel}
 						{:else}
 							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}

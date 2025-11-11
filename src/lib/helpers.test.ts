@@ -49,7 +49,10 @@ describe('helpers', () => {
 				],
 				order: ['z', 'x'],
 				key: 'id',
-				checkIdx: [[0, 'z'], [1, 'x']]
+				checkIdx: [
+					[0, 'z'],
+					[1, 'x']
+				]
 			},
 			{
 				desc: 'missing items in order',
@@ -58,12 +61,25 @@ describe('helpers', () => {
 				key: 'type',
 				checkIdx: [[0, 'B']]
 			}
-		])('should handle $desc', ({ array, order, key, checkIdx }) => {
-			const result = mapOrder(array, order, key);
-			checkIdx.forEach(([idx, expected]) => {
-				expect(result[idx][key]).toBe(expected);
-			});
-		});
+		])(
+			'should handle $desc',
+			({
+				array,
+				order,
+				key,
+				checkIdx
+			}: {
+				array: unknown;
+				order: unknown[];
+				key: string;
+				checkIdx: unknown[];
+			}) => {
+				const result = mapOrder(array as any[], order as string[], key as string);
+				(checkIdx as Array<[number, unknown]>).forEach(([idx, expected]) => {
+					expect((result[idx] as any)[key]).toBe(expected);
+				});
+			}
+		);
 
 		it('should handle empty array', () => {
 			const result = mapOrder([], ['a', 'b'], 'key');

@@ -24,8 +24,7 @@ vi.stubGlobal('fetch', mockFetch);
 const mockNetwork = mockCurrentNetwork;
 const ALL_TOKENS = getAllTokensByNetwork(mockNetwork.id);
 const PAYMENT_TOKEN =
-	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ??
-	getDefaultPaymentTokenForNetwork(mockNetwork.id);
+	DEFAULT_PAYMENT_TOKENS[mockNetwork.id] ?? getDefaultPaymentTokenForNetwork(mockNetwork.id);
 
 if (!PAYMENT_TOKEN) {
 	throw new Error('Missing default payment token for mock network');
@@ -217,10 +216,26 @@ describe('getDeploymentArgs', () => {
 				})
 			);
 
-			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', PAYMENT_TOKEN.address, inputVaultIdToken1);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', STOXs[0].address, inputVaultIdToken2);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith('output', PAYMENT_TOKEN.address, outputVaultIdToken1);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith('output', STOXs[0].address, outputVaultIdToken2);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith(
+				'input',
+				PAYMENT_TOKEN.address,
+				inputVaultIdToken1
+			);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith(
+				'input',
+				STOXs[0].address,
+				inputVaultIdToken2
+			);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith(
+				'output',
+				PAYMENT_TOKEN.address,
+				outputVaultIdToken1
+			);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith(
+				'output',
+				STOXs[0].address,
+				outputVaultIdToken2
+			);
 		});
 
 		it('should return deployment args', async () => {
@@ -253,7 +268,11 @@ describe('getDeploymentArgs', () => {
 			await getDcaDeploymentArgs(buildDcaArgs({ inputVaultId, outputVaultId }));
 
 			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', STOXs[0].address, inputVaultId);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith('output', PAYMENT_TOKEN.address, outputVaultId);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith(
+				'output',
+				PAYMENT_TOKEN.address,
+				outputVaultId
+			);
 		});
 
 		it('should handle different period units', async () => {
@@ -306,7 +325,9 @@ describe('getDeploymentArgs', () => {
 		});
 
 		it('should handle optional parameters', async () => {
-			await getFolioDeploymentArgs(buildFolioArgs({ overrideThreshold: undefined, overrideFee: undefined }));
+			await getFolioDeploymentArgs(
+				buildFolioArgs({ overrideThreshold: undefined, overrideFee: undefined })
+			);
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('threshold', '0.05');
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('fee', '0.003');
 		});

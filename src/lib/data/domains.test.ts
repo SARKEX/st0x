@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { Network } from '$lib/network';
 
-
 const {
 	network,
 	networkWithoutUsdc,
@@ -49,10 +48,7 @@ const {
 	};
 
 	type PaymentTokenType = typeof paymentToken;
-	const getDefaultPaymentTokenForNetwork = vi.fn() as Mock<
-		[number],
-		PaymentTokenType | undefined
-	>;
+	const getDefaultPaymentTokenForNetwork = vi.fn() as Mock<[number], PaymentTokenType | undefined>;
 	const getDefaultSettlementTokenForNetwork = vi.fn() as Mock<
 		[number],
 		PaymentTokenType | undefined
@@ -127,11 +123,11 @@ describe('domain fetchers', () => {
 		networkModule.PAYMENT_TOKENS_BY_NETWORK[network.id] = [paymentToken];
 		networkModule.DEFAULT_SETTLEMENT_TOKENS[network.id] = paymentToken;
 		networkModule.SETTLEMENT_TOKENS_BY_NETWORK[network.id] = [paymentToken];
-		networkModule.getDefaultPaymentTokenForNetwork.mockImplementation((chainId: number) =>
-			networkModule.DEFAULT_PAYMENT_TOKENS[chainId]
+		networkModule.getDefaultPaymentTokenForNetwork.mockImplementation(
+			(chainId: number) => networkModule.DEFAULT_PAYMENT_TOKENS[chainId]
 		);
-		networkModule.getDefaultSettlementTokenForNetwork.mockImplementation((chainId: number) =>
-			networkModule.DEFAULT_SETTLEMENT_TOKENS[chainId]
+		networkModule.getDefaultSettlementTokenForNetwork.mockImplementation(
+			(chainId: number) => networkModule.DEFAULT_SETTLEMENT_TOKENS[chainId]
 		);
 	});
 

@@ -97,17 +97,11 @@ describe('quote utilities', () => {
 		});
 
 		// Invalid inputs should throw
-		it.each([
-			['0xZZZ'],
-			['0xGG']
-		])('should throw for invalid hex: %s', (hex) => {
+		it.each([['0xZZZ'], ['0xGG']])('should throw for invalid hex: %s', (hex) => {
 			expect(() => hexToBigInt(hex)).toThrow();
 		});
 
-		it.each([
-			[''],
-			['0x']
-		])('should throw for empty/invalid input: %s', (hex) => {
+		it.each([[''], ['0x']])('should throw for empty/invalid input: %s', (hex) => {
 			expect(() => hexToBigInt(hex)).toThrow();
 		});
 	});
@@ -122,7 +116,6 @@ describe('quote utilities', () => {
 				const result = buildTokenPriceMap([], '0xUSDC');
 				expect(result.size).toBe(0);
 			});
-
 		});
 
 		describe('Single asset quotes', () => {
@@ -139,32 +132,29 @@ describe('quote utilities', () => {
 					{ side: 'bid', assetAddress: '0xAsset', quotePerAsset: 50, assetPerQuote: 0.02 },
 					{ bid: 50, bidAssetPerQuote: 0.02 }
 				]
-			])(
-				'should process %s',
-				(desc, side, mockReturn, expected) => {
-					const mockDescribeQuote = tokenMath.describeQuote as any;
-					mockDescribeQuote.mockReturnValue(mockReturn);
+			])('should process %s', (desc, side, mockReturn, expected) => {
+				const mockDescribeQuote = tokenMath.describeQuote as any;
+				mockDescribeQuote.mockReturnValue(mockReturn);
 
-					const quotes: ProcessedQuote[] = [
-						buildQuote(
-							side === 'ask'
-								? {}
-								: {
-										inputTokenSymbol: 'TOKEN',
-										outputTokenSymbol: 'USDC',
-										inputTokenAddress: '0xToken',
-										outputTokenAddress: '0xUSDC'
-									}
-						)
-					];
+				const quotes: ProcessedQuote[] = [
+					buildQuote(
+						side === 'ask'
+							? {}
+							: {
+									inputTokenSymbol: 'TOKEN',
+									outputTokenSymbol: 'USDC',
+									inputTokenAddress: '0xToken',
+									outputTokenAddress: '0xUSDC'
+								}
+					)
+				];
 
-					const result = buildTokenPriceMap(quotes, '0xUSDC');
-					const assetPrice = result.get('0xasset');
+				const result = buildTokenPriceMap(quotes, '0xUSDC');
+				const assetPrice = result.get('0xasset');
 
-					expect(assetPrice).toBeDefined();
-					expect(assetPrice).toMatchObject(expected);
-				}
-			);
+				expect(assetPrice).toBeDefined();
+				expect(assetPrice).toMatchObject(expected);
+			});
 
 			it('should use cached metrics if available', () => {
 				const quotes: ProcessedQuote[] = [
@@ -315,7 +305,6 @@ describe('quote utilities', () => {
 					})
 				];
 
-
 				const result = buildTokenPriceMap(quotes, '0xUSDC');
 				expect(result.size).toBe(0);
 			});
@@ -361,11 +350,16 @@ describe('quote utilities', () => {
 					'bidAssetPerQuote',
 					0.01
 				]
-			])('%s', (desc, side: string, quoteOverrides: any[], metricKey: string, expectedValue: number) => {
-				const quotes: ProcessedQuote[] = quoteOverrides.map((overrides) => buildQuote(overrides));
-				const result = buildTokenPriceMap(quotes, '0xUSDC');
-				expect(result.get('0xasset')?.[metricKey as 'askAssetPerQuote' | 'bidAssetPerQuote']).toBe(expectedValue);
-			});
+			])(
+				'%s',
+				(desc, side: string, quoteOverrides: any[], metricKey: string, expectedValue: number) => {
+					const quotes: ProcessedQuote[] = quoteOverrides.map((overrides) => buildQuote(overrides));
+					const result = buildTokenPriceMap(quotes, '0xUSDC');
+					expect(
+						result.get('0xasset')?.[metricKey as 'askAssetPerQuote' | 'bidAssetPerQuote']
+					).toBe(expectedValue);
+				}
+			);
 		});
 
 		describe('Address normalization', () => {
