@@ -13,6 +13,36 @@
 	};
 
 	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
+	$: if (marketOrderSummary) {
+		console.log('TransactionModal - Received marketOrderSummary:', {
+			orderSide: marketOrderSummary.orderSide,
+			quantityFilled: marketOrderSummary.quantityFilled.toString(),
+			quantityRequested: marketOrderSummary.quantityRequested.toString(),
+			outputTokenDecimals: marketOrderSummary.outputTokenDecimals,
+			outputTokenSymbol: marketOrderSummary.outputTokenSymbol,
+			averagePrice: marketOrderSummary.averagePrice,
+			paymentTokenSymbol: marketOrderSummary.paymentTokenSymbol,
+			isPartialFill: marketOrderSummary.isPartialFill
+		});
+	}
+
+	// Helper function to format quantity with max 2 decimals
+	const formatQuantity = (quantity: bigint, decimals: number): string => {
+		console.log(`formatQuantity called with:`, { quantity: quantity.toString(), decimals });
+		const formatted = parseFloat(formatUnits(quantity, decimals));
+		console.log(`formatUnits result:`, formatted);
+		// Round to 2 decimals (instead of truncating) to handle values like 0.999999...
+		const result = Math.round(formatted * 100) / 100;
+		console.log(`formatQuantity result:`, result);
+		return result.toString();
+	};
+
+	// Check if fill is complete (within 99.9% tolerance)
+	const isFullFill = (filled: bigint, requested: bigint): boolean => {
+		if (requested === 0n) return true;
+		const fillPercentage = Number(filled) / Number(requested);
+		return fillPercentage >= 0.999;
+	};
 </script>
 
 <Modal
@@ -103,10 +133,13 @@
 							<div class="mt-2 flex justify-between">
 								<span class="text-gray-400">Quantity Filled</span>
 								<span class="font-medium">
-									{formatUnits(
+									{formatQuantity(
 										marketOrderSummary.quantityFilled,
 										marketOrderSummary.outputTokenDecimals
 									)}
+									{!isFullFill(marketOrderSummary.quantityFilled, marketOrderSummary.quantityRequested)
+										? `/ ${formatQuantity(marketOrderSummary.quantityRequested, marketOrderSummary.outputTokenDecimals)}`
+										: ''}
 									{marketOrderSummary.outputTokenSymbol}
 								</span>
 							</div>

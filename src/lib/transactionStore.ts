@@ -14,7 +14,8 @@ import {
 	type SgOrder,
 	type TakeOrdersConfigV4,
 	type DeploymentTransactionArgs,
-	RaindexVault
+	RaindexVault,
+	Float
 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -70,6 +71,7 @@ export enum TransactionStatus {
 export interface MarketOrderSummary {
 	orderSide: 'Buy' | 'Sell';
 	quantityFilled: bigint;
+	quantityRequested: bigint;
 	outputTokenDecimals: number;
 	outputTokenSymbol: string;
 	averagePrice: number;
@@ -413,7 +415,9 @@ const transactionStore = () => {
 				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
-			await waitForTransactionReceipt(config, { hash });
+			const receipt = await waitForTransactionReceipt(config, { hash });
+		console.log('Transaction receipt:', receipt);
+		console.log('Transaction hash:', hash);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
@@ -454,8 +458,8 @@ const transactionStore = () => {
 			order?: {
 				orderHash?: string;
 			};
-			inputVaultBalanceChange?: { amount?: string | number };
-			outputVaultBalanceChange?: { amount?: string | number };
+			inputVaultBalanceChange?: { amount?: string | number; oldVaultBalance?: Hex; newVaultBalance?: Hex };
+			outputVaultBalanceChange?: { amount?: string | number; oldVaultBalance?: Hex; newVaultBalance?: Hex };
 		};
 
 		if (
@@ -466,17 +470,44 @@ const transactionStore = () => {
 			raindexOrder.outputs?.[outputIndex]?.token
 		) {
 			cleanup();
+
+			console.log('=== VAULT BALANCE CHANGES (RAW) ===');
+			console.log('Input vault balance change:', trade.inputVaultBalanceChange);
+			console.log('Output vault balance change:', trade.outputVaultBalanceChange);
+
+			console.log('=== VAULT BALANCE CHANGES (DECODED TO FLOAT) ===');
+
+			// Decode input vault balance changes
+			const inputOldResult = Float.fromHex(trade.inputVaultBalanceChange.oldVaultBalance as Hex);
+			const inputNewResult = Float.fromHex(trade.inputVaultBalanceChange.newVaultBalance as Hex);
+			console.log('Input oldVaultBalance (Float):', inputOldResult);
+			console.log('Input newVaultBalance (Float):', inputNewResult);
+
+			// Decode output vault balance changes
+			const outputOldResult = Float.fromHex(trade.outputVaultBalanceChange.oldVaultBalance as Hex);
+			const outputNewResult = Float.fromHex(trade.outputVaultBalanceChange.newVaultBalance as Hex);
+			console.log('Output oldVaultBalance (Float):', outputOldResult);
+			console.log('Output newVaultBalance (Float):', outputNewResult);
+
+			// Check if fill is complete (within 99.9% tolerance)
+			if (options?.summary) {
+				const fillPercentage = Number(options.summary.quantityFilled) / Number(options.summary.quantityRequested);
+				options.summary.isPartialFill = fillPercentage < 0.999;
+				console.log('Fill percentage:', fillPercentage);
+				console.log('Is partial fill:', options.summary.isPartialFill);
+			}
+
 			const chainId = network.id;
 			const tokenSold = `${parseFloat(
 				formatUnits(
 					BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-					raindexOrder.inputs[inputIndex].token.decimals ?? 18
+					Number(raindexOrder.inputs[inputIndex].token.decimals ?? 18)
 				)
 			)} ${raindexOrder.inputs[inputIndex].token.symbol}`;
 			const tokenBought = `${parseFloat(
 				formatUnits(
 					BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-					raindexOrder.outputs[outputIndex].token.decimals ?? 18
+					Number(raindexOrder.outputs[outputIndex].token.decimals ?? 18)
 				)
 			)} ${raindexOrder.outputs[outputIndex].token.symbol}`;
 
@@ -487,13 +518,12 @@ const transactionStore = () => {
 				'View order on Raindex'
 			);
 			const link = `
-			<div class="flex flex-col gap-2 text-center">
-				<div class="text-base text-gray-300">
-					${tokenBought} bought, ${tokenSold} sold
-				</div>
-				${orderLink}
 			</div>
 		`;
+
+			console.log('=== TRANSACTION SUCCESS ===');
+			console.log('Hash:', hash);
+			console.log('Market order summary being passed to modal:', options?.summary);
 
 			return transactionSuccess(
 				hash,

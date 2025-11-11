@@ -504,13 +504,23 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 				requiredApprovalAmount = requiredApprovalAmount + 1n;
 			}
 
-			const quantityFilled = selectedAmount;
+			// The actual quantity filled is based on the walk result after refresh and filtering
+		// walkOrderbook returns quantityFilled which may be less than selectedAmount due to slippage filter
+		// Use the cost divided by average price to get quantity (reverse calculation)
+		const actualQuantityFilled = estimatedQuoteCostScaled > 0n && marketPrice > 0
+			? scaleAmount(
+					BigInt(Math.round(Number(estimatedQuoteCostScaled) / marketPrice)),
+					18,
+					passedOutputToken?.decimals ?? 18
+				)
+			: selectedAmount;
 			const averagePrice = marketPrice || bestPrice;
 			const slippagePercent = worstPrice > 0 ? ((worstPrice - bestPrice) / bestPrice) * 100 : 0;
 			const slippage = BigInt(Math.round(slippagePercent));
 			const summary: MarketOrderSummary = {
 				orderSide,
-				quantityFilled,
+				quantityFilled: actualQuantityFilled,
+				quantityRequested: selectedAmount,
 				outputTokenDecimals: passedOutputToken.decimals,
 				outputTokenSymbol: passedOutputToken.symbol,
 				averagePrice,
