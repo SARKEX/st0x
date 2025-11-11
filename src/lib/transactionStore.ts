@@ -339,7 +339,7 @@ const transactionStore = () => {
 		requiredApprovalAmount: bigint,
 		options?: {
 			ioIndexes?: { input: number; output: number };
-			summary?: MarketOrderSummary;
+			walkResult?: { quantityFilled: bigint; weightedAveragePrice: number; totalCostScaled: bigint; fills: any[] };
 		}
 	) => {
 		const config = get(wagmiConfig);
@@ -471,31 +471,114 @@ const transactionStore = () => {
 		) {
 			cleanup();
 
-			console.log('=== VAULT BALANCE CHANGES (RAW) ===');
+			console.log('=== RAW TRADE OBJECT ===');
+			console.log('Full trade:', JSON.stringify(trade, null, 2));
+			console.log('=== TRADE FOUND ===');
 			console.log('Input vault balance change:', trade.inputVaultBalanceChange);
 			console.log('Output vault balance change:', trade.outputVaultBalanceChange);
 
-			console.log('=== VAULT BALANCE CHANGES (DECODED TO FLOAT) ===');
+			// Get the walk result from options
+			const { quantityFilled: estimatedQuantityFilled, weightedAveragePrice } = options?.walkResult || {
+				quantityFilled: 0n,
+				weightedAveragePrice: 0
+			};
 
-			// Decode input vault balance changes
-			const inputOldResult = Float.fromHex(trade.inputVaultBalanceChange.oldVaultBalance as Hex);
-			const inputNewResult = Float.fromHex(trade.inputVaultBalanceChange.newVaultBalance as Hex);
-			console.log('Input oldVaultBalance (Float):', inputOldResult);
-			console.log('Input newVaultBalance (Float):', inputNewResult);
+			// Determine order side from which vault had changes
+			// BUY: input = payment token, output = asset token
+			// SELL: input = asset token, output = payment token
+			const inputToken = raindexOrder.inputs[inputIndex]?.token;
+			const outputToken = raindexOrder.outputs[outputIndex]?.token;
 
-			// Decode output vault balance changes
-			const outputOldResult = Float.fromHex(trade.outputVaultBalanceChange.oldVaultBalance as Hex);
-			const outputNewResult = Float.fromHex(trade.outputVaultBalanceChange.newVaultBalance as Hex);
-			console.log('Output oldVaultBalance (Float):', outputOldResult);
-			console.log('Output newVaultBalance (Float):', outputNewResult);
+			// Get the asset token vault change (the quantity filled)
+			// For BUY: asset is OUTPUT, so use outputVaultBalanceChange
+			// For SELL: asset is INPUT, so use inputVaultBalanceChange
+			let assetVaultChange;
+			let assetTokenDecimals;
+			let orderSideFromTrade: 'Buy' | 'Sell';
+
+			// Determine order side: if input vault changed significantly, it's a SELL (we sold the asset)
+			// If output vault changed, it's a BUY (we bought the asset)
+			const inputAmount = Math.abs(Number(trade.inputVaultBalanceChange.amount || 0));
+			const outputAmount = Math.abs(Number(trade.outputVaultBalanceChange.amount || 0));
+
+			if (inputAmount > outputAmount) {
+				// SELL: asset is being given (input vault decreases)
+				assetVaultChange = trade.inputVaultBalanceChange;
+				assetTokenDecimals = inputToken?.decimals ?? 18;
+				orderSideFromTrade = 'Sell';
+			} else {
+				// BUY: asset is being received (output vault increases)
+				assetVaultChange = trade.outputVaultBalanceChange;
+				assetTokenDecimals = outputToken?.decimals ?? 18;
+				orderSideFromTrade = 'Buy';
+			}
+
+			console.log('Order side from trade:', orderSideFromTrade);
+			console.log('Asset vault change amount (hex):', assetVaultChange.amount);
+			console.log('Asset token decimals:', assetTokenDecimals);
+
+			// Decode the amount as a Float
+			let actualQuantityFilled = 0n;
+			try {
+				const amountFloatResult = Float.fromHex(assetVaultChange.amount as Hex);
+				console.log('Amount Float result:', amountFloatResult);
+
+				if (!amountFloatResult.error && amountFloatResult.value) {
+					// Get absolute value
+					const absResult = amountFloatResult.value.abs();
+					console.log('Absolute result:', absResult);
+
+					if (!absResult.error) {
+						// Convert to FixedDecimal with asset token decimals
+						const fixedResult = absResult.value.toFixedDecimalLossy(assetTokenDecimals);
+						console.log('Fixed decimal result:', fixedResult);
+
+						if (!fixedResult.error && fixedResult.value) {
+							// Extract the string value from FixedDecimal
+							const fdValue = fixedResult.value;
+							if (typeof (fdValue as any).value === 'string') {
+								actualQuantityFilled = BigInt((fdValue as any).value);
+								console.log('Extracted quantity filled:', actualQuantityFilled.toString());
+							}
+						}
+					}
+				}
+			} catch (e) {
+				console.error('Error decoding amount Float:', e);
+			}
+
+			console.log('Final actual quantity filled:', actualQuantityFilled.toString());
+			console.log('Estimated average price:', weightedAveragePrice);
+
+			// Build summary from actual transaction data
+			const summary: MarketOrderSummary = {
+				orderSide: orderSideFromTrade,
+				quantityFilled: actualQuantityFilled,
+				quantityRequested: estimatedQuantityFilled,
+				outputTokenDecimals: assetTokenDecimals,
+				outputTokenSymbol: orderSideFromTrade === 'Buy' ? outputToken?.symbol ?? '' : inputToken?.symbol ?? '',
+				averagePrice: weightedAveragePrice,
+				paymentTokenSymbol: orderSideFromTrade === 'Buy' ? inputToken?.symbol ?? '' : outputToken?.symbol ?? '',
+				actualSlippage: 0n,
+				isPartialFill: false
+			};
 
 			// Check if fill is complete (within 99.9% tolerance)
-			if (options?.summary) {
-				const fillPercentage = Number(options.summary.quantityFilled) / Number(options.summary.quantityRequested);
-				options.summary.isPartialFill = fillPercentage < 0.999;
-				console.log('Fill percentage:', fillPercentage);
-				console.log('Is partial fill:', options.summary.isPartialFill);
-			}
+			const fillPercentage = estimatedQuantityFilled > 0n ? Number(actualQuantityFilled) / Number(estimatedQuantityFilled) : 1;
+			summary.isPartialFill = fillPercentage < 0.999;
+
+			console.log('=== SUMMARY BUILT FROM ACTUAL DATA ===');
+			console.log('Final summary:', {
+				orderSide: summary.orderSide,
+				quantityFilled: summary.quantityFilled.toString(),
+				quantityRequested: summary.quantityRequested.toString(),
+				outputTokenDecimals: summary.outputTokenDecimals,
+				outputTokenSymbol: summary.outputTokenSymbol,
+				averagePrice: summary.averagePrice,
+				paymentTokenSymbol: summary.paymentTokenSymbol,
+				isPartialFill: summary.isPartialFill,
+				fillPercentage: (fillPercentage * 100).toFixed(2) + '%'
+			});
 
 			const chainId = network.id;
 			const tokenSold = `${parseFloat(
@@ -523,12 +606,12 @@ const transactionStore = () => {
 
 			console.log('=== TRANSACTION SUCCESS ===');
 			console.log('Hash:', hash);
-			console.log('Market order summary being passed to modal:', options?.summary);
+			console.log('Market order summary being passed to modal:', summary);
 
 			return transactionSuccess(
 				hash,
 				link,
-				options?.summary ? { marketOrderSummary: options.summary } : undefined
+				{ marketOrderSummary: summary }
 			);
 		}
 	});
