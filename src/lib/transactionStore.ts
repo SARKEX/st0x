@@ -453,8 +453,6 @@ const transactionStore = () => {
 			tradeEvent?: { transaction?: { id?: string } };
 			order?: {
 				orderHash?: string;
-				inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-				outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
 			};
 			inputVaultBalanceChange?: { amount?: string | number };
 			outputVaultBalanceChange?: { amount?: string | number };
@@ -464,23 +462,23 @@ const transactionStore = () => {
 			trade &&
 			trade.inputVaultBalanceChange &&
 			trade.outputVaultBalanceChange &&
-			trade.order?.inputs?.[inputIndex]?.token &&
-			trade.order?.outputs?.[outputIndex]?.token
+			raindexOrder.inputs?.[inputIndex]?.token &&
+			raindexOrder.outputs?.[outputIndex]?.token
 		) {
 			cleanup();
 			const chainId = network.id;
 			const tokenSold = `${parseFloat(
 				formatUnits(
 					BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-					trade.order.inputs[inputIndex].token.decimals ?? 18
+					raindexOrder.inputs[inputIndex].token.decimals ?? 18
 				)
-			)} ${trade.order.inputs[inputIndex].token.symbol}`;
+			)} ${raindexOrder.inputs[inputIndex].token.symbol}`;
 			const tokenBought = `${parseFloat(
 				formatUnits(
 					BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-					trade.order.outputs[outputIndex].token.decimals ?? 18
+					raindexOrder.outputs[outputIndex].token.decimals ?? 18
 				)
-			)} ${trade.order.outputs[outputIndex].token.symbol}`;
+			)} ${raindexOrder.outputs[outputIndex].token.symbol}`;
 
 			const orderLink = createRaindexLink(
 				chainId,

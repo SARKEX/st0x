@@ -4,6 +4,8 @@ import { Float } from '@rainlanguage/float';
 export type MarketOrderSide = 'Buy' | 'Sell';
 
 export const FIXED_POINT_SCALE = 10n ** 18n;
+const PRICE_SCALE = 10n ** 9n; // preserves 9 decimal places for prices
+const PRICE_SCALE_NUMBER = Number(PRICE_SCALE);
 
 export interface QuoteFill {
 	quote: ProcessedQuote;
@@ -23,6 +25,7 @@ export interface WalkQuotesResult {
 	quantityFilled: bigint;
 	weightedAveragePrice: number; // Human-readable weighted average price (quote per asset)
 	fills: QuoteFill[];
+	totalCostScaled: bigint; // Total quote tokens (1e18 scale)
 }
 
 export function scaleAmount(amount: bigint, fromDecimals?: number, toDecimals: number = 18): bigint {
@@ -100,7 +103,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 
 	const targetAmount = scaleAmount(selectedAmount, assetDecimals, 18);
 	let quantityFilled = 0n;
-	let totalCostInQuoteTokens = 0; // Accumulated cost in human-readable units
+	let totalCostScaled = 0n; // Quote tokens scaled to 1e18
 	const fills: QuoteFill[] = [];
 
 	for (const quote of quotes) {
@@ -116,23 +119,18 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		const quantityFromQuote = remaining < availableQuantity ? remaining : availableQuantity;
 		if (quantityFromQuote <= 0n) continue;
 
-		// Cost in quote tokens (human-readable)
-		const quantityInTokens = Number(quantityFromQuote) / 1e18;
-		const costInQuoteTokens = quantityInTokens * price;
-
-		// Cost as bigint for transaction encoding
-		const costBigInt = BigInt(Math.round(costInQuoteTokens * 1e18));
+		const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+		const costBigInt = (quantityFromQuote * priceScaled) / PRICE_SCALE;
 		if (costBigInt <= 0n) continue;
 
 		quantityFilled += quantityFromQuote;
-		totalCostInQuoteTokens += costInQuoteTokens;
+		totalCostScaled += costBigInt;
 		fills.push({ quote, price, quantityFilled: quantityFromQuote, cost: costBigInt });
 	}
 
-	// Calculate weighted average price: total cost / total quantity
 	const weightedAveragePrice = quantityFilled > 0n
-		? totalCostInQuoteTokens / (Number(quantityFilled) / 1e18)
+		? Number(totalCostScaled) / Number(quantityFilled)
 		: 0;
 
-	return { quantityFilled, weightedAveragePrice, fills };
+	return { quantityFilled, weightedAveragePrice, fills, totalCostScaled };
 }

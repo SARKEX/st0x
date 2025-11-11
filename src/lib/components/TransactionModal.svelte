@@ -116,10 +116,6 @@
 									{marketOrderSummary.averagePrice.toFixed(6)} {marketOrderSummary.paymentTokenSymbol}
 								</span>
 							</div>
-							<div class="mt-2 flex justify-between">
-								<span class="text-gray-400">Slippage</span>
-								<span class="font-medium">{marketOrderSummary.actualSlippage.toString()}%</span>
-							</div>
 							{#if marketOrderSummary.isPartialFill}
 								<div class="mt-3 rounded-md bg-yellow-900/30 p-2 text-xs text-yellow-200">
 									Partial fill: not all requested quantity was available within the selected slippage.
