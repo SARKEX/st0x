@@ -32,10 +32,11 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 	// Sell order: assetToken is OUTPUT (what we give), paymentToken is INPUT (what we want)
 	export let passedOutputToken: CategorizedToken | undefined;
 
-	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
+	const ORDERBOOK_MAX_STALENESS_MS = 30_000; // 30 seconds
 
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
+	let estimatedQuoteCostScaled: bigint = 0n; // Quote token cost for selected amount (1e18 scale)
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
 	let isLoadingPrice = true;
 	let priceError = false;
@@ -170,6 +171,7 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 			// If no selected amount, don't calculate a price estimate
 			if (!selectedAmount || selectedAmount === 0n) {
 				marketPrice = 0;
+				estimatedQuoteCostScaled = 0n;
 				availableOrders = [];
 				orderbook = undefined;
 				return;
@@ -182,10 +184,11 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 				assetDecimals: passedOutputToken.decimals ?? 18
 			});
 
-			const { quantityFilled, weightedAveragePrice, fills } = walkResult;
+			const { quantityFilled, weightedAveragePrice, fills, totalCostScaled } = walkResult;
 
 			if (quantityFilled > 0n) {
 				marketPrice = weightedAveragePrice;
+				estimatedQuoteCostScaled = totalCostScaled;
 
 				availableOrders = fills.map((fill) => ({
 					order: (fill.quote.sgOrder as SgOrder) ??
@@ -202,6 +205,7 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 				orderbook = fills[0]?.quote.orderbookId ?? 'cached';
 
 			} else {
+				estimatedQuoteCostScaled = 0n;
 				console.warn('No quantity filled from orderbook', {
 					selectedAmount: selectedAmount.toString(),
 					ordersWalked: fills.length,
@@ -214,6 +218,7 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 		} catch (error) {
 			console.error('Error calculating market price:', error);
 			priceError = true;
+			estimatedQuoteCostScaled = 0n;
 		} finally {
 			isLoadingPrice = false;
 		}
@@ -227,6 +232,7 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
 		marketPrice = 0;
+		estimatedQuoteCostScaled = 0n;
 		availableOrders = [];
 		orderbook = undefined;
 	}
@@ -255,11 +261,18 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 			priceSource = 'Oracle';
 		}
 
-		// Filter to only orders within 10% of reference price
-		const maxAcceptablePrice = referencePrice * slippageMultiplier;
+		// Filter to only orders within 5% of reference price
+		// For BUY: want prices up to 5% worse (higher) - price <= maxAcceptablePrice
+		// For SELL: want prices down to 5% worse (lower) - price >= minAcceptablePrice
+		const maxAcceptablePrice = referencePrice * slippageMultiplier; // For BUY
+		const minAcceptablePrice = referencePrice / slippageMultiplier; // For SELL
+
 
 		const filtered = availableOrders.filter((order) => {
-			return order.price <= maxAcceptablePrice;
+			const passes = orderSide === 'Buy'
+				? order.price <= maxAcceptablePrice
+				: order.price >= minAcceptablePrice;
+			return passes;
 		});
 
 		return filtered;
@@ -386,20 +399,15 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 
 			// Calculate required input for desired output using actual fills
 			const bestPrice = executableOrders[0].price; // Human-readable price (quote per asset)
+			const worstPrice = executableOrders[executableOrders.length - 1].price;
 			const primaryInputIndex = executableOrders[0].inputIOIndex ?? 0;
 			const primaryOutputIndex = executableOrders[0].outputIOIndex ?? 0;
 		const priceBasis = marketPrice || bestPrice;
 		const selectedAmountScaled = scaleAmount(selectedAmount, passedOutputToken?.decimals ?? 18, 18);
-		console.info('Market order cost inputs', {
-			priceBasis,
-			marketPrice,
-			bestPrice,
-			selectedAmount: selectedAmount.toString(),
-			selectedAmountScaled: selectedAmountScaled.toString()
-		});
-			const priceScaledSixDecimals = BigInt(Math.round(priceBasis * 1_000_000));
-			const fallbackCostScaled = (selectedAmountScaled * priceScaledSixDecimals) / 1_000_000n;
-			const effectiveCostScaled = fallbackCostScaled;
+		const priceScaledSixDecimals = BigInt(Math.floor(priceBasis * 1_000_000));
+		const fallbackCostScaled = (selectedAmountScaled * priceScaledSixDecimals) / 1_000_000n;
+		const costFromWalk = orderSide === 'Sell' ? estimatedQuoteCostScaled : 0n;
+		const effectiveCostScaled = costFromWalk > 0n ? costFromWalk : fallbackCostScaled;
 
 			// Build TakeOrderConfigs for ALL filtered orders in price priority
 			const takeOrderConfigs: TakeOrderConfigV4[] = [];
@@ -441,13 +449,6 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 			}
 
 			// Use worst price in filtered set for maximumIORatio (already within 10%)
-			const worstPrice = executableOrders[executableOrders.length - 1].price;
-			console.log('Orders for execution:', {
-				orderCount: executableOrders.length,
-				bestPrice: executableOrders[0].price,
-				worstPrice,
-				allPrices: executableOrders.map((o, i) => ({ index: i, price: o.price }))
-			});
 			const floatWorstPriceResult = Float.parse(worstPrice.toString());
 			if (floatWorstPriceResult.error || !floatWorstPriceResult.value) {
 				console.error('Failed to encode worst price as Float:', floatWorstPriceResult.error);
@@ -472,30 +473,30 @@ import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore
 					passedOutputToken?.decimals ?? 18,
 					inputTokenDecimals
 				  );
-		console.info('Market order spend summary', {
-			effectiveCostScaled: effectiveCostScaled.toString(),
-			requiredInputBigInt: requiredInputBigInt.toString(),
-			inputTokenDecimals
-		});
 			const inputFloat = Float.fromFixedDecimalLossy(requiredInputBigInt, inputTokenDecimals);
 
-			// maximumInput should be the quantity of tokens to acquire, not the cost
-			const selectedAmountFloat = Float.fromFixedDecimalLossy(selectedAmount, passedOutputToken?.decimals ?? 18);
+
+		// maximumInput is order-side dependent:
+		// - For Buy: max quantity of asset tokens to acquire (in asset decimals)
+		// - For Sell: max amount of USDC to receive (in payment token decimals), calculated conservatively
+		const maximumInputAmount = orderSide === 'Sell'
+			? scaleAmount(effectiveCostScaled, 18, paymentToken?.decimals ?? 6)
+			: selectedAmount;
+
+		const maximumInputDecimals = orderSide === 'Sell'
+			? (paymentToken?.decimals ?? 6)
+			: (passedOutputToken?.decimals ?? 18);
+
+		const maximumInputFloat = Float.fromFixedDecimalLossy(maximumInputAmount, maximumInputDecimals);
 
 			const zeroFloatHex = Float.fromBigint(0n).asHex();
 			const takeOrdersConfig: TakeOrdersConfigV4 = {
 				minimumInput: zeroFloatHex,
-				maximumInput: selectedAmountFloat.float.asHex(),
+				maximumInput: maximumInputFloat.float.asHex(),
 				maximumIORatio: maxIORatioHex,
 				orders: takeOrderConfigs,
 				data: '0x'
 			};
-			console.log('TakeOrdersConfig being sent to wallet:', {
-				maximumInputHex: selectedAmountFloat.float.asHex(),
-				maximumInputValue: selectedAmount.toString(),
-				maximumIORatioHex: maxIORatioHex,
-				orderCount: takeOrderConfigs.length
-			});
 
 			// Determine required approval amount
 			let requiredApprovalAmount = requiredInputBigInt;
