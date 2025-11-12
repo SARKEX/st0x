@@ -1000,13 +1000,20 @@
 									Sell
 								</button>
 							</div>
-							<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
-								<span>{panelSummaryVerb} {panelTokenLabel}</span>
-								<span class="text-gray-500">{panelSummaryPreposition}</span>
-								<span class="inline-flex items-center gap-1 text-gray-200">
-									{settlementTokenSymbol}
-									<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-4 w-4" />
-								</span>
+							<div class="space-y-2">
+								<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
+									<span>{panelSummaryVerb} {panelTokenLabel}</span>
+									<span class="text-gray-500">{panelSummaryPreposition}</span>
+									<span class="inline-flex items-center gap-1 text-gray-200">
+										{settlementTokenSymbol}
+										<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-4 w-4" />
+									</span>
+								</div>
+								<div class="flex items-center gap-2 text-sm text-gray-400">
+									<span>On</span>
+									<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
+									<span>{$currentNetwork.displayName}</span>
+								</div>
 							</div>
 							<label class="block space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
 								<span id={PANEL_STRATEGY_LABEL_ID} class="block text-sm font-medium text-gray-300">

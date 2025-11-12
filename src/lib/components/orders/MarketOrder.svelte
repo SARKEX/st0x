@@ -404,24 +404,29 @@
 			const primaryOutputIndex = executableOrders[0].outputIOIndex ?? 0;
 			const primaryOrder = executableOrders[0].order;
 
-			// Calculate required input amount from fresh walk result
+			// Calculate required approval amount for the output token (what we're spending)
 			const walkResult = calculateOrderbookWalk();
 			if (!walkResult) {
 				console.error('Unable to calculate walk result for order execution');
 				return;
 			}
 			const { totalCostScaled, quantityFilled } = walkResult;
-			const derivedInputDecimals = Number(
-				primaryOrder.inputs[primaryInputIndex]?.token?.decimals ?? 18
-			);
-			const requiredInputBigInt =
-				orderSide === 'Buy'
-					? scaleAmount(totalCostScaled, 18, derivedInputDecimals)
-					: scaleAmount(selectedAmount, passedOutputToken?.decimals ?? 18, derivedInputDecimals);
 
-			const inputFloat = Float.fromFixedDecimalLossy(requiredInputBigInt, derivedInputDecimals);
-			let requiredApprovalAmount = requiredInputBigInt;
-			if (inputFloat.lossless) {
+			// For BUY: we need to approve the payment token (output token)
+			// For SELL: we need to approve the asset token (output token)
+			// In both cases it's the output token
+			const outputTokenDecimals = Number(
+				primaryOrder.outputs[primaryOutputIndex]?.token?.decimals ?? 18
+			);
+
+			const requiredApprovalBigInt =
+				orderSide === 'Buy'
+					? scaleAmount(totalCostScaled, 18, outputTokenDecimals)
+					: scaleAmount(selectedAmount, passedOutputToken?.decimals ?? 18, outputTokenDecimals);
+
+			const approvalFloat = Float.fromFixedDecimalLossy(requiredApprovalBigInt, outputTokenDecimals);
+			let requiredApprovalAmount = requiredApprovalBigInt;
+			if (approvalFloat.lossless) {
 				requiredApprovalAmount = requiredApprovalAmount + 1n;
 			}
 
@@ -452,7 +457,17 @@
 				requiredApprovalAmount,
 				{
 					ioIndexes: { input: primaryInputIndex, output: primaryOutputIndex },
-					walkResult
+					walkResult,
+					orderSide,
+					assetToken: {
+						decimals: passedOutputToken?.decimals,
+						symbol: passedOutputToken?.symbol
+					},
+					paymentToken: {
+						decimals: paymentToken?.decimals,
+						symbol: paymentToken?.symbol
+					},
+					userRequestedAmount: selectedAmount
 				}
 			);
 		} catch (error) {

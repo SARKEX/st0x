@@ -22,7 +22,8 @@
 			outputTokenSymbol: marketOrderSummary.outputTokenSymbol,
 			averagePrice: marketOrderSummary.averagePrice,
 			paymentTokenSymbol: marketOrderSummary.paymentTokenSymbol,
-			isPartialFill: marketOrderSummary.isPartialFill
+			isPartialFill: marketOrderSummary.isPartialFill,
+			isNoFill: marketOrderSummary.isNoFill
 		});
 	}
 
@@ -121,8 +122,17 @@
 						</div>
 					{/if}
 
-					<!-- Disabled market order summary
-				{#if marketOrderSummary && false}
+					<!-- Market order summary or no-fill message -->
+					{#if marketOrderSummary?.isNoFill}
+						<div class="w-full rounded-md border border-yellow-900/50 bg-yellow-900/20 p-4 text-left text-sm text-yellow-200">
+							<div class="mb-3 text-xs uppercase tracking-wide text-yellow-600">
+								No Tokens Available
+							</div>
+							<p class="mb-3">
+								No tokens available within 10% of oracle prices. During testing we have a guardrail to avoid unfavourable prices. If you still want to make this purchase, use a limit order and specify the desired price.
+							</p>
+						</div>
+					{:else if marketOrderSummary}
 						<div class="w-full rounded-md border border-white/10 bg-gray-900/50 p-4 text-left text-sm text-gray-200">
 							<div class="mb-3 text-xs uppercase tracking-wide text-gray-500">
 								Market Order Summary
@@ -157,7 +167,6 @@
 							{/if}
 						</div>
 					{/if}
-				-->
 
 					{#if $transactionStore.hash}
 						<div class="flex flex-col gap-2">
