@@ -1029,7 +1029,7 @@
 											case 'limit':
 												return 'Limit Order';
 											case 'dca':
-												return 'DCA Order';
+												return 'Dollar Cost Averaging';
 											case 'market':
 												return 'Market Order';
 											default:

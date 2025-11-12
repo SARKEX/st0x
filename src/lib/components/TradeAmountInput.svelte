@@ -149,7 +149,9 @@
 			</span>
 		{:then data}
 			{#if data}
-				Balance: {formatUnits(data.balance, data.decimals)} {(balanceToken ?? amountToken)?.symbol}
+				{@const balanceFormatted = parseFloat(formatUnits(data.balance, data.decimals))}
+				{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
+				Balance: {balanceRounded.toFixed(3)} {(balanceToken ?? amountToken)?.symbol}
 			{:else}
 				Balance: —
 			{/if}

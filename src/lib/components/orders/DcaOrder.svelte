@@ -77,10 +77,40 @@
 	let outputVaultIdError: boolean = false;
 	let selectedBaselineError: boolean = false;
 	let selectedInitialRatioError: boolean = false;
+	let priceGuardrailError: boolean = false;
 
 	$: depositAmount = selectedAmount;
 	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
 	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
+
+	// Truncate start price to max 2 decimal places
+	$: if (selectedInitialRatio) {
+		const num = parseFloat(selectedInitialRatio);
+		if (Number.isFinite(num)) {
+			const truncated = Math.floor(num * 100) / 100;
+			if (truncated !== num) {
+				selectedInitialRatio = truncated.toString();
+			}
+		}
+	}
+
+	// Price guardrail validation
+	$: {
+		const startPrice = parseFloat(selectedInitialRatio || '0');
+		const limitPrice = parseFloat(selectedBaseline || '0');
+
+		if (selectedInitialRatio && selectedBaseline && startPrice > 0 && limitPrice > 0) {
+			if (orderSide === 'Buy') {
+				// For buy: ceiling price (limit) can't be lower than start price
+				priceGuardrailError = limitPrice < startPrice;
+			} else {
+				// For sell: floor price (limit) can't be higher than start price
+				priceGuardrailError = limitPrice > startPrice;
+			}
+		} else {
+			priceGuardrailError = false;
+		}
+	}
 
 	$: disableDeploy =
 		!selectedAmount ||
@@ -93,7 +123,8 @@
 		selectedPeriodError ||
 		selectedBaselineError ||
 		isInputTokenSameAsOutputToken ||
-		selectedInitialRatioError;
+		selectedInitialRatioError ||
+		priceGuardrailError;
 
 	const handleDcaDeploy = () => {
 		const normalizeDecimal = (v: string): string => {
@@ -165,8 +196,7 @@
 		const amount = parseFloat(formatUnits(selectedAmount, decimals));
 		const periods = parseFloat(selectedPeriod || '1');
 		if (!Number.isFinite(amount) || !Number.isFinite(periods) || periods === 0) return '0.00';
-		const dp = orderSide === 'Buy' ? 2 : 6; // Preserve fewer decimals for Buy (quote), higher precision for Sell
-		return (amount / periods).toFixed(dp);
+		return (amount / periods).toFixed(2);
 	})();
 
 	// Dynamic label for accumulation/divestment depending on order type
@@ -200,7 +230,7 @@
 		<div class="space-y-4">
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Target Amount
+					{orderSide === 'Buy' ? 'Purchase Budget' : 'Amount to Sell'}
 					<span class="ml-1 text-xs text-gray-500"
 						>({orderSide === 'Buy' ? settlementLabel : selectedInputToken.symbol})</span
 					>
