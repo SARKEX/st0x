@@ -7,7 +7,6 @@ import {
 } from './getDeploymentArgs';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import { getPrice } from './getPrice';
-import { formatUnits } from 'viem';
 import {
 	getAllTokensByNetwork,
 	STOXs,

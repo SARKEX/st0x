@@ -349,7 +349,7 @@ const transactionStore = () => {
 				quantityFilled: bigint;
 				weightedAveragePrice: number;
 				totalCostScaled: bigint;
-				fills: any[];
+				fills: unknown[];
 			};
 			assetToken?: { decimals?: number; symbol?: string };
 			paymentToken?: { decimals?: number; symbol?: string };
@@ -468,8 +468,7 @@ const transactionStore = () => {
 
 			// Find ALL trades for this transaction (multiple orders can be matched)
 			const allTrades = $resource.data.trades.filter(
-				(t) =>
-					t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
+				(t) => t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
 			) as unknown as Array<{
 				tradeEvent?: { transaction?: { id?: string } };
 				order?: {
@@ -489,9 +488,7 @@ const transactionStore = () => {
 
 			// Only proceed if we have trades with vault changes
 			const validTrades = allTrades.filter(
-				(t) =>
-					t.inputVaultBalanceChange?.amount &&
-					t.outputVaultBalanceChange?.amount
+				(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
 			);
 
 			if (validTrades.length === 0) {
@@ -500,24 +497,12 @@ const transactionStore = () => {
 
 			cleanup();
 
-			console.log('=== ALL TRADES FOR TRANSACTION ===');
-			console.log('Found trades:', validTrades.length);
-			console.log('Raw trades:', JSON.stringify(validTrades, null, 2));
-
 			// Get the walk result from options
 			const { quantityFilled: estimatedQuantityFilled, weightedAveragePrice } =
 				options?.walkResult || {
 					quantityFilled: 0n,
 					weightedAveragePrice: 0
 				};
-
-			const inputToken = raindexOrder.inputs[inputIndex]?.token;
-			const outputToken = raindexOrder.outputs[outputIndex]?.token;
-
-			// Use passed-in asset/payment tokens for decimals (immune to order structure variations)
-			// Fall back to order tokens if not provided
-			const assetTokenDecimals = options?.assetToken?.decimals ?? inputToken?.decimals ?? 18;
-			const paymentTokenDecimals = options?.paymentToken?.decimals ?? outputToken?.decimals ?? 18;
 
 			// Helper function to parse hex amount using Float
 			const parseHexAmount = (hexAmount: Hex, decimals: number): bigint => {
@@ -542,8 +527,9 @@ const transactionStore = () => {
 					}
 
 					const fdValue = fixedResult.value;
-					if (typeof (fdValue as any).value === 'string') {
-						return BigInt((fdValue as any).value);
+					const fdValueObj = fdValue as unknown as Record<string, unknown>;
+					if (typeof fdValueObj?.value === 'string') {
+						return BigInt(fdValueObj.value as string);
 					}
 					return 0n;
 				} catch (e) {
@@ -555,56 +541,56 @@ const transactionStore = () => {
 			// Get order side from options (already determined during transaction building)
 			const orderSideFromTrade = options?.orderSide ?? 'Buy';
 
+			// Get token decimals and symbol once from first trade
+			const firstTrade = validTrades[0];
+			const quantityFilledTokenDecimals =
+				orderSideFromTrade === 'Buy'
+					? // @ts-expect-error vault structure has token info
+						firstTrade.outputVaultBalanceChange?.vault?.token?.decimals ?? 18
+					: // @ts-expect-error vault structure has token info
+						firstTrade.inputVaultBalanceChange?.vault?.token?.decimals ?? 18;
+
+			const quantityFilledTokenSymbol =
+				orderSideFromTrade === 'Buy'
+					? // @ts-expect-error vault structure has token info
+						firstTrade.outputVaultBalanceChange?.vault?.token?.symbol ?? ''
+					: // @ts-expect-error vault structure has token info
+						firstTrade.inputVaultBalanceChange?.vault?.token?.symbol ?? '';
+
 			// Sum the appropriate vault changes based on order side
 			let quantityFilledAmount = 0n;
-			let quantityFilledTokenDecimals = 18;
-			let quantityFilledTokenSymbol = '';
-
 			for (const trade of validTrades) {
 				if (orderSideFromTrade === 'Buy') {
-					// For BUY: display sum of outputVaultBalanceChange
+					// For BUY: sum outputVaultBalanceChange amounts
 					const outputAmount = parseHexAmount(
 						trade.outputVaultBalanceChange!.amount as Hex,
-						// @ts-expect-error vault structure has token info
-						trade.outputVaultBalanceChange?.vault?.token?.decimals ?? 18
+						quantityFilledTokenDecimals
 					);
 					quantityFilledAmount += outputAmount;
-					// @ts-expect-error vault structure has token info
-					quantityFilledTokenDecimals = trade.outputVaultBalanceChange?.vault?.token?.decimals ?? 18;
-					// @ts-expect-error vault structure has token info
-					quantityFilledTokenSymbol = trade.outputVaultBalanceChange?.vault?.token?.symbol ?? '';
 				} else {
-					// For SELL: display sum of inputVaultBalanceChange
+					// For SELL: sum inputVaultBalanceChange amounts
 					const inputAmount = parseHexAmount(
 						trade.inputVaultBalanceChange!.amount as Hex,
-						// @ts-expect-error vault structure has token info
-						trade.inputVaultBalanceChange?.vault?.token?.decimals ?? 18
+						quantityFilledTokenDecimals
 					);
 					quantityFilledAmount += inputAmount;
-					// @ts-expect-error vault structure has token info
-					quantityFilledTokenDecimals = trade.inputVaultBalanceChange?.vault?.token?.decimals ?? 18;
-					// @ts-expect-error vault structure has token info
-					quantityFilledTokenSymbol = trade.inputVaultBalanceChange?.vault?.token?.symbol ?? '';
 				}
 			}
 
-			console.log('=== TOTALS ===');
-			console.log('Quantity filled amount:', quantityFilledAmount.toString());
-			console.log('Quantity filled token:', quantityFilledTokenSymbol);
-			console.log('Order side:', orderSideFromTrade);
-
 			// Calculate average price from walk result
 			const averagePrice = weightedAveragePrice;
-
-			console.log('Average price:', averagePrice);
 
 			// Use the user's actual requested amount, not the walk estimate
 			const userRequestedQuantity = options?.userRequestedAmount ?? estimatedQuantityFilled;
 
 			// Check if fill is complete (within 99.9% tolerance)
 			// Need to normalize both amounts to the same decimal scale for comparison
-			const quantityFilledDecimal = parseFloat(formatUnits(quantityFilledAmount, quantityFilledTokenDecimals));
-			const userRequestedDecimal = parseFloat(formatUnits(userRequestedQuantity, assetTokenDecimals));
+			const quantityFilledDecimal = parseFloat(
+				formatUnits(quantityFilledAmount, quantityFilledTokenDecimals)
+			);
+			const userRequestedDecimal = parseFloat(
+				formatUnits(userRequestedQuantity, quantityFilledTokenDecimals)
+			);
 
 			let fillPercentage = 0;
 			let isNoFill = false;
@@ -624,24 +610,11 @@ const transactionStore = () => {
 				outputTokenDecimals: quantityFilledTokenDecimals,
 				outputTokenSymbol: quantityFilledTokenSymbol,
 				averagePrice: averagePrice,
-				paymentTokenSymbol: options?.paymentToken?.symbol ?? paymentToken?.symbol ?? '',
+				paymentTokenSymbol: options?.paymentToken?.symbol ?? '',
 				actualSlippage: 0n,
 				isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
 				isNoFill
 			};
-
-			console.log('=== SUMMARY BUILT FROM ACTUAL DATA ===');
-			console.log('Final summary:', {
-				orderSide: summary.orderSide,
-				quantityFilled: summary.quantityFilled.toString(),
-				quantityRequested: summary.quantityRequested.toString(),
-				outputTokenDecimals: summary.outputTokenDecimals,
-				outputTokenSymbol: summary.outputTokenSymbol,
-				averagePrice: summary.averagePrice,
-				paymentTokenSymbol: summary.paymentTokenSymbol,
-				isPartialFill: summary.isPartialFill,
-				fillPercentage: (fillPercentage * 100).toFixed(2) + '%'
-			});
 
 			const orderLink = createRaindexLink(
 				network.id,
@@ -649,15 +622,8 @@ const transactionStore = () => {
 				raindexOrder.orderHash,
 				'View order on Raindex'
 			);
-			const link = `
-		</div>
-	`;
 
-			console.log('=== TRANSACTION SUCCESS ===');
-			console.log('Hash:', hash);
-			console.log('Market order summary being passed to modal:', summary);
-
-			return transactionSuccess(hash, link, { marketOrderSummary: summary });
+			return transactionSuccess(hash, orderLink, { marketOrderSummary: summary });
 		});
 
 		// Safety timeout: give up after 5 minutes if trade not found

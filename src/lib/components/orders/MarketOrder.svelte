@@ -3,7 +3,7 @@
 	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { OrderV4_ABI, normalizeOrderData, type ProcessedQuote } from '$lib/utils/quote';
-	import { FIXED_POINT_SCALE, scaleAmount, walkOrderbook } from '$lib/utils/marketPrice';
+	import { scaleAmount, walkOrderbook } from '$lib/utils/marketPrice';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import {
@@ -22,7 +22,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
-	import transactionStore, { type MarketOrderSummary } from '$lib/transactionStore';
+	import transactionStore from '$lib/transactionStore';
 	import { Float } from '@rainlanguage/float';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -36,7 +36,6 @@
 
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
-	let estimatedQuoteCostScaled: bigint = 0n; // Quote token cost for selected amount (1e18 scale)
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
 	let isLoadingPrice = true;
 	let priceError = false;
@@ -99,7 +98,6 @@
 			// If no selected amount, don't calculate a price estimate
 			if (!selectedAmount || selectedAmount === 0n) {
 				marketPrice = 0;
-				estimatedQuoteCostScaled = 0n;
 				availableOrders = [];
 				orderbook = undefined;
 				return;
@@ -114,11 +112,10 @@
 				return;
 			}
 
-			const { quantityFilled, weightedAveragePrice, fills, totalCostScaled } = walkResult;
+			const { quantityFilled, weightedAveragePrice, fills } = walkResult;
 
 			if (quantityFilled > 0n) {
 				marketPrice = weightedAveragePrice;
-				estimatedQuoteCostScaled = totalCostScaled;
 
 				availableOrders = fills.map((fill) => ({
 					order:
@@ -135,7 +132,6 @@
 				}));
 				orderbook = fills[0]?.quote.orderbookId ?? 'cached';
 			} else {
-				estimatedQuoteCostScaled = 0n;
 				console.warn('No quantity filled from orderbook', {
 					selectedAmount: selectedAmount.toString(),
 					ordersWalked: fills.length
@@ -147,7 +143,6 @@
 		} catch (error) {
 			console.error('Error calculating market price:', error);
 			priceError = true;
-			estimatedQuoteCostScaled = 0n;
 		} finally {
 			isLoadingPrice = false;
 		}
@@ -166,7 +161,6 @@
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
 		marketPrice = 0;
-		estimatedQuoteCostScaled = 0n;
 		availableOrders = [];
 		orderbook = undefined;
 	}
@@ -242,11 +236,9 @@
 		const oraclePrice = oracleEntry?.price;
 
 		let referencePrice = availableOrders[0].price; // Fallback to best BBO price
-		let priceSource = 'BBO';
 
 		if (oraclePrice && Number.isFinite(oraclePrice) && oraclePrice > 0) {
 			referencePrice = oraclePrice;
-			priceSource = 'Oracle';
 		}
 
 		// Filter to only orders within 5% of reference price
@@ -424,11 +416,12 @@
 					? scaleAmount(totalCostScaled, 18, outputTokenDecimals)
 					: scaleAmount(selectedAmount, passedOutputToken?.decimals ?? 18, outputTokenDecimals);
 
-			const approvalFloat = Float.fromFixedDecimalLossy(requiredApprovalBigInt, outputTokenDecimals);
-			let requiredApprovalAmount = requiredApprovalBigInt;
-			if (approvalFloat.lossless) {
-				requiredApprovalAmount = requiredApprovalAmount + 1n;
-			}
+			// Add 1 wei buffer if there's precision loss to ensure sufficient allowance
+			const approvalFloat = Float.fromFixedDecimalLossy(
+				requiredApprovalBigInt,
+				outputTokenDecimals
+			);
+			const requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
 
 			// Calculate maximumInput based on walk result
 			const maximumInputAmount =
