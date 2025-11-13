@@ -33,11 +33,12 @@
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
-	function isUSDCPosition(token: { token: SgErc20 }) {
-		return (
-			token.token.symbol?.toUpperCase() === 'USDC' ||
-			token.token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase()
-		);
+	function isPaymentTokenPosition(token: { token: SgErc20 }) {
+		const settlementToken = $currentNetwork?.defaultPaymentToken;
+		if (!settlementToken) return false;
+		const symbolMatch = token.token.symbol?.toUpperCase() === settlementToken.symbol?.toUpperCase();
+		const addressMatch = token.token.id?.toLowerCase() === settlementToken.address?.toLowerCase();
+		return Boolean(symbolMatch || addressMatch);
 	}
 
 	// Filter tokens by current network
@@ -280,40 +281,58 @@
 		// Convert map to array and format balances
 		const balancePromises = Array.from(tokenBalances.values()).map(
 			async ({ token, totalBalance, vaultIds }) => {
-				// Check if this is USDC
-				const isUSDC =
-					token.symbol?.toUpperCase() === 'USDC' ||
-					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
+				const settlementToken = $currentNetwork?.defaultPaymentToken;
+				if (!settlementToken) {
+					const balance = parseFloat(formatUnits(totalBalance, Number(token.decimals ?? 18)));
+					return {
+						token,
+						balance: balance.toFixed(6),
+						vaultIds,
+						price: '0.000000',
+						estimatedValue: '0.000000',
+						isPaymentToken: false
+					};
+				}
+				const settlementSymbol = settlementToken.symbol?.toUpperCase();
+				const settlementAddress = settlementToken.address?.toLowerCase();
+				const isPaymentToken =
+					token.symbol?.toUpperCase() === settlementSymbol ||
+					token.id.toLowerCase() === settlementAddress;
 
-				const quote = !isUSDC
-					? findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS)
-					: null;
+				const quote = findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS);
 
-				let price: number;
-				if (isUSDC) {
-					// USDC is always $1
-					price = 1.0;
-				} else if (quote?.close != null) {
-					price = quote.close;
-				} else {
-					// Fallback to getPrice if not in global quote
-					const priceStr = await getPrice(
-						new EvmToken({
-							chainId: evmChainIds[$currentNetwork.chainId],
-							address: token.id as `0x${string}`,
-							symbol: token.symbol || '',
-							decimals: Number(token.decimals ?? 18),
-							name: token.name || ''
-						}),
-						new EvmToken({
-							chainId: evmChainIds[$currentNetwork.chainId],
-							address: $currentNetwork.usdcToken.address as `0x${string}`,
-							symbol: $currentNetwork.usdcToken.symbol,
-							decimals: Number($currentNetwork.usdcToken.decimals),
-							name: $currentNetwork.usdcToken.name
-						})
-					);
-					price = parseFloat(priceStr);
+				let price: number | null = quote?.close ?? null;
+				if (!price || !Number.isFinite(price) || price <= 0) {
+					try {
+						const priceStr = await getPrice(
+							new EvmToken({
+								chainId: evmChainIds[$currentNetwork.chainId],
+								address: token.id as `0x${string}`,
+								symbol: token.symbol || '',
+								decimals: Number(token.decimals ?? 18),
+								name: token.name || ''
+							}),
+							new EvmToken({
+								chainId: evmChainIds[$currentNetwork.chainId],
+								address: settlementToken.address as `0x${string}`,
+								symbol: settlementToken.symbol || '',
+								decimals: Number(settlementToken.decimals ?? 18),
+								name: settlementToken.name || ''
+							})
+						);
+						price = parseFloat(priceStr);
+					} catch (priceError) {
+						console.warn('Failed to fetch price from swap API', priceError);
+						price = null;
+					}
+				}
+
+				if (!price || !Number.isFinite(price) || price <= 0) {
+					if (isPaymentToken) {
+						price = 1;
+					} else {
+						price = 0;
+					}
 				}
 
 				const balance = parseFloat(formatUnits(totalBalance, Number(token.decimals ?? 18)));
@@ -325,7 +344,7 @@
 					vaultIds,
 					price: price.toFixed(6),
 					estimatedValue,
-					isUSDC
+					isPaymentToken
 				};
 			}
 		);
@@ -594,7 +613,7 @@
 											<!-- Token Info -->
 											<div class="flex items-start gap-3 sm:gap-4">
 												<div
-													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {isUSDCPosition(
+													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {isPaymentTokenPosition(
 														token
 													)
 														? 'bg-gradient-to-br from-green-600/20 to-emerald-700/20'
@@ -610,7 +629,7 @@
 														<p class="{textStyles.label} sm:text-sm">
 															{token.token.symbol ?? '???'}
 														</p>
-														{#if isUSDCPosition(token)}
+														{#if isPaymentTokenPosition(token)}
 															<span
 																class="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400"
 															>
@@ -636,7 +655,7 @@
 												<div class="flex items-center justify-between">
 													<span class="{textStyles.label} sm:text-sm">Estimated Value</span>
 													<span
-														class="text-xs font-medium {isUSDCPosition(token)
+														class="text-xs font-medium {isPaymentTokenPosition(token)
 															? 'text-emerald-400'
 															: 'text-green-400'} sm:text-sm">${token.estimatedValue}</span
 													>

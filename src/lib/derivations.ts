@@ -5,14 +5,22 @@
 import type { Token } from 'sushi';
 
 /**
- * For limit strategies, return the baseline IO ratio to use.
- * Buy orders pass through unchanged, while Sell orders return the inverse
- * (unless the provided ratio is invalid or zero).
+ * For limit order strategies, convert user-specified price to the orderbook IO ratio.
+ *
+ * Bid orders (user buying): User specifies price as "I pay X per 1 asset"
+ *   → This becomes ratio = 1/X in orderbook terms (output/input)
+ *   → So the price must be inverted
+ *
+ * Ask orders (user selling): User specifies price as "I get X per 1 asset"
+ *   → This becomes ratio = X/1 = X in orderbook terms (output/input)
+ *   → So the price remains unchanged
+ *
+ * (unless the provided ratio is invalid or zero)
  */
-export function getBaseline(orderType: 'Buy' | 'Sell', ratio: string): string {
+export function getBaseline(orderType: 'Bid' | 'Ask', ratio: string): string {
 	const r = (ratio ?? '').toString().trim();
 	if (!r) return '';
-	if (orderType === 'Sell') {
+	if (orderType === 'Bid') {
 		const n = Number(r);
 		if (!Number.isFinite(n) || n === 0) return r;
 		const inverted = 1 / n;

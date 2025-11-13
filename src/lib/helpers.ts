@@ -77,12 +77,15 @@ export function mapOrder<T extends Record<string, any>>(
 	array.sort((a, b) => {
 		const A = a[key],
 			B = b[key];
+		const indexA = order.indexOf(A);
+		const indexB = order.indexOf(B);
 
-		if (order.indexOf(A) > order.indexOf(B)) {
-			return 1;
-		} else {
-			return -1;
-		}
+		// Items in order come first (with lower indices first)
+		// Items not in order come last
+		if (indexA === -1 && indexB === -1) return 0; // Both not in order, maintain relative position
+		if (indexA === -1) return 1; // A not in order, goes after B
+		if (indexB === -1) return -1; // B not in order, A goes before B
+		return indexA - indexB; // Both in order, compare by index
 	});
 
 	return array;

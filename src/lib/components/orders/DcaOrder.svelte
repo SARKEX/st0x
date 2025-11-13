@@ -33,14 +33,27 @@
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
-	// Initialize tokens - accumulating token from prop, USDC for payment
+	// Initialize tokens - accumulating token from prop, settlement token for settlement
 	let selectedInputToken: CategorizedToken;
 	let selectedOutputToken: CategorizedToken;
+	$: settlementSymbol = selectedOutputToken?.symbol ?? '';
+	$: settlementLabel = settlementSymbol || 'Quote';
 
 	// Resolve tokens whenever network, token list, or prop changes
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
-		const usdcToken = ALL_TOKENS.find((t) => t.symbol?.toUpperCase() === 'USDC');
-		selectedOutputToken = usdcToken || ALL_TOKENS[0];
+		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
+		if (settlementTokenConfig) {
+			const match = ALL_TOKENS.find(
+				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
+			);
+			selectedOutputToken =
+				match ||
+				(settlementTokenConfig as unknown as CategorizedToken) ||
+				selectedOutputToken ||
+				ALL_TOKENS[0];
+		} else {
+			selectedOutputToken = selectedOutputToken || ALL_TOKENS[0];
+		}
 		selectedInputToken =
 			(passedInputToken as unknown as CategorizedToken) || selectedInputToken || ALL_TOKENS[0];
 	}
@@ -64,10 +77,40 @@
 	let outputVaultIdError: boolean = false;
 	let selectedBaselineError: boolean = false;
 	let selectedInitialRatioError: boolean = false;
+	let priceGuardrailError: boolean = false;
 
 	$: depositAmount = selectedAmount;
 	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
 	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
+
+	// Truncate start price to max 2 decimal places
+	$: if (selectedInitialRatio) {
+		const num = parseFloat(selectedInitialRatio);
+		if (Number.isFinite(num)) {
+			const truncated = Math.floor(num * 100) / 100;
+			if (truncated !== num) {
+				selectedInitialRatio = truncated.toString();
+			}
+		}
+	}
+
+	// Price guardrail validation
+	$: {
+		const startPrice = parseFloat(selectedInitialRatio || '0');
+		const limitPrice = parseFloat(selectedBaseline || '0');
+
+		if (selectedInitialRatio && selectedBaseline && startPrice > 0 && limitPrice > 0) {
+			if (orderSide === 'Buy') {
+				// For buy: ceiling price (limit) can't be lower than start price
+				priceGuardrailError = limitPrice < startPrice;
+			} else {
+				// For sell: floor price (limit) can't be higher than start price
+				priceGuardrailError = limitPrice > startPrice;
+			}
+		} else {
+			priceGuardrailError = false;
+		}
+	}
 
 	$: disableDeploy =
 		!selectedAmount ||
@@ -80,7 +123,8 @@
 		selectedPeriodError ||
 		selectedBaselineError ||
 		isInputTokenSameAsOutputToken ||
-		selectedInitialRatioError;
+		selectedInitialRatioError ||
+		priceGuardrailError;
 
 	const handleDcaDeploy = () => {
 		const normalizeDecimal = (v: string): string => {
@@ -106,25 +150,28 @@
 			return;
 		}
 		if ($connected) {
-			// For Buy: input is asset (what we're accumulating), output is USDC (what we're spending)
-			// For Sell: input is USDC (what we're accumulating), output is asset (what we're spending)
-			const inputTok = orderSide === 'Buy' ? selectedInputToken : selectedOutputToken;
-			const outputTok = orderSide === 'Buy' ? selectedOutputToken : selectedInputToken;
+			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
+			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+
+			// Bid (buying): Accumulate asset over time using the settlement token
+			// Ask (selling): Accumulate the settlement token over time by selling the asset
+			const inputTok = orderType === 'Bid' ? selectedInputToken : selectedOutputToken;
+			const outputTok = orderType === 'Bid' ? selectedOutputToken : selectedInputToken;
 			transactionStore.handleDcaDeploy({
 				outputToken: outputTok,
 				inputToken: inputTok,
 				budgetAmount: selectedAmount,
 				selectedPeriod: selectedPeriod,
 				selectedPeriodUnit: selectedPeriodUnit,
-				// For DCA, prices need to be inverted for Buy orders (not Sell)
-				// Buy: User enters USDC price, but Rain expects asset/USDC ratio
-				// Sell: User enters USDC price, Rain expects USDC/asset ratio (same as entered)
+				// DCA price inversion logic:
+				// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
+				// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
 				baseline:
-					orderSide === 'Buy'
+					orderType === 'Bid'
 						? invertAndNormalize(selectedBaseline)
 						: normalizeDecimal(selectedBaseline),
 				kickoff:
-					orderSide === 'Buy'
+					orderType === 'Bid'
 						? invertAndNormalize(selectedInitialRatio)
 						: normalizeDecimal(selectedInitialRatio),
 				minTradeAmount: minTradeAmount,
@@ -149,8 +196,7 @@
 		const amount = parseFloat(formatUnits(selectedAmount, decimals));
 		const periods = parseFloat(selectedPeriod || '1');
 		if (!Number.isFinite(amount) || !Number.isFinite(periods) || periods === 0) return '0.00';
-		const dp = orderSide === 'Buy' ? 2 : 6; // Preserve 2dp for Buy (USDC), higher precision for Sell
-		return (amount / periods).toFixed(dp);
+		return (amount / periods).toFixed(2);
 	})();
 
 	// Dynamic label for accumulation/divestment depending on order type
@@ -184,14 +230,15 @@
 		<div class="space-y-4">
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Target Amount
+					{orderSide === 'Buy' ? 'Purchase Budget' : 'Amount to Sell'}
 					<span class="ml-1 text-xs text-gray-500"
-						>({orderSide === 'Buy' ? 'USDC' : selectedInputToken.symbol})</span
+						>({orderSide === 'Buy' ? settlementLabel : selectedInputToken.symbol})</span
 					>
 				</div>
 				<TradeAmountInput
 					aria-label="Target Amount"
 					amountToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
+					balanceToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
@@ -228,7 +275,7 @@
 				<Input
 					aria-label="Start Price"
 					type="number"
-					unit="USDC"
+					unit={settlementLabel}
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -241,7 +288,7 @@
 				<Input
 					aria-label={orderSide === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
 					type="number"
-					unit="USDC"
+					unit={settlementLabel}
 					bind:amount={selectedBaseline}
 					validate={validateBaseline}
 					bind:isError={selectedBaselineError}
@@ -257,7 +304,8 @@
 					<span class="text-gray-400">Target Amount</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
-							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'} USDC
+							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
+							{settlementLabel}
 						{:else}
 							{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}
@@ -275,7 +323,7 @@
 					<span class="text-gray-400">Average per period</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
-							~{avgPricePerPeriod} USDC
+							~{avgPricePerPeriod} {settlementLabel}
 						{:else}
 							~{avgPricePerPeriod} {selectedInputToken.symbol}
 						{/if}
@@ -285,7 +333,8 @@
 					<span class="text-gray-400">Min trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
-							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'}
+							{settlementLabel}
 						{:else}
 							{minTradeAmount ? formatUnits(minTradeAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}
@@ -296,7 +345,8 @@
 					<span class="text-gray-400">Max trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
-							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'} USDC
+							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'}
+							{settlementLabel}
 						{:else}
 							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedInputToken.decimals) : '0'}
 							{selectedInputToken.symbol}

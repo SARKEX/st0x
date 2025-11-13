@@ -10,6 +10,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	export let amountToken: Token;
+	export let balanceToken: Token | undefined = undefined;
 	let inputAmount: string | undefined;
 	export let amount: bigint | undefined = undefined;
 
@@ -21,8 +22,8 @@
 	export let showMaxButton: boolean = true;
 
 	let balance: bigint = 0n;
-	let decimals: number | null = null;
-	let tokenFingerprint: string | undefined;
+	let amountDecimals: number | null = null;
+	let amountTokenFingerprint: string | undefined;
 
 	const parseDecimals = (value: unknown): number | null => {
 		if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
@@ -38,17 +39,23 @@
 	const canParseDecimals = (value: number | null | undefined): value is number =>
 		typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
-	$: if (amountToken) {
-		resetInputAmount();
-	}
+	const getTokenFingerprint = (token?: Token) => {
+		if (!token) return undefined;
+		const address = token.address ? token.address.toString().toLowerCase() : '';
+		const chainId = token.chainId ?? '';
+		return `${address}:${chainId}`;
+	};
 
 	$: if (amountToken) {
-		const fingerprint = `${amountToken.address ?? ''}:${amountToken.chainId ?? ''}`;
+		const fingerprint = getTokenFingerprint(amountToken);
 		const fallbackDecimals = parseDecimals((amountToken as Partial<Token>).decimals);
-		const tokenChanged = tokenFingerprint !== fingerprint;
-		tokenFingerprint = fingerprint;
-		if (tokenChanged || !canParseDecimals(decimals)) {
-			decimals = fallbackDecimals;
+		const tokenChanged = amountTokenFingerprint !== fingerprint;
+		amountTokenFingerprint = fingerprint;
+		if (tokenChanged) {
+			resetInputAmount();
+		}
+		if (tokenChanged || !canParseDecimals(amountDecimals)) {
+			amountDecimals = fallbackDecimals;
 		}
 	}
 
@@ -57,48 +64,49 @@
 		amount = undefined;
 	};
 
-	$: if (inputAmount && canParseDecimals(decimals)) {
+	$: if (inputAmount && canParseDecimals(amountDecimals)) {
 		try {
-			amount = parseUnits(inputAmount, decimals);
+			amount = parseUnits(inputAmount, amountDecimals);
 		} catch {
 			amount = undefined;
 		}
+	} else if (!inputAmount) {
+		amount = undefined;
 	}
 
 	$: balancePromise = (async () => {
-		if (!amountToken) return;
-		if (!$signerAddress) return;
-		const [balance, decimals] = await Promise.all([
+		const token = balanceToken ?? amountToken;
+		if (!token) return null;
+		if (!$signerAddress) return null;
+		const fingerprint = getTokenFingerprint(token);
+		const [tokenBalance, tokenDecimals] = await Promise.all([
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address as `0x${string}`,
+				address: token.address as `0x${string}`,
 				functionName: 'balanceOf',
 				args: [$signerAddress as Hex]
 			}),
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: amountToken.address as `0x${string}`,
+				address: token.address as `0x${string}`,
 				functionName: 'decimals',
 				args: []
 			})
 		]);
-		return { balance, decimals };
+		return { balance: tokenBalance, decimals: tokenDecimals, fingerprint };
 	})();
 
 	$: balancePromise
 		.then((data) => {
 			if (!data) return;
+			const activeFingerprint = getTokenFingerprint(balanceToken ?? amountToken);
+			if (!activeFingerprint || data.fingerprint !== activeFingerprint) {
+				return;
+			}
 			balance = data.balance;
 			const resolvedDecimals = parseDecimals(data.decimals);
-			if (resolvedDecimals !== null) {
-				decimals = resolvedDecimals;
-			}
-			if (inputAmount && canParseDecimals(decimals)) {
-				try {
-					amount = parseUnits(inputAmount, decimals);
-				} catch {
-					amount = undefined;
-				}
+			if (resolvedDecimals !== null && activeFingerprint === amountTokenFingerprint) {
+				amountDecimals = resolvedDecimals;
 			}
 		})
 		.catch(() => {
@@ -106,10 +114,18 @@
 		});
 
 	const setValueToMax = () => {
-		if (!canParseDecimals(decimals)) {
+		const displayToken = balanceToken ?? amountToken;
+		if (!displayToken) {
 			return;
 		}
-		inputAmount = formatUnits(balance, decimals);
+		const matchesAmountToken = getTokenFingerprint(displayToken) === amountTokenFingerprint;
+		if (!matchesAmountToken) {
+			return;
+		}
+		if (!canParseDecimals(amountDecimals)) {
+			return;
+		}
+		inputAmount = formatUnits(balance, amountDecimals);
 		amount = balance;
 	};
 </script>
@@ -133,7 +149,11 @@
 			</span>
 		{:then data}
 			{#if data}
-				Balance: {formatUnits(data.balance, data.decimals)} {amountToken.symbol}
+				{@const balanceFormatted = parseFloat(formatUnits(data.balance, data.decimals))}
+				{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
+				Balance: {balanceRounded.toFixed(3)} {(balanceToken ?? amountToken)?.symbol}
+			{:else}
+				Balance: —
 			{/if}
 		{/await}
 	</span>

@@ -2,7 +2,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/network';
-	import type { CategorizedToken } from '$lib/network';
+	import type { CategorizedToken, Network } from '$lib/network';
 	import type { TradingViewQuote } from '$lib/services/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
@@ -199,7 +199,7 @@
 							amount?: string;
 						};
 					},
-					network.usdcToken,
+					network.defaultPaymentToken,
 					tokenLookup
 				);
 				if (analysis) {
@@ -308,7 +308,7 @@
 					if (seenTx.has(txId)) return;
 					seenTx.add(txId);
 				}
-				volume += analysis.usdc;
+				volume += analysis.quote;
 			});
 		});
 		return volume;
@@ -417,7 +417,7 @@
 				if (seenTx.has(txId)) return;
 				seenTx.add(txId);
 			}
-			tradingVolume += analysis.usdc;
+			tradingVolume += analysis.quote;
 		});
 
 		const orderHashes = new Set<string>();
@@ -449,7 +449,7 @@
 				inVolume: number;
 				outVolume: number;
 				totalVolume: number;
-				usdVolume: number;
+				quoteVolume: number;
 				transactions: Set<string>;
 			}
 		>();
@@ -467,7 +467,7 @@
 						inVolume: 0,
 						outVolume: 0,
 						totalVolume: 0,
-						usdVolume: 0,
+						quoteVolume: 0,
 						transactions: new Set<string>()
 					});
 				}
@@ -490,7 +490,7 @@
 			const txId = trade.tradeEvent?.transaction?.id ?? trade.id;
 			if (txId && !record.transactions.has(txId)) {
 				record.transactions.add(txId);
-				record.usdVolume += analysis.usdc;
+				record.quoteVolume += analysis.quote;
 			}
 		});
 
@@ -502,17 +502,37 @@
 				inVolume: record.inVolume,
 				outVolume: record.outVolume,
 				totalVolume: record.totalVolume,
-				usdValue: `$${record.usdVolume.toFixed(2)}`,
+				quoteValue: formatQuoteDisplay(record.quoteVolume),
 				trades: record.transactions.size
 			}))
 			.sort((a, b) => b.trades - a.trades);
 	})();
 
-	function formatUsd(value: number) {
+	function formatQuote(value: number) {
 		return value.toLocaleString('en-US', {
 			minimumFractionDigits: 2,
 			maximumFractionDigits: 2
 		});
+	}
+
+	function formatQuoteDisplay(value: number) {
+		const symbol = selectedNetwork.defaultPaymentToken?.symbol ?? 'Quote';
+		const formatted = formatQuote(value);
+		const normalised = symbol.toUpperCase();
+		if (normalised === 'USD' || normalised === 'USDC') {
+			return `$${formatted}`;
+		}
+		return `${formatted} ${symbol}`;
+	}
+
+	function formatQuoteDisplayWithNetwork(value: number, network: Network) {
+		const symbol = network.defaultPaymentToken?.symbol ?? 'Quote';
+		const formatted = formatQuote(value);
+		const normalised = symbol.toUpperCase();
+		if (normalised === 'USD' || normalised === 'USDC') {
+			return `$${formatted}`;
+		}
+		return `${formatted} ${symbol}`;
 	}
 
 	$: tradeLoading = tradeStates.some(({ resource }) => {
@@ -545,7 +565,7 @@
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
 				<MetricCard
 					label="Total Locked Value"
-					value={`$${formatUsd(totalTVL)}`}
+					value={formatQuoteDisplay(totalTVL)}
 					subtitle="Active orderbook tokens"
 					cardClass="bg-gray-800/50 border border-white/10"
 					paddingClass="p-6"
@@ -554,7 +574,7 @@
 				/>
 				<MetricCard
 					label="Trading Volume"
-					value={`$${formatUsd(tradingVolume)}`}
+					value={formatQuoteDisplay(tradingVolume)}
 					subtitle="Last 30 days"
 					cardClass="bg-gray-800/50 border border-white/10"
 					paddingClass="p-6"
@@ -655,11 +675,11 @@
 									</div></td
 								>
 								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm">
-									${formatUsd(stats.tvl)}
+									{formatQuoteDisplayWithNetwork(stats.tvl, stats.network)}
 								</td>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.tokenCount}</td>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">
-									${formatUsd(stats.tradingVolume)}
+									{formatQuoteDisplayWithNetwork(stats.tradingVolume, stats.network)}
 								</td>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.orderCount}</td>
 							</tr>
@@ -723,7 +743,7 @@
 									<td class="p-2 text-right text-yellow-400 sm:p-3"
 										>{token.totalVolume.toFixed(3)}</td
 									>
-									<td class="p-2 text-right font-medium sm:p-3">{token.usdValue}</td>
+									<td class="p-2 text-right font-medium sm:p-3">{token.quoteValue}</td>
 									<td class="p-2 text-right sm:p-3">{token.trades}</td>
 								</tr>
 							{/each}

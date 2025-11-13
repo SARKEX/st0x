@@ -14,7 +14,8 @@ import {
 	type SgOrder,
 	type TakeOrdersConfigV4,
 	type DeploymentTransactionArgs,
-	RaindexVault
+	RaindexVault,
+	Float
 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -67,11 +68,28 @@ export enum TransactionStatus {
 	ERROR = 'Something went wrong'
 }
 
+export interface MarketOrderSummary {
+	orderSide: 'Buy' | 'Sell';
+	quantityFilled: bigint;
+	quantityRequested: bigint;
+	outputTokenDecimals: number;
+	outputTokenSymbol: string;
+	averagePrice: number;
+	paymentTokenSymbol: string;
+	actualSlippage: bigint;
+	isPartialFill: boolean;
+	isNoFill?: boolean;
+}
+
+export interface TransactionMetadata {
+	marketOrderSummary?: MarketOrderSummary;
+}
+
 const initialState = {
 	status: TransactionStatus.IDLE,
 	error: '',
 	hash: '',
-	data: null,
+	data: null as TransactionMetadata | null,
 	functionName: '',
 	message: ''
 };
@@ -80,17 +98,33 @@ const transactionStore = () => {
 	const { subscribe, set, update } = writable(initialState);
 	const reset = () => set(initialState);
 
+	const normalizeCalldata = (value: string | Uint8Array): `0x${string}` => {
+		if (typeof value === 'string') {
+			return (value.startsWith('0x') ? value : `0x${value}`) as `0x${string}`;
+		}
+		const hex = Array.from(value)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join('');
+		return `0x${hex}` as `0x${string}`;
+	};
+
 	// Generic state update helper
 	const setState = (
 		status: TransactionStatus,
-		options: { message?: string; hash?: string; error?: string } = {}
+		options: {
+			message?: string;
+			hash?: string;
+			error?: string;
+			data?: TransactionMetadata | null;
+		} = {}
 	) =>
 		update((state) => ({
 			...state,
 			status,
 			message: options.message ?? '',
 			hash: options.hash ?? '',
-			error: options.error ?? ''
+			error: options.error ?? '',
+			data: options.data ?? null
 		}));
 
 	const checkingWalletAllowance = (message?: string) =>
@@ -98,8 +132,8 @@ const transactionStore = () => {
 	const awaitWalletConfirmation = (message?: string) =>
 		setState(TransactionStatus.PENDING_WALLET, { message });
 	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
-	const transactionSuccess = (hash: string, message?: string) =>
-		setState(TransactionStatus.SUCCESS, { hash, message });
+	const transactionSuccess = (hash: string, message?: string, data?: TransactionMetadata) =>
+		setState(TransactionStatus.SUCCESS, { hash, message, data });
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
 
@@ -308,37 +342,54 @@ const transactionStore = () => {
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV4,
 		raindexOrder: SgOrder,
-		requiredApprovalAmount: bigint
+		requiredApprovalAmount: bigint,
+		options?: {
+			ioIndexes?: { input: number; output: number };
+			walkResult?: {
+				quantityFilled: bigint;
+				weightedAveragePrice: number;
+				totalCostScaled: bigint;
+				fills: unknown[];
+			};
+			assetToken?: { decimals?: number; symbol?: string };
+			paymentToken?: { decimals?: number; symbol?: string };
+			orderSide?: 'Buy' | 'Sell';
+			userRequestedAmount?: bigint;
+		}
 	) => {
-		console.log('args : ', args);
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
+		const inputIndex = options?.ioIndexes?.input ?? 0;
+		const outputIndex = options?.ioIndexes?.output ?? 0;
 
-		// Get the input token from the first order
-		const inputToken = raindexOrder.inputs[0];
+		// Get the tokens from the order
+		const inputToken = raindexOrder.inputs[inputIndex];
 		if (!inputToken) {
 			return transactionError('No input token found in order' as TransactionErrorMessage);
 		}
 
-		const outputToken = raindexOrder.outputs[0];
+		const outputToken = raindexOrder.outputs[outputIndex];
 		if (!outputToken) {
-			return transactionError('No input token found in order' as TransactionErrorMessage);
+			return transactionError('No output token found in order' as TransactionErrorMessage);
 		}
 
-		// Check current allowance
+		// The output token is what flows out (what we spend), so it always needs approval
+		const approvalToken = outputToken;
+
+		// Check current allowance for the token that needs approval
 		checkingWalletAllowance(`Checking token allowance...`);
 		const currentAllowance = await readContract(config, {
 			abi: erc20Abi,
-			address: inputToken.token.address as `0x${string}`,
+			address: approvalToken.token.address as `0x${string}`,
 			functionName: 'allowance',
 			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
 
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
-			awaitWalletConfirmation(`Approving token spend...`);
+			awaitWalletConfirmation(`Approving ${approvalToken.token.symbol} spend...`);
 
 			const approvalHash = await sendTransaction(config, {
 				data: encodeFunctionData({
@@ -346,7 +397,7 @@ const transactionStore = () => {
 					functionName: 'approve',
 					args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
 				}) as Hex,
-				to: inputToken.token.address as `0x${string}`
+				to: approvalToken.token.address as `0x${string}`
 			});
 
 			await waitForTransactionReceipt(config, { hash: approvalHash });
@@ -376,22 +427,15 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
-			// Convert Uint8Array to hex string
-			const calldata =
-				'0x' +
-				Array.from(result.value)
-					.map((b) => {
-						const hex = Number(b).toString(16);
-						return hex.length === 1 ? '0' + hex : hex;
-					})
-					.join('');
-
+			const calldata = normalizeCalldata(result.value as string | Uint8Array);
 			hash = await sendTransaction(config, {
 				data: calldata as Hex,
 				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
-			await waitForTransactionReceipt(config, { hash });
+			const receipt = await waitForTransactionReceipt(config, { hash });
+			console.log('Transaction receipt:', receipt);
+			console.log('Transaction hash:', hash);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
@@ -422,61 +466,164 @@ const transactionStore = () => {
 		unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
 			if (!$resource?.data?.trades) return;
 
-			// Search for our specific trade in the cached data
-			const trade = $resource.data.trades.find(
-				(t) =>
-					t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
-					t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
-			) as unknown as {
+			// Find ALL trades for this transaction (multiple orders can be matched)
+			const allTrades = $resource.data.trades.filter(
+				(t) => t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
+			) as unknown as Array<{
 				tradeEvent?: { transaction?: { id?: string } };
 				order?: {
 					orderHash?: string;
-					inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-					outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
 				};
-				inputVaultBalanceChange?: { amount?: string | number };
-				outputVaultBalanceChange?: { amount?: string | number };
+				inputVaultBalanceChange?: {
+					amount?: Hex;
+					oldVaultBalance?: Hex;
+					newVaultBalance?: Hex;
+				};
+				outputVaultBalanceChange?: {
+					amount?: Hex;
+					oldVaultBalance?: Hex;
+					newVaultBalance?: Hex;
+				};
+			}>;
+
+			// Only proceed if we have trades with vault changes
+			const validTrades = allTrades.filter(
+				(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
+			);
+
+			if (validTrades.length === 0) {
+				return;
+			}
+
+			cleanup();
+
+			// Get the walk result from options
+			const { quantityFilled: estimatedQuantityFilled, weightedAveragePrice } =
+				options?.walkResult || {
+					quantityFilled: 0n,
+					weightedAveragePrice: 0
+				};
+
+			// Helper function to parse hex amount using Float
+			const parseHexAmount = (hexAmount: Hex, decimals: number): bigint => {
+				try {
+					const floatResult = Float.fromHex(hexAmount);
+					if (floatResult.error) {
+						console.error('Error parsing hex:', floatResult.error);
+						return 0n;
+					}
+
+					const float = floatResult.value;
+					const absResult = float.abs();
+					if (absResult.error) {
+						console.error('Error getting absolute value:', absResult.error);
+						return 0n;
+					}
+
+					const fixedResult = absResult.value.toFixedDecimalLossy(decimals);
+					if (fixedResult.error) {
+						console.error('Error converting to fixed decimal:', fixedResult.error);
+						return 0n;
+					}
+
+					const fdValue = fixedResult.value;
+					const fdValueObj = fdValue as unknown as Record<string, unknown>;
+					if (typeof fdValueObj?.value === 'string') {
+						return BigInt(fdValueObj.value as string);
+					}
+					return 0n;
+				} catch (e) {
+					console.error('Error decoding amount Float:', e);
+					return 0n;
+				}
 			};
 
-			if (
-				trade &&
-				trade.inputVaultBalanceChange &&
-				trade.outputVaultBalanceChange &&
-				trade.order?.inputs?.[0]?.token &&
-				trade.order?.outputs?.[0]?.token
-			) {
-				cleanup();
-				const chainId = network.id;
-				const tokenSold = `${parseFloat(
-					formatUnits(
-						BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-						trade.order.inputs[0].token.decimals ?? 18
-					)
-				)} ${trade.order.inputs[0].token.symbol}`;
-				const tokenBought = `${parseFloat(
-					formatUnits(
-						BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-						trade.order.outputs[0].token.decimals ?? 18
-					)
-				)} ${trade.order.outputs[0].token.symbol}`;
+			// Get order side from options (already determined during transaction building)
+			const orderSideFromTrade = options?.orderSide ?? 'Buy';
 
-				const orderLink = createRaindexLink(
-					chainId,
-					raindexOrder.orderbook.id,
-					raindexOrder.orderHash,
-					'View order on Raindex'
-				);
-				const link = `
-				<div class="flex flex-col gap-2 text-center">
-					<div class="text-base text-gray-300">
-						${tokenBought} bought, ${tokenSold} sold
-					</div>
-					${orderLink}
-				</div>
-			`;
+			// Get token decimals and symbol once from first trade
+			const firstTrade = validTrades[0];
+			const quantityFilledTokenDecimals =
+				orderSideFromTrade === 'Buy'
+					? // @ts-expect-error vault structure has token info
+						firstTrade.outputVaultBalanceChange?.vault?.token?.decimals ?? 18
+					: // @ts-expect-error vault structure has token info
+						firstTrade.inputVaultBalanceChange?.vault?.token?.decimals ?? 18;
 
-				return transactionSuccess(hash, link);
+			const quantityFilledTokenSymbol =
+				orderSideFromTrade === 'Buy'
+					? // @ts-expect-error vault structure has token info
+						firstTrade.outputVaultBalanceChange?.vault?.token?.symbol ?? ''
+					: // @ts-expect-error vault structure has token info
+						firstTrade.inputVaultBalanceChange?.vault?.token?.symbol ?? '';
+
+			// Sum the appropriate vault changes based on order side
+			let quantityFilledAmount = 0n;
+			for (const trade of validTrades) {
+				if (orderSideFromTrade === 'Buy') {
+					// For BUY: sum outputVaultBalanceChange amounts
+					const outputAmount = parseHexAmount(
+						trade.outputVaultBalanceChange!.amount as Hex,
+						quantityFilledTokenDecimals
+					);
+					quantityFilledAmount += outputAmount;
+				} else {
+					// For SELL: sum inputVaultBalanceChange amounts
+					const inputAmount = parseHexAmount(
+						trade.inputVaultBalanceChange!.amount as Hex,
+						quantityFilledTokenDecimals
+					);
+					quantityFilledAmount += inputAmount;
+				}
 			}
+
+			// Calculate average price from walk result
+			const averagePrice = weightedAveragePrice;
+
+			// Use the user's actual requested amount, not the walk estimate
+			const userRequestedQuantity = options?.userRequestedAmount ?? estimatedQuantityFilled;
+
+			// Check if fill is complete (within 99.9% tolerance)
+			// Need to normalize both amounts to the same decimal scale for comparison
+			const quantityFilledDecimal = parseFloat(
+				formatUnits(quantityFilledAmount, quantityFilledTokenDecimals)
+			);
+			const userRequestedDecimal = parseFloat(
+				formatUnits(userRequestedQuantity, quantityFilledTokenDecimals)
+			);
+
+			let fillPercentage = 0;
+			let isNoFill = false;
+
+			if (userRequestedDecimal > 0) {
+				fillPercentage = quantityFilledDecimal / userRequestedDecimal;
+			} else {
+				// No requested quantity means no tokens requested
+				isNoFill = true;
+			}
+
+			// Build summary from actual transaction data
+			const summary: MarketOrderSummary = {
+				orderSide: orderSideFromTrade,
+				quantityFilled: quantityFilledAmount,
+				quantityRequested: userRequestedQuantity,
+				outputTokenDecimals: quantityFilledTokenDecimals,
+				outputTokenSymbol: quantityFilledTokenSymbol,
+				averagePrice: averagePrice,
+				paymentTokenSymbol: options?.paymentToken?.symbol ?? '',
+				actualSlippage: 0n,
+				isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
+				isNoFill
+			};
+
+			const orderLink = createRaindexLink(
+				network.id,
+				raindexOrder.orderbook.id,
+				raindexOrder.orderHash,
+				'View order on Raindex'
+			);
+
+			return transactionSuccess(hash, orderLink, { marketOrderSummary: summary });
 		});
 
 		// Safety timeout: give up after 5 minutes if trade not found

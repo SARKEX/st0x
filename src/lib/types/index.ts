@@ -8,6 +8,7 @@ export interface Sft {
 
 export interface PythToken extends Token {
 	priceFeedId: string;
+	logoUrl?: string;
 }
 
 export enum FetchStatus {

@@ -2,7 +2,7 @@ export type TradeHistoryPoint = {
 	timestamp: number;
 	price: number;
 	tokens: number;
-	usdc: number;
+	quote: number;
 	side: 'bid' | 'ask';
 };
 

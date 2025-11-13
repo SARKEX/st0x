@@ -11,11 +11,11 @@
 	} from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { formatUnits } from 'viem';
-	import { TOKENS, USDC_TOKENS } from '$lib/network';
+	import { TOKENS } from '$lib/network';
 	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import LimitStrategy from '$lib/components/orders/LimitStrategy.svelte';
+	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
 	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
 	import TradingViewSymbolOverview from '$lib/components/charts/TradingViewSymbolOverview.svelte';
@@ -40,9 +40,21 @@
 		VolumeBucket
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
 	import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
-	import { analyzeTrade, createTokenLookup, normalizeAddress } from '$lib/utils/tokenMath';
-	import type { TimedResource, OracleQuote } from '$lib/stores/network-data-cache';
+	import {
+		analyzeTrade,
+		createTokenLookup,
+		normalizeAddress,
+		ratioToNumber,
+		toDecimal
+	} from '$lib/utils/tokenMath';
+	import type {
+		TimedResource,
+		OracleQuote,
+		OrderbookQuoteCache
+	} from '$lib/stores/network-data-cache';
+	import type { ResourceStatus } from '$lib/data/polling-cache';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
@@ -79,6 +91,9 @@
 	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
 	const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60; // 30 days (max window)
 	const OHLC_BUCKET_SECONDS = 60; // 1 minute buckets for candles
+	$: settlementTokenConfig = $currentNetwork?.defaultPaymentToken;
+	$: settlementTokenSymbol = settlementTokenConfig?.symbol ?? 'Quote';
+	$: settlementTokenLogo = settlementTokenConfig?.logoUrl ?? '/images/USDC.png';
 	type HistoryRangeKey = '1D' | '7D' | '30D';
 	const HISTORY_RANGE_CONFIG: Record<HistoryRangeKey, { label: string; seconds: number }> = {
 		'1D': { label: '1D', seconds: 24 * 60 * 60 },
@@ -94,15 +109,13 @@
 		trade: SgTrade,
 		assetAddress: string,
 		assetDecimals: number,
-		usdcAddress: string,
-		usdcDecimals: number
+		quoteToken: { address: string; decimals: number; symbol: string }
 	): TradeHistoryPoint | null => {
 		if (!trade) return null;
 		const rawTimestamp = Number(trade.tradeEvent?.transaction?.timestamp ?? trade.timestamp ?? 0);
 		if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return null;
 		const timestamp = rawTimestamp * 1000;
 		const normalizedAsset = normalizeAddress(assetAddress);
-		const quoteToken = { address: usdcAddress, decimals: usdcDecimals, symbol: 'USDC' as const };
 		const lookup = (address: string | null | undefined) => {
 			const normalized = normalizeAddress(address);
 			if (normalized && normalized === normalizedAsset) {
@@ -126,9 +139,9 @@
 		);
 		if (!analysis) return null;
 		if (normalizedAsset && analysis.assetAddress !== normalizedAsset) return null;
-		const { tokens, usdc, price, side } = analysis;
-		if (!Number.isFinite(tokens) || !Number.isFinite(usdc) || !Number.isFinite(price)) return null;
-		return { timestamp, price, tokens, usdc, side };
+		const { tokens, quote, price, side } = analysis;
+		if (!Number.isFinite(tokens) || !Number.isFinite(quote) || !Number.isFinite(price)) return null;
+		return { timestamp, price, tokens, quote, side };
 	};
 	// Convert trade points to OHLC candles
 	const tradesToAveragePrices = (trades: TradeHistoryPoint[], bucketSeconds: number) => {
@@ -187,6 +200,24 @@
 	let oracleError: string | null = null;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
+	type OrderbookQuoteUiState = {
+		status: ResourceStatus;
+		hasData: boolean;
+		loadingWithoutData: boolean;
+	};
+	const mapOrderbookQuoteState = (
+		resource: TimedResource<OrderbookQuoteCache> | null
+	): OrderbookQuoteUiState => {
+		const status = resource?.status ?? 'idle';
+		const hasData = (resource?.data?.quotes?.length ?? 0) > 0;
+		return {
+			status,
+			hasData,
+			loadingWithoutData: status === 'loading' && !hasData
+		};
+	};
+	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState(null);
+	$: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesResource);
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
 			return '—';
@@ -294,43 +325,37 @@
 		if (!browser || !currentToken || !$currentNetwork) {
 			resetOnChainPrices();
 		} else {
-			const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
-			if (!usdcToken) {
+			const settlementToken = $currentNetwork.defaultPaymentToken;
+			if (!settlementToken) {
 				resetOnChainPrices();
 			} else {
 				const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
 				const assetAddress = currentToken.address?.toLowerCase();
-				const usdcAddress = usdcToken.address?.toLowerCase();
+				const quoteAddress = settlementToken.address?.toLowerCase();
 				let bestBid: number | null = null;
 				let bestAsk: number | null = null;
 				quotes.forEach((quote) => {
-					const ratio = Number(quote.ratio) / 1e18;
+					const ratioValue = ratioToNumber(quote.ratio);
+					const ratio = ratioValue ?? 0;
 					if (!Number.isFinite(ratio) || ratio <= 0) return;
 					const inputAddress = quote.inputTokenAddress.toLowerCase();
 					const outputAddress = quote.outputTokenAddress.toLowerCase();
-					// ASK: USDC -> asset (what you pay when buying)
-					if (inputAddress === usdcAddress && outputAddress === assetAddress) {
-						const tokenAmount = Number(quote.maxOutput);
+					// ASK: quote token -> asset (what you pay when buying)
+					if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+						const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = ratio;
-						if (
-							Number.isFinite(tokenAmount) &&
-							Number.isFinite(price) &&
-							tokenAmount > 0 &&
-							price > 0
-						) {
+						if (tokenAmount !== null && Number.isFinite(price) && tokenAmount > 0 && price > 0) {
 							bestAsk = bestAsk === null ? price : Math.min(bestAsk, price);
 						}
 					}
-					// BID: asset -> USDC (what you get when selling)
-					if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-						const usdcAmount = Number(quote.maxOutput);
+					// BID: asset -> quote token (what you get when selling)
+					if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+						const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = 1 / ratio;
-						if (Number.isFinite(usdcAmount) && usdcAmount > 0) {
-							if (Number.isFinite(price) && price > 0) {
-								const tokenAmount = usdcAmount / price;
-								if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
-									bestBid = bestBid === null ? price : Math.max(bestBid, price);
-								}
+						if (quoteAmount !== null && quoteAmount > 0 && Number.isFinite(price) && price > 0) {
+							const tokenAmount = quoteAmount / price;
+							if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
+								bestBid = bestBid === null ? price : Math.max(bestBid, price);
 							}
 						}
 					}
@@ -342,13 +367,13 @@
 	}
 	$: tradeHistoryPoints = (() => {
 		if (!browser || !currentToken || !$currentNetwork) return [];
-		const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
-		if (!usdcToken) return [];
+		const settlementToken = $currentNetwork.defaultPaymentToken;
+		if (!settlementToken) return [];
 		const assetAddress = currentToken.address?.toLowerCase();
-		const usdcAddress = usdcToken.address?.toLowerCase();
-		if (!assetAddress || !usdcAddress) return [];
+		const quoteAddress = settlementToken.address;
+		if (!assetAddress || !quoteAddress) return [];
 		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
-		const usdcDecimals = Number(usdcToken.decimals ?? 6);
+		const quoteDecimals = Number(settlementToken.decimals ?? 6);
 		const range = $tradeActivityResource?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
@@ -357,7 +382,13 @@
 		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
 		const trades = ($tradeActivityResource?.data?.trades ?? []) as SgTrade[];
 		return trades
-			.map((trade) => tradeToPoint(trade, assetAddress, assetDecimals, usdcAddress, usdcDecimals))
+			.map((trade) =>
+				tradeToPoint(trade, assetAddress, assetDecimals, {
+					address: quoteAddress,
+					decimals: quoteDecimals,
+					symbol: settlementToken.symbol || ''
+				})
+			)
 			.filter(
 				(point): point is TradeHistoryPoint =>
 					point !== null && point.timestamp >= cutoff && point.timestamp <= rangeEnd
@@ -392,17 +423,18 @@
 		if (!quotes.length) {
 			return { bids: [], asks: [] };
 		}
-		const usdcToken = $currentNetwork.chainId ? USDC_TOKENS[$currentNetwork.chainId] : undefined;
-		if (!usdcToken) return { bids: [], asks: [] };
+		const settlementToken = $currentNetwork.defaultPaymentToken;
+		if (!settlementToken) return { bids: [], asks: [] };
 		const assetAddress = currentToken.address?.toLowerCase();
-		const usdcAddress = usdcToken.address?.toLowerCase();
-		if (!assetAddress || !usdcAddress) {
+		const quoteAddress = settlementToken.address?.toLowerCase();
+		if (!assetAddress || !quoteAddress) {
 			return { bids: [], asks: [] };
 		}
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
 		quotes.forEach((quote) => {
-			const ratio = Number(quote.ratio) / 1e18;
+			const ratioValue = ratioToNumber(quote.ratio);
+			const ratio = ratioValue ?? 0;
 			if (!Number.isFinite(ratio) || ratio <= 0) {
 				return;
 			}
@@ -411,30 +443,25 @@
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
-			if (inputAddress === usdcAddress && outputAddress === assetAddress) {
-				const tokenAmount = Number(quote.maxOutput);
+			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+				const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				const price = ratio;
-				if (
-					!Number.isFinite(tokenAmount) ||
-					!Number.isFinite(price) ||
-					tokenAmount <= 0 ||
-					price <= 0
-				) {
+				if (tokenAmount === null || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
 					return;
 				}
 				asks.push({ price, quantity: tokenAmount });
 				return;
 			}
-			if (inputAddress === assetAddress && outputAddress === usdcAddress) {
-				const usdcAmount = Number(quote.maxOutput);
-				if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) {
+			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
+				if (quoteAmount === null || quoteAmount <= 0) {
 					return;
 				}
 				const price = 1 / ratio;
 				if (!Number.isFinite(price) || price <= 0) {
 					return;
 				}
-				const tokenAmount = usdcAmount / price;
+				const tokenAmount = quoteAmount / price;
 				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
 					return;
 				}
@@ -448,11 +475,11 @@
 	$: {
 		const tradeResource = $tradeActivityResource;
 		const tradeStatus = tradeResource?.status ?? 'idle';
-		const quoteStatus = $orderbookQuotesResource?.status ?? 'idle';
 		const tradeHasData = (tradeResource?.data?.trades?.length ?? 0) > 0;
-		const quoteHasData = ($orderbookQuotesResource?.data?.quotes?.length ?? 0) > 0;
 		const tradeLoading = tradeStatus === 'loading' || (tradeStatus === 'idle' && !tradeHasData);
-		const quoteLoading = quoteStatus === 'loading' || (quoteStatus === 'idle' && !quoteHasData);
+		const quoteLoading =
+			orderbookQuoteUiState.loadingWithoutData ||
+			(orderbookQuoteUiState.status === 'idle' && !orderbookQuoteUiState.hasData);
 		// Don't show loading if we have volume data OR orderbook depth data
 		const hasVolumeData = tradeVolumeBuckets.length > 0;
 		const hasDepthData = orderbookDepth.bids.length > 0 || orderbookDepth.asks.length > 0;
@@ -563,7 +590,7 @@
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Bid Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
-									{#if $orderbookQuotesResource?.status === 'loading'}
+									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
 										${formatNumeric(buyPrice)}
@@ -575,7 +602,7 @@
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Offer Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
-									{#if $orderbookQuotesResource?.status === 'loading'}
+									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
 										${formatNumeric(sellPrice)}
@@ -973,13 +1000,20 @@
 									Sell
 								</button>
 							</div>
-							<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
-								<span>{panelSummaryVerb} {panelTokenLabel}</span>
-								<span class="text-gray-500">{panelSummaryPreposition}</span>
-								<span class="inline-flex items-center gap-1 text-gray-200">
-									USDC
-									<img src="/images/USDC.png" alt="USDC" class="h-4 w-4" />
-								</span>
+							<div class="space-y-2">
+								<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
+									<span>{panelSummaryVerb} {panelTokenLabel}</span>
+									<span class="text-gray-500">{panelSummaryPreposition}</span>
+									<span class="inline-flex items-center gap-1 text-gray-200">
+										{settlementTokenSymbol}
+										<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-4 w-4" />
+									</span>
+								</div>
+								<div class="flex items-center gap-2 text-sm text-gray-400">
+									<span>On</span>
+									<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
+									<span>{$currentNetwork.displayName}</span>
+								</div>
 							</div>
 							<label class="block space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
 								<span id={PANEL_STRATEGY_LABEL_ID} class="block text-sm font-medium text-gray-300">
@@ -995,7 +1029,7 @@
 											case 'limit':
 												return 'Limit Order';
 											case 'dca':
-												return 'DCA Order';
+												return 'Dollar Cost Averaging';
 											case 'market':
 												return 'Market Order';
 											default:
@@ -1006,7 +1040,7 @@
 							</label>
 							<div>
 								{#if panelStrategy === 'limit'}
-									<LimitStrategy
+									<LimitOrder
 										orderSide={panelOrderSide}
 										passedOutputToken={currentPythToken}
 										{buyPrice}
@@ -1014,23 +1048,8 @@
 									/>
 								{:else if panelStrategy === 'market'}
 									<MarketOrder orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
-								{:else}
-									<div
-										class="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-gray-400"
-									>
-										<div class="flex items-center justify-between">
-											<span class="font-semibold text-gray-300">DCA orders</span>
-											<span
-												class="rounded-full bg-yellow-400/10 px-2 py-0.5 text-xs font-semibold text-yellow-300"
-											>
-												Coming soon
-											</span>
-										</div>
-										<p class="mt-2 text-xs text-gray-500">
-											Automated DCA flows are on the way. Stay tuned, or place a limit order in the
-											meantime.
-										</p>
-									</div>
+								{:else if panelStrategy === 'dca'}
+									<DcaOrder orderSide={panelOrderSide} passedInputToken={currentPythToken} />
 								{/if}
 							</div>
 						</div>
