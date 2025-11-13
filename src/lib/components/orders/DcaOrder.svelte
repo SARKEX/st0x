@@ -83,17 +83,6 @@
 	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
 	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
 
-	// Truncate start price to max 2 decimal places
-	$: if (selectedInitialRatio) {
-		const num = parseFloat(selectedInitialRatio);
-		if (Number.isFinite(num)) {
-			const truncated = Math.floor(num * 100) / 100;
-			if (truncated !== num) {
-				selectedInitialRatio = truncated.toString();
-			}
-		}
-	}
-
 	// Price guardrail validation
 	$: {
 		const startPrice = parseFloat(selectedInitialRatio || '0');
@@ -216,7 +205,7 @@
 				const oracleEntry = $oracleQuotes[address];
 				const price = oracleEntry?.price;
 				if (typeof price === 'number' && !Number.isNaN(price)) {
-					selectedInitialRatio = String(price);
+					selectedInitialRatio = price.toFixed(2);
 					lastFetchedTokenAddress = address;
 				}
 			}
