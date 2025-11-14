@@ -24,13 +24,13 @@ export type DcaDeploymentArgs = {
 };
 
 export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
-	const dcaStrategy = await (
+	const dcaOrder = await (
 		await fetch(
 			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/auction-dca.rain`
 		)
 	).text();
 	const network = get(currentNetwork);
-	const gui = (await DotrainOrderGui.newWithDeployment(dcaStrategy, network.raindexNetworkSlug))
+	const gui = (await DotrainOrderGui.newWithDeployment(dcaOrder, network.raindexNetworkSlug))
 		.value as DotrainOrderGui;
 
 	await gui.setSelectToken('output', args.outputToken.address);
@@ -61,11 +61,11 @@ export const getDcaDeploymentArgs = async (args: DcaDeploymentArgs) => {
 	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
 	if (args.inputVaultId) {
-		gui.setVaultId('input', args.inputToken.address, args.inputVaultId);
+		gui.setVaultId('input', 'input', args.inputVaultId);
 	}
 
 	if (args.outputVaultId) {
-		gui.setVaultId('output', args.outputToken.address, args.outputVaultId);
+		gui.setVaultId('output', 'output', args.outputVaultId);
 	}
 
 	const $signerAddress = get(signerAddress);
@@ -95,16 +95,13 @@ export type LimitOrderDeploymentArgs = {
 };
 
 export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs) => {
-	const limitStrategy = await (
+	const limitOrder = await (
 		await fetch(
 			`https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/fixed-limit.rain`
 		)
 	).text();
 	const network = get(currentNetwork);
-	const guiResult = await DotrainOrderGui.newWithDeployment(
-		limitStrategy,
-		network.raindexNetworkSlug
-	);
+	const guiResult = await DotrainOrderGui.newWithDeployment(limitOrder, network.raindexNetworkSlug);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	const gui = guiResult.value;
 
@@ -117,11 +114,11 @@ export const getLimitOrderDeploymentArgs = async (args: LimitOrderDeploymentArgs
 	gui.setDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
 
 	if (args.inputVaultId) {
-		gui.setVaultId('input', args.inputToken.address, args.inputVaultId);
+		gui.setVaultId('input', 'token1', args.inputVaultId);
 	}
 
 	if (args.outputVaultId) {
-		gui.setVaultId('output', args.outputToken.address, args.outputVaultId);
+		gui.setVaultId('output', 'token2', args.outputVaultId);
 	}
 
 	const $signerAddress = get(signerAddress);
@@ -194,16 +191,16 @@ export const getMarketMakingDeploymentArgs = async (args: MarketMakingDeployment
 	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
 
 	if (args.inputVaultIdToken1) {
-		gui.setVaultId('input', args.token1.address, args.inputVaultIdToken1);
+		gui.setVaultId('input', 'token1', args.inputVaultIdToken1);
 	}
 	if (args.inputVaultIdToken2) {
-		gui.setVaultId('input', args.token2.address, args.inputVaultIdToken2);
+		gui.setVaultId('input', 'token2', args.inputVaultIdToken2);
 	}
 	if (args.outputVaultIdToken1) {
-		gui.setVaultId('output', args.token1.address, args.outputVaultIdToken1);
+		gui.setVaultId('output', 'token1', args.outputVaultIdToken1);
 	}
 	if (args.outputVaultIdToken2) {
-		gui.setVaultId('output', args.token2.address, args.outputVaultIdToken2);
+		gui.setVaultId('output', 'token2', args.outputVaultIdToken2);
 	}
 
 	const $signerAddress = get(signerAddress);
@@ -301,59 +298,59 @@ export const getFolioDeploymentArgs = async (args: FolioDeploymentArgs) => {
 	gui.setDeposit('token7', formatUnits(args.depositAmount7, args.selectedToken7.decimals));
 
 	if (args.inputVaultId1) {
-		gui.setVaultId('input', args.selectedToken1.address, args.inputVaultId1);
+		gui.setVaultId('input', 'token1', args.inputVaultId1);
 	}
 
 	if (args.inputVaultId2) {
-		gui.setVaultId('input', args.selectedToken2.address, args.inputVaultId2);
+		gui.setVaultId('input', 'token2', args.inputVaultId2);
 	}
 
 	if (args.inputVaultId3) {
-		gui.setVaultId('input', args.selectedToken3.address, args.inputVaultId3);
+		gui.setVaultId('input', 'token3', args.inputVaultId3);
 	}
 
 	if (args.inputVaultId4) {
-		gui.setVaultId('input', args.selectedToken4.address, args.inputVaultId4);
+		gui.setVaultId('input', 'token4', args.inputVaultId4);
 	}
 
 	if (args.inputVaultId5) {
-		gui.setVaultId('input', args.selectedToken5.address, args.inputVaultId5);
+		gui.setVaultId('input', 'token5', args.inputVaultId5);
 	}
 
 	if (args.inputVaultId6) {
-		gui.setVaultId('input', args.selectedToken6.address, args.inputVaultId6);
+		gui.setVaultId('input', 'token6', args.inputVaultId6);
 	}
 
 	if (args.inputVaultId7) {
-		gui.setVaultId('input', args.selectedToken7.address, args.inputVaultId7);
+		gui.setVaultId('input', 'token7', args.inputVaultId7);
 	}
 
 	if (args.outputVaultId1) {
-		gui.setVaultId('output', args.selectedToken1.address, args.outputVaultId1);
+		gui.setVaultId('output', 'token1', args.outputVaultId1);
 	}
 
 	if (args.outputVaultId2) {
-		gui.setVaultId('output', args.selectedToken2.address, args.outputVaultId2);
+		gui.setVaultId('output', 'token2', args.outputVaultId2);
 	}
 
 	if (args.outputVaultId3) {
-		gui.setVaultId('output', args.selectedToken3.address, args.outputVaultId3);
+		gui.setVaultId('output', 'token3', args.outputVaultId3);
 	}
 
 	if (args.outputVaultId4) {
-		gui.setVaultId('output', args.selectedToken4.address, args.outputVaultId4);
+		gui.setVaultId('output', 'token4', args.outputVaultId4);
 	}
 
 	if (args.outputVaultId5) {
-		gui.setVaultId('output', args.selectedToken5.address, args.outputVaultId5);
+		gui.setVaultId('output', 'token5', args.outputVaultId5);
 	}
 
 	if (args.outputVaultId6) {
-		gui.setVaultId('output', args.selectedToken6.address, args.outputVaultId6);
+		gui.setVaultId('output', 'token6', args.outputVaultId6);
 	}
 
 	if (args.outputVaultId7) {
-		gui.setVaultId('output', args.selectedToken7.address, args.outputVaultId7);
+		gui.setVaultId('output', 'token7', args.outputVaultId7);
 	}
 
 	const $signerAddress = get(signerAddress);
