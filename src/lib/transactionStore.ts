@@ -375,11 +375,11 @@ const transactionStore = () => {
 			return transactionError('No output token found in order' as TransactionErrorMessage);
 		}
 
-		// With dynamic index selection, we ALWAYS approve inputToken
-		// - For BUY: inputIndex points to USDC → approve USDC
-		// - For SELL: inputIndex points to tSTOX → approve tSTOX
-		// The indices are selected correctly in MarketOrder.svelte based on orderSide
-		const approvalToken = inputToken;
+		// Approve what we're giving away:
+		// - For BUY: we give outputToken (USDC from our perspective)
+		// - For SELL: we give inputToken (tSTOX from our perspective)
+		const orderSide = options?.orderSide;
+		const approvalToken = orderSide === 'Sell' ? inputToken : outputToken;
 
 		// Check current allowance for the token that needs approval
 		checkingWalletAllowance(`Checking token allowance...`);

@@ -3,7 +3,7 @@
 	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
 	import { OrderV4_ABI, normalizeOrderData, type ProcessedQuote } from '$lib/utils/quote';
-	import { scaleAmount, walkOrderbook } from '$lib/utils/marketPrice';
+	import { scaleAmount, walkOrderbook, FIXED_POINT_SCALE } from '$lib/utils/marketPrice';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import {
@@ -402,24 +402,31 @@
 				console.error('Unable to calculate walk result for order execution');
 				return;
 			}
-			const { totalCostScaled, quantityFilled } = walkResult;
+			const { totalCostScaled, quantityFilled, weightedAveragePrice } = walkResult;
 
-			// We approve inputToken (what we're giving to the order)
-			// For BUY: inputToken = USDC (payment token)
-			// For SELL: inputToken = tSTOX (asset token)
-			const inputTokenDecimals = Number(
-				primaryOrder.inputs[primaryInputIndex]?.token?.decimals ?? 18
-			);
-
+			// We approve what we're giving away (what flows out from us)
+			// For BUY: we give USDC (payment token)
+			// For SELL: we give tSTOX (asset token)
 			let requiredApprovalBigInt: bigint;
 			if (orderSide === 'Buy') {
-				// BUY: Approve USDC (payment token)
-				// Scale from 18 decimals (totalCostScaled) to USDC decimals
-				requiredApprovalBigInt = scaleAmount(totalCostScaled, 18, inputTokenDecimals);
+				// BUY: Approve USDC (payment token - what we give)
+				// Use selectedAmount * weightedAveragePrice (matches what user sees in UI)
+				const paymentTokenDecimals = paymentToken?.decimals ?? 6;
+				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
+
+				// selectedAmount is in asset decimals, scale to 18 for calculation
+				const selectedAmountScaled = scaleAmount(selectedAmount, assetTokenDecimals, 18);
+				// weightedAveragePrice is a human-readable number (USDC per tSTOX)
+				// Convert to scaled: selectedAmount * price
+				const avgPriceBigInt = BigInt(Math.round(weightedAveragePrice * 1e18));
+				const expectedCost18Dec = (selectedAmountScaled * avgPriceBigInt) / FIXED_POINT_SCALE;
+
+				requiredApprovalBigInt = scaleAmount(expectedCost18Dec, 18, paymentTokenDecimals);
 			} else {
-				// SELL: Approve tSTOX (asset token)
-				// Scale from asset decimals to input token decimals (should be same)
-				requiredApprovalBigInt = scaleAmount(selectedAmount, passedOutputToken?.decimals ?? 18, inputTokenDecimals);
+				// SELL: Approve tSTOX (asset token - what we give)
+				// selectedAmount is already in asset token decimals
+				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
+				requiredApprovalBigInt = scaleAmount(selectedAmount, assetTokenDecimals, assetTokenDecimals);
 			}
 
 			// Add buffer:
@@ -433,9 +440,10 @@
 				requiredApprovalAmount = (requiredApprovalBigInt * 105n) / 100n;
 			} else {
 				// For SELL: Add 1 wei buffer if there's precision loss
+				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
 				const approvalFloat = Float.fromFixedDecimalLossy(
 					requiredApprovalBigInt,
-					inputTokenDecimals
+					assetTokenDecimals
 				);
 				requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
 			}
