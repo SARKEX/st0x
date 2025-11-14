@@ -137,6 +137,125 @@ const transactionStore = () => {
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
 
+	const handleStrategyBulkDeployment = async (deploymentArgsArray: DeploymentTransactionArgs[]) => {
+		for (const deploymentArgs of deploymentArgsArray) {
+			const config = get(wagmiConfig);
+			if (!config) throw new Error('Wagmi config not found');
+			const $signerAddress = get(signerAddress);
+			if (!$signerAddress) throw new Error('Signer address not found');
+
+			if (deploymentArgs.approvals.length > 0) {
+				// Check token balances first
+				for (const approval of deploymentArgs.approvals) {
+					const balance = await readContract(config, {
+						abi: erc20Abi,
+						address: approval.token as `0x${string}`,
+						functionName: 'balanceOf',
+						args: [$signerAddress as Hex]
+					});
+					const { args } = decodeFunctionData({
+						abi: erc20Abi,
+						data: approval.calldata as Hex
+					});
+
+					if (balance < BigInt(args[1] as string)) {
+						return transactionError(
+							`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
+						);
+					}
+				}
+			}
+
+			if (deploymentArgs.approvals.length > 0) {
+				for (const approval of deploymentArgs.approvals) {
+					try {
+						console.log('approval : ', approval);
+						// awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
+						const hash = await sendTransaction(config, {
+							data: approval.calldata as Hex,
+							to: approval.token as `0x${string}`
+						});
+						await waitForTransactionReceipt(config, {
+							hash: hash
+						});
+					} catch (error) {
+						const errorMessage =
+							(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+							TransactionErrorMessage.GENERIC;
+						const message =
+							typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+								? (errorMessage as TransactionErrorMessage)
+								: TransactionErrorMessage.GENERIC;
+						return transactionError(message);
+					}
+				}
+			}
+			let hash: Hash;
+			try {
+				// awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
+
+				hash = await sendTransaction(config, {
+					data: deploymentArgs.deploymentCalldata as Hex,
+					to: deploymentArgs.orderbookAddress as `0x${string}`
+				});
+			} catch (error) {
+				const errorMessage =
+					(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+					TransactionErrorMessage.GENERIC;
+				const message =
+					typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+						? (errorMessage as TransactionErrorMessage)
+						: TransactionErrorMessage.GENERIC;
+				return Promise.reject(message);
+			}
+
+			// Poll for the order to be added to the orderbook
+			let attempts = 0;
+			const maxAttempts = 30; // 1 minute max (30 * 2 seconds)
+			const network = get(currentNetwork);
+
+			const interval = setInterval(async () => {
+				attempts++;
+
+				// Stop polling after max attempts
+				if (attempts >= maxAttempts) {
+					clearInterval(interval);
+					return;
+				}
+
+				try {
+					// Get RaindexClient
+					const client = await createRaindexClient();
+
+					// Check for orders added in this transaction
+					const orders = await client.getAddOrdersForTransaction(
+						network.id,
+						deploymentArgs.orderbookAddress as `0x${string}`,
+						hash as `0x${string}`
+					);
+
+					if (orders.error) {
+						return; // Continue polling
+					}
+
+					if (orders.value && orders.value.length > 0) {
+						clearInterval(interval);
+						const orderHash = orders.value[0].orderHash;
+						const orderbookId = orders.value[0].orderbook;
+						const chainId = network.id;
+						const link = createRaindexLink(chainId, orderbookId, orderHash);
+
+						return;
+					}
+				} catch (error) {
+					// Continue polling
+					console.error('Error checking for orders:', error);
+				}
+			}, 2000);
+		}
+
+	}
+
 	const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -656,7 +775,8 @@ const transactionStore = () => {
 		handleDsfDeploy,
 		handleFolioDeploy,
 		handleTakeOrders,
-		handleWithdraw
+		handleWithdraw,
+		handleStrategyBulkDeployment
 	};
 };
 
