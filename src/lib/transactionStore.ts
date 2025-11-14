@@ -375,8 +375,23 @@ const transactionStore = () => {
 			return transactionError('No output token found in order' as TransactionErrorMessage);
 		}
 
-		// The output token is what flows out (what we spend), so it always needs approval
-		const approvalToken = outputToken;
+		// With dynamic index selection, we ALWAYS approve inputToken
+		// - For BUY: inputIndex points to USDC → approve USDC
+		// - For SELL: inputIndex points to tSTOX → approve tSTOX
+		// The indices are selected correctly in MarketOrder.svelte based on orderSide
+		const orderSide = options?.orderSide;
+		const approvalToken = inputToken;
+
+		console.log('=== APPROVAL TOKEN DEBUG ===');
+		console.log('orderSide:', orderSide || 'not provided');
+		console.log('inputIndex:', inputIndex);
+		console.log('outputIndex:', outputIndex);
+		console.log('inputToken:', inputToken?.token?.symbol, inputToken?.token?.address, inputToken?.token?.decimals);
+		console.log('outputToken:', outputToken?.token?.symbol, outputToken?.token?.address, outputToken?.token?.decimals);
+		console.log('approvalToken:', approvalToken?.token?.symbol, approvalToken?.token?.address, '(always inputToken)');
+		console.log('Orderbook address:', raindexOrder.orderbook.id);
+		console.log('Required approval amount:', requiredApprovalAmount.toString());
+		console.log('Required approval decimals:', approvalToken?.token?.decimals);
 
 		// Check current allowance for the token that needs approval
 		checkingWalletAllowance(`Checking token allowance...`);
@@ -386,6 +401,8 @@ const transactionStore = () => {
 			functionName: 'allowance',
 			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
+
+		console.log('Current allowance:', currentAllowance.toString());
 
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens

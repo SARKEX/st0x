@@ -404,24 +404,41 @@
 			}
 			const { totalCostScaled, quantityFilled } = walkResult;
 
-			// For BUY: we need to approve the payment token (output token)
-			// For SELL: we need to approve the asset token (output token)
-			// In both cases it's the output token
-			const outputTokenDecimals = Number(
-				primaryOrder.outputs[primaryOutputIndex]?.token?.decimals ?? 18
+			// We approve inputToken (what we're giving to the order)
+			// For BUY: inputToken = USDC (payment token)
+			// For SELL: inputToken = tSTOX (asset token)
+			const inputTokenDecimals = Number(
+				primaryOrder.inputs[primaryInputIndex]?.token?.decimals ?? 18
 			);
 
-			const requiredApprovalBigInt =
-				orderSide === 'Buy'
-					? scaleAmount(totalCostScaled, 18, outputTokenDecimals)
-					: scaleAmount(selectedAmount, passedOutputToken?.decimals ?? 18, outputTokenDecimals);
+			let requiredApprovalBigInt: bigint;
+			if (orderSide === 'Buy') {
+				// BUY: Approve USDC (payment token)
+				// Scale from 18 decimals (totalCostScaled) to USDC decimals
+				requiredApprovalBigInt = scaleAmount(totalCostScaled, 18, inputTokenDecimals);
+			} else {
+				// SELL: Approve tSTOX (asset token)
+				// Scale from asset decimals to input token decimals (should be same)
+				requiredApprovalBigInt = scaleAmount(selectedAmount, passedOutputToken?.decimals ?? 18, inputTokenDecimals);
+			}
 
-			// Add 1 wei buffer if there's precision loss to ensure sufficient allowance
-			const approvalFloat = Float.fromFixedDecimalLossy(
-				requiredApprovalBigInt,
-				outputTokenDecimals
-			);
-			const requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
+			// Add buffer:
+			// - For BUY: Use 1.05x multiplier for better scaling
+			// - For SELL: Add 1 wei if precision loss
+			let requiredApprovalAmount: bigint;
+			if (orderSide === 'Buy') {
+				// Use 1.05x multiplier instead of fixed +1 USDC for better scaling:
+				// - Small orders (e.g., 1 USDC): 1.05 USDC approved (5% buffer)
+				// - Large orders (e.g., 1000 USDC): 1050 USDC approved (still 5% buffer)
+				requiredApprovalAmount = (requiredApprovalBigInt * 105n) / 100n;
+			} else {
+				// For SELL: Add 1 wei buffer if there's precision loss
+				const approvalFloat = Float.fromFixedDecimalLossy(
+					requiredApprovalBigInt,
+					inputTokenDecimals
+				);
+				requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
+			}
 
 			// Calculate maximumInput based on walk result
 			const maximumInputAmount =
