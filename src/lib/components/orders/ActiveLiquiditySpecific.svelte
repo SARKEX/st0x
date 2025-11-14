@@ -100,8 +100,6 @@
 	}
 
 	const handleDsfDeploy = async () => {
-		console.log('in handleDsfDeploy : ');
-		
 		const tMstrUsdcVaultId = getRandHex();
 		const cbBtcUsdcVaultId = getRandHex();
 
@@ -130,8 +128,8 @@
 					budgetAmount: depositAmount1,
 					selectedPeriod: '1',
 					selectedPeriodUnit: 'Hours',
-					baseline: (1 / cbBTCPrice95Percent).toFixed(18).toString(),
-					kickoff: (1 / cbBTCPrice).toFixed(18).toString(),
+					baseline: (1 / cbBTCPrice).toFixed(18).toString(),
+					kickoff: (1 / cbBTCPrice95Percent).toFixed(18).toString(),
 					minTradeAmount: minTradeAmount1,
 					maxTradeAmount: maxTradeAmount1,
 					inputVaultId: cbBtcVaultId,
@@ -144,8 +142,8 @@
 					budgetAmount: depositAmount2,
 					selectedPeriod: '1',
 					selectedPeriodUnit: 'Hours',
-					baseline: (1 / tMSTRPrice95Percent).toFixed(18).toString(),
-					kickoff: (1 / tMSTRPrice).toFixed(18).toString(),
+					baseline: (1 / tMSTRPrice).toFixed(18).toString(),
+					kickoff: (1 / tMSTRPrice95Percent).toFixed(18).toString(),
 					minTradeAmount: minTradeAmount2,
 					maxTradeAmount: maxTradeAmount2,
 					inputVaultId: tMstrVaultId,
