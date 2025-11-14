@@ -240,11 +240,6 @@ const transactionStore = () => {
 
 					if (orders.value && orders.value.length > 0) {
 						clearInterval(interval);
-						const orderHash = orders.value[0].orderHash;
-						const orderbookId = orders.value[0].orderbook;
-						const chainId = network.id;
-						const link = createRaindexLink(chainId, orderbookId, orderHash);
-
 						return;
 					}
 				} catch (error) {
@@ -253,8 +248,7 @@ const transactionStore = () => {
 				}
 			}, 2000);
 		}
-
-	}
+	};
 
 	const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
 		const config = get(wagmiConfig);

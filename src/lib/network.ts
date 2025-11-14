@@ -328,7 +328,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO',
 		tradingViewSymbol: 'CRYPTO:CBBTCCUSD',
 		tradingViewMarket: 'crypto'
-	} as unknown as CategorizedToken,
+	} as unknown as CategorizedToken
 ];
 
 // Helper functions to get tokens by category

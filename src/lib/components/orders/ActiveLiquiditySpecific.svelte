@@ -8,8 +8,6 @@
 		validateSelectedAmount
 	} from '$lib/validateDeploymentArgs';
 	import Input from '$lib/components/ui/Input.svelte';
-	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
-	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/transactionStore';
@@ -20,7 +18,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { bytesToHex } from 'viem';
-	import { getDcaDeploymentArgs, getMarketMakingDeploymentArgs } from '$lib/getDeploymentArgs';
+	import { getDcaDeploymentArgs } from '$lib/getDeploymentArgs';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -29,7 +27,7 @@
 	$: if (ALL_TOKENS.length > 0) {
 		const cbBTC = ALL_TOKENS.find((token) => token.symbol === 'cbBTC');
 		const tMSTR = ALL_TOKENS.find((token) => token.symbol === 'tMSTR');
-		
+
 		if (cbBTC) {
 			selectedToken1 = cbBTC;
 		}
@@ -42,18 +40,17 @@
 	$: usdcToken = ALL_TOKENS.find((token) => token.symbol === 'USDC');
 
 	// Get prices from Pyth oracles
-	$: cbBTCPrice = selectedToken1 ? $oracleQuotes[selectedToken1.address.toLowerCase()]?.price ?? null : null;
-	$: tMSTRPrice = selectedToken2 ? $oracleQuotes[selectedToken2.address.toLowerCase()]?.price ?? null : null;
+	$: cbBTCPrice = selectedToken1
+		? $oracleQuotes[selectedToken1.address.toLowerCase()]?.price ?? null
+		: null;
+	$: tMSTRPrice = selectedToken2
+		? $oracleQuotes[selectedToken2.address.toLowerCase()]?.price ?? null
+		: null;
 
-	let showAdvancedOptions = false;
 	let selectedToken1: CategorizedToken | undefined;
 	let selectedToken2: CategorizedToken | undefined;
 	let isToken1FastExit = false;
 	let isToken2FastExit = false;
-	let inputVaultId1: Hex | undefined;
-	let inputVaultId2: Hex | undefined;
-	let outputVaultId1: Hex | undefined;
-	let outputVaultId2: Hex | undefined;
 	let depositAmount1: bigint = 0n;
 	let depositAmount2: bigint = 0n;
 	let minTradeAmount: bigint = 0n;
@@ -72,7 +69,9 @@
 	let initialIoError: boolean = false;
 
 	$: isToken1SameAsToken2 =
-		selectedToken1 && selectedToken2 && selectedToken1.address.toLowerCase() === selectedToken2.address.toLowerCase();
+		selectedToken1 &&
+		selectedToken2 &&
+		selectedToken1.address.toLowerCase() === selectedToken2.address.toLowerCase();
 
 	$: disableDeploy =
 		!selectedToken1 ||
@@ -97,7 +96,7 @@
 		const randomHex = bytesToHex(randomBytes);
 
 		return randomHex;
-	}
+	};
 
 	const handleDsfDeploy = async () => {
 		const tMstrUsdcVaultId = getRandHex();
@@ -106,7 +105,7 @@
 		const tMstrVaultId = getRandHex();
 		const cbBtcVaultId = getRandHex();
 
-		if(!cbBTCPrice || !tMSTRPrice) {
+		if (!cbBTCPrice || !tMSTRPrice) {
 			return;
 		}
 
@@ -118,42 +117,44 @@
 
 		const minTradeAmount2 = (depositAmount2 * 10n) / 100n;
 		const maxTradeAmount2 = (depositAmount2 * 20n) / 100n;
-		
-		if ($connected && selectedToken1 && selectedToken2 && usdcToken) {
 
+		if ($connected && selectedToken1 && selectedToken2 && usdcToken) {
 			transactionStore.awaitWalletConfirmation('Preparing strategies...');
 			const { deploymentArgs: cbBTCDeploymentArgs } = await getDcaDeploymentArgs({
-					outputToken: usdcToken,
-					inputToken: selectedToken1,
-					budgetAmount: depositAmount1,
-					selectedPeriod: '1',
-					selectedPeriodUnit: 'Hours',
-					baseline: (1 / cbBTCPrice).toFixed(18).toString(),
-					kickoff: (1 / cbBTCPrice95Percent).toFixed(18).toString(),
-					minTradeAmount: minTradeAmount1,
-					maxTradeAmount: maxTradeAmount1,
-					inputVaultId: cbBtcVaultId,
-					outputVaultId: cbBtcUsdcVaultId,
-					depositAmount: depositAmount1
-				});
+				outputToken: usdcToken,
+				inputToken: selectedToken1,
+				budgetAmount: depositAmount1,
+				selectedPeriod: '1',
+				selectedPeriodUnit: 'Hours',
+				baseline: (1 / cbBTCPrice).toFixed(18).toString(),
+				kickoff: (1 / cbBTCPrice95Percent).toFixed(18).toString(),
+				minTradeAmount: minTradeAmount1,
+				maxTradeAmount: maxTradeAmount1,
+				inputVaultId: cbBtcVaultId,
+				outputVaultId: cbBtcUsdcVaultId,
+				depositAmount: depositAmount1
+			});
 			const { deploymentArgs: tMSTRDeploymentArgs } = await getDcaDeploymentArgs({
-					outputToken: usdcToken,
-					inputToken: selectedToken2,
-					budgetAmount: depositAmount2,
-					selectedPeriod: '1',
-					selectedPeriodUnit: 'Hours',
-					baseline: (1 / tMSTRPrice).toFixed(18).toString(),
-					kickoff: (1 / tMSTRPrice95Percent).toFixed(18).toString(),
-					minTradeAmount: minTradeAmount2,
-					maxTradeAmount: maxTradeAmount2,
-					inputVaultId: tMstrVaultId,
-					outputVaultId: tMstrUsdcVaultId,
-					depositAmount: depositAmount2
-				});
-			
+				outputToken: usdcToken,
+				inputToken: selectedToken2,
+				budgetAmount: depositAmount2,
+				selectedPeriod: '1',
+				selectedPeriodUnit: 'Hours',
+				baseline: (1 / tMSTRPrice).toFixed(18).toString(),
+				kickoff: (1 / tMSTRPrice95Percent).toFixed(18).toString(),
+				minTradeAmount: minTradeAmount2,
+				maxTradeAmount: maxTradeAmount2,
+				inputVaultId: tMstrVaultId,
+				outputVaultId: tMstrUsdcVaultId,
+				depositAmount: depositAmount2
+			});
+
 			transactionStore.awaitWalletConfirmation('Deploying strategies...');
-			
-			await transactionStore.handleStrategyBulkDeployment([cbBTCDeploymentArgs, tMSTRDeploymentArgs]);
+
+			await transactionStore.handleStrategyBulkDeployment([
+				cbBTCDeploymentArgs,
+				tMSTRDeploymentArgs
+			]);
 
 			try {
 				await transactionStore.handleDsfDeploy({
@@ -183,13 +184,17 @@
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token 1</span>
-				<div class="flex h-10 items-center rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-gray-300">
+				<div
+					class="flex h-10 items-center rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-gray-300"
+				>
 					{selectedToken1 ? selectedToken1.symbol : 'cbBTC'}
 				</div>
 			</div>
 			<div>
 				<span class="mb-2 block text-sm font-medium text-gray-300">Token 2</span>
-				<div class="flex h-10 items-center rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-gray-300">
+				<div
+					class="flex h-10 items-center rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-gray-300"
+				>
 					{selectedToken2 ? selectedToken2.symbol : 'tMSTR'}
 				</div>
 			</div>
@@ -235,7 +240,9 @@
 			<div>
 				<div class="space-y-2">
 					<div class="relative">
-						<span class="text-sm font-medium text-gray-300">${selectedToken1?.symbol} equivalent in USDC Deposit Amount</span>
+						<span class="text-sm font-medium text-gray-300"
+							>${selectedToken1?.symbol} equivalent in USDC Deposit Amount</span
+						>
 						{#if usdcToken}
 							<TradeAmountInput
 								amountToken={usdcToken}
@@ -246,7 +253,9 @@
 						{/if}
 					</div>
 					<div class="relative">
-						<span class="text-sm font-medium text-gray-300">${selectedToken2?.symbol} equivalent in USDC Deposit Amount</span>
+						<span class="text-sm font-medium text-gray-300"
+							>${selectedToken2?.symbol} equivalent in USDC Deposit Amount</span
+						>
 						{#if usdcToken}
 							<TradeAmountInput
 								amountToken={usdcToken}
@@ -371,13 +380,17 @@
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Minimum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{selectedToken1 ? formatUnits(minTradeAmount ?? 0n, selectedToken1.decimals) : '0'}</span
+						>{selectedToken1
+							? formatUnits(minTradeAmount ?? 0n, selectedToken1.decimals)
+							: '0'}</span
 					>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Maximum Trade Amount</span>
 					<span class="font-medium text-white"
-						>{selectedToken1 ? formatUnits(maxTradeAmount ?? 0n, selectedToken1.decimals) : '0'}</span
+						>{selectedToken1
+							? formatUnits(maxTradeAmount ?? 0n, selectedToken1.decimals)
+							: '0'}</span
 					>
 				</div>
 			</div>

@@ -1,7 +1,12 @@
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import type { TradingViewQuote } from '$lib/services/tradingview';
 import type { Network } from '$lib/network';
-import { TOKENS, CRYPTO_TOKENS, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/network';
+import {
+	TOKENS,
+	CRYPTO_TOKENS,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from '$lib/network';
 import { getSfts, getTrades } from '$lib/query';
 import {
 	fetchAndQuotePaymentTokenOrders,

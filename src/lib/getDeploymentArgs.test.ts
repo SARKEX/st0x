@@ -215,26 +215,10 @@ describe('getDeploymentArgs', () => {
 				})
 			);
 
-			expect(mockGui.setVaultId).toHaveBeenCalledWith(
-				'input',
-				'token1',
-				inputVaultIdToken1
-			);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith(
-				'input',
-				'token2',
-				inputVaultIdToken2
-			);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith(
-				'output',
-				'token1',
-				outputVaultIdToken1
-			);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith(
-				'output',
-				'token2',
-				outputVaultIdToken2
-			);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', 'token1', inputVaultIdToken1);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', 'token2', inputVaultIdToken2);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith('output', 'token1', outputVaultIdToken1);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith('output', 'token2', outputVaultIdToken2);
 		});
 
 		it('should return deployment args', async () => {
@@ -267,11 +251,7 @@ describe('getDeploymentArgs', () => {
 			await getDcaDeploymentArgs(buildDcaArgs({ inputVaultId, outputVaultId }));
 
 			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', 'input', inputVaultId);
-			expect(mockGui.setVaultId).toHaveBeenCalledWith(
-				'output',
-				'output',
-				outputVaultId
-			);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith('output', 'output', outputVaultId);
 		});
 
 		it('should handle different period units', async () => {
