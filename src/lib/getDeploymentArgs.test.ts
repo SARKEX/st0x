@@ -217,22 +217,22 @@ describe('getDeploymentArgs', () => {
 
 			expect(mockGui.setVaultId).toHaveBeenCalledWith(
 				'input',
-				PAYMENT_TOKEN.address,
+				'token1',
 				inputVaultIdToken1
 			);
 			expect(mockGui.setVaultId).toHaveBeenCalledWith(
 				'input',
-				STOXs[0].address,
+				'token2',
 				inputVaultIdToken2
 			);
 			expect(mockGui.setVaultId).toHaveBeenCalledWith(
 				'output',
-				PAYMENT_TOKEN.address,
+				'token1',
 				outputVaultIdToken1
 			);
 			expect(mockGui.setVaultId).toHaveBeenCalledWith(
 				'output',
-				STOXs[0].address,
+				'token2',
 				outputVaultIdToken2
 			);
 		});
@@ -266,10 +266,10 @@ describe('getDeploymentArgs', () => {
 
 			await getDcaDeploymentArgs(buildDcaArgs({ inputVaultId, outputVaultId }));
 
-			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', STOXs[0].address, inputVaultId);
+			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', 'input', inputVaultId);
 			expect(mockGui.setVaultId).toHaveBeenCalledWith(
 				'output',
-				PAYMENT_TOKEN.address,
+				'output',
 				outputVaultId
 			);
 		});

@@ -60,7 +60,8 @@ type DomainDefinition<K extends DomainKey> = PollingOptions<DomainPayloads[K]>;
 type DefinitionMap = { [K in DomainKey]: DomainDefinition<K> };
 
 function getTokensWithPriceFeed(network: Network) {
-	const allTokens = [...TOKENS, ...CRYPTO_TOKENS];
+	const cryptoTokens = CRYPTO_TOKENS ?? [];
+	const allTokens = [...TOKENS, ...cryptoTokens];
 	return allTokens.filter((token) => token.chainId === network.chainId && token.priceFeedId);
 }
 
