@@ -2,6 +2,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import FolioStrategy from '$lib/components/orders/FolioStrategy.svelte';
 	import ActiveLiquidity from '$lib/components/orders/ActiveLiquidity.svelte';
+	import ActiveLiquiditySpecific from '$lib/components/orders/ActiveLiquiditySpecific.svelte';
 	import { currentNetwork } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
@@ -9,7 +10,8 @@
 
 	const STRATEGY_TYPES = [
 		{ id: 'portfolio', name: 'Portfolio Strategy' },
-		{ id: 'market-making', name: 'Market Making' }
+		{ id: 'market-making', name: 'Market Making' },
+		{ id: 'market-making-specific', name: 'Market Making (cbBTC/tMSTR)' }
 	];
 
 	let activeStrategyType = 'portfolio';
@@ -76,6 +78,10 @@
 			{:else if activeStrategyType === 'market-making'}
 				{#key [$currentNetwork?.id]}
 					<ActiveLiquidity />
+				{/key}
+			{:else if activeStrategyType === 'market-making-specific'}
+				{#key [$currentNetwork?.id]}
+					<ActiveLiquiditySpecific />
 				{/key}
 			{/if}
 		</div>
