@@ -421,7 +421,7 @@
 				const avgPriceBigInt = BigInt(Math.round(weightedAveragePrice * 1e18));
 				const expectedCost18Dec = (selectedAmountScaled * avgPriceBigInt) / FIXED_POINT_SCALE;
 
-				requiredApprovalBigInt = scaleAmount(expectedCost18Dec, 18, paymentTokenDecimals);
+				requiredApprovalBigInt = scaleAmount(expectedCost18Dec, assetTokenDecimals, paymentTokenDecimals);
 			} else {
 				// SELL: Approve tSTOX (asset token - what we give)
 				// selectedAmount is already in asset token decimals

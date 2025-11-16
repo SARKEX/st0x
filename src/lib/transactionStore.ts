@@ -379,7 +379,7 @@ const transactionStore = () => {
 		// - For BUY: we give outputToken (USDC from our perspective)
 		// - For SELL: we give inputToken (tSTOX from our perspective)
 		const orderSide = options?.orderSide;
-		const approvalToken = orderSide === 'Sell' ? inputToken : outputToken;
+		const approvalToken = inputToken;
 
 		// Check current allowance for the token that needs approval
 		checkingWalletAllowance(`Checking token allowance...`);
