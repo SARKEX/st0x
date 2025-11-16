@@ -132,10 +132,10 @@ describe('network', () => {
 			expect(tokens.every((t) => t.chainId === 8453)).toBe(true);
 		});
 
-		it('should include tSTOX for Base', () => {
+		it('should include tIAU for Base', () => {
 			const tokens = getTokensByNetwork(8453);
-			const tSTOX = tokens.find((t) => t.symbol === 'tSTOX');
-			expect(tSTOX).toBeDefined();
+			const tIAU = tokens.find((t) => t.symbol === 'tIAU');
+			expect(tIAU).toBeDefined();
 		});
 
 		it('should return empty array for unknown network', () => {
