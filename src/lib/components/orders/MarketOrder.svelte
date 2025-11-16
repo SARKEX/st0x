@@ -428,25 +428,16 @@
 				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
 				requiredApprovalBigInt = scaleAmount(selectedAmount, assetTokenDecimals, assetTokenDecimals);
 			}
+			// TODO: Remove this once we have a better way to handle precision loss
+			// Round up scaled amount to avoid precision loss
+			requiredApprovalBigInt += 1n;
 
-			// Add buffer:
-			// - For BUY: Use 1.05x multiplier for better scaling
-			// - For SELL: Add 1 wei if precision loss
-			let requiredApprovalAmount: bigint;
-			if (orderSide === 'Buy') {
-				// Use 1.05x multiplier instead of fixed +1 USDC for better scaling:
-				// - Small orders (e.g., 1 USDC): 1.05 USDC approved (5% buffer)
-				// - Large orders (e.g., 1000 USDC): 1050 USDC approved (still 5% buffer)
-				requiredApprovalAmount = (requiredApprovalBigInt * 105n) / 100n;
-			} else {
-				// For SELL: Add 1 wei buffer if there's precision loss
-				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
+			const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
 				const approvalFloat = Float.fromFixedDecimalLossy(
 					requiredApprovalBigInt,
 					assetTokenDecimals
 				);
-				requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
-			}
+			const requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
 
 			// Calculate maximumInput based on walk result
 			const maximumInputAmount =
