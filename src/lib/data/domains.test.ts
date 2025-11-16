@@ -56,6 +56,7 @@ const {
 
 	const networkModule = {
 		TOKENS: mockTokens,
+		CRYPTO_TOKENS: [],
 		DEFAULT_PAYMENT_TOKENS: {
 			[network.id]: paymentToken
 		},
