@@ -2,8 +2,8 @@ export type TradeHistoryPoint = {
 	timestamp: number;
 	price: number;
 	tokens: number;
-	usdc: number;
-	side: 'buy' | 'sell';
+	quote: number;
+	side: 'bid' | 'ask';
 };
 
 export type VolumeBucket = {

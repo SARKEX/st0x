@@ -1,19 +1,23 @@
 import { get, writable } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
-import { encodeFunctionData, erc20Abi, formatUnits, type Hex } from 'viem';
+import {
+	decodeFunctionData,
+	encodeFunctionData,
+	erc20Abi,
+	formatUnits,
+	type Hash,
+	type Hex
+} from 'viem';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
 import {
-	getTakeOrders2Calldata,
+	getTakeOrders3Calldata,
 	type SgOrder,
-	type TakeOrdersConfigV3
+	type TakeOrdersConfigV4,
+	type DeploymentTransactionArgs,
+	RaindexVault,
+	Float
 } from '@rainlanguage/orderbook';
 import { TransactionErrorMessage } from '$lib/types/errors';
-import {
-	getTransactionAddOrders,
-	getVaultWithdrawCalldata,
-	type DeploymentTransactionArgs,
-	type SgVault
-} from '@rainlanguage/orderbook';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
@@ -26,25 +30,25 @@ import {
 	type MarketMakingDeploymentArgs
 } from './getDeploymentArgs';
 import { rainlangConfirmationModal } from './stores';
+import { createRaindexClient } from './utils/raindexClient';
 import { ensureResource, getResourceStore } from './stores/network-data-cache';
 import type { Network } from './network';
 
-// Helper function to create Raindex link HTML
+// Helper function to create Raindex v5 link HTML
 function createRaindexLink(
 	chainId: number,
 	orderbookId: string,
 	orderHashOrVaultId: string,
-	isVault = false
+	linkText = 'Manage your order on Raindex'
 ): string {
-	const baseUrl = isVault ? 'https://v2.raindex.finance/orders' : 'https://raindex.finance/orders';
 	return `
 		<a
 			target="_blank"
 			rel="noopener noreferrer"
 			class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-			href="${baseUrl}/${chainId}-${orderbookId}-${orderHashOrVaultId}"
+			href="https://v5.raindex.finance/orders/${chainId}-${orderbookId}-${orderHashOrVaultId}"
 			data-testid="raindex-link">
-			${isVault ? 'Manage your order on Raindex' : 'View order on Raindex'}
+			${linkText}
 			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
 			</svg>
@@ -64,11 +68,28 @@ export enum TransactionStatus {
 	ERROR = 'Something went wrong'
 }
 
+export interface MarketOrderSummary {
+	orderSide: 'Buy' | 'Sell';
+	quantityFilled: bigint;
+	quantityRequested: bigint;
+	outputTokenDecimals: number;
+	outputTokenSymbol: string;
+	averagePrice: number;
+	paymentTokenSymbol: string;
+	actualSlippage: bigint;
+	isPartialFill: boolean;
+	isNoFill?: boolean;
+}
+
+export interface TransactionMetadata {
+	marketOrderSummary?: MarketOrderSummary;
+}
+
 const initialState = {
 	status: TransactionStatus.IDLE,
 	error: '',
 	hash: '',
-	data: null,
+	data: null as TransactionMetadata | null,
 	functionName: '',
 	message: ''
 };
@@ -77,17 +98,33 @@ const transactionStore = () => {
 	const { subscribe, set, update } = writable(initialState);
 	const reset = () => set(initialState);
 
+	const normalizeCalldata = (value: string | Uint8Array): `0x${string}` => {
+		if (typeof value === 'string') {
+			return (value.startsWith('0x') ? value : `0x${value}`) as `0x${string}`;
+		}
+		const hex = Array.from(value)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join('');
+		return `0x${hex}` as `0x${string}`;
+	};
+
 	// Generic state update helper
 	const setState = (
 		status: TransactionStatus,
-		options: { message?: string; hash?: string; error?: string } = {}
+		options: {
+			message?: string;
+			hash?: string;
+			error?: string;
+			data?: TransactionMetadata | null;
+		} = {}
 	) =>
 		update((state) => ({
 			...state,
 			status,
 			message: options.message ?? '',
 			hash: options.hash ?? '',
-			error: options.error ?? ''
+			error: options.error ?? '',
+			data: options.data ?? null
 		}));
 
 	const checkingWalletAllowance = (message?: string) =>
@@ -95,48 +132,38 @@ const transactionStore = () => {
 	const awaitWalletConfirmation = (message?: string) =>
 		setState(TransactionStatus.PENDING_WALLET, { message });
 	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
-	const transactionSuccess = (hash: string, message?: string) =>
-		setState(TransactionStatus.SUCCESS, { hash, message });
+	const transactionSuccess = (hash: string, message?: string, data?: TransactionMetadata) =>
+		setState(TransactionStatus.SUCCESS, { hash, message, data });
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
-
-	const handleWithdraw = async (vault: SgVault) => {
-		const config = get(wagmiConfig);
-		if (!config) throw new Error('Wagmi config not found');
-		const vaultWithdrawCalldata = await getVaultWithdrawCalldata(vault, vault.balance);
-		let hash: string;
-		try {
-			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
-
-			hash = await sendTransaction(config, {
-				data: vaultWithdrawCalldata.value as Hex,
-				to: vault.orderbook.id as `0x${string}`
-			});
-			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-
-			await waitForTransactionReceipt(config, {
-				hash: hash as `0x${string}`
-			});
-
-			const chainId = get(currentNetwork).id;
-			const link = createRaindexLink(chainId, vault.orderbook.id, vault.id, true);
-
-			return transactionSuccess(hash, link);
-		} catch (error) {
-			const errorMessage =
-				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
-				TransactionErrorMessage.GENERIC;
-			const message =
-				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-					? (errorMessage as TransactionErrorMessage)
-					: TransactionErrorMessage.GENERIC;
-			return transactionError(message);
-		}
-	};
 
 	const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
+		const $signerAddress = get(signerAddress);
+		if (!$signerAddress) throw new Error('Signer address not found');
+
+		if (deploymentArgs.approvals.length > 0) {
+			// Check token balances first
+			for (const approval of deploymentArgs.approvals) {
+				const balance = await readContract(config, {
+					abi: erc20Abi,
+					address: approval.token as `0x${string}`,
+					functionName: 'balanceOf',
+					args: [$signerAddress as Hex]
+				});
+				const { args } = decodeFunctionData({
+					abi: erc20Abi,
+					data: approval.calldata as Hex
+				});
+
+				if (balance < BigInt(args[1] as string)) {
+					return transactionError(
+						`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
+					);
+				}
+			}
+		}
 
 		if (deploymentArgs.approvals.length > 0) {
 			for (const approval of deploymentArgs.approvals) {
@@ -161,7 +188,7 @@ const transactionStore = () => {
 				}
 			}
 		}
-		let hash: string;
+		let hash: Hash;
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
@@ -169,7 +196,6 @@ const transactionStore = () => {
 				data: deploymentArgs.deploymentCalldata as Hex,
 				to: deploymentArgs.orderbookAddress as `0x${string}`
 			});
-			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
@@ -180,18 +206,48 @@ const transactionStore = () => {
 					: TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
-		// Poll for the order to be added to the orderbook
-		const interval = setInterval(async () => {
-			const network = get(currentNetwork);
-			const orders = (await getTransactionAddOrders(network.orderbook_subgraph_url, hash)).value;
-			if (orders && orders.length > 0) {
-				clearInterval(interval);
-				const orderHash = orders[0].order.orderHash;
-				const orderbookId = orders[0].order.orderbook.id;
-				const chainId = get(currentNetwork).id;
-				const link = createRaindexLink(chainId, orderbookId, orderHash, true);
 
-				return transactionSuccess(hash, link);
+		// Poll for the order to be added to the orderbook
+		let attempts = 0;
+		const maxAttempts = 30; // 1 minute max (30 * 2 seconds)
+		const network = get(currentNetwork);
+
+		const interval = setInterval(async () => {
+			attempts++;
+
+			// Stop polling after max attempts
+			if (attempts >= maxAttempts) {
+				clearInterval(interval);
+				return transactionSuccess(hash, 'Order deployed successfully!');
+			}
+
+			try {
+				// Get RaindexClient
+				const client = await createRaindexClient();
+
+				// Check for orders added in this transaction
+				const orders = await client.getAddOrdersForTransaction(
+					network.id,
+					deploymentArgs.orderbookAddress as `0x${string}`,
+					hash as `0x${string}`
+				);
+
+				if (orders.error) {
+					return; // Continue polling
+				}
+
+				if (orders.value && orders.value.length > 0) {
+					clearInterval(interval);
+					const orderHash = orders.value[0].orderHash;
+					const orderbookId = orders.value[0].orderbook;
+					const chainId = network.id;
+					const link = createRaindexLink(chainId, orderbookId, orderHash);
+
+					return transactionSuccess(hash, link);
+				}
+			} catch (error) {
+				// Continue polling
+				console.error('Error checking for orders:', error);
 			}
 		}, 2000);
 	};
@@ -251,68 +307,106 @@ const transactionStore = () => {
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
 
+	const handleWithdraw = async (vault: RaindexVault) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+
+		// vault.balance is already a Float instance, use it directly
+		const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
+		if (vaultWithdrawCalldata.error) throw new Error(vaultWithdrawCalldata.error.readableMsg);
+		let hash: Hash;
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
+
+			hash = await sendTransaction(config, {
+				data: vaultWithdrawCalldata.value as Hex,
+				to: vault.orderbook as `0x${string}`
+			});
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+
+			await waitForTransactionReceipt(config, {
+				hash: hash as `0x${string}`
+			});
+
+			const chainId = get(currentNetwork).id;
+			const link = createRaindexLink(chainId, vault.orderbook, vault.id);
+
+			return transactionSuccess(hash, link);
+		} catch (error) {
+			// @ts-expect-error Send transaction error
+			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+		}
+	};
+
 	const handleTakeOrders = async (
-		args: TakeOrdersConfigV3,
+		args: TakeOrdersConfigV4,
 		raindexOrder: SgOrder,
-		marketPrice: bigint
+		requiredApprovalAmount: bigint,
+		options?: {
+			ioIndexes?: { input: number; output: number };
+			walkResult?: {
+				quantityFilled: bigint;
+				weightedAveragePrice: number;
+				totalCostScaled: bigint;
+				fills: unknown[];
+			};
+			assetToken?: { decimals?: number; symbol?: string };
+			paymentToken?: { decimals?: number; symbol?: string };
+			orderSide?: 'Buy' | 'Sell';
+			userRequestedAmount?: bigint;
+		}
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
+		const inputIndex = options?.ioIndexes?.input ?? 0;
+		const outputIndex = options?.ioIndexes?.output ?? 0;
 
-		// Get the input token from the first order
-		const inputToken = args.orders[0].order.validInputs[0];
+		// Get the tokens from the order
+		const inputToken = raindexOrder.inputs[inputIndex];
 		if (!inputToken) {
 			return transactionError('No input token found in order' as TransactionErrorMessage);
 		}
 
-		const outputToken = args.orders[0].order.validOutputs[0];
+		const outputToken = raindexOrder.outputs[outputIndex];
 		if (!outputToken) {
-			return transactionError('No input token found in order' as TransactionErrorMessage);
+			return transactionError('No output token found in order' as TransactionErrorMessage);
 		}
 
-		// Check current allowance
+		const approvalToken = inputToken;
+
+		// Check current allowance for the token that needs approval
 		checkingWalletAllowance(`Checking token allowance...`);
 		const currentAllowance = await readContract(config, {
 			abi: erc20Abi,
-			address: inputToken.token as `0x${string}`,
+			address: approvalToken.token.address as `0x${string}`,
 			functionName: 'allowance',
 			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
 
-		// Calculate required amount from maxInput
-		const requiredAmount = BigInt(
-			BigInt(args.maximumInput) * BigInt(10 ** (18 - Number(outputToken.decimals)))
-		);
-		const requiredAmountFp18 = (requiredAmount * marketPrice) / 1000000000000000000n;
-
-		// rounding up
-		const requiredAmountFormattedDecimals =
-			requiredAmountFp18 / BigInt(10 ** (18 - Number(inputToken.decimals))) + 1n;
-
-		if (currentAllowance < BigInt(requiredAmountFormattedDecimals)) {
+		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
-			awaitWalletConfirmation(`Approving token spend...`);
+			awaitWalletConfirmation(`Approving ${approvalToken.token.symbol} spend...`);
 
 			const approvalHash = await sendTransaction(config, {
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',
-					args: [raindexOrder.orderbook.id as `0x${string}`, requiredAmountFormattedDecimals]
+					args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
 				}) as Hex,
-				to: inputToken.token as `0x${string}`
+				to: approvalToken.token.address as `0x${string}`
 			});
 
 			await waitForTransactionReceipt(config, { hash: approvalHash });
 		}
 
 		// Now take the order
-		awaitWalletConfirmation(`Executing market order...`);
+		awaitWalletConfirmation(`Taking order...`);
 
 		let result;
 		try {
-			result = getTakeOrders2Calldata(args);
+			result = getTakeOrders3Calldata(args);
 
 			if (result.error) {
 				return transactionError(result.error as unknown as TransactionErrorMessage);
@@ -327,107 +421,19 @@ const transactionStore = () => {
 			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
 		}
 
+		let hash: Hash;
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
-			// Convert Uint8Array to hex string
-			const calldata =
-				'0x' +
-				Array.from(result.value)
-					.map((b) => {
-						const hex = Number(b).toString(16);
-						return hex.length === 1 ? '0' + hex : hex;
-					})
-					.join('');
-
-			const hash = await sendTransaction(config, {
+			const calldata = normalizeCalldata(result.value as string | Uint8Array);
+			hash = await sendTransaction(config, {
 				data: calldata as Hex,
 				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
-			await waitForTransactionReceipt(config, { hash });
-
-			// Force refresh pending trades to pick up the new transaction
-			const network = get(currentNetwork) as Network;
-			const pendingTradesResult = ensureResource(network.id, 'pendingTrades', { force: true });
-			if (pendingTradesResult instanceof Promise) {
-				pendingTradesResult.catch(() => {});
-			}
-
-			// Subscribe to pending trades cache instead of polling directly
-			let unsubscribe: (() => void) | null = null;
-			let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-			const cleanup = () => {
-				if (unsubscribe) unsubscribe();
-				if (timeoutId) clearTimeout(timeoutId);
-			};
-
-			unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
-				if (!$resource?.data?.trades) return;
-
-				// Search for our specific trade in the cached data
-				const trade = $resource.data.trades.find(
-					(t) =>
-						t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase() &&
-						t.order?.orderHash.toLowerCase() === raindexOrder.orderHash.toLowerCase()
-				) as unknown as {
-					tradeEvent?: { transaction?: { id?: string } };
-					order?: {
-						orderHash?: string;
-						inputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-						outputs?: Array<{ token?: { decimals?: number; symbol?: string } }>;
-					};
-					inputVaultBalanceChange?: { amount?: string | number };
-					outputVaultBalanceChange?: { amount?: string | number };
-				};
-
-				if (
-					trade &&
-					trade.inputVaultBalanceChange &&
-					trade.outputVaultBalanceChange &&
-					trade.order?.inputs?.[0]?.token &&
-					trade.order?.outputs?.[0]?.token
-				) {
-					cleanup();
-					const chainId = network.id;
-					const tokenSold = `${parseFloat(
-						formatUnits(
-							BigInt(Math.abs(Number(trade.inputVaultBalanceChange.amount))),
-							trade.order.inputs[0].token.decimals ?? 18
-						)
-					)} ${trade.order.inputs[0].token.symbol}`;
-					const tokenBought = `${parseFloat(
-						formatUnits(
-							BigInt(Math.abs(Number(trade.outputVaultBalanceChange.amount))),
-							trade.order.outputs[0].token.decimals ?? 18
-						)
-					)} ${trade.order.outputs[0].token.symbol}`;
-
-					const orderLink = createRaindexLink(
-						chainId,
-						raindexOrder.orderbook.id,
-						raindexOrder.orderHash,
-						false
-					);
-					const link = `
-					<div class="flex flex-col gap-2 text-center">
-						<div class="text-base text-gray-300">
-							${tokenBought} bought, ${tokenSold} sold
-						</div>
-						${orderLink}
-					</div>
-				`;
-
-					return transactionSuccess(hash, link);
-				}
-			});
-
-			// Safety timeout: give up after 3 minutes if trade not found
-			timeoutId = setTimeout(() => {
-				cleanup();
-				transactionError(TransactionErrorMessage.GENERIC, hash);
-			}, 180_000);
+			const receipt = await waitForTransactionReceipt(config, { hash });
+			console.log('Transaction receipt:', receipt);
+			console.log('Transaction hash:', hash);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
@@ -438,6 +444,192 @@ const transactionStore = () => {
 					: TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
+
+		// Force refresh pending trades to pick up the new transaction
+		const network = get(currentNetwork) as Network;
+		const pendingTradesResult = ensureResource(network.id, 'pendingTrades', { force: true });
+		if (pendingTradesResult instanceof Promise) {
+			pendingTradesResult.catch(() => {});
+		}
+
+		// Subscribe to pending trades cache instead of polling directly
+		let unsubscribe: (() => void) | null = null;
+		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+		const cleanup = () => {
+			if (unsubscribe) unsubscribe();
+			if (timeoutId) clearTimeout(timeoutId);
+		};
+
+		unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
+			if (!$resource?.data?.trades) return;
+
+			// Find ALL trades for this transaction (multiple orders can be matched)
+			const allTrades = $resource.data.trades.filter(
+				(t) => t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
+			) as unknown as Array<{
+				tradeEvent?: { transaction?: { id?: string } };
+				order?: {
+					orderHash?: string;
+				};
+				inputVaultBalanceChange?: {
+					amount?: Hex;
+					oldVaultBalance?: Hex;
+					newVaultBalance?: Hex;
+				};
+				outputVaultBalanceChange?: {
+					amount?: Hex;
+					oldVaultBalance?: Hex;
+					newVaultBalance?: Hex;
+				};
+			}>;
+
+			// Only proceed if we have trades with vault changes
+			const validTrades = allTrades.filter(
+				(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
+			);
+
+			if (validTrades.length === 0) {
+				return;
+			}
+
+			cleanup();
+
+			// Get the walk result from options
+			const { quantityFilled: estimatedQuantityFilled, weightedAveragePrice } =
+				options?.walkResult || {
+					quantityFilled: 0n,
+					weightedAveragePrice: 0
+				};
+
+			// Helper function to parse hex amount using Float
+			const parseHexAmount = (hexAmount: Hex, decimals: number): bigint => {
+				try {
+					const floatResult = Float.fromHex(hexAmount);
+					if (floatResult.error) {
+						console.error('Error parsing hex:', floatResult.error);
+						return 0n;
+					}
+
+					const float = floatResult.value;
+					const absResult = float.abs();
+					if (absResult.error) {
+						console.error('Error getting absolute value:', absResult.error);
+						return 0n;
+					}
+
+					const fixedResult = absResult.value.toFixedDecimalLossy(decimals);
+					if (fixedResult.error) {
+						console.error('Error converting to fixed decimal:', fixedResult.error);
+						return 0n;
+					}
+
+					const fdValue = fixedResult.value;
+					const fdValueObj = fdValue as unknown as Record<string, unknown>;
+					if (typeof fdValueObj?.value === 'string') {
+						return BigInt(fdValueObj.value as string);
+					}
+					return 0n;
+				} catch (e) {
+					console.error('Error decoding amount Float:', e);
+					return 0n;
+				}
+			};
+
+			// Get order side from options (already determined during transaction building)
+			const orderSideFromTrade = options?.orderSide ?? 'Buy';
+
+			// Get token decimals and symbol once from first trade
+			const firstTrade = validTrades[0];
+			const quantityFilledTokenDecimals =
+				orderSideFromTrade === 'Buy'
+					? // @ts-expect-error vault structure has token info
+						firstTrade.outputVaultBalanceChange?.vault?.token?.decimals ?? 18
+					: // @ts-expect-error vault structure has token info
+						firstTrade.inputVaultBalanceChange?.vault?.token?.decimals ?? 18;
+
+			const quantityFilledTokenSymbol =
+				orderSideFromTrade === 'Buy'
+					? // @ts-expect-error vault structure has token info
+						firstTrade.outputVaultBalanceChange?.vault?.token?.symbol ?? ''
+					: // @ts-expect-error vault structure has token info
+						firstTrade.inputVaultBalanceChange?.vault?.token?.symbol ?? '';
+
+			// Sum the appropriate vault changes based on order side
+			let quantityFilledAmount = 0n;
+			for (const trade of validTrades) {
+				if (orderSideFromTrade === 'Buy') {
+					// For BUY: sum outputVaultBalanceChange amounts
+					const outputAmount = parseHexAmount(
+						trade.outputVaultBalanceChange!.amount as Hex,
+						quantityFilledTokenDecimals
+					);
+					quantityFilledAmount += outputAmount;
+				} else {
+					// For SELL: sum inputVaultBalanceChange amounts
+					const inputAmount = parseHexAmount(
+						trade.inputVaultBalanceChange!.amount as Hex,
+						quantityFilledTokenDecimals
+					);
+					quantityFilledAmount += inputAmount;
+				}
+			}
+
+			// Calculate average price from walk result
+			const averagePrice = weightedAveragePrice;
+
+			// Use the user's actual requested amount, not the walk estimate
+			const userRequestedQuantity = options?.userRequestedAmount ?? estimatedQuantityFilled;
+
+			// Check if fill is complete (within 99.9% tolerance)
+			// Need to normalize both amounts to the same decimal scale for comparison
+			const quantityFilledDecimal = parseFloat(
+				formatUnits(quantityFilledAmount, quantityFilledTokenDecimals)
+			);
+			const userRequestedDecimal = parseFloat(
+				formatUnits(userRequestedQuantity, quantityFilledTokenDecimals)
+			);
+
+			let fillPercentage = 0;
+			let isNoFill = false;
+
+			if (userRequestedDecimal > 0) {
+				fillPercentage = quantityFilledDecimal / userRequestedDecimal;
+			} else {
+				// No requested quantity means no tokens requested
+				isNoFill = true;
+			}
+
+			// Build summary from actual transaction data
+			const summary: MarketOrderSummary = {
+				orderSide: orderSideFromTrade,
+				quantityFilled: quantityFilledAmount,
+				quantityRequested: userRequestedQuantity,
+				outputTokenDecimals: quantityFilledTokenDecimals,
+				outputTokenSymbol: quantityFilledTokenSymbol,
+				averagePrice: averagePrice,
+				paymentTokenSymbol: options?.paymentToken?.symbol ?? '',
+				actualSlippage: 0n,
+				isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
+				isNoFill
+			};
+
+			const orderLink = createRaindexLink(
+				network.id,
+				raindexOrder.orderbook.id,
+				raindexOrder.orderHash,
+				'View order on Raindex'
+			);
+
+			return transactionSuccess(hash, orderLink, { marketOrderSummary: summary });
+		});
+
+		// Safety timeout: give up after 5 minutes if trade not found
+		// This gives the subgraph time to index the transaction and trade
+		timeoutId = setTimeout(() => {
+			cleanup();
+			transactionError(TransactionErrorMessage.GENERIC, hash);
+		}, 300_000);
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
@@ -448,6 +640,7 @@ const transactionStore = () => {
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
+
 	return {
 		subscribe,
 		reset,
@@ -460,8 +653,8 @@ const transactionStore = () => {
 		handleLimitDeploy,
 		handleDsfDeploy,
 		handleFolioDeploy,
-		handleWithdraw,
-		handleTakeOrders
+		handleTakeOrders,
+		handleWithdraw
 	};
 };
 

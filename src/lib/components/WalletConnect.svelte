@@ -2,10 +2,17 @@
 	import { wrongNetwork } from '$lib/stores';
 	import { web3Modal, signerAddress, connected } from 'svelte-wagmi';
 	import Button from '$lib/components/ui/Button.svelte';
+
+	export let onConnect: (() => void) | undefined = undefined;
+
+	const handleClick = () => {
+		onConnect?.();
+		$web3Modal.open();
+	};
 </script>
 
 <Button
-	on:click={() => $web3Modal.open()}
+	on:click={handleClick}
 	tabindex={0}
 	dataTestId="wallet-connect"
 	variant="primary"

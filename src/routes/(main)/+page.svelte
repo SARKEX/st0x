@@ -46,8 +46,8 @@
 		symbol: string;
 		price: number | null;
 		onChainPrice: number | null;
-		buyPrice: number | null;
-		sellPrice: number | null;
+		bidPrice: number | null;
+		askPrice: number | null;
 		totalHolders: string;
 		totalSupply: string;
 		totalTransfers: string;
@@ -181,11 +181,11 @@
 
 	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
 		if (!summary) return null;
-		const { buy, sell } = summary;
-		if (buy != null && sell != null) {
-			return (buy + sell) / 2;
+		const { bid, ask } = summary;
+		if (bid != null && ask != null) {
+			return (bid + ask) / 2;
 		}
-		return buy ?? sell ?? null;
+		return bid ?? ask ?? null;
 	}
 
 	$: {
@@ -193,12 +193,14 @@
 			const rows: TokenRow[] = [];
 			for (const sft of $sfts) {
 				const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
-				const summary = quotesRecord[sft.address.toLowerCase()] ?? null;
-				const buyPrice = summary?.buy ?? null;
-				const sellPrice = summary?.sell ?? null;
+				const lookupAddress = sft.address.toLowerCase();
+				const summary = quotesRecord[lookupAddress] ?? null;
+				const bidPrice = summary?.bid ?? null;
+				const askPrice = summary?.ask ?? null;
 				const onChainPrice = calculateMidPrice(summary);
 				const fallbackPrice = quote?.close ?? null;
 				const price = onChainPrice ?? fallbackPrice ?? null;
+
 				rows.push({
 					id: sft.id,
 					address: sft.address,
@@ -206,8 +208,8 @@
 					symbol: sft.symbol,
 					price,
 					onChainPrice,
-					buyPrice,
-					sellPrice,
+					bidPrice,
+					askPrice,
 					totalHolders: sft.tokenHolders
 						.filter((holder) => BigInt(holder.balance) > BigInt(0))
 						.length.toString(),
@@ -512,7 +514,7 @@
 											</td>
 											<td class="px-2 py-2 sm:px-4 sm:py-3">
 												<div class="text-sm text-gray-200">
-													{onChainPrice != null ? `$${onChainPrice.toFixed(4)}` : 'N/A'}
+													{onChainPrice != null ? `$${onChainPrice.toFixed(2)}` : 'N/A'}
 												</div>
 											</td>
 											<td class="px-2 py-2 sm:px-4 sm:py-3">

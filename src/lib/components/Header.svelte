@@ -1,5 +1,6 @@
 <script lang="ts">
 	import TickerTape from './TickerTape.svelte';
+	import NetworkSelector from './NetworkSelector.svelte';
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
 	import { tick } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -213,6 +214,8 @@
 						{/each}
 					</div>
 				{/if}
+
+				<NetworkSelector />
 
 				{#if $connected && !$wrongNetwork && $signerAddress}
 					<div class="flex items-center gap-2">

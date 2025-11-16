@@ -16,11 +16,12 @@
 	import { formatUnits } from 'viem';
 	import { getAllTokensByNetwork } from '$lib/network';
 	import { goto } from '$app/navigation';
-	import { getOrders, getVaults } from '@rainlanguage/orderbook';
+	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import type {
 		SgOrderWithSubgraphName,
 		SgErc20,
-		SgVaultWithSubgraphName
+		SgVault,
+		RaindexVault
 	} from '@rainlanguage/orderbook';
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
@@ -32,11 +33,12 @@
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
 
-	function isUSDCPosition(token: { token: SgErc20 }) {
-		return (
-			token.token.symbol?.toUpperCase() === 'USDC' ||
-			token.token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase()
-		);
+	function isPaymentTokenPosition(token: { token: SgErc20 }) {
+		const settlementToken = $currentNetwork?.defaultPaymentToken;
+		if (!settlementToken) return false;
+		const symbolMatch = token.token.symbol?.toUpperCase() === settlementToken.symbol?.toUpperCase();
+		const addressMatch = token.token.id?.toLowerCase() === settlementToken.address?.toLowerCase();
+		return Boolean(symbolMatch || addressMatch);
 	}
 
 	// Filter tokens by current network
@@ -140,35 +142,38 @@
 	$: ordersListQuery = createInfiniteQuery({
 		queryKey: ['orders', $currentNetwork?.id, ordersActiveFilter, orderHashFilter, showMyOrders],
 		queryFn: async ({ pageParam }) => {
-			const ordersResult = await getOrders(
-				[
-					{
-						url: $currentNetwork.orderbook_subgraph_url,
-						name: $currentNetwork.raindexNetworkSlug
-					}
-				],
+			const client = await createRaindexClient();
+			const filterTokens = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+
+			const ordersResult = await client.getOrders(
+				[$currentNetwork.id],
 				{
-					owners: $signerAddress ? [$signerAddress.toLowerCase()] : [], // Always filter by user's address
-					active: ordersActiveFilter, // undefined shows all, true shows active, false shows inactive
-					orderHash: orderHashFilter === '' ? undefined : orderHashFilter
+					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
+					active: ordersActiveFilter,
+					orderHash:
+						orderHashFilter === '' ? undefined : (orderHashFilter as unknown as `0x${string}`),
+					tokens: filterTokens.map((token) => token.address) as `0x${string}`[]
 				},
-				{ page: pageParam + 1, pageSize: ORDER_LIST_PAGE_SIZE }
+				pageParam + 1
 			);
 			if (ordersResult.error) throw new Error(ordersResult.error.readableMsg);
-			const allOrders: SgOrderWithSubgraphName[] = ordersResult.value;
 
-			// Filter orders that have any token from forexTokenList in either inputs or outputs
-			const filteredOrders = allOrders.filter(({ order }) => {
-				const inputAddresses = order.inputs.map((input) => input.token.address.toLowerCase());
-				const outputAddresses = order.outputs.map((output) => output.token.address.toLowerCase());
-				const filterAddresses = ALL_TOKENS.map((token) => token.address.toLowerCase());
-				const hasTokenInInputs = inputAddresses.some((addr) => filterAddresses.includes(addr));
-				const hasTokenInOutputs = outputAddresses.some((addr) => filterAddresses.includes(addr));
-				return hasTokenInInputs || hasTokenInOutputs;
-			});
+			// Convert RaindexOrder[] to SgOrderWithSubgraphName[]
+			const allOrders: SgOrderWithSubgraphName[] = await Promise.all(
+				ordersResult.value.map(async (order) => {
+					const sgOrderResult = order.convertToSgOrder();
+					if (sgOrderResult.error || !sgOrderResult.value) {
+						throw new Error('Failed to convert order');
+					}
+					return {
+						order: sgOrderResult.value,
+						subgraphName: $currentNetwork.raindexNetworkSlug
+					};
+				})
+			);
 
 			return {
-				orders: filteredOrders,
+				orders: allOrders,
 				hasMore: allOrders.length === ORDER_LIST_PAGE_SIZE
 			};
 		},
@@ -183,21 +188,51 @@
 	$: vaultsListQuery = createInfiniteQuery({
 		queryKey: ['vaults', $currentNetwork?.id, hideEmptyVaults, showMyVaults, $signerAddress],
 		queryFn: async ({ pageParam }) => {
-			const vaultsResult = await getVaults(
-				[
-					{
-						url: $currentNetwork.orderbook_subgraph_url,
-						name: $currentNetwork.raindexNetworkSlug
-					}
-				],
+			const client = await createRaindexClient();
+
+			const vaultsResult = await client.getVaults(
+				[$currentNetwork.id],
 				{
-					owners: $signerAddress ? [$signerAddress.toLowerCase()] : [], // Always filter by user's address
+					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
 					hideZeroBalance: hideEmptyVaults ?? false
 				},
-				{ page: pageParam + 1, pageSize: VAULT_LIST_PAGE_SIZE }
+				pageParam + 1
 			);
 			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
-			const allVaults: SgVaultWithSubgraphName[] = vaultsResult.value;
+
+			// Convert RaindexVaultsList.items (RaindexVault[]) to objects with vault, raindexVault, and subgraphName
+			const allVaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[] =
+				vaultsResult.value.items.map((vault) => {
+					let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
+					console.log('vaultBalanceFloat : ', vaultBalanceFloat);
+					if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
+
+					// Convert RaindexVault to SgVault
+					const sgVault: SgVault = {
+						id: vault.id as `0x${string}`,
+						owner: vault.owner,
+						vaultId: `0x${vault.vaultId.toString(16).padStart(64, '0')}`,
+						balance: vaultBalanceFloat.value!.value.toString(),
+						token: {
+							id: vault.token.id as `0x${string}`,
+							address: vault.token.address,
+							name: vault.token.name,
+							symbol: vault.token.symbol,
+							decimals: vault.token.decimals.toString() as `0x${string}`
+						},
+						orderbook: {
+							id: vault.orderbook
+						},
+						ordersAsOutput: vault.ordersAsOutput,
+						ordersAsInput: vault.ordersAsInput,
+						balanceChanges: []
+					};
+					return {
+						vault: sgVault,
+						raindexVault: vault,
+						subgraphName: $currentNetwork.raindexNetworkSlug
+					};
+				});
 			return {
 				vaults: allVaults,
 				hasMore: allVaults.length === VAULT_LIST_PAGE_SIZE
@@ -246,40 +281,58 @@
 		// Convert map to array and format balances
 		const balancePromises = Array.from(tokenBalances.values()).map(
 			async ({ token, totalBalance, vaultIds }) => {
-				// Check if this is USDC
-				const isUSDC =
-					token.symbol?.toUpperCase() === 'USDC' ||
-					token.id.toLowerCase() === $currentNetwork.usdcToken.address.toLowerCase();
+				const settlementToken = $currentNetwork?.defaultPaymentToken;
+				if (!settlementToken) {
+					const balance = parseFloat(formatUnits(totalBalance, Number(token.decimals ?? 18)));
+					return {
+						token,
+						balance: balance.toFixed(6),
+						vaultIds,
+						price: '0.000000',
+						estimatedValue: '0.000000',
+						isPaymentToken: false
+					};
+				}
+				const settlementSymbol = settlementToken.symbol?.toUpperCase();
+				const settlementAddress = settlementToken.address?.toLowerCase();
+				const isPaymentToken =
+					token.symbol?.toUpperCase() === settlementSymbol ||
+					token.id.toLowerCase() === settlementAddress;
 
-				const quote = !isUSDC
-					? findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS)
-					: null;
+				const quote = findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS);
 
-				let price: number;
-				if (isUSDC) {
-					// USDC is always $1
-					price = 1.0;
-				} else if (quote?.close != null) {
-					price = quote.close;
-				} else {
-					// Fallback to getPrice if not in global quote
-					const priceStr = await getPrice(
-						new EvmToken({
-							chainId: evmChainIds[$currentNetwork.chainId],
-							address: token.id as `0x${string}`,
-							symbol: token.symbol || '',
-							decimals: Number(token.decimals ?? 18),
-							name: token.name || ''
-						}),
-						new EvmToken({
-							chainId: evmChainIds[$currentNetwork.chainId],
-							address: $currentNetwork.usdcToken.address as `0x${string}`,
-							symbol: $currentNetwork.usdcToken.symbol,
-							decimals: Number($currentNetwork.usdcToken.decimals),
-							name: $currentNetwork.usdcToken.name
-						})
-					);
-					price = parseFloat(priceStr);
+				let price: number | null = quote?.close ?? null;
+				if (!price || !Number.isFinite(price) || price <= 0) {
+					try {
+						const priceStr = await getPrice(
+							new EvmToken({
+								chainId: evmChainIds[$currentNetwork.chainId],
+								address: token.id as `0x${string}`,
+								symbol: token.symbol || '',
+								decimals: Number(token.decimals ?? 18),
+								name: token.name || ''
+							}),
+							new EvmToken({
+								chainId: evmChainIds[$currentNetwork.chainId],
+								address: settlementToken.address as `0x${string}`,
+								symbol: settlementToken.symbol || '',
+								decimals: Number(settlementToken.decimals ?? 18),
+								name: settlementToken.name || ''
+							})
+						);
+						price = parseFloat(priceStr);
+					} catch (priceError) {
+						console.warn('Failed to fetch price from swap API', priceError);
+						price = null;
+					}
+				}
+
+				if (!price || !Number.isFinite(price) || price <= 0) {
+					if (isPaymentToken) {
+						price = 1;
+					} else {
+						price = 0;
+					}
 				}
 
 				const balance = parseFloat(formatUnits(totalBalance, Number(token.decimals ?? 18)));
@@ -291,7 +344,7 @@
 					vaultIds,
 					price: price.toFixed(6),
 					estimatedValue,
-					isUSDC
+					isPaymentToken
 				};
 			}
 		);
@@ -560,7 +613,7 @@
 											<!-- Token Info -->
 											<div class="flex items-start gap-3 sm:gap-4">
 												<div
-													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {isUSDCPosition(
+													class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl {isPaymentTokenPosition(
 														token
 													)
 														? 'bg-gradient-to-br from-green-600/20 to-emerald-700/20'
@@ -576,7 +629,7 @@
 														<p class="{textStyles.label} sm:text-sm">
 															{token.token.symbol ?? '???'}
 														</p>
-														{#if isUSDCPosition(token)}
+														{#if isPaymentTokenPosition(token)}
 															<span
 																class="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400"
 															>
@@ -602,7 +655,7 @@
 												<div class="flex items-center justify-between">
 													<span class="{textStyles.label} sm:text-sm">Estimated Value</span>
 													<span
-														class="text-xs font-medium {isUSDCPosition(token)
+														class="text-xs font-medium {isPaymentTokenPosition(token)
 															? 'text-emerald-400'
 															: 'text-green-400'} sm:text-sm">${token.estimatedValue}</span
 													>

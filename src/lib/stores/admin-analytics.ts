@@ -66,6 +66,7 @@ export async function loadAnalyticsDashboard(options?: { force?: boolean }) {
 				updatedAt: Date.now()
 			});
 		} catch (error) {
+			console.log('error : ', error);
 			const message = error instanceof Error ? error.message : 'Unable to load analytics';
 			store.set({
 				status: 'error',

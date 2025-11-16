@@ -13,6 +13,8 @@
 	>;
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { containerStyles } from '$lib/utils/styles';
+
+	$: console.log($query.data);
 </script>
 
 {#if $query.isError}
@@ -60,10 +62,6 @@
 						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 						>Selling</th
 					>
-					<th
-						class="p-2 text-center text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
-						>Trades</th
-					>
 				</tr>
 			</thead>
 			<tbody>
@@ -88,7 +86,7 @@
 								<!-- Mobile: last 6 only -->
 								<div class="sm:hidden">
 									<ExternalLink
-										href={`https://v2.raindex.finance/orders/${
+										href={`https://v5.raindex.finance/orders/${
 											$currentNetwork.id
 										}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
 										label={order.orderHash.toString()}
@@ -99,7 +97,7 @@
 								<!-- Desktop: 6...4 -->
 								<div class="hidden sm:block">
 									<ExternalLink
-										href={`https://v2.raindex.finance/orders/${
+										href={`https://v5.raindex.finance/orders/${
 											$currentNetwork.id
 										}-${order.orderbook.id.toString()}-${order.orderHash.toString()}`}
 										label={order.orderHash.toString()}
@@ -123,18 +121,13 @@
 								>
 							</td>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
-								>{new Date(
-									Number(order.addEvents[0].transaction.timestamp) * 1000
-								).toLocaleString()}</td
+								>{new Date(Number(order.timestampAdded) * 1000).toLocaleString()}</td
 							>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
 								>{order.inputs.map((input) => input.token.symbol).join(', ')}</td
 							>
 							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
 								>{order.outputs.map((output) => output.token.symbol).join(', ')}</td
-							>
-							<td class="p-2 text-xs text-gray-200 sm:p-3 sm:text-sm"
-								>{order.trades.length > 99 ? '>99' : order.trades.length}</td
 							>
 						</tr>
 					{/each}

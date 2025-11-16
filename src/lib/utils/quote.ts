@@ -1,35 +1,49 @@
 import type {
-	SgOrderWithSubgraphName,
-	QuoteSpec,
-	OrderV3,
-	QuoteResultEnum,
+	RaindexOrder,
+	RaindexOrderQuote,
+	GetOrdersFilters,
+	OrderV4,
 	SgOrder
 } from '@rainlanguage/orderbook';
-import { doQuoteSpecs, getOrders } from '@rainlanguage/orderbook';
-import { networks, TOKENS, USDC_TOKENS } from '$lib/network';
+import {
+	networks,
+	TOKENS,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from '$lib/network';
 import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress, type MarketSide } from '$lib/utils/tokenMath';
+import type { PythToken } from '$lib/types';
+import { createRaindexClient } from '$lib/utils/raindexClient';
+import { Float } from '@rainlanguage/float';
 
 // ABI types for decoding order bytes
-export const IO = '(address token, uint8 decimals, uint256 vaultId)';
-export const EvaluableV3 = '(address interpreter, address store, bytes bytecode)';
-export const OrderV3_ABI = `(address owner, ${EvaluableV3} evaluable, ${IO}[] validInputs, ${IO}[] validOutputs, bytes32 nonce)`;
+const IOV2 = '(address token, bytes32 vaultId)';
+const EvaluableV4 = '(address interpreter, address store, bytes bytecode)';
+export const OrderV4_ABI = `(address owner, ${EvaluableV4} evaluable, ${IOV2}[] validInputs, ${IOV2}[] validOutputs, bytes32 nonce)`;
 
 // Types for processed quotes
 export interface ProcessedQuote {
 	orderHash: string;
-	maxOutput: bigint;
-	ratio: bigint;
+	maxOutput: string; // Hex-encoded Float (64 hex chars + 0x prefix)
+	ratio: string; // Hex-encoded Float (64 hex chars + 0x prefix)
 	inputTokenSymbol: string;
 	outputTokenSymbol: string;
 	inputTokenAddress: string;
 	outputTokenAddress: string;
+	inputIOIndex: number;
+	outputIOIndex: number;
+	inputVaultId?: string;
+	outputVaultId?: string;
+	orderData?: OrderV4;
+	sgOrder?: SgOrder;
+	orderbookId?: string;
 	inputTokenDecimals?: number;
 	outputTokenDecimals?: number;
 	assetAddress?: string;
 	side?: MarketSide;
-	usdcPerToken?: number;
-	tokensPerUsdc?: number;
+	quotePerAsset?: number;
+	assetPerQuote?: number;
 }
 
 // Helper function to convert hex string to BigInt
@@ -40,103 +54,151 @@ export function hexToBigInt(hex: string): bigint {
 	return BigInt(`0x${hex}`);
 }
 
-// Import the actual Token type
-import type { PythToken } from '$lib/types';
-
 // Helper function to get token symbol by address
-function getTokenSymbol(address: string, tokens: PythToken[]): string {
+function getTokenMetadata(address: string, tokens: PythToken[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
-	return token?.symbol || 'UNKNOWN';
+	return {
+		symbol: token?.symbol ?? 'UNKNOWN',
+		decimals: token?.decimals
+	};
 }
 
-// Process and filter quotes
-type QuoteResultWithSpec = {
-	result: QuoteResultEnum;
-	spec: QuoteSpec;
-};
-
-function processQuotes(
-	quoteResults: QuoteResultWithSpec[],
-	filteredOrders: SgOrderWithSubgraphName[],
-	usdcToken: PythToken,
+// Process orders with their quotes
+function processOrdersWithQuotes(
+	orders: RaindexOrder[],
+	quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>,
+	quoteToken: PythToken,
 	stockTokens: PythToken[]
 ): ProcessedQuote[] {
 	const processedQuotes: ProcessedQuote[] = [];
 
-	// Create a map of orderHash to order for quick lookup
-	const orderMap = new Map<string, SgOrder>();
-	filteredOrders.forEach(({ order }) => {
-		orderMap.set(order.orderHash, order);
-	});
+	// Process each order with its quotes
+	orders.forEach((order) => {
+		const quotes = quotesMap.get(order);
+		if (!quotes || quotes.length === 0) {
+			return;
+		}
 
-	quoteResults.forEach(({ result, spec }) => {
 		try {
-			if (result.error || !result.value) {
+			// Convert RaindexOrder to SgOrder to get orderBytes
+			const sgOrderResult = order.convertToSgOrder();
+			if (sgOrderResult.error || !sgOrderResult.value) {
 				return;
 			}
-
-			const { maxOutput, ratio } = result.value;
-
-			// Convert hex to BigInt
-			const maxOutputBigInt = hexToBigInt(maxOutput);
-			const ratioBigInt = hexToBigInt(ratio);
-
-			// Skip if maxOutput is 0
-			if (maxOutputBigInt === 0n) {
-				return;
-			}
-
-			const order = orderMap.get(spec.orderHash);
-			if (!order) {
-				return;
-			}
+			const sgOrder = sgOrderResult.value;
 
 			// Decode order to get token addresses
 			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
-			const orderData = decodedOrder[0] as OrderV3;
+			const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
+			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
-			const inputDefinition = orderData.validInputs[spec.inputIOIndex];
-			const outputDefinition = orderData.validOutputs[spec.outputIOIndex];
-			if (!inputDefinition || !outputDefinition) {
-				return;
-			}
+			// Process each quote for this order
+			quotes.forEach((quote) => {
+				try {
+					// Skip if the quote failed
+					if (!quote.success || !quote.data) {
+						return;
+					}
 
-			// Use the input/output indexes from the quote spec
-			const inputTokenAddress = inputDefinition.token;
-			const outputTokenAddress = outputDefinition.token;
+					const { maxOutput, ratio } = quote.data;
 
-			// Get token symbols - need to check both USDC and stock tokens for both input and output
-			const inputTokenSymbol = getTokenSymbol(inputTokenAddress, [usdcToken, ...stockTokens]);
-			const outputTokenSymbol = getTokenSymbol(outputTokenAddress, [usdcToken, ...stockTokens]);
+					// Validate that we have valid hex-encoded Float values (0x + 64 hex chars = 66 chars total)
+					if (
+						typeof ratio !== 'string' ||
+						!ratio.startsWith('0x') ||
+						ratio.length !== 66 ||
+						typeof maxOutput !== 'string' ||
+						!maxOutput.startsWith('0x') ||
+						maxOutput.length !== 66
+					) {
+						console.warn('Invalid Float hex format for ratio or maxOutput:', { ratio, maxOutput });
+						return;
+					}
 
-			const inputDecimals = Number(inputDefinition.decimals ?? 0);
-			const outputDecimals = Number(outputDefinition.decimals ?? 0);
+					// Verify maxOutput is not zero by converting to Float and checking
+					const maxOutputFloat = Float.fromHex(maxOutput as `0x${string}`);
+					if (maxOutputFloat.error || !maxOutputFloat.value) {
+						console.warn('Failed to parse maxOutput Float:', maxOutputFloat.error);
+						return;
+					}
 
-			const processedQuote: ProcessedQuote = {
-				orderHash: order.orderHash,
-				maxOutput: maxOutputBigInt,
-				ratio: ratioBigInt,
-				inputTokenSymbol,
-				outputTokenSymbol,
-				inputTokenAddress,
-				outputTokenAddress,
-				inputTokenDecimals: Number.isFinite(inputDecimals) ? inputDecimals : undefined,
-				outputTokenDecimals: Number.isFinite(outputDecimals) ? outputDecimals : undefined
-			};
+					// Check if maxOutput is zero
+					const zeroFloat = Float.fromHex(
+						'0x0000000000000000000000000000000000000000000000000000000000000000'
+					);
+					if (!zeroFloat.error && zeroFloat.value) {
+						const isZero = maxOutputFloat.value.eq(zeroFloat.value);
+						if (!isZero.error && isZero.value) {
+							return;
+						}
+					}
 
-			const metrics = describeQuote(processedQuote, usdcToken.address);
-			if (metrics) {
-				processedQuote.side = metrics.side;
-				const normalizedAsset = normalizeAddress(metrics.assetAddress);
-				processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
-				processedQuote.usdcPerToken = metrics.usdcPerToken;
-				processedQuote.tokensPerUsdc = metrics.tokensPerUsdc;
-			}
+					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
+					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
+					if (!inputDefinition || !outputDefinition) {
+						return;
+					}
 
-			processedQuotes.push(processedQuote);
-		} catch {
-			// Skip quotes that fail to process (malformed data, decoding errors)
+					// Use the input/output indexes from the quote pair
+					const inputTokenAddress = inputDefinition.token;
+					const outputTokenAddress = outputDefinition.token;
+
+					const allTokens = [quoteToken, ...stockTokens];
+					const inputTokenMeta = getTokenMetadata(inputTokenAddress, allTokens);
+					const outputTokenMeta = getTokenMetadata(outputTokenAddress, allTokens);
+
+					const inputDecimals = Number.isFinite(inputTokenMeta.decimals)
+						? Number(inputTokenMeta.decimals)
+						: undefined;
+					const outputDecimals = Number.isFinite(outputTokenMeta.decimals)
+						? Number(outputTokenMeta.decimals)
+						: undefined;
+
+					const processedQuote: ProcessedQuote = {
+						orderHash: sgOrder.orderHash,
+						maxOutput,
+						ratio,
+						inputTokenSymbol: inputTokenMeta.symbol,
+						outputTokenSymbol: outputTokenMeta.symbol,
+						inputTokenAddress,
+						outputTokenAddress,
+						inputIOIndex: quote.pair.inputIndex ?? 0,
+						outputIOIndex: quote.pair.outputIndex ?? 0,
+						inputVaultId: inputDefinition.vaultId?.toString?.() ?? inputDefinition.vaultId,
+						outputVaultId: outputDefinition.vaultId?.toString?.() ?? outputDefinition.vaultId,
+						orderData,
+						sgOrder,
+						orderbookId: sgOrder.orderbook.id,
+						inputTokenDecimals:
+							inputDecimals ??
+							(normalizeAddress(inputTokenAddress) === normalizeAddress(quoteToken.address)
+								? quoteToken.decimals ?? 18
+								: 18),
+						outputTokenDecimals:
+							outputDecimals ??
+							(normalizeAddress(outputTokenAddress) === normalizeAddress(quoteToken.address)
+								? quoteToken.decimals ?? 18
+								: 18)
+					};
+
+					const metrics = describeQuote(processedQuote, quoteToken.address);
+					if (metrics) {
+						processedQuote.side = metrics.side;
+						const normalizedAsset = normalizeAddress(metrics.assetAddress);
+						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
+						processedQuote.quotePerAsset = metrics.quotePerAsset;
+						processedQuote.assetPerQuote = metrics.assetPerQuote;
+					}
+
+					processedQuotes.push(processedQuote);
+				} catch (error) {
+					// Skip quotes that fail to process (malformed data, decoding errors)
+					console.error('Error processing quote:', error);
+				}
+			});
+		} catch (error) {
+			// Skip orders that fail to process
+			console.error('Error processing order:', error);
 		}
 	});
 
@@ -144,12 +206,13 @@ function processQuotes(
 }
 
 /**
- * Fetches all orders from subgraph, filters orders with USDC as input and stock tokens as output,
- * and quotes all filtered orders
+ * Fetches all orders from subgraph, filters orders that involve the configured payment token and stock tokens,
+ * and quotes all filtered orders using the RaindexClient API.
  */
-export async function fetchAndQuoteUSDCOrders(
+export async function fetchAndQuotePaymentTokenOrders(
 	networkId: number = 8453,
-	options: { maxPages?: number; pageSize?: number } = {}
+	options: { maxPages?: number; pageSize?: number } = {},
+	overridePaymentToken?: PythToken
 ) {
 	const { maxPages = 100, pageSize = 1000 } = options;
 
@@ -159,13 +222,13 @@ export async function fetchAndQuoteUSDCOrders(
 		throw new Error(`Network with id ${networkId} not found`);
 	}
 
-	const orderBookSg = network.orderbook_subgraph_url;
-	const rpcUrls = network.fallbackRpcUrls;
-
-	// Get USDC token address for the network
-	const usdcToken = USDC_TOKENS[networkId];
-	if (!usdcToken) {
-		throw new Error(`USDC token not found for network ${networkId}`);
+	// Determine the payment token for the network
+	const defaultPaymentToken =
+		overridePaymentToken ??
+		getDefaultPaymentTokenForNetwork(networkId) ??
+		DEFAULT_PAYMENT_TOKENS[networkId];
+	if (!defaultPaymentToken) {
+		throw new Error(`Payment token not found for network ${networkId}`);
 	}
 
 	// Get stock tokens for the network
@@ -173,32 +236,37 @@ export async function fetchAndQuoteUSDCOrders(
 		(token) => token.chainId === networkId && token.category === 'ST0x'
 	);
 
-	// Fetch all orders from subgraph with pagination
-	const allOrders: SgOrderWithSubgraphName[] = [];
+	// Create RaindexClient using standard configuration
+	const client = await createRaindexClient();
+
+	// Fetch all orders with pagination
+	const allOrders: RaindexOrder[] = [];
 	let page = 1;
 	let hasMore = true;
 
 	while (hasMore) {
 		try {
-			const ordersResult = await getOrders(
-				[
-					{
-						url: orderBookSg,
-						name: network.raindexNetworkSlug
-					}
-				],
-				{
-					active: true, // Only active orders
-					owners: []
-				},
-				{ page, pageSize }
-			);
+			// Use GetOrdersFilters to specify what orders to fetch
+			const filters: GetOrdersFilters = {
+				active: true,
+				owners: []
+			};
+
+			// Add token filters for payment token and stock tokens
+			const tokenAddresses: string[] = [
+				defaultPaymentToken.address,
+				...stockTokens.map((t) => t.address)
+			] as `0x${string}`[];
+
+			filters.tokens = tokenAddresses as `0x${string}`[];
+
+			const ordersResult = await client.getOrders([networkId], filters, page);
 
 			if (ordersResult.error) {
 				throw new Error(ordersResult.error.readableMsg);
 			}
 
-			const pageOrders: SgOrderWithSubgraphName[] = ordersResult.value;
+			const pageOrders = ordersResult.value;
 			allOrders.push(...pageOrders);
 
 			// If we got fewer orders than the page size, we've reached the end
@@ -224,156 +292,48 @@ export async function fetchAndQuoteUSDCOrders(
 		}
 	}
 
-	// Filter orders that have USDC and stock tokens in either direction
-	const filteredOrders = allOrders.filter(({ order }) => {
+	console.log('🔍 fetchAndQuotePaymentTokenOrders - Total orders fetched:', allOrders.length);
+
+	// Get quotes for all orders and store them in a map
+	const quotesMap = new Map<RaindexOrder, RaindexOrderQuote[]>();
+
+	for (const order of allOrders) {
 		try {
-			// Decode the order bytes to get the actual order structure
-			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
-			const orderData = decodedOrder[0] as OrderV3;
-
-			// Get input and output addresses from decoded order
-			const inputAddresses = orderData.validInputs.map(
-				(input: { token: string }) => normalizeAddress(input.token) ?? input.token
-			);
-			const outputAddresses = orderData.validOutputs.map(
-				(output: { token: string }) => normalizeAddress(output.token) ?? output.token
-			);
-
-			const usdcAddress = normalizeAddress(usdcToken.address) ?? usdcToken.address.toLowerCase();
-			const stockAddresses = stockTokens.map(
-				(token) => normalizeAddress(token.address) ?? token.address.toLowerCase()
-			);
-
-			// Check if order has USDC as input and stock as output
-			const hasUSDCAsInputAndStockAsOutput =
-				inputAddresses.includes(usdcAddress) &&
-				outputAddresses.some((addr: string) => stockAddresses.includes(addr));
-
-			// Check if order has stock as input and USDC as output
-			const hasStockAsInputAndUSDCAsOutput =
-				inputAddresses.some((addr: string) => stockAddresses.includes(addr)) &&
-				outputAddresses.includes(usdcAddress);
-
-			// Check if order has both USDC and stock in inputs (bidirectional)
-			const hasBothInInputs =
-				inputAddresses.includes(usdcAddress) &&
-				inputAddresses.some((addr: string) => stockAddresses.includes(addr));
-
-			// Check if order has both USDC and stock in outputs (bidirectional)
-			const hasBothInOutputs =
-				outputAddresses.includes(usdcAddress) &&
-				outputAddresses.some((addr: string) => stockAddresses.includes(addr));
-
-			const shouldInclude =
-				hasUSDCAsInputAndStockAsOutput ||
-				hasStockAsInputAndUSDCAsOutput ||
-				(hasBothInInputs && hasBothInOutputs);
-
-			return shouldInclude;
-		} catch {
-			return false;
-		}
-	});
-
-	if (filteredOrders.length === 0) {
-		return [];
-	}
-
-	// Create quote specs for all filtered orders
-	const quoteSpecs: QuoteSpec[] = [];
-
-	filteredOrders.forEach(({ order }) => {
-		try {
-			// Decode the order bytes to get the actual order structure
-			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV3_ABI], order.orderBytes);
-			const orderData = decodedOrder[0] as OrderV3;
-
-			// Get input and output addresses from decoded order
-			const inputAddresses = orderData.validInputs.map(
-				(input: { token: string }) => normalizeAddress(input.token) ?? input.token
-			);
-			const outputAddresses = orderData.validOutputs.map(
-				(output: { token: string }) => normalizeAddress(output.token) ?? output.token
-			);
-
-			const usdcAddress = normalizeAddress(usdcToken.address) ?? usdcToken.address.toLowerCase();
-
-			// Create quote specs for each supported direction
-			// For each stock token, check if we can create a quote spec
-			stockTokens.forEach((stockToken) => {
-				const stockAddress =
-					normalizeAddress(stockToken.address) ?? stockToken.address.toLowerCase();
-
-				// Check USDC -> Stock direction for this specific stock
-				const usdcInputIndex = inputAddresses.findIndex((addr: string) => addr === usdcAddress);
-				const stockOutputIndex = outputAddresses.findIndex((addr: string) => addr === stockAddress);
-
-				if (usdcInputIndex !== -1 && stockOutputIndex !== -1) {
-					// USDC -> Stock direction
-					quoteSpecs.push({
-						orderHash: order.orderHash,
-						inputIOIndex: usdcInputIndex,
-						outputIOIndex: stockOutputIndex,
-						signedContext: [],
-						orderbook: order.orderbook.id
-					});
-				}
-
-				// Check Stock -> USDC direction for this specific stock
-				const stockInputIndex = inputAddresses.findIndex((addr: string) => addr === stockAddress);
-				const usdcOutputIndex = outputAddresses.findIndex((addr: string) => addr === usdcAddress);
-
-				if (stockInputIndex !== -1 && usdcOutputIndex !== -1) {
-					// Stock -> USDC direction
-					quoteSpecs.push({
-						orderHash: order.orderHash,
-						inputIOIndex: stockInputIndex,
-						outputIOIndex: usdcOutputIndex,
-						signedContext: [],
-						orderbook: order.orderbook.id
-					});
-				}
-			});
-		} catch {
-			// Skip invalid orders
-		}
-	});
-
-	// Quote all orders in batches to avoid overwhelming the API
-	const batchSize = 10;
-	const quotesWithSpec: QuoteResultWithSpec[] = [];
-
-	for (let i = 0; i < quoteSpecs.length; i += batchSize) {
-		const batch = quoteSpecs.slice(i, i + batchSize);
-
-		try {
-			const batchQuotes = await doQuoteSpecs(batch, orderBookSg, rpcUrls);
-			if (batchQuotes.error || !batchQuotes.value) {
+			const quotesResult = await order.getQuotes();
+			if (quotesResult.error) {
+				console.warn('❌ Error getting quotes for order:', order.orderHash, quotesResult.error);
 				continue;
 			}
-			batchQuotes.value.forEach((result, index) => {
-				const spec = batch[index];
-				if (!spec) return;
-				quotesWithSpec.push({ result, spec });
-			});
-		} catch {
-			// Continue with next batch
+
+			if (quotesResult.value && quotesResult.value.length > 0) {
+				quotesMap.set(order, quotesResult.value);
+			}
+		} catch (error) {
+			// Skip orders that fail to quote
+			console.error('Error getting quotes for order:', error);
 		}
 	}
 
+	console.log('📦 Total quotes fetched:', quotesMap.size, 'orders with quotes');
+
 	// Process and filter the quotes
-	const processedQuotes = processQuotes(quotesWithSpec, filteredOrders, usdcToken, stockTokens);
+	const processedQuotes = processOrdersWithQuotes(
+		allOrders,
+		quotesMap,
+		defaultPaymentToken,
+		stockTokens
+	);
+
+	console.log('🎯 Final processed quotes:', processedQuotes.length);
 
 	return processedQuotes;
 }
 
 export type TokenPriceSummary = {
-	buy?: number;
-	sell?: number;
-	buyTokensPerUsdc?: number;
-	sellTokensPerUsdc?: number;
+	bid?: number;
+	ask?: number;
+	bidAssetPerQuote?: number;
+	askAssetPerQuote?: number;
 };
 
 const chooseBestPrice = (
@@ -392,10 +352,10 @@ const chooseBestPrice = (
 
 export const buildTokenPriceMap = (
 	quotes: ProcessedQuote[],
-	usdcAddressRaw: string
+	quoteAddressRaw: string
 ): Map<string, TokenPriceSummary> => {
 	const priceMap = new Map<string, TokenPriceSummary>();
-	const usdcAddress = normalizeAddress(usdcAddressRaw);
+	const quoteAddress = normalizeAddress(quoteAddressRaw);
 
 	quotes.forEach((quote) => {
 		const metrics =
@@ -403,52 +363,54 @@ export const buildTokenPriceMap = (
 				? {
 						assetAddress: quote.assetAddress,
 						side: quote.side,
-						usdcPerToken: quote.usdcPerToken,
-						tokensPerUsdc: quote.tokensPerUsdc
+						quotePerAsset: quote.quotePerAsset,
+						assetPerQuote: quote.assetPerQuote
 					}
-				: describeQuote(quote, usdcAddressRaw);
+				: describeQuote(quote, quoteAddressRaw);
 		if (!metrics) return;
 
 		const assetAddress = normalizeAddress(metrics.assetAddress);
-		if (!assetAddress || assetAddress === usdcAddress) return;
+		if (!assetAddress || assetAddress === quoteAddress) return;
 
 		const existing = priceMap.get(assetAddress) ?? {};
 
-		if (metrics.side === 'buy') {
+		if (metrics.side === 'ask') {
+			// Ask side = asks (what sellers are offering)
 			if (
-				Number.isFinite(metrics.usdcPerToken) &&
-				metrics.usdcPerToken &&
-				metrics.usdcPerToken > 0
+				Number.isFinite(metrics.quotePerAsset) &&
+				metrics.quotePerAsset &&
+				metrics.quotePerAsset > 0
 			) {
-				existing.buy = chooseBestPrice(existing.buy, metrics.usdcPerToken, 'min');
+				existing.ask = chooseBestPrice(existing.ask, metrics.quotePerAsset, 'min');
 			}
 			if (
-				Number.isFinite(metrics.tokensPerUsdc) &&
-				metrics.tokensPerUsdc &&
-				metrics.tokensPerUsdc > 0
+				Number.isFinite(metrics.assetPerQuote) &&
+				metrics.assetPerQuote &&
+				metrics.assetPerQuote > 0
 			) {
-				existing.buyTokensPerUsdc = chooseBestPrice(
-					existing.buyTokensPerUsdc,
-					metrics.tokensPerUsdc,
+				existing.askAssetPerQuote = chooseBestPrice(
+					existing.askAssetPerQuote,
+					metrics.assetPerQuote,
 					'max'
 				);
 			}
 		} else {
+			// Bid side = bids (what buyers are offering)
 			if (
-				Number.isFinite(metrics.usdcPerToken) &&
-				metrics.usdcPerToken &&
-				metrics.usdcPerToken > 0
+				Number.isFinite(metrics.quotePerAsset) &&
+				metrics.quotePerAsset &&
+				metrics.quotePerAsset > 0
 			) {
-				existing.sell = chooseBestPrice(existing.sell, metrics.usdcPerToken, 'max');
+				existing.bid = chooseBestPrice(existing.bid, metrics.quotePerAsset, 'max');
 			}
 			if (
-				Number.isFinite(metrics.tokensPerUsdc) &&
-				metrics.tokensPerUsdc &&
-				metrics.tokensPerUsdc > 0
+				Number.isFinite(metrics.assetPerQuote) &&
+				metrics.assetPerQuote &&
+				metrics.assetPerQuote > 0
 			) {
-				existing.sellTokensPerUsdc = chooseBestPrice(
-					existing.sellTokensPerUsdc,
-					metrics.tokensPerUsdc,
+				existing.bidAssetPerQuote = chooseBestPrice(
+					existing.bidAssetPerQuote,
+					metrics.assetPerQuote,
 					'min'
 				);
 			}
@@ -459,3 +421,20 @@ export const buildTokenPriceMap = (
 
 	return priceMap;
 };
+export const normalizeOrderData = (orderData: OrderV4): OrderV4 => ({
+	owner: orderData.owner,
+	evaluable: {
+		interpreter: orderData.evaluable.interpreter,
+		store: orderData.evaluable.store,
+		bytecode: orderData.evaluable.bytecode
+	},
+	validInputs: orderData.validInputs.map((input) => ({
+		token: input.token,
+		vaultId: input.vaultId?.toString?.() ?? input.vaultId
+	})),
+	validOutputs: orderData.validOutputs.map((output) => ({
+		token: output.token,
+		vaultId: output.vaultId?.toString?.() ?? output.vaultId
+	})),
+	nonce: orderData.nonce
+});

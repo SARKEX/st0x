@@ -1,10 +1,15 @@
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import type { TradingViewQuote } from '$lib/services/tradingview';
 import type { Network } from '$lib/network';
-import { TOKENS, USDC_TOKENS } from '$lib/network';
+import {
+	TOKENS,
+	CRYPTO_TOKENS,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from '$lib/network';
 import { getSfts, getTrades } from '$lib/query';
 import {
-	fetchAndQuoteUSDCOrders,
+	fetchAndQuotePaymentTokenOrders,
 	buildTokenPriceMap,
 	type TokenPriceSummary,
 	type ProcessedQuote
@@ -60,7 +65,8 @@ type DomainDefinition<K extends DomainKey> = PollingOptions<DomainPayloads[K]>;
 type DefinitionMap = { [K in DomainKey]: DomainDefinition<K> };
 
 function getTokensWithPriceFeed(network: Network) {
-	return TOKENS.filter((token) => token.chainId === network.chainId && token.priceFeedId);
+	const allTokens = [...TOKENS, ...CRYPTO_TOKENS];
+	return allTokens.filter((token) => token.chainId === network.chainId && token.priceFeedId);
 }
 
 const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (network) => {
@@ -74,12 +80,13 @@ const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (
 
 const orderbookFetcher: DomainFetcher<OrderbookQuoteCache> = async (network) => {
 	try {
-		const quotes = await fetchAndQuoteUSDCOrders(network.id);
-		const usdc = USDC_TOKENS[network.id]?.address;
-		if (!usdc) {
+		const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
+		const paymentToken =
+			getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
+		if (!paymentToken?.address) {
 			return { summary: {}, quotes } satisfies OrderbookQuoteCache;
 		}
-		const map = buildTokenPriceMap(quotes, usdc);
+		const map = buildTokenPriceMap(quotes, paymentToken.address);
 		const summary: Record<string, TokenPriceSummary> = {};
 		for (const [address, value] of map.entries()) {
 			summary[address.toLowerCase()] = value;
@@ -107,8 +114,9 @@ const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
 
 		// Try to fetch Sushi prices for any tokens missing from Pyth
 		try {
-			const usdc = USDC_TOKENS[network.id];
-			if (usdc && evmChainIds[network.chainId]) {
+			const paymentToken =
+				getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
+			if (paymentToken && evmChainIds[network.chainId]) {
 				for (const token of tokens) {
 					const hasPythData = pythQuotes.some((q) => q.symbol === token.symbol);
 					if (!hasPythData) {
@@ -123,10 +131,10 @@ const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
 								}),
 								new EvmToken({
 									chainId: evmChainIds[network.chainId],
-									address: usdc.address as `0x${string}`,
-									symbol: usdc.symbol || 'USDC',
-									name: usdc.name || 'USDC',
-									decimals: usdc.decimals || 6
+									address: paymentToken.address as `0x${string}`,
+									symbol: paymentToken.symbol || '',
+									name: paymentToken.name || paymentToken.symbol || '',
+									decimals: paymentToken.decimals || 6
 								})
 							);
 							const price = parseFloat(priceStr) || 0;
