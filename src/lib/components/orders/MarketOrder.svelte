@@ -421,22 +421,27 @@
 				const avgPriceBigInt = BigInt(Math.round(weightedAveragePrice * 1e18));
 				const expectedCost18Dec = (selectedAmountScaled * avgPriceBigInt) / FIXED_POINT_SCALE;
 
-				requiredApprovalBigInt = scaleAmount(expectedCost18Dec, assetTokenDecimals, paymentTokenDecimals);
+				requiredApprovalBigInt = scaleAmount(
+					expectedCost18Dec,
+					assetTokenDecimals,
+					paymentTokenDecimals
+				);
 			} else {
 				// SELL: Approve tSTOX (asset token - what we give)
 				// selectedAmount is already in asset token decimals
 				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
-				requiredApprovalBigInt = scaleAmount(selectedAmount, assetTokenDecimals, assetTokenDecimals);
+				requiredApprovalBigInt = scaleAmount(
+					selectedAmount,
+					assetTokenDecimals,
+					assetTokenDecimals
+				);
 			}
 			// TODO: Remove this once we have a better way to handle precision loss
 			// Round up scaled amount to avoid precision loss
 			requiredApprovalBigInt += 1n;
 
 			const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
-				const approvalFloat = Float.fromFixedDecimalLossy(
-					requiredApprovalBigInt,
-					assetTokenDecimals
-				);
+			const approvalFloat = Float.fromFixedDecimalLossy(requiredApprovalBigInt, assetTokenDecimals);
 			const requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
 
 			// Calculate maximumInput based on walk result

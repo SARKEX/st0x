@@ -175,8 +175,9 @@
 							</div>
 							{#if marketOrderSummary.isPartialFill}
 								<div class="mt-3 rounded-md bg-yellow-900/30 p-2 text-xs text-yellow-200">
-									Partial fill: not all requested quantity was available within
-									slippage tolerance. We currently have a guardrail to avoid unfavourable prices. To ignore guardrails, use a limit order.
+									Partial fill: not all requested quantity was available within slippage tolerance.
+									We currently have a guardrail to avoid unfavourable prices. To ignore guardrails,
+									use a limit order.
 								</div>
 							{/if}
 						</div>

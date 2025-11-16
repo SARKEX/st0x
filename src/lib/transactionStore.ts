@@ -168,7 +168,6 @@ const transactionStore = () => {
 		if (deploymentArgs.approvals.length > 0) {
 			for (const approval of deploymentArgs.approvals) {
 				try {
-					console.log('approval : ', approval);
 					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
 					const hash = await sendTransaction(config, {
 						data: approval.calldata as Hex,
@@ -375,10 +374,6 @@ const transactionStore = () => {
 			return transactionError('No output token found in order' as TransactionErrorMessage);
 		}
 
-		// Approve what we're giving away:
-		// - For BUY: we give outputToken (USDC from our perspective)
-		// - For SELL: we give inputToken (tSTOX from our perspective)
-		const orderSide = options?.orderSide;
 		const approvalToken = inputToken;
 
 		// Check current allowance for the token that needs approval
