@@ -315,6 +315,19 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO',
 		tradingViewSymbol: 'KRAKEN:USDCUSD',
 		tradingViewMarket: 'crypto'
+	} as unknown as CategorizedToken,
+
+	{
+		chainId: base.id,
+		address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
+		symbol: 'cbBTC',
+		decimals: 8,
+		name: 'Coinbase Wrapped BTC',
+		logoUrl: '/images/cbBTC.png',
+		priceFeedId: '0x2817d7bfe5c64b8ea956e9a26f573ef64e72e4d7891f2d6af9bcc93f7aff9a97',
+		category: 'CRYPTO',
+		tradingViewSymbol: 'CRYPTO:CBBTCCUSD',
+		tradingViewMarket: 'crypto'
 	} as unknown as CategorizedToken
 ];
 

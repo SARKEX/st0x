@@ -1,7 +1,12 @@
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import type { TradingViewQuote } from '$lib/services/tradingview';
 import type { Network } from '$lib/network';
-import { TOKENS, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/network';
+import {
+	TOKENS,
+	CRYPTO_TOKENS,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from '$lib/network';
 import { getSfts, getTrades } from '$lib/query';
 import {
 	fetchAndQuotePaymentTokenOrders,
@@ -60,7 +65,9 @@ type DomainDefinition<K extends DomainKey> = PollingOptions<DomainPayloads[K]>;
 type DefinitionMap = { [K in DomainKey]: DomainDefinition<K> };
 
 function getTokensWithPriceFeed(network: Network) {
-	return TOKENS.filter((token) => token.chainId === network.chainId && token.priceFeedId);
+	const cryptoTokens = CRYPTO_TOKENS ?? [];
+	const allTokens = [...TOKENS, ...cryptoTokens];
+	return allTokens.filter((token) => token.chainId === network.chainId && token.priceFeedId);
 }
 
 const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (network) => {
