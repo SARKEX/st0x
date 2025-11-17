@@ -430,9 +430,10 @@
 		if (!assetAddress || !quoteAddress) {
 			return { bids: [], asks: [] };
 		}
+
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
-		quotes.forEach((quote) => {
+		quotes.forEach((quote, idx) => {
 			const ratioValue = ratioToNumber(quote.ratio);
 			const ratio = ratioValue ?? 0;
 			if (!Number.isFinite(ratio) || ratio <= 0) {
@@ -443,6 +444,8 @@
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
+
+			// ASK: quote token -> asset (buying the asset)
 			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
 				const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				const price = ratio;
@@ -452,24 +455,31 @@
 				asks.push({ price, quantity: tokenAmount });
 				return;
 			}
+
+			// BID: asset -> quote token (selling the asset)
 			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
 				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				if (quoteAmount === null || quoteAmount <= 0) {
 					return;
 				}
-				const price = 1 / ratio;
+
+				// Determine price based on ratio magnitude
+				// If ratio > 1: it's already in USD/token form
+				// If ratio < 1: it's in token/USD form, so invert it
+				const price = ratio >= 1 ? ratio : 1 / ratio;
+				const tokenAmount = quoteAmount / price;
+
 				if (!Number.isFinite(price) || price <= 0) {
 					return;
 				}
-				const tokenAmount = quoteAmount / price;
 				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
 					return;
 				}
+
 				bids.push({ price, quantity: tokenAmount });
 				return;
 			}
 		});
-		console.log(`📈 ${currentToken.symbol} Depth: ${bids.length} bids, ${asks.length} asks`);
 		return { bids, asks };
 	})();
 	$: {
