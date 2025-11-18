@@ -4,18 +4,19 @@ import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
-} from './getDeploymentArgs';
+} from '$lib/getDeploymentArgs';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
-import { getPrice } from './getPrice';
 import {
 	getAllTokensByNetwork,
-	STOXs,
+	getTokensByCategory,
 	DEFAULT_PAYMENT_TOKENS,
 	getDefaultPaymentTokenForNetwork
-} from './network';
-import { currentNetwork } from './stores';
+} from '$lib/network';
+
+const STOXs = getTokensByCategory('ST0x');
+import { currentNetwork } from '$lib/stores';
 import { get } from 'svelte/store';
-import { mockCurrentNetwork } from './mocks/mockCurrentNetwork';
+import { mockCurrentNetwork } from '../mocks/mockCurrentNetwork';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -35,9 +36,6 @@ vi.mock('@rainlanguage/orderbook', () => ({
 	}
 }));
 
-vi.mock('./getPrice', () => ({
-	getPrice: vi.fn()
-}));
 
 vi.mock('svelte-wagmi', () => ({
 	signerAddress: {
@@ -171,8 +169,6 @@ describe('getDeploymentArgs', () => {
 			value: mockGui as unknown as DotrainOrderGui,
 			error: undefined
 		});
-
-		vi.mocked(getPrice).mockResolvedValue('1.5');
 
 		vi.mocked(get).mockImplementation((store) => {
 			if (store === currentNetwork) return mockNetwork;

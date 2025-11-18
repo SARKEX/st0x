@@ -113,7 +113,7 @@ vi.mock('sushi/evm', () => ({
 	}
 }));
 
-import { DOMAIN_DEFINITIONS } from './domains';
+import { DOMAIN_DEFINITIONS } from '$lib/data/domains';
 
 describe('domain fetchers', () => {
 	beforeEach(() => {

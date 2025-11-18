@@ -12,7 +12,7 @@ import {
 	type TradeMetricPayload,
 	type OracleQuote
 } from '$lib/stores/network-data-cache';
-import type { TokenPriceSummary } from '$lib/utils/quote';
+import type { TokenPriceSummary } from '$lib/domain/onchainOrders';
 
 type DomainKey =
 	| 'vaultSnapshot'

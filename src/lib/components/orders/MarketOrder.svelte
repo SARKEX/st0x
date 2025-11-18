@@ -2,10 +2,16 @@
 	import type { CategorizedToken } from '$lib/network';
 	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
 	import { ensureResource } from '$lib/stores/network-data-cache';
-	import { OrderV4_ABI, normalizeOrderData, type ProcessedQuote } from '$lib/utils/quote';
-	import { scaleAmount, walkOrderbook, FIXED_POINT_SCALE } from '$lib/utils/marketPrice';
+	import {
+		OrderV4_ABI,
+		normalizeOrderData,
+		type ProcessedQuote,
+		scaleAmount,
+		walkOrderbook,
+		FIXED_POINT_SCALE
+	} from '$lib/domain/onchainOrders';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
-	import { normalizeAddress } from '$lib/utils/tokenMath';
+	import { normalizeAddress } from '$lib/domain/tokenMath';
 	import {
 		type OrderV4,
 		type RaindexOrderQuote,

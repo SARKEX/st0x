@@ -13,28 +13,12 @@
 	};
 
 	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
-	$: if (marketOrderSummary) {
-		console.log('TransactionModal - Received marketOrderSummary:', {
-			orderSide: marketOrderSummary.orderSide,
-			quantityFilled: marketOrderSummary.quantityFilled.toString(),
-			quantityRequested: marketOrderSummary.quantityRequested.toString(),
-			outputTokenDecimals: marketOrderSummary.outputTokenDecimals,
-			outputTokenSymbol: marketOrderSummary.outputTokenSymbol,
-			averagePrice: marketOrderSummary.averagePrice,
-			paymentTokenSymbol: marketOrderSummary.paymentTokenSymbol,
-			isPartialFill: marketOrderSummary.isPartialFill,
-			isNoFill: marketOrderSummary.isNoFill
-		});
-	}
 
 	// Helper function to format quantity with max 2 decimals
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
-		console.log(`formatQuantity called with:`, { quantity: quantity.toString(), decimals });
 		const formatted = parseFloat(formatUnits(quantity, decimals));
-		console.log(`formatUnits result:`, formatted);
 		// Round to 2 decimals (instead of truncating) to handle values like 0.999999...
 		const result = Math.round(formatted * 100) / 100;
-		console.log(`formatQuantity result:`, result);
 		return result.toString();
 	};
 

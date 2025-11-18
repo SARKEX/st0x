@@ -7,7 +7,7 @@
 	import { getAllTokensByNetwork } from '$lib/network';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
-	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?

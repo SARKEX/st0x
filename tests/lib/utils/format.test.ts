@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect } from 'vitest';
-import { truncateAddress, formatCompact } from './format';
+import { truncateAddress, formatCompact } from '$lib/utils/format';
 
 describe('format utilities', () => {
 	describe('truncateAddress', () => {

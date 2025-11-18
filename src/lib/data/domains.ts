@@ -13,13 +13,10 @@ import {
 	buildTokenPriceMap,
 	type TokenPriceSummary,
 	type ProcessedQuote
-} from '$lib/utils/quote';
+} from '$lib/domain/onchainOrders';
 import { getNetworkOracleSnapshots, getPythQuotes, type OracleSnapshot } from '$lib/services/pyth';
-import { getPrice } from '$lib/getPrice';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DomainFetcher, PollingOptions } from '$lib/data/polling-cache';
-import { EvmToken } from 'sushi/evm';
-import { evmChainIds } from 'sushi/evm';
 
 export type DomainKey =
 	| 'vaultSnapshot'
@@ -105,68 +102,7 @@ const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
 			return [];
 		}
 		const pythQuotes = await getPythQuotes(tokens, network);
-
-		// Enrich with Sushi API prices as fallback for tokens without Pyth data
-		const pricesWithSushi: TradingViewQuote[] = [];
-		for (const quote of pythQuotes) {
-			pricesWithSushi.push(quote);
-		}
-
-		// Try to fetch Sushi prices for any tokens missing from Pyth
-		try {
-			const paymentToken =
-				getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
-			if (paymentToken && evmChainIds[network.chainId]) {
-				for (const token of tokens) {
-					const hasPythData = pythQuotes.some((q) => q.symbol === token.symbol);
-					if (!hasPythData) {
-						try {
-							const priceStr = await getPrice(
-								new EvmToken({
-									chainId: evmChainIds[network.chainId],
-									address: token.address as `0x${string}`,
-									symbol: token.symbol || '',
-									name: token.name || token.symbol || '',
-									decimals: token.decimals || 18
-								}),
-								new EvmToken({
-									chainId: evmChainIds[network.chainId],
-									address: paymentToken.address as `0x${string}`,
-									symbol: paymentToken.symbol || '',
-									name: paymentToken.name || paymentToken.symbol || '',
-									decimals: paymentToken.decimals || 6
-								})
-							);
-							const price = parseFloat(priceStr) || 0;
-							pricesWithSushi.push({
-								symbol: token.symbol || '',
-								close: price,
-								open: price,
-								high: price,
-								low: price,
-								volume: 0,
-								marketCap: 0,
-								percentChange: 0,
-								changePercent: 0,
-								change: 0,
-								changeAbs: 0,
-								prevClose: price,
-								week52High: price,
-								week52Low: price
-							} as TradingViewQuote);
-						} catch (e) {
-							// Skip tokens that fail in Sushi API
-							console.debug(`Sushi price fetch failed for ${token.symbol}:`, e);
-						}
-					}
-				}
-			}
-		} catch (e) {
-			// Continue with Pyth data if Sushi enrichment fails
-			console.debug(`Sushi API enrichment failed:`, e);
-		}
-
-		return pricesWithSushi;
+		return pythQuotes;
 	} catch (error) {
 		console.error(`Failed to fetch price feeds for ${network.displayName}:`, error);
 		return [];

@@ -61,7 +61,7 @@ vi.mock('$lib/data/polling-cache', () => ({
 	createPollingController: mockCreatePollingController
 }));
 
-import { getResourceStore, ensureResource, stopResourceTimer } from './network-data-cache';
+import { getResourceStore, ensureResource, stopResourceTimer } from '$lib/stores/network-data-cache';
 
 describe('network-data-cache', () => {
 	it('creates polling controllers for every domain', () => {

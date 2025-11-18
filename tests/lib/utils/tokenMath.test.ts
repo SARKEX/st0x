@@ -15,7 +15,7 @@ import {
 	createTokenLookup,
 	type PairDescriptor,
 	type TokenDescriptor
-} from './tokenMath';
+} from '$lib/domain/tokenMath';
 
 function floatHex(value: string): string {
 	const parsed = Float.parse(value);

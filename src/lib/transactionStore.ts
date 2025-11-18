@@ -431,9 +431,7 @@ const transactionStore = () => {
 				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
-			const receipt = await waitForTransactionReceipt(config, { hash });
-			console.log('Transaction receipt:', receipt);
-			console.log('Transaction hash:', hash);
+			await waitForTransactionReceipt(config, { hash });
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||

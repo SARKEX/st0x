@@ -26,12 +26,10 @@
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
-	import { evmChainIds, EvmToken } from 'sushi/evm';
-	import { getPrice } from '$lib/getPrice';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
-	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 
 	function isPaymentTokenPosition(token: { token: SgErc20 }) {
 		const settlementToken = $currentNetwork?.defaultPaymentToken;
@@ -204,7 +202,6 @@
 			const allVaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[] =
 				vaultsResult.value.items.map((vault) => {
 					let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
-					console.log('vaultBalanceFloat : ', vaultBalanceFloat);
 					if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
 
 					// Convert RaindexVault to SgVault
@@ -302,30 +299,6 @@
 				const quote = findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS);
 
 				let price: number | null = quote?.close ?? null;
-				if (!price || !Number.isFinite(price) || price <= 0) {
-					try {
-						const priceStr = await getPrice(
-							new EvmToken({
-								chainId: evmChainIds[$currentNetwork.chainId],
-								address: token.id as `0x${string}`,
-								symbol: token.symbol || '',
-								decimals: Number(token.decimals ?? 18),
-								name: token.name || ''
-							}),
-							new EvmToken({
-								chainId: evmChainIds[$currentNetwork.chainId],
-								address: settlementToken.address as `0x${string}`,
-								symbol: settlementToken.symbol || '',
-								decimals: Number(settlementToken.decimals ?? 18),
-								name: settlementToken.name || ''
-							})
-						);
-						price = parseFloat(priceStr);
-					} catch (priceError) {
-						console.warn('Failed to fetch price from swap API', priceError);
-						price = null;
-					}
-				}
 
 				if (!price || !Number.isFinite(price) || price <= 0) {
 					if (isPaymentToken) {

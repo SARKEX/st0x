@@ -25,8 +25,8 @@ export default defineConfig(({ mode }) => ({
 		deps: { inline: ['svelte-wagmi', 'viem', 'ethers'] }
 	  },
 	  environment: 'jsdom',
-	  include: ['src/**/*.{test,spec}.{js,ts}'],
-	  includeSource: ['src/**/*.{js,ts}'],
+	  include: ['src/**/*.{test,spec}.{js,ts}', 'tests/**/*.{test,spec}.{js,ts}'],
+	  includeSource: ['src/**/*.{js,ts}', 'tests/**/*.{js,ts}'],
 	  setupFiles: ['./vitest-setup.ts']
 	}
 }))

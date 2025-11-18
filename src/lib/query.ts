@@ -1,6 +1,5 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { TOKENS } from './network';
-import axios from 'axios';
 import type { Network } from './network';
 import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
 
@@ -464,18 +463,30 @@ export async function fetchAllPaginatedData(
 		// Prepare variables with updated pagination parameters
 		const paginatedVariables = { ...variables, skip, first };
 		// Fetch a batch of items
-		const response = await axios.post(endpoint, {
-			query,
-			variables: paginatedVariables
+		const response = await fetch(endpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				query,
+				variables: paginatedVariables
+			})
 		});
 
+		if (!response.ok) {
+			throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+
 		// Check for GraphQL errors
-		if (response.data.errors) {
-			throw new Error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
+		if (data.errors) {
+			throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
 		}
 
 		// Extract the items from the response
-		const items = response.data.data[itemsKey] || [];
+		const items = data.data[itemsKey] || [];
 		allItems.push(...items); // Append items to the result array
 		// Check if fewer items are returned than the `first` limit
 		if (items.length < first) {

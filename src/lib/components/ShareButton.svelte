@@ -1,8 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import ShareIcon from '$lib/components/icons/IconShare.svelte';
-	import EnvelopeIcon from '$lib/components/icons/IconEnvelope.svelte';
-	import LinkIcon from '$lib/components/icons/IconLink.svelte';
 	import { onMount } from 'svelte';
 
 	let showShareModal = false;
@@ -116,7 +113,21 @@
 	on:click={handleShare}
 	class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
 >
-	<ShareIcon class="h-5 w-5" />
+	<svg
+		class="h-5 w-5"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-label="Share"
+	>
+		<circle cx="18" cy="5" r="3" fill="currentColor" stroke="none" />
+		<circle cx="6" cy="12" r="3" fill="currentColor" stroke="none" />
+		<circle cx="18" cy="19" r="3" fill="currentColor" stroke="none" />
+		<path d="M8.9 10.7l5.2-3.1M8.9 13.3l5.2 3.1" />
+	</svg>
 	<span>Share</span>
 </button>
 
@@ -203,7 +214,19 @@
 					on:click={() => shareVia('email')}
 					class="flex flex-col items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-3 transition-all hover:border-yellow-500/30 hover:bg-white/10"
 				>
-					<EnvelopeIcon class="h-8 w-8" />
+					<svg
+						class="h-8 w-8"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-label="Email"
+					>
+						<rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
+						<path d="M3 7l9 6 9-6" />
+					</svg>
 					<span class="text-xs">Email</span>
 				</button>
 
@@ -211,7 +234,19 @@
 					on:click={copyLink}
 					class="flex flex-col items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-3 transition-all hover:border-yellow-500/30 hover:bg-white/10"
 				>
-					<LinkIcon class="h-8 w-8" />
+					<svg
+						class="h-8 w-8"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-label="Link"
+					>
+						<path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 5" />
+						<path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 1 0 7.07 7.07L13 19" />
+					</svg>
 					<span class="text-xs">{copied ? 'Copied!' : 'Copy Link'}</span>
 				</button>
 			</div>

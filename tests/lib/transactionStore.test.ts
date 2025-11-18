@@ -1,17 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
-import transactionStore from './transactionStore';
+import transactionStore from '$lib/transactionStore';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
-import { STOXs, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from './network';
-import { rainlangConfirmationModal, currentNetwork } from './stores';
+import { getTokensByCategory, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/network';
+import { rainlangConfirmationModal, currentNetwork } from '$lib/stores';
+
+const STOXs = getTokensByCategory('ST0x');
 import {
 	getMarketMakingDeploymentArgs,
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
-} from './getDeploymentArgs';
-import { mockCurrentNetwork } from './mocks/mockCurrentNetwork';
-import { createRaindexClient } from './utils/raindexClient';
+} from '$lib/getDeploymentArgs';
+import { mockCurrentNetwork } from '../mocks/mockCurrentNetwork';
+import { createRaindexClient } from '$lib/utils/raindexClient';
 import { decodeFunctionData } from 'viem';
 
 // Shared mock network object to avoid repetition
@@ -60,7 +62,7 @@ vi.mock('svelte-wagmi', async () => {
 		mockSignerAddressStore,
 		mockChainIdStore,
 		mockConnectedStore
-	} = await import('$lib/mocks/mockStores');
+	} = await import('../mocks/mockStores');
 
 	return {
 		web3Modal: web3ModalStore,
@@ -76,7 +78,7 @@ vi.mock('svelte/store', async () => {
 	const actual = (await vi.importActual('svelte/store')) as any;
 	// Import stores to check against them
 	const { mockSignerAddressStore, mockWagmiConfigStore, mockChainIdStore } = await import(
-		'$lib/mocks/mockStores'
+		'../mocks/mockStores'
 	);
 	return {
 		...actual,
@@ -178,8 +180,8 @@ describe('transactionStore tests', () => {
 		transactionStore.reset();
 
 		// Set up the mock stores with proper values
-		const { mockSignerAddressStore, mockWagmiConfigStore } = await import('$lib/mocks/mockStores');
-		const { mockWeb3Config } = await import('$lib/mocks/mockWagmiConfig');
+		const { mockSignerAddressStore, mockWagmiConfigStore } = await import('../mocks/mockStores');
+		const { mockWeb3Config } = await import('../mocks/mockWagmiConfig');
 		mockSignerAddressStore.set('0x1234567890123456789012345678901234567890');
 		mockWagmiConfigStore.set(mockWeb3Config);
 

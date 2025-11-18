@@ -326,9 +326,3 @@ export function getCryptoTokensByNetwork(chainId: number): CategorizedToken[] {
 export function getAllTokensByNetwork(chainId: number): CategorizedToken[] {
 	return [...getTokensByNetwork(chainId), ...getCryptoTokensByNetwork(chainId)];
 }
-
-// Legacy exports for backward compatibility
-export const STOXs = getTokensByCategory('ST0x');
-export const ETFs = getTokensByCategory('ETFs');
-export const ST0NX = getTokensByCategory('ST0NX');
-export const CRYPTO = getTokensByCategory('CRYPTO');

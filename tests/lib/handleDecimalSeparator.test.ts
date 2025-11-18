@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { handleDecimalSeparator } from './handleDecimalSeparator';
+import { handleDecimalSeparator } from '$lib/handleDecimalSeparator';
 
 describe('handleDecimalSeparator', () => {
 	it('normalizes multiple comma and period separators to a single decimal point', () => {

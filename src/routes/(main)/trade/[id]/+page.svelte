@@ -18,12 +18,7 @@
 	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
 	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
-	import TradingViewSymbolOverview from '$lib/components/charts/TradingViewSymbolOverview.svelte';
-	import TradingViewSymbolInfo from '$lib/components/charts/TradingViewSymbolInfo.svelte';
-	import TradingViewCompanyProfile from '$lib/components/charts/TradingViewCompanyProfile.svelte';
-	import TradingViewFundamentalData from '$lib/components/charts/TradingViewFundamentalData.svelte';
-	import TradingViewTechnicalAnalysis from '$lib/components/charts/TradingViewTechnicalAnalysis.svelte';
-	import TradingViewTopStories from '$lib/components/charts/TradingViewTopStories.svelte';
+	import TradingViewWidget from '$lib/components/charts/TradingViewWidget.svelte';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { containerStyles } from '$lib/utils/styles';
@@ -41,14 +36,14 @@
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
-	import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
+	import { extractBaseSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
 		createTokenLookup,
 		normalizeAddress,
 		ratioToNumber,
 		toDecimal
-	} from '$lib/utils/tokenMath';
+	} from '$lib/domain/tokenMath';
 	import type {
 		TimedResource,
 		OracleQuote,
@@ -433,7 +428,7 @@
 
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
-		quotes.forEach((quote, idx) => {
+		quotes.forEach((quote) => {
 			const ratioValue = ratioToNumber(quote.ratio);
 			const ratio = ratioValue ?? 0;
 			if (!Number.isFinite(ratio) || ratio <= 0) {
@@ -559,7 +554,7 @@
 							</div>
 						</div>
 						{#if tradingViewSymbol}
-							<TradingViewSymbolInfo symbol={tradingViewSymbol} height="420" />
+							<TradingViewWidget widgetType="symbol-info" symbol={tradingViewSymbol} height="420" />
 						{:else}
 							<div class="flex h-48 items-center justify-center px-4 py-6 text-sm text-gray-400">
 								TradingView data unavailable for this token.
@@ -647,7 +642,8 @@
 				<div class="flex h-full flex-col gap-4 xl:col-span-3">
 					{#if tradingViewSymbol}
 						<div class={`${containerStyles.cardBordered} flex-1 overflow-hidden p-0`}>
-							<TradingViewSymbolOverview
+							<TradingViewWidget
+								widgetType="symbol-overview"
 								symbol={tradingViewSymbol}
 								displayName={currentToken.name || currentToken.symbol}
 								dateRange="1D"
@@ -732,7 +728,7 @@
 						{#if activeAssetTab === 'company'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewCompanyProfile symbol={tradingViewSymbol} height="480" />
+									<TradingViewWidget widgetType="symbol-profile" symbol={tradingViewSymbol} height="480" />
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -742,7 +738,7 @@
 						{:else if activeAssetTab === 'fundamentals'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewFundamentalData symbol={tradingViewSymbol} height={520} />
+									<TradingViewWidget widgetType="financials" symbol={tradingViewSymbol} height={520} />
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -752,7 +748,7 @@
 						{:else if activeAssetTab === 'technical'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewTechnicalAnalysis symbol={tradingViewSymbol} height="520" />
+									<TradingViewWidget widgetType="technical-analysis" symbol={tradingViewSymbol} height="520" />
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -761,7 +757,7 @@
 							{/if}
 						{:else if tradingViewSymbol}
 							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-								<TradingViewTopStories symbol={tradingViewSymbol} height="600" />
+								<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
 							</div>
 						{:else}
 							<div class={`${containerStyles.cardBordered}`}>

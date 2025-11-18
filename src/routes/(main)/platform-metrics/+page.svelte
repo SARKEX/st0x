@@ -18,14 +18,14 @@
 		type TradeMetricPayload,
 		type OrderbookQuoteCache
 	} from '$lib/stores/network-data-cache';
-	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
 		createTokenLookup,
 		normalizeAddress,
 		type TradeAnalysis,
 		type TokenLookup
-	} from '$lib/utils/tokenMath';
+	} from '$lib/domain/tokenMath';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import { createRaindexClient } from '$lib/utils/raindexClient';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
@@ -398,12 +398,6 @@
 			}
 			tvl += balance * price;
 		});
-
-		console.log(
-			`TVL calc for ${network.displayName}: ${performance.now() - startTime}ms, vaults processed: ${
-				vaults.length
-			}, unique tokens: ${uniqueTokens.size}`
-		);
 
 		const trades = analyzedTradesByNetwork.get(network.chainId) ?? [];
 		let tradingVolume = 0;

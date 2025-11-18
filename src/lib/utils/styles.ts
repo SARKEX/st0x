@@ -24,25 +24,10 @@ export const textStyles = {
 	subheading: 'text-base font-medium sm:text-lg'
 } as const;
 
-// Flex layouts
-export const flexStyles = {
-	between: 'flex items-center justify-between',
-	center: 'flex items-center justify-center',
-	centerCol: 'flex flex-col items-center justify-center',
-	start: 'flex items-start gap-3',
-	end: 'flex items-center justify-end'
-} as const;
-
 // Container styles
 export const containerStyles = {
 	card: 'rounded-lg bg-gray-800/50 p-4',
 	cardBordered: 'rounded-lg border border-white/10 bg-gray-800/50 p-4',
 	section: 'bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-white/10 p-4 sm:p-6',
 	modal: 'rounded-xl border border-white/10 bg-gray-900/95 shadow-xl backdrop-blur-sm'
-} as const;
-
-// Button styles (in addition to Button component)
-export const buttonStyles = {
-	icon: 'p-2 rounded-lg hover:bg-white/10 transition-colors',
-	ghost: 'text-gray-400 hover:text-white transition-colors'
 } as const;
