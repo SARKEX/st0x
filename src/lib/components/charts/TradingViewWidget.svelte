@@ -28,7 +28,8 @@
 	export let lineWidth = 2;
 
 	const widgetSources: Record<typeof widgetType, string> = {
-		'symbol-profile': 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-profile.js',
+		'symbol-profile':
+			'https://s3.tradingview.com/external-embedding/embed-widget-symbol-profile.js',
 		'symbol-overview':
 			'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js',
 		financials: 'https://s3.tradingview.com/external-embedding/embed-widget-financials.js',

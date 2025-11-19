@@ -494,14 +494,8 @@ const transactionStore = () => {
 			cleanup();
 
 			// Get the walk result from options
-			const {
-				inputAmountFilled: estimatedInputFilled,
-				outputAmountGiven: estimatedOutputGiven,
-				ioRatio: estimatedIoRatio
-			} = options?.walkResult || {
-				inputAmountFilled: 0n,
-				outputAmountGiven: 0n,
-				ioRatio: 0
+			const { inputAmountFilled: estimatedInputFilled } = options?.walkResult || {
+				inputAmountFilled: 0n
 			};
 
 			// Helper function to parse hex amount using Float
@@ -579,7 +573,9 @@ const transactionStore = () => {
 			// Check if fill is complete (within 99.9% tolerance)
 			// Need to normalize both amounts to the same decimal scale for comparison
 			const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
-			const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
+			const inputRequestedDecimal = parseFloat(
+				formatUnits(requestedInputAmount, inputTokenDecimals)
+			);
 
 			let fillPercentage = 0;
 			let isNoFill = false;

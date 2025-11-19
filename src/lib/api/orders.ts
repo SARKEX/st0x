@@ -7,7 +7,8 @@
 import type {
 	RaindexOrder,
 	RaindexOrderQuote,
-	GetOrdersFilters
+	GetOrdersFilters,
+	OrderV4
 } from '@rainlanguage/orderbook';
 import {
 	networks,
@@ -34,13 +35,18 @@ import {
 
 // Re-export types and utilities
 export type { ProcessedQuote, TokenPriceSummary };
-export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, INTERNAL_DECIMALS, hexToBigInt };
+export {
+	OrderV4_ABI,
+	normalizeOrderData,
+	scaleAmount,
+	walkOrderbook,
+	INTERNAL_DECIMALS,
+	hexToBigInt
+};
 
 // Re-export buildTokenPriceMap with describeQuote injected
-export const buildTokenPriceMap = (
-	quotes: ProcessedQuote[],
-	quoteAddressRaw: string
-) => buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);
+export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
+	buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);
 
 // Helper function to get token metadata by address
 function getTokenMetadata(address: string, tokens: PythToken[]) {
@@ -78,7 +84,7 @@ function processOrdersWithQuotes(
 			// Decode order to get token addresses
 			const abiCoder = AbiCoder.defaultAbiCoder();
 			const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
-			const orderData = normalizeOrderData(decodedOrder[0] as any);
+			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
 			// Process each quote for this order
 			quotes.forEach((quote) => {
@@ -175,7 +181,7 @@ function processOrdersWithQuotes(
 						const normalizedAsset = normalizeAddress(metrics.assetAddress);
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
 						processedQuote.quotePerAsset = metrics.quotePerAsset;
-				}
+					}
 
 					processedQuotes.push(processedQuote);
 				} catch (error) {

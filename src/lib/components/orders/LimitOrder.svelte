@@ -128,10 +128,7 @@
 			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
 			const price = parseFloat(selectedInitialRatio || '0');
 			const settlementNeeded = parseFloat(assetQuantity) * price;
-			const settlementAmount = parseUnits(
-				settlementNeeded.toString(),
-				settlementToken.decimals
-			);
+			const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
 
 			deployData = {
 				inputToken: selectedInputToken, // Asset (token to be acquired, used for IO ratio)

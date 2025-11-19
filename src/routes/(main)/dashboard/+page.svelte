@@ -36,10 +36,7 @@
 		const settlementToken = $currentNetwork?.defaultPaymentToken;
 		if (!settlementToken) return false;
 		// Use consolidated utility from tokenMath.ts
-		return isPaymentToken(
-			{ symbol: token.token.symbol, address: token.token.id },
-			settlementToken
-		);
+		return isPaymentToken({ symbol: token.token.symbol, address: token.token.id }, settlementToken);
 	}
 
 	// Filter tokens by current network

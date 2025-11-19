@@ -32,12 +32,9 @@ export interface MarketOrderDisplay {
  * - If outputToken is payment token → BUY (user gave payment, received asset)
  * - Price = payment amount / asset amount
  */
-export function translateMarketOrderForDisplay(
-	summary: MarketOrderSummary
-): MarketOrderDisplay {
+export function translateMarketOrderForDisplay(summary: MarketOrderSummary): MarketOrderDisplay {
 	// Use consolidated utility from tokenMath.ts
 	const inputIsPayment = isPaymentToken(summary.inputTokenSymbol);
-	const outputIsPayment = isPaymentToken(summary.outputTokenSymbol);
 
 	// Determine direction
 	// If user received payment token as input → they SOLD the asset
@@ -51,8 +48,7 @@ export function translateMarketOrderForDisplay(
 		direction === 'Buy' ? summary.inputTokenDecimals : summary.outputTokenDecimals;
 
 	const paymentAmount = direction === 'Buy' ? summary.outputAmount : summary.inputAmount;
-	const paymentSymbol =
-		direction === 'Buy' ? summary.outputTokenSymbol : summary.inputTokenSymbol;
+	const paymentSymbol = direction === 'Buy' ? summary.outputTokenSymbol : summary.inputTokenSymbol;
 	const paymentDecimals =
 		direction === 'Buy' ? summary.outputTokenDecimals : summary.inputTokenDecimals;
 

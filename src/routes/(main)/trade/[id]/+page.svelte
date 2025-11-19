@@ -44,11 +44,7 @@
 		ratioToNumber,
 		toDecimal
 	} from '$lib/utils/tokenMath';
-	import type {
-		TimedResource,
-		OracleQuote,
-		OrderbookQuoteCache
-	} from '$lib/stores/cache';
+	import type { TimedResource, OracleQuote, OrderbookQuoteCache } from '$lib/stores/cache';
 	import type { ResourceStatus } from '$lib/stores/polling';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
@@ -728,7 +724,11 @@
 						{#if activeAssetTab === 'company'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget widgetType="symbol-profile" symbol={tradingViewSymbol} height="480" />
+									<TradingViewWidget
+										widgetType="symbol-profile"
+										symbol={tradingViewSymbol}
+										height="480"
+									/>
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -738,7 +738,11 @@
 						{:else if activeAssetTab === 'fundamentals'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget widgetType="financials" symbol={tradingViewSymbol} height={520} />
+									<TradingViewWidget
+										widgetType="financials"
+										symbol={tradingViewSymbol}
+										height={520}
+									/>
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -748,7 +752,11 @@
 						{:else if activeAssetTab === 'technical'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget widgetType="technical-analysis" symbol={tradingViewSymbol} height="520" />
+									<TradingViewWidget
+										widgetType="technical-analysis"
+										symbol={tradingViewSymbol}
+										height="520"
+									/>
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>

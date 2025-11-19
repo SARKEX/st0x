@@ -271,8 +271,9 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 	// Normalize to token scale: (input/10^inputDecimals) / (output/10^outputDecimals)
 	const ioRatio =
 		outputAmountGiven > 0n
-			? (Number(inputAmountFilled) / 10 ** inputDecimals) /
-			  (Number(outputAmountGiven) / 10 ** outputDecimals)
+			? Number(inputAmountFilled) /
+				10 ** inputDecimals /
+				(Number(outputAmountGiven) / 10 ** outputDecimals)
 			: 0;
 
 	return {
@@ -306,7 +307,10 @@ const chooseBestPrice = (
 export const buildTokenPriceMap = (
 	quotes: ProcessedQuote[],
 	quoteAddressRaw: string,
-	describeQuoteFn: (quote: ProcessedQuote, quoteAddress: string) => {
+	describeQuoteFn: (
+		quote: ProcessedQuote,
+		quoteAddress: string
+	) => {
 		assetAddress: string;
 		side: MarketSide;
 		quotePerAsset: number | null;
@@ -321,7 +325,7 @@ export const buildTokenPriceMap = (
 				? {
 						assetAddress: quote.assetAddress,
 						side: quote.side,
-						quotePerAsset: quote.quotePerAsset,
+						quotePerAsset: quote.quotePerAsset
 					}
 				: describeQuoteFn(quote, quoteAddressRaw);
 		if (!metrics) return;

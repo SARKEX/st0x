@@ -4,11 +4,7 @@
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { CategorizedToken } from '$lib/config/network';
 	import type { PythToken } from '$lib/types';
-	import {
-		validateBaseline,
-		validatePeriod,
-		validateSelectedAmount
-	} from '$lib/utils/validation';
+	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';

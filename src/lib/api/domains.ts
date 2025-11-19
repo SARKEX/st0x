@@ -66,7 +66,6 @@ function getTokensWithPriceFeed(network: Network) {
 	return allTokens.filter((token) => token.chainId === network.chainId && token.priceFeedId);
 }
 
-
 const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (network) => {
 	try {
 		return (await getSfts(network)) ?? [];

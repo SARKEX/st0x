@@ -117,7 +117,7 @@
 				return;
 			}
 
-			const { inputAmountFilled, outputAmountGiven, ioRatio, fills, inputDecimals, outputDecimals } = walkResult;
+			const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
 
 			// Check if anything was filled (asset amount)
 			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
@@ -421,7 +421,7 @@
 				console.error('Unable to calculate walk result for order execution');
 				return;
 			}
-			const { inputAmountFilled, outputAmountGiven, ioRatio, inputDecimals, outputDecimals } = walkResult;
+			const { inputAmountFilled, ioRatio, inputDecimals } = walkResult;
 
 			// Validate that we have all required token data before proceeding
 			if (!paymentToken || typeof paymentToken.decimals !== 'number') {
@@ -454,8 +454,8 @@
 				//
 				// Formula: cost = (amount_in_asset_decimals * price_scaled) / 10^asset_decimals
 				// where price_scaled = price * 10^payment_decimals
-				const priceScaled = BigInt(Math.round(price * (10 ** paymentTokenDecimals)));
-				requiredApprovalBigInt = (selectedAmount * priceScaled) / (10n ** BigInt(assetTokenDecimals));
+				const priceScaled = BigInt(Math.round(price * 10 ** paymentTokenDecimals));
+				requiredApprovalBigInt = (selectedAmount * priceScaled) / 10n ** BigInt(assetTokenDecimals);
 			} else {
 				// SELL: Approve asset token (what we give away)
 				// selectedAmount is already in asset token decimals
