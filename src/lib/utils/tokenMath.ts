@@ -158,6 +158,54 @@ export function computePrice(
 	return Number.isFinite(price) ? price : null;
 }
 
+/**
+ * Checks if a token is a payment/settlement token (like USDC, USDT, DAI).
+ *
+ * Can check by symbol string matching or by comparing against a network's default payment token.
+ *
+ * @param token - Token symbol string, TokenDescriptor, or token-like object with symbol/address
+ * @param networkPaymentToken - Optional network's default payment token to check against
+ * @returns true if the token is a payment token
+ */
+export function isPaymentToken(
+	token: string | { symbol?: string | null; address?: string | null },
+	networkPaymentToken?: { symbol?: string | null; address?: string | null }
+): boolean {
+	const symbol = typeof token === 'string' ? token : token.symbol;
+	const address = typeof token === 'string' ? null : token.address;
+
+	// Check against network default if provided
+	if (networkPaymentToken) {
+		if (address && networkPaymentToken.address) {
+			if (addressesEqual(address, networkPaymentToken.address)) {
+				return true;
+			}
+		}
+		if (symbol && networkPaymentToken.symbol) {
+			if (symbol.toUpperCase() === networkPaymentToken.symbol.toUpperCase()) {
+				return true;
+			}
+		}
+	}
+
+	// Fallback to common payment token symbols
+	if (!symbol) return false;
+	const paymentSymbols = ['USDC', 'USDT', 'DAI', 'USD'];
+	return paymentSymbols.some((pt) => symbol.toUpperCase().includes(pt));
+}
+
+/**
+ * Translates bid/ask market side to user-friendly Buy/Sell direction.
+ *
+ * This is primarily for UI display of orderbook quotes and trade history.
+ *
+ * @param side - Market side (bid or ask)
+ * @returns Buy or Sell direction
+ */
+export function sideToBuySell(side: MarketSide): 'Buy' | 'Sell' {
+	return side === 'bid' ? 'Buy' : 'Sell';
+}
+
 export interface TokenDescriptor {
 	address: string;
 	decimals: number;
@@ -293,7 +341,6 @@ export interface QuoteMetrics {
 	assetAddress: string;
 	side: MarketSide;
 	quotePerAsset: number;
-	assetPerQuote: number;
 }
 
 export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): QuoteMetrics | null {
@@ -308,13 +355,10 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 		// ASK order: giving away output token to acquire quote token input (seller offering to sell)
 		const quotePerAsset = ratio;
 		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) return null;
-		const assetPerQuote = quotePerAsset === 0 ? NaN : 1 / quotePerAsset;
-		if (!Number.isFinite(assetPerQuote) || assetPerQuote <= 0) return null;
 		return {
 			assetAddress: output,
 			side: 'ask',
-			quotePerAsset,
-			assetPerQuote
+			quotePerAsset
 		};
 	}
 
@@ -322,13 +366,10 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 		// BID order: giving away input token to acquire quote token output (buyer offering to buy)
 		const quotePerAsset = 1 / ratio;
 		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) return null;
-		const assetPerQuote = quotePerAsset === 0 ? NaN : 1 / quotePerAsset;
-		if (!Number.isFinite(assetPerQuote) || assetPerQuote <= 0) return null;
 		return {
 			assetAddress: input,
 			side: 'bid',
-			quotePerAsset,
-			assetPerQuote
+			quotePerAsset
 		};
 	}
 

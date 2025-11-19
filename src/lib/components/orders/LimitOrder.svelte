@@ -97,6 +97,16 @@
 			return;
 		}
 
+		// Validate token decimals are defined
+		if (typeof assetToken.decimals !== 'number') {
+			console.error('Asset token decimals are not defined');
+			return;
+		}
+		if (typeof settlementToken.decimals !== 'number') {
+			console.error('Settlement token decimals are not defined');
+			return;
+		}
+
 		// Prepare deploy data
 		let deployData: {
 			inputToken: CategorizedToken;
@@ -115,12 +125,12 @@
 			// User specifies quantity to acquire and price willing to pay
 			// Price interpretation: "I pay X quote tokens per 1 asset"
 			// The deployed order uses inverted ratio: 1/X (this is what getBaseline does)
-			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken?.decimals || 18);
+			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
 			const price = parseFloat(selectedInitialRatio || '0');
 			const settlementNeeded = parseFloat(assetQuantity) * price;
 			const settlementAmount = parseUnits(
 				settlementNeeded.toString(),
-				settlementToken?.decimals || 6
+				settlementToken.decimals
 			);
 
 			deployData = {

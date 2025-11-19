@@ -30,13 +30,16 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+	import { isPaymentToken } from '$lib/utils/tokenMath';
 
 	function isPaymentTokenPosition(token: { token: SgErc20 }) {
 		const settlementToken = $currentNetwork?.defaultPaymentToken;
 		if (!settlementToken) return false;
-		const symbolMatch = token.token.symbol?.toUpperCase() === settlementToken.symbol?.toUpperCase();
-		const addressMatch = token.token.id?.toLowerCase() === settlementToken.address?.toLowerCase();
-		return Boolean(symbolMatch || addressMatch);
+		// Use consolidated utility from tokenMath.ts
+		return isPaymentToken(
+			{ symbol: token.token.symbol, address: token.token.id },
+			settlementToken
+		);
 	}
 
 	// Filter tokens by current network

@@ -123,14 +123,14 @@ describe('quote utilities', () => {
 				[
 					'ASK side quote (sell order)',
 					'ask',
-					{ side: 'ask', assetAddress: '0xAsset', quotePerAsset: 100, assetPerQuote: 0.01 },
-					{ ask: 100, askAssetPerQuote: 0.01 }
+					{ side: 'ask', assetAddress: '0xAsset', quotePerAsset: 100 },
+					{ ask: 100 }
 				],
 				[
 					'BID side quote (buy order)',
 					'bid',
-					{ side: 'bid', assetAddress: '0xAsset', quotePerAsset: 50, assetPerQuote: 0.02 },
-					{ bid: 50, bidAssetPerQuote: 0.02 }
+					{ side: 'bid', assetAddress: '0xAsset', quotePerAsset: 50 },
+					{ bid: 50 }
 				]
 			])('should process %s', (desc, side, mockReturn, expected) => {
 				const mockDescribeQuote = tokenMath.describeQuote as any;
@@ -162,7 +162,6 @@ describe('quote utilities', () => {
 						side: 'ask',
 						assetAddress: '0xAsset',
 						quotePerAsset: 100,
-						assetPerQuote: 0.01
 					})
 				];
 
@@ -310,57 +309,6 @@ describe('quote utilities', () => {
 			});
 		});
 
-		describe('assetPerQuote metric', () => {
-			it.each([
-				[
-					'should select maximum assetPerQuote for ASK side',
-					'ask',
-					[
-						{ orderHash: '0x1', side: 'ask', assetAddress: '0xAsset', assetPerQuote: 0.02 },
-						{ orderHash: '0x2', side: 'ask', assetAddress: '0xAsset', assetPerQuote: 0.01 }
-					],
-					'askAssetPerQuote',
-					0.02
-				],
-				[
-					'should select minimum assetPerQuote for BID side',
-					'bid',
-					[
-						{
-							orderHash: '0x1',
-							inputTokenSymbol: 'TOKEN',
-							outputTokenSymbol: 'USDC',
-							inputTokenAddress: '0xToken',
-							outputTokenAddress: '0xUSDC',
-							side: 'bid',
-							assetAddress: '0xAsset',
-							assetPerQuote: 0.01
-						},
-						{
-							orderHash: '0x2',
-							inputTokenSymbol: 'TOKEN',
-							outputTokenSymbol: 'USDC',
-							inputTokenAddress: '0xToken',
-							outputTokenAddress: '0xUSDC',
-							side: 'bid',
-							assetAddress: '0xAsset',
-							assetPerQuote: 0.02
-						}
-					],
-					'bidAssetPerQuote',
-					0.01
-				]
-			])(
-				'%s',
-				(desc, side: string, quoteOverrides: any[], metricKey: string, expectedValue: number) => {
-					const quotes: ProcessedQuote[] = quoteOverrides.map((overrides) => buildQuote(overrides));
-					const result = buildTokenPriceMap(quotes, '0xUSDC');
-					expect(
-						result.get('0xasset')?.[metricKey as 'askAssetPerQuote' | 'bidAssetPerQuote']
-					).toBe(expectedValue);
-				}
-			);
-		});
 
 		describe('Address normalization', () => {
 			it.each([

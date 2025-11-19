@@ -7,8 +7,7 @@
 		normalizeOrderData,
 		type ProcessedQuote,
 		scaleAmount,
-		walkOrderbook,
-		FIXED_POINT_SCALE
+		walkOrderbook
 	} from '$lib/api/orders';
 	import { createRaindexClient } from '$lib/api/raindex';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
@@ -118,10 +117,13 @@
 				return;
 			}
 
-			const { quantityFilled, weightedAveragePrice, fills } = walkResult;
+			const { inputAmountFilled, outputAmountGiven, ioRatio, fills, inputDecimals, outputDecimals } = walkResult;
 
-			if (quantityFilled > 0n) {
-				marketPrice = weightedAveragePrice;
+			// Check if anything was filled (asset amount)
+			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
+			if (assetFilled > 0n) {
+				// Calculate price (quote per asset)
+				marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
 
 				availableOrders = fills.map((fill) => ({
 					order:
@@ -207,6 +209,16 @@
 			return null;
 		}
 
+		// Validate token decimals are defined
+		if (typeof passedOutputToken.decimals !== 'number') {
+			console.error('Asset token decimals are not defined');
+			return null;
+		}
+		if (!paymentToken || typeof paymentToken.decimals !== 'number') {
+			console.error('Payment token or its decimals are not defined');
+			return null;
+		}
+
 		const sortedQuotes = [...relevantQuotes].sort((a, b) => {
 			if (orderSide === 'Buy') {
 				return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
@@ -219,7 +231,8 @@
 			quotes: sortedQuotes,
 			orderSide,
 			selectedAmount,
-			assetDecimals: passedOutputToken.decimals ?? 18
+			assetDecimals: passedOutputToken.decimals,
+			paymentDecimals: paymentToken.decimals
 		});
 	}
 
@@ -408,55 +421,62 @@
 				console.error('Unable to calculate walk result for order execution');
 				return;
 			}
-			const { totalCostScaled, quantityFilled, weightedAveragePrice } = walkResult;
+			const { inputAmountFilled, outputAmountGiven, ioRatio, inputDecimals, outputDecimals } = walkResult;
+
+			// Validate that we have all required token data before proceeding
+			if (!paymentToken || typeof paymentToken.decimals !== 'number') {
+				console.error('Payment token or its decimals are not defined');
+				return;
+			}
+			if (!passedOutputToken || typeof passedOutputToken.decimals !== 'number') {
+				console.error('Asset token or its decimals are not defined');
+				return;
+			}
 
 			// We approve what we're giving away (what flows out from us)
 			// For BUY: we give USDC (payment token)
 			// For SELL: we give tSTOX (asset token)
 			let requiredApprovalBigInt: bigint;
 			if (orderSide === 'Buy') {
-				// BUY: Approve USDC (payment token - what we give)
-				// Use selectedAmount * weightedAveragePrice (matches what user sees in UI)
-				const paymentTokenDecimals = paymentToken?.decimals ?? 6;
-				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
+				// BUY: Approve payment token (what we give away)
+				const paymentTokenDecimals = paymentToken.decimals;
+				const assetTokenDecimals = passedOutputToken.decimals;
 
-				// selectedAmount is in asset decimals, scale to 18 for calculation
-				const selectedAmountScaled = scaleAmount(selectedAmount, assetTokenDecimals, 18);
-				// weightedAveragePrice is a human-readable number (USDC per tSTOX)
-				// Convert to scaled: selectedAmount * price
-				const avgPriceBigInt = BigInt(Math.round(weightedAveragePrice * 1e18));
-				const expectedCost18Dec = (selectedAmountScaled * avgPriceBigInt) / FIXED_POINT_SCALE;
+				// Calculate price from ioRatio (for BUY: ioRatio = asset/payment, so price = 1/ioRatio)
+				const price = ioRatio > 0 ? 1 / ioRatio : 0;
 
-				requiredApprovalBigInt = scaleAmount(
-					expectedCost18Dec,
-					assetTokenDecimals,
-					paymentTokenDecimals
-				);
+				// PRECISION REQUIREMENT: Use BigInt arithmetic to avoid precision loss
+				// JavaScript Numbers are 64-bit floats with ~15-17 digits precision.
+				// Token amounts can be 1e18 or larger, causing precision loss if converted to Number.
+				//
+				// Pattern: Scale the small value (price) to an integer, keep large values as BigInt
+				// This converts directly from asset decimals to payment decimals without intermediary
+				//
+				// Formula: cost = (amount_in_asset_decimals * price_scaled) / 10^asset_decimals
+				// where price_scaled = price * 10^payment_decimals
+				const priceScaled = BigInt(Math.round(price * (10 ** paymentTokenDecimals)));
+				requiredApprovalBigInt = (selectedAmount * priceScaled) / (10n ** BigInt(assetTokenDecimals));
 			} else {
-				// SELL: Approve tSTOX (asset token - what we give)
+				// SELL: Approve asset token (what we give away)
 				// selectedAmount is already in asset token decimals
-				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
 				requiredApprovalBigInt = scaleAmount(
 					selectedAmount,
-					assetTokenDecimals,
-					assetTokenDecimals
+					passedOutputToken.decimals,
+					passedOutputToken.decimals
 				);
 			}
 			// TODO: Remove this once we have a better way to handle precision loss
 			// Round up scaled amount to avoid precision loss
 			requiredApprovalBigInt += 1n;
 
-			const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
+			const assetTokenDecimals = passedOutputToken.decimals;
 			const approvalFloat = Float.fromFixedDecimalLossy(requiredApprovalBigInt, assetTokenDecimals);
 			const requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
 
 			// Calculate maximumInput based on walk result
-			const maximumInputAmount =
-				orderSide === 'Sell'
-					? scaleAmount(totalCostScaled, 18, paymentToken?.decimals ?? 6)
-					: quantityFilled;
-			const maximumInputDecimals =
-				orderSide === 'Sell' ? paymentToken?.decimals ?? 6 : passedOutputToken?.decimals ?? 18;
+			// inputAmountFilled is already in native decimals (specified by inputDecimals from walkResult)
+			const maximumInputAmount = inputAmountFilled;
+			const maximumInputDecimals = inputDecimals;
 			const maximumInputFloat = Float.fromFixedDecimalLossy(
 				maximumInputAmount,
 				maximumInputDecimals
@@ -470,6 +490,22 @@
 				data: '0x'
 			};
 
+			// Translate Buy/Sell to input/output for transactionStore
+			// BUY: input = asset (received), output = payment (given)
+			// SELL: input = payment (received), output = asset (given)
+			const inputTokenInfo =
+				orderSide === 'Buy'
+					? { decimals: passedOutputToken?.decimals, symbol: passedOutputToken?.symbol }
+					: { decimals: paymentToken?.decimals, symbol: paymentToken?.symbol };
+			const outputTokenInfo =
+				orderSide === 'Buy'
+					? { decimals: paymentToken?.decimals, symbol: paymentToken?.symbol }
+					: { decimals: passedOutputToken?.decimals, symbol: passedOutputToken?.symbol };
+			// For BUY: user requests asset amount (selectedAmount)
+			// For SELL: user requests payment amount (estimated from walkResult)
+			const requestedInputAmount =
+				orderSide === 'Buy' ? selectedAmount : walkResult.inputAmountFilled;
+
 			// Execute transaction with walk result for accurate summary
 			await transactionStore.handleTakeOrders(
 				takeOrdersConfig,
@@ -478,16 +514,9 @@
 				{
 					ioIndexes: { input: primaryInputIndex, output: primaryOutputIndex },
 					walkResult,
-					orderSide,
-					assetToken: {
-						decimals: passedOutputToken?.decimals,
-						symbol: passedOutputToken?.symbol
-					},
-					paymentToken: {
-						decimals: paymentToken?.decimals,
-						symbol: paymentToken?.symbol
-					},
-					userRequestedAmount: selectedAmount
+					inputToken: inputTokenInfo,
+					outputToken: outputTokenInfo,
+					requestedInputAmount
 				}
 			);
 		} catch (error) {

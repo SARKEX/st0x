@@ -64,7 +64,8 @@ describe('walkOrderbook', () => {
 			quotes,
 			orderSide: 'Sell',
 			selectedAmount,
-			assetDecimals: 18
+			assetDecimals: 18,
+			paymentDecimals: 18
 		});
 
 		// Need both quotes to fill the order
@@ -74,9 +75,9 @@ describe('walkOrderbook', () => {
 		expect(result.fills[0].quantityFilled).toBe(ONE);
 		expect(result.fills[1].quantityFilled).toBe(ONE);
 		// Total quantity should be 2 assets
-		expect(result.quantityFilled).toBe(2n * ONE);
+		expect(result.outputAmountGiven).toBe(2n * ONE);
 		// Average of 1 asset at price 1 and 1 asset at price 2 = (1 + 2) / 2 = 1.5
-		expect(result.weightedAveragePrice).toBeCloseTo(1.5, 6);
+		expect(result.ioRatio).toBeCloseTo(1.5, 6);
 	});
 
 	it('keeps sell-side availability scaled to 1e18 even when quote decimals differ', () => {
@@ -102,13 +103,14 @@ describe('walkOrderbook', () => {
 			quotes,
 			orderSide: 'Sell',
 			selectedAmount,
-			assetDecimals: 18
+			assetDecimals: 18,
+			paymentDecimals: 6
 		});
 
 		expect(result.fills).toHaveLength(1);
 		expect(result.fills[0].quantityFilled).toBe(ONE);
-		expect(result.quantityFilled).toBe(ONE);
-		expect(result.weightedAveragePrice).toBeCloseTo(2, 6);
+		expect(result.outputAmountGiven).toBe(ONE);
+		expect(result.ioRatio).toBeCloseTo(2, 6);
 	});
 
 	it('respects per-order liquidity when buying', () => {
@@ -149,15 +151,16 @@ describe('walkOrderbook', () => {
 			quotes,
 			orderSide: 'Buy',
 			selectedAmount,
-			assetDecimals: 18
+			assetDecimals: 18,
+			paymentDecimals: 18
 		});
 
 		// Quote 1 can provide 1 asset, Quote 2 can provide 1.5, together they fill 2.5
 		expect(result.fills.length).toBe(2);
-		expect(result.quantityFilled).toBe((5n * ONE) / 2n); // 2.5 * ONE
+		expect(result.inputAmountFilled).toBe((5n * ONE) / 2n); // 2.5 * ONE
 		expect(result.fills[0].quantityFilled).toBe(ONE); // 1 token from quote 1
 		expect(result.fills[1].quantityFilled).toBe(ONE + half); // 1.5 tokens from quote 2
-		// Buying 1 at 1.5 QUOTE = 1.5, buying 1.5 at 2 QUOTE = 3, total 4.5 QUOTE for 2.5 assets = 1.8
-		expect(result.weightedAveragePrice).toBeCloseTo(1.8, 6);
+		// Buying 1 at 1.5 QUOTE = 1.5, buying 1.5 at 2 QUOTE = 3, total 4.5 QUOTE for 2.5 assets = 1.8 price; ioRatio = 2.5/4.5 = 0.556
+		expect(result.ioRatio).toBeCloseTo(0.5555555555555556, 6);
 	});
 });

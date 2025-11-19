@@ -28,13 +28,13 @@ import {
 	type TokenPriceSummary,
 	scaleAmount,
 	walkOrderbook,
-	FIXED_POINT_SCALE,
+	INTERNAL_DECIMALS,
 	hexToBigInt
 } from '$lib/utils/orderbook';
 
 // Re-export types and utilities
 export type { ProcessedQuote, TokenPriceSummary };
-export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, FIXED_POINT_SCALE, hexToBigInt };
+export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, INTERNAL_DECIMALS, hexToBigInt };
 
 // Re-export buildTokenPriceMap with describeQuote injected
 export const buildTokenPriceMap = (
@@ -175,8 +175,7 @@ function processOrdersWithQuotes(
 						const normalizedAsset = normalizeAddress(metrics.assetAddress);
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
 						processedQuote.quotePerAsset = metrics.quotePerAsset;
-						processedQuote.assetPerQuote = metrics.assetPerQuote;
-					}
+				}
 
 					processedQuotes.push(processedQuote);
 				} catch (error) {

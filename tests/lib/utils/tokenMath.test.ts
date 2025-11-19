@@ -316,7 +316,6 @@ describe('tokenMath', () => {
 			expect(result).not.toBeNull();
 			expect(result?.side).toBe('ask');
 			expect(result?.quotePerAsset).toBe(2);
-			expect(result?.assetPerQuote).toBe(0.5);
 		});
 
 		it('should describe BID quote (TOKEN -> USDC)', () => {

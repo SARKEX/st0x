@@ -69,13 +69,14 @@ export enum TransactionStatus {
 }
 
 export interface MarketOrderSummary {
-	orderSide: 'Buy' | 'Sell';
-	quantityFilled: bigint;
-	quantityRequested: bigint;
+	inputAmount: bigint; // What the user RECEIVES
+	inputTokenDecimals: number;
+	inputTokenSymbol: string;
+	outputAmount: bigint; // What the user GIVES AWAY
 	outputTokenDecimals: number;
 	outputTokenSymbol: string;
-	averagePrice: number;
-	paymentTokenSymbol: string;
+	requestedInputAmount: bigint; // What the user requested to receive
+	ioRatio: number; // input per output (how much input received per unit output given)
 	actualSlippage: bigint;
 	isPartialFill: boolean;
 	isNoFill?: boolean;
@@ -345,15 +346,14 @@ const transactionStore = () => {
 		options?: {
 			ioIndexes?: { input: number; output: number };
 			walkResult?: {
-				quantityFilled: bigint;
-				weightedAveragePrice: number;
-				totalCostScaled: bigint;
+				inputAmountFilled: bigint;
+				outputAmountGiven: bigint;
+				ioRatio: number;
 				fills: unknown[];
 			};
-			assetToken?: { decimals?: number; symbol?: string };
-			paymentToken?: { decimals?: number; symbol?: string };
-			orderSide?: 'Buy' | 'Sell';
-			userRequestedAmount?: bigint;
+			inputToken?: { decimals?: number; symbol?: string };
+			outputToken?: { decimals?: number; symbol?: string };
+			requestedInputAmount?: bigint;
 		}
 	) => {
 		const config = get(wagmiConfig);
@@ -494,11 +494,15 @@ const transactionStore = () => {
 			cleanup();
 
 			// Get the walk result from options
-			const { quantityFilled: estimatedQuantityFilled, weightedAveragePrice } =
-				options?.walkResult || {
-					quantityFilled: 0n,
-					weightedAveragePrice: 0
-				};
+			const {
+				inputAmountFilled: estimatedInputFilled,
+				outputAmountGiven: estimatedOutputGiven,
+				ioRatio: estimatedIoRatio
+			} = options?.walkResult || {
+				inputAmountFilled: 0n,
+				outputAmountGiven: 0n,
+				ioRatio: 0
+			};
 
 			// Helper function to parse hex amount using Float
 			const parseHexAmount = (hexAmount: Hex, decimals: number): bigint => {
@@ -534,65 +538,54 @@ const transactionStore = () => {
 				}
 			};
 
-			// Get order side from options (already determined during transaction building)
-			const orderSideFromTrade = options?.orderSide ?? 'Buy';
+			// Get token info from options (passed by MarketOrder component)
+			// NOTE: inputVaultBalanceChange = what user receives (INPUT)
+			//       outputVaultBalanceChange = what user gives (OUTPUT)
+			const inputTokenDecimals = options?.inputToken?.decimals ?? 18;
+			const inputTokenSymbol = options?.inputToken?.symbol ?? '';
 
-			// Get token decimals and symbol once from first trade
-			const firstTrade = validTrades[0];
-			const quantityFilledTokenDecimals =
-				orderSideFromTrade === 'Buy'
-					? // @ts-expect-error vault structure has token info
-						firstTrade.outputVaultBalanceChange?.vault?.token?.decimals ?? 18
-					: // @ts-expect-error vault structure has token info
-						firstTrade.inputVaultBalanceChange?.vault?.token?.decimals ?? 18;
+			const outputTokenDecimals = options?.outputToken?.decimals ?? 18;
+			const outputTokenSymbol = options?.outputToken?.symbol ?? '';
 
-			const quantityFilledTokenSymbol =
-				orderSideFromTrade === 'Buy'
-					? // @ts-expect-error vault structure has token info
-						firstTrade.outputVaultBalanceChange?.vault?.token?.symbol ?? ''
-					: // @ts-expect-error vault structure has token info
-						firstTrade.inputVaultBalanceChange?.vault?.token?.symbol ?? '';
-
-			// Sum the appropriate vault changes based on order side
-			let quantityFilledAmount = 0n;
+			// Sum vault changes: INPUT = what user receives (inputVault), OUTPUT = what user gives (outputVault)
+			let totalInputAmount = 0n;
+			let totalOutputAmount = 0n;
 			for (const trade of validTrades) {
-				if (orderSideFromTrade === 'Buy') {
-					// For BUY: sum outputVaultBalanceChange amounts
-					const outputAmount = parseHexAmount(
-						trade.outputVaultBalanceChange!.amount as Hex,
-						quantityFilledTokenDecimals
-					);
-					quantityFilledAmount += outputAmount;
-				} else {
-					// For SELL: sum inputVaultBalanceChange amounts
-					const inputAmount = parseHexAmount(
-						trade.inputVaultBalanceChange!.amount as Hex,
-						quantityFilledTokenDecimals
-					);
-					quantityFilledAmount += inputAmount;
-				}
+				// User INPUT = inputVaultBalanceChange (what they receive)
+				const inputAmount = parseHexAmount(
+					trade.inputVaultBalanceChange!.amount as Hex,
+					inputTokenDecimals
+				);
+				totalInputAmount += inputAmount;
+
+				// User OUTPUT = outputVaultBalanceChange (what they give)
+				const outputAmount = parseHexAmount(
+					trade.outputVaultBalanceChange!.amount as Hex,
+					outputTokenDecimals
+				);
+				totalOutputAmount += outputAmount;
 			}
 
-			// Calculate average price from walk result
-			const averagePrice = weightedAveragePrice;
+			// Calculate actual ioRatio from transaction data
+			const actualIoRatio =
+				totalOutputAmount > 0n
+					? parseFloat(formatUnits(totalInputAmount, inputTokenDecimals)) /
+						parseFloat(formatUnits(totalOutputAmount, outputTokenDecimals))
+					: 0;
 
-			// Use the user's actual requested amount, not the walk estimate
-			const userRequestedQuantity = options?.userRequestedAmount ?? estimatedQuantityFilled;
+			// Use the user's actual requested input amount
+			const requestedInputAmount = options?.requestedInputAmount ?? estimatedInputFilled;
 
 			// Check if fill is complete (within 99.9% tolerance)
 			// Need to normalize both amounts to the same decimal scale for comparison
-			const quantityFilledDecimal = parseFloat(
-				formatUnits(quantityFilledAmount, quantityFilledTokenDecimals)
-			);
-			const userRequestedDecimal = parseFloat(
-				formatUnits(userRequestedQuantity, quantityFilledTokenDecimals)
-			);
+			const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
+			const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
 
 			let fillPercentage = 0;
 			let isNoFill = false;
 
-			if (userRequestedDecimal > 0) {
-				fillPercentage = quantityFilledDecimal / userRequestedDecimal;
+			if (inputRequestedDecimal > 0) {
+				fillPercentage = inputFilledDecimal / inputRequestedDecimal;
 			} else {
 				// No requested quantity means no tokens requested
 				isNoFill = true;
@@ -600,13 +593,14 @@ const transactionStore = () => {
 
 			// Build summary from actual transaction data
 			const summary: MarketOrderSummary = {
-				orderSide: orderSideFromTrade,
-				quantityFilled: quantityFilledAmount,
-				quantityRequested: userRequestedQuantity,
-				outputTokenDecimals: quantityFilledTokenDecimals,
-				outputTokenSymbol: quantityFilledTokenSymbol,
-				averagePrice: averagePrice,
-				paymentTokenSymbol: options?.paymentToken?.symbol ?? '',
+				inputAmount: totalInputAmount,
+				inputTokenDecimals,
+				inputTokenSymbol,
+				outputAmount: totalOutputAmount,
+				outputTokenDecimals,
+				outputTokenSymbol,
+				requestedInputAmount,
+				ioRatio: actualIoRatio,
 				actualSlippage: 0n,
 				isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
 				isNoFill

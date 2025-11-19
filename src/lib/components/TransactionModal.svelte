@@ -7,12 +7,16 @@
 	// currentNetwork not needed directly; TxLink uses it from store
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import { formatUnits } from 'viem';
+	import { translateMarketOrderForDisplay } from '$lib/utils/transactionDisplay';
 
 	const handleClose = () => {
 		return transactionStore.reset();
 	};
 
 	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
+	$: marketOrderDisplay = marketOrderSummary
+		? translateMarketOrderForDisplay(marketOrderSummary)
+		: null;
 
 	// Helper function to format quantity with max 2 decimals
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
@@ -107,7 +111,7 @@
 					{/if}
 
 					<!-- Market order summary or no-fill message -->
-					{#if marketOrderSummary?.isNoFill}
+					{#if marketOrderDisplay?.isNoFill}
 						<div
 							class="w-full rounded-md border border-yellow-900/50 bg-yellow-900/20 p-4 text-left text-sm text-yellow-200"
 						>
@@ -120,7 +124,7 @@
 								order and specify the desired price.
 							</p>
 						</div>
-					{:else if marketOrderSummary}
+					{:else if marketOrderDisplay}
 						<div
 							class="w-full rounded-md border border-white/10 bg-gray-900/50 p-4 text-left text-sm text-gray-200"
 						>
@@ -129,35 +133,29 @@
 							</div>
 							<div class="flex justify-between">
 								<span class="text-gray-400">Side</span>
-								<span class="font-medium">{marketOrderSummary.orderSide}</span>
+								<span class="font-medium">{marketOrderDisplay.direction}</span>
 							</div>
 							<div class="mt-2 flex justify-between">
 								<span class="text-gray-400">Quantity Filled</span>
 								<span class="font-medium">
-									{formatQuantity(
-										marketOrderSummary.quantityFilled,
-										marketOrderSummary.outputTokenDecimals
-									)}
-									{!isFullFill(
-										marketOrderSummary.quantityFilled,
-										marketOrderSummary.quantityRequested
-									)
+									{formatQuantity(marketOrderDisplay.assetAmount, marketOrderDisplay.assetDecimals)}
+									{!isFullFill(marketOrderDisplay.assetAmount, marketOrderDisplay.requestedAmount)
 										? `/ ${formatQuantity(
-												marketOrderSummary.quantityRequested,
-												marketOrderSummary.outputTokenDecimals
+												marketOrderDisplay.requestedAmount,
+												marketOrderDisplay.assetDecimals
 											)}`
 										: ''}
-									{marketOrderSummary.outputTokenSymbol}
+									{marketOrderDisplay.assetSymbol}
 								</span>
 							</div>
 							<div class="mt-2 flex justify-between">
 								<span class="text-gray-400">Average Price</span>
 								<span class="font-medium">
-									{marketOrderSummary.averagePrice.toFixed(6)}
-									{marketOrderSummary.paymentTokenSymbol}
+									{marketOrderDisplay.price.toFixed(6)}
+									{marketOrderDisplay.paymentSymbol}
 								</span>
 							</div>
-							{#if marketOrderSummary.isPartialFill}
+							{#if marketOrderDisplay.isPartialFill}
 								<div class="mt-3 rounded-md bg-yellow-900/30 p-2 text-xs text-yellow-200">
 									Partial fill: not all requested quantity was available within slippage tolerance.
 									We currently have a guardrail to avoid unfavourable prices. To ignore guardrails,

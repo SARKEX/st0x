@@ -17,29 +17,47 @@ import { Float } from '@rainlanguage/float';
 
 export type MarketOrderSide = 'Buy' | 'Sell';
 
-export const FIXED_POINT_SCALE = 10n ** 18n;
+/**
+ * INTERNAL_DECIMALS: DEPRECATED - Being removed.
+ *
+ * This was used for arbitrary 18-decimal normalization, which is incorrect.
+ * Proper approach: work in native token decimals and normalize to token scale for ratios.
+ *
+ * TODO: Remove after refactoring walkOrderbook.
+ */
+export const INTERNAL_DECIMALS = 18;
+
 const PRICE_SCALE = 10n ** 9n; // preserves 9 decimal places for prices
 const PRICE_SCALE_NUMBER = Number(PRICE_SCALE);
 
 export interface QuoteFill {
 	quote: ProcessedQuote;
 	price: number; // Human-readable price (quote token per asset token)
-	quantityFilled: bigint; // Amount of asset filled (scaled to 1e18)
-	cost: bigint; // Quote token cost scaled to 1e18
+	quantityFilled: bigint; // Amount of asset filled (in asset decimals)
+	cost: bigint; // Quote token cost (in payment decimals)
 }
 
 export interface WalkQuotesOptions {
 	quotes: ProcessedQuote[];
 	orderSide: MarketOrderSide;
 	selectedAmount: bigint;
-	assetDecimals?: number;
+	assetDecimals: number;
+	paymentDecimals: number; // Required for proper ratio calculation
 }
 
+/**
+ * Result from walking the orderbook.
+ *
+ * Amounts are returned in native token decimals. Use the provided decimal info
+ * to interpret the amounts correctly.
+ */
 export interface WalkQuotesResult {
-	quantityFilled: bigint;
-	weightedAveragePrice: number; // Human-readable weighted average price (quote per asset)
+	inputAmountFilled: bigint; // What the user RECEIVES (in native decimals)
+	outputAmountGiven: bigint; // What the user GIVES AWAY (in native decimals)
+	inputDecimals: number; // Decimal scale of inputAmountFilled
+	outputDecimals: number; // Decimal scale of outputAmountGiven
+	ioRatio: number; // input per output (normalized to token scale: (input/10^inputDecimals) / (output/10^outputDecimals))
 	fills: QuoteFill[];
-	totalCostScaled: bigint; // Total quote tokens (1e18 scale)
 }
 
 // ABI types for decoding order bytes
@@ -68,14 +86,11 @@ export interface ProcessedQuote {
 	assetAddress?: string;
 	side?: MarketSide;
 	quotePerAsset?: number;
-	assetPerQuote?: number;
 }
 
 export type TokenPriceSummary = {
 	bid?: number;
 	ask?: number;
-	bidAssetPerQuote?: number;
-	askAssetPerQuote?: number;
 };
 
 // ============================================================================
@@ -162,8 +177,10 @@ function computeAvailableQuantity(
 
 	if (maxOutputBigInt === null) return 0n;
 
+	// Fallback to 18 decimals if not provided (common for ERC20 tokens)
+	// TODO: Consider skipping quotes without decimals or fetching from token contract
 	const outputDecimals = quote.outputTokenDecimals ?? 18;
-	const maxOutputScaled = scaleAmount(maxOutputBigInt, outputDecimals, 18);
+	const maxOutputScaled = scaleAmount(maxOutputBigInt, outputDecimals, INTERNAL_DECIMALS);
 	if (maxOutputScaled <= 0n) return 0n;
 
 	if (orderSide === 'Buy') {
@@ -173,24 +190,49 @@ function computeAvailableQuantity(
 
 	// Sell: order outputs quote token. Convert quote token availability into asset availability
 	if (price <= 0) return 0n;
-	// maxOutputScaled is in 1e18 scale, price is human-readable
-	// Scale price to 1e18 to maintain precision when dividing: (quoteAmount / price)
-	const scaledPrice = BigInt(Math.round(price * 1e18));
+	// Scale price to INTERNAL_DECIMALS precision for division: (quoteAmount / price)
+	const precisionScale = 10n ** BigInt(INTERNAL_DECIMALS);
+	const scaledPrice = BigInt(Math.round(price * Number(precisionScale)));
 	if (scaledPrice <= 0n) return 0n;
-	// Multiply numerator before dividing so the result stays in 1e18 asset scale
-	return (maxOutputScaled * FIXED_POINT_SCALE) / scaledPrice;
+	// Maintain INTERNAL_DECIMALS scale: (amount * scale) / price
+	return (maxOutputScaled * precisionScale) / scaledPrice;
 }
 
+/**
+ * Walks the orderbook to simulate market order execution.
+ *
+ * Iterates through quotes in price order, filling the requested amount across multiple orders.
+ * Works in native token decimals - no arbitrary normalization.
+ *
+ * @param options - Configuration including quotes, order side, amount, and decimals
+ * @returns Result with fill details in native token decimals, plus decimal info and normalized ioRatio
+ *
+ * @remarks
+ * **Token Scale Normalization**: ioRatio is calculated as (input/10^inputDecimals) / (output/10^outputDecimals)
+ * to provide a meaningful ratio despite different decimal scales.
+ */
 export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
-	const { quotes, orderSide, selectedAmount } = options;
-	const assetDecimals = options.assetDecimals ?? 18;
+	const { quotes, orderSide, selectedAmount, assetDecimals, paymentDecimals } = options;
+
+	// Determine which decimals apply to input/output based on order side
+	const inputDecimals = orderSide === 'Buy' ? assetDecimals : paymentDecimals;
+	const outputDecimals = orderSide === 'Buy' ? paymentDecimals : assetDecimals;
+
 	if (selectedAmount <= 0n || !quotes.length) {
-		return { quantityFilled: 0n, weightedAveragePrice: 0, fills: [], totalCostScaled: 0n };
+		return {
+			inputAmountFilled: 0n,
+			outputAmountGiven: 0n,
+			inputDecimals,
+			outputDecimals,
+			ioRatio: 0,
+			fills: []
+		};
 	}
 
-	const targetAmount = scaleAmount(selectedAmount, assetDecimals, 18);
-	let quantityFilled = 0n;
-	let totalCostScaled = 0n; // Quote tokens scaled to 1e18
+	// Work in asset decimals (no normalization to 18)
+	const targetAmount = selectedAmount; // Already in asset decimals
+	let quantityFilled = 0n; // Asset quantity in asset decimals
+	let totalCost = 0n; // Payment cost in payment decimals
 	const fills: QuoteFill[] = [];
 
 	for (const quote of quotes) {
@@ -206,19 +248,41 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		const quantityFromQuote = remaining < availableQuantity ? remaining : availableQuantity;
 		if (quantityFromQuote <= 0n) continue;
 
+		// Calculate cost in payment decimals: cost = quantity * price
+		// quantityFromQuote is in asset decimals, price is human-readable (payment per asset)
+		// Result should be in payment decimals
 		const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
-		const costBigInt = (quantityFromQuote * priceScaled) / PRICE_SCALE;
+		const costInAssetScale = (quantityFromQuote * priceScaled) / PRICE_SCALE;
+		// Convert from asset scale to payment scale
+		const costBigInt = scaleAmount(costInAssetScale, assetDecimals, paymentDecimals);
 		if (costBigInt <= 0n) continue;
 
 		quantityFilled += quantityFromQuote;
-		totalCostScaled += costBigInt;
+		totalCost += costBigInt;
 		fills.push({ quote, price, quantityFilled: quantityFromQuote, cost: costBigInt });
 	}
 
-	const weightedAveragePrice =
-		quantityFilled > 0n ? Number(totalCostScaled) / Number(quantityFilled) : 0;
+	// Determine input/output based on order side
+	// For BUY: input = asset (received), output = payment (given)
+	// For SELL: input = payment (received), output = asset (given)
+	const inputAmountFilled = orderSide === 'Buy' ? quantityFilled : totalCost;
+	const outputAmountGiven = orderSide === 'Buy' ? totalCost : quantityFilled;
 
-	return { quantityFilled, weightedAveragePrice, fills, totalCostScaled };
+	// Normalize to token scale: (input/10^inputDecimals) / (output/10^outputDecimals)
+	const ioRatio =
+		outputAmountGiven > 0n
+			? (Number(inputAmountFilled) / 10 ** inputDecimals) /
+			  (Number(outputAmountGiven) / 10 ** outputDecimals)
+			: 0;
+
+	return {
+		inputAmountFilled,
+		outputAmountGiven,
+		inputDecimals,
+		outputDecimals,
+		ioRatio,
+		fills
+	};
 }
 
 // ============================================================================
@@ -246,7 +310,6 @@ export const buildTokenPriceMap = (
 		assetAddress: string;
 		side: MarketSide;
 		quotePerAsset: number | null;
-		assetPerQuote: number | null;
 	} | null
 ): Map<string, TokenPriceSummary> => {
 	const priceMap = new Map<string, TokenPriceSummary>();
@@ -259,7 +322,6 @@ export const buildTokenPriceMap = (
 						assetAddress: quote.assetAddress,
 						side: quote.side,
 						quotePerAsset: quote.quotePerAsset,
-						assetPerQuote: quote.assetPerQuote
 					}
 				: describeQuoteFn(quote, quoteAddressRaw);
 		if (!metrics) return;
@@ -278,17 +340,6 @@ export const buildTokenPriceMap = (
 			) {
 				existing.ask = chooseBestPrice(existing.ask, metrics.quotePerAsset, 'min');
 			}
-			if (
-				Number.isFinite(metrics.assetPerQuote) &&
-				metrics.assetPerQuote &&
-				metrics.assetPerQuote > 0
-			) {
-				existing.askAssetPerQuote = chooseBestPrice(
-					existing.askAssetPerQuote,
-					metrics.assetPerQuote,
-					'max'
-				);
-			}
 		} else {
 			// Bid side = bids (what buyers are offering)
 			if (
@@ -297,17 +348,6 @@ export const buildTokenPriceMap = (
 				metrics.quotePerAsset > 0
 			) {
 				existing.bid = chooseBestPrice(existing.bid, metrics.quotePerAsset, 'max');
-			}
-			if (
-				Number.isFinite(metrics.assetPerQuote) &&
-				metrics.assetPerQuote &&
-				metrics.assetPerQuote > 0
-			) {
-				existing.bidAssetPerQuote = chooseBestPrice(
-					existing.bidAssetPerQuote,
-					metrics.assetPerQuote,
-					'min'
-				);
 			}
 		}
 
