@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { getBaseline, getPeriodInSeconds, hasValidPriceFeedId } from '$lib/derivations';
+import { getBaseline, getPeriodInSeconds, hasValidPriceFeedId } from '$lib/utils/derivations';
 
 describe('derivations', () => {
 	describe('getBaseline', () => {

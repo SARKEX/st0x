@@ -5,7 +5,7 @@
 	import LoadingSpinner from './LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import { tableStyles } from '$lib/utils/table-styles';
+	import { tableStyles } from '$lib/styles/table';
 	// Consolidated table: use native thead/tr/th/td
 
 	export let query: CreateInfiniteQueryResult<
@@ -13,7 +13,7 @@
 		Error
 	>;
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 </script>
 
 {#if $query.isError}

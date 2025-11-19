@@ -1,19 +1,19 @@
 <script lang="ts">
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { CategorizedToken } from '$lib/network';
-	import { validateOverrideDepositAmount } from '$lib/validateDeploymentArgs';
+	import type { CategorizedToken } from '$lib/config/network';
+	import { validateOverrideDepositAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
-	import transactionStore from '$lib/transactionStore';
-	import { hasValidPriceFeedId } from '$lib/derivations';
+	import transactionStore from '$lib/stores/transaction';
+	import { hasValidPriceFeedId } from '$lib/utils/derivations';
 	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
 	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	// Filter tokens based on current network

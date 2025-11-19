@@ -1,4 +1,4 @@
-import type { Network } from '$lib/network';
+import type { Network } from '$lib/config/network';
 import type { PythToken } from '$lib/types';
 import type { TradingViewQuote } from './tradingview';
 

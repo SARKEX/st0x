@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect } from 'vitest';
-import { convertDotNotationToObject } from '$lib/helpers';
+import { convertDotNotationToObject } from '$lib/utils/helpers';
 
 describe('helpers', () => {
 	describe('convertDotNotationToObject', () => {

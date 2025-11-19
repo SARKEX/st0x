@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Schema } from '$lib/types/SchemaQueryResponse';
 	import { currentToken } from '$lib/stores';
-	import { addSchemaToReceipts } from '$lib/addSchemaToReceipts';
+	import { addSchemaToReceipts } from '$lib/lib/schemas';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import ViewMetadata from './ViewMetadata.svelte';
 	import Section from '$lib/components/ui/Section.svelte';

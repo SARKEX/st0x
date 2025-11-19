@@ -77,7 +77,6 @@
 		"pako": "^2.1.0",
 		"pinata-web3": "^0.4.1",
 		"rehype-katex-svelte": "1.2.0",
-		"sushi": "=6.1.11",
 		"svelte-wagmi": "1.0.7"
 	}
 }

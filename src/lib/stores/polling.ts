@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 import { readable, type Readable } from 'svelte/store';
-import { getNetworkById, type Network } from '$lib/network';
+import { getNetworkById, type Network } from '$lib/config/network';
 
 export type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 

@@ -11,12 +11,12 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { truncateAddress } from '$lib/utils/format';
-	import { textStyles, gridStyles } from '$lib/utils/styles';
+	import { textStyles, gridStyles } from '$lib/styles/utils';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { goto } from '$app/navigation';
-	import { createRaindexClient } from '$lib/utils/raindexClient';
+	import { createRaindexClient } from '$lib/api/raindex';
 	import type {
 		SgOrderWithSubgraphName,
 		SgErc20,

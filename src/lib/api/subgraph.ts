@@ -1,7 +1,7 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
-import { TOKENS } from './network';
-import type { Network } from './network';
-import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
+import { TOKENS } from '$lib/config/network';
+import type { Network } from '$lib/config/network';
+import type { OffchainAssetReceiptVault, MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 
 export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVault[]> => {
 	const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
@@ -498,3 +498,37 @@ export async function fetchAllPaginatedData(
 	}
 	return allItems;
 }
+
+export const getSftMetadata = async (
+	vaultAddress: string,
+	subgraphUrl: string
+): Promise<MetaV1S[]> => {
+	const query = `
+    {
+      metaV1S(
+        where: { subject: "0x000000000000000000000000${vaultAddress.slice(2)}" },
+        orderBy: transaction__timestamp,
+        orderDirection: desc
+      ) {
+        id
+        meta
+        sender
+        subject
+        metaHash
+      }
+    }
+  `;
+
+	const response = await fetch(subgraphUrl, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ query })
+	});
+
+	if (!response.ok) {
+		throw new Error(`Failed to fetch SFT metadata: ${response.status}`);
+	}
+
+	const json = await response.json();
+	return json.data?.metaV1S as MetaV1S[];
+};

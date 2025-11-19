@@ -4,14 +4,14 @@ import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
-} from '$lib/getDeploymentArgs';
+} from '$lib/lib/deployment';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import {
 	getAllTokensByNetwork,
 	getTokensByCategory,
 	DEFAULT_PAYMENT_TOKENS,
 	getDefaultPaymentTokenForNetwork
-} from '$lib/network';
+} from '$lib/config/network';
 
 const STOXs = getTokensByCategory('ST0x');
 import { currentNetwork } from '$lib/stores';

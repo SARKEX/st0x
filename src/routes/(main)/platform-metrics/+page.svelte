@@ -1,9 +1,9 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/network';
-	import type { CategorizedToken, Network } from '$lib/network';
-	import type { TradingViewQuote } from '$lib/services/tradingview';
+	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
+	import type { CategorizedToken, Network } from '$lib/config/network';
+	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -17,7 +17,7 @@
 		type TimedResource,
 		type TradeMetricPayload,
 		type OrderbookQuoteCache
-	} from '$lib/stores/network-data-cache';
+	} from '$lib/stores/cache';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
@@ -25,9 +25,9 @@
 		normalizeAddress,
 		type TradeAnalysis,
 		type TokenLookup
-	} from '$lib/domain/tokenMath';
+	} from '$lib/lib/tokens';
 	import type { SgTrade } from '@rainlanguage/orderbook';
-	import { createRaindexClient } from '$lib/utils/raindexClient';
+	import { createRaindexClient } from '$lib/api/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 
 	type AnalyzedTrade = {
@@ -367,7 +367,6 @@
 	}
 
 	$: networkStats = networks.map<NetworkStat>((network) => {
-		const startTime = performance.now();
 		const vaults = getActiveVaultsForNetwork(network.chainId);
 
 		// Aggregate vault balances by token

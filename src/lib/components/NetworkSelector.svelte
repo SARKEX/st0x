@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
-	import { networks } from '$lib/network';
+	import { networks } from '$lib/config/network';
 	import { switchChain } from '@wagmi/core';
 	import { wagmiConfig, chainId, connected } from 'svelte-wagmi';
 	import { get } from 'svelte/store';

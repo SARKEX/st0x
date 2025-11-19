@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { CategorizedToken } from '$lib/network';
+	import type { CategorizedToken } from '$lib/config/network';
 	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
-	import { ensureResource } from '$lib/stores/network-data-cache';
+	import { ensureResource } from '$lib/stores/cache';
 	import {
 		OrderV4_ABI,
 		normalizeOrderData,
@@ -9,9 +9,9 @@
 		scaleAmount,
 		walkOrderbook,
 		FIXED_POINT_SCALE
-	} from '$lib/domain/onchainOrders';
-	import { createRaindexClient } from '$lib/utils/raindexClient';
-	import { normalizeAddress } from '$lib/domain/tokenMath';
+	} from '$lib/lib/orders';
+	import { createRaindexClient } from '$lib/api/raindex';
+	import { normalizeAddress } from '$lib/lib/tokens';
 	import {
 		type OrderV4,
 		type RaindexOrderQuote,
@@ -22,13 +22,13 @@
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { AbiCoder } from 'ethers';
 	import { formatUnits } from 'viem';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
-	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
-	import transactionStore from '$lib/transactionStore';
+	import { validateSelectedAmount } from '$lib/utils/validation';
+	import transactionStore from '$lib/stores/transaction';
 	import { Float } from '@rainlanguage/float';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';

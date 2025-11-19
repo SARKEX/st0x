@@ -5,8 +5,8 @@
 	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
-	import type { Token } from 'sushi';
-	import type { ValidateFunction } from '$lib/validateDeploymentArgs';
+	import type { Token } from '$lib/types';
+	import type { ValidateFunction } from '$lib/utils/validation';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	export let amountToken: Token;

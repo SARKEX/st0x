@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
-import transactionStore from '$lib/transactionStore';
+import transactionStore from '$lib/stores/transaction';
 import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
-import { getTokensByCategory, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/network';
+import { getTokensByCategory, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/config/network';
 import { rainlangConfirmationModal, currentNetwork } from '$lib/stores';
 
 const STOXs = getTokensByCategory('ST0x');
@@ -11,9 +11,9 @@ import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
-} from '$lib/getDeploymentArgs';
+} from '$lib/lib/deployment';
 import { mockCurrentNetwork } from '../mocks/mockCurrentNetwork';
-import { createRaindexClient } from '$lib/utils/raindexClient';
+import { createRaindexClient } from '$lib/api/raindex';
 import { decodeFunctionData } from 'viem';
 
 // Shared mock network object to avoid repetition
@@ -26,7 +26,7 @@ if (!PAYMENT_TOKEN) {
 	throw new Error('Missing default payment token for mock network');
 }
 
-vi.mock('./getDeploymentArgs', async (importOriginal) => {
+vi.mock('$lib/lib/deployment', async (importOriginal) => {
 	return {
 		...((await importOriginal()) as object),
 		getMarketMakingDeploymentArgs: vi.fn(),
@@ -36,7 +36,7 @@ vi.mock('./getDeploymentArgs', async (importOriginal) => {
 	};
 });
 
-vi.mock('./utils/raindexClient', () => ({
+vi.mock('$lib/api/raindex', () => ({
 	createRaindexClient: vi.fn()
 }));
 

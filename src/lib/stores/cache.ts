@@ -7,12 +7,12 @@ import {
 	type TradeMetricPayload,
 	type PendingTradePayload,
 	type OracleQuote
-} from '$lib/data/domains';
+} from '$lib/api/domains';
 import {
 	createPollingController,
 	type PollingController,
 	type TimedResource
-} from '$lib/data/polling-cache';
+} from '$lib/stores/polling';
 
 type ControllerMap = { [K in DomainKey]: PollingController<DomainPayloads[K]> };
 

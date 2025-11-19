@@ -1,5 +1,5 @@
 import { arbitrum, base } from '@wagmi/core/chains';
-import type { PythToken } from './types';
+import type { PythToken } from '$lib/types';
 
 // Network interface
 export interface Network {

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import {
 		currentNetwork,
 		sfts,
@@ -11,27 +10,20 @@
 	} from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import ListCard from '$lib/components/ui/ListCard.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	// Consolidated table usage
-	import { containerStyles } from '$lib/utils/styles';
-	import { onMount } from 'svelte';
-	import type { TokenPriceSummary } from '$lib/domain/onchainOrders';
+	import { containerStyles } from '$lib/styles/utils';
+	import type { TokenPriceSummary } from '$lib/lib/orders';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
-
-	let st0xVaults: OffchainAssetReceiptVault[] = [];
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
-
-	let searchTerm = '';
-	let filteredSfts: OffchainAssetReceiptVault[] = [];
 
 	type TokenRow = {
 		id: string;
@@ -60,24 +52,6 @@
 	$: quotesLoading = quotesStatus === 'loading' && !quotesHaveData;
 	$: quotesError =
 		$orderbookQuotesResource?.status === 'error' ? $orderbookQuotesResource.error : null;
-
-
-	$: {
-		const trimmedSearch = searchTerm.trim();
-		if (trimmedSearch.length >= 3) {
-			filteredSfts = $sfts.filter(
-				(s) =>
-					s.name.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
-					s.symbol.toLowerCase().includes(trimmedSearch.toLowerCase())
-			);
-		} else {
-			filteredSfts = [];
-		}
-	}
-
-	$: if ($sfts && $tokenGlobalQuote) {
-		st0xVaults = $sfts;
-	}
 
 	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
 		if (!summary) return null;

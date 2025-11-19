@@ -4,7 +4,7 @@
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
 	import ShareButton from './ShareButton.svelte';
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';

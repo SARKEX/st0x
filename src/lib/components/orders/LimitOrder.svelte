@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { CategorizedToken } from '$lib/network';
-	import { validateBaseline, validateSelectedAmount } from '$lib/validateDeploymentArgs';
+	import type { CategorizedToken } from '$lib/config/network';
+	import { validateBaseline, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits, parseUnits } from 'viem';
 	import type { Hex } from 'viem';
-	import transactionStore from '$lib/transactionStore';
+	import transactionStore from '$lib/stores/transaction';
 	import { currentNetwork } from '$lib/stores';
 	import type { PythToken } from '$lib/types';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
 	import Modal from '$lib/components/ui/Modal.svelte';

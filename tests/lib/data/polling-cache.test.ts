@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { TimedResource } from '$lib/data/polling-cache';
+import type { TimedResource } from '$lib/stores/polling';
 
 const { browserState, mockGetNetworkById } = vi.hoisted(() => ({
 	browserState: { value: true },
@@ -12,11 +12,11 @@ vi.mock('$app/environment', () => ({
 	}
 }));
 
-vi.mock('$lib/network', () => ({
+vi.mock('$lib/config/network', () => ({
 	getNetworkById: mockGetNetworkById
 }));
 
-import { createPollingController } from '$lib/data/polling-cache';
+import { createPollingController } from '$lib/stores/polling';
 
 describe('createPollingController', () => {
 	const network = {

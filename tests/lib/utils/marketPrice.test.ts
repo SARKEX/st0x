@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Float } from '@rainlanguage/float';
-import type { ProcessedQuote } from '$lib/domain/onchainOrders';
-import { scaleAmount, walkOrderbook } from '$lib/domain/onchainOrders';
+import type { ProcessedQuote } from '$lib/lib/orders';
+import { scaleAmount, walkOrderbook } from '$lib/lib/orders';
 
 const ONE = 10n ** 18n;
 const ONE_FLOAT_HEX = Float.parse('1').value!.asHex();

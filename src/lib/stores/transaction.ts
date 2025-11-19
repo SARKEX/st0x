@@ -28,11 +28,11 @@ import {
 	type DcaDeploymentArgs,
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
-} from './getDeploymentArgs';
-import { rainlangConfirmationModal } from './stores';
-import { createRaindexClient } from './utils/raindexClient';
-import { ensureResource, getResourceStore } from './stores/network-data-cache';
-import type { Network } from './network';
+} from '$lib/lib/deployment';
+import { rainlangConfirmationModal } from '$lib/stores';
+import { createRaindexClient } from '$lib/api/raindex';
+import { ensureResource, getResourceStore } from '$lib/stores/cache';
+import type { Network } from '$lib/config/network';
 
 // Helper function to create Raindex v5 link HTML
 function createRaindexLink(

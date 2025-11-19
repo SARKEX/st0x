@@ -1,12 +1,12 @@
 import { get } from 'svelte/store';
 import { signerAddress } from 'svelte-wagmi';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
-import type { Token } from 'sushi';
+import type { Token } from '$lib/types';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
-import { getPeriodInSeconds } from './derivations';
-import { currentNetwork } from './stores';
-import { RAIN_STRATEGIES_COMMIT } from './utils/raindexClient';
+import { getPeriodInSeconds } from '$lib/utils/derivations';
+import { currentNetwork } from '$lib/stores';
+import { RAIN_STRATEGIES_COMMIT } from '$lib/api/raindex';
 
 export type DcaDeploymentArgs = {
 	outputToken: Token;

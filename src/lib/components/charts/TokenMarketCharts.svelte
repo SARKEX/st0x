@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import type { DepthSeries, VolumeBucket } from '$lib/components/charts/token-chart-types';
 

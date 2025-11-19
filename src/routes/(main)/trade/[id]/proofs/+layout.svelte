@@ -1,7 +1,7 @@
 <script lang="ts">
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getSftMetadata } from '$lib/getSftMetadata';
+	import { getSftMetadata } from '$lib/api/subgraph';
 	import { page } from '$app/stores';
 	import { sftMetadata, currentNetwork, sfts, currentToken } from '$lib/stores';
 

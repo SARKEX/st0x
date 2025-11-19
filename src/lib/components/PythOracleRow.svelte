@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { currentNetwork, oracleQuotes, oracleQuotesResource } from '$lib/stores';
-	import type { TimedResource, OracleQuote } from '$lib/stores/network-data-cache';
+	import type { TimedResource, OracleQuote } from '$lib/stores/cache';
 	import type { PythToken } from '$lib/types';
-	import type { TradingViewQuote } from '$lib/services/tradingview';
+	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 

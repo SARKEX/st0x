@@ -2,7 +2,7 @@
  * Utility functions for derived calculations
  */
 
-import type { Token } from 'sushi';
+import type { Token } from '$lib/types';
 
 /**
  * For limit order strategies, convert user-specified price to the orderbook IO ratio.

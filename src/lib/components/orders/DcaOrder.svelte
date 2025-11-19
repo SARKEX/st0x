@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { CategorizedToken } from '$lib/network';
+	import type { CategorizedToken } from '$lib/config/network';
 	import type { PythToken } from '$lib/types';
 	import {
 		validateBaseline,
 		validatePeriod,
 		validateSelectedAmount
-	} from '$lib/validateDeploymentArgs';
+	} from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
-	import transactionStore from '$lib/transactionStore';
-	import { hasValidPriceFeedId } from '$lib/derivations';
+	import transactionStore from '$lib/stores/transaction';
+	import { hasValidPriceFeedId } from '$lib/utils/derivations';
 	import { currentNetwork, oracleQuotes } from '$lib/stores';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';

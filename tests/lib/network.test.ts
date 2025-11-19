@@ -15,7 +15,7 @@ import {
 	DEFAULT_PAYMENT_TOKENS,
 	TOKENS,
 	CRYPTO_TOKENS
-} from '$lib/network';
+} from '$lib/config/network';
 
 describe('network', () => {
 	describe('getNetworkById', () => {

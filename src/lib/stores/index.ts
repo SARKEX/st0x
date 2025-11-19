@@ -1,18 +1,18 @@
 import { derived, writable, type Readable } from 'svelte/store';
 import { chainId, signerAddress } from 'svelte-wagmi';
-import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
-import type { TradingViewQuote } from './services/tradingview';
-import type { MetaV1S } from './types/OffchainAssetReceiptVault';
-import type { Network } from './network';
-import { networks } from './network';
+import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+import type { TradingViewQuote } from '$lib/api/tradingview';
+import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
+import type { Network } from '$lib/config/network';
+import { networks } from '$lib/config/network';
 import {
 	getResourceStore,
 	type TimedResource,
 	type OrderbookQuoteCache,
 	type TradeMetricPayload,
 	type OracleQuote
-} from '$lib/stores/network-data-cache';
-import type { TokenPriceSummary } from '$lib/domain/onchainOrders';
+} from '$lib/stores/cache';
+import type { TokenPriceSummary } from '$lib/lib/orders';
 
 type DomainKey =
 	| 'vaultSnapshot'

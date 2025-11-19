@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getTokensByNetwork } from '$lib/network';
+	import { getTokensByNetwork } from '$lib/config/network';
 	import { currentNetwork } from '$lib/stores';
 	import { onMount } from 'svelte';
 	import { onDestroy } from 'svelte';

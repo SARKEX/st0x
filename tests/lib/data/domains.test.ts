@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
-import type { Network } from '$lib/network';
+import type { Network } from '$lib/config/network';
 
 const {
 	network,
@@ -12,8 +12,7 @@ const {
 	mockFetchOrders,
 	mockBuildTokenMap,
 	mockGetPythQuotes,
-	mockGetOracleSnapshots,
-	mockGetPrice
+	mockGetOracleSnapshots
 } = vi.hoisted(() => {
 	const network = { id: 1, chainId: 100, displayName: 'Test Network' } as unknown as Network;
 	const networkWithoutUsdc = { id: 2, chainId: 100, displayName: 'No USDC' } as unknown as Network;
@@ -83,37 +82,25 @@ const {
 		mockFetchOrders: vi.fn(),
 		mockBuildTokenMap: vi.fn(),
 		mockGetPythQuotes: vi.fn(),
-		mockGetOracleSnapshots: vi.fn(),
-		mockGetPrice: vi.fn()
+		mockGetOracleSnapshots: vi.fn()
 	};
 });
 
-vi.mock('$lib/network', () => networkModule);
-vi.mock('$lib/query', () => ({
+vi.mock('$lib/config/network', () => networkModule);
+vi.mock('$lib/api/subgraph', () => ({
 	getSfts: mockGetSfts,
 	getTrades: mockGetTrades
 }));
-vi.mock('$lib/utils/quote', () => ({
+vi.mock('$lib/lib/orders', () => ({
 	fetchAndQuotePaymentTokenOrders: mockFetchOrders,
 	buildTokenPriceMap: mockBuildTokenMap
 }));
-vi.mock('$lib/services/pyth', () => ({
+vi.mock('$lib/api/pyth', () => ({
 	getPythQuotes: mockGetPythQuotes,
 	getNetworkOracleSnapshots: mockGetOracleSnapshots
 }));
-vi.mock('$lib/getPrice', () => ({
-	getPrice: mockGetPrice
-}));
-vi.mock('sushi/evm', () => ({
-	EvmToken: class MockEvmToken {
-		constructor(public config: unknown) {}
-	},
-	evmChainIds: {
-		[network.chainId]: 1
-	}
-}));
 
-import { DOMAIN_DEFINITIONS } from '$lib/data/domains';
+import { DOMAIN_DEFINITIONS } from '$lib/api/domains';
 
 describe('domain fetchers', () => {
 	beforeEach(() => {
@@ -178,35 +165,47 @@ describe('domain fetchers', () => {
 		consoleSpy.mockRestore();
 	});
 
-	it('merges price feeds with sushi fallbacks', async () => {
+	it('fetches price feeds from pyth and handles errors', async () => {
 		const priceFeedFetcher = DOMAIN_DEFINITIONS.priceFeeds.fetcher;
-		const pythQuote = {
-			symbol: 'AAA',
-			close: 10,
-			open: 10,
-			high: 10,
-			low: 10,
-			volume: 0,
-			marketCap: 0,
-			percentChange: 0,
-			changePercent: 0,
-			change: 0,
-			changeAbs: 0,
-			prevClose: 10,
-			week52High: 10,
-			week52Low: 10
-		};
-		mockGetPythQuotes.mockResolvedValue([pythQuote]);
-		mockGetPrice.mockResolvedValue('123.45');
+		const pythQuotes = [
+			{
+				symbol: 'AAA',
+				close: 10,
+				open: 10,
+				high: 10,
+				low: 10,
+				volume: 0,
+				marketCap: 0,
+				percentChange: 0,
+				changePercent: 0,
+				change: 0,
+				changeAbs: 0,
+				prevClose: 10,
+				week52High: 10,
+				week52Low: 10
+			},
+			{
+				symbol: 'BBB',
+				close: 20,
+				open: 20,
+				high: 20,
+				low: 20,
+				volume: 0,
+				marketCap: 0,
+				percentChange: 0,
+				changePercent: 0,
+				change: 0,
+				changeAbs: 0,
+				prevClose: 20,
+				week52High: 20,
+				week52Low: 20
+			}
+		];
+		mockGetPythQuotes.mockResolvedValue(pythQuotes);
 
 		const result = await priceFeedFetcher(network);
 		expect(mockGetPythQuotes).toHaveBeenCalledWith(mockTokens, network);
-		expect(mockGetPrice).toHaveBeenCalledTimes(1);
-		expect(result).toHaveLength(2);
-		expect(result[0]).toEqual(pythQuote);
-		const fallbackQuote = result[1];
-		expect(fallbackQuote.symbol).toBe('BBB');
-		expect(fallbackQuote.close).toBe(123.45);
+		expect(result).toEqual(pythQuotes);
 
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		mockGetPythQuotes.mockRejectedValueOnce(new Error('oops'));

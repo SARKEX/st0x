@@ -1,22 +1,22 @@
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-import type { TradingViewQuote } from '$lib/services/tradingview';
-import type { Network } from '$lib/network';
+import type { TradingViewQuote } from '$lib/api/tradingview';
+import type { Network } from '$lib/config/network';
 import {
 	TOKENS,
 	CRYPTO_TOKENS,
 	DEFAULT_PAYMENT_TOKENS,
 	getDefaultPaymentTokenForNetwork
-} from '$lib/network';
-import { getSfts, getTrades } from '$lib/query';
+} from '$lib/config/network';
+import { getSfts, getTrades } from '$lib/api/subgraph';
 import {
 	fetchAndQuotePaymentTokenOrders,
 	buildTokenPriceMap,
 	type TokenPriceSummary,
 	type ProcessedQuote
-} from '$lib/domain/onchainOrders';
-import { getNetworkOracleSnapshots, getPythQuotes, type OracleSnapshot } from '$lib/services/pyth';
+} from '$lib/lib/orders';
+import { getNetworkOracleSnapshots, getPythQuotes, type OracleSnapshot } from '$lib/api/pyth';
 import type { SgTrade } from '@rainlanguage/orderbook';
-import type { DomainFetcher, PollingOptions } from '$lib/data/polling-cache';
+import type { DomainFetcher, PollingOptions } from '$lib/stores/polling';
 
 export type DomainKey =
 	| 'vaultSnapshot'
@@ -65,6 +65,7 @@ function getTokensWithPriceFeed(network: Network) {
 	const allTokens = [...TOKENS, ...CRYPTO_TOKENS];
 	return allTokens.filter((token) => token.chainId === network.chainId && token.priceFeedId);
 }
+
 
 const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (network) => {
 	try {

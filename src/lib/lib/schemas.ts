@@ -1,6 +1,6 @@
-import { MAGIC_NUMBERS } from './consts';
-import { cborDecode, bytesToMeta } from './helpers';
-import type { OffchainAssetReceiptVault } from './types/OffchainAssetReceiptVault';
+import { MAGIC_NUMBERS } from '$lib/config/constants';
+import { cborDecode, bytesToMeta } from '$lib/utils/helpers';
+import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 export const addSchemaToReceipts = (vault: OffchainAssetReceiptVault) => {
 	const tempSchema: { displayName: string; hash: string }[] = [];

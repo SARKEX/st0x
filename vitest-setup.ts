@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
-import {  web3ModalStore } from './src/lib/mocks/mockStores';
-import { mockCurrentNetwork } from './src/lib/mocks/mockCurrentNetwork';
+import {  web3ModalStore } from './tests/mocks/mockStores';
+import { mockCurrentNetwork } from './tests/mocks/mockCurrentNetwork';
 
 const { mockWagmiConfigStore, mockSignerAddressStore, mockChainIdStore, mockConnectedStore, mockWrongNetworkStore } =
-	await vi.hoisted(() => import('./src/lib/mocks/mockStores'));
+	await vi.hoisted(() => import('./tests/mocks/mockStores'));
 
 vi.mock('svelte-wagmi', async () => {
 	return {

@@ -1,4 +1,10 @@
-import type { Token } from 'sushi';
+export interface Token {
+	address: string;
+	chainId: number;
+	decimals: number;
+	symbol: string;
+	name: string;
+}
 
 export interface Sft {
 	name: string;

@@ -4,7 +4,7 @@ import {
 	validatePeriod,
 	validateBaseline,
 	validateOverrideDepositAmount
-} from '$lib/validateDeploymentArgs';
+} from '$lib/utils/validation';
 
 describe('validateDeploymentArgs', () => {
 	describe('validateSelectedAmount', () => {

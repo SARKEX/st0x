@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { signerAddress } from 'svelte-wagmi';
 	import { createEventDispatcher } from 'svelte';
-	import { handleDecimalSeparator } from '$lib/handleDecimalSeparator';
-	import type { ValidateFunction } from '$lib/validateDeploymentArgs';
+	import { handleDecimalSeparator } from '$lib/utils/input';
+	import type { ValidateFunction } from '$lib/utils/validation';
 
 	export let amount: string = '';
 	export let unit: string = '';

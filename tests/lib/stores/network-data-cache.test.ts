@@ -53,15 +53,15 @@ const { domainKeys, mockedDefinitions, mockCreatePollingController, mockedContro
 		};
 	});
 
-vi.mock('$lib/data/domains', () => ({
+vi.mock('$lib/api/domains', () => ({
 	DOMAIN_DEFINITIONS: mockedDefinitions
 }));
 
-vi.mock('$lib/data/polling-cache', () => ({
+vi.mock('$lib/stores/polling', () => ({
 	createPollingController: mockCreatePollingController
 }));
 
-import { getResourceStore, ensureResource, stopResourceTimer } from '$lib/stores/network-data-cache';
+import { getResourceStore, ensureResource, stopResourceTimer } from '$lib/stores/cache';
 
 describe('network-data-cache', () => {
 	it('creates polling controllers for every domain', () => {

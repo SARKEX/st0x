@@ -2,7 +2,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import transactionStore, { TransactionStatus } from '$lib/transactionStore';
+	import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
 	import { TransactionErrorMessage } from '$lib/types/errors';
 	// currentNetwork not needed directly; TxLink uses it from store
 	import TxLink from '$lib/components/ui/TxLink.svelte';

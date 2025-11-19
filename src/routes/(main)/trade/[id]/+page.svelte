@@ -9,9 +9,9 @@
 		oracleQuotes,
 		oracleQuotesResource
 	} from '$lib/stores';
-	import { ensureResource } from '$lib/stores/network-data-cache';
+	import { ensureResource } from '$lib/stores/cache';
 	import { formatUnits } from 'viem';
-	import { TOKENS } from '$lib/network';
+	import { TOKENS } from '$lib/config/network';
 	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
@@ -21,7 +21,7 @@
 	import TradingViewWidget from '$lib/components/charts/TradingViewWidget.svelte';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
@@ -43,13 +43,13 @@
 		normalizeAddress,
 		ratioToNumber,
 		toDecimal
-	} from '$lib/domain/tokenMath';
+	} from '$lib/lib/tokens';
 	import type {
 		TimedResource,
 		OracleQuote,
 		OrderbookQuoteCache
-	} from '$lib/stores/network-data-cache';
-	import type { ResourceStatus } from '$lib/data/polling-cache';
+	} from '$lib/stores/cache';
+	import type { ResourceStatus } from '$lib/stores/polling';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
