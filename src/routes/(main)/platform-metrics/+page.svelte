@@ -25,7 +25,7 @@
 		normalizeAddress,
 		type TradeAnalysis,
 		type TokenLookup
-	} from '$lib/lib/tokens';
+	} from '$lib/utils/tokenMath';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import { createRaindexClient } from '$lib/api/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';

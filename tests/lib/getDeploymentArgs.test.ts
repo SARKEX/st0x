@@ -4,7 +4,7 @@ import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
-} from '$lib/lib/deployment';
+} from '$lib/api/deployment';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import {
 	getAllTokensByNetwork,

@@ -43,7 +43,7 @@
 		normalizeAddress,
 		ratioToNumber,
 		toDecimal
-	} from '$lib/lib/tokens';
+	} from '$lib/utils/tokenMath';
 	import type {
 		TimedResource,
 		OracleQuote,

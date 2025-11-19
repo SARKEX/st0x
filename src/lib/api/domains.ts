@@ -13,7 +13,7 @@ import {
 	buildTokenPriceMap,
 	type TokenPriceSummary,
 	type ProcessedQuote
-} from '$lib/lib/orders';
+} from '$lib/api/orders';
 import { getNetworkOracleSnapshots, getPythQuotes, type OracleSnapshot } from '$lib/api/pyth';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DomainFetcher, PollingOptions } from '$lib/stores/polling';

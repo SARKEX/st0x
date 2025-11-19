@@ -91,7 +91,7 @@ vi.mock('$lib/api/subgraph', () => ({
 	getSfts: mockGetSfts,
 	getTrades: mockGetTrades
 }));
-vi.mock('$lib/lib/orders', () => ({
+vi.mock('$lib/api/orders', () => ({
 	fetchAndQuotePaymentTokenOrders: mockFetchOrders,
 	buildTokenPriceMap: mockBuildTokenMap
 }));

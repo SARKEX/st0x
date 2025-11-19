@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { hexToBigInt, buildTokenPriceMap, type ProcessedQuote } from '$lib/lib/orders';
-import * as tokenMath from '$lib/lib/tokens';
+import { hexToBigInt, buildTokenPriceMap, type ProcessedQuote } from '$lib/api/orders';
+import * as tokenMath from '$lib/utils/tokenMath';
 
 // Helper to convert bigint to hex-encoded Float string for tests
 function bigintToHexFloat(value: bigint): string {
@@ -12,7 +12,7 @@ function bigintToHexFloat(value: bigint): string {
 }
 
 // Mock the tokenMath module
-vi.mock('$lib/lib/tokens', () => ({
+vi.mock('$lib/utils/tokenMath', () => ({
 	normalizeAddress: vi.fn((addr: string) => {
 		if (!addr) return null;
 		return addr.toLowerCase();

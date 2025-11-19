@@ -28,7 +28,7 @@ import {
 	type DcaDeploymentArgs,
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
-} from '$lib/lib/deployment';
+} from '$lib/api/deployment';
 import { rainlangConfirmationModal } from '$lib/stores';
 import { createRaindexClient } from '$lib/api/raindex';
 import { ensureResource, getResourceStore } from '$lib/stores/cache';

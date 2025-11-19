@@ -19,7 +19,7 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	// Consolidated table usage
 	import { containerStyles } from '$lib/styles/utils';
-	import type { TokenPriceSummary } from '$lib/lib/orders';
+	import type { TokenPriceSummary } from '$lib/api/orders';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 
 	// Filter tokens by current network

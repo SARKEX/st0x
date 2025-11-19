@@ -9,9 +9,9 @@
 		scaleAmount,
 		walkOrderbook,
 		FIXED_POINT_SCALE
-	} from '$lib/lib/orders';
+	} from '$lib/api/orders';
 	import { createRaindexClient } from '$lib/api/raindex';
-	import { normalizeAddress } from '$lib/lib/tokens';
+	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import {
 		type OrderV4,
 		type RaindexOrderQuote,
