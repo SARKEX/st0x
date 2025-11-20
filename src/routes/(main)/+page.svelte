@@ -1,13 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import {
-		currentNetwork,
-		sfts,
-		tokenGlobalQuote,
-		orderbookQuotes,
-		orderbookQuotesResource,
-		vaultSnapshotResource
-	} from '$lib/stores';
+	import { currentNetwork, sfts, tokenGlobalQuote, orderbookQuotes } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -43,15 +36,8 @@
 
 	let processedTokens: TokenRow[] = [];
 
-	$: vaultStatus = $vaultSnapshotResource?.status ?? 'idle';
-	$: isVaultLoading =
-		(!$sfts || !$sfts.length) && (vaultStatus === 'idle' || vaultStatus === 'loading');
+	$: isVaultLoading = !$sfts || !$sfts.length;
 	$: quotesRecord = $orderbookQuotes ?? {};
-	$: quotesStatus = $orderbookQuotesResource?.status ?? 'idle';
-	$: quotesHaveData = Object.keys(quotesRecord).length > 0;
-	$: quotesLoading = quotesStatus === 'loading' && !quotesHaveData;
-	$: quotesError =
-		$orderbookQuotesResource?.status === 'error' ? $orderbookQuotesResource.error : null;
 
 	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
 		if (!summary) return null;
@@ -116,18 +102,6 @@
 				<div class="mb-4 sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse</h2>
 				</div>
-				{#if quotesLoading}
-					<div class="flex w-full justify-center py-12">
-						<LoadingSpinner size="lg" text="Fetching on-chain prices..." />
-					</div>
-				{:else}
-					{#if quotesError}
-						<div
-							class="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
-						>
-							Unable to refresh on-chain quotes right now. Displayed prices may be stale.
-						</div>
-					{/if}
 					<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
 						<Table>
 							<thead>
@@ -244,7 +218,6 @@
 							</tbody>
 						</Table>
 					</div>
-				{/if}
 			</Section>
 		</PageContainer>
 

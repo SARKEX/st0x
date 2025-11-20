@@ -19,7 +19,7 @@ import {
 import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
-import { createRaindexClient } from '$lib/api/raindex';
+import { createRaindexClient } from '$lib/clients/raindex';
 import { Float } from '@rainlanguage/float';
 import {
 	type ProcessedQuote,

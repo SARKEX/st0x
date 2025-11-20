@@ -16,7 +16,7 @@
 	import { formatUnits } from 'viem';
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { goto } from '$app/navigation';
-	import { createRaindexClient } from '$lib/api/raindex';
+	import { createRaindexClient } from '$lib/clients/raindex';
 	import type {
 		SgOrderWithSubgraphName,
 		SgErc20,

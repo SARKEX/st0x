@@ -13,7 +13,7 @@ import {
 	getFolioDeploymentArgs
 } from '$lib/services/orderDeployment';
 import { mockCurrentNetwork } from '../mocks/mockCurrentNetwork';
-import { createRaindexClient } from '$lib/api/raindex';
+import { createRaindexClient } from '$lib/clients/raindex';
 import { decodeFunctionData } from 'viem';
 
 // Shared mock network object to avoid repetition
@@ -36,7 +36,7 @@ vi.mock('$lib/services/orderDeployment', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/api/raindex', () => ({
+vi.mock('$lib/clients/raindex', () => ({
 	createRaindexClient: vi.fn()
 }));
 

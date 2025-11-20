@@ -19,7 +19,7 @@ import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
-import { RAIN_STRATEGIES_COMMIT } from '$lib/api/raindex';
+import { RAIN_STRATEGIES_COMMIT } from '$lib/clients/raindex';
 
 // Strategy cache - keyed by commit hash + filename
 // Since strategies are from a pinned commit, they never change

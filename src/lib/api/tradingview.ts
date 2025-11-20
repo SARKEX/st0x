@@ -39,14 +39,6 @@ export interface TradingViewTechnicals {
 	obv: number | null;
 }
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-	const response = await fetch(input, init);
-	if (!response.ok) {
-		throw new Error(`TradingView request failed with status ${response.status}`);
-	}
-	return (await response.json()) as T;
-}
-
 function createQueryString(params: Record<string, string | undefined>): string {
 	const search = new URLSearchParams();
 	for (const [key, value] of Object.entries(params)) {
@@ -63,7 +55,9 @@ export async function getQuotes(symbols: string[], market?: string) {
 		symbols: symbols.join(','),
 		market
 	});
-	const data = await fetchJson<{ quotes: TradingViewQuote[] }>(`/api/tradingview/quotes?${query}`);
+	const data = await fetchJson<{ quotes: TradingViewQuote[] }>(
+		`/api/tradingview/quotes?${query}`
+	);
 	return data.quotes ?? [];
 }
 
@@ -89,3 +83,4 @@ export async function getTechnicals(symbol: string, market?: string) {
 }
 
 export type { TradingViewQuote as Quote };
+import { fetchJson } from '$lib/clients/http';
