@@ -17,6 +17,7 @@ import {
 	RaindexVault,
 	Float
 } from '@rainlanguage/orderbook';
+import { parseFloatHex } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 import {
@@ -498,40 +499,6 @@ const transactionStore = () => {
 				inputAmountFilled: 0n
 			};
 
-			// Helper function to parse hex amount using Float
-			const parseHexAmount = (hexAmount: Hex, decimals: number): bigint => {
-				try {
-					const floatResult = Float.fromHex(hexAmount);
-					if (floatResult.error) {
-						console.error('Error parsing hex:', floatResult.error);
-						return 0n;
-					}
-
-					const float = floatResult.value;
-					const absResult = float.abs();
-					if (absResult.error) {
-						console.error('Error getting absolute value:', absResult.error);
-						return 0n;
-					}
-
-					const fixedResult = absResult.value.toFixedDecimalLossy(decimals);
-					if (fixedResult.error) {
-						console.error('Error converting to fixed decimal:', fixedResult.error);
-						return 0n;
-					}
-
-					const fdValue = fixedResult.value;
-					const fdValueObj = fdValue as unknown as Record<string, unknown>;
-					if (typeof fdValueObj?.value === 'string') {
-						return BigInt(fdValueObj.value as string);
-					}
-					return 0n;
-				} catch (e) {
-					console.error('Error decoding amount Float:', e);
-					return 0n;
-				}
-			};
-
 			// Get token info from options (passed by MarketOrder component)
 			// NOTE: inputVaultBalanceChange = what user receives (INPUT)
 			//       outputVaultBalanceChange = what user gives (OUTPUT)
@@ -546,16 +513,18 @@ const transactionStore = () => {
 			let totalOutputAmount = 0n;
 			for (const trade of validTrades) {
 				// User INPUT = inputVaultBalanceChange (what they receive)
-				const inputAmount = parseHexAmount(
+				const inputAmount = parseFloatHex(
 					trade.inputVaultBalanceChange!.amount as Hex,
-					inputTokenDecimals
+					inputTokenDecimals,
+					true // Use absolute value
 				);
 				totalInputAmount += inputAmount;
 
 				// User OUTPUT = outputVaultBalanceChange (what they give)
-				const outputAmount = parseHexAmount(
+				const outputAmount = parseFloatHex(
 					trade.outputVaultBalanceChange!.amount as Hex,
-					outputTokenDecimals
+					outputTokenDecimals,
+					true // Use absolute value
 				);
 				totalOutputAmount += outputAmount;
 			}

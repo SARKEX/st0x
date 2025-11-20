@@ -8,7 +8,7 @@
  */
 
 import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
-import { normalizeAddress, type MarketSide } from '$lib/utils/tokenMath';
+import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tokenMath';
 import { Float } from '@rainlanguage/float';
 
 // ============================================================================
@@ -16,16 +16,6 @@ import { Float } from '@rainlanguage/float';
 // ============================================================================
 
 export type MarketOrderSide = 'Buy' | 'Sell';
-
-/**
- * INTERNAL_DECIMALS: DEPRECATED - Being removed.
- *
- * This was used for arbitrary 18-decimal normalization, which is incorrect.
- * Proper approach: work in native token decimals and normalize to token scale for ratios.
- *
- * TODO: Remove after refactoring walkOrderbook.
- */
-export const INTERNAL_DECIMALS = 18;
 
 const PRICE_SCALE = 10n ** 9n; // preserves 9 decimal places for prices
 const PRICE_SCALE_NUMBER = Number(PRICE_SCALE);
@@ -154,48 +144,47 @@ function getQuotePrice(quote: ProcessedQuote): number | null {
 function computeAvailableQuantity(
 	quote: ProcessedQuote,
 	orderSide: MarketOrderSide,
-	price: number
+	price: number,
+	assetDecimals: number
 ): bigint {
 	// Convert hex-encoded Float to bigint scaled amount
-	let maxOutputBigInt: bigint | null = null;
+	let maxOutputBigInt: bigint;
 	if (typeof quote.maxOutput === 'string' && quote.maxOutput.startsWith('0x')) {
-		try {
-			const floatResult = Float.fromHex(quote.maxOutput as `0x${string}`);
-			if (!floatResult.error && floatResult.value) {
-				const outputDecimals = quote.outputTokenDecimals ?? 18;
-				const decimalResult = floatResult.value.toFixedDecimalLossy(outputDecimals);
-				if (!decimalResult.error && decimalResult.value) {
-					maxOutputBigInt = BigInt(decimalResult.value.value);
-				}
-			}
-		} catch (error) {
-			console.warn('Failed to convert maxOutput Float:', error);
-		}
+		const outputDecimals = quote.outputTokenDecimals ?? 18;
+		maxOutputBigInt = parseFloatHex(quote.maxOutput, outputDecimals);
 	} else if (typeof quote.maxOutput === 'bigint') {
 		maxOutputBigInt = quote.maxOutput;
+	} else {
+		return 0n;
 	}
 
-	if (maxOutputBigInt === null) return 0n;
+	if (maxOutputBigInt === 0n) return 0n;
 
 	// Fallback to 18 decimals if not provided (common for ERC20 tokens)
 	// TODO: Consider skipping quotes without decimals or fetching from token contract
 	const outputDecimals = quote.outputTokenDecimals ?? 18;
-	const maxOutputScaled = scaleAmount(maxOutputBigInt, outputDecimals, INTERNAL_DECIMALS);
-	if (maxOutputScaled <= 0n) return 0n;
+	if (maxOutputBigInt <= 0n) return 0n;
 
 	if (orderSide === 'Buy') {
-		// Order outputs the asset directly; availability is the scaled maxOutput
-		return maxOutputScaled;
+		// Buy: Order outputs the asset directly
+		// maxOutputBigInt is in output decimals (asset decimals for Buy)
+		// Scale from output decimals to asset decimals (should be same for Buy, but ensure consistency)
+		return scaleAmount(maxOutputBigInt, outputDecimals, assetDecimals);
 	}
 
-	// Sell: order outputs quote token. Convert quote token availability into asset availability
+	// Sell: Order outputs payment token. Convert payment token availability into asset availability
+	// using price (payment per asset)
 	if (price <= 0) return 0n;
-	// Scale price to INTERNAL_DECIMALS precision for division: (quoteAmount / price)
-	const precisionScale = 10n ** BigInt(INTERNAL_DECIMALS);
-	const scaledPrice = BigInt(Math.round(price * Number(precisionScale)));
-	if (scaledPrice <= 0n) return 0n;
-	// Maintain INTERNAL_DECIMALS scale: (amount * scale) / price
-	return (maxOutputScaled * precisionScale) / scaledPrice;
+
+	// Calculate: assetAvailable = paymentAvailable / price
+	// Use PRICE_SCALE for precision in the division
+	const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+	if (priceScaled <= 0n) return 0n;
+
+	// (maxOutput in payment decimals * PRICE_SCALE) / priceScaled gives us amount in payment decimals
+	// Then convert from payment decimals to asset decimals
+	const assetAmountInPaymentScale = (maxOutputBigInt * PRICE_SCALE) / priceScaled;
+	return scaleAmount(assetAmountInPaymentScale, outputDecimals, assetDecimals);
 }
 
 /**
@@ -241,7 +230,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		const price = getQuotePrice(quote);
 		if (!price || price <= 0) continue;
 
-		const availableQuantity = computeAvailableQuantity(quote, orderSide, price);
+		const availableQuantity = computeAvailableQuantity(quote, orderSide, price, assetDecimals);
 		if (availableQuantity <= 0n) continue;
 
 		const remaining = targetAmount - quantityFilled;

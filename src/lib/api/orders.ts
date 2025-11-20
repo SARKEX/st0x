@@ -29,20 +29,12 @@ import {
 	type TokenPriceSummary,
 	scaleAmount,
 	walkOrderbook,
-	INTERNAL_DECIMALS,
 	hexToBigInt
 } from '$lib/utils/orderbook';
 
 // Re-export types and utilities
 export type { ProcessedQuote, TokenPriceSummary };
-export {
-	OrderV4_ABI,
-	normalizeOrderData,
-	scaleAmount,
-	walkOrderbook,
-	INTERNAL_DECIMALS,
-	hexToBigInt
-};
+export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, hexToBigInt };
 
 // Re-export buildTokenPriceMap with describeQuote injected
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>

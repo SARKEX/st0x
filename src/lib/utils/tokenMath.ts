@@ -3,6 +3,49 @@ import { Float } from '@rainlanguage/float';
 
 export type AmountLike = bigint | string | number | null | undefined;
 
+/**
+ * Parses a hex-encoded Float value into a BigInt amount.
+ *
+ * @param hexAmount - Hex-encoded Float value (e.g., from Rain orderbook)
+ * @param decimals - Token decimals for the amount
+ * @param useAbsolute - Whether to take absolute value (default: false)
+ * @returns BigInt amount in token decimals, or 0n on error
+ */
+export function parseFloatHex(hexAmount: string, decimals: number, useAbsolute = false): bigint {
+	try {
+		const floatResult = Float.fromHex(hexAmount as `0x${string}`);
+		if (floatResult.error || !floatResult.value) {
+			return 0n;
+		}
+
+		let float = floatResult.value;
+
+		// Optionally take absolute value
+		if (useAbsolute) {
+			const absResult = float.abs();
+			if (absResult.error || !absResult.value) {
+				return 0n;
+			}
+			float = absResult.value;
+		}
+
+		const fixedResult = float.toFixedDecimalLossy(decimals);
+		if (fixedResult.error || !fixedResult.value) {
+			return 0n;
+		}
+
+		const fdValue = fixedResult.value;
+		const fdValueObj = fdValue as unknown as Record<string, unknown>;
+		if (typeof fdValueObj?.value === 'string') {
+			return BigInt(fdValueObj.value as string);
+		}
+		return 0n;
+	} catch (error) {
+		console.warn('Failed to parse Float hex:', error);
+		return 0n;
+	}
+}
+
 export function normalizeAddress(value: string | null | undefined): string | null {
 	if (!value) return null;
 	const trimmed = value.trim();
@@ -192,18 +235,6 @@ export function isPaymentToken(
 	if (!symbol) return false;
 	const paymentSymbols = ['USDC', 'USDT', 'DAI', 'USD'];
 	return paymentSymbols.some((pt) => symbol.toUpperCase().includes(pt));
-}
-
-/**
- * Translates bid/ask market side to user-friendly Buy/Sell direction.
- *
- * This is primarily for UI display of orderbook quotes and trade history.
- *
- * @param side - Market side (bid or ask)
- * @returns Buy or Sell direction
- */
-export function sideToBuySell(side: MarketSide): 'Buy' | 'Sell' {
-	return side === 'bid' ? 'Buy' : 'Sell';
 }
 
 export interface TokenDescriptor {
