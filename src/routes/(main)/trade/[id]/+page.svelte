@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
-	import { page } from '$app/stores';
-	import { currentNetwork, sfts, oracleQuotes, oracleQuotesResource } from '$lib/stores';
+import { browser } from '$app/environment';
+import { page } from '$app/stores';
+import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -37,16 +37,20 @@
 		toDecimal
 	} from '$lib/utils/tokenMath';
 	import type { TimedResource, OracleQuote } from '$lib/stores/cache';
+	import type { ResourceStatus } from '$lib/stores/polling';
 	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
 	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: currentPythToken = TOKENS.find(
 		(token) =>
 			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
@@ -227,7 +231,24 @@ $: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 		}
 		return fallback;
 	}
-	$: oracleResource = $oracleQuotesResource;
+	$: oracleResource = (() => {
+		const q: any = oracleQuotesQuery;
+		const status: ResourceStatus =
+			q?.status === 'success'
+				? 'ready'
+				: q?.status === 'error'
+					? 'error'
+					: 'loading';
+		return {
+			status,
+			data: q?.data ?? null,
+			updatedAt: q?.dataUpdatedAt ?? null,
+			error: q?.error ?? null,
+			refreshInterval: 15_000,
+			timerId: null,
+			subscribers: 0
+		} satisfies TimedResource<Record<string, OracleQuote>>;
+	})();
 	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
 	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
 	$: oraclePriceData = oracleEntry

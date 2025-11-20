@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { currentNetwork, oracleQuotes, oracleQuotesResource } from '$lib/stores';
-	import type { TimedResource, OracleQuote } from '$lib/stores/cache';
+	import { currentNetwork, oracleQuotes } from '$lib/stores';
+	import type { OracleQuote } from '$lib/stores/cache';
 	import type { PythToken } from '$lib/types';
 	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 
 	type CommonToken = Partial<PythToken> & {
 		symbol?: string;
@@ -15,7 +16,10 @@
 	export let tokenQuotes: TradingViewQuote[] = [];
 
 	let tokenAddress = '';
-	let oracleResource: TimedResource<Record<string, OracleQuote>> | null = null;
+	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	let oracleQuotesState:
+		| import('@tanstack/query-core').QueryObserverResult<Record<string, OracleQuote>, Error>
+		| null = null;
 	let oracleEntry: OracleQuote | undefined;
 	let oracleLoading = false;
 	let oracleError: string | null = null;
@@ -44,17 +48,18 @@
 	$: quote = tokenQuotes.find((q) => matchesQuote(q, token?.symbol, token?.tradingViewSymbol));
 	$: quotePrice = quote?.close ?? null;
 	$: tokenAddress = token?.address?.toLowerCase?.() ?? '';
-	$: oracleResource = $oracleQuotesResource;
+	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	$: oracleQuotesState = $oracleQuotesQuery ?? null;
 	$: oracleEntry = tokenAddress ? $oracleQuotes[tokenAddress] : undefined;
 	$: oracleLoading =
-		(oracleResource?.status === 'idle' || oracleResource?.status === 'loading') &&
-		tokenAddress !== '';
+		(oracleQuotesState?.fetchStatus === 'fetching' || oracleQuotesState?.status === 'pending') &&
+		Boolean(tokenAddress);
 	$: oracleError = (() => {
 		if (!tokenAddress) return 'Token missing address';
-		if (oracleResource?.status === 'error') {
+		if (oracleQuotesState?.status === 'error') {
 			return 'Failed to fetch oracle data';
 		}
-		if (oracleResource?.status === 'ready' && !oracleEntry) {
+		if (oracleQuotesState?.status === 'success' && !oracleEntry) {
 			return 'Oracle data unavailable';
 		}
 		return null;

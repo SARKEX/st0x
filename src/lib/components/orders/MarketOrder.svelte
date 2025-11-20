@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { CategorizedToken } from '$lib/config/network';
-	import { currentNetwork, oracleQuotesResource } from '$lib/stores';
+import type { CategorizedToken } from '$lib/config/network';
+import { currentNetwork } from '$lib/stores';
 	import {
 		OrderV4_ABI,
 		normalizeOrderData,
@@ -27,9 +27,10 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 	import { validateSelectedAmount } from '$lib/utils/validation';
-	import transactionStore from '$lib/stores/transaction';
-	import { Float } from '@rainlanguage/float';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+import transactionStore from '$lib/stores/transaction';
+import { Float } from '@rainlanguage/float';
+import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	/**
@@ -43,8 +44,10 @@
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 
-	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
@@ -255,7 +258,7 @@
 
 		// Try to get oracle price as reference
 		const oracleAddress = assetToken?.address?.toLowerCase();
-		const oracleEntry = oracleAddress ? $oracleQuotesResource?.data?.[oracleAddress] : null;
+		const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
 		const oraclePrice = oracleEntry?.price;
 
 		let referencePrice = availableOrders[0].price; // Fallback to best BBO price

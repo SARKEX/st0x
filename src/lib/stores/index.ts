@@ -4,11 +4,10 @@ import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptV
 import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 import type { Network } from '$lib/config/network';
 import { networks } from '$lib/config/network';
-import {
-	getResourceStore,
-	type TimedResource,
-	type OracleQuote
-} from '$lib/stores/cache';
+import { getResourceStore, type TimedResource } from '$lib/stores/cache';
+import type { OracleQuote } from '$lib/queries/oracleQuotes';
+import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+import type { CreateQueryResult } from '@tanstack/svelte-query';
 
 type DomainKey =
 	| 'vaultSnapshot'
@@ -42,8 +41,9 @@ export const wrongNetwork = derived(
 );
 export const vaultSnapshotResource =
 	createNetworkResourceStore<OffchainAssetReceiptVault[]>('vaultSnapshot');
-export const oracleQuotesResource =
-	createNetworkResourceStore<Record<string, OracleQuote>>('oracleQuotes');
+export const oracleQuotesQuery = derived(currentNetwork, ($network) =>
+	createOracleQuotesQuery($network)
+);
 
 export const sfts = derived(
 	vaultSnapshotResource,
@@ -51,11 +51,7 @@ export const sfts = derived(
 	[] as OffchainAssetReceiptVault[]
 );
 export const currentToken = writable<OffchainAssetReceiptVault | null>(null);
-export const oracleQuotes = derived(
-	oracleQuotesResource,
-	($resource) => $resource?.data ?? {},
-	{} as Record<string, OracleQuote>
-);
+export const oracleQuotes = derived(oracleQuotesQuery as any, ($query: any) => $query?.data ?? {});
 
 // Store for Rainlang confirmation modal
 export const rainlangConfirmationModal = writable<{

@@ -21,6 +21,7 @@ import { containerStyles } from '$lib/styles/utils';
 import Button from '$lib/components/ui/Button.svelte';
 import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
+import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -58,7 +59,9 @@ let minTradeAmount: bigint = 0n;
 let maxTradeAmount: bigint = 0n;
 let initialIo: string = '0';
 let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 $: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 
 	// errors
 	let minTradeAmountError: boolean = false;
@@ -274,7 +277,7 @@ $: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
 			{#if !hasValidPriceFeedId(selectedToken1) && !hasValidPriceFeedId(selectedToken2)}
 				<div class="py-6 text-center text-sm text-gray-400">No price feed data available</div>
-			{:else if !$priceFeedsQuery?.data?.length}
+			{:else if !$priceFeedsQuery?.data?.length || !$oracleQuotesQuery?.data}
 				<div class="flex justify-center py-6">
 					<LoadingSpinner size="sm" text="Loading price data..." />
 				</div>
@@ -291,10 +294,16 @@ $: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 						</thead>
 						<tbody>
 							{#if hasValidPriceFeedId(selectedToken1)}
-								<PythOracleRow token={selectedToken1} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+								<PythOracleRow
+									token={selectedToken1}
+									tokenQuotes={$priceFeedsQuery?.data ?? []}
+								/>
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken2)}
-								<PythOracleRow token={selectedToken2} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+								<PythOracleRow
+									token={selectedToken2}
+									tokenQuotes={$priceFeedsQuery?.data ?? []}
+								/>
 							{/if}
 						</tbody>
 					</table>
