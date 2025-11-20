@@ -144,12 +144,12 @@
 								{:else}
 									{#each processedTokens as token (token.id)}
 										{@const sft = $sfts.find((s) => s.id === token.id)}
-										{@const deposits = sft
-											? sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0))
-											: BigInt(0)}
-										{@const withdraws = sft
-											? sft.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0))
-											: BigInt(0)}
+										{@const deposits =
+											sft?.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)) ??
+											BigInt(0)}
+										{@const withdraws =
+											sft?.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)) ??
+											BigInt(0)}
 										{@const circulating = deposits - withdraws}
 										{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
 										{@const displayPrice =

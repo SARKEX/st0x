@@ -1,47 +1,24 @@
-import type { Readable } from 'svelte/store';
-import {
-	DOMAIN_DEFINITIONS,
-	type DomainKey,
-	type DomainPayloads,
-	type PendingTradePayload,
-	type OracleQuote
-} from '$lib/api/domains';
-import {
-	createPollingController,
-	type PollingController,
-	type TimedResource
-} from '$lib/stores/polling';
-
-type ControllerMap = { [K in DomainKey]: PollingController<DomainPayloads[K]> };
-
-const controllers: ControllerMap = {
-	vaultSnapshot: createPollingController(DOMAIN_DEFINITIONS.vaultSnapshot),
-	pendingTrades: createPollingController(DOMAIN_DEFINITIONS.pendingTrades),
-	oracleQuotes: createPollingController(DOMAIN_DEFINITIONS.oracleQuotes)
+// Legacy cache API deprecated in favor of Tanstack Query. Placeholder for compatibility.
+export type TimedResource<T> = {
+	status: 'idle' | 'loading' | 'ready' | 'error';
+	data: T | null;
+	updatedAt: number | null;
+	error: unknown | null;
+	refreshInterval: number;
+	timerId: ReturnType<typeof setTimeout> | null;
+	subscribers: number;
 };
 
-export type {
-	TimedResource,
-	PendingTradePayload,
-	DomainKey,
-	OracleQuote
-};
+export type DomainKey = never;
 
-export function getResourceStore<K extends DomainKey>(
-	networkId: number,
-	domain: K
-): Readable<TimedResource<DomainPayloads[K]>> {
-	return controllers[domain].getStore(networkId);
+export function getResourceStore() {
+	throw new Error('Polling cache removed; use Tanstack Query instead.');
 }
 
-export function ensureResource(
-	networkId: number,
-	domain: DomainKey,
-	options?: { force?: boolean }
-) {
-	return controllers[domain].ensure(networkId, options);
+export function ensureResource() {
+	throw new Error('Polling cache removed; use Tanstack Query instead.');
 }
 
-export function stopResourceTimer(networkId: number, domain: DomainKey) {
-	controllers[domain].stop(networkId);
+export function stopResourceTimer() {
+	return;
 }

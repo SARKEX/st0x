@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { currentNetwork, oracleQuotes } from '$lib/stores';
-	import type { OracleQuote } from '$lib/stores/cache';
+import { currentNetwork, oracleQuotes } from '$lib/stores';
+import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	import type { PythToken } from '$lib/types';
 	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';

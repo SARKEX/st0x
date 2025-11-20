@@ -32,8 +32,8 @@ import {
 } from '$lib/services/orderDeployment';
 import { rainlangConfirmationModal } from '$lib/stores';
 import { createRaindexClient } from '$lib/api/raindex';
-import { ensureResource, getResourceStore } from '$lib/stores/cache';
 import type { Network } from '$lib/config/network';
+import { getTrades } from '$lib/api/subgraph';
 
 // Helper function to create Raindex v5 link HTML
 function createRaindexLink(
@@ -475,144 +475,125 @@ const transactionStore = () => {
 			return transactionError(message);
 		}
 
-		// Force refresh pending trades to pick up the new transaction
 		const network = get(currentNetwork) as Network;
-		const pendingTradesResult = ensureResource(network.id, 'pendingTrades', { force: true });
-		if (pendingTradesResult instanceof Promise) {
-			pendingTradesResult.catch(() => {});
-		}
+		// Poll subgraph for the transaction to appear in trades (5 minute timeout)
+		const pollPendingTrades = async () => {
+			const MAX_ATTEMPTS = 60; // 5 minutes at 5s interval
+			for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+				const now = Math.floor(Date.now() / 1000);
+				const trades = await getTrades(now - 600, now, network);
+				const allTrades = trades.filter(
+					(t) => t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
+				) as unknown as Array<{
+					tradeEvent?: { transaction?: { id?: string } };
+					order?: { orderHash?: string };
+					inputVaultBalanceChange?: {
+						amount?: Hex;
+						oldVaultBalance?: Hex;
+						newVaultBalance?: Hex;
+					};
+					outputVaultBalanceChange?: {
+						amount?: Hex;
+						oldVaultBalance?: Hex;
+						newVaultBalance?: Hex;
+					};
+				}>;
 
-		// Subscribe to pending trades cache instead of polling directly
-		let unsubscribe: (() => void) | null = null;
-		let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-		const cleanup = () => {
-			if (unsubscribe) unsubscribe();
-			if (timeoutId) clearTimeout(timeoutId);
+				const validTrades = allTrades.filter(
+					(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
+				);
+				if (validTrades.length > 0) {
+					return validTrades;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 5_000));
+			}
+			return [];
 		};
 
-		unsubscribe = getResourceStore(network.id, 'pendingTrades').subscribe(($resource) => {
-			if (!$resource?.data?.trades) return;
+		const validTrades = await pollPendingTrades();
 
-			// Find ALL trades for this transaction (multiple orders can be matched)
-			const allTrades = $resource.data.trades.filter(
-				(t) => t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
-			) as unknown as Array<{
-				tradeEvent?: { transaction?: { id?: string } };
-				order?: {
-					orderHash?: string;
-				};
-				inputVaultBalanceChange?: {
-					amount?: Hex;
-					oldVaultBalance?: Hex;
-					newVaultBalance?: Hex;
-				};
-				outputVaultBalanceChange?: {
-					amount?: Hex;
-					oldVaultBalance?: Hex;
-					newVaultBalance?: Hex;
-				};
-			}>;
+		if (validTrades.length === 0) {
+			return transactionError(TransactionErrorMessage.GENERIC, hash);
+		}
 
-			// Only proceed if we have trades with vault changes
-			const validTrades = allTrades.filter(
-				(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
-			);
+		// Get token info from params (passed by MarketOrder component)
+		// NOTE: inputVaultBalanceChange = what user receives (INPUT)
+		//       outputVaultBalanceChange = what user gives (OUTPUT)
+		const inputTokenDecimals = params.takerWantsToken.decimals;
+		const inputTokenSymbol = params.takerWantsToken.symbol;
 
-			if (validTrades.length === 0) {
-				return;
-			}
+		const outputTokenDecimals = params.takerPaysToken.decimals;
+		const outputTokenSymbol = params.takerPaysToken.symbol;
 
-			cleanup();
-
-			// Get token info from params (passed by MarketOrder component)
-			// NOTE: inputVaultBalanceChange = what user receives (INPUT)
-			//       outputVaultBalanceChange = what user gives (OUTPUT)
-			const inputTokenDecimals = params.takerWantsToken.decimals;
-			const inputTokenSymbol = params.takerWantsToken.symbol;
-
-			const outputTokenDecimals = params.takerPaysToken.decimals;
-			const outputTokenSymbol = params.takerPaysToken.symbol;
-
-			// Sum vault changes: INPUT = what user receives (inputVault), OUTPUT = what user gives (outputVault)
-			let totalInputAmount = 0n;
-			let totalOutputAmount = 0n;
-			for (const trade of validTrades) {
-				// User INPUT = inputVaultBalanceChange (what they receive)
-				const inputAmount = parseFloatHex(
-					trade.inputVaultBalanceChange!.amount as Hex,
-					inputTokenDecimals,
-					true // Use absolute value
-				);
-				totalInputAmount += inputAmount;
-
-				// User OUTPUT = outputVaultBalanceChange (what they give)
-				const outputAmount = parseFloatHex(
-					trade.outputVaultBalanceChange!.amount as Hex,
-					outputTokenDecimals,
-					true // Use absolute value
-				);
-				totalOutputAmount += outputAmount;
-			}
-
-			// Calculate actual ioRatio from transaction data
-			const actualIoRatio =
-				totalOutputAmount > 0n
-					? parseFloat(formatUnits(totalInputAmount, inputTokenDecimals)) /
-						parseFloat(formatUnits(totalOutputAmount, outputTokenDecimals))
-					: 0;
-
-			// Use the user's actual requested input amount
-			const requestedInputAmount = params.requestedTakerWantsAmount;
-
-			// Check if fill is complete (within 99.9% tolerance)
-			// Need to normalize both amounts to the same decimal scale for comparison
-			const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
-			const inputRequestedDecimal = parseFloat(
-				formatUnits(requestedInputAmount, inputTokenDecimals)
-			);
-
-			let fillPercentage = 0;
-			let isNoFill = false;
-
-			if (inputRequestedDecimal > 0) {
-				fillPercentage = inputFilledDecimal / inputRequestedDecimal;
-			} else {
-				// No requested quantity means no tokens requested
-				isNoFill = true;
-			}
-
-			// Build summary from actual transaction data
-			const summary: MarketOrderSummary = {
-				inputAmount: totalInputAmount,
+		// Sum vault changes: INPUT = what user receives (inputVault), OUTPUT = what user gives (outputVault)
+		let totalInputAmount = 0n;
+		let totalOutputAmount = 0n;
+		for (const trade of validTrades) {
+			// User INPUT = inputVaultBalanceChange (what they receive)
+			const inputAmount = parseFloatHex(
+				trade.inputVaultBalanceChange!.amount as Hex,
 				inputTokenDecimals,
-				inputTokenSymbol,
-				outputAmount: totalOutputAmount,
-				outputTokenDecimals,
-				outputTokenSymbol,
-				requestedInputAmount,
-				ioRatio: actualIoRatio,
-				actualSlippage: 0n,
-				isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
-				isNoFill
-			};
-
-			const orderLink = createRaindexLink(
-				network.id,
-				raindexOrder.orderbook.id,
-				raindexOrder.orderHash,
-				'View order on Raindex'
+				true // Use absolute value
 			);
+			totalInputAmount += inputAmount;
 
-			return transactionSuccess(hash, orderLink, { marketOrderSummary: summary });
-		});
+			// User OUTPUT = outputVaultBalanceChange (what they give)
+			const outputAmount = parseFloatHex(
+				trade.outputVaultBalanceChange!.amount as Hex,
+				outputTokenDecimals,
+				true // Use absolute value
+			);
+			totalOutputAmount += outputAmount;
+		}
 
-		// Safety timeout: give up after 5 minutes if trade not found
-		// This gives the subgraph time to index the transaction and trade
-		timeoutId = setTimeout(() => {
-			cleanup();
-			transactionError(TransactionErrorMessage.GENERIC, hash);
-		}, 300_000);
+		// Calculate actual ioRatio from transaction data
+		const actualIoRatio =
+			totalOutputAmount > 0n
+				? parseFloat(formatUnits(totalInputAmount, inputTokenDecimals)) /
+					parseFloat(formatUnits(totalOutputAmount, outputTokenDecimals))
+				: 0;
+
+		// Use the user's actual requested input amount
+		const requestedInputAmount = params.requestedTakerWantsAmount;
+
+		// Check if fill is complete (within 99.9% tolerance)
+		// Need to normalize both amounts to the same decimal scale for comparison
+		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
+		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
+
+		let fillPercentage = 0;
+		let isNoFill = false;
+
+		if (inputRequestedDecimal > 0) {
+			fillPercentage = inputFilledDecimal / inputRequestedDecimal;
+		} else {
+			// No requested quantity means no tokens requested
+			isNoFill = true;
+		}
+
+		// Build summary from actual transaction data
+		const summary: MarketOrderSummary = {
+			inputAmount: totalInputAmount,
+			inputTokenDecimals,
+			inputTokenSymbol,
+			outputAmount: totalOutputAmount,
+			outputTokenDecimals,
+			outputTokenSymbol,
+			requestedInputAmount,
+			ioRatio: actualIoRatio,
+			actualSlippage: 0n,
+			isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
+			isNoFill
+		};
+
+		const orderLink = createRaindexLink(
+			network.id,
+			raindexOrder.orderbook.id,
+			raindexOrder.orderHash,
+			'View order on Raindex'
+		);
+
+		return transactionSuccess(hash, orderLink, { marketOrderSummary: summary });
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {

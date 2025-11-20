@@ -36,7 +36,8 @@ import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
 		ratioToNumber,
 		toDecimal
 	} from '$lib/utils/tokenMath';
-	import type { TimedResource, OracleQuote } from '$lib/stores/cache';
+import type { TimedResource } from '$lib/stores/cache';
+import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	import type { ResourceStatus } from '$lib/stores/polling';
 	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
