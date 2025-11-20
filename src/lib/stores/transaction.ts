@@ -31,7 +31,7 @@ import {
 	type MarketMakingDeploymentArgs
 } from '$lib/services/orderDeployment';
 import { rainlangConfirmationModal } from '$lib/stores';
-import { createRaindexClient } from '$lib/api/raindex';
+import { createRaindexClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
@@ -240,10 +240,33 @@ const transactionStore = () => {
 			return transactionError(message);
 		}
 
+		const network = get(currentNetwork);
+
+		const tryFetchOrderLink = async () => {
+			const client = await createRaindexClient();
+			const orders = await client.getAddOrdersForTransaction(
+				network.id,
+				deploymentArgs.orderbookAddress as `0x${string}`,
+				hash as `0x${string}`
+			);
+			if (orders.error || !orders.value?.length) {
+				return null;
+			}
+			const orderHash = orders.value[0].orderHash;
+			const orderbookId = orders.value[0].orderbook;
+			const chainId = network.id;
+			return createRaindexLink(chainId, orderbookId, orderHash);
+		};
+
 		// Poll for the order to be added to the orderbook
 		let attempts = 0;
 		const maxAttempts = 30; // 1 minute max (30 * 2 seconds)
-		const network = get(currentNetwork);
+
+		// Immediate attempt before scheduling interval
+		const immediateLink = await tryFetchOrderLink();
+		if (immediateLink) {
+			return transactionSuccess(hash, immediateLink);
+		}
 
 		const interval = setInterval(async () => {
 			attempts++;
@@ -255,27 +278,9 @@ const transactionStore = () => {
 			}
 
 			try {
-				// Get RaindexClient
-				const client = await createRaindexClient();
-
-				// Check for orders added in this transaction
-				const orders = await client.getAddOrdersForTransaction(
-					network.id,
-					deploymentArgs.orderbookAddress as `0x${string}`,
-					hash as `0x${string}`
-				);
-
-				if (orders.error) {
-					return; // Continue polling
-				}
-
-				if (orders.value && orders.value.length > 0) {
+				const link = await tryFetchOrderLink();
+				if (link) {
 					clearInterval(interval);
-					const orderHash = orders.value[0].orderHash;
-					const orderbookId = orders.value[0].orderbook;
-					const chainId = network.id;
-					const link = createRaindexLink(chainId, orderbookId, orderHash);
-
 					return transactionSuccess(hash, link);
 				}
 			} catch (error) {
