@@ -8,8 +8,9 @@
 
 /**
  * Minimal token interface for order perspective types
+ * Subset of full Token from $lib/types - only includes fields needed for order calculations
  */
-export interface Token {
+export interface MinimalToken {
 	address: string;
 	decimals: number;
 	symbol: string;
@@ -39,8 +40,8 @@ export type OrderSide = 'bid' | 'ask';
  *   - orderOutputToken: asset (order gives asset)
  */
 export interface MakerOrderTokens {
-	orderInputToken: Token;   // What the order receives (on-chain INPUT)
-	orderOutputToken: Token;  // What the order gives away (on-chain OUTPUT)
+	orderInputToken: MinimalToken; // What the order receives (on-chain INPUT)
+	orderOutputToken: MinimalToken; // What the order gives away (on-chain OUTPUT)
 }
 
 /**
@@ -57,16 +58,16 @@ export interface MakerOrderTokens {
  *   - takerPays: asset (user pays with asset)
  */
 export interface TakerOrderTokens {
-	takerWants: Token;  // What the user wants to receive
-	takerPays: Token;   // What the user will give away
+	takerWants: MinimalToken; // What the user wants to receive
+	takerPays: MinimalToken; // What the user will give away
 }
 
 /**
  * Complete taker order information including which maker side to cross
  */
 export interface TakerOrderInfo extends TakerOrderTokens {
-	userAction: UserAction;      // 'Buy' | 'Sell' (UI-level action)
-	crossingSide: OrderSide;     // Which maker side we're taking from ('bid' | 'ask')
+	userAction: UserAction; // 'Buy' | 'Sell' (UI-level action)
+	crossingSide: OrderSide; // Which maker side we're taking from ('bid' | 'ask')
 	crossingDescription: string; // Human-readable description
 }
 
@@ -74,10 +75,10 @@ export interface TakerOrderInfo extends TakerOrderTokens {
  * Trade result tokens (what actually happened)
  */
 export interface TradeResultTokens {
-	takerReceivedToken: Token;  // Token user received
-	takerGaveToken: Token;      // Token user gave
-	takerReceived: bigint;      // Amount received
-	takerGave: bigint;          // Amount given
+	takerReceivedToken: MinimalToken; // Token user received
+	takerGaveToken: MinimalToken; // Token user gave
+	takerReceived: bigint; // Amount received
+	takerGave: bigint; // Amount given
 }
 
 /**
@@ -90,8 +91,8 @@ export interface TradeResultTokens {
  */
 export function getUserTakerInfo(
 	userAction: UserAction,
-	assetToken: Token,
-	paymentToken: Token
+	assetToken: MinimalToken,
+	paymentToken: MinimalToken
 ): TakerOrderInfo {
 	if (userAction === 'Buy') {
 		return {
@@ -125,9 +126,9 @@ export function getUserTakerInfo(
  * @returns 'bid' or 'ask'
  */
 export function deriveMakerSide(
-	orderInputToken: Token,
-	orderOutputToken: Token,
-	paymentToken: Token
+	orderInputToken: MinimalToken,
+	orderOutputToken: MinimalToken,
+	paymentToken: MinimalToken
 ): OrderSide {
 	const paymentAddress = paymentToken.address.toLowerCase();
 	const outputAddress = orderOutputToken.address.toLowerCase();
@@ -158,7 +159,7 @@ export function deriveMakerSide(
  */
 export function makerToTakerTokens(
 	maker: MakerOrderTokens,
-	paymentToken: Token
+	paymentToken: MinimalToken
 ): TakerOrderTokens {
 	const side = deriveMakerSide(maker.orderInputToken, maker.orderOutputToken, paymentToken);
 
@@ -167,14 +168,14 @@ export function makerToTakerTokens(
 		// Taker would SELL asset to this maker
 		return {
 			takerWants: maker.orderOutputToken, // USDC
-			takerPays: maker.orderInputToken    // asset
+			takerPays: maker.orderInputToken // asset
 		};
 	} else {
 		// ASK maker: has USDC as input, asset as output
 		// Taker would BUY asset from this maker
 		return {
 			takerWants: maker.orderOutputToken, // asset
-			takerPays: maker.orderInputToken    // USDC
+			takerPays: maker.orderInputToken // USDC
 		};
 	}
 }
@@ -189,7 +190,7 @@ export function makerToTakerTokens(
  */
 export function takerToMakerTokens(taker: TakerOrderTokens): MakerOrderTokens {
 	return {
-		orderInputToken: taker.takerWants,  // What order receives = what taker wants
-		orderOutputToken: taker.takerPays   // What order gives = what taker pays
+		orderInputToken: taker.takerWants, // What order receives = what taker wants
+		orderOutputToken: taker.takerPays // What order gives = what taker pays
 	};
 }

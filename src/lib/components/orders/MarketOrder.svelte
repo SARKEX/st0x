@@ -62,9 +62,8 @@
 	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
 
 	// Taker perspective: What the user wants to receive and what they'll pay
-	$: takerInfo = assetToken && paymentToken
-		? getUserTakerInfo(orderSide, assetToken, paymentToken)
-		: null;
+	$: takerInfo =
+		assetToken && paymentToken ? getUserTakerInfo(orderSide, assetToken, paymentToken) : null;
 
 	// Errors
 	let selectedAmountError: boolean = false;
@@ -88,9 +87,7 @@
 	$: requiredInputAmount = (() => {
 		if (!selectedAmount || !marketPrice) return '0.00';
 		// Output amount * market price = input amount
-		const outputInTokens = parseFloat(
-			formatUnits(selectedAmount, assetToken?.decimals || 18)
-		);
+		const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
 		const total = outputInTokens * marketPrice;
 		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
 	})();
@@ -168,12 +165,7 @@
 	// Fetch market price when component mounts or dependencies change
 	// Only calculates price when user has entered a quantity (selectedAmount > 0)
 	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (
-		assetToken &&
-		orderSide &&
-		selectedAmount > 0n &&
-		$orderbookQuotesResource?.data?.quotes
-	) {
+	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesResource?.data?.quotes) {
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
@@ -510,8 +502,16 @@
 						symbol: takerInfo.takerWants.symbol
 					}
 				: orderSide === 'Buy'
-					? { address: assetToken?.address, decimals: assetToken?.decimals, symbol: assetToken?.symbol }
-					: { address: paymentToken?.address, decimals: paymentToken?.decimals, symbol: paymentToken?.symbol };
+					? {
+							address: assetToken?.address,
+							decimals: assetToken?.decimals,
+							symbol: assetToken?.symbol
+						}
+					: {
+							address: paymentToken?.address,
+							decimals: paymentToken?.decimals,
+							symbol: paymentToken?.symbol
+						};
 
 			const takerPaysInfo = takerInfo
 				? {
@@ -520,8 +520,16 @@
 						symbol: takerInfo.takerPays.symbol
 					}
 				: orderSide === 'Buy'
-					? { address: paymentToken?.address, decimals: paymentToken?.decimals, symbol: paymentToken?.symbol }
-					: { address: assetToken?.address, decimals: assetToken?.decimals, symbol: assetToken?.symbol };
+					? {
+							address: paymentToken?.address,
+							decimals: paymentToken?.decimals,
+							symbol: paymentToken?.symbol
+						}
+					: {
+							address: assetToken?.address,
+							decimals: assetToken?.decimals,
+							symbol: assetToken?.symbol
+						};
 
 			// Requested amount: what user wants to receive
 			// For BUY: user requests asset amount (selectedAmount)

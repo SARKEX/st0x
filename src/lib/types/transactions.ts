@@ -3,21 +3,14 @@
  */
 
 import type { OrderV4 } from '@rainlanguage/orderbook';
-import type { QuoteFill, WalkQuotesResult } from '$lib/utils/orderbook';
+import type { WalkQuotesResult } from '$lib/utils/orderbook';
+import type { MinimalToken } from '$lib/types/orderPerspective';
 
 /**
  * Token information for transaction display and processing
+ * Alias for MinimalToken to maintain backward compatibility
  */
-export interface TokenInfo {
-	address: string;
-	decimals: number;
-	symbol: string;
-}
-
-/**
- * Re-export QuoteFill from orderbook utils for convenience
- */
-export type { QuoteFill };
+export type TokenInfo = MinimalToken;
 
 /**
  * Simulation result from orderbook walk
@@ -37,32 +30,17 @@ export interface TakeOrdersParams {
 	// Order identification
 	orderData: OrderV4;
 	ioIndexes: {
-		input: number;   // Index of input token in order's validInputs
-		output: number;  // Index of output token in order's validOutputs
+		input: number; // Index of input token in order's validInputs
+		output: number; // Index of output token in order's validOutputs
 	};
 
 	// Taker perspective - what user wants vs what they pay
-	takerWantsToken: TokenInfo;  // What user RECEIVES (input from order perspective)
-	takerPaysToken: TokenInfo;   // What user GIVES (output from order perspective)
+	takerWantsToken: TokenInfo; // What user RECEIVES (input from order perspective)
+	takerPaysToken: TokenInfo; // What user GIVES (output from order perspective)
 
 	// Requested amount
-	requestedTakerWantsAmount: bigint;  // Amount user wants to receive
+	requestedTakerWantsAmount: bigint; // Amount user wants to receive
 
 	// Optional: pre-calculated simulation for validation
 	simulation?: OrderSimulation;
-}
-
-/**
- * Parameters for deploying a maker order (DCA, limit, etc.)
- *
- * Perspective: MAKER (placing order on orderbook)
- */
-export interface DeployOrderParams {
-	orderType: 'dca' | 'limit' | 'dsf' | 'folio';
-	composedRainlang: string;
-	deploymentArgs: unknown;  // From Rain SDK
-
-	// Maker perspective
-	orderInputToken: TokenInfo;   // What maker order receives
-	orderOutputToken: TokenInfo;  // What maker order gives
 }

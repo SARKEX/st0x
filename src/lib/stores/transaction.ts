@@ -14,8 +14,7 @@ import {
 	type SgOrder,
 	type TakeOrdersConfigV4,
 	type DeploymentTransactionArgs,
-	RaindexVault,
-	Float
+	RaindexVault
 } from '@rainlanguage/orderbook';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
@@ -525,11 +524,6 @@ const transactionStore = () => {
 			}
 
 			cleanup();
-
-			// Get the walk result from params
-			const { inputAmountFilled: estimatedInputFilled } = params.simulation || {
-				inputAmountFilled: 0n
-			};
 
 			// Get token info from params (passed by MarketOrder component)
 			// NOTE: inputVaultBalanceChange = what user receives (INPUT)

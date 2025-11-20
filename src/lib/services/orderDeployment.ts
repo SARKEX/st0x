@@ -135,7 +135,10 @@ export type LimitOrderDeploymentArgs = {
 	outputVaultId: Hex | undefined;
 };
 
-export const getLimitOrderDeploymentArgs = async (network: Network, args: LimitOrderDeploymentArgs) => {
+export const getLimitOrderDeploymentArgs = async (
+	network: Network,
+	args: LimitOrderDeploymentArgs
+) => {
 	const limitOrder = await fetchStrategy('fixed-limit.rain');
 
 	const guiResult = await DotrainOrderGui.newWithDeployment(limitOrder, network.raindexNetworkSlug);
@@ -191,7 +194,10 @@ export type MarketMakingDeploymentArgs = {
 	outputVaultIdToken2: Hex | undefined;
 };
 
-export const getMarketMakingDeploymentArgs = async (network: Network, args: MarketMakingDeploymentArgs) => {
+export const getMarketMakingDeploymentArgs = async (
+	network: Network,
+	args: MarketMakingDeploymentArgs
+) => {
 	const dsfStrategy = await fetchStrategy('dynamic-spread.rain');
 
 	const guiResult = await DotrainOrderGui.newWithDeployment(

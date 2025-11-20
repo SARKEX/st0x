@@ -4,18 +4,18 @@ import {
 	deriveMakerSide,
 	makerToTakerTokens,
 	takerToMakerTokens,
-	type Token,
+	type MinimalToken,
 	type MakerOrderTokens
 } from '$lib/types/orderPerspective';
 
 // Mock tokens for testing
-const USDC: Token = {
+const USDC: MinimalToken = {
 	address: '0xUSDC',
 	decimals: 6,
 	symbol: 'USDC'
 };
 
-const ASSET: Token = {
+const ASSET: MinimalToken = {
 	address: '0xASSET',
 	decimals: 18,
 	symbol: 'tSTOX'

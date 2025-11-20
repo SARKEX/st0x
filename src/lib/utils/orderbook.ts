@@ -9,7 +9,6 @@
 
 import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
 import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tokenMath';
-import { Float } from '@rainlanguage/float';
 
 // ============================================================================
 // TYPES & CONSTANTS

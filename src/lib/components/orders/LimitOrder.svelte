@@ -50,8 +50,10 @@
 	// Maker order perspective: What the ORDER receives and gives
 	// Buy order (maker buying): orderInput=asset (receives), orderOutput=settlement (gives) → BID
 	// Sell order (maker selling): orderInput=settlement (receives), orderOutput=asset (gives) → ASK
-	$: orderInputToken = orderSide === 'Buy' ? (assetToken as unknown as CategorizedToken) : settlementToken;
-	$: orderOutputToken = orderSide === 'Buy' ? settlementToken : (assetToken as unknown as CategorizedToken);
+	$: orderInputToken =
+		orderSide === 'Buy' ? (assetToken as unknown as CategorizedToken) : settlementToken;
+	$: orderOutputToken =
+		orderSide === 'Buy' ? settlementToken : (assetToken as unknown as CategorizedToken);
 
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
