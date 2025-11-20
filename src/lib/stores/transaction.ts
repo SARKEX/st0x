@@ -19,6 +19,7 @@ import {
 } from '@rainlanguage/orderbook';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
+import type { TakeOrdersParams } from '$lib/types/transactions';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 import {
 	getDcaDeploymentArgs,
@@ -378,33 +379,22 @@ const transactionStore = () => {
 	 * Executes a market order by taking existing orders from the orderbook.
 	 *
 	 * Perspective: TAKER (user executing against orderbook)
-	 * - inputToken: What the taker wants to RECEIVE
-	 * - outputToken: What the taker will GIVE AWAY
-	 * - requestedInputAmount: Amount taker wants to receive
+	 * - takerWantsToken: What the taker wants to RECEIVE
+	 * - takerPaysToken: What the taker will GIVE AWAY
+	 * - requestedTakerWantsAmount: Amount taker wants to receive
 	 */
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV4,
 		raindexOrder: SgOrder,
 		requiredApprovalAmount: bigint,
-		options?: {
-			ioIndexes?: { input: number; output: number };
-			walkResult?: {
-				inputAmountFilled: bigint;   // Amount taker receives
-				outputAmountGiven: bigint;   // Amount taker gives
-				ioRatio: number;
-				fills: unknown[];
-			};
-			inputToken?: { decimals?: number; symbol?: string };   // Taker receives
-			outputToken?: { decimals?: number; symbol?: string };  // Taker gives
-			requestedInputAmount?: bigint;  // Amount taker wants
-		}
+		params: TakeOrdersParams
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
-		const inputIndex = options?.ioIndexes?.input ?? 0;
-		const outputIndex = options?.ioIndexes?.output ?? 0;
+		const inputIndex = params.ioIndexes.input;
+		const outputIndex = params.ioIndexes.output;
 
 		// Get the tokens from the order
 		const inputToken = raindexOrder.inputs[inputIndex];
@@ -536,19 +526,19 @@ const transactionStore = () => {
 
 			cleanup();
 
-			// Get the walk result from options
-			const { inputAmountFilled: estimatedInputFilled } = options?.walkResult || {
+			// Get the walk result from params
+			const { inputAmountFilled: estimatedInputFilled } = params.simulation || {
 				inputAmountFilled: 0n
 			};
 
-			// Get token info from options (passed by MarketOrder component)
+			// Get token info from params (passed by MarketOrder component)
 			// NOTE: inputVaultBalanceChange = what user receives (INPUT)
 			//       outputVaultBalanceChange = what user gives (OUTPUT)
-			const inputTokenDecimals = options?.inputToken?.decimals ?? 18;
-			const inputTokenSymbol = options?.inputToken?.symbol ?? '';
+			const inputTokenDecimals = params.takerWantsToken.decimals;
+			const inputTokenSymbol = params.takerWantsToken.symbol;
 
-			const outputTokenDecimals = options?.outputToken?.decimals ?? 18;
-			const outputTokenSymbol = options?.outputToken?.symbol ?? '';
+			const outputTokenDecimals = params.takerPaysToken.decimals;
+			const outputTokenSymbol = params.takerPaysToken.symbol;
 
 			// Sum vault changes: INPUT = what user receives (inputVault), OUTPUT = what user gives (outputVault)
 			let totalInputAmount = 0n;
@@ -579,7 +569,7 @@ const transactionStore = () => {
 					: 0;
 
 			// Use the user's actual requested input amount
-			const requestedInputAmount = options?.requestedInputAmount ?? estimatedInputFilled;
+			const requestedInputAmount = params.requestedTakerWantsAmount;
 
 			// Check if fill is complete (within 99.9% tolerance)
 			// Need to normalize both amounts to the same decimal scale for comparison

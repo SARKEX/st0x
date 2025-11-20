@@ -423,6 +423,7 @@
 			const primaryInputIndex = executableOrders[0].inputIOIndex ?? 0;
 			const primaryOutputIndex = executableOrders[0].outputIOIndex ?? 0;
 			const primaryOrder = executableOrders[0].order;
+			const primaryOrderData = executableOrders[0].orderData;
 
 			// Calculate required approval amount for the output token (what we're spending)
 			const walkResult = calculateOrderbookWalk();
@@ -503,16 +504,24 @@
 			// takerWants = what user receives (INPUT from order perspective)
 			// takerPays = what user gives away (OUTPUT from order perspective)
 			const takerWantsInfo = takerInfo
-				? { decimals: takerInfo.takerWants.decimals, symbol: takerInfo.takerWants.symbol }
+				? {
+						address: takerInfo.takerWants.address,
+						decimals: takerInfo.takerWants.decimals,
+						symbol: takerInfo.takerWants.symbol
+					}
 				: orderSide === 'Buy'
-					? { decimals: assetToken?.decimals, symbol: assetToken?.symbol }
-					: { decimals: paymentToken?.decimals, symbol: paymentToken?.symbol };
+					? { address: assetToken?.address, decimals: assetToken?.decimals, symbol: assetToken?.symbol }
+					: { address: paymentToken?.address, decimals: paymentToken?.decimals, symbol: paymentToken?.symbol };
 
 			const takerPaysInfo = takerInfo
-				? { decimals: takerInfo.takerPays.decimals, symbol: takerInfo.takerPays.symbol }
+				? {
+						address: takerInfo.takerPays.address,
+						decimals: takerInfo.takerPays.decimals,
+						symbol: takerInfo.takerPays.symbol
+					}
 				: orderSide === 'Buy'
-					? { decimals: paymentToken?.decimals, symbol: paymentToken?.symbol }
-					: { decimals: assetToken?.decimals, symbol: assetToken?.symbol };
+					? { address: paymentToken?.address, decimals: paymentToken?.decimals, symbol: paymentToken?.symbol }
+					: { address: assetToken?.address, decimals: assetToken?.decimals, symbol: assetToken?.symbol };
 
 			// Requested amount: what user wants to receive
 			// For BUY: user requests asset amount (selectedAmount)
@@ -526,11 +535,12 @@
 				primaryOrder,
 				requiredApprovalAmount,
 				{
+					orderData: primaryOrderData,
 					ioIndexes: { input: primaryInputIndex, output: primaryOutputIndex },
-					walkResult,
-					inputToken: takerWantsInfo,
-					outputToken: takerPaysInfo,
-					requestedInputAmount: requestedTakerWantsAmount
+					takerWantsToken: takerWantsInfo,
+					takerPaysToken: takerPaysInfo,
+					requestedTakerWantsAmount: requestedTakerWantsAmount,
+					simulation: walkResult
 				}
 			);
 		} catch (error) {

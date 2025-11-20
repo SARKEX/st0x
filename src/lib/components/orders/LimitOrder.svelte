@@ -28,7 +28,6 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Initialize tokens - trading token from prop, settlement token for settlement
-	let assetToken: CategorizedToken | undefined;
 	let settlementToken: CategorizedToken | undefined;
 	let orderInputToken: CategorizedToken | undefined;
 	let orderOutputToken: CategorizedToken | undefined;
@@ -46,18 +45,13 @@
 		} else {
 			settlementToken = ALL_TOKENS[0];
 		}
-
-		// Update asset token if network changes
-		if (assetToken && !assetToken) {
-			assetToken = assetToken as unknown as CategorizedToken;
-		}
 	}
 
 	// Maker order perspective: What the ORDER receives and gives
 	// Buy order (maker buying): orderInput=asset (receives), orderOutput=settlement (gives) → BID
 	// Sell order (maker selling): orderInput=settlement (receives), orderOutput=asset (gives) → ASK
-	$: orderInputToken = orderSide === 'Buy' ? assetToken : settlementToken;
-	$: orderOutputToken = orderSide === 'Buy' ? settlementToken : assetToken;
+	$: orderInputToken = orderSide === 'Buy' ? (assetToken as unknown as CategorizedToken) : settlementToken;
+	$: orderOutputToken = orderSide === 'Buy' ? settlementToken : (assetToken as unknown as CategorizedToken);
 
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
