@@ -4,7 +4,6 @@ import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptV
 import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 import type { Network } from '$lib/config/network';
 import { networks } from '$lib/config/network';
-import type { TimedResource } from '$lib/stores/cache';
 import type { OracleQuote } from '$lib/queries/oracleQuotes';
 import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 import type { CreateQueryResult } from '@tanstack/svelte-query';

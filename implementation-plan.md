@@ -45,6 +45,6 @@ This plan focuses on simplifying interdependencies and data/logic flows while ke
 
 ## 7) Incremental Migration Strategy (current status)
 - Progress: Config split done; client layer added (http/subgraph/raindex/pyth); orderbook + price feeds + trade activity + oracle quotes now on Tanstack Query. Vault snapshots now on Query as well; pending trades are polled directly inside transaction flow. Polling helper/domains removed.
-- Next cleanup: tighten types around Query stores, and validate subgraph polling resilience for pending trades or move that to Query if needed.
+- Next cleanup: validate subgraph polling resilience for pending trades or move that to Query if needed; apply tighter typing around Query-derived stores as time permits.
 - After each domain migration, remove unused polling/controller code and update imports.
 - Add vitest coverage for services and view-models as they are introduced to prevent regressions.

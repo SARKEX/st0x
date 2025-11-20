@@ -36,9 +36,8 @@ import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
 		ratioToNumber,
 		toDecimal
 	} from '$lib/utils/tokenMath';
-import type { TimedResource } from '$lib/stores/cache';
-import type { OracleQuote } from '$lib/queries/oracleQuotes';
-	import type { ResourceStatus } from '$lib/stores/polling';
+	import type { OracleQuote } from '$lib/queries/oracleQuotes';
+type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
@@ -187,7 +186,12 @@ import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
 	let chartsLoading = false;
 	let tradeQueryError: string | null = null;
-let oracleResource: TimedResource<Record<string, OracleQuote>> | null = null;
+	let oracleResource: {
+		status: ResourceStatus;
+		data: Record<string, OracleQuote> | null;
+		updatedAt: number | null;
+		error: unknown | null;
+	} | null = null;
 let oracleEntry: OracleQuote | undefined;
 let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
 let oracleLoading = false;
@@ -248,7 +252,7 @@ $: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 			refreshInterval: 15_000,
 			timerId: null,
 			subscribers: 0
-		} satisfies TimedResource<Record<string, OracleQuote>>;
+		};
 	})();
 	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
 	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
