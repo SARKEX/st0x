@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import { connected, signerAddress } from 'svelte-wagmi';
-	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
+	import { currentNetwork, sfts } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
@@ -31,6 +31,7 @@
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { isPaymentToken } from '$lib/utils/tokenMath';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 
 	function isPaymentTokenPosition(token: { token: SgErc20 }) {
 		const settlementToken = $currentNetwork?.defaultPaymentToken;
@@ -63,6 +64,8 @@
 	let orderHashFilter: string | undefined = undefined;
 	let showMyOrders = true; // Always show only user's orders
 	const ORDER_LIST_PAGE_SIZE = 1000;
+	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
 	// Vault List variables
 	let hideEmptyVaults: boolean | undefined = false;
@@ -101,7 +104,7 @@
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
-					const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+					const quote = findQuoteForSymbol(sft.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const priceChange = quote?.change ?? 0;
 					const priceChangePercent = quote?.changePercent ?? 0;
@@ -296,7 +299,7 @@
 					token.symbol?.toUpperCase() === settlementSymbol ||
 					token.id.toLowerCase() === settlementAddress;
 
-				const quote = findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS);
+				const quote = findQuoteForSymbol(token.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 
 				let price: number | null = quote?.close ?? null;
 

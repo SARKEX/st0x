@@ -7,7 +7,6 @@ const {
 	networkModule,
 	mockGetSfts,
 	mockGetTrades,
-	mockGetPythQuotes,
 	mockGetOracleSnapshots
 } = vi.hoisted(() => {
 	const network = { id: 1, chainId: 100, displayName: 'Test Network' } as unknown as Network;
@@ -42,7 +41,6 @@ const {
 		networkModule,
 		mockGetSfts: vi.fn(),
 		mockGetTrades: vi.fn(),
-		mockGetPythQuotes: vi.fn(),
 		mockGetOracleSnapshots: vi.fn()
 	};
 });
@@ -53,7 +51,6 @@ vi.mock('$lib/api/subgraph', () => ({
 	getTrades: mockGetTrades
 }));
 vi.mock('$lib/api/pyth', () => ({
-	getPythQuotes: mockGetPythQuotes,
 	getNetworkOracleSnapshots: mockGetOracleSnapshots
 }));
 
@@ -82,55 +79,6 @@ describe('domain fetchers', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		mockGetSfts.mockRejectedValueOnce(new Error('boom'));
 		const fallback = await vaultFetcher(network);
-		expect(fallback).toEqual([]);
-		consoleSpy.mockRestore();
-	});
-
-	it('fetches price feeds from pyth and handles errors', async () => {
-		const priceFeedFetcher = DOMAIN_DEFINITIONS.priceFeeds.fetcher;
-		const pythQuotes = [
-			{
-				symbol: 'AAA',
-				close: 10,
-				open: 10,
-				high: 10,
-				low: 10,
-				volume: 0,
-				marketCap: 0,
-				percentChange: 0,
-				changePercent: 0,
-				change: 0,
-				changeAbs: 0,
-				prevClose: 10,
-				week52High: 10,
-				week52Low: 10
-			},
-			{
-				symbol: 'BBB',
-				close: 20,
-				open: 20,
-				high: 20,
-				low: 20,
-				volume: 0,
-				marketCap: 0,
-				percentChange: 0,
-				changePercent: 0,
-				change: 0,
-				changeAbs: 0,
-				prevClose: 20,
-				week52High: 20,
-				week52Low: 20
-			}
-		];
-		mockGetPythQuotes.mockResolvedValue(pythQuotes);
-
-		const result = await priceFeedFetcher(network);
-		expect(mockGetPythQuotes).toHaveBeenCalledWith(mockTokens, network);
-		expect(result).toEqual(pythQuotes);
-
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		mockGetPythQuotes.mockRejectedValueOnce(new Error('oops'));
-		const fallback = await priceFeedFetcher(network);
 		expect(fallback).toEqual([]);
 		consoleSpy.mockRestore();
 	});
@@ -173,7 +121,6 @@ describe('domain fetchers', () => {
 
 	it('fetches trade windows and handles failures', async () => {
 		const pendingFetcher = DOMAIN_DEFINITIONS.pendingTrades.fetcher;
-		const tradeFetcher = DOMAIN_DEFINITIONS.tradeActivity.fetcher;
 		mockGetTrades.mockResolvedValueOnce(['pending-trade']);
 		const pending = await pendingFetcher(network);
 		expect(mockGetTrades).toHaveBeenCalledWith(expect.any(Number), expect.any(Number), network);
@@ -185,7 +132,7 @@ describe('domain fetchers', () => {
 
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		mockGetTrades.mockRejectedValueOnce(new Error('no trades'));
-		const fallback = await tradeFetcher(network);
+		const fallback = await pendingFetcher(network);
 		expect(fallback).toEqual({ trades: [], range: { from: 0, to: 0 } });
 		consoleSpy.mockRestore();
 	});

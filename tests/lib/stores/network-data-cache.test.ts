@@ -4,8 +4,6 @@ const { domainKeys, mockedDefinitions, mockCreatePollingController, mockedContro
 	vi.hoisted(() => {
 		const domainKeys = [
 			'vaultSnapshot',
-			'priceFeeds',
-			'tradeActivity',
 			'pendingTrades',
 			'oracleQuotes'
 		] as const;
@@ -81,10 +79,10 @@ describe('network-data-cache', () => {
 	});
 
 	it('delegates ensureResource to the correct controller', () => {
-		const controller = mockedControllers.get('priceFeeds');
+		const controller = mockedControllers.get('pendingTrades');
 		expect(controller).toBeDefined();
 		controller?.ensure.mockClear();
-		ensureResource(5, 'priceFeeds', { force: true });
+		ensureResource(5, 'pendingTrades', { force: true });
 		expect(controller?.ensure).toHaveBeenCalledWith(5, { force: true });
 	});
 

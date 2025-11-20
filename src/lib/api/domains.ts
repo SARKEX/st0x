@@ -1,16 +1,13 @@
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-import type { TradingViewQuote } from '$lib/api/tradingview';
 import type { Network } from '$lib/config/network';
 import { TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
 import { getSfts, getTrades } from '$lib/api/subgraph';
-import { getNetworkOracleSnapshots, getPythQuotes, type OracleSnapshot } from '$lib/api/pyth';
+import { getNetworkOracleSnapshots, type OracleSnapshot } from '$lib/api/pyth';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DomainFetcher, PollingOptions } from '$lib/stores/polling';
 
 export type DomainKey =
 	| 'vaultSnapshot'
-	| 'priceFeeds'
-	| 'tradeActivity'
 	| 'pendingTrades'
 	| 'oracleQuotes';
 
@@ -18,8 +15,6 @@ interface TradeWindowPayload {
 	trades: SgTrade[];
 	range: { from: number; to: number };
 }
-
-export type TradeMetricPayload = TradeWindowPayload;
 
 export type PendingTradePayload = TradeWindowPayload;
 
@@ -33,8 +28,6 @@ export interface OracleQuote {
 
 export interface DomainPayloads {
 	vaultSnapshot: OffchainAssetReceiptVault[];
-	priceFeeds: TradingViewQuote[];
-	tradeActivity: TradeMetricPayload;
 	pendingTrades: PendingTradePayload;
 	oracleQuotes: Record<string, OracleQuote>;
 }
@@ -53,20 +46,6 @@ const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (
 		return (await getSfts(network)) ?? [];
 	} catch (error) {
 		console.error(`Failed to fetch vault snapshots for ${network.displayName}:`, error);
-		return [];
-	}
-};
-
-const priceFeedFetcher: DomainFetcher<TradingViewQuote[]> = async (network) => {
-	try {
-		const tokens = getTokensWithPriceFeed(network);
-		if (!tokens.length) {
-			return [];
-		}
-		const pythQuotes = await getPythQuotes(tokens, network);
-		return pythQuotes;
-	} catch (error) {
-		console.error(`Failed to fetch price feeds for ${network.displayName}:`, error);
 		return [];
 	}
 };
@@ -119,7 +98,6 @@ function createTradeFetcher(
 	};
 }
 
-const tradeActivityFetcher = createTradeFetcher(30 * 24 * 60 * 60, 'trade activity');
 const pendingTradesFetcher = createTradeFetcher(10 * 60, 'pending trades');
 
 export const DOMAIN_DEFINITIONS: DefinitionMap = {
@@ -127,16 +105,6 @@ export const DOMAIN_DEFINITIONS: DefinitionMap = {
 		refreshInterval: 60_000, // 1 minute
 		autoPause: false,
 		fetcher: vaultSnapshotFetcher
-	},
-	priceFeeds: {
-		refreshInterval: 300_000,
-		autoPause: false,
-		fetcher: priceFeedFetcher
-	},
-	tradeActivity: {
-		refreshInterval: 300_000, // 5 minutes
-		autoPause: true,
-		fetcher: tradeActivityFetcher
 	},
 	pendingTrades: {
 		refreshInterval: 5_000, // Poll every 5 seconds for pending trades

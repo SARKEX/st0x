@@ -1,34 +1,30 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import Section from '$lib/components/ui/Section.svelte';
-	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
-	import type { CategorizedToken, Network } from '$lib/config/network';
-	import type { TradingViewQuote } from '$lib/api/tradingview';
-	import PageContainer from '$lib/components/ui/PageContainer.svelte';
-	import MetricCard from '$lib/components/ui/MetricCard.svelte';
-	import Table from '$lib/components/ui/table/Table.svelte';
-	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
-	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { derived } from 'svelte/store';
-	import { onMount } from 'svelte';
-	import {
-		getResourceStore,
-		ensureResource,
-		type TimedResource,
-		type TradeMetricPayload
-	} from '$lib/stores/cache';
-	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
-	import {
-		analyzeTrade,
-		createTokenLookup,
-		normalizeAddress,
+import Section from '$lib/components/ui/Section.svelte';
+import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
+import type { CategorizedToken, Network } from '$lib/config/network';
+import type { TradingViewQuote } from '$lib/api/tradingview';
+import PageContainer from '$lib/components/ui/PageContainer.svelte';
+import MetricCard from '$lib/components/ui/MetricCard.svelte';
+import Table from '$lib/components/ui/table/Table.svelte';
+import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
+import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+import { derived } from 'svelte/store';
+import { onMount } from 'svelte';
+import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+import {
+	analyzeTrade,
+	createTokenLookup,
+	normalizeAddress,
 		type TradeAnalysis,
 		type TokenLookup
 	} from '$lib/utils/tokenMath';
-	import type { SgTrade } from '@rainlanguage/orderbook';
-	import { createRaindexClient } from '$lib/api/raindex';
-	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
-import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+import type { SgTrade } from '@rainlanguage/orderbook';
+import { createRaindexClient } from '$lib/api/raindex';
+import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
+	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
+	import { createTradeActivityQuery, type TradeMetricPayload } from '$lib/queries/tradeActivity';
 
 	type AnalyzedTrade = {
 		trade: SgTrade;
@@ -45,44 +41,26 @@ import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queri
 
 	let selectedNetwork = networks[0];
 
-const priceFeedResourceStores = networks.map((network) =>
-	getResourceStore(network.id, 'priceFeeds')
-);
-const tradeResourceStores = networks.map((network) =>
-	getResourceStore(network.id, 'tradeActivity')
-);
+const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
+const tradeActivityQueries = networks.map((network) => createTradeActivityQuery(network));
 const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
 
-const allPriceFeedResources = derived(
-	priceFeedResourceStores,
-	(resources) => resources,
-	priceFeedResourceStores.map(() => null as TimedResource<TradingViewQuote[]> | null)
-	);
-
-	const allTradeResources = derived(
-	tradeResourceStores,
-	(resources) => resources,
-	tradeResourceStores.map(() => null as TimedResource<TradeMetricPayload> | null)
-);
-
+const allPriceFeedQueries = derived(priceFeedQueries, (queries) => queries);
+const allTradeQueries = derived(tradeActivityQueries, (queries) => queries);
 const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
 
 onMount(() => {
-	networks.forEach((network) => {
-		ensureResource(network.id, 'priceFeeds');
-		ensureResource(network.id, 'tradeActivity');
-	});
 	void loadVaults();
 });
 
-	$: priceFeedStates = networks.map((network, index) => ({
-		network,
-		resource: $allPriceFeedResources[index]
-	}));
+$: priceFeedStates = networks.map((network, index) => ({
+	network,
+	query: $allPriceFeedQueries[index]
+}));
 
 $: tradeStates = networks.map((network, index) => ({
 	network,
-	resource: $allTradeResources[index]
+	query: $allTradeQueries[index]
 }));
 
 $: orderbookStates = networks.map((network, index) => ({
@@ -90,21 +68,21 @@ $: orderbookStates = networks.map((network, index) => ({
 	query: $allOrderbookQueries[index]
 }));
 
-	let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
-	$: priceFeedByNetwork = (() => {
-		const map = new Map<number, TradingViewQuote[]>();
-		priceFeedStates.forEach(({ network, resource }) => {
-			map.set(network.chainId, resource?.data ?? []);
-		});
-		return map;
-	})();
+let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
+$: priceFeedByNetwork = (() => {
+	const map = new Map<number, TradingViewQuote[]>();
+	priceFeedStates.forEach(({ network, query }) => {
+		map.set(network.chainId, query?.data ?? []);
+	});
+	return map;
+})();
 
-	$: allNetworksTrades = tradeStates.map(({ network, resource }) => ({
-		network,
-		trades: resource?.data?.trades ?? [],
-		range: resource?.data?.range,
-		status: resource?.status ?? 'idle'
-	}));
+$: allNetworksTrades = tradeStates.map(({ network, query }) => ({
+	network,
+	trades: query?.data?.trades ?? [],
+	range: query?.data?.range,
+	status: query?.status ?? 'pending'
+}));
 
 	let vaultsByNetwork = new Map<number, RaindexVault[]>();
 	let vaultsLoading = true;
@@ -521,11 +499,9 @@ $: orderbookStates = networks.map((network, index) => ({
 		return `${formatted} ${symbol}`;
 	}
 
-	$: tradeLoading = tradeStates.some(({ resource }) => {
-		const count = resource?.data?.trades?.length ?? 0;
-		return (
-			!resource || resource.status === 'idle' || (resource.status === 'loading' && count === 0)
-		);
+	$: tradeLoading = tradeStates.some(({ query }) => {
+		const count = query?.data?.trades?.length ?? 0;
+		return !query || ((query.isPending || query.isFetching) && count === 0);
 	});
 
 	$: metricsLoading = vaultsLoading || tradeLoading;

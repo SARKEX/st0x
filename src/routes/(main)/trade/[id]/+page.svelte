@@ -1,14 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import {
-		currentNetwork,
-		sfts,
-		tradeActivityResource,
-		oracleQuotes,
-		oracleQuotesResource
-	} from '$lib/stores';
-	import { ensureResource } from '$lib/stores/cache';
+	import { currentNetwork, sfts, oracleQuotes, oracleQuotesResource } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -46,11 +39,14 @@
 	import type { TimedResource, OracleQuote } from '$lib/stores/cache';
 	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
+	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
 	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	$: currentPythToken = TOKENS.find(
 		(token) =>
 			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
@@ -370,13 +366,13 @@ $: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 		if (!assetAddress || !quoteAddress) return [];
 		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
 		const quoteDecimals = Number(settlementToken.decimals ?? 6);
-		const range = $tradeActivityResource?.data?.range ?? null;
+		const range = $tradeActivityQuery?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
 		const rangeEnd = range ? range.to * 1000 : now;
 		// TODO: Display range label in UI if needed
 		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
-		const trades = ($tradeActivityResource?.data?.trades ?? []) as SgTrade[];
+		const trades = ($tradeActivityQuery?.data?.trades ?? []) as SgTrade[];
 		return trades
 			.map((trade) =>
 				tradeToPoint(trade, assetAddress, assetDecimals, {
@@ -479,10 +475,10 @@ $: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 		return { bids, asks };
 	})();
 	$: {
-		const tradeResource = $tradeActivityResource;
-		const tradeStatus = tradeResource?.status ?? 'idle';
+		const tradeResource = $tradeActivityQuery;
+		const tradeStatus = tradeResource?.status ?? 'pending';
 		const tradeHasData = (tradeResource?.data?.trades?.length ?? 0) > 0;
-		const tradeLoading = tradeStatus === 'loading' || (tradeStatus === 'idle' && !tradeHasData);
+		const tradeLoading = (tradeResource?.isPending ?? tradeStatus === 'pending') && !tradeHasData;
 		const quoteLoading =
 			orderbookQuoteUiState.loadingWithoutData ||
 			(orderbookQuoteUiState.status === 'pending' && !orderbookQuoteUiState.hasData);
@@ -494,18 +490,6 @@ $: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 			tradeStatus === 'error'
 				? formatResourceError(tradeResource?.error, 'Failed to load trade history.')
 				: null;
-	}
-	let ensuredNetworkId: number | null = null;
-	$: if (!browser) {
-		ensuredNetworkId = null;
-	} else {
-		const networkId = $currentNetwork?.id ?? null;
-		if (!networkId) {
-			ensuredNetworkId = null;
-		} else if (ensuredNetworkId !== networkId) {
-			ensuredNetworkId = networkId;
-			void ensureResource(networkId, 'tradeActivity');
-		}
 	}
 	$: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';

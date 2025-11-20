@@ -1,21 +1,17 @@
 import { derived, writable, type Readable } from 'svelte/store';
 import { chainId, signerAddress } from 'svelte-wagmi';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-import type { TradingViewQuote } from '$lib/api/tradingview';
 import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 import type { Network } from '$lib/config/network';
 import { networks } from '$lib/config/network';
 import {
 	getResourceStore,
 	type TimedResource,
-	type TradeMetricPayload,
 	type OracleQuote
 } from '$lib/stores/cache';
 
 type DomainKey =
 	| 'vaultSnapshot'
-	| 'priceFeeds'
-	| 'tradeActivity'
 	| 'oracleQuotes';
 
 function createNetworkResourceStore<T>(domain: DomainKey) {
@@ -46,9 +42,6 @@ export const wrongNetwork = derived(
 );
 export const vaultSnapshotResource =
 	createNetworkResourceStore<OffchainAssetReceiptVault[]>('vaultSnapshot');
-export const priceFeedsResource = createNetworkResourceStore<TradingViewQuote[]>('priceFeeds');
-export const tradeActivityResource =
-	createNetworkResourceStore<TradeMetricPayload>('tradeActivity');
 export const oracleQuotesResource =
 	createNetworkResourceStore<Record<string, OracleQuote>>('oracleQuotes');
 
@@ -58,11 +51,6 @@ export const sfts = derived(
 	[] as OffchainAssetReceiptVault[]
 );
 export const currentToken = writable<OffchainAssetReceiptVault | null>(null);
-export const tokenGlobalQuote = derived(
-	priceFeedsResource,
-	($resource) => $resource?.data ?? [],
-	[] as TradingViewQuote[]
-);
 export const oracleQuotes = derived(
 	oracleQuotesResource,
 	($resource) => $resource?.data ?? {},

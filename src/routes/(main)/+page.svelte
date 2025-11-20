@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
+	import { currentNetwork, sfts } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -15,9 +15,12 @@
 	import type { TokenPriceSummary } from '$lib/api/orders';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 
 	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
@@ -55,7 +58,7 @@
 		if ($sfts && $sfts.length) {
 			const rows: TokenRow[] = [];
 			for (const sft of $sfts) {
-				const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+				const quote = findQuoteForSymbol(sft.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 				const lookupAddress = sft.address.toLowerCase();
 				const summary = quotesRecord[lookupAddress] ?? null;
 				const bidPrice = summary?.bid ?? null;

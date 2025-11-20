@@ -6,15 +6,16 @@
 	import { validateOverrideDepositAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
-	import type { Hex } from 'viem';
-	import { formatUnits } from 'viem';
-	import { connected } from 'svelte-wagmi';
-	import transactionStore from '$lib/stores/transaction';
-	import { hasValidPriceFeedId } from '$lib/utils/derivations';
-	import { tokenGlobalQuote, currentNetwork } from '$lib/stores';
-	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-	import { containerStyles } from '$lib/styles/utils';
-	import Button from '$lib/components/ui/Button.svelte';
+import type { Hex } from 'viem';
+import { formatUnits } from 'viem';
+import { connected } from 'svelte-wagmi';
+import transactionStore from '$lib/stores/transaction';
+import { hasValidPriceFeedId } from '$lib/utils/derivations';
+import { currentNetwork } from '$lib/stores';
+import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+import { containerStyles } from '$lib/styles/utils';
+import Button from '$lib/components/ui/Button.svelte';
+import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -87,7 +88,7 @@
 	let overrideDepositAmount4: bigint = 0n;
 	let overrideDepositAmount5: bigint = 0n;
 	let overrideDepositAmount6: bigint = 0n;
-	let overrideDepositAmount7: bigint = 0n;
+let overrideDepositAmount7: bigint = 0n;
 	let inputVaultId1: Hex | undefined;
 	let inputVaultId2: Hex | undefined;
 	let inputVaultId3: Hex | undefined;
@@ -101,7 +102,9 @@
 	let outputVaultId4: Hex | undefined;
 	let outputVaultId5: Hex | undefined;
 	let outputVaultId6: Hex | undefined;
-	let outputVaultId7: Hex | undefined;
+let outputVaultId7: Hex | undefined;
+let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
 	// errors
 	let overrideDepositAmount1Error: boolean = false;
@@ -463,7 +466,7 @@
 					</thead>
 					<tbody>
 						{#if hasValidPriceFeedId(selectedToken1)}
-							<PythOracleRow token={selectedToken1} tokenQuotes={$tokenGlobalQuote} />
+							<PythOracleRow token={selectedToken1} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedToken1?.symbol ?? '-'}</td>
@@ -473,7 +476,7 @@
 							</tr>
 						{/if}
 						{#if hasValidPriceFeedId(selectedToken2)}
-							<PythOracleRow token={selectedToken2} tokenQuotes={$tokenGlobalQuote} />
+							<PythOracleRow token={selectedToken2} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedToken2?.symbol ?? '-'}</td>
@@ -483,7 +486,7 @@
 							</tr>
 						{/if}
 						{#if hasValidPriceFeedId(selectedToken3)}
-							<PythOracleRow token={selectedToken3} tokenQuotes={$tokenGlobalQuote} />
+							<PythOracleRow token={selectedToken3} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedToken3?.symbol ?? '-'}</td>
@@ -493,7 +496,7 @@
 							</tr>
 						{/if}
 						{#if hasValidPriceFeedId(selectedToken4)}
-							<PythOracleRow token={selectedToken4} tokenQuotes={$tokenGlobalQuote} />
+							<PythOracleRow token={selectedToken4} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedToken4?.symbol ?? '-'}</td>
@@ -503,7 +506,7 @@
 							</tr>
 						{/if}
 						{#if hasValidPriceFeedId(selectedToken5)}
-							<PythOracleRow token={selectedToken5} tokenQuotes={$tokenGlobalQuote} />
+							<PythOracleRow token={selectedToken5} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedToken5?.symbol ?? '-'}</td>
@@ -513,7 +516,7 @@
 							</tr>
 						{/if}
 						{#if hasValidPriceFeedId(selectedToken6)}
-							<PythOracleRow token={selectedToken6} tokenQuotes={$tokenGlobalQuote} />
+							<PythOracleRow token={selectedToken6} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedToken6?.symbol ?? '-'}</td>
@@ -523,7 +526,7 @@
 							</tr>
 						{/if}
 						{#if hasValidPriceFeedId(selectedToken7)}
-							<PythOracleRow token={selectedToken7} tokenQuotes={$tokenGlobalQuote} />
+							<PythOracleRow token={selectedToken7} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 						{:else}
 							<tr>
 								<td class="px-2 py-1">{selectedToken7?.symbol ?? '-'}</td>

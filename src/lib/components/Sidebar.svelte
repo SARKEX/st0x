@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
+	import { currentNetwork, sfts } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
@@ -8,6 +8,7 @@
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
@@ -23,6 +24,8 @@
 		price: number;
 		dollarVolume: number;
 	};
+	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
 	let filteredAssets: AssetWithMetrics[] = [];
 	let sortedAssets: AssetWithMetrics[] = [];
@@ -41,7 +44,7 @@
 						BigInt(0)
 					);
 					const totalVolume = depositVolume + withdrawVolume;
-					const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+					const quote = findQuoteForSymbol(sft.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;
