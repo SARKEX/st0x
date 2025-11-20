@@ -1,26 +1,14 @@
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import type { TradingViewQuote } from '$lib/api/tradingview';
 import type { Network } from '$lib/config/network';
-import {
-	TOKENS,
-	CRYPTO_TOKENS,
-	DEFAULT_PAYMENT_TOKENS,
-	getDefaultPaymentTokenForNetwork
-} from '$lib/config/network';
+import { TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
 import { getSfts, getTrades } from '$lib/api/subgraph';
-import {
-	fetchAndQuotePaymentTokenOrders,
-	buildTokenPriceMap,
-	type TokenPriceSummary,
-	type ProcessedQuote
-} from '$lib/api/orders';
 import { getNetworkOracleSnapshots, getPythQuotes, type OracleSnapshot } from '$lib/api/pyth';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DomainFetcher, PollingOptions } from '$lib/stores/polling';
 
 export type DomainKey =
 	| 'vaultSnapshot'
-	| 'orderbookQuotes'
 	| 'priceFeeds'
 	| 'tradeActivity'
 	| 'pendingTrades'
@@ -32,11 +20,6 @@ interface TradeWindowPayload {
 }
 
 export type TradeMetricPayload = TradeWindowPayload;
-
-export interface OrderbookQuoteCache {
-	summary: Record<string, TokenPriceSummary>;
-	quotes: ProcessedQuote[];
-}
 
 export type PendingTradePayload = TradeWindowPayload;
 
@@ -50,7 +33,6 @@ export interface OracleQuote {
 
 export interface DomainPayloads {
 	vaultSnapshot: OffchainAssetReceiptVault[];
-	orderbookQuotes: OrderbookQuoteCache;
 	priceFeeds: TradingViewQuote[];
 	tradeActivity: TradeMetricPayload;
 	pendingTrades: PendingTradePayload;
@@ -72,26 +54,6 @@ const vaultSnapshotFetcher: DomainFetcher<OffchainAssetReceiptVault[]> = async (
 	} catch (error) {
 		console.error(`Failed to fetch vault snapshots for ${network.displayName}:`, error);
 		return [];
-	}
-};
-
-const orderbookFetcher: DomainFetcher<OrderbookQuoteCache> = async (network) => {
-	try {
-		const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
-		const paymentToken =
-			getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
-		if (!paymentToken?.address) {
-			return { summary: {}, quotes } satisfies OrderbookQuoteCache;
-		}
-		const map = buildTokenPriceMap(quotes, paymentToken.address);
-		const summary: Record<string, TokenPriceSummary> = {};
-		for (const [address, value] of map.entries()) {
-			summary[address.toLowerCase()] = value;
-		}
-		return { summary, quotes } satisfies OrderbookQuoteCache;
-	} catch (error) {
-		console.error(`Failed to fetch orderbook quotes for ${network.displayName}:`, error);
-		return { summary: {}, quotes: [] } satisfies OrderbookQuoteCache;
 	}
 };
 
@@ -165,12 +127,6 @@ export const DOMAIN_DEFINITIONS: DefinitionMap = {
 		refreshInterval: 60_000, // 1 minute
 		autoPause: false,
 		fetcher: vaultSnapshotFetcher
-	},
-	orderbookQuotes: {
-		refreshInterval: 15_000,
-		autoPause: true,
-		browserOnly: true,
-		fetcher: orderbookFetcher
 	},
 	priceFeeds: {
 		refreshInterval: 300_000,

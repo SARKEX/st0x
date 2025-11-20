@@ -4,7 +4,6 @@
 	import {
 		currentNetwork,
 		sfts,
-		orderbookQuotesResource,
 		tradeActivityResource,
 		oracleQuotes,
 		oracleQuotesResource
@@ -44,11 +43,14 @@
 		ratioToNumber,
 		toDecimal
 	} from '$lib/utils/tokenMath';
-	import type { TimedResource, OracleQuote, OrderbookQuoteCache } from '$lib/stores/cache';
-	import type { ResourceStatus } from '$lib/stores/polling';
+	import type { TimedResource, OracleQuote } from '$lib/stores/cache';
+	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import type { QueryObserverResult } from '@tanstack/query-core';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
+	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	$: currentPythToken = TOKENS.find(
 		(token) =>
 			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
@@ -184,31 +186,34 @@
 	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
 	let chartsLoading = false;
 	let tradeQueryError: string | null = null;
-	let oracleResource: TimedResource<Record<string, OracleQuote>> | null = null;
-	let oracleEntry: OracleQuote | undefined;
-	let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
-	let oracleLoading = false;
-	let oracleError: string | null = null;
-	let buyPrice: number | null = null;
-	let sellPrice: number | null = null;
-	type OrderbookQuoteUiState = {
-		status: ResourceStatus;
-		hasData: boolean;
-		loadingWithoutData: boolean;
+let oracleResource: TimedResource<Record<string, OracleQuote>> | null = null;
+let oracleEntry: OracleQuote | undefined;
+let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
+let oracleLoading = false;
+let oracleError: string | null = null;
+let buyPrice: number | null = null;
+let sellPrice: number | null = null;
+type OrderbookQuoteUiState = {
+	status: QueryObserverResult<OrderbookQuoteCache, Error>['status'];
+	hasData: boolean;
+	loadingWithoutData: boolean;
+};
+const mapOrderbookQuoteState = (
+	resource: QueryObserverResult<OrderbookQuoteCache, Error> | null
+): OrderbookQuoteUiState => {
+	if (!resource) {
+		return { status: 'pending', hasData: false, loadingWithoutData: true };
+	}
+	const hasData = (resource.data?.quotes?.length ?? 0) > 0;
+	const status = resource.status;
+	return {
+		status,
+		hasData,
+		loadingWithoutData: resource.isPending && !hasData
 	};
-	const mapOrderbookQuoteState = (
-		resource: TimedResource<OrderbookQuoteCache> | null
-	): OrderbookQuoteUiState => {
-		const status = resource?.status ?? 'idle';
-		const hasData = (resource?.data?.quotes?.length ?? 0) > 0;
-		return {
-			status,
-			hasData,
-			loadingWithoutData: status === 'loading' && !hasData
-		};
-	};
-	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState(null);
-	$: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesResource);
+};
+let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
+$: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
 			return '—';
@@ -320,7 +325,7 @@
 			if (!settlementToken) {
 				resetOnChainPrices();
 			} else {
-				const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+				const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 				const assetAddress = currentToken.address?.toLowerCase();
 				const quoteAddress = settlementToken.address?.toLowerCase();
 				let bestBid: number | null = null;
@@ -410,7 +415,7 @@
 	}
 	$: orderbookDepth = (() => {
 		if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
-		const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+		const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 		if (!quotes.length) {
 			return { bids: [], asks: [] };
 		}
@@ -480,7 +485,7 @@
 		const tradeLoading = tradeStatus === 'loading' || (tradeStatus === 'idle' && !tradeHasData);
 		const quoteLoading =
 			orderbookQuoteUiState.loadingWithoutData ||
-			(orderbookQuoteUiState.status === 'idle' && !orderbookQuoteUiState.hasData);
+			(orderbookQuoteUiState.status === 'pending' && !orderbookQuoteUiState.hasData);
 		// Don't show loading if we have volume data OR orderbook depth data
 		const hasVolumeData = tradeVolumeBuckets.length > 0;
 		const hasDepthData = orderbookDepth.bids.length > 0 || orderbookDepth.asks.length > 0;
@@ -499,7 +504,6 @@
 			ensuredNetworkId = null;
 		} else if (ensuredNetworkId !== networkId) {
 			ensuredNetworkId = networkId;
-			void ensureResource(networkId, 'orderbookQuotes');
 			void ensureResource(networkId, 'tradeActivity');
 		}
 	}

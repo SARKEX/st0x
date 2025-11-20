@@ -15,8 +15,7 @@
 		getResourceStore,
 		ensureResource,
 		type TimedResource,
-		type TradeMetricPayload,
-		type OrderbookQuoteCache
+		type TradeMetricPayload
 	} from '$lib/stores/cache';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
@@ -29,6 +28,7 @@
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import { createRaindexClient } from '$lib/api/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
+import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
 
 	type AnalyzedTrade = {
 		trade: SgTrade;
@@ -45,57 +45,50 @@
 
 	let selectedNetwork = networks[0];
 
-	const priceFeedResourceStores = networks.map((network) =>
-		getResourceStore(network.id, 'priceFeeds')
-	);
-	const tradeResourceStores = networks.map((network) =>
-		getResourceStore(network.id, 'tradeActivity')
-	);
-	const orderbookResourceStores = networks.map((network) =>
-		getResourceStore(network.id, 'orderbookQuotes')
-	);
+const priceFeedResourceStores = networks.map((network) =>
+	getResourceStore(network.id, 'priceFeeds')
+);
+const tradeResourceStores = networks.map((network) =>
+	getResourceStore(network.id, 'tradeActivity')
+);
+const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
 
-	const allPriceFeedResources = derived(
-		priceFeedResourceStores,
-		(resources) => resources,
-		priceFeedResourceStores.map(() => null as TimedResource<TradingViewQuote[]> | null)
+const allPriceFeedResources = derived(
+	priceFeedResourceStores,
+	(resources) => resources,
+	priceFeedResourceStores.map(() => null as TimedResource<TradingViewQuote[]> | null)
 	);
 
 	const allTradeResources = derived(
-		tradeResourceStores,
-		(resources) => resources,
-		tradeResourceStores.map(() => null as TimedResource<TradeMetricPayload> | null)
-	);
+	tradeResourceStores,
+	(resources) => resources,
+	tradeResourceStores.map(() => null as TimedResource<TradeMetricPayload> | null)
+);
 
-	const allOrderbookResources = derived(
-		orderbookResourceStores,
-		(resources) => resources,
-		orderbookResourceStores.map(() => null as TimedResource<OrderbookQuoteCache> | null)
-	);
+const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
 
-	onMount(() => {
-		networks.forEach((network) => {
-			ensureResource(network.id, 'priceFeeds');
-			ensureResource(network.id, 'tradeActivity');
-			ensureResource(network.id, 'orderbookQuotes');
-		});
-		void loadVaults();
+onMount(() => {
+	networks.forEach((network) => {
+		ensureResource(network.id, 'priceFeeds');
+		ensureResource(network.id, 'tradeActivity');
 	});
+	void loadVaults();
+});
 
 	$: priceFeedStates = networks.map((network, index) => ({
 		network,
 		resource: $allPriceFeedResources[index]
 	}));
 
-	$: tradeStates = networks.map((network, index) => ({
-		network,
-		resource: $allTradeResources[index]
-	}));
+$: tradeStates = networks.map((network, index) => ({
+	network,
+	resource: $allTradeResources[index]
+}));
 
-	$: orderbookStates = networks.map((network, index) => ({
-		network,
-		resource: $allOrderbookResources[index]
-	}));
+$: orderbookStates = networks.map((network, index) => ({
+	network,
+	query: $allOrderbookQueries[index]
+}));
 
 	let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
 	$: priceFeedByNetwork = (() => {
@@ -219,10 +212,10 @@
 			map.set(network.chainId, new Set<string>());
 		});
 
-		orderbookStates.forEach(({ network, resource }) => {
+		orderbookStates.forEach(({ network, query }) => {
 			const set = map.get(network.chainId);
 			if (!set) return;
-			const summary = resource?.data?.summary ?? {};
+			const summary = query?.data?.summary ?? {};
 			Object.keys(summary).forEach((address) => {
 				const normalised = normalizeAddress(address);
 				if (normalised && canonicalTokens.has(normalised)) {
@@ -255,8 +248,8 @@
 	function getMidPrice(networkId: number, tokenAddress: string | null): number | null {
 		if (!tokenAddress) return null;
 		const summary =
-			orderbookStates.find(({ network }) => network.chainId === networkId)?.resource?.data
-				?.summary ?? {};
+			orderbookStates.find(({ network }) => network.chainId === networkId)?.query?.data?.summary ??
+			{};
 		const metrics = summary[tokenAddress] ?? summary[tokenAddress.toLowerCase()];
 		if (!metrics) return null;
 		const { bid, ask } = metrics;
@@ -344,8 +337,8 @@
 
 	$: totalDeployedOrders = (() => {
 		const hashes = new Set<string>();
-		orderbookStates.forEach(({ resource }) => {
-			resource?.data?.quotes?.forEach((quote) => {
+		orderbookStates.forEach(({ query }) => {
+			query?.data?.quotes?.forEach((quote) => {
 				if (quote.orderHash) {
 					hashes.add(quote.orderHash.toLowerCase());
 				}
@@ -416,7 +409,7 @@
 		const orderHashes = new Set<string>();
 		orderbookStates
 			.find(({ network: net }) => net.chainId === network.chainId)
-			?.resource?.data?.quotes?.forEach((quote) => {
+			?.query?.data?.quotes?.forEach((quote) => {
 				if (quote.orderHash) {
 					orderHashes.add(quote.orderHash.toLowerCase());
 				}

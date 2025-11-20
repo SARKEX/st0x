@@ -8,15 +8,12 @@ import { networks } from '$lib/config/network';
 import {
 	getResourceStore,
 	type TimedResource,
-	type OrderbookQuoteCache,
 	type TradeMetricPayload,
 	type OracleQuote
 } from '$lib/stores/cache';
-import type { TokenPriceSummary } from '$lib/api/orders';
 
 type DomainKey =
 	| 'vaultSnapshot'
-	| 'orderbookQuotes'
 	| 'priceFeeds'
 	| 'tradeActivity'
 	| 'oracleQuotes';
@@ -49,8 +46,6 @@ export const wrongNetwork = derived(
 );
 export const vaultSnapshotResource =
 	createNetworkResourceStore<OffchainAssetReceiptVault[]>('vaultSnapshot');
-export const orderbookQuotesResource =
-	createNetworkResourceStore<OrderbookQuoteCache>('orderbookQuotes');
 export const priceFeedsResource = createNetworkResourceStore<TradingViewQuote[]>('priceFeeds');
 export const tradeActivityResource =
 	createNetworkResourceStore<TradeMetricPayload>('tradeActivity');
@@ -67,11 +62,6 @@ export const tokenGlobalQuote = derived(
 	priceFeedsResource,
 	($resource) => $resource?.data ?? [],
 	[] as TradingViewQuote[]
-);
-export const orderbookQuotes = derived(
-	orderbookQuotesResource,
-	($resource) => $resource?.data?.summary ?? {},
-	{} as Record<string, TokenPriceSummary>
 );
 export const oracleQuotes = derived(
 	oracleQuotesResource,

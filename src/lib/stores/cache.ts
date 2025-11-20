@@ -3,7 +3,6 @@ import {
 	DOMAIN_DEFINITIONS,
 	type DomainKey,
 	type DomainPayloads,
-	type OrderbookQuoteCache,
 	type TradeMetricPayload,
 	type PendingTradePayload,
 	type OracleQuote
@@ -18,7 +17,6 @@ type ControllerMap = { [K in DomainKey]: PollingController<DomainPayloads[K]> };
 
 const controllers: ControllerMap = {
 	vaultSnapshot: createPollingController(DOMAIN_DEFINITIONS.vaultSnapshot),
-	orderbookQuotes: createPollingController(DOMAIN_DEFINITIONS.orderbookQuotes),
 	priceFeeds: createPollingController(DOMAIN_DEFINITIONS.priceFeeds),
 	tradeActivity: createPollingController(DOMAIN_DEFINITIONS.tradeActivity),
 	pendingTrades: createPollingController(DOMAIN_DEFINITIONS.pendingTrades),
@@ -27,7 +25,6 @@ const controllers: ControllerMap = {
 
 export type {
 	TimedResource,
-	OrderbookQuoteCache,
 	TradeMetricPayload,
 	PendingTradePayload,
 	DomainKey,

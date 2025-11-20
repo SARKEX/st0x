@@ -43,7 +43,8 @@ This plan focuses on simplifying interdependencies and data/logic flows while ke
 - Keep strategy file fetching cached and isolated; consider server-side proxy or pre-fetch cache keyed by commit to avoid repeated client fetches.
 - Make order components depend on the smaller services, not the monolithic store.
 
-## 7) Incremental Migration Strategy
-- Step through domains one by one (vaults → orderbook → trades → oracles) to move them to Query-based fetchers and new clients.
-- After each migration, remove unused polling/controller code and update imports.
+## 7) Incremental Migration Strategy (current status)
+- Progress: Config split done; client layer added (http/subgraph/raindex/pyth); orderbook domain now on Tanstack Query (home list, trade page/depth, market orders, platform metrics) with polling controller + domain entry removed.
+- Next domains to migrate: price feeds/trade activity/pending trades via Query to retire remaining polling controllers.
+- After each domain migration, remove unused polling/controller code and update imports.
 - Add vitest coverage for services and view-models as they are introduced to prevent regressions.

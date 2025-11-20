@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { CategorizedToken } from '$lib/config/network';
-	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
-	import { ensureResource } from '$lib/stores/cache';
+	import { currentNetwork, oracleQuotesResource } from '$lib/stores';
 	import {
 		OrderV4_ABI,
 		normalizeOrderData,
@@ -30,6 +29,7 @@
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import transactionStore from '$lib/stores/transaction';
 	import { Float } from '@rainlanguage/float';
+	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	/**
@@ -42,6 +42,9 @@
 	export let assetToken: CategorizedToken | undefined;
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
+
+	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
@@ -165,7 +168,7 @@
 	// Fetch market price when component mounts or dependencies change
 	// Only calculates price when user has entered a quantity (selectedAmount > 0)
 	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesResource?.data?.quotes) {
+	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes) {
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
@@ -180,7 +183,7 @@
 			return null;
 		}
 
-		const allQuotes = $orderbookQuotesResource?.data?.quotes ?? [];
+		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 		const assetAddressNormalized = normalizeAddress(assetToken.address);
 		const paymentTokenAddressNormalized = normalizeAddress(
 			paymentToken?.address?.toLowerCase() || ''
@@ -293,10 +296,10 @@
 
 		try {
 			// Refresh orderbook quotes if stale
-			const lastUpdated = $orderbookQuotesResource?.updatedAt ?? 0;
+			const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
 			const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
 			if (isStaleQuotes) {
-				await ensureResource($currentNetwork.id, 'orderbookQuotes', { force: true });
+				await $orderbookQuotesQuery?.refetch?.();
 				await fetchMarketPrice();
 				if (priceError) {
 					console.error('Price unavailable after refresh');

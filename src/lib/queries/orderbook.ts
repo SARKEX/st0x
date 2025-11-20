@@ -21,10 +21,12 @@ export function createOrderbookQuotesQuery(network: Network | null) {
 		enabled: Boolean(network),
 		refetchInterval: 15_000,
 		queryFn: async () => {
-			const quotes = await fetchAndQuotePaymentTokenOrders(network?.id);
+			if (!network) {
+				return { summary: {}, quotes: [] };
+			}
+			const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
 			const paymentToken =
-				(network && getDefaultPaymentTokenForNetwork(network.id)) ||
-				(network && DEFAULT_PAYMENT_TOKENS[network.id]);
+				getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
 			if (!paymentToken?.address) {
 				return { summary: {}, quotes };
 			}

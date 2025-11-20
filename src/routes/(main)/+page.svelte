@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { currentNetwork, sfts, tokenGlobalQuote, orderbookQuotes } from '$lib/stores';
+	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -14,7 +14,10 @@
 	import { containerStyles } from '$lib/styles/utils';
 	import type { TokenPriceSummary } from '$lib/api/orders';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 
+	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
@@ -37,7 +40,7 @@
 	let processedTokens: TokenRow[] = [];
 
 	$: isVaultLoading = !$sfts || !$sfts.length;
-	$: quotesRecord = $orderbookQuotes ?? {};
+	$: quotesRecord = $orderbookQuotesQuery?.data?.summary ?? {};
 
 	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
 		if (!summary) return null;

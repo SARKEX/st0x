@@ -1,21 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Network } from '$lib/config/network';
 
 const {
 	network,
-	networkWithoutUsdc,
 	mockTokens,
 	networkModule,
-	paymentToken,
 	mockGetSfts,
 	mockGetTrades,
-	mockFetchOrders,
-	mockBuildTokenMap,
 	mockGetPythQuotes,
 	mockGetOracleSnapshots
 } = vi.hoisted(() => {
 	const network = { id: 1, chainId: 100, displayName: 'Test Network' } as unknown as Network;
-	const networkWithoutUsdc = { id: 2, chainId: 100, displayName: 'No USDC' } as unknown as Network;
 
 	const mockTokens = [
 		{
@@ -36,51 +31,17 @@ const {
 		}
 	];
 
-	const paymentToken = {
-		chainId: network.chainId,
-		address: '0xUSDC',
-		symbol: 'USDC',
-		decimals: 6,
-		name: 'USD Coin',
-		priceFeedId: 'usdc-feed',
-		logoUrl: '/images/USDC.png'
-	};
-
-	type PaymentTokenType = typeof paymentToken;
-	const getDefaultPaymentTokenForNetwork = vi.fn() as Mock<[number], PaymentTokenType | undefined>;
-	const getDefaultSettlementTokenForNetwork = vi.fn() as Mock<
-		[number],
-		PaymentTokenType | undefined
-	>;
-
 	const networkModule = {
 		TOKENS: mockTokens,
-		CRYPTO_TOKENS: [],
-		DEFAULT_PAYMENT_TOKENS: {
-			[network.id]: paymentToken
-		},
-		PAYMENT_TOKENS_BY_NETWORK: {
-			[network.id]: [paymentToken]
-		},
-		DEFAULT_SETTLEMENT_TOKENS: {} as Record<number, PaymentTokenType>,
-		SETTLEMENT_TOKENS_BY_NETWORK: {} as Record<number, PaymentTokenType[]>,
-		getDefaultPaymentTokenForNetwork,
-		getDefaultSettlementTokenForNetwork
+		CRYPTO_TOKENS: []
 	};
-
-	networkModule.DEFAULT_SETTLEMENT_TOKENS = networkModule.DEFAULT_PAYMENT_TOKENS;
-	networkModule.SETTLEMENT_TOKENS_BY_NETWORK = networkModule.PAYMENT_TOKENS_BY_NETWORK;
 
 	return {
 		network,
-		networkWithoutUsdc,
 		mockTokens,
 		networkModule,
-		paymentToken,
 		mockGetSfts: vi.fn(),
 		mockGetTrades: vi.fn(),
-		mockFetchOrders: vi.fn(),
-		mockBuildTokenMap: vi.fn(),
 		mockGetPythQuotes: vi.fn(),
 		mockGetOracleSnapshots: vi.fn()
 	};
@@ -90,10 +51,6 @@ vi.mock('$lib/config/network', () => networkModule);
 vi.mock('$lib/api/subgraph', () => ({
 	getSfts: mockGetSfts,
 	getTrades: mockGetTrades
-}));
-vi.mock('$lib/api/orders', () => ({
-	fetchAndQuotePaymentTokenOrders: mockFetchOrders,
-	buildTokenPriceMap: mockBuildTokenMap
 }));
 vi.mock('$lib/api/pyth', () => ({
 	getPythQuotes: mockGetPythQuotes,
@@ -107,16 +64,6 @@ describe('domain fetchers', () => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
-		networkModule.DEFAULT_PAYMENT_TOKENS[network.id] = paymentToken;
-		networkModule.PAYMENT_TOKENS_BY_NETWORK[network.id] = [paymentToken];
-		networkModule.DEFAULT_SETTLEMENT_TOKENS[network.id] = paymentToken;
-		networkModule.SETTLEMENT_TOKENS_BY_NETWORK[network.id] = [paymentToken];
-		networkModule.getDefaultPaymentTokenForNetwork.mockImplementation(
-			(chainId: number) => networkModule.DEFAULT_PAYMENT_TOKENS[chainId]
-		);
-		networkModule.getDefaultSettlementTokenForNetwork.mockImplementation(
-			(chainId: number) => networkModule.DEFAULT_SETTLEMENT_TOKENS[chainId]
-		);
 	});
 
 	afterEach(() => {
@@ -136,32 +83,6 @@ describe('domain fetchers', () => {
 		mockGetSfts.mockRejectedValueOnce(new Error('boom'));
 		const fallback = await vaultFetcher(network);
 		expect(fallback).toEqual([]);
-		consoleSpy.mockRestore();
-	});
-
-	it('builds a summary map for orderbook quotes and handles missing payment token', async () => {
-		const orderbookFetcher = DOMAIN_DEFINITIONS.orderbookQuotes.fetcher;
-		const quotes = [{ id: 'q1' }];
-		const summaryValue = { midPrice: 1.23 };
-		mockFetchOrders.mockResolvedValue(quotes);
-		mockBuildTokenMap.mockReturnValue(new Map([['0xToken1', summaryValue]]));
-
-		const result = await orderbookFetcher(network);
-		expect(mockFetchOrders).toHaveBeenCalledWith(network.id);
-		expect(mockBuildTokenMap).toHaveBeenCalledWith(quotes, paymentToken.address);
-		expect(result.summary).toEqual({ '0xtoken1': summaryValue });
-		expect(result.quotes).toBe(quotes);
-
-		const noUsdcResult = await orderbookFetcher(networkWithoutUsdc);
-		expect(mockFetchOrders).toHaveBeenLastCalledWith(networkWithoutUsdc.id);
-		expect(mockBuildTokenMap).toHaveBeenCalledTimes(1);
-		expect(noUsdcResult.summary).toEqual({});
-		expect(noUsdcResult.quotes).toBe(quotes);
-
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		mockFetchOrders.mockRejectedValueOnce(new Error('failure'));
-		const fallback = await orderbookFetcher(network);
-		expect(fallback).toEqual({ summary: {}, quotes: [] });
 		consoleSpy.mockRestore();
 	});
 
