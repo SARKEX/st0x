@@ -6,7 +6,6 @@ import type { Network } from '$lib/config/network';
 import { networks } from '$lib/config/network';
 import type { OracleQuote } from '$lib/queries/oracleQuotes';
 import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
-import type { CreateQueryResult } from '@tanstack/svelte-query';
 import { createVaultsQuery } from '$lib/queries/vaults';
 import type { OffchainAssetReceiptVault as Vault } from '$lib/types/OffchainAssetReceiptVault';
 
@@ -16,18 +15,23 @@ export const wrongNetwork = derived(
 	[chainId, signerAddress, currentNetwork],
 	([$chainId, $signerAddress, $currentNetwork]) => $signerAddress && $chainId !== $currentNetwork.id
 );
-export const vaultsQuery = derived(currentNetwork, ($network) =>
-	createVaultsQuery($network?.name ? $network : null)
-);
+export const vaultsQuery = derived(currentNetwork, ($network) => createVaultsQuery($network ?? null));
+
 export const oracleQuotesQuery = derived(currentNetwork, ($network) =>
 	createOracleQuotesQuery($network)
 );
 
-export const sfts = derived(vaultsQuery as any, ($query: any) => $query?.data ?? []) as Readable<
-	OffchainAssetReceiptVault[]
->;
+export const sfts = derived(
+	vaultsQuery,
+	($query) => ($query as any)?.data ?? [],
+	[] as OffchainAssetReceiptVault[]
+);
 export const currentToken = writable<OffchainAssetReceiptVault | null>(null);
-export const oracleQuotes = derived(oracleQuotesQuery as any, ($query: any) => $query?.data ?? {});
+export const oracleQuotes = derived(
+	oracleQuotesQuery,
+	($query) => ($query as any)?.data ?? {},
+	{} as Record<string, OracleQuote>
+);
 
 // Store for Rainlang confirmation modal
 export const rainlangConfirmationModal = writable<{

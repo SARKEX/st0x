@@ -100,7 +100,7 @@
 			const userHoldings = [];
 			for (const sft of $sfts) {
 				const userHolder = sft.tokenHolders.find(
-					(holder) => holder.address.toLowerCase() === $signerAddress.toLowerCase()
+					(holder: { address: string }) => holder.address.toLowerCase() === $signerAddress.toLowerCase()
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {

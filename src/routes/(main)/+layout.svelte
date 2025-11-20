@@ -8,7 +8,8 @@
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-	import { sfts, rainlangConfirmationModal } from '$lib/stores';
+import { sfts, rainlangConfirmationModal } from '$lib/stores';
+import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
@@ -69,7 +70,7 @@
 		if (pathname.startsWith('/trade/')) {
 			// Extract token name from path
 			const tokenId = pathname.split('/trade/')[1];
-			const sft = $sfts?.find((s) => s.id === tokenId);
+			const sft = $sfts?.find((s: OffchainAssetReceiptVault) => s.id === tokenId);
 			if (sft) {
 				return `Trade ${sft.name} on our DEX`;
 			}

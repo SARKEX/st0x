@@ -39,11 +39,11 @@
 				.map<AssetWithMetrics>((sft) => {
 					// Calculate total on-chain volume (deposits + withdrawals)
 					const depositVolume = sft.deposits.reduce(
-						(sum: bigint, d) => sum + BigInt(d.amount),
+						(sum: bigint, d: { amount: string }) => sum + BigInt(d.amount),
 						BigInt(0)
 					);
 					const withdrawVolume = sft.withdraws.reduce(
-						(sum: bigint, w) => sum + BigInt(w.amount),
+						(sum: bigint, w: { amount: string }) => sum + BigInt(w.amount),
 						BigInt(0)
 					);
 					const totalVolume = depositVolume + withdrawVolume;

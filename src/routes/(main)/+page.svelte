@@ -10,6 +10,7 @@
 	import { goto } from '$app/navigation';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	// Consolidated table usage
 	import { containerStyles } from '$lib/styles/utils';
 	import type { TokenPriceSummary } from '$lib/api/orders';
@@ -41,9 +42,13 @@
 	};
 
 	let processedTokens: TokenRow[] = [];
+	let sftLookup = new Map<string, OffchainAssetReceiptVault>();
 
 	$: isVaultLoading = !$sfts || !$sfts.length;
 	$: quotesRecord = $orderbookQuotesQuery?.data?.summary ?? {};
+	$: sftLookup = new Map<string, OffchainAssetReceiptVault>(
+		($sfts ?? []).map((vault: OffchainAssetReceiptVault) => [vault.id, vault])
+	);
 
 	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
 		if (!summary) return null;
@@ -52,6 +57,10 @@
 			return (bid + ask) / 2;
 		}
 		return bid ?? ask ?? null;
+	}
+
+	function sumAmounts(entries?: Array<{ amount: string }>): bigint {
+		return (entries ?? []).reduce((sum: bigint, entry) => sum + BigInt(entry.amount), 0n);
 	}
 
 	$: {
@@ -77,7 +86,7 @@
 					bidPrice,
 					askPrice,
 					totalHolders: sft.tokenHolders
-						.filter((holder) => BigInt(holder.balance) > BigInt(0))
+						.filter((holder: { balance: string }) => BigInt(holder.balance) > BigInt(0))
 						.length.toString(),
 					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
 					totalTransfers: sft.shareTransfers.length.toString(),
@@ -143,13 +152,9 @@
 									</tr>
 								{:else}
 									{#each processedTokens as token (token.id)}
-										{@const sft = $sfts.find((s) => s.id === token.id)}
-										{@const deposits =
-											sft?.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0)) ??
-											BigInt(0)}
-										{@const withdraws =
-											sft?.withdraws.reduce((sum, w) => sum + BigInt(w.amount), BigInt(0)) ??
-											BigInt(0)}
+										{@const sft = sftLookup.get(token.id)}
+										{@const deposits = sumAmounts(sft?.deposits)}
+										{@const withdraws = sumAmounts(sft?.withdraws)}
 										{@const circulating = deposits - withdraws}
 										{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
 										{@const displayPrice =
