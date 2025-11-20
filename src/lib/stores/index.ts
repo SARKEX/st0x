@@ -7,10 +7,15 @@ import { networks } from '$lib/config/network';
 import type { OracleQuote } from '$lib/queries/oracleQuotes';
 import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 import { createVaultsQuery } from '$lib/queries/vaults';
-import type { OffchainAssetReceiptVault as Vault } from '$lib/types/OffchainAssetReceiptVault';
 
 function mapQueryData<T>(queryStore: Readable<{ data?: T }>, fallback: T) {
-	return derived(queryStore, ($query) => ($query && 'data' in $query ? $query.data ?? fallback : fallback), fallback);
+	return derived(
+		queryStore,
+		($query) => {
+			return $query?.data ?? fallback;
+		},
+		fallback
+	);
 }
 
 export const sftMetadata = writable<MetaV1S[] | null>(null);
@@ -19,12 +24,14 @@ export const wrongNetwork = derived(
 	[chainId, signerAddress, currentNetwork],
 	([$chainId, $signerAddress, $currentNetwork]) => $signerAddress && $chainId !== $currentNetwork.id
 );
-export const vaultsQuery = derived(currentNetwork, ($network) =>
-	createVaultsQuery($network ?? null)
+export const vaultsQuery: Readable<{ data?: OffchainAssetReceiptVault[] }> = derived(
+	currentNetwork,
+	($network) => createVaultsQuery($network ?? null) as { data?: OffchainAssetReceiptVault[] }
 );
 
-export const oracleQuotesQuery = derived(currentNetwork, ($network) =>
-	createOracleQuotesQuery($network)
+export const oracleQuotesQuery: Readable<{ data?: Record<string, OracleQuote> }> = derived(
+	currentNetwork,
+	($network) => createOracleQuotesQuery($network) as { data?: Record<string, OracleQuote> }
 );
 
 export const sfts = mapQueryData(vaultsQuery, [] as OffchainAssetReceiptVault[]);

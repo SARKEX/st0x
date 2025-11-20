@@ -22,9 +22,9 @@ import {
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { createRaindexClient } from '$lib/api/raindex';
 import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
-	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { createTradeActivityQuery, type TradeMetricPayload } from '$lib/queries/tradeActivity';
+	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 
 	type AnalyzedTrade = {
 		trade: SgTrade;

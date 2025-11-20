@@ -238,7 +238,7 @@ $: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 		return fallback;
 	}
 	$: oracleResource = (() => {
-		const q: any = oracleQuotesQuery;
+		const q = oracleQuotesQuery;
 		const status: ResourceStatus =
 			q?.status === 'success'
 				? 'ready'
