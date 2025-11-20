@@ -24,7 +24,7 @@
 			? 'bg-green-500 hover:bg-green-600 text-white'
 			: 'bg-red-500 hover:bg-red-600 text-white';
 
-	export let passedInputToken: PythToken | undefined; // The token we're accumulating
+	export let assetToken: PythToken | undefined; // The token we're accumulating
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -51,7 +51,7 @@
 			selectedOutputToken = selectedOutputToken || ALL_TOKENS[0];
 		}
 		selectedInputToken =
-			(passedInputToken as unknown as CategorizedToken) || selectedInputToken || ALL_TOKENS[0];
+			(assetToken as unknown as CategorizedToken) || selectedInputToken || ALL_TOKENS[0];
 	}
 
 	let selectedAmount: bigint = 0n;

@@ -1056,14 +1056,14 @@
 								{#if panelStrategy === 'limit'}
 									<LimitOrder
 										orderSide={panelOrderSide}
-										passedOutputToken={currentPythToken}
+										assetToken={currentPythToken}
 										{buyPrice}
 										{sellPrice}
 									/>
 								{:else if panelStrategy === 'market'}
-									<MarketOrder orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
+									<MarketOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
 								{:else if panelStrategy === 'dca'}
-									<DcaOrder orderSide={panelOrderSide} passedInputToken={currentPythToken} />
+									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
 								{/if}
 							</div>
 						</div>

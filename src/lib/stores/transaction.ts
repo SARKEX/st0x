@@ -29,7 +29,7 @@ import {
 	type DcaDeploymentArgs,
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
-} from '$lib/api/deployment';
+} from '$lib/services/orderDeployment';
 import { rainlangConfirmationModal } from '$lib/stores';
 import { createRaindexClient } from '$lib/api/raindex';
 import { ensureResource, getResourceStore } from '$lib/stores/cache';
@@ -145,30 +145,61 @@ const transactionStore = () => {
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
 
-		if (deploymentArgs.approvals.length > 0) {
-			// Check token balances first
-			for (const approval of deploymentArgs.approvals) {
-				const balance = await readContract(config, {
-					abi: erc20Abi,
-					address: approval.token as `0x${string}`,
-					functionName: 'balanceOf',
-					args: [$signerAddress as Hex]
-				});
-				const { args } = decodeFunctionData({
-					abi: erc20Abi,
-					data: approval.calldata as Hex
-				});
+		// Filter approvals: check balance + allowance in parallel, skip if already approved
+		const approvalsNeeded: typeof deploymentArgs.approvals = [];
 
-				if (balance < BigInt(args[1] as string)) {
+		if (deploymentArgs.approvals.length > 0) {
+			checkingWalletAllowance('Checking balances and allowances...');
+
+			// Check all balances and allowances in PARALLEL
+			const checks = await Promise.all(
+				deploymentArgs.approvals.map(async (approval) => {
+					const { args: approvalArgs } = decodeFunctionData({
+						abi: erc20Abi,
+						data: approval.calldata as Hex
+					});
+					const spender = approvalArgs[0] as Hex;
+					const requiredAmount = BigInt(approvalArgs[1] as string);
+
+					// Check balance and allowance in parallel
+					const [balance, allowance] = await Promise.all([
+						readContract(config, {
+							abi: erc20Abi,
+							address: approval.token as `0x${string}`,
+							functionName: 'balanceOf',
+							args: [$signerAddress as Hex]
+						}),
+						readContract(config, {
+							abi: erc20Abi,
+							address: approval.token as `0x${string}`,
+							functionName: 'allowance',
+							args: [$signerAddress as Hex, spender]
+						})
+					]);
+
+					return { approval, balance, allowance, requiredAmount };
+				})
+			);
+
+			// Validate balances and filter approvals
+			for (const { approval, balance, allowance, requiredAmount } of checks) {
+				// Check if user has sufficient balance
+				if (balance < requiredAmount) {
 					return transactionError(
 						`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
 					);
 				}
+
+				// Only add approval if current allowance is insufficient
+				if (allowance < requiredAmount) {
+					approvalsNeeded.push(approval);
+				}
 			}
 		}
 
-		if (deploymentArgs.approvals.length > 0) {
-			for (const approval of deploymentArgs.approvals) {
+		// Only execute approvals that are actually needed
+		if (approvalsNeeded.length > 0) {
+			for (const approval of approvalsNeeded) {
 				try {
 					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
 					const hash = await sendTransaction(config, {
@@ -285,8 +316,9 @@ const transactionStore = () => {
 	const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(args);
+		const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(network, args);
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
@@ -294,8 +326,9 @@ const transactionStore = () => {
 	const handleDcaDeploy = async (args: DcaDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(args);
+		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(network, args);
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
@@ -303,8 +336,9 @@ const transactionStore = () => {
 	const handleLimitDeploy = async (args: LimitOrderDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(args);
+		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(network, args);
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
@@ -340,6 +374,14 @@ const transactionStore = () => {
 		}
 	};
 
+	/**
+	 * Executes a market order by taking existing orders from the orderbook.
+	 *
+	 * Perspective: TAKER (user executing against orderbook)
+	 * - inputToken: What the taker wants to RECEIVE
+	 * - outputToken: What the taker will GIVE AWAY
+	 * - requestedInputAmount: Amount taker wants to receive
+	 */
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV4,
 		raindexOrder: SgOrder,
@@ -347,14 +389,14 @@ const transactionStore = () => {
 		options?: {
 			ioIndexes?: { input: number; output: number };
 			walkResult?: {
-				inputAmountFilled: bigint;
-				outputAmountGiven: bigint;
+				inputAmountFilled: bigint;   // Amount taker receives
+				outputAmountGiven: bigint;   // Amount taker gives
 				ioRatio: number;
 				fills: unknown[];
 			};
-			inputToken?: { decimals?: number; symbol?: string };
-			outputToken?: { decimals?: number; symbol?: string };
-			requestedInputAmount?: bigint;
+			inputToken?: { decimals?: number; symbol?: string };   // Taker receives
+			outputToken?: { decimals?: number; symbol?: string };  // Taker gives
+			requestedInputAmount?: bigint;  // Amount taker wants
 		}
 	) => {
 		const config = get(wagmiConfig);
@@ -592,8 +634,9 @@ const transactionStore = () => {
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(args);
+		const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args);
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};

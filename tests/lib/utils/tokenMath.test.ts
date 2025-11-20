@@ -187,10 +187,12 @@ describe('tokenMath', () => {
 		};
 
 		it.each([
-			['0xQUOTE', '0xASSET', 'bid'],
-			['0xquote', '0xasset', 'bid'], // case insensitive
-			['0xASSET', '0xQUOTE', 'ask']
-		])('should classify flow: %s -> %s = %s', (input, output, expected) => {
+			// BID: buying asset (input=asset, output=quote/USDC)
+			['0xASSET', '0xQUOTE', 'bid'],
+			['0xasset', '0xquote', 'bid'], // case insensitive
+			// ASK: selling asset (input=quote/USDC, output=asset)
+			['0xQUOTE', '0xASSET', 'ask']
+		])('should classify flow: input=%s, output=%s -> %s', (input, output, expected) => {
 			expect(classifyFlow(input, output, pair)).toBe(expected);
 		});
 
@@ -210,18 +212,18 @@ describe('tokenMath', () => {
 			quote: { address: '0xQUOTE', decimals: 6 }
 		};
 
-		it('should parse BID trade (buying asset with quote)', () => {
+		it('should parse BID trade (buying asset - input=asset, output=quote)', () => {
 			const trade = {
 				inputVaultBalanceChange: {
-					amount: '1000000', // 1 USDC (6 decimals)
-					vault: {
-						token: { address: '0xQUOTE', decimals: 6 }
-					}
-				},
-				outputVaultBalanceChange: {
 					amount: '1000000000000000000', // 1 ASSET (18 decimals)
 					vault: {
 						token: { address: '0xASSET', decimals: 18 }
+					}
+				},
+				outputVaultBalanceChange: {
+					amount: '1000000', // 1 USDC (6 decimals)
+					vault: {
+						token: { address: '0xQUOTE', decimals: 6 }
 					}
 				}
 			};
@@ -234,18 +236,18 @@ describe('tokenMath', () => {
 			expect(result?.price).toBe(1);
 		});
 
-		it('should parse ASK trade (selling asset for quote)', () => {
+		it('should parse ASK trade (selling asset - input=quote, output=asset)', () => {
 			const trade = {
 				inputVaultBalanceChange: {
-					amount: '1000000000000000000', // 1 ASSET (18 decimals)
-					vault: {
-						token: { address: '0xASSET', decimals: 18 }
-					}
-				},
-				outputVaultBalanceChange: {
 					amount: '5000000', // 5 USDC (6 decimals)
 					vault: {
 						token: { address: '0xQUOTE', decimals: 6 }
+					}
+				},
+				outputVaultBalanceChange: {
+					amount: '1000000000000000000', // 1 ASSET (18 decimals)
+					vault: {
+						token: { address: '0xASSET', decimals: 18 }
 					}
 				}
 			};
@@ -374,19 +376,19 @@ describe('tokenMath', () => {
 	});
 
 	describe('analyzeTrade', () => {
-		it('should analyze a complete trade', () => {
+		it('should analyze a complete trade (ASK - selling asset)', () => {
 			const quoteToken: TokenDescriptor = { address: '0xUSDC', decimals: 6, symbol: 'USDC' };
 			const assetToken: TokenDescriptor = { address: '0xASSET', decimals: 18, symbol: 'ASSET' };
 
 			const trade = {
 				inputVaultBalanceChange: {
-					amount: '1000000', // 1 USDC
+					amount: '1000000', // 1 USDC (input=quote)
 					vault: {
 						token: { address: '0xUSDC', decimals: 6 }
 					}
 				},
 				outputVaultBalanceChange: {
-					amount: '1000000000000000000', // 1 ASSET
+					amount: '1000000000000000000', // 1 ASSET (output=asset)
 					vault: {
 						token: { address: '0xASSET', decimals: 18 }
 					}
@@ -399,7 +401,7 @@ describe('tokenMath', () => {
 			expect(result).not.toBeNull();
 			expect(result?.assetAddress).toBe('0xasset');
 			expect(result?.assetSymbol).toBe('ASSET');
-			expect(result?.side).toBe('bid');
+			expect(result?.side).toBe('ask');
 			expect(result?.quote).toBe(1);
 			expect(result?.tokens).toBe(1);
 			expect(result?.price).toBe(1);

@@ -260,8 +260,10 @@ export function classifyFlow(
 	const asset = normalizeAddress(pair.asset.address);
 	const quote = normalizeAddress(pair.quote.address);
 	if (!input || !output || !asset || !quote) return null;
-	if (input === quote && output === asset) return 'bid';
-	if (input === asset && output === quote) return 'ask';
+	// BID: buying asset (input=asset, output=quote/USDC)
+	if (input === asset && output === quote) return 'bid';
+	// ASK: selling asset (input=quote/USDC, output=asset)
+	if (input === quote && output === asset) return 'ask';
 	return null;
 }
 
@@ -302,21 +304,23 @@ export function parseTradeAmounts(
 	const quoteDecimals = Number(pair.quote.decimals ?? 6);
 
 	const inputDecimals = Number(
-		inputChange?.vault?.token?.decimals ?? (side === 'ask' ? assetDecimals : quoteDecimals)
+		inputChange?.vault?.token?.decimals ?? (side === 'bid' ? assetDecimals : quoteDecimals)
 	);
 	const outputDecimals = Number(
-		outputChange?.vault?.token?.decimals ?? (side === 'ask' ? quoteDecimals : assetDecimals)
+		outputChange?.vault?.token?.decimals ?? (side === 'bid' ? quoteDecimals : assetDecimals)
 	);
 
 	let tokens: number | null = null;
 	let quoteAmount: number | null = null;
 
+	// BID: input=asset, output=quote
 	if (side === 'bid') {
-		quoteAmount = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
-		tokens = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
-	} else {
 		tokens = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
 		quoteAmount = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
+	} else {
+		// ASK: input=quote, output=asset
+		quoteAmount = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
+		tokens = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
 	}
 
 	if (tokens === null || quoteAmount === null) return null;

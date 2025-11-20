@@ -4,7 +4,7 @@ import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
-} from '$lib/api/deployment';
+} from '$lib/services/orderDeployment';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import {
 	getAllTokensByNetwork,
@@ -178,7 +178,7 @@ describe('getDeploymentArgs', () => {
 
 	describe('DotrainOrderGui initialization', () => {
 		it('should call DotrainOrderGui.newWithDeployment with correct arguments', async () => {
-			await getMarketMakingDeploymentArgs(buildMarketMakingArgs());
+			await getMarketMakingDeploymentArgs(mockNetwork, buildMarketMakingArgs());
 			expect(DotrainOrderGui.newWithDeployment).toHaveBeenCalledWith(
 				expect.any(String),
 				mockNetwork.raindexNetworkSlug
@@ -188,7 +188,7 @@ describe('getDeploymentArgs', () => {
 
 	describe('getMarketMakingDeploymentArgs', () => {
 		it('should handle strategy correctly', async () => {
-			await getMarketMakingDeploymentArgs(buildMarketMakingArgs());
+			await getMarketMakingDeploymentArgs(mockNetwork, buildMarketMakingArgs());
 			expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', PAYMENT_TOKEN.address);
 			expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', STOXs[0].address);
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('amount-is-fast-exit', '1');
@@ -203,6 +203,7 @@ describe('getDeploymentArgs', () => {
 			const outputVaultIdToken2 = '0x1234567890123456789012345678901234567894';
 
 			await getMarketMakingDeploymentArgs(
+				mockNetwork,
 				buildMarketMakingArgs({
 					inputVaultIdToken1,
 					inputVaultIdToken2,
@@ -218,7 +219,7 @@ describe('getDeploymentArgs', () => {
 		});
 
 		it('should return deployment args', async () => {
-			const result = await getMarketMakingDeploymentArgs(buildMarketMakingArgs());
+			const result = await getMarketMakingDeploymentArgs(mockNetwork, buildMarketMakingArgs());
 			expect(result).toEqual({
 				composedRainlang: '/* mock rainlang code */',
 				deploymentArgs: {
@@ -232,7 +233,7 @@ describe('getDeploymentArgs', () => {
 
 	describe('getDcaDeploymentArgs', () => {
 		it('should handle strategy correctly', async () => {
-			await getDcaDeploymentArgs(buildDcaArgs());
+			await getDcaDeploymentArgs(mockNetwork, buildDcaArgs());
 			expect(mockGui.setSelectToken).toHaveBeenCalledWith('output', PAYMENT_TOKEN.address);
 			expect(mockGui.setSelectToken).toHaveBeenCalledWith('input', STOXs[0].address);
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '86400');
@@ -244,19 +245,19 @@ describe('getDeploymentArgs', () => {
 			const inputVaultId = '0x1234567890123456789012345678901234567895';
 			const outputVaultId = '0x1234567890123456789012345678901234567896';
 
-			await getDcaDeploymentArgs(buildDcaArgs({ inputVaultId, outputVaultId }));
+			await getDcaDeploymentArgs(mockNetwork, buildDcaArgs({ inputVaultId, outputVaultId }));
 
 			expect(mockGui.setVaultId).toHaveBeenCalledWith('input', 'input', inputVaultId);
 			expect(mockGui.setVaultId).toHaveBeenCalledWith('output', 'output', outputVaultId);
 		});
 
 		it('should handle different period units', async () => {
-			await getDcaDeploymentArgs(buildDcaArgs({ selectedPeriodUnit: 'Minutes' }));
+			await getDcaDeploymentArgs(mockNetwork, buildDcaArgs({ selectedPeriodUnit: 'Minutes' }));
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('time-per-amount-epoch', '60');
 		});
 
 		it('should return deployment args', async () => {
-			const result = await getDcaDeploymentArgs(buildDcaArgs({ selectedPeriodUnit: 'Hours' }));
+			const result = await getDcaDeploymentArgs(mockNetwork, buildDcaArgs({ selectedPeriodUnit: 'Hours' }));
 			expect(result).toEqual({
 				composedRainlang: '/* mock rainlang code */',
 				deploymentArgs: {
@@ -270,14 +271,14 @@ describe('getDeploymentArgs', () => {
 
 	describe('getLimitOrderDeploymentArgs', () => {
 		it('should handle strategy correctly', async () => {
-			await getLimitOrderDeploymentArgs(buildLimitOrderArgs());
+			await getLimitOrderDeploymentArgs(mockNetwork, buildLimitOrderArgs());
 			expect(mockGui.setSelectToken).toHaveBeenCalledWith('token1', STOXs[0].address);
 			expect(mockGui.setSelectToken).toHaveBeenCalledWith('token2', PAYMENT_TOKEN.address);
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('fixed-io', '0.1');
 		});
 
 		it('should return deployment args', async () => {
-			const result = await getLimitOrderDeploymentArgs(buildLimitOrderArgs());
+			const result = await getLimitOrderDeploymentArgs(mockNetwork, buildLimitOrderArgs());
 			expect(result).toEqual({
 				composedRainlang: '/* mock rainlang code */',
 				deploymentArgs: {
@@ -291,7 +292,7 @@ describe('getDeploymentArgs', () => {
 
 	describe('getFolioDeploymentArgs', () => {
 		it('should handle strategy correctly', async () => {
-			await getFolioDeploymentArgs(buildFolioArgs());
+			await getFolioDeploymentArgs(mockNetwork, buildFolioArgs());
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('threshold', '0.1');
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('fee', '0.1');
 			for (let i = 0; i < 7; i++) {
@@ -301,6 +302,7 @@ describe('getDeploymentArgs', () => {
 
 		it('should handle optional parameters', async () => {
 			await getFolioDeploymentArgs(
+				mockNetwork,
 				buildFolioArgs({ overrideThreshold: undefined, overrideFee: undefined })
 			);
 			expect(mockGui.setFieldValue).toHaveBeenCalledWith('threshold', '0.05');
@@ -308,7 +310,7 @@ describe('getDeploymentArgs', () => {
 		});
 
 		it('should return deployment args', async () => {
-			const result = await getFolioDeploymentArgs(buildFolioArgs());
+			const result = await getFolioDeploymentArgs(mockNetwork, buildFolioArgs());
 			expect(result).toEqual({
 				composedRainlang: '/* mock rainlang code */',
 				deploymentArgs: {
@@ -327,7 +329,7 @@ describe('getDeploymentArgs', () => {
 				return undefined;
 			});
 
-			await expect(getMarketMakingDeploymentArgs(buildMarketMakingArgs())).rejects.toThrow(
+			await expect(getMarketMakingDeploymentArgs(mockNetwork, buildMarketMakingArgs())).rejects.toThrow(
 				'Signer address not found'
 			);
 		});

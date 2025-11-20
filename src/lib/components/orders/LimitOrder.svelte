@@ -15,7 +15,10 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
 
-	export let passedOutputToken: PythToken | undefined; // The token we're trading
+	/**
+	 * assetToken: The non-settlement token being traded (from prop)
+	 */
+	export let assetToken: PythToken | undefined;
 	export let currentPrice: string | undefined = undefined; // Current market price
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let buyPrice: number | null = null; // Best bid price (what you get when selling)
@@ -27,8 +30,8 @@
 	// Initialize tokens - trading token from prop, settlement token for settlement
 	let assetToken: CategorizedToken | undefined;
 	let settlementToken: CategorizedToken | undefined;
-	let selectedInputToken: CategorizedToken | undefined;
-	let selectedOutputToken: CategorizedToken | undefined;
+	let orderInputToken: CategorizedToken | undefined;
+	let orderOutputToken: CategorizedToken | undefined;
 	$: settlementSymbol = settlementToken?.symbol ?? '';
 	$: settlementLabel = settlementSymbol || 'Quote';
 
@@ -45,13 +48,16 @@
 		}
 
 		// Update asset token if network changes
-		if (passedOutputToken && !assetToken) {
-			assetToken = passedOutputToken as unknown as CategorizedToken;
+		if (assetToken && !assetToken) {
+			assetToken = assetToken as unknown as CategorizedToken;
 		}
 	}
 
-	$: selectedInputToken = orderSide === 'Buy' ? assetToken : settlementToken;
-	$: selectedOutputToken = orderSide === 'Buy' ? settlementToken : assetToken;
+	// Maker order perspective: What the ORDER receives and gives
+	// Buy order (maker buying): orderInput=asset (receives), orderOutput=settlement (gives) → BID
+	// Sell order (maker selling): orderInput=settlement (receives), orderOutput=asset (gives) → ASK
+	$: orderInputToken = orderSide === 'Buy' ? assetToken : settlementToken;
+	$: orderOutputToken = orderSide === 'Buy' ? settlementToken : assetToken;
 
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
@@ -70,7 +76,7 @@
 	let outputVaultId: Hex | undefined;
 
 	$: isInputTokenSameAsOutputToken =
-		selectedInputToken?.address.toLowerCase() === selectedOutputToken?.address.toLowerCase();
+		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
 
 	// errors
 	let selectedInitialRatioError: boolean = false;
@@ -81,8 +87,8 @@
 	$: disableDeploy =
 		!selectedAmount ||
 		!selectedInitialRatio ||
-		!selectedInputToken ||
-		!selectedOutputToken ||
+		!orderInputToken ||
+		!orderOutputToken ||
 		!assetToken ||
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
@@ -91,7 +97,7 @@
 		outputVaultIdError;
 
 	const handleDeploy = async () => {
-		if (!selectedInputToken || !selectedOutputToken || !assetToken || !settlementToken) return;
+		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
 		if (!$connected) {
 			showConnectModal = true;
 			return;
@@ -131,8 +137,8 @@
 			const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
 
 			deployData = {
-				inputToken: selectedInputToken, // Asset (token to be acquired, used for IO ratio)
-				outputToken: selectedOutputToken, // payment token (token to be deposited as payment)
+				inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
+				outputToken: orderOutputToken, // payment token (token to be deposited as payment)
 				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
 				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toFixed(18).toString(),
 				depositAmount: settlementAmount, // Payment amount in settlement token
@@ -145,8 +151,8 @@
 			// Price interpretation: "I receive X quote tokens per 1 asset"
 			// The deployed order uses direct ratio: X (this is what getBaseline does)
 			deployData = {
-				inputToken: selectedInputToken, // payment token (token expected in return)
-				outputToken: selectedOutputToken, // Asset (token being offered for sale)
+				inputToken: orderInputToken, // payment token (token expected in return)
+				outputToken: orderOutputToken, // Asset (token being offered for sale)
 				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
 				ioRatio: selectedInitialRatio,
 				depositAmount: selectedAmount, // Asset amount being offered
@@ -229,7 +235,7 @@
 			: '0.00';
 </script>
 
-{#if $currentNetwork && ALL_TOKENS.length > 0 && selectedInputToken && selectedOutputToken && assetToken}
+{#if $currentNetwork && ALL_TOKENS.length > 0 && orderInputToken && orderOutputToken && assetToken}
 	<div class="space-y-4">
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">

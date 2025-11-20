@@ -11,7 +11,7 @@ import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
 	getFolioDeploymentArgs
-} from '$lib/api/deployment';
+} from '$lib/services/orderDeployment';
 import { mockCurrentNetwork } from '../mocks/mockCurrentNetwork';
 import { createRaindexClient } from '$lib/api/raindex';
 import { decodeFunctionData } from 'viem';
@@ -26,7 +26,7 @@ if (!PAYMENT_TOKEN) {
 	throw new Error('Missing default payment token for mock network');
 }
 
-vi.mock('$lib/api/deployment', async (importOriginal) => {
+vi.mock('$lib/services/orderDeployment', async (importOriginal) => {
 	return {
 		...((await importOriginal()) as object),
 		getMarketMakingDeploymentArgs: vi.fn(),
