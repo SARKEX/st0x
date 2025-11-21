@@ -55,3 +55,46 @@ export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promis
 
 	throw lastError instanceof Error ? lastError : new Error('Unknown fetchJson error');
 }
+
+/**
+ * Fetch text (for YAML, plain text, etc.) with retry/backoff
+ */
+export async function fetchText(url: string, init?: FetchJsonOptions): Promise<string> {
+	const {
+		retries = 2,
+		retryDelayMs = 250,
+		fetchFn = fetch,
+		...requestInit
+	} = init ?? {};
+
+	let attempt = 0;
+	let lastError: unknown;
+
+	while (attempt <= retries) {
+		try {
+			const response = await fetchFn(url, requestInit);
+			const text = await response.text();
+			if (!response.ok) {
+				// Only retry on selected status codes
+				if (defaultRetryableStatuses.has(response.status) && attempt < retries) {
+					attempt += 1;
+					await delay(retryDelayMs * attempt);
+					continue;
+				}
+				const message = text || `${response.status} ${response.statusText}`;
+				throw new Error(`HTTP ${response.status}: ${message}`);
+			}
+
+			return text;
+		} catch (error) {
+			lastError = error;
+			if (attempt >= retries) {
+				break;
+			}
+			attempt += 1;
+			await delay(retryDelayMs * attempt);
+		}
+	}
+
+	throw lastError instanceof Error ? lastError : new Error('Unknown fetchText error');
+}

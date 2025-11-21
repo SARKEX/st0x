@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { currentNetwork, sfts } from '$lib/stores';
+	import { currentNetwork, sfts, vaultsQuery } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -8,6 +8,7 @@
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
+	import { dev } from '$app/environment';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
@@ -43,12 +44,37 @@
 
 	let processedTokens: TokenRow[] = [];
 	let sftLookup = new Map<string, OffchainAssetReceiptVault>();
+	let isVaultLoading = false;
+	let vaultsError: string | null = null;
+	let hasVaults = false;
 
-	$: isVaultLoading = !$sfts || !$sfts.length;
+	$: hasVaults = ($sfts?.length ?? 0) > 0;
+	$: isVaultLoading = !hasVaults && ($vaultsQuery?.isPending || $vaultsQuery?.isFetching || false);
+	$: vaultsError =
+		!hasVaults && $vaultsQuery?.error instanceof Error
+			? $vaultsQuery.error.message
+			: !hasVaults && $vaultsQuery?.error
+				? String($vaultsQuery.error)
+				: null;
 	$: quotesRecord = $orderbookQuotesQuery?.data?.summary ?? {};
 	$: sftLookup = new Map<string, OffchainAssetReceiptVault>(
 		($sfts ?? []).map((vault: OffchainAssetReceiptVault) => [vault.id, vault])
 	);
+	$: if (dev && $sfts) {
+		const missingOnChain = $sfts
+			.map((sft) => {
+				const lookupAddress = sft.address.toLowerCase();
+				const summary = quotesRecord[lookupAddress];
+				if (!summary || summary.bid == null || summary.ask == null) {
+					return { symbol: sft.symbol, address: lookupAddress, summary };
+				}
+				return null;
+			})
+			.filter(Boolean);
+		if (missingOnChain.length) {
+			console.debug('Missing on-chain price from orderbook for:', missingOnChain);
+		}
+	}
 
 	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
 		if (!summary) return null;
@@ -73,8 +99,7 @@
 				const bidPrice = summary?.bid ?? null;
 				const askPrice = summary?.ask ?? null;
 				const onChainPrice = calculateMidPrice(summary);
-				const fallbackPrice = quote?.close ?? null;
-				const price = onChainPrice ?? fallbackPrice ?? null;
+				const price = onChainPrice;
 
 				rows.push({
 					id: sft.id,
@@ -109,7 +134,11 @@
 			text="Loading SFTs from {$currentNetwork?.displayName || 'network'}..."
 		/>
 	</div>
-{:else if $sfts.length > 0}
+{:else if vaultsError}
+	<div class="flex w-full items-center justify-center p-8 text-sm text-red-400">
+		Failed to load SFTs: {vaultsError}
+	</div>
+{:else if hasVaults}
 	<div>
 		<PageContainer>
 			<!-- Asset Table Section -->

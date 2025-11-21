@@ -7,15 +7,23 @@ import { networks } from '$lib/config/network';
 import type { OracleQuote } from '$lib/queries/oracleQuotes';
 import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 import { createVaultsQuery } from '$lib/queries/vaults';
+import type { CreateQueryResult } from '@tanstack/svelte-query';
 
-function mapQueryData<T>(queryStore: Readable<{ data?: T }>, fallback: T) {
-	return derived(
-		queryStore,
-		($query) => {
-			return $query?.data ?? fallback;
-		},
-		fallback
-	);
+type QueryResultStore<T> = CreateQueryResult<T, Error>;
+
+function mapQueryData<T>(queryStore: QueryResultStore<T>, fallback: T) {
+	return derived(queryStore, ($query) => $query?.data ?? fallback, fallback);
+}
+
+function createNetworkQueryStore<T>(
+	networkStore: Readable<Network>,
+	factory: (network: Network | null) => QueryResultStore<T>
+): QueryResultStore<T> {
+	return derived(networkStore, ($network, set) => {
+		const queryStore = factory($network ?? null);
+		const unsubscribe = queryStore.subscribe(set);
+		return () => unsubscribe();
+	});
 }
 
 export const sftMetadata = writable<MetaV1S[] | null>(null);
@@ -24,14 +32,15 @@ export const wrongNetwork = derived(
 	[chainId, signerAddress, currentNetwork],
 	([$chainId, $signerAddress, $currentNetwork]) => $signerAddress && $chainId !== $currentNetwork.id
 );
-export const vaultsQuery: Readable<{ data?: OffchainAssetReceiptVault[] }> = derived(
+
+export const vaultsQuery = createNetworkQueryStore(
 	currentNetwork,
-	($network) => createVaultsQuery($network ?? null) as { data?: OffchainAssetReceiptVault[] }
+	(network) => createVaultsQuery(network ?? null)
 );
 
-export const oracleQuotesQuery: Readable<{ data?: Record<string, OracleQuote> }> = derived(
+export const oracleQuotesQuery = createNetworkQueryStore(
 	currentNetwork,
-	($network) => createOracleQuotesQuery($network) as { data?: Record<string, OracleQuote> }
+	(network) => createOracleQuotesQuery(network)
 );
 
 export const sfts = mapQueryData(vaultsQuery, [] as OffchainAssetReceiptVault[]);

@@ -206,6 +206,7 @@ const transactionStore = () => {
 						data: approval.calldata as Hex,
 						to: approval.token as `0x${string}`
 					});
+					awaitApprovalTx(hash);
 					await waitForTransactionReceipt(config, {
 						hash: hash
 					});
@@ -424,7 +425,7 @@ const transactionStore = () => {
 
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
-			awaitWalletConfirmation(`Approving ${approvalToken.token.symbol} spend...`);
+			awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalToken.token.symbol}...`);
 
 			const approvalHash = await sendTransaction(config, {
 				data: encodeFunctionData({
@@ -435,6 +436,7 @@ const transactionStore = () => {
 				to: approvalToken.token.address as `0x${string}`
 			});
 
+			awaitApprovalTx(approvalHash);
 			await waitForTransactionReceipt(config, { hash: approvalHash });
 		}
 
@@ -522,29 +524,30 @@ const transactionStore = () => {
 		}
 
 		// Get token info from params (passed by MarketOrder component)
-		// NOTE: inputVaultBalanceChange = what user receives (INPUT)
-		//       outputVaultBalanceChange = what user gives (OUTPUT)
+	// NOTE: Vault changes are from MAKER's perspective, we need TAKER's perspective:
+	//       - inputVaultBalanceChange = what MAKER receives = what TAKER gives (OUTPUT)
+	//       - outputVaultBalanceChange = what MAKER gives = what TAKER receives (INPUT)
 		const inputTokenDecimals = params.takerWantsToken.decimals;
 		const inputTokenSymbol = params.takerWantsToken.symbol;
 
 		const outputTokenDecimals = params.takerPaysToken.decimals;
 		const outputTokenSymbol = params.takerPaysToken.symbol;
 
-		// Sum vault changes: INPUT = what user receives (inputVault), OUTPUT = what user gives (outputVault)
+	// Sum vault changes from TAKER's perspective
 		let totalInputAmount = 0n;
 		let totalOutputAmount = 0n;
 		for (const trade of validTrades) {
-			// User INPUT = inputVaultBalanceChange (what they receive)
+			// TAKER INPUT (what taker receives) = outputVaultBalanceChange (what maker gives)
 			const inputAmount = parseFloatHex(
-				trade.inputVaultBalanceChange!.amount as Hex,
+				trade.outputVaultBalanceChange!.amount as Hex,
 				inputTokenDecimals,
 				true // Use absolute value
 			);
 			totalInputAmount += inputAmount;
 
-			// User OUTPUT = outputVaultBalanceChange (what they give)
+			// TAKER OUTPUT (what taker gives) = inputVaultBalanceChange (what maker receives)
 			const outputAmount = parseFloatHex(
-				trade.outputVaultBalanceChange!.amount as Hex,
+				trade.inputVaultBalanceChange!.amount as Hex,
 				outputTokenDecimals,
 				true // Use absolute value
 			);

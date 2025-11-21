@@ -49,9 +49,12 @@ import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptV
 	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
-	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork);
-	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	$: {
+		console.log('🌐 [Trade Page] Current network:', $currentNetwork?.id, $currentNetwork?.name);
+		orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	}
 	$: currentPythToken = TOKENS.find(
 		(token) =>
 			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
@@ -219,7 +222,11 @@ const mapOrderbookQuoteState = (
 	};
 };
 let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
-$: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
+$: {
+	console.log('🔄 [Trade Page] orderbookQuotesQuery state:', $orderbookQuotesQuery?.status, 'data:', $orderbookQuotesQuery?.data);
+	orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
+	console.log('📊 [Trade Page] orderbookQuoteUiState:', orderbookQuoteUiState);
+}
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
 			return '—';

@@ -237,11 +237,9 @@ export async function fetchAndQuotePaymentTokenOrders(
 				owners: []
 			};
 
-			// Add token filters for payment token and stock tokens
-			const tokenAddresses: string[] = [
-				defaultPaymentToken.address,
-				...stockTokens.map((t) => t.address)
-			] as `0x${string}`[];
+			// Filter only by stock tokens - payment token filtering is too restrictive
+			// Orders should be visible regardless of which payment token is configured
+			const tokenAddresses: string[] = stockTokens.map((t) => t.address) as `0x${string}`[];
 
 			filters.tokens = tokenAddresses as `0x${string}`[];
 
@@ -287,7 +285,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 				console.warn('❌ Error getting quotes for order:', order.orderHash, quotesResult.error);
 				continue;
 			}
-
+			// Store the quotes in the map
 			if (quotesResult.value && quotesResult.value.length > 0) {
 				quotesMap.set(order, quotesResult.value);
 			}
