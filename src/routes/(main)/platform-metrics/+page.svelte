@@ -1,27 +1,27 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-import Section from '$lib/components/ui/Section.svelte';
-import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
-import type { CategorizedToken, Network } from '$lib/config/network';
-import type { TradingViewQuote } from '$lib/api/tradingview';
-import PageContainer from '$lib/components/ui/PageContainer.svelte';
-import MetricCard from '$lib/components/ui/MetricCard.svelte';
-import Table from '$lib/components/ui/table/Table.svelte';
-import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
-import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-import { derived } from 'svelte/store';
-import { onMount } from 'svelte';
-import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
-import {
-	analyzeTrade,
-	createTokenLookup,
-	normalizeAddress,
+	import Section from '$lib/components/ui/Section.svelte';
+	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
+	import type { CategorizedToken, Network } from '$lib/config/network';
+	import type { TradingViewQuote } from '$lib/api/tradingview';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import MetricCard from '$lib/components/ui/MetricCard.svelte';
+	import Table from '$lib/components/ui/table/Table.svelte';
+	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import { derived } from 'svelte/store';
+	import { onMount } from 'svelte';
+	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+	import {
+		analyzeTrade,
+		createTokenLookup,
+		normalizeAddress,
 		type TradeAnalysis,
 		type TokenLookup
 	} from '$lib/utils/tokenMath';
-import type { SgTrade } from '@rainlanguage/orderbook';
-import { createRaindexClient } from '$lib/api/raindex';
-import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
+	import type { SgTrade } from '@rainlanguage/orderbook';
+	import { createRaindexClient } from '$lib/api/raindex';
+	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
@@ -41,48 +41,48 @@ import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 
 	let selectedNetwork = networks[0];
 
-const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
-const tradeActivityQueries = networks.map((network) => createTradeActivityQuery(network));
-const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
+	const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
+	const tradeActivityQueries = networks.map((network) => createTradeActivityQuery(network));
+	const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
 
-const allPriceFeedQueries = derived(priceFeedQueries, (queries) => queries);
-const allTradeQueries = derived(tradeActivityQueries, (queries) => queries);
-const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
+	const allPriceFeedQueries = derived(priceFeedQueries, (queries) => queries);
+	const allTradeQueries = derived(tradeActivityQueries, (queries) => queries);
+	const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
 
-onMount(() => {
-	void loadVaults();
-});
-
-$: priceFeedStates = networks.map((network, index) => ({
-	network,
-	query: $allPriceFeedQueries[index]
-}));
-
-$: tradeStates = networks.map((network, index) => ({
-	network,
-	query: $allTradeQueries[index]
-}));
-
-$: orderbookStates = networks.map((network, index) => ({
-	network,
-	query: $allOrderbookQueries[index]
-}));
-
-let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
-$: priceFeedByNetwork = (() => {
-	const map = new Map<number, TradingViewQuote[]>();
-	priceFeedStates.forEach(({ network, query }) => {
-		map.set(network.chainId, query?.data ?? []);
+	onMount(() => {
+		void loadVaults();
 	});
-	return map;
-})();
 
-$: allNetworksTrades = tradeStates.map(({ network, query }) => ({
-	network,
-	trades: query?.data?.trades ?? [],
-	range: query?.data?.range,
-	status: query?.status ?? 'pending'
-}));
+	$: priceFeedStates = networks.map((network, index) => ({
+		network,
+		query: $allPriceFeedQueries[index]
+	}));
+
+	$: tradeStates = networks.map((network, index) => ({
+		network,
+		query: $allTradeQueries[index]
+	}));
+
+	$: orderbookStates = networks.map((network, index) => ({
+		network,
+		query: $allOrderbookQueries[index]
+	}));
+
+	let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
+	$: priceFeedByNetwork = (() => {
+		const map = new Map<number, TradingViewQuote[]>();
+		priceFeedStates.forEach(({ network, query }) => {
+			map.set(network.chainId, query?.data ?? []);
+		});
+		return map;
+	})();
+
+	$: allNetworksTrades = tradeStates.map(({ network, query }) => ({
+		network,
+		trades: query?.data?.trades ?? [],
+		range: query?.data?.range,
+		status: query?.status ?? 'pending'
+	}));
 
 	let vaultsByNetwork = new Map<number, RaindexVault[]>();
 	let vaultsLoading = true;

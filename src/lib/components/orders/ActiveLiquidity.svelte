@@ -3,25 +3,25 @@
 	import TokenSelect from '$lib/components/TokenSelect.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { CategorizedToken } from '$lib/config/network';
-import {
-	validateBaseline,
-	validateOverrideDepositAmount,
-	validateSelectedAmount
-} from '$lib/utils/validation';
+	import {
+		validateBaseline,
+		validateOverrideDepositAmount,
+		validateSelectedAmount
+	} from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
-import { connected } from 'svelte-wagmi';
-import transactionStore from '$lib/stores/transaction';
-import { hasValidPriceFeedId } from '$lib/utils/derivations';
-import { currentNetwork } from '$lib/stores';
-import PythOracleRow from '$lib/components/PythOracleRow.svelte';
-import { containerStyles } from '$lib/styles/utils';
-import Button from '$lib/components/ui/Button.svelte';
-import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+	import { connected } from 'svelte-wagmi';
+	import transactionStore from '$lib/stores/transaction';
+	import { hasValidPriceFeedId } from '$lib/utils/derivations';
+	import { currentNetwork } from '$lib/stores';
+	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+	import { containerStyles } from '$lib/styles/utils';
+	import Button from '$lib/components/ui/Button.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
+	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -55,12 +55,12 @@ import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	let outputVaultId2: Hex | undefined;
 	let depositAmount1: bigint = 0n;
 	let depositAmount2: bigint = 0n;
-let minTradeAmount: bigint = 0n;
-let maxTradeAmount: bigint = 0n;
-let initialIo: string = '0';
-let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
-let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
-$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	let minTradeAmount: bigint = 0n;
+	let maxTradeAmount: bigint = 0n;
+	let initialIo: string = '0';
+	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 
 	// errors
@@ -294,16 +294,10 @@ $: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 						</thead>
 						<tbody>
 							{#if hasValidPriceFeedId(selectedToken1)}
-								<PythOracleRow
-									token={selectedToken1}
-									tokenQuotes={$priceFeedsQuery?.data ?? []}
-								/>
+								<PythOracleRow token={selectedToken1} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken2)}
-								<PythOracleRow
-									token={selectedToken2}
-									tokenQuotes={$priceFeedsQuery?.data ?? []}
-								/>
+								<PythOracleRow token={selectedToken2} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{/if}
 						</tbody>
 					</table>

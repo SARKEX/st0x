@@ -8,8 +8,8 @@
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-import { sfts, rainlangConfirmationModal } from '$lib/stores';
-import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import { sfts, rainlangConfirmationModal } from '$lib/stores';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;

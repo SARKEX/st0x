@@ -1,7 +1,7 @@
 <script lang="ts">
-import { browser } from '$app/environment';
-import { page } from '$app/stores';
-import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
+	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
+	import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -37,12 +37,12 @@ import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
 		toDecimal
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
-type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
-import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
-import type { QueryObserverResult } from '@tanstack/query-core';
-import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
-import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
-import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
+	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import type { QueryObserverResult } from '@tanstack/query-core';
+	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft: OffchainAssetReceiptVault) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
@@ -196,37 +196,42 @@ import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptV
 		updatedAt: number | null;
 		error: unknown | null;
 	} | null = null;
-let oracleEntry: OracleQuote | undefined;
-let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
-let oracleLoading = false;
-let oracleError: string | null = null;
-let buyPrice: number | null = null;
-let sellPrice: number | null = null;
-type OrderbookQuoteUiState = {
-	status: QueryObserverResult<OrderbookQuoteCache, Error>['status'];
-	hasData: boolean;
-	loadingWithoutData: boolean;
-};
-const mapOrderbookQuoteState = (
-	resource: QueryObserverResult<OrderbookQuoteCache, Error> | null
-): OrderbookQuoteUiState => {
-	if (!resource) {
-		return { status: 'pending', hasData: false, loadingWithoutData: true };
-	}
-	const hasData = (resource.data?.quotes?.length ?? 0) > 0;
-	const status = resource.status;
-	return {
-		status,
-		hasData,
-		loadingWithoutData: resource.isPending && !hasData
+	let oracleEntry: OracleQuote | undefined;
+	let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
+	let oracleLoading = false;
+	let oracleError: string | null = null;
+	let buyPrice: number | null = null;
+	let sellPrice: number | null = null;
+	type OrderbookQuoteUiState = {
+		status: QueryObserverResult<OrderbookQuoteCache, Error>['status'];
+		hasData: boolean;
+		loadingWithoutData: boolean;
 	};
-};
-let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
-$: {
-	console.log('🔄 [Trade Page] orderbookQuotesQuery state:', $orderbookQuotesQuery?.status, 'data:', $orderbookQuotesQuery?.data);
-	orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
-	console.log('📊 [Trade Page] orderbookQuoteUiState:', orderbookQuoteUiState);
-}
+	const mapOrderbookQuoteState = (
+		resource: QueryObserverResult<OrderbookQuoteCache, Error> | null
+	): OrderbookQuoteUiState => {
+		if (!resource) {
+			return { status: 'pending', hasData: false, loadingWithoutData: true };
+		}
+		const hasData = (resource.data?.quotes?.length ?? 0) > 0;
+		const status = resource.status;
+		return {
+			status,
+			hasData,
+			loadingWithoutData: resource.isPending && !hasData
+		};
+	};
+	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
+	$: {
+		console.log(
+			'🔄 [Trade Page] orderbookQuotesQuery state:',
+			$orderbookQuotesQuery?.status,
+			'data:',
+			$orderbookQuotesQuery?.data
+		);
+		orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
+		console.log('📊 [Trade Page] orderbookQuoteUiState:', orderbookQuoteUiState);
+	}
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
 			return '—';
@@ -247,11 +252,7 @@ $: {
 	$: oracleResource = (() => {
 		const q = $oracleQuotesQuery;
 		const status: ResourceStatus =
-			q?.status === 'success'
-				? 'ready'
-				: q?.status === 'error'
-					? 'error'
-					: 'loading';
+			q?.status === 'success' ? 'ready' : q?.status === 'error' ? 'error' : 'loading';
 		return {
 			status,
 			data: q?.data ?? null,

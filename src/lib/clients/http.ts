@@ -16,12 +16,7 @@ async function delay(ms: number) {
  * Fetch JSON with basic retry/backoff for transient failures.
  */
 export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promise<T> {
-	const {
-		retries = 2,
-		retryDelayMs = 250,
-		fetchFn = fetch,
-		...requestInit
-	} = init ?? {};
+	const { retries = 2, retryDelayMs = 250, fetchFn = fetch, ...requestInit } = init ?? {};
 
 	let attempt = 0;
 	let lastError: unknown;
@@ -60,12 +55,7 @@ export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promis
  * Fetch text (for YAML, plain text, etc.) with retry/backoff
  */
 export async function fetchText(url: string, init?: FetchJsonOptions): Promise<string> {
-	const {
-		retries = 2,
-		retryDelayMs = 250,
-		fetchFn = fetch,
-		...requestInit
-	} = init ?? {};
+	const { retries = 2, retryDelayMs = 250, fetchFn = fetch, ...requestInit } = init ?? {};
 
 	let attempt = 0;
 	let lastError: unknown;

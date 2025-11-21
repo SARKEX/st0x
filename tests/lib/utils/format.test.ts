@@ -6,22 +6,25 @@ import { truncateAddress, formatCompact } from '$lib/utils/format';
 describe('format utilities', () => {
 	describe('truncateAddress', () => {
 		it.each([
-			['0x1234567890abcdef', '0x1234...cdef'],
-			['0xAbCdEfGhIjKlMnOpQrStUvWxYz', '0xAbCdE...WxYz'],
-			['0x123456789abc', '0x1234...89abc'],
-			['0x0000000000000000000000000000000000000000', '0x0000...0000']
-		])('should truncate address %s to %s', (address, expected) => {
+			['0x0000000000000000000000000000000000000000', '0x0000...0000'],
+			['0x1234567890abcdef1234567890abcdef12345678', '0x1234...5678'],
+			['0xAbCdEfGhIjKlMnOpQrStUvWxYz123456789012', '0xAbCdE...9012']
+		])('should truncate valid address %s to %s', (address, expected) => {
 			expect(truncateAddress(address)).toBe(expected);
 		});
 
 		it.each([
-			['0x1234', '0x12......1234'],
-			['0x', '0x......']
-		])('should handle short addresses: %s', (address, expected) => {
+			['0x1234567890abcdef', ''],
+			['0xAbCdEfGhIjKlMnOpQrStUvWxYz', ''],
+			['0x123456789abc', ''],
+			['0x1234', ''],
+			['0x', ''],
+			['', '']
+		])('should return empty string for invalid/short addresses: %s', (address, expected) => {
 			expect(truncateAddress(address)).toBe(expected);
 		});
 
-		it.each([[''], [null], [undefined]])(
+		it.each([[null], [undefined]])(
 			'should return empty string for falsy inputs: %s',
 			(input) => {
 				expect(truncateAddress(input as any)).toBe('');

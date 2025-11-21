@@ -55,9 +55,7 @@ export async function getQuotes(symbols: string[], market?: string) {
 		symbols: symbols.join(','),
 		market
 	});
-	const data = await fetchJson<{ quotes: TradingViewQuote[] }>(
-		`/api/tradingview/quotes?${query}`
-	);
+	const data = await fetchJson<{ quotes: TradingViewQuote[] }>(`/api/tradingview/quotes?${query}`);
 	return data.quotes ?? [];
 }
 

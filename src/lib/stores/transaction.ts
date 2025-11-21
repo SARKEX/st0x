@@ -425,7 +425,9 @@ const transactionStore = () => {
 
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
-			awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalToken.token.symbol}...`);
+			awaitWalletConfirmation(
+				`Awaiting wallet confirmation to approve ${approvalToken.token.symbol}...`
+			);
 
 			const approvalHash = await sendTransaction(config, {
 				data: encodeFunctionData({
@@ -524,16 +526,16 @@ const transactionStore = () => {
 		}
 
 		// Get token info from params (passed by MarketOrder component)
-	// NOTE: Vault changes are from MAKER's perspective, we need TAKER's perspective:
-	//       - inputVaultBalanceChange = what MAKER receives = what TAKER gives (OUTPUT)
-	//       - outputVaultBalanceChange = what MAKER gives = what TAKER receives (INPUT)
+		// NOTE: Vault changes are from MAKER's perspective, we need TAKER's perspective:
+		//       - inputVaultBalanceChange = what MAKER receives = what TAKER gives (OUTPUT)
+		//       - outputVaultBalanceChange = what MAKER gives = what TAKER receives (INPUT)
 		const inputTokenDecimals = params.takerWantsToken.decimals;
 		const inputTokenSymbol = params.takerWantsToken.symbol;
 
 		const outputTokenDecimals = params.takerPaysToken.decimals;
 		const outputTokenSymbol = params.takerPaysToken.symbol;
 
-	// Sum vault changes from TAKER's perspective
+		// Sum vault changes from TAKER's perspective
 		let totalInputAmount = 0n;
 		let totalOutputAmount = 0n;
 		for (const trade of validTrades) {

@@ -23,7 +23,10 @@ export async function executeGraphql<T>(
 	});
 
 	if (response.errors?.length) {
-		const message = response.errors.map((e) => e.message).filter(Boolean).join('; ');
+		const message = response.errors
+			.map((e) => e.message)
+			.filter(Boolean)
+			.join('; ');
 		throw new Error(message || 'GraphQL error');
 	}
 

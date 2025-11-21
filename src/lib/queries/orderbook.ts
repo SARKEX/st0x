@@ -16,7 +16,11 @@ export type OrderbookQuoteCache = {
 export type OrderbookQuoteState = OrderbookQuoteCache & { updatedAt?: number };
 
 export function createOrderbookQuotesQuery(network: Network | null) {
-	console.log('🏗️ [createOrderbookQuotesQuery] Creating query for network:', network?.id, network?.name);
+	console.log(
+		'🏗️ [createOrderbookQuotesQuery] Creating query for network:',
+		network?.id,
+		network?.name
+	);
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(network),
@@ -34,7 +38,9 @@ export function createOrderbookQuotesQuery(network: Network | null) {
 				const paymentToken =
 					getDefaultPaymentTokenForNetwork(network.id) ?? DEFAULT_PAYMENT_TOKENS[network.id];
 				if (!paymentToken?.address) {
-					console.log('⚠️  [orderbookQuotesQuery] No payment token, returning quotes without summary');
+					console.log(
+						'⚠️  [orderbookQuotesQuery] No payment token, returning quotes without summary'
+					);
 					return { summary: {}, quotes };
 				}
 				const map = buildTokenPriceMap(quotes, paymentToken.address);
@@ -42,7 +48,11 @@ export function createOrderbookQuotesQuery(network: Network | null) {
 				for (const [address, value] of map.entries()) {
 					summary[address.toLowerCase()] = value;
 				}
-				console.log('📊 [orderbookQuotesQuery] Returning summary with', Object.keys(summary).length, 'tokens');
+				console.log(
+					'📊 [orderbookQuotesQuery] Returning summary with',
+					Object.keys(summary).length,
+					'tokens'
+				);
 				return { summary, quotes };
 			} catch (error) {
 				console.error('💥 [orderbookQuotesQuery] ERROR:', error);

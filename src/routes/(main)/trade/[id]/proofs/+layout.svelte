@@ -21,8 +21,7 @@
 	// Ensure currentToken is set when coming directly to /trade/[id]/proofs
 	$: if ($sfts && id) {
 		const found = $sfts.find(
-			(v: OffchainAssetReceiptVault) =>
-				v.id === id || v.address?.toLowerCase() === id.toLowerCase()
+			(v: OffchainAssetReceiptVault) => v.id === id || v.address?.toLowerCase() === id.toLowerCase()
 		);
 		if (found) currentToken.set(found);
 	}

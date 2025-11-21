@@ -33,14 +33,12 @@ export const wrongNetwork = derived(
 	([$chainId, $signerAddress, $currentNetwork]) => $signerAddress && $chainId !== $currentNetwork.id
 );
 
-export const vaultsQuery = createNetworkQueryStore(
-	currentNetwork,
-	(network) => createVaultsQuery(network ?? null)
+export const vaultsQuery = createNetworkQueryStore(currentNetwork, (network) =>
+	createVaultsQuery(network ?? null)
 );
 
-export const oracleQuotesQuery = createNetworkQueryStore(
-	currentNetwork,
-	(network) => createOracleQuotesQuery(network)
+export const oracleQuotesQuery = createNetworkQueryStore(currentNetwork, (network) =>
+	createOracleQuotesQuery(network)
 );
 
 export const sfts = mapQueryData(vaultsQuery, [] as OffchainAssetReceiptVault[]);
