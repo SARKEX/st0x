@@ -43,6 +43,11 @@
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import { createInfiniteQuery } from '@tanstack/svelte-query';
+	import { createRaindexClient } from '$lib/clients/raindex';
+	import { signerAddress, connected } from 'svelte-wagmi';
+	import type { SgVault, RaindexVault, RaindexOrder } from '@rainlanguage/orderbook';
+	import transactionStore from '$lib/stores/transaction';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft: OffchainAssetReceiptVault) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
@@ -55,6 +60,67 @@
 		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
+
+	// Orders query for this token
+	$: tokenOrdersQuery = createInfiniteQuery({
+		queryKey: ['tokenOrders', $currentNetwork?.id, currentToken?.address, $signerAddress],
+		initialPageParam: 0,
+		queryFn: async ({ pageParam }: { pageParam: number }) => {
+			if (!currentToken?.address || !$currentNetwork) {
+				return { orders: [], hasMore: false };
+			}
+			const client = await createRaindexClient();
+			const ordersResult = await client.getOrders(
+				[$currentNetwork.id],
+				{
+					owners: [], // Empty array means all owners
+					tokens: [currentToken.address.toLowerCase() as `0x${string}`]
+				},
+				pageParam + 1
+			);
+			if (ordersResult.error) throw new Error(ordersResult.error.readableMsg);
+			const orders = ordersResult.value;
+			return {
+				orders: Array.isArray(orders) ? orders : [],
+				hasMore: Array.isArray(orders) && orders.length === 1000
+			};
+		},
+		getNextPageParam: (lastPage: { orders: RaindexOrder[]; hasMore: boolean }, pages) => {
+			return lastPage.hasMore ? pages.length : undefined;
+		},
+		enabled: activeOnchainTab === 'orders' && Boolean(currentToken?.address && $currentNetwork)
+	});
+
+	// Vaults query for this token
+	$: tokenVaultsQuery = createInfiniteQuery({
+		queryKey: ['tokenVaults', $currentNetwork?.id, currentToken?.address, $signerAddress],
+		initialPageParam: 0,
+		queryFn: async ({ pageParam }: { pageParam: number }) => {
+			if (!currentToken?.address || !$currentNetwork || !$signerAddress) {
+				return { vaults: [], hasMore: false };
+			}
+			const client = await createRaindexClient();
+			const vaultsResult = await client.getVaults(
+				[$currentNetwork.id],
+				{
+					owners: [$signerAddress.toLowerCase() as `0x${string}`],
+					tokens: [currentToken.address.toLowerCase() as `0x${string}`],
+					hideZeroBalance: false
+				},
+				pageParam + 1
+			);
+			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
+			const vaults = vaultsResult.value;
+			return {
+				vaults: Array.isArray(vaults) ? vaults : [],
+				hasMore: Array.isArray(vaults) && vaults.length === 1000
+			};
+		},
+		getNextPageParam: (lastPage: { vaults: RaindexVault[]; hasMore: boolean }, pages) => {
+			return lastPage.hasMore ? pages.length : undefined;
+		},
+		enabled: activeOnchainTab === 'vaults' && Boolean(currentToken?.address && $currentNetwork && $signerAddress)
+	});
 	$: currentPythToken = TOKENS.find(
 		(token) =>
 			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
@@ -78,6 +144,35 @@
 	] as const;
 	type TokenTabId = (typeof TOKEN_TABS)[number]['id'];
 	let activeTokenTab: TokenTabId = 'contract';
+	const ONCHAIN_TABS = [
+		{ id: 'market', label: 'Market Data' },
+		{ id: 'orders', label: 'Orders' },
+		{ id: 'vaults', label: 'Vaults' }
+	] as const;
+	type OnchainTabId = (typeof ONCHAIN_TABS)[number]['id'];
+	let activeOnchainTab: OnchainTabId = 'market';
+
+	function handleOnchainTabChange(event: CustomEvent<{ id: string }>) {
+		activeOnchainTab = event.detail.id as OnchainTabId;
+	}
+
+	// Helper to safely access RaindexOrder properties (incomplete types in SDK)
+	function getOrderInput(order: RaindexOrder, tokenAddress: string) {
+		return (order as any).inputs?.find(
+			(i: any) => i.token.address.toLowerCase() === tokenAddress.toLowerCase()
+		);
+	}
+
+	function getOrderOutput(order: RaindexOrder, tokenAddress: string) {
+		return (order as any).outputs?.find(
+			(o: any) => o.token.address.toLowerCase() === tokenAddress.toLowerCase()
+		);
+	}
+
+	function getOrderType(order: RaindexOrder): string {
+		return (order as any).orderType || 'Order';
+	}
+
 	let infoCollapsed = false;
 	let showTradePanel = false;
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
@@ -582,10 +677,10 @@
 					</div>
 					<div class={containerStyles.cardBordered}>
 						<div class="border-b border-white/10 pb-3">
-							<h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400">
-								On-chain Price
-							</h3>
+							<TabNav tabs={ONCHAIN_TABS} activeId={activeOnchainTab} on:change={handleOnchainTabChange} />
 						</div>
+
+						{#if activeOnchainTab === 'market'}
 						<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Oracle Price</dt>
@@ -638,6 +733,137 @@
 						</dl>
 						{#if oracleError}
 							<p class="mt-4 text-xs text-red-400">{oracleError}</p>
+						{/if}
+
+						{:else if activeOnchainTab === 'orders'}
+						<div class="mt-4">
+							{#if !$connected}
+								<div class="py-8 text-center text-sm text-gray-400">
+									Connect your wallet to view your orders
+								</div>
+							{:else if $tokenOrdersQuery.isLoading}
+								<div class="flex justify-center py-8">
+									<LoadingSpinner variant="inline" size="md" text="Loading orders..." />
+								</div>
+							{:else if $tokenOrdersQuery.isError}
+								<div class="py-8 text-center text-sm text-red-400">
+									Error loading orders: {$tokenOrdersQuery.error?.message}
+								</div>
+							{:else if $tokenOrdersQuery.data?.pages?.[0]?.orders?.length === 0}
+								<div class="py-8 text-center text-sm text-gray-400">
+									No orders found for this token
+								</div>
+							{:else}
+								<div class="space-y-2">
+									{#each $tokenOrdersQuery.data?.pages ?? [] as page}
+										{#each page.orders as order}
+											{@const orderInput = currentToken ? getOrderInput(order, currentToken.address) : null}
+											{@const orderOutput = currentToken ? getOrderOutput(order, currentToken.address) : null}
+											{@const isInput = Boolean(orderInput)}
+											{@const isOutput = Boolean(orderOutput)}
+											{@const maxOutput = isOutput ? orderOutput?.vault?.balance || 0n : 0n}
+											{@const isFulfilled = maxOutput === 0n}
+											<div class="rounded-lg border border-white/5 bg-white/5 p-3 text-sm">
+												<div class="flex items-center justify-between">
+													<div class="flex items-center gap-2">
+														<span class="rounded bg-white/10 px-2 py-1 text-xs font-medium">
+															{getOrderType(order)}
+														</span>
+														<span class={`text-xs font-medium ${isInput ? 'text-green-400' : 'text-red-400'}`}>
+															{isInput ? 'Buy' : 'Sell'}
+														</span>
+														{#if isFulfilled}
+															<span class="rounded bg-yellow-500/20 px-2 py-1 text-xs font-medium text-yellow-400">
+																Fulfilled
+															</span>
+														{/if}
+													</div>
+													<a
+														href={`https://www.rainlang.xyz/raindex/#/${$currentNetwork?.raindexNetworkSlug}/orderbook/${order.orderbook}/order/${order.orderHash}`}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="text-xs text-blue-400 hover:text-blue-300"
+													>
+														View →
+													</a>
+												</div>
+												{#if !isFulfilled && isOutput}
+													<div class="mt-2 text-xs text-gray-400">
+														Remaining: {formatUnits(maxOutput, orderOutput.token.decimals)} {orderOutput.token.symbol}
+													</div>
+												{/if}
+											</div>
+										{/each}
+									{/each}
+								</div>
+							{/if}
+						</div>
+
+						{:else if activeOnchainTab === 'vaults'}
+						<div class="mt-4">
+							{#if !$connected}
+								<div class="py-8 text-center text-sm text-gray-400">
+									Connect your wallet to view your vaults
+								</div>
+							{:else if $tokenVaultsQuery.isLoading}
+								<div class="flex justify-center py-8">
+									<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
+								</div>
+							{:else if $tokenVaultsQuery.isError}
+								<div class="py-8 text-center text-sm text-red-400">
+									Error loading vaults: {$tokenVaultsQuery.error?.message}
+								</div>
+							{:else}
+								{@const vaults = $tokenVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
+								{@const totalVaultBalance = vaults.reduce((sum, v) => sum + v.balance.toBigIntLossy().value, 0n)}
+								{@const walletBalance = 0n}
+								{@const totalBalance = totalVaultBalance + walletBalance}
+
+								{#if vaults.length === 0}
+									<div class="py-8 text-center text-sm text-gray-400">
+										No vaults found for this token
+									</div>
+								{:else}
+									{@const tokenDecimals = vaults[0]?.token?.decimals || 18}
+									<div class="space-y-2">
+										{#each vaults as vault}
+											{@const balance = vault.balance.toBigIntLossy().value}
+											<div class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-3 text-sm">
+												<div>
+													<div class="font-medium text-gray-100">
+														{formatUnits(balance, vault.token.decimals)} {vault.token.symbol}
+													</div>
+													<div class="mt-1 text-xs text-gray-400">
+														Vault ID: {vault.vaultId.toString(16).slice(0, 8)}...
+													</div>
+												</div>
+												<Button
+													variant="secondary"
+													size="sm"
+													on:click={() => transactionStore.handleWithdraw(vault)}
+												>
+													Withdraw
+												</Button>
+											</div>
+										{/each}
+									</div>
+									<div class="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
+										<div class="flex justify-between text-gray-400">
+											<span>Wallet Balance:</span>
+											<span>{formatUnits(walletBalance, tokenDecimals)} {currentToken?.symbol}</span>
+										</div>
+										<div class="flex justify-between text-gray-400">
+											<span>Vaults Subtotal:</span>
+											<span>{formatUnits(totalVaultBalance, tokenDecimals)} {currentToken?.symbol}</span>
+										</div>
+										<div class="flex justify-between border-t border-white/10 pt-2 font-semibold text-gray-100">
+											<span>Total:</span>
+											<span>{formatUnits(totalBalance, tokenDecimals)} {currentToken?.symbol}</span>
+										</div>
+									</div>
+								{/if}
+							{/if}
+						</div>
 						{/if}
 					</div>
 					<div class="grid grid-cols-2 gap-3">
