@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { MAILERLITE_SUBSCRIBE_ENDPOINT } from '$lib/constants/newsletter';
+import { MAILERLITE_SUBSCRIBE_ENDPOINT } from '$lib/config/constants';
 import type { RequestHandler } from './$types';
 
 interface MailerLiteResponse {

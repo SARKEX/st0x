@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { getBaseline, getPeriodInSeconds, hasValidPriceFeedId } from '$lib/utils/derivations';
+import { priceToIoratioString, getPeriodInSeconds, hasValidPriceFeedId } from '$lib/utils/derivations';
 
 describe('derivations', () => {
-	describe('getBaseline', () => {
+	describe('priceToIoratioString', () => {
 		describe('Bid orders (user buying)', () => {
 			it.each([
 				{ input: '2', expected: '0.5' },
@@ -17,33 +17,33 @@ describe('derivations', () => {
 				{ input: 'invalid', expected: 'invalid' },
 				{ input: 'NaN', expected: 'NaN' }
 			])('should process Bid order with input "$input"', ({ input, expected }) => {
-				expect(getBaseline('Bid', input)).toBe(expected);
+				expect(priceToIoratioString('Bid', input)).toBe(expected);
 			});
 
 			it('should handle small numbers correctly', () => {
 				const smallNum = '0.0001';
-				const result = getBaseline('Bid', smallNum);
+				const result = priceToIoratioString('Bid', smallNum);
 				expect(Number(result)).toBe(1 / 0.0001);
 			});
 
 			it('should handle large numbers correctly', () => {
 				const largeNum = '1000000';
-				const result = getBaseline('Bid', largeNum);
+				const result = priceToIoratioString('Bid', largeNum);
 				expect(Number(result)).toBe(1 / 1000000);
 			});
 
 			it('should handle scientific notation', () => {
-				const result = getBaseline('Bid', '1e3');
+				const result = priceToIoratioString('Bid', '1e3');
 				expect(Number(result)).toBe(1 / 1000);
 			});
 
 			it('should handle negative numbers', () => {
-				const result = getBaseline('Bid', '-2');
+				const result = priceToIoratioString('Bid', '-2');
 				expect(Number(result)).toBe(-0.5);
 			});
 
 			it('should handle leading zeros', () => {
-				expect(getBaseline('Bid', '00100')).toBe('0.01');
+				expect(priceToIoratioString('Bid', '00100')).toBe('0.01');
 			});
 		});
 
@@ -57,12 +57,12 @@ describe('derivations', () => {
 				{ input: '  1.5  ', expected: '1.5' },
 				{ input: '\t100\n', expected: '100' }
 			])('should return Ask order unchanged for input "$input"', ({ input, expected }) => {
-				expect(getBaseline('Ask', input)).toBe(expected);
+				expect(priceToIoratioString('Ask', input)).toBe(expected);
 			});
 
 			it('should maintain precision for Ask orders', () => {
 				const precision = '123.456789';
-				expect(getBaseline('Ask', precision)).toBe(precision);
+				expect(priceToIoratioString('Ask', precision)).toBe(precision);
 			});
 		});
 
@@ -71,20 +71,79 @@ describe('derivations', () => {
 				{ input: '', side: 'Bid' as const, expected: '' },
 				{ input: '', side: 'Ask' as const, expected: '' }
 			])('should handle empty string for $side', ({ input, side, expected }) => {
-				expect(getBaseline(side, input)).toBe(expected);
+				expect(priceToIoratioString(side, input)).toBe(expected);
 			});
 
 			it('should handle undefined/null as empty string', () => {
-				expect(getBaseline('Bid', undefined as any)).toBe('');
-				expect(getBaseline('Ask', null as any)).toBe('');
+				expect(priceToIoratioString('Bid', undefined as any)).toBe('');
+				expect(priceToIoratioString('Ask', null as any)).toBe('');
 			});
 		});
 
 		describe('Precision', () => {
 			it('should have acceptable precision loss for Bid orders (after inversion)', () => {
-				const result = getBaseline('Bid', '3');
+				const result = priceToIoratioString('Bid', '3');
 				const parsed = Number(result);
 				expect(parsed).toBeCloseTo(0.3333333, 6);
+			});
+		});
+
+		describe('18-decimal formatting', () => {
+			it('should format Bid result to 18 decimals with trailing zeros removed', () => {
+				const result = priceToIoratioString('Bid', '2', true);
+				expect(result).toBe('0.5');
+			});
+
+			it('should format Ask result to 18 decimals with trailing zeros removed', () => {
+				const result = priceToIoratioString('Ask', '2', true);
+				expect(result).toBe('2');
+			});
+
+			it('should handle complex decimal values with formatting', () => {
+				const result = priceToIoratioString('Bid', '3', true);
+				// 1/3 = 0.333333... formatted to 18 decimals then trimmed
+				// JavaScript precision limits mean we check the prefix
+				expect(result).toMatch(/^0\.33333333333333/);
+				expect(result.split('.')[1].length).toBeGreaterThanOrEqual(15);
+			});
+
+			it('should preserve precision up to 18 decimals', () => {
+				const result = priceToIoratioString('Ask', '1.123456789012345678', true);
+				// JavaScript precision limits mean we check the prefix
+				expect(result).toMatch(/^1\.12345678901234/);
+				expect(Number(result)).toBeCloseTo(1.123456789012345678, 14);
+			});
+
+			it('should trim trailing zeros when formatting', () => {
+				const result = priceToIoratioString('Bid', '4', true);
+				expect(result).toBe('0.25'); // Not '0.250000000000000000'
+			});
+
+			it('should handle zero correctly with formatting', () => {
+				const result = priceToIoratioString('Ask', '0', true);
+				expect(result).toBe('0');
+			});
+
+			it('should format large numbers correctly', () => {
+				const result = priceToIoratioString('Ask', '1000000', true);
+				expect(result).toBe('1000000');
+			});
+
+			it('should format small numbers correctly', () => {
+				const result = priceToIoratioString('Bid', '0.0001', true);
+				expect(result).toBe('10000');
+			});
+
+			it('should maintain backward compatibility when formatTo18Decimals is false', () => {
+				const result1 = priceToIoratioString('Bid', '2', false);
+				const result2 = priceToIoratioString('Bid', '2');
+				expect(result1).toBe(result2);
+				expect(result1).toBe('0.5');
+			});
+
+			it('should handle invalid input the same way with formatting', () => {
+				const result = priceToIoratioString('Bid', 'invalid', true);
+				expect(result).toBe('invalid');
 			});
 		});
 	});

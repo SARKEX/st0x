@@ -8,6 +8,7 @@
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/stores/transaction';
 	import { currentNetwork } from '$lib/stores';
+	import { priceToIoratioString } from '$lib/utils/derivations';
 	import type { PythToken } from '$lib/types';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -126,7 +127,7 @@
 			// Bid order (user buying): Places order to buy asset with the settlement token
 			// User specifies quantity to acquire and price willing to pay
 			// Price interpretation: "I pay X quote tokens per 1 asset"
-			// The deployed order uses inverted ratio: 1/X (this is what getBaseline does)
+			// The deployed order uses inverted ratio: 1/X
 			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
 			const price = parseFloat(selectedInitialRatio || '0');
 			const settlementNeeded = parseFloat(assetQuantity) * price;
@@ -136,7 +137,7 @@
 				inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
 				outputToken: orderOutputToken, // payment token (token to be deposited as payment)
 				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
-				ioRatio: (1 / parseFloat(selectedInitialRatio || '1')).toFixed(18).toString(),
+				ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
 				depositAmount: settlementAmount, // Payment amount in settlement token
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId
@@ -145,12 +146,12 @@
 			// Ask order (user selling): Places order to sell asset for the settlement token
 			// User specifies quantity to offer and price willing to receive
 			// Price interpretation: "I receive X quote tokens per 1 asset"
-			// The deployed order uses direct ratio: X (this is what getBaseline does)
+			// The deployed order uses direct ratio: X
 			deployData = {
 				inputToken: orderInputToken, // payment token (token expected in return)
 				outputToken: orderOutputToken, // Asset (token being offered for sale)
 				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
-				ioRatio: selectedInitialRatio,
+				ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
 				depositAmount: selectedAmount, // Asset amount being offered
 				inputVaultId: inputVaultId,
 				outputVaultId: outputVaultId

@@ -10,7 +10,7 @@
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/stores/transaction';
-	import { hasValidPriceFeedId } from '$lib/utils/derivations';
+	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
 	import { currentNetwork, oracleQuotes } from '$lib/stores';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -112,24 +112,6 @@
 		priceGuardrailError;
 
 	const handleDcaDeploy = () => {
-		const normalizeDecimal = (v: string): string => {
-			if (!v) return v;
-			const n = Number(v);
-			if (!Number.isFinite(n)) return v;
-			// format to 18 fractional digits, then trim trailing zeros and dot
-			return n
-				.toFixed(18)
-				.replace(/\.0+$/, '')
-				.replace(/\.(.*?)(0+)$/, (m, p1) => (p1 ? `.${p1}`.replace(/\.$/, '') : ''))
-				.replace(/\.$/, '');
-		};
-
-		const invertAndNormalize = (v: string): string => {
-			const n = Number(v || '0');
-			if (!Number.isFinite(n) || n === 0) return '0';
-			return normalizeDecimal(String(1 / n));
-		};
-
 		if (!$connected) {
 			showConnectModal = true;
 			return;
@@ -151,14 +133,8 @@
 				// DCA price inversion logic:
 				// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
 				// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
-				baseline:
-					orderType === 'Bid'
-						? invertAndNormalize(selectedBaseline)
-						: normalizeDecimal(selectedBaseline),
-				kickoff:
-					orderType === 'Bid'
-						? invertAndNormalize(selectedInitialRatio)
-						: normalizeDecimal(selectedInitialRatio),
+				baseline: priceToIoratioString(orderType, selectedBaseline, true),
+				kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
 				inputVaultId: inputVaultId,

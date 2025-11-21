@@ -4,9 +4,6 @@ title: Tokenization Layer
 published: true
 ---
 
-<script>
-    import tokenization from '$lib/images/tokenization.png'
-</script>
 S1 leverages a Semi-Fungible Token (SFT) standard, integrating non-fungible ERC-1155 and ERC-20 tokens.
 
 The ERC-1155 token acts as a repository for essential data related to off-chain assets, including audit history, and is accessible by all users via IPFS. Users can then exchange the asset linked to the ERC-1155 token in a fungible manner using ERC-20 tokens.
@@ -94,7 +91,7 @@ A common mitigation for ownership-level compromise is a simple timelock—e.g. e
 
 If an attacker gains control of the signing keys, they can repeatedly repropose themselves as owner, turning the system into a war of attrition. The attacker only needs to succeed once, incentivised by the protocol’s full TVL, while defenders must respond successfully every time, with far fewer resources.
 
-<img src={tokenization} />
+<img src="/docs/tokenization.png" alt="Tokenization Layer" />
 
 This asymmetry is especially dangerous given that private key compromise accounted for an estimated 43–69% of all crypto thefts in 2024. While high-profile exploits like the ByBit hack drew attention, key theft remains the most frequent and effective attack vector.
 

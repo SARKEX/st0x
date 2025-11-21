@@ -2,7 +2,7 @@
 	import { connected } from 'svelte-wagmi';
 	import { currentNetwork } from '$lib/stores';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { MAILERLITE_RECAPTCHA_SITE_KEY } from '$lib/constants/newsletter';
+	import { MAILERLITE_RECAPTCHA_SITE_KEY } from '$lib/config/constants';
 
 	let showCaptcha = false;
 	let formState: { status: 'idle' | 'loading' | 'success' | 'error'; message?: string } = {

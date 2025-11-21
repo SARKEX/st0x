@@ -8,25 +8,47 @@ import type { Token } from '$lib/types';
  * For limit order strategies, convert user-specified price to the orderbook IO ratio.
  *
  * Bid orders (user buying): User specifies price as "I pay X per 1 asset"
- *   → This becomes ratio = 1/X in orderbook terms (output/input)
- *   → So the price must be inverted
+ *   → This is (output/input) in orderbook terms since X is the output
+ *   → So the price must be inverted to IORatio
  *
  * Ask orders (user selling): User specifies price as "I get X per 1 asset"
- *   → This becomes ratio = X/1 = X in orderbook terms (output/input)
+ *   → This is naturally IOratio as X is the input
  *   → So the price remains unchanged
  *
- * (unless the provided ratio is invalid or zero)
+ * @param orderType - 'Bid' or 'Ask'
+ * @param ratio - The price as a string
+ * @param formatTo18Decimals - If true, formats result to 18 decimals and removes trailing zeros
+ * @returns The IO ratio as a string
  */
-export function getBaseline(orderType: 'Bid' | 'Ask', ratio: string): string {
+export function priceToIoratioString(
+	orderType: 'Bid' | 'Ask',
+	ratio: string,
+	formatTo18Decimals: boolean = false
+): string {
 	const r = (ratio ?? '').toString().trim();
 	if (!r) return '';
+
+	const n = Number(r);
+	if (!Number.isFinite(n)) return r;
+
+	let result: number;
 	if (orderType === 'Bid') {
-		const n = Number(r);
-		if (!Number.isFinite(n) || n === 0) return r;
-		const inverted = 1 / n;
-		return inverted.toString();
+		if (n === 0) return r;
+		result = 1 / n;
+	} else {
+		result = n;
 	}
-	return r;
+
+	if (formatTo18Decimals) {
+		// Format to 18 decimals and remove trailing zeros
+		return result
+			.toFixed(18)
+			.replace(/\.0+$/, '')
+			.replace(/\.(.*?)(0+)$/, (m, p1) => (p1 ? `.${p1}`.replace(/\.$/, '') : ''))
+			.replace(/\.$/, '');
+	}
+
+	return result.toString();
 }
 
 /**
