@@ -665,17 +665,6 @@
 			{combinedError}
 		</div>
 	{/if}
-	<div>
-		<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-			<div>
-				<h2 class="text-base font-semibold text-white">On-chain Activity</h2>
-				<p class="text-sm text-gray-400">
-					Visualize recent trades and current liquidity sourced directly from the on-chain
-					orderbook.
-				</p>
-			</div>
-		</div>
-	</div>
 	<div class="grid grid-cols-1 gap-6 lg:grid-cols-3 xl:grid-cols-3 xl:grid-rows-2">
 		<!-- Row 1: Trade History (2/3) -->
 		<div

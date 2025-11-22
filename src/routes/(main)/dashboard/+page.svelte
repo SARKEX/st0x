@@ -188,7 +188,10 @@
 
 	// Vault List Query
 	$: vaultsListQuery = createInfiniteQuery({
-		queryKey: ['vaults', $currentNetwork?.id, hideEmptyVaults, showMyVaults, $signerAddress],
+		queryKey: ['vaults', $currentNetwork?.id, $signerAddress],
+		staleTime: 300000, // 5 minutes (override global Infinity)
+		refetchOnMount: true, // Refresh when visiting page
+		refetchInterval: 300000, // Poll every 5 minutes
 		queryFn: async ({ pageParam }) => {
 			const client = await createRaindexClient();
 
@@ -196,7 +199,7 @@
 				[$currentNetwork.id],
 				{
 					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
-					hideZeroBalance: hideEmptyVaults ?? false
+					hideZeroBalance: false
 				},
 				pageParam + 1
 			);

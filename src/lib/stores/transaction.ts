@@ -14,7 +14,8 @@ import {
 	type SgOrder,
 	type TakeOrdersConfigV4,
 	type DeploymentTransactionArgs,
-	RaindexVault
+	RaindexVault,
+	type RaindexOrder
 } from '@rainlanguage/orderbook';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
@@ -380,6 +381,129 @@ const transactionStore = () => {
 		}
 	};
 
+	const handleRemoveOrder = async (quote: {
+		orderHash: string;
+		orderbookId?: string;
+		inputVaultId?: string;
+		outputVaultId?: string;
+	}) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork);
+		const $signerAddress = get(signerAddress);
+
+		if (!$signerAddress) {
+			throw new Error('Wallet not connected');
+		}
+
+		try {
+			// Fetch the RaindexOrder from the SDK
+			const client = await createRaindexClient();
+			const ordersResult = await client.getOrders(
+				[network.id],
+				{
+					orderHash: quote.orderHash as `0x${string}`,
+					owners: [$signerAddress as `0x${string}`]
+				},
+				0
+			);
+
+			if (ordersResult.error || !ordersResult.value) {
+				throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
+			}
+
+			const orders = [...(ordersResult.value as any)];
+			if (orders.length === 0) {
+				throw new Error('Order not found');
+			}
+
+			const order = orders[0] as RaindexOrder;
+
+			// Get remove calldata
+			const removeCalldata = order.getRemoveCalldata();
+			if (removeCalldata.error) {
+				throw new Error(removeCalldata.error.readableMsg);
+			}
+
+			let hash: Hash;
+
+			awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
+
+			// Send transaction to remove the order
+			hash = await sendTransaction(config, {
+				data: removeCalldata.value as Hex,
+				to: order.orderbook as `0x${string}`
+			});
+
+			awaitWalletConfirmation('Awaiting transaction confirmation...');
+
+			await waitForTransactionReceipt(config, {
+				hash: hash as `0x${string}`
+			});
+
+			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
+
+			return transactionSuccess(hash, link);
+		} catch (error) {
+			// @ts-expect-error Send transaction error
+			return transactionError(error?.cause?.details || error?.message || TransactionErrorMessage.GENERIC);
+		}
+	};
+
+	const handleWithdrawFromOrder = async (quote: {
+		orderHash: string;
+		orderbookId?: string;
+		inputVaultId?: string;
+		outputVaultId?: string;
+	}) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork);
+		const $signerAddress = get(signerAddress);
+
+		if (!$signerAddress) {
+			throw new Error('Wallet not connected');
+		}
+
+		if (!quote.outputVaultId) {
+			throw new Error('Output vault ID not found');
+		}
+
+		try {
+			// Fetch the vault from the SDK
+			const client = await createRaindexClient();
+			const vaultsResult = await client.getVaults(
+				[network.id],
+				{
+					owners: [$signerAddress as `0x${string}`],
+					hideZeroBalance: false,
+					tokens: []
+				},
+				0
+			);
+
+			if (vaultsResult.error || !vaultsResult.value) {
+				throw new Error(vaultsResult.error?.readableMsg || 'Failed to fetch vaults');
+			}
+
+			// Find the specific vault by ID
+			const vaults = [...(vaultsResult.value as any)];
+			const vault = vaults.find((v: RaindexVault) =>
+				v.vaultId.toString() === quote.outputVaultId
+			) as RaindexVault | undefined;
+
+			if (!vault) {
+				throw new Error('Vault not found');
+			}
+
+			// Use the existing handleWithdraw function
+			return await handleWithdraw(vault);
+		} catch (error) {
+			// @ts-expect-error Send transaction error
+			return transactionError(error?.cause?.details || error?.message || TransactionErrorMessage.GENERIC);
+		}
+	};
+
 	/**
 	 * Executes a market order by taking existing orders from the orderbook.
 	 *
@@ -629,7 +753,9 @@ const transactionStore = () => {
 		handleDsfDeploy,
 		handleFolioDeploy,
 		handleTakeOrders,
-		handleWithdraw
+		handleWithdraw,
+		handleRemoveOrder,
+		handleWithdrawFromOrder
 	};
 };
 

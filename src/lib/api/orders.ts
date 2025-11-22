@@ -129,6 +129,21 @@ function processOrdersWithQuotes(
 					const inputTokenAddress = inputDefinition.token;
 					const outputTokenAddress = outputDefinition.token;
 
+					// Filter out quotes where neither input nor output is the quote token
+					const normalizedInput = normalizeAddress(inputTokenAddress);
+					const normalizedOutput = normalizeAddress(outputTokenAddress);
+					const normalizedQuote = normalizeAddress(quoteToken.address);
+
+					if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
+						console.log('⏭️  Skipping quote - neither input nor output is quote token:', {
+							orderHash: sgOrder.orderHash,
+							inputTokenAddress,
+							outputTokenAddress,
+							quoteTokenAddress: quoteToken.address
+						});
+						return;
+					}
+
 					const allTokens = [quoteToken, ...stockTokens];
 					const inputTokenMeta = getTokenMetadata(inputTokenAddress, allTokens);
 					const outputTokenMeta = getTokenMetadata(outputTokenAddress, allTokens);
@@ -167,7 +182,22 @@ function processOrdersWithQuotes(
 								: 18)
 					};
 
+					// DEBUG: Log describeQuote inputs and output
+					console.log('🔍 DEBUG describeQuote call:', {
+						orderHash: processedQuote.orderHash,
+						inputTokenAddress: processedQuote.inputTokenAddress,
+						outputTokenAddress: processedQuote.outputTokenAddress,
+						quoteTokenAddress: quoteToken.address,
+						ratio: processedQuote.ratio
+					});
+
 					const metrics = describeQuote(processedQuote, quoteToken.address);
+
+					console.log('🔍 DEBUG describeQuote result:', {
+						orderHash: processedQuote.orderHash,
+						metrics: metrics
+					});
+
 					if (metrics) {
 						processedQuote.side = metrics.side;
 						const normalizedAsset = normalizeAddress(metrics.assetAddress);

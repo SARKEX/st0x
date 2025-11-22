@@ -33,6 +33,7 @@
 		analyzeTrade,
 		createTokenLookup,
 		normalizeAddress,
+		parseFloatHex,
 		ratioToNumber,
 		toDecimal
 	} from '$lib/utils/tokenMath';
@@ -43,11 +44,13 @@
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import { createInfiniteQuery } from '@tanstack/svelte-query';
+	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import { createRaindexClient } from '$lib/clients/raindex';
-	import { signerAddress, connected } from 'svelte-wagmi';
+	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import type { SgVault, RaindexVault, RaindexOrder } from '@rainlanguage/orderbook';
 	import transactionStore from '$lib/stores/transaction';
+	import { readContract } from '@wagmi/core';
+	import { erc20Abi } from 'viem';
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft: OffchainAssetReceiptVault) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
@@ -61,65 +64,121 @@
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
 
-	// Orders query for this token
-	$: tokenOrdersQuery = createInfiniteQuery({
-		queryKey: ['tokenOrders', $currentNetwork?.id, currentToken?.address, $signerAddress],
-		initialPageParam: 0,
-		queryFn: async ({ pageParam }: { pageParam: number }) => {
-			if (!currentToken?.address || !$currentNetwork) {
-				return { orders: [], hasMore: false };
-			}
-			const client = await createRaindexClient();
-			const ordersResult = await client.getOrders(
-				[$currentNetwork.id],
-				{
-					owners: [], // Empty array means all owners
-					tokens: [currentToken.address.toLowerCase() as `0x${string}`]
-				},
-				pageParam + 1
-			);
-			if (ordersResult.error) throw new Error(ordersResult.error.readableMsg);
-			const orders = ordersResult.value;
-			return {
-				orders: Array.isArray(orders) ? orders : [],
-				hasMore: Array.isArray(orders) && orders.length === 1000
-			};
-		},
-		getNextPageParam: (lastPage: { orders: RaindexOrder[]; hasMore: boolean }, pages) => {
-			return lastPage.hasMore ? pages.length : undefined;
-		},
-		enabled: activeOnchainTab === 'orders' && Boolean(currentToken?.address && $currentNetwork)
-	});
+	// Use orderbook quotes for orders instead of separate query
+	// Filter quotes by current token and owner
+	$: tokenOrders = (() => {
+		if (!currentToken?.address || !$orderbookQuotesQuery.data?.quotes) {
+			return [];
+		}
+		const quotes = $orderbookQuotesQuery.data.quotes;
+		const tokenAddress = currentToken.address.toLowerCase();
 
-	// Vaults query for this token
+		// Filter by token (input or output matches current token)
+		let filtered = quotes.filter(q =>
+			q.inputTokenAddress.toLowerCase() === tokenAddress ||
+			q.outputTokenAddress.toLowerCase() === tokenAddress
+		);
+
+		// Filter by owner if "My Orders" is selected
+		if (selectedOrdersFilter === 'my' && $signerAddress) {
+			const myAddress = $signerAddress.toLowerCase();
+			filtered = filtered.filter(q =>
+				q.sgOrder?.owner?.toLowerCase() === myAddress
+			);
+		}
+
+		// Debug: Check if quotePerAsset is set
+		console.log('🔍 DEBUG tokenOrders:', filtered.map(q => ({
+			orderHash: q.orderHash,
+			quotePerAsset: q.quotePerAsset,
+			side: q.side,
+			ratio: q.ratio,
+			inputToken: q.inputTokenSymbol,
+			outputToken: q.outputTokenSymbol
+		})));
+
+		return filtered;
+	})();
+
+	// Paginate the filtered orders
+	$: paginatedOrders = (() => {
+		const startIndex = (currentOrdersPage - 1) * 10;
+		const endIndex = startIndex + 10;
+		return tokenOrders.slice(startIndex, endIndex);
+	})();
+
+	$: totalOrderPages = Math.ceil(tokenOrders.length / 10);
+
+	// Vaults query - shared with dashboard
 	$: tokenVaultsQuery = createInfiniteQuery({
-		queryKey: ['tokenVaults', $currentNetwork?.id, currentToken?.address, $signerAddress],
+		queryKey: ['vaults', $currentNetwork?.id, $signerAddress],
 		initialPageParam: 0,
+		staleTime: 300000, // 5 minutes (override global Infinity)
+		refetchOnMount: true, // Refresh when visiting tab
+		refetchInterval: 300000, // Poll every 5 minutes
 		queryFn: async ({ pageParam }: { pageParam: number }) => {
-			if (!currentToken?.address || !$currentNetwork || !$signerAddress) {
+			if (!$currentNetwork || !$signerAddress) {
+				console.log('🔍 Vaults query skipped - missing params:', {
+					hasNetwork: !!$currentNetwork,
+					hasSigner: !!$signerAddress
+				});
 				return { vaults: [], hasMore: false };
 			}
+			console.log('🔍 Fetching vaults with params:', {
+				networkId: $currentNetwork.id,
+				owner: $signerAddress.toLowerCase(),
+				pageParam
+			});
 			const client = await createRaindexClient();
+
+			// Fetch all vaults (shared query with dashboard)
 			const vaultsResult = await client.getVaults(
 				[$currentNetwork.id],
 				{
 					owners: [$signerAddress.toLowerCase() as `0x${string}`],
-					tokens: [currentToken.address.toLowerCase() as `0x${string}`],
 					hideZeroBalance: false
 				},
 				pageParam + 1
 			);
-			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
-			const vaults = vaultsResult.value;
+			if (vaultsResult.error) {
+				console.error('🔍 Vaults query error:', vaultsResult.error);
+				throw new Error(vaultsResult.error.readableMsg);
+			}
+
+			// Access .items like the dashboard does
+			const vaultsArray: RaindexVault[] = vaultsResult.value.items || [];
+
+			console.log('🔍 Vaults query result:', {
+				totalVaultsCount: vaultsArray.length,
+				vaults: vaultsArray.map(v => ({ token: v.token.address, symbol: v.token.symbol }))
+			});
 			return {
-				vaults: Array.isArray(vaults) ? vaults : [],
-				hasMore: Array.isArray(vaults) && vaults.length === 1000
+				vaults: vaultsArray,
+				hasMore: vaultsArray.length === 1000
 			};
 		},
 		getNextPageParam: (lastPage: { vaults: RaindexVault[]; hasMore: boolean }, pages) => {
 			return lastPage.hasMore ? pages.length : undefined;
 		},
-		enabled: activeOnchainTab === 'vaults' && Boolean(currentToken?.address && $currentNetwork && $signerAddress)
+		enabled: activeOnchainTab === 'vaults' && Boolean($currentNetwork && $signerAddress)
+	});
+
+	// Wallet balance query for this token
+	$: walletBalanceQuery = createQuery({
+		queryKey: ['walletBalance', $currentNetwork?.id, currentToken?.address, $signerAddress],
+		queryFn: async () => {
+			if (!currentToken?.address || !$signerAddress || !$wagmiConfig) {
+				return 0n;
+			}
+			const balance = await readContract($wagmiConfig, {
+				abi: erc20Abi,
+				address: currentToken.address as `0x${string}`,
+				functionName: 'balanceOf',
+				args: [$signerAddress as `0x${string}`]
+			});
+			return balance as bigint;
+		},
+		enabled: activeOnchainTab === 'vaults' && Boolean(currentToken?.address && $signerAddress && $wagmiConfig)
 	});
 	$: currentPythToken = TOKENS.find(
 		(token) =>
@@ -147,10 +206,29 @@
 	const ONCHAIN_TABS = [
 		{ id: 'market', label: 'Market Data' },
 		{ id: 'orders', label: 'Orders' },
-		{ id: 'vaults', label: 'Vaults' }
+		{ id: 'vaults', label: 'Holdings' }
 	] as const;
 	type OnchainTabId = (typeof ONCHAIN_TABS)[number]['id'];
 	let activeOnchainTab: OnchainTabId = 'market';
+
+	// Orders filter: 'my' for user's orders, 'all' for all orders
+	// Default to 'my' if wallet is connected, otherwise 'all'
+	$: ordersFilter = $connected ? 'my' : 'all';
+	let selectedOrdersFilter: 'my' | 'all' = 'my';
+
+	// Update selected filter when connection changes
+	$: if (!$connected && selectedOrdersFilter === 'my') {
+		selectedOrdersFilter = 'all';
+	}
+
+	// Pagination state
+	let currentOrdersPage = 1;
+	let currentVaultsPage = 1;
+
+	// Reset pagination when filter changes
+	$: if (selectedOrdersFilter) {
+		currentOrdersPage = 1;
+	}
 
 	function handleOnchainTabChange(event: CustomEvent<{ id: string }>) {
 		activeOnchainTab = event.detail.id as OnchainTabId;
@@ -158,19 +236,64 @@
 
 	// Helper to safely access RaindexOrder properties (incomplete types in SDK)
 	function getOrderInput(order: RaindexOrder, tokenAddress: string) {
-		return (order as any).inputs?.find(
-			(i: any) => i.token.address.toLowerCase() === tokenAddress.toLowerCase()
+		const inputs = (order as any).inputs;
+		console.log('🔍 getOrderInput - inputs:', inputs, 'tokenAddress:', tokenAddress);
+		if (!inputs || !Array.isArray(inputs)) return null;
+		return inputs.find(
+			(i: any) => i.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
 		);
 	}
 
 	function getOrderOutput(order: RaindexOrder, tokenAddress: string) {
-		return (order as any).outputs?.find(
-			(o: any) => o.token.address.toLowerCase() === tokenAddress.toLowerCase()
+		const outputs = (order as any).outputs;
+		console.log('🔍 getOrderOutput - outputs:', outputs, 'tokenAddress:', tokenAddress);
+		if (!outputs || !Array.isArray(outputs)) return null;
+		return outputs.find(
+			(o: any) => o.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
 		);
 	}
 
 	function getOrderType(order: RaindexOrder): string {
 		return (order as any).orderType || 'Order';
+	}
+
+	function getOrderTimestamp(order: RaindexOrder): number | null {
+		return (order as any).timestampAdded || (order as any).timestamp || null;
+	}
+
+	function vaultBalanceToBigInt(vault: RaindexVault): bigint {
+		const fixedResult = vault.balance.toFixedDecimalLossy(vault.token.decimals);
+		if (fixedResult.error || !fixedResult.value) return 0n;
+		const value = (fixedResult.value as any).value;
+		return typeof value === 'string' ? BigInt(value) : 0n;
+	}
+
+	function getOrderAmount(order: RaindexOrder, tokenAddress: string): { total: bigint; remaining: bigint } {
+		const input = getOrderInput(order, tokenAddress);
+		const output = getOrderOutput(order, tokenAddress);
+
+		console.log('🔍 getOrderAmount DEBUG:', {
+			orderHash: order.orderHash,
+			tokenAddress,
+			input: input ? { vault: input.vault, token: input.token } : null,
+			output: output ? { vault: output.vault, token: output.token } : null,
+			fullOrder: order
+		});
+
+		if (input) {
+			// For input (buy orders), check input vault
+			const remaining = input?.vault?.balance || 0n;
+			return { total: remaining, remaining };
+		} else if (output) {
+			// For output (sell orders), check output vault
+			const remaining = output?.vault?.balance || 0n;
+			// Try to get initial balance from order metadata
+			const initialBalance = (output.vault as any)?.initialBalance || (order as any).initialOutputVaultBalance;
+			const total = initialBalance || remaining;
+			return { total, remaining };
+		}
+
+		return { total: 0n, remaining: 0n };
 	}
 
 	let infoCollapsed = false;
@@ -676,12 +799,7 @@
 						{/if}
 					</div>
 					<div class={containerStyles.cardBordered}>
-						<div class="border-b border-white/10 pb-3">
-							<TabNav tabs={ONCHAIN_TABS} activeId={activeOnchainTab} on:change={handleOnchainTabChange} />
-						</div>
-
-						{#if activeOnchainTab === 'market'}
-						<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+						<dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Oracle Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
@@ -733,137 +851,6 @@
 						</dl>
 						{#if oracleError}
 							<p class="mt-4 text-xs text-red-400">{oracleError}</p>
-						{/if}
-
-						{:else if activeOnchainTab === 'orders'}
-						<div class="mt-4">
-							{#if !$connected}
-								<div class="py-8 text-center text-sm text-gray-400">
-									Connect your wallet to view your orders
-								</div>
-							{:else if $tokenOrdersQuery.isLoading}
-								<div class="flex justify-center py-8">
-									<LoadingSpinner variant="inline" size="md" text="Loading orders..." />
-								</div>
-							{:else if $tokenOrdersQuery.isError}
-								<div class="py-8 text-center text-sm text-red-400">
-									Error loading orders: {$tokenOrdersQuery.error?.message}
-								</div>
-							{:else if $tokenOrdersQuery.data?.pages?.[0]?.orders?.length === 0}
-								<div class="py-8 text-center text-sm text-gray-400">
-									No orders found for this token
-								</div>
-							{:else}
-								<div class="space-y-2">
-									{#each $tokenOrdersQuery.data?.pages ?? [] as page}
-										{#each page.orders as order}
-											{@const orderInput = currentToken ? getOrderInput(order, currentToken.address) : null}
-											{@const orderOutput = currentToken ? getOrderOutput(order, currentToken.address) : null}
-											{@const isInput = Boolean(orderInput)}
-											{@const isOutput = Boolean(orderOutput)}
-											{@const maxOutput = isOutput ? orderOutput?.vault?.balance || 0n : 0n}
-											{@const isFulfilled = maxOutput === 0n}
-											<div class="rounded-lg border border-white/5 bg-white/5 p-3 text-sm">
-												<div class="flex items-center justify-between">
-													<div class="flex items-center gap-2">
-														<span class="rounded bg-white/10 px-2 py-1 text-xs font-medium">
-															{getOrderType(order)}
-														</span>
-														<span class={`text-xs font-medium ${isInput ? 'text-green-400' : 'text-red-400'}`}>
-															{isInput ? 'Buy' : 'Sell'}
-														</span>
-														{#if isFulfilled}
-															<span class="rounded bg-yellow-500/20 px-2 py-1 text-xs font-medium text-yellow-400">
-																Fulfilled
-															</span>
-														{/if}
-													</div>
-													<a
-														href={`https://www.rainlang.xyz/raindex/#/${$currentNetwork?.raindexNetworkSlug}/orderbook/${order.orderbook}/order/${order.orderHash}`}
-														target="_blank"
-														rel="noopener noreferrer"
-														class="text-xs text-blue-400 hover:text-blue-300"
-													>
-														View →
-													</a>
-												</div>
-												{#if !isFulfilled && isOutput}
-													<div class="mt-2 text-xs text-gray-400">
-														Remaining: {formatUnits(maxOutput, orderOutput.token.decimals)} {orderOutput.token.symbol}
-													</div>
-												{/if}
-											</div>
-										{/each}
-									{/each}
-								</div>
-							{/if}
-						</div>
-
-						{:else if activeOnchainTab === 'vaults'}
-						<div class="mt-4">
-							{#if !$connected}
-								<div class="py-8 text-center text-sm text-gray-400">
-									Connect your wallet to view your vaults
-								</div>
-							{:else if $tokenVaultsQuery.isLoading}
-								<div class="flex justify-center py-8">
-									<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
-								</div>
-							{:else if $tokenVaultsQuery.isError}
-								<div class="py-8 text-center text-sm text-red-400">
-									Error loading vaults: {$tokenVaultsQuery.error?.message}
-								</div>
-							{:else}
-								{@const vaults = $tokenVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
-								{@const totalVaultBalance = vaults.reduce((sum, v) => sum + v.balance.toBigIntLossy().value, 0n)}
-								{@const walletBalance = 0n}
-								{@const totalBalance = totalVaultBalance + walletBalance}
-
-								{#if vaults.length === 0}
-									<div class="py-8 text-center text-sm text-gray-400">
-										No vaults found for this token
-									</div>
-								{:else}
-									{@const tokenDecimals = vaults[0]?.token?.decimals || 18}
-									<div class="space-y-2">
-										{#each vaults as vault}
-											{@const balance = vault.balance.toBigIntLossy().value}
-											<div class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-3 text-sm">
-												<div>
-													<div class="font-medium text-gray-100">
-														{formatUnits(balance, vault.token.decimals)} {vault.token.symbol}
-													</div>
-													<div class="mt-1 text-xs text-gray-400">
-														Vault ID: {vault.vaultId.toString(16).slice(0, 8)}...
-													</div>
-												</div>
-												<Button
-													variant="secondary"
-													size="sm"
-													on:click={() => transactionStore.handleWithdraw(vault)}
-												>
-													Withdraw
-												</Button>
-											</div>
-										{/each}
-									</div>
-									<div class="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
-										<div class="flex justify-between text-gray-400">
-											<span>Wallet Balance:</span>
-											<span>{formatUnits(walletBalance, tokenDecimals)} {currentToken?.symbol}</span>
-										</div>
-										<div class="flex justify-between text-gray-400">
-											<span>Vaults Subtotal:</span>
-											<span>{formatUnits(totalVaultBalance, tokenDecimals)} {currentToken?.symbol}</span>
-										</div>
-										<div class="flex justify-between border-t border-white/10 pt-2 font-semibold text-gray-100">
-											<span>Total:</span>
-											<span>{formatUnits(totalBalance, tokenDecimals)} {currentToken?.symbol}</span>
-										</div>
-									</div>
-								{/if}
-							{/if}
-						</div>
 						{/if}
 					</div>
 					<div class="grid grid-cols-2 gap-3">
@@ -919,19 +906,347 @@
 			</div>
 		</Section>
 		<Section>
-			<TokenMarketCharts
-				volumeBuckets={tradeVolumeBuckets}
-				depth={orderbookDepth}
-				{averagePrices}
-				rangeStartMs={historyRangeStartMs}
-				rangeEndMs={historyRangeEndMs}
-				isLoading={chartsLoading}
-				error={tradeQueryError}
-				{historyRange}
-				historyRangeOptions={HISTORY_RANGE_OPTIONS}
-				on:rangeChange={(e) => (historyRange = e.detail.key)}
-			/>
-			<div class="mt-2 text-xs text-gray-400">All times are displayed in your local timezone</div>
+			<div class="mb-6">
+				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+					<div>
+						<h2 class="text-base font-semibold text-white">On-chain Activity</h2>
+						<p class="text-sm text-gray-400">
+							Visualize recent trades, liquidity, orders, and vaults
+						</p>
+					</div>
+				</div>
+				<TabNav tabs={ONCHAIN_TABS} activeId={activeOnchainTab} on:change={handleOnchainTabChange} />
+			</div>
+
+			{#if activeOnchainTab === 'market'}
+				<TokenMarketCharts
+					volumeBuckets={tradeVolumeBuckets}
+					depth={orderbookDepth}
+					{averagePrices}
+					rangeStartMs={historyRangeStartMs}
+					rangeEndMs={historyRangeEndMs}
+					isLoading={chartsLoading}
+					error={tradeQueryError}
+					{historyRange}
+					historyRangeOptions={HISTORY_RANGE_OPTIONS}
+					on:rangeChange={(e) => (historyRange = e.detail.key)}
+				/>
+				<div class="mt-2 text-xs text-gray-400">All times are displayed in your local timezone</div>
+
+			{:else if activeOnchainTab === 'orders'}
+				<div class="mt-4">
+					<!-- Filter toggle -->
+					<div class="mb-4 flex items-center gap-2">
+						<span class="text-sm text-gray-400">Show:</span>
+						<div class="flex gap-2">
+							<button
+								type="button"
+								class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+									selectedOrdersFilter === 'my'
+										? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
+										: 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+								} ${!$connected ? 'opacity-50 cursor-not-allowed' : ''}`}
+								disabled={!$connected}
+								on:click={() => { selectedOrdersFilter = 'my' }}
+							>
+								My Orders
+							</button>
+							<button
+								type="button"
+								class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+									selectedOrdersFilter === 'all'
+										? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
+										: 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+								}`}
+								on:click={() => { selectedOrdersFilter = 'all' }}
+							>
+								All Orders
+							</button>
+						</div>
+					</div>
+
+					{#if $orderbookQuotesQuery.isLoading}
+						<div class="flex justify-center py-8">
+							<LoadingSpinner variant="inline" size="md" text="Loading orders..." />
+						</div>
+					{:else if $orderbookQuotesQuery.isError}
+						<div class="py-8 text-center text-sm text-red-400">
+							Error loading orders: {$orderbookQuotesQuery.error?.message}
+						</div>
+					{:else if tokenOrders.length === 0}
+						<div class="py-8 text-center text-sm text-gray-400">
+							{selectedOrdersFilter === 'my' ? 'You have no orders for this token' : 'No orders found for this token'}
+						</div>
+					{:else}
+						<!-- Orders table -->
+						<div class="overflow-x-auto">
+							<table class="w-full text-sm">
+								<thead class="border-b border-white/10">
+									<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
+										<th class="pb-3 pr-4 font-medium">Type</th>
+										<th class="pb-3 pr-4 font-medium">Status</th>
+										<th class="pb-3 pr-4 font-medium">Remaining</th>
+										<th class="pb-3 pr-4 font-medium">Current Price</th>
+										<th class="pb-3 pr-4 font-medium">Order Hash</th>
+										<th class="pb-3 pr-4 font-medium">Wallet</th>
+										{#if selectedOrdersFilter === 'my'}
+											<th class="pb-3 font-medium">Actions</th>
+										{/if}
+									</tr>
+								</thead>
+								<tbody>
+									{#each paginatedOrders as quote}
+										{@const tokenAddress = currentToken?.address.toLowerCase()}
+										{@const isBuy = quote.inputTokenAddress.toLowerCase() === tokenAddress}
+										{@const maxOutputBigInt = parseFloatHex(quote.maxOutput, isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18)}
+										{@const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol}
+										{@const tokenDecimals = isBuy ? (quote.inputTokenDecimals || 18) : (quote.outputTokenDecimals || 18)}
+										{@const orderOwner = quote.sgOrder?.owner || ''}
+										{@const orderbookId = quote.orderbookId || ''}
+										{@const remainingAmount = maxOutputBigInt > 0n ? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3) : '—'}
+										{@const currentPrice = (quote.quotePerAsset !== undefined && quote.quotePerAsset !== null && Number.isFinite(quote.quotePerAsset)) ? quote.quotePerAsset.toFixed(3) : `DEBUG: ${quote.quotePerAsset}`}
+										{@const isMyOrder = orderOwner.toLowerCase() === $signerAddress?.toLowerCase()}
+										{@const isActive = quote.sgOrder?.active ?? true}
+										<tr class="border-b border-white/5 hover:bg-white/5">
+											<td class="py-3 pr-4">
+												<span class={`text-xs font-medium ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
+													{isBuy ? 'Buy' : 'Sell'}
+												</span>
+											</td>
+											<td class="py-3 pr-4">
+												{#if isActive}
+													<span class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+														Active
+													</span>
+												{:else}
+													<span class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400">
+														Closed
+													</span>
+												{/if}
+											</td>
+											<td class="py-3 pr-4 text-gray-300">
+												{remainingAmount} {tokenSymbol}
+											</td>
+											<td class="py-3 pr-4 text-gray-300">
+												{currentPrice}
+											</td>
+											<td class="py-3 pr-4">
+												<a
+													href={`https://sdk.raindex.finance/v5/#/${$currentNetwork?.raindexNetworkSlug}/orderbook/${orderbookId}/order/${quote.orderHash}`}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+													title={quote.orderHash}
+												>
+													{quote.orderHash.slice(0, 8)}...{quote.orderHash.slice(-6)}
+												</a>
+											</td>
+											<td class="py-3 pr-4">
+												{#if orderOwner}
+													<a
+														href={`${$currentNetwork?.blockExplorer}/address/${orderOwner}`}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+														title={orderOwner}
+													>
+														{orderOwner.slice(0, 6)}...{orderOwner.slice(-4)}
+													</a>
+												{:else}
+													—
+												{/if}
+											</td>
+											{#if selectedOrdersFilter === 'my'}
+												<td class="py-3">
+													{#if isMyOrder}
+														{#if isActive}
+															<Button
+																variant="danger"
+																size="sm"
+																on:click={() => transactionStore.handleRemoveOrder(quote)}
+															>
+																Cancel
+															</Button>
+														{:else}
+															<Button
+																variant="secondary"
+																size="sm"
+																on:click={() => transactionStore.handleWithdrawFromOrder(quote)}
+															>
+																Withdraw
+															</Button>
+														{/if}
+													{:else}
+														—
+													{/if}
+												</td>
+											{/if}
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+						<!-- Pagination controls -->
+						{#if totalOrderPages > 1}
+							<div class="mt-4 flex items-center justify-center gap-2">
+								{#each Array.from({ length: totalOrderPages }, (_, i) => i + 1) as pageNum}
+									<button
+										type="button"
+										class={`h-8 w-8 rounded-md text-sm font-medium transition ${
+											pageNum === currentOrdersPage
+												? 'bg-blue-500 text-white'
+												: 'bg-white/5 text-gray-400 hover:bg-white/10'
+										}`}
+										on:click={() => {
+											currentOrdersPage = pageNum;
+										}}
+									>
+										{pageNum}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					{/if}
+				</div>
+
+			{:else if activeOnchainTab === 'vaults'}
+				<div class="mt-4">
+					{#if !$connected}
+						<div class="flex flex-col items-center justify-center gap-4 py-12">
+							<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
+							<Button
+								variant="primary"
+								size="md"
+								on:click={() => $web3Modal.open()}
+							>
+								Connect Wallet
+							</Button>
+						</div>
+					{:else if $tokenVaultsQuery.isLoading}
+						<div class="flex justify-center py-8">
+							<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
+						</div>
+					{:else if $tokenVaultsQuery.isError}
+						<div class="py-8 text-center text-sm text-red-400">
+							Error loading vaults: {$tokenVaultsQuery.error?.message}
+						</div>
+					{:else}
+						{@const allVaults = $tokenVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
+						{@const _ = console.log('🔍 DEBUG vault filtering:', {
+							currentTokenAddress: currentToken?.address,
+							allVaultsCount: allVaults.length,
+							allVaultTokens: allVaults.map(v => ({
+								address: v.token?.address,
+								symbol: v.token?.symbol
+							}))
+						})}
+						{@const vaults = currentToken ? allVaults.filter(v => {
+							const isCorrectToken = v.token?.address?.toLowerCase() === currentToken.address.toLowerCase();
+							const hasBalance = vaultBalanceToBigInt(v) > 0n;
+							return isCorrectToken && hasBalance;
+						}) : []}
+						{@const __ = console.log('🔍 DEBUG filtered vaults:', vaults.length)}
+						{@const totalVaultBalance = vaults.reduce((sum, v) => sum + vaultBalanceToBigInt(v), 0n)}
+						{@const walletBalance = $walletBalanceQuery.data ?? 0n}
+						{@const totalBalance = totalVaultBalance + walletBalance}
+						{@const tokenDecimals = vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
+
+						{#if vaults.length === 0 && walletBalance === 0n}
+							<div class="py-8 text-center text-sm text-gray-400">
+								No position found for this token
+							</div>
+						{:else}
+							<!-- Two column layout: Vaults list on left, Summary on right -->
+							<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+								<!-- Left: Vaults list with pagination -->
+								<div>
+									{#if vaults.length > 0}
+										{@const vaultsPerPage = 10}
+										{@const totalPages = Math.ceil(vaults.length / vaultsPerPage)}
+										{@const startIndex = (currentVaultsPage - 1) * vaultsPerPage}
+										{@const endIndex = startIndex + vaultsPerPage}
+										{@const paginatedVaults = vaults.slice(startIndex, endIndex)}
+
+										<div class="space-y-2">
+											{#each paginatedVaults as vault, vaultIndex}
+												{@const balance = vaultBalanceToBigInt(vault)}
+												{@const vaultIdHex = vault.vaultId.toString(16).padStart(64, '0')}
+												{@const raindexUrl = `https://v5.raindex.finance/vaults/0x${vaultIdHex}`}
+												<div class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm">
+													<div class="flex items-center gap-2 text-xs text-gray-400">
+														<a
+															href={raindexUrl}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="text-blue-400 hover:text-blue-300 hover:underline"
+															title="View on Raindex"
+														>
+															{vaultIdHex.slice(0, 8)}...
+														</a>
+														<span>•</span>
+														<span>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)} {vault.token.symbol}</span>
+													</div>
+													<Button
+														variant="danger"
+														size="sm"
+														on:click={() => transactionStore.handleWithdraw(vault)}
+													>
+														Withdraw
+													</Button>
+												</div>
+											{/each}
+										</div>
+
+										<!-- Pagination -->
+										{#if totalPages > 1}
+											<div class="mt-4 flex items-center justify-center gap-2">
+												{#each Array.from({ length: totalPages }, (_, i) => i + 1) as pageNum}
+													<button
+														type="button"
+														class={`h-8 w-8 rounded-md text-sm font-medium transition ${
+															pageNum === currentVaultsPage
+																? 'bg-blue-500 text-white'
+																: 'bg-white/5 text-gray-400 hover:bg-white/10'
+														}`}
+														on:click={() => {
+															currentVaultsPage = pageNum;
+														}}
+													>
+														{pageNum}
+													</button>
+												{/each}
+											</div>
+										{/if}
+									{:else}
+										<div class="py-8 text-center text-sm text-gray-400">
+											No vaults with balance found
+										</div>
+									{/if}
+								</div>
+
+								<!-- Right: Summary table -->
+								<div class="rounded-lg border border-white/10 bg-white/5 p-4">
+									<h3 class="mb-4 text-sm font-semibold text-gray-100">Summary</h3>
+									<div class="space-y-3 text-sm">
+										<div class="flex justify-between text-gray-400">
+											<span>Vaults Subtotal:</span>
+											<span>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)} {currentToken?.symbol}</span>
+										</div>
+										<div class="flex justify-between text-gray-400">
+											<span>Wallet Balance:</span>
+											<span>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)} {currentToken?.symbol}</span>
+										</div>
+										<div class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100">
+											<span>Total:</span>
+											<span>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)} {currentToken?.symbol}</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						{/if}
+					{/if}
+				</div>
+			{/if}
 		</Section>
 		<!-- Tabbed Information Section (collapsible) -->
 		<Section>
