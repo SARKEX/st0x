@@ -20,6 +20,7 @@ import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
 import { createRaindexClient } from '$lib/clients/raindex';
+import { getRaindexClientPool } from '$lib/clients/raindexPool';
 import { Float } from '@rainlanguage/float';
 import {
 	type ProcessedQuote,
@@ -31,6 +32,7 @@ import {
 	walkOrderbook,
 	hexToBigInt
 } from '$lib/utils/orderbook';
+import { fetchQuotesWithBatching } from '$lib/utils/quoteBatcher';
 
 // Re-export types and utilities
 export type { ProcessedQuote, TokenPriceSummary };
@@ -182,21 +184,7 @@ function processOrdersWithQuotes(
 								: 18)
 					};
 
-					// DEBUG: Log describeQuote inputs and output
-					console.log('🔍 DEBUG describeQuote call:', {
-						orderHash: processedQuote.orderHash,
-						inputTokenAddress: processedQuote.inputTokenAddress,
-						outputTokenAddress: processedQuote.outputTokenAddress,
-						quoteTokenAddress: quoteToken.address,
-						ratio: processedQuote.ratio
-					});
-
 					const metrics = describeQuote(processedQuote, quoteToken.address);
-
-					console.log('🔍 DEBUG describeQuote result:', {
-						orderHash: processedQuote.orderHash,
-						metrics: metrics
-					});
 
 					if (metrics) {
 						processedQuote.side = metrics.side;
@@ -369,8 +357,45 @@ export async function fetchAndQuoteTokenOrders(
 		(token) => token.chainId === networkId && token.category === 'ST0x'
 	);
 
-	// Create RaindexClient using standard configuration
-	const client = await createRaindexClient();
+	// Get client pool for load balancing
+	const pool = await getRaindexClientPool(network);
+	const clientEntry = pool.getClient();
+
+	if (!clientEntry) {
+		console.error('[fetchAndQuoteTokenOrders] No available clients in pool');
+		// Fallback to single client
+		const fallbackClient = await createRaindexClient();
+		const filters: GetOrdersFilters = {
+			active: true,
+			owners: [],
+			tokens: [tokenAddress as `0x${string}`]
+		};
+		const ordersResult = await fallbackClient.getOrders([networkId], filters, 1);
+
+		if (ordersResult.error) {
+			throw new Error(ordersResult.error.readableMsg);
+		}
+
+		const allOrders = ordersResult.value;
+
+		// Continue with batched quote fetching...
+		let quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>;
+		try {
+			quotesMap = await fetchQuotesWithBatching(allOrders);
+		} catch (error) {
+			console.error('[fetchAndQuoteTokenOrders] Failed to fetch quotes:', error);
+			return [];
+		}
+
+		const processedQuotes = processOrdersWithQuotes(
+			allOrders,
+			quotesMap,
+			defaultPaymentToken,
+			stockTokens
+		);
+
+		return processedQuotes;
+	}
 
 	// Fetch orders for this specific token only
 	const filters: GetOrdersFilters = {
@@ -379,7 +404,14 @@ export async function fetchAndQuoteTokenOrders(
 		tokens: [tokenAddress as `0x${string}`]
 	};
 
-	const ordersResult = await client.getOrders([networkId], filters, 1);
+	let ordersResult;
+	try {
+		ordersResult = await clientEntry.client.getOrders([networkId], filters, 1);
+		pool.recordSuccess(clientEntry);
+	} catch (error) {
+		pool.recordFailure(clientEntry, error);
+		throw error;
+	}
 
 	if (ordersResult.error) {
 		throw new Error(ordersResult.error.readableMsg);
@@ -387,24 +419,14 @@ export async function fetchAndQuoteTokenOrders(
 
 	const allOrders = ordersResult.value;
 
-	// Get quotes for all orders and store them in a map
-	const quotesMap = new Map<RaindexOrder, RaindexOrderQuote[]>();
-
-	for (const order of allOrders) {
-		try {
-			const quotesResult = await order.getQuotes();
-			if (quotesResult.error) {
-				console.warn('❌ Error getting quotes for order:', order.orderHash, quotesResult.error);
-				continue;
-			}
-			// Store the quotes in the map
-			if (quotesResult.value && quotesResult.value.length > 0) {
-				quotesMap.set(order, quotesResult.value);
-			}
-		} catch (error) {
-			// Skip orders that fail to quote
-			console.error('Error getting quotes for order:', error);
-		}
+	// Get quotes using batching with jitter and retries
+	let quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>;
+	try {
+		quotesMap = await fetchQuotesWithBatching(allOrders);
+	} catch (error) {
+		console.error('[fetchAndQuoteTokenOrders] Failed to fetch quotes:', error);
+		// Return empty array on complete failure to avoid showing stale/partial data
+		return [];
 	}
 
 	// Process and filter the quotes

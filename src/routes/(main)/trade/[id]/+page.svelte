@@ -61,8 +61,6 @@
 	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: {
-		console.log('🌐 [Trade Page] Current network:', $currentNetwork?.id, $currentNetwork?.name);
-		console.log('🪙 [Trade Page] Current token:', currentToken?.address, currentToken?.symbol);
 		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
 			$currentNetwork,
 			currentToken?.address ?? null
@@ -93,16 +91,6 @@
 				q.sgOrder?.owner?.toLowerCase() === myAddress
 			);
 		}
-
-		// Debug: Check if quotePerAsset is set
-		console.log('🔍 DEBUG tokenOrders:', filtered.map(q => ({
-			orderHash: q.orderHash,
-			quotePerAsset: q.quotePerAsset,
-			side: q.side,
-			ratio: q.ratio,
-			inputToken: q.inputTokenSymbol,
-			outputToken: q.outputTokenSymbol
-		})));
 
 		return filtered;
 	})();

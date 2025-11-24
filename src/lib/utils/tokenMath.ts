@@ -383,34 +383,18 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 	const output = normalizeAddress(quote.outputTokenAddress);
 	const quoteAddress = normalizeAddress(quoteTokenAddress);
 
-	console.log('🔍 DEBUG describeQuote internals:', {
-		input,
-		output,
-		quoteAddress,
-		quoteTokenAddress,
-		ratio: quote.ratio
-	});
-
 	if (!input || !output || !quoteAddress) {
-		console.log('❌ DEBUG describeQuote: normalizeAddress failed');
 		return null;
 	}
 	const ratio = ratioToNumber(quote.ratio);
 	if (ratio === null) {
-		console.log('❌ DEBUG describeQuote: ratioToNumber returned null');
 		return null;
 	}
-
-	console.log('🔍 DEBUG describeQuote: ratio =', ratio);
-	console.log('🔍 DEBUG describeQuote: input === quoteAddress?', input === quoteAddress);
-	console.log('🔍 DEBUG describeQuote: output === quoteAddress?', output === quoteAddress);
 
 	if (input === quoteAddress && output !== quoteAddress) {
 		// ASK order: giving away output token to acquire quote token input (seller offering to sell)
 		const quotePerAsset = ratio;
-		console.log('🔍 DEBUG describeQuote: ASK order, quotePerAsset =', quotePerAsset);
 		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) {
-			console.log('❌ DEBUG describeQuote: ASK quotePerAsset invalid');
 			return null;
 		}
 		return {
@@ -423,9 +407,7 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 	if (output === quoteAddress && input !== quoteAddress) {
 		// BID order: giving away input token to acquire quote token output (buyer offering to buy)
 		const quotePerAsset = 1 / ratio;
-		console.log('🔍 DEBUG describeQuote: BID order, quotePerAsset =', quotePerAsset);
 		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) {
-			console.log('❌ DEBUG describeQuote: BID quotePerAsset invalid');
 			return null;
 		}
 		return {
@@ -435,7 +417,6 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 		};
 	}
 
-	console.log('❌ DEBUG describeQuote: Neither input nor output matched quoteAddress');
 	return null;
 }
 
