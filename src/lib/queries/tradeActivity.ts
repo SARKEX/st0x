@@ -20,7 +20,9 @@ export function createTradeActivityQuery(network: Network | null) {
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
 			const from = now - WINDOW_SECONDS;
+
 			const trades = await getTrades(from, now, network as Network);
+
 			return {
 				trades,
 				range: { from, to: now }

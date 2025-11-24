@@ -29,8 +29,9 @@
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import transactionStore from '$lib/stores/transaction';
 	import { Float } from '@rainlanguage/float';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+	import type { CreateQueryResult } from '@tanstack/svelte-query';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	/**
@@ -41,12 +42,14 @@
 	 * - Sell action: takerWants=paymentToken, takerPays=assetToken
 	 */
 	export let assetToken: CategorizedToken | undefined;
+	/**
+	 * orderbookQuotesQuery: The orderbook quotes query (passed from parent)
+	 */
+	export let orderbookQuotesQuery: CreateQueryResult<OrderbookQuoteCache, Error>;
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 
-	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 
 	// State for market price and quantity

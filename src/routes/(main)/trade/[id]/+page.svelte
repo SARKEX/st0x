@@ -39,7 +39,10 @@
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
-	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import {
+		createTokenOrderbookQuotesQuery,
+		type OrderbookQuoteCache
+	} from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
@@ -54,12 +57,16 @@
 	$: tokenId = $page.params.id;
 	$: currentToken = $sfts?.find((sft: OffchainAssetReceiptVault) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
-	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery($currentNetwork, currentToken?.address ?? null);
 	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: {
 		console.log('🌐 [Trade Page] Current network:', $currentNetwork?.id, $currentNetwork?.name);
-		orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+		console.log('🪙 [Trade Page] Current token:', currentToken?.address, currentToken?.symbol);
+		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
+			$currentNetwork,
+			currentToken?.address ?? null
+		);
 		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
@@ -1625,7 +1632,11 @@
 										{sellPrice}
 									/>
 								{:else if panelStrategy === 'market'}
-									<MarketOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
+									<MarketOrder
+										orderSide={panelOrderSide}
+										assetToken={currentPythToken}
+										{orderbookQuotesQuery}
+									/>
 								{:else if panelStrategy === 'dca'}
 									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
 								{/if}
