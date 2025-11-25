@@ -11,6 +11,62 @@
 	type Tab = 'tokens' | 'codes' | 'wallets';
 	let activeTab: Tab = 'tokens';
 
+	// Period selector
+	type PeriodPreset = '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
+	let selectedPeriod: PeriodPreset = '30d';
+	let customStartDate = '';
+	let customEndDate = '';
+
+	const periodPresets: { value: PeriodPreset; label: string }[] = [
+		{ value: '7d', label: '7D' },
+		{ value: '30d', label: '30D' },
+		{ value: '90d', label: '90D' },
+		{ value: '1y', label: '1Y' },
+		{ value: 'all', label: 'All' }
+	];
+
+	// Calculate timestamps from period
+	function getTimestampRange(): { start: number; end: number } {
+		const now = Math.floor(Date.now() / 1000);
+
+		if (selectedPeriod === 'custom' && customStartDate && customEndDate) {
+			return {
+				start: Math.floor(new Date(customStartDate).getTime() / 1000),
+				end: Math.floor(new Date(customEndDate + 'T23:59:59').getTime() / 1000)
+			};
+		}
+
+		const dayInSeconds = 24 * 60 * 60;
+		switch (selectedPeriod) {
+			case '7d':
+				return { start: now - 7 * dayInSeconds, end: now };
+			case '30d':
+				return { start: now - 30 * dayInSeconds, end: now };
+			case '90d':
+				return { start: now - 90 * dayInSeconds, end: now };
+			case '1y':
+				return { start: now - 365 * dayInSeconds, end: now };
+			case 'all':
+				return { start: 0, end: now };
+			default:
+				return { start: now - 30 * dayInSeconds, end: now };
+		}
+	}
+
+	function selectPeriod(period: PeriodPreset) {
+		selectedPeriod = period;
+		if (period !== 'custom') {
+			loadAllData();
+		}
+	}
+
+	function applyCustomRange() {
+		if (customStartDate && customEndDate) {
+			selectedPeriod = 'custom';
+			loadAllData();
+		}
+	}
+
 	// Types
 	interface AccessCode {
 		code: string;
@@ -95,7 +151,19 @@
 	const network = networks[0]; // Base mainnet
 	const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase();
 
+	// All token addresses we care about (for filtering trades)
+	const allRelevantTokens = [
+		USDC_ADDRESS,
+		...TOKENS.map((t) => t.address.toLowerCase())
+	];
+
 	onMount(() => {
+		// Set default custom dates
+		const now = new Date();
+		const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+		customEndDate = now.toISOString().split('T')[0];
+		customStartDate = thirtyDaysAgo.toISOString().split('T')[0];
+
 		loadAllData();
 		// Auto-refresh every 30 seconds
 		refreshInterval = setInterval(loadAllData, 30000);
@@ -166,9 +234,7 @@
 	}
 
 	async function fetchAllTrades(): Promise<Trade[]> {
-		// Fetch trades from last 365 days
-		const now = Math.floor(Date.now() / 1000);
-		const oneYearAgo = now - 365 * 24 * 60 * 60;
+		const { start: timestampGt, end: timestampLt } = getTimestampRange();
 
 		const query = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
 			trades(
@@ -224,7 +290,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					query,
-					variables: { skip, first, timestampGt: oneYearAgo, timestampLt: now }
+					variables: { skip, first, timestampGt, timestampLt }
 				})
 			});
 
@@ -242,7 +308,13 @@
 			skip += first;
 		}
 
-		return allTrades;
+		// Filter to only trades involving our tokens (client-side)
+		const relevantTokenSet = new Set(allRelevantTokens);
+		return allTrades.filter((trade) => {
+			const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+			const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+			return relevantTokenSet.has(inputTokenAddr) || relevantTokenSet.has(outputTokenAddr);
+		});
 	}
 
 	function processTradeData(trades: Trade[]) {
@@ -383,16 +455,80 @@
 	function truncateAddress(addr: string): string {
 		return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 	}
+
+	function getPeriodLabel(): string {
+		switch (selectedPeriod) {
+			case '7d':
+				return 'Last 7 days';
+			case '30d':
+				return 'Last 30 days';
+			case '90d':
+				return 'Last 90 days';
+			case '1y':
+				return 'Last year';
+			case 'all':
+				return 'All time';
+			case 'custom':
+				return `${customStartDate} to ${customEndDate}`;
+			default:
+				return '';
+		}
+	}
 </script>
 
 <div class="py-8">
-	<div class="mb-8 flex items-center justify-between">
+	<div class="mb-6 flex items-center justify-between">
 		<h1 class="text-2xl font-semibold">Dashboard</h1>
 		{#if lastUpdated}
 			<span class="text-xs text-gray-500">
 				Auto-refreshes every 30s &middot; Last updated: {formatTime(lastUpdated)}
 			</span>
 		{/if}
+	</div>
+
+	<!-- Period Selector -->
+	<div class="mb-6">
+		<Card>
+			<div class="flex flex-wrap items-center gap-4">
+				<span class="text-sm font-medium text-gray-400">Period:</span>
+				<div class="flex flex-wrap gap-2">
+					{#each periodPresets as preset}
+						<button
+							on:click={() => selectPeriod(preset.value)}
+							class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {selectedPeriod ===
+							preset.value
+								? 'bg-[#e8be89] text-gray-900'
+								: 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+						>
+							{preset.label}
+						</button>
+					{/each}
+				</div>
+				<div class="flex items-center gap-2">
+					<span class="text-sm text-gray-500">|</span>
+					<input
+						type="date"
+						bind:value={customStartDate}
+						class="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+					/>
+					<span class="text-sm text-gray-400">to</span>
+					<input
+						type="date"
+						bind:value={customEndDate}
+						class="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+					/>
+					<button
+						on:click={applyCustomRange}
+						class="rounded-md bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-600"
+					>
+						Apply
+					</button>
+				</div>
+			</div>
+			{#if selectedPeriod === 'custom'}
+				<p class="mt-2 text-xs text-gray-500">Showing data for: {getPeriodLabel()}</p>
+			{/if}
+		</Card>
 	</div>
 
 	{#if error}
