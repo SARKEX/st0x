@@ -492,3 +492,29 @@ export function analyzeTrade(
 		...parsed
 	};
 }
+
+// ============================================================================
+// RAINDEX URL UTILITIES
+// ============================================================================
+
+const RAINDEX_BASE_URL = 'https://v5.raindex.finance';
+
+/**
+ * Generate a Raindex URL for an order
+ */
+export function getRaindexOrderUrl(
+	chainId: number,
+	orderbookId: string,
+	orderHash: string
+): string {
+	return `${RAINDEX_BASE_URL}/orders/${chainId}-${orderbookId}-${orderHash}`;
+}
+
+/**
+ * Generate a Raindex URL for a vault
+ */
+export function getRaindexVaultUrl(vaultId: string): string {
+	// Ensure vaultId has 0x prefix
+	const normalizedId = vaultId.startsWith('0x') ? vaultId : `0x${vaultId}`;
+	return `${RAINDEX_BASE_URL}/vaults/${normalizedId}`;
+}

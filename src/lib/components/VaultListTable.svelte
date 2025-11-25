@@ -8,6 +8,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import { tableStyles } from '$lib/styles/table';
+	import { getRaindexOrderUrl } from '$lib/utils/tokenMath';
 	// Consolidated table: use native thead/tr/th/td
 
 	export let query: CreateInfiniteQueryResult<
@@ -95,9 +96,7 @@
 									<!-- Mobile: last 6 only -->
 									<div class="sm:hidden">
 										<ExternalLink
-											href={`https://v5.raindex.finance/orders/${
-												$currentNetwork.id
-											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+											href={getRaindexOrderUrl($currentNetwork.id, vault.orderbook.id.toString(), order.orderHash.toString())}
 											label={order.orderHash.toString()}
 											truncate={{ start: 0, end: 6 }}
 											className="text-blue-400 hover:text-blue-300"
@@ -106,9 +105,7 @@
 									<!-- Desktop: 6...4 -->
 									<div class="hidden sm:block">
 										<ExternalLink
-											href={`https://v5.raindex.finance/orders/${
-												$currentNetwork.id
-											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+											href={getRaindexOrderUrl($currentNetwork.id, vault.orderbook.id.toString(), order.orderHash.toString())}
 											label={order.orderHash.toString()}
 											truncate={{ start: 6, end: 4 }}
 											className="text-blue-400 hover:text-blue-300"
@@ -121,9 +118,7 @@
 									<!-- Mobile: last 6 only -->
 									<div class="sm:hidden">
 										<ExternalLink
-											href={`https://v5.raindex.finance/orders/${
-												$currentNetwork.id
-											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+											href={getRaindexOrderUrl($currentNetwork.id, vault.orderbook.id.toString(), order.orderHash.toString())}
 											label={order.orderHash.toString()}
 											truncate={{ start: 0, end: 6 }}
 											className="text-blue-400 hover:text-blue-300"
@@ -132,9 +127,7 @@
 									<!-- Desktop: 6...4 -->
 									<div class="hidden sm:block">
 										<ExternalLink
-											href={`https://v5.raindex.finance/orders/${
-												$currentNetwork.id
-											}-${vault.orderbook.id.toString()}-${order.orderHash.toString()}`}
+											href={getRaindexOrderUrl($currentNetwork.id, vault.orderbook.id.toString(), order.orderHash.toString())}
 											label={order.orderHash.toString()}
 											truncate={{ start: 6, end: 4 }}
 											className="text-blue-400 hover:text-blue-300"

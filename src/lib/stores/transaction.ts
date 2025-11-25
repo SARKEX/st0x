@@ -17,7 +17,7 @@ import {
 	RaindexVault,
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
-import { parseFloatHex } from '$lib/utils/tokenMath';
+import { parseFloatHex, getRaindexOrderUrl, getRaindexVaultUrl } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -33,6 +33,11 @@ import {
 } from '$lib/services/orderDeployment';
 import { rainlangConfirmationModal } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
+import {
+	invalidateOrderQueries,
+	invalidateVaultQueries,
+	invalidateOrderAndVaultQueries
+} from '$lib/clients/queryClient';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
@@ -43,12 +48,13 @@ function createRaindexLink(
 	orderHashOrVaultId: string,
 	linkText = 'Manage your order on Raindex'
 ): string {
+	const url = getRaindexOrderUrl(chainId, orderbookId, orderHashOrVaultId);
 	return `
 		<a
 			target="_blank"
 			rel="noopener noreferrer"
 			class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-			href="https://v5.raindex.finance/orders/${chainId}-${orderbookId}-${orderHashOrVaultId}"
+			href="${url}"
 			data-testid="raindex-link">
 			${linkText}
 			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -374,6 +380,9 @@ const transactionStore = () => {
 			const chainId = get(currentNetwork).id;
 			const link = createRaindexLink(chainId, vault.orderbook, vault.id);
 
+			// Invalidate vault queries to refresh the UI
+			invalidateVaultQueries();
+
 			return transactionSuccess(hash, link);
 		} catch (error) {
 			// @ts-expect-error Send transaction error
@@ -381,11 +390,17 @@ const transactionStore = () => {
 		}
 	};
 
+	/**
+	 * Cancel an order: withdraw from vaults first, then deactivate the order.
+	 * This combines both operations into a single user flow.
+	 */
 	const handleRemoveOrder = async (quote: {
 		orderHash: string;
 		orderbookId?: string;
 		inputVaultId?: string;
 		outputVaultId?: string;
+		inputTokenAddress?: string;
+		outputTokenAddress?: string;
 	}) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -405,7 +420,7 @@ const transactionStore = () => {
 					orderHash: quote.orderHash as `0x${string}`,
 					owners: [$signerAddress as `0x${string}`]
 				},
-				0
+				1 // Page 1 (1-indexed)
 			);
 
 			if (ordersResult.error || !ordersResult.value) {
@@ -419,7 +434,143 @@ const transactionStore = () => {
 
 			const order = orders[0];
 
-			// Get remove calldata
+			// Step 1: Withdraw from vaults first
+			// Fetch all user vaults to find ones associated with this order
+			const vaultsResult = await client.getVaults(
+				[network.id],
+				{
+					owners: [$signerAddress as `0x${string}`],
+					hideZeroBalance: false,
+					tokens: []
+				},
+				1 // Page 1 (1-indexed)
+			);
+
+			console.log('[handleRemoveOrder] Vaults API response:', {
+				error: vaultsResult.error?.readableMsg,
+				hasValue: !!vaultsResult.value,
+				hasItems: !!vaultsResult.value?.items,
+				itemCount: vaultsResult.value?.items?.length,
+				signerAddress: $signerAddress,
+				networkId: network.id
+			});
+
+			if (!vaultsResult.error && vaultsResult.value?.items) {
+				const vaults = vaultsResult.value.items as RaindexVault[];
+
+				console.log('[handleRemoveOrder] Looking for vaults:', {
+					outputVaultId: quote.outputVaultId,
+					outputTokenAddress: quote.outputTokenAddress,
+					inputVaultId: quote.inputVaultId,
+					inputTokenAddress: quote.inputTokenAddress,
+					availableVaultIds: vaults.map((v) => ({
+						vaultId: v.vaultId.toString(),
+						vaultIdHex: `0x${v.vaultId.toString(16).padStart(64, '0')}`,
+						token: v.token?.symbol,
+						tokenAddress: v.token?.address
+					}))
+				});
+
+				// Find vaults for this order
+				// Note: vaultId alone doesn't uniquely identify a vault - need (vaultId + token)
+				// Same vaultId can hold different tokens (e.g., input vault has USDC, output vault has tSTOX)
+				const vaultsToWithdraw: RaindexVault[] = [];
+				const addedVaultKeys = new Set<string>(); // Track by vaultId + token
+
+				if (quote.outputVaultId) {
+					// Find vault matching vaultId AND output token
+					const outputVault = vaults.find((v) => {
+						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
+						const vaultIdMatches =
+							v.vaultId.toString() === quote.outputVaultId ||
+							vaultIdHex === quote.outputVaultId?.toLowerCase();
+						const tokenMatches =
+							v.token?.address?.toLowerCase() === quote.outputTokenAddress?.toLowerCase();
+						return vaultIdMatches && tokenMatches;
+					});
+					if (outputVault) {
+						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
+						if (!addedVaultKeys.has(key)) {
+							vaultsToWithdraw.push(outputVault);
+							addedVaultKeys.add(key);
+						}
+					}
+				}
+				if (quote.inputVaultId) {
+					// Find vault matching vaultId AND input token
+					const inputVault = vaults.find((v) => {
+						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
+						const vaultIdMatches =
+							v.vaultId.toString() === quote.inputVaultId ||
+							vaultIdHex === quote.inputVaultId?.toLowerCase();
+						const tokenMatches =
+							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
+						return vaultIdMatches && tokenMatches;
+					});
+					if (inputVault) {
+						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
+						if (!addedVaultKeys.has(key)) {
+							vaultsToWithdraw.push(inputVault);
+							addedVaultKeys.add(key);
+						}
+					}
+				}
+
+				console.log('[handleRemoveOrder] Found vaults to withdraw:', vaultsToWithdraw.length);
+				console.log(
+					'[handleRemoveOrder] Vault details:',
+					vaultsToWithdraw.map((v) => ({
+						vaultId: v.vaultId.toString(),
+						vaultIdHex: `0x${v.vaultId.toString(16).padStart(64, '0')}`,
+						token: v.token?.symbol,
+						tokenAddress: v.token?.address,
+						balanceHex: v.balance.asHex(),
+						orderbook: v.orderbook
+					}))
+				);
+
+				// Filter to only vaults with non-zero balance
+				// Compare hex representation to avoid Float class instance mismatch
+				const ZERO_FLOAT_HEX =
+					'0x0000000000000000000000000000000000000000000000000000000000000000';
+				const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
+					const balanceHex = vault.balance.asHex().toLowerCase();
+					console.log('[handleRemoveOrder] Vault balance check:', {
+						vaultId: vault.vaultId.toString(),
+						token: vault.token?.symbol,
+						balanceHex,
+						isZero: balanceHex === ZERO_FLOAT_HEX
+					});
+					return balanceHex !== ZERO_FLOAT_HEX;
+				});
+
+				// Withdraw from each vault with balance
+				for (let i = 0; i < vaultsWithBalance.length; i++) {
+					const vault = vaultsWithBalance[i];
+
+					const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
+					if (vaultWithdrawCalldata.error) {
+						throw new Error(vaultWithdrawCalldata.error.readableMsg);
+					}
+
+					awaitWalletConfirmation(
+						`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`
+					);
+
+					const withdrawHash = await sendTransaction(config, {
+						data: vaultWithdrawCalldata.value as Hex,
+						to: vault.orderbook as `0x${string}`
+					});
+
+					awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
+
+					await waitForTransactionReceipt(config, {
+						hash: withdrawHash as `0x${string}`
+					});
+				}
+			}
+
+			// Step 2: Deactivate/remove the order
 			const removeCalldata = order.getRemoveCalldata();
 			if (removeCalldata.error) {
 				throw new Error(removeCalldata.error.readableMsg);
@@ -427,7 +578,6 @@ const transactionStore = () => {
 
 			awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
 
-			// Send transaction to remove the order
 			const hash = await sendTransaction(config, {
 				data: removeCalldata.value as Hex,
 				to: order.orderbook as `0x${string}`
@@ -440,6 +590,9 @@ const transactionStore = () => {
 			});
 
 			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
+
+			// Invalidate both order and vault queries to refresh the UI
+			invalidateOrderAndVaultQueries();
 
 			return transactionSuccess(hash, link);
 		} catch (error: unknown) {
@@ -464,6 +617,8 @@ const transactionStore = () => {
 		orderbookId?: string;
 		inputVaultId?: string;
 		outputVaultId?: string;
+		inputTokenAddress?: string;
+		outputTokenAddress?: string;
 		isFilled?: boolean;
 	}) => {
 		const config = get(wagmiConfig);
@@ -491,7 +646,7 @@ const transactionStore = () => {
 						orderHash: quote.orderHash as `0x${string}`,
 						owners: [$signerAddress as `0x${string}`]
 					},
-					0
+					1 // Page 1 (1-indexed)
 				);
 
 				if (ordersResult.error || !ordersResult.value) {
@@ -536,38 +691,79 @@ const transactionStore = () => {
 					hideZeroBalance: false,
 					tokens: []
 				},
-				0
+				1 // Page 1 (1-indexed)
 			);
 
-			if (vaultsResult.error || !vaultsResult.value) {
+			if (vaultsResult.error || !vaultsResult.value?.items) {
 				throw new Error(vaultsResult.error?.readableMsg || 'Failed to fetch vaults');
 			}
 
-			const vaults = [...(vaultsResult.value as unknown as Iterable<RaindexVault>)];
+			const vaults = vaultsResult.value.items as RaindexVault[];
 
 			// Determine which vaults to withdraw from
+			// Note: vaultId alone doesn't uniquely identify a vault - need (vaultId + token)
 			const vaultsToWithdraw: RaindexVault[] = [];
+			const addedVaultKeys = new Set<string>(); // Track by vaultId + token
 
 			if (isFilled) {
 				// Filled order: only withdraw from input vault (output is empty)
 				if (quote.inputVaultId) {
-					const inputVault = vaults.find((v) => v.vaultId.toString() === quote.inputVaultId);
+					// Find vault matching vaultId AND input token
+					const inputVault = vaults.find((v) => {
+						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
+						const vaultIdMatches =
+							v.vaultId.toString() === quote.inputVaultId ||
+							vaultIdHex === quote.inputVaultId?.toLowerCase();
+						const tokenMatches =
+							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
+						return vaultIdMatches && tokenMatches;
+					});
 					if (inputVault) {
-						vaultsToWithdraw.push(inputVault);
+						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
+						if (!addedVaultKeys.has(key)) {
+							vaultsToWithdraw.push(inputVault);
+							addedVaultKeys.add(key);
+						}
 					}
 				}
 			} else {
 				// Not filled: withdraw from both vaults
 				if (quote.outputVaultId) {
-					const outputVault = vaults.find((v) => v.vaultId.toString() === quote.outputVaultId);
+					// Find vault matching vaultId AND output token
+					const outputVault = vaults.find((v) => {
+						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
+						const vaultIdMatches =
+							v.vaultId.toString() === quote.outputVaultId ||
+							vaultIdHex === quote.outputVaultId?.toLowerCase();
+						const tokenMatches =
+							v.token?.address?.toLowerCase() === quote.outputTokenAddress?.toLowerCase();
+						return vaultIdMatches && tokenMatches;
+					});
 					if (outputVault) {
-						vaultsToWithdraw.push(outputVault);
+						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
+						if (!addedVaultKeys.has(key)) {
+							vaultsToWithdraw.push(outputVault);
+							addedVaultKeys.add(key);
+						}
 					}
 				}
 				if (quote.inputVaultId) {
-					const inputVault = vaults.find((v) => v.vaultId.toString() === quote.inputVaultId);
+					// Find vault matching vaultId AND input token
+					const inputVault = vaults.find((v) => {
+						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
+						const vaultIdMatches =
+							v.vaultId.toString() === quote.inputVaultId ||
+							vaultIdHex === quote.inputVaultId?.toLowerCase();
+						const tokenMatches =
+							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
+						return vaultIdMatches && tokenMatches;
+					});
 					if (inputVault) {
-						vaultsToWithdraw.push(inputVault);
+						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
+						if (!addedVaultKeys.has(key)) {
+							vaultsToWithdraw.push(inputVault);
+							addedVaultKeys.add(key);
+						}
 					}
 				}
 			}
@@ -577,21 +773,20 @@ const transactionStore = () => {
 			}
 
 			// Filter to only vaults with non-zero balance
-			const { Float } = await import('@rainlanguage/float');
-			const zeroFloat = Float.fromHex(
-				'0x0000000000000000000000000000000000000000000000000000000000000000'
-			);
-
+			// Compare hex representation to avoid Float class instance mismatch
+			const ZERO_FLOAT_HEX =
+				'0x0000000000000000000000000000000000000000000000000000000000000000';
 			const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
-				if (zeroFloat.error || !zeroFloat.value) return true; // Include if we can't check
-				const isZero = vault.balance.eq(zeroFloat.value);
-				return isZero.error || !isZero.value; // Include if not zero or if check failed
+				const balanceHex = vault.balance.asHex().toLowerCase();
+				return balanceHex !== ZERO_FLOAT_HEX;
 			});
 
 			if (vaultsWithBalance.length === 0) {
 				// No vaults have balance - nothing to withdraw
 				const chainId = network.id;
 				const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+				// Still invalidate queries in case order was deactivated
+				invalidateOrderAndVaultQueries();
 				return transactionSuccess('0x' as Hash, `No balance to withdraw. ${link}`);
 			}
 
@@ -623,6 +818,9 @@ const transactionStore = () => {
 
 			const chainId = network.id;
 			const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+
+			// Invalidate both order and vault queries to refresh the UI
+			invalidateOrderAndVaultQueries();
 
 			return transactionSuccess(lastHash, link);
 		} catch (error: unknown) {

@@ -102,18 +102,17 @@ export function classifyOrderType(rainlang: string | undefined): OrderType | nul
 		return null; // Return null to indicate this should be filtered out
 	}
 
-	// DCA - contains the min-amount tracking pattern
-	// Look for the characteristic DCA pattern with amount tracking
-	const dcaPattern =
-		/min-amount:.*\n.*:ensure\(greater-than-or-equal-to\(output-vault-decrease\(\).*min-amount\).*\n.*used:.*get\(hash\(order-hash\(\)/s;
-	if (dcaPattern.test(rainlang)) {
+	// Extract the handle-io section content
+	const handleIoMatch = rainlang.match(/\/\*\s*1\.\s*handle-io\s*\*\/\s*([\s\S]*?)(?:\/\*\s*2\.|$)/);
+	const handleIoContent = handleIoMatch?.[1]?.trim() ?? '';
+
+	// DCA - handle-io section starts with "min-amount:"
+	if (handleIoContent.startsWith('min-amount:')) {
 		return 'dca';
 	}
 
-	// Limit Order - handle-io section is empty (just a colon after the comment)
-	// Pattern: /* 1. handle-io */ followed by newline and just ":"
-	const limitPattern = /\/\*\s*1\.\s*handle-io\s*\*\/\s*\n\s*:/;
-	if (limitPattern.test(rainlang)) {
+	// Limit Order - handle-io section is empty (just ":;" or similar)
+	if (handleIoContent === ':;' || handleIoContent === ':') {
 		return 'limit';
 	}
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { connected, signerAddress } from 'svelte-wagmi';
+	import { connected, signerAddress, wagmiConfig } from 'svelte-wagmi';
 	import { currentNetwork, sfts } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
@@ -13,8 +13,10 @@
 	import { truncateAddress } from '$lib/utils/format';
 	import { gridStyles } from '$lib/styles/utils';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { formatUnits } from 'viem';
+	import { formatUnits, erc20Abi } from 'viem';
+	import { readContract } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
+	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { SgVault, RaindexVault, SgTrade } from '@rainlanguage/orderbook';
@@ -22,9 +24,9 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
-	import { parseFloatHex } from '$lib/utils/tokenMath';
+	import { parseFloatHex, getRaindexVaultUrl } from '$lib/utils/tokenMath';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { createTokenOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import transactionStore from '$lib/stores/transaction';
@@ -34,6 +36,24 @@
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+
+	// Set of valid token addresses (asset tokens + payment tokens) for filtering
+	$: validTokenAddresses = (() => {
+		if (!$currentNetwork) return new Set<string>();
+		const addresses = new Set<string>();
+		// Add asset tokens for current network
+		for (const token of TOKENS) {
+			if (token.chainId === $currentNetwork.chainId) {
+				addresses.add(token.address.toLowerCase());
+			}
+		}
+		// Add payment tokens for current network
+		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
+		for (const token of paymentTokens) {
+			addresses.add(token.address.toLowerCase());
+		}
+		return addresses;
+	})();
 
 	let isNetworkLoading = false;
 	const DASHBOARD_TABS = [
@@ -55,6 +75,10 @@
 	let currentOrdersPage = 1;
 	let currentVaultsPage = 1;
 	const ITEMS_PER_PAGE = 10;
+
+	// Dust threshold for vaults (in token units)
+	const DUST_THRESHOLD = 0.0001;
+	let showDustVaults = false;
 
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
@@ -164,9 +188,52 @@
 		}
 	});
 
+	// Query USDC wallet balance
+	$: usdcBalanceQuery = createQuery({
+		queryKey: ['usdcWalletBalance', $signerAddress, $currentNetwork?.chainId],
+		enabled: !!($connected && $signerAddress && $currentNetwork && $wagmiConfig),
+		queryFn: async () => {
+			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
+			if (paymentTokens.length === 0 || !$signerAddress) return [];
+
+			const balances: {
+				id: string;
+				address: string;
+				name: string;
+				symbol: string;
+				walletBalance: bigint;
+				decimals: number;
+			}[] = [];
+
+			for (const token of paymentTokens) {
+				try {
+					const balance = await readContract($wagmiConfig, {
+						abi: erc20Abi,
+						address: token.address as `0x${string}`,
+						functionName: 'balanceOf',
+						args: [$signerAddress as `0x${string}`]
+					});
+					balances.push({
+						id: token.address,
+						address: token.address,
+						name: token.name,
+						symbol: token.symbol,
+						walletBalance: balance as bigint,
+						decimals: token.decimals
+					});
+				} catch (e) {
+					console.error(`Failed to fetch balance for ${token.symbol}:`, e);
+				}
+			}
+
+			return balances;
+		}
+	});
+
 	// Combined portfolio: wallet + vaults
 	$: portfolioHoldings = (() => {
 		const walletHoldings = $walletHoldingsQuery?.data ?? [];
+		const usdcHoldings = $usdcBalanceQuery?.data ?? [];
 		const vaultPages = $vaultsListQuery?.data?.pages ?? [];
 		const allVaults = vaultPages.flatMap((p) => p.vaults ?? []);
 
@@ -184,8 +251,16 @@
 			}
 		>();
 
-		// Add wallet holdings
+		// Add wallet holdings (SFT tokens)
 		for (const h of walletHoldings) {
+			holdingsMap.set(h.address.toLowerCase(), {
+				...h,
+				vaultBalance: 0n
+			});
+		}
+
+		// Add USDC/payment token wallet holdings
+		for (const h of usdcHoldings) {
 			holdingsMap.set(h.address.toLowerCase(), {
 				...h,
 				vaultBalance: 0n
@@ -218,8 +293,9 @@
 			}
 		}
 
-		// Convert to array with prices
+		// Convert to array with prices, filtering to only valid tokens
 		const result = Array.from(holdingsMap.values())
+			.filter((h) => validTokenAddresses.has(h.address.toLowerCase()))
 			.map((h) => {
 				const totalBalance = h.walletBalance + h.vaultBalance;
 				const quote = findQuoteForSymbol(h.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
@@ -254,8 +330,8 @@
 		0
 	);
 
-	// Orders: Fetch orderbook quotes for all ST0x tokens
-	$: orderbookQuotesQuery = createTokenOrderbookQuotesQuery($currentNetwork, null); // null = all tokens
+	// Orders: Fetch orderbook quotes for all tokens
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 
 	// Trade activity for market orders
 	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork);
@@ -273,7 +349,7 @@
 
 	// Type for unified order display
 	type DisplayOrder = {
-		type: 'limit' | 'market';
+		type: 'limit' | 'dca' | 'custom' | 'market';
 		orderHash: string;
 		timestamp: number;
 		side: 'Buy' | 'Sell';
@@ -310,9 +386,11 @@
 					isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18
 				);
 				const isFilled = maxOutputBigInt === 0n;
+				// Use the classified order type, defaulting to 'limit' if not set
+				const orderType = quote.orderType ?? 'limit';
 
 				displayOrders.push({
-					type: 'limit',
+					type: orderType === 'dynamic-spread' ? 'custom' : orderType,
 					orderHash: quote.orderHash,
 					timestamp: quote.sgOrder?.timestampAdded ? Number(quote.sgOrder.timestampAdded) : 0,
 					side: isBuy ? 'Buy' : 'Sell',
@@ -375,9 +453,10 @@
 			});
 		}
 
-		// Sort by timestamp descending
-		displayOrders.sort((a, b) => b.timestamp - a.timestamp);
-		return displayOrders;
+		// Filter to only valid tokens, then sort by timestamp descending
+		return displayOrders
+			.filter((o) => validTokenAddresses.has(o.tokenAddress.toLowerCase()))
+			.sort((a, b) => b.timestamp - a.timestamp);
 	})();
 
 	$: paginatedOrders = allOrders.slice(
@@ -386,10 +465,16 @@
 	);
 	$: totalOrderPages = Math.ceil(allOrders.length / ITEMS_PER_PAGE);
 
-	// Vaults: sorted with default vault first for each token
+	// Vaults: sorted with default vault first for each token, filtered to valid tokens only
 	$: sortedVaults = (() => {
 		const vaultPages = $vaultsListQuery?.data?.pages ?? [];
-		const allVaults = vaultPages.flatMap((p) => p.vaults ?? []).filter((v) => v?.vault?.token);
+		const allVaults = vaultPages
+			.flatMap((p) => p.vaults ?? [])
+			.filter((v) => v?.vault?.token)
+			.filter((v) => {
+				const tokenAddr = v.vault.token?.address?.toLowerCase() ?? v.vault.token?.id?.toLowerCase();
+				return tokenAddr && validTokenAddresses.has(tokenAddr);
+			});
 
 		// Sort: default vault (0x1) first, then by balance descending
 		return allVaults.sort((a, b) => {
@@ -409,13 +494,20 @@
 		});
 	})();
 
-	$: paginatedVaults = sortedVaults.slice(
-		(currentVaultsPage - 1) * ITEMS_PER_PAGE,
-		currentVaultsPage * ITEMS_PER_PAGE
-	);
-	$: totalVaultPages = Math.ceil(sortedVaults.length / ITEMS_PER_PAGE);
+	// Split vaults into default and non-default
+	$: defaultVaults = sortedVaults.filter((v) => v.vault.vaultId === DEFAULT_VAULT_ID);
+	$: allNonDefaultVaults = sortedVaults.filter((v) => v.vault.vaultId !== DEFAULT_VAULT_ID);
+	$: nonDefaultVaults = showDustVaults
+		? allNonDefaultVaults
+		: allNonDefaultVaults.filter((v) => {
+				const balance = BigInt(v.vault.balance);
+				const decimals = Number(v.vault.token?.decimals ?? 18);
+				const balanceNum = parseFloat(formatUnits(balance, decimals));
+				return balanceNum >= DUST_THRESHOLD;
+			});
+	$: dustVaultsCount = allNonDefaultVaults.length - nonDefaultVaults.length;
 
-	$: activeOrdersCount = allOrders.filter((o) => o.type === 'limit' && o.isActive).length;
+	$: activeOrdersCount = allOrders.filter((o) => o.type !== 'market' && o.isActive).length;
 	$: activeVaultsCount = sortedVaults.filter((v) => BigInt(v.vault.balance) > 0n).length;
 </script>
 
@@ -494,7 +586,7 @@
 				<Section>
 					<h2 class="mb-4 text-lg font-semibold">Your Holdings</h2>
 					<p class="mb-4 text-sm text-gray-400">Combined balance across wallet and all vaults</p>
-					{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading}
+					{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
 						<LoadingSpinner variant="inline" size="md" text="Loading holdings..." />
 					{:else if portfolioHoldings.length > 0}
 						<div class="overflow-x-auto">
@@ -601,15 +693,17 @@
 												<td class="py-3 text-gray-500">—</td>
 											</tr>
 										{:else}
-											<!-- Limit Order Row -->
+											<!-- Limit/DCA/Custom Order Row -->
 											{@const quote = order.quote}
 											{@const maxOutputBigInt = quote ? parseFloatHex(quote.maxOutput, order.side === 'Buy' ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18) : 0n}
 											{@const tokenDecimals = quote ? (order.side === 'Buy' ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18) : 18}
 											{@const remainingAmount = order.isFilled ? '0' : maxOutputBigInt > 0n ? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3) : '—'}
 											{@const orderbookId = quote?.orderbookId || ''}
+											{@const typeLabel = order.type === 'dca' ? 'DCA' : order.type === 'custom' ? 'Custom' : 'Limit'}
+											{@const typeColorClass = order.type === 'dca' ? 'bg-orange-500/20 text-orange-400' : order.type === 'custom' ? 'bg-pink-500/20 text-pink-400' : 'bg-blue-500/20 text-blue-400'}
 											<tr class="border-b border-white/5 hover:bg-white/5">
 												<td class="py-3 pr-4">
-													<span class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400">Limit</span>
+													<span class={`rounded px-2 py-0.5 text-xs font-medium ${typeColorClass}`}>{typeLabel}</span>
 												</td>
 												<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
 												<td class="py-3 pr-4">
@@ -674,8 +768,6 @@
 			<!-- Vaults Tab -->
 			{:else if activeTab === 'vaults'}
 				<Section>
-					<h2 class="mb-4 text-lg font-semibold">Your Vaults</h2>
-					<p class="mb-4 text-sm text-gray-400">Default vault (0x1) shown first for each token</p>
 					{#if $vaultsListQuery.isLoading}
 						<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
 					{:else if $vaultsListQuery.isError}
@@ -683,70 +775,132 @@
 					{:else if sortedVaults.length === 0}
 						<EmptyState description="No vaults found." />
 					{:else}
-						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
-								<thead class="border-b border-white/10">
-									<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
-										<th class="pb-3 pr-4 font-medium">Token</th>
-										<th class="pb-3 pr-4 font-medium">Vault ID</th>
-										<th class="pb-3 pr-4 font-medium">Balance</th>
-										<th class="pb-3 pr-4 font-medium">Orders</th>
-										<th class="pb-3 font-medium">Actions</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each paginatedVaults as { vault, raindexVault }}
-										{@const balance = BigInt(vault.balance)}
-										{@const decimals = Number(vault.token.decimals ?? 18)}
-										{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
-										{@const isDefault = vault.vaultId === DEFAULT_VAULT_ID}
-										{@const ordersCount = (vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
-										<tr class="border-b border-white/5 hover:bg-white/5">
-											<td class="py-3 pr-4">
-												<div class="flex items-center gap-2">
-													<span class="text-gray-200">{vault.token.symbol}</span>
-													{#if isDefault}
-														<span class="rounded bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-medium text-yellow-400">Default</span>
-													{/if}
-												</div>
-											</td>
-											<td class="py-3 pr-4">
-												<a
-													href={`https://v5.raindex.finance/vaults/${vault.vaultId}`}
-													target="_blank"
-													rel="noopener noreferrer"
-													class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-													title={vault.vaultId}
-												>
-													{vault.vaultId.slice(0, 10)}...{vault.vaultId.slice(-6)}
-												</a>
-											</td>
-											<td class="py-3 pr-4 text-gray-300">{balanceNum.toFixed(4)} {vault.token.symbol}</td>
-											<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
-											<td class="py-3">
-												{#if balance > 0n}
-													<Button variant="secondary" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
-												{:else}
-													<span class="text-gray-500">—</span>
-												{/if}
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
+						<!-- Default Vaults Section -->
+						<div class="mb-8">
+							<h2 class="mb-2 text-lg font-semibold">Default Vaults</h2>
+							<p class="mb-4 text-sm text-gray-400">Your primary vault for each token</p>
+							{#if defaultVaults.length === 0}
+								<div class="py-4 text-sm text-gray-500">No default vaults found.</div>
+							{:else}
+								<div class="overflow-x-auto">
+									<table class="w-full text-sm">
+										<thead class="border-b border-white/10">
+											<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
+												<th class="pb-3 pr-4 font-medium">Token</th>
+												<th class="pb-3 pr-4 font-medium">Balance</th>
+												<th class="pb-3 pr-4 font-medium">Orders</th>
+												<th class="pb-3 font-medium">Actions</th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each defaultVaults as { vault, raindexVault }}
+												{@const balance = BigInt(vault.balance)}
+												{@const decimals = Number(vault.token.decimals ?? 18)}
+												{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
+												{@const ordersCount = (vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
+												<tr class="border-b border-white/5 hover:bg-white/5">
+													<td class="py-3 pr-4">
+														<div class="flex items-center gap-2">
+															<span class="text-gray-200">{vault.token.symbol}</span>
+															<a
+																href={getRaindexVaultUrl(vault.vaultId)}
+																target="_blank"
+																rel="noopener noreferrer"
+																class="text-blue-400 hover:text-blue-300"
+																title="View on Raindex"
+															>
+																<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+																</svg>
+															</a>
+														</div>
+													</td>
+													<td class="py-3 pr-4 text-gray-300">{balanceNum.toFixed(4)} {vault.token.symbol}</td>
+													<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
+													<td class="py-3">
+														{#if balance > 0n}
+															<Button variant="secondary" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
+														{:else}
+															<span class="text-gray-500">—</span>
+														{/if}
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{/if}
 						</div>
-						<!-- Pagination -->
-						{#if totalVaultPages > 1}
-							<div class="mt-4 flex items-center justify-center gap-2">
-								{#each Array.from({ length: totalVaultPages }, (_, i) => i + 1) as pageNum}
-									<button
-										type="button"
-										class={`h-8 w-8 rounded-md text-sm font-medium transition ${pageNum === currentVaultsPage ? 'bg-blue-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
-										on:click={() => { currentVaultsPage = pageNum; }}
-									>
-										{pageNum}
-									</button>
-								{/each}
+
+						<!-- Non-Default Vaults Section -->
+						{#if allNonDefaultVaults.length > 0}
+							<div>
+								<div class="mb-4 flex items-center justify-between">
+									<div>
+										<h2 class="text-lg font-semibold">Other Vaults</h2>
+										<p class="text-sm text-gray-400">Additional vaults with custom IDs</p>
+									</div>
+									{#if dustVaultsCount > 0 || showDustVaults}
+										<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-400">
+											<input
+												type="checkbox"
+												bind:checked={showDustVaults}
+												class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+											/>
+											Show dust ({dustVaultsCount} vault{dustVaultsCount === 1 ? '' : 's'})
+										</label>
+									{/if}
+								</div>
+								{#if nonDefaultVaults.length > 0}
+									<div class="overflow-x-auto">
+										<table class="w-full text-sm">
+											<thead class="border-b border-white/10">
+												<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
+													<th class="pb-3 pr-4 font-medium">Token</th>
+													<th class="pb-3 pr-4 font-medium">Vault ID</th>
+													<th class="pb-3 pr-4 font-medium">Balance</th>
+													<th class="pb-3 pr-4 font-medium">Orders</th>
+													<th class="pb-3 font-medium">Actions</th>
+												</tr>
+											</thead>
+											<tbody>
+												{#each nonDefaultVaults as { vault, raindexVault }}
+													{@const balance = BigInt(vault.balance)}
+													{@const decimals = Number(vault.token.decimals ?? 18)}
+													{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
+													{@const ordersCount = (vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
+													<tr class="border-b border-white/5 hover:bg-white/5">
+														<td class="py-3 pr-4">
+															<span class="text-gray-200">{vault.token.symbol}</span>
+														</td>
+														<td class="py-3 pr-4">
+															<a
+																href={getRaindexVaultUrl(vault.vaultId)}
+																target="_blank"
+																rel="noopener noreferrer"
+																class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+																title={vault.vaultId}
+															>
+																{vault.vaultId.slice(0, 10)}...{vault.vaultId.slice(-6)}
+															</a>
+														</td>
+														<td class="py-3 pr-4 text-gray-300">{balanceNum.toFixed(4)} {vault.token.symbol}</td>
+														<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
+														<td class="py-3">
+															{#if balance > 0n}
+																<Button variant="secondary" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
+															{:else}
+																<span class="text-gray-500">—</span>
+															{/if}
+														</td>
+													</tr>
+												{/each}
+											</tbody>
+										</table>
+									</div>
+								{:else}
+									<div class="py-4 text-sm text-gray-500">All other vaults contain only dust amounts.</div>
+								{/if}
 							</div>
 						{/if}
 					{/if}

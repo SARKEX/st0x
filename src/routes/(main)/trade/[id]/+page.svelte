@@ -24,7 +24,8 @@
 	import type {
 		DepthSeries,
 		TradeHistoryPoint,
-		VolumeBucket
+		VolumeBucket,
+		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
@@ -35,7 +36,9 @@
 		normalizeAddress,
 		parseFloatHex,
 		ratioToNumber,
-		toDecimal
+		toDecimal,
+		getRaindexOrderUrl,
+		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -101,7 +104,7 @@
 
 	// Type for unified order display (limit orders + market orders)
 	type DisplayOrder = {
-		type: 'limit' | 'market';
+		type: 'limit' | 'dca' | 'custom' | 'market';
 		orderHash: string;
 		timestamp: number;
 		side: 'Buy' | 'Sell';
@@ -204,8 +207,10 @@
 			// Transform to DisplayOrder
 			for (const quote of filtered) {
 				const isBuy = quote.side === 'bid';
+				// Use the classified order type, defaulting to 'limit' if not set
+				const orderType = quote.orderType ?? 'limit';
 				displayOrders.push({
-					type: 'limit',
+					type: orderType === 'dynamic-spread' ? 'custom' : orderType,
 					orderHash: quote.orderHash,
 					timestamp: quote.sgOrder?.timestampAdded ? Number(quote.sgOrder.timestampAdded) : 0,
 					side: isBuy ? 'Buy' : 'Sell',
@@ -242,6 +247,11 @@
 			}
 			return 0;
 		});
+
+		// Apply type filter
+		if (selectedOrderTypeFilter !== 'all') {
+			return displayOrders.filter((order) => order.type === selectedOrderTypeFilter);
+		}
 
 		return displayOrders;
 	})();
@@ -347,6 +357,8 @@
 
 	// Orders filter: 'my' for user's orders, 'all' for all orders
 	let selectedOrdersFilter: 'my' | 'all' = 'my';
+	// Order type filter
+	let selectedOrderTypeFilter: 'all' | 'limit' | 'dca' | 'custom' | 'market' = 'all';
 
 	// Update selected filter when connection changes
 	$: if (!$connected && selectedOrdersFilter === 'my') {
@@ -358,7 +370,7 @@
 	let currentVaultsPage = 1;
 
 	// Reset pagination when filter changes
-	$: if (selectedOrdersFilter) {
+	$: if (selectedOrdersFilter || selectedOrderTypeFilter) {
 		currentOrdersPage = 1;
 	}
 
@@ -436,7 +448,7 @@
 		return { timestamp, price, tokens, quote, side };
 	};
 	// Convert trade points to OHLC candles
-	const tradesToAveragePrices = (trades: TradeHistoryPoint[], bucketSeconds: number) => {
+	const tradesToOHLCBuckets = (trades: TradeHistoryPoint[], bucketSeconds: number): OHLCBucket[] => {
 		if (trades.length === 0) return [];
 		const buckets = new Map<number, TradeHistoryPoint[]>();
 		for (const trade of trades) {
@@ -446,19 +458,25 @@
 			}
 			buckets.get(bucketTime)!.push(trade);
 		}
-		const pricePoints: Array<{ x: number; y: number }> = [];
+		const ohlcData: OHLCBucket[] = [];
 		const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
 		for (const [time, bucketTrades] of sortedBuckets) {
 			if (bucketTrades.length === 0) continue;
-			const prices = bucketTrades.map((t) => t.price).filter((p) => Number.isFinite(p));
-			if (prices.length === 0) continue;
-			const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
-			pricePoints.push({
+			// Sort trades within bucket by timestamp
+			const sortedTrades = bucketTrades
+				.filter((t) => Number.isFinite(t.price))
+				.sort((a, b) => a.timestamp - b.timestamp);
+			if (sortedTrades.length === 0) continue;
+			const prices = sortedTrades.map((t) => t.price);
+			ohlcData.push({
 				x: time,
-				y: avgPrice
+				o: sortedTrades[0].price, // first trade = open
+				h: Math.max(...prices), // highest price
+				l: Math.min(...prices), // lowest price
+				c: sortedTrades[sortedTrades.length - 1].price // last trade = close
 			});
 		}
-		return pricePoints;
+		return ohlcData;
 	};
 	// Aggregate volume by candlestick bucket size for proper alignment
 	const tradesToVolumeBuckets = (
@@ -480,7 +498,7 @@
 	let historyRangeEndMs = 0;
 	let tradeHistoryPoints: TradeHistoryPoint[] = [];
 	let visibleTradeHistoryPoints: TradeHistoryPoint[] = [];
-	let averagePrices: Array<{ x: number; y: number }> = [];
+	let ohlcData: OHLCBucket[] = [];
 	let tradeVolumeBuckets: VolumeBucket[] = [];
 	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
 	let chartsLoading = false;
@@ -728,8 +746,8 @@
 		historyRangeStartMs = rangeStart;
 		historyRangeEndMs = rangeEnd;
 		visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
-		// Calculate average prices and volume using the same candlestick bucket size
-		averagePrices = tradesToAveragePrices(visibleTradeHistoryPoints, candleBucketSeconds);
+		// Calculate OHLC candles and volume using the same bucket size
+		ohlcData = tradesToOHLCBuckets(visibleTradeHistoryPoints, candleBucketSeconds);
 		tradeVolumeBuckets = tradesToVolumeBuckets(visibleTradeHistoryPoints, candleBucketSeconds);
 	}
 	$: orderbookDepth = (() => {
@@ -1014,7 +1032,7 @@
 				<TokenMarketCharts
 					volumeBuckets={tradeVolumeBuckets}
 					depth={orderbookDepth}
-					{averagePrices}
+					{ohlcData}
 					rangeStartMs={historyRangeStartMs}
 					rangeEndMs={historyRangeEndMs}
 					isLoading={chartsLoading}
@@ -1027,36 +1045,98 @@
 			{:else if activeOnchainTab === 'orders'}
 				<div class="mt-4">
 					<!-- Filter toggle -->
-					<div class="mb-4 flex items-center gap-2">
-						<span class="text-sm text-gray-400">Show:</span>
-						<div class="flex gap-2">
-							<button
-								type="button"
-								class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-									selectedOrdersFilter === 'my'
-										? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-										: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-								} ${!$connected ? 'cursor-not-allowed opacity-50' : ''}`}
-								disabled={!$connected}
-								on:click={() => {
-									selectedOrdersFilter = 'my';
-								}}
-							>
-								My Orders
-							</button>
-							<button
-								type="button"
-								class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-									selectedOrdersFilter === 'all'
-										? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-										: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-								}`}
-								on:click={() => {
-									selectedOrdersFilter = 'all';
-								}}
-							>
-								All Orders
-							</button>
+					<div class="mb-4 flex flex-wrap items-center gap-4">
+						<div class="flex items-center gap-2">
+							<span class="text-sm text-gray-400">Show:</span>
+							<div class="flex gap-2">
+								<button
+									type="button"
+									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+										selectedOrdersFilter === 'my'
+											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+									} ${!$connected ? 'cursor-not-allowed opacity-50' : ''}`}
+									disabled={!$connected}
+									on:click={() => {
+										selectedOrdersFilter = 'my';
+									}}
+								>
+									My Orders
+								</button>
+								<button
+									type="button"
+									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+										selectedOrdersFilter === 'all'
+											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+									}`}
+									on:click={() => {
+										selectedOrdersFilter = 'all';
+									}}
+								>
+									All Orders
+								</button>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							<span class="text-sm text-gray-400">Type:</span>
+							<div class="flex gap-2">
+								<button
+									type="button"
+									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+										selectedOrderTypeFilter === 'all'
+											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+									}`}
+									on:click={() => { selectedOrderTypeFilter = 'all'; }}
+								>
+									All
+								</button>
+								<button
+									type="button"
+									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+										selectedOrderTypeFilter === 'limit'
+											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+									}`}
+									on:click={() => { selectedOrderTypeFilter = 'limit'; }}
+								>
+									Limit
+								</button>
+								<button
+									type="button"
+									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+										selectedOrderTypeFilter === 'dca'
+											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+									}`}
+									on:click={() => { selectedOrderTypeFilter = 'dca'; }}
+								>
+									DCA
+								</button>
+								<button
+									type="button"
+									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+										selectedOrderTypeFilter === 'market'
+											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+									}`}
+									on:click={() => { selectedOrderTypeFilter = 'market'; }}
+								>
+									Market
+								</button>
+								<button
+									type="button"
+									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+										selectedOrderTypeFilter === 'custom'
+											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+									}`}
+									on:click={() => { selectedOrderTypeFilter = 'custom'; }}
+								>
+									Custom
+								</button>
+							</div>
 						</div>
 					</div>
 
@@ -1204,12 +1284,24 @@
 											{@const isMyOrder =
 												orderOwner.toLowerCase() === $signerAddress?.toLowerCase()}
 											{@const isActive = quote?.sgOrder?.active ?? true}
+											{@const typeLabel =
+												order.type === 'dca'
+													? 'DCA'
+													: order.type === 'custom'
+														? 'Custom'
+														: 'Limit'}
+											{@const typeClass =
+												order.type === 'dca'
+													? 'bg-green-500/20 text-green-400'
+													: order.type === 'custom'
+														? 'bg-yellow-500/20 text-yellow-400'
+														: 'bg-blue-500/20 text-blue-400'}
 											<tr class="border-b border-white/5 hover:bg-white/5">
 												<td class="py-3 pr-4">
 													<span
-														class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400"
+														class={`rounded px-2 py-0.5 text-xs font-medium ${typeClass}`}
 													>
-														Limit
+														{typeLabel}
 													</span>
 												</td>
 												<td class="py-3 pr-4">
@@ -1252,7 +1344,7 @@
 												<td class="py-3 pr-4">
 													{#if quote}
 														<a
-															href={`https://sdk.raindex.finance/v5/#/${$currentNetwork?.raindexNetworkSlug}/orderbook/${orderbookId}/order/${quote.orderHash}`}
+															href={getRaindexOrderUrl($currentNetwork?.id ?? 0, orderbookId, quote.orderHash)}
 															target="_blank"
 															rel="noopener noreferrer"
 															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
@@ -1406,7 +1498,7 @@
 											{#each paginatedVaults as vault}
 												{@const balance = vaultBalanceToBigInt(vault)}
 												{@const vaultIdHex = vault.vaultId.toString(16).padStart(64, '0')}
-												{@const raindexUrl = `https://v5.raindex.finance/vaults/0x${vaultIdHex}`}
+												{@const raindexUrl = getRaindexVaultUrl(vaultIdHex)}
 												<div
 													class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
 												>

@@ -3,7 +3,7 @@
 	import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import type { DepthSeries, VolumeBucket } from '$lib/components/charts/token-chart-types';
+	import type { DepthSeries, VolumeBucket, OHLCBucket } from '$lib/components/charts/token-chart-types';
 
 	type ChartInstance = {
 		destroy: () => void;
@@ -37,7 +37,7 @@
 	export let depth: DepthSeries = { bids: [], asks: [] };
 	export let isLoading = false;
 	export let error: string | null = null;
-	export let averagePrices: Array<{ x: number; y: number }> = [];
+	export let ohlcData: OHLCBucket[] = [];
 	export let rangeStartMs: number | null = null;
 	export let rangeEndMs: number | null = null;
 	export let historyRange: HistoryRangeKey = '7D';
@@ -146,6 +146,10 @@
 			await loadScript(
 				'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js'
 			);
+			// Load financial chart plugin for OHLC/candlestick
+			await loadScript(
+				'https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js'
+			);
 			const chartGlobal = (window as ChartJsWindow).Chart ?? null;
 			if (!chartGlobal) {
 				throw new Error('Chart.js global not found');
@@ -202,16 +206,22 @@
 		const ctx = historyCanvas.getContext('2d');
 		if (!ctx) return;
 
-		const priceLineData = [...averagePrices]
-			.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+		// Prepare OHLC candlestick data
+		const candleData = [...ohlcData]
+			.filter(
+				(candle) =>
+					Number.isFinite(candle.x) &&
+					Number.isFinite(candle.o) &&
+					Number.isFinite(candle.h) &&
+					Number.isFinite(candle.l) &&
+					Number.isFinite(candle.c)
+			)
 			.sort((a, b) => a.x - b.x)
-			// Ensure all timestamps are treated as UTC milliseconds since epoch
-			.map((point) => ({ ...point, x: Math.trunc(point.x) }));
+			.map((candle) => ({ ...candle, x: Math.trunc(candle.x) }));
 
 		const volumeData = volumeBuckets
 			.filter((bucket) => Number.isFinite(bucket.start) && Number.isFinite(bucket.tokens))
 			.sort((a, b) => a.start - b.start)
-			// Ensure all timestamps are treated as UTC milliseconds since epoch
 			.map((bucket) => ({ x: Math.trunc(bucket.start), y: bucket.tokens }));
 
 		const hasExplicitStart = typeof rangeStartMs === 'number' && Number.isFinite(rangeStartMs);
@@ -247,7 +257,15 @@
 			timeStep = 6;
 		}
 
-		const hasPriceData = priceLineData.length > 0;
+		const hasCandleData = candleData.length > 0;
+
+		// Calculate price range with padding (20% below lowest, 10% above highest)
+		const priceLows = candleData.map((c) => c.l);
+		const priceHighs = candleData.map((c) => c.h);
+		const minPrice = priceLows.length ? Math.min(...priceLows) : 0;
+		const maxPrice = priceHighs.length ? Math.max(...priceHighs) : 100;
+		const priceAxisMin = Math.max(0, minPrice * 0.8);
+		const priceAxisMax = maxPrice * 1.1;
 
 		if (historyChart) {
 			historyChart.destroy();
@@ -255,7 +273,7 @@
 		}
 
 		historyChart = new ChartCtor(ctx, {
-			type: 'scatter',
+			type: 'candlestick',
 			data: { datasets: [] },
 			options: {
 				responsive: true,
@@ -268,14 +286,13 @@
 						callbacks: {
 							title: (
 								items: Array<{
-									raw?: { x?: number; y?: number };
+									raw?: { x?: number; y?: number; o?: number; h?: number; l?: number; c?: number };
 									parsed?: { x?: number; y?: number };
 								}>
 							) => {
 								if (items.length === 0) return '';
 								const time = items[0].raw?.x ?? items[0].parsed?.x;
 								if (!time) return '';
-								// Convert UTC milliseconds to local timezone
 								const date = new Date(Math.trunc(time));
 								return date.toLocaleString('en-US', {
 									year: 'numeric',
@@ -288,21 +305,18 @@
 								});
 							},
 							label: (context: {
-								dataset?: { candlestick?: boolean; label?: string };
+								dataset?: { label?: string };
 								raw?: { o?: number; h?: number; l?: number; c?: number; x?: number; y?: number };
 								parsed?: { x?: number; y?: number };
 							}) => {
-								if (context.dataset?.candlestick) {
-									const candle = context.raw as
-										| { o?: number; h?: number; l?: number; c?: number }
-										| undefined;
-									if (!candle?.c || !candle?.o) return '';
-									const direction = candle.c >= candle.o ? '▲' : '▼';
-									return `${direction} O:${candle.o.toFixed(2)} H:${candle.h?.toFixed(
-										2
-									)} L:${candle.l?.toFixed(2)} C:${candle.c.toFixed(2)}`;
+								const label = context.dataset?.label || '';
+								// Check if this is OHLC data
+								const candle = context.raw;
+								if (candle && 'o' in candle && 'c' in candle) {
+									const direction = (candle.c ?? 0) >= (candle.o ?? 0) ? '▲' : '▼';
+									return `${direction} O:$${candle.o?.toFixed(2)} H:$${candle.h?.toFixed(2)} L:$${candle.l?.toFixed(2)} C:$${candle.c?.toFixed(2)}`;
 								}
-								if (context.dataset?.label === 'Volume') {
+								if (label === 'Volume') {
 									const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);
 									return `Volume: ${formatYAxisValue(volumeValue, volumeRange)}`;
 								}
@@ -317,15 +331,24 @@
 						time: {
 							unit: timeUnit,
 							stepSize: timeStep,
-							displayFormats: { hour: 'MMM dd HH:00', day: 'MMM dd' }
+							displayFormats: { hour: 'MMM dd HH:mm', day: 'MMM dd' },
+							tooltipFormat: 'MMM dd, yyyy HH:mm'
 						},
-						ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: false },
+						ticks: {
+							color: '#9ca3af',
+							maxRotation: 0,
+							autoSkip: true,
+							maxTicksLimit: 8,
+							source: 'auto'
+						},
 						grid: { color: 'rgba(148, 163, 184, 0.15)' },
 						min: minTime,
 						max: maxTime
 					},
 					yPrice: {
 						position: 'left',
+						min: priceAxisMin,
+						max: priceAxisMax,
 						ticks: {
 							color: '#9ca3af',
 							callback: (value: string | number) => {
@@ -354,22 +377,22 @@
 		if (!historyChart) return;
 
 		const datasets: Array<{ [key: string]: unknown }> = [];
-		if (hasPriceData) {
+		if (hasCandleData) {
 			datasets.push({
-				label: 'Average Price',
-				type: 'line',
+				label: 'Price',
+				type: 'candlestick',
 				yAxisID: 'yPrice',
-				data: priceLineData,
-				borderColor: '#00ff00',
-				backgroundColor: 'transparent',
-				borderWidth: 2,
-				fill: false,
-				pointRadius: 3,
-				pointBackgroundColor: '#00ff00',
-				pointBorderColor: '#ffffff',
-				pointBorderWidth: 1,
-				pointHoverRadius: 5,
-				tension: 0,
+				data: candleData,
+				borderColor: {
+					up: '#22c55e', // green for bullish
+					down: '#ef4444', // red for bearish
+					unchanged: '#9ca3af'
+				},
+				backgroundColor: {
+					up: 'rgba(34, 197, 94, 0.8)',
+					down: 'rgba(239, 68, 68, 0.8)',
+					unchanged: 'rgba(156, 163, 175, 0.8)'
+				},
 				parsing: false
 			});
 		}
@@ -388,7 +411,7 @@
 				parsing: false
 			});
 		}
-		if (!hasPriceData && volumeData.length === 0) {
+		if (!hasCandleData && volumeData.length === 0) {
 			datasets.push({
 				label: 'Placeholder',
 				type: 'line',
@@ -640,20 +663,20 @@
 		void rangeStartMs;
 		void rangeEndMs;
 		void historyRange;
-		void averagePrices;
+		void ohlcData;
 		chartsReady = false;
 		tick().then(() => {
 			if (ChartCtor && browser) {
 				updateCharts();
 				// Only mark as ready if we have actual data OR we're done loading
-				const hasData = averagePrices.length > 0 || depth.bids.length > 0 || depth.asks.length > 0;
+				const hasData = ohlcData.length > 0 || depth.bids.length > 0 || depth.asks.length > 0;
 				const doneLoading = !isLoading && !libraryLoading;
 				chartsReady = hasData || doneLoading;
 			}
 		});
 	}
 
-	$: historyEmpty = averagePrices.length === 0 && volumeBuckets.length === 0;
+	$: historyEmpty = ohlcData.length === 0 && volumeBuckets.length === 0;
 	$: depthEmpty = depth.bids.length === 0 && depth.asks.length === 0;
 	$: combinedError = error ?? chartLibError;
 	$: libraryLoading = loadingChartLib && !ChartCtor;

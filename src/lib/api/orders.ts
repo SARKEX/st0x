@@ -137,12 +137,6 @@ function processOrdersWithQuotes(
 					const normalizedQuote = normalizeAddress(quoteToken.address);
 
 					if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
-						console.log('⏭️  Skipping quote - neither input nor output is quote token:', {
-							orderHash: sgOrder.orderHash,
-							inputTokenAddress,
-							outputTokenAddress,
-							quoteTokenAddress: quoteToken.address
-						});
 						return;
 					}
 
@@ -164,10 +158,6 @@ function processOrdersWithQuotes(
 					// Skip dynamic spread orders (return null from classifyOrderType)
 					if (orderType === null) {
 						return;
-					}
-
-					if (rainlang) {
-						console.log('[Orders] Order type:', orderType, 'for order:', sgOrder.orderHash);
 					}
 
 					const processedQuote: ProcessedQuote = {
@@ -308,24 +298,14 @@ export async function fetchAndQuotePaymentTokenOrders(
 		}
 	}
 
-	// Get quotes for all orders and store them in a map
-	const quotesMap = new Map<RaindexOrder, RaindexOrderQuote[]>();
-
-	for (const order of allOrders) {
-		try {
-			const quotesResult = await order.getQuotes();
-			if (quotesResult.error) {
-				console.warn('❌ Error getting quotes for order:', order.orderHash, quotesResult.error);
-				continue;
-			}
-			// Store the quotes in the map
-			if (quotesResult.value && quotesResult.value.length > 0) {
-				quotesMap.set(order, quotesResult.value);
-			}
-		} catch (error) {
-			// Skip orders that fail to quote
-			console.error('Error getting quotes for order:', error);
-		}
+	// Get quotes using batching with jitter and retries (same as fetchAndQuoteTokenOrders)
+	let quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>;
+	try {
+		quotesMap = await fetchQuotesWithBatching(allOrders);
+	} catch (error) {
+		console.error('[fetchAndQuotePaymentTokenOrders] Failed to fetch quotes:', error);
+		// Return empty array on complete failure to avoid showing stale/partial data
+		return [];
 	}
 
 	// Process and filter the quotes

@@ -166,12 +166,6 @@ export async function fetchQuotesWithBatching(
 ): Promise<Map<RaindexOrder, RaindexOrderQuote[]>> {
 	const cfg = { ...QUOTE_BATCH_CONFIG, ...config };
 
-	console.log(`[QuoteBatcher] Starting fetch for ${orders.length} orders`, {
-		batchSize: cfg.batchSize,
-		baseBatchDelay: cfg.baseBatchDelayMs,
-		maxJitter: cfg.jitterMaxMs
-	});
-
 	const startTime = Date.now();
 	const allSuccessful = new Map<RaindexOrder, RaindexOrderQuote[]>();
 	const allFailed = new Map<RaindexOrder, Error>();
@@ -182,13 +176,8 @@ export async function fetchQuotesWithBatching(
 		batches.push(orders.slice(i, i + cfg.batchSize));
 	}
 
-	console.log(`[QuoteBatcher] Processing ${batches.length} batches`);
-
 	for (let i = 0; i < batches.length; i++) {
 		const batch = batches[i];
-		console.log(
-			`[QuoteBatcher] Processing batch ${i + 1}/${batches.length} (${batch.length} orders)`
-		);
 
 		const { successful, failed } = await processBatch(
 			batch,
@@ -200,14 +189,9 @@ export async function fetchQuotesWithBatching(
 		successful.forEach((quotes, order) => allSuccessful.set(order, quotes));
 		failed.forEach((error, order) => allFailed.set(order, error));
 
-		console.log(
-			`[QuoteBatcher] Batch ${i + 1} complete: ${successful.size} succeeded, ${failed.size} failed`
-		);
-
 		// Add jittered delay before next batch (except after last batch)
 		if (i < batches.length - 1) {
 			const delay = addJitter(cfg.baseBatchDelayMs, cfg.jitterMaxMs);
-			console.log(`[QuoteBatcher] Waiting ${delay}ms before next batch (with jitter)`);
 			await sleep(delay);
 		}
 	}
@@ -219,10 +203,6 @@ export async function fetchQuotesWithBatching(
 	while (toRetry.length > 0 && retryAttempt < cfg.maxRetries) {
 		retryAttempt++;
 		const retryDelay = getBackoffDelay(retryAttempt - 1, cfg.baseRetryDelayMs, cfg.maxRetryDelayMs);
-
-		console.log(
-			`[QuoteBatcher] Retry attempt ${retryAttempt}/${cfg.maxRetries}: ${toRetry.length} orders after ${retryDelay}ms`
-		);
 
 		await sleep(retryDelay);
 
@@ -259,8 +239,6 @@ export async function fetchQuotesWithBatching(
 
 		toRetry = Array.from(stillFailed.keys());
 		stillFailed.forEach((error, order) => allFailed.set(order, error));
-
-		console.log(`[QuoteBatcher] Retry ${retryAttempt} complete: ${toRetry.length} still failing`);
 	}
 
 	const totalTime = Date.now() - startTime;
