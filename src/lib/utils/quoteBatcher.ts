@@ -15,9 +15,9 @@ import type { RaindexOrder, RaindexOrderQuote } from '@rainlanguage/orderbook';
 export const QUOTE_BATCH_CONFIG = {
 	// Batching
 	batchSize: 5, // Parallel requests per batch
-	baseBatchDelayMs: 150, // Base delay between batches
-	jitterMaxMs: 100, // Random jitter up to 100ms
-	inBatchJitterMs: 50, // Jitter within batch (stagger requests)
+	baseBatchDelayMs: 100, // Base delay between batches
+	jitterMaxMs: 70, // Random jitter up to 70ms
+	inBatchJitterMs: 35, // Jitter within batch (stagger requests)
 
 	// Retries
 	maxRetries: 3, // Retry failed requests up to 3 times

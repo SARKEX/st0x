@@ -135,11 +135,44 @@
 
 			// Find sequential vault numbers from the fetched vaults
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const vaults = [...(vaultsResult.value as any)] as Array<{ vaultId: bigint }>;
+			const vaultsList = vaultsResult.value as any;
+			console.log(
+				'Raw vaults result:',
+				vaultsList,
+				'type:',
+				typeof vaultsList,
+				'constructor:',
+				vaultsList?.constructor?.name
+			);
+
+			// Try different ways to convert to array
+			let vaults: Array<{ vaultId: bigint }> = [];
+			if (Array.isArray(vaultsList)) {
+				vaults = vaultsList;
+			} else if (vaultsList && typeof vaultsList[Symbol.iterator] === 'function') {
+				vaults = Array.from(vaultsList);
+			} else if (vaultsList && typeof vaultsList.toArray === 'function') {
+				vaults = vaultsList.toArray();
+			} else if (vaultsList && vaultsList.length !== undefined) {
+				// Array-like object
+				vaults = Array.prototype.slice.call(vaultsList);
+			}
+
+			console.log(
+				'Fetched vaults for token',
+				orderInputToken.address,
+				':',
+				vaults.map((v) => ({
+					vaultId: v.vaultId.toString(),
+					vaultIdHex: '0x' + v.vaultId.toString(16).padStart(64, '0')
+				}))
+			);
+
 			const sequentialNumbers: number[] = [];
 
 			for (const vault of vaults) {
 				const num = parseSequentialVaultNumber(vault.vaultId);
+				console.log('Vault', vault.vaultId.toString(), '-> sequential number:', num);
 				if (num !== undefined) {
 					sequentialNumbers.push(num);
 				}

@@ -625,6 +625,180 @@ export const getTrades = async (
 	}
 };
 
+/**
+ * Fetch trades where the specified address is the sender (taker).
+ * These represent market orders executed by the user.
+ * Fetches recent trades and filters by sender client-side to avoid GraphQL filter issues.
+ */
+export const getTradesBySender = async (
+	senderAddress: string,
+	tokenAddress: string | null,
+	network?: Network
+): Promise<SgTrade[]> => {
+	if (!senderAddress) {
+		return [];
+	}
+
+	// Collect all orderbook subgraph URLs (active + inactive)
+	const allOrderbookUrls: string[] = [];
+
+	if (network?.orderbook_subgraph_url) {
+		allOrderbookUrls.push(network.orderbook_subgraph_url);
+	}
+
+	if (
+		network?.orderbook_subgraph_urls_inactive &&
+		network.orderbook_subgraph_urls_inactive.length > 0
+	) {
+		allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
+	}
+
+	if (allOrderbookUrls.length === 0) {
+		return [];
+	}
+
+	// Fetch recent trades (last 90 days) and filter by sender client-side
+	// This avoids issues with GraphQL filter syntax for nested entity references
+	const now = Math.floor(Date.now() / 1000);
+	const ninetyDaysAgo = now - 90 * 24 * 60 * 60;
+
+	const tradesQuery = `query TradesBySender($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!) {
+  trades(
+    skip: $skip
+    first: $first
+    orderBy: timestamp
+    orderDirection: desc
+    where: {
+      timestamp_gt: $timestampGt
+    }
+  ){
+    id
+    tradeEvent{
+      transaction{
+        id
+        from
+        blockNumber
+        timestamp
+      }
+      sender
+    }
+    outputVaultBalanceChange {
+      id
+      __typename
+      amount
+      newVaultBalance
+      oldVaultBalance
+      vault {
+        id
+        vaultId
+        token {
+          id
+          address
+          name
+          symbol
+          decimals
+        }
+      }
+      timestamp
+      transaction{
+        id
+        from
+        blockNumber
+        timestamp
+      }
+      orderbook{
+        id
+      }
+    }
+    order{
+      id
+      orderHash
+    }
+    inputVaultBalanceChange {
+      id
+      __typename
+      amount
+      newVaultBalance
+      oldVaultBalance
+      vault {
+        id
+        vaultId
+        token {
+          id
+          address
+          name
+          symbol
+          decimals
+        }
+      }
+      timestamp
+      transaction{
+        id
+        from
+        blockNumber
+        timestamp
+      }
+      orderbook{
+        id
+      }
+    }
+    timestamp
+    orderbook{
+      id
+    }
+  }
+}`;
+
+	try {
+		const allTradesPromises = allOrderbookUrls.map(async (url) => {
+			try {
+				const trades = await fetchAllPaginatedData(
+					url,
+					tradesQuery,
+					{ timestampGt: ninetyDaysAgo },
+					'trades'
+				);
+				return trades;
+			} catch {
+				return [];
+			}
+		});
+
+		const allTradesResults = await Promise.all(allTradesPromises);
+		const allTrades = allTradesResults.flat();
+
+		// Remove duplicates
+		let uniqueTrades = allTrades.filter(
+			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
+		);
+
+		// Filter by sender (taker) address - client-side filtering
+		const normalizedSender = senderAddress.toLowerCase();
+		uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
+			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
+			return tradeSender === normalizedSender;
+		});
+
+		// Filter by token address client-side if provided
+		if (tokenAddress) {
+			const normalizedToken = tokenAddress.toLowerCase();
+			uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
+				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+				const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+				return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
+			});
+		}
+
+		return uniqueTrades;
+	} catch (error) {
+		throw new Error(
+			`Failed to fetch trades by sender: ${
+				error instanceof Error ? error.message : 'Unknown error'
+			}`
+		);
+	}
+};
+
 export const getTradeByTransactionHash = async (
 	transactionHash: string,
 	orderHash: string,

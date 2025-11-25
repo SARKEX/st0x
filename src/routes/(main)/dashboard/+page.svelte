@@ -69,7 +69,6 @@
 
 	// Vault List variables
 	let hideEmptyVaults: boolean | undefined = false;
-	let showMyVaults: boolean | undefined = true; // Default to showing only user's vaults
 	let isProcessingBalances = false;
 	const VAULT_LIST_PAGE_SIZE = 1000;
 

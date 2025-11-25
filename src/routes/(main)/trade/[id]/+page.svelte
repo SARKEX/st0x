@@ -43,14 +43,14 @@
 		createTokenOrderbookQuotesQuery,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
+	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
-	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
-	import type { SgVault, RaindexVault, RaindexOrder } from '@rainlanguage/orderbook';
+	import type { RaindexVault } from '@rainlanguage/orderbook';
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
@@ -79,29 +79,171 @@
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
 
-	// Use orderbook quotes for orders instead of separate query
-	// Filter quotes by current token and owner
-	$: tokenOrders = (() => {
-		if (!currentToken?.address || !$orderbookQuotesQuery.data?.quotes) {
+	// Filter trades from tradeActivityQuery to get user's market orders
+	$: userMarketOrders = (() => {
+		if (!$signerAddress || !currentToken?.address || !$tradeActivityQuery.data?.trades) {
 			return [];
 		}
-		const quotes = $orderbookQuotesQuery.data.quotes;
-		const tokenAddress = currentToken.address.toLowerCase();
+		const normalizedSender = $signerAddress.toLowerCase();
+		const normalizedToken = currentToken.address.toLowerCase();
 
-		// Filter by token (input or output matches current token)
-		let filtered = quotes.filter(
-			(q) =>
-				q.inputTokenAddress.toLowerCase() === tokenAddress ||
-				q.outputTokenAddress.toLowerCase() === tokenAddress
-		);
+		return $tradeActivityQuery.data.trades.filter((trade: SgTrade) => {
+			// Check if user is the sender (taker)
+			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
+			if (tradeSender !== normalizedSender) return false;
 
-		// Filter by owner if "My Orders" is selected
-		if (selectedOrdersFilter === 'my' && $signerAddress) {
-			const myAddress = $signerAddress.toLowerCase();
-			filtered = filtered.filter((q) => q.sgOrder?.owner?.toLowerCase() === myAddress);
+			// Check if trade involves the current token
+			const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+			const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+			return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
+		});
+	})();
+
+	// Type for unified order display (limit orders + market orders)
+	type DisplayOrder = {
+		type: 'limit' | 'market';
+		orderHash: string;
+		timestamp: number;
+		side: 'Buy' | 'Sell';
+		// For limit orders
+		quote?: ProcessedQuote;
+		// For market orders (trades)
+		trade?: SgTrade;
+		// Common display fields
+		inputTokenSymbol: string;
+		outputTokenSymbol: string;
+		inputTokenAddress: string;
+		outputTokenAddress: string;
+		inputAmount?: string;
+		outputAmount?: string;
+		price?: number;
+	};
+
+	// Transform market orders (trades) into display format
+	function transformTradeToDisplayOrder(trade: SgTrade, tokenAddress: string): DisplayOrder | null {
+		const inputToken = trade.inputVaultBalanceChange?.vault?.token;
+		const outputToken = trade.outputVaultBalanceChange?.vault?.token;
+
+		if (!inputToken || !outputToken) return null;
+
+		const inputTokenAddr = inputToken.address?.toLowerCase();
+		const outputTokenAddr = outputToken.address?.toLowerCase();
+		const targetAddr = tokenAddress.toLowerCase();
+
+		// Determine side based on which token is the target
+		// If target token is the input (what taker received), it's a Buy
+		// If target token is the output (what taker gave), it's a Sell
+		const isBuy = inputTokenAddr === targetAddr;
+
+		const inputAmountHex = trade.inputVaultBalanceChange?.amount;
+		const outputAmountHex = trade.outputVaultBalanceChange?.amount;
+		const inputDecimals = Number(inputToken.decimals ?? 18);
+		const outputDecimals = Number(outputToken.decimals ?? 18);
+
+		// Parse Rain Float hex values to BigInt (use absolute value since amounts can be negative in vault changes)
+		const inputAmountBigInt = inputAmountHex
+			? parseFloatHex(inputAmountHex, inputDecimals, true)
+			: 0n;
+		const outputAmountBigInt = outputAmountHex
+			? parseFloatHex(outputAmountHex, outputDecimals, true)
+			: 0n;
+
+		// Calculate price (quote per asset)
+		let price: number | undefined;
+		if (inputAmountBigInt > 0n && outputAmountBigInt > 0n) {
+			const inputValue = parseFloat(formatUnits(inputAmountBigInt, inputDecimals));
+			const outputValue = parseFloat(formatUnits(outputAmountBigInt, outputDecimals));
+			if (isBuy && inputValue > 0) {
+				price = outputValue / inputValue; // Price paid per unit received
+			} else if (!isBuy && outputValue > 0) {
+				price = inputValue / outputValue; // Price received per unit sold
+			}
 		}
 
-		return filtered;
+		return {
+			type: 'market',
+			orderHash: trade.order?.orderHash ?? trade.id,
+			timestamp: Number(trade.timestamp),
+			side: isBuy ? 'Buy' : 'Sell',
+			trade,
+			inputTokenSymbol: inputToken.symbol ?? 'UNKNOWN',
+			outputTokenSymbol: outputToken.symbol ?? 'UNKNOWN',
+			inputTokenAddress: inputTokenAddr ?? '',
+			outputTokenAddress: outputTokenAddr ?? '',
+			inputAmount:
+				inputAmountBigInt > 0n ? formatUnits(inputAmountBigInt, inputDecimals) : undefined,
+			outputAmount:
+				outputAmountBigInt > 0n ? formatUnits(outputAmountBigInt, outputDecimals) : undefined,
+			price
+		};
+	}
+
+	// Use orderbook quotes for orders instead of separate query
+	// Filter quotes by current token and owner, combine with market orders
+	$: tokenOrders = (() => {
+		const displayOrders: DisplayOrder[] = [];
+		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
+
+		// Add limit orders from quotes
+		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
+			const quotes = $orderbookQuotesQuery.data.quotes;
+
+			// Filter by token (input or output matches current token)
+			let filtered = quotes.filter(
+				(q) =>
+					q.inputTokenAddress.toLowerCase() === tokenAddress ||
+					q.outputTokenAddress.toLowerCase() === tokenAddress
+			);
+
+			// Filter by owner if "My Orders" is selected
+			if (selectedOrdersFilter === 'my' && $signerAddress) {
+				const myAddress = $signerAddress.toLowerCase();
+				filtered = filtered.filter((q) => q.sgOrder?.owner?.toLowerCase() === myAddress);
+			}
+
+			// Transform to DisplayOrder
+			for (const quote of filtered) {
+				const isBuy = quote.side === 'bid';
+				displayOrders.push({
+					type: 'limit',
+					orderHash: quote.orderHash,
+					timestamp: quote.sgOrder?.timestampAdded ? Number(quote.sgOrder.timestampAdded) : 0,
+					side: isBuy ? 'Buy' : 'Sell',
+					quote,
+					inputTokenSymbol: quote.inputTokenSymbol,
+					outputTokenSymbol: quote.outputTokenSymbol,
+					inputTokenAddress: quote.inputTokenAddress,
+					outputTokenAddress: quote.outputTokenAddress,
+					price: quote.quotePerAsset
+				});
+			}
+		}
+
+		// Add market orders (only for "My Orders" view)
+		if (selectedOrdersFilter === 'my' && $signerAddress && userMarketOrders.length > 0) {
+			for (const trade of userMarketOrders) {
+				const displayOrder = transformTradeToDisplayOrder(trade, tokenAddress);
+				if (displayOrder) {
+					displayOrders.push(displayOrder);
+				}
+			}
+		}
+
+		// Sort by timestamp descending (newest first), then by block number for market orders
+		displayOrders.sort((a, b) => {
+			const timeDiff = b.timestamp - a.timestamp;
+			if (timeDiff !== 0) return timeDiff;
+
+			// Secondary sort by block number for market orders (more precision)
+			if (a.type === 'market' && b.type === 'market') {
+				const aBlock = Number(a.trade?.tradeEvent?.transaction?.blockNumber ?? 0);
+				const bBlock = Number(b.trade?.tradeEvent?.transaction?.blockNumber ?? 0);
+				return bBlock - aBlock;
+			}
+			return 0;
+		});
+
+		return displayOrders;
 	})();
 
 	// Paginate the filtered orders
@@ -204,8 +346,6 @@
 	let activeOnchainTab: OnchainTabId = 'market';
 
 	// Orders filter: 'my' for user's orders, 'all' for all orders
-	// Default to 'my' if wallet is connected, otherwise 'all'
-	$: ordersFilter = $connected ? 'my' : 'all';
 	let selectedOrdersFilter: 'my' | 'all' = 'my';
 
 	// Update selected filter when connection changes
@@ -226,56 +366,11 @@
 		activeOnchainTab = event.detail.id as OnchainTabId;
 	}
 
-	// Helper to safely access RaindexOrder properties (incomplete types in SDK)
-	function getOrderInput(order: RaindexOrder, tokenAddress: string) {
-		const inputs = (order as any).inputs;
-		if (!inputs || !Array.isArray(inputs)) return null;
-		return inputs.find((i: any) => i.token?.address?.toLowerCase() === tokenAddress.toLowerCase());
-	}
-
-	function getOrderOutput(order: RaindexOrder, tokenAddress: string) {
-		const outputs = (order as any).outputs;
-		if (!outputs || !Array.isArray(outputs)) return null;
-		return outputs.find((o: any) => o.token?.address?.toLowerCase() === tokenAddress.toLowerCase());
-	}
-
-	function getOrderType(order: RaindexOrder): string {
-		return (order as any).orderType || 'Order';
-	}
-
-	function getOrderTimestamp(order: RaindexOrder): number | null {
-		return (order as any).timestampAdded || (order as any).timestamp || null;
-	}
-
 	function vaultBalanceToBigInt(vault: RaindexVault): bigint {
 		const fixedResult = vault.balance.toFixedDecimalLossy(vault.token.decimals);
 		if (fixedResult.error || !fixedResult.value) return 0n;
-		const value = (fixedResult.value as any).value;
+		const value = (fixedResult.value as { value: string }).value;
 		return typeof value === 'string' ? BigInt(value) : 0n;
-	}
-
-	function getOrderAmount(
-		order: RaindexOrder,
-		tokenAddress: string
-	): { total: bigint; remaining: bigint } {
-		const input = getOrderInput(order, tokenAddress);
-		const output = getOrderOutput(order, tokenAddress);
-
-		if (input) {
-			// For input (buy orders), check input vault
-			const remaining = input?.vault?.balance || 0n;
-			return { total: remaining, remaining };
-		} else if (output) {
-			// For output (sell orders), check output vault
-			const remaining = output?.vault?.balance || 0n;
-			// Try to get initial balance from order metadata
-			const initialBalance =
-				(output.vault as any)?.initialBalance || (order as any).initialOutputVaultBalance;
-			const total = initialBalance || remaining;
-			return { total, remaining };
-		}
-
-		return { total: 0n, remaining: 0n };
 	}
 
 	let infoCollapsed = false;
@@ -423,14 +518,7 @@
 	};
 	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 	$: {
-		console.log(
-			'🔄 [Trade Page] orderbookQuotesQuery state:',
-			$orderbookQuotesQuery?.status,
-			'data:',
-			$orderbookQuotesQuery?.data
-		);
 		orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
-		console.log('📊 [Trade Page] orderbookQuoteUiState:', orderbookQuoteUiState);
 	}
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
@@ -993,10 +1081,11 @@
 								<thead class="border-b border-white/10">
 									<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
 										<th class="pb-3 pr-4 font-medium">Type</th>
+										<th class="pb-3 pr-4 font-medium">Direction</th>
 										<th class="pb-3 pr-4 font-medium">Status</th>
-										<th class="pb-3 pr-4 font-medium">Remaining</th>
-										<th class="pb-3 pr-4 font-medium">Current Price</th>
-										<th class="pb-3 pr-4 font-medium">Order Hash</th>
+										<th class="pb-3 pr-4 font-medium">Amount</th>
+										<th class="pb-3 pr-4 font-medium">Price</th>
+										<th class="pb-3 pr-4 font-medium">Hash</th>
 										<th class="pb-3 pr-4 font-medium">Wallet</th>
 										{#if selectedOrdersFilter === 'my'}
 											<th class="pb-3 font-medium">Actions</th>
@@ -1004,113 +1093,238 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each paginatedOrders as quote}
-										{@const tokenAddress = currentToken?.address.toLowerCase()}
-										{@const isBuy = quote.inputTokenAddress.toLowerCase() === tokenAddress}
-										{@const maxOutputBigInt = parseFloatHex(
-											quote.maxOutput,
-											isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18
-										)}
-										{@const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol}
-										{@const tokenDecimals = isBuy
-											? quote.inputTokenDecimals || 18
-											: quote.outputTokenDecimals || 18}
-										{@const orderOwner = quote.sgOrder?.owner || ''}
-										{@const orderbookId = quote.orderbookId || ''}
-										{@const remainingAmount =
-											maxOutputBigInt > 0n
-												? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3)
-												: '—'}
-										{@const currentPrice =
-											quote.quotePerAsset !== undefined &&
-											quote.quotePerAsset !== null &&
-											Number.isFinite(quote.quotePerAsset)
-												? quote.quotePerAsset.toFixed(3)
-												: '—'}
-										{@const isMyOrder = orderOwner.toLowerCase() === $signerAddress?.toLowerCase()}
-										{@const isActive = quote.sgOrder?.active ?? true}
-										<tr class="border-b border-white/5 hover:bg-white/5">
-											<td class="py-3 pr-4">
-												<span
-													class={`text-xs font-medium ${isBuy ? 'text-green-400' : 'text-red-400'}`}
-												>
-													{isBuy ? 'Buy' : 'Sell'}
-												</span>
-											</td>
-											<td class="py-3 pr-4">
-												{#if isActive}
+									{#each paginatedOrders as order}
+										{#if order.type === 'market'}
+											<!-- Market Order (Trade) Row -->
+											{@const trade = order.trade}
+											{@const txHash = trade?.tradeEvent?.transaction?.id || ''}
+											{@const amount =
+												order.side === 'Buy' ? order.inputAmount : order.outputAmount}
+											{@const tokenSymbol =
+												order.side === 'Buy' ? order.inputTokenSymbol : order.outputTokenSymbol}
+											<tr class="border-b border-white/5 hover:bg-white/5">
+												<td class="py-3 pr-4">
 													<span
-														class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400"
+														class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400"
 													>
-														Active
+														Market
 													</span>
-												{:else}
+												</td>
+												<td class="py-3 pr-4">
 													<span
-														class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400"
+														class={`text-xs font-medium ${
+															order.side === 'Buy' ? 'text-green-400' : 'text-red-400'
+														}`}
 													>
-														Closed
+														{order.side}
 													</span>
-												{/if}
-											</td>
-											<td class="py-3 pr-4 text-gray-300">
-												{remainingAmount}
-												{tokenSymbol}
-											</td>
-											<td class="py-3 pr-4 text-gray-300">
-												{currentPrice}
-											</td>
-											<td class="py-3 pr-4">
-												<a
-													href={`https://sdk.raindex.finance/v5/#/${$currentNetwork?.raindexNetworkSlug}/orderbook/${orderbookId}/order/${quote.orderHash}`}
-													target="_blank"
-													rel="noopener noreferrer"
-													class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-													title={quote.orderHash}
-												>
-													{quote.orderHash.slice(0, 8)}...{quote.orderHash.slice(-6)}
-												</a>
-											</td>
-											<td class="py-3 pr-4">
-												{#if orderOwner}
-													<a
-														href={`${$currentNetwork?.blockExplorer}/address/${orderOwner}`}
-														target="_blank"
-														rel="noopener noreferrer"
-														class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-														title={orderOwner}
+												</td>
+												<td class="py-3 pr-4">
+													<span
+														class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400"
 													>
-														{orderOwner.slice(0, 6)}...{orderOwner.slice(-4)}
-													</a>
-												{:else}
-													—
-												{/if}
-											</td>
-											{#if selectedOrdersFilter === 'my'}
-												<td class="py-3">
-													{#if isMyOrder}
-														{#if isActive}
-															<Button
-																variant="danger"
-																size="sm"
-																on:click={() => transactionStore.handleRemoveOrder(quote)}
-															>
-																Cancel
-															</Button>
-														{:else}
-															<Button
-																variant="secondary"
-																size="sm"
-																on:click={() => transactionStore.handleWithdrawFromOrder(quote)}
-															>
-																Withdraw
-															</Button>
-														{/if}
+														Executed
+													</span>
+												</td>
+												<td class="py-3 pr-4 text-gray-300">
+													{amount ? Number(amount).toFixed(3) : '—'}
+													{tokenSymbol}
+												</td>
+												<td class="py-3 pr-4 text-gray-300">
+													{order.price !== undefined && Number.isFinite(order.price)
+														? order.price.toFixed(3)
+														: '—'}
+												</td>
+												<td class="py-3 pr-4">
+													{#if txHash}
+														<a
+															href={`${$currentNetwork?.blockExplorer}/tx/${txHash}`}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+															title={txHash}
+														>
+															{txHash.slice(0, 8)}...{txHash.slice(-6)}
+														</a>
 													{:else}
 														—
 													{/if}
 												</td>
-											{/if}
-										</tr>
+												<td class="py-3 pr-4">
+													{#if $signerAddress}
+														<a
+															href={`${$currentNetwork?.blockExplorer}/address/${$signerAddress}`}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+															title={$signerAddress}
+														>
+															{$signerAddress.slice(0, 6)}...{$signerAddress.slice(-4)}
+														</a>
+													{:else}
+														—
+													{/if}
+												</td>
+												{#if selectedOrdersFilter === 'my'}
+													<td class="py-3 text-gray-500"> — </td>
+												{/if}
+											</tr>
+										{:else}
+											<!-- Limit Order Row -->
+											{@const quote = order.quote}
+											{@const isBuy = order.side === 'Buy'}
+											{@const maxOutputBigInt = quote
+												? parseFloatHex(
+														quote.maxOutput,
+														isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18
+													)
+												: 0n}
+											{@const tokenSymbol = isBuy
+												? order.inputTokenSymbol
+												: order.outputTokenSymbol}
+											{@const tokenDecimals = quote
+												? isBuy
+													? quote.inputTokenDecimals || 18
+													: quote.outputTokenDecimals || 18
+												: 18}
+											{@const orderOwner = quote?.sgOrder?.owner || ''}
+											{@const orderbookId = quote?.orderbookId || ''}
+											{@const isFilled = maxOutputBigInt === 0n}
+											{@const remainingAmount = isFilled
+												? '0'
+												: maxOutputBigInt > 0n
+													? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3)
+													: '—'}
+											{@const currentPrice =
+												order.price !== undefined &&
+												order.price !== null &&
+												Number.isFinite(order.price)
+													? order.price.toFixed(3)
+													: '—'}
+											{@const isMyOrder =
+												orderOwner.toLowerCase() === $signerAddress?.toLowerCase()}
+											{@const isActive = quote?.sgOrder?.active ?? true}
+											<tr class="border-b border-white/5 hover:bg-white/5">
+												<td class="py-3 pr-4">
+													<span
+														class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400"
+													>
+														Limit
+													</span>
+												</td>
+												<td class="py-3 pr-4">
+													<span
+														class={`text-xs font-medium ${
+															isBuy ? 'text-green-400' : 'text-red-400'
+														}`}
+													>
+														{order.side}
+													</span>
+												</td>
+												<td class="py-3 pr-4">
+													{#if isFilled && isActive}
+														<span
+															class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400"
+														>
+															Filled
+														</span>
+													{:else if isActive}
+														<span
+															class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400"
+														>
+															Active
+														</span>
+													{:else}
+														<span
+															class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400"
+														>
+															Closed
+														</span>
+													{/if}
+												</td>
+												<td class="py-3 pr-4 text-gray-300">
+													{remainingAmount}
+													{tokenSymbol}
+												</td>
+												<td class="py-3 pr-4 text-gray-300">
+													{currentPrice}
+												</td>
+												<td class="py-3 pr-4">
+													{#if quote}
+														<a
+															href={`https://sdk.raindex.finance/v5/#/${$currentNetwork?.raindexNetworkSlug}/orderbook/${orderbookId}/order/${quote.orderHash}`}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+															title={quote.orderHash}
+														>
+															{quote.orderHash.slice(0, 8)}...{quote.orderHash.slice(-6)}
+														</a>
+													{:else}
+														—
+													{/if}
+												</td>
+												<td class="py-3 pr-4">
+													{#if orderOwner}
+														<a
+															href={`${$currentNetwork?.blockExplorer}/address/${orderOwner}`}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+															title={orderOwner}
+														>
+															{orderOwner.slice(0, 6)}...{orderOwner.slice(-4)}
+														</a>
+													{:else}
+														—
+													{/if}
+												</td>
+												{#if selectedOrdersFilter === 'my'}
+													<td class="py-3">
+														{#if isMyOrder && quote}
+															{#if isFilled && isActive}
+																<!-- Filled order: show Withdraw button that deactivates + withdraws from input vault -->
+																<Button
+																	variant="secondary"
+																	size="sm"
+																	on:click={() =>
+																		transactionStore.handleWithdrawFromOrder({
+																			...quote,
+																			isFilled: true
+																		})}
+																>
+																	Withdraw
+																</Button>
+															{:else if isActive}
+																<!-- Active but not filled: just show Cancel button -->
+																<Button
+																	variant="danger"
+																	size="sm"
+																	on:click={() => transactionStore.handleRemoveOrder(quote)}
+																>
+																	Cancel
+																</Button>
+															{:else}
+																<!-- Closed order: withdraw from both vaults -->
+																<Button
+																	variant="secondary"
+																	size="sm"
+																	on:click={() =>
+																		transactionStore.handleWithdrawFromOrder({
+																			...quote,
+																			isFilled: false
+																		})}
+																>
+																	Withdraw
+																</Button>
+															{/if}
+														{:else}
+															—
+														{/if}
+													</td>
+												{/if}
+											</tr>
+										{/if}
 									{/each}
 								</tbody>
 							</table>
@@ -1189,7 +1403,7 @@
 										{@const paginatedVaults = vaults.slice(startIndex, endIndex)}
 
 										<div class="space-y-2">
-											{#each paginatedVaults as vault, vaultIndex}
+											{#each paginatedVaults as vault}
 												{@const balance = vaultBalanceToBigInt(vault)}
 												{@const vaultIdHex = vault.vaultId.toString(16).padStart(64, '0')}
 												{@const raindexUrl = `https://v5.raindex.finance/vaults/0x${vaultIdHex}`}

@@ -8,7 +8,6 @@
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
-	import { dev } from '$app/environment';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';

@@ -412,12 +412,12 @@ const transactionStore = () => {
 				throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
 			}
 
-			const orders = [...(ordersResult.value as any)];
+			const orders = [...(ordersResult.value as Iterable<RaindexOrder>)];
 			if (orders.length === 0) {
 				throw new Error('Order not found');
 			}
 
-			const order = orders[0] as RaindexOrder;
+			const order = orders[0];
 
 			// Get remove calldata
 			const removeCalldata = order.getRemoveCalldata();
@@ -452,11 +452,19 @@ const transactionStore = () => {
 		}
 	};
 
+	/**
+	 * Withdraw from order vaults.
+	 *
+	 * Behavior based on order state:
+	 * - If isFilled (remaining = 0): Deactivate order first, then withdraw from input vault only
+	 * - If not filled (remaining > 0): Withdraw from both output and input vaults
+	 */
 	const handleWithdrawFromOrder = async (quote: {
 		orderHash: string;
 		orderbookId?: string;
 		inputVaultId?: string;
 		outputVaultId?: string;
+		isFilled?: boolean;
 	}) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -467,13 +475,60 @@ const transactionStore = () => {
 			throw new Error('Wallet not connected');
 		}
 
-		if (!quote.outputVaultId) {
-			throw new Error('Output vault ID not found');
-		}
+		const isFilled = quote.isFilled ?? false;
 
 		try {
-			// Fetch the vault from the SDK
 			const client = await createRaindexClient();
+
+			// For filled orders, we need to deactivate first
+			if (isFilled) {
+				// Step 1: Deactivate the order
+				awaitWalletConfirmation('Deactivating filled order...');
+
+				const ordersResult = await client.getOrders(
+					[network.id],
+					{
+						orderHash: quote.orderHash as `0x${string}`,
+						owners: [$signerAddress as `0x${string}`]
+					},
+					0
+				);
+
+				if (ordersResult.error || !ordersResult.value) {
+					throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
+				}
+
+				const orders = [...(ordersResult.value as Iterable<RaindexOrder>)];
+				if (orders.length === 0) {
+					throw new Error('Order not found');
+				}
+
+				const order = orders[0];
+
+				// Only deactivate if order is still active
+				const sgOrderResult = order.convertToSgOrder();
+				if (!sgOrderResult.error && sgOrderResult.value?.active) {
+					const removeCalldata = order.getRemoveCalldata();
+					if (removeCalldata.error) {
+						throw new Error(removeCalldata.error.readableMsg);
+					}
+
+					awaitWalletConfirmation('Awaiting wallet confirmation to deactivate order...');
+
+					const removeHash = await sendTransaction(config, {
+						data: removeCalldata.value as Hex,
+						to: order.orderbook as `0x${string}`
+					});
+
+					awaitWalletConfirmation('Awaiting deactivation confirmation...');
+
+					await waitForTransactionReceipt(config, {
+						hash: removeHash as `0x${string}`
+					});
+				}
+			}
+
+			// Fetch all user vaults
 			const vaultsResult = await client.getVaults(
 				[network.id],
 				{
@@ -488,18 +543,88 @@ const transactionStore = () => {
 				throw new Error(vaultsResult.error?.readableMsg || 'Failed to fetch vaults');
 			}
 
-			// Find the specific vault by ID
-			const vaults = [...(vaultsResult.value as any)];
-			const vault = vaults.find(
-				(v: RaindexVault) => v.vaultId.toString() === quote.outputVaultId
-			) as RaindexVault | undefined;
+			const vaults = [...(vaultsResult.value as unknown as Iterable<RaindexVault>)];
 
-			if (!vault) {
-				throw new Error('Vault not found');
+			// Determine which vaults to withdraw from
+			const vaultsToWithdraw: RaindexVault[] = [];
+
+			if (isFilled) {
+				// Filled order: only withdraw from input vault (output is empty)
+				if (quote.inputVaultId) {
+					const inputVault = vaults.find((v) => v.vaultId.toString() === quote.inputVaultId);
+					if (inputVault) {
+						vaultsToWithdraw.push(inputVault);
+					}
+				}
+			} else {
+				// Not filled: withdraw from both vaults
+				if (quote.outputVaultId) {
+					const outputVault = vaults.find((v) => v.vaultId.toString() === quote.outputVaultId);
+					if (outputVault) {
+						vaultsToWithdraw.push(outputVault);
+					}
+				}
+				if (quote.inputVaultId) {
+					const inputVault = vaults.find((v) => v.vaultId.toString() === quote.inputVaultId);
+					if (inputVault) {
+						vaultsToWithdraw.push(inputVault);
+					}
+				}
 			}
 
-			// Use the existing handleWithdraw function
-			return await handleWithdraw(vault);
+			if (vaultsToWithdraw.length === 0) {
+				throw new Error('No vaults found to withdraw from');
+			}
+
+			// Filter to only vaults with non-zero balance
+			const { Float } = await import('@rainlanguage/float');
+			const zeroFloat = Float.fromHex(
+				'0x0000000000000000000000000000000000000000000000000000000000000000'
+			);
+
+			const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
+				if (zeroFloat.error || !zeroFloat.value) return true; // Include if we can't check
+				const isZero = vault.balance.eq(zeroFloat.value);
+				return isZero.error || !isZero.value; // Include if not zero or if check failed
+			});
+
+			if (vaultsWithBalance.length === 0) {
+				// No vaults have balance - nothing to withdraw
+				const chainId = network.id;
+				const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+				return transactionSuccess('0x' as Hash, `No balance to withdraw. ${link}`);
+			}
+
+			// Withdraw from each vault with balance
+			let lastHash: Hash = '0x';
+			for (let i = 0; i < vaultsWithBalance.length; i++) {
+				const vault = vaultsWithBalance[i];
+
+				const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
+				if (vaultWithdrawCalldata.error) {
+					throw new Error(vaultWithdrawCalldata.error.readableMsg);
+				}
+
+				awaitWalletConfirmation(
+					`Awaiting wallet confirmation for withdrawal ${i + 1}/${vaultsWithBalance.length}...`
+				);
+
+				lastHash = await sendTransaction(config, {
+					data: vaultWithdrawCalldata.value as Hex,
+					to: vault.orderbook as `0x${string}`
+				});
+
+				awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+
+				await waitForTransactionReceipt(config, {
+					hash: lastHash as `0x${string}`
+				});
+			}
+
+			const chainId = network.id;
+			const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+
+			return transactionSuccess(lastHash, link);
 		} catch (error: unknown) {
 			const err = error as { cause?: { details?: string }; message?: string };
 			return transactionError(
@@ -602,7 +727,10 @@ const transactionStore = () => {
 				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 			await waitForTransactionReceipt(config, { hash });
+
+			awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
 		} catch (error) {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||

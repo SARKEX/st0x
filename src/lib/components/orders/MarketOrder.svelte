@@ -8,7 +8,7 @@
 		scaleAmount,
 		walkOrderbook
 	} from '$lib/api/orders';
-	import { createRaindexClient } from '$lib/api/raindex';
+	import { createRaindexClient } from '$lib/clients/raindex';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import { getUserTakerInfo } from '$lib/types/orderPerspective';
 	import {

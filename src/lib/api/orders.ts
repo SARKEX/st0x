@@ -19,8 +19,7 @@ import {
 import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
-import { createRaindexClient } from '$lib/clients/raindex';
-import { getRaindexClientPool } from '$lib/clients/raindexPool';
+import { createRaindexClient, getLoadBalancedClient } from '$lib/clients/raindex';
 import { Float } from '@rainlanguage/float';
 import {
 	type ProcessedQuote,
@@ -357,45 +356,8 @@ export async function fetchAndQuoteTokenOrders(
 		(token) => token.chainId === networkId && token.category === 'ST0x'
 	);
 
-	// Get client pool for load balancing
-	const pool = await getRaindexClientPool(network);
-	const clientEntry = pool.getClient();
-
-	if (!clientEntry) {
-		console.error('[fetchAndQuoteTokenOrders] No available clients in pool');
-		// Fallback to single client
-		const fallbackClient = await createRaindexClient();
-		const filters: GetOrdersFilters = {
-			active: true,
-			owners: [],
-			tokens: [tokenAddress as `0x${string}`]
-		};
-		const ordersResult = await fallbackClient.getOrders([networkId], filters, 1);
-
-		if (ordersResult.error) {
-			throw new Error(ordersResult.error.readableMsg);
-		}
-
-		const allOrders = ordersResult.value;
-
-		// Continue with batched quote fetching...
-		let quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>;
-		try {
-			quotesMap = await fetchQuotesWithBatching(allOrders);
-		} catch (error) {
-			console.error('[fetchAndQuoteTokenOrders] Failed to fetch quotes:', error);
-			return [];
-		}
-
-		const processedQuotes = processOrdersWithQuotes(
-			allOrders,
-			quotesMap,
-			defaultPaymentToken,
-			stockTokens
-		);
-
-		return processedQuotes;
-	}
+	// Get load-balanced client (round-robin between 2 clients, SDK handles RPC failover)
+	const client = await getLoadBalancedClient(network);
 
 	// Fetch orders for this specific token only
 	const filters: GetOrdersFilters = {
@@ -404,14 +366,7 @@ export async function fetchAndQuoteTokenOrders(
 		tokens: [tokenAddress as `0x${string}`]
 	};
 
-	let ordersResult;
-	try {
-		ordersResult = await clientEntry.client.getOrders([networkId], filters, 1);
-		pool.recordSuccess(clientEntry);
-	} catch (error) {
-		pool.recordFailure(clientEntry, error);
-		throw error;
-	}
+	const ordersResult = await client.getOrders([networkId], filters, 1);
 
 	if (ordersResult.error) {
 		throw new Error(ordersResult.error.readableMsg);
