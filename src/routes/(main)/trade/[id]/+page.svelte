@@ -44,20 +44,20 @@
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
+		prefetchGlobalOrders,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
-	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { createRaindexClient } from '$lib/clients/raindex';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import type { RaindexVault } from '@rainlanguage/orderbook';
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
-	import { createSingleVaultQuery } from '$lib/queries/vaults';
+	import { createSingleVaultQuery, createUserVaultsQuery, prefetchUserVaults } from '$lib/queries/vaults';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
 	$: tokenId = $page.params.id;
@@ -222,45 +222,15 @@
 		return displayOrders;
 	})();
 
-	// Vaults query - shared with dashboard
-	$: tokenVaultsQuery = createInfiniteQuery({
-		queryKey: ['vaults', $currentNetwork?.id, $signerAddress],
-		initialPageParam: 0,
-		staleTime: 300000, // 5 minutes (override global Infinity)
-		refetchOnMount: true, // Refresh when visiting tab
-		refetchInterval: 300000, // Poll every 5 minutes
-		queryFn: async ({ pageParam }: { pageParam: number }) => {
-			if (!$currentNetwork || !$signerAddress) {
-				return { vaults: [], hasMore: false };
-			}
-			const client = await createRaindexClient();
+	// User vaults query - uses centralized query with 15s polling (trade page)
+	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $signerAddress, 15_000);
 
-			// Fetch all vaults (shared query with dashboard)
-			const vaultsResult = await client.getVaults(
-				[$currentNetwork.id],
-				{
-					owners: [$signerAddress.toLowerCase() as `0x${string}`],
-					hideZeroBalance: false
-				},
-				pageParam + 1
-			);
-			if (vaultsResult.error) {
-				throw new Error(vaultsResult.error.readableMsg);
-			}
-
-			// Access .items like the dashboard does
-			const vaultsArray: RaindexVault[] = vaultsResult.value.items || [];
-
-			return {
-				vaults: vaultsArray,
-				hasMore: vaultsArray.length === 1000
-			};
-		},
-		getNextPageParam: (lastPage: { vaults: RaindexVault[]; hasMore: boolean }, pages) => {
-			return lastPage.hasMore ? pages.length : undefined;
-		},
-		enabled: activeOnchainTab === 'vaults' && Boolean($currentNetwork && $signerAddress)
-	});
+	// Background prefetch of global caches when page loads
+	$: if (browser && $currentNetwork && $signerAddress) {
+		// Prefetch global orders and vaults in background (non-blocking)
+		prefetchGlobalOrders($currentNetwork.id).catch(() => {});
+		prefetchUserVaults($currentNetwork.id, $signerAddress).catch(() => {});
+	}
 
 	// Wallet balance query for this token
 	$: walletBalanceQuery = createQuery({
@@ -277,9 +247,7 @@
 			});
 			return balance as bigint;
 		},
-		enabled:
-			activeOnchainTab === 'vaults' &&
-			Boolean(currentToken?.address && $signerAddress && $wagmiConfig)
+		enabled: Boolean(currentToken?.address && $signerAddress && $wagmiConfig)
 	});
 	$: currentPythToken = TOKENS.find(
 		(token) =>
@@ -1002,23 +970,25 @@
 								Connect Wallet
 							</Button>
 						</div>
-					{:else if $tokenVaultsQuery.isLoading}
+					{:else if $userVaultsQuery.isLoading}
 						<div class="flex justify-center py-8">
 							<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
 						</div>
-					{:else if $tokenVaultsQuery.isError}
+					{:else if $userVaultsQuery.isError}
 						<div class="py-8 text-center text-sm text-red-400">
-							Error loading vaults: {$tokenVaultsQuery.error?.message}
+							Error loading vaults: {$userVaultsQuery.error?.message}
 						</div>
 					{:else}
-						{@const allVaults = $tokenVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
+						{@const allVaultData = $userVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
 						{@const vaults = currentToken
-							? allVaults.filter((v) => {
-									const isCorrectToken =
-										v.token?.address?.toLowerCase() === currentToken.address.toLowerCase();
-									const hasBalance = vaultBalanceToBigInt(v) > 0n;
-									return isCorrectToken && hasBalance;
-								})
+							? allVaultData
+									.map((vd) => vd.raindexVault)
+									.filter((v) => {
+										const vaultTokenAddr = (v.token?.address ?? v.token?.id)?.toLowerCase();
+										const isCorrectToken = vaultTokenAddr === currentToken.address.toLowerCase();
+										const hasBalance = vaultBalanceToBigInt(v) > 0n;
+										return isCorrectToken && hasBalance;
+									})
 							: []}
 						{@const totalVaultBalance = vaults.reduce(
 							(sum, v) => sum + vaultBalanceToBigInt(v),

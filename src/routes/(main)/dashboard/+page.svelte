@@ -18,15 +18,14 @@
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
-	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { SgVault, RaindexVault, SgTrade } from '@rainlanguage/orderbook';
-	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { parseFloatHex, getRaindexVaultUrl } from '$lib/utils/tokenMath';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { createUserVaultsQuery } from '$lib/queries/vaults';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import transactionStore from '$lib/stores/transaction';
@@ -91,66 +90,8 @@
 		}, 300);
 	}
 
-	// Vault List Query - used for both Portfolio and Vaults tabs
-	$: vaultsListQuery = createInfiniteQuery({
-		queryKey: ['vaults', $currentNetwork?.id, $signerAddress],
-		staleTime: 300000,
-		refetchOnMount: true,
-		refetchInterval: 300000,
-		queryFn: async ({ pageParam }) => {
-			const client = await createRaindexClient();
-
-			const vaultsResult = await client.getVaults(
-				[$currentNetwork.id],
-				{
-					owners: $signerAddress ? ([$signerAddress.toLowerCase()] as `0x${string}`[]) : [],
-					hideZeroBalance: false
-				},
-				pageParam + 1
-			);
-			if (vaultsResult.error) throw new Error(vaultsResult.error.readableMsg);
-
-			const allVaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[] =
-				vaultsResult.value.items.map((vault) => {
-					let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
-					if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
-
-					const sgVault: SgVault = {
-						id: vault.id as `0x${string}`,
-						owner: vault.owner,
-						vaultId: `0x${vault.vaultId.toString(16).padStart(64, '0')}`,
-						balance: vaultBalanceFloat.value!.value.toString(),
-						token: {
-							id: vault.token.id as `0x${string}`,
-							address: (vault.token.address ?? vault.token.id) as `0x${string}`,
-							name: vault.token.name,
-							symbol: vault.token.symbol,
-							decimals: vault.token.decimals.toString() as `0x${string}`
-						},
-						orderbook: {
-							id: vault.orderbook
-						},
-						ordersAsOutput: vault.ordersAsOutput,
-						ordersAsInput: vault.ordersAsInput,
-						balanceChanges: []
-					};
-					return {
-						vault: sgVault,
-						raindexVault: vault,
-						subgraphName: $currentNetwork.raindexNetworkSlug
-					};
-				});
-			return {
-				vaults: allVaults,
-				hasMore: allVaults.length === 1000
-			};
-		},
-		initialPageParam: 0,
-		getNextPageParam(lastPage, _allPages, lastPageParam) {
-			return lastPage.hasMore ? lastPageParam + 1 : undefined;
-		},
-		enabled: !!($connected && $signerAddress && $currentNetwork)
-	});
+	// User Vaults Query - centralized with 60s polling on dashboard
+	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $signerAddress, 60_000);
 
 	// Query user's wallet holdings from SFTs
 	$: walletHoldingsQuery = createQuery({
@@ -331,7 +272,7 @@
 	);
 
 	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, true);
 
 	// Trade activity for market orders
 	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork);

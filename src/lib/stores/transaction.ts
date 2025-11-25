@@ -34,7 +34,7 @@ import {
 import { rainlangConfirmationModal } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
-import { invalidateVaultQueries } from '$lib/queries/vaults';
+import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
@@ -377,11 +377,13 @@ const transactionStore = () => {
 				hash: hash as `0x${string}`
 			});
 
-			const chainId = get(currentNetwork).id;
-			const link = createRaindexLink(chainId, vault.orderbook, vault.id);
+			const network = get(currentNetwork);
+			const $signer = get(signerAddress);
+			const link = createRaindexLink(network.id, vault.orderbook, vault.id);
 
-			// Invalidate vault queries to refresh the UI
-			invalidateVaultQueries();
+			// Invalidate vault queries for this specific token
+			const tokenAddress = vault.token?.address ?? vault.token?.id;
+			invalidateUserVaultQueries(network.id, $signer ?? undefined, tokenAddress);
 
 			return transactionSuccess(hash, link);
 		} catch (error) {
@@ -591,8 +593,14 @@ const transactionStore = () => {
 
 			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
 
-			// Invalidate both order and vault queries to refresh the UI
-			invalidateOrderQueries(); invalidateVaultQueries();
+			// Invalidate queries for the tokens involved in this order
+			const tokenAddresses = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
+			for (const tokenAddr of tokenAddresses) {
+				if (tokenAddr) {
+					invalidateOrderQueries(network.id, tokenAddr);
+					invalidateUserVaultQueries(network.id, $signerAddress, tokenAddr);
+				}
+			}
 
 			return transactionSuccess(hash, link);
 		} catch (error: unknown) {
@@ -786,7 +794,13 @@ const transactionStore = () => {
 				const chainId = network.id;
 				const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 				// Still invalidate queries in case order was deactivated
-				invalidateOrderQueries(); invalidateVaultQueries();
+				const tokenAddrs = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
+				for (const tokenAddr of tokenAddrs) {
+					if (tokenAddr) {
+						invalidateOrderQueries(network.id, tokenAddr);
+						invalidateUserVaultQueries(network.id, $signerAddress, tokenAddr);
+					}
+				}
 				return transactionSuccess('0x' as Hash, `No balance to withdraw. ${link}`);
 			}
 
@@ -819,8 +833,14 @@ const transactionStore = () => {
 			const chainId = network.id;
 			const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 
-			// Invalidate both order and vault queries to refresh the UI
-			invalidateOrderQueries(); invalidateVaultQueries();
+			// Invalidate queries for the tokens involved in this order
+			const tokenAddrs = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
+			for (const tokenAddr of tokenAddrs) {
+				if (tokenAddr) {
+					invalidateOrderQueries(network.id, tokenAddr);
+					invalidateUserVaultQueries(network.id, $signerAddress, tokenAddr);
+				}
+			}
 
 			return transactionSuccess(lastHash, link);
 		} catch (error: unknown) {
