@@ -1,4 +1,9 @@
-import { createQuery, createInfiniteQuery, type QueryClient, type InfiniteData } from '@tanstack/svelte-query';
+import {
+	createQuery,
+	createInfiniteQuery,
+	type QueryClient,
+	type InfiniteData
+} from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
 import { getSfts, getSftById } from '$lib/api/subgraph';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
@@ -90,7 +95,13 @@ export function createUserVaultsQuery(
 	signerAddress: string | null,
 	pollInterval: number | false = false
 ) {
-	return createInfiniteQuery<UserVaultsPage, Error, InfiniteData<UserVaultsPage, number>, unknown[], number>({
+	return createInfiniteQuery<
+		UserVaultsPage,
+		Error,
+		InfiniteData<UserVaultsPage, number>,
+		unknown[],
+		number
+	>({
 		queryKey: ['userVaults', network?.id, signerAddress],
 		initialPageParam: 0,
 		staleTime: pollInterval ? 10_000 : Infinity, // Allow refetch if polling enabled
@@ -130,9 +141,7 @@ export function getUserVaultsForToken(
 	const normalizedToken = tokenAddress.toLowerCase();
 	const allVaults = globalCache.pages.flatMap((p) => p.vaults);
 
-	return allVaults.filter(
-		(v) => v.vault.token.address?.toLowerCase() === normalizedToken
-	);
+	return allVaults.filter((v) => v.vault.token.address?.toLowerCase() === normalizedToken);
 }
 
 /**

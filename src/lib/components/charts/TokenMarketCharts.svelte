@@ -3,7 +3,11 @@
 	import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import type { DepthSeries, VolumeBucket, OHLCBucket } from '$lib/components/charts/token-chart-types';
+	import type {
+		DepthSeries,
+		VolumeBucket,
+		OHLCBucket
+	} from '$lib/components/charts/token-chart-types';
 
 	type ChartInstance = {
 		destroy: () => void;
@@ -314,7 +318,9 @@
 								const candle = context.raw;
 								if (candle && 'o' in candle && 'c' in candle) {
 									const direction = (candle.c ?? 0) >= (candle.o ?? 0) ? '▲' : '▼';
-									return `${direction} O:$${candle.o?.toFixed(2)} H:$${candle.h?.toFixed(2)} L:$${candle.l?.toFixed(2)} C:$${candle.c?.toFixed(2)}`;
+									return `${direction} O:$${candle.o?.toFixed(2)} H:$${candle.h?.toFixed(
+										2
+									)} L:$${candle.l?.toFixed(2)} C:$${candle.c?.toFixed(2)}`;
 								}
 								if (label === 'Volume') {
 									const volumeValue = Number(context.raw?.y ?? context.parsed?.y ?? 0);

@@ -81,8 +81,7 @@
 	// Computed input vault ID based on selection
 	// 'default' = DEFAULT_INPUT_VAULT_ID (shared vault 0x01)
 	// 'order-specific' = undefined (system generates random vault ID)
-	$: selectedInputVaultId =
-		selectedVaultOption === 'default' ? DEFAULT_INPUT_VAULT_ID : undefined;
+	$: selectedInputVaultId = selectedVaultOption === 'default' ? DEFAULT_INPUT_VAULT_ID : undefined;
 
 	// Price guardrail validation
 	$: {

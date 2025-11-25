@@ -784,7 +784,8 @@ export const getTradesBySender = async (
 			const normalizedToken = tokenAddress.toLowerCase();
 			uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
 				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+				const outputTokenAddr =
+					trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
 				return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
 			});
 		}

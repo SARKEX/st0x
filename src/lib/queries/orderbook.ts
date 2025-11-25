@@ -1,4 +1,4 @@
-import { createQuery, type CreateQueryResult } from '@tanstack/svelte-query';
+import { createQuery } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
 import {
 	fetchAndQuotePaymentTokenOrders,

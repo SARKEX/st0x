@@ -60,7 +60,11 @@
 								<!-- Mobile: last 6 only -->
 								<div class="sm:hidden">
 									<ExternalLink
-										href={getRaindexOrderUrl($currentNetwork.id, order.orderbook.id.toString(), order.orderHash.toString())}
+										href={getRaindexOrderUrl(
+											$currentNetwork.id,
+											order.orderbook.id.toString(),
+											order.orderHash.toString()
+										)}
 										label={order.orderHash.toString()}
 										truncate={{ start: 0, end: 6 }}
 										className="text-blue-400 hover:text-blue-300"
@@ -69,7 +73,11 @@
 								<!-- Desktop: 6...4 -->
 								<div class="hidden sm:block">
 									<ExternalLink
-										href={getRaindexOrderUrl($currentNetwork.id, order.orderbook.id.toString(), order.orderHash.toString())}
+										href={getRaindexOrderUrl(
+											$currentNetwork.id,
+											order.orderbook.id.toString(),
+											order.orderHash.toString()
+										)}
 										label={order.orderHash.toString()}
 										truncate={{ start: 6, end: 4 }}
 										className="text-blue-400 hover:text-blue-300"

@@ -34,10 +34,8 @@
 		analyzeTrade,
 		createTokenLookup,
 		normalizeAddress,
-		parseFloatHex,
 		ratioToNumber,
 		toDecimal,
-		getRaindexOrderUrl,
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
@@ -47,7 +45,6 @@
 		prefetchGlobalOrders,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
-	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
@@ -57,7 +54,11 @@
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
-	import { createSingleVaultQuery, createUserVaultsQuery, prefetchUserVaults } from '$lib/queries/vaults';
+	import {
+		createSingleVaultQuery,
+		createUserVaultsQuery,
+		prefetchUserVaults
+	} from '$lib/queries/vaults';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
@@ -147,7 +148,9 @@
 		// Add market orders (user's trades for this token)
 		if (userMarketOrders.length > 0 && tokenAddress) {
 			for (const trade of userMarketOrders) {
-				const displayOrder = transformTradeToDisplayOrder(trade, { targetTokenAddress: tokenAddress });
+				const displayOrder = transformTradeToDisplayOrder(trade, {
+					targetTokenAddress: tokenAddress
+				});
 				if (displayOrder) {
 					displayOrders.push(displayOrder);
 				}
@@ -232,7 +235,6 @@
 		return typeof value === 'string' ? BigInt(value) : 0n;
 	}
 
-	let infoCollapsed = false;
 	let showTradePanel = false;
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
 	let panelStrategy: 'limit' | 'dca' | 'market' = 'market';
@@ -295,7 +297,10 @@
 		return { timestamp, price, tokens, quote, side };
 	};
 	// Convert trade points to OHLC candles
-	const tradesToOHLCBuckets = (trades: TradeHistoryPoint[], bucketSeconds: number): OHLCBucket[] => {
+	const tradesToOHLCBuckets = (
+		trades: TradeHistoryPoint[],
+		bucketSeconds: number
+	): OHLCBucket[] => {
 		if (trades.length === 0) return [];
 		const buckets = new Map<number, TradeHistoryPoint[]>();
 		for (const trade of trades) {
@@ -437,10 +442,6 @@
 		return null;
 	})();
 	onMount(() => {
-		if (typeof window !== 'undefined') {
-			const isMobile = window.innerWidth < 640;
-			infoCollapsed = isMobile;
-		}
 		return () => {};
 	});
 	const handleAssetTabChange = (event: CustomEvent<{ id: string }>) => {
@@ -863,9 +864,7 @@
 				>
 					<div>
 						<h2 class="text-base font-semibold text-white">DEX Activity</h2>
-						<p class="text-sm text-gray-400">
-							View DEX trades, liquidity, orders, and vaults
-						</p>
+						<p class="text-sm text-gray-400">View DEX trades, liquidity, orders, and vaults</p>
 					</div>
 				</div>
 				<TabNav
@@ -956,7 +955,11 @@
 											{#each paginatedVaults as vault}
 												{@const balance = vaultBalanceToBigInt(vault)}
 												{@const vaultIdHex = `0x${vault.vaultId.toString(16).padStart(64, '0')}`}
-												{@const raindexUrl = getRaindexVaultUrl($currentNetwork?.chainId ?? 8453, vault.orderbook, vault.id)}
+												{@const raindexUrl = getRaindexVaultUrl(
+													$currentNetwork?.chainId ?? 8453,
+													vault.orderbook,
+													vault.id
+												)}
 												<div
 													class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
 												>
@@ -1057,11 +1060,7 @@
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
 							Asset Details
 						</h3>
-						<TabNav
-							tabs={ASSET_TABS}
-							activeId={activeAssetTab}
-							on:change={handleAssetTabChange}
-						/>
+						<TabNav tabs={ASSET_TABS} activeId={activeAssetTab} on:change={handleAssetTabChange} />
 					</div>
 					{#if activeAssetTab === 'company'}
 						{#if tradingViewSymbol}
@@ -1120,11 +1119,7 @@
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
 							Token Details
 						</h3>
-						<TabNav
-							tabs={TOKEN_TABS}
-							activeId={activeTokenTab}
-							on:change={handleTokenTabChange}
-						/>
+						<TabNav tabs={TOKEN_TABS} activeId={activeTokenTab} on:change={handleTokenTabChange} />
 					</div>
 					{#if activeTokenTab === 'contract'}
 						<div class={containerStyles.cardBordered}>

@@ -18,7 +18,7 @@
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
-	import type { SgVault, RaindexVault, SgTrade } from '@rainlanguage/orderbook';
+	import type { SgTrade } from '@rainlanguage/orderbook';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -26,7 +26,6 @@
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
-	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import transactionStore from '$lib/stores/transaction';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
@@ -72,9 +71,6 @@
 			activeTab = nextId as DashboardTabId;
 		}
 	};
-
-	// Pagination for vaults (orders pagination is handled by OrdersTable component)
-	let currentVaultsPage = 1;
 
 	// Dust threshold for vaults (in token units)
 	const DUST_THRESHOLD = 0.0001;
@@ -267,10 +263,6 @@
 	})();
 
 	$: totalValue = portfolioHoldings.reduce((sum, h) => sum + h.value, 0);
-	$: totalChange24h = portfolioHoldings.reduce(
-		(sum, h) => sum + h.priceChange * h.totalBalance,
-		0
-	);
 
 	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
 	$: paymentTokenAddresses = (() => {
@@ -493,17 +485,29 @@
 								<Table>
 									<thead>
 										<tr class="border-b border-white/10">
-											<th class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Token</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Wallet</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Vaults</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Total</th>
+											<th
+												class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Token</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Wallet</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Vaults</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Total</th
+											>
 										</tr>
 									</thead>
 									<tbody>
 										{#each fundsHoldings as holding}
-											{@const paymentToken = (PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []).find(
-												(t) => t.address.toLowerCase() === holding.address.toLowerCase()
-											)}
+											{@const paymentToken = (
+												PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []
+											).find((t) => t.address.toLowerCase() === holding.address.toLowerCase())}
 											<tr class="border-b border-white/5 hover:bg-white/5">
 												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
@@ -512,9 +516,15 @@
 														name={holding.name}
 													/>
 												</td>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.walletBalanceNum.toFixed(2)}</td>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.vaultBalanceNum.toFixed(2)}</td>
-												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">{holding.totalBalance.toFixed(2)}</td>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+													>{holding.walletBalanceNum.toFixed(2)}</td
+												>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+													>{holding.vaultBalanceNum.toFixed(2)}</td
+												>
+												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3"
+													>{holding.totalBalance.toFixed(2)}</td
+												>
 											</tr>
 										{/each}
 									</tbody>
@@ -534,14 +544,38 @@
 								<Table>
 									<thead>
 										<tr class="border-b border-white/10">
-											<th class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Token</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Wallet</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Vaults</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Total</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Price</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Value</th>
-											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">24h</th>
-											<th class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Actions</th>
+											<th
+												class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Token</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Wallet</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Vaults</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Total</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Price</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Value</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>24h</th
+											>
+											<th
+												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Actions</th
+											>
 										</tr>
 									</thead>
 									<tbody>
@@ -549,22 +583,34 @@
 											<tr class="border-b border-white/5 hover:bg-white/5">
 												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
-														logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
+														logoUrl={ALL_TOKENS.find(
+															(s) => s.address.toLowerCase() === holding.address.toLowerCase()
+														)?.logoUrl}
 														symbol={holding.symbol}
 														name={holding.name}
 													/>
 												</td>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.walletBalanceNum.toFixed(4)}</td>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.vaultBalanceNum.toFixed(4)}</td>
-												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">{holding.totalBalance.toFixed(4)}</td>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+													>{holding.walletBalanceNum.toFixed(4)}</td
+												>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+													>{holding.vaultBalanceNum.toFixed(4)}</td
+												>
+												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3"
+													>{holding.totalBalance.toFixed(4)}</td
+												>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">${holding.price.toFixed(2)}</td>
-												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">${holding.value.toFixed(2)}</td>
-												<td class="px-2 py-2 text-gray-400 sm:px-4 sm:py-3">
-													TBD
-												</td>
+												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3"
+													>${holding.value.toFixed(2)}</td
+												>
+												<td class="px-2 py-2 text-gray-400 sm:px-4 sm:py-3"> TBD </td>
 												<td class="px-4 py-3">
 													<div class="flex justify-center gap-2">
-														<Button size="sm" variant="primary" on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button>
+														<Button
+															size="sm"
+															variant="primary"
+															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
+														>
 													</div>
 												</td>
 											</tr>
@@ -578,7 +624,7 @@
 					</Section>
 				{/if}
 
-			<!-- Orders Tab -->
+				<!-- Orders Tab -->
 			{:else if activeTab === 'orders'}
 				<Section>
 					<h2 class="mb-4 text-lg font-semibold">Your Orders</h2>
@@ -592,13 +638,15 @@
 					/>
 				</Section>
 
-			<!-- Vaults Tab -->
+				<!-- Vaults Tab -->
 			{:else if activeTab === 'vaults'}
 				<Section>
 					{#if $vaultsListQuery.isLoading}
 						<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
 					{:else if $vaultsListQuery.isError}
-						<div class="py-8 text-center text-sm text-red-400">Error loading vaults: {$vaultsListQuery.error?.message}</div>
+						<div class="py-8 text-center text-sm text-red-400">
+							Error loading vaults: {$vaultsListQuery.error?.message}
+						</div>
 					{:else if sortedVaults.length === 0}
 						<EmptyState description="No vaults found." />
 					{:else}
@@ -624,29 +672,52 @@
 												{@const balance = BigInt(vault.balance)}
 												{@const decimals = Number(vault.token.decimals ?? 18)}
 												{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
-												{@const ordersCount = (vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
+												{@const ordersCount =
+													(vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
 												<tr class="border-b border-white/5 hover:bg-white/5">
 													<td class="py-3 pr-4">
 														<div class="flex items-center gap-2">
 															<span class="text-gray-200">{vault.token.symbol}</span>
 															<a
-																href={getRaindexVaultUrl($currentNetwork?.chainId ?? 8453, vault.orderbook.id, vault.id)}
+																href={getRaindexVaultUrl(
+																	$currentNetwork?.chainId ?? 8453,
+																	vault.orderbook.id,
+																	vault.id
+																)}
 																target="_blank"
 																rel="noopener noreferrer"
 																class="text-blue-400 hover:text-blue-300"
 																title="View on Raindex"
 															>
-																<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	class="h-4 w-4"
+																	fill="none"
+																	viewBox="0 0 24 24"
+																	stroke="currentColor"
+																>
+																	<path
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		stroke-width="2"
+																		d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+																	/>
 																</svg>
 															</a>
 														</div>
 													</td>
-													<td class="py-3 pr-4 text-gray-300">{balanceNum.toFixed(4)} {vault.token.symbol}</td>
+													<td class="py-3 pr-4 text-gray-300"
+														>{balanceNum.toFixed(4)} {vault.token.symbol}</td
+													>
 													<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
 													<td class="py-3">
 														{#if balance > 0n}
-															<Button variant="danger" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
+															<Button
+																variant="danger"
+																size="sm"
+																on:click={() => transactionStore.handleWithdraw(raindexVault)}
+																>Withdraw</Button
+															>
 														{:else}
 															<span class="text-gray-500">—</span>
 														{/if}
@@ -695,14 +766,20 @@
 													{@const balance = BigInt(vault.balance)}
 													{@const decimals = Number(vault.token.decimals ?? 18)}
 													{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
-													{@const ordersCount = (vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
+													{@const ordersCount =
+														(vault.ordersAsInput?.length ?? 0) +
+														(vault.ordersAsOutput?.length ?? 0)}
 													<tr class="border-b border-white/5 hover:bg-white/5">
 														<td class="py-3 pr-4">
 															<span class="text-gray-200">{vault.token.symbol}</span>
 														</td>
 														<td class="py-3 pr-4">
 															<a
-																href={getRaindexVaultUrl($currentNetwork?.chainId ?? 8453, vault.orderbook.id, vault.id)}
+																href={getRaindexVaultUrl(
+																	$currentNetwork?.chainId ?? 8453,
+																	vault.orderbook.id,
+																	vault.id
+																)}
 																target="_blank"
 																rel="noopener noreferrer"
 																class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
@@ -711,11 +788,18 @@
 																{vault.vaultId.slice(0, 10)}...{vault.vaultId.slice(-6)}
 															</a>
 														</td>
-														<td class="py-3 pr-4 text-gray-300">{balanceNum.toFixed(4)} {vault.token.symbol}</td>
+														<td class="py-3 pr-4 text-gray-300"
+															>{balanceNum.toFixed(4)} {vault.token.symbol}</td
+														>
 														<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
 														<td class="py-3">
 															{#if balance > 0n}
-																<Button variant="danger" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
+																<Button
+																	variant="danger"
+																	size="sm"
+																	on:click={() => transactionStore.handleWithdraw(raindexVault)}
+																	>Withdraw</Button
+																>
 															{:else}
 																<span class="text-gray-500">—</span>
 															{/if}
@@ -726,7 +810,9 @@
 										</table>
 									</div>
 								{:else}
-									<div class="py-4 text-sm text-gray-500">All other vaults contain only dust amounts.</div>
+									<div class="py-4 text-sm text-gray-500">
+										All other vaults contain only dust amounts.
+									</div>
 								{/if}
 							</div>
 						{/if}

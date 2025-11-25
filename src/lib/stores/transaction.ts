@@ -533,8 +533,7 @@ const transactionStore = () => {
 
 				// Filter to only vaults with non-zero balance
 				// Compare hex representation to avoid Float class instance mismatch
-				const ZERO_FLOAT_HEX =
-					'0x0000000000000000000000000000000000000000000000000000000000000000';
+				const ZERO_FLOAT_HEX = '0x0000000000000000000000000000000000000000000000000000000000000000';
 				const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
 					const balanceHex = vault.balance.asHex().toLowerCase();
 					console.log('[handleRemoveOrder] Vault balance check:', {
@@ -555,9 +554,7 @@ const transactionStore = () => {
 						throw new Error(vaultWithdrawCalldata.error.readableMsg);
 					}
 
-					awaitWalletConfirmation(
-						`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`
-					);
+					awaitWalletConfirmation(`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`);
 
 					const withdrawHash = await sendTransaction(config, {
 						data: vaultWithdrawCalldata.value as Hex,
@@ -782,8 +779,7 @@ const transactionStore = () => {
 
 			// Filter to only vaults with non-zero balance
 			// Compare hex representation to avoid Float class instance mismatch
-			const ZERO_FLOAT_HEX =
-				'0x0000000000000000000000000000000000000000000000000000000000000000';
+			const ZERO_FLOAT_HEX = '0x0000000000000000000000000000000000000000000000000000000000000000';
 			const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
 				const balanceHex = vault.balance.asHex().toLowerCase();
 				return balanceHex !== ZERO_FLOAT_HEX;

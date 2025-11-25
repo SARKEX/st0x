@@ -7,7 +7,6 @@
 	import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 	import transactionStore from '$lib/stores/transaction';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
-	import type { RaindexOrder } from '@rainlanguage/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { DisplayOrder } from '$lib/types/orders';
@@ -56,10 +55,7 @@
 	$: closedOrdersQuery = createQuery({
 		queryKey: ['closedOrders', $currentNetwork?.id, $signerAddress, tokenAddress],
 		enabled: Boolean(
-			showClosedOrders &&
-				showClosedOrdersOption &&
-				$currentNetwork &&
-				$signerAddress
+			showClosedOrders && showClosedOrdersOption && $currentNetwork && $signerAddress
 		),
 		staleTime: 60_000,
 		queryFn: async () => {
@@ -390,26 +386,37 @@
 							{@const amount = order.side === 'Buy' ? order.inputAmount : order.outputAmount}
 							<tr class="border-b border-white/5 hover:bg-white/5">
 								<td class="py-3 pr-4">
-									<span class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400">
+									<span
+										class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400"
+									>
 										Market
 									</span>
 								</td>
 								<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
 								<td class="py-3 pr-4">
-									<span class={`text-xs font-medium ${order.side === 'Buy' ? 'text-green-400' : 'text-red-400'}`}>
+									<span
+										class={`text-xs font-medium ${
+											order.side === 'Buy' ? 'text-green-400' : 'text-red-400'
+										}`}
+									>
 										{order.side}
 									</span>
 								</td>
 								<td class="py-3 pr-4">
-									<span class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400">
+									<span
+										class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400"
+									>
 										Executed
 									</span>
 								</td>
 								<td class="py-3 pr-4 text-gray-300">
-									{amount ? Number(amount).toFixed(3) : '—'} {order.tokenSymbol}
+									{amount ? Number(amount).toFixed(3) : '—'}
+									{order.tokenSymbol}
 								</td>
 								<td class="py-3 pr-4 text-gray-300">
-									{order.price !== undefined && Number.isFinite(order.price) ? order.price.toFixed(3) : '—'}
+									{order.price !== undefined && Number.isFinite(order.price)
+										? order.price.toFixed(3)
+										: '—'}
 								</td>
 								<td class="py-3 pr-4">
 									{#if txHash}
@@ -464,8 +471,8 @@
 								: 18}
 							{@const orderOwner = quote?.sgOrder?.owner || ''}
 							{@const orderbookId = quote?.orderbookId || ''}
-							{@const isActive = order.isActive ?? (quote?.sgOrder?.active ?? true)}
-							{@const isFilled = order.isFilled ?? (maxOutputBigInt === 0n)}
+							{@const isActive = order.isActive ?? quote?.sgOrder?.active ?? true}
+							{@const isFilled = order.isFilled ?? maxOutputBigInt === 0n}
 							{@const remainingAmount = !isActive
 								? 'n/a'
 								: isFilled
@@ -500,27 +507,38 @@
 								</td>
 								<td class="py-3 pr-4">
 									{#if isFilled && isActive}
-										<span class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400">
+										<span
+											class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400"
+										>
 											Filled
 										</span>
 									{:else if isActive}
-										<span class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+										<span
+											class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400"
+										>
 											Active
 										</span>
 									{:else}
-										<span class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400">
+										<span
+											class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400"
+										>
 											Closed
 										</span>
 									{/if}
 								</td>
 								<td class="py-3 pr-4 text-gray-300">
-									{remainingAmount} {order.tokenSymbol}
+									{remainingAmount}
+									{order.tokenSymbol}
 								</td>
 								<td class="py-3 pr-4 text-gray-300">{currentPrice}</td>
 								<td class="py-3 pr-4">
 									{#if quote}
 										<a
-											href={getRaindexOrderUrl($currentNetwork?.id ?? 0, orderbookId, quote.orderHash)}
+											href={getRaindexOrderUrl(
+												$currentNetwork?.id ?? 0,
+												orderbookId,
+												quote.orderHash
+											)}
 											target="_blank"
 											rel="noopener noreferrer"
 											class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"

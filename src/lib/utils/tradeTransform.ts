@@ -37,7 +37,7 @@ export function transformTradeToDisplayOrder(
 		// Trade page: check if target matches input (Buy) or output (Sell)
 		const targetAddr = options.targetTokenAddress.toLowerCase();
 		isBuy = inputAddr === targetAddr;
-		assetTokenSymbol = isBuy ? (inputToken.symbol ?? 'UNKNOWN') : (outputToken.symbol ?? 'UNKNOWN');
+		assetTokenSymbol = isBuy ? inputToken.symbol ?? 'UNKNOWN' : outputToken.symbol ?? 'UNKNOWN';
 		assetTokenAddress = targetAddr;
 	} else {
 		// Dashboard: check if input/output is an asset token

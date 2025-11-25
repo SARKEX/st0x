@@ -103,7 +103,9 @@ export function classifyOrderType(rainlang: string | undefined): OrderType | nul
 	}
 
 	// Extract the handle-io section content
-	const handleIoMatch = rainlang.match(/\/\*\s*1\.\s*handle-io\s*\*\/\s*([\s\S]*?)(?:\/\*\s*2\.|$)/);
+	const handleIoMatch = rainlang.match(
+		/\/\*\s*1\.\s*handle-io\s*\*\/\s*([\s\S]*?)(?:\/\*\s*2\.|$)/
+	);
 	const handleIoContent = handleIoMatch?.[1]?.trim() ?? '';
 
 	// DCA - handle-io section starts with "min-amount:"
