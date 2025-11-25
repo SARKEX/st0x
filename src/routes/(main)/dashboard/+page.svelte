@@ -30,6 +30,8 @@
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import transactionStore from '$lib/stores/transaction';
+	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
+	import type { DisplayOrder } from '$lib/types/orders';
 
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
@@ -71,10 +73,8 @@
 		}
 	};
 
-	// Pagination
-	let currentOrdersPage = 1;
+	// Pagination for vaults (orders pagination is handled by OrdersTable component)
 	let currentVaultsPage = 1;
-	const ITEMS_PER_PAGE = 10;
 
 	// Dust threshold for vaults (in token units)
 	const DUST_THRESHOLD = 0.0001;
@@ -122,7 +122,7 @@
 						balance: vaultBalanceFloat.value!.value.toString(),
 						token: {
 							id: vault.token.id as `0x${string}`,
-							address: vault.token.address,
+							address: (vault.token.address ?? vault.token.id) as `0x${string}`,
 							name: vault.token.name,
 							symbol: vault.token.symbol,
 							decimals: vault.token.decimals.toString() as `0x${string}`
@@ -347,25 +347,6 @@
 		});
 	})();
 
-	// Type for unified order display
-	type DisplayOrder = {
-		type: 'limit' | 'dca' | 'custom' | 'market';
-		orderHash: string;
-		timestamp: number;
-		side: 'Buy' | 'Sell';
-		quote?: ProcessedQuote;
-		trade?: SgTrade;
-		tokenSymbol: string;
-		tokenAddress: string;
-		inputTokenSymbol: string;
-		outputTokenSymbol: string;
-		inputAmount?: string;
-		outputAmount?: string;
-		price?: number;
-		isActive?: boolean;
-		isFilled?: boolean;
-	};
-
 	// Combined orders (limit + market)
 	$: allOrders = (() => {
 		const displayOrders: DisplayOrder[] = [];
@@ -459,12 +440,6 @@
 			.sort((a, b) => b.timestamp - a.timestamp);
 	})();
 
-	$: paginatedOrders = allOrders.slice(
-		(currentOrdersPage - 1) * ITEMS_PER_PAGE,
-		currentOrdersPage * ITEMS_PER_PAGE
-	);
-	$: totalOrderPages = Math.ceil(allOrders.length / ITEMS_PER_PAGE);
-
 	// Vaults: sorted with default vault first for each token, filtered to valid tokens only
 	$: sortedVaults = (() => {
 		const vaultPages = $vaultsListQuery?.data?.pages ?? [];
@@ -550,14 +525,12 @@
 					/>
 					<MetricCard
 						label="24h Change"
-						value={`${totalChange24h >= 0 ? '+' : ''}$${Math.abs(totalChange24h).toFixed(2)}`}
+						value="TBD"
 						cardClass="bg-gray-800/50 border border-white/10"
 						paddingClass="p-4"
 						showGradient={false}
 						change=""
-						valueClass={`text-2xl font-bold ${
-							totalChange24h >= 0 ? 'text-green-500' : 'text-red-500'
-						}`}
+						valueClass="text-2xl font-bold text-gray-400"
 					/>
 					<MetricCard
 						label="Active Orders"
@@ -618,10 +591,8 @@
 											<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">{holding.totalBalance.toFixed(4)}</td>
 											<td class="px-2 py-2 sm:px-4 sm:py-3">${holding.price.toFixed(2)}</td>
 											<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">${holding.value.toFixed(2)}</td>
-											<td class="px-2 py-2 sm:px-4 sm:py-3">
-												<span class={holding.priceChangePercent >= 0 ? 'text-green-500' : 'text-red-500'}>
-													{holding.priceChangePercent >= 0 ? '+' : ''}{holding.priceChangePercent.toFixed(2)}%
-												</span>
+											<td class="px-2 py-2 text-gray-400 sm:px-4 sm:py-3">
+												TBD
 											</td>
 											<td class="px-4 py-3">
 												<div class="flex justify-center gap-2">
@@ -642,127 +613,14 @@
 			{:else if activeTab === 'orders'}
 				<Section>
 					<h2 class="mb-4 text-lg font-semibold">Your Orders</h2>
-					{#if $orderbookQuotesQuery.isLoading || $tradeActivityQuery.isLoading}
-						<LoadingSpinner variant="inline" size="md" text="Loading orders..." />
-					{:else if allOrders.length === 0}
-						<EmptyState description="No orders found." />
-					{:else}
-						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
-								<thead class="border-b border-white/10">
-									<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
-										<th class="pb-3 pr-4 font-medium">Type</th>
-										<th class="pb-3 pr-4 font-medium">Token</th>
-										<th class="pb-3 pr-4 font-medium">Direction</th>
-										<th class="pb-3 pr-4 font-medium">Status</th>
-										<th class="pb-3 pr-4 font-medium">Amount</th>
-										<th class="pb-3 pr-4 font-medium">Price</th>
-										<th class="pb-3 pr-4 font-medium">Hash</th>
-										<th class="pb-3 font-medium">Actions</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each paginatedOrders as order}
-										{#if order.type === 'market'}
-											<!-- Market Order Row -->
-											{@const trade = order.trade}
-											{@const txHash = trade?.tradeEvent?.transaction?.id || ''}
-											{@const amount = order.side === 'Buy' ? order.inputAmount : order.outputAmount}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="py-3 pr-4">
-													<span class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400">Market</span>
-												</td>
-												<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
-												<td class="py-3 pr-4">
-													<span class={`text-xs font-medium ${order.side === 'Buy' ? 'text-green-400' : 'text-red-400'}`}>{order.side}</span>
-												</td>
-												<td class="py-3 pr-4">
-													<span class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400">Executed</span>
-												</td>
-												<td class="py-3 pr-4 text-gray-300">{amount ? Number(amount).toFixed(3) : '—'} {order.tokenSymbol}</td>
-												<td class="py-3 pr-4 text-gray-300">{order.price !== undefined && Number.isFinite(order.price) ? order.price.toFixed(3) : '—'}</td>
-												<td class="py-3 pr-4">
-													{#if txHash}
-														<a href={`${$currentNetwork?.blockExplorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline" title={txHash}>
-															{txHash.slice(0, 8)}...{txHash.slice(-6)}
-														</a>
-													{:else}
-														—
-													{/if}
-												</td>
-												<td class="py-3 text-gray-500">—</td>
-											</tr>
-										{:else}
-											<!-- Limit/DCA/Custom Order Row -->
-											{@const quote = order.quote}
-											{@const maxOutputBigInt = quote ? parseFloatHex(quote.maxOutput, order.side === 'Buy' ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18) : 0n}
-											{@const tokenDecimals = quote ? (order.side === 'Buy' ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18) : 18}
-											{@const remainingAmount = order.isFilled ? '0' : maxOutputBigInt > 0n ? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3) : '—'}
-											{@const orderbookId = quote?.orderbookId || ''}
-											{@const typeLabel = order.type === 'dca' ? 'DCA' : order.type === 'custom' ? 'Custom' : 'Limit'}
-											{@const typeColorClass = order.type === 'dca' ? 'bg-orange-500/20 text-orange-400' : order.type === 'custom' ? 'bg-pink-500/20 text-pink-400' : 'bg-blue-500/20 text-blue-400'}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="py-3 pr-4">
-													<span class={`rounded px-2 py-0.5 text-xs font-medium ${typeColorClass}`}>{typeLabel}</span>
-												</td>
-												<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
-												<td class="py-3 pr-4">
-													<span class={`text-xs font-medium ${order.side === 'Buy' ? 'text-green-400' : 'text-red-400'}`}>{order.side}</span>
-												</td>
-												<td class="py-3 pr-4">
-													{#if order.isFilled && order.isActive}
-														<span class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400">Filled</span>
-													{:else if order.isActive}
-														<span class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">Active</span>
-													{:else}
-														<span class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400">Closed</span>
-													{/if}
-												</td>
-												<td class="py-3 pr-4 text-gray-300">{remainingAmount} {order.tokenSymbol}</td>
-												<td class="py-3 pr-4 text-gray-300">{order.price !== undefined && Number.isFinite(order.price) ? order.price.toFixed(3) : '—'}</td>
-												<td class="py-3 pr-4">
-													{#if quote}
-														<a href={`https://sdk.raindex.finance/v5/#/${$currentNetwork?.raindexNetworkSlug}/orderbook/${orderbookId}/order/${quote.orderHash}`} target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline" title={quote.orderHash}>
-															{quote.orderHash.slice(0, 8)}...{quote.orderHash.slice(-6)}
-														</a>
-													{:else}
-														—
-													{/if}
-												</td>
-												<td class="py-3">
-													{#if quote}
-														{#if order.isFilled && order.isActive}
-															<Button variant="secondary" size="sm" on:click={() => transactionStore.handleWithdrawFromOrder({ ...quote, isFilled: true })}>Withdraw</Button>
-														{:else if order.isActive}
-															<Button variant="danger" size="sm" on:click={() => transactionStore.handleRemoveOrder(quote)}>Cancel</Button>
-														{:else}
-															<Button variant="secondary" size="sm" on:click={() => transactionStore.handleWithdrawFromOrder({ ...quote, isFilled: false })}>Withdraw</Button>
-														{/if}
-													{:else}
-														—
-													{/if}
-												</td>
-											</tr>
-										{/if}
-									{/each}
-								</tbody>
-							</table>
-						</div>
-						<!-- Pagination -->
-						{#if totalOrderPages > 1}
-							<div class="mt-4 flex items-center justify-center gap-2">
-								{#each Array.from({ length: totalOrderPages }, (_, i) => i + 1) as pageNum}
-									<button
-										type="button"
-										class={`h-8 w-8 rounded-md text-sm font-medium transition ${pageNum === currentOrdersPage ? 'bg-blue-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
-										on:click={() => { currentOrdersPage = pageNum; }}
-									>
-										{pageNum}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					{/if}
+					<OrdersTable
+						orders={allOrders}
+						isLoading={$orderbookQuotesQuery.isLoading || $tradeActivityQuery.isLoading}
+						isError={$orderbookQuotesQuery.isError}
+						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+						showOwnerFilter={false}
+						showWalletColumn={false}
+					/>
 				</Section>
 
 			<!-- Vaults Tab -->
@@ -803,7 +661,7 @@
 														<div class="flex items-center gap-2">
 															<span class="text-gray-200">{vault.token.symbol}</span>
 															<a
-																href={getRaindexVaultUrl(vault.vaultId)}
+																href={getRaindexVaultUrl($currentNetwork?.chainId ?? 8453, vault.orderbook.id, vault.id)}
 																target="_blank"
 																rel="noopener noreferrer"
 																class="text-blue-400 hover:text-blue-300"
@@ -875,7 +733,7 @@
 														</td>
 														<td class="py-3 pr-4">
 															<a
-																href={getRaindexVaultUrl(vault.vaultId)}
+																href={getRaindexVaultUrl($currentNetwork?.chainId ?? 8453, vault.orderbook.id, vault.id)}
 																target="_blank"
 																rel="noopener noreferrer"
 																class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"

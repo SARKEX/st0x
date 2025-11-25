@@ -8,6 +8,7 @@ import {
 	type ProcessedQuote
 } from '$lib/api/orders';
 import { getDefaultPaymentTokenForNetwork, DEFAULT_PAYMENT_TOKENS } from '$lib/config/network';
+import { queryClient } from '$lib/clients/queryClient';
 
 export type OrderbookQuoteCache = {
 	summary: Record<string, TokenPriceSummary>;
@@ -84,4 +85,15 @@ export function createTokenOrderbookQuotesQuery(
 			}
 		}
 	});
+}
+
+/**
+ * Invalidate and refetch all order-related queries.
+ * Call after order deployment or cancel operations.
+ */
+export function invalidateOrderQueries() {
+	console.log('[OrderbookQueries] Refetching order queries...');
+	queryClient.refetchQueries({ queryKey: ['orderbookQuotes'] });
+	queryClient.refetchQueries({ queryKey: ['tokenOrderbookQuotes'] });
+	queryClient.refetchQueries({ queryKey: ['closedOrders'] });
 }

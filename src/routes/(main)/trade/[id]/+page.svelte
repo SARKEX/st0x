@@ -58,6 +58,8 @@
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
 	import { createSingleVaultQuery } from '$lib/queries/vaults';
+	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
+	import type { DisplayOrder } from '$lib/types/orders';
 	$: tokenId = $page.params.id;
 
 	// Get queryClient for cache lookup
@@ -102,26 +104,6 @@
 		});
 	})();
 
-	// Type for unified order display (limit orders + market orders)
-	type DisplayOrder = {
-		type: 'limit' | 'dca' | 'custom' | 'market';
-		orderHash: string;
-		timestamp: number;
-		side: 'Buy' | 'Sell';
-		// For limit orders
-		quote?: ProcessedQuote;
-		// For market orders (trades)
-		trade?: SgTrade;
-		// Common display fields
-		inputTokenSymbol: string;
-		outputTokenSymbol: string;
-		inputTokenAddress: string;
-		outputTokenAddress: string;
-		inputAmount?: string;
-		outputAmount?: string;
-		price?: number;
-	};
-
 	// Transform market orders (trades) into display format
 	function transformTradeToDisplayOrder(trade: SgTrade, tokenAddress: string): DisplayOrder | null {
 		const inputToken = trade.inputVaultBalanceChange?.vault?.token;
@@ -163,16 +145,20 @@
 			}
 		}
 
+		const tokenSymbol = isBuy
+			? (inputToken.symbol ?? 'UNKNOWN')
+			: (outputToken.symbol ?? 'UNKNOWN');
+
 		return {
 			type: 'market',
 			orderHash: trade.order?.orderHash ?? trade.id,
 			timestamp: Number(trade.timestamp),
 			side: isBuy ? 'Buy' : 'Sell',
 			trade,
+			tokenSymbol,
+			tokenAddress: targetAddr,
 			inputTokenSymbol: inputToken.symbol ?? 'UNKNOWN',
 			outputTokenSymbol: outputToken.symbol ?? 'UNKNOWN',
-			inputTokenAddress: inputTokenAddr ?? '',
-			outputTokenAddress: outputTokenAddr ?? '',
 			inputAmount:
 				inputAmountBigInt > 0n ? formatUnits(inputAmountBigInt, inputDecimals) : undefined,
 			outputAmount:
@@ -181,32 +167,27 @@
 		};
 	}
 
-	// Use orderbook quotes for orders instead of separate query
-	// Filter quotes by current token and owner, combine with market orders
+	// Transform quotes and market orders into DisplayOrder format for OrdersTable
+	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
 	$: tokenOrders = (() => {
 		const displayOrders: DisplayOrder[] = [];
 		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
 
-		// Add limit orders from quotes
+		// Add limit orders from quotes (for current token only)
 		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
 			const quotes = $orderbookQuotesQuery.data.quotes;
 
 			// Filter by token (input or output matches current token)
-			let filtered = quotes.filter(
+			const filtered = quotes.filter(
 				(q) =>
 					q.inputTokenAddress.toLowerCase() === tokenAddress ||
 					q.outputTokenAddress.toLowerCase() === tokenAddress
 			);
 
-			// Filter by owner if "My Orders" is selected
-			if (selectedOrdersFilter === 'my' && $signerAddress) {
-				const myAddress = $signerAddress.toLowerCase();
-				filtered = filtered.filter((q) => q.sgOrder?.owner?.toLowerCase() === myAddress);
-			}
-
 			// Transform to DisplayOrder
 			for (const quote of filtered) {
 				const isBuy = quote.side === 'bid';
+				const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol;
 				// Use the classified order type, defaulting to 'limit' if not set
 				const orderType = quote.orderType ?? 'limit';
 				displayOrders.push({
@@ -215,17 +196,18 @@
 					timestamp: quote.sgOrder?.timestampAdded ? Number(quote.sgOrder.timestampAdded) : 0,
 					side: isBuy ? 'Buy' : 'Sell',
 					quote,
+					tokenSymbol,
+					tokenAddress,
 					inputTokenSymbol: quote.inputTokenSymbol,
 					outputTokenSymbol: quote.outputTokenSymbol,
-					inputTokenAddress: quote.inputTokenAddress,
-					outputTokenAddress: quote.outputTokenAddress,
-					price: quote.quotePerAsset
+					price: quote.quotePerAsset,
+					isActive: quote.sgOrder?.active ?? true
 				});
 			}
 		}
 
-		// Add market orders (only for "My Orders" view)
-		if (selectedOrdersFilter === 'my' && $signerAddress && userMarketOrders.length > 0) {
+		// Add market orders (user's trades for this token)
+		if (userMarketOrders.length > 0) {
 			for (const trade of userMarketOrders) {
 				const displayOrder = transformTradeToDisplayOrder(trade, tokenAddress);
 				if (displayOrder) {
@@ -234,36 +216,11 @@
 			}
 		}
 
-		// Sort by timestamp descending (newest first), then by block number for market orders
-		displayOrders.sort((a, b) => {
-			const timeDiff = b.timestamp - a.timestamp;
-			if (timeDiff !== 0) return timeDiff;
-
-			// Secondary sort by block number for market orders (more precision)
-			if (a.type === 'market' && b.type === 'market') {
-				const aBlock = Number(a.trade?.tradeEvent?.transaction?.blockNumber ?? 0);
-				const bBlock = Number(b.trade?.tradeEvent?.transaction?.blockNumber ?? 0);
-				return bBlock - aBlock;
-			}
-			return 0;
-		});
-
-		// Apply type filter
-		if (selectedOrderTypeFilter !== 'all') {
-			return displayOrders.filter((order) => order.type === selectedOrderTypeFilter);
-		}
+		// Sort by timestamp descending
+		displayOrders.sort((a, b) => b.timestamp - a.timestamp);
 
 		return displayOrders;
 	})();
-
-	// Paginate the filtered orders
-	$: paginatedOrders = (() => {
-		const startIndex = (currentOrdersPage - 1) * 10;
-		const endIndex = startIndex + 10;
-		return tokenOrders.slice(startIndex, endIndex);
-	})();
-
-	$: totalOrderPages = Math.ceil(tokenOrders.length / 10);
 
 	// Vaults query - shared with dashboard
 	$: tokenVaultsQuery = createInfiniteQuery({
@@ -355,24 +312,8 @@
 	type OnchainTabId = (typeof ONCHAIN_TABS)[number]['id'];
 	let activeOnchainTab: OnchainTabId = 'market';
 
-	// Orders filter: 'my' for user's orders, 'all' for all orders
-	let selectedOrdersFilter: 'my' | 'all' = 'my';
-	// Order type filter
-	let selectedOrderTypeFilter: 'all' | 'limit' | 'dca' | 'custom' | 'market' = 'all';
-
-	// Update selected filter when connection changes
-	$: if (!$connected && selectedOrdersFilter === 'my') {
-		selectedOrdersFilter = 'all';
-	}
-
-	// Pagination state
-	let currentOrdersPage = 1;
+	// Pagination state for vaults (orders pagination is handled by OrdersTable component)
 	let currentVaultsPage = 1;
-
-	// Reset pagination when filter changes
-	$: if (selectedOrdersFilter || selectedOrderTypeFilter) {
-		currentOrdersPage = 1;
-	}
 
 	function handleOnchainTabChange(event: CustomEvent<{ id: string }>) {
 		activeOnchainTab = event.detail.id as OnchainTabId;
@@ -1044,404 +985,13 @@
 				<div class="mt-2 text-xs text-gray-400">All times are displayed in your local timezone</div>
 			{:else if activeOnchainTab === 'orders'}
 				<div class="mt-4">
-					<!-- Filter toggle -->
-					<div class="mb-4 flex flex-wrap items-center gap-4">
-						<div class="flex items-center gap-2">
-							<span class="text-sm text-gray-400">Show:</span>
-							<div class="flex gap-2">
-								<button
-									type="button"
-									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-										selectedOrdersFilter === 'my'
-											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-									} ${!$connected ? 'cursor-not-allowed opacity-50' : ''}`}
-									disabled={!$connected}
-									on:click={() => {
-										selectedOrdersFilter = 'my';
-									}}
-								>
-									My Orders
-								</button>
-								<button
-									type="button"
-									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-										selectedOrdersFilter === 'all'
-											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-									}`}
-									on:click={() => {
-										selectedOrdersFilter = 'all';
-									}}
-								>
-									All Orders
-								</button>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
-							<span class="text-sm text-gray-400">Type:</span>
-							<div class="flex gap-2">
-								<button
-									type="button"
-									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-										selectedOrderTypeFilter === 'all'
-											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-									}`}
-									on:click={() => { selectedOrderTypeFilter = 'all'; }}
-								>
-									All
-								</button>
-								<button
-									type="button"
-									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-										selectedOrderTypeFilter === 'limit'
-											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-									}`}
-									on:click={() => { selectedOrderTypeFilter = 'limit'; }}
-								>
-									Limit
-								</button>
-								<button
-									type="button"
-									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-										selectedOrderTypeFilter === 'dca'
-											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-									}`}
-									on:click={() => { selectedOrderTypeFilter = 'dca'; }}
-								>
-									DCA
-								</button>
-								<button
-									type="button"
-									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-										selectedOrderTypeFilter === 'market'
-											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-									}`}
-									on:click={() => { selectedOrderTypeFilter = 'market'; }}
-								>
-									Market
-								</button>
-								<button
-									type="button"
-									class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-										selectedOrderTypeFilter === 'custom'
-											? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-											: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-									}`}
-									on:click={() => { selectedOrderTypeFilter = 'custom'; }}
-								>
-									Custom
-								</button>
-							</div>
-						</div>
-					</div>
-
-					{#if $orderbookQuotesQuery.isLoading}
-						<div class="flex justify-center py-8">
-							<LoadingSpinner variant="inline" size="md" text="Loading orders..." />
-						</div>
-					{:else if $orderbookQuotesQuery.isError}
-						<div class="py-8 text-center text-sm text-red-400">
-							Error loading orders: {$orderbookQuotesQuery.error?.message}
-						</div>
-					{:else if tokenOrders.length === 0}
-						<div class="py-8 text-center text-sm text-gray-400">
-							{selectedOrdersFilter === 'my'
-								? 'You have no orders for this token'
-								: 'No orders found for this token'}
-						</div>
-					{:else}
-						<!-- Orders table -->
-						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
-								<thead class="border-b border-white/10">
-									<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
-										<th class="pb-3 pr-4 font-medium">Type</th>
-										<th class="pb-3 pr-4 font-medium">Direction</th>
-										<th class="pb-3 pr-4 font-medium">Status</th>
-										<th class="pb-3 pr-4 font-medium">Amount</th>
-										<th class="pb-3 pr-4 font-medium">Price</th>
-										<th class="pb-3 pr-4 font-medium">Hash</th>
-										<th class="pb-3 pr-4 font-medium">Wallet</th>
-										{#if selectedOrdersFilter === 'my'}
-											<th class="pb-3 font-medium">Actions</th>
-										{/if}
-									</tr>
-								</thead>
-								<tbody>
-									{#each paginatedOrders as order}
-										{#if order.type === 'market'}
-											<!-- Market Order (Trade) Row -->
-											{@const trade = order.trade}
-											{@const txHash = trade?.tradeEvent?.transaction?.id || ''}
-											{@const amount =
-												order.side === 'Buy' ? order.inputAmount : order.outputAmount}
-											{@const tokenSymbol =
-												order.side === 'Buy' ? order.inputTokenSymbol : order.outputTokenSymbol}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="py-3 pr-4">
-													<span
-														class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400"
-													>
-														Market
-													</span>
-												</td>
-												<td class="py-3 pr-4">
-													<span
-														class={`text-xs font-medium ${
-															order.side === 'Buy' ? 'text-green-400' : 'text-red-400'
-														}`}
-													>
-														{order.side}
-													</span>
-												</td>
-												<td class="py-3 pr-4">
-													<span
-														class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400"
-													>
-														Executed
-													</span>
-												</td>
-												<td class="py-3 pr-4 text-gray-300">
-													{amount ? Number(amount).toFixed(3) : '—'}
-													{tokenSymbol}
-												</td>
-												<td class="py-3 pr-4 text-gray-300">
-													{order.price !== undefined && Number.isFinite(order.price)
-														? order.price.toFixed(3)
-														: '—'}
-												</td>
-												<td class="py-3 pr-4">
-													{#if txHash}
-														<a
-															href={`${$currentNetwork?.blockExplorer}/tx/${txHash}`}
-															target="_blank"
-															rel="noopener noreferrer"
-															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-															title={txHash}
-														>
-															{txHash.slice(0, 8)}...{txHash.slice(-6)}
-														</a>
-													{:else}
-														—
-													{/if}
-												</td>
-												<td class="py-3 pr-4">
-													{#if $signerAddress}
-														<a
-															href={`${$currentNetwork?.blockExplorer}/address/${$signerAddress}`}
-															target="_blank"
-															rel="noopener noreferrer"
-															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-															title={$signerAddress}
-														>
-															{$signerAddress.slice(0, 6)}...{$signerAddress.slice(-4)}
-														</a>
-													{:else}
-														—
-													{/if}
-												</td>
-												{#if selectedOrdersFilter === 'my'}
-													<td class="py-3 text-gray-500"> — </td>
-												{/if}
-											</tr>
-										{:else}
-											<!-- Limit Order Row -->
-											{@const quote = order.quote}
-											{@const isBuy = order.side === 'Buy'}
-											{@const maxOutputBigInt = quote
-												? parseFloatHex(
-														quote.maxOutput,
-														isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18
-													)
-												: 0n}
-											{@const tokenSymbol = isBuy
-												? order.inputTokenSymbol
-												: order.outputTokenSymbol}
-											{@const tokenDecimals = quote
-												? isBuy
-													? quote.inputTokenDecimals || 18
-													: quote.outputTokenDecimals || 18
-												: 18}
-											{@const orderOwner = quote?.sgOrder?.owner || ''}
-											{@const orderbookId = quote?.orderbookId || ''}
-											{@const isFilled = maxOutputBigInt === 0n}
-											{@const remainingAmount = isFilled
-												? '0'
-												: maxOutputBigInt > 0n
-													? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3)
-													: '—'}
-											{@const currentPrice =
-												order.price !== undefined &&
-												order.price !== null &&
-												Number.isFinite(order.price)
-													? order.price.toFixed(3)
-													: '—'}
-											{@const isMyOrder =
-												orderOwner.toLowerCase() === $signerAddress?.toLowerCase()}
-											{@const isActive = quote?.sgOrder?.active ?? true}
-											{@const typeLabel =
-												order.type === 'dca'
-													? 'DCA'
-													: order.type === 'custom'
-														? 'Custom'
-														: 'Limit'}
-											{@const typeClass =
-												order.type === 'dca'
-													? 'bg-green-500/20 text-green-400'
-													: order.type === 'custom'
-														? 'bg-yellow-500/20 text-yellow-400'
-														: 'bg-blue-500/20 text-blue-400'}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="py-3 pr-4">
-													<span
-														class={`rounded px-2 py-0.5 text-xs font-medium ${typeClass}`}
-													>
-														{typeLabel}
-													</span>
-												</td>
-												<td class="py-3 pr-4">
-													<span
-														class={`text-xs font-medium ${
-															isBuy ? 'text-green-400' : 'text-red-400'
-														}`}
-													>
-														{order.side}
-													</span>
-												</td>
-												<td class="py-3 pr-4">
-													{#if isFilled && isActive}
-														<span
-															class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400"
-														>
-															Filled
-														</span>
-													{:else if isActive}
-														<span
-															class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400"
-														>
-															Active
-														</span>
-													{:else}
-														<span
-															class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400"
-														>
-															Closed
-														</span>
-													{/if}
-												</td>
-												<td class="py-3 pr-4 text-gray-300">
-													{remainingAmount}
-													{tokenSymbol}
-												</td>
-												<td class="py-3 pr-4 text-gray-300">
-													{currentPrice}
-												</td>
-												<td class="py-3 pr-4">
-													{#if quote}
-														<a
-															href={getRaindexOrderUrl($currentNetwork?.id ?? 0, orderbookId, quote.orderHash)}
-															target="_blank"
-															rel="noopener noreferrer"
-															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-															title={quote.orderHash}
-														>
-															{quote.orderHash.slice(0, 8)}...{quote.orderHash.slice(-6)}
-														</a>
-													{:else}
-														—
-													{/if}
-												</td>
-												<td class="py-3 pr-4">
-													{#if orderOwner}
-														<a
-															href={`${$currentNetwork?.blockExplorer}/address/${orderOwner}`}
-															target="_blank"
-															rel="noopener noreferrer"
-															class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-															title={orderOwner}
-														>
-															{orderOwner.slice(0, 6)}...{orderOwner.slice(-4)}
-														</a>
-													{:else}
-														—
-													{/if}
-												</td>
-												{#if selectedOrdersFilter === 'my'}
-													<td class="py-3">
-														{#if isMyOrder && quote}
-															{#if isFilled && isActive}
-																<!-- Filled order: show Withdraw button that deactivates + withdraws from input vault -->
-																<Button
-																	variant="secondary"
-																	size="sm"
-																	on:click={() =>
-																		transactionStore.handleWithdrawFromOrder({
-																			...quote,
-																			isFilled: true
-																		})}
-																>
-																	Withdraw
-																</Button>
-															{:else if isActive}
-																<!-- Active but not filled: just show Cancel button -->
-																<Button
-																	variant="danger"
-																	size="sm"
-																	on:click={() => transactionStore.handleRemoveOrder(quote)}
-																>
-																	Cancel
-																</Button>
-															{:else}
-																<!-- Closed order: withdraw from both vaults -->
-																<Button
-																	variant="secondary"
-																	size="sm"
-																	on:click={() =>
-																		transactionStore.handleWithdrawFromOrder({
-																			...quote,
-																			isFilled: false
-																		})}
-																>
-																	Withdraw
-																</Button>
-															{/if}
-														{:else}
-															—
-														{/if}
-													</td>
-												{/if}
-											</tr>
-										{/if}
-									{/each}
-								</tbody>
-							</table>
-						</div>
-						<!-- Pagination controls -->
-						{#if totalOrderPages > 1}
-							<div class="mt-4 flex items-center justify-center gap-2">
-								{#each Array.from({ length: totalOrderPages }, (_, i) => i + 1) as pageNum}
-									<button
-										type="button"
-										class={`h-8 w-8 rounded-md text-sm font-medium transition ${
-											pageNum === currentOrdersPage
-												? 'bg-blue-500 text-white'
-												: 'bg-white/5 text-gray-400 hover:bg-white/10'
-										}`}
-										on:click={() => {
-											currentOrdersPage = pageNum;
-										}}
-									>
-										{pageNum}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					{/if}
+					<OrdersTable
+						orders={tokenOrders}
+						isLoading={$orderbookQuotesQuery.isLoading}
+						isError={$orderbookQuotesQuery.isError}
+						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+						tokenAddress={currentToken?.address ?? null}
+					/>
 				</div>
 			{:else if activeOnchainTab === 'vaults'}
 				<div class="mt-4">
@@ -1497,8 +1047,8 @@
 										<div class="space-y-2">
 											{#each paginatedVaults as vault}
 												{@const balance = vaultBalanceToBigInt(vault)}
-												{@const vaultIdHex = vault.vaultId.toString(16).padStart(64, '0')}
-												{@const raindexUrl = getRaindexVaultUrl(vaultIdHex)}
+												{@const vaultIdHex = `0x${vault.vaultId.toString(16).padStart(64, '0')}`}
+												{@const raindexUrl = getRaindexVaultUrl($currentNetwork?.chainId ?? 8453, vault.orderbook, vault.id)}
 												<div
 													class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
 												>

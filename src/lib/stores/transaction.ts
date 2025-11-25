@@ -17,7 +17,7 @@ import {
 	RaindexVault,
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
-import { parseFloatHex, getRaindexOrderUrl, getRaindexVaultUrl } from '$lib/utils/tokenMath';
+import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -33,11 +33,8 @@ import {
 } from '$lib/services/orderDeployment';
 import { rainlangConfirmationModal } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
-import {
-	invalidateOrderQueries,
-	invalidateVaultQueries,
-	invalidateOrderAndVaultQueries
-} from '$lib/clients/queryClient';
+import { invalidateOrderQueries } from '$lib/queries/orderbook';
+import { invalidateVaultQueries } from '$lib/queries/vaults';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
@@ -273,6 +270,7 @@ const transactionStore = () => {
 		// Immediate attempt before scheduling interval
 		const immediateLink = await tryFetchOrderLink();
 		if (immediateLink) {
+			invalidateOrderQueries();
 			return transactionSuccess(hash, immediateLink);
 		}
 
@@ -282,6 +280,7 @@ const transactionStore = () => {
 			// Stop polling after max attempts
 			if (attempts >= maxAttempts) {
 				clearInterval(interval);
+				invalidateOrderQueries();
 				return transactionSuccess(hash, 'Order deployed successfully!');
 			}
 
@@ -289,6 +288,7 @@ const transactionStore = () => {
 				const link = await tryFetchOrderLink();
 				if (link) {
 					clearInterval(interval);
+					invalidateOrderQueries();
 					return transactionSuccess(hash, link);
 				}
 			} catch (error) {
@@ -592,7 +592,7 @@ const transactionStore = () => {
 			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
 
 			// Invalidate both order and vault queries to refresh the UI
-			invalidateOrderAndVaultQueries();
+			invalidateOrderQueries(); invalidateVaultQueries();
 
 			return transactionSuccess(hash, link);
 		} catch (error: unknown) {
@@ -786,7 +786,7 @@ const transactionStore = () => {
 				const chainId = network.id;
 				const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 				// Still invalidate queries in case order was deactivated
-				invalidateOrderAndVaultQueries();
+				invalidateOrderQueries(); invalidateVaultQueries();
 				return transactionSuccess('0x' as Hash, `No balance to withdraw. ${link}`);
 			}
 
@@ -820,7 +820,7 @@ const transactionStore = () => {
 			const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 
 			// Invalidate both order and vault queries to refresh the UI
-			invalidateOrderAndVaultQueries();
+			invalidateOrderQueries(); invalidateVaultQueries();
 
 			return transactionSuccess(lastHash, link);
 		} catch (error: unknown) {

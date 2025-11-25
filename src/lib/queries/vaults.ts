@@ -2,6 +2,7 @@ import { createQuery, type QueryClient } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
 import { getSfts, getSftById } from '$lib/api/subgraph';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+import { queryClient } from '$lib/clients/queryClient';
 
 export function createVaultsQuery(network: Network | null) {
 	return createQuery<OffchainAssetReceiptVault[]>({
@@ -48,4 +49,14 @@ export function createSingleVaultQuery(
 			return getSftById(tokenId, network);
 		}
 	});
+}
+
+/**
+ * Invalidate and refetch all vault-related queries.
+ * Call after withdraw operations.
+ */
+export function invalidateVaultQueries() {
+	console.log('[VaultQueries] Resetting vault queries...');
+	// resetQueries clears all cached pages for infinite queries and triggers refetch
+	queryClient.resetQueries({ queryKey: ['vaults'] });
 }

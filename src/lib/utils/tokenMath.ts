@@ -512,9 +512,17 @@ export function getRaindexOrderUrl(
 
 /**
  * Generate a Raindex URL for a vault
+ * Format: {chainId}-{orderbookId}-{vaultSubgraphId}
+ *
+ * @param chainId - Network chain ID (e.g., 8453 for Base)
+ * @param orderbookId - Orderbook contract address
+ * @param vaultSubgraphId - The vault's unique subgraph identifier (vault.id), NOT the vault slot number (vault.vaultId)
  */
-export function getRaindexVaultUrl(vaultId: string): string {
-	// Ensure vaultId has 0x prefix
-	const normalizedId = vaultId.startsWith('0x') ? vaultId : `0x${vaultId}`;
-	return `${RAINDEX_BASE_URL}/vaults/${normalizedId}`;
+export function getRaindexVaultUrl(
+	chainId: number,
+	orderbookId: string,
+	vaultSubgraphId: string
+): string {
+	const normalizedId = vaultSubgraphId.startsWith('0x') ? vaultSubgraphId : `0x${vaultSubgraphId}`;
+	return `${RAINDEX_BASE_URL}/vaults/${chainId}-${orderbookId}-${normalizedId}`;
 }
