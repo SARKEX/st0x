@@ -28,6 +28,7 @@ import {
 	buildTokenPriceMap as buildTokenPriceMapBase,
 	type TokenPriceSummary,
 	scaleAmount,
+	classifyOrderType,
 	walkOrderbook,
 	hexToBigInt
 } from '$lib/utils/orderbook';
@@ -156,6 +157,19 @@ function processOrdersWithQuotes(
 						? Number(outputTokenMeta.decimals)
 						: undefined;
 
+					// Get rainlang source from the RaindexOrder and classify order type
+					const rainlang = order.rainlang;
+					const orderType = classifyOrderType(rainlang);
+
+					// Skip dynamic spread orders (return null from classifyOrderType)
+					if (orderType === null) {
+						return;
+					}
+
+					if (rainlang) {
+						console.log('[Orders] Order type:', orderType, 'for order:', sgOrder.orderHash);
+					}
+
 					const processedQuote: ProcessedQuote = {
 						orderHash: sgOrder.orderHash,
 						maxOutput,
@@ -180,7 +194,9 @@ function processOrdersWithQuotes(
 							outputDecimals ??
 							(normalizeAddress(outputTokenAddress) === normalizeAddress(quoteToken.address)
 								? quoteToken.decimals ?? 18
-								: 18)
+								: 18),
+						rainlang,
+						orderType
 					};
 
 					const metrics = describeQuote(processedQuote, quoteToken.address);

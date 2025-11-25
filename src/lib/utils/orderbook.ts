@@ -75,7 +75,11 @@ export interface ProcessedQuote {
 	assetAddress?: string;
 	side?: MarketSide;
 	quotePerAsset?: number;
+	rainlang?: string; // Decoded Rainlang source for the order
+	orderType?: OrderType; // Classified order type based on rainlang
 }
+
+export type OrderType = 'limit' | 'dca' | 'dynamic-spread' | 'custom';
 
 export type TokenPriceSummary = {
 	bid?: number;
@@ -85,6 +89,37 @@ export type TokenPriceSummary = {
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
+
+/**
+ * Classify an order type based on its rainlang source.
+ * Returns null for orders that should be hidden (e.g., dynamic spread).
+ */
+export function classifyOrderType(rainlang: string | undefined): OrderType | null {
+	if (!rainlang) return 'custom';
+
+	// Dynamic Spread - contains "other-vwaio" - should be hidden from order tab
+	if (rainlang.includes('other-vwaio')) {
+		return null; // Return null to indicate this should be filtered out
+	}
+
+	// DCA - contains the min-amount tracking pattern
+	// Look for the characteristic DCA pattern with amount tracking
+	const dcaPattern =
+		/min-amount:.*\n.*:ensure\(greater-than-or-equal-to\(output-vault-decrease\(\).*min-amount\).*\n.*used:.*get\(hash\(order-hash\(\)/s;
+	if (dcaPattern.test(rainlang)) {
+		return 'dca';
+	}
+
+	// Limit Order - handle-io section is empty (just a colon after the comment)
+	// Pattern: /* 1. handle-io */ followed by newline and just ":"
+	const limitPattern = /\/\*\s*1\.\s*handle-io\s*\*\/\s*\n\s*:/;
+	if (limitPattern.test(rainlang)) {
+		return 'limit';
+	}
+
+	// Everything else is custom
+	return 'custom';
+}
 
 export function scaleAmount(
 	amount: bigint,
