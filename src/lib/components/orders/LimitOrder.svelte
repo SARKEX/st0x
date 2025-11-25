@@ -12,9 +12,11 @@
 	import type { PythToken } from '$lib/types';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { connected } from 'svelte-wagmi';
+	import { connected, signerAddress } from 'svelte-wagmi';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { createRaindexClient } from '$lib/clients/raindex';
+	import { getSequentialVaultId, parseSequentialVaultNumber } from '$lib/services/orderDeployment';
 
 	/**
 	 * assetToken: The non-settlement token being traded (from prop)
@@ -69,8 +71,6 @@
 	}
 
 	let selectedAmount: bigint = 0n;
-	let inputVaultId: Hex | undefined;
-	let outputVaultId: Hex | undefined;
 
 	$: isInputTokenSameAsOutputToken =
 		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
@@ -78,8 +78,26 @@
 	// errors
 	let selectedInitialRatioError: boolean = false;
 	let selectedAmountError: boolean = false;
-	let inputVaultIdError: boolean = false;
-	let outputVaultIdError: boolean = false;
+
+	// Advanced options state
+	let showAdvancedOptions = false;
+	let selectedVaultOption: string = 'default'; // 'default', 'vault-N', or 'create-new'
+	let existingVaultNumbers: number[] = []; // Sequential vault numbers that exist
+	let nextVaultNumber = 2; // Next available vault number for "Create new"
+	let loadingVaults = false;
+
+	// Computed input vault ID based on selection
+	$: selectedInputVaultId = (() => {
+		if (selectedVaultOption === 'default') {
+			return undefined; // Use default (0x01)
+		} else if (selectedVaultOption === 'create-new') {
+			return getSequentialVaultId(nextVaultNumber);
+		} else if (selectedVaultOption.startsWith('vault-')) {
+			const num = parseInt(selectedVaultOption.replace('vault-', ''), 10);
+			return getSequentialVaultId(num);
+		}
+		return undefined;
+	})();
 
 	$: disableDeploy =
 		!selectedAmount ||
@@ -89,9 +107,68 @@
 		!assetToken ||
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
-		selectedAmountError ||
-		inputVaultIdError ||
-		outputVaultIdError;
+		selectedAmountError;
+
+	// Fetch vaults when advanced options are expanded
+	async function fetchSequentialVaults() {
+		if (!$signerAddress || !$currentNetwork || !orderInputToken) return;
+
+		loadingVaults = true;
+		try {
+			const client = await createRaindexClient();
+			const vaultsResult = await client.getVaults(
+				[$currentNetwork.id],
+				{
+					owners: [$signerAddress as `0x${string}`],
+					hideZeroBalance: false,
+					tokens: [orderInputToken.address as `0x${string}`]
+				},
+				0
+			);
+
+			if (vaultsResult.error || !vaultsResult.value) {
+				console.error('Failed to fetch vaults:', vaultsResult.error?.readableMsg);
+				existingVaultNumbers = [];
+				nextVaultNumber = 2;
+				return;
+			}
+
+			// Find sequential vault numbers from the fetched vaults
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const vaults = [...(vaultsResult.value as any)] as Array<{ vaultId: bigint }>;
+			const sequentialNumbers: number[] = [];
+
+			for (const vault of vaults) {
+				const num = parseSequentialVaultNumber(vault.vaultId);
+				if (num !== undefined) {
+					sequentialNumbers.push(num);
+				}
+			}
+
+			// Sort and dedupe
+			existingVaultNumbers = [...new Set(sequentialNumbers)].sort((a, b) => a - b);
+
+			// Find next available number (start from 2 since 1 is default)
+			nextVaultNumber = 2;
+			while (existingVaultNumbers.includes(nextVaultNumber)) {
+				nextVaultNumber++;
+			}
+		} catch (error) {
+			console.error('Error fetching vaults:', error);
+			existingVaultNumbers = [];
+			nextVaultNumber = 2;
+		} finally {
+			loadingVaults = false;
+		}
+	}
+
+	// Handle expanding advanced options
+	function toggleAdvancedOptions() {
+		showAdvancedOptions = !showAdvancedOptions;
+		if (showAdvancedOptions) {
+			fetchSequentialVaults();
+		}
+	}
 
 	const handleDeploy = async () => {
 		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
@@ -117,7 +194,6 @@
 			ioRatio: string;
 			depositAmount: bigint;
 			inputVaultId: Hex | undefined;
-			outputVaultId: Hex | undefined;
 		};
 
 		// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
@@ -139,8 +215,7 @@
 				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
 				ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
 				depositAmount: settlementAmount, // Payment amount in settlement token
-				inputVaultId: inputVaultId,
-				outputVaultId: outputVaultId
+				inputVaultId: selectedInputVaultId
 			};
 		} else {
 			// Ask order (user selling): Places order to sell asset for the settlement token
@@ -153,8 +228,7 @@
 				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
 				ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
 				depositAmount: selectedAmount, // Asset amount being offered
-				inputVaultId: inputVaultId,
-				outputVaultId: outputVaultId
+				inputVaultId: selectedInputVaultId
 			};
 		}
 
@@ -179,7 +253,6 @@
 		ioRatio: string;
 		depositAmount: bigint;
 		inputVaultId: Hex | undefined;
-		outputVaultId: Hex | undefined;
 	} | null = null;
 
 	// Check if limit price is significantly off market price
@@ -294,6 +367,69 @@
 					</div>
 				</div>
 			</div>
+		</div>
+
+		<!-- Advanced Options -->
+		<div class="border-t border-white/10 pt-4">
+			<button
+				type="button"
+				on:click={toggleAdvancedOptions}
+				class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
+			>
+				<span>Advanced options</span>
+				<svg
+					class={`h-4 w-4 transform transition-transform ${
+						showAdvancedOptions ? 'rotate-180' : ''
+					}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 9l-7 7-7-7"
+					/>
+				</svg>
+			</button>
+
+			{#if showAdvancedOptions}
+				<div class="mt-4 space-y-3">
+					<div>
+						<label for="receiving-vault" class="mb-2 block text-sm font-medium text-gray-300">
+							Receiving vault
+						</label>
+						{#if loadingVaults}
+							<div class="flex items-center gap-2 text-sm text-gray-400">
+								<LoadingSpinner size="sm" />
+								<span>Loading vaults...</span>
+							</div>
+						{:else}
+							<select
+								id="receiving-vault"
+								bind:value={selectedVaultOption}
+								class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+							>
+								<option value="default">Default</option>
+								{#each existingVaultNumbers.filter((n) => n !== 1) as vaultNum}
+									<option value="vault-{vaultNum}">Vault {vaultNum}</option>
+								{/each}
+								<option value="create-new">Create new vault (Vault {nextVaultNumber})</option>
+							</select>
+							<p class="mt-1 text-xs text-gray-500">
+								{#if selectedVaultOption === 'default'}
+									Uses the default receiving vault (Vault 1)
+								{:else if selectedVaultOption === 'create-new'}
+									Creates a new vault (Vault {nextVaultNumber}) for receiving tokens
+								{:else}
+									Uses an existing vault for receiving tokens
+								{/if}
+							</p>
+						{/if}
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Deploy Button -->

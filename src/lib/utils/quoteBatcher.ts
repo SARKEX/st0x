@@ -139,9 +139,7 @@ async function processBatch(
 			successful.set(order, result.value);
 		} else {
 			const error =
-				result.status === 'rejected'
-					? result.reason
-					: new Error('No quotes returned or timed out');
+				result.status === 'rejected' ? result.reason : new Error('No quotes returned or timed out');
 			failed.set(order, error);
 		}
 	});
@@ -188,9 +186,15 @@ export async function fetchQuotesWithBatching(
 
 	for (let i = 0; i < batches.length; i++) {
 		const batch = batches[i];
-		console.log(`[QuoteBatcher] Processing batch ${i + 1}/${batches.length} (${batch.length} orders)`);
+		console.log(
+			`[QuoteBatcher] Processing batch ${i + 1}/${batches.length} (${batch.length} orders)`
+		);
 
-		const { successful, failed } = await processBatch(batch, cfg.quoteTimeoutMs, cfg.inBatchJitterMs);
+		const { successful, failed } = await processBatch(
+			batch,
+			cfg.quoteTimeoutMs,
+			cfg.inBatchJitterMs
+		);
 
 		// Collect results
 		successful.forEach((quotes, order) => allSuccessful.set(order, quotes));
@@ -233,7 +237,11 @@ export async function fetchQuotesWithBatching(
 
 		for (let i = 0; i < retryBatches.length; i++) {
 			const batch = retryBatches[i];
-			const { successful, failed } = await processBatch(batch, cfg.quoteTimeoutMs, cfg.inBatchJitterMs);
+			const { successful, failed } = await processBatch(
+				batch,
+				cfg.quoteTimeoutMs,
+				cfg.inBatchJitterMs
+			);
 
 			// Update results
 			successful.forEach((quotes, order) => {
@@ -252,9 +260,7 @@ export async function fetchQuotesWithBatching(
 		toRetry = Array.from(stillFailed.keys());
 		stillFailed.forEach((error, order) => allFailed.set(order, error));
 
-		console.log(
-			`[QuoteBatcher] Retry ${retryAttempt} complete: ${toRetry.length} still failing`
-		);
+		console.log(`[QuoteBatcher] Retry ${retryAttempt} complete: ${toRetry.length} still failing`);
 	}
 
 	const totalTime = Date.now() - startTime;
@@ -287,8 +293,9 @@ export async function fetchQuotesWithBatching(
 	// Allow up to 10% failure to be pragmatic (e.g., 1 order out of 10 can fail)
 	if (successRate < 90) {
 		throw new Error(
-			`Quote fetch failed: only ${successRate.toFixed(1)}% successful (${allSuccessful.size}/${orders.length}). ` +
-				`Failed orders: ${allFailed.size}`
+			`Quote fetch failed: only ${successRate.toFixed(1)}% successful (${allSuccessful.size}/${
+				orders.length
+			}). ` + `Failed orders: ${allFailed.size}`
 		);
 	}
 

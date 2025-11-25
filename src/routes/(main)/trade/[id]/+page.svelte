@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
+	import { currentNetwork, oracleQuotes } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -47,17 +47,27 @@
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
+	import { createInfiniteQuery, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import type { SgVault, RaindexVault, RaindexOrder } from '@rainlanguage/orderbook';
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
+	import { createSingleVaultQuery } from '$lib/queries/vaults';
 	$: tokenId = $page.params.id;
-	$: currentToken = $sfts?.find((sft: OffchainAssetReceiptVault) => sft.id === tokenId);
+
+	// Get queryClient for cache lookup
+	const queryClient = useQueryClient();
+
+	// Use single token query - checks global cache first, falls back to single fetch
+	$: singleTokenQuery = createSingleVaultQuery(tokenId, $currentNetwork, queryClient);
+	$: currentToken = $singleTokenQuery.data;
 	const tokensLookup = createTokenLookup(TOKENS);
-	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery($currentNetwork, currentToken?.address ?? null);
+	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
+		$currentNetwork,
+		currentToken?.address ?? null
+	);
 	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: {
@@ -79,17 +89,16 @@
 		const tokenAddress = currentToken.address.toLowerCase();
 
 		// Filter by token (input or output matches current token)
-		let filtered = quotes.filter(q =>
-			q.inputTokenAddress.toLowerCase() === tokenAddress ||
-			q.outputTokenAddress.toLowerCase() === tokenAddress
+		let filtered = quotes.filter(
+			(q) =>
+				q.inputTokenAddress.toLowerCase() === tokenAddress ||
+				q.outputTokenAddress.toLowerCase() === tokenAddress
 		);
 
 		// Filter by owner if "My Orders" is selected
 		if (selectedOrdersFilter === 'my' && $signerAddress) {
 			const myAddress = $signerAddress.toLowerCase();
-			filtered = filtered.filter(q =>
-				q.sgOrder?.owner?.toLowerCase() === myAddress
-			);
+			filtered = filtered.filter((q) => q.sgOrder?.owner?.toLowerCase() === myAddress);
 		}
 
 		return filtered;
@@ -113,17 +122,8 @@
 		refetchInterval: 300000, // Poll every 5 minutes
 		queryFn: async ({ pageParam }: { pageParam: number }) => {
 			if (!$currentNetwork || !$signerAddress) {
-				console.log('🔍 Vaults query skipped - missing params:', {
-					hasNetwork: !!$currentNetwork,
-					hasSigner: !!$signerAddress
-				});
 				return { vaults: [], hasMore: false };
 			}
-			console.log('🔍 Fetching vaults with params:', {
-				networkId: $currentNetwork.id,
-				owner: $signerAddress.toLowerCase(),
-				pageParam
-			});
 			const client = await createRaindexClient();
 
 			// Fetch all vaults (shared query with dashboard)
@@ -136,17 +136,12 @@
 				pageParam + 1
 			);
 			if (vaultsResult.error) {
-				console.error('🔍 Vaults query error:', vaultsResult.error);
 				throw new Error(vaultsResult.error.readableMsg);
 			}
 
 			// Access .items like the dashboard does
 			const vaultsArray: RaindexVault[] = vaultsResult.value.items || [];
 
-			console.log('🔍 Vaults query result:', {
-				totalVaultsCount: vaultsArray.length,
-				vaults: vaultsArray.map(v => ({ token: v.token.address, symbol: v.token.symbol }))
-			});
 			return {
 				vaults: vaultsArray,
 				hasMore: vaultsArray.length === 1000
@@ -173,7 +168,9 @@
 			});
 			return balance as bigint;
 		},
-		enabled: activeOnchainTab === 'vaults' && Boolean(currentToken?.address && $signerAddress && $wagmiConfig)
+		enabled:
+			activeOnchainTab === 'vaults' &&
+			Boolean(currentToken?.address && $signerAddress && $wagmiConfig)
 	});
 	$: currentPythToken = TOKENS.find(
 		(token) =>
@@ -232,20 +229,14 @@
 	// Helper to safely access RaindexOrder properties (incomplete types in SDK)
 	function getOrderInput(order: RaindexOrder, tokenAddress: string) {
 		const inputs = (order as any).inputs;
-		console.log('🔍 getOrderInput - inputs:', inputs, 'tokenAddress:', tokenAddress);
 		if (!inputs || !Array.isArray(inputs)) return null;
-		return inputs.find(
-			(i: any) => i.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
-		);
+		return inputs.find((i: any) => i.token?.address?.toLowerCase() === tokenAddress.toLowerCase());
 	}
 
 	function getOrderOutput(order: RaindexOrder, tokenAddress: string) {
 		const outputs = (order as any).outputs;
-		console.log('🔍 getOrderOutput - outputs:', outputs, 'tokenAddress:', tokenAddress);
 		if (!outputs || !Array.isArray(outputs)) return null;
-		return outputs.find(
-			(o: any) => o.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
-		);
+		return outputs.find((o: any) => o.token?.address?.toLowerCase() === tokenAddress.toLowerCase());
 	}
 
 	function getOrderType(order: RaindexOrder): string {
@@ -263,17 +254,12 @@
 		return typeof value === 'string' ? BigInt(value) : 0n;
 	}
 
-	function getOrderAmount(order: RaindexOrder, tokenAddress: string): { total: bigint; remaining: bigint } {
+	function getOrderAmount(
+		order: RaindexOrder,
+		tokenAddress: string
+	): { total: bigint; remaining: bigint } {
 		const input = getOrderInput(order, tokenAddress);
 		const output = getOrderOutput(order, tokenAddress);
-
-		console.log('🔍 getOrderAmount DEBUG:', {
-			orderHash: order.orderHash,
-			tokenAddress,
-			input: input ? { vault: input.vault, token: input.token } : null,
-			output: output ? { vault: output.vault, token: output.token } : null,
-			fullOrder: order
-		});
 
 		if (input) {
 			// For input (buy orders), check input vault
@@ -283,7 +269,8 @@
 			// For output (sell orders), check output vault
 			const remaining = output?.vault?.balance || 0n;
 			// Try to get initial balance from order metadata
-			const initialBalance = (output.vault as any)?.initialBalance || (order as any).initialOutputVaultBalance;
+			const initialBalance =
+				(output.vault as any)?.initialBalance || (order as any).initialOutputVaultBalance;
 			const total = initialBalance || remaining;
 			return { total, remaining };
 		}
@@ -754,9 +741,25 @@
 	<title>{pageTitle}</title>
 </svelte:head>
 <svelte:window on:keydown={handleGlobalKeydown} />
-{#if !currentToken}
+{#if $singleTokenQuery.isPending}
 	<div class="flex h-screen items-center justify-center">
 		<LoadingSpinner variant="fullscreen" size="xl" text="Loading token data..." />
+	</div>
+{:else if $singleTokenQuery.isError}
+	<div class="flex h-screen items-center justify-center">
+		<div class="text-center">
+			<p class="text-lg text-red-400">Failed to load token data</p>
+			<p class="mt-2 text-sm text-gray-400">
+				{$singleTokenQuery.error?.message || 'Unknown error'}
+			</p>
+		</div>
+	</div>
+{:else if !currentToken}
+	<div class="flex h-screen items-center justify-center">
+		<div class="text-center">
+			<p class="text-lg text-gray-400">Token not found</p>
+			<p class="mt-2 text-sm text-gray-500">ID: {tokenId}</p>
+		</div>
 	</div>
 {:else}
 	<div class="space-y-6 p-4 sm:p-6">
@@ -902,7 +905,9 @@
 		</Section>
 		<Section>
 			<div class="mb-6">
-				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+				<div
+					class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+				>
 					<div>
 						<h2 class="text-base font-semibold text-white">On-chain Activity</h2>
 						<p class="text-sm text-gray-400">
@@ -910,7 +915,11 @@
 						</p>
 					</div>
 				</div>
-				<TabNav tabs={ONCHAIN_TABS} activeId={activeOnchainTab} on:change={handleOnchainTabChange} />
+				<TabNav
+					tabs={ONCHAIN_TABS}
+					activeId={activeOnchainTab}
+					on:change={handleOnchainTabChange}
+				/>
 			</div>
 
 			{#if activeOnchainTab === 'market'}
@@ -927,7 +936,6 @@
 					on:rangeChange={(e) => (historyRange = e.detail.key)}
 				/>
 				<div class="mt-2 text-xs text-gray-400">All times are displayed in your local timezone</div>
-
 			{:else if activeOnchainTab === 'orders'}
 				<div class="mt-4">
 					<!-- Filter toggle -->
@@ -938,11 +946,13 @@
 								type="button"
 								class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
 									selectedOrdersFilter === 'my'
-										? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
-										: 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
-								} ${!$connected ? 'opacity-50 cursor-not-allowed' : ''}`}
+										? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+										: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+								} ${!$connected ? 'cursor-not-allowed opacity-50' : ''}`}
 								disabled={!$connected}
-								on:click={() => { selectedOrdersFilter = 'my' }}
+								on:click={() => {
+									selectedOrdersFilter = 'my';
+								}}
 							>
 								My Orders
 							</button>
@@ -950,10 +960,12 @@
 								type="button"
 								class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
 									selectedOrdersFilter === 'all'
-										? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
-										: 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+										? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+										: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
 								}`}
-								on:click={() => { selectedOrdersFilter = 'all' }}
+								on:click={() => {
+									selectedOrdersFilter = 'all';
+								}}
 							>
 								All Orders
 							</button>
@@ -970,7 +982,9 @@
 						</div>
 					{:else if tokenOrders.length === 0}
 						<div class="py-8 text-center text-sm text-gray-400">
-							{selectedOrdersFilter === 'my' ? 'You have no orders for this token' : 'No orders found for this token'}
+							{selectedOrdersFilter === 'my'
+								? 'You have no orders for this token'
+								: 'No orders found for this token'}
 						</div>
 					{:else}
 						<!-- Orders table -->
@@ -993,34 +1007,54 @@
 									{#each paginatedOrders as quote}
 										{@const tokenAddress = currentToken?.address.toLowerCase()}
 										{@const isBuy = quote.inputTokenAddress.toLowerCase() === tokenAddress}
-										{@const maxOutputBigInt = parseFloatHex(quote.maxOutput, isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18)}
+										{@const maxOutputBigInt = parseFloatHex(
+											quote.maxOutput,
+											isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18
+										)}
 										{@const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol}
-										{@const tokenDecimals = isBuy ? (quote.inputTokenDecimals || 18) : (quote.outputTokenDecimals || 18)}
+										{@const tokenDecimals = isBuy
+											? quote.inputTokenDecimals || 18
+											: quote.outputTokenDecimals || 18}
 										{@const orderOwner = quote.sgOrder?.owner || ''}
 										{@const orderbookId = quote.orderbookId || ''}
-										{@const remainingAmount = maxOutputBigInt > 0n ? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3) : '—'}
-										{@const currentPrice = (quote.quotePerAsset !== undefined && quote.quotePerAsset !== null && Number.isFinite(quote.quotePerAsset)) ? quote.quotePerAsset.toFixed(3) : `DEBUG: ${quote.quotePerAsset}`}
+										{@const remainingAmount =
+											maxOutputBigInt > 0n
+												? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3)
+												: '—'}
+										{@const currentPrice =
+											quote.quotePerAsset !== undefined &&
+											quote.quotePerAsset !== null &&
+											Number.isFinite(quote.quotePerAsset)
+												? quote.quotePerAsset.toFixed(3)
+												: '—'}
 										{@const isMyOrder = orderOwner.toLowerCase() === $signerAddress?.toLowerCase()}
 										{@const isActive = quote.sgOrder?.active ?? true}
 										<tr class="border-b border-white/5 hover:bg-white/5">
 											<td class="py-3 pr-4">
-												<span class={`text-xs font-medium ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
+												<span
+													class={`text-xs font-medium ${isBuy ? 'text-green-400' : 'text-red-400'}`}
+												>
 													{isBuy ? 'Buy' : 'Sell'}
 												</span>
 											</td>
 											<td class="py-3 pr-4">
 												{#if isActive}
-													<span class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+													<span
+														class="rounded bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400"
+													>
 														Active
 													</span>
 												{:else}
-													<span class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400">
+													<span
+														class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400"
+													>
 														Closed
 													</span>
 												{/if}
 											</td>
 											<td class="py-3 pr-4 text-gray-300">
-												{remainingAmount} {tokenSymbol}
+												{remainingAmount}
+												{tokenSymbol}
 											</td>
 											<td class="py-3 pr-4 text-gray-300">
 												{currentPrice}
@@ -1103,17 +1137,12 @@
 						{/if}
 					{/if}
 				</div>
-
 			{:else if activeOnchainTab === 'vaults'}
 				<div class="mt-4">
 					{#if !$connected}
 						<div class="flex flex-col items-center justify-center gap-4 py-12">
 							<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
-							<Button
-								variant="primary"
-								size="md"
-								on:click={() => $web3Modal.open()}
-							>
+							<Button variant="primary" size="md" on:click={() => $web3Modal.open()}>
 								Connect Wallet
 							</Button>
 						</div>
@@ -1127,21 +1156,18 @@
 						</div>
 					{:else}
 						{@const allVaults = $tokenVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
-						{@const _ = console.log('🔍 DEBUG vault filtering:', {
-							currentTokenAddress: currentToken?.address,
-							allVaultsCount: allVaults.length,
-							allVaultTokens: allVaults.map(v => ({
-								address: v.token?.address,
-								symbol: v.token?.symbol
-							}))
-						})}
-						{@const vaults = currentToken ? allVaults.filter(v => {
-							const isCorrectToken = v.token?.address?.toLowerCase() === currentToken.address.toLowerCase();
-							const hasBalance = vaultBalanceToBigInt(v) > 0n;
-							return isCorrectToken && hasBalance;
-						}) : []}
-						{@const __ = console.log('🔍 DEBUG filtered vaults:', vaults.length)}
-						{@const totalVaultBalance = vaults.reduce((sum, v) => sum + vaultBalanceToBigInt(v), 0n)}
+						{@const vaults = currentToken
+							? allVaults.filter((v) => {
+									const isCorrectToken =
+										v.token?.address?.toLowerCase() === currentToken.address.toLowerCase();
+									const hasBalance = vaultBalanceToBigInt(v) > 0n;
+									return isCorrectToken && hasBalance;
+								})
+							: []}
+						{@const totalVaultBalance = vaults.reduce(
+							(sum, v) => sum + vaultBalanceToBigInt(v),
+							0n
+						)}
 						{@const walletBalance = $walletBalanceQuery.data ?? 0n}
 						{@const totalBalance = totalVaultBalance + walletBalance}
 						{@const tokenDecimals = vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
@@ -1167,7 +1193,9 @@
 												{@const balance = vaultBalanceToBigInt(vault)}
 												{@const vaultIdHex = vault.vaultId.toString(16).padStart(64, '0')}
 												{@const raindexUrl = `https://v5.raindex.finance/vaults/0x${vaultIdHex}`}
-												<div class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm">
+												<div
+													class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
+												>
 													<div class="flex items-center gap-2 text-xs text-gray-400">
 														<a
 															href={raindexUrl}
@@ -1179,7 +1207,10 @@
 															{vaultIdHex.slice(0, 8)}...
 														</a>
 														<span>•</span>
-														<span>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)} {vault.token.symbol}</span>
+														<span
+															>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)}
+															{vault.token.symbol}</span
+														>
 													</div>
 													<Button
 														variant="danger"
@@ -1225,15 +1256,26 @@
 									<div class="space-y-3 text-sm">
 										<div class="flex justify-between text-gray-400">
 											<span>Vaults Subtotal:</span>
-											<span>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)} {currentToken?.symbol}</span>
+											<span
+												>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)}
+												{currentToken?.symbol}</span
+											>
 										</div>
 										<div class="flex justify-between text-gray-400">
 											<span>Wallet Balance:</span>
-											<span>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)} {currentToken?.symbol}</span>
+											<span
+												>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)}
+												{currentToken?.symbol}</span
+											>
 										</div>
-										<div class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100">
+										<div
+											class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100"
+										>
 											<span>Total:</span>
-											<span>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)} {currentToken?.symbol}</span>
+											<span
+												>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)}
+												{currentToken?.symbol}</span
+											>
 										</div>
 									</div>
 								</div>

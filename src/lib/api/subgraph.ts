@@ -3,6 +3,245 @@ import { TOKENS } from '$lib/config/network';
 import type { Network } from '$lib/config/network';
 import type { OffchainAssetReceiptVault, MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 
+/**
+ * Fetch a single token by ID from the subgraph
+ * Much faster than fetching all tokens - use this for individual token pages
+ */
+export const getSftById = async (
+	tokenId: string,
+	network: Network
+): Promise<OffchainAssetReceiptVault | null> => {
+	const subgraphUrl = network.subgraph_url;
+
+	// Validate that the token exists in our config
+	const token = TOKENS.find(
+		(t) => t.chainId === network.chainId && t.address.toLowerCase() === tokenId.toLowerCase()
+	);
+	if (!token) {
+		return null;
+	}
+
+	const query = `
+    {
+ offchainAssetReceiptVaults(where: {
+ id: "${tokenId.toLowerCase()}"
+ }) {
+
+    withdraws {
+      id
+       emitter {
+        address
+      }
+      transaction {
+        id
+      }
+
+      receipt {
+        id
+        receiptId
+        receiptInformations {
+        payload
+          schema
+          information
+            payload
+            schema
+          emitter {
+            address
+          }
+        }
+      }
+      amount
+      caller {
+        address
+      }
+      timestamp
+    }
+    deposits {
+      id
+       emitter {
+        address
+      }
+      transaction {
+        id
+      }
+      receipt {
+        id
+        receiptId
+        receiptInformations {
+          payload
+          schema
+          information
+          emitter {
+            address
+          }
+        }
+      }
+      amount
+      caller {
+        address
+      }
+      timestamp
+    }
+    activeAuthorizer {
+      address
+      rolesGranted(orderBy: timestamp, orderDirection: desc) {
+        role {
+          roleName
+        }
+        sender {
+          address
+        }
+        account {
+          address
+        }
+        timestamp
+        transaction {
+          id
+        }
+      }
+      roleHolders {
+        role {
+          roleName
+          roleHash
+        }
+        account {
+          address
+        }
+      }
+      roles(orderBy: roleName) {
+        roleName
+        roleHolders {
+          account {
+            address
+          }
+        }
+        roleHash
+      }
+      roleRevokes {
+        role {
+          roleName
+        }
+        sender {
+          address
+        }
+        account {
+          address
+        }
+        timestamp
+        transaction {
+          id
+        }
+      }
+    }
+
+    id
+    totalShares
+    address
+    deployer
+    admin
+    name
+    symbol
+    deployTimestamp
+    receiptContractAddress
+    shareHolders {
+      address
+    }
+
+    tokenHolders {
+      address
+      balance
+    }
+
+    shareTransfers {
+      id
+      timestamp
+      from {
+        address
+      }
+      to {
+        address
+      }
+      value
+    }
+    receiptBalances {
+      receipt {
+        shares
+        id
+        receiptId
+        balances {
+          valueExact
+          value
+          account {
+            address
+          }
+        }
+          deposits {
+          amount
+          receipt {
+            receiptId
+          }
+          timestamp
+        }
+        receiptInformations(orderDirection: desc, orderBy: timestamp) {
+          information
+          id
+          transaction {
+            blockNumber
+            id
+          }
+          timestamp
+          emitter {
+            address
+          }
+          receipt {
+            deposits {
+              amount
+            }
+          }
+        }
+      }
+    }
+    certifications(orderBy: timestamp, orderDirection: desc) {
+      timestamp
+      id
+      certifier {
+        address
+      }
+      certifiedUntil
+      totalShares
+      transaction {
+        id
+        blockNumber
+      }
+      data
+      information
+    }
+    receiptVaultInformations(orderBy: timestamp, orderDirection: desc) {
+      information
+      id
+      timestamp
+      caller {
+        address
+      }
+      transaction {
+        blockNumber
+      }
+    }
+  }
+          }
+    `;
+
+	const response = await fetch(subgraphUrl, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ query })
+	});
+
+	const json = await response.json();
+	const vaults = (json.data.offchainAssetReceiptVaults ?? []) as OffchainAssetReceiptVault[];
+	return vaults.length > 0 ? vaults[0] : null;
+};
+
 export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVault[]> => {
 	const networkTokens = TOKENS.filter((token) => token.chainId === network.chainId);
 

@@ -21,6 +21,47 @@ import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { RAIN_STRATEGIES_COMMIT } from '$lib/clients/raindex';
 
+// Default input vault ID for DCA and limit orders (32 bytes, padded)
+// Using a simple constant allows multiple orders to share the same input vault
+export const DEFAULT_INPUT_VAULT_ID: Hex =
+	'0x0000000000000000000000000000000000000000000000000000000000000001';
+
+/**
+ * Generates a sequential vault ID (32 bytes, padded)
+ * @param n - The vault number (1, 2, 3, etc.)
+ * @returns Hex string padded to 32 bytes
+ */
+export function getSequentialVaultId(n: number): Hex {
+	return `0x${n.toString(16).padStart(64, '0')}` as Hex;
+}
+
+/**
+ * Parses a vault ID to extract its sequential number if it's a sequential vault
+ * Returns undefined if not a sequential vault (e.g., random vault ID)
+ * @param vaultId - The vault ID (can be bigint or hex string)
+ */
+export function parseSequentialVaultNumber(vaultId: bigint | string): number | undefined {
+	const num = typeof vaultId === 'bigint' ? vaultId : BigInt(vaultId);
+	// Only consider it sequential if it's a reasonable number (< 1000)
+	if (num > 0n && num < 1000n) {
+		return Number(num);
+	}
+	return undefined;
+}
+
+/**
+ * Generates a random vault ID using Web Crypto API
+ * Used for output vaults and DSF/Folio vaults that should be unique per order
+ */
+function generateRandomVaultId(): Hex {
+	const array = new Uint8Array(32);
+	crypto.getRandomValues(array);
+	const hexString = Array.from(array)
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
+	return `0x${hexString}`;
+}
+
 // Strategy cache - keyed by commit hash + filename
 // Since strategies are from a pinned commit, they never change
 const strategyCache = new Map<string, string>();
@@ -63,9 +104,8 @@ export type DcaDeploymentArgs = {
 	baseline: string;
 	minTradeAmount: bigint;
 	maxTradeAmount: bigint;
-	inputVaultId: Hex | undefined;
-	outputVaultId: Hex | undefined;
 	depositAmount: bigint;
+	inputVaultId?: Hex; // Optional override for input vault (defaults to DEFAULT_INPUT_VAULT_ID)
 };
 
 export const getDcaDeploymentArgs = async (network: Network, args: DcaDeploymentArgs) => {
@@ -101,16 +141,14 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 
 	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-	if (args.inputVaultId) {
-		gui.setVaultId('input', 'input', args.inputVaultId);
-	}
-
-	if (args.outputVaultId) {
-		gui.setVaultId('output', 'output', args.outputVaultId);
-	}
-
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
+
+	// DCA vault management:
+	// - Input vault: Use provided vault ID or default (0x01) so orders share the same input vault
+	// - Output vault: Always new random (unique per order)
+	gui.setVaultId('input', 'input', args.inputVaultId ?? DEFAULT_INPUT_VAULT_ID);
+	gui.setVaultId('output', 'output', generateRandomVaultId());
 
 	const composedRainlangResult = await gui.getComposedRainlang();
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
@@ -131,8 +169,7 @@ export type LimitOrderDeploymentArgs = {
 	inputToken: Token;
 	ioRatio: string;
 	depositAmount: bigint;
-	inputVaultId: Hex | undefined;
-	outputVaultId: Hex | undefined;
+	inputVaultId?: Hex; // Optional override for input vault (defaults to DEFAULT_INPUT_VAULT_ID)
 };
 
 export const getLimitOrderDeploymentArgs = async (
@@ -153,16 +190,14 @@ export const getLimitOrderDeploymentArgs = async (
 
 	gui.setDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-	if (args.inputVaultId) {
-		gui.setVaultId('input', 'token1', args.inputVaultId);
-	}
-
-	if (args.outputVaultId) {
-		gui.setVaultId('output', 'token2', args.outputVaultId);
-	}
-
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
+
+	// Limit order vault management:
+	// - Input vault: Use provided vault ID or default (0x01) so orders share the same input vault
+	// - Output vault: Always new random (unique per order)
+	gui.setVaultId('input', 'token1', args.inputVaultId ?? DEFAULT_INPUT_VAULT_ID);
+	gui.setVaultId('output', 'token2', generateRandomVaultId());
 
 	const composedRainlangResult = await gui.getComposedRainlang();
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
@@ -188,10 +223,6 @@ export type MarketMakingDeploymentArgs = {
 	minAmount: bigint;
 	depositAmountToken1: bigint;
 	depositAmountToken2: bigint;
-	inputVaultIdToken1: Hex | undefined;
-	inputVaultIdToken2: Hex | undefined;
-	outputVaultIdToken1: Hex | undefined;
-	outputVaultIdToken2: Hex | undefined;
 };
 
 export const getMarketMakingDeploymentArgs = async (
@@ -229,21 +260,20 @@ export const getMarketMakingDeploymentArgs = async (
 	gui.setDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
 	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
 
-	if (args.inputVaultIdToken1) {
-		gui.setVaultId('input', 'token1', args.inputVaultIdToken1);
-	}
-	if (args.inputVaultIdToken2) {
-		gui.setVaultId('input', 'token2', args.inputVaultIdToken2);
-	}
-	if (args.outputVaultIdToken1) {
-		gui.setVaultId('output', 'token1', args.outputVaultIdToken1);
-	}
-	if (args.outputVaultIdToken2) {
-		gui.setVaultId('output', 'token2', args.outputVaultIdToken2);
-	}
-
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
+
+	// DSF vault management:
+	// - All vaults (input and output) are newly generated and unique (not tracked)
+	const inputVaultIdToken1 = generateRandomVaultId();
+	const inputVaultIdToken2 = generateRandomVaultId();
+	const outputVaultIdToken1 = generateRandomVaultId();
+	const outputVaultIdToken2 = generateRandomVaultId();
+
+	gui.setVaultId('input', 'token1', inputVaultIdToken1);
+	gui.setVaultId('input', 'token2', inputVaultIdToken2);
+	gui.setVaultId('output', 'token1', outputVaultIdToken1);
+	gui.setVaultId('output', 'token2', outputVaultIdToken2);
 
 	const composedRainlangResult = await gui.getComposedRainlang();
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
@@ -278,20 +308,6 @@ export type FolioDeploymentArgs = {
 	depositAmount5: bigint;
 	depositAmount6: bigint;
 	depositAmount7: bigint;
-	inputVaultId1: Hex | undefined;
-	inputVaultId2: Hex | undefined;
-	inputVaultId3: Hex | undefined;
-	inputVaultId4: Hex | undefined;
-	inputVaultId5: Hex | undefined;
-	inputVaultId6: Hex | undefined;
-	inputVaultId7: Hex | undefined;
-	outputVaultId1: Hex | undefined;
-	outputVaultId2: Hex | undefined;
-	outputVaultId3: Hex | undefined;
-	outputVaultId4: Hex | undefined;
-	outputVaultId5: Hex | undefined;
-	outputVaultId6: Hex | undefined;
-	outputVaultId7: Hex | undefined;
 };
 
 export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploymentArgs) => {
@@ -332,64 +348,26 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 	gui.setDeposit('token6', formatUnits(args.depositAmount6, args.selectedToken6.decimals));
 	gui.setDeposit('token7', formatUnits(args.depositAmount7, args.selectedToken7.decimals));
 
-	if (args.inputVaultId1) {
-		gui.setVaultId('input', 'token1', args.inputVaultId1);
-	}
-
-	if (args.inputVaultId2) {
-		gui.setVaultId('input', 'token2', args.inputVaultId2);
-	}
-
-	if (args.inputVaultId3) {
-		gui.setVaultId('input', 'token3', args.inputVaultId3);
-	}
-
-	if (args.inputVaultId4) {
-		gui.setVaultId('input', 'token4', args.inputVaultId4);
-	}
-
-	if (args.inputVaultId5) {
-		gui.setVaultId('input', 'token5', args.inputVaultId5);
-	}
-
-	if (args.inputVaultId6) {
-		gui.setVaultId('input', 'token6', args.inputVaultId6);
-	}
-
-	if (args.inputVaultId7) {
-		gui.setVaultId('input', 'token7', args.inputVaultId7);
-	}
-
-	if (args.outputVaultId1) {
-		gui.setVaultId('output', 'token1', args.outputVaultId1);
-	}
-
-	if (args.outputVaultId2) {
-		gui.setVaultId('output', 'token2', args.outputVaultId2);
-	}
-
-	if (args.outputVaultId3) {
-		gui.setVaultId('output', 'token3', args.outputVaultId3);
-	}
-
-	if (args.outputVaultId4) {
-		gui.setVaultId('output', 'token4', args.outputVaultId4);
-	}
-
-	if (args.outputVaultId5) {
-		gui.setVaultId('output', 'token5', args.outputVaultId5);
-	}
-
-	if (args.outputVaultId6) {
-		gui.setVaultId('output', 'token6', args.outputVaultId6);
-	}
-
-	if (args.outputVaultId7) {
-		gui.setVaultId('output', 'token7', args.outputVaultId7);
-	}
-
 	const $signerAddress = get(signerAddress);
 	if (!$signerAddress) throw new Error('Signer address not found');
+
+	// Folio vault management:
+	// - All vaults (input and output) are newly generated and unique (not tracked)
+	gui.setVaultId('input', 'token1', generateRandomVaultId());
+	gui.setVaultId('input', 'token2', generateRandomVaultId());
+	gui.setVaultId('input', 'token3', generateRandomVaultId());
+	gui.setVaultId('input', 'token4', generateRandomVaultId());
+	gui.setVaultId('input', 'token5', generateRandomVaultId());
+	gui.setVaultId('input', 'token6', generateRandomVaultId());
+	gui.setVaultId('input', 'token7', generateRandomVaultId());
+
+	gui.setVaultId('output', 'token1', generateRandomVaultId());
+	gui.setVaultId('output', 'token2', generateRandomVaultId());
+	gui.setVaultId('output', 'token3', generateRandomVaultId());
+	gui.setVaultId('output', 'token4', generateRandomVaultId());
+	gui.setVaultId('output', 'token5', generateRandomVaultId());
+	gui.setVaultId('output', 'token6', generateRandomVaultId());
+	gui.setVaultId('output', 'token7', generateRandomVaultId());
 
 	const composedRainlangResult = await gui.getComposedRainlang();
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);

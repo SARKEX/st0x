@@ -6,9 +6,8 @@
 	import type { PythToken } from '$lib/types';
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
-	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
-	import { connected } from 'svelte-wagmi';
+	import { connected, signerAddress } from 'svelte-wagmi';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
 	import { currentNetwork, oracleQuotes } from '$lib/stores';
@@ -16,6 +15,8 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { createRaindexClient } from '$lib/clients/raindex';
+	import { getSequentialVaultId, parseSequentialVaultNumber } from '$lib/services/orderDeployment';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -60,17 +61,12 @@
 	let selectedBaseline: string = '';
 	let selectedInitialRatio: string = '';
 
-	let inputVaultId: Hex | undefined;
-	let outputVaultId: Hex | undefined;
-
 	$: isInputTokenSameAsOutputToken =
 		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
 
 	// errors
 	let selectedAmountError: boolean = false;
 	let selectedPeriodError: boolean = false;
-	let inputVaultIdError: boolean = false;
-	let outputVaultIdError: boolean = false;
 	let selectedBaselineError: boolean = false;
 	let selectedInitialRatioError: boolean = false;
 	let priceGuardrailError: boolean = false;
@@ -78,6 +74,89 @@
 	$: depositAmount = selectedAmount;
 	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
 	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
+
+	// Advanced options state
+	let showAdvancedOptions = false;
+	let selectedVaultOption: string = 'default'; // 'default', 'vault-N', or 'create-new'
+	let existingVaultNumbers: number[] = []; // Sequential vault numbers that exist
+	let nextVaultNumber = 2; // Next available vault number for "Create new"
+	let loadingVaults = false;
+
+	// Computed input vault ID based on selection
+	$: selectedInputVaultId = (() => {
+		if (selectedVaultOption === 'default') {
+			return undefined; // Use default (0x01)
+		} else if (selectedVaultOption === 'create-new') {
+			return getSequentialVaultId(nextVaultNumber);
+		} else if (selectedVaultOption.startsWith('vault-')) {
+			const num = parseInt(selectedVaultOption.replace('vault-', ''), 10);
+			return getSequentialVaultId(num);
+		}
+		return undefined;
+	})();
+
+	// Fetch vaults when advanced options are expanded
+	async function fetchSequentialVaults() {
+		// For DCA, input token depends on order side
+		const inputToken = orderSide === 'Buy' ? selectedInputToken : selectedOutputToken;
+		if (!$signerAddress || !$currentNetwork || !inputToken) return;
+
+		loadingVaults = true;
+		try {
+			const client = await createRaindexClient();
+			const vaultsResult = await client.getVaults(
+				[$currentNetwork.id],
+				{
+					owners: [$signerAddress as `0x${string}`],
+					hideZeroBalance: false,
+					tokens: [inputToken.address as `0x${string}`]
+				},
+				0
+			);
+
+			if (vaultsResult.error || !vaultsResult.value) {
+				console.error('Failed to fetch vaults:', vaultsResult.error?.readableMsg);
+				existingVaultNumbers = [];
+				nextVaultNumber = 2;
+				return;
+			}
+
+			// Find sequential vault numbers from the fetched vaults
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const vaults = [...(vaultsResult.value as any)] as Array<{ vaultId: bigint }>;
+			const sequentialNumbers: number[] = [];
+
+			for (const vault of vaults) {
+				const num = parseSequentialVaultNumber(vault.vaultId);
+				if (num !== undefined) {
+					sequentialNumbers.push(num);
+				}
+			}
+
+			// Sort and dedupe
+			existingVaultNumbers = [...new Set(sequentialNumbers)].sort((a, b) => a - b);
+
+			// Find next available number (start from 2 since 1 is default)
+			nextVaultNumber = 2;
+			while (existingVaultNumbers.includes(nextVaultNumber)) {
+				nextVaultNumber++;
+			}
+		} catch (error) {
+			console.error('Error fetching vaults:', error);
+			existingVaultNumbers = [];
+			nextVaultNumber = 2;
+		} finally {
+			loadingVaults = false;
+		}
+	}
+
+	// Handle expanding advanced options
+	function toggleAdvancedOptions() {
+		showAdvancedOptions = !showAdvancedOptions;
+		if (showAdvancedOptions) {
+			fetchSequentialVaults();
+		}
+	}
 
 	// Price guardrail validation
 	$: {
@@ -102,8 +181,6 @@
 		!selectedPeriod ||
 		!selectedBaseline ||
 		!selectedInitialRatio ||
-		inputVaultIdError ||
-		outputVaultIdError ||
 		selectedAmountError ||
 		selectedPeriodError ||
 		selectedBaselineError ||
@@ -137,9 +214,8 @@
 				kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
-				inputVaultId: inputVaultId,
-				outputVaultId: outputVaultId,
-				depositAmount: depositAmount
+				depositAmount: depositAmount,
+				inputVaultId: selectedInputVaultId
 			});
 		}
 	};
@@ -315,6 +391,69 @@
 					</span>
 				</div>
 			</div>
+		</div>
+
+		<!-- Advanced Options -->
+		<div class="border-t border-white/10 pt-4">
+			<button
+				type="button"
+				on:click={toggleAdvancedOptions}
+				class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
+			>
+				<span>Advanced options</span>
+				<svg
+					class={`h-4 w-4 transform transition-transform ${
+						showAdvancedOptions ? 'rotate-180' : ''
+					}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 9l-7 7-7-7"
+					/>
+				</svg>
+			</button>
+
+			{#if showAdvancedOptions}
+				<div class="mt-4 space-y-3">
+					<div>
+						<label for="receiving-vault-dca" class="mb-2 block text-sm font-medium text-gray-300">
+							Receiving vault
+						</label>
+						{#if loadingVaults}
+							<div class="flex items-center gap-2 text-sm text-gray-400">
+								<LoadingSpinner size="sm" />
+								<span>Loading vaults...</span>
+							</div>
+						{:else}
+							<select
+								id="receiving-vault-dca"
+								bind:value={selectedVaultOption}
+								class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+							>
+								<option value="default">Default</option>
+								{#each existingVaultNumbers.filter((n) => n !== 1) as vaultNum}
+									<option value="vault-{vaultNum}">Vault {vaultNum}</option>
+								{/each}
+								<option value="create-new">Create new vault (Vault {nextVaultNumber})</option>
+							</select>
+							<p class="mt-1 text-xs text-gray-500">
+								{#if selectedVaultOption === 'default'}
+									Uses the default receiving vault (Vault 1)
+								{:else if selectedVaultOption === 'create-new'}
+									Creates a new vault (Vault {nextVaultNumber}) for receiving tokens
+								{:else}
+									Uses an existing vault for receiving tokens
+								{/if}
+							</p>
+						{/if}
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Deploy Button -->

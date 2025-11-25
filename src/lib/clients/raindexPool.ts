@@ -70,7 +70,10 @@ export class RaindexClientPool {
 
 				console.log(`[RaindexClientPool] Created client for pair ${pairStat.pairIndex}`);
 			} catch (error) {
-				console.error(`[RaindexClientPool] Error creating client for pair ${pairStat.pairIndex}:`, error);
+				console.error(
+					`[RaindexClientPool] Error creating client for pair ${pairStat.pairIndex}:`,
+					error
+				);
 			}
 		}
 

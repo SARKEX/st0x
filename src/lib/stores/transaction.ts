@@ -425,12 +425,10 @@ const transactionStore = () => {
 				throw new Error(removeCalldata.error.readableMsg);
 			}
 
-			let hash: Hash;
-
 			awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
 
 			// Send transaction to remove the order
-			hash = await sendTransaction(config, {
+			const hash = await sendTransaction(config, {
 				data: removeCalldata.value as Hex,
 				to: order.orderbook as `0x${string}`
 			});
@@ -444,9 +442,13 @@ const transactionStore = () => {
 			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
 
 			return transactionSuccess(hash, link);
-		} catch (error) {
-			// @ts-expect-error Send transaction error
-			return transactionError(error?.cause?.details || error?.message || TransactionErrorMessage.GENERIC);
+		} catch (error: unknown) {
+			const err = error as { cause?: { details?: string }; message?: string };
+			return transactionError(
+				(err?.cause?.details ||
+					err?.message ||
+					TransactionErrorMessage.GENERIC) as TransactionErrorMessage
+			);
 		}
 	};
 
@@ -488,8 +490,8 @@ const transactionStore = () => {
 
 			// Find the specific vault by ID
 			const vaults = [...(vaultsResult.value as any)];
-			const vault = vaults.find((v: RaindexVault) =>
-				v.vaultId.toString() === quote.outputVaultId
+			const vault = vaults.find(
+				(v: RaindexVault) => v.vaultId.toString() === quote.outputVaultId
 			) as RaindexVault | undefined;
 
 			if (!vault) {
@@ -498,9 +500,13 @@ const transactionStore = () => {
 
 			// Use the existing handleWithdraw function
 			return await handleWithdraw(vault);
-		} catch (error) {
-			// @ts-expect-error Send transaction error
-			return transactionError(error?.cause?.details || error?.message || TransactionErrorMessage.GENERIC);
+		} catch (error: unknown) {
+			const err = error as { cause?: { details?: string }; message?: string };
+			return transactionError(
+				(err?.cause?.details ||
+					err?.message ||
+					TransactionErrorMessage.GENERIC) as TransactionErrorMessage
+			);
 		}
 	};
 
