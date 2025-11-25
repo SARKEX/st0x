@@ -60,6 +60,7 @@
 	import { createSingleVaultQuery, createUserVaultsQuery, prefetchUserVaults } from '$lib/queries/vaults';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
+	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 	$: tokenId = $page.params.id;
 
 	// Get queryClient for cache lookup
@@ -104,69 +105,6 @@
 		});
 	})();
 
-	// Transform market orders (trades) into display format
-	function transformTradeToDisplayOrder(trade: SgTrade, tokenAddress: string): DisplayOrder | null {
-		const inputToken = trade.inputVaultBalanceChange?.vault?.token;
-		const outputToken = trade.outputVaultBalanceChange?.vault?.token;
-
-		if (!inputToken || !outputToken) return null;
-
-		const inputTokenAddr = inputToken.address?.toLowerCase();
-		const outputTokenAddr = outputToken.address?.toLowerCase();
-		const targetAddr = tokenAddress.toLowerCase();
-
-		// Determine side based on which token is the target
-		// If target token is the input (what taker received), it's a Buy
-		// If target token is the output (what taker gave), it's a Sell
-		const isBuy = inputTokenAddr === targetAddr;
-
-		const inputAmountHex = trade.inputVaultBalanceChange?.amount;
-		const outputAmountHex = trade.outputVaultBalanceChange?.amount;
-		const inputDecimals = Number(inputToken.decimals ?? 18);
-		const outputDecimals = Number(outputToken.decimals ?? 18);
-
-		// Parse Rain Float hex values to BigInt (use absolute value since amounts can be negative in vault changes)
-		const inputAmountBigInt = inputAmountHex
-			? parseFloatHex(inputAmountHex, inputDecimals, true)
-			: 0n;
-		const outputAmountBigInt = outputAmountHex
-			? parseFloatHex(outputAmountHex, outputDecimals, true)
-			: 0n;
-
-		// Calculate price (quote per asset)
-		let price: number | undefined;
-		if (inputAmountBigInt > 0n && outputAmountBigInt > 0n) {
-			const inputValue = parseFloat(formatUnits(inputAmountBigInt, inputDecimals));
-			const outputValue = parseFloat(formatUnits(outputAmountBigInt, outputDecimals));
-			if (isBuy && inputValue > 0) {
-				price = outputValue / inputValue; // Price paid per unit received
-			} else if (!isBuy && outputValue > 0) {
-				price = inputValue / outputValue; // Price received per unit sold
-			}
-		}
-
-		const tokenSymbol = isBuy
-			? (inputToken.symbol ?? 'UNKNOWN')
-			: (outputToken.symbol ?? 'UNKNOWN');
-
-		return {
-			type: 'market',
-			orderHash: trade.order?.orderHash ?? trade.id,
-			timestamp: Number(trade.timestamp),
-			side: isBuy ? 'Buy' : 'Sell',
-			trade,
-			tokenSymbol,
-			tokenAddress: targetAddr,
-			inputTokenSymbol: inputToken.symbol ?? 'UNKNOWN',
-			outputTokenSymbol: outputToken.symbol ?? 'UNKNOWN',
-			inputAmount:
-				inputAmountBigInt > 0n ? formatUnits(inputAmountBigInt, inputDecimals) : undefined,
-			outputAmount:
-				outputAmountBigInt > 0n ? formatUnits(outputAmountBigInt, outputDecimals) : undefined,
-			price
-		};
-	}
-
 	// Transform quotes and market orders into DisplayOrder format for OrdersTable
 	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
 	$: tokenOrders = (() => {
@@ -207,9 +145,9 @@
 		}
 
 		// Add market orders (user's trades for this token)
-		if (userMarketOrders.length > 0) {
+		if (userMarketOrders.length > 0 && tokenAddress) {
 			for (const trade of userMarketOrders) {
-				const displayOrder = transformTradeToDisplayOrder(trade, tokenAddress);
+				const displayOrder = transformTradeToDisplayOrder(trade, { targetTokenAddress: tokenAddress });
 				if (displayOrder) {
 					displayOrders.push(displayOrder);
 				}
@@ -924,9 +862,9 @@
 					class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 				>
 					<div>
-						<h2 class="text-base font-semibold text-white">On-chain Activity</h2>
+						<h2 class="text-base font-semibold text-white">DEX Activity</h2>
 						<p class="text-sm text-gray-400">
-							Visualize recent trades, liquidity, orders, and vaults
+							View DEX trades, liquidity, orders, and vaults
 						</p>
 					</div>
 				</div>
@@ -1111,260 +1049,236 @@
 				</div>
 			{/if}
 		</Section>
-		<!-- Tabbed Information Section (collapsible) -->
+		<!-- Tabbed Information Section -->
 		<Section>
-			<div class="mb-3 flex items-center justify-between">
-				<h2 class="text-base font-semibold">Details</h2>
-				<button
-					class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
-					aria-label={infoCollapsed ? 'Expand details' : 'Collapse details'}
-					on:click={() => (infoCollapsed = !infoCollapsed)}
-				>
-					<svg
-						class="h-4 w-4 transition-transform duration-200 ease-out {infoCollapsed
-							? ''
-							: 'rotate-180'}"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M6 9l6 6 6-6" />
-					</svg>
-				</button>
-			</div>
-			{#if !infoCollapsed}
-				<div class="grid gap-6 lg:grid-cols-2">
-					<div class="space-y-4">
-						<div class="space-y-3">
-							<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
-								Asset Details
-							</h3>
-							<TabNav
-								tabs={ASSET_TABS}
-								activeId={activeAssetTab}
-								on:change={handleAssetTabChange}
-							/>
-						</div>
-						{#if activeAssetTab === 'company'}
-							{#if tradingViewSymbol}
-								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget
-										widgetType="symbol-profile"
-										symbol={tradingViewSymbol}
-										height="480"
-									/>
-								</div>
-							{:else}
-								<div class={`${containerStyles.cardBordered}`}>
-									<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-								</div>
-							{/if}
-						{:else if activeAssetTab === 'fundamentals'}
-							{#if tradingViewSymbol}
-								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget
-										widgetType="financials"
-										symbol={tradingViewSymbol}
-										height={520}
-									/>
-								</div>
-							{:else}
-								<div class={`${containerStyles.cardBordered}`}>
-									<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-								</div>
-							{/if}
-						{:else if activeAssetTab === 'technical'}
-							{#if tradingViewSymbol}
-								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget
-										widgetType="technical-analysis"
-										symbol={tradingViewSymbol}
-										height="520"
-									/>
-								</div>
-							{:else}
-								<div class={`${containerStyles.cardBordered}`}>
-									<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-								</div>
-							{/if}
-						{:else if tradingViewSymbol}
+			<div class="grid gap-6 lg:grid-cols-2">
+				<div class="space-y-4">
+					<div class="space-y-3">
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+							Asset Details
+						</h3>
+						<TabNav
+							tabs={ASSET_TABS}
+							activeId={activeAssetTab}
+							on:change={handleAssetTabChange}
+						/>
+					</div>
+					{#if activeAssetTab === 'company'}
+						{#if tradingViewSymbol}
 							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-								<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
+								<TradingViewWidget
+									widgetType="symbol-profile"
+									symbol={tradingViewSymbol}
+									height="480"
+								/>
 							</div>
 						{:else}
 							<div class={`${containerStyles.cardBordered}`}>
 								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
-					</div>
-					<div class="space-y-4">
-						<div class="space-y-3">
-							<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
-								Token Details
-							</h3>
-							<TabNav
-								tabs={TOKEN_TABS}
-								activeId={activeTokenTab}
-								on:change={handleTokenTabChange}
-							/>
-						</div>
-						{#if activeTokenTab === 'contract'}
-							<div class={containerStyles.cardBordered}>
-								<h3 class="mb-3 font-semibold">Contract Information</h3>
-								<div class="space-y-3 text-sm">
-									<div class="flex items-center justify-between gap-2">
-										<span class="text-gray-400">Address</span>
-										<div>
-											<div class="sm:hidden">
-												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-													label={currentToken.address}
-													truncate={{ start: 0, end: 6 }}
-													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-												/>
-											</div>
-											<div class="hidden sm:block">
-												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-													label={truncateAddress(currentToken.address)}
-													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-												/>
-											</div>
-										</div>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Network</span>
-										<span>{$currentNetwork.displayName}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Symbol</span>
-										<span>{currentToken.symbol}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Decimals</span>
-										<span>18</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-gray-400">Proofs</span>
-										<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
-											View proofs
-										</a>
-									</div>
-								</div>
-							</div>
-						{:else if activeTokenTab === 'supply'}
-							<div class={containerStyles.cardBordered}>
-								<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
-								<div class="space-y-3 text-sm">
-									<div class="flex justify-between">
-										<span class="text-gray-400">Total Supply</span>
-										<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">On-Chain Market Cap</span>
-										<span>N/A</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Holders</span>
-										<span>{currentToken.tokenHolders.length}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Total Transfers</span>
-										<span>{currentToken.shareTransfers.length}</span>
-									</div>
-								</div>
-							</div>
-						{:else if activeTokenTab === 'mints'}
-							<div class={containerStyles.cardBordered}>
-								<div class="mb-2 flex items-center justify-between">
-									<h3 class="font-semibold">Latest Mints</h3>
-									<ExternalLink
-										href="https://portal.s01issuer.com/metrics"
-										label="View All"
-										className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
-									/>
-								</div>
-								{#if currentToken?.deposits?.length}
-									<div class="space-y-1">
-										{#each currentToken.deposits.slice(0, 5) as dep}
-											<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
-												<div class="flex items-center justify-between gap-3 text-xs">
-													<div class="min-w-0 truncate">
-														<span class="font-medium text-green-400">
-															+ {formatUnits(BigInt(dep.amount), 18)}
-															{currentToken.symbol}
-														</span>
-													</div>
-													<div class="flex flex-shrink-0 items-center gap-2">
-														<TxLink hash={dep.transaction.id} />
-													</div>
-												</div>
-												<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-													<span class="text-gray-400">
-														<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
-														<span class="hidden sm:inline">
-															{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}
-														</span>
-													</span>
-													<span class="mx-2 text-gray-500">•</span>
-													<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
-												</div>
-											</div>
-										{/each}
-									</div>
-								{:else}
-									<div class="text-sm text-gray-400">No recent mints.</div>
-								{/if}
+					{:else if activeAssetTab === 'fundamentals'}
+						{#if tradingViewSymbol}
+							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+								<TradingViewWidget
+									widgetType="financials"
+									symbol={tradingViewSymbol}
+									height={520}
+								/>
 							</div>
 						{:else}
-							<div class={containerStyles.cardBordered}>
-								<div class="mb-2 flex items-center justify-between">
-									<h3 class="font-semibold">Latest Burns</h3>
-									<ExternalLink
-										href="https://portal.s01issuer.com/metrics"
-										label="View All"
-										className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
-									/>
-								</div>
-								{#if currentToken?.withdraws?.length}
-									<div class="space-y-1">
-										{#each currentToken.withdraws.slice(0, 5) as w}
-											<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
-												<div class="flex items-center justify-between gap-3 text-xs">
-													<div class="min-w-0 truncate">
-														<span class="font-medium text-red-400">
-															− {formatUnits(BigInt(w.amount), 18)}
-															{currentToken.symbol}
-														</span>
-													</div>
-													<div class="flex flex-shrink-0 items-center gap-2">
-														<TxLink hash={w.transaction.id} />
-													</div>
-												</div>
-												<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-													<span class="text-gray-400">
-														<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
-														<span class="hidden sm:inline">
-															{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}
-														</span>
-													</span>
-													<span class="mx-2 text-gray-500">•</span>
-													<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
-												</div>
-											</div>
-										{/each}
-									</div>
-								{:else}
-									<div class="text-sm text-gray-400">No recent burns.</div>
-								{/if}
+							<div class={`${containerStyles.cardBordered}`}>
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
-					</div>
+					{:else if activeAssetTab === 'technical'}
+						{#if tradingViewSymbol}
+							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+								<TradingViewWidget
+									widgetType="technical-analysis"
+									symbol={tradingViewSymbol}
+									height="520"
+								/>
+							</div>
+						{:else}
+							<div class={`${containerStyles.cardBordered}`}>
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if tradingViewSymbol}
+						<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+							<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
+						</div>
+					{:else}
+						<div class={`${containerStyles.cardBordered}`}>
+							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+						</div>
+					{/if}
 				</div>
-			{/if}
+				<div class="space-y-4">
+					<div class="space-y-3">
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+							Token Details
+						</h3>
+						<TabNav
+							tabs={TOKEN_TABS}
+							activeId={activeTokenTab}
+							on:change={handleTokenTabChange}
+						/>
+					</div>
+					{#if activeTokenTab === 'contract'}
+						<div class={containerStyles.cardBordered}>
+							<h3 class="mb-3 font-semibold">Contract Information</h3>
+							<div class="space-y-3 text-sm">
+								<div class="flex items-center justify-between gap-2">
+									<span class="text-gray-400">Address</span>
+									<div>
+										<div class="sm:hidden">
+											<ExternalLink
+												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+												label={currentToken.address}
+												truncate={{ start: 0, end: 6 }}
+												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+											/>
+										</div>
+										<div class="hidden sm:block">
+											<ExternalLink
+												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+												label={truncateAddress(currentToken.address)}
+												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+											/>
+										</div>
+									</div>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Network</span>
+									<span>{$currentNetwork.displayName}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Symbol</span>
+									<span>{currentToken.symbol}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Decimals</span>
+									<span>18</span>
+								</div>
+								<div class="flex items-center justify-between">
+									<span class="text-gray-400">Proofs</span>
+									<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
+										View proofs
+									</a>
+								</div>
+							</div>
+						</div>
+					{:else if activeTokenTab === 'supply'}
+						<div class={containerStyles.cardBordered}>
+							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
+							<div class="space-y-3 text-sm">
+								<div class="flex justify-between">
+									<span class="text-gray-400">Total Supply</span>
+									<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">On-Chain Market Cap</span>
+									<span>N/A</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Holders</span>
+									<span>{currentToken.tokenHolders.length}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Total Transfers</span>
+									<span>{currentToken.shareTransfers.length}</span>
+								</div>
+							</div>
+						</div>
+					{:else if activeTokenTab === 'mints'}
+						<div class={containerStyles.cardBordered}>
+							<div class="mb-2 flex items-center justify-between">
+								<h3 class="font-semibold">Latest Mints</h3>
+								<ExternalLink
+									href="https://portal.s01issuer.com/metrics"
+									label="View All"
+									className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+								/>
+							</div>
+							{#if currentToken?.deposits?.length}
+								<div class="space-y-1">
+									{#each currentToken.deposits.slice(0, 5) as dep}
+										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+											<div class="flex items-center justify-between gap-3 text-xs">
+												<div class="min-w-0 truncate">
+													<span class="font-medium text-green-400">
+														+ {formatUnits(BigInt(dep.amount), 18)}
+														{currentToken.symbol}
+													</span>
+												</div>
+												<div class="flex flex-shrink-0 items-center gap-2">
+													<TxLink hash={dep.transaction.id} />
+												</div>
+											</div>
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
+												<span class="text-gray-400">
+													<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
+													<span class="hidden sm:inline">
+														{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}
+													</span>
+												</span>
+												<span class="mx-2 text-gray-500">•</span>
+												<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<div class="text-sm text-gray-400">No recent mints.</div>
+							{/if}
+						</div>
+					{:else}
+						<div class={containerStyles.cardBordered}>
+							<div class="mb-2 flex items-center justify-between">
+								<h3 class="font-semibold">Latest Burns</h3>
+								<ExternalLink
+									href="https://portal.s01issuer.com/metrics"
+									label="View All"
+									className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+								/>
+							</div>
+							{#if currentToken?.withdraws?.length}
+								<div class="space-y-1">
+									{#each currentToken.withdraws.slice(0, 5) as w}
+										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+											<div class="flex items-center justify-between gap-3 text-xs">
+												<div class="min-w-0 truncate">
+													<span class="font-medium text-red-400">
+														− {formatUnits(BigInt(w.amount), 18)}
+														{currentToken.symbol}
+													</span>
+												</div>
+												<div class="flex flex-shrink-0 items-center gap-2">
+													<TxLink hash={w.transaction.id} />
+												</div>
+											</div>
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
+												<span class="text-gray-400">
+													<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
+													<span class="hidden sm:inline">
+														{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}
+													</span>
+												</span>
+												<span class="mx-2 text-gray-500">•</span>
+												<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<div class="text-sm text-gray-400">No recent burns.</div>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			</div>
 		</Section>
 	</div>
 	{#if showTradePanel}

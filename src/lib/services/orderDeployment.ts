@@ -51,7 +51,7 @@ export function parseSequentialVaultNumber(vaultId: bigint | string): number | u
 
 /**
  * Generates a random vault ID using Web Crypto API
- * Used for output vaults and DSF/Folio vaults that should be unique per order
+ * Used internally for vaults that should be unique per order
  */
 function generateRandomVaultId(): Hex {
 	const array = new Uint8Array(32);
@@ -145,10 +145,11 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 	if (!$signerAddress) throw new Error('Signer address not found');
 
 	// DCA vault management:
-	// - Input vault: Use provided vault ID or default (0x01) so orders share the same input vault
-	// - Output vault: Always new random (unique per order)
-	gui.setVaultId('input', 'input', args.inputVaultId ?? DEFAULT_INPUT_VAULT_ID);
-	gui.setVaultId('output', 'output', generateRandomVaultId());
+	// - Input vault: Use provided vault ID if specified, otherwise let system generate random
+	// - Output vault: Always let system generate random (unique per order)
+	if (args.inputVaultId) {
+		gui.setVaultId('input', 'input', args.inputVaultId);
+	}
 
 	const composedRainlangResult = await gui.getComposedRainlang();
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
@@ -194,10 +195,11 @@ export const getLimitOrderDeploymentArgs = async (
 	if (!$signerAddress) throw new Error('Signer address not found');
 
 	// Limit order vault management:
-	// - Input vault: Use provided vault ID or default (0x01) so orders share the same input vault
-	// - Output vault: Always new random (unique per order)
-	gui.setVaultId('input', 'token1', args.inputVaultId ?? DEFAULT_INPUT_VAULT_ID);
-	gui.setVaultId('output', 'token2', generateRandomVaultId());
+	// - Input vault: Use provided vault ID if specified, otherwise let system generate random
+	// - Output vault: Always let system generate random (unique per order)
+	if (args.inputVaultId) {
+		gui.setVaultId('input', 'token1', args.inputVaultId);
+	}
 
 	const composedRainlangResult = await gui.getComposedRainlang();
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);

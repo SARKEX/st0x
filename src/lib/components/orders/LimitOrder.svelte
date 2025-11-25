@@ -12,11 +12,10 @@
 	import type { PythToken } from '$lib/types';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { connected, signerAddress } from 'svelte-wagmi';
+	import { connected } from 'svelte-wagmi';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
-	import { createRaindexClient } from '$lib/clients/raindex';
-	import { getSequentialVaultId, parseSequentialVaultNumber } from '$lib/services/orderDeployment';
+	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 
 	/**
 	 * assetToken: The non-settlement token being traded (from prop)
@@ -81,23 +80,13 @@
 
 	// Advanced options state
 	let showAdvancedOptions = false;
-	let selectedVaultOption: string = 'default'; // 'default', 'vault-N', or 'create-new'
-	let existingVaultNumbers: number[] = []; // Sequential vault numbers that exist
-	let nextVaultNumber = 2; // Next available vault number for "Create new"
-	let loadingVaults = false;
+	let selectedVaultOption = 'default' as 'default' | 'order-specific';
 
 	// Computed input vault ID based on selection
-	$: selectedInputVaultId = (() => {
-		if (selectedVaultOption === 'default') {
-			return undefined; // Use default (0x01)
-		} else if (selectedVaultOption === 'create-new') {
-			return getSequentialVaultId(nextVaultNumber);
-		} else if (selectedVaultOption.startsWith('vault-')) {
-			const num = parseInt(selectedVaultOption.replace('vault-', ''), 10);
-			return getSequentialVaultId(num);
-		}
-		return undefined;
-	})();
+	// 'default' = DEFAULT_INPUT_VAULT_ID (shared vault 0x01)
+	// 'order-specific' = undefined (system generates random vault ID)
+	$: selectedInputVaultId =
+		selectedVaultOption === 'default' ? DEFAULT_INPUT_VAULT_ID : undefined;
 
 	$: disableDeploy =
 		!selectedAmount ||
@@ -108,100 +97,6 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		selectedAmountError;
-
-	// Fetch vaults when advanced options are expanded
-	async function fetchSequentialVaults() {
-		if (!$signerAddress || !$currentNetwork || !orderInputToken) return;
-
-		loadingVaults = true;
-		try {
-			const client = await createRaindexClient();
-			const vaultsResult = await client.getVaults(
-				[$currentNetwork.id],
-				{
-					owners: [$signerAddress as `0x${string}`],
-					hideZeroBalance: false,
-					tokens: [orderInputToken.address as `0x${string}`]
-				},
-				0
-			);
-
-			if (vaultsResult.error || !vaultsResult.value) {
-				console.error('Failed to fetch vaults:', vaultsResult.error?.readableMsg);
-				existingVaultNumbers = [];
-				nextVaultNumber = 2;
-				return;
-			}
-
-			// Find sequential vault numbers from the fetched vaults
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const vaultsList = vaultsResult.value as any;
-			console.log(
-				'Raw vaults result:',
-				vaultsList,
-				'type:',
-				typeof vaultsList,
-				'constructor:',
-				vaultsList?.constructor?.name
-			);
-
-			// Try different ways to convert to array
-			let vaults: Array<{ vaultId: bigint }> = [];
-			if (Array.isArray(vaultsList)) {
-				vaults = vaultsList;
-			} else if (vaultsList && typeof vaultsList[Symbol.iterator] === 'function') {
-				vaults = Array.from(vaultsList);
-			} else if (vaultsList && typeof vaultsList.toArray === 'function') {
-				vaults = vaultsList.toArray();
-			} else if (vaultsList && vaultsList.length !== undefined) {
-				// Array-like object
-				vaults = Array.prototype.slice.call(vaultsList);
-			}
-
-			console.log(
-				'Fetched vaults for token',
-				orderInputToken.address,
-				':',
-				vaults.map((v) => ({
-					vaultId: v.vaultId.toString(),
-					vaultIdHex: '0x' + v.vaultId.toString(16).padStart(64, '0')
-				}))
-			);
-
-			const sequentialNumbers: number[] = [];
-
-			for (const vault of vaults) {
-				const num = parseSequentialVaultNumber(vault.vaultId);
-				console.log('Vault', vault.vaultId.toString(), '-> sequential number:', num);
-				if (num !== undefined) {
-					sequentialNumbers.push(num);
-				}
-			}
-
-			// Sort and dedupe
-			existingVaultNumbers = [...new Set(sequentialNumbers)].sort((a, b) => a - b);
-
-			// Find next available number (start from 2 since 1 is default)
-			nextVaultNumber = 2;
-			while (existingVaultNumbers.includes(nextVaultNumber)) {
-				nextVaultNumber++;
-			}
-		} catch (error) {
-			console.error('Error fetching vaults:', error);
-			existingVaultNumbers = [];
-			nextVaultNumber = 2;
-		} finally {
-			loadingVaults = false;
-		}
-	}
-
-	// Handle expanding advanced options
-	function toggleAdvancedOptions() {
-		showAdvancedOptions = !showAdvancedOptions;
-		if (showAdvancedOptions) {
-			fetchSequentialVaults();
-		}
-	}
 
 	const handleDeploy = async () => {
 		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
@@ -406,7 +301,7 @@
 		<div class="border-t border-white/10 pt-4">
 			<button
 				type="button"
-				on:click={toggleAdvancedOptions}
+				on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
 				class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
 			>
 				<span>Advanced options</span>
@@ -433,33 +328,21 @@
 						<label for="receiving-vault" class="mb-2 block text-sm font-medium text-gray-300">
 							Receiving vault
 						</label>
-						{#if loadingVaults}
-							<div class="flex items-center gap-2 text-sm text-gray-400">
-								<LoadingSpinner size="sm" />
-								<span>Loading vaults...</span>
-							</div>
-						{:else}
-							<select
-								id="receiving-vault"
-								bind:value={selectedVaultOption}
-								class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
-							>
-								<option value="default">Default</option>
-								{#each existingVaultNumbers.filter((n) => n !== 1) as vaultNum}
-									<option value="vault-{vaultNum}">Vault {vaultNum}</option>
-								{/each}
-								<option value="create-new">Create new vault (Vault {nextVaultNumber})</option>
-							</select>
-							<p class="mt-1 text-xs text-gray-500">
-								{#if selectedVaultOption === 'default'}
-									Uses the default receiving vault (Vault 1)
-								{:else if selectedVaultOption === 'create-new'}
-									Creates a new vault (Vault {nextVaultNumber}) for receiving tokens
-								{:else}
-									Uses an existing vault for receiving tokens
-								{/if}
-							</p>
-						{/if}
+						<select
+							id="receiving-vault"
+							bind:value={selectedVaultOption}
+							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+						>
+							<option value="default">Default</option>
+							<option value="order-specific">Order-specific</option>
+						</select>
+						<p class="mt-1 text-xs text-gray-500">
+							{#if selectedVaultOption === 'default'}
+								Uses the shared default vault for receiving tokens
+							{:else}
+								Creates a unique vault for this order only
+							{/if}
+						</p>
 					</div>
 				</div>
 			{/if}

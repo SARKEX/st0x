@@ -31,6 +31,7 @@
 	import transactionStore from '$lib/stores/transaction';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
+	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
@@ -271,6 +272,20 @@
 		0
 	);
 
+	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
+	$: paymentTokenAddresses = (() => {
+		if (!$currentNetwork) return new Set<string>();
+		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
+		return new Set(paymentTokens.map((t) => t.address.toLowerCase()));
+	})();
+
+	$: fundsHoldings = portfolioHoldings.filter((h) =>
+		paymentTokenAddresses.has(h.address.toLowerCase())
+	);
+	$: assetHoldings = portfolioHoldings.filter(
+		(h) => !paymentTokenAddresses.has(h.address.toLowerCase())
+	);
+
 	// Orders: Fetch orderbook quotes for all tokens
 	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, true);
 
@@ -330,49 +345,12 @@
 
 		// Add market orders (trades)
 		for (const trade of userMarketOrders) {
-			const inputToken = trade.inputVaultBalanceChange?.vault?.token;
-			const outputToken = trade.outputVaultBalanceChange?.vault?.token;
-			if (!inputToken || !outputToken) continue;
-
-			const inputAmountHex = trade.inputVaultBalanceChange?.amount;
-			const outputAmountHex = trade.outputVaultBalanceChange?.amount;
-			const inputDecimals = Number(inputToken.decimals ?? 18);
-			const outputDecimals = Number(outputToken.decimals ?? 18);
-
-			const inputAmountBigInt = inputAmountHex
-				? parseFloatHex(inputAmountHex, inputDecimals, true)
-				: 0n;
-			const outputAmountBigInt = outputAmountHex
-				? parseFloatHex(outputAmountHex, outputDecimals, true)
-				: 0n;
-
-			// Determine side: if input is a known ST0x token, it's a Buy
-			const inputAddr = inputToken.address?.toLowerCase();
-			const isBuy = ALL_TOKENS.some((t) => t.address.toLowerCase() === inputAddr);
-
-			let price: number | undefined;
-			if (inputAmountBigInt > 0n && outputAmountBigInt > 0n) {
-				const inputValue = parseFloat(formatUnits(inputAmountBigInt, inputDecimals));
-				const outputValue = parseFloat(formatUnits(outputAmountBigInt, outputDecimals));
-				price = isBuy && inputValue > 0 ? outputValue / inputValue : inputValue / outputValue;
+			const chainId = $currentNetwork?.chainId;
+			if (!chainId) continue;
+			const displayOrder = transformTradeToDisplayOrder(trade, { chainId });
+			if (displayOrder) {
+				displayOrders.push(displayOrder);
 			}
-
-			displayOrders.push({
-				type: 'market',
-				orderHash: trade.order?.orderHash ?? trade.id,
-				timestamp: Number(trade.timestamp),
-				side: isBuy ? 'Buy' : 'Sell',
-				trade,
-				tokenSymbol: isBuy ? inputToken.symbol ?? 'UNKNOWN' : outputToken.symbol ?? 'UNKNOWN',
-				tokenAddress: isBuy ? inputAddr ?? '' : outputToken.address?.toLowerCase() ?? '',
-				inputTokenSymbol: inputToken.symbol ?? 'UNKNOWN',
-				outputTokenSymbol: outputToken.symbol ?? 'UNKNOWN',
-				inputAmount:
-					inputAmountBigInt > 0n ? formatUnits(inputAmountBigInt, inputDecimals) : undefined,
-				outputAmount:
-					outputAmountBigInt > 0n ? formatUnits(outputAmountBigInt, outputDecimals) : undefined,
-				price
-			});
 		}
 
 		// Filter to only valid tokens, then sort by timestamp descending
@@ -410,9 +388,13 @@
 		});
 	})();
 
-	// Split vaults into default and non-default
-	$: defaultVaults = sortedVaults.filter((v) => v.vault.vaultId === DEFAULT_VAULT_ID);
-	$: allNonDefaultVaults = sortedVaults.filter((v) => v.vault.vaultId !== DEFAULT_VAULT_ID);
+	// Split vaults into default and non-default (both filtered by balance > 0)
+	$: defaultVaults = sortedVaults.filter(
+		(v) => v.vault.vaultId === DEFAULT_VAULT_ID && BigInt(v.vault.balance) > 0n
+	);
+	$: allNonDefaultVaults = sortedVaults.filter(
+		(v) => v.vault.vaultId !== DEFAULT_VAULT_ID && BigInt(v.vault.balance) > 0n
+	);
 	$: nonDefaultVaults = showDustVaults
 		? allNonDefaultVaults
 		: allNonDefaultVaults.filter((v) => {
@@ -497,58 +479,104 @@
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}
-				<Section>
-					<h2 class="mb-4 text-lg font-semibold">Your Holdings</h2>
-					<p class="mb-4 text-sm text-gray-400">Combined balance across wallet and all vaults</p>
-					{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
-						<LoadingSpinner variant="inline" size="md" text="Loading holdings..." />
-					{:else if portfolioHoldings.length > 0}
-						<div class="overflow-x-auto">
-							<Table>
-								<thead>
-									<tr class="border-b border-white/10">
-										<th class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Token</th>
-										<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Wallet</th>
-										<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Vaults</th>
-										<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Total</th>
-										<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Price</th>
-										<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Value</th>
-										<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">24h</th>
-										<th class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Actions</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each portfolioHoldings as holding}
-										<tr class="border-b border-white/5 hover:bg-white/5">
-											<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
-												<TokenDisplay
-													logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
-													symbol={holding.symbol}
-													name={holding.name}
-												/>
-											</td>
-											<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.walletBalanceNum.toFixed(4)}</td>
-											<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.vaultBalanceNum.toFixed(4)}</td>
-											<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">{holding.totalBalance.toFixed(4)}</td>
-											<td class="px-2 py-2 sm:px-4 sm:py-3">${holding.price.toFixed(2)}</td>
-											<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">${holding.value.toFixed(2)}</td>
-											<td class="px-2 py-2 text-gray-400 sm:px-4 sm:py-3">
-												TBD
-											</td>
-											<td class="px-4 py-3">
-												<div class="flex justify-center gap-2">
-													<Button size="sm" variant="primary" on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button>
-												</div>
-											</td>
+				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
+					<Section>
+						<LoadingSpinner variant="inline" size="md" text="Loading portfolio..." />
+					</Section>
+				{:else}
+					<!-- Funds Section (Payment Tokens) -->
+					<Section>
+						<h2 class="mb-4 text-lg font-semibold">Funds</h2>
+						<p class="mb-4 text-sm text-gray-400">Payment tokens available for trading</p>
+						{#if fundsHoldings.length > 0}
+							<div class="overflow-x-auto">
+								<Table>
+									<thead>
+										<tr class="border-b border-white/10">
+											<th class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Token</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Wallet</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Vaults</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Total</th>
 										</tr>
-									{/each}
-								</tbody>
-							</Table>
-						</div>
-					{:else}
-						<EmptyState description="No holdings found in your wallet or vaults." />
-					{/if}
-				</Section>
+									</thead>
+									<tbody>
+										{#each fundsHoldings as holding}
+											{@const paymentToken = (PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []).find(
+												(t) => t.address.toLowerCase() === holding.address.toLowerCase()
+											)}
+											<tr class="border-b border-white/5 hover:bg-white/5">
+												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+													<TokenDisplay
+														logoUrl={paymentToken?.logoUrl}
+														symbol={holding.symbol}
+														name={holding.name}
+													/>
+												</td>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.walletBalanceNum.toFixed(2)}</td>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.vaultBalanceNum.toFixed(2)}</td>
+												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">{holding.totalBalance.toFixed(2)}</td>
+											</tr>
+										{/each}
+									</tbody>
+								</Table>
+							</div>
+						{:else}
+							<EmptyState description="No funds found in your wallet or vaults." />
+						{/if}
+					</Section>
+
+					<!-- Holdings Section (Asset Tokens) -->
+					<Section>
+						<h2 class="mb-4 text-lg font-semibold">Holdings</h2>
+						<p class="mb-4 text-sm text-gray-400">Asset tokens combined across wallet and vaults</p>
+						{#if assetHoldings.length > 0}
+							<div class="overflow-x-auto">
+								<Table>
+									<thead>
+										<tr class="border-b border-white/10">
+											<th class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Token</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Wallet</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Vaults</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Total</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Price</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Value</th>
+											<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3">24h</th>
+											<th class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3">Actions</th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each assetHoldings as holding}
+											<tr class="border-b border-white/5 hover:bg-white/5">
+												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+													<TokenDisplay
+														logoUrl={ALL_TOKENS.find((s) => s.address.toLowerCase() === holding.address.toLowerCase())?.logoUrl}
+														symbol={holding.symbol}
+														name={holding.name}
+													/>
+												</td>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.walletBalanceNum.toFixed(4)}</td>
+												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3">{holding.vaultBalanceNum.toFixed(4)}</td>
+												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">{holding.totalBalance.toFixed(4)}</td>
+												<td class="px-2 py-2 sm:px-4 sm:py-3">${holding.price.toFixed(2)}</td>
+												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3">${holding.value.toFixed(2)}</td>
+												<td class="px-2 py-2 text-gray-400 sm:px-4 sm:py-3">
+													TBD
+												</td>
+												<td class="px-4 py-3">
+													<div class="flex justify-center gap-2">
+														<Button size="sm" variant="primary" on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button>
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</Table>
+							</div>
+						{:else}
+							<EmptyState description="No asset holdings found in your wallet or vaults." />
+						{/if}
+					</Section>
+				{/if}
 
 			<!-- Orders Tab -->
 			{:else if activeTab === 'orders'}
@@ -618,7 +646,7 @@
 													<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
 													<td class="py-3">
 														{#if balance > 0n}
-															<Button variant="secondary" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
+															<Button variant="danger" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
 														{:else}
 															<span class="text-gray-500">—</span>
 														{/if}
@@ -687,7 +715,7 @@
 														<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
 														<td class="py-3">
 															{#if balance > 0n}
-																<Button variant="secondary" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
+																<Button variant="danger" size="sm" on:click={() => transactionStore.handleWithdraw(raindexVault)}>Withdraw</Button>
 															{:else}
 																<span class="text-gray-500">—</span>
 															{/if}

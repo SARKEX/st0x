@@ -30,6 +30,7 @@
 	// Filter state
 	let selectedOrdersFilter: 'my' | 'all' = 'my';
 	let selectedOrderTypeFilter: 'all' | 'limit' | 'dca' | 'custom' | 'market' = 'all';
+	let selectedDirectionFilter: 'all' | 'Buy' | 'Sell' = 'all';
 	let showClosedOrders = false;
 
 	// Pagination
@@ -37,7 +38,7 @@
 	const ITEMS_PER_PAGE = 10;
 
 	// Reset pagination when filter changes
-	$: if (selectedOrdersFilter || selectedOrderTypeFilter) {
+	$: if (selectedOrdersFilter || selectedOrderTypeFilter || selectedDirectionFilter) {
 		currentPage = 1;
 	}
 
@@ -163,6 +164,11 @@
 			result = result.filter((order) => order.type === selectedOrderTypeFilter);
 		}
 
+		// Apply direction filter
+		if (selectedDirectionFilter !== 'all') {
+			result = result.filter((order) => order.side === selectedDirectionFilter);
+		}
+
 		// Sort by timestamp descending
 		result.sort((a, b) => b.timestamp - a.timestamp);
 
@@ -282,6 +288,49 @@
 				</button>
 			</div>
 		{/if}
+
+		<div class="flex items-center gap-2">
+			<span class="text-xs text-gray-500">Direction:</span>
+			<button
+				type="button"
+				class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+					selectedDirectionFilter === 'all'
+						? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
+						: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+				}`}
+				on:click={() => {
+					selectedDirectionFilter = 'all';
+				}}
+			>
+				All
+			</button>
+			<button
+				type="button"
+				class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+					selectedDirectionFilter === 'Buy'
+						? 'border border-green-400/40 bg-green-500/20 text-green-300'
+						: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+				}`}
+				on:click={() => {
+					selectedDirectionFilter = 'Buy';
+				}}
+			>
+				Buy
+			</button>
+			<button
+				type="button"
+				class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+					selectedDirectionFilter === 'Sell'
+						? 'border border-red-400/40 bg-red-500/20 text-red-300'
+						: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
+				}`}
+				on:click={() => {
+					selectedDirectionFilter = 'Sell';
+				}}
+			>
+				Sell
+			</button>
+		</div>
 
 		{#if showClosedOrdersOption && selectedOrdersFilter === 'my' && $connected}
 			<label class="flex cursor-pointer items-center gap-2">
