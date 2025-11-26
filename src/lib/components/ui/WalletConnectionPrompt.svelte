@@ -14,12 +14,14 @@
 		`Connect your wallet to access this feature on ${
 			$currentNetwork?.displayName || 'this network'
 		}.`;
+
+	$: containerClasses = showSection ? 'py-12 sm:px-8 sm:py-16' : 'py-12';
 </script>
 
 <div class={minHeight ? 'flex min-h-[60vh] items-center justify-center' : ''}>
 	{#if showSection}
 		<Section>
-			<div class="flex flex-col items-center justify-center gap-6 px-6 py-12 sm:px-8 sm:py-16">
+			<div class="flex flex-col items-center justify-center gap-6 px-6 {containerClasses}">
 				<div class="rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6">
 					<svg
 						class="h-10 w-10 text-blue-400 sm:h-12 sm:w-12"
@@ -51,7 +53,7 @@
 			</div>
 		</Section>
 	{:else}
-		<div class="flex flex-col items-center justify-center gap-6 px-6 py-12">
+		<div class="flex flex-col items-center justify-center gap-6 px-6 {containerClasses}">
 			<div class="rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6">
 				<svg
 					class="h-10 w-10 text-blue-400 sm:h-12 sm:w-12"

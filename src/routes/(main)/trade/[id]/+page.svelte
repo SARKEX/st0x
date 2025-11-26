@@ -1,32 +1,19 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import {
-		currentNetwork,
-		sfts,
-		orderbookQuotesResource,
-		tradeActivityResource,
-		oracleQuotes,
-		oracleQuotesResource
-	} from '$lib/stores';
-	import { ensureResource } from '$lib/stores/network-data-cache';
+	import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
 	import { formatUnits } from 'viem';
-	import { TOKENS } from '$lib/network';
+	import { TOKENS } from '$lib/config/network';
 	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
 	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
-	import TradingViewSymbolOverview from '$lib/components/charts/TradingViewSymbolOverview.svelte';
-	import TradingViewSymbolInfo from '$lib/components/charts/TradingViewSymbolInfo.svelte';
-	import TradingViewCompanyProfile from '$lib/components/charts/TradingViewCompanyProfile.svelte';
-	import TradingViewFundamentalData from '$lib/components/charts/TradingViewFundamentalData.svelte';
-	import TradingViewTechnicalAnalysis from '$lib/components/charts/TradingViewTechnicalAnalysis.svelte';
-	import TradingViewTopStories from '$lib/components/charts/TradingViewTopStories.svelte';
+	import TradingViewWidget from '$lib/components/charts/TradingViewWidget.svelte';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
@@ -41,7 +28,7 @@
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
-	import { extractBaseSymbol } from '$lib/utils/tokenQuotes';
+	import { extractBaseSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
 		createTokenLookup,
@@ -49,15 +36,25 @@
 		ratioToNumber,
 		toDecimal
 	} from '$lib/utils/tokenMath';
-	import type {
-		TimedResource,
-		OracleQuote,
-		OrderbookQuoteCache
-	} from '$lib/stores/network-data-cache';
-	import type { ResourceStatus } from '$lib/data/polling-cache';
+	import type { OracleQuote } from '$lib/queries/oracleQuotes';
+	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
+	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import type { QueryObserverResult } from '@tanstack/query-core';
+	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	$: tokenId = $page.params.id;
-	$: currentToken = $sfts?.find((sft) => sft.id === tokenId);
+	$: currentToken = $sfts?.find((sft: OffchainAssetReceiptVault) => sft.id === tokenId);
 	const tokensLookup = createTokenLookup(TOKENS);
+	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	$: {
+		console.log('🌐 [Trade Page] Current network:', $currentNetwork?.id, $currentNetwork?.name);
+		orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	}
 	$: currentPythToken = TOKENS.find(
 		(token) =>
 			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
@@ -193,7 +190,12 @@
 	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
 	let chartsLoading = false;
 	let tradeQueryError: string | null = null;
-	let oracleResource: TimedResource<Record<string, OracleQuote>> | null = null;
+	let oracleResource: {
+		status: ResourceStatus;
+		data: Record<string, OracleQuote> | null;
+		updatedAt: number | null;
+		error: unknown | null;
+	} | null = null;
 	let oracleEntry: OracleQuote | undefined;
 	let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
 	let oracleLoading = false;
@@ -201,23 +203,35 @@
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
 	type OrderbookQuoteUiState = {
-		status: ResourceStatus;
+		status: QueryObserverResult<OrderbookQuoteCache, Error>['status'];
 		hasData: boolean;
 		loadingWithoutData: boolean;
 	};
 	const mapOrderbookQuoteState = (
-		resource: TimedResource<OrderbookQuoteCache> | null
+		resource: QueryObserverResult<OrderbookQuoteCache, Error> | null
 	): OrderbookQuoteUiState => {
-		const status = resource?.status ?? 'idle';
-		const hasData = (resource?.data?.quotes?.length ?? 0) > 0;
+		if (!resource) {
+			return { status: 'pending', hasData: false, loadingWithoutData: true };
+		}
+		const hasData = (resource.data?.quotes?.length ?? 0) > 0;
+		const status = resource.status;
 		return {
 			status,
 			hasData,
-			loadingWithoutData: status === 'loading' && !hasData
+			loadingWithoutData: resource.isPending && !hasData
 		};
 	};
-	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState(null);
-	$: orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesResource);
+	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
+	$: {
+		console.log(
+			'🔄 [Trade Page] orderbookQuotesQuery state:',
+			$orderbookQuotesQuery?.status,
+			'data:',
+			$orderbookQuotesQuery?.data
+		);
+		orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
+		console.log('📊 [Trade Page] orderbookQuoteUiState:', orderbookQuoteUiState);
+	}
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
 			return '—';
@@ -235,7 +249,20 @@
 		}
 		return fallback;
 	}
-	$: oracleResource = $oracleQuotesResource;
+	$: oracleResource = (() => {
+		const q = $oracleQuotesQuery;
+		const status: ResourceStatus =
+			q?.status === 'success' ? 'ready' : q?.status === 'error' ? 'error' : 'loading';
+		return {
+			status,
+			data: q?.data ?? null,
+			updatedAt: q?.dataUpdatedAt ?? null,
+			error: q?.error ?? null,
+			refreshInterval: 15_000,
+			timerId: null,
+			subscribers: 0
+		};
+	})();
 	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
 	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
 	$: oraclePriceData = oracleEntry
@@ -329,7 +356,7 @@
 			if (!settlementToken) {
 				resetOnChainPrices();
 			} else {
-				const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+				const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 				const assetAddress = currentToken.address?.toLowerCase();
 				const quoteAddress = settlementToken.address?.toLowerCase();
 				let bestBid: number | null = null;
@@ -374,13 +401,13 @@
 		if (!assetAddress || !quoteAddress) return [];
 		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
 		const quoteDecimals = Number(settlementToken.decimals ?? 6);
-		const range = $tradeActivityResource?.data?.range ?? null;
+		const range = $tradeActivityQuery?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
 		const rangeEnd = range ? range.to * 1000 : now;
 		// TODO: Display range label in UI if needed
 		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
-		const trades = ($tradeActivityResource?.data?.trades ?? []) as SgTrade[];
+		const trades = ($tradeActivityQuery?.data?.trades ?? []) as SgTrade[];
 		return trades
 			.map((trade) =>
 				tradeToPoint(trade, assetAddress, assetDecimals, {
@@ -419,7 +446,7 @@
 	}
 	$: orderbookDepth = (() => {
 		if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
-		const quotes = $orderbookQuotesResource?.data?.quotes ?? [];
+		const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 		if (!quotes.length) {
 			return { bids: [], asks: [] };
 		}
@@ -433,7 +460,7 @@
 
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
-		quotes.forEach((quote, idx) => {
+		quotes.forEach((quote) => {
 			const ratioValue = ratioToNumber(quote.ratio);
 			const ratio = ratioValue ?? 0;
 			if (!Number.isFinite(ratio) || ratio <= 0) {
@@ -483,13 +510,13 @@
 		return { bids, asks };
 	})();
 	$: {
-		const tradeResource = $tradeActivityResource;
-		const tradeStatus = tradeResource?.status ?? 'idle';
+		const tradeResource = $tradeActivityQuery;
+		const tradeStatus = tradeResource?.status ?? 'pending';
 		const tradeHasData = (tradeResource?.data?.trades?.length ?? 0) > 0;
-		const tradeLoading = tradeStatus === 'loading' || (tradeStatus === 'idle' && !tradeHasData);
+		const tradeLoading = (tradeResource?.isPending ?? tradeStatus === 'pending') && !tradeHasData;
 		const quoteLoading =
 			orderbookQuoteUiState.loadingWithoutData ||
-			(orderbookQuoteUiState.status === 'idle' && !orderbookQuoteUiState.hasData);
+			(orderbookQuoteUiState.status === 'pending' && !orderbookQuoteUiState.hasData);
 		// Don't show loading if we have volume data OR orderbook depth data
 		const hasVolumeData = tradeVolumeBuckets.length > 0;
 		const hasDepthData = orderbookDepth.bids.length > 0 || orderbookDepth.asks.length > 0;
@@ -498,19 +525,6 @@
 			tradeStatus === 'error'
 				? formatResourceError(tradeResource?.error, 'Failed to load trade history.')
 				: null;
-	}
-	let ensuredNetworkId: number | null = null;
-	$: if (!browser) {
-		ensuredNetworkId = null;
-	} else {
-		const networkId = $currentNetwork?.id ?? null;
-		if (!networkId) {
-			ensuredNetworkId = null;
-		} else if (ensuredNetworkId !== networkId) {
-			ensuredNetworkId = networkId;
-			void ensureResource(networkId, 'orderbookQuotes');
-			void ensureResource(networkId, 'tradeActivity');
-		}
 	}
 	$: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
@@ -559,7 +573,7 @@
 							</div>
 						</div>
 						{#if tradingViewSymbol}
-							<TradingViewSymbolInfo symbol={tradingViewSymbol} height="420" />
+							<TradingViewWidget widgetType="symbol-info" symbol={tradingViewSymbol} height="420" />
 						{:else}
 							<div class="flex h-48 items-center justify-center px-4 py-6 text-sm text-gray-400">
 								TradingView data unavailable for this token.
@@ -647,7 +661,8 @@
 				<div class="flex h-full flex-col gap-4 xl:col-span-3">
 					{#if tradingViewSymbol}
 						<div class={`${containerStyles.cardBordered} flex-1 overflow-hidden p-0`}>
-							<TradingViewSymbolOverview
+							<TradingViewWidget
+								widgetType="symbol-overview"
 								symbol={tradingViewSymbol}
 								displayName={currentToken.name || currentToken.symbol}
 								dateRange="1D"
@@ -732,7 +747,11 @@
 						{#if activeAssetTab === 'company'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewCompanyProfile symbol={tradingViewSymbol} height="480" />
+									<TradingViewWidget
+										widgetType="symbol-profile"
+										symbol={tradingViewSymbol}
+										height="480"
+									/>
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -742,7 +761,11 @@
 						{:else if activeAssetTab === 'fundamentals'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewFundamentalData symbol={tradingViewSymbol} height={520} />
+									<TradingViewWidget
+										widgetType="financials"
+										symbol={tradingViewSymbol}
+										height={520}
+									/>
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -752,7 +775,11 @@
 						{:else if activeAssetTab === 'technical'}
 							{#if tradingViewSymbol}
 								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewTechnicalAnalysis symbol={tradingViewSymbol} height="520" />
+									<TradingViewWidget
+										widgetType="technical-analysis"
+										symbol={tradingViewSymbol}
+										height="520"
+									/>
 								</div>
 							{:else}
 								<div class={`${containerStyles.cardBordered}`}>
@@ -761,7 +788,7 @@
 							{/if}
 						{:else if tradingViewSymbol}
 							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-								<TradingViewTopStories symbol={tradingViewSymbol} height="600" />
+								<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
 							</div>
 						{:else}
 							<div class={`${containerStyles.cardBordered}`}>
@@ -1052,14 +1079,14 @@
 								{#if panelStrategy === 'limit'}
 									<LimitOrder
 										orderSide={panelOrderSide}
-										passedOutputToken={currentPythToken}
+										assetToken={currentPythToken}
 										{buyPrice}
 										{sellPrice}
 									/>
 								{:else if panelStrategy === 'market'}
-									<MarketOrder orderSide={panelOrderSide} passedOutputToken={currentPythToken} />
+									<MarketOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
 								{:else if panelStrategy === 'dca'}
-									<DcaOrder orderSide={panelOrderSide} passedInputToken={currentPythToken} />
+									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
 								{/if}
 							</div>
 						</div>

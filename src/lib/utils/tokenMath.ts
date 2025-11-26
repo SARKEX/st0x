@@ -3,6 +3,49 @@ import { Float } from '@rainlanguage/float';
 
 export type AmountLike = bigint | string | number | null | undefined;
 
+/**
+ * Parses a hex-encoded Float value into a BigInt amount.
+ *
+ * @param hexAmount - Hex-encoded Float value (e.g., from Rain orderbook)
+ * @param decimals - Token decimals for the amount
+ * @param useAbsolute - Whether to take absolute value (default: false)
+ * @returns BigInt amount in token decimals, or 0n on error
+ */
+export function parseFloatHex(hexAmount: string, decimals: number, useAbsolute = false): bigint {
+	try {
+		const floatResult = Float.fromHex(hexAmount as `0x${string}`);
+		if (floatResult.error || !floatResult.value) {
+			return 0n;
+		}
+
+		let float = floatResult.value;
+
+		// Optionally take absolute value
+		if (useAbsolute) {
+			const absResult = float.abs();
+			if (absResult.error || !absResult.value) {
+				return 0n;
+			}
+			float = absResult.value;
+		}
+
+		const fixedResult = float.toFixedDecimalLossy(decimals);
+		if (fixedResult.error || !fixedResult.value) {
+			return 0n;
+		}
+
+		const fdValue = fixedResult.value;
+		const fdValueObj = fdValue as unknown as Record<string, unknown>;
+		if (typeof fdValueObj?.value === 'string') {
+			return BigInt(fdValueObj.value as string);
+		}
+		return 0n;
+	} catch (error) {
+		console.warn('Failed to parse Float hex:', error);
+		return 0n;
+	}
+}
+
 export function normalizeAddress(value: string | null | undefined): string | null {
 	if (!value) return null;
 	const trimmed = value.trim();
@@ -158,6 +201,42 @@ export function computePrice(
 	return Number.isFinite(price) ? price : null;
 }
 
+/**
+ * Checks if a token is a payment/settlement token (like USDC, USDT, DAI).
+ *
+ * Can check by symbol string matching or by comparing against a network's default payment token.
+ *
+ * @param token - Token symbol string, TokenDescriptor, or token-like object with symbol/address
+ * @param networkPaymentToken - Optional network's default payment token to check against
+ * @returns true if the token is a payment token
+ */
+export function isPaymentToken(
+	token: string | { symbol?: string | null; address?: string | null },
+	networkPaymentToken?: { symbol?: string | null; address?: string | null }
+): boolean {
+	const symbol = typeof token === 'string' ? token : token.symbol;
+	const address = typeof token === 'string' ? null : token.address;
+
+	// Check against network default if provided
+	if (networkPaymentToken) {
+		if (address && networkPaymentToken.address) {
+			if (addressesEqual(address, networkPaymentToken.address)) {
+				return true;
+			}
+		}
+		if (symbol && networkPaymentToken.symbol) {
+			if (symbol.toUpperCase() === networkPaymentToken.symbol.toUpperCase()) {
+				return true;
+			}
+		}
+	}
+
+	// Fallback to common payment token symbols
+	if (!symbol) return false;
+	const paymentSymbols = ['USDC', 'USDT', 'DAI', 'USD'];
+	return paymentSymbols.some((pt) => symbol.toUpperCase().includes(pt));
+}
+
 export interface TokenDescriptor {
 	address: string;
 	decimals: number;
@@ -181,8 +260,10 @@ export function classifyFlow(
 	const asset = normalizeAddress(pair.asset.address);
 	const quote = normalizeAddress(pair.quote.address);
 	if (!input || !output || !asset || !quote) return null;
-	if (input === quote && output === asset) return 'bid';
-	if (input === asset && output === quote) return 'ask';
+	// BID: buying asset (input=asset, output=quote/USDC)
+	if (input === asset && output === quote) return 'bid';
+	// ASK: selling asset (input=quote/USDC, output=asset)
+	if (input === quote && output === asset) return 'ask';
 	return null;
 }
 
@@ -223,21 +304,23 @@ export function parseTradeAmounts(
 	const quoteDecimals = Number(pair.quote.decimals ?? 6);
 
 	const inputDecimals = Number(
-		inputChange?.vault?.token?.decimals ?? (side === 'ask' ? assetDecimals : quoteDecimals)
+		inputChange?.vault?.token?.decimals ?? (side === 'bid' ? assetDecimals : quoteDecimals)
 	);
 	const outputDecimals = Number(
-		outputChange?.vault?.token?.decimals ?? (side === 'ask' ? quoteDecimals : assetDecimals)
+		outputChange?.vault?.token?.decimals ?? (side === 'bid' ? quoteDecimals : assetDecimals)
 	);
 
 	let tokens: number | null = null;
 	let quoteAmount: number | null = null;
 
+	// BID: input=asset, output=quote
 	if (side === 'bid') {
-		quoteAmount = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
-		tokens = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
-	} else {
 		tokens = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
 		quoteAmount = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
+	} else {
+		// ASK: input=quote, output=asset
+		quoteAmount = toDecimal(inputChange?.amount ?? null, inputDecimals, { absolute: true });
+		tokens = toDecimal(outputChange?.amount ?? null, outputDecimals, { absolute: true });
 	}
 
 	if (tokens === null || quoteAmount === null) return null;
@@ -293,7 +376,6 @@ export interface QuoteMetrics {
 	assetAddress: string;
 	side: MarketSide;
 	quotePerAsset: number;
-	assetPerQuote: number;
 }
 
 export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): QuoteMetrics | null {
@@ -308,13 +390,10 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 		// ASK order: giving away output token to acquire quote token input (seller offering to sell)
 		const quotePerAsset = ratio;
 		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) return null;
-		const assetPerQuote = quotePerAsset === 0 ? NaN : 1 / quotePerAsset;
-		if (!Number.isFinite(assetPerQuote) || assetPerQuote <= 0) return null;
 		return {
 			assetAddress: output,
 			side: 'ask',
-			quotePerAsset,
-			assetPerQuote
+			quotePerAsset
 		};
 	}
 
@@ -322,13 +401,10 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 		// BID order: giving away input token to acquire quote token output (buyer offering to buy)
 		const quotePerAsset = 1 / ratio;
 		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) return null;
-		const assetPerQuote = quotePerAsset === 0 ? NaN : 1 / quotePerAsset;
-		if (!Number.isFinite(assetPerQuote) || assetPerQuote <= 0) return null;
 		return {
 			assetAddress: input,
 			side: 'bid',
-			quotePerAsset,
-			assetPerQuote
+			quotePerAsset
 		};
 	}
 

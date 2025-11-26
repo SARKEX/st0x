@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import { connected, signerAddress } from 'svelte-wagmi';
-	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
+	import { currentNetwork, sfts } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
@@ -11,12 +11,12 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { truncateAddress } from '$lib/utils/format';
-	import { textStyles, gridStyles } from '$lib/utils/styles';
+	import { textStyles, gridStyles } from '$lib/styles/utils';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits } from 'viem';
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { goto } from '$app/navigation';
-	import { createRaindexClient } from '$lib/utils/raindexClient';
+	import { createRaindexClient } from '$lib/clients/raindex';
 	import type {
 		SgOrderWithSubgraphName,
 		SgErc20,
@@ -26,19 +26,18 @@
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import OrderListTable from '$lib/components/OrderListTable.svelte';
 	import VaultListTable from '$lib/components/VaultListTable.svelte';
-	import { evmChainIds, EvmToken } from 'sushi/evm';
-	import { getPrice } from '$lib/getPrice';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
-	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+	import { isPaymentToken } from '$lib/utils/tokenMath';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 
 	function isPaymentTokenPosition(token: { token: SgErc20 }) {
 		const settlementToken = $currentNetwork?.defaultPaymentToken;
 		if (!settlementToken) return false;
-		const symbolMatch = token.token.symbol?.toUpperCase() === settlementToken.symbol?.toUpperCase();
-		const addressMatch = token.token.id?.toLowerCase() === settlementToken.address?.toLowerCase();
-		return Boolean(symbolMatch || addressMatch);
+		// Use consolidated utility from tokenMath.ts
+		return isPaymentToken({ symbol: token.token.symbol, address: token.token.id }, settlementToken);
 	}
 
 	// Filter tokens by current network
@@ -65,6 +64,8 @@
 	let orderHashFilter: string | undefined = undefined;
 	let showMyOrders = true; // Always show only user's orders
 	const ORDER_LIST_PAGE_SIZE = 1000;
+	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
 	// Vault List variables
 	let hideEmptyVaults: boolean | undefined = false;
@@ -99,11 +100,12 @@
 			const userHoldings = [];
 			for (const sft of $sfts) {
 				const userHolder = sft.tokenHolders.find(
-					(holder) => holder.address.toLowerCase() === $signerAddress.toLowerCase()
+					(holder: { address: string }) =>
+						holder.address.toLowerCase() === $signerAddress.toLowerCase()
 				);
 
 				if (userHolder && BigInt(userHolder.balance) > 0n) {
-					const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+					const quote = findQuoteForSymbol(sft.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const priceChange = quote?.change ?? 0;
 					const priceChangePercent = quote?.changePercent ?? 0;
@@ -204,7 +206,6 @@
 			const allVaults: { vault: SgVault; raindexVault: RaindexVault; subgraphName: string }[] =
 				vaultsResult.value.items.map((vault) => {
 					let vaultBalanceFloat = vault.balance.toFixedDecimalLossy(Number(vault.token.decimals));
-					console.log('vaultBalanceFloat : ', vaultBalanceFloat);
 					if (vaultBalanceFloat.error) throw new Error(vaultBalanceFloat.error.readableMsg);
 
 					// Convert RaindexVault to SgVault
@@ -299,33 +300,9 @@
 					token.symbol?.toUpperCase() === settlementSymbol ||
 					token.id.toLowerCase() === settlementAddress;
 
-				const quote = findQuoteForSymbol(token.symbol, $tokenGlobalQuote, ALL_TOKENS);
+				const quote = findQuoteForSymbol(token.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 
 				let price: number | null = quote?.close ?? null;
-				if (!price || !Number.isFinite(price) || price <= 0) {
-					try {
-						const priceStr = await getPrice(
-							new EvmToken({
-								chainId: evmChainIds[$currentNetwork.chainId],
-								address: token.id as `0x${string}`,
-								symbol: token.symbol || '',
-								decimals: Number(token.decimals ?? 18),
-								name: token.name || ''
-							}),
-							new EvmToken({
-								chainId: evmChainIds[$currentNetwork.chainId],
-								address: settlementToken.address as `0x${string}`,
-								symbol: settlementToken.symbol || '',
-								decimals: Number(settlementToken.decimals ?? 18),
-								name: settlementToken.name || ''
-							})
-						);
-						price = parseFloat(priceStr);
-					} catch (priceError) {
-						console.warn('Failed to fetch price from swap API', priceError);
-						price = null;
-					}
-				}
 
 				if (!price || !Number.isFinite(price) || price <= 0) {
 					if (isPaymentToken) {

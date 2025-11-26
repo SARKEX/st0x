@@ -1,13 +1,14 @@
 <script lang="ts">
-	import { currentNetwork, sfts, tokenGlobalQuote } from '$lib/stores';
+	import { currentNetwork, sfts } from '$lib/stores';
 	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
 	import ShareButton from './ShareButton.svelte';
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
-	import { findQuoteForSymbol } from '$lib/utils/tokenQuotes';
+	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
@@ -23,6 +24,8 @@
 		price: number;
 		dollarVolume: number;
 	};
+	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
 	let filteredAssets: AssetWithMetrics[] = [];
 	let sortedAssets: AssetWithMetrics[] = [];
@@ -35,13 +38,16 @@
 		? [...$sfts]
 				.map<AssetWithMetrics>((sft) => {
 					// Calculate total on-chain volume (deposits + withdrawals)
-					const depositVolume = sft.deposits.reduce((sum, d) => sum + BigInt(d.amount), BigInt(0));
+					const depositVolume = sft.deposits.reduce(
+						(sum: bigint, d: { amount: string }) => sum + BigInt(d.amount),
+						BigInt(0)
+					);
 					const withdrawVolume = sft.withdraws.reduce(
-						(sum, w) => sum + BigInt(w.amount),
+						(sum: bigint, w: { amount: string }) => sum + BigInt(w.amount),
 						BigInt(0)
 					);
 					const totalVolume = depositVolume + withdrawVolume;
-					const quote = findQuoteForSymbol(sft.symbol, $tokenGlobalQuote, ALL_TOKENS);
+					const quote = findQuoteForSymbol(sft.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { bytesToMeta, cborDecode, convertDotNotationToObject } from '$lib/helpers';
+	import { bytesToMeta, cborDecode, convertDotNotationToObject } from '$lib/utils/helpers';
 	import Section from '$lib/components/ui/Section.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 

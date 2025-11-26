@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { MetaV1S, OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { fade } from 'svelte/transition';
-	import { cborDecode } from '$lib/helpers';
-	import { MAGIC_NUMBERS } from '$lib/consts';
+	import { cborDecode } from '$lib/utils/helpers';
+	import { MAGIC_NUMBERS } from '$lib/config/constants';
 	import { sftMetadata } from '$lib/stores';
 	import ReceiptMetadata from './ReceiptMetadata.svelte';
 

@@ -1,9 +1,10 @@
 <script lang="ts">
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getSftMetadata } from '$lib/getSftMetadata';
+	import { getSftMetadata } from '$lib/api/subgraph';
 	import { page } from '$app/stores';
 	import { sftMetadata, currentNetwork, sfts, currentToken } from '$lib/stores';
+	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	const { id } = $page.params;
 
@@ -19,7 +20,9 @@
 
 	// Ensure currentToken is set when coming directly to /trade/[id]/proofs
 	$: if ($sfts && id) {
-		const found = $sfts.find((v) => v.id === id || v.address?.toLowerCase() === id.toLowerCase());
+		const found = $sfts.find(
+			(v: OffchainAssetReceiptVault) => v.id === id || v.address?.toLowerCase() === id.toLowerCase()
+		);
 		if (found) currentToken.set(found);
 	}
 </script>

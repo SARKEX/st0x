@@ -1,22 +1,18 @@
 <script lang="ts">
-	import { getAllTokensByNetwork } from '$lib/network';
+	import { getAllTokensByNetwork } from '$lib/config/network';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import type { CategorizedToken } from '$lib/network';
+	import type { CategorizedToken } from '$lib/config/network';
 	import type { PythToken } from '$lib/types';
-	import {
-		validateBaseline,
-		validatePeriod,
-		validateSelectedAmount
-	} from '$lib/validateDeploymentArgs';
+	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
-	import transactionStore from '$lib/transactionStore';
-	import { hasValidPriceFeedId } from '$lib/derivations';
+	import transactionStore from '$lib/stores/transaction';
+	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
 	import { currentNetwork, oracleQuotes } from '$lib/stores';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
@@ -28,7 +24,7 @@
 			? 'bg-green-500 hover:bg-green-600 text-white'
 			: 'bg-red-500 hover:bg-red-600 text-white';
 
-	export let passedInputToken: PythToken | undefined; // The token we're accumulating
+	export let assetToken: PythToken | undefined; // The token we're accumulating
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -55,7 +51,7 @@
 			selectedOutputToken = selectedOutputToken || ALL_TOKENS[0];
 		}
 		selectedInputToken =
-			(passedInputToken as unknown as CategorizedToken) || selectedInputToken || ALL_TOKENS[0];
+			(assetToken as unknown as CategorizedToken) || selectedInputToken || ALL_TOKENS[0];
 	}
 
 	let selectedAmount: bigint = 0n;
@@ -116,24 +112,6 @@
 		priceGuardrailError;
 
 	const handleDcaDeploy = () => {
-		const normalizeDecimal = (v: string): string => {
-			if (!v) return v;
-			const n = Number(v);
-			if (!Number.isFinite(n)) return v;
-			// format to 18 fractional digits, then trim trailing zeros and dot
-			return n
-				.toFixed(18)
-				.replace(/\.0+$/, '')
-				.replace(/\.(.*?)(0+)$/, (m, p1) => (p1 ? `.${p1}`.replace(/\.$/, '') : ''))
-				.replace(/\.$/, '');
-		};
-
-		const invertAndNormalize = (v: string): string => {
-			const n = Number(v || '0');
-			if (!Number.isFinite(n) || n === 0) return '0';
-			return normalizeDecimal(String(1 / n));
-		};
-
 		if (!$connected) {
 			showConnectModal = true;
 			return;
@@ -155,14 +133,8 @@
 				// DCA price inversion logic:
 				// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
 				// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
-				baseline:
-					orderType === 'Bid'
-						? invertAndNormalize(selectedBaseline)
-						: normalizeDecimal(selectedBaseline),
-				kickoff:
-					orderType === 'Bid'
-						? invertAndNormalize(selectedInitialRatio)
-						: normalizeDecimal(selectedInitialRatio),
+				baseline: priceToIoratioString(orderType, selectedBaseline, true),
+				kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
 				inputVaultId: inputVaultId,

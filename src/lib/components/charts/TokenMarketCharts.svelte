@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import type { DepthSeries, VolumeBucket } from '$lib/components/charts/token-chart-types';
 
@@ -659,7 +659,7 @@
 	$: libraryLoading = loadingChartLib && !ChartCtor;
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" data-testid="token-market-charts">
 	{#if combinedError}
 		<div class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
 			{combinedError}
@@ -679,6 +679,7 @@
 	<div class="grid grid-cols-1 gap-6 lg:grid-cols-3 xl:grid-cols-3 xl:grid-rows-2">
 		<!-- Row 1: Trade History (2/3) -->
 		<div
+			data-testid="trade-history-chart"
 			class={`${containerStyles.cardBordered} flex min-h-96 flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2`}
 		>
 			<div class="border-b border-white/5 pb-3">
@@ -739,6 +740,7 @@
 
 		<!-- Orderbook Depth (spans remaining column) -->
 		<div
+			data-testid="orderbook-depth-chart"
 			class={`${containerStyles.cardBordered} flex min-h-96 flex-col lg:row-span-1 xl:row-span-2`}
 		>
 			<div class="border-b border-white/5 pb-3">

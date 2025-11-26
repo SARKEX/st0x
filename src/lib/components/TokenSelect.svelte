@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { onMount } from 'svelte';
-	import type { CategorizedToken } from '$lib/network';
+	import type { CategorizedToken } from '$lib/config/network';
 
 	export let options: CategorizedToken[] = [];
 	export let selected: CategorizedToken;

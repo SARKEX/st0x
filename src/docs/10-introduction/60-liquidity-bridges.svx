@@ -4,9 +4,6 @@ title: Liquidity Bridges
 published: true
 ---
 
-<script>
-    import liquidity from '$lib/images/liquidity.png'
-</script>
 ## Trust and safety is vital 
 
 Bridges occupy an exceptionally sensitive position, acting as the gateway between two financial systems. They must be robust and secure to instil confidence in users, protocols, and institutions regarding the assets issued through them.
@@ -33,7 +30,7 @@ S1’s German entity acts as custodian, holding the underlying assets under a ri
 1. The trust verifies the burn.
 1. The trust transfers the corresponding shares to the user.
 
-<img src={liquidity} />
+<img src="/docs/liquidity.png" alt="Liquidity Bridges" />
 
 ## Arbitrageurs: Aligning On-Chain and Off-Chain Prices
 

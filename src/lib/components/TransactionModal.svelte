@@ -2,39 +2,27 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import transactionStore, { TransactionStatus } from '$lib/transactionStore';
+	import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
 	import { TransactionErrorMessage } from '$lib/types/errors';
 	// currentNetwork not needed directly; TxLink uses it from store
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import { formatUnits } from 'viem';
+	import { translateMarketOrderForDisplay } from '$lib/utils/transactionDisplay';
 
 	const handleClose = () => {
 		return transactionStore.reset();
 	};
 
 	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
-	$: if (marketOrderSummary) {
-		console.log('TransactionModal - Received marketOrderSummary:', {
-			orderSide: marketOrderSummary.orderSide,
-			quantityFilled: marketOrderSummary.quantityFilled.toString(),
-			quantityRequested: marketOrderSummary.quantityRequested.toString(),
-			outputTokenDecimals: marketOrderSummary.outputTokenDecimals,
-			outputTokenSymbol: marketOrderSummary.outputTokenSymbol,
-			averagePrice: marketOrderSummary.averagePrice,
-			paymentTokenSymbol: marketOrderSummary.paymentTokenSymbol,
-			isPartialFill: marketOrderSummary.isPartialFill,
-			isNoFill: marketOrderSummary.isNoFill
-		});
-	}
+	$: marketOrderDisplay = marketOrderSummary
+		? translateMarketOrderForDisplay(marketOrderSummary)
+		: null;
 
 	// Helper function to format quantity with max 2 decimals
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
-		console.log(`formatQuantity called with:`, { quantity: quantity.toString(), decimals });
 		const formatted = parseFloat(formatUnits(quantity, decimals));
-		console.log(`formatUnits result:`, formatted);
 		// Round to 2 decimals (instead of truncating) to handle values like 0.999999...
 		const result = Math.round(formatted * 100) / 100;
-		console.log(`formatQuantity result:`, result);
 		return result.toString();
 	};
 
@@ -123,7 +111,7 @@
 					{/if}
 
 					<!-- Market order summary or no-fill message -->
-					{#if marketOrderSummary?.isNoFill}
+					{#if marketOrderDisplay?.isNoFill}
 						<div
 							class="w-full rounded-md border border-yellow-900/50 bg-yellow-900/20 p-4 text-left text-sm text-yellow-200"
 						>
@@ -136,7 +124,7 @@
 								order and specify the desired price.
 							</p>
 						</div>
-					{:else if marketOrderSummary}
+					{:else if marketOrderDisplay}
 						<div
 							class="w-full rounded-md border border-white/10 bg-gray-900/50 p-4 text-left text-sm text-gray-200"
 						>
@@ -145,35 +133,29 @@
 							</div>
 							<div class="flex justify-between">
 								<span class="text-gray-400">Side</span>
-								<span class="font-medium">{marketOrderSummary.orderSide}</span>
+								<span class="font-medium">{marketOrderDisplay.direction}</span>
 							</div>
 							<div class="mt-2 flex justify-between">
 								<span class="text-gray-400">Quantity Filled</span>
 								<span class="font-medium">
-									{formatQuantity(
-										marketOrderSummary.quantityFilled,
-										marketOrderSummary.outputTokenDecimals
-									)}
-									{!isFullFill(
-										marketOrderSummary.quantityFilled,
-										marketOrderSummary.quantityRequested
-									)
+									{formatQuantity(marketOrderDisplay.assetAmount, marketOrderDisplay.assetDecimals)}
+									{!isFullFill(marketOrderDisplay.assetAmount, marketOrderDisplay.requestedAmount)
 										? `/ ${formatQuantity(
-												marketOrderSummary.quantityRequested,
-												marketOrderSummary.outputTokenDecimals
+												marketOrderDisplay.requestedAmount,
+												marketOrderDisplay.assetDecimals
 											)}`
 										: ''}
-									{marketOrderSummary.outputTokenSymbol}
+									{marketOrderDisplay.assetSymbol}
 								</span>
 							</div>
 							<div class="mt-2 flex justify-between">
 								<span class="text-gray-400">Average Price</span>
 								<span class="font-medium">
-									{marketOrderSummary.averagePrice.toFixed(6)}
-									{marketOrderSummary.paymentTokenSymbol}
+									{marketOrderDisplay.price.toFixed(6)}
+									{marketOrderDisplay.paymentSymbol}
 								</span>
 							</div>
-							{#if marketOrderSummary.isPartialFill}
+							{#if marketOrderDisplay.isPartialFill}
 								<div class="mt-3 rounded-md bg-yellow-900/30 p-2 text-xs text-yellow-200">
 									Partial fill: not all requested quantity was available within slippage tolerance.
 									We currently have a guardrail to avoid unfavourable prices. To ignore guardrails,

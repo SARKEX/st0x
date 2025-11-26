@@ -1,11 +1,16 @@
 <script lang="ts">
-	import type { CategorizedToken } from '$lib/network';
-	import { currentNetwork, orderbookQuotesResource, oracleQuotesResource } from '$lib/stores';
-	import { ensureResource } from '$lib/stores/network-data-cache';
-	import { OrderV4_ABI, normalizeOrderData, type ProcessedQuote } from '$lib/utils/quote';
-	import { scaleAmount, walkOrderbook, FIXED_POINT_SCALE } from '$lib/utils/marketPrice';
-	import { createRaindexClient } from '$lib/utils/raindexClient';
+	import type { CategorizedToken } from '$lib/config/network';
+	import { currentNetwork } from '$lib/stores';
+	import {
+		OrderV4_ABI,
+		normalizeOrderData,
+		type ProcessedQuote,
+		scaleAmount,
+		walkOrderbook
+	} from '$lib/api/orders';
+	import { createRaindexClient } from '$lib/api/raindex';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
+	import { getUserTakerInfo } from '$lib/types/orderPerspective';
 	import {
 		type OrderV4,
 		type RaindexOrderQuote,
@@ -16,23 +21,33 @@
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { AbiCoder } from 'ethers';
 	import { formatUnits } from 'viem';
-	import { containerStyles } from '$lib/utils/styles';
+	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
-	import { validateSelectedAmount } from '$lib/validateDeploymentArgs';
-	import transactionStore from '$lib/transactionStore';
+	import { validateSelectedAmount } from '$lib/utils/validation';
+	import transactionStore from '$lib/stores/transaction';
 	import { Float } from '@rainlanguage/float';
+	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
-	// assetToken: The non-settlement token being traded (tSTOX, tNVDA, etc.)
-	// Note: Naming clarification - this is the asset token, not output token in the traditional sense
-	// Buy order: assetToken is INPUT (what we want), paymentToken is OUTPUT (what we give)
-	// Sell order: assetToken is OUTPUT (what we give), paymentToken is INPUT (what we want)
-	export let passedOutputToken: CategorizedToken | undefined;
+	/**
+	 * assetToken: The non-settlement token being traded (tSTOX, tNVDA, etc.)
+	 *
+	 * From taker perspective:
+	 * - Buy action: takerWants=assetToken, takerPays=paymentToken
+	 * - Sell action: takerWants=paymentToken, takerPays=assetToken
+	 */
+	export let assetToken: CategorizedToken | undefined;
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
+
+	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
@@ -52,6 +67,10 @@
 	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.paymentTokens?.[0];
 	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
 
+	// Taker perspective: What the user wants to receive and what they'll pay
+	$: takerInfo =
+		assetToken && paymentToken ? getUserTakerInfo(orderSide, assetToken, paymentToken) : null;
+
 	// Errors
 	let selectedAmountError: boolean = false;
 
@@ -64,7 +83,7 @@
 	$: disableDeploy =
 		!selectedAmount ||
 		!marketPrice ||
-		!passedOutputToken ||
+		!assetToken ||
 		selectedAmountError ||
 		isLoadingPrice ||
 		priceError ||
@@ -74,9 +93,7 @@
 	$: requiredInputAmount = (() => {
 		if (!selectedAmount || !marketPrice) return '0.00';
 		// Output amount * market price = input amount
-		const outputInTokens = parseFloat(
-			formatUnits(selectedAmount, passedOutputToken?.decimals || 18)
-		);
+		const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
 		const total = outputInTokens * marketPrice;
 		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
 	})();
@@ -86,7 +103,7 @@
 	let isSubmittingMarketOrder = false;
 
 	async function fetchMarketPrice() {
-		if (!passedOutputToken || !orderSide) {
+		if (!assetToken || !orderSide) {
 			isLoadingPrice = false;
 			return;
 		}
@@ -112,10 +129,13 @@
 				return;
 			}
 
-			const { quantityFilled, weightedAveragePrice, fills } = walkResult;
+			const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
 
-			if (quantityFilled > 0n) {
-				marketPrice = weightedAveragePrice;
+			// Check if anything was filled (asset amount)
+			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
+			if (assetFilled > 0n) {
+				// Calculate price (quote per asset)
+				marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
 
 				availableOrders = fills.map((fill) => ({
 					order:
@@ -151,12 +171,7 @@
 	// Fetch market price when component mounts or dependencies change
 	// Only calculates price when user has entered a quantity (selectedAmount > 0)
 	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (
-		passedOutputToken &&
-		orderSide &&
-		selectedAmount > 0n &&
-		$orderbookQuotesResource?.data?.quotes
-	) {
+	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes) {
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
@@ -167,12 +182,12 @@
 
 	// Walk the orderbook with current quotes and selected amount
 	function calculateOrderbookWalk() {
-		if (!passedOutputToken || !orderSide || !selectedAmount || selectedAmount === 0n) {
+		if (!assetToken || !orderSide || !selectedAmount || selectedAmount === 0n) {
 			return null;
 		}
 
-		const allQuotes = $orderbookQuotesResource?.data?.quotes ?? [];
-		const assetAddressNormalized = normalizeAddress(passedOutputToken.address);
+		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
+		const assetAddressNormalized = normalizeAddress(assetToken.address);
 		const paymentTokenAddressNormalized = normalizeAddress(
 			paymentToken?.address?.toLowerCase() || ''
 		);
@@ -201,6 +216,16 @@
 			return null;
 		}
 
+		// Validate token decimals are defined
+		if (typeof assetToken.decimals !== 'number') {
+			console.error('Asset token decimals are not defined');
+			return null;
+		}
+		if (!paymentToken || typeof paymentToken.decimals !== 'number') {
+			console.error('Payment token or its decimals are not defined');
+			return null;
+		}
+
 		const sortedQuotes = [...relevantQuotes].sort((a, b) => {
 			if (orderSide === 'Buy') {
 				return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
@@ -213,7 +238,8 @@
 			quotes: sortedQuotes,
 			orderSide,
 			selectedAmount,
-			assetDecimals: passedOutputToken.decimals ?? 18
+			assetDecimals: assetToken.decimals,
+			paymentDecimals: paymentToken.decimals
 		});
 	}
 
@@ -231,8 +257,8 @@
 		const slippageMultiplier = 1.05; // 1.05 = 105% (5% tolerance)
 
 		// Try to get oracle price as reference
-		const oracleAddress = passedOutputToken?.address?.toLowerCase();
-		const oracleEntry = oracleAddress ? $oracleQuotesResource?.data?.[oracleAddress] : null;
+		const oracleAddress = assetToken?.address?.toLowerCase();
+		const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
 		const oraclePrice = oracleEntry?.price;
 
 		let referencePrice = availableOrders[0].price; // Fallback to best BBO price
@@ -273,10 +299,10 @@
 
 		try {
 			// Refresh orderbook quotes if stale
-			const lastUpdated = $orderbookQuotesResource?.updatedAt ?? 0;
+			const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
 			const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
 			if (isStaleQuotes) {
-				await ensureResource($currentNetwork.id, 'orderbookQuotes', { force: true });
+				await $orderbookQuotesQuery?.refetch?.();
 				await fetchMarketPrice();
 				if (priceError) {
 					console.error('Price unavailable after refresh');
@@ -395,6 +421,7 @@
 			const primaryInputIndex = executableOrders[0].inputIOIndex ?? 0;
 			const primaryOutputIndex = executableOrders[0].outputIOIndex ?? 0;
 			const primaryOrder = executableOrders[0].order;
+			const primaryOrderData = executableOrders[0].orderData;
 
 			// Calculate required approval amount for the output token (what we're spending)
 			const walkResult = calculateOrderbookWalk();
@@ -402,55 +429,62 @@
 				console.error('Unable to calculate walk result for order execution');
 				return;
 			}
-			const { totalCostScaled, quantityFilled, weightedAveragePrice } = walkResult;
+			const { inputAmountFilled, ioRatio, inputDecimals } = walkResult;
+
+			// Validate that we have all required token data before proceeding
+			if (!paymentToken || typeof paymentToken.decimals !== 'number') {
+				console.error('Payment token or its decimals are not defined');
+				return;
+			}
+			if (!assetToken || typeof assetToken.decimals !== 'number') {
+				console.error('Asset token or its decimals are not defined');
+				return;
+			}
 
 			// We approve what we're giving away (what flows out from us)
 			// For BUY: we give USDC (payment token)
 			// For SELL: we give tSTOX (asset token)
 			let requiredApprovalBigInt: bigint;
 			if (orderSide === 'Buy') {
-				// BUY: Approve USDC (payment token - what we give)
-				// Use selectedAmount * weightedAveragePrice (matches what user sees in UI)
-				const paymentTokenDecimals = paymentToken?.decimals ?? 6;
-				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
+				// BUY: Approve payment token (what we give away)
+				const paymentTokenDecimals = paymentToken.decimals;
+				const assetTokenDecimals = assetToken.decimals;
 
-				// selectedAmount is in asset decimals, scale to 18 for calculation
-				const selectedAmountScaled = scaleAmount(selectedAmount, assetTokenDecimals, 18);
-				// weightedAveragePrice is a human-readable number (USDC per tSTOX)
-				// Convert to scaled: selectedAmount * price
-				const avgPriceBigInt = BigInt(Math.round(weightedAveragePrice * 1e18));
-				const expectedCost18Dec = (selectedAmountScaled * avgPriceBigInt) / FIXED_POINT_SCALE;
+				// Calculate price from ioRatio (for BUY: ioRatio = asset/payment, so price = 1/ioRatio)
+				const price = ioRatio > 0 ? 1 / ioRatio : 0;
 
-				requiredApprovalBigInt = scaleAmount(
-					expectedCost18Dec,
-					assetTokenDecimals,
-					paymentTokenDecimals
-				);
+				// PRECISION REQUIREMENT: Use BigInt arithmetic to avoid precision loss
+				// JavaScript Numbers are 64-bit floats with ~15-17 digits precision.
+				// Token amounts can be 1e18 or larger, causing precision loss if converted to Number.
+				//
+				// Pattern: Scale the small value (price) to an integer, keep large values as BigInt
+				// This converts directly from asset decimals to payment decimals without intermediary
+				//
+				// Formula: cost = (amount_in_asset_decimals * price_scaled) / 10^asset_decimals
+				// where price_scaled = price * 10^payment_decimals
+				const priceScaled = BigInt(Math.round(price * 10 ** paymentTokenDecimals));
+				requiredApprovalBigInt = (selectedAmount * priceScaled) / 10n ** BigInt(assetTokenDecimals);
 			} else {
-				// SELL: Approve tSTOX (asset token - what we give)
+				// SELL: Approve asset token (what we give away)
 				// selectedAmount is already in asset token decimals
-				const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
 				requiredApprovalBigInt = scaleAmount(
 					selectedAmount,
-					assetTokenDecimals,
-					assetTokenDecimals
+					assetToken.decimals,
+					assetToken.decimals
 				);
 			}
 			// TODO: Remove this once we have a better way to handle precision loss
 			// Round up scaled amount to avoid precision loss
 			requiredApprovalBigInt += 1n;
 
-			const assetTokenDecimals = passedOutputToken?.decimals ?? 18;
+			const assetTokenDecimals = assetToken.decimals;
 			const approvalFloat = Float.fromFixedDecimalLossy(requiredApprovalBigInt, assetTokenDecimals);
 			const requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
 
 			// Calculate maximumInput based on walk result
-			const maximumInputAmount =
-				orderSide === 'Sell'
-					? scaleAmount(totalCostScaled, 18, paymentToken?.decimals ?? 6)
-					: quantityFilled;
-			const maximumInputDecimals =
-				orderSide === 'Sell' ? paymentToken?.decimals ?? 6 : passedOutputToken?.decimals ?? 18;
+			// inputAmountFilled is already in native decimals (specified by inputDecimals from walkResult)
+			const maximumInputAmount = inputAmountFilled;
+			const maximumInputDecimals = inputDecimals;
 			const maximumInputFloat = Float.fromFixedDecimalLossy(
 				maximumInputAmount,
 				maximumInputDecimals
@@ -464,24 +498,63 @@
 				data: '0x'
 			};
 
+			// Taker perspective: What user wants to receive vs what they'll pay
+			// takerWants = what user receives (INPUT from order perspective)
+			// takerPays = what user gives away (OUTPUT from order perspective)
+			const takerWantsInfo = takerInfo
+				? {
+						address: takerInfo.takerWants.address,
+						decimals: takerInfo.takerWants.decimals,
+						symbol: takerInfo.takerWants.symbol
+					}
+				: orderSide === 'Buy'
+					? {
+							address: assetToken?.address,
+							decimals: assetToken?.decimals,
+							symbol: assetToken?.symbol
+						}
+					: {
+							address: paymentToken?.address,
+							decimals: paymentToken?.decimals,
+							symbol: paymentToken?.symbol
+						};
+
+			const takerPaysInfo = takerInfo
+				? {
+						address: takerInfo.takerPays.address,
+						decimals: takerInfo.takerPays.decimals,
+						symbol: takerInfo.takerPays.symbol
+					}
+				: orderSide === 'Buy'
+					? {
+							address: paymentToken?.address,
+							decimals: paymentToken?.decimals,
+							symbol: paymentToken?.symbol
+						}
+					: {
+							address: assetToken?.address,
+							decimals: assetToken?.decimals,
+							symbol: assetToken?.symbol
+						};
+
+			// Requested amount: what user wants to receive
+			// For BUY: user requests asset amount (selectedAmount)
+			// For SELL: user requests payment amount (estimated from walkResult)
+			const requestedTakerWantsAmount =
+				orderSide === 'Buy' ? selectedAmount : walkResult.inputAmountFilled;
+
 			// Execute transaction with walk result for accurate summary
 			await transactionStore.handleTakeOrders(
 				takeOrdersConfig,
 				primaryOrder,
 				requiredApprovalAmount,
 				{
+					orderData: primaryOrderData,
 					ioIndexes: { input: primaryInputIndex, output: primaryOutputIndex },
-					walkResult,
-					orderSide,
-					assetToken: {
-						decimals: passedOutputToken?.decimals,
-						symbol: passedOutputToken?.symbol
-					},
-					paymentToken: {
-						decimals: paymentToken?.decimals,
-						symbol: paymentToken?.symbol
-					},
-					userRequestedAmount: selectedAmount
+					takerWantsToken: takerWantsInfo,
+					takerPaysToken: takerPaysInfo,
+					requestedTakerWantsAmount: requestedTakerWantsAmount,
+					simulation: walkResult
 				}
 			);
 		} catch (error) {
@@ -492,7 +565,7 @@
 	};
 </script>
 
-{#if $currentNetwork && passedOutputToken}
+{#if $currentNetwork && assetToken}
 	<div class="space-y-4">
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
@@ -502,8 +575,8 @@
 				</div>
 				<TradeAmountInput
 					aria-label="Quantity"
-					amountToken={passedOutputToken}
-					balanceToken={orderSide === 'Buy' ? paymentToken : passedOutputToken}
+					amountToken={assetToken}
+					balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
 					bind:amount={selectedAmount}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
@@ -514,7 +587,7 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Market Price
-					<span class="ml-1 text-xs text-gray-500">(per {passedOutputToken.symbol})</span>
+					<span class="ml-1 text-xs text-gray-500">(per {assetToken.symbol})</span>
 				</div>
 				<div class="relative">
 					<input
@@ -545,8 +618,8 @@
 				<div class="flex justify-between">
 					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 					<span class="font-medium">
-						{selectedAmount ? formatUnits(selectedAmount, passedOutputToken.decimals) : '0'}
-						{passedOutputToken.symbol}
+						{selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0'}
+						{assetToken.symbol}
 					</span>
 				</div>
 				<div class="flex justify-between">
