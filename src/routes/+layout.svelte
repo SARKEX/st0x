@@ -1,19 +1,12 @@
 <script lang="ts">
 	import '../app.css';
-	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+	import { QueryClientProvider } from '@tanstack/svelte-query';
+	import { queryClient } from '$lib/clients/queryClient';
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { defaultConfig } from 'svelte-wagmi';
 	import { base } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
-
-	const queryClient = new QueryClient({
-		defaultOptions: {
-			queries: {
-				staleTime: Infinity
-			}
-		}
-	});
 
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';

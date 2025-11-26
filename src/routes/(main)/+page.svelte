@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { currentNetwork, sfts, vaultsQuery } from '$lib/stores';
+	import { currentNetwork, sfts, vaultsQuery, oracleQuotes } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -8,17 +8,11 @@
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
-	import { dev } from '$app/environment';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	// Consolidated table usage
 	import { containerStyles } from '$lib/styles/utils';
-	import type { TokenPriceSummary } from '$lib/api/orders';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
-
-	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
@@ -28,9 +22,6 @@
 		name: string;
 		symbol: string;
 		price: number | null;
-		onChainPrice: number | null;
-		bidPrice: number | null;
-		askPrice: number | null;
 		totalHolders: string;
 		totalSupply: string;
 		totalTransfers: string;
@@ -52,34 +43,9 @@
 			: !hasVaults && $vaultsQuery?.error
 				? String($vaultsQuery.error)
 				: null;
-	$: quotesRecord = $orderbookQuotesQuery?.data?.summary ?? {};
 	$: sftLookup = new Map<string, OffchainAssetReceiptVault>(
 		($sfts ?? []).map((vault: OffchainAssetReceiptVault) => [vault.id, vault])
 	);
-	$: if (dev && $sfts) {
-		const missingOnChain = $sfts
-			.map((sft) => {
-				const lookupAddress = sft.address.toLowerCase();
-				const summary = quotesRecord[lookupAddress];
-				if (!summary || summary.bid == null || summary.ask == null) {
-					return { symbol: sft.symbol, address: lookupAddress, summary };
-				}
-				return null;
-			})
-			.filter(Boolean);
-		if (missingOnChain.length) {
-			console.debug('Missing on-chain price from orderbook for:', missingOnChain);
-		}
-	}
-
-	function calculateMidPrice(summary?: TokenPriceSummary | null): number | null {
-		if (!summary) return null;
-		const { bid, ask } = summary;
-		if (bid != null && ask != null) {
-			return (bid + ask) / 2;
-		}
-		return bid ?? ask ?? null;
-	}
 
 	function sumAmounts(entries?: Array<{ amount: string }>): bigint {
 		return (entries ?? []).reduce((sum: bigint, entry) => sum + BigInt(entry.amount), 0n);
@@ -90,11 +56,9 @@
 			const rows: TokenRow[] = [];
 			for (const sft of $sfts) {
 				const lookupAddress = sft.address.toLowerCase();
-				const summary = quotesRecord[lookupAddress] ?? null;
-				const bidPrice = summary?.bid ?? null;
-				const askPrice = summary?.ask ?? null;
-				const onChainPrice = calculateMidPrice(summary);
-				const price = onChainPrice;
+				// Get oracle price for this token
+				const oracleData = $oracleQuotes[lookupAddress];
+				const price = oracleData?.price ?? null;
 
 				rows.push({
 					id: sft.id,
@@ -102,9 +66,6 @@
 					name: sft.name,
 					symbol: sft.symbol,
 					price,
-					onChainPrice,
-					bidPrice,
-					askPrice,
 					totalHolders: sft.tokenHolders
 						.filter((holder: { balance: string }) => BigInt(holder.balance) > BigInt(0))
 						.length.toString(),
@@ -153,13 +114,10 @@
 									>Price</th
 								>
 								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Price</th
+									>Market Cap</th
 								>
 								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Market Cap</th
-								>
-								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-									>On-Chain Supply</th
+									>Circulating Supply</th
 								>
 								<th class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 									>Holders</th
@@ -170,7 +128,7 @@
 						<tbody>
 							{#if !processedTokens.length}
 								<tr>
-									<td colspan="7" class="px-4 py-6 text-center text-sm text-gray-400">
+									<td colspan="6" class="px-4 py-6 text-center text-sm text-gray-400">
 										No assets available.
 									</td>
 								</tr>
@@ -183,9 +141,10 @@
 									{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
 									{@const displayPrice =
 										typeof token.price === 'number' ? token.price : Number(token.price ?? NaN)}
-									{@const onChainPrice = token.onChainPrice ?? null}
-									{@const onChainMarketCap =
-										onChainPrice != null ? circulatingSupply * onChainPrice : null}
+									{@const marketCap =
+										displayPrice != null && Number.isFinite(displayPrice)
+											? circulatingSupply * displayPrice
+											: null}
 									<tr
 										class="cursor-pointer transition-colors hover:bg-yellow-500/5"
 										on:click={() => goto(`/trade/${token.id}`)}
@@ -205,18 +164,13 @@
 											</div>
 										</td>
 										<td class="px-2 py-2 sm:px-4 sm:py-3">
-											<div class="text-sm text-gray-200">
-												{onChainPrice != null ? `$${onChainPrice.toFixed(2)}` : 'N/A'}
-											</div>
-										</td>
-										<td class="px-2 py-2 sm:px-4 sm:py-3">
 											<div class="text-sm">
-												{#if onChainMarketCap != null}
-													{onChainMarketCap >= 1_000_000
-														? `$${(onChainMarketCap / 1_000_000).toFixed(2)}M`
-														: onChainMarketCap >= 1_000
-															? `$${(onChainMarketCap / 1_000).toFixed(1)}K`
-															: `$${onChainMarketCap.toFixed(2)}`}
+												{#if marketCap != null}
+													{marketCap >= 1_000_000
+														? `$${(marketCap / 1_000_000).toFixed(2)}M`
+														: marketCap >= 1_000
+															? `$${(marketCap / 1_000).toFixed(1)}K`
+															: `$${marketCap.toFixed(2)}`}
 												{:else}
 													N/A
 												{/if}

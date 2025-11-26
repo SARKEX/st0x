@@ -11,6 +11,14 @@ export type VolumeBucket = {
 	tokens: number;
 };
 
+export type OHLCBucket = {
+	x: number; // timestamp (start of bucket)
+	o: number; // open
+	h: number; // high
+	l: number; // low
+	c: number; // close
+};
+
 export type DepthPoint = {
 	price: number;
 	quantity: number;

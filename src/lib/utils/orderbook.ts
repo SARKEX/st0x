@@ -75,7 +75,11 @@ export interface ProcessedQuote {
 	assetAddress?: string;
 	side?: MarketSide;
 	quotePerAsset?: number;
+	rainlang?: string; // Decoded Rainlang source for the order
+	orderType?: OrderType; // Classified order type based on rainlang
 }
+
+export type OrderType = 'limit' | 'dca' | 'dynamic-spread' | 'custom';
 
 export type TokenPriceSummary = {
 	bid?: number;
@@ -85,6 +89,38 @@ export type TokenPriceSummary = {
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
+
+/**
+ * Classify an order type based on its rainlang source.
+ * Returns null for orders that should be hidden (e.g., dynamic spread).
+ */
+export function classifyOrderType(rainlang: string | undefined): OrderType | null {
+	if (!rainlang) return 'custom';
+
+	// Dynamic Spread - contains "other-vwaio" - should be hidden from order tab
+	if (rainlang.includes('other-vwaio')) {
+		return null; // Return null to indicate this should be filtered out
+	}
+
+	// Extract the handle-io section content
+	const handleIoMatch = rainlang.match(
+		/\/\*\s*1\.\s*handle-io\s*\*\/\s*([\s\S]*?)(?:\/\*\s*2\.|$)/
+	);
+	const handleIoContent = handleIoMatch?.[1]?.trim() ?? '';
+
+	// DCA - handle-io section starts with "min-amount:"
+	if (handleIoContent.startsWith('min-amount:')) {
+		return 'dca';
+	}
+
+	// Limit Order - handle-io section is empty (just ":;" or similar)
+	if (handleIoContent === ':;' || handleIoContent === ':') {
+		return 'limit';
+	}
+
+	// Everything else is custom
+	return 'custom';
+}
 
 export function scaleAmount(
 	amount: bigint,

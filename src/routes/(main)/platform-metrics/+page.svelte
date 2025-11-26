@@ -20,7 +20,7 @@
 		type TokenLookup
 	} from '$lib/utils/tokenMath';
 	import type { SgTrade } from '@rainlanguage/orderbook';
-	import { createRaindexClient } from '$lib/api/raindex';
+	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';

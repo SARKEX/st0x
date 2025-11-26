@@ -6,7 +6,6 @@
 	import type { PythToken } from '$lib/types';
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
-	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/stores/transaction';
@@ -16,6 +15,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -60,17 +60,12 @@
 	let selectedBaseline: string = '';
 	let selectedInitialRatio: string = '';
 
-	let inputVaultId: Hex | undefined;
-	let outputVaultId: Hex | undefined;
-
 	$: isInputTokenSameAsOutputToken =
 		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
 
 	// errors
 	let selectedAmountError: boolean = false;
 	let selectedPeriodError: boolean = false;
-	let inputVaultIdError: boolean = false;
-	let outputVaultIdError: boolean = false;
 	let selectedBaselineError: boolean = false;
 	let selectedInitialRatioError: boolean = false;
 	let priceGuardrailError: boolean = false;
@@ -78,6 +73,15 @@
 	$: depositAmount = selectedAmount;
 	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
 	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
+
+	// Advanced options state
+	let showAdvancedOptions = false;
+	let selectedVaultOption = 'default' as 'default' | 'order-specific';
+
+	// Computed input vault ID based on selection
+	// 'default' = DEFAULT_INPUT_VAULT_ID (shared vault 0x01)
+	// 'order-specific' = undefined (system generates random vault ID)
+	$: selectedInputVaultId = selectedVaultOption === 'default' ? DEFAULT_INPUT_VAULT_ID : undefined;
 
 	// Price guardrail validation
 	$: {
@@ -102,8 +106,6 @@
 		!selectedPeriod ||
 		!selectedBaseline ||
 		!selectedInitialRatio ||
-		inputVaultIdError ||
-		outputVaultIdError ||
 		selectedAmountError ||
 		selectedPeriodError ||
 		selectedBaselineError ||
@@ -137,9 +139,8 @@
 				kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
-				inputVaultId: inputVaultId,
-				outputVaultId: outputVaultId,
-				depositAmount: depositAmount
+				depositAmount: depositAmount,
+				inputVaultId: selectedInputVaultId
 			});
 		}
 	};
@@ -315,6 +316,57 @@
 					</span>
 				</div>
 			</div>
+		</div>
+
+		<!-- Advanced Options -->
+		<div class="border-t border-white/10 pt-4">
+			<button
+				type="button"
+				on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
+				class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
+			>
+				<span>Advanced options</span>
+				<svg
+					class={`h-4 w-4 transform transition-transform ${
+						showAdvancedOptions ? 'rotate-180' : ''
+					}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 9l-7 7-7-7"
+					/>
+				</svg>
+			</button>
+
+			{#if showAdvancedOptions}
+				<div class="mt-4 space-y-3">
+					<div>
+						<label for="receiving-vault-dca" class="mb-2 block text-sm font-medium text-gray-300">
+							Receiving vault
+						</label>
+						<select
+							id="receiving-vault-dca"
+							bind:value={selectedVaultOption}
+							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+						>
+							<option value="default">Default</option>
+							<option value="order-specific">Order-specific</option>
+						</select>
+						<p class="mt-1 text-xs text-gray-500">
+							{#if selectedVaultOption === 'default'}
+								Uses the shared default vault for receiving tokens
+							{:else}
+								Creates a unique vault for this order only
+							{/if}
+						</p>
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Deploy Button -->

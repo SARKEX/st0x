@@ -239,11 +239,7 @@ describe('transactionStore tests', () => {
 					maxAmount: 1000000000000000000n,
 					minAmount: 1000000000000000000n,
 					depositAmountToken1: 1000000000000000000n,
-					depositAmountToken2: 1000000000000000000n,
-					inputVaultIdToken1: undefined,
-					inputVaultIdToken2: undefined,
-					outputVaultIdToken1: undefined,
-					outputVaultIdToken2: undefined
+					depositAmountToken2: 1000000000000000000n
 				}),
 			expectedFn: getMarketMakingDeploymentArgs
 		},
@@ -260,8 +256,6 @@ describe('transactionStore tests', () => {
 					baseline: '1',
 					minTradeAmount: 1000000000000000000n,
 					maxTradeAmount: 1000000000000000000n,
-					inputVaultId: undefined,
-					outputVaultId: undefined,
 					depositAmount: 2000000000000000000n
 				}),
 			expectedFn: getDcaDeploymentArgs
@@ -273,9 +267,7 @@ describe('transactionStore tests', () => {
 					outputToken: PAYMENT_TOKEN,
 					inputToken: STOXs[0],
 					ioRatio: '1',
-					depositAmount: 1000000000000000000n,
-					inputVaultId: undefined,
-					outputVaultId: undefined
+					depositAmount: 1000000000000000000n
 				}),
 			expectedFn: getLimitOrderDeploymentArgs
 		},
@@ -298,21 +290,7 @@ describe('transactionStore tests', () => {
 					depositAmount4: 4000000000000000000n,
 					depositAmount5: 5000000000000000000n,
 					depositAmount6: 6000000000000000000n,
-					depositAmount7: 7000000000000000000n,
-					inputVaultId1: undefined,
-					inputVaultId2: undefined,
-					inputVaultId3: undefined,
-					inputVaultId4: undefined,
-					inputVaultId5: undefined,
-					inputVaultId6: undefined,
-					inputVaultId7: undefined,
-					outputVaultId1: undefined,
-					outputVaultId2: undefined,
-					outputVaultId3: undefined,
-					outputVaultId4: undefined,
-					outputVaultId5: undefined,
-					outputVaultId6: undefined,
-					outputVaultId7: undefined
+					depositAmount7: 7000000000000000000n
 				}),
 			expectedFn: getFolioDeploymentArgs
 		}

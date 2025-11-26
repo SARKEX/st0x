@@ -382,14 +382,21 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 	const input = normalizeAddress(quote.inputTokenAddress);
 	const output = normalizeAddress(quote.outputTokenAddress);
 	const quoteAddress = normalizeAddress(quoteTokenAddress);
-	if (!input || !output || !quoteAddress) return null;
+
+	if (!input || !output || !quoteAddress) {
+		return null;
+	}
 	const ratio = ratioToNumber(quote.ratio);
-	if (ratio === null) return null;
+	if (ratio === null) {
+		return null;
+	}
 
 	if (input === quoteAddress && output !== quoteAddress) {
 		// ASK order: giving away output token to acquire quote token input (seller offering to sell)
 		const quotePerAsset = ratio;
-		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) return null;
+		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) {
+			return null;
+		}
 		return {
 			assetAddress: output,
 			side: 'ask',
@@ -400,7 +407,9 @@ export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): Quot
 	if (output === quoteAddress && input !== quoteAddress) {
 		// BID order: giving away input token to acquire quote token output (buyer offering to buy)
 		const quotePerAsset = 1 / ratio;
-		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) return null;
+		if (!Number.isFinite(quotePerAsset) || quotePerAsset <= 0) {
+			return null;
+		}
 		return {
 			assetAddress: input,
 			side: 'bid',
@@ -482,4 +491,38 @@ export function analyzeTrade(
 		assetSymbol: pair.asset.symbol,
 		...parsed
 	};
+}
+
+// ============================================================================
+// RAINDEX URL UTILITIES
+// ============================================================================
+
+const RAINDEX_BASE_URL = 'https://v5.raindex.finance';
+
+/**
+ * Generate a Raindex URL for an order
+ */
+export function getRaindexOrderUrl(
+	chainId: number,
+	orderbookId: string,
+	orderHash: string
+): string {
+	return `${RAINDEX_BASE_URL}/orders/${chainId}-${orderbookId}-${orderHash}`;
+}
+
+/**
+ * Generate a Raindex URL for a vault
+ * Format: {chainId}-{orderbookId}-{vaultSubgraphId}
+ *
+ * @param chainId - Network chain ID (e.g., 8453 for Base)
+ * @param orderbookId - Orderbook contract address
+ * @param vaultSubgraphId - The vault's unique subgraph identifier (vault.id), NOT the vault slot number (vault.vaultId)
+ */
+export function getRaindexVaultUrl(
+	chainId: number,
+	orderbookId: string,
+	vaultSubgraphId: string
+): string {
+	const normalizedId = vaultSubgraphId.startsWith('0x') ? vaultSubgraphId : `0x${vaultSubgraphId}`;
+	return `${RAINDEX_BASE_URL}/vaults/${chainId}-${orderbookId}-${normalizedId}`;
 }

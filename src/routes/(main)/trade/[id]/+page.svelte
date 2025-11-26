@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { currentNetwork, sfts, oracleQuotes } from '$lib/stores';
+	import { currentNetwork, oracleQuotes } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
 	import Footer from '$lib/components/Footer.svelte';
@@ -24,7 +24,8 @@
 	import type {
 		DepthSeries,
 		TradeHistoryPoint,
-		VolumeBucket
+		VolumeBucket,
+		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
@@ -34,27 +35,161 @@
 		createTokenLookup,
 		normalizeAddress,
 		ratioToNumber,
-		toDecimal
+		toDecimal,
+		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
-	import { createOrderbookQuotesQuery, type OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import {
+		createTokenOrderbookQuotesQuery,
+		prefetchGlobalOrders,
+		type OrderbookQuoteCache
+	} from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
-	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
+	import type { RaindexVault } from '@rainlanguage/orderbook';
+	import transactionStore from '$lib/stores/transaction';
+	import { readContract } from '@wagmi/core';
+	import { erc20Abi } from 'viem';
+	import {
+		createSingleVaultQuery,
+		createUserVaultsQuery,
+		prefetchUserVaults
+	} from '$lib/queries/vaults';
+	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
+	import type { DisplayOrder } from '$lib/types/orders';
+	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 	$: tokenId = $page.params.id;
-	$: currentToken = $sfts?.find((sft: OffchainAssetReceiptVault) => sft.id === tokenId);
+
+	// Get queryClient for cache lookup
+	const queryClient = useQueryClient();
+
+	// Use single token query - checks global cache first, falls back to single fetch
+	$: singleTokenQuery = createSingleVaultQuery(tokenId, $currentNetwork, queryClient);
+	$: currentToken = $singleTokenQuery.data;
 	const tokensLookup = createTokenLookup(TOKENS);
-	let orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
+		$currentNetwork,
+		currentToken?.address ?? null
+	);
 	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: {
-		console.log('🌐 [Trade Page] Current network:', $currentNetwork?.id, $currentNetwork?.name);
-		orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork);
+		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
+			$currentNetwork,
+			currentToken?.address ?? null
+		);
 		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
+
+	// Filter trades from tradeActivityQuery to get user's market orders
+	$: userMarketOrders = (() => {
+		if (!$signerAddress || !currentToken?.address || !$tradeActivityQuery.data?.trades) {
+			return [];
+		}
+		const normalizedSender = $signerAddress.toLowerCase();
+		const normalizedToken = currentToken.address.toLowerCase();
+
+		return $tradeActivityQuery.data.trades.filter((trade: SgTrade) => {
+			// Check if user is the sender (taker)
+			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
+			if (tradeSender !== normalizedSender) return false;
+
+			// Check if trade involves the current token
+			const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+			const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+			return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
+		});
+	})();
+
+	// Transform quotes and market orders into DisplayOrder format for OrdersTable
+	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
+	$: tokenOrders = (() => {
+		const displayOrders: DisplayOrder[] = [];
+		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
+
+		// Add limit orders from quotes (for current token only)
+		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
+			const quotes = $orderbookQuotesQuery.data.quotes;
+
+			// Filter by token (input or output matches current token)
+			const filtered = quotes.filter(
+				(q) =>
+					q.inputTokenAddress.toLowerCase() === tokenAddress ||
+					q.outputTokenAddress.toLowerCase() === tokenAddress
+			);
+
+			// Transform to DisplayOrder
+			for (const quote of filtered) {
+				const isBuy = quote.side === 'bid';
+				const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol;
+				// Use the classified order type, defaulting to 'limit' if not set
+				const orderType = quote.orderType ?? 'limit';
+				displayOrders.push({
+					type: orderType === 'dynamic-spread' ? 'custom' : orderType,
+					orderHash: quote.orderHash,
+					timestamp: quote.sgOrder?.timestampAdded ? Number(quote.sgOrder.timestampAdded) : 0,
+					side: isBuy ? 'Buy' : 'Sell',
+					quote,
+					tokenSymbol,
+					tokenAddress,
+					inputTokenSymbol: quote.inputTokenSymbol,
+					outputTokenSymbol: quote.outputTokenSymbol,
+					price: quote.quotePerAsset,
+					isActive: quote.sgOrder?.active ?? true
+				});
+			}
+		}
+
+		// Add market orders (user's trades for this token)
+		if (userMarketOrders.length > 0 && tokenAddress) {
+			for (const trade of userMarketOrders) {
+				const displayOrder = transformTradeToDisplayOrder(trade, {
+					targetTokenAddress: tokenAddress
+				});
+				if (displayOrder) {
+					displayOrders.push(displayOrder);
+				}
+			}
+		}
+
+		// Sort by timestamp descending
+		displayOrders.sort((a, b) => b.timestamp - a.timestamp);
+
+		return displayOrders;
+	})();
+
+	// User vaults query - uses centralized query with 15s polling (trade page)
+	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $signerAddress, 15_000);
+
+	// Background prefetch of global caches when page loads
+	$: if (browser && $currentNetwork && $signerAddress) {
+		// Prefetch global orders and vaults in background (non-blocking)
+		prefetchGlobalOrders($currentNetwork.id).catch(() => {});
+		prefetchUserVaults($currentNetwork.id, $signerAddress).catch(() => {});
+	}
+
+	// Wallet balance query for this token
+	$: walletBalanceQuery = createQuery({
+		queryKey: ['walletBalance', $currentNetwork?.id, currentToken?.address, $signerAddress],
+		queryFn: async () => {
+			if (!currentToken?.address || !$signerAddress || !$wagmiConfig) {
+				return 0n;
+			}
+			const balance = await readContract($wagmiConfig, {
+				abi: erc20Abi,
+				address: currentToken.address as `0x${string}`,
+				functionName: 'balanceOf',
+				args: [$signerAddress as `0x${string}`]
+			});
+			return balance as bigint;
+		},
+		enabled: Boolean(currentToken?.address && $signerAddress && $wagmiConfig)
+	});
 	$: currentPythToken = TOKENS.find(
 		(token) =>
 			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
@@ -78,7 +213,28 @@
 	] as const;
 	type TokenTabId = (typeof TOKEN_TABS)[number]['id'];
 	let activeTokenTab: TokenTabId = 'contract';
-	let infoCollapsed = false;
+	const ONCHAIN_TABS = [
+		{ id: 'market', label: 'Market Data' },
+		{ id: 'orders', label: 'Orders' },
+		{ id: 'vaults', label: 'Holdings' }
+	] as const;
+	type OnchainTabId = (typeof ONCHAIN_TABS)[number]['id'];
+	let activeOnchainTab: OnchainTabId = 'market';
+
+	// Pagination state for vaults (orders pagination is handled by OrdersTable component)
+	let currentVaultsPage = 1;
+
+	function handleOnchainTabChange(event: CustomEvent<{ id: string }>) {
+		activeOnchainTab = event.detail.id as OnchainTabId;
+	}
+
+	function vaultBalanceToBigInt(vault: RaindexVault): bigint {
+		const fixedResult = vault.balance.toFixedDecimalLossy(vault.token.decimals);
+		if (fixedResult.error || !fixedResult.value) return 0n;
+		const value = (fixedResult.value as { value: string }).value;
+		return typeof value === 'string' ? BigInt(value) : 0n;
+	}
+
 	let showTradePanel = false;
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
 	let panelStrategy: 'limit' | 'dca' | 'market' = 'market';
@@ -141,7 +297,10 @@
 		return { timestamp, price, tokens, quote, side };
 	};
 	// Convert trade points to OHLC candles
-	const tradesToAveragePrices = (trades: TradeHistoryPoint[], bucketSeconds: number) => {
+	const tradesToOHLCBuckets = (
+		trades: TradeHistoryPoint[],
+		bucketSeconds: number
+	): OHLCBucket[] => {
 		if (trades.length === 0) return [];
 		const buckets = new Map<number, TradeHistoryPoint[]>();
 		for (const trade of trades) {
@@ -151,19 +310,25 @@
 			}
 			buckets.get(bucketTime)!.push(trade);
 		}
-		const pricePoints: Array<{ x: number; y: number }> = [];
+		const ohlcData: OHLCBucket[] = [];
 		const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
 		for (const [time, bucketTrades] of sortedBuckets) {
 			if (bucketTrades.length === 0) continue;
-			const prices = bucketTrades.map((t) => t.price).filter((p) => Number.isFinite(p));
-			if (prices.length === 0) continue;
-			const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
-			pricePoints.push({
+			// Sort trades within bucket by timestamp
+			const sortedTrades = bucketTrades
+				.filter((t) => Number.isFinite(t.price))
+				.sort((a, b) => a.timestamp - b.timestamp);
+			if (sortedTrades.length === 0) continue;
+			const prices = sortedTrades.map((t) => t.price);
+			ohlcData.push({
 				x: time,
-				y: avgPrice
+				o: sortedTrades[0].price, // first trade = open
+				h: Math.max(...prices), // highest price
+				l: Math.min(...prices), // lowest price
+				c: sortedTrades[sortedTrades.length - 1].price // last trade = close
 			});
 		}
-		return pricePoints;
+		return ohlcData;
 	};
 	// Aggregate volume by candlestick bucket size for proper alignment
 	const tradesToVolumeBuckets = (
@@ -185,7 +350,7 @@
 	let historyRangeEndMs = 0;
 	let tradeHistoryPoints: TradeHistoryPoint[] = [];
 	let visibleTradeHistoryPoints: TradeHistoryPoint[] = [];
-	let averagePrices: Array<{ x: number; y: number }> = [];
+	let ohlcData: OHLCBucket[] = [];
 	let tradeVolumeBuckets: VolumeBucket[] = [];
 	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
 	let chartsLoading = false;
@@ -223,14 +388,7 @@
 	};
 	let orderbookQuoteUiState: OrderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
 	$: {
-		console.log(
-			'🔄 [Trade Page] orderbookQuotesQuery state:',
-			$orderbookQuotesQuery?.status,
-			'data:',
-			$orderbookQuotesQuery?.data
-		);
 		orderbookQuoteUiState = mapOrderbookQuoteState($orderbookQuotesQuery);
-		console.log('📊 [Trade Page] orderbookQuoteUiState:', orderbookQuoteUiState);
 	}
 	function formatNumeric(value: number | null | undefined): string {
 		if (value === null || value === undefined || Number.isNaN(value)) {
@@ -284,10 +442,6 @@
 		return null;
 	})();
 	onMount(() => {
-		if (typeof window !== 'undefined') {
-			const isMobile = window.innerWidth < 640;
-			infoCollapsed = isMobile;
-		}
 		return () => {};
 	});
 	const handleAssetTabChange = (event: CustomEvent<{ id: string }>) => {
@@ -440,8 +594,8 @@
 		historyRangeStartMs = rangeStart;
 		historyRangeEndMs = rangeEnd;
 		visibleTradeHistoryPoints = tradeHistoryPoints.filter((point) => point.timestamp >= rangeStart);
-		// Calculate average prices and volume using the same candlestick bucket size
-		averagePrices = tradesToAveragePrices(visibleTradeHistoryPoints, candleBucketSeconds);
+		// Calculate OHLC candles and volume using the same bucket size
+		ohlcData = tradesToOHLCBuckets(visibleTradeHistoryPoints, candleBucketSeconds);
 		tradeVolumeBuckets = tradesToVolumeBuckets(visibleTradeHistoryPoints, candleBucketSeconds);
 	}
 	$: orderbookDepth = (() => {
@@ -541,9 +695,25 @@
 	<title>{pageTitle}</title>
 </svelte:head>
 <svelte:window on:keydown={handleGlobalKeydown} />
-{#if !currentToken}
+{#if $singleTokenQuery.isPending}
 	<div class="flex h-screen items-center justify-center">
 		<LoadingSpinner variant="fullscreen" size="xl" text="Loading token data..." />
+	</div>
+{:else if $singleTokenQuery.isError}
+	<div class="flex h-screen items-center justify-center">
+		<div class="text-center">
+			<p class="text-lg text-red-400">Failed to load token data</p>
+			<p class="mt-2 text-sm text-gray-400">
+				{$singleTokenQuery.error?.message || 'Unknown error'}
+			</p>
+		</div>
+	</div>
+{:else if !currentToken}
+	<div class="flex h-screen items-center justify-center">
+		<div class="text-center">
+			<p class="text-lg text-gray-400">Token not found</p>
+			<p class="mt-2 text-sm text-gray-500">ID: {tokenId}</p>
+		</div>
 	</div>
 {:else}
 	<div class="space-y-6 p-4 sm:p-6">
@@ -581,12 +751,7 @@
 						{/if}
 					</div>
 					<div class={containerStyles.cardBordered}>
-						<div class="border-b border-white/10 pb-3">
-							<h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400">
-								On-chain Price
-							</h3>
-						</div>
-						<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+						<dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Oracle Price</dt>
 								<dd class="mt-1 font-medium text-gray-100">
@@ -693,274 +858,422 @@
 			</div>
 		</Section>
 		<Section>
-			<TokenMarketCharts
-				volumeBuckets={tradeVolumeBuckets}
-				depth={orderbookDepth}
-				{averagePrices}
-				rangeStartMs={historyRangeStartMs}
-				rangeEndMs={historyRangeEndMs}
-				isLoading={chartsLoading}
-				error={tradeQueryError}
-				{historyRange}
-				historyRangeOptions={HISTORY_RANGE_OPTIONS}
-				on:rangeChange={(e) => (historyRange = e.detail.key)}
-			/>
-			<div class="mt-2 text-xs text-gray-400">All times are displayed in your local timezone</div>
-		</Section>
-		<!-- Tabbed Information Section (collapsible) -->
-		<Section>
-			<div class="mb-3 flex items-center justify-between">
-				<h2 class="text-base font-semibold">Details</h2>
-				<button
-					class="rounded-md border border-white/10 p-1 text-xs text-gray-200 hover:bg-white/5"
-					aria-label={infoCollapsed ? 'Expand details' : 'Collapse details'}
-					on:click={() => (infoCollapsed = !infoCollapsed)}
+			<div class="mb-6">
+				<div
+					class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 				>
-					<svg
-						class="h-4 w-4 transition-transform duration-200 ease-out {infoCollapsed
-							? ''
-							: 'rotate-180'}"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M6 9l6 6 6-6" />
-					</svg>
-				</button>
+					<div>
+						<h2 class="text-base font-semibold text-white">DEX Activity</h2>
+						<p class="text-sm text-gray-400">View DEX trades, liquidity, orders, and vaults</p>
+					</div>
+				</div>
+				<TabNav
+					tabs={ONCHAIN_TABS}
+					activeId={activeOnchainTab}
+					on:change={handleOnchainTabChange}
+				/>
 			</div>
-			{#if !infoCollapsed}
-				<div class="grid gap-6 lg:grid-cols-2">
-					<div class="space-y-4">
-						<div class="space-y-3">
-							<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
-								Asset Details
-							</h3>
-							<TabNav
-								tabs={ASSET_TABS}
-								activeId={activeAssetTab}
-								on:change={handleAssetTabChange}
-							/>
+
+			{#if activeOnchainTab === 'market'}
+				<TokenMarketCharts
+					volumeBuckets={tradeVolumeBuckets}
+					depth={orderbookDepth}
+					{ohlcData}
+					rangeStartMs={historyRangeStartMs}
+					rangeEndMs={historyRangeEndMs}
+					isLoading={chartsLoading}
+					error={tradeQueryError}
+					{historyRange}
+					historyRangeOptions={HISTORY_RANGE_OPTIONS}
+					on:rangeChange={(e) => (historyRange = e.detail.key)}
+				/>
+				<div class="mt-2 text-xs text-gray-400">All times are displayed in your local timezone</div>
+			{:else if activeOnchainTab === 'orders'}
+				<div class="mt-4">
+					<OrdersTable
+						orders={tokenOrders}
+						isLoading={$orderbookQuotesQuery.isLoading}
+						isError={$orderbookQuotesQuery.isError}
+						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+						tokenAddress={currentToken?.address ?? null}
+					/>
+				</div>
+			{:else if activeOnchainTab === 'vaults'}
+				<div class="mt-4">
+					{#if !$connected}
+						<div class="flex flex-col items-center justify-center gap-4 py-12">
+							<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
+							<Button variant="primary" size="md" on:click={() => $web3Modal.open()}>
+								Connect Wallet
+							</Button>
 						</div>
-						{#if activeAssetTab === 'company'}
-							{#if tradingViewSymbol}
-								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget
-										widgetType="symbol-profile"
-										symbol={tradingViewSymbol}
-										height="480"
-									/>
+					{:else if $userVaultsQuery.isLoading}
+						<div class="flex justify-center py-8">
+							<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
+						</div>
+					{:else if $userVaultsQuery.isError}
+						<div class="py-8 text-center text-sm text-red-400">
+							Error loading vaults: {$userVaultsQuery.error?.message}
+						</div>
+					{:else}
+						{@const allVaultData = $userVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
+						{@const vaults = currentToken
+							? allVaultData
+									.map((vd) => vd.raindexVault)
+									.filter((v) => {
+										const vaultTokenAddr = (v.token?.address ?? v.token?.id)?.toLowerCase();
+										const isCorrectToken = vaultTokenAddr === currentToken.address.toLowerCase();
+										const hasBalance = vaultBalanceToBigInt(v) > 0n;
+										return isCorrectToken && hasBalance;
+									})
+							: []}
+						{@const totalVaultBalance = vaults.reduce(
+							(sum, v) => sum + vaultBalanceToBigInt(v),
+							0n
+						)}
+						{@const walletBalance = $walletBalanceQuery.data ?? 0n}
+						{@const totalBalance = totalVaultBalance + walletBalance}
+						{@const tokenDecimals = vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
+
+						{#if vaults.length === 0 && walletBalance === 0n}
+							<div class="py-8 text-center text-sm text-gray-400">
+								No position found for this token
+							</div>
+						{:else}
+							<!-- Two column layout: Vaults list on left, Summary on right -->
+							<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+								<!-- Left: Vaults list with pagination -->
+								<div>
+									{#if vaults.length > 0}
+										{@const vaultsPerPage = 10}
+										{@const totalPages = Math.ceil(vaults.length / vaultsPerPage)}
+										{@const startIndex = (currentVaultsPage - 1) * vaultsPerPage}
+										{@const endIndex = startIndex + vaultsPerPage}
+										{@const paginatedVaults = vaults.slice(startIndex, endIndex)}
+
+										<div class="space-y-2">
+											{#each paginatedVaults as vault}
+												{@const balance = vaultBalanceToBigInt(vault)}
+												{@const vaultIdHex = `0x${vault.vaultId.toString(16).padStart(64, '0')}`}
+												{@const raindexUrl = getRaindexVaultUrl(
+													$currentNetwork?.chainId ?? 8453,
+													vault.orderbook,
+													vault.id
+												)}
+												<div
+													class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
+												>
+													<div class="flex items-center gap-2 text-xs text-gray-400">
+														<a
+															href={raindexUrl}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="text-blue-400 hover:text-blue-300 hover:underline"
+															title="View on Raindex"
+														>
+															{vaultIdHex.slice(0, 8)}...
+														</a>
+														<span>•</span>
+														<span
+															>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)}
+															{vault.token.symbol}</span
+														>
+													</div>
+													<Button
+														variant="danger"
+														size="sm"
+														on:click={() => transactionStore.handleWithdraw(vault)}
+													>
+														Withdraw
+													</Button>
+												</div>
+											{/each}
+										</div>
+
+										<!-- Pagination -->
+										{#if totalPages > 1}
+											<div class="mt-4 flex items-center justify-center gap-2">
+												{#each Array.from({ length: totalPages }, (_, i) => i + 1) as pageNum}
+													<button
+														type="button"
+														class={`h-8 w-8 rounded-md text-sm font-medium transition ${
+															pageNum === currentVaultsPage
+																? 'bg-blue-500 text-white'
+																: 'bg-white/5 text-gray-400 hover:bg-white/10'
+														}`}
+														on:click={() => {
+															currentVaultsPage = pageNum;
+														}}
+													>
+														{pageNum}
+													</button>
+												{/each}
+											</div>
+										{/if}
+									{:else}
+										<div class="py-8 text-center text-sm text-gray-400">
+											No vaults with balance found
+										</div>
+									{/if}
 								</div>
-							{:else}
-								<div class={`${containerStyles.cardBordered}`}>
-									<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+
+								<!-- Right: Summary table -->
+								<div class="rounded-lg border border-white/10 bg-white/5 p-4">
+									<h3 class="mb-4 text-sm font-semibold text-gray-100">Summary</h3>
+									<div class="space-y-3 text-sm">
+										<div class="flex justify-between text-gray-400">
+											<span>Vaults Subtotal:</span>
+											<span
+												>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)}
+												{currentToken?.symbol}</span
+											>
+										</div>
+										<div class="flex justify-between text-gray-400">
+											<span>Wallet Balance:</span>
+											<span
+												>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)}
+												{currentToken?.symbol}</span
+											>
+										</div>
+										<div
+											class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100"
+										>
+											<span>Total:</span>
+											<span
+												>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)}
+												{currentToken?.symbol}</span
+											>
+										</div>
+									</div>
 								</div>
-							{/if}
-						{:else if activeAssetTab === 'fundamentals'}
-							{#if tradingViewSymbol}
-								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget
-										widgetType="financials"
-										symbol={tradingViewSymbol}
-										height={520}
-									/>
-								</div>
-							{:else}
-								<div class={`${containerStyles.cardBordered}`}>
-									<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-								</div>
-							{/if}
-						{:else if activeAssetTab === 'technical'}
-							{#if tradingViewSymbol}
-								<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-									<TradingViewWidget
-										widgetType="technical-analysis"
-										symbol={tradingViewSymbol}
-										height="520"
-									/>
-								</div>
-							{:else}
-								<div class={`${containerStyles.cardBordered}`}>
-									<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-								</div>
-							{/if}
-						{:else if tradingViewSymbol}
+							</div>
+						{/if}
+					{/if}
+				</div>
+			{/if}
+		</Section>
+		<!-- Tabbed Information Section -->
+		<Section>
+			<div class="grid gap-6 lg:grid-cols-2">
+				<div class="space-y-4">
+					<div class="space-y-3">
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+							Asset Details
+						</h3>
+						<TabNav tabs={ASSET_TABS} activeId={activeAssetTab} on:change={handleAssetTabChange} />
+					</div>
+					{#if activeAssetTab === 'company'}
+						{#if tradingViewSymbol}
 							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-								<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
+								<TradingViewWidget
+									widgetType="symbol-profile"
+									symbol={tradingViewSymbol}
+									height="480"
+								/>
 							</div>
 						{:else}
 							<div class={`${containerStyles.cardBordered}`}>
 								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
-					</div>
-					<div class="space-y-4">
-						<div class="space-y-3">
-							<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
-								Token Details
-							</h3>
-							<TabNav
-								tabs={TOKEN_TABS}
-								activeId={activeTokenTab}
-								on:change={handleTokenTabChange}
-							/>
-						</div>
-						{#if activeTokenTab === 'contract'}
-							<div class={containerStyles.cardBordered}>
-								<h3 class="mb-3 font-semibold">Contract Information</h3>
-								<div class="space-y-3 text-sm">
-									<div class="flex items-center justify-between gap-2">
-										<span class="text-gray-400">Address</span>
-										<div>
-											<div class="sm:hidden">
-												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-													label={currentToken.address}
-													truncate={{ start: 0, end: 6 }}
-													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-												/>
-											</div>
-											<div class="hidden sm:block">
-												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-													label={truncateAddress(currentToken.address)}
-													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
-												/>
-											</div>
-										</div>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Network</span>
-										<span>{$currentNetwork.displayName}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Symbol</span>
-										<span>{currentToken.symbol}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Decimals</span>
-										<span>18</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-gray-400">Proofs</span>
-										<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
-											View proofs
-										</a>
-									</div>
-								</div>
-							</div>
-						{:else if activeTokenTab === 'supply'}
-							<div class={containerStyles.cardBordered}>
-								<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
-								<div class="space-y-3 text-sm">
-									<div class="flex justify-between">
-										<span class="text-gray-400">Total Supply</span>
-										<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">On-Chain Market Cap</span>
-										<span>N/A</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Holders</span>
-										<span>{currentToken.tokenHolders.length}</span>
-									</div>
-									<div class="flex justify-between">
-										<span class="text-gray-400">Total Transfers</span>
-										<span>{currentToken.shareTransfers.length}</span>
-									</div>
-								</div>
-							</div>
-						{:else if activeTokenTab === 'mints'}
-							<div class={containerStyles.cardBordered}>
-								<div class="mb-2 flex items-center justify-between">
-									<h3 class="font-semibold">Latest Mints</h3>
-									<ExternalLink
-										href="https://portal.s01issuer.com/metrics"
-										label="View All"
-										className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
-									/>
-								</div>
-								{#if currentToken?.deposits?.length}
-									<div class="space-y-1">
-										{#each currentToken.deposits.slice(0, 5) as dep}
-											<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
-												<div class="flex items-center justify-between gap-3 text-xs">
-													<div class="min-w-0 truncate">
-														<span class="font-medium text-green-400">
-															+ {formatUnits(BigInt(dep.amount), 18)}
-															{currentToken.symbol}
-														</span>
-													</div>
-													<div class="flex flex-shrink-0 items-center gap-2">
-														<TxLink hash={dep.transaction.id} />
-													</div>
-												</div>
-												<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-													<span class="text-gray-400">
-														<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
-														<span class="hidden sm:inline">
-															{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}
-														</span>
-													</span>
-													<span class="mx-2 text-gray-500">•</span>
-													<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
-												</div>
-											</div>
-										{/each}
-									</div>
-								{:else}
-									<div class="text-sm text-gray-400">No recent mints.</div>
-								{/if}
+					{:else if activeAssetTab === 'fundamentals'}
+						{#if tradingViewSymbol}
+							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+								<TradingViewWidget
+									widgetType="financials"
+									symbol={tradingViewSymbol}
+									height={520}
+								/>
 							</div>
 						{:else}
-							<div class={containerStyles.cardBordered}>
-								<div class="mb-2 flex items-center justify-between">
-									<h3 class="font-semibold">Latest Burns</h3>
-									<ExternalLink
-										href="https://portal.s01issuer.com/metrics"
-										label="View All"
-										className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
-									/>
-								</div>
-								{#if currentToken?.withdraws?.length}
-									<div class="space-y-1">
-										{#each currentToken.withdraws.slice(0, 5) as w}
-											<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
-												<div class="flex items-center justify-between gap-3 text-xs">
-													<div class="min-w-0 truncate">
-														<span class="font-medium text-red-400">
-															− {formatUnits(BigInt(w.amount), 18)}
-															{currentToken.symbol}
-														</span>
-													</div>
-													<div class="flex flex-shrink-0 items-center gap-2">
-														<TxLink hash={w.transaction.id} />
-													</div>
-												</div>
-												<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-													<span class="text-gray-400">
-														<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
-														<span class="hidden sm:inline">
-															{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}
-														</span>
-													</span>
-													<span class="mx-2 text-gray-500">•</span>
-													<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
-												</div>
-											</div>
-										{/each}
-									</div>
-								{:else}
-									<div class="text-sm text-gray-400">No recent burns.</div>
-								{/if}
+							<div class={`${containerStyles.cardBordered}`}>
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
-					</div>
+					{:else if activeAssetTab === 'technical'}
+						{#if tradingViewSymbol}
+							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+								<TradingViewWidget
+									widgetType="technical-analysis"
+									symbol={tradingViewSymbol}
+									height="520"
+								/>
+							</div>
+						{:else}
+							<div class={`${containerStyles.cardBordered}`}>
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if tradingViewSymbol}
+						<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+							<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
+						</div>
+					{:else}
+						<div class={`${containerStyles.cardBordered}`}>
+							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+						</div>
+					{/if}
 				</div>
-			{/if}
+				<div class="space-y-4">
+					<div class="space-y-3">
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+							Token Details
+						</h3>
+						<TabNav tabs={TOKEN_TABS} activeId={activeTokenTab} on:change={handleTokenTabChange} />
+					</div>
+					{#if activeTokenTab === 'contract'}
+						<div class={containerStyles.cardBordered}>
+							<h3 class="mb-3 font-semibold">Contract Information</h3>
+							<div class="space-y-3 text-sm">
+								<div class="flex items-center justify-between gap-2">
+									<span class="text-gray-400">Address</span>
+									<div>
+										<div class="sm:hidden">
+											<ExternalLink
+												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+												label={currentToken.address}
+												truncate={{ start: 0, end: 6 }}
+												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+											/>
+										</div>
+										<div class="hidden sm:block">
+											<ExternalLink
+												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
+												label={truncateAddress(currentToken.address)}
+												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+											/>
+										</div>
+									</div>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Network</span>
+									<span>{$currentNetwork.displayName}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Symbol</span>
+									<span>{currentToken.symbol}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Decimals</span>
+									<span>18</span>
+								</div>
+								<div class="flex items-center justify-between">
+									<span class="text-gray-400">Proofs</span>
+									<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
+										View proofs
+									</a>
+								</div>
+							</div>
+						</div>
+					{:else if activeTokenTab === 'supply'}
+						<div class={containerStyles.cardBordered}>
+							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
+							<div class="space-y-3 text-sm">
+								<div class="flex justify-between">
+									<span class="text-gray-400">Total Supply</span>
+									<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">On-Chain Market Cap</span>
+									<span>N/A</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Holders</span>
+									<span>{currentToken.tokenHolders.length}</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-gray-400">Total Transfers</span>
+									<span>{currentToken.shareTransfers.length}</span>
+								</div>
+							</div>
+						</div>
+					{:else if activeTokenTab === 'mints'}
+						<div class={containerStyles.cardBordered}>
+							<div class="mb-2 flex items-center justify-between">
+								<h3 class="font-semibold">Latest Mints</h3>
+								<ExternalLink
+									href="https://portal.s01issuer.com/metrics"
+									label="View All"
+									className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+								/>
+							</div>
+							{#if currentToken?.deposits?.length}
+								<div class="space-y-1">
+									{#each currentToken.deposits.slice(0, 5) as dep}
+										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+											<div class="flex items-center justify-between gap-3 text-xs">
+												<div class="min-w-0 truncate">
+													<span class="font-medium text-green-400">
+														+ {formatUnits(BigInt(dep.amount), 18)}
+														{currentToken.symbol}
+													</span>
+												</div>
+												<div class="flex flex-shrink-0 items-center gap-2">
+													<TxLink hash={dep.transaction.id} />
+												</div>
+											</div>
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
+												<span class="text-gray-400">
+													<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
+													<span class="hidden sm:inline">
+														{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}
+													</span>
+												</span>
+												<span class="mx-2 text-gray-500">•</span>
+												<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<div class="text-sm text-gray-400">No recent mints.</div>
+							{/if}
+						</div>
+					{:else}
+						<div class={containerStyles.cardBordered}>
+							<div class="mb-2 flex items-center justify-between">
+								<h3 class="font-semibold">Latest Burns</h3>
+								<ExternalLink
+									href="https://portal.s01issuer.com/metrics"
+									label="View All"
+									className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+								/>
+							</div>
+							{#if currentToken?.withdraws?.length}
+								<div class="space-y-1">
+									{#each currentToken.withdraws.slice(0, 5) as w}
+										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+											<div class="flex items-center justify-between gap-3 text-xs">
+												<div class="min-w-0 truncate">
+													<span class="font-medium text-red-400">
+														− {formatUnits(BigInt(w.amount), 18)}
+														{currentToken.symbol}
+													</span>
+												</div>
+												<div class="flex flex-shrink-0 items-center gap-2">
+													<TxLink hash={w.transaction.id} />
+												</div>
+											</div>
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
+												<span class="text-gray-400">
+													<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
+													<span class="hidden sm:inline">
+														{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}
+													</span>
+												</span>
+												<span class="mx-2 text-gray-500">•</span>
+												<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<div class="text-sm text-gray-400">No recent burns.</div>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			</div>
 		</Section>
 	</div>
 	{#if showTradePanel}
@@ -1084,7 +1397,11 @@
 										{sellPrice}
 									/>
 								{:else if panelStrategy === 'market'}
-									<MarketOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
+									<MarketOrder
+										orderSide={panelOrderSide}
+										assetToken={currentPythToken}
+										{orderbookQuotesQuery}
+									/>
 								{:else if panelStrategy === 'dca'}
 									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
 								{/if}

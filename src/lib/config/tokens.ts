@@ -6,7 +6,7 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
 		{
 			chainId: 8453,
-			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+			address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
 			symbol: 'USDC',
 			decimals: 6,
 			name: 'USD Coin',
@@ -212,7 +212,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
-		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+		address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
 		symbol: 'USDC',
 		decimals: 6,
 		name: 'USD Coin',
