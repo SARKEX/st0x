@@ -11,9 +11,6 @@
 		showDetailsModal,
 		showRulesModal
 	} from '$lib/stores/rewardsStore';
-	import RewardsDetailsModal from './RewardsDetailsModal.svelte';
-	import RewardsLeaderboardModal from './RewardsLeaderboardModal.svelte';
-	import RewardsRulesModal from './RewardsRulesModal.svelte';
 
 	let showDropdown = false;
 	let dropdownRef: HTMLDivElement;
@@ -150,8 +147,3 @@
 		{/if}
 	</div>
 {/if}
-
-<!-- Modals -->
-<RewardsDetailsModal />
-<RewardsLeaderboardModal />
-<RewardsRulesModal />

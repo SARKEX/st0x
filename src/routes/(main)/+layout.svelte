@@ -4,6 +4,9 @@
 	import { goto } from '$app/navigation';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
+	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
+	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
+	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -178,6 +181,11 @@
 				onCancel={$rainlangConfirmationModal.onCancel || (() => {})}
 			/>
 		</div>
+
+		<!-- Rewards Modals (rendered at root level for proper fixed positioning) -->
+		<RewardsDetailsModal />
+		<RewardsLeaderboardModal />
+		<RewardsRulesModal />
 	</div>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-gray-900 text-white">
