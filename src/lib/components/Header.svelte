@@ -189,10 +189,7 @@
 				</div>
 			</div>
 
-			<div
-				class="flex min-w-0 flex-nowrap items-center gap-2 xl:gap-3"
-				bind:this={actionCluster}
-			>
+			<div class="flex min-w-0 flex-nowrap items-center gap-2 xl:gap-3" bind:this={actionCluster}>
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
 						{#each NAV_ITEMS as item}

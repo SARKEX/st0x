@@ -11,7 +11,6 @@ import {
 	type SnapshotBlockRecord
 } from '$lib/server/kv';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
-import { TOKENS } from '$lib/config/tokens';
 
 const POINTS_PER_DOLLAR = 100;
 
@@ -51,6 +50,38 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 		const excludedSet = new Set(excludedWallets.map((w) => w.toLowerCase()));
 
+		// Create a set of block numbers we're looking for
+		const targetBlocks = new Set(monthBlocks.map((b) => b.blockNumber));
+		console.log(`[Recalculate] Target block numbers: ${Array.from(targetBlocks).join(', ')}`);
+
+		// List ALL blobs from blob storage
+		const { blobs: allBlobs } = await list({ prefix: 'snapshots/', limit: 1000 });
+		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
+
+		// Parse blob paths and filter for our target blocks
+		const blobsForMonth: Array<{
+			token: string;
+			blockNumber: number;
+			url: string;
+		}> = [];
+
+		for (const blob of allBlobs) {
+			const pathParts = blob.pathname.split('/');
+			const fileName = pathParts[pathParts.length - 1];
+			const tokenSymbol = pathParts[pathParts.length - 2];
+			const blockNumber = parseInt(fileName.replace('.json', ''));
+
+			if (targetBlocks.has(blockNumber)) {
+				blobsForMonth.push({
+					token: tokenSymbol,
+					blockNumber,
+					url: blob.url
+				});
+			}
+		}
+
+		console.log(`[Recalculate] Found ${blobsForMonth.length} blobs for target blocks`);
+
 		// Initialize new monthly data
 		const monthlyData: MonthlyPointsData = {
 			month,
@@ -62,82 +93,75 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		let totalPointsRecalculated = 0;
 		const tokensProcessed = new Set<string>();
+		const processedBlocks = new Set<number>();
 
-		// Process each block
-		for (const blockRecord of monthBlocks) {
-			console.log(`[Recalculate] Processing block ${blockRecord.blockNumber}`);
+		// Process each blob
+		for (const blobInfo of blobsForMonth) {
+			try {
+				console.log(`[Recalculate] Fetching ${blobInfo.token} at block ${blobInfo.blockNumber}`);
 
-			// Fetch all token snapshots for this block from blob storage
-			for (const token of TOKENS) {
-				const blobPath = `snapshots/${token.symbol}/${blockRecord.blockNumber}.json`;
-
-				try {
-					// List blobs to find the exact URL
-					const { blobs } = await list({ prefix: blobPath });
-
-					if (blobs.length === 0) {
-						console.log(
-							`[Recalculate] No blob found for ${token.symbol} at block ${blockRecord.blockNumber}`
-						);
-						continue;
-					}
-
-					// Fetch the snapshot
-					const response = await fetch(blobs[0].url);
-					if (!response.ok) {
-						console.log(`[Recalculate] Failed to fetch ${blobPath}`);
-						continue;
-					}
-
-					const snapshot: BlockSnapshot = await response.json();
-					tokensProcessed.add(token.symbol);
-
-					// Calculate points from this snapshot
-					const price = snapshot.price?.price ?? 0;
-					const tokenAddress = snapshot.tokenAddress.toLowerCase();
-
-					for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
-						const address = walletAddress.toLowerCase();
-
-						// Skip excluded wallets
-						if (excludedSet.has(address)) {
-							continue;
-						}
-
-						const balance = BigInt(balanceStr);
-						const balanceFloat = Number(balance) / 1e18;
-						const usdValue = balanceFloat * price;
-						const points = usdValue * POINTS_PER_DOLLAR;
-
-						if (!monthlyData.wallets[address]) {
-							monthlyData.wallets[address] = {
-								tokens: {},
-								totalPoints: 0
-							};
-						}
-
-						const wallet = monthlyData.wallets[address];
-
-						if (!wallet.tokens[tokenAddress]) {
-							wallet.tokens[tokenAddress] = {
-								points: 0,
-								lastBalance: '0'
-							};
-						}
-
-						wallet.tokens[tokenAddress].points += points;
-						wallet.tokens[tokenAddress].lastBalance = balanceStr;
-						wallet.totalPoints += points;
-						totalPointsRecalculated += points;
-					}
-				} catch (err) {
-					console.error(`[Recalculate] Error processing ${blobPath}:`, err);
+				const response = await fetch(blobInfo.url);
+				if (!response.ok) {
+					console.log(`[Recalculate] Failed to fetch ${blobInfo.url}`);
+					continue;
 				}
-			}
 
-			monthlyData.blockNumbers.push(blockRecord.blockNumber);
-			monthlyData.snapshotCount += 1;
+				const snapshot: BlockSnapshot = await response.json();
+				tokensProcessed.add(blobInfo.token);
+				processedBlocks.add(blobInfo.blockNumber);
+
+				// Calculate points from this snapshot
+				const price = snapshot.price?.price ?? 0;
+				const tokenAddress = snapshot.tokenAddress.toLowerCase();
+
+				console.log(
+					`[Recalculate] ${blobInfo.token}: price=${price}, balances=${
+						Object.keys(snapshot.balances).length
+					}`
+				);
+
+				for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
+					const address = walletAddress.toLowerCase();
+
+					// Skip excluded wallets
+					if (excludedSet.has(address)) {
+						continue;
+					}
+
+					const balance = BigInt(balanceStr);
+					const balanceFloat = Number(balance) / 1e18;
+					const usdValue = balanceFloat * price;
+					const points = usdValue * POINTS_PER_DOLLAR;
+
+					if (!monthlyData.wallets[address]) {
+						monthlyData.wallets[address] = {
+							tokens: {},
+							totalPoints: 0
+						};
+					}
+
+					const wallet = monthlyData.wallets[address];
+
+					if (!wallet.tokens[tokenAddress]) {
+						wallet.tokens[tokenAddress] = {
+							points: 0,
+							lastBalance: '0'
+						};
+					}
+
+					wallet.tokens[tokenAddress].points += points;
+					wallet.tokens[tokenAddress].lastBalance = balanceStr;
+					wallet.totalPoints += points;
+					totalPointsRecalculated += points;
+				}
+			} catch (err) {
+				console.error(`[Recalculate] Error processing ${blobInfo.url}:`, err);
+			}
 		}
+
+		// Update snapshot count and block numbers
+		monthlyData.blockNumbers = Array.from(processedBlocks).sort((a, b) => a - b);
+		monthlyData.snapshotCount = processedBlocks.size;
 
 		// Save updated data
 		await kvSet(KV_KEYS.monthlyPoints(month), monthlyData);
@@ -153,7 +177,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const walletCount = Object.keys(monthlyData.wallets).length;
 
 		console.log(
-			`[Recalculate] Completed: ${monthlyData.snapshotCount} snapshots, ${walletCount} wallets, ${Math.round(totalPointsRecalculated).toLocaleString()} total points`
+			`[Recalculate] Completed: ${
+				monthlyData.snapshotCount
+			} snapshots, ${walletCount} wallets, ${Math.round(
+				totalPointsRecalculated
+			).toLocaleString()} total points`
 		);
 		console.log(`[Recalculate] Tokens processed: ${Array.from(tokensProcessed).join(', ')}`);
 		console.log(`[Recalculate] Block numbers: ${monthlyData.blockNumbers.join(', ')}`);
@@ -172,7 +200,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			tokensProcessed: Array.from(tokensProcessed),
 			debug: {
 				blocksFound: monthBlocks.length,
-				excludedWalletsCount: excludedWallets.length
+				totalBlobsInStorage: allBlobs.length,
+				blobsMatchingMonth: blobsForMonth.length,
+				excludedWalletsCount: excludedWallets.length,
+				targetBlockNumbers: Array.from(targetBlocks)
 			}
 		});
 	} catch (error) {

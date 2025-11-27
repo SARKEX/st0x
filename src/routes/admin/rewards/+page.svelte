@@ -43,7 +43,10 @@
 		blockNumbers?: number[];
 		debug?: {
 			blocksFound: number;
+			totalBlobsInStorage: number;
+			blobsMatchingMonth: number;
 			excludedWalletsCount: number;
+			targetBlockNumbers: number[];
 		};
 	} | null = null;
 
@@ -863,9 +866,21 @@
 							</p>
 						{/if}
 						{#if recalculateResult.debug}
-							<p class="mt-1 text-xs text-gray-500">
-								Debug: {recalculateResult.debug.blocksFound} blocks found, {recalculateResult.debug.excludedWalletsCount} excluded wallets
-							</p>
+							<div class="mt-2 rounded bg-gray-800/50 p-2 text-xs text-gray-400">
+								<p class="font-medium text-gray-300">Debug Info:</p>
+								<ul class="mt-1 space-y-0.5">
+									<li>KV blocks found for month: {recalculateResult.debug.blocksFound}</li>
+									<li>
+										Target block numbers: {recalculateResult.debug.targetBlockNumbers?.join(', ') ||
+											'none'}
+									</li>
+									<li>Total blobs in storage: {recalculateResult.debug.totalBlobsInStorage}</li>
+									<li>
+										Blobs matching target blocks: {recalculateResult.debug.blobsMatchingMonth}
+									</li>
+									<li>Excluded wallets: {recalculateResult.debug.excludedWalletsCount}</li>
+								</ul>
+							</div>
 						{/if}
 					</div>
 				{/if}
