@@ -7,6 +7,9 @@
 	import { base } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
+	import { injectAnalytics } from '@vercel/analytics/sveltekit';
+	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
+
 
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
@@ -30,6 +33,8 @@
 
 	onMount(() => {
 		initWallet();
+		injectAnalytics();
+		injectSpeedInsights();
 		return () => {
 			document.body.style.overflow = '';
 		};

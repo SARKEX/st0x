@@ -6,16 +6,10 @@
 	export let data: LayoutData;
 
 	const navItems = [
-		{ href: '/admin', label: 'Dashboard' },
+		{ href: '/admin', label: 'DEX Activity' },
+		{ href: '/admin/rewards', label: 'Rewards' },
 		{ href: '/admin/codes', label: 'Access Codes' }
 	];
-
-	async function handleLogout() {
-		// Clear cookies by making a request to a logout endpoint or just navigate away
-		document.cookie = 'auth-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-		document.cookie = 'auth-timestamp=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-		window.location.href = '/admin/login';
-	}
 </script>
 
 <svelte:head>
@@ -46,12 +40,14 @@
 						{/each}
 					</nav>
 				</div>
-				<button
-					on:click={handleLogout}
-					class="rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-800/50 hover:text-white"
-				>
-					Logout
-				</button>
+				<form action="/admin/logout" method="POST">
+					<button
+						type="submit"
+						class="rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-800/50 hover:text-white"
+					>
+						Logout
+					</button>
+				</form>
 			</div>
 		</header>
 

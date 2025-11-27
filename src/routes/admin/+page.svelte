@@ -3,8 +3,9 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import { networks } from '$lib/config/networks';
 	import { TOKENS } from '$lib/config/tokens';
+	import { toDecimal } from '$lib/utils/tokenMath';
 
-	// Build set of valid token addresses (lowercase) from the token list
+	// Build set of valid token addresses (lowercase) from the token list (asset tokens only, not USDC)
 	const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
 
 	// Tab types
@@ -150,12 +151,6 @@
 	// Network config
 	const network = networks[0]; // Base mainnet
 	const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase();
-
-	// All token addresses we care about (for filtering trades)
-	const allRelevantTokens = [
-		USDC_ADDRESS,
-		...TOKENS.map((t) => t.address.toLowerCase())
-	];
 
 	onMount(() => {
 		// Set default custom dates
@@ -308,12 +303,20 @@
 			skip += first;
 		}
 
-		// Filter to only trades involving our tokens (client-side)
-		const relevantTokenSet = new Set(allRelevantTokens);
+		// Filter to only trades involving our asset tokens paired with USDC
+		// A valid trade must have one token as USDC and the other as one of our asset tokens
 		return allTrades.filter((trade) => {
 			const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
 			const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-			return relevantTokenSet.has(inputTokenAddr) || relevantTokenSet.has(outputTokenAddr);
+			if (!inputTokenAddr || !outputTokenAddr) return false;
+
+			const inputIsUsdc = inputTokenAddr === USDC_ADDRESS;
+			const outputIsUsdc = outputTokenAddr === USDC_ADDRESS;
+			const inputIsAsset = validTokenAddresses.has(inputTokenAddr);
+			const outputIsAsset = validTokenAddresses.has(outputTokenAddr);
+
+			// Valid: USDC paired with one of our asset tokens
+			return (inputIsUsdc && outputIsAsset) || (outputIsUsdc && inputIsAsset);
 		});
 	}
 
@@ -348,8 +351,9 @@
 
 			if (!inputToken || !outputToken) continue;
 
-			const inputAmount = parseFloat(input.amount) / Math.pow(10, inputToken.decimals);
-			const outputAmount = parseFloat(output.amount) / Math.pow(10, outputToken.decimals);
+			// Use toDecimal to properly parse Float hex amounts from Rain orderbook
+			const inputAmount = toDecimal(input.amount, inputToken.decimals, { absolute: true }) ?? 0;
+			const outputAmount = toDecimal(output.amount, outputToken.decimals, { absolute: true }) ?? 0;
 
 			// Determine USDC volume and direction
 			// From the taker's perspective: input is what they receive, output is what they give
@@ -369,8 +373,10 @@
 			totalUsdcVolume += usdcAmount;
 
 			// Token stats - track only tokens from our token list (non-USDC)
-			const assetToken = inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputToken : outputToken;
-			const assetAmount = inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputAmount : outputAmount;
+			const assetToken =
+				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputToken : outputToken;
+			const assetAmount =
+				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputAmount : outputAmount;
 			const isBuying = outputToken.address.toLowerCase() === USDC_ADDRESS;
 			const assetAddress = assetToken.address.toLowerCase();
 
@@ -422,9 +428,15 @@
 			}
 		}
 
-		tokenStats = Array.from(tokenMap.values()).sort((a, b) => b.bought + b.sold - (a.bought + a.sold));
-		walletStats = Array.from(walletMap.values()).sort((a, b) => b.totalUsdcVolume - a.totalUsdcVolume);
-		accessCodeStats = Array.from(codeMap.values()).sort((a, b) => b.totalUsdcVolume - a.totalUsdcVolume);
+		tokenStats = Array.from(tokenMap.values()).sort(
+			(a, b) => b.bought + b.sold - (a.bought + a.sold)
+		);
+		walletStats = Array.from(walletMap.values()).sort(
+			(a, b) => b.totalUsdcVolume - a.totalUsdcVolume
+		);
+		accessCodeStats = Array.from(codeMap.values()).sort(
+			(a, b) => b.totalUsdcVolume - a.totalUsdcVolume
+		);
 	}
 
 	function formatTime(date: Date | null): string {
@@ -478,7 +490,7 @@
 
 <div class="py-8">
 	<div class="mb-6 flex items-center justify-between">
-		<h1 class="text-2xl font-semibold">Dashboard</h1>
+		<h1 class="text-2xl font-semibold">DEX Activity</h1>
 		{#if lastUpdated}
 			<span class="text-xs text-gray-500">
 				Auto-refreshes every 30s &middot; Last updated: {formatTime(lastUpdated)}
@@ -539,7 +551,9 @@
 
 	{#if loading && !lastUpdated}
 		<div class="flex items-center gap-3 text-gray-400">
-			<div class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"></div>
+			<div
+				class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+			></div>
 			Loading analytics...
 		</div>
 	{:else}
@@ -630,7 +644,9 @@
 										<td class="py-3 text-right text-red-400">
 											-{formatNumber(token.sold)}
 										</td>
-										<td class="py-3 text-right {token.net >= 0 ? 'text-green-400' : 'text-red-400'}">
+										<td
+											class="py-3 text-right {token.net >= 0 ? 'text-green-400' : 'text-red-400'}"
+										>
 											{token.net >= 0 ? '+' : ''}{formatNumber(token.net)}
 										</td>
 									</tr>
@@ -668,7 +684,11 @@
 										<td class="py-3 text-right text-white">{code.walletCount}</td>
 										<td class="py-3 text-right text-white">{code.tradeCount}</td>
 										<td class="py-3 text-right text-white">{formatUsd(code.totalUsdcVolume)}</td>
-										<td class="py-3 text-right {code.netUsdcSpend >= 0 ? 'text-red-400' : 'text-green-400'}">
+										<td
+											class="py-3 text-right {code.netUsdcSpend >= 0
+												? 'text-red-400'
+												: 'text-green-400'}"
+										>
 											{code.netUsdcSpend >= 0 ? '-' : '+'}{formatUsd(Math.abs(code.netUsdcSpend))}
 										</td>
 									</tr>
@@ -718,7 +738,9 @@
 										</td>
 										<td class="py-3">
 											{#if wallet.accessCode}
-												<code class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]">
+												<code
+													class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]"
+												>
 													{wallet.accessCode}
 												</code>
 											{:else}
@@ -727,8 +749,14 @@
 										</td>
 										<td class="py-3 text-right text-white">{wallet.tradeCount}</td>
 										<td class="py-3 text-right text-white">{formatUsd(wallet.totalUsdcVolume)}</td>
-										<td class="py-3 text-right {wallet.netUsdcSpend >= 0 ? 'text-red-400' : 'text-green-400'}">
-											{wallet.netUsdcSpend >= 0 ? '-' : '+'}{formatUsd(Math.abs(wallet.netUsdcSpend))}
+										<td
+											class="py-3 text-right {wallet.netUsdcSpend >= 0
+												? 'text-red-400'
+												: 'text-green-400'}"
+										>
+											{wallet.netUsdcSpend >= 0 ? '-' : '+'}{formatUsd(
+												Math.abs(wallet.netUsdcSpend)
+											)}
 										</td>
 									</tr>
 								{/each}
