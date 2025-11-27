@@ -2,7 +2,7 @@
 // Awards 100 points per $1 USD of holdings at each snapshot
 // Points accumulate within a calendar month, reset to 0 for new month
 
-import { kv, KV_KEYS, type MonthlyPointsData, type WalletMonthlyPoints } from '$lib/server/kv';
+import { getKv, kvGet, kvSet, KV_KEYS, type MonthlyPointsData, type WalletMonthlyPoints } from '$lib/server/kv';
 import type { BlockSnapshot } from './types';
 
 const POINTS_PER_DOLLAR = 100;
@@ -66,6 +66,7 @@ export async function updateMonthlyPoints(
 	blockNumber: number,
 	timestamp: number
 ): Promise<void> {
+	const kv = await getKv();
 	if (!kv) {
 		console.warn('[Points] KV not configured, skipping monthly points update');
 		return;
@@ -80,7 +81,7 @@ export async function updateMonthlyPoints(
 	console.log(`[Points] Updating monthly points for ${month}, block ${blockNumber}`);
 
 	// Get existing monthly data or create new (handles month rollover automatically)
-	let monthlyData = await kv.get<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
+	let monthlyData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
 	const isNewMonth = !monthlyData;
 
 	if (!monthlyData) {
@@ -138,14 +139,14 @@ export async function updateMonthlyPoints(
 	monthlyData.updatedAt = new Date().toISOString();
 
 	// Save updated data
-	await kv.set(KV_KEYS.monthlyPoints(month), monthlyData);
+	await kvSet(KV_KEYS.monthlyPoints(month), monthlyData);
 
 	// Update list of months
-	const monthsList = (await kv.get<string[]>(KV_KEYS.monthlyPointsList())) || [];
+	const monthsList = (await kvGet<string[]>(KV_KEYS.monthlyPointsList())) || [];
 	if (!monthsList.includes(month)) {
 		monthsList.push(month);
 		monthsList.sort(); // Keep sorted
-		await kv.set(KV_KEYS.monthlyPointsList(), monthsList);
+		await kvSet(KV_KEYS.monthlyPointsList(), monthsList);
 	}
 
 	const totalPointsAwarded = Array.from(walletPoints.values()).reduce(
@@ -162,24 +163,26 @@ export async function updateMonthlyPoints(
  * Get monthly points data for a specific month
  */
 export async function getMonthlyPoints(month: string): Promise<MonthlyPointsData | null> {
+	const kv = await getKv();
 	if (!kv) {
 		console.warn('[Points] KV not configured');
 		return null;
 	}
 
-	return kv.get<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
+	return kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
 }
 
 /**
  * Get list of all months with points data
  */
 export async function getAvailableMonths(): Promise<string[]> {
+	const kv = await getKv();
 	if (!kv) {
 		console.warn('[Points] KV not configured');
 		return [];
 	}
 
-	return (await kv.get<string[]>(KV_KEYS.monthlyPointsList())) || [];
+	return (await kvGet<string[]>(KV_KEYS.monthlyPointsList())) || [];
 }
 
 /**

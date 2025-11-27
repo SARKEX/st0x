@@ -1,22 +1,70 @@
-import { createClient } from '@vercel/kv';
+import { createClient, type RedisClientType } from 'redis';
 import { env } from '$env/dynamic/private';
 
-function getKvClient() {
-	const url = env.KV_REST_API_URL;
-	const token = env.KV_REST_API_TOKEN;
+let kvClient: RedisClientType | null = null;
+let connectionPromise: Promise<RedisClientType | null> | null = null;
 
-	if (!url || !token) {
-		console.warn('Vercel KV not configured. Using mock storage for development.');
+// Get or create the Redis client (lazy initialization)
+export async function getKv(): Promise<RedisClientType | null> {
+	// Return existing client if connected
+	if (kvClient?.isReady) return kvClient;
+
+	// Return existing connection attempt if in progress
+	if (connectionPromise) return connectionPromise;
+
+	const url = env.REDIS_URL;
+
+	if (!url) {
+		console.warn('Redis not configured. Using mock storage for development.');
 		return null;
 	}
 
-	return createClient({
-		url,
-		token
-	});
+	// Start connection
+	connectionPromise = (async () => {
+		try {
+			kvClient = createClient({ url });
+			kvClient.on('error', (err) => console.error('Redis Client Error', err));
+			await kvClient.connect();
+			return kvClient;
+		} catch (err) {
+			console.error('Failed to connect to Redis:', err);
+			kvClient = null;
+			connectionPromise = null;
+			return null;
+		}
+	})();
+
+	return connectionPromise;
 }
 
-export const kv = getKvClient();
+// Helper functions that match @vercel/kv API for easier migration
+export async function kvGet<T>(key: string): Promise<T | null> {
+	const client = await getKv();
+	if (!client) return null;
+
+	const value = await client.get(key);
+	if (!value) return null;
+
+	try {
+		return JSON.parse(value) as T;
+	} catch {
+		return value as unknown as T;
+	}
+}
+
+export async function kvSet(key: string, value: unknown): Promise<void> {
+	const client = await getKv();
+	if (!client) return;
+
+	await client.set(key, JSON.stringify(value));
+}
+
+export async function kvDel(key: string): Promise<void> {
+	const client = await getKv();
+	if (!client) return;
+
+	await client.del(key);
+}
 
 // Key prefixes for organization
 export const KV_KEYS = {

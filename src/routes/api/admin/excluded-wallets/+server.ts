@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verifySessionToken } from '$lib/server/auth';
-import { kv, KV_KEYS } from '$lib/server/kv';
+import { getKv, kvGet, kvSet, KV_KEYS } from '$lib/server/kv';
 
 // Helper to check admin auth from cookies
 function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
@@ -22,11 +22,12 @@ export const GET: RequestHandler = async ({ cookies }) => {
 	}
 
 	// Return empty list if KV not configured (local dev)
+	const kv = await getKv();
 	if (!kv) {
 		return json({ wallets: [], kvConfigured: false });
 	}
 
-	const wallets = (await kv.get<string[]>(KV_KEYS.excludedWallets())) || [];
+	const wallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 
 	return json({ wallets, kvConfigured: true });
 };
@@ -37,6 +38,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const kv = await getKv();
 	if (!kv) {
 		return json({ error: 'KV store not configured. Cannot modify excluded wallets in local dev.' }, { status: 503 });
 	}
@@ -57,7 +59,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		// Get current list
-		const wallets = (await kv.get<string[]>(KV_KEYS.excludedWallets())) || [];
+		const wallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 
 		if (action === 'add') {
 			if (wallets.includes(normalizedAddress)) {
@@ -75,7 +77,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		// Save updated list
-		await kv.set(KV_KEYS.excludedWallets(), wallets);
+		await kvSet(KV_KEYS.excludedWallets(), wallets);
 
 		return json({ success: true, wallets });
 	} catch {

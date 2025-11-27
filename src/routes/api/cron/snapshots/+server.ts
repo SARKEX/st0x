@@ -9,7 +9,7 @@ import {
 	getBlockNumberForTimestamp
 } from '$lib/server/snapshots/generator';
 import { updateMonthlyPoints } from '$lib/server/snapshots/points';
-import { kv, KV_KEYS, type SnapshotBlockRecord, type DailySnapshotRecord } from '$lib/server/kv';
+import { getKv, kvGet, kvSet, KV_KEYS, type SnapshotBlockRecord, type DailySnapshotRecord } from '$lib/server/kv';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -105,6 +105,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Store block records in KV
+		const kv = await getKv();
 		if (kv) {
 			// Store daily record
 			const dailyRecord: DailySnapshotRecord = {
@@ -113,15 +114,15 @@ export const POST: RequestHandler = async ({ request }) => {
 				generatedAt: new Date().toISOString()
 			};
 
-			await kv.set(KV_KEYS.snapshotBlocksByDate(dateStr), dailyRecord);
+			await kvSet(KV_KEYS.snapshotBlocksByDate(dateStr), dailyRecord);
 
 			// Append to master list of all blocks
-			const allBlocks = (await kv.get<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
+			const allBlocks = (await kvGet<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
 			allBlocks.push(...blockRecords);
 
 			// Keep only last 365 days worth of blocks (730 records at 2 per day)
 			const trimmedBlocks = allBlocks.slice(-730);
-			await kv.set(KV_KEYS.snapshotBlocks(), trimmedBlocks);
+			await kvSet(KV_KEYS.snapshotBlocks(), trimmedBlocks);
 
 			console.log(`[Cron] Stored block records in KV`);
 		}

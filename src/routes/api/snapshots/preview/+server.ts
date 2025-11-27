@@ -7,7 +7,7 @@ import {
 	getBlockTimestamp,
 	generateAllTokenSnapshots_v2
 } from '$lib/server/snapshots/generator';
-import { kv, KV_KEYS } from '$lib/server/kv';
+import { kvGet, KV_KEYS } from '$lib/server/kv';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -26,7 +26,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Get timestamp and excluded wallets for response metadata
 		const timestamp = await getBlockTimestamp(targetBlock);
 		const blockDate = new Date(timestamp * 1000).toISOString();
-		const excludedWallets = kv ? (await kv.get<string[]>(KV_KEYS.excludedWallets())) || [] : [];
+		const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 
 		// Calculate per-token summary stats (for tools section)
 		const tokenSummary = snapshots.map((s) => ({

@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { verifySessionToken } from '$lib/server/auth';
-import { kv, KV_KEYS, type RewardsPoolConfig } from '$lib/server/kv';
+import { getKv, kvGet, kvSet, kvDel, KV_KEYS, type RewardsPoolConfig } from '$lib/server/kv';
 
 // Helper to check admin auth from cookies
 function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
@@ -22,6 +22,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	// Return empty data if KV not configured (local dev)
+	const kv = await getKv();
 	if (!kv) {
 		return json({ pools: [], kvConfigured: false });
 	}
@@ -30,7 +31,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 	if (month) {
 		// Get specific month's config
-		const config = await kv.get<RewardsPoolConfig>(KV_KEYS.rewardsPool(month));
+		const config = await kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(month));
 
 		if (!config) {
 			return json({
@@ -44,12 +45,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	// Get all months with pool configs
-	const allMonths = (await kv.get<string[]>(KV_KEYS.rewardsPoolList())) || [];
+	const allMonths = (await kvGet<string[]>(KV_KEYS.rewardsPoolList())) || [];
 
 	// Fetch all pool configs
 	const pools: RewardsPoolConfig[] = [];
 	for (const m of allMonths) {
-		const config = await kv.get<RewardsPoolConfig>(KV_KEYS.rewardsPool(m));
+		const config = await kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(m));
 		if (config) {
 			pools.push(config);
 		}
@@ -67,6 +68,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const kv = await getKv();
 	if (!kv) {
 		return json(
 			{ error: 'KV store not configured. Cannot modify rewards pool in local dev.' },
@@ -107,14 +109,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		};
 
 		// Save pool config
-		await kv.set(KV_KEYS.rewardsPool(month), config);
+		await kvSet(KV_KEYS.rewardsPool(month), config);
 
 		// Update list of months
-		const allMonths = (await kv.get<string[]>(KV_KEYS.rewardsPoolList())) || [];
+		const allMonths = (await kvGet<string[]>(KV_KEYS.rewardsPoolList())) || [];
 		if (!allMonths.includes(month)) {
 			allMonths.push(month);
 			allMonths.sort((a, b) => b.localeCompare(a)); // Sort descending
-			await kv.set(KV_KEYS.rewardsPoolList(), allMonths);
+			await kvSet(KV_KEYS.rewardsPoolList(), allMonths);
 		}
 
 		return json({ success: true, pool: config });
@@ -129,6 +131,7 @@ export const DELETE: RequestHandler = async ({ url, cookies }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const kv = await getKv();
 	if (!kv) {
 		return json(
 			{ error: 'KV store not configured. Cannot modify rewards pool in local dev.' },
@@ -143,14 +146,14 @@ export const DELETE: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	// Delete the pool config
-	await kv.del(KV_KEYS.rewardsPool(month));
+	await kvDel(KV_KEYS.rewardsPool(month));
 
 	// Remove from list
-	const allMonths = (await kv.get<string[]>(KV_KEYS.rewardsPoolList())) || [];
+	const allMonths = (await kvGet<string[]>(KV_KEYS.rewardsPoolList())) || [];
 	const index = allMonths.indexOf(month);
 	if (index !== -1) {
 		allMonths.splice(index, 1);
-		await kv.set(KV_KEYS.rewardsPoolList(), allMonths);
+		await kvSet(KV_KEYS.rewardsPoolList(), allMonths);
 	}
 
 	return json({ success: true });

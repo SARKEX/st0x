@@ -1,20 +1,21 @@
 // API endpoint to list snapshot blocks from KV
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kv, KV_KEYS, type SnapshotBlockRecord, type DailySnapshotRecord } from '$lib/server/kv';
+import { getKv, kvGet, KV_KEYS, type SnapshotBlockRecord, type DailySnapshotRecord } from '$lib/server/kv';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const date = url.searchParams.get('date'); // YYYY-MM-DD format
 		const limit = parseInt(url.searchParams.get('limit') || '100');
 
+		const kv = await getKv();
 		if (!kv) {
 			return json({ error: 'KV storage not configured' }, { status: 503 });
 		}
 
 		// If date is specified, get blocks for that specific date
 		if (date) {
-			const dailyRecord = await kv.get<DailySnapshotRecord>(KV_KEYS.snapshotBlocksByDate(date));
+			const dailyRecord = await kvGet<DailySnapshotRecord>(KV_KEYS.snapshotBlocksByDate(date));
 
 			if (!dailyRecord) {
 				return json({
@@ -34,7 +35,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 
 		// Otherwise, get all blocks (with limit)
-		const allBlocks = (await kv.get<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
+		const allBlocks = (await kvGet<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
 
 		// Sort by block number descending (most recent first)
 		const sortedBlocks = [...allBlocks].sort((a, b) => b.blockNumber - a.blockNumber);

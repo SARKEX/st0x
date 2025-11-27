@@ -1,5 +1,5 @@
 import { verifyMessage } from 'viem';
-import { kv, KV_KEYS } from './kv';
+import { getKv, kvGet, kvSet, kvDel, KV_KEYS } from './kv';
 import { env } from '$env/dynamic/private';
 
 // Types
@@ -106,13 +106,14 @@ export async function createAccessCode(
 		label
 	};
 
+	const kv = await getKv();
 	if (kv) {
-		await kv.set(KV_KEYS.accessCode(finalCode), accessCode);
+		await kvSet(KV_KEYS.accessCode(finalCode), accessCode);
 		// Add to list of all codes
-		const allCodes = (await kv.get<string[]>(KV_KEYS.allCodes())) || [];
+		const allCodes = (await kvGet<string[]>(KV_KEYS.allCodes())) || [];
 		if (!allCodes.includes(finalCode)) {
 			allCodes.push(finalCode);
-			await kv.set(KV_KEYS.allCodes(), allCodes);
+			await kvSet(KV_KEYS.allCodes(), allCodes);
 		}
 	} else {
 		devStore.codes.set(finalCode, accessCode);
@@ -124,8 +125,9 @@ export async function createAccessCode(
 export async function getAccessCode(code: string): Promise<AccessCode | null> {
 	const normalizedCode = code.toUpperCase();
 
+	const kv = await getKv();
 	if (kv) {
-		return await kv.get<AccessCode>(KV_KEYS.accessCode(normalizedCode));
+		return await kvGet<AccessCode>(KV_KEYS.accessCode(normalizedCode));
 	}
 	return devStore.codes.get(normalizedCode) || null;
 }
@@ -163,8 +165,9 @@ export async function incrementCodeUsage(code: string): Promise<void> {
 
 	accessCode.currentUses += 1;
 
+	const kv = await getKv();
 	if (kv) {
-		await kv.set(KV_KEYS.accessCode(normalizedCode), accessCode);
+		await kvSet(KV_KEYS.accessCode(normalizedCode), accessCode);
 	} else {
 		devStore.codes.set(normalizedCode, accessCode);
 	}
@@ -194,8 +197,9 @@ export async function updateAccessCode(
 		accessCode.label = updates.label ?? null;
 	}
 
+	const kv = await getKv();
 	if (kv) {
-		await kv.set(KV_KEYS.accessCode(normalizedCode), accessCode);
+		await kvSet(KV_KEYS.accessCode(normalizedCode), accessCode);
 	} else {
 		devStore.codes.set(normalizedCode, accessCode);
 	}
@@ -204,8 +208,9 @@ export async function updateAccessCode(
 }
 
 export async function listAccessCodes(): Promise<AccessCode[]> {
+	const kv = await getKv();
 	if (kv) {
-		const allCodes = (await kv.get<string[]>(KV_KEYS.allCodes())) || [];
+		const allCodes = (await kvGet<string[]>(KV_KEYS.allCodes())) || [];
 		const codes: AccessCode[] = [];
 		for (const code of allCodes) {
 			const accessCode = await getAccessCode(code);
@@ -221,12 +226,13 @@ export async function listAccessCodes(): Promise<AccessCode[]> {
 export async function deleteAccessCode(code: string): Promise<boolean> {
 	const normalizedCode = code.toUpperCase();
 
+	const kv = await getKv();
 	if (kv) {
-		await kv.del(KV_KEYS.accessCode(normalizedCode));
+		await kvDel(KV_KEYS.accessCode(normalizedCode));
 		// Remove from all codes list
-		const allCodes = (await kv.get<string[]>(KV_KEYS.allCodes())) || [];
-		const filtered = allCodes.filter((c) => c !== normalizedCode);
-		await kv.set(KV_KEYS.allCodes(), filtered);
+		const allCodes = (await kvGet<string[]>(KV_KEYS.allCodes())) || [];
+		const filtered = allCodes.filter((c: string) => c !== normalizedCode);
+		await kvSet(KV_KEYS.allCodes(), filtered);
 		return true;
 	}
 
@@ -238,8 +244,9 @@ export async function deleteAccessCode(code: string): Promise<boolean> {
 export async function isWalletRegistered(address: string): Promise<boolean> {
 	const normalizedAddress = address.toLowerCase();
 
+	const kv = await getKv();
 	if (kv) {
-		const wallet = await kv.get<RegisteredWallet>(KV_KEYS.wallet(normalizedAddress));
+		const wallet = await kvGet<RegisteredWallet>(KV_KEYS.wallet(normalizedAddress));
 		return wallet !== null;
 	}
 	return devStore.wallets.has(normalizedAddress);
@@ -248,8 +255,9 @@ export async function isWalletRegistered(address: string): Promise<boolean> {
 export async function getWalletInfo(address: string): Promise<RegisteredWallet | null> {
 	const normalizedAddress = address.toLowerCase();
 
+	const kv = await getKv();
 	if (kv) {
-		return await kv.get<RegisteredWallet>(KV_KEYS.wallet(normalizedAddress));
+		return await kvGet<RegisteredWallet>(KV_KEYS.wallet(normalizedAddress));
 	}
 	return devStore.wallets.get(normalizedAddress) || null;
 }
@@ -264,13 +272,14 @@ export async function registerWallet(address: string, code: string): Promise<Reg
 		registeredAt: new Date().toISOString()
 	};
 
+	const kv = await getKv();
 	if (kv) {
-		await kv.set(KV_KEYS.wallet(normalizedAddress), wallet);
+		await kvSet(KV_KEYS.wallet(normalizedAddress), wallet);
 		// Add to code's wallet list for analytics
-		const codeWallets = (await kv.get<string[]>(KV_KEYS.codeWallets(normalizedCode))) || [];
+		const codeWallets = (await kvGet<string[]>(KV_KEYS.codeWallets(normalizedCode))) || [];
 		if (!codeWallets.includes(normalizedAddress)) {
 			codeWallets.push(normalizedAddress);
-			await kv.set(KV_KEYS.codeWallets(normalizedCode), codeWallets);
+			await kvSet(KV_KEYS.codeWallets(normalizedCode), codeWallets);
 		}
 	} else {
 		devStore.wallets.set(normalizedAddress, wallet);
@@ -290,8 +299,9 @@ export async function registerWallet(address: string, code: string): Promise<Reg
 export async function getWalletsByCode(code: string): Promise<string[]> {
 	const normalizedCode = code.toUpperCase();
 
+	const kv = await getKv();
 	if (kv) {
-		return (await kv.get<string[]>(KV_KEYS.codeWallets(normalizedCode))) || [];
+		return (await kvGet<string[]>(KV_KEYS.codeWallets(normalizedCode))) || [];
 	}
 	return devStore.codeWallets.get(normalizedCode) || [];
 }
