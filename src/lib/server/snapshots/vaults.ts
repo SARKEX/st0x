@@ -3,6 +3,7 @@
 
 import { networks } from '$lib/config/networks';
 import { TOKENS } from '$lib/config/tokens';
+import { parseFloatHex } from '$lib/utils/tokenMath';
 
 const BATCH_SIZE = 1000;
 
@@ -42,15 +43,14 @@ export interface VaultHolding {
  * Returns vault holdings that can be attributed to their owners
  */
 async function fetchVaults(skip: number, tokenAddresses: string[]): Promise<SubgraphVault[]> {
+	// Note: We fetch all vaults and filter client-side because:
+	// 1. Token entity ID in subgraph may not match token address directly
+	// 2. balance_gt filter may not work if balance is stored as Bytes type
 	const query = `
-		query getVaults($skip: Int!, $first: Int!, $tokenAddresses: [String!]!) {
+		query getVaults($skip: Int!, $first: Int!) {
 			vaults(
 				skip: $skip
 				first: $first
-				where: {
-					token_in: $tokenAddresses
-					balance_gt: "0"
-				}
 			) {
 				id
 				vaultId
@@ -76,8 +76,7 @@ async function fetchVaults(skip: number, tokenAddresses: string[]): Promise<Subg
 			query,
 			variables: {
 				skip,
-				first: BATCH_SIZE,
-				tokenAddresses
+				first: BATCH_SIZE
 			}
 		})
 	});
@@ -91,7 +90,20 @@ async function fetchVaults(skip: number, tokenAddresses: string[]): Promise<Subg
 		throw new Error(`GraphQL error: ${data.errors[0]?.message}`);
 	}
 
-	return data.data?.vaults || [];
+	const allVaults = data.data?.vaults || [];
+
+	// Filter to only our tokens with non-zero balance (client-side)
+	// Note: balance is hex-encoded Rain Float, so we decode it to check
+	const tokenAddressSet = new Set(tokenAddresses.map((a) => a.toLowerCase()));
+	return allVaults.filter((v: SubgraphVault) => {
+		const vaultTokenAddr = (v.token.address || v.token.id).toLowerCase();
+		if (!tokenAddressSet.has(vaultTokenAddr)) return false;
+
+		// Decode Float to check for non-zero balance
+		const decimals = parseInt(v.token.decimals) || 18;
+		const decodedBalance = parseFloatHex(v.balance, decimals);
+		return decodedBalance > 0n;
+	});
 }
 
 /**
@@ -106,29 +118,47 @@ export async function fetchAllVaultHoldings(
 	const allVaults: VaultHolding[] = [];
 
 	console.log(`[Vaults] Fetching vault holdings for ${tokenAddresses.length} tokens`);
+	console.log(`[Vaults] Token addresses: ${tokenAddresses.join(', ')}`);
+	console.log(`[Vaults] Subgraph URL: ${ORDERBOOK_SUBGRAPH_URL}`);
 
-	while (hasMore) {
-		const batch = await fetchVaults(skip, tokenAddresses);
+	try {
+		while (hasMore) {
+			const batch = await fetchVaults(skip, tokenAddresses);
 
-		const holdings: VaultHolding[] = batch.map((v) => ({
-			vaultId: v.vaultId,
-			owner: v.owner.toLowerCase(),
-			tokenAddress: (v.token.address || v.token.id).toLowerCase(),
-			tokenSymbol: v.token.symbol,
-			balance: v.balance,
-			orderbookAddress: v.orderbook.id.toLowerCase()
-		}));
+			console.log(`[Vaults] Raw batch response:`, JSON.stringify(batch.slice(0, 2), null, 2));
 
-		allVaults.push(...holdings);
+			const holdings: VaultHolding[] = batch.map((v) => {
+				// Decode Rain Float hex balance to bigint
+				const decimals = parseInt(v.token.decimals) || 18;
+				const decodedBalance = parseFloatHex(v.balance, decimals);
 
-		console.log(`[Vaults] Batch: ${batch.length} vaults`);
+				return {
+					vaultId: v.vaultId,
+					owner: v.owner.toLowerCase(),
+					tokenAddress: (v.token.address || v.token.id).toLowerCase(),
+					tokenSymbol: v.token.symbol,
+					balance: decodedBalance.toString(), // Store as string representation of bigint
+					orderbookAddress: v.orderbook.id.toLowerCase()
+				};
+			});
 
-		hasMore = batch.length === BATCH_SIZE;
-		if (hasMore) skip += batch.length;
+			allVaults.push(...holdings);
+
+			console.log(`[Vaults] Batch: ${batch.length} vaults`);
+
+			hasMore = batch.length === BATCH_SIZE;
+			if (hasMore) skip += batch.length;
+		}
+
+		console.log(`[Vaults] Total vault holdings fetched: ${allVaults.length}`);
+		if (allVaults.length > 0) {
+			console.log(`[Vaults] Sample holding:`, JSON.stringify(allVaults[0], null, 2));
+		}
+		return allVaults;
+	} catch (error) {
+		console.error(`[Vaults] Failed to fetch vault holdings: ${error}. Continuing without vault attribution.`);
+		return [];
 	}
-
-	console.log(`[Vaults] Total vault holdings fetched: ${allVaults.length}`);
-	return allVaults;
 }
 
 /**

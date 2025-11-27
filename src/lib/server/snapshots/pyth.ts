@@ -1,9 +1,16 @@
 // Pyth price fetcher for historical timestamps
-// Uses Hermes API: /v2/updates/price/{publish_time}
+// Uses Hermes API: /v2/updates/price/{timestamp}
+// Returns the first price update at or after the given timestamp
+// See: https://hermes.pyth.network/docs
+//
+// Note: Pyth stock prices are only available during US market hours.
+// If the requested timestamp is outside market hours, we adjust to the
+// last market close to get valid price data.
 
 import { TOKENS } from '$lib/config/tokens';
+import { getPriceTimestamp } from './marketHours';
 
-const HERMES_BASE_URL = 'https://hermes.pyth.network/v2/updates/price';
+const HERMES_URL = 'https://hermes.pyth.network/v2/updates/price';
 
 interface PythPriceData {
 	price: string;
@@ -57,15 +64,28 @@ function normalizeConfidence(priceData: PythPriceData | null): number | null {
 	return conf * Math.pow(10, expo);
 }
 
+export interface PythPriceResult {
+	prices: Map<string, TokenPrice>;
+	priceTimestamp: number; // The actual timestamp used for the price query (may differ from requested if outside market hours)
+}
+
 /**
- * Fetch historical Pyth prices at a specific Unix timestamp
- * Uses the /v2/updates/price/{publish_time} endpoint
+ * Fetch Pyth prices at a specific historical timestamp
+ * Uses the Hermes API: /v2/updates/price/{timestamp}
+ * Returns the first price update at or after the given timestamp
+ *
+ * Note: If the timestamp is outside US market hours, the timestamp is
+ * automatically adjusted to the last market close to ensure valid price data.
  */
 export async function fetchPythPricesAtTimestamp(
 	timestamp: number,
 	tokenAddresses: string[]
-): Promise<Map<string, TokenPrice>> {
+): Promise<PythPriceResult> {
 	const results = new Map<string, TokenPrice>();
+
+	// Adjust timestamp to last market close if outside market hours
+	// This is necessary because Pyth only has stock price data during US market hours
+	const adjustedTimestamp = getPriceTimestamp(timestamp);
 
 	// Get feed IDs for the requested tokens
 	const tokenFeedMap = new Map<string, { address: string; symbol: string; feedId: string }>();
@@ -83,21 +103,22 @@ export async function fetchPythPricesAtTimestamp(
 
 	if (tokenFeedMap.size === 0) {
 		console.log('[Pyth] No tokens with price feed IDs found');
-		return results;
+		return { prices: results, priceTimestamp: adjustedTimestamp };
 	}
 
 	// Build the query with all feed IDs
+	// Hermes API uses ids[]= format for multiple feeds
 	const feedIds = Array.from(tokenFeedMap.keys());
 	const idsParams = feedIds.map((id) => `ids[]=${id}`).join('&');
-	const url = `${HERMES_BASE_URL}/${timestamp}?${idsParams}`;
 
-	console.log(`[Pyth] Fetching prices at timestamp ${timestamp} for ${feedIds.length} feeds`);
+	const url = `${HERMES_URL}/${adjustedTimestamp}?${idsParams}`;
+	console.log(`[Pyth] Fetching prices at timestamp ${adjustedTimestamp} for ${feedIds.length} feeds`);
 
 	try {
 		const response = await fetch(url);
 
 		if (!response.ok) {
-			console.error(`[Pyth] API error: ${response.status} ${response.statusText}`);
+			console.error(`[Pyth] Hermes API error: ${response.status} ${response.statusText}`);
 			// Return empty prices for all tokens
 			for (const [, tokenInfo] of tokenFeedMap) {
 				results.set(tokenInfo.address, {
@@ -110,7 +131,7 @@ export async function fetchPythPricesAtTimestamp(
 					publishTime: null
 				});
 			}
-			return results;
+			return { prices: results, priceTimestamp: adjustedTimestamp };
 		}
 
 		const data: PythHistoricalResponse = await response.json();
@@ -148,7 +169,8 @@ export async function fetchPythPricesAtTimestamp(
 			}
 		}
 
-		console.log(`[Pyth] Successfully fetched ${results.size} prices`);
+		const successCount = Array.from(results.values()).filter((r) => r.price !== null).length;
+		console.log(`[Pyth] Successfully fetched ${successCount}/${results.size} prices`);
 	} catch (error) {
 		console.error('[Pyth] Error fetching prices:', error);
 		// Return empty prices for all tokens
@@ -165,7 +187,7 @@ export async function fetchPythPricesAtTimestamp(
 		}
 	}
 
-	return results;
+	return { prices: results, priceTimestamp: adjustedTimestamp };
 }
 
 /**
@@ -174,13 +196,16 @@ export async function fetchPythPricesAtTimestamp(
 export async function getTokenPricesAtTimestamp(
 	timestamp: number,
 	tokenAddresses: string[]
-): Promise<Record<string, TokenPrice>> {
-	const priceMap = await fetchPythPricesAtTimestamp(timestamp, tokenAddresses);
+): Promise<{ prices: Record<string, TokenPrice>; priceTimestamp: number }> {
+	const { prices: priceMap, priceTimestamp } = await fetchPythPricesAtTimestamp(
+		timestamp,
+		tokenAddresses
+	);
 	const result: Record<string, TokenPrice> = {};
 
 	for (const [address, price] of priceMap) {
 		result[address] = price;
 	}
 
-	return result;
+	return { prices: result, priceTimestamp };
 }

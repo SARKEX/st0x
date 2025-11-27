@@ -1,76 +1,13 @@
 // API endpoint to preview/generate snapshots without saving
+// Uses the same core generator functions as the cron job
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { fetchAllTransfers, TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
-import { generateAllTokenSnapshots } from '$lib/server/snapshots/processor';
-import { fetchPythPricesAtTimestamp } from '$lib/server/snapshots/pyth';
-import { fetchAllVaultHoldings } from '$lib/server/snapshots/vaults';
+import {
+	getCurrentBlockNumber,
+	getBlockTimestamp,
+	generateAllTokenSnapshots_v2
+} from '$lib/server/snapshots/generator';
 import { kv, KV_KEYS } from '$lib/server/kv';
-import { networks } from '$lib/config/networks';
-
-// Get current block number from RPC
-async function getCurrentBlockNumber(): Promise<number> {
-	const network = networks[0];
-	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
-
-	for (const rpcUrl of rpcUrls) {
-		try {
-			const response = await fetch(rpcUrl, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					method: 'eth_blockNumber',
-					params: [],
-					id: 1
-				})
-			});
-
-			if (!response.ok) continue;
-
-			const data = await response.json();
-			if (data.result) {
-				return parseInt(data.result, 16);
-			}
-		} catch {
-			continue;
-		}
-	}
-
-	throw new Error('Failed to get current block number from any RPC');
-}
-
-// Get block timestamp from RPC
-async function getBlockTimestamp(blockNumber: number): Promise<number> {
-	const network = networks[0];
-	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
-
-	for (const rpcUrl of rpcUrls) {
-		try {
-			const response = await fetch(rpcUrl, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					method: 'eth_getBlockByNumber',
-					params: [`0x${blockNumber.toString(16)}`, false],
-					id: 1
-				})
-			});
-
-			if (!response.ok) continue;
-
-			const data = await response.json();
-			if (data.result?.timestamp) {
-				return parseInt(data.result.timestamp, 16);
-			}
-		} catch {
-			continue;
-		}
-	}
-
-	throw new Error('Failed to get block timestamp from any RPC');
-}
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -83,42 +20,16 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		console.log(`[Preview] Generating preview for block ${targetBlock}`);
 
-		// Get block timestamp
+		// Use the same core generator function as the cron job
+		const snapshots = await generateAllTokenSnapshots_v2(targetBlock);
+
+		// Get timestamp and excluded wallets for response metadata
 		const timestamp = await getBlockTimestamp(targetBlock);
 		const blockDate = new Date(timestamp * 1000).toISOString();
-
-		// Fetch all transfers up to target block
-		const transfers = await fetchAllTransfers(targetBlock, TOKEN_ADDRESSES);
-
-		console.log(`[Preview] Fetched ${transfers.length} transfers`);
-
-		// Fetch Pyth prices at block timestamp
-		console.log(`[Preview] Fetching Pyth prices at timestamp ${timestamp}`);
-		const prices = await fetchPythPricesAtTimestamp(timestamp, TOKEN_ADDRESSES);
-
-		// Fetch vault holdings (to attribute orderbook holdings to vault owners)
-		const vaultHoldings = await fetchAllVaultHoldings(TOKEN_ADDRESSES);
-
-		console.log(`[Preview] Fetched ${vaultHoldings.length} vault holdings`);
-
-		// Fetch excluded wallets from KV
 		const excludedWallets = kv ? (await kv.get<string[]>(KV_KEYS.excludedWallets())) || [] : [];
 
-		console.log(`[Preview] Fetched ${excludedWallets.length} excluded wallets`);
-
-		// Generate snapshots for all tokens with prices and vault attribution
-		const snapshots = generateAllTokenSnapshots(
-			transfers,
-			targetBlock,
-			timestamp,
-			TOKEN_ADDRESSES,
-			prices,
-			vaultHoldings,
-			excludedWallets
-		);
-
-		// Calculate summary stats
-		const summary = snapshots.map((s) => ({
+		// Calculate per-token summary stats (for tools section)
+		const tokenSummary = snapshots.map((s) => ({
 			token: s.tokenSymbol,
 			tokenAddress: s.tokenAddress,
 			holders: Object.keys(s.balances).length,
@@ -127,14 +38,74 @@ export const GET: RequestHandler = async ({ url }) => {
 			priceConfidence: s.price?.confidence ?? null
 		}));
 
+		// Calculate consolidated wallet holdings across all tokens
+		const walletHoldings = new Map<
+			string,
+			{
+				totalValue: number;
+				totalPoints: number;
+				tokens: Array<{
+					symbol: string;
+					address: string;
+					balance: string;
+					value: number;
+					points: number;
+				}>;
+				isExcluded: boolean;
+			}
+		>();
+
+		for (const snapshot of snapshots) {
+			const price = snapshot.price?.price ?? 0;
+
+			for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
+				const address = walletAddress.toLowerCase();
+				const balanceFloat = Number(BigInt(balanceStr)) / 1e18;
+				const value = balanceFloat * price;
+				const points = value * 100; // 100 points per $1
+
+				if (!walletHoldings.has(address)) {
+					walletHoldings.set(address, {
+						totalValue: 0,
+						totalPoints: 0,
+						tokens: [],
+						isExcluded: excludedWallets.includes(address)
+					});
+				}
+
+				const wallet = walletHoldings.get(address)!;
+				wallet.totalValue += value;
+				wallet.totalPoints += points;
+				wallet.tokens.push({
+					symbol: snapshot.tokenSymbol,
+					address: snapshot.tokenAddress,
+					balance: balanceStr,
+					value,
+					points
+				});
+			}
+		}
+
+		// Convert to sorted array (by total value descending)
+		const wallets = Array.from(walletHoldings.entries())
+			.map(([address, data]) => ({
+				address,
+				...data
+			}))
+			.sort((a, b) => b.totalValue - a.totalValue);
+
 		return json({
 			success: true,
 			blockNumber: targetBlock,
 			timestamp,
 			blockDate,
-			transfersProcessed: transfers.length,
 			tokensProcessed: snapshots.length,
-			summary,
+			walletCount: wallets.length,
+			excludedCount: wallets.filter((w) => w.isExcluded).length,
+			// Main data: wallets ranked by holdings
+			wallets,
+			// Tools data: per-token breakdown
+			tokenSummary,
 			snapshots
 		});
 	} catch (error) {

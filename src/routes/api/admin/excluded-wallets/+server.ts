@@ -21,13 +21,14 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	// Return empty list if KV not configured (local dev)
 	if (!kv) {
-		return json({ error: 'KV store not configured' }, { status: 500 });
+		return json({ wallets: [], kvConfigured: false });
 	}
 
 	const wallets = (await kv.get<string[]>(KV_KEYS.excludedWallets())) || [];
 
-	return json({ wallets });
+	return json({ wallets, kvConfigured: true });
 };
 
 // POST - Add or remove excluded wallet
@@ -37,7 +38,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	}
 
 	if (!kv) {
-		return json({ error: 'KV store not configured' }, { status: 500 });
+		return json({ error: 'KV store not configured. Cannot modify excluded wallets in local dev.' }, { status: 503 });
 	}
 
 	try {

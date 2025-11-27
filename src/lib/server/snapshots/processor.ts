@@ -73,21 +73,24 @@ export function calculateBalancesAtBlock(
 
 /**
  * Merge vault holdings into balances, attributing to vault owners
- * Removes the orderbook contract balance and adds vault balances to owners
+ * Note: Orderbook contract balance should already be removed before calling this
  */
 export function mergeVaultHoldings(
 	balances: Map<string, bigint>,
 	vaultHoldings: VaultHolding[],
 	tokenAddress: string
 ): Map<string, bigint> {
-	const orderbookAddr = ORDERBOOK_ADDRESS.toLowerCase();
 	const normalizedToken = tokenAddress.toLowerCase();
-
-	// Remove orderbook contract balance (will be replaced by vault owner attributions)
-	balances.delete(orderbookAddr);
 
 	// Filter vault holdings for this token
 	const tokenVaults = vaultHoldings.filter((v) => v.tokenAddress === normalizedToken);
+
+	console.log(
+		`[MergeVaults] Token ${normalizedToken}: found ${tokenVaults.length} vaults from ${vaultHoldings.length} total`
+	);
+	if (tokenVaults.length > 0) {
+		console.log(`[MergeVaults] Sample vault:`, JSON.stringify(tokenVaults[0], null, 2));
+	}
 
 	// Add vault balances to their owners
 	for (const vault of tokenVaults) {
@@ -145,6 +148,7 @@ function toSnapshotPrice(tokenPrice: TokenPrice | undefined): SnapshotPrice | nu
  * Generate a snapshot for a specific token at a specific block
  * @param vaultHoldings - Optional vault holdings to attribute to owners instead of orderbook
  * @param dynamicExcluded - Optional list of wallet addresses from KV store to mark as excluded
+ * @param priceTimestamp - Optional timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
  */
 export function generateSnapshot(
 	transfers: Transfer[],
@@ -153,14 +157,20 @@ export function generateSnapshot(
 	tokenAddress: string,
 	tokenPrice?: TokenPrice,
 	vaultHoldings?: VaultHolding[],
-	dynamicExcluded?: string[]
+	dynamicExcluded?: string[],
+	priceTimestamp?: number
 ): BlockSnapshot {
 	const token = TOKENS.find((t) => t.address.toLowerCase() === tokenAddress);
 	const result = calculateBalancesAtBlock(transfers, blockNumber, tokenAddress);
 	const totalSupply = result.totalSupply;
 	let balances = result.balances;
 
-	// Merge vault holdings if provided (replaces orderbook balance with vault owner attributions)
+	// Always remove the orderbook contract balance - it's not a real holder
+	// Tokens in the orderbook are held in vaults owned by users
+	const orderbookAddr = ORDERBOOK_ADDRESS.toLowerCase();
+	balances.delete(orderbookAddr);
+
+	// Attribute vault holdings to their owners (if vault data was fetched successfully)
 	if (vaultHoldings && vaultHoldings.length > 0) {
 		balances = mergeVaultHoldings(balances, vaultHoldings, tokenAddress);
 	}
@@ -184,7 +194,8 @@ export function generateSnapshot(
 		balances: tokenBalances,
 		excludedWallets: processed.excludedWallets,
 		totalSupply: totalSupply.toString(),
-		price: toSnapshotPrice(tokenPrice)
+		price: toSnapshotPrice(tokenPrice),
+		priceTimestamp: priceTimestamp ?? null
 	};
 }
 
@@ -193,6 +204,7 @@ export function generateSnapshot(
  * @param prices - Map of token address -> TokenPrice from Pyth
  * @param vaultHoldings - Vault holdings to attribute to owners instead of orderbook
  * @param dynamicExcluded - Optional list of wallet addresses from KV store to mark as excluded
+ * @param priceTimestamp - Optional timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
  */
 export function generateAllTokenSnapshots(
 	transfers: Transfer[],
@@ -201,7 +213,8 @@ export function generateAllTokenSnapshots(
 	tokenAddresses: string[],
 	prices?: Map<string, TokenPrice>,
 	vaultHoldings?: VaultHolding[],
-	dynamicExcluded?: string[]
+	dynamicExcluded?: string[],
+	priceTimestamp?: number
 ): BlockSnapshot[] {
 	return tokenAddresses.map((tokenAddress) =>
 		generateSnapshot(
@@ -211,7 +224,8 @@ export function generateAllTokenSnapshots(
 			tokenAddress,
 			prices?.get(tokenAddress.toLowerCase()),
 			vaultHoldings,
-			dynamicExcluded
+			dynamicExcluded,
+			priceTimestamp
 		)
 	);
 }

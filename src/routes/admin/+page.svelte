@@ -594,7 +594,7 @@
 						? 'border-[#e8be89] text-[#e8be89]'
 						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 				>
-					Token Activity
+					By Token
 				</button>
 				<button
 					on:click={() => (activeTab = 'codes')}
@@ -602,7 +602,7 @@
 						? 'border-[#e8be89] text-[#e8be89]'
 						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 				>
-					Access Codes
+					By Access Code
 				</button>
 				<button
 					on:click={() => (activeTab = 'wallets')}
@@ -610,7 +610,7 @@
 						? 'border-[#e8be89] text-[#e8be89]'
 						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 				>
-					Wallets
+					By Wallet
 				</button>
 			</nav>
 		</div>

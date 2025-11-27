@@ -3,5 +3,5 @@ export * from './types';
 export * from './scraper';
 export * from './processor';
 export * from './pyth';
-export * from './averages';
+export * from './points';
 export * from './vaults';

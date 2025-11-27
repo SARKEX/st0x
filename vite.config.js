@@ -1,11 +1,15 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 import { svelteTesting } from '@testing-library/svelte/vite';
+import path from 'path';
 
 export default defineConfig(({ mode }) => ({
 	plugins: [sveltekit(), svelteTesting()],
 	resolve: {
-	  conditions: mode === 'test' ? ['browser'] : []
+	  conditions: mode === 'test' ? ['browser'] : [],
+	  alias: {
+	    '@vercel/speed-insights/sveltekit': path.resolve('./node_modules/@vercel/speed-insights/dist/sveltekit/index.mjs')
+	  }
 	},
 	define: {
 	  'process.env': {}

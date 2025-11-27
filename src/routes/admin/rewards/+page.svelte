@@ -2,41 +2,50 @@
 	import { onMount } from 'svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import type { BlockSnapshot } from '$lib/server/snapshots/types';
+	import { TOKENS } from '$lib/config/tokens';
 
 	// Tab management
-	type Tab = 'tvl' | 'preview' | 'excluded';
-	let activeTab: Tab = 'tvl';
+	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'pool';
+	let activeTab: Tab = 'points';
 
 	// Hide excluded wallets toggle (hidden by default)
 	let hideExcluded = true;
 
-	// ===== TVL Tab State =====
-	let tvlLoading = false;
-	let tvlError = '';
+	// ===== Points Tab State =====
+	let pointsLoading = false;
+	let pointsError = '';
 	let availableMonths: string[] = [];
 	let selectedMonth = '';
 	let monthlyData: {
 		month: string;
 		snapshotCount: number;
 		blockNumbers: number[];
-		wallets: {
-			[address: string]: {
-				tokens: {
-					[tokenAddress: string]: {
-						balanceSum: string;
-						valueSum: number;
-						snapshotCount: number;
-					};
-				};
-				totalValueSum: number;
-				snapshotCount: number;
-			};
-		};
+		walletCount: number;
+		wallets: Array<{
+			address: string;
+			totalPoints: number;
+			tokenCount: number;
+		}>;
 		updatedAt: string;
 	} | null = null;
 
 	// Excluded wallets from the monthly data
 	let excludedWalletsInData: Set<string> = new Set();
+
+	// ===== Snapshots Tab State =====
+	interface SnapshotBlockRecord {
+		blockNumber: number;
+		timestamp: number;
+		date: string;
+		generatedAt: string;
+	}
+	let snapshotsLoading = false;
+	let snapshotsError = '';
+	let canonicalBlocks: SnapshotBlockRecord[] = [];
+	let selectedCanonicalBlock: number | null = null;
+	let selectedSnapshotToken: string = '';
+	let snapshotData: BlockSnapshot | null = null;
+	let snapshotDataLoading = false;
 
 	// ===== Preview Tab State =====
 	let blockNumber = '';
@@ -49,7 +58,22 @@
 		blockDate: string;
 		transfersProcessed: number;
 		tokensProcessed: number;
-		summary: Array<{
+		walletCount: number;
+		excludedCount: number;
+		wallets: Array<{
+			address: string;
+			totalValue: number;
+			totalPoints: number;
+			tokens: Array<{
+				symbol: string;
+				address: string;
+				balance: string;
+				value: number;
+				points: number;
+			}>;
+			isExcluded: boolean;
+		}>;
+		tokenSummary: Array<{
 			token: string;
 			tokenAddress: string;
 			holders: number;
@@ -59,7 +83,8 @@
 		}>;
 		snapshots: BlockSnapshot[];
 	} | null = null;
-	let selectedToken: string | null = null;
+	let selectedWallet: string | null = null;
+	let selectedTokenFilter: string = ''; // token symbol (defaults to first token)
 
 	// ===== Excluded Wallets Tab State =====
 	let excludedLoading = false;
@@ -68,20 +93,49 @@
 	let newWalletAddress = '';
 	let addingWallet = false;
 
+	// ===== Rewards Pool Tab State =====
+	interface RewardsPoolConfig {
+		month: string;
+		poolAmount: number;
+		kickerAmount: number;
+		kickerTvlTarget: number;
+		kickerHit: boolean;
+		notes: string;
+		updatedAt: string;
+	}
+	let poolLoading = false;
+	let poolError = '';
+	let poolConfigs: RewardsPoolConfig[] = [];
+	let editingPool: RewardsPoolConfig | null = null;
+	let savingPool = false;
+
+	// Form state for new/edit pool
+	let poolFormMonth = '';
+	let poolFormAmount = 0;
+	let poolFormKickerAmount = 0;
+	let poolFormKickerTarget = 0;
+	let poolFormKickerHit = false;
+	let poolFormNotes = '';
+
+	// Token list for snapshots tab
+	const tokenSymbols = TOKENS.map((t) => t.symbol);
+
 	onMount(() => {
 		loadAvailableMonths();
 		loadExcludedWallets();
+		loadCanonicalBlocks();
+		loadPoolConfigs();
 	});
 
-	// ===== TVL Functions =====
+	// ===== Points Functions =====
 	async function loadAvailableMonths() {
 		try {
-			const res = await fetch('/api/snapshots/averages');
+			const res = await fetch('/api/snapshots/points');
 			const data = await res.json();
 			if (data.availableMonths) {
 				availableMonths = data.availableMonths;
 				if (availableMonths.length > 0 && !selectedMonth) {
-					selectedMonth = availableMonths[0];
+					selectedMonth = availableMonths[availableMonths.length - 1]; // Most recent month
 					await loadMonthlyData();
 				}
 			}
@@ -93,11 +147,11 @@
 	async function loadMonthlyData() {
 		if (!selectedMonth) return;
 
-		tvlLoading = true;
-		tvlError = '';
+		pointsLoading = true;
+		pointsError = '';
 
 		try {
-			const res = await fetch(`/api/snapshots/averages?month=${selectedMonth}`);
+			const res = await fetch(`/api/snapshots/points?month=${selectedMonth}`);
 			const data = await res.json();
 
 			if (!res.ok) {
@@ -106,28 +160,22 @@
 
 			monthlyData = data;
 
-			// Extract excluded wallets from snapshot data
-			// We'll need to get this from the API or store
+			// Update excluded wallets set
 			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
 		} catch (err) {
-			tvlError = err instanceof Error ? err.message : 'Unknown error';
+			pointsError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
-			tvlLoading = false;
+			pointsLoading = false;
 		}
 	}
 
 	function getWalletRows() {
 		if (!monthlyData?.wallets) return [];
 
-		const rows = Object.entries(monthlyData.wallets).map(([address, data]) => {
-			const avgValue = data.snapshotCount > 0 ? data.totalValueSum / data.snapshotCount : 0;
-			const isExcluded = excludedWalletsInData.has(address.toLowerCase());
-
+		const rows = monthlyData.wallets.map((wallet) => {
+			const isExcluded = excludedWalletsInData.has(wallet.address.toLowerCase());
 			return {
-				address,
-				avgValue,
-				snapshotCount: data.snapshotCount,
-				tokens: data.tokens,
+				...wallet,
 				isExcluded
 			};
 		});
@@ -135,14 +183,94 @@
 		// Filter if hiding excluded
 		const filtered = hideExcluded ? rows.filter((r) => !r.isExcluded) : rows;
 
-		// Sort by average value descending
-		return filtered.sort((a, b) => b.avgValue - a.avgValue);
+		// Already sorted by API (by totalPoints descending)
+		return filtered;
 	}
 
-	function getTotalTVL() {
+	function getTotalPoints() {
 		const rows = getWalletRows();
-		return rows.reduce((sum, r) => sum + r.avgValue, 0);
+		return rows.reduce((sum, r) => sum + r.totalPoints, 0);
 	}
+
+	// ===== Snapshots Functions =====
+	async function loadCanonicalBlocks() {
+		snapshotsLoading = true;
+		snapshotsError = '';
+
+		try {
+			const res = await fetch('/api/snapshots/blocks?limit=200');
+			const data = await res.json();
+
+			if (!res.ok || !data.success) {
+				throw new Error(data.error || 'Failed to load snapshot blocks');
+			}
+
+			canonicalBlocks = data.blocks || [];
+
+			// Default to first block and first token
+			if (canonicalBlocks.length > 0 && !selectedCanonicalBlock) {
+				selectedCanonicalBlock = canonicalBlocks[0].blockNumber;
+			}
+			if (tokenSymbols.length > 0 && !selectedSnapshotToken) {
+				selectedSnapshotToken = tokenSymbols[0];
+			}
+
+			// Load snapshot data for default selection
+			if (selectedCanonicalBlock && selectedSnapshotToken) {
+				await loadSnapshotData();
+			}
+		} catch (err) {
+			snapshotsError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			snapshotsLoading = false;
+		}
+	}
+
+	async function loadSnapshotData() {
+		if (!selectedCanonicalBlock || !selectedSnapshotToken) return;
+
+		snapshotDataLoading = true;
+		snapshotData = null;
+
+		try {
+			const res = await fetch(
+				`/api/snapshots/get?block=${selectedCanonicalBlock}&token=${selectedSnapshotToken}`
+			);
+			const data = await res.json();
+
+			if (!res.ok || !data.success) {
+				throw new Error(data.error || 'Snapshot not found');
+			}
+
+			snapshotData = data.snapshot;
+		} catch (err) {
+			snapshotsError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			snapshotDataLoading = false;
+		}
+	}
+
+	function selectCanonicalBlock(block: number) {
+		selectedCanonicalBlock = block;
+		loadSnapshotData();
+	}
+
+	function selectSnapshotToken(token: string) {
+		selectedSnapshotToken = token;
+		loadSnapshotData();
+	}
+
+	// Group canonical blocks by date
+	$: blocksByDate = (() => {
+		const grouped: Record<string, SnapshotBlockRecord[]> = {};
+		for (const block of canonicalBlocks) {
+			if (!grouped[block.date]) {
+				grouped[block.date] = [];
+			}
+			grouped[block.date].push(block);
+		}
+		return grouped;
+	})();
 
 	// ===== Preview Functions =====
 	async function generatePreview() {
@@ -154,7 +282,8 @@
 		previewLoading = true;
 		previewError = '';
 		previewResult = null;
-		selectedToken = null;
+		selectedWallet = null;
+		selectedTokenFilter = '';
 
 		try {
 			const res = await fetch(`/api/snapshots/preview?block=${blockNumber.trim()}`);
@@ -165,6 +294,10 @@
 			}
 
 			previewResult = data;
+			// Default to first token
+			if (data.tokenSummary?.length > 0) {
+				selectedTokenFilter = data.tokenSummary[0].token;
+			}
 		} catch (err) {
 			previewError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -172,17 +305,40 @@
 		}
 	}
 
-	function getSelectedSnapshot(): BlockSnapshot | null {
-		if (!previewResult || !selectedToken) return null;
-		return previewResult.snapshots.find((s) => s.tokenSymbol === selectedToken) || null;
-	}
+	// Get filtered preview wallets for selected token (respecting hideExcluded toggle)
+	$: previewWallets = (() => {
+		if (!previewResult?.wallets || !selectedTokenFilter) return [];
 
-	$: selectedSnapshot = getSelectedSnapshot();
-	$: sortedBalances = selectedSnapshot
-		? Object.entries(selectedSnapshot.balances)
-				.filter(([addr]) => !hideExcluded || !selectedSnapshot!.excludedWallets.includes(addr.toLowerCase()))
-				.sort(([, a], [, b]) => parseFloat(b) - parseFloat(a))
-		: [];
+		// Filter to only wallets holding the selected token
+		let wallets = previewResult.wallets
+			.map((w) => {
+				const tokenData = w.tokens.find((t) => t.symbol === selectedTokenFilter);
+				if (!tokenData) return null;
+				return {
+					...w,
+					tokens: [tokenData],
+					totalValue: tokenData.value,
+					totalPoints: tokenData.points
+				};
+			})
+			.filter((w): w is NonNullable<typeof w> => w !== null);
+
+		// Filter excluded if toggle is on
+		if (hideExcluded) {
+			wallets = wallets.filter((w) => !w.isExcluded);
+		}
+
+		// Sort by value
+		return wallets.sort((a, b) => b.totalValue - a.totalValue);
+	})();
+
+	// Get selected wallet details
+	$: selectedWalletData = previewWallets.find((w) => w.address === selectedWallet) || null;
+
+	// Get the actual BlockSnapshot for the selected token (what would be stored to blob)
+	$: selectedTokenSnapshot = previewResult?.snapshots.find(
+		(s) => s.tokenSymbol === selectedTokenFilter
+	) || null;
 
 	// ===== Excluded Wallets Functions =====
 	async function loadExcludedWallets() {
@@ -268,6 +424,119 @@
 		}
 	}
 
+	// ===== Rewards Pool Functions =====
+	async function loadPoolConfigs() {
+		poolLoading = true;
+		poolError = '';
+
+		try {
+			const res = await fetch('/api/admin/rewards-pool');
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to load pool configs');
+			}
+
+			poolConfigs = data.pools || [];
+		} catch (err) {
+			poolError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			poolLoading = false;
+		}
+	}
+
+	function startNewPool() {
+		// Default to current month
+		const now = new Date();
+		const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+		poolFormMonth = currentMonth;
+		poolFormAmount = 0;
+		poolFormKickerAmount = 0;
+		poolFormKickerTarget = 0;
+		poolFormKickerHit = false;
+		poolFormNotes = '';
+		editingPool = null;
+	}
+
+	function editPool(config: RewardsPoolConfig) {
+		poolFormMonth = config.month;
+		poolFormAmount = config.poolAmount;
+		poolFormKickerAmount = config.kickerAmount;
+		poolFormKickerTarget = config.kickerTvlTarget;
+		poolFormKickerHit = config.kickerHit;
+		poolFormNotes = config.notes;
+		editingPool = config;
+	}
+
+	function cancelPoolEdit() {
+		editingPool = null;
+		poolFormMonth = '';
+	}
+
+	async function savePool() {
+		if (!poolFormMonth) {
+			poolError = 'Month is required';
+			return;
+		}
+
+		savingPool = true;
+		poolError = '';
+
+		try {
+			const res = await fetch('/api/admin/rewards-pool', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					month: poolFormMonth,
+					poolAmount: poolFormAmount,
+					kickerAmount: poolFormKickerAmount,
+					kickerTvlTarget: poolFormKickerTarget,
+					kickerHit: poolFormKickerHit,
+					notes: poolFormNotes
+				})
+			});
+
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to save pool config');
+			}
+
+			// Reload configs
+			await loadPoolConfigs();
+
+			// Clear form
+			editingPool = null;
+			poolFormMonth = '';
+		} catch (err) {
+			poolError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			savingPool = false;
+		}
+	}
+
+	async function deletePool(month: string) {
+		if (!confirm(`Delete rewards pool config for ${month}?`)) return;
+
+		try {
+			const res = await fetch(`/api/admin/rewards-pool?month=${month}`, {
+				method: 'DELETE'
+			});
+
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to delete pool config');
+			}
+
+			// Reload configs
+			await loadPoolConfigs();
+		} catch (err) {
+			poolError = err instanceof Error ? err.message : 'Unknown error';
+		}
+	}
+
 	// ===== Utility Functions =====
 	function formatNumber(value: string | number, decimals = 18): string {
 		const num = typeof value === 'string' ? parseFloat(value) / Math.pow(10, decimals) : value;
@@ -295,7 +564,7 @@
 	}
 
 	$: walletRows = getWalletRows();
-	$: totalTVL = getTotalTVL();
+	$: totalPoints = getTotalPoints();
 </script>
 
 <svelte:head>
@@ -305,19 +574,27 @@
 <div class="py-8">
 	<div class="mb-6">
 		<h1 class="text-2xl font-semibold">Rewards</h1>
-		<p class="mt-1 text-sm text-gray-400">Manage snapshots, TVL tracking, and excluded wallets</p>
+		<p class="mt-1 text-sm text-gray-400">Manage snapshots, points tracking, and excluded wallets</p>
 	</div>
 
 	<!-- Tab Navigation -->
 	<div class="mb-6 border-b border-gray-700">
 		<nav class="-mb-px flex gap-6">
 			<button
-				on:click={() => (activeTab = 'tvl')}
-				class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'tvl'
+				on:click={() => (activeTab = 'points')}
+				class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'points'
 					? 'border-[#e8be89] text-[#e8be89]'
 					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 			>
-				Monthly TVL
+				Monthly Points
+			</button>
+			<button
+				on:click={() => (activeTab = 'snapshots')}
+				class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'snapshots'
+					? 'border-[#e8be89] text-[#e8be89]'
+					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+			>
+				Snapshots
 			</button>
 			<button
 				on:click={() => (activeTab = 'preview')}
@@ -325,7 +602,7 @@
 					? 'border-[#e8be89] text-[#e8be89]'
 					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 			>
-				Snapshot Preview
+				Snapshot Tester
 			</button>
 			<button
 				on:click={() => (activeTab = 'excluded')}
@@ -335,11 +612,19 @@
 			>
 				Excluded Wallets
 			</button>
+			<button
+				on:click={() => (activeTab = 'pool')}
+				class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'pool'
+					? 'border-[#e8be89] text-[#e8be89]'
+					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+			>
+				Rewards Pool
+			</button>
 		</nav>
 	</div>
 
-	<!-- Hide Excluded Toggle (shown on TVL and Preview tabs) -->
-	{#if activeTab === 'tvl' || activeTab === 'preview'}
+	<!-- Hide Excluded Toggle (shown on Points and Preview tabs) -->
+	{#if activeTab === 'points' || activeTab === 'preview'}
 		<div class="mb-4">
 			<label class="flex items-center gap-2 text-sm text-gray-300">
 				<input
@@ -352,8 +637,8 @@
 		</div>
 	{/if}
 
-	<!-- TVL Tab -->
-	{#if activeTab === 'tvl'}
+	<!-- Points Tab -->
+	{#if activeTab === 'points'}
 		<div class="space-y-6">
 			<!-- Month Selector -->
 			<Card>
@@ -378,15 +663,15 @@
 				</div>
 			</Card>
 
-			{#if tvlError}
+			{#if pointsError}
 				<div
 					class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300"
 				>
-					{tvlError}
+					{pointsError}
 				</div>
 			{/if}
 
-			{#if tvlLoading}
+			{#if pointsLoading}
 				<Card>
 					<div class="flex items-center justify-center gap-3 py-8 text-gray-400">
 						<div
@@ -396,13 +681,13 @@
 					</div>
 				</Card>
 			{:else if monthlyData}
-				<!-- TVL Summary -->
+				<!-- Points Summary -->
 				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
 					<Card>
 						<div class="text-center">
-							<p class="text-3xl font-bold text-[#e8be89]">{formatUsd(totalTVL)}</p>
+							<p class="text-3xl font-bold text-[#e8be89]">{totalPoints.toLocaleString()}</p>
 							<p class="mt-1 text-sm text-gray-400">
-								Average TVL {hideExcluded ? '(excl. excluded)' : '(all wallets)'}
+								Total Points {hideExcluded ? '(excl. excluded)' : '(all wallets)'}
 							</p>
 						</div>
 					</Card>
@@ -422,9 +707,12 @@
 					</Card>
 				</div>
 
-				<!-- Wallet TVL Table -->
+				<!-- Wallet Points Table -->
 				<Card>
-					<h2 class="mb-4 text-lg font-semibold text-white">Wallet TVL Rankings</h2>
+					<h2 class="mb-4 text-lg font-semibold text-white">Wallet Points Rankings</h2>
+					<p class="mb-4 text-sm text-gray-400">
+						Points = 100 per $1 USD of holdings at each snapshot
+					</p>
 					{#if walletRows.length === 0}
 						<p class="py-4 text-center text-gray-400">No wallet data available</p>
 					{:else}
@@ -436,8 +724,8 @@
 									<tr>
 										<th class="pb-3 pr-4">#</th>
 										<th class="pb-3 pr-4">Wallet</th>
-										<th class="pb-3 pr-4 text-right">Avg. Value</th>
-										<th class="pb-3 text-right">Snapshots</th>
+										<th class="pb-3 pr-4 text-right">Points</th>
+										<th class="pb-3 text-right">Tokens</th>
 									</tr>
 								</thead>
 								<tbody class="divide-y divide-gray-800">
@@ -466,10 +754,10 @@
 												</div>
 											</td>
 											<td class="py-2 pr-4 text-right font-mono text-white">
-												{formatUsd(row.avgValue)}
+												{row.totalPoints.toLocaleString()}
 											</td>
 											<td class="py-2 text-right text-gray-400">
-												{row.snapshotCount}
+												{row.tokenCount}
 											</td>
 										</tr>
 									{/each}
@@ -490,6 +778,146 @@
 					</p>
 				</Card>
 			{/if}
+		</div>
+	{/if}
+
+	<!-- Snapshots Tab -->
+	{#if activeTab === 'snapshots'}
+		<div class="flex gap-6">
+			<!-- Left Panel: Block List -->
+			<div class="w-80 flex-shrink-0">
+				<Card>
+					<h2 class="mb-4 text-lg font-semibold text-white">Canonical Blocks</h2>
+					<p class="mb-4 text-xs text-gray-400">
+						Blocks selected by the daily cron job for rewards calculation
+					</p>
+
+					{#if snapshotsLoading}
+						<div class="flex items-center justify-center gap-3 py-8 text-gray-400">
+							<div
+								class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+							></div>
+							Loading...
+						</div>
+					{:else if canonicalBlocks.length === 0}
+						<p class="py-4 text-center text-sm text-gray-400">
+							No canonical blocks yet. Run the cron job to generate snapshots.
+						</p>
+					{:else}
+						<div class="max-h-[500px] space-y-4 overflow-y-auto">
+							{#each Object.entries(blocksByDate).slice(0, 30) as [date, blocks]}
+								<div>
+									<h3 class="mb-2 text-xs font-medium text-gray-400">{date}</h3>
+									<div class="space-y-1">
+										{#each blocks as block}
+											<button
+												on:click={() => selectCanonicalBlock(block.blockNumber)}
+												class="w-full rounded px-3 py-2 text-left text-sm transition-colors {selectedCanonicalBlock ===
+												block.blockNumber
+													? 'bg-[#e8be89] text-black'
+													: 'bg-gray-800 text-white hover:bg-gray-700'}"
+											>
+												<div class="font-mono">{block.blockNumber.toLocaleString()}</div>
+												<div class="text-xs opacity-70">
+													{new Date(block.timestamp * 1000).toLocaleTimeString()}
+												</div>
+											</button>
+										{/each}
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</Card>
+			</div>
+
+			<!-- Right Panel: Snapshot Data -->
+			<div class="flex-1">
+				<Card>
+					<div class="mb-4 flex items-center justify-between">
+						<h2 class="text-lg font-semibold text-white">Snapshot Data</h2>
+						<div class="flex items-center gap-2">
+							<label for="snapshotToken" class="text-sm text-gray-400">Token:</label>
+							<select
+								id="snapshotToken"
+								bind:value={selectedSnapshotToken}
+								on:change={() => loadSnapshotData()}
+								class="rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+							>
+								{#each tokenSymbols as token}
+									<option value={token}>{token}</option>
+								{/each}
+							</select>
+						</div>
+					</div>
+
+					{#if snapshotsError}
+						<div
+							class="mb-4 rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300"
+						>
+							{snapshotsError}
+						</div>
+					{/if}
+
+					{#if !selectedCanonicalBlock}
+						<p class="py-8 text-center text-gray-400">Select a block to view its snapshot data</p>
+					{:else if snapshotDataLoading}
+						<div class="flex items-center justify-center gap-3 py-8 text-gray-400">
+							<div
+								class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+							></div>
+							Loading snapshot...
+						</div>
+					{:else if snapshotData}
+						<!-- Snapshot Summary -->
+						<div class="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+							<div class="rounded-lg bg-gray-800/50 p-3 text-center">
+								<p class="text-lg font-bold text-[#e8be89]">
+									{Object.keys(snapshotData.balances).length}
+								</p>
+								<p class="text-xs text-gray-400">Holders</p>
+							</div>
+							<div class="rounded-lg bg-gray-800/50 p-3 text-center">
+								<p class="text-lg font-bold text-[#e8be89]">
+									{snapshotData.price?.price ? '$' + snapshotData.price.price.toFixed(2) : 'N/A'}
+								</p>
+								<p class="text-xs text-gray-400">Price</p>
+							</div>
+							<div class="rounded-lg bg-gray-800/50 p-3 text-center">
+								<p class="text-lg font-bold text-[#e8be89]">
+									{snapshotData.excludedWallets.length}
+								</p>
+								<p class="text-xs text-gray-400">Excluded</p>
+							</div>
+							<div class="rounded-lg bg-gray-800/50 p-3 text-center">
+								<p class="text-sm font-mono text-[#e8be89]">
+									{snapshotData.priceTimestamp
+										? new Date(snapshotData.priceTimestamp * 1000).toLocaleString()
+										: 'N/A'}
+								</p>
+								<p class="text-xs text-gray-400">Price Timestamp</p>
+							</div>
+						</div>
+
+						<!-- Raw JSON -->
+						<details>
+							<summary class="cursor-pointer text-sm font-medium text-gray-300 hover:text-white">
+								View Raw JSON
+							</summary>
+							<pre
+								class="mt-2 max-h-96 overflow-auto rounded-lg bg-gray-800/50 p-4 text-xs text-gray-300">{JSON.stringify(
+									snapshotData,
+									null,
+									2
+								)}</pre>
+						</details>
+					{:else}
+						<p class="py-8 text-center text-gray-400">
+							Snapshot not found for {selectedSnapshotToken} at block {selectedCanonicalBlock}
+						</p>
+					{/if}
+				</Card>
+			</div>
 		</div>
 	{/if}
 
@@ -540,161 +968,105 @@
 			{/if}
 
 			{#if previewResult && !previewLoading}
-				<!-- Block Info -->
-				<Card>
-					<h2 class="mb-4 text-lg font-semibold text-white">Block Information</h2>
-					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-						<div>
-							<p class="text-sm text-gray-400">Block Number</p>
-							<p class="font-mono text-lg text-white">
+				<!-- Summary Stats -->
+				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+					<Card>
+						<div class="text-center">
+							<p class="text-2xl font-bold text-[#e8be89]">
 								{previewResult.blockNumber.toLocaleString()}
 							</p>
+							<p class="mt-1 text-sm text-gray-400">Block Number</p>
 						</div>
-						<div>
-							<p class="text-sm text-gray-400">Timestamp</p>
-							<p class="text-lg text-white">{previewResult.blockDate}</p>
-						</div>
-						<div>
-							<p class="text-sm text-gray-400">Transfers Processed</p>
-							<p class="text-lg text-white">
-								{previewResult.transfersProcessed.toLocaleString()}
+					</Card>
+					<Card>
+						<div class="text-center">
+							<p class="text-2xl font-bold text-[#e8be89]">{previewWallets.length}</p>
+							<p class="mt-1 text-sm text-gray-400">
+								Wallets {hideExcluded ? `(${previewResult.excludedCount} excluded)` : ''}
 							</p>
 						</div>
-						<div>
-							<p class="text-sm text-gray-400">Tokens</p>
-							<p class="text-lg text-white">{previewResult.tokensProcessed}</p>
-						</div>
-					</div>
-				</Card>
-
-				<!-- Token Summary -->
-				<Card>
-					<h2 class="mb-4 text-lg font-semibold text-white">Token Summary</h2>
-					<div class="overflow-x-auto">
-						<table class="w-full text-left text-sm">
-							<thead class="border-b border-gray-700 text-gray-400">
-								<tr>
-									<th class="pb-3 pr-4">Token</th>
-									<th class="pb-3 pr-4 text-right">Holders</th>
-									<th class="pb-3 pr-4 text-right">Total Supply</th>
-									<th class="pb-3 pr-4 text-right">Price</th>
-									<th class="pb-3 text-right">Confidence</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-800">
-								{#each previewResult.summary as token}
-									<tr
-										class="cursor-pointer transition-colors hover:bg-gray-800/50"
-										class:bg-gray-800={selectedToken === token.token}
-										on:click={() => (selectedToken = token.token)}
-									>
-										<td class="py-3 pr-4">
-											<span class="font-medium text-[#e8be89]">{token.token}</span>
-										</td>
-										<td class="py-3 pr-4 text-right text-white">{token.holders}</td>
-										<td class="py-3 pr-4 text-right font-mono text-white">
-											{formatNumber(token.totalSupply)}
-										</td>
-										<td class="py-3 pr-4 text-right text-white">
-											{formatPrice(token.price)}
-										</td>
-										<td class="py-3 text-right text-gray-400">
-											{token.priceConfidence !== null
-												? '±$' + token.priceConfidence.toFixed(4)
-												: '-'}
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-					<p class="mt-4 text-sm text-gray-500">Click a token to view holder details</p>
-				</Card>
-
-				<!-- Selected Token Details -->
-				{#if selectedSnapshot}
+					</Card>
 					<Card>
-						<div class="mb-4 flex items-center justify-between">
-							<h2 class="text-lg font-semibold text-white">
-								{selectedSnapshot.tokenSymbol} Holders
-							</h2>
-							<span class="text-sm text-gray-400">
-								{sortedBalances.length} holders
-								{#if selectedSnapshot.excludedWallets.length > 0}
-									({selectedSnapshot.excludedWallets.length} excluded)
-								{/if}
-							</span>
+						<div class="text-center">
+							<p class="text-2xl font-bold text-[#e8be89]">
+								{formatUsd(previewWallets.reduce((sum, w) => sum + w.totalValue, 0))}
+							</p>
+							<p class="mt-1 text-sm text-gray-400">Total Value</p>
 						</div>
+					</Card>
+					<Card>
+						<div class="text-center">
+							<p class="text-2xl font-bold text-[#e8be89]">
+								{Math.round(previewWallets.reduce((sum, w) => sum + w.totalPoints, 0)).toLocaleString()}
+							</p>
+							<p class="mt-1 text-sm text-gray-400">Points (this snapshot)</p>
+						</div>
+					</Card>
+				</div>
 
-						<!-- Price Info -->
-						{#if selectedSnapshot.price}
-							<div class="mb-4 rounded-lg bg-gray-800/50 p-3">
-								<div class="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-									<div>
-										<span class="text-gray-400">Price:</span>
-										<span class="ml-2 text-white"
-											>{formatPrice(selectedSnapshot.price.price)}</span
-										>
-									</div>
-									<div>
-										<span class="text-gray-400">Confidence:</span>
-										<span class="ml-2 text-white">
-											±${selectedSnapshot.price.confidence?.toFixed(4) ?? 'N/A'}
-										</span>
-									</div>
-									<div>
-										<span class="text-gray-400">Feed ID:</span>
-										<span class="ml-2 font-mono text-xs text-gray-300">
-											{formatAddress(selectedSnapshot.price.priceFeedId)}
-										</span>
-									</div>
-									<div>
-										<span class="text-gray-400">Price Time:</span>
-										<span class="ml-2 text-white">
-											{selectedSnapshot.price.pricePublishTime
-												? new Date(
-														selectedSnapshot.price.pricePublishTime * 1000
-													).toISOString()
-												: 'N/A'}
-										</span>
-									</div>
-								</div>
+				<!-- Wallet Rankings (Main View) -->
+				<Card>
+					<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+						<h2 class="text-lg font-semibold text-white">Wallet Rankings</h2>
+						<div class="flex items-center gap-4">
+							<div class="flex items-center gap-2">
+								<label for="tokenFilter" class="text-sm text-gray-400">Token:</label>
+								<select
+									id="tokenFilter"
+									bind:value={selectedTokenFilter}
+									on:change={() => (selectedWallet = null)}
+									class="rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+								>
+									{#each previewResult.tokenSummary as token}
+										<option value={token.token}>{token.token}</option>
+									{/each}
+								</select>
 							</div>
-						{/if}
-
-						<!-- Holders Table -->
-						<div class="max-h-96 overflow-y-auto">
+							<span class="text-sm text-gray-400">{previewResult.blockDate}</span>
+						</div>
+					</div>
+					<p class="mb-4 text-sm text-gray-400">
+						Wallets ranked by {selectedTokenFilter} holdings at block {previewResult.blockNumber.toLocaleString()}
+					</p>
+					{#if previewWallets.length === 0}
+						<p class="py-4 text-center text-gray-400">No wallet data available</p>
+					{:else}
+						<div class="max-h-[500px] overflow-y-auto">
 							<table class="w-full text-left text-sm">
 								<thead
 									class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400"
 								>
 									<tr>
 										<th class="pb-3 pr-4">#</th>
-										<th class="pb-3 pr-4">Address</th>
+										<th class="pb-3 pr-4">Wallet</th>
 										<th class="pb-3 pr-4 text-right">Balance</th>
-										<th class="pb-3 text-right">Value</th>
+										<th class="pb-3 pr-4 text-right">Value</th>
+										<th class="pb-3 text-right">Points</th>
 									</tr>
 								</thead>
 								<tbody class="divide-y divide-gray-800">
-									{#each sortedBalances as [address, balance], i}
-										{@const isExcluded = selectedSnapshot.excludedWallets.includes(
-											address.toLowerCase()
-										)}
+									{#each previewWallets.slice(0, 100) as wallet, i}
 										<tr
-											class="hover:bg-gray-800/30 {isExcluded ? 'bg-yellow-900/10' : ''}"
+											class="cursor-pointer transition-colors hover:bg-gray-800/30 {wallet.isExcluded
+												? 'bg-yellow-900/10'
+												: ''} {selectedWallet === wallet.address ? 'bg-gray-800' : ''}"
+											on:click={() =>
+												(selectedWallet =
+													selectedWallet === wallet.address ? null : wallet.address)}
 										>
 											<td class="py-2 pr-4 text-gray-500">{i + 1}</td>
 											<td class="py-2 pr-4">
 												<div class="flex items-center gap-2">
 													<a
-														href="https://basescan.org/address/{address}"
+														href="https://basescan.org/address/{wallet.address}"
 														target="_blank"
 														rel="noopener noreferrer"
 														class="font-mono text-blue-400 hover:underline"
+														on:click|stopPropagation
 													>
-														{formatAddress(address)}
+														{formatAddress(wallet.address)}
 													</a>
-													{#if isExcluded}
+													{#if wallet.isExcluded}
 														<span
 															class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-xs text-yellow-400"
 														>
@@ -704,41 +1076,132 @@
 												</div>
 											</td>
 											<td class="py-2 pr-4 text-right font-mono text-white">
-												{formatNumber(balance)}
+												{formatNumber(wallet.tokens[0]?.balance ?? '0')}
 											</td>
-											<td class="py-2 text-right text-gray-300">
-												{#if selectedSnapshot.price?.price}
-													${(
-														(parseFloat(balance) / 1e18) *
-														selectedSnapshot.price.price
-													).toLocaleString(undefined, {
-														minimumFractionDigits: 2,
-														maximumFractionDigits: 2
-													})}
-												{:else}
-													-
-												{/if}
+											<td class="py-2 pr-4 text-right font-mono text-white">
+												{formatUsd(wallet.totalValue)}
+											</td>
+											<td class="py-2 text-right font-mono text-gray-300">
+												{Math.round(wallet.totalPoints).toLocaleString()}
 											</td>
 										</tr>
 									{/each}
 								</tbody>
 							</table>
+							{#if previewWallets.length > 100}
+								<p class="mt-4 text-center text-sm text-gray-500">
+									Showing top 100 of {previewWallets.length} wallets
+								</p>
+							{/if}
+						</div>
+					{/if}
+				</Card>
+
+				<!-- Selected Wallet Details -->
+				{#if selectedWalletData}
+					<Card>
+						<div class="mb-4 flex items-center justify-between">
+							<h2 class="text-lg font-semibold text-white">
+								Wallet Details
+							</h2>
+							<button
+								on:click={() => (selectedWallet = null)}
+								class="text-sm text-gray-400 hover:text-white"
+							>
+								Close
+							</button>
+						</div>
+						<div class="rounded-lg bg-gray-800/50 p-4">
+							<a
+								href="https://basescan.org/address/{selectedWalletData.address}"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="font-mono text-sm text-blue-400 hover:underline"
+							>
+								{selectedWalletData.address}
+							</a>
+							<div class="mt-3 grid gap-4 sm:grid-cols-4">
+								<div>
+									<p class="text-sm text-gray-400">Token</p>
+									<p class="font-medium text-[#e8be89]">{selectedTokenFilter}</p>
+								</div>
+								<div>
+									<p class="text-sm text-gray-400">Balance</p>
+									<p class="font-mono text-white">{formatNumber(selectedWalletData.tokens[0]?.balance ?? '0')}</p>
+								</div>
+								<div>
+									<p class="text-sm text-gray-400">Value</p>
+									<p class="font-mono text-white">{formatUsd(selectedWalletData.totalValue)}</p>
+								</div>
+								<div>
+									<p class="text-sm text-gray-400">Points</p>
+									<p class="font-mono text-white">{Math.round(selectedWalletData.totalPoints).toLocaleString()}</p>
+								</div>
+							</div>
 						</div>
 					</Card>
 				{/if}
 
-				<!-- Raw JSON -->
+				<!-- Tools Section (Collapsible) -->
 				<details class="mt-6">
-					<summary class="cursor-pointer text-sm text-gray-400 hover:text-gray-300">
-						View Raw JSON Response
+					<summary class="cursor-pointer text-sm font-medium text-gray-300 hover:text-white">
+						Tools: Token Summary & Raw Data
 					</summary>
-					<Card className="mt-2">
-						<pre class="max-h-96 overflow-auto text-xs text-gray-300">{JSON.stringify(
-								previewResult,
-								null,
-								2
-							)}</pre>
-					</Card>
+					<div class="mt-4 space-y-4">
+						<!-- Token Summary -->
+						<Card>
+							<h3 class="mb-4 text-lg font-semibold text-white">Token Summary</h3>
+							<div class="overflow-x-auto">
+								<table class="w-full text-left text-sm">
+									<thead class="border-b border-gray-700 text-gray-400">
+										<tr>
+											<th class="pb-3 pr-4">Token</th>
+											<th class="pb-3 pr-4 text-right">Holders</th>
+											<th class="pb-3 pr-4 text-right">Total Supply</th>
+											<th class="pb-3 pr-4 text-right">Price</th>
+											<th class="pb-3 text-right">Confidence</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-gray-800">
+										{#each previewResult.tokenSummary as token}
+											<tr>
+												<td class="py-3 pr-4">
+													<span class="font-medium text-[#e8be89]">{token.token}</span>
+												</td>
+												<td class="py-3 pr-4 text-right text-white">{token.holders}</td>
+												<td class="py-3 pr-4 text-right font-mono text-white">
+													{formatNumber(token.totalSupply)}
+												</td>
+												<td class="py-3 pr-4 text-right text-white">
+													{formatPrice(token.price)}
+												</td>
+												<td class="py-3 text-right text-gray-400">
+													{token.priceConfidence !== null
+														? '±$' + token.priceConfidence.toFixed(4)
+														: '-'}
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+						</Card>
+
+						<!-- Raw Snapshot JSON (what would be stored) -->
+						<Card>
+							<h3 class="mb-4 text-lg font-semibold text-white">
+								Raw Snapshot: {selectedTokenFilter}
+							</h3>
+							<p class="mb-2 text-sm text-gray-400">
+								This is the exact JSON that would be stored at: <code class="text-[#e8be89]">snapshots/{selectedTokenFilter}/{previewResult.blockNumber}.json</code>
+							</p>
+							<pre class="max-h-96 overflow-auto text-xs text-gray-300">{JSON.stringify(
+									selectedTokenSnapshot,
+									null,
+									2
+								)}</pre>
+						</Card>
+					</div>
 				</details>
 			{/if}
 		</div>
@@ -822,6 +1285,221 @@
 						{/each}
 					</div>
 				{/if}
+			</Card>
+		</div>
+	{/if}
+
+	<!-- Rewards Pool Tab -->
+	{#if activeTab === 'pool'}
+		<div class="space-y-6">
+			{#if poolError}
+				<div
+					class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300"
+				>
+					{poolError}
+				</div>
+			{/if}
+
+			<!-- Add/Edit Form -->
+			{#if poolFormMonth || editingPool}
+				<Card>
+					<h2 class="mb-4 text-lg font-semibold text-white">
+						{editingPool ? 'Edit Pool Config' : 'New Pool Config'}
+					</h2>
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						<div>
+							<label for="poolMonth" class="mb-2 block text-sm font-medium text-gray-300">
+								Month (YYYY-MM)
+							</label>
+							<input
+								id="poolMonth"
+								type="text"
+								bind:value={poolFormMonth}
+								placeholder="2024-01"
+								disabled={!!editingPool}
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89] disabled:opacity-50"
+							/>
+						</div>
+						<div>
+							<label for="poolAmount" class="mb-2 block text-sm font-medium text-gray-300">
+								Pool Amount (USD)
+							</label>
+							<input
+								id="poolAmount"
+								type="number"
+								bind:value={poolFormAmount}
+								min="0"
+								step="100"
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
+							/>
+						</div>
+						<div>
+							<label for="kickerAmount" class="mb-2 block text-sm font-medium text-gray-300">
+								Kicker Amount (USD)
+							</label>
+							<input
+								id="kickerAmount"
+								type="number"
+								bind:value={poolFormKickerAmount}
+								min="0"
+								step="100"
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
+							/>
+						</div>
+						<div>
+							<label for="kickerTarget" class="mb-2 block text-sm font-medium text-gray-300">
+								Kicker TVL Target (USD)
+							</label>
+							<input
+								id="kickerTarget"
+								type="number"
+								bind:value={poolFormKickerTarget}
+								min="0"
+								step="1000"
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
+							/>
+						</div>
+						<div class="flex items-end">
+							<label class="flex items-center gap-2 text-sm text-gray-300">
+								<input
+									type="checkbox"
+									bind:checked={poolFormKickerHit}
+									class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-[#e8be89] focus:ring-[#e8be89]"
+								/>
+								Kicker Hit
+							</label>
+						</div>
+						<div class="sm:col-span-2 lg:col-span-3">
+							<label for="poolNotes" class="mb-2 block text-sm font-medium text-gray-300">
+								Notes
+							</label>
+							<textarea
+								id="poolNotes"
+								bind:value={poolFormNotes}
+								rows="2"
+								placeholder="Optional notes..."
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
+							></textarea>
+						</div>
+					</div>
+					<div class="mt-4 flex gap-3">
+						<button
+							on:click={savePool}
+							disabled={savingPool}
+							class="rounded-lg bg-[#e8be89] px-6 py-2.5 font-medium text-black transition-colors hover:bg-[#d4a875] disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{savingPool ? 'Saving...' : 'Save'}
+						</button>
+						<button
+							on:click={cancelPoolEdit}
+							class="rounded-lg border border-gray-600 px-6 py-2.5 font-medium text-gray-300 transition-colors hover:bg-gray-800"
+						>
+							Cancel
+						</button>
+					</div>
+				</Card>
+			{:else}
+				<Card>
+					<div class="flex items-center justify-between">
+						<h2 class="text-lg font-semibold text-white">Rewards Pool Configuration</h2>
+						<button
+							on:click={startNewPool}
+							class="rounded-lg bg-[#e8be89] px-4 py-2 font-medium text-black transition-colors hover:bg-[#d4a875]"
+						>
+							Add New Month
+						</button>
+					</div>
+				</Card>
+			{/if}
+
+			<!-- Pool Configs List -->
+			<Card>
+				<h2 class="mb-4 text-lg font-semibold text-white">Monthly Pool Configs</h2>
+				{#if poolLoading}
+					<div class="flex items-center justify-center gap-3 py-8 text-gray-400">
+						<div
+							class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+						></div>
+						Loading...
+					</div>
+				{:else if poolConfigs.length === 0}
+					<p class="py-4 text-center text-gray-400">
+						No pool configs yet. Add a new month to get started.
+					</p>
+				{:else}
+					<div class="overflow-x-auto">
+						<table class="w-full text-left text-sm">
+							<thead class="border-b border-gray-700 text-gray-400">
+								<tr>
+									<th class="pb-3 pr-4">Month</th>
+									<th class="pb-3 pr-4 text-right">Pool Amount</th>
+									<th class="pb-3 pr-4 text-right">Kicker Amount</th>
+									<th class="pb-3 pr-4 text-right">TVL Target</th>
+									<th class="pb-3 pr-4 text-center">Kicker Hit</th>
+									<th class="pb-3 pr-4">Notes</th>
+									<th class="pb-3 text-right">Actions</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-gray-800">
+								{#each poolConfigs as config}
+									<tr class="hover:bg-gray-800/30">
+										<td class="py-3 pr-4 font-medium text-[#e8be89]">{config.month}</td>
+										<td class="py-3 pr-4 text-right font-mono text-white">
+											{formatUsd(config.poolAmount)}
+										</td>
+										<td class="py-3 pr-4 text-right font-mono text-white">
+											{formatUsd(config.kickerAmount)}
+										</td>
+										<td class="py-3 pr-4 text-right font-mono text-white">
+											{formatUsd(config.kickerTvlTarget)}
+										</td>
+										<td class="py-3 pr-4 text-center">
+											{#if config.kickerHit}
+												<span class="rounded bg-green-900/50 px-2 py-0.5 text-xs text-green-400">
+													Yes
+												</span>
+											{:else}
+												<span class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-400">
+													No
+												</span>
+											{/if}
+										</td>
+										<td class="py-3 pr-4 max-w-[200px] truncate text-gray-400" title={config.notes}>
+											{config.notes || '-'}
+										</td>
+										<td class="py-3 text-right">
+											<div class="flex justify-end gap-2">
+												<button
+													on:click={() => editPool(config)}
+													class="rounded px-2 py-1 text-sm text-blue-400 transition-colors hover:bg-blue-900/30"
+												>
+													Edit
+												</button>
+												<button
+													on:click={() => deletePool(config.month)}
+													class="rounded px-2 py-1 text-sm text-red-400 transition-colors hover:bg-red-900/30"
+												>
+													Delete
+												</button>
+											</div>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</Card>
+
+			<!-- Info Card -->
+			<Card>
+				<h3 class="mb-2 text-sm font-medium text-gray-300">How Rewards Work</h3>
+				<ul class="space-y-1 text-sm text-gray-400">
+					<li>• <strong>Pool Amount:</strong> Base reward pool distributed pro-rata based on points</li>
+					<li>• <strong>Kicker Amount:</strong> Additional bonus if TVL target is met</li>
+					<li>• <strong>TVL Target:</strong> Target TVL threshold to trigger kicker</li>
+					<li>• <strong>Kicker Hit:</strong> Manually mark if the TVL target was achieved</li>
+				</ul>
 			</Card>
 		</div>
 	{/if}

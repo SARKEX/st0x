@@ -35,6 +35,7 @@ export interface BlockSnapshot {
 	excludedWallets: string[]; // Wallets that are excluded from TVL calculations
 	totalSupply: string;
 	price: SnapshotPrice | null; // Pyth price at snapshot time
+	priceTimestamp: number | null; // Timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
 }
 
 export interface SubgraphTransfer {

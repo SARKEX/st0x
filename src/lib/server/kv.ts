@@ -27,11 +27,14 @@ export const KV_KEYS = {
 	// Snapshot keys
 	snapshotBlocks: () => 'snapshots:blocks', // List of all snapshot block records
 	snapshotBlocksByDate: (date: string) => `snapshots:date:${date}`, // Blocks for a specific date (YYYY-MM-DD)
-	// Monthly average keys
-	monthlyAverage: (month: string) => `snapshots:monthly:${month}`, // Monthly running averages (YYYY-MM)
-	monthlyAveragesList: () => 'snapshots:monthly:__all__', // List of all months with data
+	// Monthly points keys
+	monthlyPoints: (month: string) => `snapshots:points:${month}`, // Monthly points (YYYY-MM)
+	monthlyPointsList: () => 'snapshots:points:__all__', // List of all months with data
 	// Excluded wallets for rewards
-	excludedWallets: () => 'rewards:excluded_wallets' // List of wallet addresses excluded from TVL
+	excludedWallets: () => 'rewards:excluded_wallets', // List of wallet addresses excluded from TVL
+	// Rewards pool configuration
+	rewardsPool: (month: string) => `rewards:pool:${month}`, // Rewards pool config (YYYY-MM)
+	rewardsPoolList: () => 'rewards:pool:__all__' // List of all months with pool config
 } as const;
 
 // Types for snapshot block records
@@ -48,29 +51,39 @@ export interface DailySnapshotRecord {
 	generatedAt: string;
 }
 
-// Types for monthly running averages
-export interface WalletTokenAverage {
-	balanceSum: string; // Sum of balances across snapshots (string for BigInt)
-	valueSum: number; // Sum of (price × balance) in USD
-	snapshotCount: number; // Number of snapshots where wallet held this token
+// Types for monthly points tracking
+// Points = 100 per $1 USD of holdings at each snapshot
+export interface WalletTokenPoints {
+	points: number; // Cumulative points from this token
+	lastBalance: string; // Last recorded balance (for reference)
 }
 
-export interface WalletMonthlyAverage {
+export interface WalletMonthlyPoints {
 	// Per-token tracking
 	tokens: {
-		[tokenAddress: string]: WalletTokenAverage;
+		[tokenAddress: string]: WalletTokenPoints;
 	};
-	// Total portfolio tracking
-	totalValueSum: number; // Sum of portfolio values across all snapshots
-	snapshotCount: number; // Total snapshots wallet appeared in
+	// Total points across all tokens
+	totalPoints: number;
 }
 
-export interface MonthlyAverageData {
+export interface MonthlyPointsData {
 	month: string; // YYYY-MM format
 	snapshotCount: number; // Total snapshots in this month
 	blockNumbers: number[]; // List of block numbers included
 	wallets: {
-		[address: string]: WalletMonthlyAverage;
+		[address: string]: WalletMonthlyPoints;
 	};
+	updatedAt: string;
+}
+
+// Rewards pool configuration for each month
+export interface RewardsPoolConfig {
+	month: string; // YYYY-MM format
+	poolAmount: number; // Total reward pool in USD
+	kickerAmount: number; // Additional kicker reward if TVL target is met
+	kickerTvlTarget: number; // TVL target in USD to trigger kicker
+	kickerHit: boolean; // Whether the kicker was achieved
+	notes: string; // Optional admin notes
 	updatedAt: string;
 }

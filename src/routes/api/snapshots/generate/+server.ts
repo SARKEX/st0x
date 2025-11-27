@@ -88,9 +88,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		console.log(`[Snapshot] Fetched ${transfers.length} transfers`);
 
-		// Fetch Pyth prices at block timestamp
+		// Fetch Pyth prices at block timestamp (may be adjusted for market hours)
 		console.log(`[Snapshot] Fetching Pyth prices at timestamp ${timestamp}`);
-		const prices = await fetchPythPricesAtTimestamp(timestamp, TOKEN_ADDRESSES);
+		const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, TOKEN_ADDRESSES);
 
 		// Generate snapshots for all tokens with prices
 		const snapshots = generateAllTokenSnapshots(
@@ -98,7 +98,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			targetBlock,
 			timestamp,
 			TOKEN_ADDRESSES,
-			prices
+			prices,
+			undefined, // vaultHoldings
+			undefined, // dynamicExcluded
+			priceTimestamp
 		);
 
 		// Store each snapshot as a blob
