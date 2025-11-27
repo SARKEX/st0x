@@ -292,6 +292,10 @@
 			return;
 		}
 
+		// Capture values before closing modal (which resets triggerConfirmText)
+		const dateToTrigger = manualTriggerDate;
+		const confirmValue = triggerConfirmText;
+
 		closeTriggerConfirmModal();
 		manualTriggerLoading = true;
 		manualTriggerError = '';
@@ -302,8 +306,8 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					date: manualTriggerDate,
-					confirmText: triggerConfirmText
+					date: dateToTrigger,
+					confirmText: confirmValue
 				})
 			});
 
