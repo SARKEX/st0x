@@ -190,7 +190,7 @@
 			</div>
 
 			<div
-				class="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden xl:gap-3"
+				class="flex min-w-0 flex-nowrap items-center gap-2 xl:gap-3"
 				bind:this={actionCluster}
 			>
 				{#if !isHamburgerMode}
