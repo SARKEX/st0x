@@ -39,6 +39,12 @@
 		snapshotCount: number;
 		walletCount: number;
 		totalPoints: number;
+		tokensProcessed?: string[];
+		blockNumbers?: number[];
+		debug?: {
+			blocksFound: number;
+			excludedWalletsCount: number;
+		};
 	} | null = null;
 
 	// Pool config for current month (for reward calculations)
@@ -245,7 +251,10 @@
 			recalculateResult = {
 				snapshotCount: data.snapshotCount,
 				walletCount: data.walletCount,
-				totalPoints: data.totalPoints
+				totalPoints: data.totalPoints,
+				tokensProcessed: data.tokensProcessed,
+				blockNumbers: data.blockNumbers,
+				debug: data.debug
 			};
 
 			// Reload the monthly data
@@ -843,6 +852,21 @@
 							{recalculateResult.walletCount} wallets &middot;
 							{recalculateResult.totalPoints.toLocaleString()} total points
 						</p>
+						{#if recalculateResult.tokensProcessed}
+							<p class="mt-1 text-xs text-gray-400">
+								Tokens: {recalculateResult.tokensProcessed.join(', ') || 'none'}
+							</p>
+						{/if}
+						{#if recalculateResult.blockNumbers}
+							<p class="mt-1 text-xs text-gray-400">
+								Blocks: {recalculateResult.blockNumbers.join(', ') || 'none'}
+							</p>
+						{/if}
+						{#if recalculateResult.debug}
+							<p class="mt-1 text-xs text-gray-500">
+								Debug: {recalculateResult.debug.blocksFound} blocks found, {recalculateResult.debug.excludedWalletsCount} excluded wallets
+							</p>
+						{/if}
 					</div>
 				{/if}
 			</Card>

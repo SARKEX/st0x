@@ -150,20 +150,30 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			await kvSet(KV_KEYS.monthlyPointsList(), monthsList);
 		}
 
+		const walletCount = Object.keys(monthlyData.wallets).length;
+
 		console.log(
-			`[Recalculate] Completed: ${monthlyData.snapshotCount} snapshots, ${
-				Object.keys(monthlyData.wallets).length
-			} wallets, ${Math.round(totalPointsRecalculated).toLocaleString()} total points`
+			`[Recalculate] Completed: ${monthlyData.snapshotCount} snapshots, ${walletCount} wallets, ${Math.round(totalPointsRecalculated).toLocaleString()} total points`
 		);
+		console.log(`[Recalculate] Tokens processed: ${Array.from(tokensProcessed).join(', ')}`);
+		console.log(`[Recalculate] Block numbers: ${monthlyData.blockNumbers.join(', ')}`);
+
+		// Debug: show first few wallets
+		const walletSample = Object.entries(monthlyData.wallets).slice(0, 3);
+		console.log(`[Recalculate] Sample wallets:`, JSON.stringify(walletSample, null, 2));
 
 		return json({
 			success: true,
 			month,
 			snapshotCount: monthlyData.snapshotCount,
 			blockNumbers: monthlyData.blockNumbers,
-			walletCount: Object.keys(monthlyData.wallets).length,
+			walletCount,
 			totalPoints: Math.round(totalPointsRecalculated),
-			tokensProcessed: Array.from(tokensProcessed)
+			tokensProcessed: Array.from(tokensProcessed),
+			debug: {
+				blocksFound: monthBlocks.length,
+				excludedWalletsCount: excludedWallets.length
+			}
 		});
 	} catch (error) {
 		console.error('[Recalculate] Error:', error);
