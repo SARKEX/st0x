@@ -47,6 +47,19 @@
 	let snapshotData: BlockSnapshot | null = null;
 	let snapshotDataLoading = false;
 
+	// Manual trigger state
+	let manualTriggerDate = '';
+	let manualTriggerLoading = false;
+	let manualTriggerError = '';
+	let manualTriggerResult: {
+		success: boolean;
+		date: string;
+		blocks: SnapshotBlockRecord[];
+		blobsStored: number;
+	} | null = null;
+	let showTriggerConfirmModal = false;
+	let triggerConfirmText = '';
+
 	// ===== Preview Tab State =====
 	let blockNumber = '';
 	let previewLoading = false;
@@ -255,9 +268,59 @@
 		loadSnapshotData();
 	}
 
-	function selectSnapshotToken(token: string) {
-		selectedSnapshotToken = token;
-		loadSnapshotData();
+	// Open confirmation modal for manual trigger
+	function openTriggerConfirmModal() {
+		if (!manualTriggerDate) {
+			manualTriggerError = 'Please select a date';
+			return;
+		}
+		manualTriggerError = '';
+		triggerConfirmText = '';
+		showTriggerConfirmModal = true;
+	}
+
+	// Close confirmation modal
+	function closeTriggerConfirmModal() {
+		showTriggerConfirmModal = false;
+		triggerConfirmText = '';
+	}
+
+	// Execute manual trigger after confirmation
+	async function executeManualTrigger() {
+		if (triggerConfirmText !== 'CONFIRM') {
+			manualTriggerError = 'Please type CONFIRM to proceed';
+			return;
+		}
+
+		closeTriggerConfirmModal();
+		manualTriggerLoading = true;
+		manualTriggerError = '';
+		manualTriggerResult = null;
+
+		try {
+			const res = await fetch('/api/admin/snapshots/trigger', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					date: manualTriggerDate,
+					confirmText: triggerConfirmText
+				})
+			});
+
+			const data = await res.json();
+
+			if (!res.ok || !data.success) {
+				throw new Error(data.error || 'Failed to trigger snapshot');
+			}
+
+			manualTriggerResult = data;
+			// Reload the canonical blocks list
+			await loadCanonicalBlocks();
+		} catch (err) {
+			manualTriggerError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			manualTriggerLoading = false;
+		}
 	}
 
 	// Group canonical blocks by date
@@ -336,9 +399,8 @@
 	$: selectedWalletData = previewWallets.find((w) => w.address === selectedWallet) || null;
 
 	// Get the actual BlockSnapshot for the selected token (what would be stored to blob)
-	$: selectedTokenSnapshot = previewResult?.snapshots.find(
-		(s) => s.tokenSymbol === selectedTokenFilter
-	) || null;
+	$: selectedTokenSnapshot =
+		previewResult?.snapshots.find((s) => s.tokenSymbol === selectedTokenFilter) || null;
 
 	// ===== Excluded Wallets Functions =====
 	async function loadExcludedWallets() {
@@ -574,7 +636,9 @@
 <div class="py-8">
 	<div class="mb-6">
 		<h1 class="text-2xl font-semibold">Rewards</h1>
-		<p class="mt-1 text-sm text-gray-400">Manage snapshots, points tracking, and excluded wallets</p>
+		<p class="mt-1 text-sm text-gray-400">
+			Manage snapshots, points tracking, and excluded wallets
+		</p>
 	</div>
 
 	<!-- Tab Navigation -->
@@ -664,9 +728,7 @@
 			</Card>
 
 			{#if pointsError}
-				<div
-					class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300"
-				>
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
 					{pointsError}
 				</div>
 			{/if}
@@ -718,9 +780,7 @@
 					{:else}
 						<div class="max-h-[500px] overflow-y-auto">
 							<table class="w-full text-left text-sm">
-								<thead
-									class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400"
-								>
+								<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400">
 									<tr>
 										<th class="pb-3 pr-4">#</th>
 										<th class="pb-3 pr-4">Wallet</th>
@@ -730,9 +790,7 @@
 								</thead>
 								<tbody class="divide-y divide-gray-800">
 									{#each walletRows.slice(0, 100) as row, i}
-										<tr
-											class="hover:bg-gray-800/30 {row.isExcluded ? 'bg-yellow-900/10' : ''}"
-										>
+										<tr class="hover:bg-gray-800/30 {row.isExcluded ? 'bg-yellow-900/10' : ''}">
 											<td class="py-2 pr-4 text-gray-500">{i + 1}</td>
 											<td class="py-2 pr-4">
 												<div class="flex items-center gap-2">
@@ -829,6 +887,59 @@
 						</div>
 					{/if}
 				</Card>
+
+				<!-- Manual Trigger Section -->
+				<Card className="mt-4">
+					<h2 class="mb-2 text-lg font-semibold text-white">Manual Trigger</h2>
+					<p class="mb-4 text-xs text-gray-400">
+						Generate snapshots for a specific date. This will overwrite any existing data.
+					</p>
+
+					<div class="space-y-3">
+						<div>
+							<label for="triggerDate" class="mb-1 block text-sm text-gray-400">Date</label>
+							<input
+								type="date"
+								id="triggerDate"
+								bind:value={manualTriggerDate}
+								max={new Date(Date.now() - 86400000).toISOString().split('T')[0]}
+								class="w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+							/>
+						</div>
+
+						<button
+							on:click={openTriggerConfirmModal}
+							disabled={manualTriggerLoading || !manualTriggerDate}
+							class="w-full rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{#if manualTriggerLoading}
+								<span class="flex items-center justify-center gap-2">
+									<div
+										class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+									></div>
+									Generating...
+								</span>
+							{:else}
+								Trigger Snapshot
+							{/if}
+						</button>
+
+						{#if manualTriggerError}
+							<p class="text-sm text-red-400">{manualTriggerError}</p>
+						{/if}
+
+						{#if manualTriggerResult}
+							<div class="rounded-md bg-green-900/30 p-3 text-sm">
+								<p class="font-medium text-green-400">Snapshots generated successfully!</p>
+								<p class="mt-1 text-gray-300">
+									Date: {manualTriggerResult.date}<br />
+									Blocks: {manualTriggerResult.blocks.map((b) => b.blockNumber).join(', ')}<br />
+									Files stored: {manualTriggerResult.blobsStored}
+								</p>
+							</div>
+						{/if}
+					</div>
+				</Card>
 			</div>
 
 			<!-- Right Panel: Snapshot Data -->
@@ -890,7 +1001,7 @@
 								<p class="text-xs text-gray-400">Excluded</p>
 							</div>
 							<div class="rounded-lg bg-gray-800/50 p-3 text-center">
-								<p class="text-sm font-mono text-[#e8be89]">
+								<p class="font-mono text-sm text-[#e8be89]">
 									{snapshotData.priceTimestamp
 										? new Date(snapshotData.priceTimestamp * 1000).toLocaleString()
 										: 'N/A'}
@@ -997,7 +1108,9 @@
 					<Card>
 						<div class="text-center">
 							<p class="text-2xl font-bold text-[#e8be89]">
-								{Math.round(previewWallets.reduce((sum, w) => sum + w.totalPoints, 0)).toLocaleString()}
+								{Math.round(
+									previewWallets.reduce((sum, w) => sum + w.totalPoints, 0)
+								).toLocaleString()}
 							</p>
 							<p class="mt-1 text-sm text-gray-400">Points (this snapshot)</p>
 						</div>
@@ -1033,9 +1146,7 @@
 					{:else}
 						<div class="max-h-[500px] overflow-y-auto">
 							<table class="w-full text-left text-sm">
-								<thead
-									class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400"
-								>
+								<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400">
 									<tr>
 										<th class="pb-3 pr-4">#</th>
 										<th class="pb-3 pr-4">Wallet</th>
@@ -1101,9 +1212,7 @@
 				{#if selectedWalletData}
 					<Card>
 						<div class="mb-4 flex items-center justify-between">
-							<h2 class="text-lg font-semibold text-white">
-								Wallet Details
-							</h2>
+							<h2 class="text-lg font-semibold text-white">Wallet Details</h2>
 							<button
 								on:click={() => (selectedWallet = null)}
 								class="text-sm text-gray-400 hover:text-white"
@@ -1127,7 +1236,9 @@
 								</div>
 								<div>
 									<p class="text-sm text-gray-400">Balance</p>
-									<p class="font-mono text-white">{formatNumber(selectedWalletData.tokens[0]?.balance ?? '0')}</p>
+									<p class="font-mono text-white">
+										{formatNumber(selectedWalletData.tokens[0]?.balance ?? '0')}
+									</p>
 								</div>
 								<div>
 									<p class="text-sm text-gray-400">Value</p>
@@ -1135,7 +1246,9 @@
 								</div>
 								<div>
 									<p class="text-sm text-gray-400">Points</p>
-									<p class="font-mono text-white">{Math.round(selectedWalletData.totalPoints).toLocaleString()}</p>
+									<p class="font-mono text-white">
+										{Math.round(selectedWalletData.totalPoints).toLocaleString()}
+									</p>
 								</div>
 							</div>
 						</div>
@@ -1193,7 +1306,9 @@
 								Raw Snapshot: {selectedTokenFilter}
 							</h3>
 							<p class="mb-2 text-sm text-gray-400">
-								This is the exact JSON that would be stored at: <code class="text-[#e8be89]">snapshots/{selectedTokenFilter}/{previewResult.blockNumber}.json</code>
+								This is the exact JSON that would be stored at: <code class="text-[#e8be89]"
+									>snapshots/{selectedTokenFilter}/{previewResult.blockNumber}.json</code
+								>
 							</p>
 							<pre class="max-h-96 overflow-auto text-xs text-gray-300">{JSON.stringify(
 									selectedTokenSnapshot,
@@ -1236,15 +1351,13 @@
 					</button>
 				</div>
 				<p class="mt-2 text-sm text-gray-500">
-					Excluded wallets will be marked but still included in snapshots. They can be hidden
-					from TVL calculations using the toggle.
+					Excluded wallets will be marked but still included in snapshots. They can be hidden from
+					TVL calculations using the toggle.
 				</p>
 			</Card>
 
 			{#if excludedError}
-				<div
-					class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300"
-				>
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
 					{excludedError}
 				</div>
 			{/if}
@@ -1264,9 +1377,7 @@
 				{:else}
 					<div class="space-y-2">
 						{#each excludedWallets as wallet}
-							<div
-								class="flex items-center justify-between rounded-lg bg-gray-800/50 px-4 py-3"
-							>
+							<div class="flex items-center justify-between rounded-lg bg-gray-800/50 px-4 py-3">
 								<a
 									href="https://basescan.org/address/{wallet}"
 									target="_blank"
@@ -1293,9 +1404,7 @@
 	{#if activeTab === 'pool'}
 		<div class="space-y-6">
 			{#if poolError}
-				<div
-					class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300"
-				>
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
 					{poolError}
 				</div>
 			{/if}
@@ -1464,7 +1573,7 @@
 												</span>
 											{/if}
 										</td>
-										<td class="py-3 pr-4 max-w-[200px] truncate text-gray-400" title={config.notes}>
+										<td class="max-w-[200px] truncate py-3 pr-4 text-gray-400" title={config.notes}>
 											{config.notes || '-'}
 										</td>
 										<td class="py-3 text-right">
@@ -1495,7 +1604,9 @@
 			<Card>
 				<h3 class="mb-2 text-sm font-medium text-gray-300">How Rewards Work</h3>
 				<ul class="space-y-1 text-sm text-gray-400">
-					<li>• <strong>Pool Amount:</strong> Base reward pool distributed pro-rata based on points</li>
+					<li>
+						• <strong>Pool Amount:</strong> Base reward pool distributed pro-rata based on points
+					</li>
 					<li>• <strong>Kicker Amount:</strong> Additional bonus if TVL target is met</li>
 					<li>• <strong>TVL Target:</strong> Target TVL threshold to trigger kicker</li>
 					<li>• <strong>Kicker Hit:</strong> Manually mark if the TVL target was achieved</li>
@@ -1504,3 +1615,73 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Confirmation Modal for Manual Trigger -->
+{#if showTriggerConfirmModal}
+	<div
+		class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+		on:click={closeTriggerConfirmModal}
+		on:keydown={(e) => e.key === 'Escape' && closeTriggerConfirmModal()}
+		role="button"
+		tabindex="0"
+	>
+		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+		<div
+			class="w-full max-w-md rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-2xl"
+			on:click|stopPropagation
+			on:keydown|stopPropagation
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="confirm-title"
+		>
+			<h2 id="confirm-title" class="mb-2 text-xl font-semibold text-white">
+				Confirm Snapshot Generation
+			</h2>
+			<p class="mb-4 text-sm text-gray-400">
+				You are about to generate snapshots for <strong class="text-white"
+					>{manualTriggerDate}</strong
+				>. This will overwrite any existing snapshot data for this date.
+			</p>
+
+			<div class="mb-4 rounded-md bg-orange-900/30 p-3">
+				<p class="text-sm text-orange-300">This action will:</p>
+				<ul class="mt-2 space-y-1 text-sm text-orange-200/80">
+					<li>• Select 2 random blocks from that day</li>
+					<li>• Generate token snapshots for all configured tokens</li>
+					<li>• Update monthly points calculations</li>
+					<li>• Overwrite any existing data for this date</li>
+				</ul>
+			</div>
+
+			<div class="mb-4">
+				<label for="confirmInput" class="mb-1 block text-sm text-gray-400">
+					Type <strong class="text-white">CONFIRM</strong> to proceed
+				</label>
+				<input
+					type="text"
+					id="confirmInput"
+					bind:value={triggerConfirmText}
+					placeholder="Type CONFIRM"
+					class="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none"
+					on:keydown={(e) => e.key === 'Enter' && executeManualTrigger()}
+				/>
+			</div>
+
+			<div class="flex gap-3">
+				<button
+					on:click={closeTriggerConfirmModal}
+					class="flex-1 rounded-md border border-gray-600 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+				>
+					Cancel
+				</button>
+				<button
+					on:click={executeManualTrigger}
+					disabled={triggerConfirmText !== 'CONFIRM'}
+					class="flex-1 rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					Generate Snapshots
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

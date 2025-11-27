@@ -9,7 +9,14 @@ import {
 	getBlockNumberForTimestamp
 } from '$lib/server/snapshots/generator';
 import { updateMonthlyPoints } from '$lib/server/snapshots/points';
-import { getKv, kvGet, kvSet, KV_KEYS, type SnapshotBlockRecord, type DailySnapshotRecord } from '$lib/server/kv';
+import {
+	getKv,
+	kvGet,
+	kvSet,
+	KV_KEYS,
+	type SnapshotBlockRecord,
+	type DailySnapshotRecord
+} from '$lib/server/kv';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -18,10 +25,7 @@ function pickRandomBlock(startBlock: number, endBlock: number): number {
 }
 
 // Pick 2 random blocks - one from first half of range, one from second half
-function pickRandomBlocksFromHalves(
-	startBlock: number,
-	endBlock: number
-): [number, number] {
+function pickRandomBlocksFromHalves(startBlock: number, endBlock: number): [number, number] {
 	const midBlock = Math.floor((startBlock + endBlock) / 2);
 	const block1 = pickRandomBlock(startBlock, midBlock);
 	const block2 = pickRandomBlock(midBlock, endBlock);

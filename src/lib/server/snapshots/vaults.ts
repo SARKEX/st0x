@@ -156,7 +156,9 @@ export async function fetchAllVaultHoldings(
 		}
 		return allVaults;
 	} catch (error) {
-		console.error(`[Vaults] Failed to fetch vault holdings: ${error}. Continuing without vault attribution.`);
+		console.error(
+			`[Vaults] Failed to fetch vault holdings: ${error}. Continuing without vault attribution.`
+		);
 		return [];
 	}
 }

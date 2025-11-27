@@ -112,7 +112,9 @@ export async function fetchPythPricesAtTimestamp(
 	const idsParams = feedIds.map((id) => `ids[]=${id}`).join('&');
 
 	const url = `${HERMES_URL}/${adjustedTimestamp}?${idsParams}`;
-	console.log(`[Pyth] Fetching prices at timestamp ${adjustedTimestamp} for ${feedIds.length} feeds`);
+	console.log(
+		`[Pyth] Fetching prices at timestamp ${adjustedTimestamp} for ${feedIds.length} feeds`
+	);
 
 	try {
 		const response = await fetch(url);

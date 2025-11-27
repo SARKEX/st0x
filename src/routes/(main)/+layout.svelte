@@ -20,10 +20,18 @@
 
 	// Track wallet address to detect changes
 	let lastCheckedAddress: string | null = null;
+	let initialCheckDone = false;
+
+	// Redirect to /access if not connected (on initial load)
+	$: if (browser && !$connected && !initialCheckDone) {
+		initialCheckDone = true;
+		goto('/access');
+	}
 
 	// Check wallet registration when wallet connects or changes
 	$: if (browser && $signerAddress && $connected && $signerAddress !== lastCheckedAddress) {
 		lastCheckedAddress = $signerAddress;
+		initialCheckDone = true;
 		checkWalletAccess($signerAddress).then((registered) => {
 			if (!registered) {
 				goto('/access');
@@ -119,7 +127,7 @@
 	}
 </script>
 
-{#if $wagmiConfig && (!$checkingAccess || $walletRegistered)}
+{#if $wagmiConfig && $connected && $walletRegistered}
 	<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
 		<!-- Background Pattern -->
 		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
@@ -176,7 +184,7 @@
 		<LoadingSpinner
 			variant="fullscreen"
 			size="xl"
-			text={$checkingAccess ? 'Checking access...' : 'Loading ST0x...'}
+			text={$checkingAccess ? 'Checking access...' : 'Redirecting...'}
 		/>
 	</div>
 {/if}

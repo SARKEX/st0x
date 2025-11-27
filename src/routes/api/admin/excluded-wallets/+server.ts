@@ -40,7 +40,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	const kv = await getKv();
 	if (!kv) {
-		return json({ error: 'KV store not configured. Cannot modify excluded wallets in local dev.' }, { status: 503 });
+		return json(
+			{ error: 'KV store not configured. Cannot modify excluded wallets in local dev.' },
+			{ status: 503 }
+		);
 	}
 
 	try {

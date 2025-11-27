@@ -2,7 +2,14 @@
 // Awards 100 points per $1 USD of holdings at each snapshot
 // Points accumulate within a calendar month, reset to 0 for new month
 
-import { getKv, kvGet, kvSet, KV_KEYS, type MonthlyPointsData, type WalletMonthlyPoints } from '$lib/server/kv';
+import {
+	getKv,
+	kvGet,
+	kvSet,
+	KV_KEYS,
+	type MonthlyPointsData,
+	type WalletMonthlyPoints
+} from '$lib/server/kv';
 import type { BlockSnapshot } from './types';
 
 const POINTS_PER_DOLLAR = 100;
@@ -155,7 +162,11 @@ export async function updateMonthlyPoints(
 	);
 
 	console.log(
-		`[Points] Updated ${month}${isNewMonth ? ' (new month)' : ''}: ${monthlyData.snapshotCount} snapshots, ${Object.keys(monthlyData.wallets).length} wallets, ${Math.round(totalPointsAwarded).toLocaleString()} points awarded this snapshot`
+		`[Points] Updated ${month}${isNewMonth ? ' (new month)' : ''}: ${
+			monthlyData.snapshotCount
+		} snapshots, ${Object.keys(monthlyData.wallets).length} wallets, ${Math.round(
+			totalPointsAwarded
+		).toLocaleString()} points awarded this snapshot`
 	);
 }
 
