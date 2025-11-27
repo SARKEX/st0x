@@ -32,6 +32,18 @@
 	// Excluded wallets from the monthly data
 	let excludedWalletsInData: Set<string> = new Set();
 
+	// Recalculate state
+	let recalculateLoading = false;
+	let recalculateError = '';
+	let recalculateResult: {
+		snapshotCount: number;
+		walletCount: number;
+		totalPoints: number;
+	} | null = null;
+
+	// Pool config for current month (for reward calculations)
+	let currentMonthPool: RewardsPoolConfig | null = null;
+
 	// ===== Snapshots Tab State =====
 	interface SnapshotBlockRecord {
 		blockNumber: number;
@@ -46,6 +58,30 @@
 	let selectedSnapshotToken: string = '';
 	let snapshotData: BlockSnapshot | null = null;
 	let snapshotDataLoading = false;
+
+	// Derived: wallet points from current snapshot
+	$: snapshotWalletPoints = (() => {
+		if (!snapshotData) return [];
+		const price = snapshotData.price?.price ?? 0;
+		const excludedSet = new Set(snapshotData.excludedWallets.map((w) => w.toLowerCase()));
+
+		return Object.entries(snapshotData.balances)
+			.map(([address, balanceStr]) => {
+				const balance = parseFloat(balanceStr) / 1e18;
+				const value = balance * price;
+				const isExcluded = excludedSet.has(address.toLowerCase());
+				const points = isExcluded ? 0 : value * 100; // 100 points per $1
+
+				return {
+					address,
+					balance,
+					value,
+					points,
+					isExcluded
+				};
+			})
+			.sort((a, b) => b.value - a.value);
+	})();
 
 	// Manual trigger state
 	let manualTriggerDate = '';
@@ -162,6 +198,7 @@
 
 		pointsLoading = true;
 		pointsError = '';
+		recalculateResult = null;
 
 		try {
 			const res = await fetch(`/api/snapshots/points?month=${selectedMonth}`);
@@ -175,6 +212,9 @@
 
 			// Update excluded wallets set
 			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
+
+			// Find pool config for selected month
+			currentMonthPool = poolConfigs.find((p) => p.month === selectedMonth) || null;
 		} catch (err) {
 			pointsError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -182,14 +222,64 @@
 		}
 	}
 
+	async function recalculatePoints() {
+		if (!selectedMonth) return;
+
+		recalculateLoading = true;
+		recalculateError = '';
+		recalculateResult = null;
+
+		try {
+			const res = await fetch('/api/admin/snapshots/recalculate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ month: selectedMonth })
+			});
+
+			const data = await res.json();
+
+			if (!res.ok || !data.success) {
+				throw new Error(data.error || 'Failed to recalculate points');
+			}
+
+			recalculateResult = {
+				snapshotCount: data.snapshotCount,
+				walletCount: data.walletCount,
+				totalPoints: data.totalPoints
+			};
+
+			// Reload the monthly data
+			await loadMonthlyData();
+		} catch (err) {
+			recalculateError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			recalculateLoading = false;
+		}
+	}
+
 	function getWalletRows() {
 		if (!monthlyData?.wallets) return [];
 
+		// Calculate total points for share calculation
+		const allPoints = monthlyData.wallets.reduce((sum, w) => sum + w.totalPoints, 0);
+
 		const rows = monthlyData.wallets.map((wallet) => {
 			const isExcluded = excludedWalletsInData.has(wallet.address.toLowerCase());
+			const share = allPoints > 0 ? wallet.totalPoints / allPoints : 0;
+
+			// Calculate rewards
+			const basePool = currentMonthPool?.poolAmount ?? 0;
+			const kickerPool = currentMonthPool?.kickerHit ? currentMonthPool?.kickerAmount ?? 0 : 0;
+			const rewardBase = share * basePool;
+			const rewardWithKicker = share * (basePool + (currentMonthPool?.kickerAmount ?? 0));
+
 			return {
 				...wallet,
-				isExcluded
+				isExcluded,
+				share,
+				rewardBase,
+				rewardWithKicker,
+				rewardActual: rewardBase + (currentMonthPool?.kickerHit ? kickerPool * share : 0)
 			};
 		});
 
@@ -204,6 +294,11 @@
 		const rows = getWalletRows();
 		return rows.reduce((sum, r) => sum + r.totalPoints, 0);
 	}
+
+	// Calculate effective pool amount
+	$: effectivePoolAmount = currentMonthPool
+		? currentMonthPool.poolAmount + (currentMonthPool.kickerHit ? currentMonthPool.kickerAmount : 0)
+		: 0;
 
 	// ===== Snapshots Functions =====
 	async function loadCanonicalBlocks() {
@@ -326,18 +421,6 @@
 			manualTriggerLoading = false;
 		}
 	}
-
-	// Group canonical blocks by date
-	$: blocksByDate = (() => {
-		const grouped: Record<string, SnapshotBlockRecord[]> = {};
-		for (const block of canonicalBlocks) {
-			if (!grouped[block.date]) {
-				grouped[block.date] = [];
-			}
-			grouped[block.date].push(block);
-		}
-		return grouped;
-	})();
 
 	// ===== Preview Functions =====
 	async function generatePreview() {
@@ -708,28 +791,97 @@
 	<!-- Points Tab -->
 	{#if activeTab === 'points'}
 		<div class="space-y-6">
-			<!-- Month Selector -->
+			<!-- Month Selector and Recalculate -->
 			<Card>
-				<div class="flex flex-wrap items-center gap-4">
-					<span class="text-sm font-medium text-gray-400">Month:</span>
-					<select
-						bind:value={selectedMonth}
-						on:change={() => loadMonthlyData()}
-						class="rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+				<div class="flex flex-wrap items-center justify-between gap-4">
+					<div class="flex flex-wrap items-center gap-4">
+						<span class="text-sm font-medium text-gray-400">Month:</span>
+						<select
+							bind:value={selectedMonth}
+							on:change={() => loadMonthlyData()}
+							class="rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+						>
+							{#each availableMonths as month}
+								<option value={month}>{month}</option>
+							{/each}
+						</select>
+						{#if monthlyData}
+							<span class="text-sm text-gray-500">
+								{monthlyData.snapshotCount} snapshots &middot; Last updated: {new Date(
+									monthlyData.updatedAt
+								).toLocaleString()}
+							</span>
+						{/if}
+					</div>
+					<button
+						on:click={recalculatePoints}
+						disabled={recalculateLoading || !selectedMonth}
+						class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
 					>
-						{#each availableMonths as month}
-							<option value={month}>{month}</option>
-						{/each}
-					</select>
-					{#if monthlyData}
-						<span class="text-sm text-gray-500">
-							{monthlyData.snapshotCount} snapshots &middot; Last updated: {new Date(
-								monthlyData.updatedAt
-							).toLocaleString()}
-						</span>
-					{/if}
+						{#if recalculateLoading}
+							<span class="flex items-center gap-2">
+								<div
+									class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+								></div>
+								Recalculating...
+							</span>
+						{:else}
+							Recalculate Points
+						{/if}
+					</button>
 				</div>
+
+				{#if recalculateError}
+					<p class="mt-3 text-sm text-red-400">{recalculateError}</p>
+				{/if}
+
+				{#if recalculateResult}
+					<div class="mt-3 rounded-md bg-green-900/30 p-3 text-sm">
+						<p class="font-medium text-green-400">Points recalculated successfully!</p>
+						<p class="mt-1 text-gray-300">
+							{recalculateResult.snapshotCount} snapshots processed &middot;
+							{recalculateResult.walletCount} wallets &middot;
+							{recalculateResult.totalPoints.toLocaleString()} total points
+						</p>
+					</div>
+				{/if}
 			</Card>
+
+			<!-- Pool Config Info -->
+			{#if currentMonthPool}
+				<Card>
+					<h3 class="mb-3 text-sm font-semibold text-gray-300">Rewards Pool for {selectedMonth}</h3>
+					<div class="grid gap-4 text-sm sm:grid-cols-4">
+						<div>
+							<p class="text-gray-400">Base Pool</p>
+							<p class="font-mono text-white">{formatUsd(currentMonthPool.poolAmount)}</p>
+						</div>
+						<div>
+							<p class="text-gray-400">Kicker Amount</p>
+							<p class="font-mono text-white">{formatUsd(currentMonthPool.kickerAmount)}</p>
+						</div>
+						<div>
+							<p class="text-gray-400">Kicker Hit?</p>
+							<p class={currentMonthPool.kickerHit ? 'text-green-400' : 'text-gray-500'}>
+								{currentMonthPool.kickerHit ? 'Yes' : 'No'}
+							</p>
+						</div>
+						<div>
+							<p class="text-gray-400">Effective Pool</p>
+							<p class="font-mono font-semibold text-[#e8be89]">{formatUsd(effectivePoolAmount)}</p>
+						</div>
+					</div>
+				</Card>
+			{:else if selectedMonth}
+				<div
+					class="rounded-md border border-yellow-900/40 bg-yellow-900/20 p-3 text-sm text-yellow-300"
+				>
+					No pool config for {selectedMonth}.
+					<a href="#pool" on:click={() => (activeTab = 'pool')} class="underline"
+						>Configure rewards pool</a
+					> to see reward calculations.
+				</div>
+			{/if}
 
 			{#if pointsError}
 				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
@@ -780,16 +932,33 @@
 						Points = 100 per $1 USD of holdings at each snapshot
 					</p>
 					{#if walletRows.length === 0}
-						<p class="py-4 text-center text-gray-400">No wallet data available</p>
+						<div class="py-8 text-center">
+							<p class="text-gray-400">No wallet data available</p>
+							{#if monthlyData && monthlyData.snapshotCount > 0}
+								<p class="mt-2 text-sm text-yellow-400">
+									{monthlyData.snapshotCount} snapshots recorded but no wallet points.
+									<button on:click={recalculatePoints} class="underline hover:text-yellow-300">
+										Click to recalculate
+									</button>
+								</p>
+							{/if}
+						</div>
 					{:else}
-						<div class="max-h-[500px] overflow-y-auto">
+						<div class="max-h-[500px] overflow-x-auto overflow-y-auto">
 							<table class="w-full text-left text-sm">
 								<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400">
 									<tr>
-										<th class="pb-3 pr-4">#</th>
-										<th class="pb-3 pr-4">Wallet</th>
-										<th class="pb-3 pr-4 text-right">Points</th>
-										<th class="pb-3 text-right">Tokens</th>
+										<th class="whitespace-nowrap pb-3 pr-4">#</th>
+										<th class="whitespace-nowrap pb-3 pr-4">Wallet</th>
+										<th class="whitespace-nowrap pb-3 pr-4 text-right">Points</th>
+										<th class="whitespace-nowrap pb-3 pr-4 text-right">Share</th>
+										{#if currentMonthPool}
+											<th class="whitespace-nowrap pb-3 pr-4 text-right">Reward (Base)</th>
+											<th class="whitespace-nowrap pb-3 pr-4 text-right">Reward (w/ Kicker)</th>
+											<th class="whitespace-nowrap pb-3 text-right">Actual Reward</th>
+										{:else}
+											<th class="whitespace-nowrap pb-3 text-right">Tokens</th>
+										{/if}
 									</tr>
 								</thead>
 								<tbody class="divide-y divide-gray-800">
@@ -818,12 +987,56 @@
 											<td class="py-2 pr-4 text-right font-mono text-white">
 												{row.totalPoints.toLocaleString()}
 											</td>
-											<td class="py-2 text-right text-gray-400">
-												{row.tokenCount}
+											<td class="py-2 pr-4 text-right font-mono text-gray-300">
+												{(row.share * 100).toFixed(2)}%
 											</td>
+											{#if currentMonthPool}
+												<td class="py-2 pr-4 text-right font-mono text-gray-300">
+													{formatUsd(row.rewardBase)}
+												</td>
+												<td class="py-2 pr-4 text-right font-mono text-gray-300">
+													{formatUsd(row.rewardWithKicker)}
+												</td>
+												<td
+													class="py-2 text-right font-mono font-semibold {currentMonthPool.kickerHit
+														? 'text-green-400'
+														: 'text-[#e8be89]'}"
+												>
+													{formatUsd(row.rewardActual)}
+												</td>
+											{:else}
+												<td class="py-2 text-right text-gray-400">
+													{row.tokenCount}
+												</td>
+											{/if}
 										</tr>
 									{/each}
 								</tbody>
+								{#if currentMonthPool}
+									<tfoot class="border-t border-gray-600 bg-gray-800/50">
+										<tr>
+											<td class="py-3 pr-4"></td>
+											<td class="py-3 pr-4 font-semibold text-white">Total</td>
+											<td class="py-3 pr-4 text-right font-mono font-semibold text-white">
+												{totalPoints.toLocaleString()}
+											</td>
+											<td class="py-3 pr-4 text-right font-mono text-gray-300">100%</td>
+											<td class="py-3 pr-4 text-right font-mono text-gray-300">
+												{formatUsd(currentMonthPool.poolAmount)}
+											</td>
+											<td class="py-3 pr-4 text-right font-mono text-gray-300">
+												{formatUsd(currentMonthPool.poolAmount + currentMonthPool.kickerAmount)}
+											</td>
+											<td
+												class="py-3 text-right font-mono font-semibold {currentMonthPool.kickerHit
+													? 'text-green-400'
+													: 'text-[#e8be89]'}"
+											>
+												{formatUsd(effectivePoolAmount)}
+											</td>
+										</tr>
+									</tfoot>
+								{/if}
 							</table>
 							{#if walletRows.length > 100}
 								<p class="mt-4 text-center text-sm text-gray-500">
@@ -847,7 +1060,7 @@
 	{#if activeTab === 'snapshots'}
 		<div class="flex gap-6">
 			<!-- Left Panel: Block List -->
-			<div class="w-80 flex-shrink-0">
+			<div class="w-[420px] flex-shrink-0">
 				<Card>
 					<h2 class="mb-4 text-lg font-semibold text-white">Canonical Blocks</h2>
 					<p class="mb-4 text-xs text-gray-400">
@@ -866,28 +1079,43 @@
 							No canonical blocks yet. Run the cron job to generate snapshots.
 						</p>
 					{:else}
-						<div class="max-h-[500px] space-y-4 overflow-y-auto">
-							{#each Object.entries(blocksByDate).slice(0, 30) as [date, blocks]}
-								<div>
-									<h3 class="mb-2 text-xs font-medium text-gray-400">{date}</h3>
-									<div class="space-y-1">
-										{#each blocks as block}
-											<button
-												on:click={() => selectCanonicalBlock(block.blockNumber)}
-												class="w-full rounded px-3 py-2 text-left text-sm transition-colors {selectedCanonicalBlock ===
-												block.blockNumber
-													? 'bg-[#e8be89] text-black'
-													: 'bg-gray-800 text-white hover:bg-gray-700'}"
+						<div class="max-h-[500px] overflow-y-auto">
+							<table class="w-full text-left text-sm">
+								<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400">
+									<tr>
+										<th class="pb-2 pr-4">Date</th>
+										<th class="pb-2 pr-4">Time (NY)</th>
+										<th class="pb-2">Block</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-gray-800">
+									{#each canonicalBlocks as block}
+										<tr
+											class="cursor-pointer transition-colors {selectedCanonicalBlock ===
+											block.blockNumber
+												? 'bg-[#e8be89]/20'
+												: 'hover:bg-gray-800/50'}"
+											on:click={() => selectCanonicalBlock(block.blockNumber)}
+										>
+											<td class="py-2 pr-4 text-gray-300">{block.date}</td>
+											<td class="py-2 pr-4 text-gray-300">
+												{new Date(block.timestamp * 1000).toLocaleTimeString('en-US', {
+													timeZone: 'America/New_York',
+													hour: '2-digit',
+													minute: '2-digit'
+												})}
+											</td>
+											<td
+												class="py-2 font-mono {selectedCanonicalBlock === block.blockNumber
+													? 'text-[#e8be89]'
+													: 'text-white'}"
 											>
-												<div class="font-mono">{block.blockNumber.toLocaleString()}</div>
-												<div class="text-xs opacity-70">
-													{new Date(block.timestamp * 1000).toLocaleTimeString()}
-												</div>
-											</button>
-										{/each}
-									</div>
-								</div>
-							{/each}
+												{block.blockNumber}
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
 						</div>
 					{/if}
 				</Card>
@@ -1014,14 +1242,95 @@
 							</div>
 						</div>
 
+						<!-- Wallet Points Table -->
+						<div class="mb-4">
+							<h3 class="mb-3 text-sm font-semibold text-gray-300">
+								Wallet Points (this snapshot)
+							</h3>
+							<div class="max-h-[400px] overflow-y-auto rounded-lg border border-gray-700">
+								<table class="w-full text-left text-sm">
+									<thead class="sticky top-0 border-b border-gray-700 bg-gray-800 text-gray-400">
+										<tr>
+											<th class="px-3 py-2">#</th>
+											<th class="px-3 py-2">Wallet</th>
+											<th class="px-3 py-2 text-right">Balance</th>
+											<th class="px-3 py-2 text-right">Value</th>
+											<th class="px-3 py-2 text-right">Points</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-gray-700/50">
+										{#each snapshotWalletPoints.slice(0, 100) as wallet, i}
+											<tr class={wallet.isExcluded ? 'bg-yellow-900/10' : ''}>
+												<td class="px-3 py-2 text-gray-500">{i + 1}</td>
+												<td class="px-3 py-2">
+													<div class="flex items-center gap-2">
+														<a
+															href="https://basescan.org/address/{wallet.address}"
+															target="_blank"
+															rel="noopener noreferrer"
+															class="font-mono text-xs text-blue-400 hover:underline"
+														>
+															{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+														</a>
+														{#if wallet.isExcluded}
+															<span
+																class="rounded bg-yellow-600/30 px-1.5 py-0.5 text-[10px] text-yellow-400"
+															>
+																Excluded
+															</span>
+														{/if}
+													</div>
+												</td>
+												<td class="px-3 py-2 text-right font-mono text-gray-300">
+													{wallet.balance.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+												</td>
+												<td class="px-3 py-2 text-right font-mono text-gray-300">
+													{formatUsd(wallet.value)}
+												</td>
+												<td
+													class="px-3 py-2 text-right font-mono {wallet.isExcluded
+														? 'text-gray-500'
+														: 'text-[#e8be89]'}"
+												>
+													{Math.round(wallet.points).toLocaleString()}
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+							{#if snapshotWalletPoints.length > 100}
+								<p class="mt-2 text-center text-xs text-gray-500">
+									Showing top 100 of {snapshotWalletPoints.length} wallets
+								</p>
+							{/if}
+							<div class="mt-3 flex justify-between rounded-lg bg-gray-800/50 px-3 py-2 text-sm">
+								<span class="text-gray-400">Total Points (this snapshot)</span>
+								<span class="font-mono font-semibold text-[#e8be89]">
+									{Math.round(
+										snapshotWalletPoints.reduce((sum, w) => sum + w.points, 0)
+									).toLocaleString()}
+								</span>
+							</div>
+						</div>
+
 						<!-- Raw JSON -->
 						<details>
 							<summary class="cursor-pointer text-sm font-medium text-gray-300 hover:text-white">
-								View Raw JSON
+								View Raw JSON (balances + points)
 							</summary>
 							<pre
 								class="mt-2 max-h-96 overflow-auto rounded-lg bg-gray-800/50 p-4 text-xs text-gray-300">{JSON.stringify(
-									snapshotData,
+									{
+										...snapshotData,
+										walletPoints: snapshotWalletPoints.map((w) => ({
+											address: w.address,
+											balance: w.balance,
+											value: w.value,
+											points: Math.round(w.points),
+											isExcluded: w.isExcluded
+										}))
+									},
 									null,
 									2
 								)}</pre>
