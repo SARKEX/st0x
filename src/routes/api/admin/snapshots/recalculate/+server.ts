@@ -58,6 +58,28 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const { blobs: allBlobs } = await list({ prefix: 'snapshots/', limit: 1000 });
 		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
 
+		// Debug: show sample blob paths
+		if (allBlobs.length > 0) {
+			const samplePaths = allBlobs.slice(0, 3).map((b) => b.pathname);
+			console.log(`[Recalculate] Sample blob pathnames: ${JSON.stringify(samplePaths)}`);
+		}
+
+		// Debug: extract all block numbers from blobs
+		const allBlobBlocks = new Set<number>();
+		for (const blob of allBlobs) {
+			const pathParts = blob.pathname.split('/');
+			const fileName = pathParts[pathParts.length - 1];
+			const blockNumber = parseInt(fileName.replace('.json', ''));
+			if (!isNaN(blockNumber)) {
+				allBlobBlocks.add(blockNumber);
+			}
+		}
+		console.log(
+			`[Recalculate] All blob block numbers: ${Array.from(allBlobBlocks)
+				.slice(0, 10)
+				.join(', ')}...`
+		);
+
 		// Parse blob paths and filter for our target blocks
 		const blobsForMonth: Array<{
 			token: string;
@@ -203,7 +225,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				totalBlobsInStorage: allBlobs.length,
 				blobsMatchingMonth: blobsForMonth.length,
 				excludedWalletsCount: excludedWallets.length,
-				targetBlockNumbers: Array.from(targetBlocks)
+				targetBlockNumbers: Array.from(targetBlocks),
+				sampleBlobPaths: allBlobs.slice(0, 3).map((b) => b.pathname),
+				allBlobBlockNumbers: Array.from(allBlobBlocks).slice(0, 10)
 			}
 		});
 	} catch (error) {

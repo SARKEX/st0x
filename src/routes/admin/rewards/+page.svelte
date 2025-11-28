@@ -47,6 +47,8 @@
 			blobsMatchingMonth: number;
 			excludedWalletsCount: number;
 			targetBlockNumbers: number[];
+			sampleBlobPaths?: string[];
+			allBlobBlockNumbers?: number[];
 		};
 	} | null = null;
 
@@ -879,6 +881,23 @@
 										Blobs matching target blocks: {recalculateResult.debug.blobsMatchingMonth}
 									</li>
 									<li>Excluded wallets: {recalculateResult.debug.excludedWalletsCount}</li>
+									{#if recalculateResult.debug.sampleBlobPaths?.length}
+										<li class="mt-2">
+											<span class="text-gray-300">Sample blob paths:</span>
+											<ul class="ml-4 mt-1">
+												{#each recalculateResult.debug.sampleBlobPaths as path}
+													<li class="font-mono text-[10px]">{path}</li>
+												{/each}
+											</ul>
+										</li>
+									{/if}
+									{#if recalculateResult.debug.allBlobBlockNumbers?.length}
+										<li class="mt-2">
+											Blob block numbers (first 10): {recalculateResult.debug.allBlobBlockNumbers.join(
+												', '
+											)}
+										</li>
+									{/if}
 								</ul>
 							</div>
 						{/if}
