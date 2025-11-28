@@ -8,13 +8,27 @@ export interface WalletRanking {
 	rank: number;
 }
 
+export interface KickerTiers {
+	tier25: number;
+	tier50: number;
+	tier75: number;
+	tier100: number;
+}
+
+export interface KickerTiersAchieved {
+	tier25: boolean;
+	tier50: boolean;
+	tier75: boolean;
+	tier100: boolean;
+}
+
 export interface LastMonthData {
 	month: string;
 	userPoints: number;
 	totalPoints: number;
 	reward: number;
 	poolAmount: number;
-	kickerHit: boolean;
+	kickerAchievedAmount: number;
 }
 
 export interface UserRewardsData {
@@ -30,9 +44,11 @@ export interface UserRewardsData {
 	approxApy: number | null; // annualized percentage, null if no holdings
 	// Pool config
 	poolAmount: number;
-	kickerAmount: number;
+	kickerAmounts: KickerTiers;
 	kickerTvlTarget: number;
-	kickerHit: boolean;
+	kickerTargetPoints: number; // kickerTvlTarget * 2 * daysInMonth * 100
+	kickerTiersAchieved: KickerTiersAchieved;
+	kickerAchievedAmount: number;
 	effectivePool: number;
 	lastMonth: LastMonthData | null;
 	leaderboard: {
@@ -89,9 +105,11 @@ export async function fetchUserRewards(walletAddress: string): Promise<void> {
 			averageValue: data.averageValue,
 			approxApy: data.approxApy,
 			poolAmount: data.poolAmount,
-			kickerAmount: data.kickerAmount,
+			kickerAmounts: data.kickerAmounts,
 			kickerTvlTarget: data.kickerTvlTarget,
-			kickerHit: data.kickerHit,
+			kickerTargetPoints: data.kickerTargetPoints,
+			kickerTiersAchieved: data.kickerTiersAchieved,
+			kickerAchievedAmount: data.kickerAchievedAmount,
 			effectivePool: data.effectivePool,
 			lastMonth: data.lastMonth,
 			leaderboard: data.leaderboard

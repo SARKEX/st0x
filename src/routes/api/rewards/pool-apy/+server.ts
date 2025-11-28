@@ -29,11 +29,29 @@ export const GET: RequestHandler = async () => {
 			}
 		}
 
+		// Calculate kicker target in points and progress
+		const kickerTvlTarget = poolConfig?.kickerTvlTarget ?? 0;
+		const daysInMonth = getDaysInMonth(currentMonth);
+		const kickerTargetPoints = kickerTvlTarget * 2 * daysInMonth * 100;
+		const progressPercent =
+			kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+
+		// Calculate achieved kicker amount based on progress
+		const kickerAmounts = poolConfig?.kickerAmounts ?? {
+			tier25: 0,
+			tier50: 0,
+			tier75: 0,
+			tier100: 0
+		};
+		const kickerAchievedAmount =
+			(progressPercent >= 25 ? kickerAmounts.tier25 : 0) +
+			(progressPercent >= 50 ? kickerAmounts.tier50 : 0) +
+			(progressPercent >= 75 ? kickerAmounts.tier75 : 0) +
+			(progressPercent >= 100 ? kickerAmounts.tier100 : 0);
+
 		// Calculate effective pool
 		const poolAmount = poolConfig?.poolAmount ?? 0;
-		const kickerAmount = poolConfig?.kickerAmount ?? 0;
-		const kickerHit = poolConfig?.kickerHit ?? false;
-		const effectivePool = poolAmount + (kickerHit ? kickerAmount : 0);
+		const effectivePool = poolAmount + kickerAchievedAmount;
 
 		// Calculate Pool APY (compound): ((1 + monthlyReturn) ^ 12 - 1) * 100
 		// avgTvl = totalPoints / snapshotCount / 100
@@ -65,3 +83,9 @@ export const GET: RequestHandler = async () => {
 		);
 	}
 };
+
+function getDaysInMonth(monthStr: string): number {
+	const [year, month] = monthStr.split('-').map(Number);
+	// Day 0 of next month gives last day of current month
+	return new Date(year, month, 0).getDate();
+}
