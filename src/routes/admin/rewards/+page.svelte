@@ -212,8 +212,20 @@
 		recalculateResult = null;
 
 		try {
+			console.log('[Admin] Fetching points for month:', selectedMonth);
 			const res = await fetch(`/api/snapshots/points?month=${selectedMonth}`);
 			const data = await res.json();
+
+			console.log('[Admin] Points API response:', {
+				status: res.status,
+				ok: res.ok,
+				dataKeys: Object.keys(data),
+				snapshotCount: data.snapshotCount,
+				walletCount: data.walletCount,
+				walletsLength: data.wallets?.length,
+				walletsType: typeof data.wallets,
+				walletsSample: data.wallets?.slice(0, 3)
+			});
 
 			if (!res.ok) {
 				throw new Error(data.error || 'Failed to load monthly data');
@@ -227,6 +239,7 @@
 			// Find pool config for selected month
 			currentMonthPool = poolConfigs.find((p) => p.month === selectedMonth) || null;
 		} catch (err) {
+			console.error('[Admin] Error loading monthly data:', err);
 			pointsError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
 			pointsLoading = false;
@@ -241,6 +254,7 @@
 		recalculateResult = null;
 
 		try {
+			console.log('[Admin] Starting recalculation for month:', selectedMonth);
 			const res = await fetch('/api/admin/snapshots/recalculate', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -248,6 +262,15 @@
 			});
 
 			const data = await res.json();
+
+			console.log('[Admin] Recalculate API response:', {
+				status: res.status,
+				success: data.success,
+				walletCount: data.walletCount,
+				totalPoints: data.totalPoints,
+				snapshotCount: data.snapshotCount,
+				debug: data.debug
+			});
 
 			if (!res.ok || !data.success) {
 				throw new Error(data.error || 'Failed to recalculate points');
@@ -263,8 +286,14 @@
 			};
 
 			// Reload the monthly data
+			console.log('[Admin] Recalculate done, now reloading monthly data...');
 			await loadMonthlyData();
+			console.log(
+				'[Admin] Monthly data reloaded, monthlyData.wallets:',
+				monthlyData?.wallets?.length
+			);
 		} catch (err) {
+			console.error('[Admin] Recalculate error:', err);
 			recalculateError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
 			recalculateLoading = false;
