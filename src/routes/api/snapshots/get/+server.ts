@@ -2,6 +2,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
+import { BLOB_READ_WRITE_TOKEN } from '$env/static/private';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -16,7 +17,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		if (tokenSymbol) {
 			const prefix = `snapshots/${tokenSymbol}/${blockNumber}.json`;
 
-			const { blobs } = await list({ prefix, limit: 1 });
+			const { blobs } = await list({ prefix, limit: 1, token: BLOB_READ_WRITE_TOKEN });
 
 			if (blobs.length === 0) {
 				return json(
@@ -48,7 +49,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// If no token specified, get all token snapshots for this block
 		const prefix = `snapshots/`;
 
-		const { blobs } = await list({ prefix });
+		const { blobs } = await list({ prefix, token: BLOB_READ_WRITE_TOKEN });
 
 		// Filter blobs for this block number
 		const blockSnapshots = blobs.filter((blob) => {

@@ -2,6 +2,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
+import { BLOB_READ_WRITE_TOKEN } from '$env/static/private';
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
@@ -13,7 +14,8 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const { blobs } = await list({
 			prefix,
-			limit
+			limit,
+			token: BLOB_READ_WRITE_TOKEN
 		});
 
 		// Parse blob paths to extract metadata

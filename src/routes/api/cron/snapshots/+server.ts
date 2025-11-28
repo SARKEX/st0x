@@ -3,6 +3,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
+import { BLOB_READ_WRITE_TOKEN } from '$env/static/private';
 import {
 	generateAllTokenSnapshots_v2,
 	getBlockTimestamp,
@@ -85,7 +86,8 @@ export const POST: RequestHandler = async ({ request }) => {
 
 				const blob = await put(blobPath, JSON.stringify(snapshot, null, 2), {
 					access: 'public',
-					contentType: 'application/json'
+					contentType: 'application/json',
+					token: BLOB_READ_WRITE_TOKEN
 				});
 
 				storedBlobs.push({

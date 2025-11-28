@@ -116,15 +116,14 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Calculate estimated reward
 		const estimatedReward = totalPoints > 0 ? (userPoints / totalPoints) * effectivePool : 0;
 
-		// Calculate APY
+		// Calculate APY (compound)
 		// Average value = points / snapshots / 100 (converting points back to USD)
-		// APY = (estimatedReward / averageValue) * 12 * 100 (annualized percentage)
+		// APY = ((1 + monthlyReturn) ^ 12 - 1) * 100 (compound annualized percentage)
 		const averageValue = snapshotCount > 0 ? userPoints / snapshotCount / 100 : 0;
 		let approxApy: number | null = null;
 		if (averageValue > 0 && estimatedReward > 0) {
-			// Monthly return as decimal, then annualize and convert to percentage
 			const monthlyReturn = estimatedReward / averageValue;
-			approxApy = monthlyReturn * 12 * 100;
+			approxApy = (Math.pow(1 + monthlyReturn, 12) - 1) * 100;
 		}
 
 		// Get last month's data

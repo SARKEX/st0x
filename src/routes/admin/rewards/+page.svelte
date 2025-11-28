@@ -70,6 +70,17 @@
 	let snapshotData: BlockSnapshot | null = null;
 	let snapshotDataLoading = false;
 
+	// Aggregated wallet data across all tokens for the selected block
+	interface AggregatedWalletData {
+		address: string;
+		totalPoints: number;
+		totalValue: number;
+		isExcluded: boolean;
+		tokens: { symbol: string; balance: number; value: number; points: number }[];
+	}
+	let aggregatedWalletData: AggregatedWalletData[] = [];
+	let aggregatedDataLoading = false;
+
 	// Derived: wallet points from current snapshot
 	$: snapshotWalletPoints = (() => {
 		if (!snapshotData) return [];
@@ -212,20 +223,8 @@
 		recalculateResult = null;
 
 		try {
-			console.log('[Admin] Fetching points for month:', selectedMonth);
 			const res = await fetch(`/api/snapshots/points?month=${selectedMonth}`);
 			const data = await res.json();
-
-			console.log('[Admin] Points API response:', {
-				status: res.status,
-				ok: res.ok,
-				dataKeys: Object.keys(data),
-				snapshotCount: data.snapshotCount,
-				walletCount: data.walletCount,
-				walletsLength: data.wallets?.length,
-				walletsType: typeof data.wallets,
-				walletsSample: data.wallets?.slice(0, 3)
-			});
 
 			if (!res.ok) {
 				throw new Error(data.error || 'Failed to load monthly data');
@@ -239,7 +238,6 @@
 			// Find pool config for selected month
 			currentMonthPool = poolConfigs.find((p) => p.month === selectedMonth) || null;
 		} catch (err) {
-			console.error('[Admin] Error loading monthly data:', err);
 			pointsError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
 			pointsLoading = false;
@@ -254,7 +252,6 @@
 		recalculateResult = null;
 
 		try {
-			console.log('[Admin] Starting recalculation for month:', selectedMonth);
 			const res = await fetch('/api/admin/snapshots/recalculate', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -262,15 +259,6 @@
 			});
 
 			const data = await res.json();
-
-			console.log('[Admin] Recalculate API response:', {
-				status: res.status,
-				success: data.success,
-				walletCount: data.walletCount,
-				totalPoints: data.totalPoints,
-				snapshotCount: data.snapshotCount,
-				debug: data.debug
-			});
 
 			if (!res.ok || !data.success) {
 				throw new Error(data.error || 'Failed to recalculate points');
@@ -286,14 +274,8 @@
 			};
 
 			// Reload the monthly data
-			console.log('[Admin] Recalculate done, now reloading monthly data...');
 			await loadMonthlyData();
-			console.log(
-				'[Admin] Monthly data reloaded, monthlyData.wallets:',
-				monthlyData?.wallets?.length
-			);
 		} catch (err) {
-			console.error('[Admin] Recalculate error:', err);
 			recalculateError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
 			recalculateLoading = false;
@@ -310,16 +292,8 @@
 	) {
 		/* eslint-enable @typescript-eslint/no-unused-vars */
 		if (!monthlyData?.wallets) {
-			console.log('[Admin] getWalletRows: monthlyData.wallets is empty/undefined');
 			return [];
 		}
-
-		console.log('[Admin] getWalletRows called:', {
-			walletsCount: monthlyData.wallets.length,
-			hideExcluded,
-			excludedWalletsInDataSize: excludedWalletsInData.size,
-			excludedWalletsSample: Array.from(excludedWalletsInData).slice(0, 3)
-		});
 
 		// Calculate total points for share calculation
 		const allPoints = monthlyData.wallets.reduce((sum, w) => sum + w.totalPoints, 0);
@@ -347,12 +321,6 @@
 		// Filter if hiding excluded
 		const filtered = hideExcluded ? rows.filter((r) => !r.isExcluded) : rows;
 
-		console.log('[Admin] getWalletRows result:', {
-			totalRows: rows.length,
-			excludedCount: rows.filter((r) => r.isExcluded).length,
-			filteredCount: filtered.length
-		});
-
 		// Already sorted by API (by totalPoints descending)
 		return filtered;
 	}
@@ -361,6 +329,24 @@
 	$: effectivePoolAmount = currentMonthPool
 		? currentMonthPool.poolAmount + (currentMonthPool.kickerHit ? currentMonthPool.kickerAmount : 0)
 		: 0;
+
+	// Calculate pool APY (compound): ((1 + monthlyReturn) ^ 12 - 1) * 100
+	// avgTvl = totalPoints / snapshotCount / 100
+	$: poolApy = (() => {
+		if (!monthlyData || !effectivePoolAmount || totalPoints <= 0 || monthlyData.snapshotCount <= 0)
+			return null;
+		const avgTvl = totalPoints / monthlyData.snapshotCount / 100;
+		if (avgTvl <= 0) return null;
+		const monthlyReturn = effectivePoolAmount / avgTvl;
+		return (Math.pow(1 + monthlyReturn, 12) - 1) * 100;
+	})();
+
+	function formatApy(apy: number | null): string {
+		if (apy === null) return '-';
+		if (apy >= 1000) return (apy / 1000).toFixed(1) + 'K%';
+		if (apy >= 100) return Math.round(apy) + '%';
+		return apy.toFixed(1) + '%';
+	}
 
 	// ===== Snapshots Functions =====
 	async function loadCanonicalBlocks() {
@@ -388,6 +374,7 @@
 			// Load snapshot data for default selection
 			if (selectedCanonicalBlock && selectedSnapshotToken) {
 				await loadSnapshotData();
+				await loadAggregatedData();
 			}
 		} catch (err) {
 			snapshotsError = err instanceof Error ? err.message : 'Unknown error';
@@ -420,9 +407,72 @@
 		}
 	}
 
+	// Load all token snapshots for a block and aggregate wallet data
+	async function loadAggregatedData() {
+		if (!selectedCanonicalBlock) return;
+
+		aggregatedDataLoading = true;
+		aggregatedWalletData = [];
+
+		try {
+			// Load all tokens for this block (no token param = all tokens)
+			const res = await fetch(`/api/snapshots/get?block=${selectedCanonicalBlock}`);
+			const data = await res.json();
+
+			if (!res.ok || !data.success) {
+				throw new Error(data.error || 'Failed to load snapshots');
+			}
+
+			// Aggregate wallet data across all tokens
+			const walletMap = new Map<string, AggregatedWalletData>();
+
+			for (const { token, snapshot } of data.snapshots) {
+				if (!snapshot) continue;
+
+				const price = snapshot.price?.price ?? 0;
+				const excludedSet = new Set(
+					(snapshot.excludedWallets || []).map((w: string) => w.toLowerCase())
+				);
+
+				for (const [address, balanceStr] of Object.entries(snapshot.balances)) {
+					const balance = parseFloat(balanceStr as string) / 1e18;
+					const value = balance * price;
+					const isExcluded = excludedSet.has(address.toLowerCase());
+					const points = isExcluded ? 0 : value * 100;
+
+					const existing = walletMap.get(address.toLowerCase());
+					if (existing) {
+						existing.totalPoints += points;
+						existing.totalValue += value;
+						existing.isExcluded = existing.isExcluded || isExcluded;
+						existing.tokens.push({ symbol: token, balance, value, points });
+					} else {
+						walletMap.set(address.toLowerCase(), {
+							address,
+							totalPoints: points,
+							totalValue: value,
+							isExcluded,
+							tokens: [{ symbol: token, balance, value, points }]
+						});
+					}
+				}
+			}
+
+			// Convert to array and sort by total points
+			aggregatedWalletData = Array.from(walletMap.values()).sort(
+				(a, b) => b.totalPoints - a.totalPoints
+			);
+		} catch (err) {
+			snapshotsError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			aggregatedDataLoading = false;
+		}
+	}
+
 	function selectCanonicalBlock(block: number) {
 		selectedCanonicalBlock = block;
 		loadSnapshotData();
+		loadAggregatedData();
 	}
 
 	// Open confirmation modal for manual trigger
@@ -557,7 +607,6 @@
 		excludedError = '';
 
 		try {
-			console.log('[Admin] Loading excluded wallets...');
 			const res = await fetch('/api/admin/excluded-wallets');
 			const data = await res.json();
 
@@ -567,10 +616,6 @@
 
 			excludedWallets = data.wallets || [];
 			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
-			console.log('[Admin] Excluded wallets loaded:', {
-				count: excludedWallets.length,
-				sample: excludedWallets.slice(0, 3)
-			});
 		} catch (err) {
 			excludedError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -1012,7 +1057,7 @@
 				</Card>
 			{:else if monthlyData}
 				<!-- Points Summary -->
-				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
 					<Card>
 						<div class="text-center">
 							<p class="text-3xl font-bold text-[#e8be89]">{totalPoints.toLocaleString()}</p>
@@ -1033,6 +1078,12 @@
 						<div class="text-center">
 							<p class="text-3xl font-bold text-[#e8be89]">{monthlyData.snapshotCount}</p>
 							<p class="mt-1 text-sm text-gray-400">Snapshots this month</p>
+						</div>
+					</Card>
+					<Card>
+						<div class="text-center">
+							<p class="text-3xl font-bold text-green-400">{formatApy(poolApy)}</p>
+							<p class="mt-1 text-sm text-gray-400">Rewards APY</p>
 						</div>
 					</Card>
 				</div>
@@ -1451,6 +1502,109 @@
 						<p class="py-8 text-center text-gray-400">
 							Snapshot not found for {selectedSnapshotToken} at block {selectedCanonicalBlock}
 						</p>
+					{/if}
+				</Card>
+
+				<!-- Aggregated Wallet Points (All Tokens) -->
+				<Card className="mt-4">
+					<h2 class="mb-4 text-lg font-semibold text-white">
+						All Tokens - Aggregated Wallet Points
+					</h2>
+					<p class="mb-4 text-xs text-gray-400">
+						Combined points across all tokens for block {selectedCanonicalBlock}
+					</p>
+
+					{#if aggregatedDataLoading}
+						<div class="flex items-center justify-center gap-3 py-8 text-gray-400">
+							<div
+								class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+							></div>
+							Loading aggregated data...
+						</div>
+					{:else if aggregatedWalletData.length === 0}
+						<p class="py-4 text-center text-sm text-gray-400">
+							No aggregated wallet data available
+						</p>
+					{:else}
+						<div class="max-h-[500px] overflow-y-auto rounded-lg border border-gray-700">
+							<table class="w-full text-left text-sm">
+								<thead class="sticky top-0 border-b border-gray-700 bg-gray-800 text-gray-400">
+									<tr>
+										<th class="px-3 py-2">#</th>
+										<th class="px-3 py-2">Wallet</th>
+										<th class="px-3 py-2 text-right">Total Value</th>
+										<th class="px-3 py-2 text-right">Total Points</th>
+										<th class="px-3 py-2">Token Breakdown</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-gray-700/50">
+									{#each aggregatedWalletData.slice(0, 100) as wallet, i}
+										<tr class={wallet.isExcluded ? 'bg-yellow-900/10' : ''}>
+											<td class="px-3 py-2 text-gray-500">{i + 1}</td>
+											<td class="px-3 py-2">
+												<div class="flex items-center gap-2">
+													<a
+														href="https://basescan.org/address/{wallet.address}"
+														target="_blank"
+														rel="noopener noreferrer"
+														class="font-mono text-xs text-blue-400 hover:underline"
+													>
+														{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+													</a>
+													{#if wallet.isExcluded}
+														<span
+															class="rounded bg-yellow-600/30 px-1.5 py-0.5 text-[10px] text-yellow-400"
+														>
+															Excluded
+														</span>
+													{/if}
+												</div>
+											</td>
+											<td class="px-3 py-2 text-right font-mono text-gray-300">
+												{formatUsd(wallet.totalValue)}
+											</td>
+											<td
+												class="px-3 py-2 text-right font-mono {wallet.isExcluded
+													? 'text-gray-500'
+													: 'text-[#e8be89]'}"
+											>
+												{Math.round(wallet.totalPoints).toLocaleString()}
+											</td>
+											<td class="px-3 py-2">
+												<div class="flex flex-wrap gap-1">
+													{#each wallet.tokens.sort((a, b) => b.points - a.points) as token}
+														<span
+															class="inline-flex items-center gap-1 rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px]"
+															title="{token.symbol}: {formatUsd(token.value)} ({Math.round(
+																token.points
+															).toLocaleString()} pts)"
+														>
+															<span class="text-gray-300">{token.symbol}</span>
+															<span class="text-[#e8be89]"
+																>{Math.round(token.points).toLocaleString()}</span
+															>
+														</span>
+													{/each}
+												</div>
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+						{#if aggregatedWalletData.length > 100}
+							<p class="mt-2 text-center text-xs text-gray-500">
+								Showing top 100 of {aggregatedWalletData.length} wallets
+							</p>
+						{/if}
+						<div class="mt-3 flex justify-between rounded-lg bg-gray-800/50 px-3 py-2 text-sm">
+							<span class="text-gray-400">Total Points (all tokens, this block)</span>
+							<span class="font-mono font-semibold text-[#e8be89]">
+								{Math.round(
+									aggregatedWalletData.reduce((sum, w) => sum + w.totalPoints, 0)
+								).toLocaleString()}
+							</span>
+						</div>
 					{/if}
 				</Card>
 			</div>

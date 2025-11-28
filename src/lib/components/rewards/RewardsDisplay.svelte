@@ -8,13 +8,23 @@
 		resetRewardsState,
 		formatPoints,
 		formatApy,
+		formatUsd,
 		showDetailsModal,
-		showRulesModal
+		showRulesModal,
+		globalPoolApy,
+		fetchGlobalPoolApy
 	} from '$lib/stores/rewardsStore';
 
 	let showDropdown = false;
 	let dropdownRef: HTMLDivElement;
 	let lastFetchedAddress: string | null = null;
+	let showTooltip = false;
+
+	// Fetch global pool APY on mount (doesn't require wallet)
+	onMount(() => {
+		fetchGlobalPoolApy();
+		document.addEventListener('click', handleClickOutside);
+	});
 
 	// Fetch rewards when wallet connects/changes
 	$: if ($connected && $signerAddress && $signerAddress !== lastFetchedAddress) {
@@ -44,10 +54,6 @@
 		showRulesModal.set(true);
 	}
 
-	onMount(() => {
-		document.addEventListener('click', handleClickOutside);
-	});
-
 	onDestroy(() => {
 		document.removeEventListener('click', handleClickOutside);
 	});
@@ -55,13 +61,27 @@
 
 {#if $connected && $signerAddress}
 	<div class="relative" bind:this={dropdownRef}>
-		<!-- Boost Rewards Button -->
+		<!-- Boost Rewards Button with Rainbow Wave Animation -->
 		<button
 			on:click={() => (showDropdown = !showDropdown)}
-			class="flex h-10 items-center gap-2 rounded-lg border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 px-3 py-2 text-sm transition-all hover:border-yellow-500/50 hover:from-yellow-600/30 hover:to-orange-600/30"
+			on:mouseenter={() => (showTooltip = true)}
+			on:mouseleave={() => (showTooltip = false)}
+			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
 		>
+			<!-- Animated rainbow border -->
+			<span class="rainbow-border"></span>
+			<!-- Inner background with gradient -->
+			<span
+				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
+			></span>
+
 			<!-- Rocket Icon -->
-			<svg class="h-4 w-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<svg
+				class="relative z-10 h-4 w-4 text-yellow-400"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
 				<path
 					stroke-linecap="round"
 					stroke-linejoin="round"
@@ -72,32 +92,28 @@
 
 			{#if $rewardsLoading}
 				<div
-					class="h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-yellow-400"
+					class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-yellow-400"
 				/>
-				<span class="text-gray-400">Loading...</span>
+				<span class="relative z-10 text-gray-400">Loading...</span>
 			{:else if $rewardsData}
-				<div class="flex items-center gap-3">
-					<span class="font-semibold text-yellow-400">Boost Rewards</span>
-					<div class="flex flex-col items-end text-xs">
-						<span class="font-medium text-white">
-							{formatPoints($rewardsData.userPoints)} pts
-						</span>
-						{#if $rewardsData.approxApy !== null}
-							<span class="text-green-400">
-								~{formatApy($rewardsData.approxApy)} APY
-							</span>
-						{:else}
-							<span class="text-gray-400">-</span>
-						{/if}
-					</div>
+				<div class="relative z-10 flex items-center gap-2">
+					<span class="font-semibold text-white">Boost Rewards</span>
+					<span class="text-xs text-gray-400">|</span>
+					<span class="text-xs font-medium text-yellow-300">
+						{formatPoints($rewardsData.userPoints)} pts
+					</span>
+					<span class="text-xs font-bold text-green-400">
+						{formatApy($globalPoolApy)}
+					</span>
 				</div>
 			{:else}
-				<span class="font-semibold text-yellow-400">Boost Rewards</span>
-				<span class="text-xs text-gray-400">0 pts</span>
+				<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
+				<span class="relative z-10 text-xs text-gray-400">0 pts</span>
+				<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
 			{/if}
 
 			<svg
-				class="h-4 w-4 text-gray-400 transition-transform"
+				class="relative z-10 h-4 w-4 text-gray-400 transition-transform"
 				class:rotate-180={showDropdown}
 				fill="none"
 				stroke="currentColor"
@@ -106,6 +122,29 @@
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
 			</svg>
 		</button>
+
+		<!-- Hover Tooltip -->
+		{#if showTooltip && $rewardsData && !showDropdown}
+			<div
+				class="absolute right-0 top-full z-[160] mt-2 w-48 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+			>
+				<div class="space-y-2 text-sm">
+					<div class="flex justify-between">
+						<span class="text-gray-400">Points</span>
+						<span class="font-medium text-white">{formatPoints($rewardsData.userPoints)}</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Est. Reward</span>
+						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span
+						>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Rewards APY</span>
+						<span class="font-medium text-green-400">{formatApy($globalPoolApy)}</span>
+					</div>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Dropdown Menu -->
 		{#if showDropdown}
@@ -151,3 +190,75 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	/* Rainbow wave animation for the Boost Rewards button */
+	.rainbow-button {
+		position: relative;
+		background: transparent;
+	}
+
+	.rainbow-border {
+		position: absolute;
+		inset: 0;
+		border-radius: 8px;
+		padding: 1px;
+		background: linear-gradient(
+			90deg,
+			#ff6b6b,
+			#feca57,
+			#48dbfb,
+			#ff9ff3,
+			#54a0ff,
+			#5f27cd,
+			#ff6b6b
+		);
+		background-size: 300% 100%;
+		animation: rainbow-wave 3s linear infinite;
+		-webkit-mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		mask:
+			linear-gradient(#fff 0 0) content-box,
+			linear-gradient(#fff 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
+	}
+
+	/* Subtle glow effect */
+	.rainbow-button::before {
+		content: '';
+		position: absolute;
+		inset: -2px;
+		border-radius: 10px;
+		background: linear-gradient(
+			90deg,
+			#ff6b6b40,
+			#feca5740,
+			#48dbfb40,
+			#ff9ff340,
+			#54a0ff40,
+			#5f27cd40,
+			#ff6b6b40
+		);
+		background-size: 300% 100%;
+		animation: rainbow-wave 3s linear infinite;
+		filter: blur(8px);
+		opacity: 0.6;
+		z-index: -1;
+	}
+
+	.rainbow-button:hover::before {
+		opacity: 0.9;
+		filter: blur(12px);
+	}
+
+	@keyframes rainbow-wave {
+		0% {
+			background-position: 0% 50%;
+		}
+		100% {
+			background-position: 300% 50%;
+		}
+	}
+</style>

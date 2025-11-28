@@ -11,9 +11,6 @@ export default defineConfig(({ mode }) => ({
 	    '@vercel/speed-insights/sveltekit': path.resolve('./node_modules/@vercel/speed-insights/dist/sveltekit/index.mjs')
 	  }
 	},
-	define: {
-	  'process.env': {}
-	},
 	optimizeDeps: {
 	  esbuildOptions: {
 		target: 'es2022',

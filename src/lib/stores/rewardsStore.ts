@@ -47,6 +47,10 @@ export const rewardsData = writable<UserRewardsData | null>(null);
 export const rewardsLoading = writable(false);
 export const rewardsError = writable<string | null>(null);
 
+// Global pool APY (same for all users, fetched once)
+export const globalPoolApy = writable<number | null>(null);
+export const globalPoolApyLoading = writable(false);
+
 // Modal visibility stores
 export const showDetailsModal = writable(false);
 export const showLeaderboardModal = writable(false);
@@ -97,6 +101,26 @@ export async function fetchUserRewards(walletAddress: string): Promise<void> {
 		rewardsData.set(null);
 	} finally {
 		rewardsLoading.set(false);
+	}
+}
+
+// Fetch global pool APY (can be called without wallet connection)
+export async function fetchGlobalPoolApy(): Promise<void> {
+	if (!browser) return;
+
+	globalPoolApyLoading.set(true);
+
+	try {
+		const response = await fetch('/api/rewards/pool-apy');
+		const data = await response.json();
+
+		if (response.ok && data.success) {
+			globalPoolApy.set(data.poolApy);
+		}
+	} catch {
+		// Silently fail - APY is not critical
+	} finally {
+		globalPoolApyLoading.set(false);
 	}
 }
 

@@ -3,6 +3,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
+import { BLOB_READ_WRITE_TOKEN } from '$env/static/private';
 import {
 	kvGet,
 	kvSet,
@@ -55,7 +56,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		console.log(`[Recalculate] Target block numbers: ${Array.from(targetBlocks).join(', ')}`);
 
 		// List ALL blobs from blob storage
-		const { blobs: allBlobs } = await list({ prefix: 'snapshots/', limit: 1000 });
+		const { blobs: allBlobs } = await list({
+			prefix: 'snapshots/',
+			limit: 1000,
+			token: BLOB_READ_WRITE_TOKEN
+		});
 		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
 
 		// Debug: show sample blob paths

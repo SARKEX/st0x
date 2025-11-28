@@ -11,14 +11,10 @@ export const GET: RequestHandler = async ({ url }) => {
 	const month = url.searchParams.get('month'); // YYYY-MM format
 	const wallet = url.searchParams.get('wallet')?.toLowerCase();
 
-	console.log(`[Points API] Request received - month: ${month}, wallet: ${wallet}`);
-
 	try {
 		// If no month specified, return list of available months
 		if (!month) {
-			console.log('[Points API] No month specified, fetching available months');
 			const months = await getAvailableMonths();
-			console.log(`[Points API] Available months: ${JSON.stringify(months)}`);
 			return json({
 				success: true,
 				availableMonths: months
@@ -30,15 +26,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			return json({ error: 'Invalid month format. Use YYYY-MM' }, { status: 400 });
 		}
 
-		console.log(`[Points API] Fetching monthly points for ${month}...`);
 		const monthlyData = await getMonthlyPoints(month);
-		console.log(`[Points API] getMonthlyPoints returned, exists: ${!!monthlyData}`);
-		if (monthlyData) {
-			const walletKeys = Object.keys(monthlyData.wallets || {});
-			console.log(`[Points API] snapshotCount: ${monthlyData.snapshotCount}`);
-			console.log(`[Points API] wallets keys count: ${walletKeys.length}`);
-			console.log(`[Points API] wallets sample: ${JSON.stringify(walletKeys.slice(0, 3))}`);
-		}
 
 		if (!monthlyData) {
 			return json(
