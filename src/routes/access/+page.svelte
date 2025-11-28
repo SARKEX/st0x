@@ -142,7 +142,7 @@
 </script>
 
 <svelte:head>
-	<title>Access | ST0X</title>
+	<title>Real Stocks, On-Chain | ST0X</title>
 </svelte:head>
 
 <div class="min-h-screen bg-gray-950 text-white">

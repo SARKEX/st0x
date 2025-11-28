@@ -28,6 +28,20 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const monthlyData = await getMonthlyPoints(month);
 
+		// Debug logging
+		console.log(`[Points API] Fetching data for ${month}`);
+		console.log(`[Points API] monthlyData exists: ${!!monthlyData}`);
+		if (monthlyData) {
+			console.log(`[Points API] snapshotCount: ${monthlyData.snapshotCount}`);
+			console.log(`[Points API] wallets keys: ${Object.keys(monthlyData.wallets || {}).length}`);
+			console.log(`[Points API] wallets type: ${typeof monthlyData.wallets}`);
+			console.log(
+				`[Points API] wallets sample: ${JSON.stringify(
+					Object.keys(monthlyData.wallets || {}).slice(0, 3)
+				)}`
+			);
+		}
+
 		if (!monthlyData) {
 			return json(
 				{
