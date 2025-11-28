@@ -58,7 +58,7 @@
 		<!-- Boost Rewards Button -->
 		<button
 			on:click={() => (showDropdown = !showDropdown)}
-			class="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 px-4 py-2 text-sm transition-all hover:border-yellow-500/50 hover:from-yellow-600/30 hover:to-orange-600/30"
+			class="flex h-10 items-center gap-2 rounded-lg border border-yellow-500/30 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 px-3 py-2 text-sm transition-all hover:border-yellow-500/50 hover:from-yellow-600/30 hover:to-orange-600/30"
 		>
 			<!-- Rocket Icon -->
 			<svg class="h-4 w-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

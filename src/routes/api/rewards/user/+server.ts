@@ -36,6 +36,7 @@ interface UserRewardsResponse {
 	leaderboard: {
 		top3: WalletRanking[];
 		aroundUser: WalletRanking[];
+		allRankings: WalletRanking[];
 	};
 }
 
@@ -179,7 +180,8 @@ export const GET: RequestHandler = async ({ url }) => {
 			lastMonth: lastMonthData,
 			leaderboard: {
 				top3,
-				aroundUser
+				aroundUser,
+				allRankings: rankings
 			}
 		};
 

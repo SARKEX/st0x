@@ -33,6 +33,7 @@ export interface UserRewardsData {
 	leaderboard: {
 		top3: WalletRanking[];
 		aroundUser: WalletRanking[];
+		allRankings: WalletRanking[];
 	};
 }
 

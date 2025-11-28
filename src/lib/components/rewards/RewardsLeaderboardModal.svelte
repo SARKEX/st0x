@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { signerAddress } from 'svelte-wagmi';
 	import {
 		rewardsData,
@@ -6,6 +7,8 @@
 		formatPoints,
 		formatAddress
 	} from '$lib/stores/rewardsStore';
+
+	let scrollContainer: HTMLDivElement;
 
 	function closeModal() {
 		showLeaderboardModal.set(false);
@@ -16,9 +19,6 @@
 			closeModal();
 		}
 	}
-
-	// Check if user is in top 3
-	$: userInTop3 = $rewardsData?.rank && $rewardsData.rank <= 3;
 
 	// Get medal for rank
 	function getMedal(rank: number): string {
@@ -32,6 +32,26 @@
 			default:
 				return '';
 		}
+	}
+
+	// Scroll to user's position when modal opens
+	async function scrollToUser() {
+		await tick();
+		if (!scrollContainer || !$rewardsData?.rank) return;
+
+		const userRank = $rewardsData.rank;
+		const rowHeight = 52; // Approximate height of each row
+
+		// Calculate scroll position to center user with 3 above visible
+		const userRowTop = (userRank - 1) * rowHeight;
+		const scrollTarget = userRowTop - 3 * rowHeight;
+
+		scrollContainer.scrollTop = Math.max(0, scrollTarget);
+	}
+
+	// Scroll to user when modal becomes visible
+	$: if ($showLeaderboardModal && $rewardsData) {
+		scrollToUser();
 	}
 </script>
 
@@ -77,94 +97,51 @@
 			</div>
 
 			<!-- Content -->
-			<div class="p-6">
-				<!-- Top 3 -->
-				<div class="mb-6">
-					<h3 class="mb-3 text-sm font-medium text-gray-400">Top 3</h3>
-					<div class="space-y-2">
-						{#each $rewardsData.leaderboard.top3 as wallet}
-							<div
-								class="flex items-center justify-between rounded-lg px-4 py-3 {wallet.address ===
-								$signerAddress?.toLowerCase()
-									? 'border border-yellow-500/50 bg-yellow-500/10'
-									: 'bg-gray-700/50'}"
-							>
-								<div class="flex items-center gap-3">
-									<span class="text-xl">{getMedal(wallet.rank)}</span>
-									<div>
-										<p class="font-mono text-sm text-white">
-											{wallet.address === $signerAddress?.toLowerCase()
-												? 'You'
-												: formatAddress(wallet.address)}
-										</p>
-										{#if wallet.address === $signerAddress?.toLowerCase()}
-											<p class="text-xs text-yellow-400">Your position</p>
-										{/if}
-									</div>
-								</div>
-								<span class="font-medium text-yellow-400">{formatPoints(wallet.points)}</span>
-							</div>
-						{/each}
-					</div>
-				</div>
-
-				<!-- User's Position (if not in top 3) -->
-				{#if !userInTop3 && $rewardsData.leaderboard.aroundUser.length > 0}
-					<div>
-						<h3 class="mb-3 text-sm font-medium text-gray-400">Your Position</h3>
-						<div class="space-y-2">
-							<!-- Separator indicating gap from top 3 -->
-							{#if $rewardsData.leaderboard.aroundUser[0]?.rank > 4}
-								<div class="flex items-center justify-center py-2 text-gray-500">
-									<span class="text-xs">• • •</span>
-								</div>
-							{/if}
-
-							{#each $rewardsData.leaderboard.aroundUser as wallet}
-								<div
-									class="flex items-center justify-between rounded-lg px-4 py-3 {wallet.address ===
-									$signerAddress?.toLowerCase()
-										? 'border border-yellow-500/50 bg-yellow-500/10'
-										: 'bg-gray-700/50'}"
-								>
-									<div class="flex items-center gap-3">
-										<span class="w-8 text-center text-sm font-medium text-gray-400">
-											#{wallet.rank}
-										</span>
-										<div>
-											<p class="font-mono text-sm text-white">
-												{wallet.address === $signerAddress?.toLowerCase()
-													? 'You'
-													: formatAddress(wallet.address)}
-											</p>
-											{#if wallet.address === $signerAddress?.toLowerCase()}
-												<p class="text-xs text-yellow-400">Your position</p>
-											{/if}
-										</div>
-									</div>
-									<span
-										class="font-medium {wallet.address === $signerAddress?.toLowerCase()
-											? 'text-yellow-400'
-											: 'text-white'}"
-									>
-										{formatPoints(wallet.points)}
+			<div class="flex flex-col p-6">
+				<!-- Full Leaderboard with scroll -->
+				<div bind:this={scrollContainer} class="max-h-[400px] space-y-2 overflow-y-auto pr-2">
+					{#each $rewardsData.leaderboard.allRankings as wallet}
+						<div
+							class="flex items-center justify-between rounded-lg px-4 py-3 {wallet.address ===
+							$signerAddress?.toLowerCase()
+								? 'border border-yellow-500/50 bg-yellow-500/10'
+								: 'bg-gray-700/50'}"
+						>
+							<div class="flex items-center gap-3">
+								{#if wallet.rank <= 3}
+									<span class="w-8 text-center text-xl">{getMedal(wallet.rank)}</span>
+								{:else}
+									<span class="w-8 text-center text-sm font-medium text-gray-400">
+										#{wallet.rank}
 									</span>
+								{/if}
+								<div>
+									<p class="font-mono text-sm text-white">
+										{wallet.address === $signerAddress?.toLowerCase()
+											? 'You'
+											: formatAddress(wallet.address)}
+									</p>
+									{#if wallet.address === $signerAddress?.toLowerCase()}
+										<p class="text-xs text-yellow-400">Your position</p>
+									{/if}
 								</div>
-							{/each}
-
-							<!-- Separator indicating more below -->
-							{#if $rewardsData.leaderboard.aroundUser[$rewardsData.leaderboard.aroundUser.length - 1]?.rank < $rewardsData.totalWallets}
-								<div class="flex items-center justify-center py-2 text-gray-500">
-									<span class="text-xs">• • •</span>
-								</div>
-							{/if}
+							</div>
+							<span
+								class="font-medium {wallet.address === $signerAddress?.toLowerCase()
+									? 'text-yellow-400'
+									: wallet.rank <= 3
+										? 'text-yellow-400'
+										: 'text-white'}"
+							>
+								{formatPoints(wallet.points)}
+							</span>
 						</div>
-					</div>
-				{/if}
+					{/each}
+				</div>
 
 				<!-- Stats Summary -->
 				<div
-					class="mt-6 flex items-center justify-between rounded-lg bg-gray-700/30 px-4 py-3 text-sm"
+					class="mt-4 flex items-center justify-between rounded-lg bg-gray-700/30 px-4 py-3 text-sm"
 				>
 					<span class="text-gray-400">Total participants</span>
 					<span class="font-medium text-white">{$rewardsData.totalWallets}</span>
