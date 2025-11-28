@@ -7,7 +7,7 @@
 		fetchUserRewards,
 		resetRewardsState,
 		formatPoints,
-		formatUsd,
+		formatApy,
 		showDetailsModal,
 		showRulesModal
 	} from '$lib/stores/rewardsStore';
@@ -82,9 +82,13 @@
 						<span class="font-medium text-white">
 							{formatPoints($rewardsData.userPoints)} pts
 						</span>
-						<span class="text-gray-400">
-							~{formatUsd($rewardsData.estimatedReward)}
-						</span>
+						{#if $rewardsData.approxApy !== null}
+							<span class="text-green-400">
+								~{formatApy($rewardsData.approxApy)} APY
+							</span>
+						{:else}
+							<span class="text-gray-400">-</span>
+						{/if}
 					</div>
 				</div>
 			{:else}

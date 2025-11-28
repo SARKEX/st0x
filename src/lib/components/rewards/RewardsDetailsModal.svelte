@@ -4,7 +4,8 @@
 		showDetailsModal,
 		showLeaderboardModal,
 		formatPoints,
-		formatUsd
+		formatUsd,
+		formatApy
 	} from '$lib/stores/rewardsStore';
 
 	function closeModal() {
@@ -100,6 +101,12 @@
 							</p>
 						</div>
 						<div>
+							<p class="text-xs text-gray-400">Approx APY</p>
+							<p class="text-xl font-bold text-green-400">
+								{formatApy($rewardsData.approxApy)}
+							</p>
+						</div>
+						<div>
 							<p class="text-xs text-gray-400">Your Rank</p>
 							<p class="text-lg font-semibold text-white">
 								{$rewardsData.rank ? `#${$rewardsData.rank}` : '-'}
@@ -110,6 +117,12 @@
 							<p class="text-xs text-gray-400">Pool Size</p>
 							<p class="text-lg font-semibold text-white">
 								{formatUsd($rewardsData.effectivePool)}
+							</p>
+						</div>
+						<div>
+							<p class="text-xs text-gray-400">Avg Holdings</p>
+							<p class="text-lg font-semibold text-white">
+								{formatUsd($rewardsData.averageValue)}
 							</p>
 						</div>
 					</div>

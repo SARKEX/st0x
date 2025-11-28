@@ -300,8 +300,26 @@
 		}
 	}
 
-	function getWalletRows() {
-		if (!monthlyData?.wallets) return [];
+	/* eslint-disable @typescript-eslint/no-unused-vars */
+	// Parameters are used to force Svelte to track dependencies
+	function getWalletRows(
+		_monthlyData: typeof monthlyData,
+		_hideExcluded: boolean,
+		_excludedWalletsInData: Set<string>,
+		_currentMonthPool: typeof currentMonthPool
+	) {
+		/* eslint-enable @typescript-eslint/no-unused-vars */
+		if (!monthlyData?.wallets) {
+			console.log('[Admin] getWalletRows: monthlyData.wallets is empty/undefined');
+			return [];
+		}
+
+		console.log('[Admin] getWalletRows called:', {
+			walletsCount: monthlyData.wallets.length,
+			hideExcluded,
+			excludedWalletsInDataSize: excludedWalletsInData.size,
+			excludedWalletsSample: Array.from(excludedWalletsInData).slice(0, 3)
+		});
 
 		// Calculate total points for share calculation
 		const allPoints = monthlyData.wallets.reduce((sum, w) => sum + w.totalPoints, 0);
@@ -329,13 +347,14 @@
 		// Filter if hiding excluded
 		const filtered = hideExcluded ? rows.filter((r) => !r.isExcluded) : rows;
 
+		console.log('[Admin] getWalletRows result:', {
+			totalRows: rows.length,
+			excludedCount: rows.filter((r) => r.isExcluded).length,
+			filteredCount: filtered.length
+		});
+
 		// Already sorted by API (by totalPoints descending)
 		return filtered;
-	}
-
-	function getTotalPoints() {
-		const rows = getWalletRows();
-		return rows.reduce((sum, r) => sum + r.totalPoints, 0);
 	}
 
 	// Calculate effective pool amount
@@ -538,6 +557,7 @@
 		excludedError = '';
 
 		try {
+			console.log('[Admin] Loading excluded wallets...');
 			const res = await fetch('/api/admin/excluded-wallets');
 			const data = await res.json();
 
@@ -547,6 +567,10 @@
 
 			excludedWallets = data.wallets || [];
 			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
+			console.log('[Admin] Excluded wallets loaded:', {
+				count: excludedWallets.length,
+				sample: excludedWallets.slice(0, 3)
+			});
 		} catch (err) {
 			excludedError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -755,8 +779,9 @@
 		return address.slice(0, 6) + '...' + address.slice(-4);
 	}
 
-	$: walletRows = getWalletRows();
-	$: totalPoints = getTotalPoints();
+	// Pass dependencies as parameters so Svelte tracks them for reactivity
+	$: walletRows = getWalletRows(monthlyData, hideExcluded, excludedWalletsInData, currentMonthPool);
+	$: totalPoints = walletRows.reduce((sum, r) => sum + r.totalPoints, 0);
 </script>
 
 <svelte:head>

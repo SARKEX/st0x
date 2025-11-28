@@ -17,6 +17,10 @@ interface UserRewardsResponse {
 	estimatedReward: number;
 	rank: number | null;
 	totalWallets: number;
+	// APY calculation fields
+	snapshotCount: number;
+	averageValue: number; // userPoints / snapshotCount / 100 (in USD)
+	approxApy: number | null; // (estimatedReward / averageValue) * 12 * 100, null if no holdings
 	// Pool config
 	poolAmount: number;
 	kickerAmount: number;
@@ -71,9 +75,11 @@ export const GET: RequestHandler = async ({ url }) => {
 		let totalPoints = 0;
 		let rank: number | null = null;
 		let totalWallets = 0;
+		let snapshotCount = 0;
 		const rankings: WalletRanking[] = [];
 
 		if (monthlyData) {
+			snapshotCount = monthlyData.snapshotCount ?? 0;
 			// Build rankings from wallet data
 			const walletEntries = Object.entries(monthlyData.wallets);
 			totalWallets = walletEntries.length;
@@ -109,6 +115,17 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Calculate estimated reward
 		const estimatedReward = totalPoints > 0 ? (userPoints / totalPoints) * effectivePool : 0;
+
+		// Calculate APY
+		// Average value = points / snapshots / 100 (converting points back to USD)
+		// APY = (estimatedReward / averageValue) * 12 * 100 (annualized percentage)
+		const averageValue = snapshotCount > 0 ? userPoints / snapshotCount / 100 : 0;
+		let approxApy: number | null = null;
+		if (averageValue > 0 && estimatedReward > 0) {
+			// Monthly return as decimal, then annualize and convert to percentage
+			const monthlyReturn = estimatedReward / averageValue;
+			approxApy = monthlyReturn * 12 * 100;
+		}
 
 		// Get last month's data
 		let lastMonthData: UserRewardsResponse['lastMonth'] = null;
@@ -172,6 +189,9 @@ export const GET: RequestHandler = async ({ url }) => {
 			estimatedReward,
 			rank,
 			totalWallets,
+			snapshotCount,
+			averageValue,
+			approxApy,
 			poolAmount,
 			kickerAmount,
 			kickerTvlTarget,

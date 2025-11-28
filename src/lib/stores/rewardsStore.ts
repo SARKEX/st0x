@@ -24,6 +24,11 @@ export interface UserRewardsData {
 	estimatedReward: number;
 	rank: number | null;
 	totalWallets: number;
+	// APY calculation fields
+	snapshotCount: number;
+	averageValue: number; // userPoints / snapshotCount / 100 (in USD)
+	approxApy: number | null; // annualized percentage, null if no holdings
+	// Pool config
 	poolAmount: number;
 	kickerAmount: number;
 	kickerTvlTarget: number;
@@ -52,6 +57,7 @@ export const hasRewardsData = derived(rewardsData, ($data) => $data !== null);
 export const userPoints = derived(rewardsData, ($data) => $data?.userPoints ?? 0);
 export const estimatedReward = derived(rewardsData, ($data) => $data?.estimatedReward ?? 0);
 export const userRank = derived(rewardsData, ($data) => $data?.rank);
+export const approxApy = derived(rewardsData, ($data) => $data?.approxApy ?? null);
 
 // Fetch user rewards data
 export async function fetchUserRewards(walletAddress: string): Promise<void> {
@@ -75,6 +81,9 @@ export async function fetchUserRewards(walletAddress: string): Promise<void> {
 			estimatedReward: data.estimatedReward,
 			rank: data.rank,
 			totalWallets: data.totalWallets,
+			snapshotCount: data.snapshotCount,
+			averageValue: data.averageValue,
+			approxApy: data.approxApy,
 			poolAmount: data.poolAmount,
 			kickerAmount: data.kickerAmount,
 			kickerTvlTarget: data.kickerTvlTarget,
@@ -120,4 +129,16 @@ export function formatPoints(points: number): string {
 // Format address for display
 export function formatAddress(address: string): string {
 	return address.slice(0, 6) + '...' + address.slice(-4);
+}
+
+// Format APY percentage
+export function formatApy(apy: number | null): string {
+	if (apy === null || apy === 0) return '-';
+	if (apy >= 1000) {
+		return (apy / 1000).toFixed(1) + 'K%';
+	}
+	if (apy >= 100) {
+		return Math.round(apy) + '%';
+	}
+	return apy.toFixed(1) + '%';
 }
