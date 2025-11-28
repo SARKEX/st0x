@@ -1,6 +1,7 @@
 <script lang="ts">
 	import TickerTape from './TickerTape.svelte';
 	import NetworkSelector from './NetworkSelector.svelte';
+	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
 	import { tick } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -188,10 +189,7 @@
 				</div>
 			</div>
 
-			<div
-				class="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden xl:gap-3"
-				bind:this={actionCluster}
-			>
+			<div class="flex min-w-0 flex-nowrap items-center gap-2 xl:gap-3" bind:this={actionCluster}>
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
 						{#each NAV_ITEMS as item}
@@ -216,6 +214,8 @@
 				{/if}
 
 				<NetworkSelector />
+
+				<RewardsDisplay />
 
 				{#if $connected && !$wrongNetwork && $signerAddress}
 					<div class="flex items-center gap-2">

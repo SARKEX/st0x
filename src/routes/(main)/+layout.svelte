@@ -1,15 +1,53 @@
 <script lang="ts">
 	import '../../app.css';
-	import { wagmiConfig } from 'svelte-wagmi';
+	import { wagmiConfig, signerAddress, connected } from 'svelte-wagmi';
+	import { goto } from '$app/navigation';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
+	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
+	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
+	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { sfts, rainlangConfirmationModal } from '$lib/stores';
+	import {
+		walletRegistered,
+		checkingAccess,
+		checkWalletAccess,
+		resetAccessState
+	} from '$lib/stores/accessStore';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+
+	// Track wallet address to detect changes
+	let lastCheckedAddress: string | null = null;
+	let initialCheckDone = false;
+
+	// Redirect to /access if not connected (on initial load)
+	$: if (browser && !$connected && !initialCheckDone) {
+		initialCheckDone = true;
+		goto('/access');
+	}
+
+	// Check wallet registration when wallet connects or changes
+	$: if (browser && $signerAddress && $connected && $signerAddress !== lastCheckedAddress) {
+		lastCheckedAddress = $signerAddress;
+		initialCheckDone = true;
+		checkWalletAccess($signerAddress).then((registered) => {
+			if (!registered) {
+				goto('/access');
+			}
+		});
+	}
+
+	// Reset state and redirect when wallet disconnects
+	$: if (browser && !$connected && lastCheckedAddress) {
+		lastCheckedAddress = null;
+		resetAccessState();
+		goto('/access');
+	}
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
@@ -92,7 +130,7 @@
 	}
 </script>
 
-{#if $wagmiConfig}
+{#if $wagmiConfig && $connected && $walletRegistered}
 	<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
 		<!-- Background Pattern -->
 		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
@@ -143,9 +181,18 @@
 				onCancel={$rainlangConfirmationModal.onCancel || (() => {})}
 			/>
 		</div>
+
+		<!-- Rewards Modals (rendered at root level for proper fixed positioning) -->
+		<RewardsDetailsModal />
+		<RewardsLeaderboardModal />
+		<RewardsRulesModal />
 	</div>
 {:else}
 	<div class="flex h-screen items-center justify-center bg-gray-900 text-white">
-		<LoadingSpinner variant="fullscreen" size="xl" text="Loading ST0x..." />
+		<LoadingSpinner
+			variant="fullscreen"
+			size="xl"
+			text={$checkingAccess ? 'Checking access...' : 'Redirecting...'}
+		/>
 	</div>
 {/if}

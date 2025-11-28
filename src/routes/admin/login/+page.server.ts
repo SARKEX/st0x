@@ -10,30 +10,29 @@ import type { PageServerLoad } from './$types';
 
 export const prerender = false;
 
-export const load: PageServerLoad = async ({ url, cookies }) => {
-	const redirectTo = url.searchParams.get('redirectTo') || '/';
+export const load: PageServerLoad = async ({ cookies }) => {
 	const token = cookies.get('auth-session');
 	const ts = cookies.get('auth-timestamp');
+
+	// If already logged in, redirect to admin dashboard
 	if (token && ts && verifySessionToken(token, Number(ts))) {
-		throw redirect(303, redirectTo);
+		throw redirect(303, '/admin');
 	}
-	// If stale/invalid cookies exist, clear them to prevent redirect loops
+
+	// Clear stale cookies
 	if (token || ts) {
 		cookies.delete('auth-session', { path: '/' });
 		cookies.delete('auth-timestamp', { path: '/' });
 	}
-	return { redirectTo };
+
+	return {};
 };
 
 export const actions: Actions = {
 	default: async ({ request, cookies }) => {
-		const formData = await request.formData();
-		// Cast to any to work around TypeScript issue with FormData.get()
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const form = formData as any;
-		const username = String(form.get('username') || '');
-		const password = String(form.get('password') || '');
-		const redirectTo = String(form.get('redirectTo') || '/');
+		const formData = (await request.formData()) as unknown as globalThis.FormData;
+		const username = formData.get('username')?.toString() || '';
+		const password = formData.get('password')?.toString() || '';
 
 		if (!validateCredentials(username, password)) {
 			return fail(401, { error: 'Invalid credentials' });
@@ -41,6 +40,7 @@ export const actions: Actions = {
 
 		const timestamp = Date.now();
 		const token = createSessionToken(timestamp);
+
 		cookies.set('auth-session', token, {
 			path: '/',
 			httpOnly: true,
@@ -56,6 +56,6 @@ export const actions: Actions = {
 			maxAge: SESSION_DURATION_MS / 1000
 		});
 
-		throw redirect(303, redirectTo);
+		throw redirect(303, '/admin');
 	}
 };
