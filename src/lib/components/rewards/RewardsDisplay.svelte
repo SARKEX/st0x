@@ -125,8 +125,11 @@
 
 		<!-- Hover Tooltip -->
 		{#if showTooltip && $rewardsData && !showDropdown}
+			{@const kickerProgress = $rewardsData.kickerTargetPoints > 0
+				? Math.min(100, ($rewardsData.totalPoints / $rewardsData.kickerTargetPoints) * 100)
+				: 0}
 			<div
-				class="absolute right-0 top-full z-[160] mt-2 w-48 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+				class="absolute right-0 top-full z-[160] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
 			>
 				<div class="space-y-2 text-sm">
 					<div class="flex justify-between">
@@ -135,12 +138,31 @@
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Est. Reward</span>
-						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span
-						>
+						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span>
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Rewards APY</span>
 						<span class="font-medium text-green-400">{formatApy($globalPoolApy)}</span>
+					</div>
+					<!-- Kicker Progress Bar -->
+					<div class="pt-1">
+						<div class="flex items-center justify-between text-xs text-gray-400">
+							<span>Kicker</span>
+							<span>{kickerProgress.toFixed(0)}%</span>
+						</div>
+						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
+							<div
+								class="h-full transition-all {kickerProgress >= 100 ? 'bg-green-500' : 'bg-yellow-500'}"
+								style="width: {kickerProgress}%"
+							/>
+							<!-- Milestone markers -->
+							{#each [25, 50, 75] as milestone}
+								<div
+									class="absolute top-0 h-full w-px bg-gray-600"
+									style="left: {milestone}%"
+								/>
+							{/each}
+						</div>
 					</div>
 				</div>
 			</div>

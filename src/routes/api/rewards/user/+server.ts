@@ -1,12 +1,26 @@
 // API endpoint to get user rewards data (points, ranking, pool info)
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, type MonthlyPointsData, type RewardsPoolConfig } from '$lib/server/kv';
+import {
+	kvGet,
+	KV_KEYS,
+	type MonthlyPointsData,
+	type RewardsPoolConfig,
+	type KickerTiers
+} from '$lib/server/kv';
 
 interface WalletRanking {
 	address: string;
 	points: number;
 	rank: number;
+}
+
+// Which kicker tiers have been achieved
+interface KickerTiersAchieved {
+	tier25: boolean;
+	tier50: boolean;
+	tier75: boolean;
+	tier100: boolean;
 }
 
 interface UserRewardsResponse {
@@ -23,10 +37,12 @@ interface UserRewardsResponse {
 	approxApy: number | null; // (estimatedReward / averageValue) * 12 * 100, null if no holdings
 	// Pool config
 	poolAmount: number;
-	kickerAmount: number;
+	kickerAmounts: KickerTiers; // Bonus amounts for each tier
 	kickerTvlTarget: number;
-	kickerHit: boolean;
-	effectivePool: number; // poolAmount + (kickerHit ? kickerAmount : 0)
+	kickerTargetPoints: number; // kickerTvlTarget * 2 * daysInMonth * 100
+	kickerTiersAchieved: KickerTiersAchieved; // Which tiers have been hit
+	kickerAchievedAmount: number; // Sum of achieved tier bonuses
+	effectivePool: number; // poolAmount + kickerAchievedAmount
 	// Last month data
 	lastMonth: {
 		month: string;
@@ -34,7 +50,7 @@ interface UserRewardsResponse {
 		totalPoints: number;
 		reward: number;
 		poolAmount: number;
-		kickerHit: boolean;
+		kickerAchievedAmount: number;
 	} | null;
 	// Leaderboard data
 	leaderboard: {
@@ -108,10 +124,37 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Pool calculations
 		const poolAmount = poolConfig?.poolAmount ?? 0;
-		const kickerAmount = poolConfig?.kickerAmount ?? 0;
+		const kickerAmounts: KickerTiers = poolConfig?.kickerAmounts ?? {
+			tier25: 0,
+			tier50: 0,
+			tier75: 0,
+			tier100: 0
+		};
 		const kickerTvlTarget = poolConfig?.kickerTvlTarget ?? 0;
-		const kickerHit = poolConfig?.kickerHit ?? false;
-		const effectivePool = poolAmount + (kickerHit ? kickerAmount : 0);
+
+		// Kicker target in points: TVL * 2 snapshots/day * days in month * 100 points/$
+		const daysInMonth = getDaysInMonth(currentMonth);
+		const kickerTargetPoints = kickerTvlTarget * 2 * daysInMonth * 100;
+
+		// Calculate progress percentage and which tiers are achieved
+		const progressPercent =
+			kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+
+		const kickerTiersAchieved: KickerTiersAchieved = {
+			tier25: progressPercent >= 25,
+			tier50: progressPercent >= 50,
+			tier75: progressPercent >= 75,
+			tier100: progressPercent >= 100
+		};
+
+		// Sum up achieved tier bonuses
+		const kickerAchievedAmount =
+			(kickerTiersAchieved.tier25 ? kickerAmounts.tier25 : 0) +
+			(kickerTiersAchieved.tier50 ? kickerAmounts.tier50 : 0) +
+			(kickerTiersAchieved.tier75 ? kickerAmounts.tier75 : 0) +
+			(kickerTiersAchieved.tier100 ? kickerAmounts.tier100 : 0);
+
+		const effectivePool = poolAmount + kickerAchievedAmount;
 
 		// Calculate estimated reward
 		const estimatedReward = totalPoints > 0 ? (userPoints / totalPoints) * effectivePool : 0;
@@ -140,8 +183,27 @@ export const GET: RequestHandler = async ({ url }) => {
 					(sum, w) => sum + w.totalPoints,
 					0
 				);
-				const lastEffectivePool =
-					lastPoolConfig.poolAmount + (lastPoolConfig.kickerHit ? lastPoolConfig.kickerAmount : 0);
+
+				// Calculate last month's achieved kicker amount
+				const lastDaysInMonth = getDaysInMonth(lastMonth);
+				const lastKickerTargetPoints =
+					(lastPoolConfig.kickerTvlTarget ?? 0) * 2 * lastDaysInMonth * 100;
+				const lastProgressPercent =
+					lastKickerTargetPoints > 0 ? (lastTotalPoints / lastKickerTargetPoints) * 100 : 0;
+
+				const lastKickerAmounts = lastPoolConfig.kickerAmounts ?? {
+					tier25: 0,
+					tier50: 0,
+					tier75: 0,
+					tier100: 0
+				};
+				const lastKickerAchievedAmount =
+					(lastProgressPercent >= 25 ? lastKickerAmounts.tier25 : 0) +
+					(lastProgressPercent >= 50 ? lastKickerAmounts.tier50 : 0) +
+					(lastProgressPercent >= 75 ? lastKickerAmounts.tier75 : 0) +
+					(lastProgressPercent >= 100 ? lastKickerAmounts.tier100 : 0);
+
+				const lastEffectivePool = lastPoolConfig.poolAmount + lastKickerAchievedAmount;
 				const lastReward =
 					lastTotalPoints > 0 ? (lastUserPoints / lastTotalPoints) * lastEffectivePool : 0;
 
@@ -151,7 +213,7 @@ export const GET: RequestHandler = async ({ url }) => {
 					totalPoints: lastTotalPoints,
 					reward: lastReward,
 					poolAmount: lastEffectivePool,
-					kickerHit: lastPoolConfig.kickerHit
+					kickerAchievedAmount: lastKickerAchievedAmount
 				};
 			}
 		}
@@ -192,9 +254,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			averageValue,
 			approxApy,
 			poolAmount,
-			kickerAmount,
+			kickerAmounts,
 			kickerTvlTarget,
-			kickerHit,
+			kickerTargetPoints,
+			kickerTiersAchieved,
+			kickerAchievedAmount,
 			effectivePool,
 			lastMonth: lastMonthData,
 			leaderboard: {
@@ -223,4 +287,10 @@ function getLastMonth(currentMonth: string): string | null {
 		return `${year - 1}-12`;
 	}
 	return `${year}-${String(month - 1).padStart(2, '0')}`;
+}
+
+function getDaysInMonth(monthStr: string): number {
+	const [year, month] = monthStr.split('-').map(Number);
+	// Day 0 of next month gives last day of current month
+	return new Date(year, month, 0).getDate();
 }

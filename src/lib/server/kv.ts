@@ -125,13 +125,20 @@ export interface MonthlyPointsData {
 	updatedAt: string;
 }
 
+// Kicker tier amounts for milestone bonuses
+export interface KickerTiers {
+	tier25: number; // Bonus at 25% of target
+	tier50: number; // Bonus at 50% of target
+	tier75: number; // Bonus at 75% of target
+	tier100: number; // Bonus at 100% of target
+}
+
 // Rewards pool configuration for each month
 export interface RewardsPoolConfig {
 	month: string; // YYYY-MM format
 	poolAmount: number; // Total reward pool in USD
-	kickerAmount: number; // Additional kicker reward if TVL target is met
-	kickerTvlTarget: number; // TVL target in USD to trigger kicker
-	kickerHit: boolean; // Whether the kicker was achieved
+	kickerAmounts: KickerTiers; // Bonus amounts for each tier
+	kickerTvlTarget: number; // TVL target in USD (converts to points target)
 	notes: string; // Optional admin notes
 	updatedAt: string;
 }

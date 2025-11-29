@@ -24,10 +24,11 @@
 	}
 
 	// Calculate kicker progress percentage (capped at 100%)
+	// Progress = accumulated totalPoints / target points (TVL * 2 snapshots/day * days * 100)
 	$: kickerProgress = $rewardsData
 		? Math.min(
 				100,
-				($rewardsData.totalPoints / 100 / Math.max(1, $rewardsData.kickerTvlTarget)) * 100
+				($rewardsData.totalPoints / Math.max(1, $rewardsData.kickerTargetPoints)) * 100
 			)
 		: 0;
 
@@ -133,37 +134,51 @@
 					<div class="mb-2 flex items-center justify-between">
 						<h3 class="text-sm font-medium text-gray-300">Kicker Progress</h3>
 						<span class="text-xs text-gray-400">
-							{$rewardsData.kickerHit
-								? 'Achieved!'
-								: `${formatUsd($rewardsData.kickerTvlTarget)} target`}
+							{formatPoints($rewardsData.totalPoints)} / {formatPoints($rewardsData.kickerTargetPoints)}
 						</span>
 					</div>
-					<div class="mb-2 h-3 overflow-hidden rounded-full bg-gray-600">
-						<div
-							class="h-full transition-all duration-500 {$rewardsData.kickerHit
-								? 'bg-green-500'
-								: 'bg-yellow-500'}"
-							style="width: {kickerProgress}%"
-						/>
+
+					<!-- Progress bar with milestone markers -->
+					<div class="relative mb-4">
+						<div class="h-3 overflow-hidden rounded-full bg-gray-600">
+							<div
+								class="h-full transition-all duration-500 {$rewardsData.kickerTiersAchieved.tier100
+									? 'bg-green-500'
+									: 'bg-yellow-500'}"
+								style="width: {kickerProgress}%"
+							/>
+						</div>
+						<!-- Milestone markers -->
+						{#each [25, 50, 75, 100] as milestone}
+							<div
+								class="absolute top-0 h-3 w-0.5 {kickerProgress >= milestone
+									? 'bg-green-400'
+									: 'bg-gray-500'}"
+								style="left: {milestone}%"
+							/>
+						{/each}
 					</div>
-					<div class="flex items-center justify-between text-xs">
+
+					<!-- Tier bonuses -->
+					<div class="grid grid-cols-4 gap-1 text-center text-xs">
+						{#each [{ pct: 25, achieved: $rewardsData.kickerTiersAchieved.tier25, amount: $rewardsData.kickerAmounts.tier25 }, { pct: 50, achieved: $rewardsData.kickerTiersAchieved.tier50, amount: $rewardsData.kickerAmounts.tier50 }, { pct: 75, achieved: $rewardsData.kickerTiersAchieved.tier75, amount: $rewardsData.kickerAmounts.tier75 }, { pct: 100, achieved: $rewardsData.kickerTiersAchieved.tier100, amount: $rewardsData.kickerAmounts.tier100 }] as { pct, achieved, amount } (pct)}
+							<div class="rounded p-1 {achieved ? 'bg-green-900/30' : 'bg-gray-700/50'}">
+								<div class="font-medium {achieved ? 'text-green-400' : 'text-gray-500'}">
+									{pct}%
+								</div>
+								<div class="{achieved ? 'text-green-300' : 'text-gray-500'}">
+									+${Math.round(amount)}
+								</div>
+							</div>
+						{/each}
+					</div>
+
+					<!-- Total bonus -->
+					<div class="mt-3 flex items-center justify-between text-xs">
 						<span class="text-gray-400">
-							Bonus: +{formatUsd($rewardsData.kickerAmount)}
+							Total Bonus: <span class="font-medium text-green-400">+${Math.round($rewardsData.kickerAchievedAmount)}</span>
 						</span>
-						{#if $rewardsData.kickerHit}
-							<span class="flex items-center gap-1 text-green-400">
-								<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-									<path
-										fill-rule="evenodd"
-										d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-										clip-rule="evenodd"
-									/>
-								</svg>
-								Kicker unlocked!
-							</span>
-						{:else}
-							<span class="text-gray-400">{kickerProgress.toFixed(0)}%</span>
-						{/if}
+						<span class="text-gray-400">{kickerProgress.toFixed(0)}%</span>
 					</div>
 				</div>
 
@@ -187,8 +202,10 @@
 								</p>
 							</div>
 						</div>
-						{#if $rewardsData.lastMonth.kickerHit}
-							<p class="mt-2 text-xs text-green-400">Kicker bonus was included</p>
+						{#if $rewardsData.lastMonth.kickerAchievedAmount > 0}
+							<p class="mt-2 text-xs text-green-400">
+								Includes {formatUsd($rewardsData.lastMonth.kickerAchievedAmount)} kicker bonus
+							</p>
 						{/if}
 					</div>
 				{/if}
