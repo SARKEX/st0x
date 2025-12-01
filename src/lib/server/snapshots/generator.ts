@@ -6,6 +6,7 @@ import { fetchAllTransfers, TOKEN_ADDRESSES } from './scraper';
 import { generateSnapshot, generateAllTokenSnapshots } from './processor';
 import { fetchPythPricesAtTimestamp } from './pyth';
 import { fetchAllVaultHoldings } from './vaults';
+import { fetchAllAerodromeHoldings } from './aerodrome';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { networks } from '$lib/config/networks';
 
@@ -168,6 +169,9 @@ export async function generateTokenSnapshot(
 	// Fetch vault holdings for this token
 	const vaultHoldings = await fetchAllVaultHoldings([normalizedToken]);
 
+	// Fetch Aerodrome LP holdings for this token
+	const aerodromeHoldings = await fetchAllAerodromeHoldings(transfers, blockNumber, [normalizedToken]);
+
 	// Fetch excluded wallets from KV
 	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 
@@ -179,6 +183,7 @@ export async function generateTokenSnapshot(
 		normalizedToken,
 		price,
 		vaultHoldings,
+		aerodromeHoldings,
 		excludedWallets,
 		priceTimestamp
 	);
@@ -202,6 +207,9 @@ export async function generateAllTokenSnapshots_v2(blockNumber: number): Promise
 	// Fetch vault holdings for all tokens
 	const vaultHoldings = await fetchAllVaultHoldings(TOKEN_ADDRESSES);
 
+	// Fetch Aerodrome LP holdings for all tokens
+	const aerodromeHoldings = await fetchAllAerodromeHoldings(transfers, blockNumber, TOKEN_ADDRESSES);
+
 	// Fetch excluded wallets from KV
 	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 
@@ -213,6 +221,7 @@ export async function generateAllTokenSnapshots_v2(blockNumber: number): Promise
 		TOKEN_ADDRESSES,
 		prices,
 		vaultHoldings,
+		aerodromeHoldings,
 		excludedWallets,
 		priceTimestamp
 	);

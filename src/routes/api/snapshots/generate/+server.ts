@@ -101,6 +101,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			TOKEN_ADDRESSES,
 			prices,
 			undefined, // vaultHoldings
+			undefined, // aerodromeHoldings
 			undefined, // dynamicExcluded
 			priceTimestamp
 		);

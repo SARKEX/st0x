@@ -4,11 +4,14 @@
 import type { Transfer, BlockSnapshot, TokenBalances, SnapshotPrice } from './types';
 import type { TokenPrice } from './pyth';
 import type { VaultHolding } from './vaults';
+import type { AerodromeHolding } from './aerodrome';
+import { mergeAerodromeHoldings } from './aerodrome';
 import { TOKENS } from '$lib/config/tokens';
 import {
 	EXCLUDED_WALLETS,
 	ORDERBOOK_ADDRESS,
-	SYSTEM_EXCLUDED_ADDRESSES
+	SYSTEM_EXCLUDED_ADDRESSES,
+	AERODROME_POSITION_MANAGER
 } from '$lib/config/snapshots';
 
 // Zero address for filtering
@@ -16,12 +19,19 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 // Build excluded addresses set from config and optional dynamic list
 function getExcludedAddresses(dynamicExcluded: string[] = []): Set<string> {
-	return new Set([
+	const excluded = new Set([
 		...SYSTEM_EXCLUDED_ADDRESSES.map((a) => a.toLowerCase()),
 		...EXCLUDED_WALLETS.map((a) => a.toLowerCase()),
 		...dynamicExcluded.map((a) => a.toLowerCase()),
 		ORDERBOOK_ADDRESS.toLowerCase()
 	]);
+
+	// Exclude Aerodrome position manager if configured - holdings are tracked via Aerodrome module
+	if (AERODROME_POSITION_MANAGER) {
+		excluded.add(AERODROME_POSITION_MANAGER.toLowerCase());
+	}
+
+	return excluded;
 }
 
 /**
@@ -147,6 +157,7 @@ function toSnapshotPrice(tokenPrice: TokenPrice | undefined): SnapshotPrice | nu
 /**
  * Generate a snapshot for a specific token at a specific block
  * @param vaultHoldings - Optional vault holdings to attribute to owners instead of orderbook
+ * @param aerodromeHoldings - Optional Aerodrome LP holdings to attribute to depositors
  * @param dynamicExcluded - Optional list of wallet addresses from KV store to mark as excluded
  * @param priceTimestamp - Optional timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
  */
@@ -157,6 +168,7 @@ export function generateSnapshot(
 	tokenAddress: string,
 	tokenPrice?: TokenPrice,
 	vaultHoldings?: VaultHolding[],
+	aerodromeHoldings?: AerodromeHolding[],
 	dynamicExcluded?: string[],
 	priceTimestamp?: number
 ): BlockSnapshot {
@@ -170,9 +182,19 @@ export function generateSnapshot(
 	const orderbookAddr = ORDERBOOK_ADDRESS.toLowerCase();
 	balances.delete(orderbookAddr);
 
+	// Remove Aerodrome position manager balance - holdings are tracked via the Aerodrome module
+	if (AERODROME_POSITION_MANAGER) {
+		balances.delete(AERODROME_POSITION_MANAGER.toLowerCase());
+	}
+
 	// Attribute vault holdings to their owners (if vault data was fetched successfully)
 	if (vaultHoldings && vaultHoldings.length > 0) {
 		balances = mergeVaultHoldings(balances, vaultHoldings, tokenAddress);
+	}
+
+	// Attribute Aerodrome LP holdings to depositors (if Aerodrome data was fetched successfully)
+	if (aerodromeHoldings && aerodromeHoldings.length > 0) {
+		balances = mergeAerodromeHoldings(balances, aerodromeHoldings, tokenAddress);
 	}
 
 	// Process balances: remove zeros and identify excluded wallets
@@ -203,6 +225,7 @@ export function generateSnapshot(
  * Generate snapshots for all tokens at a specific block
  * @param prices - Map of token address -> TokenPrice from Pyth
  * @param vaultHoldings - Vault holdings to attribute to owners instead of orderbook
+ * @param aerodromeHoldings - Aerodrome LP holdings to attribute to depositors
  * @param dynamicExcluded - Optional list of wallet addresses from KV store to mark as excluded
  * @param priceTimestamp - Optional timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
  */
@@ -213,6 +236,7 @@ export function generateAllTokenSnapshots(
 	tokenAddresses: string[],
 	prices?: Map<string, TokenPrice>,
 	vaultHoldings?: VaultHolding[],
+	aerodromeHoldings?: AerodromeHolding[],
 	dynamicExcluded?: string[],
 	priceTimestamp?: number
 ): BlockSnapshot[] {
@@ -224,6 +248,7 @@ export function generateAllTokenSnapshots(
 			tokenAddress,
 			prices?.get(tokenAddress.toLowerCase()),
 			vaultHoldings,
+			aerodromeHoldings,
 			dynamicExcluded,
 			priceTimestamp
 		)

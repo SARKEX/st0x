@@ -10,6 +10,11 @@ export const EXCLUDED_WALLETS: string[] = [
 // Rain Orderbook contract address - holdings here are attributed to vault owners
 export const ORDERBOOK_ADDRESS = '0x52ceb8ebef648744ffdde89f7bc9c3ac35944775';
 
+// Aerodrome Slipstream (V3/CL) configuration
+// NonfungiblePositionManager address for Aerodrome Slipstream on Base
+// Set to empty string to disable Aerodrome tracking
+export const AERODROME_POSITION_MANAGER = '0x827922686190790b37229fd06084350E74485b72';
+
 // Addresses that should always be excluded (zero address, etc.)
 export const SYSTEM_EXCLUDED_ADDRESSES = [
 	'0x0000000000000000000000000000000000000000' // Zero address
