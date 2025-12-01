@@ -362,15 +362,17 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing strategy...`);
 		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(network, args);
 
-		// Determine asset token (non-payment token) for Track in Wallet
-		// If outputToken is payment token (e.g., USDC), then inputToken is the asset (Buy DCA)
-		// If outputToken is NOT payment token, then outputToken is the asset (Sell DCA)
-		const assetToken = isPaymentToken(args.outputToken.symbol) ? args.inputToken : args.outputToken;
-		const assetTokenInfo: AssetTokenInfo = {
-			address: assetToken.address,
-			symbol: assetToken.symbol,
-			decimals: assetToken.decimals
-		};
+		// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
+		// Buy DCA: outputToken is payment token (e.g., USDC), inputToken is the asset
+		// Sell DCA: no need to track - user is receiving payment token
+		const isBuyOrder = isPaymentToken(args.outputToken.symbol);
+		const assetTokenInfo: AssetTokenInfo | undefined = isBuyOrder
+			? {
+					address: args.inputToken.address,
+					symbol: args.inputToken.symbol,
+					decimals: args.inputToken.decimals
+				}
+			: undefined;
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo);
 	};
@@ -382,15 +384,17 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing strategy...`);
 		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(network, args);
 
-		// Determine asset token (non-payment token) for Track in Wallet
-		// If outputToken is payment token (e.g., USDC), then inputToken is the asset (Buy Limit)
-		// If outputToken is NOT payment token, then outputToken is the asset (Sell Limit)
-		const assetToken = isPaymentToken(args.outputToken.symbol) ? args.inputToken : args.outputToken;
-		const assetTokenInfo: AssetTokenInfo = {
-			address: assetToken.address,
-			symbol: assetToken.symbol,
-			decimals: assetToken.decimals
-		};
+		// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
+		// Buy Limit: outputToken is payment token (e.g., USDC), inputToken is the asset
+		// Sell Limit: no need to track - user is receiving payment token
+		const isBuyOrder = isPaymentToken(args.outputToken.symbol);
+		const assetTokenInfo: AssetTokenInfo | undefined = isBuyOrder
+			? {
+					address: args.inputToken.address,
+					symbol: args.inputToken.symbol,
+					decimals: args.inputToken.decimals
+				}
+			: undefined;
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo);
 	};
