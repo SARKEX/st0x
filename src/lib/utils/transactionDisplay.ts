@@ -14,6 +14,7 @@ export interface MarketOrderDisplay {
 	assetAmount: bigint;
 	assetSymbol: string;
 	assetDecimals: number;
+	assetAddress: string;
 	paymentAmount: bigint;
 	paymentSymbol: string;
 	paymentDecimals: number;
@@ -46,6 +47,7 @@ export function translateMarketOrderForDisplay(summary: MarketOrderSummary): Mar
 	const assetSymbol = direction === 'Buy' ? summary.inputTokenSymbol : summary.outputTokenSymbol;
 	const assetDecimals =
 		direction === 'Buy' ? summary.inputTokenDecimals : summary.outputTokenDecimals;
+	const assetAddress = direction === 'Buy' ? summary.inputTokenAddress : summary.outputTokenAddress;
 
 	const paymentAmount = direction === 'Buy' ? summary.outputAmount : summary.inputAmount;
 	const paymentSymbol = direction === 'Buy' ? summary.outputTokenSymbol : summary.inputTokenSymbol;
@@ -67,6 +69,7 @@ export function translateMarketOrderForDisplay(summary: MarketOrderSummary): Mar
 		assetAmount,
 		assetSymbol,
 		assetDecimals,
+		assetAddress,
 		paymentAmount,
 		paymentSymbol,
 		paymentDecimals,

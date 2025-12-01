@@ -62,6 +62,7 @@
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
+	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	$: tokenId = $page.params.id;
 
 	// Get queryClient for cache lookup
@@ -1164,6 +1165,30 @@
 									</a>
 								</div>
 							</div>
+							{#if $connected}
+								<button
+									type="button"
+									on:click={() =>
+										addTokenToWallet({
+											address: currentToken.address,
+											symbol: currentToken.symbol,
+											decimals: 18,
+											image: currentPythToken?.logoUrl
+										})}
+									class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+								>
+									<svg
+										class="h-4 w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+									</svg>
+									Track in Wallet
+								</button>
+							{/if}
 						</div>
 					{:else if activeTokenTab === 'supply'}
 						<div class={containerStyles.cardBordered}>

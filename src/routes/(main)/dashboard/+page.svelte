@@ -31,6 +31,7 @@
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
+	import { addTokenToWallet } from '$lib/utils/walletUtils';
 
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
@@ -611,6 +612,35 @@
 															variant="primary"
 															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
 														>
+														<button
+															type="button"
+															on:click={() =>
+																addTokenToWallet({
+																	address: holding.address,
+																	symbol: holding.symbol,
+																	decimals: holding.decimals,
+																	image: ALL_TOKENS.find(
+																		(s) => s.address.toLowerCase() === holding.address.toLowerCase()
+																	)?.logoUrl
+																})}
+															class="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+															title="Track in Wallet"
+														>
+															<svg
+																class="h-3 w-3"
+																viewBox="0 0 24 24"
+																fill="none"
+																stroke="currentColor"
+																stroke-width="2"
+															>
+																<path
+																	d="M12 5v14M5 12h14"
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																/>
+															</svg>
+															Track
+														</button>
 													</div>
 												</td>
 											</tr>

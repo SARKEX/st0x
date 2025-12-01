@@ -33,7 +33,7 @@ function pickRandomBlocksFromHalves(startBlock: number, endBlock: number): [numb
 	return [block1, block2];
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const GET: RequestHandler = async ({ request }) => {
 	try {
 		// Verify cron secret if configured (for Vercel cron protection)
 		const authHeader = request.headers.get('authorization');
@@ -152,13 +152,12 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 };
 
-// GET endpoint for manual triggering or status check
-export const GET: RequestHandler = async () => {
+// POST endpoint for manual triggering with custom parameters
+export const POST: RequestHandler = async ({ request }) => {
+	// For manual triggers, redirect to GET handler logic
+	// This maintains backwards compatibility
 	return json({
-		message: 'Snapshot cron endpoint. Use POST to trigger snapshot generation.',
-		schedule: '0 1 * * *', // 0:01 UTC daily
-		description:
-			'Generates 2 random block snapshots for the previous day ' +
-			'(one from first half 00:00-12:00, one from second half 12:00-24:00)'
+		message: 'Use GET request instead. Vercel Cron uses GET by default.',
+		hint: 'The cron job has been moved to the GET handler.'
 	});
 };

@@ -17,7 +17,7 @@ import {
 	RaindexVault,
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
-import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
+import { parseFloatHex, getRaindexOrderUrl, isPaymentToken } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
@@ -77,9 +77,11 @@ export interface MarketOrderSummary {
 	inputAmount: bigint; // What the user RECEIVES
 	inputTokenDecimals: number;
 	inputTokenSymbol: string;
+	inputTokenAddress: string;
 	outputAmount: bigint; // What the user GIVES AWAY
 	outputTokenDecimals: number;
 	outputTokenSymbol: string;
+	outputTokenAddress: string;
 	requestedInputAmount: bigint; // What the user requested to receive
 	ioRatio: number; // input per output (how much input received per unit output given)
 	actualSlippage: bigint;
@@ -87,8 +89,16 @@ export interface MarketOrderSummary {
 	isNoFill?: boolean;
 }
 
+// Asset token info for Track in Wallet prompt after order deployment
+export interface AssetTokenInfo {
+	address: string;
+	symbol: string;
+	decimals: number;
+}
+
 export interface TransactionMetadata {
 	marketOrderSummary?: MarketOrderSummary;
+	assetTokenInfo?: AssetTokenInfo; // For limit/DCA order deployments
 }
 
 const initialState = {
@@ -143,7 +153,10 @@ const transactionStore = () => {
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
 
-	const handleStrategyDeployment = async (deploymentArgs: DeploymentTransactionArgs) => {
+	const handleStrategyDeployment = async (
+		deploymentArgs: DeploymentTransactionArgs,
+		assetTokenInfo?: AssetTokenInfo
+	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(signerAddress);
@@ -267,11 +280,16 @@ const transactionStore = () => {
 		let attempts = 0;
 		const maxAttempts = 30; // 1 minute max (30 * 2 seconds)
 
+		// Build metadata with asset token info if provided
+		const metadata: TransactionMetadata | undefined = assetTokenInfo
+			? { assetTokenInfo }
+			: undefined;
+
 		// Immediate attempt before scheduling interval
 		const immediateLink = await tryFetchOrderLink();
 		if (immediateLink) {
 			invalidateOrderQueries();
-			return transactionSuccess(hash, immediateLink);
+			return transactionSuccess(hash, immediateLink, metadata);
 		}
 
 		const interval = setInterval(async () => {
@@ -281,7 +299,7 @@ const transactionStore = () => {
 			if (attempts >= maxAttempts) {
 				clearInterval(interval);
 				invalidateOrderQueries();
-				return transactionSuccess(hash, 'Order deployed successfully!');
+				return transactionSuccess(hash, 'Order deployed successfully!', metadata);
 			}
 
 			try {
@@ -289,7 +307,7 @@ const transactionStore = () => {
 				if (link) {
 					clearInterval(interval);
 					invalidateOrderQueries();
-					return transactionSuccess(hash, link);
+					return transactionSuccess(hash, link, metadata);
 				}
 			} catch (error) {
 				// Continue polling
@@ -300,7 +318,8 @@ const transactionStore = () => {
 
 	const showRainlangConfirmation = (
 		composedRainlang: string,
-		deploymentArgs: DeploymentTransactionArgs
+		deploymentArgs: DeploymentTransactionArgs,
+		assetTokenInfo?: AssetTokenInfo
 	) => {
 		rainlangConfirmationModal.set({
 			show: true,
@@ -312,7 +331,7 @@ const transactionStore = () => {
 					onDeploy: null,
 					onCancel: null
 				});
-				handleStrategyDeployment(deploymentArgs);
+				handleStrategyDeployment(deploymentArgs, assetTokenInfo);
 			},
 			onCancel: () => {
 				rainlangConfirmationModal.set({
@@ -343,7 +362,17 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing strategy...`);
 		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(network, args);
 
-		showRainlangConfirmation(composedRainlang, deploymentArgs);
+		// Determine asset token (non-payment token) for Track in Wallet
+		// If outputToken is payment token (e.g., USDC), then inputToken is the asset (Buy DCA)
+		// If outputToken is NOT payment token, then outputToken is the asset (Sell DCA)
+		const assetToken = isPaymentToken(args.outputToken.symbol) ? args.inputToken : args.outputToken;
+		const assetTokenInfo: AssetTokenInfo = {
+			address: assetToken.address,
+			symbol: assetToken.symbol,
+			decimals: assetToken.decimals
+		};
+
+		showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo);
 	};
 
 	const handleLimitDeploy = async (args: LimitOrderDeploymentArgs) => {
@@ -353,7 +382,17 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing strategy...`);
 		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(network, args);
 
-		showRainlangConfirmation(composedRainlang, deploymentArgs);
+		// Determine asset token (non-payment token) for Track in Wallet
+		// If outputToken is payment token (e.g., USDC), then inputToken is the asset (Buy Limit)
+		// If outputToken is NOT payment token, then outputToken is the asset (Sell Limit)
+		const assetToken = isPaymentToken(args.outputToken.symbol) ? args.inputToken : args.outputToken;
+		const assetTokenInfo: AssetTokenInfo = {
+			address: assetToken.address,
+			symbol: assetToken.symbol,
+			decimals: assetToken.decimals
+		};
+
+		showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo);
 	};
 
 	const handleWithdraw = async (vault: RaindexVault) => {
@@ -1003,9 +1042,11 @@ const transactionStore = () => {
 		//       - outputVaultBalanceChange = what MAKER gives = what TAKER receives (INPUT)
 		const inputTokenDecimals = params.takerWantsToken.decimals;
 		const inputTokenSymbol = params.takerWantsToken.symbol;
+		const inputTokenAddress = params.takerWantsToken.address;
 
 		const outputTokenDecimals = params.takerPaysToken.decimals;
 		const outputTokenSymbol = params.takerPaysToken.symbol;
+		const outputTokenAddress = params.takerPaysToken.address;
 
 		// Sum vault changes from TAKER's perspective
 		let totalInputAmount = 0n;
@@ -1058,9 +1099,11 @@ const transactionStore = () => {
 			inputAmount: totalInputAmount,
 			inputTokenDecimals,
 			inputTokenSymbol,
+			inputTokenAddress,
 			outputAmount: totalOutputAmount,
 			outputTokenDecimals,
 			outputTokenSymbol,
+			outputTokenAddress,
 			requestedInputAmount,
 			ioRatio: actualIoRatio,
 			actualSlippage: 0n,

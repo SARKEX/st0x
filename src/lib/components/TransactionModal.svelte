@@ -8,6 +8,7 @@
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import { formatUnits } from 'viem';
 	import { translateMarketOrderForDisplay } from '$lib/utils/transactionDisplay';
+	import { addTokenToWallet } from '$lib/utils/walletUtils';
 
 	const handleClose = () => {
 		return transactionStore.reset();
@@ -17,6 +18,9 @@
 	$: marketOrderDisplay = marketOrderSummary
 		? translateMarketOrderForDisplay(marketOrderSummary)
 		: null;
+
+	// Asset token info for limit/DCA order deployments
+	$: assetTokenInfo = $transactionStore.data?.assetTokenInfo;
 
 	// Helper function to format quantity with max 2 decimals
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
@@ -163,6 +167,30 @@
 								</div>
 							{/if}
 						</div>
+						<!-- Track in Wallet button - only for Buy orders with non-zero fill -->
+						{#if marketOrderDisplay.direction === 'Buy' && !marketOrderDisplay.isNoFill && marketOrderDisplay.assetAddress}
+							<button
+								type="button"
+								on:click={() =>
+									addTokenToWallet({
+										address: marketOrderDisplay.assetAddress,
+										symbol: marketOrderDisplay.assetSymbol,
+										decimals: marketOrderDisplay.assetDecimals
+									})}
+								class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+							>
+								<svg
+									class="h-4 w-4"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+								</svg>
+								Track {marketOrderDisplay.assetSymbol} in Wallet
+							</button>
+						{/if}
 					{/if}
 
 					{#if $transactionStore.hash}
@@ -176,6 +204,31 @@
 								dataTestId="view-transaction-link"
 							/>
 						</div>
+					{/if}
+
+					<!-- Track in Wallet button for limit/DCA order deployments (not market orders) -->
+					{#if assetTokenInfo && !marketOrderDisplay}
+						<button
+							type="button"
+							on:click={() =>
+								addTokenToWallet({
+									address: assetTokenInfo.address,
+									symbol: assetTokenInfo.symbol,
+									decimals: assetTokenInfo.decimals
+								})}
+							class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+						>
+							<svg
+								class="h-4 w-4"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+							</svg>
+							Track {assetTokenInfo.symbol} in Wallet
+						</button>
 					{/if}
 				</div>
 
