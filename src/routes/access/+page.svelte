@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { env } from '$env/dynamic/public';
@@ -41,7 +41,7 @@
 		const urlParams = new URLSearchParams(window.location.search);
 		const code = urlParams.get('utm_campaign') || urlParams.get('ref');
 		if (code) {
-			accessCode = code;
+			accessCode = code.trim();
 		}
 
 		if (browser && !document.getElementById('hcaptcha-script')) {
@@ -56,7 +56,29 @@
 			document.head.appendChild(script);
 		} else if (browser && window.hcaptcha) {
 			captchaReady = true;
+		} else if (browser) {
+			// Script element exists but hcaptcha not ready yet - poll until it's available
+			const checkHcaptcha = setInterval(() => {
+				if (window.hcaptcha) {
+					captchaReady = true;
+					clearInterval(checkHcaptcha);
+				}
+			}, 100);
+			// Stop polling after 10 seconds
+			setTimeout(() => clearInterval(checkHcaptcha), 10000);
 		}
+	});
+
+	// Clean up hcaptcha widget on unmount to prevent stale state
+	onDestroy(() => {
+		if (browser && window.hcaptcha && captchaWidgetId !== null) {
+			try {
+				window.hcaptcha.remove(captchaWidgetId);
+			} catch {
+				// Ignore errors during cleanup
+			}
+		}
+		captchaWidgetId = null;
 	});
 
 	// Render captcha when ready and conditions are met
@@ -64,16 +86,22 @@
 		setTimeout(() => {
 			const container = document.getElementById('hcaptcha-container');
 			if (container && window.hcaptcha && !captchaWidgetId) {
-				captchaWidgetId = window.hcaptcha.render('hcaptcha-container', {
-					sitekey: env.PUBLIC_HCAPTCHA_SITEKEY || '10000000-ffff-ffff-ffff-000000000001',
-					callback: (token: string) => {
-						captchaToken = token;
-					},
-					'expired-callback': () => {
-						captchaToken = '';
-					},
-					theme: 'dark'
-				});
+				try {
+					captchaWidgetId = window.hcaptcha.render('hcaptcha-container', {
+						sitekey: env.PUBLIC_HCAPTCHA_SITEKEY || '10000000-ffff-ffff-ffff-000000000001',
+						callback: (token: string) => {
+							captchaToken = token;
+						},
+						'expired-callback': () => {
+							captchaToken = '';
+						},
+						theme: 'dark'
+					});
+				} catch (err) {
+					console.error('Failed to render hcaptcha:', err);
+					// Reset state to allow retry
+					captchaWidgetId = null;
+				}
 			}
 		}, 100);
 	}

@@ -155,7 +155,7 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/COIN.png',
 		priceFeedId: '0xfee33f2a978bf32dd6b662b65ba8083c6773b494f8401194ec1870c640860245',
 		category: 'ST0x',
-		tradingViewSymbol: 'PYTH:COIN',
+		tradingViewSymbol: 'NASDAQ:COIN',
 		tradingViewMarket: 'america',
 		limitOrders: []
 	} as unknown as CategorizedToken,
