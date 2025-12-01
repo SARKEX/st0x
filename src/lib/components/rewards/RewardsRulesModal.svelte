@@ -89,8 +89,8 @@
 						<li class="flex gap-3">
 							<span class="flex-shrink-0 font-medium text-yellow-400">3.</span>
 							<span>
-								Balances in Aerodrome pools are based on the number of tokens deposited, not 
-								the current balance.
+								Balances in Aerodrome pools are based on the number of tokens deposited, not the
+								current balance.
 							</span>
 						</li>
 						<li class="flex gap-3">

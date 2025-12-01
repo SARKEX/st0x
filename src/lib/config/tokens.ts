@@ -148,6 +148,19 @@ export const TOKENS: CategorizedToken[] = [
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
+		address: '0xb616f8b391d1adc118fd7e4063526d5530d49b10',
+		symbol: 'tCOIN',
+		decimals: 18,
+		name: 'Coinbase Global Inc ST0x',
+		logoUrl: '/images/COIN.png',
+		priceFeedId: '0xfee33f2a978bf32dd6b662b65ba8083c6773b494f8401194ec1870c640860245',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:COIN',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
 		address: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
 		symbol: 'tSPLG',
 		decimals: 18,

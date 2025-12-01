@@ -33,8 +33,7 @@ export const GET: RequestHandler = async () => {
 		const kickerTvlTarget = poolConfig?.kickerTvlTarget ?? 0;
 		const daysInMonth = getDaysInMonth(currentMonth);
 		const kickerTargetPoints = kickerTvlTarget * 2 * daysInMonth * 100;
-		const progressPercent =
-			kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+		const progressPercent = kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
 
 		// Calculate achieved kicker amount based on progress
 		const kickerAmounts = poolConfig?.kickerAmounts ?? {

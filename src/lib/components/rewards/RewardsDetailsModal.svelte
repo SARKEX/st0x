@@ -26,10 +26,7 @@
 	// Calculate kicker progress percentage (capped at 100%)
 	// Progress = accumulated totalPoints / target points (TVL * 2 snapshots/day * days * 100)
 	$: kickerProgress = $rewardsData
-		? Math.min(
-				100,
-				($rewardsData.totalPoints / Math.max(1, $rewardsData.kickerTargetPoints)) * 100
-			)
+		? Math.min(100, ($rewardsData.totalPoints / Math.max(1, $rewardsData.kickerTargetPoints)) * 100)
 		: 0;
 
 	// Format month display
@@ -134,7 +131,9 @@
 					<div class="mb-2 flex items-center justify-between">
 						<h3 class="text-sm font-medium text-gray-300">Kicker Progress</h3>
 						<span class="text-xs text-gray-400">
-							{formatPoints($rewardsData.totalPoints)} / {formatPoints($rewardsData.kickerTargetPoints)}
+							{formatPoints($rewardsData.totalPoints)} / {formatPoints(
+								$rewardsData.kickerTargetPoints
+							)}
 						</span>
 					</div>
 
@@ -166,7 +165,7 @@
 								<div class="font-medium {achieved ? 'text-green-400' : 'text-gray-500'}">
 									{pct}%
 								</div>
-								<div class="{achieved ? 'text-green-300' : 'text-gray-500'}">
+								<div class={achieved ? 'text-green-300' : 'text-gray-500'}>
 									+${Math.round(amount)}
 								</div>
 							</div>
@@ -176,7 +175,9 @@
 					<!-- Total bonus -->
 					<div class="mt-3 flex items-center justify-between text-xs">
 						<span class="text-gray-400">
-							Total Bonus: <span class="font-medium text-green-400">+${Math.round($rewardsData.kickerAchievedAmount)}</span>
+							Total Bonus: <span class="font-medium text-green-400"
+								>+${Math.round($rewardsData.kickerAchievedAmount)}</span
+							>
 						</span>
 						<span class="text-gray-400">{kickerProgress.toFixed(0)}%</span>
 					</div>

@@ -94,7 +94,7 @@ export async function createAccessCode(
 	label: string | null,
 	createdBy: string
 ): Promise<AccessCode> {
-	const finalCode = (code || generateAccessCode()).toUpperCase();
+	const finalCode = (code?.trim() || generateAccessCode()).toUpperCase();
 
 	const accessCode: AccessCode = {
 		code: finalCode,
@@ -123,7 +123,7 @@ export async function createAccessCode(
 }
 
 export async function getAccessCode(code: string): Promise<AccessCode | null> {
-	const normalizedCode = code.toUpperCase();
+	const normalizedCode = code.trim().toUpperCase();
 
 	const kv = await getKv();
 	if (kv) {
@@ -158,7 +158,7 @@ export async function validateAccessCode(
 }
 
 export async function incrementCodeUsage(code: string): Promise<void> {
-	const normalizedCode = code.toUpperCase();
+	const normalizedCode = code.trim().toUpperCase();
 	const accessCode = await getAccessCode(normalizedCode);
 
 	if (!accessCode) return;
@@ -181,7 +181,7 @@ export async function updateAccessCode(
 		label?: string | null;
 	}
 ): Promise<AccessCode | null> {
-	const normalizedCode = code.toUpperCase();
+	const normalizedCode = code.trim().toUpperCase();
 	const accessCode = await getAccessCode(normalizedCode);
 
 	if (!accessCode) return null;
@@ -224,7 +224,7 @@ export async function listAccessCodes(): Promise<AccessCode[]> {
 }
 
 export async function deleteAccessCode(code: string): Promise<boolean> {
-	const normalizedCode = code.toUpperCase();
+	const normalizedCode = code.trim().toUpperCase();
 
 	const kv = await getKv();
 	if (kv) {
@@ -264,7 +264,7 @@ export async function getWalletInfo(address: string): Promise<RegisteredWallet |
 
 export async function registerWallet(address: string, code: string): Promise<RegisteredWallet> {
 	const normalizedAddress = address.toLowerCase();
-	const normalizedCode = code.toUpperCase();
+	const normalizedCode = code.trim().toUpperCase();
 
 	const wallet: RegisteredWallet = {
 		address: normalizedAddress,
@@ -297,7 +297,7 @@ export async function registerWallet(address: string, code: string): Promise<Reg
 }
 
 export async function getWalletsByCode(code: string): Promise<string[]> {
-	const normalizedCode = code.toUpperCase();
+	const normalizedCode = code.trim().toUpperCase();
 
 	const kv = await getKv();
 	if (kv) {
