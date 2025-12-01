@@ -196,7 +196,8 @@
 	let poolFormNotes = '';
 
 	// Helper to get total kicker amount
-	$: totalKickerAmount = poolFormKickerTier25 + poolFormKickerTier50 + poolFormKickerTier75 + poolFormKickerTier100;
+	$: totalKickerAmount =
+		poolFormKickerTier25 + poolFormKickerTier50 + poolFormKickerTier75 + poolFormKickerTier100;
 
 	// Token list for snapshots tab
 	const tokenSymbols = TOKENS.map((t) => t.symbol);
@@ -364,8 +365,7 @@
 		? currentMonthPool.kickerTvlTarget * 2 * getDaysInMonth(selectedMonth) * 100
 		: 0;
 
-	$: kickerProgressPercent =
-		kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+	$: kickerProgressPercent = kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
 
 	// Calculate achieved kicker amount based on progress
 	$: achievedKickerAmount = currentMonthPool
@@ -1073,7 +1073,11 @@
 						</div>
 						<div>
 							<p class="text-gray-400">Kicker Progress</p>
-							<p class="font-mono {kickerProgressPercent >= 100 ? 'text-green-400' : 'text-yellow-400'}">
+							<p
+								class="font-mono {kickerProgressPercent >= 100
+									? 'text-green-400'
+									: 'text-yellow-400'}"
+							>
 								{kickerProgressPercent.toFixed(1)}%
 							</p>
 						</div>
@@ -1108,19 +1112,31 @@
 									class="absolute top-5 flex flex-col items-center text-xs"
 									style="left: {pct}%; transform: translateX(-50%)"
 								>
-									<span class="{achieved ? 'text-green-400' : 'text-gray-500'}">{pct}%</span>
-									<span class="{achieved ? 'text-green-300' : 'text-gray-600'}">+{formatUsd(amount)}</span>
+									<span class={achieved ? 'text-green-400' : 'text-gray-500'}>{pct}%</span>
+									<span class={achieved ? 'text-green-300' : 'text-gray-600'}
+										>+{formatUsd(amount)}</span
+									>
 								</div>
 							{/each}
 						</div>
 						<!-- Points display -->
 						<div class="mt-10 flex items-center justify-between text-sm">
 							<div class="text-gray-400">
-								<span class="font-mono text-white">{totalPoints.toLocaleString()}</span> / <span class="font-mono text-gray-300">{kickerTargetPoints.toLocaleString()}</span> points
+								<span class="font-mono text-white">{totalPoints.toLocaleString()}</span> /
+								<span class="font-mono text-gray-300">{kickerTargetPoints.toLocaleString()}</span> points
 							</div>
 							<div class="text-gray-400">
-								Achieved: <span class="font-medium text-green-400">+{formatUsd(achievedKickerAmount)}</span>
-								<span class="text-gray-500">/ {formatUsd((currentMonthPool.kickerAmounts?.tier25 ?? 0) + (currentMonthPool.kickerAmounts?.tier50 ?? 0) + (currentMonthPool.kickerAmounts?.tier75 ?? 0) + (currentMonthPool.kickerAmounts?.tier100 ?? 0))}</span>
+								Achieved: <span class="font-medium text-green-400"
+									>+{formatUsd(achievedKickerAmount)}</span
+								>
+								<span class="text-gray-500"
+									>/ {formatUsd(
+										(currentMonthPool.kickerAmounts?.tier25 ?? 0) +
+											(currentMonthPool.kickerAmounts?.tier50 ?? 0) +
+											(currentMonthPool.kickerAmounts?.tier75 ?? 0) +
+											(currentMonthPool.kickerAmounts?.tier100 ?? 0)
+									)}</span
+								>
 							</div>
 						</div>
 					</div>
@@ -1248,9 +1264,7 @@
 												{(row.share * 100).toFixed(2)}%
 											</td>
 											{#if currentMonthPool}
-												<td
-													class="py-2 text-right font-mono font-semibold text-[#e8be89]"
-												>
+												<td class="py-2 text-right font-mono font-semibold text-[#e8be89]">
 													{formatUsd(row.rewardActual)}
 												</td>
 											{:else}
@@ -1270,9 +1284,7 @@
 												{totalPoints.toLocaleString()}
 											</td>
 											<td class="py-3 pr-4 text-right font-mono text-gray-300">100%</td>
-											<td
-												class="py-3 text-right font-mono font-semibold text-[#e8be89]"
-											>
+											<td class="py-3 text-right font-mono font-semibold text-[#e8be89]">
 												{formatUsd(effectivePoolAmount)}
 											</td>
 										</tr>
@@ -2114,9 +2126,9 @@
 						</div>
 						<!-- Kicker Tier Amounts -->
 						<div class="sm:col-span-2 lg:col-span-3">
-							<label class="mb-2 block text-sm font-medium text-gray-300">
+							<span class="mb-2 block text-sm font-medium text-gray-300">
 								Kicker Tier Bonuses (USD)
-							</label>
+							</span>
 							<div class="grid grid-cols-4 gap-2">
 								<div>
 									<label for="kickerTier25" class="mb-1 block text-xs text-gray-400">25%</label>
@@ -2239,7 +2251,11 @@
 							</thead>
 							<tbody class="divide-y divide-gray-800">
 								{#each poolConfigs as config}
-									{@const totalKicker = (config.kickerAmounts?.tier25 ?? 0) + (config.kickerAmounts?.tier50 ?? 0) + (config.kickerAmounts?.tier75 ?? 0) + (config.kickerAmounts?.tier100 ?? 0)}
+									{@const totalKicker =
+										(config.kickerAmounts?.tier25 ?? 0) +
+										(config.kickerAmounts?.tier50 ?? 0) +
+										(config.kickerAmounts?.tier75 ?? 0) +
+										(config.kickerAmounts?.tier100 ?? 0)}
 									<tr class="hover:bg-gray-800/30">
 										<td class="py-3 pr-4 font-medium text-[#e8be89]">{config.month}</td>
 										<td class="py-3 pr-4 text-right font-mono text-white">

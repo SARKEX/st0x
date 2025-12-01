@@ -137,8 +137,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		const kickerTargetPoints = kickerTvlTarget * 2 * daysInMonth * 100;
 
 		// Calculate progress percentage and which tiers are achieved
-		const progressPercent =
-			kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+		const progressPercent = kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
 
 		const kickerTiersAchieved: KickerTiersAchieved = {
 			tier25: progressPercent >= 25,
