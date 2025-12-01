@@ -89,19 +89,26 @@
 						<li class="flex gap-3">
 							<span class="flex-shrink-0 font-medium text-yellow-400">3.</span>
 							<span>
+								Balances in Aerodrome pools are based on the number of tokens deposited, not 
+								the current balance.
+							</span>
+						</li>
+						<li class="flex gap-3">
+							<span class="flex-shrink-0 font-medium text-yellow-400">4.</span>
+							<span>
 								St0x-operated accounts used for market making, protocol-owned liquidity, or treasury
 								are ineligible for rewards and do not count towards TVL targets.
 							</span>
 						</li>
 						<li class="flex gap-3">
-							<span class="flex-shrink-0 font-medium text-yellow-400">4.</span>
+							<span class="flex-shrink-0 font-medium text-yellow-400">5.</span>
 							<span>
 								Points accrual begins at 00:00:00 UTC on 1st December 2025 and resets monthly until
 								the programme end date, which will be announced in advance.
 							</span>
 						</li>
 						<li class="flex gap-3">
-							<span class="flex-shrink-0 font-medium text-yellow-400">5.</span>
+							<span class="flex-shrink-0 font-medium text-yellow-400">6.</span>
 							<span>
 								Points are awarded every UTC calendar day in proportion to the US$ value of holdings
 								at two randomly selected blocks, using the most recent regular market hours price as
@@ -109,21 +116,21 @@
 							</span>
 						</li>
 						<li class="flex gap-3">
-							<span class="flex-shrink-0 font-medium text-yellow-400">6.</span>
+							<span class="flex-shrink-0 font-medium text-yellow-400">7.</span>
 							<span>
 								For kicker purposes, we calculate average TVL as the sum of each eligible wallet's
 								holdings in US$ for that block, averaged over the calendar month.
 							</span>
 						</li>
 						<li class="flex gap-3">
-							<span class="flex-shrink-0 font-medium text-yellow-400">7.</span>
+							<span class="flex-shrink-0 font-medium text-yellow-400">8.</span>
 							<span>
 								The reward pool will be used to buy tSPLG for distribution. Due to market and other
 								factors the nominal value of rewards may vary at time of receipt.
 							</span>
 						</li>
 						<li class="flex gap-3">
-							<span class="flex-shrink-0 font-medium text-yellow-400">8.</span>
+							<span class="flex-shrink-0 font-medium text-yellow-400">9.</span>
 							<span> Rewards below US$0.50 will be rounded down to $0 and not distributed. </span>
 						</li>
 					</ol>
