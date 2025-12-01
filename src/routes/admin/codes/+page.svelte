@@ -32,6 +32,27 @@
 	// Delete state
 	let deletingCode: string | null = null;
 
+	// Copy feedback state
+	let copiedCode: string | null = null;
+	let copiedLinkCode: string | null = null;
+
+	function copyCode(code: string) {
+		navigator.clipboard.writeText(code);
+		copiedCode = code;
+		setTimeout(() => {
+			copiedCode = null;
+		}, 1500);
+	}
+
+	function copyLink(code: string) {
+		const baseUrl = window.location.origin;
+		navigator.clipboard.writeText(`${baseUrl}/access?utm_source=referral&utm_campaign=${code}`);
+		copiedLinkCode = code;
+		setTimeout(() => {
+			copiedLinkCode = null;
+		}, 1500);
+	}
+
 	// Edit state
 	let editingCode: string | null = null;
 	let editMaxUses: number | null = null;
@@ -468,10 +489,22 @@
 									Edit
 								</button>
 								<button
-									on:click={() => navigator.clipboard.writeText(code.code)}
-									class="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+									on:click={() => copyCode(code.code)}
+									class="rounded-md border px-3 py-1.5 text-sm transition-all duration-150 {copiedCode ===
+									code.code
+										? 'border-green-600 bg-green-600/20 text-green-400'
+										: 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'}"
 								>
-									Copy
+									{copiedCode === code.code ? 'Copied!' : 'Copy Code'}
+								</button>
+								<button
+									on:click={() => copyLink(code.code)}
+									class="rounded-md border px-3 py-1.5 text-sm transition-all duration-150 {copiedLinkCode ===
+									code.code
+										? 'border-green-600 bg-green-600/20 text-green-400'
+										: 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+								>
+									{copiedLinkCode === code.code ? 'Copied!' : 'Copy Link'}
 								</button>
 								<button
 									on:click={() => deleteCode(code.code)}

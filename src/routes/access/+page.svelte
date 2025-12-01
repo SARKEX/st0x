@@ -35,8 +35,15 @@
 		});
 	}
 
-	// Load hCaptcha script
+	// Load hCaptcha script and pre-fill access code from URL
 	onMount(() => {
+		// Pre-fill access code from URL param (utm_campaign or ref for backwards compat)
+		const urlParams = new URLSearchParams(window.location.search);
+		const code = urlParams.get('utm_campaign') || urlParams.get('ref');
+		if (code) {
+			accessCode = code;
+		}
+
 		if (browser && !document.getElementById('hcaptcha-script')) {
 			const script = document.createElement('script');
 			script.id = 'hcaptcha-script';
@@ -249,7 +256,7 @@
 								<input
 									type="text"
 									bind:value={accessCode}
-									disabled={!$connected || !$signerAddress || submitting}
+									disabled={submitting}
 									placeholder="ST0X-XXXX-XXXX"
 									class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 uppercase text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89] disabled:cursor-not-allowed disabled:opacity-50"
 								/>
