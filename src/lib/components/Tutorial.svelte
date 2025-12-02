@@ -77,7 +77,7 @@
 		tradingview: {
 			title: 'Live Market Data',
 			description: 'Live US exchange data on the underlying equity.',
-			targetSelector: '[data-tutorial="tradingview"]',
+			targetSelector: ['[data-tutorial="symbol-overview"]', '[data-tutorial="tradingview"]'],
 			buttonText: 'Next'
 		},
 		'dex-activity': {
