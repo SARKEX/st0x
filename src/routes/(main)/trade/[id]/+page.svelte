@@ -51,6 +51,7 @@
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import { promptWalletConnection, promptLogin, walletRegistered } from '$lib/stores/accessStore';
+	import { tutorialWantsTradePanel } from '$lib/stores/tutorialStore';
 	import type { RaindexVault } from '@rainlanguage/orderbook';
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
@@ -241,6 +242,21 @@
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
 	let panelStrategy: 'limit' | 'dca' | 'market' = 'market';
 	let panelOpenedFromTerminal = false;
+
+	// Track if the trade panel was opened by the tutorial
+	let panelOpenedByTutorial = false;
+
+	// Open trade panel when tutorial requests it
+	$: if ($tutorialWantsTradePanel && !showTradePanel) {
+		showTradePanel = true;
+		panelOrderSide = 'Buy';
+		panelStrategy = 'market';
+		panelOpenedByTutorial = true;
+	} else if (!$tutorialWantsTradePanel && showTradePanel && panelOpenedByTutorial) {
+		// Close the panel when tutorial no longer wants it open (only if tutorial opened it)
+		showTradePanel = false;
+		panelOpenedByTutorial = false;
+	}
 	const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
 	const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
 	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
@@ -817,7 +833,7 @@
 							<p class="mt-4 text-xs text-red-400">{oracleError}</p>
 						{/if}
 					</div>
-					<div class="grid grid-cols-2 gap-3">
+					<div class="grid grid-cols-2 gap-3" data-tutorial="buy-sell-buttons">
 						<button
 							type="button"
 							class="rounded-xl bg-green-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900"
@@ -835,7 +851,7 @@
 					</div>
 				</div>
 				<!-- Right: Overview and chart -->
-				<div class="flex h-full flex-col gap-4 xl:col-span-3">
+				<div class="flex h-full flex-col gap-4 xl:col-span-3" data-tutorial="tradingview">
 					{#if tradingViewSymbol}
 						<div class={`${containerStyles.cardBordered} flex-1 overflow-hidden p-0`}>
 							<TradingViewWidget
@@ -870,6 +886,7 @@
 			</div>
 		</Section>
 		<Section>
+			<div data-tutorial="dex-activity">
 			<div class="mb-6">
 				<div
 					class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
@@ -1087,10 +1104,11 @@
 					{/if}
 				</div>
 			{/if}
+			</div>
 		</Section>
 		<!-- Tabbed Information Section -->
 		<Section>
-			<div class="grid gap-6 lg:grid-cols-2">
+			<div class="grid gap-6 lg:grid-cols-2" data-tutorial="fundamentals">
 				<div class="space-y-4">
 					<div class="space-y-3">
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
@@ -1323,6 +1341,7 @@
 				role="dialog"
 				aria-modal="true"
 				aria-label={'Trade ' + tokenDisplayName}
+				data-tutorial="trade-panel"
 			>
 				<div class="flex h-full flex-col">
 					<div class="flex items-start justify-between border-b border-white/10 px-6 py-5">

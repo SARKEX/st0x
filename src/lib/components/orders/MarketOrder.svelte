@@ -75,6 +75,33 @@
 
 	// Errors
 	let selectedAmountError: boolean = false;
+	let insufficientBalanceError: boolean = false;
+
+	// Balance from TradeAmountInput (bound)
+	let spendingTokenBalance: bigint = 0n;
+
+	// Token being spent
+	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
+
+	// Calculate the amount being spent and check against balance
+	$: {
+		if (!selectedAmount || selectedAmount === 0n || !marketPrice || isLoadingPrice) {
+			insufficientBalanceError = false;
+		} else if (orderSide === 'Sell') {
+			// For SELL: user is spending the asset token
+			insufficientBalanceError = selectedAmount > spendingTokenBalance;
+		} else {
+			// For BUY: user is spending the payment token (USDC)
+			// Calculate the estimated cost
+			const assetDecimals = assetToken?.decimals ?? 18;
+			const paymentDecimals = paymentToken?.decimals ?? 6;
+			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
+			const estimatedCost = outputInTokens * marketPrice;
+			// Convert to bigint in payment token decimals
+			const estimatedCostBigInt = BigInt(Math.ceil(estimatedCost * 10 ** paymentDecimals));
+			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
+		}
+	}
 
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
@@ -87,6 +114,7 @@
 		!marketPrice ||
 		!assetToken ||
 		selectedAmountError ||
+		insufficientBalanceError ||
 		isLoadingPrice ||
 		priceError ||
 		isSubmittingMarketOrder;
@@ -584,6 +612,7 @@
 					amountToken={assetToken}
 					balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
 					bind:amount={selectedAmount}
+					bind:balance={spendingTokenBalance}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
 					showUnit={false}
@@ -640,11 +669,16 @@
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Estimated Cost</span>
+						<span class="text-gray-400">Estimated</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
 							{isLoadingPrice || priceError ? 'N/A' : requiredInputAmount}
 						</span>
 					</div>
+					{#if insufficientBalanceError}
+						<div class="mt-2 text-sm text-red-400">
+							Insufficient {spendingToken?.symbol ?? 'token'} balance
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -671,6 +705,8 @@
 					Price unavailable
 				{:else if !selectedAmount}
 					Enter an amount
+				{:else if insufficientBalanceError}
+					Insufficient {spendingToken?.symbol ?? 'token'} balance
 				{:else}
 					Complete all fields
 				{/if}

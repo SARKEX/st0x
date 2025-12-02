@@ -9,6 +9,7 @@
 	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
 	import AccessCodeModal from '$lib/components/AccessCodeModal.svelte';
 	import WalletConnectionModal from '$lib/components/WalletConnectionModal.svelte';
+	import Tutorial from '$lib/components/Tutorial.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
@@ -16,14 +17,16 @@
 	import { sfts, rainlangConfirmationModal } from '$lib/stores';
 	import { checkWalletAccess, resetAccessState } from '$lib/stores/accessStore';
 	import { checkAndStoreAccessCodeFromUrl } from '$lib/utils/accessCodeStorage';
+	import { initTutorial } from '$lib/stores/tutorialStore';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	// Track wallet address to detect changes
 	let lastCheckedAddress: string | null = null;
 
-	// Check for access code in URL params on mount
+	// Check for access code in URL params on mount and initialize tutorial
 	onMount(() => {
 		checkAndStoreAccessCodeFromUrl();
+		initTutorial();
 	});
 
 	// Check wallet registration when wallet connects or changes
@@ -179,4 +182,7 @@
 	<!-- Access/Connection Modals -->
 	<AccessCodeModal />
 	<WalletConnectionModal />
+
+	<!-- Tutorial Overlay -->
+	<Tutorial />
 </div>
