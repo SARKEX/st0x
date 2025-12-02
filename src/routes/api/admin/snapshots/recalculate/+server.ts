@@ -51,6 +51,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 		const excludedSet = new Set(excludedWallets.map((w) => w.toLowerCase()));
 
+		// Get existing monthly data to compare
+		const existingData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
+		const existingWalletCount = existingData ? Object.keys(existingData.wallets).length : 0;
+		const existingTotalPoints = existingData
+			? Object.values(existingData.wallets).reduce((sum, w) => sum + w.totalPoints, 0)
+			: 0;
+
+		// Track excluded wallets that had points
+		const excludedWithPoints: { address: string; points: number }[] = [];
+
 		// Create a set of block numbers we're looking for
 		const targetBlocks = new Set(monthBlocks.map((b) => b.blockNumber));
 		console.log(`[Recalculate] Target block numbers: ${Array.from(targetBlocks).join(', ')}`);
@@ -149,16 +159,22 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 				for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
 					const address = walletAddress.toLowerCase();
-
-					// Skip excluded wallets
-					if (excludedSet.has(address)) {
-						continue;
-					}
-
 					const balance = BigInt(balanceStr);
 					const balanceFloat = Number(balance) / 1e18;
 					const usdValue = balanceFloat * price;
 					const points = usdValue * POINTS_PER_DOLLAR;
+
+					// Skip excluded wallets but track their points
+					if (excludedSet.has(address)) {
+						// Track excluded wallet's points for reporting
+						const existing = excludedWithPoints.find((e) => e.address === address);
+						if (existing) {
+							existing.points += points;
+						} else {
+							excludedWithPoints.push({ address, points });
+						}
+						continue;
+					}
 
 					if (!monthlyData.wallets[address]) {
 						monthlyData.wallets[address] = {
@@ -217,6 +233,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const walletSample = Object.entries(monthlyData.wallets).slice(0, 3);
 		console.log(`[Recalculate] Sample wallets:`, JSON.stringify(walletSample, null, 2));
 
+		// Calculate total excluded points
+		const totalExcludedPoints = excludedWithPoints.reduce((sum, e) => sum + e.points, 0);
+
 		return json({
 			success: true,
 			month,
@@ -225,6 +244,19 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			walletCount,
 			totalPoints: Math.round(totalPointsRecalculated),
 			tokensProcessed: Array.from(tokensProcessed),
+			comparison: {
+				previousWalletCount: existingWalletCount,
+				previousTotalPoints: Math.round(existingTotalPoints),
+				walletsRemoved: existingWalletCount - walletCount,
+				pointsRemoved: Math.round(existingTotalPoints - totalPointsRecalculated)
+			},
+			excludedWalletsApplied: excludedWithPoints
+				.filter((e) => e.points > 0)
+				.map((e) => ({
+					address: e.address,
+					pointsExcluded: Math.round(e.points)
+				})),
+			totalExcludedPoints: Math.round(totalExcludedPoints),
 			debug: {
 				blocksFound: monthBlocks.length,
 				totalBlobsInStorage: allBlobs.length,

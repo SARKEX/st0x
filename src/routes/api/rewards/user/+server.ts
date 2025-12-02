@@ -9,6 +9,12 @@ import {
 	type KickerTiers
 } from '$lib/server/kv';
 
+// Get excluded wallets set for filtering
+async function getExcludedWalletsSet(): Promise<Set<string>> {
+	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
+	return new Set(excludedWallets.map((w) => w.toLowerCase()));
+}
+
 interface WalletRanking {
 	address: string;
 	points: number;
@@ -86,6 +92,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Get current month's pool config
 		const poolConfig = await kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth));
 
+		// Get excluded wallets to filter from leaderboard
+		const excludedSet = await getExcludedWalletsSet();
+
 		// Calculate user points and ranking
 		let userPoints = 0;
 		let totalPoints = 0;
@@ -96,11 +105,16 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		if (monthlyData) {
 			snapshotCount = monthlyData.snapshotCount ?? 0;
-			// Build rankings from wallet data
+			// Build rankings from wallet data, excluding excluded wallets
 			const walletEntries = Object.entries(monthlyData.wallets);
-			totalWallets = walletEntries.length;
 
 			for (const [address, data] of walletEntries) {
+				// Skip excluded wallets
+				if (excludedSet.has(address.toLowerCase())) {
+					continue;
+				}
+
+				totalWallets++;
 				totalPoints += data.totalPoints;
 				rankings.push({
 					address,
@@ -177,11 +191,18 @@ export const GET: RequestHandler = async ({ url }) => {
 			const lastPoolConfig = await kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(lastMonth));
 
 			if (lastMonthPoints && lastPoolConfig) {
-				const lastUserPoints = lastMonthPoints.wallets[walletAddress]?.totalPoints ?? 0;
-				const lastTotalPoints = Object.values(lastMonthPoints.wallets).reduce(
-					(sum, w) => sum + w.totalPoints,
-					0
-				);
+				// Only count user points if they're not excluded
+				const lastUserPoints = excludedSet.has(walletAddress)
+					? 0
+					: lastMonthPoints.wallets[walletAddress]?.totalPoints ?? 0;
+
+				// Calculate total points excluding excluded wallets
+				let lastTotalPoints = 0;
+				for (const [addr, data] of Object.entries(lastMonthPoints.wallets)) {
+					if (!excludedSet.has(addr.toLowerCase())) {
+						lastTotalPoints += data.totalPoints;
+					}
+				}
 
 				// Calculate last month's achieved kicker amount
 				const lastDaysInMonth = getDaysInMonth(lastMonth);

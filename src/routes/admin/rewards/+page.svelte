@@ -41,6 +41,14 @@
 		totalPoints: number;
 		tokensProcessed?: string[];
 		blockNumbers?: number[];
+		comparison?: {
+			previousWalletCount: number;
+			previousTotalPoints: number;
+			walletsRemoved: number;
+			pointsRemoved: number;
+		};
+		excludedWalletsApplied?: { address: string; pointsExcluded: number }[];
+		totalExcludedPoints?: number;
 		debug?: {
 			blocksFound: number;
 			totalBlobsInStorage: number;
@@ -281,6 +289,9 @@
 				totalPoints: data.totalPoints,
 				tokensProcessed: data.tokensProcessed,
 				blockNumbers: data.blockNumbers,
+				comparison: data.comparison,
+				excludedWalletsApplied: data.excludedWalletsApplied,
+				totalExcludedPoints: data.totalExcludedPoints,
 				debug: data.debug
 			};
 
@@ -1023,6 +1034,51 @@
 							<p class="mt-1 text-xs text-gray-400">
 								Blocks: {recalculateResult.blockNumbers.join(', ') || 'none'}
 							</p>
+						{/if}
+						{#if recalculateResult.comparison}
+							<div class="mt-2 rounded bg-yellow-900/30 p-2 text-xs">
+								<p class="font-medium text-yellow-400">Changes Applied:</p>
+								<ul class="mt-1 space-y-0.5 text-gray-300">
+									<li>
+										Wallets: {recalculateResult.comparison.previousWalletCount} → {recalculateResult.walletCount}
+										{#if recalculateResult.comparison.walletsRemoved > 0}
+											<span class="text-red-400">(-{recalculateResult.comparison.walletsRemoved} excluded)</span>
+										{:else if recalculateResult.comparison.walletsRemoved < 0}
+											<span class="text-green-400">(+{Math.abs(recalculateResult.comparison.walletsRemoved)} added)</span>
+										{:else}
+											<span class="text-gray-500">(no change)</span>
+										{/if}
+									</li>
+									<li>
+										Points: {recalculateResult.comparison.previousTotalPoints.toLocaleString()} → {recalculateResult.totalPoints.toLocaleString()}
+										{#if recalculateResult.comparison.pointsRemoved > 0}
+											<span class="text-red-400">(-{recalculateResult.comparison.pointsRemoved.toLocaleString()} removed)</span>
+										{:else if recalculateResult.comparison.pointsRemoved < 0}
+											<span class="text-green-400">(+{Math.abs(recalculateResult.comparison.pointsRemoved).toLocaleString()} added)</span>
+										{:else}
+											<span class="text-gray-500">(no change)</span>
+										{/if}
+									</li>
+								</ul>
+							</div>
+						{/if}
+						{#if recalculateResult.excludedWalletsApplied && recalculateResult.excludedWalletsApplied.length > 0}
+							<div class="mt-2 rounded bg-red-900/30 p-2 text-xs">
+								<p class="font-medium text-red-400">
+									Excluded Wallets ({recalculateResult.excludedWalletsApplied.length}):
+									<span class="font-normal text-gray-300">
+										{recalculateResult.totalExcludedPoints?.toLocaleString() || 0} points removed
+									</span>
+								</p>
+								<ul class="mt-1 max-h-32 space-y-0.5 overflow-y-auto text-gray-400">
+									{#each recalculateResult.excludedWalletsApplied as excluded}
+										<li class="font-mono">
+											{excluded.address.slice(0, 10)}...{excluded.address.slice(-8)}
+											<span class="text-red-400">-{excluded.pointsExcluded.toLocaleString()} pts</span>
+										</li>
+									{/each}
+								</ul>
+							</div>
 						{/if}
 						{#if recalculateResult.debug}
 							<div class="mt-2 rounded bg-gray-800/50 p-2 text-xs text-gray-400">

@@ -19,6 +19,7 @@ import {
 } from '@rainlanguage/orderbook';
 import { parseFloatHex, getRaindexOrderUrl, isPaymentToken } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
+import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import { signerAddress, wagmiConfig } from 'svelte-wagmi';
 import {
@@ -228,6 +229,10 @@ const transactionStore = () => {
 						hash: hash
 					});
 				} catch (error) {
+					if (isStaleWalletSessionError(error)) {
+						const msg = await handleStaleWalletSession(config);
+						return transactionError(msg as TransactionErrorMessage);
+					}
 					const errorMessage =
 						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 						TransactionErrorMessage.GENERIC;
@@ -248,6 +253,10 @@ const transactionStore = () => {
 				to: deploymentArgs.orderbookAddress as `0x${string}`
 			});
 		} catch (error) {
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
@@ -430,6 +439,10 @@ const transactionStore = () => {
 
 			return transactionSuccess(hash, link);
 		} catch (error) {
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
 			// @ts-expect-error Send transaction error
 			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
 		}
@@ -644,6 +657,10 @@ const transactionStore = () => {
 
 			return transactionSuccess(hash, link);
 		} catch (error: unknown) {
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
 			const err = error as { cause?: { details?: string }; message?: string };
 			return transactionError(
 				(err?.cause?.details ||
@@ -883,6 +900,10 @@ const transactionStore = () => {
 
 			return transactionSuccess(lastHash, link);
 		} catch (error: unknown) {
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
 			const err = error as { cause?: { details?: string }; message?: string };
 			return transactionError(
 				(err?.cause?.details ||
@@ -989,6 +1010,10 @@ const transactionStore = () => {
 
 			awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
 		} catch (error) {
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;

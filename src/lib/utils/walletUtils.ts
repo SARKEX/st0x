@@ -2,6 +2,39 @@
  * Wallet utility functions for EIP-747 (wallet_watchAsset) and other wallet interactions
  */
 
+import { disconnect } from '@wagmi/core';
+import type { Config } from '@wagmi/core';
+
+/**
+ * Check if an error is a WalletConnect stale session error
+ * This happens when the WalletConnect session becomes invalid but persists in storage
+ */
+export function isStaleWalletSessionError(error: unknown): boolean {
+	if (error instanceof Error) {
+		const message = error.message.toLowerCase();
+		return (
+			(message.includes('personal_sign') || message.includes('eth_sendtransaction')) &&
+			(message.includes('not available') || message.includes('does not exist'))
+		);
+	}
+	return false;
+}
+
+/**
+ * Handle stale wallet session by disconnecting and returning a user-friendly error message
+ * Returns the error message to display to the user
+ */
+export async function handleStaleWalletSession(config: Config | null): Promise<string> {
+	if (config) {
+		try {
+			await disconnect(config);
+		} catch {
+			// Ignore disconnect errors
+		}
+	}
+	return 'Wallet session expired. Please reconnect your wallet and try again.';
+}
+
 export interface WatchAssetParams {
 	address: string;
 	symbol: string;

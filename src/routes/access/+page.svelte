@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { env } from '$env/dynamic/public';
-	import { signMessage } from '@wagmi/core';
+	import { signMessage, disconnect } from '@wagmi/core';
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -14,6 +14,10 @@
 		createSignMessage,
 		registerWallet
 	} from '$lib/stores/accessStore';
+	import {
+		isStaleWalletSessionError,
+		handleStaleWalletSession
+	} from '$lib/utils/walletUtils';
 
 	// Form state
 	let accessCode = '';
@@ -156,7 +160,9 @@
 				}
 			}
 		} catch (err) {
-			if (err instanceof Error) {
+			if (isStaleWalletSessionError(err)) {
+				error = await handleStaleWalletSession($wagmiConfig);
+			} else if (err instanceof Error) {
 				if (err.message.includes('rejected') || err.message.includes('denied')) {
 					error = 'Signature request was rejected';
 				} else {
@@ -253,18 +259,36 @@
 									</Button>
 								{:else}
 									<div
-										class="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2"
+										class="flex items-center justify-between rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2"
 									>
-										<svg class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-											<path
-												fill-rule="evenodd"
-												d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.172 7.707 8.879a1 1 0 10-1.414 1.414L9 13l4.707-4.707z"
-												clip-rule="evenodd"
-											/>
-										</svg>
-										<span class="text-sm text-gray-300">
-											{$signerAddress.slice(0, 6)}...{$signerAddress.slice(-4)}
-										</span>
+										<div class="flex items-center gap-2">
+											<svg class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+												<path
+													fill-rule="evenodd"
+													d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.172 7.707 8.879a1 1 0 10-1.414 1.414L9 13l4.707-4.707z"
+													clip-rule="evenodd"
+												/>
+											</svg>
+											<span class="text-sm text-gray-300">
+												{$signerAddress.slice(0, 6)}...{$signerAddress.slice(-4)}
+											</span>
+										</div>
+										<button
+											type="button"
+											on:click={() => $wagmiConfig && disconnect($wagmiConfig)}
+											class="text-gray-400 hover:text-red-400 transition-colors"
+											aria-label="Disconnect wallet"
+											disabled={submitting}
+										>
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+												/>
+											</svg>
+										</button>
 									</div>
 								{/if}
 							</div>
