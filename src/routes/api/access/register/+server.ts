@@ -4,7 +4,7 @@ import { processRegistration } from '$lib/server/accessCodes';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
-		const { address, code, signature, message, captchaToken } = await request.json();
+		const { address, code, signature, message } = await request.json();
 
 		// Validate required fields
 		if (!address || typeof address !== 'string') {

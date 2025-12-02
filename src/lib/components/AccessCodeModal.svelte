@@ -7,7 +7,8 @@
 	import {
 		createSignMessage,
 		registerWallet,
-		showAccessCodeModal
+		showAccessCodeModal,
+		walletRegistered
 	} from '$lib/stores/accessStore';
 	import {
 		getStoredAccessCode,
@@ -36,9 +37,13 @@
 		}
 	}
 
-	function handleClose() {
+	async function handleClose() {
 		showAccessCodeModal.set(false);
 		error = '';
+		// Auto-disconnect if user closes modal without registering
+		if (!$walletRegistered && $wagmiConfig) {
+			await disconnect($wagmiConfig);
+		}
 	}
 
 	async function handleDisconnect() {

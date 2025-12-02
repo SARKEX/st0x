@@ -11,9 +11,6 @@ export const accessError = writable<string | null>(null);
 export const showAccessCodeModal = writable<boolean>(false);
 export const showWalletConnectionModal = writable<boolean>(false);
 
-// Legacy alias for compatibility
-export const showLoginDropdown = showAccessCodeModal;
-
 // Function to prompt wallet connection (shows modal if not connected)
 export function promptWalletConnection() {
 	showWalletConnectionModal.set(true);
@@ -150,7 +147,8 @@ if (browser) {
 	signerAddress.subscribe((address) => {
 		if (address && address !== currentAddress) {
 			currentAddress = address;
-			checkWalletAccess(address);
+			// Check registration and show modal if not registered
+			checkWalletAccess(address, true);
 		} else if (!address && currentAddress) {
 			currentAddress = null;
 			resetAccessState();
