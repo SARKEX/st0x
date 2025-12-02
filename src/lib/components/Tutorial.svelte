@@ -14,6 +14,7 @@
 		tutorialWantsTradePanel,
 		type TutorialStep
 	} from '$lib/stores/tutorialStore';
+	import { globalPoolApy, fetchGlobalPoolApy } from '$lib/stores/rewardsStore';
 
 	// Element positioning - support multiple target elements
 	let targetRects: DOMRect[] = [];
@@ -32,8 +33,15 @@
 			targetSelector?: string | string[];
 			buttonText: string;
 			isModal?: boolean;
+			isPromo?: boolean;
 		}
 	> = {
+		promo: {
+			title: '',
+			description: '',
+			buttonText: '',
+			isPromo: true
+		},
 		welcome: {
 			title: 'Welcome to ST0x',
 			description:
@@ -229,21 +237,42 @@
 	onMount(() => {
 		if (browser) {
 			window.addEventListener('resize', updateTargetPosition);
+			window.addEventListener('resize', updatePromoFontSize);
 			window.addEventListener('scroll', updateTargetPosition, true);
 			updateTargetPosition();
+			// Fetch global pool APY for the promo step
+			fetchGlobalPoolApy();
 		}
 	});
 
 	onDestroy(() => {
 		if (browser) {
 			window.removeEventListener('resize', updateTargetPosition);
+			window.removeEventListener('resize', updatePromoFontSize);
 			window.removeEventListener('scroll', updateTargetPosition, true);
 		}
 	});
 
 	$: content = stepContent[$tutorialStep];
 	$: isModal = content?.isModal || targetRects.length === 0;
+	$: isPromo = content?.isPromo || false;
 	$: showTutorial = $tutorialActive && $tutorialStep !== 'complete';
+
+	// Format APY for display in promo (no truncation to K)
+	$: promoApyText = $globalPoolApy ? `${Math.round($globalPoolApy)}%` : '300%';
+
+	// Track promo image size for scaling text
+	let promoImageEl: HTMLImageElement;
+	let promoFontSize = '1rem';
+
+	function updatePromoFontSize() {
+		if (promoImageEl) {
+			// Scale font size based on rendered image width
+			// ~1.4rem (22px) looks good at ~400px width, so use 5.5% of width
+			const scaledSize = promoImageEl.clientWidth * 0.045;
+			promoFontSize = `${Math.max(14, scaledSize)}px`;
+		}
+	}
 </script>
 
 {#if showTutorial}
@@ -252,8 +281,47 @@
 		class="fixed inset-0 z-[9000]"
 		transition:fade={{ duration: 200 }}
 	>
+		<!-- Promo screen with image and dynamic APY -->
+		{#if isPromo}
+			<button
+				type="button"
+				class="absolute inset-0 flex items-center justify-center bg-black/75"
+				on:click={handleNext}
+				aria-label="Continue to tutorial"
+			>
+				<div class="relative max-h-[72vh] max-w-[72vw]">
+					<img
+						bind:this={promoImageEl}
+						on:load={updatePromoFontSize}
+						src="/images/promo-boost.png"
+						alt="Boost Rewards Promo"
+						class="max-h-[72vh] max-w-[72vw] object-contain"
+					/>
+					<!-- Dynamic APY overlay positioned after "CURRENT APY IS" -->
+					<div
+						class="absolute flex items-center justify-center"
+						style="
+							top: 52.2%;
+							left: 68%;
+							transform: translate(-50%, -50%);
+							width: 100%;
+						"
+					>
+						<span
+							class="font-bold text-[#c084fc]"
+							style="
+								font-size: {promoFontSize};
+								text-shadow: 0 0 20px rgba(192, 132, 252, 0.6);
+								letter-spacing: 0.02em;
+							"
+						>
+							{promoApyText}
+						</span>
+					</div>
+				</div>
+			</button>
 		<!-- Dark overlay with cutout for target element(s) -->
-		{#if targetRects.length > 0 && !isModal}
+		{:else if targetRects.length > 0 && !isModal}
 			<svg class="absolute inset-0 h-full w-full">
 				<defs>
 					<mask id="tutorial-mask">

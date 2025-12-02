@@ -4,6 +4,7 @@ import { goto } from '$app/navigation';
 import { isTutorialHidden, hideTutorial as persistHideTutorial } from '$lib/utils/tutorialStorage';
 
 export type TutorialStep =
+	| 'promo'
 	| 'welcome'
 	| 'boost-rewards'
 	| 'token-list'
@@ -15,6 +16,7 @@ export type TutorialStep =
 	| 'complete';
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
+	'promo',
 	'welcome',
 	'boost-rewards',
 	'token-list',
@@ -27,7 +29,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
 ];
 
 // Current tutorial step
-export const tutorialStep = writable<TutorialStep>('welcome');
+export const tutorialStep = writable<TutorialStep>('promo');
 
 // Whether tutorial is active (visible)
 export const tutorialActive = writable<boolean>(false);
@@ -45,7 +47,7 @@ export async function initTutorial(): Promise<void> {
 			await goto('/');
 		}
 		tutorialActive.set(true);
-		tutorialStep.set('welcome');
+		tutorialStep.set('promo');
 	}
 }
 
