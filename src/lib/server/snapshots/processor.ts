@@ -61,9 +61,10 @@ export function calculateBalancesAtBlock(
 		}
 	}
 
-	// Remove zero balances only (not excluded addresses - done later)
+	// Remove zero and negative balances (not excluded addresses - done later)
+	// Negative balances can occur due to transfer replay ordering issues
 	for (const [address, balance] of balances) {
-		if (balance === 0n) {
+		if (balance <= 0n) {
 			balances.delete(address);
 		}
 	}

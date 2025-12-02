@@ -90,16 +90,18 @@
 	let aggregatedDataLoading = false;
 
 	// Derived: wallet points from current snapshot
+	// Uses current KV excluded wallets list instead of snapshot file's list
 	$: snapshotWalletPoints = (() => {
 		if (!snapshotData) return [];
 		const price = snapshotData.price?.price ?? 0;
-		const excludedSet = new Set(snapshotData.excludedWallets.map((w) => w.toLowerCase()));
 
 		return Object.entries(snapshotData.balances)
 			.map(([address, balanceStr]) => {
 				const balance = parseFloat(balanceStr) / 1e18;
+				// Skip negative balances (can occur from transfer replay ordering issues)
+				if (balance <= 0) return null;
 				const value = balance * price;
-				const isExcluded = excludedSet.has(address.toLowerCase());
+				const isExcluded = excludedWalletsInData.has(address.toLowerCase());
 				const points = isExcluded ? 0 : value * 100; // 100 points per $1
 
 				return {
@@ -110,6 +112,7 @@
 					isExcluded
 				};
 			})
+			.filter((w): w is NonNullable<typeof w> => w !== null)
 			.sort((a, b) => b.value - a.value);
 	})();
 
@@ -491,14 +494,14 @@
 				if (!snapshot) continue;
 
 				const price = snapshot.price?.price ?? 0;
-				const excludedSet = new Set(
-					(snapshot.excludedWallets || []).map((w: string) => w.toLowerCase())
-				);
 
 				for (const [address, balanceStr] of Object.entries(snapshot.balances)) {
 					const balance = parseFloat(balanceStr as string) / 1e18;
+					// Skip negative balances (can occur from transfer replay ordering issues)
+					if (balance <= 0) continue;
 					const value = balance * price;
-					const isExcluded = excludedSet.has(address.toLowerCase());
+					// Use current KV excluded wallets list instead of snapshot file's list
+					const isExcluded = excludedWalletsInData.has(address.toLowerCase());
 					const points = isExcluded ? 0 : value * 100;
 
 					const existing = walletMap.get(address.toLowerCase());
@@ -1537,7 +1540,7 @@
 							</div>
 							<div class="rounded-lg bg-gray-800/50 p-3 text-center">
 								<p class="text-lg font-bold text-[#e8be89]">
-									{snapshotData.excludedWallets.length}
+									{snapshotWalletPoints.filter((w) => w.isExcluded).length}
 								</p>
 								<p class="text-xs text-gray-400">Excluded</p>
 							</div>

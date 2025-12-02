@@ -44,6 +44,9 @@ function calculateWalletPointsFromSnapshots(
 			const address = walletAddress.toLowerCase();
 			const balance = BigInt(balanceStr);
 
+			// Skip negative balances (treat as 0 points)
+			if (balance <= 0n) continue;
+
 			// Calculate USD value: (balance / 10^18) * price
 			const balanceFloat = Number(balance) / 1e18;
 			const usdValue = balanceFloat * price;

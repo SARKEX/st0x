@@ -160,6 +160,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
 					const address = walletAddress.toLowerCase();
 					const balance = BigInt(balanceStr);
+
+					// Skip negative balances (can occur from transfer replay ordering issues)
+					if (balance <= 0n) continue;
+
 					const balanceFloat = Number(balance) / 1e18;
 					const usdValue = balanceFloat * price;
 					const points = usdValue * POINTS_PER_DOLLAR;
@@ -205,6 +209,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		// Update snapshot count and block numbers
 		monthlyData.blockNumbers = Array.from(processedBlocks).sort((a, b) => a - b);
 		monthlyData.snapshotCount = processedBlocks.size;
+
+		// Floor all points to 0 (reset any negative points)
+		for (const wallet of Object.values(monthlyData.wallets)) {
+			wallet.totalPoints = Math.max(0, wallet.totalPoints);
+			for (const tokenData of Object.values(wallet.tokens)) {
+				tokenData.points = Math.max(0, tokenData.points);
+			}
+		}
 
 		// Save updated data
 		await kvSet(KV_KEYS.monthlyPoints(month), monthlyData);
