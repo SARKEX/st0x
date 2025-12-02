@@ -13,8 +13,7 @@
 	import { currentNetwork, oracleQuotes } from '$lib/stores';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -114,11 +113,17 @@
 		priceGuardrailError;
 
 	const handleDcaDeploy = () => {
+		// Check if user is connected
 		if (!$connected) {
-			showConnectModal = true;
+			promptWalletConnection();
 			return;
 		}
-		if ($connected) {
+		// Check if user is registered
+		if (!$walletRegistered) {
+			promptLogin();
+			return;
+		}
+		if ($connected && $walletRegistered) {
 			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
 			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 
@@ -144,9 +149,6 @@
 			});
 		}
 	};
-
-	// Wallet connect modal state
-	let showConnectModal = false;
 
 	// Calculate average amount per period (use correct decimals for order type)
 	$: avgPricePerPeriod = (() => {
@@ -401,21 +403,3 @@
 		<LoadingSpinner size="md" text="Loading..." />
 	</div>
 {/if}
-
-<!-- Connect Wallet Modal -->
-<Modal
-	show={showConnectModal}
-	title="Connect Your Wallet"
-	maxWidthClass="max-w-lg"
-	onClose={() => (showConnectModal = false)}
->
-	<div class="space-y-4">
-		<WalletConnectionPrompt
-			title="Wallet Required to Place Order"
-			description="Connect your wallet to continue. After connecting, click Place again to submit your order."
-			showSection={false}
-			minHeight={false}
-			onConnect={() => (showConnectModal = false)}
-		/>
-	</div>
-</Modal>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { signerAddress, connected } from 'svelte-wagmi';
+	import { browser } from '$app/environment';
 	import {
 		rewardsData,
 		rewardsLoading,
@@ -23,7 +24,9 @@
 	// Fetch global pool APY on mount (doesn't require wallet)
 	onMount(() => {
 		fetchGlobalPoolApy();
-		document.addEventListener('click', handleClickOutside);
+		if (browser) {
+			document.addEventListener('click', handleClickOutside);
+		}
 	});
 
 	// Fetch rewards when wallet connects/changes
@@ -55,7 +58,9 @@
 	}
 
 	onDestroy(() => {
-		document.removeEventListener('click', handleClickOutside);
+		if (browser) {
+			document.removeEventListener('click', handleClickOutside);
+		}
 	});
 </script>
 

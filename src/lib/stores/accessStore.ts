@@ -7,6 +7,23 @@ export const walletRegistered = writable<boolean | null>(null); // null = not ch
 export const checkingAccess = writable<boolean>(false);
 export const accessError = writable<string | null>(null);
 
+// Modal states
+export const showAccessCodeModal = writable<boolean>(false);
+export const showWalletConnectionModal = writable<boolean>(false);
+
+// Legacy alias for compatibility
+export const showLoginDropdown = showAccessCodeModal;
+
+// Function to prompt wallet connection (shows modal if not connected)
+export function promptWalletConnection() {
+	showWalletConnectionModal.set(true);
+}
+
+// Function to prompt login/registration (shows access code modal)
+export function promptLogin() {
+	showAccessCodeModal.set(true);
+}
+
 // Derived store for access status
 export const accessStatus = derived(
 	[connected, signerAddress, walletRegistered, checkingAccess],
@@ -25,7 +42,11 @@ export const accessStatus = derived(
 );
 
 // Check if wallet is registered
-export async function checkWalletAccess(address: string): Promise<boolean> {
+// If showModalIfUnregistered is true (default), shows access code modal for unregistered wallets
+export async function checkWalletAccess(
+	address: string,
+	showModalIfUnregistered: boolean = true
+): Promise<boolean> {
 	if (!browser) return false;
 
 	checkingAccess.set(true);
@@ -37,6 +58,12 @@ export async function checkWalletAccess(address: string): Promise<boolean> {
 
 		if (res.ok) {
 			walletRegistered.set(data.registered);
+
+			// Show access code modal for unregistered wallets
+			if (!data.registered && showModalIfUnregistered) {
+				showAccessCodeModal.set(true);
+			}
+
 			return data.registered;
 		} else {
 			accessError.set(data.error || 'Failed to check access');

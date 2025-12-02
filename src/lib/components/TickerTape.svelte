@@ -3,13 +3,16 @@
 	import { currentNetwork } from '$lib/stores';
 	import { onMount } from 'svelte';
 	import { onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	let container: HTMLDivElement;
 	let paused = false;
 	let tapTimeout: ReturnType<typeof setTimeout> | null = null;
 	let isMobile = false;
 
 	function checkMobile() {
-		isMobile = window.innerWidth < 640;
+		if (browser) {
+			isMobile = window.innerWidth < 640;
+		}
 	}
 
 	// On mobile, overlay is present by default
@@ -62,7 +65,9 @@
 
 	onDestroy(() => {
 		if (tapTimeout) clearTimeout(tapTimeout);
-		window.removeEventListener('resize', checkMobile);
+		if (browser) {
+			window.removeEventListener('resize', checkMobile);
+		}
 	});
 
 	// On mobile, tap overlay to unlock ticker for 10s

@@ -24,8 +24,7 @@
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import transactionStore from '$lib/stores/transaction';
 	import { Float } from '@rainlanguage/float';
@@ -101,8 +100,6 @@
 		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
 	})();
 
-	// Wallet connect modal state
-	let showConnectModal = false;
 	let isSubmittingMarketOrder = false;
 
 	async function fetchMarketPrice() {
@@ -286,8 +283,14 @@
 	}
 
 	const handleMarketOrder = async () => {
+		// Check if user is connected
 		if (!$connected) {
-			showConnectModal = true;
+			promptWalletConnection();
+			return;
+		}
+		// Check if user is registered (access code modal shows automatically after connecting)
+		if (!$walletRegistered) {
+			promptLogin();
 			return;
 		}
 
@@ -682,20 +685,3 @@
 	</div>
 {/if}
 
-<!-- Connect Wallet Modal -->
-<Modal
-	show={showConnectModal}
-	title="Connect Your Wallet"
-	maxWidthClass="max-w-lg"
-	onClose={() => (showConnectModal = false)}
->
-	<div class="space-y-4">
-		<WalletConnectionPrompt
-			title="Wallet Required to Place Order"
-			description="Connect your wallet to continue. After connecting, click Place again to submit your order."
-			showSection={false}
-			minHeight={false}
-			onConnect={() => (showConnectModal = false)}
-		/>
-	</div>
-</Modal>

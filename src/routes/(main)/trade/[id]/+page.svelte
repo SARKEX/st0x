@@ -50,6 +50,7 @@
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
+	import { promptWalletConnection, promptLogin, walletRegistered } from '$lib/stores/accessStore';
 	import type { RaindexVault } from '@rainlanguage/orderbook';
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
@@ -474,6 +475,16 @@
 		}
 	};
 	const openTradePanel = (side: 'Buy' | 'Sell', options: { closeTerminal?: boolean } = {}) => {
+		// Check if wallet is connected before opening trade panel
+		if (!$connected) {
+			promptWalletConnection();
+			return;
+		}
+		// Check if wallet is registered
+		if (!$walletRegistered) {
+			promptLogin();
+			return;
+		}
 		panelOrderSide = side;
 		panelStrategy = 'market';
 		const shouldCloseTerminal = options.closeTerminal ?? true;
