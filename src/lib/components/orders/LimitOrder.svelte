@@ -14,7 +14,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
 	import Modal from '$lib/components/ui/Modal.svelte';
-	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 
 	/**
@@ -99,8 +99,14 @@
 
 	const handleDeploy = async () => {
 		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
+		// Check if user is connected
 		if (!$connected) {
-			showConnectModal = true;
+			promptWalletConnection();
+			return;
+		}
+		// Check if user is registered
+		if (!$walletRegistered) {
+			promptLogin();
 			return;
 		}
 
@@ -167,9 +173,6 @@
 			transactionStore.handleLimitDeploy(deployData);
 		}
 	};
-
-	// Wallet connect modal state
-	let showConnectModal = false;
 
 	// Price warning modal state
 	let showPriceWarning = false;
@@ -375,24 +378,6 @@
 		<LoadingSpinner size="md" text="Loading..." />
 	</div>
 {/if}
-
-<!-- Connect Wallet Modal -->
-<Modal
-	show={showConnectModal}
-	title="Connect Your Wallet"
-	maxWidthClass="max-w-lg"
-	onClose={() => (showConnectModal = false)}
->
-	<div class="space-y-4">
-		<WalletConnectionPrompt
-			title="Wallet Required to Place Order"
-			description="Connect your wallet to continue. After connecting, click Place again to submit your order."
-			showSection={false}
-			minHeight={false}
-			onConnect={() => (showConnectModal = false)}
-		/>
-	</div>
-</Modal>
 
 <!-- Price Warning Modal -->
 <Modal

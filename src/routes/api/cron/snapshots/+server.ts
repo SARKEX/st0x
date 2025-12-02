@@ -153,7 +153,7 @@ export const GET: RequestHandler = async ({ request }) => {
 };
 
 // POST endpoint for manual triggering with custom parameters
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async () => {
 	// For manual triggers, redirect to GET handler logic
 	// This maintains backwards compatibility
 	return json({

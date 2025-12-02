@@ -95,7 +95,9 @@ export type TokenPriceSummary = {
  * Returns null for orders that should be hidden (e.g., dynamic spread).
  */
 export function classifyOrderType(rainlang: string | undefined): OrderType | null {
-	if (!rainlang) return 'custom';
+	if (!rainlang) {
+		return 'custom';
+	}
 
 	// Dynamic Spread - contains "other-vwaio" - should be hidden from order tab
 	if (rainlang.includes('other-vwaio')) {
@@ -108,8 +110,16 @@ export function classifyOrderType(rainlang: string | undefined): OrderType | nul
 	);
 	const handleIoContent = handleIoMatch?.[1]?.trim() ?? '';
 
-	// DCA - handle-io section starts with "min-amount:"
-	if (handleIoContent.startsWith('min-amount:')) {
+	// DCA detection - multiple patterns
+	// 1. handle-io section contains "min-amount:" (common DCA pattern)
+	// 2. Contains DCA-specific functions like linear-growth, halflife, amount-epochs
+	const isDca =
+		handleIoContent.includes('min-amount:') ||
+		rainlang.includes('linear-growth') ||
+		rainlang.includes('amount-epochs') ||
+		rainlang.includes('halflife');
+
+	if (isDca) {
 		return 'dca';
 	}
 

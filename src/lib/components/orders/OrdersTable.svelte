@@ -6,7 +6,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 	import transactionStore from '$lib/stores/transaction';
-	import type { ProcessedQuote } from '$lib/utils/orderbook';
+	import { type ProcessedQuote, classifyOrderType } from '$lib/utils/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { DisplayOrder } from '$lib/types/orders';
@@ -51,34 +51,49 @@
 		selectedOrdersFilter = 'all';
 	}
 
-	// Query for closed/inactive orders (user's only)
-	$: closedOrdersQuery = createQuery({
-		queryKey: ['closedOrders', $currentNetwork?.id, $signerAddress, tokenAddress],
-		enabled: Boolean(
-			showClosedOrders && showClosedOrdersOption && $currentNetwork && $signerAddress
-		),
-		staleTime: 60_000,
-		queryFn: async () => {
-			if (!$currentNetwork || !$signerAddress) {
-				return [];
+	// Helper function to create the closed orders query
+	function createClosedOrdersQuery(
+		network: typeof $currentNetwork,
+		signer: typeof $signerAddress,
+		token: string | null,
+		enabled: boolean
+	) {
+		return createQuery({
+			queryKey: ['closedOrders', network?.id, signer, token, enabled],
+			enabled: Boolean(enabled && network && signer),
+			staleTime: 60_000,
+			queryFn: async () => {
+				// Double-check enabled state (Tanstack Query should prevent this, but be safe)
+				if (!enabled || !network || !signer) {
+					return [];
+				}
+				const client = await createRaindexClient();
+				const filters: { owners: `0x${string}`[]; active: boolean; tokens?: `0x${string}`[] } = {
+					owners: [signer as `0x${string}`],
+					active: false
+				};
+				// Only filter by token if provided
+				if (token) {
+					filters.tokens = [token as `0x${string}`];
+				}
+				const result = await client.getOrders([network.id], filters, 1);
+				if (result.error) {
+					console.error('[closedOrdersQuery] Error:', result.error);
+					return [];
+				}
+				return result.value ?? [];
 			}
-			const client = await createRaindexClient();
-			const filters: { owners: `0x${string}`[]; active: boolean; tokens?: `0x${string}`[] } = {
-				owners: [$signerAddress as `0x${string}`],
-				active: false
-			};
-			// Only filter by token if provided
-			if (tokenAddress) {
-				filters.tokens = [tokenAddress as `0x${string}`];
-			}
-			const result = await client.getOrders([$currentNetwork.id], filters, 1);
-			if (result.error) {
-				console.error('[closedOrdersQuery] Error:', result.error);
-				return [];
-			}
-			return result.value ?? [];
-		}
-	});
+		});
+	}
+
+	// Reactive query that tracks all dependencies including the checkbox state
+	$: shouldFetchClosedOrders = showClosedOrders && showClosedOrdersOption;
+	$: closedOrdersQuery = createClosedOrdersQuery(
+		$currentNetwork,
+		$signerAddress,
+		tokenAddress,
+		shouldFetchClosedOrders
+	);
 
 	// Filter and combine orders
 	$: filteredOrders = (() => {
@@ -101,10 +116,14 @@
 		if (showClosedOrders && selectedOrdersFilter === 'my' && $closedOrdersQuery.data) {
 			const existingHashes = new Set(result.map((o) => o.orderHash.toLowerCase()));
 			for (const order of $closedOrdersQuery.data) {
-				if (existingHashes.has(order.orderHash.toLowerCase())) continue;
+				if (existingHashes.has(order.orderHash.toLowerCase())) {
+					continue;
+				}
 
 				const sgOrderResult = order.convertToSgOrder();
-				if (sgOrderResult.error || !sgOrderResult.value) continue;
+				if (sgOrderResult.error || !sgOrderResult.value) {
+					continue;
+				}
 				const sgOrder = sgOrderResult.value;
 
 				const inputVault = sgOrder.inputs?.[0];
@@ -117,15 +136,21 @@
 				const outputTokenAddress = outputVault?.token?.address ?? '';
 
 				// Determine side and token info based on token position
+				// If order INPUT is the asset, this is a BUY order (order receives the asset)
+				// If order OUTPUT is the asset, this is a SELL order (order gives the asset)
 				const isBuy = tokenAddress
-					? outputVault?.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
+					? inputVault?.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
 					: false;
 
 				const displayTokenSymbol = isBuy ? inputTokenSymbol : outputTokenSymbol;
 				const displayTokenAddress = isBuy ? inputTokenAddress : outputTokenAddress;
 
+				// Classify the order type using rainlang
+				const orderType = classifyOrderType(order.rainlang) ?? 'custom';
+				const displayType = orderType === 'dynamic-spread' ? 'custom' : orderType;
+
 				result.push({
-					type: 'limit',
+					type: displayType,
 					orderHash: order.orderHash,
 					timestamp: sgOrder.timestampAdded ? Number(sgOrder.timestampAdded) : 0,
 					side: isBuy ? 'Buy' : 'Sell',
@@ -383,7 +408,8 @@
 							<!-- Market Order Row -->
 							{@const trade = order.trade}
 							{@const txHash = trade?.tradeEvent?.transaction?.id || ''}
-							{@const amount = order.side === 'Buy' ? order.inputAmount : order.outputAmount}
+							<!-- For market orders: outputAmount = asset received (Buy), inputAmount = asset given (Sell) -->
+							{@const amount = order.side === 'Buy' ? order.outputAmount : order.inputAmount}
 							<tr class="border-b border-white/5 hover:bg-white/5">
 								<td class="py-3 pr-4">
 									<span
@@ -458,7 +484,7 @@
 							<!-- Limit/DCA/Custom Order Row -->
 							{@const quote = order.quote}
 							{@const isBuy = order.side === 'Buy'}
-							{@const maxOutputBigInt = quote
+							{@const maxOutputBigInt = quote?.maxOutput
 								? parseFloatHex(
 										quote.maxOutput,
 										isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18

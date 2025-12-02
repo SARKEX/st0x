@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { signerAddress, connected } from 'svelte-wagmi';
+	import { browser } from '$app/environment';
 	import {
 		rewardsData,
 		rewardsLoading,
@@ -23,7 +24,9 @@
 	// Fetch global pool APY on mount (doesn't require wallet)
 	onMount(() => {
 		fetchGlobalPoolApy();
-		document.addEventListener('click', handleClickOutside);
+		if (browser) {
+			document.addEventListener('click', handleClickOutside);
+		}
 	});
 
 	// Fetch rewards when wallet connects/changes
@@ -55,12 +58,14 @@
 	}
 
 	onDestroy(() => {
-		document.removeEventListener('click', handleClickOutside);
+		if (browser) {
+			document.removeEventListener('click', handleClickOutside);
+		}
 	});
 </script>
 
 {#if $connected && $signerAddress}
-	<div class="relative" bind:this={dropdownRef}>
+	<div class="relative" bind:this={dropdownRef} data-tutorial="boost-rewards">
 		<!-- Boost Rewards Button with Rainbow Wave Animation -->
 		<button
 			on:click={() => (showDropdown = !showDropdown)}
@@ -211,6 +216,33 @@
 				</button>
 			</div>
 		{/if}
+	</div>
+{:else}
+	<!-- Simplified button for non-connected users (visible during tutorial) -->
+	<div data-tutorial="boost-rewards">
+		<button
+			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
+		>
+			<span class="rainbow-border"></span>
+			<span
+				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900"
+			></span>
+			<svg
+				class="relative z-10 h-4 w-4 text-yellow-400"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
+				/>
+			</svg>
+			<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
+			<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
+		</button>
 	</div>
 {/if}
 

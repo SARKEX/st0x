@@ -102,7 +102,7 @@
 				<div class="mb-4 sm:mb-6">
 					<h2 class="text-base font-semibold sm:text-lg lg:text-xl">Browse</h2>
 				</div>
-				<div class={'overflow-x-auto ' + containerStyles.cardBordered}>
+				<div class={'overflow-x-auto ' + containerStyles.cardBordered} data-tutorial="token-list">
 					<Table>
 						<thead>
 							<tr class="border-b border-white/10">

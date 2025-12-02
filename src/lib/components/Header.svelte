@@ -8,6 +8,7 @@
 	import { connected, signerAddress, web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import { wrongNetwork } from '$lib/stores';
+	import { walletRegistered } from '$lib/stores/accessStore';
 
 	export let title: string;
 	export let description: string;
@@ -131,6 +132,10 @@
 	$: if (!isHamburgerMode) {
 		mobileNavOpen = false;
 	}
+
+	function handleConnectWallet() {
+		$web3Modal.open();
+	}
 </script>
 
 <div class="sticky top-0 z-[100] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
@@ -217,7 +222,8 @@
 
 				<RewardsDisplay />
 
-				{#if $connected && !$wrongNetwork && $signerAddress}
+				{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
+					<!-- Fully registered user -->
 					<div class="flex items-center gap-2">
 						<a href="/dashboard">
 							<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
@@ -234,7 +240,7 @@
 							size="sm"
 							className="p-2"
 							aria-label="Disconnect wallet"
-							on:click={() => $web3Modal.open()}
+							on:click={handleConnectWallet}
 						>
 							<svg
 								class="h-5 w-5 text-gray-400 hover:text-red-400"
@@ -252,8 +258,9 @@
 						</Button>
 					</div>
 				{:else}
+					<!-- Not connected or not registered -->
 					<Button
-						on:click={() => $web3Modal.open()}
+						on:click={handleConnectWallet}
 						variant="primary"
 						size="sm"
 						className="px-3 py-2 text-sm whitespace-nowrap"

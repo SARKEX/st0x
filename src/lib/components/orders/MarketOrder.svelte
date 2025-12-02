@@ -24,8 +24,7 @@
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
-	import Modal from '$lib/components/ui/Modal.svelte';
-	import WalletConnectionPrompt from '$lib/components/ui/WalletConnectionPrompt.svelte';
+	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import transactionStore from '$lib/stores/transaction';
 	import { Float } from '@rainlanguage/float';
@@ -76,6 +75,33 @@
 
 	// Errors
 	let selectedAmountError: boolean = false;
+	let insufficientBalanceError: boolean = false;
+
+	// Balance from TradeAmountInput (bound)
+	let spendingTokenBalance: bigint = 0n;
+
+	// Token being spent
+	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
+
+	// Calculate the amount being spent and check against balance
+	$: {
+		if (!selectedAmount || selectedAmount === 0n || !marketPrice || isLoadingPrice) {
+			insufficientBalanceError = false;
+		} else if (orderSide === 'Sell') {
+			// For SELL: user is spending the asset token
+			insufficientBalanceError = selectedAmount > spendingTokenBalance;
+		} else {
+			// For BUY: user is spending the payment token (USDC)
+			// Calculate the estimated cost
+			const assetDecimals = assetToken?.decimals ?? 18;
+			const paymentDecimals = paymentToken?.decimals ?? 6;
+			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
+			const estimatedCost = outputInTokens * marketPrice;
+			// Convert to bigint in payment token decimals
+			const estimatedCostBigInt = BigInt(Math.ceil(estimatedCost * 10 ** paymentDecimals));
+			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
+		}
+	}
 
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
@@ -88,6 +114,7 @@
 		!marketPrice ||
 		!assetToken ||
 		selectedAmountError ||
+		insufficientBalanceError ||
 		isLoadingPrice ||
 		priceError ||
 		isSubmittingMarketOrder;
@@ -101,8 +128,6 @@
 		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
 	})();
 
-	// Wallet connect modal state
-	let showConnectModal = false;
 	let isSubmittingMarketOrder = false;
 
 	async function fetchMarketPrice() {
@@ -286,8 +311,14 @@
 	}
 
 	const handleMarketOrder = async () => {
+		// Check if user is connected
 		if (!$connected) {
-			showConnectModal = true;
+			promptWalletConnection();
+			return;
+		}
+		// Check if user is registered (access code modal shows automatically after connecting)
+		if (!$walletRegistered) {
+			promptLogin();
 			return;
 		}
 
@@ -581,6 +612,7 @@
 					amountToken={assetToken}
 					balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
 					bind:amount={selectedAmount}
+					bind:balance={spendingTokenBalance}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
 					showUnit={false}
@@ -637,11 +669,16 @@
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Estimated Cost</span>
+						<span class="text-gray-400">Estimated</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
 							{isLoadingPrice || priceError ? 'N/A' : requiredInputAmount}
 						</span>
 					</div>
+					{#if insufficientBalanceError}
+						<div class="mt-2 text-sm text-red-400">
+							Insufficient {spendingToken?.symbol ?? 'token'} balance
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -668,6 +705,8 @@
 					Price unavailable
 				{:else if !selectedAmount}
 					Enter an amount
+				{:else if insufficientBalanceError}
+					Insufficient {spendingToken?.symbol ?? 'token'} balance
 				{:else}
 					Complete all fields
 				{/if}
@@ -682,20 +721,3 @@
 	</div>
 {/if}
 
-<!-- Connect Wallet Modal -->
-<Modal
-	show={showConnectModal}
-	title="Connect Your Wallet"
-	maxWidthClass="max-w-lg"
-	onClose={() => (showConnectModal = false)}
->
-	<div class="space-y-4">
-		<WalletConnectionPrompt
-			title="Wallet Required to Place Order"
-			description="Connect your wallet to continue. After connecting, click Place again to submit your order."
-			showSection={false}
-			minHeight={false}
-			onConnect={() => (showConnectModal = false)}
-		/>
-	</div>
-</Modal>

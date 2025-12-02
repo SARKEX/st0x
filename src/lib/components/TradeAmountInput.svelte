@@ -21,7 +21,9 @@
 	export let showUnit: boolean = true;
 	export let showMaxButton: boolean = true;
 
-	let balance: bigint = 0n;
+	// Expose balance to parent component
+	export let balance: bigint = 0n;
+	export let balanceDecimals: number | null = null;
 	let amountDecimals: number | null = null;
 	let amountTokenFingerprint: string | undefined;
 
@@ -105,6 +107,7 @@
 			}
 			balance = data.balance;
 			const resolvedDecimals = parseDecimals(data.decimals);
+			balanceDecimals = resolvedDecimals;
 			if (resolvedDecimals !== null && activeFingerprint === amountTokenFingerprint) {
 				amountDecimals = resolvedDecimals;
 			}

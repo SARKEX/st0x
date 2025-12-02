@@ -1,52 +1,45 @@
 <script lang="ts">
 	import '../../app.css';
-	import { wagmiConfig, signerAddress, connected } from 'svelte-wagmi';
-	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { signerAddress, connected } from 'svelte-wagmi';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
 	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
 	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
+	import AccessCodeModal from '$lib/components/AccessCodeModal.svelte';
+	import WalletConnectionModal from '$lib/components/WalletConnectionModal.svelte';
+	import Tutorial from '$lib/components/Tutorial.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
-	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { sfts, rainlangConfirmationModal } from '$lib/stores';
-	import {
-		walletRegistered,
-		checkingAccess,
-		checkWalletAccess,
-		resetAccessState
-	} from '$lib/stores/accessStore';
+	import { checkWalletAccess, resetAccessState } from '$lib/stores/accessStore';
+	import { checkAndStoreAccessCodeFromUrl } from '$lib/utils/accessCodeStorage';
+	import { initTutorial } from '$lib/stores/tutorialStore';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	// Track wallet address to detect changes
 	let lastCheckedAddress: string | null = null;
-	let initialCheckDone = false;
 
-	// Redirect to /access if not connected (on initial load)
-	$: if (browser && !$connected && !initialCheckDone) {
-		initialCheckDone = true;
-		goto('/access');
-	}
+	// Check for access code in URL params on mount and initialize tutorial
+	onMount(() => {
+		checkAndStoreAccessCodeFromUrl();
+		initTutorial();
+	});
 
 	// Check wallet registration when wallet connects or changes
+	// Shows modal if not registered, which will auto-disconnect if dismissed
 	$: if (browser && $signerAddress && $connected && $signerAddress !== lastCheckedAddress) {
 		lastCheckedAddress = $signerAddress;
-		initialCheckDone = true;
-		checkWalletAccess($signerAddress).then((registered) => {
-			if (!registered) {
-				goto('/access');
-			}
-		});
+		checkWalletAccess($signerAddress);
 	}
 
-	// Reset state and redirect when wallet disconnects
+	// Reset state when wallet disconnects
 	$: if (browser && !$connected && lastCheckedAddress) {
 		lastCheckedAddress = null;
 		resetAccessState();
-		goto('/access');
 	}
 
 	let sidebarExpanded = true;
@@ -130,69 +123,66 @@
 	}
 </script>
 
-{#if $wagmiConfig && $connected && $walletRegistered}
-	<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
-		<!-- Background Pattern -->
-		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
-			<div
-				class="bg-[url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 2000 1000%27%3E%3Cpath d=%27M0,500 Q250,400 500,500 T1000,500 T1500,500 T2000,500%27 stroke=%27%23F3B13C%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,400 Q250,300 500,400 T1000,400 T1500,400 T2000,400%27 stroke=%27%231A5C8E%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,600 Q250,500 500,600 T1000,600 T1500,600 T2000,600%27 stroke=%27%2337134D%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3C/svg%3E')] h-full w-full bg-cover"
-			/>
-		</div>
-		<!-- Mobile/Tablet sidebar (always rendered) -->
-		<div class="lg:hidden">
-			<Sidebar
-				visible={mobileSidebarOpen}
-				desktop={false}
-				on:close={() => (mobileSidebarOpen = false)}
-				on:open={() => (mobileSidebarOpen = true)}
-			/>
-		</div>
-		<!-- Desktop sidebar -->
-		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
-			<Sidebar
-				visible={true}
-				desktop={true}
-				collapsed={sidebarCollapsed}
-				on:toggleCollapse={handleSidebarToggle}
-			/>
-		</div>
-
-		<!-- Main Content -->
+<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
+	<!-- Background Pattern -->
+	<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
 		<div
-			class="transition-all duration-300"
-			class:lg:ml-64={!sidebarCollapsed}
-			class:lg:ml-0={sidebarCollapsed}
-		>
-			<!-- Header for all screen sizes -->
-			<Header
-				title={pageTitle}
-				description={pageDescription}
-				isSidebarCollapsed={sidebarCollapsed}
-				isMobileSidebarOpen={mobileSidebarOpen}
-				on:toggleSidebar={handleHeaderSidebarToggle}
-			/>
-
-			<slot {sidebarExpanded} />
-			<TransactionModal />
-			<RainlangConfirmationModal
-				show={$rainlangConfirmationModal.show}
-				rainlangCode={$rainlangConfirmationModal.rainlangCode}
-				onDeploy={$rainlangConfirmationModal.onDeploy || (() => {})}
-				onCancel={$rainlangConfirmationModal.onCancel || (() => {})}
-			/>
-		</div>
-
-		<!-- Rewards Modals (rendered at root level for proper fixed positioning) -->
-		<RewardsDetailsModal />
-		<RewardsLeaderboardModal />
-		<RewardsRulesModal />
-	</div>
-{:else}
-	<div class="flex h-screen items-center justify-center bg-gray-900 text-white">
-		<LoadingSpinner
-			variant="fullscreen"
-			size="xl"
-			text={$checkingAccess ? 'Checking access...' : 'Redirecting...'}
+			class="bg-[url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 2000 1000%27%3E%3Cpath d=%27M0,500 Q250,400 500,500 T1000,500 T1500,500 T2000,500%27 stroke=%27%23F3B13C%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,400 Q250,300 500,400 T1000,400 T1500,400 T2000,400%27 stroke=%27%231A5C8E%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,600 Q250,500 500,600 T1000,600 T1500,600 T2000,600%27 stroke=%27%2337134D%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3C/svg%3E')] h-full w-full bg-cover"
 		/>
 	</div>
-{/if}
+	<!-- Mobile/Tablet sidebar (always rendered) -->
+	<div class="lg:hidden">
+		<Sidebar
+			visible={mobileSidebarOpen}
+			desktop={false}
+			on:close={() => (mobileSidebarOpen = false)}
+			on:open={() => (mobileSidebarOpen = true)}
+		/>
+	</div>
+	<!-- Desktop sidebar -->
+	<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
+		<Sidebar
+			visible={true}
+			desktop={true}
+			collapsed={sidebarCollapsed}
+			on:toggleCollapse={handleSidebarToggle}
+		/>
+	</div>
+
+	<!-- Main Content -->
+	<div
+		class="transition-all duration-300"
+		class:lg:ml-64={!sidebarCollapsed}
+		class:lg:ml-0={sidebarCollapsed}
+	>
+		<!-- Header for all screen sizes -->
+		<Header
+			title={pageTitle}
+			description={pageDescription}
+			isSidebarCollapsed={sidebarCollapsed}
+			isMobileSidebarOpen={mobileSidebarOpen}
+			on:toggleSidebar={handleHeaderSidebarToggle}
+		/>
+
+		<slot {sidebarExpanded} />
+		<TransactionModal />
+		<RainlangConfirmationModal
+			show={$rainlangConfirmationModal.show}
+			rainlangCode={$rainlangConfirmationModal.rainlangCode}
+			onDeploy={$rainlangConfirmationModal.onDeploy || (() => {})}
+			onCancel={$rainlangConfirmationModal.onCancel || (() => {})}
+		/>
+	</div>
+
+	<!-- Rewards Modals (rendered at root level for proper fixed positioning) -->
+	<RewardsDetailsModal />
+	<RewardsLeaderboardModal />
+	<RewardsRulesModal />
+
+	<!-- Access/Connection Modals -->
+	<AccessCodeModal />
+	<WalletConnectionModal />
+
+	<!-- Tutorial Overlay -->
+	<Tutorial />
+</div>

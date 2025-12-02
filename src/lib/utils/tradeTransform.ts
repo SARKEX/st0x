@@ -7,11 +7,12 @@ import type { DisplayOrder } from '$lib/types/orders';
 /**
  * Transform a trade into a DisplayOrder for the OrdersTable component.
  *
- * Buy/Sell semantics (from user's perspective):
- * - Your output (what you give) = outputToken (goes into order's output vault)
- * - Your input (what you receive) = inputToken (comes from order's input vault)
- * - Sell = giving away the asset, so asset is your output (outputToken)
- * - Buy = receiving the asset, so asset is your input (inputToken)
+ * Buy/Sell semantics (from taker's perspective):
+ * - Trade data is from the ORDER's perspective (the counterparty)
+ * - Order's input (inputVaultBalanceChange) = what the taker GAVE
+ * - Order's output (outputVaultBalanceChange) = what the taker RECEIVED
+ * - Buy = taker received the asset = order's output is the asset
+ * - Sell = taker gave the asset = order's input is the asset
  *
  * @param trade - The trade from the subgraph
  * @param options - Either provide targetTokenAddress (for trade page) or chainId (for dashboard)
@@ -28,16 +29,17 @@ export function transformTradeToDisplayOrder(
 	const inputAddr = inputToken.address?.toLowerCase() ?? '';
 	const outputAddr = outputToken.address?.toLowerCase() ?? '';
 
-	// Determine Buy/Sell
+	// Determine Buy/Sell from TAKER's perspective
+	// Order's output = what taker received, Order's input = what taker gave
 	let isBuy: boolean;
 	let assetTokenSymbol: string;
 	let assetTokenAddress: string;
 
 	if ('targetTokenAddress' in options) {
-		// Trade page: check if target matches input (Buy) or output (Sell)
+		// Trade page: if taker received the target token (order's output), they bought it
 		const targetAddr = options.targetTokenAddress.toLowerCase();
-		isBuy = inputAddr === targetAddr;
-		assetTokenSymbol = isBuy ? inputToken.symbol ?? 'UNKNOWN' : outputToken.symbol ?? 'UNKNOWN';
+		isBuy = outputAddr === targetAddr;
+		assetTokenSymbol = isBuy ? outputToken.symbol ?? 'UNKNOWN' : inputToken.symbol ?? 'UNKNOWN';
 		assetTokenAddress = targetAddr;
 	} else {
 		// Dashboard: check if input/output is an asset token
@@ -48,10 +50,11 @@ export function transformTradeToDisplayOrder(
 		const outputIsAsset = TOKENS.some(
 			(t) => t.chainId === chainId && t.address.toLowerCase() === outputAddr
 		);
-		isBuy = inputIsAsset;
-		const assetToken = inputIsAsset ? inputToken : outputIsAsset ? outputToken : inputToken;
+		// If taker received the asset (order's output is asset), they bought it
+		isBuy = outputIsAsset;
+		const assetToken = outputIsAsset ? outputToken : inputIsAsset ? inputToken : outputToken;
 		assetTokenSymbol = assetToken.symbol ?? 'UNKNOWN';
-		assetTokenAddress = inputIsAsset ? inputAddr : outputIsAsset ? outputAddr : inputAddr;
+		assetTokenAddress = outputIsAsset ? outputAddr : inputIsAsset ? inputAddr : outputAddr;
 	}
 
 	// Parse amounts
@@ -67,14 +70,15 @@ export function transformTradeToDisplayOrder(
 		? parseFloatHex(outputAmountHex, outputDecimals, true)
 		: 0n;
 
-	// Calculate price (payment / asset)
-	// Buy: gave payment (output), received asset (input) -> price = output/input
-	// Sell: gave asset (output), received payment (input) -> price = input/output
+	// Calculate price (payment / asset) from taker's perspective
+	// Order's input = what taker gave, Order's output = what taker received
+	// Buy: taker gave payment (order's input), received asset (order's output) -> price = input/output
+	// Sell: taker gave asset (order's input), received payment (order's output) -> price = output/input
 	let price: number | undefined;
 	if (inputAmountBigInt > 0n && outputAmountBigInt > 0n) {
 		const inputValue = parseFloat(formatUnits(inputAmountBigInt, inputDecimals));
 		const outputValue = parseFloat(formatUnits(outputAmountBigInt, outputDecimals));
-		price = isBuy ? outputValue / inputValue : inputValue / outputValue;
+		price = isBuy ? inputValue / outputValue : outputValue / inputValue;
 	}
 
 	return {
