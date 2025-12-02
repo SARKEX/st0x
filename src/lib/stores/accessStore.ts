@@ -69,7 +69,7 @@ export async function validateCode(code: string): Promise<{ valid: boolean; reas
 
 // Create the message for signing
 export function createSignMessage(address: string, code: string): string {
-	return `Sign this message to verify wallet ownership and register with ST0X.
+	return `Sign to verify wallet ownership for st0x rewards.
 
 Wallet: ${address}
 Access Code: ${code}
@@ -81,8 +81,7 @@ export async function registerWallet(
 	address: string,
 	code: string,
 	signature: string,
-	message: string,
-	captchaToken: string
+	message: string
 ): Promise<{ success: boolean; error?: string }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
 
@@ -94,8 +93,7 @@ export async function registerWallet(
 				address,
 				code,
 				signature,
-				message,
-				captchaToken
+				message
 			})
 		});
 		const data = await res.json();

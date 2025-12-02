@@ -29,28 +29,28 @@ export const GET: RequestHandler = async () => {
 			}
 		}
 
-		// Calculate kicker target in points and progress
-		const kickerTvlTarget = poolConfig?.kickerTvlTarget ?? 0;
+		// Calculate RocketBoost target in points and progress
+		const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
 		const daysInMonth = getDaysInMonth(currentMonth);
-		const kickerTargetPoints = kickerTvlTarget * 2 * daysInMonth * 100;
-		const progressPercent = kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+		const rocketBoostTargetPoints = rocketBoostTvlTarget * 2 * daysInMonth * 100;
+		const progressPercent = rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
-		// Calculate achieved kicker amount based on progress
-		const kickerAmounts = poolConfig?.kickerAmounts ?? {
+		// Calculate achieved RocketBoost amount based on progress
+		const rocketBoostAmounts = poolConfig?.rocketBoostAmounts ?? {
 			tier25: 0,
 			tier50: 0,
 			tier75: 0,
 			tier100: 0
 		};
-		const kickerAchievedAmount =
-			(progressPercent >= 25 ? kickerAmounts.tier25 : 0) +
-			(progressPercent >= 50 ? kickerAmounts.tier50 : 0) +
-			(progressPercent >= 75 ? kickerAmounts.tier75 : 0) +
-			(progressPercent >= 100 ? kickerAmounts.tier100 : 0);
+		const rocketBoostAchievedAmount =
+			(progressPercent >= 25 ? rocketBoostAmounts.tier25 : 0) +
+			(progressPercent >= 50 ? rocketBoostAmounts.tier50 : 0) +
+			(progressPercent >= 75 ? rocketBoostAmounts.tier75 : 0) +
+			(progressPercent >= 100 ? rocketBoostAmounts.tier100 : 0);
 
 		// Calculate effective pool
 		const poolAmount = poolConfig?.poolAmount ?? 0;
-		const effectivePool = poolAmount + kickerAchievedAmount;
+		const effectivePool = poolAmount + rocketBoostAchievedAmount;
 
 		// Calculate Pool APY (compound): ((1 + monthlyReturn) ^ 12 - 1) * 100
 		// avgTvl = totalPoints / snapshotCount / 100

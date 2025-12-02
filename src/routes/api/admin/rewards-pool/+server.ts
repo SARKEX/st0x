@@ -8,7 +8,7 @@ import {
 	kvDel,
 	KV_KEYS,
 	type RewardsPoolConfig,
-	type KickerTiers
+	type RocketBoostTiers
 } from '$lib/server/kv';
 
 // Helper to check admin auth from cookies
@@ -86,7 +86,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	try {
 		const body = await request.json();
-		const { month, poolAmount, kickerAmounts, kickerTvlTarget, notes } = body;
+		const { month, poolAmount, rocketBoostAmounts, rocketBoostTvlTarget, notes } = body;
 
 		// Validate month format (YYYY-MM)
 		if (!month || !/^\d{4}-\d{2}$/.test(month)) {
@@ -98,12 +98,12 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			return json({ error: 'Pool amount must be a non-negative number' }, { status: 400 });
 		}
 
-		// Validate kicker amounts object
-		if (!kickerAmounts || typeof kickerAmounts !== 'object') {
-			return json({ error: 'Kicker amounts must be an object with tier values' }, { status: 400 });
+		// Validate RocketBoost amounts object
+		if (!rocketBoostAmounts || typeof rocketBoostAmounts !== 'object') {
+			return json({ error: 'RocketBoost amounts must be an object with tier values' }, { status: 400 });
 		}
 
-		const validatedKickerAmounts: KickerTiers = {
+		const validatedRocketBoostAmounts: RocketBoostTiers = {
 			tier25: 0,
 			tier50: 0,
 			tier75: 0,
@@ -111,25 +111,25 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		};
 
 		for (const tier of ['tier25', 'tier50', 'tier75', 'tier100'] as const) {
-			const value = kickerAmounts[tier];
+			const value = rocketBoostAmounts[tier];
 			if (typeof value !== 'number' || value < 0) {
 				return json(
-					{ error: `Kicker ${tier} amount must be a non-negative number` },
+					{ error: `RocketBoost ${tier} amount must be a non-negative number` },
 					{ status: 400 }
 				);
 			}
-			validatedKickerAmounts[tier] = value;
+			validatedRocketBoostAmounts[tier] = value;
 		}
 
-		if (typeof kickerTvlTarget !== 'number' || kickerTvlTarget < 0) {
-			return json({ error: 'Kicker TVL target must be a non-negative number' }, { status: 400 });
+		if (typeof rocketBoostTvlTarget !== 'number' || rocketBoostTvlTarget < 0) {
+			return json({ error: 'RocketBoost TVL target must be a non-negative number' }, { status: 400 });
 		}
 
 		const config: RewardsPoolConfig = {
 			month,
 			poolAmount,
-			kickerAmounts: validatedKickerAmounts,
-			kickerTvlTarget,
+			rocketBoostAmounts: validatedRocketBoostAmounts,
+			rocketBoostTvlTarget,
 			notes: notes || '',
 			updatedAt: new Date().toISOString()
 		};

@@ -118,7 +118,7 @@
 						<li class="flex gap-3">
 							<span class="flex-shrink-0 font-medium text-yellow-400">7.</span>
 							<span>
-								For kicker purposes, we calculate average TVL as the sum of each eligible wallet's
+								For RocketBoost purposes, we calculate average TVL as the sum of each eligible wallet's
 								holdings in US$ for that block, averaged over the calendar month.
 							</span>
 						</li>

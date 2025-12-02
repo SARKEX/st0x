@@ -27,16 +27,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Message required' }, { status: 400 });
 		}
 
-		if (!captchaToken || typeof captchaToken !== 'string') {
-			return json({ error: 'Captcha token required' }, { status: 400 });
-		}
-
 		const result = await processRegistration(
 			address,
 			code,
 			signature as `0x${string}`,
-			message,
-			captchaToken
+			message
 		);
 
 		if (result.success) {

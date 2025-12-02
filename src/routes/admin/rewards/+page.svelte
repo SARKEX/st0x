@@ -173,7 +173,7 @@
 	let addingWallet = false;
 
 	// ===== Rewards Pool Tab State =====
-	interface KickerTiers {
+	interface RocketBoostTiers {
 		tier25: number;
 		tier50: number;
 		tier75: number;
@@ -182,8 +182,8 @@
 	interface RewardsPoolConfig {
 		month: string;
 		poolAmount: number;
-		kickerAmounts: KickerTiers;
-		kickerTvlTarget: number;
+		rocketBoostAmounts: RocketBoostTiers;
+		rocketBoostTvlTarget: number;
 		notes: string;
 		updatedAt: string;
 	}
@@ -196,16 +196,16 @@
 	// Form state for new/edit pool
 	let poolFormMonth = '';
 	let poolFormAmount = 0;
-	let poolFormKickerTier25 = 0;
-	let poolFormKickerTier50 = 0;
-	let poolFormKickerTier75 = 0;
-	let poolFormKickerTier100 = 0;
-	let poolFormKickerTarget = 0;
+	let poolFormRocketBoostTier25 = 0;
+	let poolFormRocketBoostTier50 = 0;
+	let poolFormRocketBoostTier75 = 0;
+	let poolFormRocketBoostTier100 = 0;
+	let poolFormRocketBoostTarget = 0;
 	let poolFormNotes = '';
 
-	// Helper to get total kicker amount
-	$: totalKickerAmount =
-		poolFormKickerTier25 + poolFormKickerTier50 + poolFormKickerTier75 + poolFormKickerTier100;
+	// Helper to get total RocketBoost amount
+	$: totalRocketBoostAmount =
+		poolFormRocketBoostTier25 + poolFormRocketBoostTier50 + poolFormRocketBoostTier75 + poolFormRocketBoostTier100;
 
 	// Token list for snapshots tab
 	const tokenSymbols = TOKENS.map((t) => t.symbol);
@@ -320,25 +320,25 @@
 		// Calculate total points for share calculation
 		const allPoints = monthlyData.wallets.reduce((sum, w) => sum + w.totalPoints, 0);
 
-		// Calculate total kicker amount available
-		const kickerAmts = currentMonthPool?.kickerAmounts ?? {
+		// Calculate total RocketBoost amount available
+		const rocketBoostAmts = currentMonthPool?.rocketBoostAmounts ?? {
 			tier25: 0,
 			tier50: 0,
 			tier75: 0,
 			tier100: 0
 		};
-		const maxKickerAmount =
-			kickerAmts.tier25 + kickerAmts.tier50 + kickerAmts.tier75 + kickerAmts.tier100;
+		const maxRocketBoostAmount =
+			rocketBoostAmts.tier25 + rocketBoostAmts.tier50 + rocketBoostAmts.tier75 + rocketBoostAmts.tier100;
 
 		// Calculate progress and achieved amount locally to avoid circular dependency
 		const daysInMonth = selectedMonth ? getDaysInMonth(selectedMonth) : 30;
-		const kickerTarget = (currentMonthPool?.kickerTvlTarget ?? 0) * 2 * daysInMonth * 100;
-		const progressPct = kickerTarget > 0 ? (allPoints / kickerTarget) * 100 : 0;
+		const rocketBoostTarget = (currentMonthPool?.rocketBoostTvlTarget ?? 0) * 2 * daysInMonth * 100;
+		const progressPct = rocketBoostTarget > 0 ? (allPoints / rocketBoostTarget) * 100 : 0;
 		const achievedAmount =
-			(progressPct >= 25 ? kickerAmts.tier25 : 0) +
-			(progressPct >= 50 ? kickerAmts.tier50 : 0) +
-			(progressPct >= 75 ? kickerAmts.tier75 : 0) +
-			(progressPct >= 100 ? kickerAmts.tier100 : 0);
+			(progressPct >= 25 ? rocketBoostAmts.tier25 : 0) +
+			(progressPct >= 50 ? rocketBoostAmts.tier50 : 0) +
+			(progressPct >= 75 ? rocketBoostAmts.tier75 : 0) +
+			(progressPct >= 100 ? rocketBoostAmts.tier100 : 0);
 
 		const rows = monthlyData.wallets.map((wallet) => {
 			const isExcluded = excludedWalletsInData.has(wallet.address.toLowerCase());
@@ -347,14 +347,14 @@
 			// Calculate rewards
 			const basePool = currentMonthPool?.poolAmount ?? 0;
 			const rewardBase = share * basePool;
-			const rewardWithKicker = share * (basePool + maxKickerAmount);
+			const rewardWithRocketBoost = share * (basePool + maxRocketBoostAmount);
 
 			return {
 				...wallet,
 				isExcluded,
 				share,
 				rewardBase,
-				rewardWithKicker,
+				rewardWithRocketBoost,
 				rewardActual: share * (basePool + achievedAmount)
 			};
 		});
@@ -366,29 +366,29 @@
 		return filtered;
 	}
 
-	// Calculate kicker target in points and progress
+	// Calculate RocketBoost target in points and progress
 	function getDaysInMonth(monthStr: string): number {
 		const [year, month] = monthStr.split('-').map(Number);
 		return new Date(year, month, 0).getDate();
 	}
 
-	$: kickerTargetPoints = currentMonthPool
-		? currentMonthPool.kickerTvlTarget * 2 * getDaysInMonth(selectedMonth) * 100
+	$: rocketBoostTargetPoints = currentMonthPool
+		? currentMonthPool.rocketBoostTvlTarget * 2 * getDaysInMonth(selectedMonth) * 100
 		: 0;
 
-	$: kickerProgressPercent = kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+	$: rocketBoostProgressPercent = rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
-	// Calculate achieved kicker amount based on progress
-	$: achievedKickerAmount = currentMonthPool
-		? (kickerProgressPercent >= 25 ? currentMonthPool.kickerAmounts.tier25 : 0) +
-			(kickerProgressPercent >= 50 ? currentMonthPool.kickerAmounts.tier50 : 0) +
-			(kickerProgressPercent >= 75 ? currentMonthPool.kickerAmounts.tier75 : 0) +
-			(kickerProgressPercent >= 100 ? currentMonthPool.kickerAmounts.tier100 : 0)
+	// Calculate achieved RocketBoost amount based on progress
+	$: achievedRocketBoostAmount = currentMonthPool
+		? (rocketBoostProgressPercent >= 25 ? currentMonthPool.rocketBoostAmounts.tier25 : 0) +
+			(rocketBoostProgressPercent >= 50 ? currentMonthPool.rocketBoostAmounts.tier50 : 0) +
+			(rocketBoostProgressPercent >= 75 ? currentMonthPool.rocketBoostAmounts.tier75 : 0) +
+			(rocketBoostProgressPercent >= 100 ? currentMonthPool.rocketBoostAmounts.tier100 : 0)
 		: 0;
 
 	// Calculate effective pool amount
 	$: effectivePoolAmount = currentMonthPool
-		? currentMonthPool.poolAmount + achievedKickerAmount
+		? currentMonthPool.poolAmount + achievedRocketBoostAmount
 		: 0;
 
 	// Calculate pool APY (compound): ((1 + monthlyReturn) ^ 12 - 1) * 100
@@ -774,11 +774,11 @@
 
 		poolFormMonth = currentMonth;
 		poolFormAmount = 0;
-		poolFormKickerTier25 = 0;
-		poolFormKickerTier50 = 0;
-		poolFormKickerTier75 = 0;
-		poolFormKickerTier100 = 0;
-		poolFormKickerTarget = 0;
+		poolFormRocketBoostTier25 = 0;
+		poolFormRocketBoostTier50 = 0;
+		poolFormRocketBoostTier75 = 0;
+		poolFormRocketBoostTier100 = 0;
+		poolFormRocketBoostTarget = 0;
 		poolFormNotes = '';
 		editingPool = null;
 	}
@@ -786,11 +786,11 @@
 	function editPool(config: RewardsPoolConfig) {
 		poolFormMonth = config.month;
 		poolFormAmount = config.poolAmount;
-		poolFormKickerTier25 = config.kickerAmounts?.tier25 ?? 0;
-		poolFormKickerTier50 = config.kickerAmounts?.tier50 ?? 0;
-		poolFormKickerTier75 = config.kickerAmounts?.tier75 ?? 0;
-		poolFormKickerTier100 = config.kickerAmounts?.tier100 ?? 0;
-		poolFormKickerTarget = config.kickerTvlTarget;
+		poolFormRocketBoostTier25 = config.rocketBoostAmounts?.tier25 ?? 0;
+		poolFormRocketBoostTier50 = config.rocketBoostAmounts?.tier50 ?? 0;
+		poolFormRocketBoostTier75 = config.rocketBoostAmounts?.tier75 ?? 0;
+		poolFormRocketBoostTier100 = config.rocketBoostAmounts?.tier100 ?? 0;
+		poolFormRocketBoostTarget = config.rocketBoostTvlTarget;
 		poolFormNotes = config.notes;
 		editingPool = config;
 	}
@@ -816,13 +816,13 @@
 				body: JSON.stringify({
 					month: poolFormMonth,
 					poolAmount: poolFormAmount,
-					kickerAmounts: {
-						tier25: poolFormKickerTier25,
-						tier50: poolFormKickerTier50,
-						tier75: poolFormKickerTier75,
-						tier100: poolFormKickerTier100
+					rocketBoostAmounts: {
+						tier25: poolFormRocketBoostTier25,
+						tier50: poolFormRocketBoostTier50,
+						tier75: poolFormRocketBoostTier75,
+						tier100: poolFormRocketBoostTier100
 					},
-					kickerTvlTarget: poolFormKickerTarget,
+					rocketBoostTvlTarget: poolFormRocketBoostTarget,
 					notes: poolFormNotes
 				})
 			});
@@ -1128,13 +1128,13 @@
 							<p class="font-mono text-white">{formatUsd(currentMonthPool.poolAmount)}</p>
 						</div>
 						<div>
-							<p class="text-gray-400">Kicker Progress</p>
+							<p class="text-gray-400">RocketBoost Progress</p>
 							<p
-								class="font-mono {kickerProgressPercent >= 100
+								class="font-mono {rocketBoostProgressPercent >= 100
 									? 'text-green-400'
 									: 'text-yellow-400'}"
 							>
-								{kickerProgressPercent.toFixed(1)}%
+								{rocketBoostProgressPercent.toFixed(1)}%
 							</p>
 						</div>
 						<div>
@@ -1142,21 +1142,21 @@
 							<p class="font-mono font-semibold text-[#e8be89]">{formatUsd(effectivePoolAmount)}</p>
 						</div>
 					</div>
-					<!-- Kicker Progress Bar -->
+					<!-- RocketBoost Progress Bar -->
 					<div class="mt-4">
 						<div class="relative">
 							<!-- Progress bar background -->
 							<div class="h-4 overflow-hidden rounded-full bg-gray-700">
 								<div
-									class="h-full transition-all duration-500 {kickerProgressPercent >= 100
+									class="h-full transition-all duration-500 {rocketBoostProgressPercent >= 100
 										? 'bg-green-500'
 										: 'bg-yellow-500'}"
-									style="width: {Math.min(100, kickerProgressPercent)}%"
+									style="width: {Math.min(100, rocketBoostProgressPercent)}%"
 								/>
 							</div>
 							<!-- Milestone markers -->
-							{#each [{ pct: 25, amount: currentMonthPool.kickerAmounts?.tier25 ?? 0 }, { pct: 50, amount: currentMonthPool.kickerAmounts?.tier50 ?? 0 }, { pct: 75, amount: currentMonthPool.kickerAmounts?.tier75 ?? 0 }, { pct: 100, amount: currentMonthPool.kickerAmounts?.tier100 ?? 0 }] as { pct, amount } (pct)}
-								{@const achieved = kickerProgressPercent >= pct}
+							{#each [{ pct: 25, amount: currentMonthPool.rocketBoostAmounts?.tier25 ?? 0 }, { pct: 50, amount: currentMonthPool.rocketBoostAmounts?.tier50 ?? 0 }, { pct: 75, amount: currentMonthPool.rocketBoostAmounts?.tier75 ?? 0 }, { pct: 100, amount: currentMonthPool.rocketBoostAmounts?.tier100 ?? 0 }] as { pct, amount } (pct)}
+								{@const achieved = rocketBoostProgressPercent >= pct}
 								<div
 									class="absolute top-0 flex h-4 flex-col items-center"
 									style="left: {pct}%; transform: translateX(-50%)"
@@ -1179,18 +1179,18 @@
 						<div class="mt-10 flex items-center justify-between text-sm">
 							<div class="text-gray-400">
 								<span class="font-mono text-white">{totalPoints.toLocaleString()}</span> /
-								<span class="font-mono text-gray-300">{kickerTargetPoints.toLocaleString()}</span> points
+								<span class="font-mono text-gray-300">{rocketBoostTargetPoints.toLocaleString()}</span> points
 							</div>
 							<div class="text-gray-400">
 								Achieved: <span class="font-medium text-green-400"
-									>+{formatUsd(achievedKickerAmount)}</span
+									>+{formatUsd(achievedRocketBoostAmount)}</span
 								>
 								<span class="text-gray-500"
 									>/ {formatUsd(
-										(currentMonthPool.kickerAmounts?.tier25 ?? 0) +
-											(currentMonthPool.kickerAmounts?.tier50 ?? 0) +
-											(currentMonthPool.kickerAmounts?.tier75 ?? 0) +
-											(currentMonthPool.kickerAmounts?.tier100 ?? 0)
+										(currentMonthPool.rocketBoostAmounts?.tier25 ?? 0) +
+											(currentMonthPool.rocketBoostAmounts?.tier50 ?? 0) +
+											(currentMonthPool.rocketBoostAmounts?.tier75 ?? 0) +
+											(currentMonthPool.rocketBoostAmounts?.tier100 ?? 0)
 									)}</span
 								>
 							</div>
@@ -2168,63 +2168,63 @@
 							/>
 						</div>
 						<div>
-							<label for="kickerTarget" class="mb-2 block text-sm font-medium text-gray-300">
-								Kicker TVL Target (USD)
+							<label for="rocketBoostTarget" class="mb-2 block text-sm font-medium text-gray-300">
+								RocketBoost TVL Target (USD)
 							</label>
 							<input
-								id="kickerTarget"
+								id="rocketBoostTarget"
 								type="number"
-								bind:value={poolFormKickerTarget}
+								bind:value={poolFormRocketBoostTarget}
 								min="0"
 								step="1000"
 								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
 							/>
 						</div>
-						<!-- Kicker Tier Amounts -->
+						<!-- RocketBoost Tier Amounts -->
 						<div class="sm:col-span-2 lg:col-span-3">
 							<span class="mb-2 block text-sm font-medium text-gray-300">
-								Kicker Tier Bonuses (USD)
+								RocketBoost Tier Bonuses (USD)
 							</span>
 							<div class="grid grid-cols-4 gap-2">
 								<div>
-									<label for="kickerTier25" class="mb-1 block text-xs text-gray-400">25%</label>
+									<label for="rocketBoostTier25" class="mb-1 block text-xs text-gray-400">25%</label>
 									<input
-										id="kickerTier25"
+										id="rocketBoostTier25"
 										type="number"
-										bind:value={poolFormKickerTier25}
+										bind:value={poolFormRocketBoostTier25}
 										min="0"
 										step="10"
 										class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
 									/>
 								</div>
 								<div>
-									<label for="kickerTier50" class="mb-1 block text-xs text-gray-400">50%</label>
+									<label for="rocketBoostTier50" class="mb-1 block text-xs text-gray-400">50%</label>
 									<input
-										id="kickerTier50"
+										id="rocketBoostTier50"
 										type="number"
-										bind:value={poolFormKickerTier50}
+										bind:value={poolFormRocketBoostTier50}
 										min="0"
 										step="10"
 										class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
 									/>
 								</div>
 								<div>
-									<label for="kickerTier75" class="mb-1 block text-xs text-gray-400">75%</label>
+									<label for="rocketBoostTier75" class="mb-1 block text-xs text-gray-400">75%</label>
 									<input
-										id="kickerTier75"
+										id="rocketBoostTier75"
 										type="number"
-										bind:value={poolFormKickerTier75}
+										bind:value={poolFormRocketBoostTier75}
 										min="0"
 										step="10"
 										class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
 									/>
 								</div>
 								<div>
-									<label for="kickerTier100" class="mb-1 block text-xs text-gray-400">100%</label>
+									<label for="rocketBoostTier100" class="mb-1 block text-xs text-gray-400">100%</label>
 									<input
-										id="kickerTier100"
+										id="rocketBoostTier100"
 										type="number"
-										bind:value={poolFormKickerTier100}
+										bind:value={poolFormRocketBoostTier100}
 										min="0"
 										step="10"
 										class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
@@ -2232,7 +2232,7 @@
 								</div>
 							</div>
 							<p class="mt-1 text-xs text-gray-500">
-								Total kicker: {formatUsd(totalKickerAmount)}
+								Total RocketBoost: {formatUsd(totalRocketBoostAmount)}
 							</p>
 						</div>
 						<div class="sm:col-span-2 lg:col-span-3">
@@ -2299,7 +2299,7 @@
 								<tr>
 									<th class="pb-3 pr-4">Month</th>
 									<th class="pb-3 pr-4 text-right">Pool Amount</th>
-									<th class="pb-3 pr-4 text-right">Max Kicker</th>
+									<th class="pb-3 pr-4 text-right">Max RocketBoost</th>
 									<th class="pb-3 pr-4 text-right">TVL Target</th>
 									<th class="pb-3 pr-4">Notes</th>
 									<th class="pb-3 text-right">Actions</th>
@@ -2307,21 +2307,21 @@
 							</thead>
 							<tbody class="divide-y divide-gray-800">
 								{#each poolConfigs as config}
-									{@const totalKicker =
-										(config.kickerAmounts?.tier25 ?? 0) +
-										(config.kickerAmounts?.tier50 ?? 0) +
-										(config.kickerAmounts?.tier75 ?? 0) +
-										(config.kickerAmounts?.tier100 ?? 0)}
+									{@const totalRocketBoost =
+										(config.rocketBoostAmounts?.tier25 ?? 0) +
+										(config.rocketBoostAmounts?.tier50 ?? 0) +
+										(config.rocketBoostAmounts?.tier75 ?? 0) +
+										(config.rocketBoostAmounts?.tier100 ?? 0)}
 									<tr class="hover:bg-gray-800/30">
 										<td class="py-3 pr-4 font-medium text-[#e8be89]">{config.month}</td>
 										<td class="py-3 pr-4 text-right font-mono text-white">
 											{formatUsd(config.poolAmount)}
 										</td>
 										<td class="py-3 pr-4 text-right font-mono text-white">
-											{formatUsd(totalKicker)}
+											{formatUsd(totalRocketBoost)}
 										</td>
 										<td class="py-3 pr-4 text-right font-mono text-white">
-											{formatUsd(config.kickerTvlTarget)}
+											{formatUsd(config.rocketBoostTvlTarget)}
 										</td>
 										<td class="max-w-[200px] truncate py-3 pr-4 text-gray-400" title={config.notes}>
 											{config.notes || '-'}
@@ -2357,9 +2357,9 @@
 					<li>
 						• <strong>Pool Amount:</strong> Base reward pool distributed pro-rata based on points
 					</li>
-					<li>• <strong>Kicker Amount:</strong> Additional bonus if TVL target is met</li>
-					<li>• <strong>TVL Target:</strong> Target TVL threshold to trigger kicker</li>
-					<li>• <strong>Kicker Hit:</strong> Manually mark if the TVL target was achieved</li>
+					<li>• <strong>RocketBoost Amount:</strong> Additional bonus if TVL target is met</li>
+					<li>• <strong>TVL Target:</strong> Target TVL threshold to trigger RocketBoost</li>
+					<li>• <strong>RocketBoost Hit:</strong> Manually mark if the TVL target was achieved</li>
 				</ul>
 			</Card>
 		</div>

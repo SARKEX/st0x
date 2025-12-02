@@ -23,10 +23,10 @@
 		}
 	}
 
-	// Calculate kicker progress percentage (capped at 100%)
+	// Calculate RocketBoost progress percentage (capped at 100%)
 	// Progress = accumulated totalPoints / target points (TVL * 2 snapshots/day * days * 100)
-	$: kickerProgress = $rewardsData
-		? Math.min(100, ($rewardsData.totalPoints / Math.max(1, $rewardsData.kickerTargetPoints)) * 100)
+	$: rocketBoostProgress = $rewardsData
+		? Math.min(100, ($rewardsData.totalPoints / Math.max(1, $rewardsData.rocketBoostTargetPoints)) * 100)
 		: 0;
 
 	// Format month display
@@ -126,13 +126,13 @@
 					</div>
 				</div>
 
-				<!-- Kicker Progress -->
+				<!-- RocketBoost Progress -->
 				<div class="rounded-lg bg-gray-700/50 p-4">
 					<div class="mb-2 flex items-center justify-between">
-						<h3 class="text-sm font-medium text-gray-300">Kicker Progress</h3>
+						<h3 class="text-sm font-medium text-gray-300">RocketBoost Progress</h3>
 						<span class="text-xs text-gray-400">
 							{formatPoints($rewardsData.totalPoints)} / {formatPoints(
-								$rewardsData.kickerTargetPoints
+								$rewardsData.rocketBoostTargetPoints
 							)}
 						</span>
 					</div>
@@ -141,16 +141,16 @@
 					<div class="relative mb-4">
 						<div class="h-3 overflow-hidden rounded-full bg-gray-600">
 							<div
-								class="h-full transition-all duration-500 {$rewardsData.kickerTiersAchieved.tier100
+								class="h-full transition-all duration-500 {$rewardsData.rocketBoostTiersAchieved.tier100
 									? 'bg-green-500'
 									: 'bg-yellow-500'}"
-								style="width: {kickerProgress}%"
+								style="width: {rocketBoostProgress}%"
 							/>
 						</div>
 						<!-- Milestone markers -->
 						{#each [25, 50, 75, 100] as milestone}
 							<div
-								class="absolute top-0 h-3 w-0.5 {kickerProgress >= milestone
+								class="absolute top-0 h-3 w-0.5 {rocketBoostProgress >= milestone
 									? 'bg-green-400'
 									: 'bg-gray-500'}"
 								style="left: {milestone}%"
@@ -160,7 +160,7 @@
 
 					<!-- Tier bonuses -->
 					<div class="grid grid-cols-4 gap-1 text-center text-xs">
-						{#each [{ pct: 25, achieved: $rewardsData.kickerTiersAchieved.tier25, amount: $rewardsData.kickerAmounts.tier25 }, { pct: 50, achieved: $rewardsData.kickerTiersAchieved.tier50, amount: $rewardsData.kickerAmounts.tier50 }, { pct: 75, achieved: $rewardsData.kickerTiersAchieved.tier75, amount: $rewardsData.kickerAmounts.tier75 }, { pct: 100, achieved: $rewardsData.kickerTiersAchieved.tier100, amount: $rewardsData.kickerAmounts.tier100 }] as { pct, achieved, amount } (pct)}
+						{#each [{ pct: 25, achieved: $rewardsData.rocketBoostTiersAchieved.tier25, amount: $rewardsData.rocketBoostAmounts.tier25 }, { pct: 50, achieved: $rewardsData.rocketBoostTiersAchieved.tier50, amount: $rewardsData.rocketBoostAmounts.tier50 }, { pct: 75, achieved: $rewardsData.rocketBoostTiersAchieved.tier75, amount: $rewardsData.rocketBoostAmounts.tier75 }, { pct: 100, achieved: $rewardsData.rocketBoostTiersAchieved.tier100, amount: $rewardsData.rocketBoostAmounts.tier100 }] as { pct, achieved, amount } (pct)}
 							<div class="rounded p-1 {achieved ? 'bg-green-900/30' : 'bg-gray-700/50'}">
 								<div class="font-medium {achieved ? 'text-green-400' : 'text-gray-500'}">
 									{pct}%
@@ -176,10 +176,10 @@
 					<div class="mt-3 flex items-center justify-between text-xs">
 						<span class="text-gray-400">
 							Total Bonus: <span class="font-medium text-green-400"
-								>+${Math.round($rewardsData.kickerAchievedAmount)}</span
+								>+${Math.round($rewardsData.rocketBoostAchievedAmount)}</span
 							>
 						</span>
-						<span class="text-gray-400">{kickerProgress.toFixed(0)}%</span>
+						<span class="text-gray-400">{rocketBoostProgress.toFixed(0)}%</span>
 					</div>
 				</div>
 
@@ -203,9 +203,9 @@
 								</p>
 							</div>
 						</div>
-						{#if $rewardsData.lastMonth.kickerAchievedAmount > 0}
+						{#if $rewardsData.lastMonth.rocketBoostAchievedAmount > 0}
 							<p class="mt-2 text-xs text-green-400">
-								Includes {formatUsd($rewardsData.lastMonth.kickerAchievedAmount)} kicker bonus
+								Includes {formatUsd($rewardsData.lastMonth.rocketBoostAchievedAmount)} RocketBoost bonus
 							</p>
 						{/if}
 					</div>

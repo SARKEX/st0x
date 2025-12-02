@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
-	import { env } from '$env/dynamic/public';
 	import { signMessage, disconnect } from '@wagmi/core';
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
@@ -21,14 +20,8 @@
 
 	// Form state
 	let accessCode = '';
-	let captchaToken = '';
 	let error = '';
 	let submitting = false;
-	let captchaWidgetId: string | null = null;
-	let captchaReady = false;
-
-	// Derived state for showing captcha (avoid cyclical dependency with captchaToken)
-	$: showCaptcha = $connected && $signerAddress && accessCode.trim();
 
 	// Check if already registered when wallet connects
 	$: if ($signerAddress && browser) {
@@ -39,76 +32,14 @@
 		});
 	}
 
-	// Load hCaptcha script and pre-fill access code from URL
+	// Pre-fill access code from URL
 	onMount(() => {
-		// Pre-fill access code from URL param (utm_campaign or ref for backwards compat)
 		const urlParams = new URLSearchParams(window.location.search);
 		const code = urlParams.get('utm_campaign') || urlParams.get('ref');
 		if (code) {
 			accessCode = code.trim();
 		}
-
-		if (browser && !document.getElementById('hcaptcha-script')) {
-			const script = document.createElement('script');
-			script.id = 'hcaptcha-script';
-			script.src = 'https://js.hcaptcha.com/1/api.js?render=explicit';
-			script.async = true;
-			script.defer = true;
-			script.onload = () => {
-				captchaReady = true;
-			};
-			document.head.appendChild(script);
-		} else if (browser && window.hcaptcha) {
-			captchaReady = true;
-		} else if (browser) {
-			// Script element exists but hcaptcha not ready yet - poll until it's available
-			const checkHcaptcha = setInterval(() => {
-				if (window.hcaptcha) {
-					captchaReady = true;
-					clearInterval(checkHcaptcha);
-				}
-			}, 100);
-			// Stop polling after 10 seconds
-			setTimeout(() => clearInterval(checkHcaptcha), 10000);
-		}
 	});
-
-	// Clean up hcaptcha widget on unmount to prevent stale state
-	onDestroy(() => {
-		if (browser && window.hcaptcha && captchaWidgetId !== null) {
-			try {
-				window.hcaptcha.remove(captchaWidgetId);
-			} catch {
-				// Ignore errors during cleanup
-			}
-		}
-		captchaWidgetId = null;
-	});
-
-	// Render captcha when ready and conditions are met
-	$: if (captchaReady && showCaptcha && browser && !captchaWidgetId) {
-		setTimeout(() => {
-			const container = document.getElementById('hcaptcha-container');
-			if (container && window.hcaptcha && !captchaWidgetId) {
-				try {
-					captchaWidgetId = window.hcaptcha.render('hcaptcha-container', {
-						sitekey: env.PUBLIC_HCAPTCHA_SITEKEY || '10000000-ffff-ffff-ffff-000000000001',
-						callback: (token: string) => {
-							captchaToken = token;
-						},
-						'expired-callback': () => {
-							captchaToken = '';
-						},
-						theme: 'dark'
-					});
-				} catch (err) {
-					console.error('Failed to render hcaptcha:', err);
-					// Reset state to allow retry
-					captchaWidgetId = null;
-				}
-			}
-		}, 100);
-	}
 
 	function handleConnectWallet() {
 		$web3Modal.open();
@@ -125,11 +56,6 @@
 			return;
 		}
 
-		if (!captchaToken) {
-			error = 'Please complete the captcha';
-			return;
-		}
-
 		submitting = true;
 		error = '';
 
@@ -141,23 +67,12 @@
 			const signature = await signMessage($wagmiConfig, { message });
 
 			// Register with backend
-			const result = await registerWallet(
-				$signerAddress,
-				accessCode.trim(),
-				signature,
-				message,
-				captchaToken
-			);
+			const result = await registerWallet($signerAddress, accessCode.trim(), signature, message);
 
 			if (result.success) {
 				goto('/');
 			} else {
 				error = result.error || 'Registration failed';
-				// Reset captcha on error
-				if (window.hcaptcha && captchaWidgetId !== null) {
-					window.hcaptcha.reset(captchaWidgetId);
-					captchaToken = '';
-				}
 			}
 		} catch (err) {
 			if (isStaleWalletSessionError(err)) {
@@ -170,11 +85,6 @@
 				}
 			} else {
 				error = 'An unexpected error occurred';
-			}
-			// Reset captcha on error
-			if (window.hcaptcha && captchaWidgetId !== null) {
-				window.hcaptcha.reset(captchaWidgetId);
-				captchaToken = '';
 			}
 		} finally {
 			submitting = false;
@@ -314,41 +224,13 @@
 								/>
 							</div>
 
-							<!-- Step 3: Captcha -->
-							<div class="space-y-2">
-								<div class="flex items-center gap-2">
-									<div
-										class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium {captchaToken
-											? 'bg-green-600 text-white'
-											: 'bg-gray-700 text-gray-300'}"
-									>
-										{captchaToken ? '✓' : '3'}
-									</div>
-									<span class="text-sm font-medium text-gray-300">Verify You're Human</span>
-								</div>
-								{#if showCaptcha}
-									<div
-										id="hcaptcha-container"
-										class="flex justify-center"
-										data-sitekey={env.PUBLIC_HCAPTCHA_SITEKEY ||
-											'10000000-ffff-ffff-ffff-000000000001'}
-									></div>
-								{:else}
-									<div
-										class="flex h-[78px] items-center justify-center rounded border border-gray-700 bg-gray-800/30 text-sm text-gray-500"
-									>
-										Complete previous steps first
-									</div>
-								{/if}
-							</div>
-
-							<!-- Step 4: Sign & Submit -->
+							<!-- Step 3: Sign & Submit -->
 							<div class="space-y-2">
 								<div class="flex items-center gap-2">
 									<div
 										class="flex h-6 w-6 items-center justify-center rounded-full bg-gray-700 text-xs font-medium text-gray-300"
 									>
-										4
+										3
 									</div>
 									<span class="text-sm font-medium text-gray-300">Sign & Register</span>
 								</div>
@@ -359,7 +241,6 @@
 									disabled={!$connected ||
 										!$signerAddress ||
 										!accessCode.trim() ||
-										!captchaToken ||
 										submitting}
 								>
 									{#if submitting}
@@ -391,10 +272,3 @@
 		/>
 	</div>
 </div>
-
-<style>
-	:global(.h-captcha) {
-		display: flex;
-		justify-content: center;
-	}
-</style>

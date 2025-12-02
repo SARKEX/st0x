@@ -125,9 +125,9 @@
 
 		<!-- Hover Tooltip -->
 		{#if showTooltip && $rewardsData && !showDropdown}
-			{@const kickerProgress =
-				$rewardsData.kickerTargetPoints > 0
-					? Math.min(100, ($rewardsData.totalPoints / $rewardsData.kickerTargetPoints) * 100)
+			{@const rocketBoostProgress =
+				$rewardsData.rocketBoostTargetPoints > 0
+					? Math.min(100, ($rewardsData.totalPoints / $rewardsData.rocketBoostTargetPoints) * 100)
 					: 0}
 			<div
 				class="absolute right-0 top-full z-[160] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
@@ -146,18 +146,18 @@
 						<span class="text-gray-400">Rewards APY</span>
 						<span class="font-medium text-green-400">{formatApy($globalPoolApy)}</span>
 					</div>
-					<!-- Kicker Progress Bar -->
+					<!-- RocketBoost Progress Bar -->
 					<div class="pt-1">
 						<div class="flex items-center justify-between text-xs text-gray-400">
-							<span>Kicker</span>
-							<span>{kickerProgress.toFixed(0)}%</span>
+							<span>RocketBoost</span>
+							<span>{rocketBoostProgress.toFixed(0)}%</span>
 						</div>
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
 							<div
-								class="h-full transition-all {kickerProgress >= 100
+								class="h-full transition-all {rocketBoostProgress >= 100
 									? 'bg-green-500'
 									: 'bg-yellow-500'}"
-								style="width: {kickerProgress}%"
+								style="width: {rocketBoostProgress}%"
 							/>
 							<!-- Milestone markers -->
 							{#each [25, 50, 75] as milestone}

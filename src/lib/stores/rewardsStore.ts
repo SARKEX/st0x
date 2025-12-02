@@ -8,14 +8,14 @@ export interface WalletRanking {
 	rank: number;
 }
 
-export interface KickerTiers {
+export interface RocketBoostTiers {
 	tier25: number;
 	tier50: number;
 	tier75: number;
 	tier100: number;
 }
 
-export interface KickerTiersAchieved {
+export interface RocketBoostTiersAchieved {
 	tier25: boolean;
 	tier50: boolean;
 	tier75: boolean;
@@ -28,7 +28,7 @@ export interface LastMonthData {
 	totalPoints: number;
 	reward: number;
 	poolAmount: number;
-	kickerAchievedAmount: number;
+	rocketBoostAchievedAmount: number;
 }
 
 export interface UserRewardsData {
@@ -44,11 +44,11 @@ export interface UserRewardsData {
 	approxApy: number | null; // annualized percentage, null if no holdings
 	// Pool config
 	poolAmount: number;
-	kickerAmounts: KickerTiers;
-	kickerTvlTarget: number;
-	kickerTargetPoints: number; // kickerTvlTarget * 2 * daysInMonth * 100
-	kickerTiersAchieved: KickerTiersAchieved;
-	kickerAchievedAmount: number;
+	rocketBoostAmounts: RocketBoostTiers;
+	rocketBoostTvlTarget: number;
+	rocketBoostTargetPoints: number; // rocketBoostTvlTarget * 2 * daysInMonth * 100
+	rocketBoostTiersAchieved: RocketBoostTiersAchieved;
+	rocketBoostAchievedAmount: number;
 	effectivePool: number;
 	lastMonth: LastMonthData | null;
 	leaderboard: {
@@ -105,11 +105,11 @@ export async function fetchUserRewards(walletAddress: string): Promise<void> {
 			averageValue: data.averageValue,
 			approxApy: data.approxApy,
 			poolAmount: data.poolAmount,
-			kickerAmounts: data.kickerAmounts,
-			kickerTvlTarget: data.kickerTvlTarget,
-			kickerTargetPoints: data.kickerTargetPoints,
-			kickerTiersAchieved: data.kickerTiersAchieved,
-			kickerAchievedAmount: data.kickerAchievedAmount,
+			rocketBoostAmounts: data.rocketBoostAmounts,
+			rocketBoostTvlTarget: data.rocketBoostTvlTarget,
+			rocketBoostTargetPoints: data.rocketBoostTargetPoints,
+			rocketBoostTiersAchieved: data.rocketBoostTiersAchieved,
+			rocketBoostAchievedAmount: data.rocketBoostAchievedAmount,
 			effectivePool: data.effectivePool,
 			lastMonth: data.lastMonth,
 			leaderboard: data.leaderboard

@@ -6,7 +6,7 @@ import {
 	KV_KEYS,
 	type MonthlyPointsData,
 	type RewardsPoolConfig,
-	type KickerTiers
+	type RocketBoostTiers
 } from '$lib/server/kv';
 
 // Get excluded wallets set for filtering
@@ -21,8 +21,8 @@ interface WalletRanking {
 	rank: number;
 }
 
-// Which kicker tiers have been achieved
-interface KickerTiersAchieved {
+// Which RocketBoost tiers have been achieved
+interface RocketBoostTiersAchieved {
 	tier25: boolean;
 	tier50: boolean;
 	tier75: boolean;
@@ -43,12 +43,12 @@ interface UserRewardsResponse {
 	approxApy: number | null; // (estimatedReward / averageValue) * 12 * 100, null if no holdings
 	// Pool config
 	poolAmount: number;
-	kickerAmounts: KickerTiers; // Bonus amounts for each tier
-	kickerTvlTarget: number;
-	kickerTargetPoints: number; // kickerTvlTarget * 2 * daysInMonth * 100
-	kickerTiersAchieved: KickerTiersAchieved; // Which tiers have been hit
-	kickerAchievedAmount: number; // Sum of achieved tier bonuses
-	effectivePool: number; // poolAmount + kickerAchievedAmount
+	rocketBoostAmounts: RocketBoostTiers; // Bonus amounts for each tier
+	rocketBoostTvlTarget: number;
+	rocketBoostTargetPoints: number; // rocketBoostTvlTarget * 2 * daysInMonth * 100
+	rocketBoostTiersAchieved: RocketBoostTiersAchieved; // Which tiers have been hit
+	rocketBoostAchievedAmount: number; // Sum of achieved tier bonuses
+	effectivePool: number; // poolAmount + rocketBoostAchievedAmount
 	// Last month data
 	lastMonth: {
 		month: string;
@@ -56,7 +56,7 @@ interface UserRewardsResponse {
 		totalPoints: number;
 		reward: number;
 		poolAmount: number;
-		kickerAchievedAmount: number;
+		rocketBoostAchievedAmount: number;
 	} | null;
 	// Leaderboard data
 	leaderboard: {
@@ -138,22 +138,22 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Pool calculations
 		const poolAmount = poolConfig?.poolAmount ?? 0;
-		const kickerAmounts: KickerTiers = poolConfig?.kickerAmounts ?? {
+		const rocketBoostAmounts: RocketBoostTiers = poolConfig?.rocketBoostAmounts ?? {
 			tier25: 0,
 			tier50: 0,
 			tier75: 0,
 			tier100: 0
 		};
-		const kickerTvlTarget = poolConfig?.kickerTvlTarget ?? 0;
+		const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
 
-		// Kicker target in points: TVL * 2 snapshots/day * days in month * 100 points/$
+		// RocketBoost target in points: TVL * 2 snapshots/day * days in month * 100 points/$
 		const daysInMonth = getDaysInMonth(currentMonth);
-		const kickerTargetPoints = kickerTvlTarget * 2 * daysInMonth * 100;
+		const rocketBoostTargetPoints = rocketBoostTvlTarget * 2 * daysInMonth * 100;
 
 		// Calculate progress percentage and which tiers are achieved
-		const progressPercent = kickerTargetPoints > 0 ? (totalPoints / kickerTargetPoints) * 100 : 0;
+		const progressPercent = rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
-		const kickerTiersAchieved: KickerTiersAchieved = {
+		const rocketBoostTiersAchieved: RocketBoostTiersAchieved = {
 			tier25: progressPercent >= 25,
 			tier50: progressPercent >= 50,
 			tier75: progressPercent >= 75,
@@ -161,13 +161,13 @@ export const GET: RequestHandler = async ({ url }) => {
 		};
 
 		// Sum up achieved tier bonuses
-		const kickerAchievedAmount =
-			(kickerTiersAchieved.tier25 ? kickerAmounts.tier25 : 0) +
-			(kickerTiersAchieved.tier50 ? kickerAmounts.tier50 : 0) +
-			(kickerTiersAchieved.tier75 ? kickerAmounts.tier75 : 0) +
-			(kickerTiersAchieved.tier100 ? kickerAmounts.tier100 : 0);
+		const rocketBoostAchievedAmount =
+			(rocketBoostTiersAchieved.tier25 ? rocketBoostAmounts.tier25 : 0) +
+			(rocketBoostTiersAchieved.tier50 ? rocketBoostAmounts.tier50 : 0) +
+			(rocketBoostTiersAchieved.tier75 ? rocketBoostAmounts.tier75 : 0) +
+			(rocketBoostTiersAchieved.tier100 ? rocketBoostAmounts.tier100 : 0);
 
-		const effectivePool = poolAmount + kickerAchievedAmount;
+		const effectivePool = poolAmount + rocketBoostAchievedAmount;
 
 		// Calculate estimated reward
 		const estimatedReward = totalPoints > 0 ? (userPoints / totalPoints) * effectivePool : 0;
@@ -204,26 +204,26 @@ export const GET: RequestHandler = async ({ url }) => {
 					}
 				}
 
-				// Calculate last month's achieved kicker amount
+				// Calculate last month's achieved RocketBoost amount
 				const lastDaysInMonth = getDaysInMonth(lastMonth);
-				const lastKickerTargetPoints =
-					(lastPoolConfig.kickerTvlTarget ?? 0) * 2 * lastDaysInMonth * 100;
+				const lastRocketBoostTargetPoints =
+					(lastPoolConfig.rocketBoostTvlTarget ?? 0) * 2 * lastDaysInMonth * 100;
 				const lastProgressPercent =
-					lastKickerTargetPoints > 0 ? (lastTotalPoints / lastKickerTargetPoints) * 100 : 0;
+					lastRocketBoostTargetPoints > 0 ? (lastTotalPoints / lastRocketBoostTargetPoints) * 100 : 0;
 
-				const lastKickerAmounts = lastPoolConfig.kickerAmounts ?? {
+				const lastRocketBoostAmounts = lastPoolConfig.rocketBoostAmounts ?? {
 					tier25: 0,
 					tier50: 0,
 					tier75: 0,
 					tier100: 0
 				};
-				const lastKickerAchievedAmount =
-					(lastProgressPercent >= 25 ? lastKickerAmounts.tier25 : 0) +
-					(lastProgressPercent >= 50 ? lastKickerAmounts.tier50 : 0) +
-					(lastProgressPercent >= 75 ? lastKickerAmounts.tier75 : 0) +
-					(lastProgressPercent >= 100 ? lastKickerAmounts.tier100 : 0);
+				const lastRocketBoostAchievedAmount =
+					(lastProgressPercent >= 25 ? lastRocketBoostAmounts.tier25 : 0) +
+					(lastProgressPercent >= 50 ? lastRocketBoostAmounts.tier50 : 0) +
+					(lastProgressPercent >= 75 ? lastRocketBoostAmounts.tier75 : 0) +
+					(lastProgressPercent >= 100 ? lastRocketBoostAmounts.tier100 : 0);
 
-				const lastEffectivePool = lastPoolConfig.poolAmount + lastKickerAchievedAmount;
+				const lastEffectivePool = lastPoolConfig.poolAmount + lastRocketBoostAchievedAmount;
 				const lastReward =
 					lastTotalPoints > 0 ? (lastUserPoints / lastTotalPoints) * lastEffectivePool : 0;
 
@@ -233,7 +233,7 @@ export const GET: RequestHandler = async ({ url }) => {
 					totalPoints: lastTotalPoints,
 					reward: lastReward,
 					poolAmount: lastEffectivePool,
-					kickerAchievedAmount: lastKickerAchievedAmount
+					rocketBoostAchievedAmount: lastRocketBoostAchievedAmount
 				};
 			}
 		}
@@ -274,11 +274,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			averageValue,
 			approxApy,
 			poolAmount,
-			kickerAmounts,
-			kickerTvlTarget,
-			kickerTargetPoints,
-			kickerTiersAchieved,
-			kickerAchievedAmount,
+			rocketBoostAmounts,
+			rocketBoostTvlTarget,
+			rocketBoostTargetPoints,
+			rocketBoostTiersAchieved,
+			rocketBoostAchievedAmount,
 			effectivePool,
 			lastMonth: lastMonthData,
 			leaderboard: {

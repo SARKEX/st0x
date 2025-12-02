@@ -36,7 +36,7 @@ export function generateAccessCode(): string {
 
 // Create the message that users need to sign
 export function createSignMessage(address: string, code: string): string {
-	return `Sign this message to verify wallet ownership and register with ST0X.
+	return `Sign to verify wallet ownership for st0x rewards.
 
 Wallet: ${address}
 Access Code: ${code}
@@ -318,34 +318,27 @@ export async function processRegistration(
 	address: string,
 	code: string,
 	signature: `0x${string}`,
-	message: string,
-	captchaToken: string
+	message: string
 ): Promise<RegistrationResult> {
-	// 1. Verify captcha
-	const captchaValid = await verifyCaptcha(captchaToken);
-	if (!captchaValid) {
-		return { success: false, error: 'Captcha verification failed' };
-	}
-
-	// 2. Verify signature
+	// 1. Verify signature
 	const signatureValid = await verifyWalletSignature(address, message, signature);
 	if (!signatureValid) {
 		return { success: false, error: 'Signature verification failed' };
 	}
 
-	// 3. Check if wallet already registered
+	// 2. Check if wallet already registered
 	const alreadyRegistered = await isWalletRegistered(address);
 	if (alreadyRegistered) {
 		return { success: false, error: 'Wallet is already registered' };
 	}
 
-	// 4. Validate access code
+	// 3. Validate access code
 	const codeValidation = await validateAccessCode(code);
 	if (!codeValidation.valid) {
 		return { success: false, error: codeValidation.reason };
 	}
 
-	// 5. Register wallet
+	// 4. Register wallet
 	const wallet = await registerWallet(address, code);
 
 	return { success: true, wallet };
