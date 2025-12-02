@@ -758,7 +758,7 @@
 			<div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
 				<!-- Left: Symbol info -->
 				<div class="space-y-4 xl:col-span-2">
-					<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+					<div class={`${containerStyles.cardBordered} overflow-hidden p-0`} data-tutorial="symbol-overview">
 						<div class="border-b border-white/10 bg-gray-900/60 px-4 py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
