@@ -188,9 +188,6 @@
 				</a>
 				<div class="ml-2 hidden lg:block">
 					<h1 class="text-base font-bold">{title}</h1>
-					<p class="truncate text-xs text-gray-400 md:max-w-[200px] xl:max-w-[260px]">
-						{description}
-					</p>
 				</div>
 			</div>
 
