@@ -71,6 +71,10 @@
 
 	let selectedAmount: bigint = 0n;
 
+	// Balance from TradeAmountInput (bound)
+	let spendingTokenBalance: bigint = 0n;
+	let spendingTokenBalanceDecimals: number | null = null;
+
 	$: isInputTokenSameAsOutputToken =
 		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
 
@@ -96,6 +100,37 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		selectedAmountError;
+
+	// Handle percentage button clicks for setting amount based on wallet balance
+	const handlePercentageClick = (percent: number) => {
+		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
+		if (spendingTokenBalanceDecimals === null) return;
+
+		if (orderSide === 'Sell') {
+			// For SELL: balance is in asset token, amount is in asset token - direct calculation
+			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
+			selectedAmount = percentAmount;
+		} else {
+			// For BUY: balance is in settlement token, need to convert to asset amount using limit price
+			const price = parseFloat(selectedInitialRatio || '0');
+			if (!price || price <= 0) {
+				// Can't convert without a valid price
+				return;
+			}
+
+			const settlementDecimals = spendingTokenBalanceDecimals;
+			const assetDecimals = assetToken?.decimals ?? 18;
+
+			// Calculate settlement amount to spend (percent of balance)
+			const settlementToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
+
+			// Convert settlement amount to asset amount using limit price
+			// settlementAmount / price = assetAmount
+			const settlementInFloat = parseFloat(formatUnits(settlementToSpend, settlementDecimals));
+			const assetAmount = settlementInFloat / price;
+			selectedAmount = parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals);
+		}
+	};
 
 	const handleDeploy = async () => {
 		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
@@ -246,11 +281,25 @@
 					amountToken={assetToken}
 					balanceToken={orderSide === 'Buy' ? settlementToken : assetToken}
 					bind:amount={selectedAmount}
+					bind:balance={spendingTokenBalance}
+					bind:balanceDecimals={spendingTokenBalanceDecimals}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
 					showUnit={false}
 					showMaxButton={false}
 				/>
+				<!-- Percentage buttons -->
+				<div class="mt-2 flex gap-2">
+					{#each [25, 50, 75, 100] as percent}
+						<button
+							type="button"
+							on:click={() => handlePercentageClick(percent)}
+							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+						>
+							{percent === 100 ? 'Max' : `${percent}%`}
+						</button>
+					{/each}
+				</div>
 			</div>
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
