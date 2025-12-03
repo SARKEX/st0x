@@ -65,8 +65,21 @@
 
 	// Autofill with current price if available
 	let selectedInitialRatio: string = currentPrice || '';
-	$: if (currentPrice && !selectedInitialRatio) {
-		selectedInitialRatio = currentPrice;
+	let userHasEditedPrice = false;
+	let lastAutofilledPrice: string | undefined = undefined;
+
+	// Auto-fill price when currentPrice becomes available or changes (and user hasn't manually edited)
+	$: if (currentPrice && !userHasEditedPrice) {
+		// Only update if price actually changed to avoid unnecessary reactivity
+		if (lastAutofilledPrice !== currentPrice) {
+			selectedInitialRatio = currentPrice;
+			lastAutofilledPrice = currentPrice;
+		}
+	}
+
+	// Track when user manually edits the price
+	function handlePriceInput() {
+		userHasEditedPrice = true;
 	}
 
 	let selectedAmount: bigint = 0n;
@@ -74,6 +87,9 @@
 	// Balance from TradeAmountInput (bound)
 	let spendingTokenBalance: bigint = 0n;
 	let spendingTokenBalanceDecimals: number | null = null;
+
+	// Reference to TradeAmountInput for programmatic updates
+	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
 	$: isInputTokenSameAsOutputToken =
 		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
@@ -105,11 +121,12 @@
 	const handlePercentageClick = (percent: number) => {
 		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
 		if (spendingTokenBalanceDecimals === null) return;
+		if (!tradeAmountInputRef) return;
 
 		if (orderSide === 'Sell') {
 			// For SELL: balance is in asset token, amount is in asset token - direct calculation
 			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
-			selectedAmount = percentAmount;
+			tradeAmountInputRef.setAmountValue(percentAmount);
 		} else {
 			// For BUY: balance is in settlement token, need to convert to asset amount using limit price
 			const price = parseFloat(selectedInitialRatio || '0');
@@ -128,7 +145,9 @@
 			// settlementAmount / price = assetAmount
 			const settlementInFloat = parseFloat(formatUnits(settlementToSpend, settlementDecimals));
 			const assetAmount = settlementInFloat / price;
-			selectedAmount = parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals);
+			tradeAmountInputRef.setAmountValue(
+				parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals)
+			);
 		}
 	};
 
@@ -277,6 +296,7 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
 				<TradeAmountInput
+					bind:this={tradeAmountInputRef}
 					aria-label="Quantity"
 					amountToken={assetToken}
 					balanceToken={orderSide === 'Buy' ? settlementToken : assetToken}
@@ -314,6 +334,7 @@
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
+					on:input={handlePriceInput}
 				/>
 			</div>
 		</div>
@@ -325,7 +346,9 @@
 				<div class="flex justify-between">
 					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 					<span class="font-medium">
-						{selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0'}
+						{selectedAmount
+							? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+							: '0'}
 						{assetToken.symbol}
 					</span>
 				</div>

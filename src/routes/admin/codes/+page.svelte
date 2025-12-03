@@ -360,164 +360,170 @@
 			</div>
 		</Card>
 	{:else}
-		<div class="space-y-4">
-			{#each codes as code}
-				<Card>
-					{#if editingCode === code.code}
-						<!-- Edit Form -->
-						<div class="space-y-4">
-							<div class="flex items-center gap-3">
-								<code class="rounded bg-gray-800 px-2 py-1 font-mono text-lg text-[#e8be89]">
-									{code.code}
-								</code>
-								<span class="text-sm text-gray-400">Editing...</span>
+		<Card>
+			<!-- Edit Form (shown above table when editing) -->
+			{#if editingCode}
+				{@const code = codes.find((c) => c.code === editingCode)}
+				{#if code}
+					<div class="mb-4 border-b border-gray-700 pb-4">
+						<div class="mb-3 flex items-center gap-3">
+							<code class="rounded bg-gray-800 px-2 py-1 font-mono text-[#e8be89]">
+								{code.code}
+							</code>
+							<span class="text-sm text-gray-400">Editing...</span>
+						</div>
+
+						{#if updateError}
+							<div
+								class="mb-3 rounded-md border border-red-900/40 bg-red-900/20 p-2 text-sm text-red-300"
+							>
+								{updateError}
 							</div>
+						{/if}
 
-							{#if updateError}
-								<div
-									class="rounded-md border border-red-900/40 bg-red-900/20 p-2 text-sm text-red-300"
-								>
-									{updateError}
-								</div>
-							{/if}
-
-							<div class="grid gap-4 sm:grid-cols-3">
-								<div>
-									<label for="edit-maxUses" class="mb-1 block text-sm text-gray-300">
-										Max Uses (empty = unlimited)
-									</label>
-									<input
-										id="edit-maxUses"
-										type="number"
-										min="1"
-										bind:value={editMaxUses}
-										placeholder="Unlimited"
-										class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
-									/>
-									<p class="mt-1 text-xs text-gray-500">
-										Current uses: {code.currentUses}
-									</p>
-								</div>
-								<div>
-									<label for="edit-expiresAt" class="mb-1 block text-sm text-gray-300">
-										Expires At
-									</label>
-									<input
-										id="edit-expiresAt"
-										type="datetime-local"
-										bind:value={editExpiresAt}
-										class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
-									/>
-								</div>
-								<div>
-									<label for="edit-label" class="mb-1 block text-sm text-gray-300">Label</label>
-									<input
-										id="edit-label"
-										type="text"
-										bind:value={editLabel}
-										placeholder="e.g., Twitter Campaign"
-										class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
-									/>
-								</div>
+						<div class="grid gap-3 sm:grid-cols-4">
+							<div>
+								<label for="edit-maxUses" class="mb-1 block text-xs text-gray-400">Max Uses</label>
+								<input
+									id="edit-maxUses"
+									type="number"
+									min="1"
+									bind:value={editMaxUses}
+									placeholder="∞"
+									class="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
+								/>
 							</div>
-
-							<div class="flex justify-end gap-2">
+							<div>
+								<label for="edit-expiresAt" class="mb-1 block text-xs text-gray-400">Expires</label>
+								<input
+									id="edit-expiresAt"
+									type="datetime-local"
+									bind:value={editExpiresAt}
+									class="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+								/>
+							</div>
+							<div>
+								<label for="edit-label" class="mb-1 block text-xs text-gray-400">Label</label>
+								<input
+									id="edit-label"
+									type="text"
+									bind:value={editLabel}
+									placeholder="Campaign name"
+									class="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
+								/>
+							</div>
+							<div class="flex items-end gap-2">
 								<button
 									on:click={cancelEdit}
 									disabled={updating}
-									class="rounded-md border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-50"
+									class="rounded border border-gray-700 bg-gray-800 px-3 py-1 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-50"
 								>
 									Cancel
 								</button>
-								<Button variant="primary" on:click={updateCode} disabled={updating}>
-									{updating ? 'Saving...' : 'Save Changes'}
-								</Button>
+								<button
+									on:click={updateCode}
+									disabled={updating}
+									class="rounded bg-[#e8be89] px-3 py-1 text-sm font-medium text-gray-900 hover:bg-[#d4a875] disabled:opacity-50"
+								>
+									{updating ? 'Saving...' : 'Save'}
+								</button>
 							</div>
 						</div>
-					{:else}
-						<!-- Display Mode -->
-						<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-							<div class="flex-1">
-								<div class="flex items-center gap-3">
-									<code class="rounded bg-gray-800 px-2 py-1 font-mono text-lg text-[#e8be89]">
-										{code.code}
-									</code>
-									{#if isExpired(code.expiresAt)}
-										<span class="rounded-full bg-red-900/30 px-2 py-0.5 text-xs text-red-400">
-											Expired
-										</span>
-									{:else if isExhausted(code)}
-										<span class="rounded-full bg-yellow-900/30 px-2 py-0.5 text-xs text-yellow-400">
-											Exhausted
-										</span>
-									{:else}
-										<span class="rounded-full bg-green-900/30 px-2 py-0.5 text-xs text-green-400">
-											Active
-										</span>
-									{/if}
-								</div>
-								{#if code.label}
-									<p class="mt-1 text-sm text-gray-400">{code.label}</p>
-								{/if}
-								<div class="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-400">
-									<span>
-										Uses: <span class="text-white">{code.currentUses}</span>
-										{#if code.maxUses !== null}
-											/ {code.maxUses}
+					</div>
+				{/if}
+			{/if}
+
+			<!-- Compact Table -->
+			<div class="overflow-x-auto">
+				<table class="w-full text-left text-sm">
+					<thead class="border-b border-gray-700 text-xs text-gray-400">
+						<tr>
+							<th class="pb-2 pr-3">Code</th>
+							<th class="pb-2 pr-3">Label</th>
+							<th class="pb-2 pr-3 text-center">Uses</th>
+							<th class="pb-2 pr-3 text-center">Wallets</th>
+							<th class="pb-2 pr-3">Expires</th>
+							<th class="pb-2 text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-800">
+						{#each codes as code}
+							<tr class="hover:bg-gray-800/30">
+								<td class="py-2 pr-3">
+									<div class="flex items-center gap-2">
+										<code class="font-mono text-[#e8be89]">{code.code}</code>
+										{#if isExpired(code.expiresAt)}
+											<span class="rounded bg-red-900/30 px-1.5 py-0.5 text-[10px] text-red-400"
+												>Expired</span
+											>
+										{:else if isExhausted(code)}
+											<span
+												class="rounded bg-yellow-900/30 px-1.5 py-0.5 text-[10px] text-yellow-400"
+												>Exhausted</span
+											>
 										{:else}
-											<span class="text-gray-500">(unlimited)</span>
+											<span class="rounded bg-green-900/30 px-1.5 py-0.5 text-[10px] text-green-400"
+												>Active</span
+											>
 										{/if}
-									</span>
-									<span>
-										Wallets: <span class="text-white">{code.walletCount}</span>
-									</span>
-									<span>
-										Created: <span class="text-white">{formatDate(code.createdAt)}</span>
-									</span>
+									</div>
+								</td>
+								<td class="py-2 pr-3 text-gray-400">{code.label || '-'}</td>
+								<td class="py-2 pr-3 text-center">
+									<span class="text-white">{code.currentUses}</span><span class="text-gray-500"
+										>/{code.maxUses ?? '∞'}</span
+									>
+								</td>
+								<td class="py-2 pr-3 text-center text-white">{code.walletCount}</td>
+								<td class="py-2 pr-3 text-gray-400">
 									{#if code.expiresAt}
-										<span>
-											Expires: <span class="text-white">{formatDate(code.expiresAt)}</span>
-										</span>
+										{formatDate(code.expiresAt)}
+									{:else}
+										<span class="text-gray-500">Never</span>
 									{/if}
-								</div>
-							</div>
-							<div class="flex gap-2">
-								<button
-									on:click={() => startEdit(code)}
-									class="rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
-								>
-									Edit
-								</button>
-								<button
-									on:click={() => copyCode(code.code)}
-									class="rounded-md border px-3 py-1.5 text-sm transition-all duration-150 {copiedCode ===
-									code.code
-										? 'border-green-600 bg-green-600/20 text-green-400'
-										: 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'}"
-								>
-									{copiedCode === code.code ? 'Copied!' : 'Copy Code'}
-								</button>
-								<button
-									on:click={() => copyLink(code.code)}
-									class="rounded-md border px-3 py-1.5 text-sm transition-all duration-150 {copiedLinkCode ===
-									code.code
-										? 'border-green-600 bg-green-600/20 text-green-400'
-										: 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'}"
-								>
-									{copiedLinkCode === code.code ? 'Copied!' : 'Copy Link'}
-								</button>
-								<button
-									on:click={() => deleteCode(code.code)}
-									disabled={deletingCode === code.code}
-									class="rounded-md border border-red-900/50 bg-red-900/20 px-3 py-1.5 text-sm text-red-400 hover:bg-red-900/30 disabled:opacity-50"
-								>
-									{deletingCode === code.code ? 'Deleting...' : 'Delete'}
-								</button>
-							</div>
-						</div>
-					{/if}
-				</Card>
-			{/each}
-		</div>
+								</td>
+								<td class="py-2 text-right">
+									<div class="flex justify-end gap-1">
+										<button
+											on:click={() => startEdit(code)}
+											class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 hover:text-white"
+											title="Edit"
+										>
+											Edit
+										</button>
+										<button
+											on:click={() => copyCode(code.code)}
+											class="rounded px-2 py-1 text-xs transition-all {copiedCode === code.code
+												? 'bg-green-600/20 text-green-400'
+												: 'text-gray-400 hover:bg-gray-700 hover:text-white'}"
+											title="Copy code"
+										>
+											{copiedCode === code.code ? '✓' : 'Code'}
+										</button>
+										<button
+											on:click={() => copyLink(code.code)}
+											class="rounded px-2 py-1 text-xs transition-all {copiedLinkCode === code.code
+												? 'bg-green-600/20 text-green-400'
+												: 'text-gray-400 hover:bg-gray-700 hover:text-white'}"
+											title="Copy referral link"
+										>
+											{copiedLinkCode === code.code ? '✓' : 'Link'}
+										</button>
+										<button
+											on:click={() => deleteCode(code.code)}
+											disabled={deletingCode === code.code}
+											class="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+											title="Delete"
+										>
+											{deletingCode === code.code ? '...' : '×'}
+										</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</Card>
 	{/if}
 </div>

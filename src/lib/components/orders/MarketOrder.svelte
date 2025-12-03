@@ -82,6 +82,9 @@
 	let spendingTokenBalance: bigint = 0n;
 	let spendingTokenBalanceDecimals: number | null = null;
 
+	// Reference to TradeAmountInput for programmatic updates
+	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
+
 	// Token being spent
 	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
 
@@ -154,9 +157,7 @@
 
 				const quotesWithinGuard = relevantQuotes.filter((quote: ProcessedQuote) => {
 					const price = quote.quotePerAsset ?? 0;
-					return orderSide === 'Buy'
-						? price <= maxAcceptablePrice
-						: price >= minAcceptablePrice;
+					return orderSide === 'Buy' ? price <= maxAcceptablePrice : price >= minAcceptablePrice;
 				});
 
 				if (quotesWithinGuard.length === 0) {
@@ -226,12 +227,12 @@
 	const handlePercentageClick = (percent: number) => {
 		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
 		if (spendingTokenBalanceDecimals === null) return;
+		if (!tradeAmountInputRef) return;
 
 		if (orderSide === 'Sell') {
 			// For SELL: balance is in asset token, amount is in asset token - direct calculation
-			const assetDecimals = assetToken?.decimals ?? 18;
 			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
-			selectedAmount = percentAmount;
+			tradeAmountInputRef.setAmountValue(percentAmount);
 		} else {
 			// For BUY: balance is in payment token (USDC), need to convert to asset amount
 			// We need the oracle price to estimate how much asset we can buy
@@ -257,7 +258,9 @@
 			// We want result in asset decimals (e.g., 18)
 			const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
 			const assetAmount = paymentInFloat / oraclePrice;
-			selectedAmount = parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals);
+			tradeAmountInputRef.setAmountValue(
+				parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals)
+			);
 		}
 	};
 
@@ -737,6 +740,7 @@
 					Amount to {orderSide === 'Buy' ? 'Buy' : 'Sell'}
 				</div>
 				<TradeAmountInput
+					bind:this={tradeAmountInputRef}
 					aria-label="Quantity"
 					amountToken={assetToken}
 					balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
@@ -795,7 +799,9 @@
 				<div class="flex justify-between">
 					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 					<span class="font-medium">
-						{selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0'}
+						{selectedAmount
+							? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+							: '0'}
 						{assetToken.symbol}
 					</span>
 				</div>
@@ -822,8 +828,11 @@
 						</div>
 					{/if}
 					{#if insufficientLiquidityWarning && !insufficientBalanceError}
-						<div class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300">
-							There currently isn't enough liquidity to fully fill this order. Continue to fill as much as possible.
+						<div
+							class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
+						>
+							There currently isn't enough liquidity to fully fill this order. Continue to fill as
+							much as possible.
 						</div>
 					{/if}
 				</div>
@@ -867,4 +876,3 @@
 		<LoadingSpinner size="md" text="Loading..." />
 	</div>
 {/if}
-

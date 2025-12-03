@@ -40,7 +40,9 @@
 			<!-- Login gate for strategies -->
 			<div class="flex min-h-[60vh] items-center justify-center">
 				<div class="max-w-md text-center">
-					<div class="mb-6 inline-flex rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6">
+					<div
+						class="mb-6 inline-flex rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6"
+					>
 						<svg
 							class="h-12 w-12 text-blue-400"
 							fill="none"
@@ -57,9 +59,14 @@
 					</div>
 					<h2 class="mb-2 text-2xl font-bold">Connect to Access Strategies</h2>
 					<p class="mb-6 text-gray-400">
-						Connect and register your wallet to access advanced trading strategies including portfolio management and market making.
+						Connect and register your wallet to access advanced trading strategies including
+						portfolio management and market making.
 					</p>
-					<Button on:click={() => !$connected ? promptWalletConnection() : promptLogin()} variant="primary" size="lg">
+					<Button
+						on:click={() => (!$connected ? promptWalletConnection() : promptLogin())}
+						variant="primary"
+						size="lg"
+					>
 						Connect Wallet
 					</Button>
 				</div>

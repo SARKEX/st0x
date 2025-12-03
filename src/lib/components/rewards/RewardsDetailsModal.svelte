@@ -26,7 +26,10 @@
 	// Calculate RocketBoost progress percentage (capped at 100%)
 	// Progress = accumulated totalPoints / target points (TVL * 2 snapshots/day * days * 100)
 	$: rocketBoostProgress = $rewardsData
-		? Math.min(100, ($rewardsData.totalPoints / Math.max(1, $rewardsData.rocketBoostTargetPoints)) * 100)
+		? Math.min(
+				100,
+				($rewardsData.totalPoints / Math.max(1, $rewardsData.rocketBoostTargetPoints)) * 100
+			)
 		: 0;
 
 	// Format month display
@@ -141,7 +144,8 @@
 					<div class="relative mb-4">
 						<div class="h-3 overflow-hidden rounded-full bg-gray-600">
 							<div
-								class="h-full transition-all duration-500 {$rewardsData.rocketBoostTiersAchieved.tier100
+								class="h-full transition-all duration-500 {$rewardsData.rocketBoostTiersAchieved
+									.tier100
 									? 'bg-green-500'
 									: 'bg-yellow-500'}"
 								style="width: {rocketBoostProgress}%"

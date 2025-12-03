@@ -11,7 +11,6 @@
 	import { walletRegistered } from '$lib/stores/accessStore';
 
 	export let title: string;
-	export let description: string;
 	export let isSidebarCollapsed = false;
 	export let isMobileSidebarOpen = false;
 

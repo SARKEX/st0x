@@ -63,6 +63,9 @@
 	let spendingTokenBalance: bigint = 0n;
 	let spendingTokenBalanceDecimals: number | null = null;
 
+	// Reference to TradeAmountInput for programmatic updates
+	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
+
 	$: isInputTokenSameAsOutputToken =
 		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
 
@@ -120,8 +123,9 @@
 	// For DCA, amount token and balance token are always the same (both are the spending token)
 	const handlePercentageClick = (percent: number) => {
 		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
+		if (!tradeAmountInputRef) return;
 		const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
-		selectedAmount = percentAmount;
+		tradeAmountInputRef.setAmountValue(percentAmount);
 	};
 
 	const handleDcaDeploy = () => {
@@ -212,6 +216,7 @@
 					>
 				</div>
 				<TradeAmountInput
+					bind:this={tradeAmountInputRef}
 					aria-label="Target Amount"
 					amountToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
 					balanceToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
@@ -294,10 +299,14 @@
 					<span class="text-gray-400">Target Amount</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
-							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
+							{selectedAmount
+								? parseFloat(formatUnits(selectedAmount, selectedOutputToken.decimals)).toFixed(3)
+								: '0'}
 							{settlementLabel}
 						{:else}
-							{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
+							{selectedAmount
+								? parseFloat(formatUnits(selectedAmount, selectedInputToken.decimals)).toFixed(3)
+								: '0'}
 							{selectedInputToken.symbol}
 						{/if}
 					</span>

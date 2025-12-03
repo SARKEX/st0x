@@ -20,7 +20,11 @@
 
 	// Element positioning for highlighting
 	let targetRect: DOMRect | null = null;
-	let tooltipPosition: { top: number; left: number; arrowPosition: 'top' | 'bottom' | 'left' | 'right' } = {
+	let tooltipPosition: {
+		top: number;
+		left: number;
+		arrowPosition: 'top' | 'bottom' | 'left' | 'right';
+	} = {
 		top: 0,
 		left: 0,
 		arrowPosition: 'top'
@@ -55,7 +59,7 @@
 		'cancel-order': {
 			title: 'Withdrawing Unspent Funds',
 			description:
-				'To withdraw unspent funds, cancel the order and go through the signing steps to return the funds to your wallet.',
+				'To withdraw unspent funds from vaults, cancel the order and go through the signing steps to return the funds to your wallet.',
 			targetSelector: '[data-tutorial="dex-activity"]',
 			buttonText: 'Next',
 			highlightDex: true,
@@ -220,10 +224,7 @@
 
 {#if showTutorial}
 	<!-- Overlay -->
-	<div
-		class="fixed inset-0 z-[9000]"
-		transition:fade={{ duration: 200 }}
-	>
+	<div class="fixed inset-0 z-[9000]" transition:fade={{ duration: 200 }}>
 		<!-- Dark overlay with cutout for target element -->
 		{#if targetRect && !isModal}
 			<svg class="absolute inset-0 h-full w-full">
@@ -325,9 +326,21 @@
 				transition:fly={{ y: 20, duration: 300 }}
 			>
 				<div class="mb-6 text-center">
-					<div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20">
-						<svg class="h-8 w-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+					<div
+						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20"
+					>
+						<svg
+							class="h-8 w-8 text-blue-500"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+							/>
 						</svg>
 					</div>
 					<h2 class="mb-2 text-2xl font-bold text-white">{content.title}</h2>

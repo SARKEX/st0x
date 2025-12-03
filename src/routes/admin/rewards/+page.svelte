@@ -208,7 +208,10 @@
 
 	// Helper to get total RocketBoost amount
 	$: totalRocketBoostAmount =
-		poolFormRocketBoostTier25 + poolFormRocketBoostTier50 + poolFormRocketBoostTier75 + poolFormRocketBoostTier100;
+		poolFormRocketBoostTier25 +
+		poolFormRocketBoostTier50 +
+		poolFormRocketBoostTier75 +
+		poolFormRocketBoostTier100;
 
 	// Token list for snapshots tab
 	const tokenSymbols = TOKENS.map((t) => t.symbol);
@@ -331,7 +334,10 @@
 			tier100: 0
 		};
 		const maxRocketBoostAmount =
-			rocketBoostAmts.tier25 + rocketBoostAmts.tier50 + rocketBoostAmts.tier75 + rocketBoostAmts.tier100;
+			rocketBoostAmts.tier25 +
+			rocketBoostAmts.tier50 +
+			rocketBoostAmts.tier75 +
+			rocketBoostAmts.tier100;
 
 		// Calculate progress and achieved amount locally to avoid circular dependency
 		const daysInMonth = selectedMonth ? getDaysInMonth(selectedMonth) : 30;
@@ -371,15 +377,19 @@
 
 	// Calculate RocketBoost target in points and progress
 	function getDaysInMonth(monthStr: string): number {
+		if (!monthStr || !monthStr.includes('-')) return 30; // Default fallback
 		const [year, month] = monthStr.split('-').map(Number);
+		if (isNaN(year) || isNaN(month)) return 30; // Default fallback
 		return new Date(year, month, 0).getDate();
 	}
 
-	$: rocketBoostTargetPoints = currentMonthPool
-		? currentMonthPool.rocketBoostTvlTarget * 2 * getDaysInMonth(selectedMonth) * 100
-		: 0;
+	$: rocketBoostTargetPoints =
+		currentMonthPool && currentMonthPool.rocketBoostTvlTarget
+			? currentMonthPool.rocketBoostTvlTarget * 2 * getDaysInMonth(selectedMonth) * 100
+			: 0;
 
-	$: rocketBoostProgressPercent = rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
+	$: rocketBoostProgressPercent =
+		rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 	// Calculate achieved RocketBoost amount based on progress
 	$: achievedRocketBoostAmount = currentMonthPool
@@ -1045,9 +1055,13 @@
 									<li>
 										Wallets: {recalculateResult.comparison.previousWalletCount} → {recalculateResult.walletCount}
 										{#if recalculateResult.comparison.walletsRemoved > 0}
-											<span class="text-red-400">(-{recalculateResult.comparison.walletsRemoved} excluded)</span>
+											<span class="text-red-400"
+												>(-{recalculateResult.comparison.walletsRemoved} excluded)</span
+											>
 										{:else if recalculateResult.comparison.walletsRemoved < 0}
-											<span class="text-green-400">(+{Math.abs(recalculateResult.comparison.walletsRemoved)} added)</span>
+											<span class="text-green-400"
+												>(+{Math.abs(recalculateResult.comparison.walletsRemoved)} added)</span
+											>
 										{:else}
 											<span class="text-gray-500">(no change)</span>
 										{/if}
@@ -1055,9 +1069,13 @@
 									<li>
 										Points: {recalculateResult.comparison.previousTotalPoints.toLocaleString()} → {recalculateResult.totalPoints.toLocaleString()}
 										{#if recalculateResult.comparison.pointsRemoved > 0}
-											<span class="text-red-400">(-{recalculateResult.comparison.pointsRemoved.toLocaleString()} removed)</span>
+											<span class="text-red-400"
+												>(-{recalculateResult.comparison.pointsRemoved.toLocaleString()} removed)</span
+											>
 										{:else if recalculateResult.comparison.pointsRemoved < 0}
-											<span class="text-green-400">(+{Math.abs(recalculateResult.comparison.pointsRemoved).toLocaleString()} added)</span>
+											<span class="text-green-400"
+												>(+{Math.abs(recalculateResult.comparison.pointsRemoved).toLocaleString()} added)</span
+											>
 										{:else}
 											<span class="text-gray-500">(no change)</span>
 										{/if}
@@ -1077,7 +1095,9 @@
 									{#each recalculateResult.excludedWalletsApplied as excluded}
 										<li class="font-mono">
 											{excluded.address.slice(0, 10)}...{excluded.address.slice(-8)}
-											<span class="text-red-400">-{excluded.pointsExcluded.toLocaleString()} pts</span>
+											<span class="text-red-400"
+												>-{excluded.pointsExcluded.toLocaleString()} pts</span
+											>
 										</li>
 									{/each}
 								</ul>
@@ -1182,7 +1202,9 @@
 						<div class="mt-10 flex items-center justify-between text-sm">
 							<div class="text-gray-400">
 								<span class="font-mono text-white">{totalPoints.toLocaleString()}</span> /
-								<span class="font-mono text-gray-300">{rocketBoostTargetPoints.toLocaleString()}</span> points
+								<span class="font-mono text-gray-300"
+									>{rocketBoostTargetPoints.toLocaleString()}</span
+								> points
 							</div>
 							<div class="text-gray-400">
 								Achieved: <span class="font-medium text-green-400"
@@ -2190,7 +2212,8 @@
 							</span>
 							<div class="grid grid-cols-4 gap-2">
 								<div>
-									<label for="rocketBoostTier25" class="mb-1 block text-xs text-gray-400">25%</label>
+									<label for="rocketBoostTier25" class="mb-1 block text-xs text-gray-400">25%</label
+									>
 									<input
 										id="rocketBoostTier25"
 										type="number"
@@ -2201,7 +2224,8 @@
 									/>
 								</div>
 								<div>
-									<label for="rocketBoostTier50" class="mb-1 block text-xs text-gray-400">50%</label>
+									<label for="rocketBoostTier50" class="mb-1 block text-xs text-gray-400">50%</label
+									>
 									<input
 										id="rocketBoostTier50"
 										type="number"
@@ -2212,7 +2236,8 @@
 									/>
 								</div>
 								<div>
-									<label for="rocketBoostTier75" class="mb-1 block text-xs text-gray-400">75%</label>
+									<label for="rocketBoostTier75" class="mb-1 block text-xs text-gray-400">75%</label
+									>
 									<input
 										id="rocketBoostTier75"
 										type="number"
@@ -2223,7 +2248,9 @@
 									/>
 								</div>
 								<div>
-									<label for="rocketBoostTier100" class="mb-1 block text-xs text-gray-400">100%</label>
+									<label for="rocketBoostTier100" class="mb-1 block text-xs text-gray-400"
+										>100%</label
+									>
 									<input
 										id="rocketBoostTier100"
 										type="number"

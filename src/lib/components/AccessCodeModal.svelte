@@ -10,10 +10,7 @@
 		showAccessCodeModal,
 		walletRegistered
 	} from '$lib/stores/accessStore';
-	import {
-		getStoredAccessCode,
-		clearStoredAccessCode
-	} from '$lib/utils/accessCodeStorage';
+	import { getStoredAccessCode, clearStoredAccessCode } from '$lib/utils/accessCodeStorage';
 	import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 
 	// Form state
@@ -152,7 +149,10 @@
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 uppercase text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500 disabled:cursor-not-allowed disabled:opacity-50"
 			/>
 			<p class="text-xs text-gray-500">
-				Don't have an access code? Contact us at <a href="mailto:toby@st0x.io" class="text-yellow-500 hover:underline">toby@st0x.io</a>
+				Don't have an access code? Contact us at <a
+					href="mailto:toby@st0x.io"
+					class="text-yellow-500 hover:underline">toby@st0x.io</a
+				>
 			</p>
 		</div>
 
@@ -164,8 +164,7 @@
 		>
 			{#if submitting}
 				<span class="flex items-center gap-2">
-					<span
-						class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+					<span class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
 					></span>
 					Signing...
 				</span>
