@@ -13,6 +13,7 @@
 	export let title: string;
 	export let isSidebarCollapsed = false;
 	export let isMobileSidebarOpen = false;
+	export let isLandingPage = false;
 
 	const dispatch = createEventDispatcher();
 
@@ -137,37 +138,24 @@
 	}
 </script>
 
-<div class="sticky top-0 z-[100] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
-	<div class="hidden sm:block"><TickerTape /></div>
-	<div class="px-4 py-2 sm:px-6 sm:py-3">
+<div
+	class="sticky top-0 z-[100] transition-all duration-300 {isLandingPage
+		? 'bg-transparent'
+		: 'border-b border-white/10 bg-gray-800/95 backdrop-blur-lg'}"
+>
+	{#if !isLandingPage}
+		<div class="hidden sm:block"><TickerTape /></div>
+	{/if}
+	<div class="px-4 sm:px-6 {isLandingPage ? 'py-4 sm:py-5' : 'py-2 sm:py-3'}">
 		<div class="flex items-center justify-between gap-3 lg:gap-4">
 			<div class="flex items-center gap-2 lg:gap-4">
-				<Button
-					variant="ghost"
-					size="sm"
-					className="p-2 lg:hidden"
-					aria-label={isMobileSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-					on:click={() => handleSidebarToggle('mobile')}
-				>
-					<svg
-						class="h-5 w-5 transition-transform duration-200"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						viewBox="0 0 24 24"
-						xmlns="http://www.w3.org/2000/svg"
-						class:rotate-180={isMobileSidebarOpen}
-					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-					</svg>
-				</Button>
-				{#if isSidebarCollapsed}
+				{#if !isLandingPage}
 					<Button
 						variant="ghost"
 						size="sm"
-						className="hidden p-2 lg:inline-flex"
-						aria-label="Expand sidebar"
-						on:click={() => handleSidebarToggle('desktop')}
+						className="p-2 lg:hidden"
+						aria-label={isMobileSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+						on:click={() => handleSidebarToggle('mobile')}
 					>
 						<svg
 							class="h-5 w-5 transition-transform duration-200"
@@ -176,18 +164,41 @@
 							stroke-width="2"
 							viewBox="0 0 24 24"
 							xmlns="http://www.w3.org/2000/svg"
-							class:rotate-180={!isSidebarCollapsed}
+							class:rotate-180={isMobileSidebarOpen}
 						>
 							<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
 						</svg>
 					</Button>
+					{#if isSidebarCollapsed}
+						<Button
+							variant="ghost"
+							size="sm"
+							className="hidden p-2 lg:inline-flex"
+							aria-label="Expand sidebar"
+							on:click={() => handleSidebarToggle('desktop')}
+						>
+							<svg
+								class="h-5 w-5 transition-transform duration-200"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								viewBox="0 0 24 24"
+								xmlns="http://www.w3.org/2000/svg"
+								class:rotate-180={!isSidebarCollapsed}
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+							</svg>
+						</Button>
+					{/if}
 				{/if}
 				<a href="/" aria-label="Go to home" class="shrink-0">
 					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-8 w-auto lg:h-10" />
 				</a>
-				<div class="ml-2 hidden lg:block">
-					<h1 class="text-base font-bold">{title}</h1>
-				</div>
+				{#if title}
+					<div class="ml-2 hidden lg:block">
+						<h1 class="text-base font-bold">{title}</h1>
+					</div>
+				{/if}
 			</div>
 
 			<div class="flex min-w-0 flex-nowrap items-center gap-2 xl:gap-3" bind:this={actionCluster}>

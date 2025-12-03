@@ -45,6 +45,9 @@
 	let mobileSidebarOpen = false;
 	let sidebarCollapsed = false;
 
+	// Check if current page is the landing/home page
+	$: isLandingPage = $page.url.pathname === '/';
+
 	// Prevent background scroll when mobile sidebar is open
 	$: if (browser) {
 		if (mobileSidebarOpen) {
@@ -75,7 +78,7 @@
 
 		switch (pathname) {
 			case '/':
-				return 'Assets';
+				return '';
 			case '/strategies':
 				return 'Strategies';
 			case '/dashboard':
@@ -97,42 +100,68 @@
 </script>
 
 <div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
-	<!-- Background Pattern -->
-	<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
-		<div
-			class="bg-[url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 2000 1000%27%3E%3Cpath d=%27M0,500 Q250,400 500,500 T1000,500 T1500,500 T2000,500%27 stroke=%27%23F3B13C%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,400 Q250,300 500,400 T1000,400 T1500,400 T2000,400%27 stroke=%27%231A5C8E%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,600 Q250,500 500,600 T1000,600 T1500,600 T2000,600%27 stroke=%27%2337134D%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3C/svg%3E')] h-full w-full bg-cover"
-		/>
-	</div>
-	<!-- Mobile/Tablet sidebar (always rendered) -->
-	<div class="lg:hidden">
-		<Sidebar
-			visible={mobileSidebarOpen}
-			desktop={false}
-			on:close={() => (mobileSidebarOpen = false)}
-			on:open={() => (mobileSidebarOpen = true)}
-		/>
-	</div>
-	<!-- Desktop sidebar -->
-	<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
-		<Sidebar
-			visible={true}
-			desktop={true}
-			collapsed={sidebarCollapsed}
-			on:toggleCollapse={handleSidebarToggle}
-		/>
-	</div>
+	<!-- Background - enhanced for landing page -->
+	{#if isLandingPage}
+		<div class="pointer-events-none fixed inset-0 z-0">
+			<!-- Gradient overlay -->
+			<div
+				class="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-900/95 to-gray-900"
+			></div>
+			<!-- Subtle grid pattern -->
+			<div
+				class="absolute inset-0 opacity-[0.02]"
+				style="background-image: linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px); background-size: 60px 60px;"
+			></div>
+			<!-- Radial glow accents -->
+			<div
+				class="absolute left-1/4 top-1/4 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-500/5 blur-3xl"
+			></div>
+			<div
+				class="absolute bottom-1/4 right-1/4 h-[500px] w-[500px] translate-x-1/2 translate-y-1/2 rounded-full bg-blue-500/5 blur-3xl"
+			></div>
+		</div>
+	{:else}
+		<!-- Standard background pattern for other pages -->
+		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
+			<div
+				class="bg-[url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 2000 1000%27%3E%3Cpath d=%27M0,500 Q250,400 500,500 T1000,500 T1500,500 T2000,500%27 stroke=%27%23F3B13C%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,400 Q250,300 500,400 T1000,400 T1500,400 T2000,400%27 stroke=%27%231A5C8E%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3Cpath d=%27M0,600 Q250,500 500,600 T1000,600 T1500,600 T2000,600%27 stroke=%27%2337134D%27 fill=%27none%27 stroke-width=%271%27 opacity=%270.3%27/%3E%3C/svg%3E')] h-full w-full bg-cover"
+			/>
+		</div>
+	{/if}
+
+	<!-- Mobile/Tablet sidebar (hidden on landing page) -->
+	{#if !isLandingPage}
+		<div class="lg:hidden">
+			<Sidebar
+				visible={mobileSidebarOpen}
+				desktop={false}
+				on:close={() => (mobileSidebarOpen = false)}
+				on:open={() => (mobileSidebarOpen = true)}
+			/>
+		</div>
+		<!-- Desktop sidebar -->
+		<div class="fixed left-0 top-0 z-50 hidden h-full lg:block">
+			<Sidebar
+				visible={true}
+				desktop={true}
+				collapsed={sidebarCollapsed}
+				on:toggleCollapse={handleSidebarToggle}
+			/>
+		</div>
+	{/if}
 
 	<!-- Main Content -->
 	<div
 		class="transition-all duration-300"
-		class:lg:ml-64={!sidebarCollapsed}
-		class:lg:ml-0={sidebarCollapsed}
+		class:lg:ml-64={!isLandingPage && !sidebarCollapsed}
+		class:lg:ml-0={isLandingPage || sidebarCollapsed}
 	>
 		<!-- Header for all screen sizes -->
 		<Header
 			title={pageTitle}
-			isSidebarCollapsed={sidebarCollapsed}
+			isSidebarCollapsed={isLandingPage || sidebarCollapsed}
 			isMobileSidebarOpen={mobileSidebarOpen}
+			{isLandingPage}
 			on:toggleSidebar={handleHeaderSidebarToggle}
 		/>
 
