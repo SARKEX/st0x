@@ -52,6 +52,9 @@
 	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import { promptWalletConnection, promptLogin, walletRegistered } from '$lib/stores/accessStore';
 	import { tutorialWantsTradePanel } from '$lib/stores/tutorialStore';
+	import { startVaultTutorial, vaultTutorialActive } from '$lib/stores/vaultTutorialStore';
+	import VaultTutorial from '$lib/components/VaultTutorial.svelte';
+	import { isVaultTutorialHidden } from '$lib/utils/tutorialStorage';
 	import type { RaindexVault } from '@rainlanguage/orderbook';
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
@@ -260,6 +263,22 @@
 	const PANEL_STRATEGY_OPTIONS: Array<'limit' | 'dca' | 'market'> = ['limit', 'dca', 'market'];
 	const PANEL_STRATEGY_SELECT_ID = 'panel-strategy-select';
 	const PANEL_STRATEGY_LABEL_ID = 'panel-strategy-label';
+
+	// Track if we've shown the vault tutorial trigger for this session
+	let vaultTutorialTriggered = false;
+
+	// Trigger vault tutorial when user first selects limit or dca
+	$: if (browser && (panelStrategy === 'limit' || panelStrategy === 'dca') && !vaultTutorialTriggered) {
+		if (!isVaultTutorialHidden()) {
+			vaultTutorialTriggered = true;
+			startVaultTutorial();
+		}
+	}
+
+	// Callback to change DEX activity tab from vault tutorial
+	function handleVaultTutorialTabChange(tab: 'orders' | 'vaults') {
+		activeOnchainTab = tab;
+	}
 	const TRADE_HISTORY_LOOKBACK_SECONDS = 30 * 24 * 60 * 60; // 30 days (max window)
 	const OHLC_BUCKET_SECONDS = 60; // 1 minute buckets for candles
 	$: settlementTokenConfig = $currentNetwork?.defaultPaymentToken;
@@ -1540,3 +1559,6 @@
 		</div>
 	</div>
 {/if}
+
+<!-- Vault Tutorial -->
+<VaultTutorial onSelectDexTab={handleVaultTutorialTabChange} />

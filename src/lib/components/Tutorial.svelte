@@ -141,6 +141,21 @@
 					targetRects = updatedRects;
 					calculateTooltipPosition();
 				}, 500);
+			} else if (step === 'buy-sell-panel') {
+				// Scroll down slightly to properly align the buy/sell button selection
+				window.scrollTo({ top: 50, behavior: 'smooth' });
+				// Wait for scroll to complete before getting position
+				setTimeout(() => {
+					const updatedRects: DOMRect[] = [];
+					for (const selector of selectors) {
+						const target = document.querySelector(selector);
+						if (target) {
+							updatedRects.push(target.getBoundingClientRect());
+						}
+					}
+					targetRects = updatedRects;
+					calculateTooltipPosition();
+				}, 300);
 			} else {
 				targetRects = rects;
 				calculateTooltipPosition();
@@ -212,6 +227,8 @@
 
 		const next = nextTutorialStep();
 		if (next === 'complete') {
+			// Navigate back to home page before completing
+			await goto('/');
 			completeTutorial();
 		} else {
 			// Wait a tick for any DOM updates
