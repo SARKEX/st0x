@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { currentNetwork, sfts, vaultsQuery, oracleQuotes } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -9,9 +10,70 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import Button from '$lib/components/ui/Button.svelte';
+	import { globalPoolApy, fetchGlobalPoolApy } from '$lib/stores/rewardsStore';
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+
+	// APY slot machine animation
+	let displayedApy = 0;
+	let isAnimating = false;
+	let animationComplete = false;
+
+	onMount(() => {
+		fetchGlobalPoolApy();
+	});
+
+	// Animate APY when it becomes available
+	$: if ($globalPoolApy !== null && !isAnimating && !animationComplete) {
+		animateApy($globalPoolApy);
+	}
+
+	function animateApy(targetApy: number) {
+		isAnimating = true;
+		const duration = 2000; // 2 seconds
+		const frameRate = 50; // updates per second
+		const totalFrames = (duration / 1000) * frameRate;
+		let frame = 0;
+
+		// Start from a random high number for slot machine effect
+		displayedApy = Math.random() * 500;
+
+		const interval = setInterval(() => {
+			frame++;
+			const progress = frame / totalFrames;
+
+			if (progress >= 1) {
+				displayedApy = targetApy;
+				isAnimating = false;
+				animationComplete = true;
+				clearInterval(interval);
+			} else {
+				// Easing function for slot machine effect - fast then slow
+				const easeOut = 1 - Math.pow(1 - progress, 3);
+
+				if (progress < 0.7) {
+					// Spinning phase - random numbers
+					displayedApy = Math.random() * 500;
+				} else {
+					// Settling phase - approach target
+					const settleProgress = (progress - 0.7) / 0.3;
+					const easeSettle = 1 - Math.pow(1 - settleProgress, 2);
+					displayedApy = displayedApy + (targetApy - displayedApy) * easeSettle * 0.3;
+				}
+			}
+		}, 1000 / frameRate);
+	}
+
+	function formatApyDisplay(apy: number): string {
+		if (apy >= 1000) {
+			return (apy / 1000).toFixed(1) + 'K';
+		}
+		if (apy >= 100) {
+			return Math.round(apy).toString();
+		}
+		return apy.toFixed(1);
+	}
 
 	function scrollToAssets() {
 		document.getElementById('asset-table')?.scrollIntoView({ behavior: 'smooth' });
@@ -88,10 +150,16 @@
 	<section class="px-4 pb-28 pt-28 sm:px-6 sm:pb-36 sm:pt-36 lg:px-8 lg:pb-44 lg:pt-44">
 		<div class="mx-auto max-w-5xl text-center">
 			<h1
-				class="mb-12 text-3xl font-bold tracking-tight text-white sm:mb-16 sm:text-4xl lg:mb-20 lg:text-5xl xl:text-6xl"
+				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
 			>
 				Global Equities On-Chain
 			</h1>
+			<p class="mb-12 text-lg text-gray-300 sm:mb-16 sm:text-xl lg:mb-20 lg:text-2xl">
+				Earn yield on equity investing. Current APY
+				<span class="inline-block min-w-[4ch] font-bold tabular-nums text-green-400" class:animate-pulse={isAnimating}>
+					{formatApyDisplay(displayedApy)}%
+				</span>
+			</p>
 
 			<!-- Trust Indicators -->
 			<div class="mb-12 grid grid-cols-1 gap-8 sm:mb-16 sm:grid-cols-3 sm:gap-10 lg:gap-16">
