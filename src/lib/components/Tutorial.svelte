@@ -18,7 +18,11 @@
 
 	// Element positioning - support multiple target elements
 	let targetRects: DOMRect[] = [];
-	let tooltipPosition: { top: number; left: number; arrowPosition: 'top' | 'bottom' | 'left' | 'right' } = {
+	let tooltipPosition: {
+		top: number;
+		left: number;
+		arrowPosition: 'top' | 'bottom' | 'left' | 'right';
+	} = {
 		top: 0,
 		left: 0,
 		arrowPosition: 'top'
@@ -51,7 +55,8 @@
 		},
 		'boost-rewards': {
 			title: 'Boost Rewards',
-			description: 'Earn monthly rewards for investing in real companies. Click this button to learn more.',
+			description:
+				'Earn monthly rewards for investing in real companies. Click this button to learn more.',
 			targetSelector: '[data-tutorial="boost-rewards"]',
 			buttonText: 'Next'
 		},
@@ -141,6 +146,21 @@
 					targetRects = updatedRects;
 					calculateTooltipPosition();
 				}, 500);
+			} else if (step === 'buy-sell-panel') {
+				// Scroll down slightly to properly align the buy/sell button selection
+				window.scrollTo({ top: 50, behavior: 'smooth' });
+				// Wait for scroll to complete before getting position
+				setTimeout(() => {
+					const updatedRects: DOMRect[] = [];
+					for (const selector of selectors) {
+						const target = document.querySelector(selector);
+						if (target) {
+							updatedRects.push(target.getBoundingClientRect());
+						}
+					}
+					targetRects = updatedRects;
+					calculateTooltipPosition();
+				}, 300);
 			} else {
 				targetRects = rects;
 				calculateTooltipPosition();
@@ -212,6 +232,8 @@
 
 		const next = nextTutorialStep();
 		if (next === 'complete') {
+			// Navigate back to home page before completing
+			await goto('/');
 			completeTutorial();
 		} else {
 			// Wait a tick for any DOM updates
@@ -277,10 +299,7 @@
 
 {#if showTutorial}
 	<!-- Overlay -->
-	<div
-		class="fixed inset-0 z-[9000]"
-		transition:fade={{ duration: 200 }}
-	>
+	<div class="fixed inset-0 z-[9000]" transition:fade={{ duration: 200 }}>
 		<!-- Promo screen with image and dynamic APY -->
 		{#if isPromo}
 			<button
@@ -320,7 +339,7 @@
 					</div>
 				</div>
 			</button>
-		<!-- Dark overlay with cutout for target element(s) -->
+			<!-- Dark overlay with cutout for target element(s) -->
 		{:else if targetRects.length > 0 && !isModal}
 			<svg class="absolute inset-0 h-full w-full">
 				<defs>
@@ -425,9 +444,21 @@
 				transition:fly={{ y: 20, duration: 300 }}
 			>
 				<div class="mb-6 text-center">
-					<div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20">
-						<svg class="h-8 w-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+					<div
+						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20"
+					>
+						<svg
+							class="h-8 w-8 text-yellow-500"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M13 10V3L4 14h7v7l9-11h-7z"
+							/>
 						</svg>
 					</div>
 					<h2 class="mb-2 text-2xl font-bold text-white">{content.title}</h2>

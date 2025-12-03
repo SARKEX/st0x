@@ -59,6 +59,13 @@
 	let selectedBaseline: string = '';
 	let selectedInitialRatio: string = '';
 
+	// Balance from TradeAmountInput (bound)
+	let spendingTokenBalance: bigint = 0n;
+	let spendingTokenBalanceDecimals: number | null = null;
+
+	// Reference to TradeAmountInput for programmatic updates
+	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
+
 	$: isInputTokenSameAsOutputToken =
 		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
 
@@ -111,6 +118,15 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		priceGuardrailError;
+
+	// Handle percentage button clicks for setting amount based on wallet balance
+	// For DCA, amount token and balance token are always the same (both are the spending token)
+	const handlePercentageClick = (percent: number) => {
+		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
+		if (!tradeAmountInputRef) return;
+		const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
+		tradeAmountInputRef.setAmountValue(percentAmount);
+	};
 
 	const handleDcaDeploy = () => {
 		// Check if user is connected
@@ -200,14 +216,29 @@
 					>
 				</div>
 				<TradeAmountInput
+					bind:this={tradeAmountInputRef}
 					aria-label="Target Amount"
 					amountToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
 					balanceToken={orderSide === 'Buy' ? selectedOutputToken : selectedInputToken}
 					bind:amount={selectedAmount}
+					bind:balance={spendingTokenBalance}
+					bind:balanceDecimals={spendingTokenBalanceDecimals}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
 					showMaxButton={false}
 				/>
+				<!-- Percentage buttons -->
+				<div class="mt-2 flex gap-2">
+					{#each [25, 50, 75, 100] as percent}
+						<button
+							type="button"
+							on:click={() => handlePercentageClick(percent)}
+							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+						>
+							{percent === 100 ? 'Max' : `${percent}%`}
+						</button>
+					{/each}
+				</div>
 			</div>
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">{periodLabel}</div>
@@ -268,10 +299,14 @@
 					<span class="text-gray-400">Target Amount</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
-							{selectedAmount ? formatUnits(selectedAmount, selectedOutputToken.decimals) : '0'}
+							{selectedAmount
+								? parseFloat(formatUnits(selectedAmount, selectedOutputToken.decimals)).toFixed(3)
+								: '0'}
 							{settlementLabel}
 						{:else}
-							{selectedAmount ? formatUnits(selectedAmount, selectedInputToken.decimals) : '0'}
+							{selectedAmount
+								? parseFloat(formatUnits(selectedAmount, selectedInputToken.decimals)).toFixed(3)
+								: '0'}
 							{selectedInputToken.symbol}
 						{/if}
 					</span>

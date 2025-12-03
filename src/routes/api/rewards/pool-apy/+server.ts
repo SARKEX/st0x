@@ -33,7 +33,8 @@ export const GET: RequestHandler = async () => {
 		const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
 		const daysInMonth = getDaysInMonth(currentMonth);
 		const rocketBoostTargetPoints = rocketBoostTvlTarget * 2 * daysInMonth * 100;
-		const progressPercent = rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
+		const progressPercent =
+			rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 		// Calculate achieved RocketBoost amount based on progress
 		const rocketBoostAmounts = poolConfig?.rocketBoostAmounts ?? {

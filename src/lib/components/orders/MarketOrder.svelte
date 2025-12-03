@@ -20,7 +20,7 @@
 	} from '@rainlanguage/orderbook';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { AbiCoder } from 'ethers';
-	import { formatUnits } from 'viem';
+	import { formatUnits, parseUnits } from 'viem';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
@@ -47,6 +47,7 @@
 	export let orderbookQuotesQuery: CreateQueryResult<OrderbookQuoteCache, Error>;
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
+	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
 
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
@@ -79,6 +80,10 @@
 
 	// Balance from TradeAmountInput (bound)
 	let spendingTokenBalance: bigint = 0n;
+	let spendingTokenBalanceDecimals: number | null = null;
+
+	// Reference to TradeAmountInput for programmatic updates
+	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
 	// Token being spent
 	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
@@ -100,6 +105,94 @@
 			// Convert to bigint in payment token decimals
 			const estimatedCostBigInt = BigInt(Math.ceil(estimatedCost * 10 ** paymentDecimals));
 			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
+		}
+	}
+
+	// Liquidity warning: check if there's enough liquidity within price guard
+	let insufficientLiquidityWarning: boolean = false;
+
+	// Calculate available liquidity within price guard
+	$: {
+		if (!selectedAmount || selectedAmount === 0n || !assetToken) {
+			insufficientLiquidityWarning = false;
+		} else {
+			const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
+			const assetAddressNormalized = normalizeAddress(assetToken.address);
+			const paymentTokenAddressNormalized = normalizeAddress(
+				paymentToken?.address?.toLowerCase() || ''
+			);
+
+			// Filter quotes by side and token pair
+			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
+				const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
+				const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+				const targetOutputAddress =
+					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
+				const targetInputAddress =
+					orderSide === 'Buy' ? paymentTokenAddressNormalized : assetAddressNormalized;
+				const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
+				const quotePerAsset = quote.quotePerAsset;
+
+				return (
+					quoteOutputAddressNormalized === targetOutputAddress &&
+					quoteInputAddressNormalized === targetInputAddress &&
+					quote.side === targetSide &&
+					quotePerAsset !== undefined &&
+					Number.isFinite(quotePerAsset) &&
+					quotePerAsset > 0
+				);
+			});
+
+			// Get oracle price for price guard
+			const oracleAddress = assetToken?.address?.toLowerCase();
+			const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
+			const oraclePrice = oracleEntry?.price;
+
+			if (!oraclePrice || oraclePrice <= 0 || relevantQuotes.length === 0) {
+				insufficientLiquidityWarning = false;
+			} else {
+				// Filter quotes within price guard (5% of oracle price)
+				const maxAcceptablePrice = oraclePrice * PRICE_GUARD_MULTIPLIER;
+				const minAcceptablePrice = oraclePrice / PRICE_GUARD_MULTIPLIER;
+
+				const quotesWithinGuard = relevantQuotes.filter((quote: ProcessedQuote) => {
+					const price = quote.quotePerAsset ?? 0;
+					return orderSide === 'Buy' ? price <= maxAcceptablePrice : price >= minAcceptablePrice;
+				});
+
+				if (quotesWithinGuard.length === 0) {
+					insufficientLiquidityWarning = selectedAmount > 0n;
+				} else {
+					// Walk the filtered orderbook to calculate available liquidity
+					const assetDecimals = assetToken?.decimals ?? 18;
+					const paymentDecimals = paymentToken?.decimals ?? 6;
+
+					// Sort quotes by price (best first)
+					const sortedQuotes = [...quotesWithinGuard].sort((a, b) => {
+						if (orderSide === 'Buy') {
+							return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
+						} else {
+							return (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0);
+						}
+					});
+
+					// Walk to calculate total available liquidity
+					const walkResult = walkOrderbook({
+						quotes: sortedQuotes,
+						orderSide,
+						selectedAmount: BigInt('0xffffffffffffffffffffffffffffffff'), // Max value to get total liquidity
+						assetDecimals,
+						paymentDecimals
+					});
+
+					// For both BUY and SELL, we compare against asset amount
+					// inputAmountFilled for BUY is asset amount, outputAmountGiven for SELL is asset amount
+					const availableAssetAmount =
+						orderSide === 'Buy' ? walkResult.inputAmountFilled : walkResult.outputAmountGiven;
+
+					insufficientLiquidityWarning = selectedAmount > availableAssetAmount;
+				}
+			}
 		}
 	}
 
@@ -129,6 +222,47 @@
 	})();
 
 	let isSubmittingMarketOrder = false;
+
+	// Handle percentage button clicks for setting amount based on wallet balance
+	const handlePercentageClick = (percent: number) => {
+		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
+		if (spendingTokenBalanceDecimals === null) return;
+		if (!tradeAmountInputRef) return;
+
+		if (orderSide === 'Sell') {
+			// For SELL: balance is in asset token, amount is in asset token - direct calculation
+			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
+			tradeAmountInputRef.setAmountValue(percentAmount);
+		} else {
+			// For BUY: balance is in payment token (USDC), need to convert to asset amount
+			// We need the oracle price to estimate how much asset we can buy
+			const oracleAddress = assetToken?.address?.toLowerCase();
+			const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
+			const oraclePrice = oracleEntry?.price;
+
+			if (!oraclePrice || oraclePrice <= 0) {
+				// Fall back: can't convert without price - just don't set anything
+				return;
+			}
+
+			const paymentDecimals = spendingTokenBalanceDecimals;
+			const assetDecimals = assetToken?.decimals ?? 18;
+
+			// Calculate payment amount to spend (percent of balance)
+			const paymentToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
+
+			// Convert payment amount to asset amount using oracle price
+			// paymentAmount / price = assetAmount
+			// But we need to handle decimals properly:
+			// paymentToSpend is in payment decimals (e.g., 6 for USDC)
+			// We want result in asset decimals (e.g., 18)
+			const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
+			const assetAmount = paymentInFloat / oraclePrice;
+			tradeAmountInputRef.setAmountValue(
+				parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals)
+			);
+		}
+	};
 
 	async function fetchMarketPrice() {
 		if (!assetToken || !orderSide) {
@@ -282,8 +416,6 @@
 	}> {
 		if (availableOrders.length === 0) return [];
 
-		const slippageMultiplier = 1.05; // 1.05 = 105% (5% tolerance)
-
 		// Try to get oracle price as reference
 		const oracleAddress = assetToken?.address?.toLowerCase();
 		const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
@@ -295,11 +427,11 @@
 			referencePrice = oraclePrice;
 		}
 
-		// Filter to only orders within 5% of reference price
+		// Filter to only orders within price guard of reference price
 		// For BUY: want prices up to 5% worse (higher) - price <= maxAcceptablePrice
 		// For SELL: want prices down to 5% worse (lower) - price >= minAcceptablePrice
-		const maxAcceptablePrice = referencePrice * slippageMultiplier; // For BUY
-		const minAcceptablePrice = referencePrice / slippageMultiplier; // For SELL
+		const maxAcceptablePrice = referencePrice * PRICE_GUARD_MULTIPLIER; // For BUY
+		const minAcceptablePrice = referencePrice / PRICE_GUARD_MULTIPLIER; // For SELL
 
 		const filtered = availableOrders.filter((order) => {
 			const passes =
@@ -608,16 +740,30 @@
 					Amount to {orderSide === 'Buy' ? 'Buy' : 'Sell'}
 				</div>
 				<TradeAmountInput
+					bind:this={tradeAmountInputRef}
 					aria-label="Quantity"
 					amountToken={assetToken}
 					balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
 					bind:amount={selectedAmount}
 					bind:balance={spendingTokenBalance}
+					bind:balanceDecimals={spendingTokenBalanceDecimals}
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
 					showUnit={false}
 					showMaxButton={false}
 				/>
+				<!-- Percentage buttons -->
+				<div class="mt-2 flex gap-2">
+					{#each [25, 50, 75, 100] as percent}
+						<button
+							type="button"
+							on:click={() => handlePercentageClick(percent)}
+							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+						>
+							{percent === 100 ? 'Max' : `${percent}%`}
+						</button>
+					{/each}
+				</div>
 			</div>
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
@@ -653,7 +799,9 @@
 				<div class="flex justify-between">
 					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 					<span class="font-medium">
-						{selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0'}
+						{selectedAmount
+							? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+							: '0'}
 						{assetToken.symbol}
 					</span>
 				</div>
@@ -677,6 +825,14 @@
 					{#if insufficientBalanceError}
 						<div class="mt-2 text-sm text-red-400">
 							Insufficient {spendingToken?.symbol ?? 'token'} balance
+						</div>
+					{/if}
+					{#if insufficientLiquidityWarning && !insufficientBalanceError}
+						<div
+							class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
+						>
+							There currently isn't enough liquidity to fully fill this order. Continue to fill as
+							much as possible.
 						</div>
 					{/if}
 				</div>
@@ -720,4 +876,3 @@
 		<LoadingSpinner size="md" text="Loading..." />
 	</div>
 {/if}
-

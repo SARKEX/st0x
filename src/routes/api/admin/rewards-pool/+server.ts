@@ -100,7 +100,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		// Validate RocketBoost amounts object
 		if (!rocketBoostAmounts || typeof rocketBoostAmounts !== 'object') {
-			return json({ error: 'RocketBoost amounts must be an object with tier values' }, { status: 400 });
+			return json(
+				{ error: 'RocketBoost amounts must be an object with tier values' },
+				{ status: 400 }
+			);
 		}
 
 		const validatedRocketBoostAmounts: RocketBoostTiers = {
@@ -122,7 +125,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		if (typeof rocketBoostTvlTarget !== 'number' || rocketBoostTvlTarget < 0) {
-			return json({ error: 'RocketBoost TVL target must be a non-negative number' }, { status: 400 });
+			return json(
+				{ error: 'RocketBoost TVL target must be a non-negative number' },
+				{ status: 400 }
+			);
 		}
 
 		const config: RewardsPoolConfig = {

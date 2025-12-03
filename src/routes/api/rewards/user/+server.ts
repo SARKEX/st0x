@@ -151,7 +151,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		const rocketBoostTargetPoints = rocketBoostTvlTarget * 2 * daysInMonth * 100;
 
 		// Calculate progress percentage and which tiers are achieved
-		const progressPercent = rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
+		const progressPercent =
+			rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 		const rocketBoostTiersAchieved: RocketBoostTiersAchieved = {
 			tier25: progressPercent >= 25,
@@ -209,7 +210,9 @@ export const GET: RequestHandler = async ({ url }) => {
 				const lastRocketBoostTargetPoints =
 					(lastPoolConfig.rocketBoostTvlTarget ?? 0) * 2 * lastDaysInMonth * 100;
 				const lastProgressPercent =
-					lastRocketBoostTargetPoints > 0 ? (lastTotalPoints / lastRocketBoostTargetPoints) * 100 : 0;
+					lastRocketBoostTargetPoints > 0
+						? (lastTotalPoints / lastRocketBoostTargetPoints) * 100
+						: 0;
 
 				const lastRocketBoostAmounts = lastPoolConfig.rocketBoostAmounts ?? {
 					tier25: 0,

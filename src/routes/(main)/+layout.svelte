@@ -14,11 +14,10 @@
 	import Header from '$lib/components/Header.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-	import { sfts, rainlangConfirmationModal } from '$lib/stores';
+	import { rainlangConfirmationModal } from '$lib/stores';
 	import { checkWalletAccess, resetAccessState } from '$lib/stores/accessStore';
 	import { checkAndStoreAccessCodeFromUrl } from '$lib/utils/accessCodeStorage';
 	import { initTutorial } from '$lib/stores/tutorialStore';
-	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	// Track wallet address to detect changes
 	let lastCheckedAddress: string | null = null;
@@ -68,9 +67,8 @@
 		}
 	}
 
-	// Get page title and description based on current route
+	// Get page title based on current route
 	$: pageTitle = getPageTitle($page.url.pathname);
-	$: pageDescription = getPageDescription($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
 		if (pathname.startsWith('/trade/')) return 'Trade';
@@ -94,31 +92,6 @@
 				return 'Token List';
 			default:
 				return 'ST0x';
-		}
-	}
-
-	function getPageDescription(pathname: string): string {
-		if (pathname.startsWith('/trade/')) {
-			// Extract token name from path
-			const tokenId = pathname.split('/trade/')[1];
-			const sft = $sfts?.find((s: OffchainAssetReceiptVault) => s.id === tokenId);
-			if (sft) {
-				return `Trade ${sft.name} on our DEX`;
-			}
-			return 'Trade tokenised assets';
-		}
-
-		switch (pathname) {
-			case '/':
-				return `Browse and trade tokenised assets`;
-			case '/strategies':
-				return 'Manage automated trading strategies';
-			case '/dashboard':
-				return 'Portfolio, orders, and vault positions';
-			case '/platform-metrics':
-				return 'Platform statistics and metrics';
-			default:
-				return 'ST0x Platform';
 		}
 	}
 </script>
@@ -158,7 +131,6 @@
 		<!-- Header for all screen sizes -->
 		<Header
 			title={pageTitle}
-			description={pageDescription}
 			isSidebarCollapsed={sidebarCollapsed}
 			isMobileSidebarOpen={mobileSidebarOpen}
 			on:toggleSidebar={handleHeaderSidebarToggle}

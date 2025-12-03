@@ -83,7 +83,7 @@
 			</div>
 
 			<!-- Header -->
-			<Header title="Documentation" description="ST0x Platform Documentation" />
+			<Header title="Documentation" />
 
 			<slot {sidebarExpanded} />
 

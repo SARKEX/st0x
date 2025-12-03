@@ -27,12 +27,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Message required' }, { status: 400 });
 		}
 
-		const result = await processRegistration(
-			address,
-			code,
-			signature as `0x${string}`,
-			message
-		);
+		const result = await processRegistration(address, code, signature as `0x${string}`, message);
 
 		if (result.success) {
 			return json({

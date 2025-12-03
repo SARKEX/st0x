@@ -76,6 +76,13 @@
 		amount = undefined;
 	}
 
+	// Expose function to set amount from parent (for percentage buttons)
+	export function setAmountValue(newAmount: bigint) {
+		if (!canParseDecimals(amountDecimals)) return;
+		amount = newAmount;
+		inputAmount = formatUnits(newAmount, amountDecimals);
+	}
+
 	$: balancePromise = (async () => {
 		const token = balanceToken ?? amountToken;
 		if (!token) return null;
