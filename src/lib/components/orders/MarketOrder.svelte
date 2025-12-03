@@ -343,6 +343,7 @@
 	}
 
 	// Walk the orderbook with current quotes and selected amount
+	// Applies the same price guard filter used during execution for consistency
 	function calculateOrderbookWalk() {
 		if (!assetToken || !orderSide || !selectedAmount || selectedAmount === 0n) {
 			return null;
@@ -354,6 +355,17 @@
 			paymentToken?.address?.toLowerCase() || ''
 		);
 
+		// Get oracle price for price guard filtering
+		const oracleAddress = assetToken?.address?.toLowerCase();
+		const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
+		const oraclePrice = oracleEntry?.price;
+
+		// Calculate price guard bounds (same logic as getFilteredOrders)
+		const maxAcceptablePrice =
+			oraclePrice && oraclePrice > 0 ? oraclePrice * PRICE_GUARD_MULTIPLIER : Infinity;
+		const minAcceptablePrice =
+			oraclePrice && oraclePrice > 0 ? oraclePrice / PRICE_GUARD_MULTIPLIER : 0;
+
 		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
 			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
 			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
@@ -364,14 +376,26 @@
 			const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
 			const quotePerAsset = quote.quotePerAsset;
 
-			return (
-				quoteOutputAddressNormalized === targetOutputAddress &&
-				quoteInputAddressNormalized === targetInputAddress &&
-				quote.side === targetSide &&
-				quotePerAsset !== undefined &&
-				Number.isFinite(quotePerAsset) &&
-				quotePerAsset > 0
-			);
+			// Basic validity checks
+			if (
+				quoteOutputAddressNormalized !== targetOutputAddress ||
+				quoteInputAddressNormalized !== targetInputAddress ||
+				quote.side !== targetSide ||
+				quotePerAsset === undefined ||
+				!Number.isFinite(quotePerAsset) ||
+				quotePerAsset <= 0
+			) {
+				return false;
+			}
+
+			// Apply price guard filter (same as getFilteredOrders)
+			// For BUY: only accept prices up to 5% above oracle
+			// For SELL: only accept prices down to 5% below oracle
+			if (orderSide === 'Buy') {
+				return quotePerAsset <= maxAcceptablePrice;
+			} else {
+				return quotePerAsset >= minAcceptablePrice;
+			}
 		});
 
 		if (relevantQuotes.length === 0) {
@@ -595,7 +619,7 @@
 				console.error('Unable to calculate walk result for order execution');
 				return;
 			}
-			const { inputAmountFilled, ioRatio, inputDecimals } = walkResult;
+			const { inputAmountFilled, outputAmountGiven, inputDecimals, outputDecimals } = walkResult;
 
 			// Validate that we have all required token data before proceeding
 			if (!paymentToken || typeof paymentToken.decimals !== 'number') {
@@ -608,40 +632,26 @@
 			}
 
 			// We approve what we're giving away (what flows out from us)
-			// For BUY: we give USDC (payment token)
-			// For SELL: we give tSTOX (asset token)
+			// For BUY: we give USDC (payment token) - use outputAmountGiven from walk result
+			// For SELL: we give tSTOX (asset token) - use selectedAmount
+			//
+			// IMPORTANT: Use the walk result directly instead of recalculating from ioRatio.
+			// The ioRatio calculation uses Number() which loses precision for large BigInts.
+			// The walk result has already computed the exact amounts with full BigInt precision.
 			let requiredApprovalBigInt: bigint;
+
 			if (orderSide === 'Buy') {
-				// BUY: Approve payment token (what we give away)
-				const paymentTokenDecimals = paymentToken.decimals;
-				const assetTokenDecimals = assetToken.decimals;
-
-				// Calculate price from ioRatio (for BUY: ioRatio = asset/payment, so price = 1/ioRatio)
-				const price = ioRatio > 0 ? 1 / ioRatio : 0;
-
-				// PRECISION REQUIREMENT: Use BigInt arithmetic to avoid precision loss
-				// JavaScript Numbers are 64-bit floats with ~15-17 digits precision.
-				// Token amounts can be 1e18 or larger, causing precision loss if converted to Number.
-				//
-				// Pattern: Scale the small value (price) to an integer, keep large values as BigInt
-				// This converts directly from asset decimals to payment decimals without intermediary
-				//
-				// Formula: cost = (amount_in_asset_decimals * price_scaled) / 10^asset_decimals
-				// where price_scaled = price * 10^payment_decimals
-				const priceScaled = BigInt(Math.round(price * 10 ** paymentTokenDecimals));
-				requiredApprovalBigInt = (selectedAmount * priceScaled) / 10n ** BigInt(assetTokenDecimals);
+				// BUY: Approve payment token (outputAmountGiven is already in payment decimals)
+				requiredApprovalBigInt = outputAmountGiven;
 			} else {
-				// SELL: Approve asset token (what we give away)
-				// selectedAmount is already in asset token decimals
-				requiredApprovalBigInt = scaleAmount(
-					selectedAmount,
-					assetToken.decimals,
-					assetToken.decimals
-				);
+				// SELL: Approve asset token (selectedAmount is in asset decimals)
+				requiredApprovalBigInt = selectedAmount;
 			}
-			// TODO: Remove this once we have a better way to handle precision loss
-			// Round up scaled amount to avoid precision loss
-			requiredApprovalBigInt += 1n;
+
+			// Add 0.1% buffer for rounding errors (BigInt divisions in walkOrderbook round down)
+			// This is larger than 1 wei but smaller than typical slippage tolerance
+			const roundingBuffer = requiredApprovalBigInt / 1000n; // 0.1%
+			requiredApprovalBigInt += roundingBuffer > 0n ? roundingBuffer : 1n;
 
 			const assetTokenDecimals = assetToken.decimals;
 			const approvalFloat = Float.fromFixedDecimalLossy(requiredApprovalBigInt, assetTokenDecimals);

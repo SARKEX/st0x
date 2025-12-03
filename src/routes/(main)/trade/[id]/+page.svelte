@@ -4,16 +4,13 @@
 	import { currentNetwork, oracleQuotes } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
-	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import Section from '$lib/components/ui/Section.svelte';
 	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
 	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
 	import TradingViewWidget from '$lib/components/charts/TradingViewWidget.svelte';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { containerStyles } from '$lib/styles/utils';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
@@ -783,24 +780,16 @@
 	</div>
 {:else}
 	<div class="space-y-6 p-4 sm:p-6">
-		<div class="flex flex-col gap-1 text-left sm:flex-row sm:items-baseline sm:gap-3">
-			<h1 class="text-2xl font-bold">
-				Trade {tokenDisplayName}
-				{#if tokenDisplaySymbol}
-					<span class="ml-2 text-lg font-normal text-gray-400">({tokenDisplaySymbol})</span>
-				{/if}
-			</h1>
-		</div>
 		<!-- Header Section with Chart -->
-		<Section>
+		<div class="space-y-6">
 			<div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
 				<!-- Left: Symbol info -->
 				<div class="space-y-4 xl:col-span-2">
 					<div
-						class={`${containerStyles.cardBordered} overflow-hidden p-0`}
+						class="overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
 						data-tutorial="symbol-overview"
 					>
-						<div class="border-b border-white/10 bg-gray-900/60 px-4 py-3">
+						<div class="border-b border-white/10 px-4 py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
 									<p class="text-xs uppercase tracking-wide text-gray-400">Off-chain Reference</p>
@@ -812,14 +801,19 @@
 							</div>
 						</div>
 						{#if tradingViewSymbol}
-							<TradingViewWidget widgetType="symbol-info" symbol={tradingViewSymbol} height="420" />
+							<TradingViewWidget
+								widgetType="symbol-info"
+								symbol={tradingViewSymbol}
+								height="420"
+								isTransparent={true}
+							/>
 						{:else}
 							<div class="flex h-48 items-center justify-center px-4 py-6 text-sm text-gray-400">
 								TradingView data unavailable for this token.
 							</div>
 						{/if}
 					</div>
-					<div class={containerStyles.cardBordered}>
+					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-4 backdrop-blur-sm">
 						<dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
 							<div>
 								<dt class="text-xs uppercase tracking-wide text-gray-500">Oracle Price</dt>
@@ -894,7 +888,9 @@
 				<!-- Right: Overview and chart -->
 				<div class="flex h-full flex-col gap-4 xl:col-span-3" data-tutorial="tradingview">
 					{#if tradingViewSymbol}
-						<div class={`${containerStyles.cardBordered} flex-1 overflow-hidden p-0`}>
+						<div
+							class="flex-1 overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
+						>
 							<TradingViewWidget
 								widgetType="symbol-overview"
 								symbol={tradingViewSymbol}
@@ -903,10 +899,11 @@
 								showVolume={false}
 								autosize={false}
 								height="485"
+								isTransparent={true}
 							/>
 						</div>
 					{:else}
-						<div class={`${containerStyles.cardBordered} flex-1`}>
+						<div class="flex-1 rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm">
 							<div class="flex h-[495px] items-center justify-center text-sm text-gray-400">
 								TradingView data unavailable for this token.
 							</div>
@@ -925,15 +922,15 @@
 					</div>
 				</div>
 			</div>
-		</Section>
-		<Section>
+		</div>
+		<div class="space-y-6">
 			<div data-tutorial="dex-activity">
 				<div class="mb-6">
 					<div
 						class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 					>
 						<div>
-							<h2 class="text-base font-semibold text-white">DEX Activity</h2>
+							<h2 class="text-lg font-semibold">DEX Activity</h2>
 							<p class="text-sm text-gray-400">View DEX trades, liquidity, orders, and vaults</p>
 						</div>
 						{#if $connected}
@@ -1149,9 +1146,9 @@
 					</div>
 				{/if}
 			</div>
-		</Section>
+		</div>
 		<!-- Tabbed Information Section -->
-		<Section>
+		<div class="space-y-6">
 			<div class="grid gap-6 lg:grid-cols-2" data-tutorial="fundamentals">
 				<div class="space-y-4">
 					<div class="space-y-3">
@@ -1162,52 +1159,60 @@
 					</div>
 					{#if activeAssetTab === 'company'}
 						{#if tradingViewSymbol}
-							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+							<div class="overflow-hidden">
 								<TradingViewWidget
 									widgetType="symbol-profile"
 									symbol={tradingViewSymbol}
 									height="480"
+									isTransparent={true}
 								/>
 							</div>
 						{:else}
-							<div class={`${containerStyles.cardBordered}`}>
+							<div class="p-4">
 								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
 					{:else if activeAssetTab === 'fundamentals'}
 						{#if tradingViewSymbol}
-							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+							<div class="overflow-hidden">
 								<TradingViewWidget
 									widgetType="financials"
 									symbol={tradingViewSymbol}
 									height={520}
+									isTransparent={true}
 								/>
 							</div>
 						{:else}
-							<div class={`${containerStyles.cardBordered}`}>
+							<div class="p-4">
 								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
 					{:else if activeAssetTab === 'technical'}
 						{#if tradingViewSymbol}
-							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
+							<div class="overflow-hidden">
 								<TradingViewWidget
 									widgetType="technical-analysis"
 									symbol={tradingViewSymbol}
 									height="520"
+									isTransparent={true}
 								/>
 							</div>
 						{:else}
-							<div class={`${containerStyles.cardBordered}`}>
+							<div class="p-4">
 								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
 					{:else if tradingViewSymbol}
-						<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-							<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
+						<div class="overflow-hidden">
+							<TradingViewWidget
+								widgetType="timeline"
+								symbol={tradingViewSymbol}
+								height="600"
+								isTransparent={true}
+							/>
 						</div>
 					{:else}
-						<div class={`${containerStyles.cardBordered}`}>
+						<div class="p-4">
 							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 						</div>
 					{/if}
@@ -1220,7 +1225,7 @@
 						<TabNav tabs={TOKEN_TABS} activeId={activeTokenTab} on:change={handleTokenTabChange} />
 					</div>
 					{#if activeTokenTab === 'contract'}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex items-center justify-between gap-2">
@@ -1264,7 +1269,7 @@
 							</div>
 						</div>
 					{:else if activeTokenTab === 'supply'}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex justify-between">
@@ -1286,7 +1291,7 @@
 							</div>
 						</div>
 					{:else if activeTokenTab === 'mints'}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<div class="mb-2 flex items-center justify-between">
 								<h3 class="font-semibold">Latest Mints</h3>
 								<ExternalLink
@@ -1296,9 +1301,11 @@
 								/>
 							</div>
 							{#if currentToken?.deposits?.length}
-								<div class="space-y-1">
+								<div>
 									{#each currentToken.deposits.slice(0, 5) as dep}
-										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+										<div
+											class="border-b border-white/5 px-2 py-3 transition-colors hover:bg-white/5"
+										>
 											<div class="flex items-center justify-between gap-3 text-xs">
 												<div class="min-w-0 truncate">
 													<span class="font-medium text-green-400">
@@ -1310,14 +1317,14 @@
 													<TxLink hash={dep.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-												<span class="text-gray-400">
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+												<span>
 													<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}
 													</span>
 												</span>
-												<span class="mx-2 text-gray-500">•</span>
+												<span class="text-gray-600">•</span>
 												<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
@@ -1328,7 +1335,7 @@
 							{/if}
 						</div>
 					{:else}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<div class="mb-2 flex items-center justify-between">
 								<h3 class="font-semibold">Latest Burns</h3>
 								<ExternalLink
@@ -1338,9 +1345,11 @@
 								/>
 							</div>
 							{#if currentToken?.withdraws?.length}
-								<div class="space-y-1">
+								<div>
 									{#each currentToken.withdraws.slice(0, 5) as w}
-										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+										<div
+											class="border-b border-white/5 px-2 py-3 transition-colors hover:bg-white/5"
+										>
 											<div class="flex items-center justify-between gap-3 text-xs">
 												<div class="min-w-0 truncate">
 													<span class="font-medium text-red-400">
@@ -1352,14 +1361,14 @@
 													<TxLink hash={w.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-												<span class="text-gray-400">
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+												<span>
 													<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}
 													</span>
 												</span>
-												<span class="mx-2 text-gray-500">•</span>
+												<span class="text-gray-600">•</span>
 												<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
@@ -1372,7 +1381,7 @@
 					{/if}
 				</div>
 			</div>
-		</Section>
+		</div>
 	</div>
 	{#if showTradePanel}
 		<div class="fixed inset-0 z-[2100] flex">
@@ -1398,7 +1407,7 @@
 								/>
 							{/if}
 							<div>
-								<h2 class="text-lg font-semibold text-white">{tokenDisplayName}</h2>
+								<h2 class="text-lg font-semibold">{tokenDisplayName}</h2>
 								{#if tokenDisplaySymbol}
 									<p class="text-sm text-gray-400">{tokenDisplaySymbol}</p>
 								{/if}
@@ -1514,7 +1523,87 @@
 			</aside>
 		</div>
 	{/if}
-	<Footer />
+	<!-- Compact Footer -->
+	<footer class="border-t border-white/5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+		<div class="mx-auto max-w-5xl">
+			<!-- Links Row -->
+			<div
+				class="mb-6 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-400 sm:gap-6 sm:text-sm"
+			>
+				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
+				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
+				<a href="/compliance" class="transition-colors hover:text-yellow-500">Compliance</a>
+				<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
+				<a href="/audit" class="transition-colors hover:text-yellow-500">Audits</a>
+				<a href="/faqs" class="transition-colors hover:text-yellow-500">FAQs</a>
+			</div>
+
+			<!-- Social Links -->
+			<div class="mb-6 flex items-center justify-center gap-4">
+				<a
+					href="mailto:toby@st0x.io"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="Email"
+				>
+					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"
+						><path
+							d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 2v.01L12 13 4 6.01V6h16zM4 18V8.236l7.386 6.178a1 1 0 001.228 0L20 8.236V18H4z"
+						/></svg
+					>
+				</a>
+				<a
+					href="https://x.com/st0x_io"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="X"
+				>
+					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+						><path
+							d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+						/></svg
+					>
+				</a>
+				<a
+					href="https://t.me/+oIzo_I9xi745ODU0"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="Telegram"
+				>
+					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+						><path
+							d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
+						/></svg
+					>
+				</a>
+				<a
+					href="https://www.linkedin.com/company/st0x"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="LinkedIn"
+				>
+					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+						><path
+							d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
+						/></svg
+					>
+				</a>
+			</div>
+
+			<!-- Copyright and Risk Warning -->
+			<div class="text-center">
+				<p class="mb-4 text-xs text-gray-500">
+					© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
+				</p>
+				<p class="text-[10px] leading-relaxed text-gray-600 sm:text-xs">
+					<span class="text-yellow-600">Risk Warning:</span> Trading tokenized assets involves substantial
+					risk. Past performance does not guarantee future results.
+				</p>
+			</div>
+		</div>
+	</footer>
 {/if}
 {#if showChartModal}
 	<div class="fixed inset-0 z-[2000]">

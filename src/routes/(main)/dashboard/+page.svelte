@@ -403,7 +403,7 @@
 </script>
 
 <!-- Main Content -->
-<div>
+<div class="relative z-10 min-h-screen text-white">
 	<PageContainer>
 		{#if isNetworkLoading}
 			<div class="flex flex-col items-center justify-center gap-4 py-8">
@@ -434,16 +434,14 @@
 					<MetricCard
 						label="Total Value"
 						value={`$${totalValue.toFixed(2)}`}
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
+												paddingClass="p-4"
 						showGradient={false}
 						valueClass="text-2xl font-bold"
 					/>
 					<MetricCard
 						label="24h Change"
 						value="TBD"
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
+												paddingClass="p-4"
 						showGradient={false}
 						change=""
 						valueClass="text-2xl font-bold text-gray-400"
@@ -451,16 +449,14 @@
 					<MetricCard
 						label="Active Orders"
 						value={`${activeOrdersCount}`}
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
+												paddingClass="p-4"
 						showGradient={false}
 						valueClass="text-2xl font-bold"
 					/>
 					<MetricCard
 						label="Active Vaults"
 						value={`${activeVaultsCount}`}
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
+												paddingClass="p-4"
 						showGradient={false}
 						valueClass="text-2xl font-bold"
 					/>
@@ -485,9 +481,9 @@
 							<div class="overflow-x-auto">
 								<Table>
 									<thead>
-										<tr class="border-b border-white/10">
+										<tr>
 											<th
-												class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												>Token</th
 											>
 											<th
@@ -509,8 +505,8 @@
 											{@const paymentToken = (
 												PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []
 											).find((t) => t.address.toLowerCase() === holding.address.toLowerCase())}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
 														logoUrl={paymentToken?.logoUrl}
 														symbol={holding.symbol}
@@ -544,9 +540,9 @@
 							<div class="overflow-x-auto">
 								<Table>
 									<thead>
-										<tr class="border-b border-white/10">
+										<tr>
 											<th
-												class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												>Token</th
 											>
 											<th
@@ -581,8 +577,8 @@
 									</thead>
 									<tbody>
 										{#each assetHoldings as holding}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
 														logoUrl={ALL_TOKENS.find(
 															(s) => s.address.toLowerCase() === holding.address.toLowerCase()
@@ -689,7 +685,7 @@
 							{:else}
 								<div class="overflow-x-auto">
 									<table class="w-full text-sm">
-										<thead class="border-b border-white/10">
+										<thead>
 											<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
 												<th class="pb-3 pr-4 font-medium">Token</th>
 												<th class="pb-3 pr-4 font-medium">Balance</th>
@@ -704,7 +700,7 @@
 												{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
 												{@const ordersCount =
 													(vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
-												<tr class="border-b border-white/5 hover:bg-white/5">
+												<tr class="hover:bg-white/5">
 													<td class="py-3 pr-4">
 														<div class="flex items-center gap-2">
 															<span class="text-gray-200">{vault.token.symbol}</span>
@@ -782,7 +778,7 @@
 								{#if nonDefaultVaults.length > 0}
 									<div class="overflow-x-auto">
 										<table class="w-full text-sm">
-											<thead class="border-b border-white/10">
+											<thead>
 												<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
 													<th class="pb-3 pr-4 font-medium">Token</th>
 													<th class="pb-3 pr-4 font-medium">Vault ID</th>
@@ -799,7 +795,7 @@
 													{@const ordersCount =
 														(vault.ordersAsInput?.length ?? 0) +
 														(vault.ordersAsOutput?.length ?? 0)}
-													<tr class="border-b border-white/5 hover:bg-white/5">
+													<tr class="hover:bg-white/5">
 														<td class="py-3 pr-4">
 															<span class="text-gray-200">{vault.token.symbol}</span>
 														</td>

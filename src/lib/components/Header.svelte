@@ -1,5 +1,4 @@
 <script lang="ts">
-	import TickerTape from './TickerTape.svelte';
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
@@ -7,7 +6,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import { connected, signerAddress, web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { wrongNetwork } from '$lib/stores';
+	import { wrongNetwork, sfts } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
 
 	export let title: string;
@@ -40,10 +39,17 @@
 
 	$: activePath = $page.url.pathname;
 
-	const NAV_ITEMS = [
-		{ name: 'Assets', href: '/' },
-		{ name: 'Strategies', href: '/strategies', showAlpha: true },
-		{ name: 'Platform Metrics', href: '/platform-metrics' }
+	// Get first token's trade URL for the Trade nav link
+	$: firstTokenId = $sfts?.[0]?.id;
+	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
+
+	// Check if we're on any trade page
+	$: isOnTradePage = activePath.startsWith('/trade/');
+
+	$: NAV_ITEMS = [
+		{ name: 'Trade', href: tradeHref, isActive: isOnTradePage, showAlpha: false },
+		{ name: 'Strategies', href: '/strategies', isActive: false, showAlpha: true },
+		{ name: 'Platform Metrics', href: '/platform-metrics', isActive: false, showAlpha: false }
 	];
 
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
@@ -138,15 +144,8 @@
 	}
 </script>
 
-<div
-	class="sticky top-0 z-[100] transition-all duration-300 {isLandingPage
-		? 'bg-transparent'
-		: 'border-b border-white/10 bg-gray-800/95 backdrop-blur-lg'}"
->
-	{#if !isLandingPage}
-		<div class="hidden sm:block"><TickerTape /></div>
-	{/if}
-	<div class="px-4 sm:px-6 {isLandingPage ? 'py-4 sm:py-5' : 'py-2 sm:py-3'}">
+<div class="sticky top-0 z-[100] bg-transparent transition-all duration-300">
+	<div class="px-4 py-4 sm:px-6 sm:py-5">
 		<div class="flex items-center justify-between gap-3 lg:gap-4">
 			<div class="flex items-center gap-2 lg:gap-4">
 				{#if !isLandingPage}
@@ -208,7 +207,7 @@
 							<a
 								href={item.href}
 								class={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${DESKTOP_NAV_WIDTH} ${
-									activePath === item.href
+									item.isActive || activePath === item.href
 										? 'bg-yellow-500/20 text-yellow-500'
 										: 'text-gray-300 hover:bg-white/5 hover:text-white'
 								}`}
@@ -335,8 +334,8 @@
 					<a
 						href={item.href}
 						on:click={closeMobileNav}
-						class="rounded-lg px-4 py-3 text-base font-medium transition-colors {activePath ===
-						item.href
+						class="rounded-lg px-4 py-3 text-base font-medium transition-colors {item.isActive ||
+						activePath === item.href
 							? 'bg-yellow-500/20 text-yellow-500'
 							: 'text-gray-300 hover:bg-white/5 hover:text-white'}"
 					>

@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { currentNetwork, sfts } from '$lib/stores';
-	import { signerAddress, connected } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
-	import ShareButton from './ShareButton.svelte';
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
@@ -19,7 +16,6 @@
 
 	$: activePath = $page.url.pathname;
 
-	let searchTerm = '';
 	type AssetWithMetrics = OffchainAssetReceiptVault & {
 		price: number;
 		dollarVolume: number;
@@ -27,7 +23,6 @@
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
-	let filteredAssets: AssetWithMetrics[] = [];
 	let sortedAssets: AssetWithMetrics[] = [];
 
 	// Get all tokens for the current network
@@ -56,104 +51,73 @@
 				.sort((a, b) => b.dollarVolume - a.dollarVolume)
 		: [];
 
-	// Filter assets based on search
-	$: if (searchTerm.trim().length >= 2) {
-		const trimmed = searchTerm.trim().toLowerCase();
-		filteredAssets = sortedAssets.filter(
-			(asset) =>
-				asset.name.toLowerCase().includes(trimmed) || asset.symbol.toLowerCase().includes(trimmed)
-		);
-	} else {
-		filteredAssets = sortedAssets;
-	}
-
 	function toggleCollapse() {
 		collapsed = !collapsed;
 		dispatch('toggleCollapse', { collapsed });
 	}
 </script>
 
+<!-- Pull-out tab (desktop only) - always visible, positioned near top -->
+{#if desktop}
+	<button
+		on:click={toggleCollapse}
+		class="fixed top-16 z-[10001] rounded-r-lg border border-l-0 border-white/10 bg-gray-900/80 px-1 py-3 text-gray-400 backdrop-blur-xl transition-all duration-300 hover:bg-gray-800 hover:pr-2 hover:text-white"
+		class:left-64={!collapsed}
+		class:left-0={collapsed}
+		aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+	>
+		<svg
+			class="h-4 w-4 transition-transform duration-300"
+			class:rotate-180={collapsed}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+		>
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+		</svg>
+	</button>
+{/if}
+
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-[10000] flex h-full transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-all duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-[10000] flex h-full transform flex-col border-r border-white/5 bg-gray-900/70 backdrop-blur-xl transition-all duration-300 ease-in-out"
 	class:w-64={desktop || (!desktop && visible)}
 	class:w-0={!desktop && !visible}
 	class:max-w-[80vw]={!desktop && visible}
 	class:-translate-x-full={(desktop && collapsed) || (!desktop && !visible)}
 	class:pointer-events-none={(desktop && collapsed) || (!desktop && !visible)}
 >
-	<!-- Header with collapse button (desktop) or arrow indicator (mobile/tablet) -->
-	<div class="flex items-center justify-end border-b border-white/10 p-2">
-		{#if desktop}
-			<button
-				on:click={toggleCollapse}
-				class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
-				aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-			>
-				<svg
-					class="h-5 w-5 transition-transform duration-300"
-					class:rotate-180={!collapsed}
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-				</svg>
-			</button>
-		{:else}
+	<!-- Mobile header with close button -->
+	{#if !desktop}
+		<div class="flex items-center justify-end border-b border-white/5 p-2">
 			<button
 				on:click={() => dispatch(visible ? 'close' : 'open')}
 				class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
-				aria-label={visible ? 'Collapse sidebar' : 'Expand sidebar'}
+				aria-label={visible ? 'Close sidebar' : 'Open sidebar'}
 			>
-				<svg
-					class="h-5 w-5 transition-transform duration-300"
-					class:rotate-180={visible}
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M6 18L18 6M6 6l12 12"
+					/>
 				</svg>
 			</button>
-		{/if}
-	</div>
+		</div>
+	{:else}
+		<!-- Desktop: add some top padding to align with header -->
+		<div class="h-14"></div>
+	{/if}
 
 	{#if (desktop && !collapsed) || (!desktop && visible)}
-		<!-- Search Bar -->
-		<div class="border-b border-white/10 p-3">
-			<div class="relative">
-				<input
-					type="text"
-					bind:value={searchTerm}
-					placeholder="Search assets..."
-					class="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm placeholder-gray-400 outline-none focus:border-yellow-500/50"
-				/>
-				{#if searchTerm}
-					<button
-						on:click={() => (searchTerm = '')}
-						class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-					>
-						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M6 18L18 6M6 6l12 12"
-							/>
-						</svg>
-					</button>
-				{/if}
-			</div>
-		</div>
-
 		<!-- Assets List (scrollable) -->
 		<div class="flex-1 overflow-y-auto p-3">
-			<div class="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-				Assets by Volume
+			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-gray-600">
+				Assets
 			</div>
-			<div class="space-y-1">
-				{#each filteredAssets as asset}
+			<div class="space-y-0.5">
+				{#each sortedAssets as asset}
 					{@const tokenInfo = ALL_TOKENS.find(
 						(t) => t.address.toLowerCase() === asset.address.toLowerCase()
 					)}
@@ -162,9 +126,9 @@
 						on:click={() => {
 							if (!desktop) dispatch('close');
 						}}
-						class="block rounded-lg px-2 py-2 transition-colors hover:bg-white/5 {activePath ===
+						class="block rounded-md px-2 py-2 transition-colors hover:bg-white/5 {activePath ===
 						`/trade/${asset.id}`
-							? 'bg-yellow-500/20'
+							? 'border-l-2 border-yellow-500 bg-yellow-500/10'
 							: ''}"
 					>
 						<div class="flex items-center justify-between gap-2">
@@ -204,37 +168,9 @@
 						</div>
 					</a>
 				{/each}
-				{#if filteredAssets.length === 0}
-					<div class="py-8 text-center text-sm text-gray-400">
-						{searchTerm ? 'No assets found' : 'No assets available'}
-					</div>
+				{#if sortedAssets.length === 0}
+					<div class="py-8 text-center text-sm text-gray-400">No assets available</div>
 				{/if}
-			</div>
-		</div>
-
-		<!-- Bottom Info -->
-		<div class="border-t border-white/10 bg-gray-800/95 p-3">
-			<div class="flex w-full flex-col gap-2">
-				<div class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-					<div class="flex w-full flex-col">
-						<div class="text-xs font-semibold text-yellow-500">{$currentNetwork.name}</div>
-						{#if $connected}
-							<div class="text-xs text-gray-400">
-								{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}
-							</div>
-						{:else}
-							<div class="text-xs text-gray-400">Not Connected</div>
-						{/if}
-					</div>
-				</div>
-				<a
-					href="/docs"
-					class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-				>
-					<ExternalLinkIcon class="h-4 w-4" />
-					<span>Docs</span>
-				</a>
-				<ShareButton />
 			</div>
 		</div>
 	{/if}

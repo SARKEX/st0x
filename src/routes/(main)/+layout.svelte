@@ -12,6 +12,7 @@
 	import Tutorial from '$lib/components/Tutorial.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import TickerTape from '$lib/components/TickerTape.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { rainlangConfirmationModal } from '$lib/stores';
@@ -45,8 +46,15 @@
 	let mobileSidebarOpen = false;
 	let sidebarCollapsed = false;
 
-	// Check if current page is the landing/home page
+	// Check if current page should use the clean/floating layout (no sidebar, transparent header)
 	$: isLandingPage = $page.url.pathname === '/';
+	$: isTradePage = $page.url.pathname.startsWith('/trade/');
+	$: isDashboardPage = $page.url.pathname === '/dashboard';
+	$: isMetricsPage = $page.url.pathname === '/platform-metrics';
+	// Landing page: no sidebar, transparent header
+	// Trade/Dashboard/Metrics pages: sidebar visible, with enhanced background
+	$: useCleanLayout = isLandingPage;
+	$: useEnhancedBackground = isLandingPage || isTradePage || isDashboardPage || isMetricsPage;
 
 	// Prevent background scroll when mobile sidebar is open
 	$: if (browser) {
@@ -74,7 +82,7 @@
 	$: pageTitle = getPageTitle($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
-		if (pathname.startsWith('/trade/')) return 'Trade';
+		if (pathname.startsWith('/trade/')) return '';
 
 		switch (pathname) {
 			case '/':
@@ -82,11 +90,11 @@
 			case '/strategies':
 				return 'Strategies';
 			case '/dashboard':
-				return 'My Dashboard';
+				return '';
 			case '/portfolio':
-				return 'My Dashboard';
+				return '';
 			case '/platform-metrics':
-				return 'Platform Metrics';
+				return '';
 			case '/orderlist':
 				return 'Order List';
 			case '/vaultlist':
@@ -100,8 +108,8 @@
 </script>
 
 <div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
-	<!-- Background - enhanced for landing page -->
-	{#if isLandingPage}
+	<!-- Background - enhanced for clean layout pages -->
+	{#if useEnhancedBackground}
 		<div class="pointer-events-none fixed inset-0 z-0">
 			<!-- Gradient overlay -->
 			<div
@@ -120,7 +128,7 @@
 				class="absolute bottom-1/4 right-1/4 h-[500px] w-[500px] translate-x-1/2 translate-y-1/2 rounded-full bg-blue-500/5 blur-3xl"
 			></div>
 		</div>
-	{:else}
+	{:else if !useEnhancedBackground}
 		<!-- Standard background pattern for other pages -->
 		<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
 			<div
@@ -129,8 +137,8 @@
 		</div>
 	{/if}
 
-	<!-- Mobile/Tablet sidebar (hidden on landing page) -->
-	{#if !isLandingPage}
+	<!-- Mobile/Tablet sidebar (hidden on clean layout pages) -->
+	{#if !useCleanLayout}
 		<div class="lg:hidden">
 			<Sidebar
 				visible={mobileSidebarOpen}
@@ -152,18 +160,23 @@
 
 	<!-- Main Content -->
 	<div
-		class="transition-all duration-300"
-		class:lg:ml-64={!isLandingPage && !sidebarCollapsed}
-		class:lg:ml-0={isLandingPage || sidebarCollapsed}
+		class="relative z-10 transition-all duration-300"
+		class:lg:ml-64={!useCleanLayout && !sidebarCollapsed}
+		class:lg:ml-0={useCleanLayout || sidebarCollapsed}
 	>
 		<!-- Header for all screen sizes -->
 		<Header
 			title={pageTitle}
-			isSidebarCollapsed={isLandingPage || sidebarCollapsed}
+			isSidebarCollapsed={useCleanLayout || sidebarCollapsed}
 			isMobileSidebarOpen={mobileSidebarOpen}
-			{isLandingPage}
+			isLandingPage={useEnhancedBackground}
 			on:toggleSidebar={handleHeaderSidebarToggle}
 		/>
+
+		<!-- Ticker tape underneath header (trade pages only) -->
+		{#if isTradePage}
+			<div class="hidden sm:block"><TickerTape /></div>
+		{/if}
 
 		<slot {sidebarExpanded} />
 		<TransactionModal />
