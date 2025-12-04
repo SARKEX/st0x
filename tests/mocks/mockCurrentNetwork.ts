@@ -15,7 +15,7 @@ export const mockCurrentNetwork = {
 	],
 	icon: 'ethereum',
 	subgraph_url:
-		'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.4/gn',
+		'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.5/gn',
 	metadata_subgraph_url:
 		'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 	orderbook_subgraph_url:
