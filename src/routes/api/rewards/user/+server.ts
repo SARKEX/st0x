@@ -49,6 +49,14 @@ interface UserRewardsResponse {
 	rocketBoostTiersAchieved: RocketBoostTiersAchieved; // Which tiers have been hit
 	rocketBoostAchievedAmount: number; // Sum of achieved tier bonuses
 	effectivePool: number; // poolAmount + rocketBoostAchievedAmount
+	// Projection data for RocketBoost
+	projection: {
+		daysElapsed: number; // Days with snapshot data so far
+		daysRemaining: number; // Days remaining in month (including today)
+		avgDailyPoints: number; // Average points earned per day (all wallets)
+		projectedTotalPoints: number; // Projected end-of-month total points
+		projectedProgress: number; // Projected RocketBoost progress percentage
+	};
 	// Last month data
 	lastMonth: {
 		month: string;
@@ -241,6 +249,20 @@ export const GET: RequestHandler = async ({ url }) => {
 			}
 		}
 
+		// Calculate projection for RocketBoost
+		// Days elapsed = snapshots / 2 (2 snapshots per day)
+		const daysElapsed = Math.max(1, Math.floor(snapshotCount / 2));
+		// Days remaining = days in month - current day of month + 1 (including today)
+		const currentDayOfMonth = now.getUTCDate();
+		const daysRemaining = daysInMonth - currentDayOfMonth + 1;
+		// Average daily points (all wallets combined)
+		const avgDailyPoints = totalPoints / daysElapsed;
+		// Projected total = current + (avgDaily * daysRemaining)
+		const projectedTotalPoints = totalPoints + avgDailyPoints * daysRemaining;
+		// Projected RocketBoost progress
+		const projectedProgress =
+			rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
+
 		// Build leaderboard data
 		const top3 = rankings.slice(0, 3);
 		const aroundUser: WalletRanking[] = [];
@@ -283,6 +305,13 @@ export const GET: RequestHandler = async ({ url }) => {
 			rocketBoostTiersAchieved,
 			rocketBoostAchievedAmount,
 			effectivePool,
+			projection: {
+				daysElapsed,
+				daysRemaining,
+				avgDailyPoints,
+				projectedTotalPoints,
+				projectedProgress
+			},
 			lastMonth: lastMonthData,
 			leaderboard: {
 				top3,

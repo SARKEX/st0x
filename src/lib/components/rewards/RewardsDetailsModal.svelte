@@ -32,6 +32,11 @@
 			)
 		: 0;
 
+	// Projected progress (capped at 100%)
+	$: projectedProgress = $rewardsData?.projection
+		? Math.min(100, $rewardsData.projection.projectedProgress)
+		: 0;
+
 	// Format month display
 	function formatMonth(monthStr: string): string {
 		const [year, month] = monthStr.split('-');
@@ -143,14 +148,30 @@
 					<!-- Progress bar with milestone markers -->
 					<div class="relative mb-4">
 						<div class="h-3 overflow-hidden rounded-full bg-gray-600">
+							<!-- Projected progress (background, lighter) -->
+							{#if projectedProgress > rocketBoostProgress}
+								<div
+									class="absolute h-full bg-yellow-500/30 transition-all duration-500"
+									style="width: {projectedProgress}%"
+								/>
+							{/if}
+							<!-- Current progress (foreground) -->
 							<div
-								class="h-full transition-all duration-500 {$rewardsData.rocketBoostTiersAchieved
-									.tier100
+								class="relative h-full transition-all duration-500 {$rewardsData
+									.rocketBoostTiersAchieved.tier100
 									? 'bg-green-500'
 									: 'bg-yellow-500'}"
 								style="width: {rocketBoostProgress}%"
 							/>
 						</div>
+						<!-- Projected progress marker (dashed line) -->
+						{#if projectedProgress > rocketBoostProgress && projectedProgress < 100}
+							<div
+								class="absolute top-0 h-3 w-0.5 border-l-2 border-dashed border-yellow-300/70"
+								style="left: {projectedProgress}%"
+								title="Projected: {projectedProgress.toFixed(0)}%"
+							/>
+						{/if}
 						<!-- Milestone markers -->
 						{#each [25, 50, 75, 100] as milestone}
 							<div
@@ -162,14 +183,30 @@
 						{/each}
 					</div>
 
+					<!-- Current vs Projected stats -->
+					<div class="mb-3 flex items-center justify-between text-xs">
+						<div class="flex items-center gap-2">
+							<span class="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
+							<span class="text-gray-400">Current: {rocketBoostProgress.toFixed(0)}%</span>
+						</div>
+						{#if $rewardsData.projection}
+							<div class="flex items-center gap-2">
+								<span class="inline-block h-2 w-2 rounded-full bg-yellow-500/30 ring-1 ring-yellow-300/50"></span>
+								<span class="text-gray-400">
+									Projected: <span class="font-medium text-yellow-300">{projectedProgress.toFixed(0)}%</span>
+								</span>
+							</div>
+						{/if}
+					</div>
+
 					<!-- Tier bonuses -->
 					<div class="grid grid-cols-4 gap-1 text-center text-xs">
-						{#each [{ pct: 25, achieved: $rewardsData.rocketBoostTiersAchieved.tier25, amount: $rewardsData.rocketBoostAmounts.tier25 }, { pct: 50, achieved: $rewardsData.rocketBoostTiersAchieved.tier50, amount: $rewardsData.rocketBoostAmounts.tier50 }, { pct: 75, achieved: $rewardsData.rocketBoostTiersAchieved.tier75, amount: $rewardsData.rocketBoostAmounts.tier75 }, { pct: 100, achieved: $rewardsData.rocketBoostTiersAchieved.tier100, amount: $rewardsData.rocketBoostAmounts.tier100 }] as { pct, achieved, amount } (pct)}
-							<div class="rounded p-1 {achieved ? 'bg-green-900/30' : 'bg-gray-700/50'}">
-								<div class="font-medium {achieved ? 'text-green-400' : 'text-gray-500'}">
+						{#each [{ pct: 25, achieved: $rewardsData.rocketBoostTiersAchieved.tier25, projected: projectedProgress >= 25, amount: $rewardsData.rocketBoostAmounts.tier25 }, { pct: 50, achieved: $rewardsData.rocketBoostTiersAchieved.tier50, projected: projectedProgress >= 50, amount: $rewardsData.rocketBoostAmounts.tier50 }, { pct: 75, achieved: $rewardsData.rocketBoostTiersAchieved.tier75, projected: projectedProgress >= 75, amount: $rewardsData.rocketBoostAmounts.tier75 }, { pct: 100, achieved: $rewardsData.rocketBoostTiersAchieved.tier100, projected: projectedProgress >= 100, amount: $rewardsData.rocketBoostAmounts.tier100 }] as { pct, achieved, projected, amount } (pct)}
+							<div class="rounded p-1 {achieved ? 'bg-green-900/30' : projected ? 'bg-yellow-900/20' : 'bg-gray-700/50'}">
+								<div class="font-medium {achieved ? 'text-green-400' : projected ? 'text-yellow-300/70' : 'text-gray-500'}">
 									{pct}%
 								</div>
-								<div class={achieved ? 'text-green-300' : 'text-gray-500'}>
+								<div class={achieved ? 'text-green-300' : projected ? 'text-yellow-300/50' : 'text-gray-500'}>
 									+${Math.round(amount)}
 								</div>
 							</div>
@@ -183,7 +220,11 @@
 								>+${Math.round($rewardsData.rocketBoostAchievedAmount)}</span
 							>
 						</span>
-						<span class="text-gray-400">{rocketBoostProgress.toFixed(0)}%</span>
+						{#if $rewardsData.projection}
+							<span class="text-gray-500">
+								{$rewardsData.projection.daysRemaining} days remaining
+							</span>
+						{/if}
 					</div>
 				</div>
 

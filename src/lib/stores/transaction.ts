@@ -8,7 +8,54 @@ import {
 	type Hash,
 	type Hex
 } from 'viem';
-import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
+import {
+	readContract as wagmiReadContract,
+	sendTransaction as wagmiSendTransaction,
+	waitForTransactionReceipt as wagmiWaitForTransactionReceipt
+} from '@wagmi/core';
+
+// Retry wrapper for RPC calls that fail with "header not found" error
+// This is a known RPC provider issue related to load balancing
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000): Promise<T> {
+	let lastError: unknown;
+	for (let attempt = 0; attempt < maxRetries; attempt++) {
+		try {
+			return await fn();
+		} catch (error) {
+			lastError = error;
+			const errorMessage = String(error);
+			// Retry on "header not found" or "block not found" RPC errors
+			if (
+				errorMessage.includes('header not found') ||
+				errorMessage.includes('block not found') ||
+				(error as { code?: number })?.code === -32000
+			) {
+				if (attempt < maxRetries - 1) {
+					// Exponential backoff
+					await new Promise((resolve) => setTimeout(resolve, delayMs * Math.pow(2, attempt)));
+					continue;
+				}
+			}
+			throw error;
+		}
+	}
+	throw lastError;
+}
+
+// Wrapped wagmi functions with retry logic
+const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
+	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
+
+const sendTransaction: typeof wagmiSendTransaction = ((
+	...args: Parameters<typeof wagmiSendTransaction>
+) => withRetry(() => wagmiSendTransaction(...args))) as typeof wagmiSendTransaction;
+
+const waitForTransactionReceipt: typeof wagmiWaitForTransactionReceipt = ((
+	...args: Parameters<typeof wagmiWaitForTransactionReceipt>
+) =>
+	withRetry(() =>
+		wagmiWaitForTransactionReceipt(...args)
+	)) as typeof wagmiWaitForTransactionReceipt;
 import {
 	getTakeOrders3Calldata,
 	type SgOrder,
