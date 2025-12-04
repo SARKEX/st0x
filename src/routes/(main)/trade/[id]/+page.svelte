@@ -747,8 +747,8 @@
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
 	$: pageTitle = `Trade ${tokenDisplayName}`;
 	$: modalTitle = tokenDisplaySymbol
-		? `Terminal View — ${tokenDisplayName} (${tokenDisplaySymbol})`
-		: `Terminal View — ${tokenDisplayName}`;
+		? `Advanced Chart — ${tokenDisplayName} (${tokenDisplaySymbol})`
+		: `Advanced Chart — ${tokenDisplayName}`;
 	$: panelTokenLabel = tokenDisplaySymbol || currentToken?.symbol || tokenDisplayName;
 	$: panelSummaryVerb = panelOrderSide === 'Buy' ? 'Buying' : 'Selling';
 	$: panelSummaryPreposition = panelOrderSide === 'Buy' ? 'with' : 'for';
@@ -917,7 +917,7 @@
 							aria-label="Open terminal view"
 							on:click={(event) => openChartModal(event)}
 						>
-							Terminal View
+							Advanced Chart
 						</Button>
 					</div>
 				</div>
@@ -930,8 +930,10 @@
 						class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 					>
 						<div>
-							<h2 class="text-lg font-semibold">DEX Activity</h2>
-							<p class="text-sm text-gray-400">View DEX trades, liquidity, orders, and vaults</p>
+							<h2 class="text-lg font-semibold">On-chain Market</h2>
+							<p class="text-sm text-gray-400">
+								View on-chain trades, liquidity, orders, and vaults
+							</p>
 						</div>
 						{#if $connected}
 							<button
@@ -965,258 +967,202 @@
 					/>
 				</div>
 
-				{#if activeOnchainTab === 'market'}
-					<TokenMarketCharts
-						volumeBuckets={tradeVolumeBuckets}
-						depth={orderbookDepth}
-						{ohlcData}
-						rangeStartMs={historyRangeStartMs}
-						rangeEndMs={historyRangeEndMs}
-						isLoading={chartsLoading}
-						error={tradeQueryError}
-						{historyRange}
-						historyRangeOptions={HISTORY_RANGE_OPTIONS}
-						on:rangeChange={(e) => (historyRange = e.detail.key)}
-					/>
-					<div class="mt-2 text-xs text-gray-400">
-						All times are displayed in your local timezone
-					</div>
-				{:else if activeOnchainTab === 'orders'}
-					<div class="mt-4">
-						<OrdersTable
-							orders={tokenOrders}
-							isLoading={$orderbookQuotesQuery.isLoading}
-							isError={$orderbookQuotesQuery.isError}
-							errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
-							tokenAddress={currentToken?.address ?? null}
+				<!-- Fixed height container to prevent layout jumps between tabs -->
+				<div class="min-h-[320px] sm:min-h-[440px]">
+					{#if activeOnchainTab === 'market'}
+						<TokenMarketCharts
+							volumeBuckets={tradeVolumeBuckets}
+							depth={orderbookDepth}
+							{ohlcData}
+							rangeStartMs={historyRangeStartMs}
+							rangeEndMs={historyRangeEndMs}
+							isLoading={chartsLoading}
+							error={tradeQueryError}
+							{historyRange}
+							historyRangeOptions={HISTORY_RANGE_OPTIONS}
+							on:rangeChange={(e) => (historyRange = e.detail.key)}
 						/>
-					</div>
-				{:else if activeOnchainTab === 'vaults'}
-					<div class="mt-4">
-						{#if !$connected}
-							<div class="flex flex-col items-center justify-center gap-4 py-12">
-								<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
-								<Button variant="primary" size="md" on:click={() => $web3Modal.open()}>
-									Connect Wallet
-								</Button>
-							</div>
-						{:else if $userVaultsQuery.isLoading}
-							<div class="flex justify-center py-8">
-								<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
-							</div>
-						{:else if $userVaultsQuery.isError}
-							<div class="py-8 text-center text-sm text-red-400">
-								Error loading vaults: {$userVaultsQuery.error?.message}
-							</div>
-						{:else}
-							{@const allVaultData = $userVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
-							{@const vaults = currentToken
-								? allVaultData
-										.map((vd) => vd.raindexVault)
-										.filter((v) => {
-											const vaultTokenAddr = (v.token?.address ?? v.token?.id)?.toLowerCase();
-											const isCorrectToken = vaultTokenAddr === currentToken.address.toLowerCase();
-											const hasBalance = vaultBalanceToBigInt(v) > 0n;
-											return isCorrectToken && hasBalance;
-										})
-								: []}
-							{@const totalVaultBalance = vaults.reduce(
-								(sum, v) => sum + vaultBalanceToBigInt(v),
-								0n
-							)}
-							{@const walletBalance = $walletBalanceQuery.data ?? 0n}
-							{@const totalBalance = totalVaultBalance + walletBalance}
-							{@const tokenDecimals =
-								vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
-
-							{#if vaults.length === 0 && walletBalance === 0n}
-								<div class="py-8 text-center text-sm text-gray-400">
-									No position found for this token
+						<div class="mt-2 text-xs text-gray-400">
+							All times are displayed in your local timezone
+						</div>
+					{:else if activeOnchainTab === 'orders'}
+						<div class="mt-4">
+							<OrdersTable
+								orders={tokenOrders}
+								isLoading={$orderbookQuotesQuery.isLoading}
+								isError={$orderbookQuotesQuery.isError}
+								errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+								tokenAddress={currentToken?.address ?? null}
+							/>
+						</div>
+					{:else if activeOnchainTab === 'vaults'}
+						<div class="mt-4">
+							{#if !$connected}
+								<div class="flex flex-col items-center justify-center gap-4 py-12">
+									<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
+									<Button variant="primary" size="md" on:click={() => $web3Modal.open()}>
+										Connect Wallet
+									</Button>
+								</div>
+							{:else if $userVaultsQuery.isLoading}
+								<div class="flex justify-center py-8">
+									<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
+								</div>
+							{:else if $userVaultsQuery.isError}
+								<div class="py-8 text-center text-sm text-red-400">
+									Error loading vaults: {$userVaultsQuery.error?.message}
 								</div>
 							{:else}
-								<!-- Two column layout: Vaults list on left, Summary on right -->
-								<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-									<!-- Left: Vaults list with pagination -->
-									<div>
-										{#if vaults.length > 0}
-											{@const vaultsPerPage = 10}
-											{@const totalPages = Math.ceil(vaults.length / vaultsPerPage)}
-											{@const startIndex = (currentVaultsPage - 1) * vaultsPerPage}
-											{@const endIndex = startIndex + vaultsPerPage}
-											{@const paginatedVaults = vaults.slice(startIndex, endIndex)}
+								{@const allVaultData = $userVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
+								{@const vaults = currentToken
+									? allVaultData
+											.map((vd) => vd.raindexVault)
+											.filter((v) => {
+												const vaultTokenAddr = (v.token?.address ?? v.token?.id)?.toLowerCase();
+												const isCorrectToken =
+													vaultTokenAddr === currentToken.address.toLowerCase();
+												const hasBalance = vaultBalanceToBigInt(v) > 0n;
+												return isCorrectToken && hasBalance;
+											})
+									: []}
+								{@const totalVaultBalance = vaults.reduce(
+									(sum, v) => sum + vaultBalanceToBigInt(v),
+									0n
+								)}
+								{@const walletBalance = $walletBalanceQuery.data ?? 0n}
+								{@const totalBalance = totalVaultBalance + walletBalance}
+								{@const tokenDecimals =
+									vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
 
-											<div class="space-y-2">
-												{#each paginatedVaults as vault}
-													{@const balance = vaultBalanceToBigInt(vault)}
-													{@const vaultIdHex = `0x${vault.vaultId.toString(16).padStart(64, '0')}`}
-													{@const raindexUrl = getRaindexVaultUrl(
-														$currentNetwork?.chainId ?? 8453,
-														vault.orderbook,
-														vault.id
-													)}
-													<div
-														class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
-													>
-														<div class="flex items-center gap-2 text-xs text-gray-400">
-															<a
-																href={raindexUrl}
-																target="_blank"
-																rel="noopener noreferrer"
-																class="text-blue-400 hover:text-blue-300 hover:underline"
-																title="View on Raindex"
+								{#if vaults.length === 0 && walletBalance === 0n}
+									<div class="py-8 text-center text-sm text-gray-400">
+										No position found for this token
+									</div>
+								{:else}
+									<!-- Two column layout: Vaults list on left, Summary on right -->
+									<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+										<!-- Left: Vaults list with pagination -->
+										<div>
+											{#if vaults.length > 0}
+												{@const vaultsPerPage = 10}
+												{@const totalPages = Math.ceil(vaults.length / vaultsPerPage)}
+												{@const startIndex = (currentVaultsPage - 1) * vaultsPerPage}
+												{@const endIndex = startIndex + vaultsPerPage}
+												{@const paginatedVaults = vaults.slice(startIndex, endIndex)}
+
+												<div class="space-y-2">
+													{#each paginatedVaults as vault}
+														{@const balance = vaultBalanceToBigInt(vault)}
+														{@const vaultIdHex = `0x${vault.vaultId
+															.toString(16)
+															.padStart(64, '0')}`}
+														{@const raindexUrl = getRaindexVaultUrl(
+															$currentNetwork?.chainId ?? 8453,
+															vault.orderbook,
+															vault.id
+														)}
+														<div
+															class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
+														>
+															<div class="flex items-center gap-2 text-xs text-gray-400">
+																<a
+																	href={raindexUrl}
+																	target="_blank"
+																	rel="noopener noreferrer"
+																	class="text-blue-400 hover:text-blue-300 hover:underline"
+																	title="View on Raindex"
+																>
+																	{vaultIdHex.slice(0, 8)}...
+																</a>
+																<span>•</span>
+																<span
+																	>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)}
+																	{vault.token.symbol}</span
+																>
+															</div>
+															<Button
+																variant="danger"
+																size="sm"
+																on:click={() => transactionStore.handleWithdraw(vault)}
 															>
-																{vaultIdHex.slice(0, 8)}...
-															</a>
-															<span>•</span>
-															<span
-																>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)}
-																{vault.token.symbol}</span
-															>
+																Withdraw
+															</Button>
 														</div>
-														<Button
-															variant="danger"
-															size="sm"
-															on:click={() => transactionStore.handleWithdraw(vault)}
-														>
-															Withdraw
-														</Button>
-													</div>
-												{/each}
-											</div>
-
-											<!-- Pagination -->
-											{#if totalPages > 1}
-												<div class="mt-4 flex items-center justify-center gap-2">
-													{#each Array.from({ length: totalPages }, (_, i) => i + 1) as pageNum}
-														<button
-															type="button"
-															class={`h-8 w-8 rounded-md text-sm font-medium transition ${
-																pageNum === currentVaultsPage
-																	? 'bg-blue-500 text-white'
-																	: 'bg-white/5 text-gray-400 hover:bg-white/10'
-															}`}
-															on:click={() => {
-																currentVaultsPage = pageNum;
-															}}
-														>
-															{pageNum}
-														</button>
 													{/each}
 												</div>
-											{/if}
-										{:else}
-											<div class="py-8 text-center text-sm text-gray-400">
-												No vaults with balance found
-											</div>
-										{/if}
-									</div>
 
-									<!-- Right: Summary table -->
-									<div class="rounded-lg border border-white/10 bg-white/5 p-4">
-										<h3 class="mb-4 text-sm font-semibold text-gray-100">Summary</h3>
-										<div class="space-y-3 text-sm">
-											<div class="flex justify-between text-gray-400">
-												<span>Vaults Subtotal:</span>
-												<span
-													>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)}
-													{currentToken?.symbol}</span
+												<!-- Pagination -->
+												{#if totalPages > 1}
+													<div class="mt-4 flex items-center justify-center gap-2">
+														{#each Array.from({ length: totalPages }, (_, i) => i + 1) as pageNum}
+															<button
+																type="button"
+																class={`h-8 w-8 rounded-md text-sm font-medium transition ${
+																	pageNum === currentVaultsPage
+																		? 'bg-blue-500 text-white'
+																		: 'bg-white/5 text-gray-400 hover:bg-white/10'
+																}`}
+																on:click={() => {
+																	currentVaultsPage = pageNum;
+																}}
+															>
+																{pageNum}
+															</button>
+														{/each}
+													</div>
+												{/if}
+											{:else}
+												<div class="py-8 text-center text-sm text-gray-400">
+													No vaults with balance found
+												</div>
+											{/if}
+										</div>
+
+										<!-- Right: Summary table -->
+										<div class="rounded-lg border border-white/10 bg-white/5 p-4">
+											<h3 class="mb-4 text-sm font-semibold text-gray-100">Summary</h3>
+											<div class="space-y-3 text-sm">
+												<div class="flex justify-between text-gray-400">
+													<span>Vaults Subtotal:</span>
+													<span
+														>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)}
+														{currentToken?.symbol}</span
+													>
+												</div>
+												<div class="flex justify-between text-gray-400">
+													<span>Wallet Balance:</span>
+													<span
+														>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)}
+														{currentToken?.symbol}</span
+													>
+												</div>
+												<div
+													class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100"
 												>
-											</div>
-											<div class="flex justify-between text-gray-400">
-												<span>Wallet Balance:</span>
-												<span
-													>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)}
-													{currentToken?.symbol}</span
-												>
-											</div>
-											<div
-												class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100"
-											>
-												<span>Total:</span>
-												<span
-													>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)}
-													{currentToken?.symbol}</span
-												>
+													<span>Total:</span>
+													<span
+														>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)}
+														{currentToken?.symbol}</span
+													>
+												</div>
 											</div>
 										</div>
 									</div>
-								</div>
+								{/if}
 							{/if}
-						{/if}
-					</div>
-				{/if}
-			</div>
-		</div>
-		<!-- Tabbed Information Section -->
-		<div class="space-y-6">
-			<div class="grid gap-6 lg:grid-cols-2" data-tutorial="fundamentals">
-				<div class="space-y-4">
-					<div class="space-y-3">
-						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
-							Asset Details
-						</h3>
-						<TabNav tabs={ASSET_TABS} activeId={activeAssetTab} on:change={handleAssetTabChange} />
-					</div>
-					{#if activeAssetTab === 'company'}
-						{#if tradingViewSymbol}
-							<div class="overflow-hidden">
-								<TradingViewWidget
-									widgetType="symbol-profile"
-									symbol={tradingViewSymbol}
-									height="480"
-									isTransparent={true}
-								/>
-							</div>
-						{:else}
-							<div class="p-4">
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-							</div>
-						{/if}
-					{:else if activeAssetTab === 'fundamentals'}
-						{#if tradingViewSymbol}
-							<div class="overflow-hidden">
-								<TradingViewWidget
-									widgetType="financials"
-									symbol={tradingViewSymbol}
-									height={520}
-									isTransparent={true}
-								/>
-							</div>
-						{:else}
-							<div class="p-4">
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-							</div>
-						{/if}
-					{:else if activeAssetTab === 'technical'}
-						{#if tradingViewSymbol}
-							<div class="overflow-hidden">
-								<TradingViewWidget
-									widgetType="technical-analysis"
-									symbol={tradingViewSymbol}
-									height="520"
-									isTransparent={true}
-								/>
-							</div>
-						{:else}
-							<div class="p-4">
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-							</div>
-						{/if}
-					{:else if tradingViewSymbol}
-						<div class="overflow-hidden">
-							<TradingViewWidget
-								widgetType="timeline"
-								symbol={tradingViewSymbol}
-								height="600"
-								isTransparent={true}
-							/>
-						</div>
-					{:else}
-						<div class="p-4">
-							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 						</div>
 					{/if}
 				</div>
+			</div>
+		</div>
+		<!-- About Section -->
+		<div class="space-y-6">
+			<div>
+				<h2 class="text-lg font-semibold">About</h2>
+				<p class="text-sm text-gray-400">Learn more about the token or the equity</p>
+			</div>
+			<div class="grid gap-6 lg:grid-cols-2" data-tutorial="fundamentals">
+				<!-- Token Details (Left) -->
 				<div class="space-y-4">
 					<div class="space-y-3">
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
@@ -1377,6 +1323,74 @@
 							{:else}
 								<div class="text-sm text-gray-400">No recent burns.</div>
 							{/if}
+						</div>
+					{/if}
+				</div>
+				<!-- Underlying Equity (Right) -->
+				<div class="space-y-4">
+					<div class="space-y-3">
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+							Equity Details
+						</h3>
+						<TabNav tabs={ASSET_TABS} activeId={activeAssetTab} on:change={handleAssetTabChange} />
+					</div>
+					{#if activeAssetTab === 'company'}
+						{#if tradingViewSymbol}
+							<div class="overflow-hidden">
+								<TradingViewWidget
+									widgetType="symbol-profile"
+									symbol={tradingViewSymbol}
+									height="480"
+									isTransparent={true}
+								/>
+							</div>
+						{:else}
+							<div class="p-4">
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if activeAssetTab === 'fundamentals'}
+						{#if tradingViewSymbol}
+							<div class="overflow-hidden">
+								<TradingViewWidget
+									widgetType="financials"
+									symbol={tradingViewSymbol}
+									height={520}
+									isTransparent={true}
+								/>
+							</div>
+						{:else}
+							<div class="p-4">
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if activeAssetTab === 'technical'}
+						{#if tradingViewSymbol}
+							<div class="overflow-hidden">
+								<TradingViewWidget
+									widgetType="technical-analysis"
+									symbol={tradingViewSymbol}
+									height="520"
+									isTransparent={true}
+								/>
+							</div>
+						{:else}
+							<div class="p-4">
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if tradingViewSymbol}
+						<div class="overflow-hidden">
+							<TradingViewWidget
+								widgetType="timeline"
+								symbol={tradingViewSymbol}
+								height="600"
+								isTransparent={true}
+							/>
+						</div>
+					{:else}
+						<div class="p-4">
+							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 						</div>
 					{/if}
 				</div>
@@ -1622,7 +1636,7 @@
 		<div class="relative z-10 flex h-full flex-col bg-gray-950">
 			<div class="flex items-center justify-between border-b border-white/10 px-6 py-5">
 				<div>
-					<p class="text-xs uppercase tracking-wide text-gray-500">Terminal View</p>
+					<p class="text-xs uppercase tracking-wide text-gray-500">Advanced Chart</p>
 					<h2 class="text-xl font-semibold text-white">{modalTitle}</h2>
 				</div>
 				<button

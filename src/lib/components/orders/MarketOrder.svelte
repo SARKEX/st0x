@@ -5,7 +5,6 @@
 		OrderV4_ABI,
 		normalizeOrderData,
 		type ProcessedQuote,
-		scaleAmount,
 		walkOrderbook
 	} from '$lib/api/orders';
 	import { createRaindexClient } from '$lib/clients/raindex';
@@ -619,7 +618,7 @@
 				console.error('Unable to calculate walk result for order execution');
 				return;
 			}
-			const { inputAmountFilled, outputAmountGiven, inputDecimals, outputDecimals } = walkResult;
+			const { inputAmountFilled, outputAmountGiven, inputDecimals } = walkResult;
 
 			// Validate that we have all required token data before proceeding
 			if (!paymentToken || typeof paymentToken.decimals !== 'number') {

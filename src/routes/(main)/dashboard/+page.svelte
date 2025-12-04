@@ -434,14 +434,14 @@
 					<MetricCard
 						label="Total Value"
 						value={`$${totalValue.toFixed(2)}`}
-												paddingClass="p-4"
+						paddingClass="p-4"
 						showGradient={false}
 						valueClass="text-2xl font-bold"
 					/>
 					<MetricCard
 						label="24h Change"
 						value="TBD"
-												paddingClass="p-4"
+						paddingClass="p-4"
 						showGradient={false}
 						change=""
 						valueClass="text-2xl font-bold text-gray-400"
@@ -449,14 +449,14 @@
 					<MetricCard
 						label="Active Orders"
 						value={`${activeOrdersCount}`}
-												paddingClass="p-4"
+						paddingClass="p-4"
 						showGradient={false}
 						valueClass="text-2xl font-bold"
 					/>
 					<MetricCard
 						label="Active Vaults"
 						value={`${activeVaultsCount}`}
-												paddingClass="p-4"
+						paddingClass="p-4"
 						showGradient={false}
 						valueClass="text-2xl font-bold"
 					/>
@@ -681,7 +681,10 @@
 							<h2 class="mb-2 text-lg font-semibold">Default Vaults</h2>
 							<p class="mb-4 text-sm text-gray-400">Your primary vault for each token</p>
 							{#if defaultVaults.length === 0}
-								<div class="py-4 text-sm text-gray-500">No default vaults found.</div>
+								<div class="py-4 text-sm text-gray-500">
+									No default vaults found. Default vaults are created automatically when you make a
+									limit or DCA order.
+								</div>
 							{:else}
 								<div class="overflow-x-auto">
 									<table class="w-full text-sm">

@@ -490,7 +490,7 @@
 
 <div class="py-8">
 	<div class="mb-6 flex items-center justify-between">
-		<h1 class="text-2xl font-semibold">DEX Activity</h1>
+		<h1 class="text-2xl font-semibold">On-chain Market</h1>
 		{#if lastUpdated}
 			<span class="text-xs text-gray-500">
 				Auto-refreshes every 30s &middot; Last updated: {formatTime(lastUpdated)}

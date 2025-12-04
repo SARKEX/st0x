@@ -81,7 +81,7 @@
 </script>
 
 <div
-	class="max-w-screen relative z-[100] min-h-[48px] w-screen min-w-0 overflow-x-auto border-b border-white/5 bg-transparent sm:min-h-[48px]"
+	class="max-w-screen relative z-[50] min-h-[48px] w-screen min-w-0 overflow-x-auto border-b border-white/5 bg-transparent sm:min-h-[48px]"
 	style="width:100vw;max-width:100vw;"
 >
 	<div bind:this={container} class="w-full min-w-0" />

@@ -529,7 +529,7 @@
 					label="Total Locked Value"
 					value={formatQuoteDisplay(totalTVL)}
 					subtitle="Active orderbook tokens"
-										paddingClass="p-6"
+					paddingClass="p-6"
 					showGradient={false}
 					valueClass="text-3xl font-bold"
 				/>
@@ -537,7 +537,7 @@
 					label="Trading Volume"
 					value={formatQuoteDisplay(tradingVolume)}
 					subtitle="Last 30 days"
-										paddingClass="p-6"
+					paddingClass="p-6"
 					showGradient={false}
 					valueClass="text-3xl font-bold"
 				/>
@@ -545,7 +545,7 @@
 					label="Total Trades"
 					value={`${totalTrades}`}
 					subtitle="Last 30 days"
-										paddingClass="p-6"
+					paddingClass="p-6"
 					showGradient={false}
 					valueClass="text-3xl font-bold"
 				/>
@@ -553,7 +553,7 @@
 					label="Active Tokens"
 					value={`${activeST0x}`}
 					subtitle="Live on orderbook"
-										paddingClass="p-6"
+					paddingClass="p-6"
 					showGradient={false}
 					valueClass="text-3xl font-bold"
 				/>
@@ -561,7 +561,7 @@
 					label="Deployed Orders"
 					value={`${totalDeployedOrders}`}
 					subtitle="Active across networks"
-										paddingClass="p-6"
+					paddingClass="p-6"
 					showGradient={false}
 					valueClass="text-3xl font-bold"
 				/>
@@ -668,9 +668,7 @@
 				<div class="overflow-x-auto">
 					<table class="w-full">
 						<thead>
-							<tr
-								class="text-left text-xs font-medium uppercase tracking-wide text-gray-400"
-							>
+							<tr class="text-left text-xs font-medium uppercase tracking-wide text-gray-400">
 								<th class="sticky left-0 z-10 p-2 sm:p-3">Token</th>
 								<th class="p-2 text-right sm:p-3">Total Volume</th>
 								<th class="p-2 text-right sm:p-3">USD Value</th>

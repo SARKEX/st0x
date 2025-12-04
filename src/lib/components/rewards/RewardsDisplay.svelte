@@ -11,9 +11,11 @@
 		formatApy,
 		formatUsd,
 		showDetailsModal,
+		showLeaderboardModal,
 		showRulesModal,
 		globalPoolApy,
-		fetchGlobalPoolApy
+		fetchGlobalPoolApy,
+		fetchPublicLeaderboard
 	} from '$lib/stores/rewardsStore';
 
 	let showDropdown = false;
@@ -55,6 +57,15 @@
 	function openRulesModal() {
 		showDropdown = false;
 		showRulesModal.set(true);
+	}
+
+	async function openLeaderboardModal() {
+		showDropdown = false;
+		// Fetch public leaderboard if not connected
+		if (!$connected) {
+			await fetchPublicLeaderboard();
+		}
+		showLeaderboardModal.set(true);
 	}
 
 	onDestroy(() => {
@@ -135,7 +146,7 @@
 					? Math.min(100, ($rewardsData.totalPoints / $rewardsData.rocketBoostTargetPoints) * 100)
 					: 0}
 			<div
-				class="absolute right-0 top-full z-[160] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+				class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
 			>
 				<div class="space-y-2 text-sm">
 					<div class="flex justify-between">
@@ -218,14 +229,17 @@
 		{/if}
 	</div>
 {:else}
-	<!-- Simplified button for non-connected users (visible during tutorial) -->
-	<div data-tutorial="boost-rewards">
+	<!-- Button for non-connected users with dropdown -->
+	<div class="relative" bind:this={dropdownRef} data-tutorial="boost-rewards">
 		<button
+			on:click={() => (showDropdown = !showDropdown)}
+			on:mouseenter={() => (showTooltip = true)}
+			on:mouseleave={() => (showTooltip = false)}
 			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
 		>
 			<span class="rainbow-border"></span>
 			<span
-				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900"
+				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
 			></span>
 			<svg
 				class="relative z-10 h-4 w-4 text-yellow-400"
@@ -242,7 +256,74 @@
 			</svg>
 			<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
 			<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
+			<svg
+				class="relative z-10 h-4 w-4 text-gray-400 transition-transform"
+				class:rotate-180={showDropdown}
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+			</svg>
 		</button>
+
+		<!-- Hover Tooltip for non-connected users -->
+		{#if showTooltip && !showDropdown}
+			<div
+				class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+			>
+				<div class="space-y-2 text-sm">
+					<div class="flex justify-between">
+						<span class="text-gray-400">Current APY</span>
+						<span class="font-medium text-green-400">{formatApy($globalPoolApy)}</span>
+					</div>
+					<p class="text-xs text-gray-500">Connect wallet to see your rewards</p>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Dropdown Menu -->
+		{#if showDropdown}
+			<div
+				class="absolute right-0 top-full z-[150] mt-2 w-56 overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl"
+				role="menu"
+				tabindex="-1"
+			>
+				<button
+					on:click={openLeaderboardModal}
+					class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-gray-200 transition-colors hover:bg-gray-700"
+				>
+					<svg
+						class="h-4 w-4 text-yellow-400"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+						/>
+					</svg>
+					Leaderboard
+				</button>
+				<button
+					on:click={openRulesModal}
+					class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-gray-200 transition-colors hover:bg-gray-700"
+				>
+					<svg class="h-4 w-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+					About
+				</button>
+			</div>
+		{/if}
 	</div>
 {/if}
 

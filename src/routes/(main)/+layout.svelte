@@ -18,15 +18,13 @@
 	import { rainlangConfirmationModal } from '$lib/stores';
 	import { checkWalletAccess, resetAccessState } from '$lib/stores/accessStore';
 	import { checkAndStoreAccessCodeFromUrl } from '$lib/utils/accessCodeStorage';
-	import { initTutorial } from '$lib/stores/tutorialStore';
 
 	// Track wallet address to detect changes
 	let lastCheckedAddress: string | null = null;
 
-	// Check for access code in URL params on mount and initialize tutorial
+	// Check for access code in URL params on mount
 	onMount(() => {
 		checkAndStoreAccessCodeFromUrl();
-		initTutorial();
 	});
 
 	// Check wallet registration when wallet connects or changes

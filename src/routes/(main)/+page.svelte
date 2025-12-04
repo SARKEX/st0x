@@ -9,7 +9,6 @@
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
-	import Button from '$lib/components/ui/Button.svelte';
 	import QuickTrade from '$lib/components/QuickTrade.svelte';
 	import { globalPoolApy, fetchGlobalPoolApy } from '$lib/stores/rewardsStore';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
@@ -39,52 +38,38 @@
 
 	function animateApy(targetApy: number) {
 		isAnimating = true;
-		const duration = 2000; // 2 seconds
-		const frameRate = 50; // updates per second
+		const duration = 1500; // 1.5 seconds
+		const frameRate = 30; // updates per second
 		const totalFrames = (duration / 1000) * frameRate;
 		let frame = 0;
+		const targetRounded = Math.round(targetApy);
 
-		// Start from a random high number for slot machine effect
-		displayedApy = Math.random() * 500;
+		// Start from 0
+		displayedApy = 0;
 
 		const interval = setInterval(() => {
 			frame++;
 			const progress = frame / totalFrames;
 
 			if (progress >= 1) {
-				displayedApy = targetApy;
+				displayedApy = targetRounded;
 				isAnimating = false;
 				animationComplete = true;
 				clearInterval(interval);
 			} else {
-				// Easing function for slot machine effect - fast then slow
+				// Ease out - fast at start, slow at end
 				const easeOut = 1 - Math.pow(1 - progress, 3);
-
-				if (progress < 0.7) {
-					// Spinning phase - random numbers
-					displayedApy = Math.random() * 500;
-				} else {
-					// Settling phase - approach target
-					const settleProgress = (progress - 0.7) / 0.3;
-					const easeSettle = 1 - Math.pow(1 - settleProgress, 2);
-					displayedApy = displayedApy + (targetApy - displayedApy) * easeSettle * 0.3;
-				}
+				displayedApy = Math.round(easeOut * targetRounded);
 			}
 		}, 1000 / frameRate);
 	}
 
 	function formatApyDisplay(apy: number): string {
-		if (apy >= 1000) {
-			return (apy / 1000).toFixed(1) + 'K';
+		const rounded = Math.round(apy);
+		if (rounded >= 1000) {
+			return (rounded / 1000).toFixed(1) + 'K';
 		}
-		if (apy >= 100) {
-			return Math.round(apy).toString();
-		}
-		return apy.toFixed(1);
-	}
-
-	function scrollToAssets() {
-		document.getElementById('asset-table')?.scrollIntoView({ behavior: 'smooth' });
+		return rounded.toString();
 	}
 
 	type TokenRow = {
@@ -127,7 +112,7 @@
 		{ alt: 'Microsoft', src: '/images/pioneers/microsoft.svg' },
 		{ alt: 'Nasdaq', src: '/images/pioneers/nasdaq.svg' },
 		{ alt: 'NYSE', src: '/images/pioneers/nyse.svg' },
-		{ alt: 'ICE', src: '/images/pioneers/ice.svg' },
+		{ alt: 'ICE', src: '/images/pioneers/ice.svg' }
 		// { alt: 'University of Oxford', src: '/images/pioneers/oxford.svg' },
 		// { alt: 'University of Sussex', src: '/images/pioneers/sussex.svg' }
 	];
@@ -180,16 +165,15 @@
 					<span class="absolute inset-[1px] z-0 rounded-full bg-gray-900/90"></span>
 					<div class="relative z-10 flex items-center gap-3 text-base">
 						<span class="relative flex h-2.5 w-2.5">
-							<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+							<span
+								class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"
+							></span>
 							<span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500"></span>
 						</span>
 						<span class="text-gray-300">Limited time monthly rewards boost:</span>
 						<span class="text-gray-500">·</span>
 						<span class="text-gray-400">Current APY</span>
-						<span
-							class="font-bold tabular-nums text-white"
-							class:animate-pulse={isAnimating}
-						>
+						<span class="font-bold tabular-nums text-white" class:animate-pulse={isAnimating}>
 							{formatApyDisplay(displayedApy)}%
 						</span>
 					</div>
@@ -201,10 +185,17 @@
 				<QuickTrade />
 				<button
 					type="button"
-					class="text-base text-gray-400 underline decoration-gray-600 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500"
+					class="rounded-lg bg-yellow-500 px-6 py-2.5 text-sm font-medium text-black transition hover:bg-yellow-400"
+					on:click={() => goto('/trade/0x2289249984f1fa2ce86c4e8867e7eb819ea7df95')}
+				>
+					Launch Trading Terminal
+				</button>
+				<button
+					type="button"
+					class="text-sm text-gray-500 underline decoration-gray-600 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500"
 					on:click={startTour}
 				>
-					Limit Orders? Trading Terminals? Take the tour 👉
+					New? Take the tour 👉
 				</button>
 			</div>
 
@@ -239,7 +230,7 @@
 					<p class="text-sm text-gray-400 sm:text-base">24/7 instant settlement. No fees.</p>
 				</div>
 
-				<!-- EU Regulated -->
+				<!-- Exchange-Linked Liquidity -->
 				<div class="p-3 sm:p-5">
 					<div class="mb-4 flex justify-center">
 						<div
@@ -251,17 +242,36 @@
 								stroke="currentColor"
 								viewBox="0 0 24 24"
 							>
+								<!-- Small lightning bolt in top-left -->
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
 									stroke-width="1.5"
-									d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+									d="M7 2L5 6h2L5 10"
+								/>
+								<!-- Arrow 1: diagonal pointing bottom-left -->
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="1.5"
+									d="M14 10L6 18m0 0v-5m0 5h5"
+								/>
+								<!-- Arrow 2: diagonal pointing top-right -->
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="1.5"
+									d="M10 14l8-8m0 0v5m0-5h-5"
 								/>
 							</svg>
 						</div>
 					</div>
-					<h3 class="mb-2 text-lg font-semibold text-white sm:text-xl lg:text-2xl">EU Compliant</h3>
-					<p class="text-sm text-gray-400 sm:text-base">Regulated in Germany to global standards</p>
+					<h3 class="mb-2 text-lg font-semibold text-white sm:text-xl lg:text-2xl">
+						Exchange-Linked Liquidity
+					</h3>
+					<p class="text-sm text-gray-400 sm:text-base">
+						Tap into primary exchange liquidity on the NYSE, Nasdaq, and more.
+					</p>
 				</div>
 
 				<!-- Fully Backed -->
@@ -287,7 +297,7 @@
 					</div>
 					<h3 class="mb-2 text-lg font-semibold text-white sm:text-xl lg:text-2xl">Fully Backed</h3>
 					<p class="text-sm text-gray-400 sm:text-base">
-						Every token fully backed and redeemable for shares held by a regulated custodian
+						Every token fully backed and legally redeemable for shares held by a regulated custodian
 					</p>
 				</div>
 			</div>
@@ -321,10 +331,7 @@
 					Failed to load assets: {vaultsError}
 				</div>
 			{:else if hasVaults}
-				<div
-					class="overflow-hidden rounded-xl"
-					data-tutorial="token-list"
-				>
+				<div class="overflow-hidden rounded-xl" data-tutorial="token-list">
 					<Table>
 						<thead>
 							<tr>
@@ -373,9 +380,7 @@
 										class="cursor-pointer transition-all hover:bg-yellow-500/5"
 										on:click={() => goto(`/trade/${token.id}`)}
 									>
-										<td
-											class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4"
-										>
+										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<TokenDisplay
 												logoUrl={ALL_TOKENS.find(
 													(s) => s.address.toLowerCase() === token.address.toLowerCase()

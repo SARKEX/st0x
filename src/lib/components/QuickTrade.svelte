@@ -194,9 +194,7 @@
 				if (outputDecimals !== assetDecimals) {
 					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
 					maxAssetAvailable =
-						outputDecimals < assetDecimals
-							? maxAssetAvailable * scale
-							: maxAssetAvailable / scale;
+						outputDecimals < assetDecimals ? maxAssetAvailable * scale : maxAssetAvailable / scale;
 				}
 			}
 			if (maxAssetAvailable <= 0n) continue;
@@ -206,7 +204,7 @@
 			);
 			const usdcToUse = remainingUsdc < maxUsdcForQuote ? remainingUsdc : maxUsdcForQuote;
 			const tokensFromQuote = BigInt(
-				Math.floor(((Number(usdcToUse) / 10 ** paymentDecimals) / price) * 10 ** assetDecimals)
+				Math.floor((Number(usdcToUse) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
 			);
 			if (tokensFromQuote <= 0n) continue;
 
@@ -244,7 +242,8 @@
 
 			let maxAvailable = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? (direction === 'buy' ? assetDecimals : paymentDecimals);
+				const outputDecimals =
+					q.outputTokenDecimals ?? (direction === 'buy' ? assetDecimals : paymentDecimals);
 				maxAvailable = parseFloatHex(q.maxOutput, outputDecimals);
 			}
 			if (maxAvailable <= 0n) continue;
@@ -267,7 +266,9 @@
 				);
 				tokensFromQuote = remainingTokens < maxTokensForBid ? remainingTokens : maxTokensForBid;
 				usdcFromQuote = BigInt(
-					Math.floor((Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals)
+					Math.floor(
+						(Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals
+					)
 				);
 			}
 
@@ -411,7 +412,6 @@
 		if (price >= 1) return '$' + price.toFixed(2);
 		return '$' + price.toFixed(4);
 	}
-
 </script>
 
 <div
@@ -428,13 +428,14 @@
 			<div class="flex items-center justify-between text-sm">
 				{#if $connected}
 					<span class="text-gray-500">
-						Balance: {formattedUsdcBalance.toFixed(2)} {paymentToken?.symbol ?? 'USDC'}
+						Balance: {formattedUsdcBalance.toFixed(2)}
+						{paymentToken?.symbol ?? 'USDC'}
 					</span>
 				{:else}
 					<span></span>
 				{/if}
 				{#if quote && !quote.hasLiquidity}
-					<span class="text-yellow-500 text-xs">Partial fill</span>
+					<span class="text-xs text-yellow-500">Partial fill</span>
 				{/if}
 			</div>
 			<div
@@ -480,7 +481,7 @@
 			<button
 				type="button"
 				on:click={handleSwapDirection}
-				class="rounded-full border border-white/10 bg-gray-800 p-2 transition hover:bg-gray-700 hover:border-white/20"
+				class="rounded-full border border-white/10 bg-gray-800 p-2 transition hover:border-white/20 hover:bg-gray-700"
 			>
 				<svg
 					class="h-4 w-4 text-gray-400 transition-transform duration-200"
@@ -489,7 +490,12 @@
 					stroke="currentColor"
 					viewBox="0 0 24 24"
 				>
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 14l-7 7m0 0l-7-7m7 7V3"
+					/>
 				</svg>
 			</button>
 		</div>
@@ -516,13 +522,25 @@
 						{:else}
 							<span class="text-gray-400">Select</span>
 						{/if}
-						<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+						<svg
+							class="h-4 w-4 text-gray-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 9l-7 7-7-7"
+							/>
 						</svg>
 					</button>
 
 					{#if isDropdownOpen}
-						<div class="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-gray-800 py-2 shadow-xl">
+						<div
+							class="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-gray-800 py-2 shadow-xl"
+						>
 							{#each tradableTokens as token}
 								<button
 									type="button"
@@ -554,7 +572,7 @@
 						<div class="text-xs text-gray-500">
 							~{formatPrice(quote.avgPrice)} per token
 						</div>
-					{:else if (isBuying ? bestAskPrice : bestBidPrice)}
+					{:else if isBuying ? bestAskPrice : bestBidPrice}
 						<div class="text-xs text-gray-500">
 							Best: {formatPrice((isBuying ? bestAskPrice : bestBidPrice) ?? 0)}
 						</div>
