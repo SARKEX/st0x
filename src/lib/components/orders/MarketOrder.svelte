@@ -651,6 +651,7 @@
 
 			// Build TakeOrderConfigs from executable orders
 			const takeOrderConfigs: TakeOrderConfigV4[] = [];
+			let totalBytecodeSize = 0;
 			for (const orderInfo of executableOrders) {
 				if (
 					!orderInfo.orderData?.validInputs?.length ||
@@ -674,6 +675,11 @@
 					continue;
 				}
 
+				// Log bytecode size for gas debugging
+				const bytecode = orderInfo.orderData.evaluable?.bytecode ?? '';
+				const bytecodeSize = typeof bytecode === 'string' ? bytecode.length / 2 : 0; // hex string to bytes
+				totalBytecodeSize += bytecodeSize;
+
 				takeOrderConfigs.push({
 					order: orderInfo.orderData,
 					inputIOIndex: inputIndex.toString(),
@@ -681,6 +687,14 @@
 					signedContext: []
 				});
 			}
+
+			// Log diagnostic info for gas cost investigation
+			console.log('[MarketOrder] Order execution diagnostics:', {
+				orderCount: takeOrderConfigs.length,
+				totalBytecodeSize: `${totalBytecodeSize} bytes`,
+				avgBytecodePerOrder: takeOrderConfigs.length > 0 ? Math.round(totalBytecodeSize / takeOrderConfigs.length) : 0,
+				orderHashes: executableOrders.map(o => o.order.orderHash?.slice(0, 10) + '...')
+			});
 
 			if (takeOrderConfigs.length === 0) {
 				console.error('Unable to build take order configs');

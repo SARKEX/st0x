@@ -156,10 +156,19 @@
 					</div>
 					<!-- RocketBoost Progress Bar -->
 					<div class="pt-1">
-						<div class="flex items-center justify-between text-xs text-gray-400">
+						<div class="text-xs text-gray-400">
 							<span>RocketBoost</span>
-							<span>{rocketBoostProgress.toFixed(0)}%{projectedProgress > rocketBoostProgress ? ` → ${projectedProgress.toFixed(0)}%` : ''}</span>
 						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-400">Progress</span>
+							<span class="text-white">{rocketBoostProgress.toFixed(0)}%</span>
+						</div>
+						{#if projectedProgress > rocketBoostProgress}
+							<div class="flex items-center justify-between text-xs">
+								<span class="text-gray-400">Projected</span>
+								<span class="text-yellow-300">{projectedProgress.toFixed(0)}%</span>
+							</div>
+						{/if}
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
 							<!-- Projected progress (lighter) -->
 							{#if projectedProgress > rocketBoostProgress}
