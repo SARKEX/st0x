@@ -2,7 +2,7 @@ import { RaindexClient } from '@rainlanguage/orderbook';
 import { fetchText } from '$lib/clients/http';
 import { type Network } from '$lib/config/network';
 
-export const RAIN_STRATEGIES_COMMIT = 'b2e056bb58f0e467a515132ce7a1b25bc624bd09';
+export const RAIN_STRATEGIES_COMMIT = '99517d58e332dbf17f106d98fdf01e536ef2c9e6';
 export const RAIN_STRATEGIES_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/settings.yaml`;
 
 // Cache the strategies YAML so we don't refetch on every client creation.
