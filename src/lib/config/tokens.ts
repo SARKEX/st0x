@@ -171,7 +171,20 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:SPLG',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x826a85de1f7b70f4c7450c0f882a6db06000ed80',
+		symbol: 'tSIVR',
+		decimals: 18,
+		name: 'abrdn Physical Silver Shares ETF ST0x',
+		logoUrl: '/images/SIVR.png',
+		priceFeedId: '0x0a5ee42b0f7287a777926d08bc185a6a60f42f40a9b63d78d85d4a03ee2e3737',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:SIVR',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	} as unknown as CategorizedToken,
 ];
 
 export const CRYPTO_TOKENS: CategorizedToken[] = [
