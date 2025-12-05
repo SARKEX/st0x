@@ -21,6 +21,7 @@
 	export let showUnit: boolean = true;
 	export let showMaxButton: boolean = true;
 	export let compact: boolean = false;
+	export let noBorder: boolean = false;
 
 	// Expose balance to parent component
 	export let balance: bigint = 0n;
@@ -151,6 +152,7 @@
 		on:setValueToMax={setValueToMax}
 		{dataTestId}
 		{validate}
+		{noBorder}
 		bind:isError
 	/>
 	{#if !compact}

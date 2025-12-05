@@ -939,31 +939,30 @@
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
-				<!-- Inline input with integrated mode toggle -->
-				<div class="flex items-center gap-2 rounded-lg border border-white/10 bg-gray-800/50 p-2">
+				<!-- Unified input with integrated toggle and token -->
+				<div class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50">
+					<!-- Left side: Buy/Spend or Sell toggle -->
 					{#if orderSide === 'Buy'}
-						<!-- Toggleable Buy/Spend button -->
 						<button
 							type="button"
 							on:click={() => {
 								inputMode = inputMode === 'amount' ? 'spend' : 'amount';
 								selectedAmount = 0n;
 							}}
-							class="flex items-center gap-1 rounded-md bg-green-500/20 px-3 py-1.5 text-sm font-medium text-green-400 transition-all hover:bg-green-500/30"
+							class="flex items-center gap-1.5 border-r border-white/10 px-4 py-3 text-sm font-medium text-green-400 transition-colors hover:bg-gray-600/30"
 						>
 							{inputMode === 'amount' ? 'Buy' : 'Spend'}
-							<svg class="h-3 w-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<svg class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
 							</svg>
 						</button>
 					{:else}
-						<!-- Static Sell label -->
-						<span class="rounded-md bg-red-500/20 px-3 py-1.5 text-sm font-medium text-red-400">
+						<span class="border-r border-white/10 px-4 py-3 text-sm font-medium text-red-400">
 							Sell
 						</span>
 					{/if}
 
-					<!-- Amount input (flex-grow to fill space) -->
+					<!-- Middle: Amount input -->
 					<div class="flex-1">
 						<TradeAmountInput
 							bind:this={tradeAmountInputRef}
@@ -978,17 +977,18 @@
 							showUnit={false}
 							showMaxButton={false}
 							compact={true}
+							noBorder={true}
 						/>
 					</div>
 
-					<!-- Token symbol -->
-					<span class="text-sm font-medium text-gray-300">
+					<!-- Right side: Token symbol -->
+					<span class="border-l border-white/10 px-4 py-3 text-sm font-medium text-gray-300">
 						{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
 					</span>
 				</div>
 
 				<!-- Balance display -->
-				<div class="mt-1 text-sm text-gray-400">
+				<div class="mt-1.5 text-sm text-gray-400">
 					{#if spendingTokenBalanceDecimals !== null}
 						{@const balanceFormatted = parseFloat(formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals))}
 						{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
