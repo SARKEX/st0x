@@ -291,34 +291,22 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 	// Note: SELL is inherently spending asset, so SELL always targets asset.
 	// The mode distinction only matters for BUY (receive asset vs spend payment).
 
-	let targetAssetToReceive: bigint | null = null; // For BUY + receive mode
-	let targetAssetToSpend: bigint | null = null; // For SELL (always spend mode conceptually)
-	let targetPaymentToSpend: bigint | null = null; // For BUY + spend mode
-
-	if (orderSide === 'Sell') {
-		// SELL always targets asset output (what you're giving away)
-		targetAssetToSpend = selectedAmount;
-	} else if (mode === 'spend') {
-		// BUY + spend: target payment output
-		targetPaymentToSpend = selectedAmount;
-	} else {
-		// BUY + receive: target asset input
-		targetAssetToReceive = selectedAmount;
-	}
+	// Determine target mode and amount
+	// 'asset' mode: targeting asset amount (BUY receive or SELL spend)
+	// 'payment' mode: targeting payment amount (BUY spend)
+	const targetMode: 'asset' | 'payment' =
+		orderSide === 'Sell' || mode !== 'spend' ? 'asset' : 'payment';
+	const targetAmount = selectedAmount;
 
 	// Accumulators - always track asset and payment traded
 	let assetAccumulated = 0n; // Total asset tokens traded (in asset decimals)
 	let paymentAccumulated = 0n; // Total payment tokens traded (in payment decimals)
 	const fills: QuoteFill[] = [];
 
-	// Determine which target we're checking (only one will be non-null)
-	const targetAsset = targetAssetToReceive ?? targetAssetToSpend;
-	const isTargetingAsset = targetAsset !== null;
-
 	for (const quote of quotes) {
 		// Check if we've reached our target
-		if (isTargetingAsset && assetAccumulated >= targetAsset!) break;
-		if (targetPaymentToSpend !== null && paymentAccumulated >= targetPaymentToSpend) break;
+		if (targetMode === 'asset' && assetAccumulated >= targetAmount) break;
+		if (targetMode === 'payment' && paymentAccumulated >= targetAmount) break;
 
 		const price = getQuotePrice(quote);
 		if (!price || price <= 0) continue;
@@ -329,13 +317,13 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 
 		let assetFromQuote: bigint;
 
-		if (isTargetingAsset) {
+		if (targetMode === 'asset') {
 			// Targeting asset (receive for BUY, spend for SELL): limit by remaining asset needed
-			const remainingAsset = targetAsset! - assetAccumulated;
+			const remainingAsset = targetAmount - assetAccumulated;
 			assetFromQuote = remainingAsset < availableAsset ? remainingAsset : availableAsset;
 		} else {
 			// Targeting payment to spend (BUY + spend mode): calculate asset for remaining budget
-			const remainingPaymentBudget = targetPaymentToSpend! - paymentAccumulated;
+			const remainingPaymentBudget = targetAmount - paymentAccumulated;
 			if (remainingPaymentBudget <= 0n) break;
 
 			// Calculate max asset for remaining budget: asset = budget / price
@@ -357,17 +345,17 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		if (paymentFromQuote <= 0n) continue;
 
 		// In payment-spend mode, ensure we don't exceed the payment budget
-		if (targetPaymentToSpend !== null) {
+		if (targetMode === 'payment') {
 			const newPaymentTotal = paymentAccumulated + paymentFromQuote;
-			if (newPaymentTotal > targetPaymentToSpend) {
+			if (newPaymentTotal > targetAmount) {
 				// Adjust to exactly hit the budget
-				const adjustedPayment = targetPaymentToSpend - paymentAccumulated;
+				const adjustedPayment = targetAmount - paymentAccumulated;
 				// Recalculate asset for adjusted payment
 				const adjustedPaymentInAssetScale = scaleAmount(adjustedPayment, paymentDecimals, assetDecimals);
 				const adjustedAsset = (adjustedPaymentInAssetScale * PRICE_SCALE) / priceScaled;
 				if (adjustedAsset > 0n) {
 					assetAccumulated += adjustedAsset;
-					paymentAccumulated = targetPaymentToSpend;
+					paymentAccumulated = targetAmount;
 					fills.push({ quote, price, assetAmount: adjustedAsset, paymentAmount: adjustedPayment });
 				}
 				break;
