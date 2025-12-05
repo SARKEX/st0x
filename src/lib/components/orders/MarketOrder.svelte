@@ -939,56 +939,65 @@
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
-				<!-- Input mode toggle (only for Buy orders) -->
-				{#if orderSide === 'Buy'}
-					<div class="mb-3 flex rounded-lg border border-white/10 bg-gray-800/50 p-1">
+				<!-- Inline input with integrated mode toggle -->
+				<div class="flex items-center gap-2 rounded-lg border border-white/10 bg-gray-800/50 p-2">
+					{#if orderSide === 'Buy'}
+						<!-- Toggleable Buy/Spend button -->
 						<button
 							type="button"
 							on:click={() => {
-								if (inputMode !== 'amount') {
-									inputMode = 'amount';
-									selectedAmount = 0n;
-								}
+								inputMode = inputMode === 'amount' ? 'spend' : 'amount';
+								selectedAmount = 0n;
 							}}
-							class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all {inputMode === 'amount'
-								? 'bg-yellow-500/20 text-yellow-400'
-								: 'text-gray-400 hover:text-gray-300'}"
+							class="flex items-center gap-1 rounded-md bg-green-500/20 px-3 py-1.5 text-sm font-medium text-green-400 transition-all hover:bg-green-500/30"
 						>
-							Amount to Buy
+							{inputMode === 'amount' ? 'Buy' : 'Spend'}
+							<svg class="h-3 w-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+							</svg>
 						</button>
-						<button
-							type="button"
-							on:click={() => {
-								if (inputMode !== 'spend') {
-									inputMode = 'spend';
-									selectedAmount = 0n;
-								}
-							}}
-							class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all {inputMode === 'spend'
-								? 'bg-yellow-500/20 text-yellow-400'
-								: 'text-gray-400 hover:text-gray-300'}"
-						>
-							Amount to Spend
-						</button>
+					{:else}
+						<!-- Static Sell label -->
+						<span class="rounded-md bg-red-500/20 px-3 py-1.5 text-sm font-medium text-red-400">
+							Sell
+						</span>
+					{/if}
+
+					<!-- Amount input (flex-grow to fill space) -->
+					<div class="flex-1">
+						<TradeAmountInput
+							bind:this={tradeAmountInputRef}
+							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
+							amountToken={inputMode === 'spend' ? paymentToken : assetToken}
+							balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
+							bind:amount={selectedAmount}
+							bind:balance={spendingTokenBalance}
+							bind:balanceDecimals={spendingTokenBalanceDecimals}
+							validate={validateSelectedAmount}
+							bind:isError={selectedAmountError}
+							showUnit={false}
+							showMaxButton={false}
+							compact={true}
+						/>
 					</div>
-				{:else}
-					<div class="mb-2 block text-sm font-medium text-gray-300">
-						Amount to Sell
-					</div>
-				{/if}
-				<TradeAmountInput
-					bind:this={tradeAmountInputRef}
-					aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
-					amountToken={inputMode === 'spend' ? paymentToken : assetToken}
-					balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
-					bind:amount={selectedAmount}
-					bind:balance={spendingTokenBalance}
-					bind:balanceDecimals={spendingTokenBalanceDecimals}
-					validate={validateSelectedAmount}
-					bind:isError={selectedAmountError}
-					showUnit={false}
-					showMaxButton={false}
-				/>
+
+					<!-- Token symbol -->
+					<span class="text-sm font-medium text-gray-300">
+						{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
+					</span>
+				</div>
+
+				<!-- Balance display -->
+				<div class="mt-1 text-sm text-gray-400">
+					{#if spendingTokenBalanceDecimals !== null}
+						{@const balanceFormatted = parseFloat(formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals))}
+						{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
+						Balance: {balanceRounded.toFixed(3)} {spendingToken?.symbol ?? ''}
+					{:else}
+						Balance: —
+					{/if}
+				</div>
+
 				<!-- Percentage buttons -->
 				<div class="mt-2 flex gap-2">
 					{#each [25, 50, 75, 100] as percent}
