@@ -16,7 +16,9 @@ const config = {
 	],
 
 	kit: {
-		adapter: adapter(),
+		adapter: adapter({
+			external: ['@scalar/api-reference']
+		}),
 		paths: {
 			relative: true
 		}
