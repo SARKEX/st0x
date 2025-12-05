@@ -17,14 +17,12 @@ interface AllWalletData {
 
 interface WalletResponse {
 	success: boolean;
-	month: string;
+	date: string;
 	wallet: string;
 	points: number;
 	sharePercent: number;
 	estimatedReward: number;
 	rank: number | null;
-	totalWallets: number;
-	effectivePool: number;
 }
 
 // Get excluded wallets set for filtering
@@ -146,14 +144,12 @@ export const GET: RequestHandler = async ({ url, request }) => {
 
 		const response: WalletResponse = {
 			success: true,
-			month: allData.month,
+			date: new Date().toISOString().split('T')[0],
 			wallet: walletAddress,
 			points: userPoints,
 			sharePercent,
 			estimatedReward,
-			rank,
-			totalWallets: allData.totalWallets,
-			effectivePool: allData.effectivePool
+			rank
 		};
 
 		return json(response, {

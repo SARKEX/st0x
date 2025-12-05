@@ -18,7 +18,7 @@
     "/api/public/rewards-apy": {
       "get": {
         "summary": "Get Current Rewards APY",
-        "description": "Returns the current annualized rewards APY for the month, calculated using compound interest formula.",
+        "description": "Returns the current annualized rewards APY, calculated using compound interest formula.",
         "operationId": "getRewardsApy",
         "tags": ["Rewards"],
         "responses": {
@@ -31,7 +31,7 @@
                 },
                 "example": {
                   "success": true,
-                  "month": "2025-12",
+                  "date": "2025-12-05",
                   "apy": 42.5,
                   "effectivePool": 12500,
                   "basePool": 10000,
@@ -56,7 +56,7 @@
     "/api/public/rocketboost": {
       "get": {
         "summary": "Get RocketBoost Progress",
-        "description": "Returns current and projected RocketBoost progress towards TVL targets, including tier achievements and bonus amounts.",
+        "description": "Returns current and projected RocketBoost progress, including tier achievements and bonus amounts.",
         "operationId": "getRocketBoost",
         "tags": ["RocketBoost"],
         "responses": {
@@ -69,8 +69,7 @@
                 },
                 "example": {
                   "success": true,
-                  "month": "2025-12",
-                  "tvlTarget": 1000000,
+                  "date": "2025-12-05",
                   "current": {
                     "progressPercent": 65.2,
                     "totalPoints": 4033000000,
@@ -78,10 +77,8 @@
                   },
                   "projected": {
                     "progressPercent": 85.3,
-                    "projectedTotalPoints": 5280000000,
                     "daysElapsed": 5,
-                    "daysRemaining": 26,
-                    "avgDailyPoints": 806600000
+                    "daysRemaining": 26
                   },
                   "tiers": {
                     "tier25": { "target": 25, "bonus": 500, "achieved": true },
@@ -110,7 +107,7 @@
     "/api/public/wallet": {
       "get": {
         "summary": "Get Wallet Rewards Data",
-        "description": "Returns a wallet's current points, estimated reward share, and ranking for the current month.",
+        "description": "Returns a wallet's current points, estimated reward share, and ranking.",
         "operationId": "getWalletRewards",
         "tags": ["Wallet"],
         "parameters": [
@@ -136,14 +133,12 @@
                 },
                 "example": {
                   "success": true,
-                  "month": "2025-12",
+                  "date": "2025-12-05",
                   "wallet": "0x1234567890abcdef1234567890abcdef12345678",
                   "points": 50000000,
                   "sharePercent": 1.24,
                   "estimatedReward": 155,
-                  "rank": 12,
-                  "totalWallets": 156,
-                  "effectivePool": 12500
+                  "rank": 12
                 }
               }
             }
@@ -181,10 +176,10 @@
             "type": "boolean",
             "description": "Whether the request was successful"
           },
-          "month": {
+          "date": {
             "type": "string",
-            "description": "Current month in YYYY-MM format",
-            "example": "2025-12"
+            "description": "Current date in YYYY-MM-DD format",
+            "example": "2025-12-05"
           },
           "apy": {
             "type": "number",
@@ -208,7 +203,7 @@
             "example": 2500
           }
         },
-        "required": ["success", "month", "effectivePool", "basePool", "rocketBoostBonus"]
+        "required": ["success", "date", "effectivePool", "basePool", "rocketBoostBonus"]
       },
       "RocketBoostResponse": {
         "type": "object",
@@ -216,14 +211,10 @@
           "success": {
             "type": "boolean"
           },
-          "month": {
+          "date": {
             "type": "string",
-            "example": "2025-12"
-          },
-          "tvlTarget": {
-            "type": "number",
-            "description": "TVL target in USD for 100% RocketBoost",
-            "example": 1000000
+            "description": "Current date in YYYY-MM-DD format",
+            "example": "2025-12-05"
           },
           "current": {
             "type": "object",
@@ -254,11 +245,6 @@
                 "description": "Projected progress at month end (0-100)",
                 "example": 85.3
               },
-              "projectedTotalPoints": {
-                "type": "number",
-                "description": "Projected total points at month end",
-                "example": 5280000000
-              },
               "daysElapsed": {
                 "type": "integer",
                 "description": "Days with snapshot data",
@@ -268,11 +254,6 @@
                 "type": "integer",
                 "description": "Days remaining in month",
                 "example": 26
-              },
-              "avgDailyPoints": {
-                "type": "number",
-                "description": "Average points earned per day",
-                "example": 806600000
               }
             }
           },
@@ -292,7 +273,7 @@
             "example": 5000
           }
         },
-        "required": ["success", "month", "tvlTarget", "current", "projected", "tiers", "totalPossibleBonus"]
+        "required": ["success", "date", "current", "projected", "tiers", "totalPossibleBonus"]
       },
       "TierStatus": {
         "type": "object",
@@ -321,9 +302,10 @@
           "success": {
             "type": "boolean"
           },
-          "month": {
+          "date": {
             "type": "string",
-            "example": "2025-12"
+            "description": "Current date in YYYY-MM-DD format",
+            "example": "2025-12-05"
           },
           "wallet": {
             "type": "string",
@@ -350,19 +332,9 @@
             "nullable": true,
             "description": "User's rank on the leaderboard. Null if user has no points.",
             "example": 12
-          },
-          "totalWallets": {
-            "type": "integer",
-            "description": "Total number of wallets with points",
-            "example": 156
-          },
-          "effectivePool": {
-            "type": "number",
-            "description": "Total reward pool including RocketBoost (USD)",
-            "example": 12500
           }
         },
-        "required": ["success", "month", "wallet", "points", "sharePercent", "estimatedReward", "totalWallets", "effectivePool"]
+        "required": ["success", "date", "wallet", "points", "sharePercent", "estimatedReward"]
       },
       "ErrorResponse": {
         "type": "object",

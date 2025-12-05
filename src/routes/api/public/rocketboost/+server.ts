@@ -19,8 +19,7 @@ interface TierStatus {
 
 interface RocketBoostData {
 	success: boolean;
-	month: string;
-	tvlTarget: number;
+	date: string;
 	current: {
 		progressPercent: number;
 		totalPoints: number;
@@ -28,10 +27,8 @@ interface RocketBoostData {
 	};
 	projected: {
 		progressPercent: number;
-		projectedTotalPoints: number;
 		daysElapsed: number;
 		daysRemaining: number;
-		avgDailyPoints: number;
 	};
 	tiers: Record<string, TierStatus>;
 	totalPossibleBonus: number;
@@ -135,8 +132,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
 				return {
 					success: true,
-					month: currentMonth,
-					tvlTarget: rocketBoostTvlTarget,
+					date: now.toISOString().split('T')[0],
 					current: {
 						progressPercent: Math.min(currentProgressPercent, 100),
 						totalPoints,
@@ -144,10 +140,8 @@ export const GET: RequestHandler = async ({ request }) => {
 					},
 					projected: {
 						progressPercent: Math.min(projectedProgressPercent, 100),
-						projectedTotalPoints,
 						daysElapsed,
-						daysRemaining,
-						avgDailyPoints
+						daysRemaining
 					},
 					tiers,
 					totalPossibleBonus

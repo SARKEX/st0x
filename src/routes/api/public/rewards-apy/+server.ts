@@ -7,7 +7,7 @@ import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 
 interface RewardsApyData {
 	success: boolean;
-	month: string;
+	date: string;
 	apy: number | null;
 	effectivePool: number;
 	basePool: number;
@@ -90,7 +90,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
 				return {
 					success: true,
-					month: currentMonth,
+					date: now.toISOString().split('T')[0],
 					apy: poolApy,
 					effectivePool,
 					basePool: poolAmount,

@@ -375,7 +375,9 @@
 			// Check if anything was filled (asset amount)
 			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
 			if (assetFilled > 0n) {
-				// Calculate price (quote per asset)
+				// Convert ioRatio to price (quote per asset) for display
+				// BUY: ioRatio = asset/payment, so price = 1/ioRatio
+				// SELL: ioRatio = payment/asset = price
 				marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
 
 				availableOrders = fills.map((fill) => ({
@@ -703,21 +705,6 @@
 				return;
 			}
 
-			// Build TakeOrdersConfigV4 with worst IO ratio
-			// Convert price (quotePerAsset) to IO ratio based on order side:
-			// - BUY takes Ask orders: IO ratio = price (quote/asset)
-			// - SELL takes Bid orders: IO ratio = 1/price (asset/quote)
-			const worstPrice = executableOrders[executableOrders.length - 1].price;
-			const worstIoRatio = orderSide === 'Buy' ? worstPrice : 1 / worstPrice;
-			// Apply buffer to make the max slightly more permissive for execution-time variance
-			const bufferedWorstIoRatio = worstIoRatio * IO_RATIO_BUFFER;
-			const floatWorstIoRatioResult = Float.parse(bufferedWorstIoRatio.toString());
-			if (floatWorstIoRatioResult.error || !floatWorstIoRatioResult.value) {
-				console.error('Failed to encode IO ratio as Float:', floatWorstIoRatioResult.error);
-				orderPreparationError = 'Price encoding error. Please try again.';
-				return;
-			}
-
 			const primaryInputIndex = executableOrders[0].inputIOIndex ?? 0;
 			const primaryOutputIndex = executableOrders[0].outputIOIndex ?? 0;
 			const primaryOrder = executableOrders[0].order;
@@ -768,22 +755,52 @@
 
 			// Calculate maximumInput based on walk result
 			// inputAmountFilled is already in native decimals (specified by inputDecimals from walkResult)
-			// For SELL and BUY (spend mode): apply 1.5x buffer to allow receiving more if price moves favorably
-			// For BUY (amount mode): use exact amount since user specified what they want to receive
-			const shouldBufferMaxInput = orderSide === 'Sell' || inputMode === 'spend';
-			const maximumInputAmount = shouldBufferMaxInput
-				? (inputAmountFilled * 15n) / 10n
-				: inputAmountFilled;
+			const maximumInputAmount = inputAmountFilled;
 			const maximumInputDecimals = inputDecimals;
 			const maximumInputFloat = Float.fromFixedDecimalLossy(
 				maximumInputAmount,
 				maximumInputDecimals
 			);
 
+			// Calculate maximumIORatio from the worst (last) fill's original ratio
+			// Using the original hex ratio avoids precision loss from price conversions
+			// - ASK order ratio = quote/asset (price) - used directly for BUY
+			// - BID order ratio = asset/quote (1/price) - used directly for SELL
+			// This matches what TakeOrders expects: BUY uses price, SELL uses 1/price
+			const worstFill = walkResult.fills[walkResult.fills.length - 1];
+			if (!worstFill?.quote?.ratio) {
+				console.error('No valid ratio found in worst fill');
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+
+			// Parse the original hex ratio and apply buffer
+			const originalRatioResult = Float.parse(worstFill.quote.ratio);
+			if (originalRatioResult.error || !originalRatioResult.value) {
+				console.error('Failed to parse original ratio:', worstFill.quote.ratio);
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+
+			// Apply buffer by multiplying the ratio (makes it more permissive)
+			// Float.parse returns the ratio as-is, so we multiply by buffer factor
+			const bufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
+			if (bufferFloat.error || !bufferFloat.value) {
+				console.error('Failed to parse buffer');
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+			const bufferedRatioResult = originalRatioResult.value.mul(bufferFloat.value);
+			if (bufferedRatioResult.error || !bufferedRatioResult.value) {
+				console.error('Failed to apply buffer to ratio');
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+
 			const takeOrdersConfig: TakeOrdersConfigV4 = {
 				minimumInput: Float.fromBigint(0n).asHex(),
 				maximumInput: maximumInputFloat.float.asHex(),
-				maximumIORatio: floatWorstIoRatioResult.value.asHex(),
+				maximumIORatio: bufferedRatioResult.value.asHex(),
 				orders: takeOrderConfigs,
 				data: '0x'
 			};
@@ -838,6 +855,62 @@
 						: selectedAmount // User-specified asset amount
 					: walkResult.inputAmountFilled;
 
+			// For SELL and BUY (spend mode), provide a callback to recalculate config after approval
+			// This handles cases where prices move during the approval transaction
+			const shouldRecalculate = orderSide === 'Sell' || inputMode === 'spend';
+			const recalculateConfig = shouldRecalculate
+				? async (): Promise<TakeOrdersConfigV4 | null> => {
+						// Refresh orderbook quotes
+						await $orderbookQuotesQuery?.refetch?.();
+
+						// Re-walk the orderbook with current prices
+						const freshWalkResult = calculateOrderbookWalk();
+						if (!freshWalkResult || freshWalkResult.inputAmountFilled === 0n) {
+							console.warn('Failed to recalculate orderbook walk after approval');
+							return null; // Fall back to original config
+						}
+
+						// Recalculate maximumInput with fresh data
+						const freshMaximumInputFloat = Float.fromFixedDecimalLossy(
+							freshWalkResult.inputAmountFilled,
+							freshWalkResult.inputDecimals
+						);
+
+						// Get fresh IO ratio from the worst fill's original ratio (avoids precision loss)
+						const freshWorstFill = freshWalkResult.fills[freshWalkResult.fills.length - 1];
+						if (!freshWorstFill?.quote?.ratio) {
+							console.warn('No valid ratio found in fresh worst fill');
+							return null;
+						}
+
+						const freshRatioResult = Float.parse(freshWorstFill.quote.ratio);
+						if (freshRatioResult.error || !freshRatioResult.value) {
+							console.warn('Failed to parse fresh ratio');
+							return null;
+						}
+
+						// Apply buffer
+						const freshBufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
+						if (freshBufferFloat.error || !freshBufferFloat.value) {
+							console.warn('Failed to parse buffer for fresh ratio');
+							return null;
+						}
+						const freshBufferedRatioResult = freshRatioResult.value.mul(freshBufferFloat.value);
+						if (freshBufferedRatioResult.error || !freshBufferedRatioResult.value) {
+							console.warn('Failed to apply buffer to fresh ratio');
+							return null;
+						}
+
+						return {
+							minimumInput: Float.fromBigint(0n).asHex(),
+							maximumInput: freshMaximumInputFloat.float.asHex(),
+							maximumIORatio: freshBufferedRatioResult.value.asHex(),
+							orders: takeOrderConfigs,
+							data: '0x'
+						};
+					}
+				: undefined;
+
 			// Execute transaction with walk result for accurate summary
 			await transactionStore.handleTakeOrders(
 				takeOrdersConfig,
@@ -850,7 +923,8 @@
 					takerPaysToken: takerPaysInfo,
 					requestedTakerWantsAmount: requestedTakerWantsAmount,
 					simulation: walkResult
-				}
+				},
+				recalculateConfig
 			);
 		} catch (error) {
 			console.error('Market order error:', error);
