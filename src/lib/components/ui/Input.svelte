@@ -8,6 +8,7 @@
 	export let unit: string = '';
 	export let maxButton: boolean = false;
 	export let placeholder: string = '';
+	export let noBorder: boolean = false;
 
 	export let validate: ValidateFunction = () => undefined;
 
@@ -50,7 +51,7 @@
 
 <div class="flex w-full flex-col gap-2">
 	<div
-		class="flex h-full w-full items-center justify-end rounded-lg border border-white/10 bg-gray-700/50 text-white transition-colors focus-within:border-yellow-500/50 focus-within:outline-none"
+		class="flex h-full w-full items-center justify-end text-white transition-colors focus-within:outline-none {noBorder ? 'bg-transparent' : 'rounded-lg border border-white/10 bg-gray-700/50 focus-within:border-yellow-500/50'}"
 	>
 		<input
 			class="mr-2 w-full min-w-0 rounded border-none bg-transparent px-4 py-3 text-left text-base text-white outline-none [appearance:textfield] focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"

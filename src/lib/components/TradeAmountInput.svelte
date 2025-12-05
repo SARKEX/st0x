@@ -20,6 +20,8 @@
 	export let dataTestId: string = '';
 	export let showUnit: boolean = true;
 	export let showMaxButton: boolean = true;
+	export let compact: boolean = false;
+	export let noBorder: boolean = false;
 
 	// Expose balance to parent component
 	export let balance: bigint = 0n;
@@ -140,7 +142,7 @@
 	};
 </script>
 
-<div class="flex flex-col gap-2">
+<div class="flex flex-col {compact ? '' : 'gap-2'}">
 	<Input
 		{...$$restProps}
 		bind:amount={inputAmount}
@@ -150,22 +152,25 @@
 		on:setValueToMax={setValueToMax}
 		{dataTestId}
 		{validate}
+		{noBorder}
 		bind:isError
 	/>
-	<span class="text-left text-sm text-gray-400">
-		{#await balancePromise}
-			<span class="inline-flex items-center gap-2">
-				<LoadingSpinner variant="inline" size="sm" text="Loading balance..." />
-			</span>
-		{:then data}
-			{#if data}
-				{@const balanceFormatted = parseFloat(formatUnits(data.balance, data.decimals))}
-				{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
-				Balance: {balanceRounded.toFixed(3)}
-				{(balanceToken ?? amountToken)?.symbol}
-			{:else}
-				Balance: —
-			{/if}
-		{/await}
-	</span>
+	{#if !compact}
+		<span class="text-left text-sm text-gray-400">
+			{#await balancePromise}
+				<span class="inline-flex items-center gap-2">
+					<LoadingSpinner variant="inline" size="sm" text="Loading balance..." />
+				</span>
+			{:then data}
+				{#if data}
+					{@const balanceFormatted = parseFloat(formatUnits(data.balance, data.decimals))}
+					{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
+					Balance: {balanceRounded.toFixed(3)}
+					{(balanceToken ?? amountToken)?.symbol}
+				{:else}
+					Balance: —
+				{/if}
+			{/await}
+		</span>
+	{/if}
 </div>

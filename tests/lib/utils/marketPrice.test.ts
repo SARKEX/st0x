@@ -72,8 +72,8 @@ describe('walkOrderbook', () => {
 		expect(result.fills.length).toBe(2);
 		expect(result.fills[0].quote.orderHash).toBe('0x1');
 		expect(result.fills[1].quote.orderHash).toBe('0x2');
-		expect(result.fills[0].quantityFilled).toBe(ONE);
-		expect(result.fills[1].quantityFilled).toBe(ONE);
+		expect(result.fills[0].assetAmount).toBe(ONE);
+		expect(result.fills[1].assetAmount).toBe(ONE);
 		// Total quantity should be 2 assets
 		expect(result.outputAmountGiven).toBe(2n * ONE);
 		// Average of 1 asset at price 1 and 1 asset at price 2 = (1 + 2) / 2 = 1.5
@@ -108,7 +108,7 @@ describe('walkOrderbook', () => {
 		});
 
 		expect(result.fills).toHaveLength(1);
-		expect(result.fills[0].quantityFilled).toBe(ONE);
+		expect(result.fills[0].assetAmount).toBe(ONE);
 		expect(result.outputAmountGiven).toBe(ONE);
 		expect(result.ioRatio).toBeCloseTo(2, 6);
 	});
@@ -158,8 +158,8 @@ describe('walkOrderbook', () => {
 		// Quote 1 can provide 1 asset, Quote 2 can provide 1.5, together they fill 2.5
 		expect(result.fills.length).toBe(2);
 		expect(result.inputAmountFilled).toBe((5n * ONE) / 2n); // 2.5 * ONE
-		expect(result.fills[0].quantityFilled).toBe(ONE); // 1 token from quote 1
-		expect(result.fills[1].quantityFilled).toBe(ONE + half); // 1.5 tokens from quote 2
+		expect(result.fills[0].assetAmount).toBe(ONE); // 1 token from quote 1
+		expect(result.fills[1].assetAmount).toBe(ONE + half); // 1.5 tokens from quote 2
 		// Buying 1 at 1.5 QUOTE = 1.5, buying 1.5 at 2 QUOTE = 3, total 4.5 QUOTE for 2.5 assets = 1.8 price; ioRatio = 2.5/4.5 = 0.556
 		expect(result.ioRatio).toBeCloseTo(0.5555555555555556, 6);
 	});

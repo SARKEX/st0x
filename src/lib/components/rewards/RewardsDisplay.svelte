@@ -85,10 +85,10 @@
 			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
 		>
 			<!-- Animated rainbow border -->
-			<span class="rainbow-border"></span>
+			<span class="rainbow-border pointer-events-none"></span>
 			<!-- Inner background with gradient -->
 			<span
-				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
+				class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
 			></span>
 
 			<!-- Rocket Icon -->
@@ -145,6 +145,9 @@
 				$rewardsData.rocketBoostTargetPoints > 0
 					? Math.min(100, ($rewardsData.totalPoints / $rewardsData.rocketBoostTargetPoints) * 100)
 					: 0}
+			{@const projectedProgress = $rewardsData.projection
+				? Math.min(100, $rewardsData.projection.projectedProgress)
+				: 0}
 			<div
 				class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
 			>
@@ -155,8 +158,7 @@
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Est. Reward</span>
-						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span
-						>
+						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span>
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Rewards APY</span>
@@ -164,13 +166,30 @@
 					</div>
 					<!-- RocketBoost Progress Bar -->
 					<div class="pt-1">
-						<div class="flex items-center justify-between text-xs text-gray-400">
+						<div class="text-xs text-gray-400">
 							<span>RocketBoost</span>
-							<span>{rocketBoostProgress.toFixed(0)}%</span>
 						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-400">Progress</span>
+							<span class="text-white">{rocketBoostProgress.toFixed(0)}%</span>
+						</div>
+						{#if projectedProgress > rocketBoostProgress}
+							<div class="flex items-center justify-between text-xs">
+								<span class="text-gray-400">Projected</span>
+								<span class="text-yellow-300">{projectedProgress.toFixed(0)}%</span>
+							</div>
+						{/if}
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
+							<!-- Projected progress (lighter) -->
+							{#if projectedProgress > rocketBoostProgress}
+								<div
+									class="absolute h-full bg-yellow-500/30"
+									style="width: {projectedProgress}%"
+								/>
+							{/if}
+							<!-- Current progress -->
 							<div
-								class="h-full transition-all {rocketBoostProgress >= 100
+								class="relative h-full transition-all {rocketBoostProgress >= 100
 									? 'bg-green-500'
 									: 'bg-yellow-500'}"
 								style="width: {rocketBoostProgress}%"
@@ -237,9 +256,9 @@
 			on:mouseleave={() => (showTooltip = false)}
 			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
 		>
-			<span class="rainbow-border"></span>
+			<span class="rainbow-border pointer-events-none"></span>
 			<span
-				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
+				class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
 			></span>
 			<svg
 				class="relative z-10 h-4 w-4 text-yellow-400"

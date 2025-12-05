@@ -46,30 +46,67 @@
 	{#if $transactionStore.status !== TransactionStatus.IDLE}
 		<div class="flex flex-col items-center justify-center gap-2 p-4 text-white">
 			{#if $transactionStore.status === TransactionStatus.ERROR}
+				{@const isUserRejection = $transactionStore.error === TransactionErrorMessage.USER_REJECTED_APPROVAL}
+				{@const isTimeout = $transactionStore.error === TransactionErrorMessage.TIMEOUT}
 				<div
-					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-red-500/30 bg-red-500/20"
+					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border {isUserRejection
+						? 'border-yellow-500/30 bg-yellow-500/20'
+						: 'border-red-500/30 bg-red-500/20'}"
 					data-testid="error-icon"
 				>
-					<svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M6 18L18 6M6 6l12 12"
-						/>
-					</svg>
+					{#if isUserRejection}
+						<!-- Hand/stop icon for user rejection -->
+						<svg class="h-10 w-10 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+							/>
+						</svg>
+					{:else if isTimeout}
+						<!-- Clock icon for timeout -->
+						<svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+					{:else}
+						<svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M6 18L18 6M6 6l12 12"
+							/>
+						</svg>
+					{/if}
 				</div>
 				<p class="text-xl font-bold text-white" data-testid="error-status">
-					{$transactionStore.status}
+					{#if isUserRejection}
+						Transaction Cancelled
+					{:else if isTimeout}
+						Transaction Timeout
+					{:else}
+						{$transactionStore.status}
+					{/if}
 				</p>
-				<p class="mt-2 text-base text-gray-300" data-testid="error-message">
+				<p class="mt-2 text-center text-base text-gray-300" data-testid="error-message">
 					{$transactionStore.error}
 				</p>
 				{#if $transactionStore.error === TransactionErrorMessage.GENERIC}
-					<a
-						class="text-center text-white hover:text-yellow-500/50 hover:underline"
-						href="https://platform.st0x.io/">platform.st0x.io</a
-					>
+					<p class="mt-2 text-center text-sm text-gray-400">
+						If this issue persists, please contact support on our
+						<a
+							class="text-yellow-500 hover:text-yellow-400 hover:underline"
+							href="https://t.me/st0xio"
+							target="_blank"
+							rel="noopener noreferrer">Telegram group</a
+						>.
+					</p>
 				{/if}
 				{#if $transactionStore.hash}
 					<TxLink
@@ -81,9 +118,9 @@
 						dataTestId="view-transaction-link"
 					/>
 				{/if}
-				<Button on:click={() => handleClose()} className="mt-6" dataTestId="dismiss-button"
-					>Dismiss</Button
-				>
+				<Button on:click={() => handleClose()} className="mt-6" dataTestId="dismiss-button">
+					{isUserRejection ? 'Close' : 'Dismiss'}
+				</Button>
 			{:else if $transactionStore.status === TransactionStatus.SUCCESS}
 				<div
 					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-green-500/30 bg-green-500/20"

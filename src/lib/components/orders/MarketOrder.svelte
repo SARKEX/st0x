@@ -32,6 +32,9 @@
 	import type { CreateQueryResult } from '@tanstack/svelte-query';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
+
+	// Input mode: 'amount' = specify asset quantity, 'spend' = specify payment amount
+	let inputMode: 'amount' | 'spend' = 'amount';
 	/**
 	 * assetToken: The non-settlement token being traded (tSTOX, tNVDA, etc.)
 	 *
@@ -47,15 +50,50 @@
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
+	const IO_RATIO_BUFFER = 1.0025; // 0.25% buffer for execution-time price variance
 
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+
+	// Quote freshness tracking
+	let quoteFreshnessSeconds = 0;
+	let quoteFreshnessInterval: ReturnType<typeof setInterval> | null = null;
+
+	function updateQuoteFreshness() {
+		const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
+		if (lastUpdated > 0) {
+			quoteFreshnessSeconds = Math.floor((Date.now() - lastUpdated) / 1000);
+		}
+	}
+
+	$: if ($orderbookQuotesQuery?.dataUpdatedAt) {
+		updateQuoteFreshness();
+		// Clear existing interval
+		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
+		// Update every second
+		quoteFreshnessInterval = setInterval(updateQuoteFreshness, 1000);
+	}
+
+	// Cleanup interval on component destroy
+	import { onDestroy } from 'svelte';
+	onDestroy(() => {
+		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
+	});
+
+	$: isQuoteStale = quoteFreshnessSeconds > ORDERBOOK_MAX_STALENESS_MS / 1000;
 
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
 	let isLoadingPrice = true;
 	let priceError = false;
+	let priceErrorReason: 'no_quotes' | 'no_fill' | 'error' | null = null;
+	let orderPreparationError: string | null = null;
+
+	// Clear preparation error when inputs change
+	$: if (selectedAmount || orderSide) {
+		orderPreparationError = null;
+	}
 	let availableOrders: Array<{
 		order: SgOrder;
 		orderData: OrderV4;
@@ -87,6 +125,15 @@
 	// Token being spent
 	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
 
+	// Check if oracle price is available (needed for BUY percentage calculations)
+	$: oracleAddress = assetToken?.address?.toLowerCase();
+	$: oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
+	$: oraclePriceAvailable = oracleEntry?.price && oracleEntry.price > 0;
+	// Percentage buttons need oracle price for BUY in 'amount' mode (to convert payment to asset amount)
+	// In 'spend' mode, no conversion needed - direct percentage of balance
+	$: percentageButtonsDisabled =
+		orderSide === 'Buy' && inputMode === 'amount' && !oraclePriceAvailable && spendingTokenBalance > 0n;
+
 	// Calculate the amount being spent and check against balance
 	$: {
 		if (!selectedAmount || selectedAmount === 0n || !marketPrice || isLoadingPrice) {
@@ -94,8 +141,11 @@
 		} else if (orderSide === 'Sell') {
 			// For SELL: user is spending the asset token
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
+		} else if (inputMode === 'spend') {
+			// For BUY in spend mode: selectedAmount is the exact payment amount
+			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else {
-			// For BUY: user is spending the payment token (USDC)
+			// For BUY in amount mode: user is spending the payment token (USDC)
 			// Calculate the estimated cost
 			const assetDecimals = assetToken?.decimals ?? 18;
 			const paymentDecimals = paymentToken?.decimals ?? 6;
@@ -184,12 +234,21 @@
 						paymentDecimals
 					});
 
-					// For both BUY and SELL, we compare against asset amount
-					// inputAmountFilled for BUY is asset amount, outputAmountGiven for SELL is asset amount
-					const availableAssetAmount =
-						orderSide === 'Buy' ? walkResult.inputAmountFilled : walkResult.outputAmountGiven;
-
-					insufficientLiquidityWarning = selectedAmount > availableAssetAmount;
+					// Compare based on input mode:
+					// - amount mode: compare selectedAmount (asset) against available asset amount
+					// - spend mode: compare selectedAmount (payment) against available payment capacity
+					if (inputMode === 'spend') {
+						// In spend mode, selectedAmount is payment amount
+						// For BUY: outputAmountGiven is payment capacity
+						const availablePaymentCapacity = walkResult.outputAmountGiven;
+						insufficientLiquidityWarning = selectedAmount > availablePaymentCapacity;
+					} else {
+						// In amount mode, selectedAmount is asset amount
+						// For BUY: inputAmountFilled is asset amount, For SELL: outputAmountGiven is asset amount
+						const availableAssetAmount =
+							orderSide === 'Buy' ? walkResult.inputAmountFilled : walkResult.outputAmountGiven;
+						insufficientLiquidityWarning = selectedAmount > availableAssetAmount;
+					}
 				}
 			}
 		}
@@ -211,13 +270,28 @@
 		priceError ||
 		isSubmittingMarketOrder;
 
-	// Calculate required input based on desired output
-	$: requiredInputAmount = (() => {
-		if (!selectedAmount || !marketPrice) return '0.00';
-		// Output amount * market price = input amount
-		const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
-		const total = outputInTokens * marketPrice;
-		return `~${total.toFixed(2)} ${paymentTokenSymbol}`;
+	// Calculate the "other side" of the trade for display
+	// In amount mode: show how much payment token you'll spend
+	// In spend mode: show how many asset tokens you'll receive
+	$: estimatedTradeResult = (() => {
+		if (!selectedAmount || !marketPrice) return { value: '0.00', label: '' };
+		if (inputMode === 'spend') {
+			// Spend mode: show estimated tokens received
+			const spendInTokens = parseFloat(formatUnits(selectedAmount, paymentToken?.decimals || 6));
+			const tokensReceived = spendInTokens / marketPrice;
+			return {
+				value: `~${tokensReceived.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`,
+				label: 'Est. tokens'
+			};
+		} else {
+			// Amount mode: show estimated cost
+			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
+			const total = outputInTokens * marketPrice;
+			return {
+				value: `~${total.toFixed(2)} ${paymentTokenSymbol}`,
+				label: 'Est. cost'
+			};
+		}
 	})();
 
 	let isSubmittingMarketOrder = false;
@@ -232,8 +306,12 @@
 			// For SELL: balance is in asset token, amount is in asset token - direct calculation
 			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
 			tradeAmountInputRef.setAmountValue(percentAmount);
+		} else if (inputMode === 'spend') {
+			// For BUY in spend mode: balance is in payment token, amount is in payment token - direct calculation
+			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
+			tradeAmountInputRef.setAmountValue(percentAmount);
 		} else {
-			// For BUY: balance is in payment token (USDC), need to convert to asset amount
+			// For BUY in amount mode: balance is in payment token (USDC), need to convert to asset amount
 			// We need the oracle price to estimate how much asset we can buy
 			const oracleAddress = assetToken?.address?.toLowerCase();
 			const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
@@ -272,6 +350,7 @@
 		try {
 			isLoadingPrice = true;
 			priceError = false;
+			priceErrorReason = null;
 
 			// If no selected amount, don't calculate a price estimate
 			if (!selectedAmount || selectedAmount === 0n) {
@@ -286,6 +365,7 @@
 			if (!walkResult) {
 				console.warn('No relevant quotes found');
 				priceError = true;
+				priceErrorReason = 'no_quotes';
 				isLoadingPrice = false;
 				return;
 			}
@@ -295,7 +375,9 @@
 			// Check if anything was filled (asset amount)
 			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
 			if (assetFilled > 0n) {
-				// Calculate price (quote per asset)
+				// Convert ioRatio to price (quote per asset) for display
+				// BUY: ioRatio = asset/payment, so price = 1/ioRatio
+				// SELL: ioRatio = payment/asset = price
 				marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
 
 				availableOrders = fills.map((fill) => ({
@@ -318,12 +400,14 @@
 					ordersWalked: fills.length
 				});
 				priceError = true;
+				priceErrorReason = 'no_fill';
 				isLoadingPrice = false;
 				return;
 			}
 		} catch (error) {
 			console.error('Error calculating market price:', error);
 			priceError = true;
+			priceErrorReason = 'error';
 		} finally {
 			isLoadingPrice = false;
 		}
@@ -424,7 +508,8 @@
 			orderSide,
 			selectedAmount,
 			assetDecimals: assetToken.decimals,
-			paymentDecimals: paymentToken.decimals
+			paymentDecimals: paymentToken.decimals,
+			mode: inputMode === 'spend' ? 'spend' : 'receive'
 		});
 	}
 
@@ -485,6 +570,7 @@
 			return;
 		}
 		isSubmittingMarketOrder = true;
+		orderPreparationError = null; // Reset any previous error
 
 		try {
 			// Refresh orderbook quotes if stale
@@ -495,6 +581,7 @@
 				await fetchMarketPrice();
 				if (priceError) {
 					console.error('Price unavailable after refresh');
+					// Price error state is already set, user will see the error message
 					return;
 				}
 			}
@@ -503,6 +590,9 @@
 			const filteredOrders = getFilteredOrders();
 			if (filteredOrders.length === 0) {
 				console.error('No orders within slippage tolerance');
+				// Set error state so user sees feedback
+				priceError = true;
+				priceErrorReason = 'no_quotes';
 				return;
 			}
 
@@ -558,11 +648,13 @@
 			const executableOrders = filteredOrders.filter((info) => info.orderData?.owner);
 			if (!executableOrders.length) {
 				console.error('No executable orders available after hydration');
+				orderPreparationError = 'Orders temporarily unavailable. Please try again.';
 				return;
 			}
 
 			// Build TakeOrderConfigs from executable orders
 			const takeOrderConfigs: TakeOrderConfigV4[] = [];
+			let totalBytecodeSize = 0;
 			for (const orderInfo of executableOrders) {
 				if (
 					!orderInfo.orderData?.validInputs?.length ||
@@ -586,6 +678,11 @@
 					continue;
 				}
 
+				// Log bytecode size for gas debugging
+				const bytecode = orderInfo.orderData.evaluable?.bytecode ?? '';
+				const bytecodeSize = typeof bytecode === 'string' ? bytecode.length / 2 : 0; // hex string to bytes
+				totalBytecodeSize += bytecodeSize;
+
 				takeOrderConfigs.push({
 					order: orderInfo.orderData,
 					inputIOIndex: inputIndex.toString(),
@@ -594,16 +691,17 @@
 				});
 			}
 
+			// Log diagnostic info for gas cost investigation
+			console.log('[MarketOrder] Order execution diagnostics:', {
+				orderCount: takeOrderConfigs.length,
+				totalBytecodeSize: `${totalBytecodeSize} bytes`,
+				avgBytecodePerOrder: takeOrderConfigs.length > 0 ? Math.round(totalBytecodeSize / takeOrderConfigs.length) : 0,
+				orderHashes: executableOrders.map(o => o.order.orderHash?.slice(0, 10) + '...')
+			});
+
 			if (takeOrderConfigs.length === 0) {
 				console.error('Unable to build take order configs');
-				return;
-			}
-
-			// Build TakeOrdersConfigV4 with worst price as maximum IO ratio
-			const worstPrice = executableOrders[executableOrders.length - 1].price;
-			const floatWorstPriceResult = Float.parse(worstPrice.toString());
-			if (floatWorstPriceResult.error || !floatWorstPriceResult.value) {
-				console.error('Failed to encode worst price as Float:', floatWorstPriceResult.error);
+				orderPreparationError = 'Unable to prepare order. Please try again.';
 				return;
 			}
 
@@ -616,6 +714,7 @@
 			const walkResult = calculateOrderbookWalk();
 			if (!walkResult) {
 				console.error('Unable to calculate walk result for order execution');
+				orderPreparationError = 'Unable to calculate order. Please try again.';
 				return;
 			}
 			const { inputAmountFilled, outputAmountGiven, inputDecimals } = walkResult;
@@ -623,38 +722,36 @@
 			// Validate that we have all required token data before proceeding
 			if (!paymentToken || typeof paymentToken.decimals !== 'number') {
 				console.error('Payment token or its decimals are not defined');
+				orderPreparationError = 'Token configuration error. Please refresh the page.';
 				return;
 			}
 			if (!assetToken || typeof assetToken.decimals !== 'number') {
 				console.error('Asset token or its decimals are not defined');
+				orderPreparationError = 'Token configuration error. Please refresh the page.';
 				return;
 			}
 
 			// We approve what we're giving away (what flows out from us)
-			// For BUY: we give USDC (payment token) - use outputAmountGiven from walk result
-			// For SELL: we give tSTOX (asset token) - use selectedAmount
-			//
-			// IMPORTANT: Use the walk result directly instead of recalculating from ioRatio.
-			// The ioRatio calculation uses Number() which loses precision for large BigInts.
-			// The walk result has already computed the exact amounts with full BigInt precision.
-			let requiredApprovalBigInt: bigint;
+			// For BUY: we give USDC (payment token)
+			// For SELL: we give tSTOX (asset token)
+			let requiredApprovalAmount: bigint;
 
 			if (orderSide === 'Buy') {
-				// BUY: Approve payment token (outputAmountGiven is already in payment decimals)
-				requiredApprovalBigInt = outputAmountGiven;
+				if (inputMode === 'spend') {
+					// BUY in spend mode: selectedAmount is the exact payment amount user wants to spend
+					// No buffer needed - approve exactly what the user specified
+					requiredApprovalAmount = selectedAmount;
+				} else {
+					// BUY in amount mode: outputAmountGiven comes from walkOrderbook which has rounding
+					// Add 0.05% buffer to cover precision loss from price scaling and decimal conversions
+					const roundingBuffer = outputAmountGiven / 2000n; // 0.05%
+					requiredApprovalAmount = outputAmountGiven + (roundingBuffer > 0n ? roundingBuffer : 1n);
+				}
 			} else {
-				// SELL: Approve asset token (selectedAmount is in asset decimals)
-				requiredApprovalBigInt = selectedAmount;
+				// SELL: selectedAmount is the exact user input, no calculation involved
+				// No buffer needed - approve exactly what the user specified
+				requiredApprovalAmount = selectedAmount;
 			}
-
-			// Add 0.1% buffer for rounding errors (BigInt divisions in walkOrderbook round down)
-			// This is larger than 1 wei but smaller than typical slippage tolerance
-			const roundingBuffer = requiredApprovalBigInt / 1000n; // 0.1%
-			requiredApprovalBigInt += roundingBuffer > 0n ? roundingBuffer : 1n;
-
-			const assetTokenDecimals = assetToken.decimals;
-			const approvalFloat = Float.fromFixedDecimalLossy(requiredApprovalBigInt, assetTokenDecimals);
-			const requiredApprovalAmount = requiredApprovalBigInt + (approvalFloat.lossless ? 0n : 1n);
 
 			// Calculate maximumInput based on walk result
 			// inputAmountFilled is already in native decimals (specified by inputDecimals from walkResult)
@@ -665,10 +762,45 @@
 				maximumInputDecimals
 			);
 
+			// Calculate maximumIORatio from the worst (last) fill's original ratio
+			// Using the original hex ratio avoids precision loss from price conversions
+			// - ASK order ratio = quote/asset (price) - used directly for BUY
+			// - BID order ratio = asset/quote (1/price) - used directly for SELL
+			// This matches what TakeOrders expects: BUY uses price, SELL uses 1/price
+			const worstFill = walkResult.fills[walkResult.fills.length - 1];
+			if (!worstFill?.quote?.ratio) {
+				console.error('No valid ratio found in worst fill');
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+
+			// Parse the original hex ratio and apply buffer
+			const originalRatioResult = Float.parse(worstFill.quote.ratio);
+			if (originalRatioResult.error || !originalRatioResult.value) {
+				console.error('Failed to parse original ratio:', worstFill.quote.ratio);
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+
+			// Apply buffer by multiplying the ratio (makes it more permissive)
+			// Float.parse returns the ratio as-is, so we multiply by buffer factor
+			const bufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
+			if (bufferFloat.error || !bufferFloat.value) {
+				console.error('Failed to parse buffer');
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+			const bufferedRatioResult = originalRatioResult.value.mul(bufferFloat.value);
+			if (bufferedRatioResult.error || !bufferedRatioResult.value) {
+				console.error('Failed to apply buffer to ratio');
+				orderPreparationError = 'Unable to calculate order price. Please try again.';
+				return;
+			}
+
 			const takeOrdersConfig: TakeOrdersConfigV4 = {
 				minimumInput: Float.fromBigint(0n).asHex(),
 				maximumInput: maximumInputFloat.float.asHex(),
-				maximumIORatio: floatWorstPriceResult.value.asHex(),
+				maximumIORatio: bufferedRatioResult.value.asHex(),
 				orders: takeOrderConfigs,
 				data: '0x'
 			};
@@ -713,10 +845,71 @@
 						};
 
 			// Requested amount: what user wants to receive
-			// For BUY: user requests asset amount (selectedAmount)
+			// For BUY in amount mode: user requests asset amount (selectedAmount)
+			// For BUY in spend mode: user gets asset amount from walkResult (we calculate it)
 			// For SELL: user requests payment amount (estimated from walkResult)
 			const requestedTakerWantsAmount =
-				orderSide === 'Buy' ? selectedAmount : walkResult.inputAmountFilled;
+				orderSide === 'Buy'
+					? inputMode === 'spend'
+						? inputAmountFilled // Calculated asset amount from spend
+						: selectedAmount // User-specified asset amount
+					: walkResult.inputAmountFilled;
+
+			// For SELL and BUY (spend mode), provide a callback to recalculate config after approval
+			// This handles cases where prices move during the approval transaction
+			const shouldRecalculate = orderSide === 'Sell' || inputMode === 'spend';
+			const recalculateConfig = shouldRecalculate
+				? async (): Promise<TakeOrdersConfigV4 | null> => {
+						// Refresh orderbook quotes
+						await $orderbookQuotesQuery?.refetch?.();
+
+						// Re-walk the orderbook with current prices
+						const freshWalkResult = calculateOrderbookWalk();
+						if (!freshWalkResult || freshWalkResult.inputAmountFilled === 0n) {
+							console.warn('Failed to recalculate orderbook walk after approval');
+							return null; // Fall back to original config
+						}
+
+						// Recalculate maximumInput with fresh data
+						const freshMaximumInputFloat = Float.fromFixedDecimalLossy(
+							freshWalkResult.inputAmountFilled,
+							freshWalkResult.inputDecimals
+						);
+
+						// Get fresh IO ratio from the worst fill's original ratio (avoids precision loss)
+						const freshWorstFill = freshWalkResult.fills[freshWalkResult.fills.length - 1];
+						if (!freshWorstFill?.quote?.ratio) {
+							console.warn('No valid ratio found in fresh worst fill');
+							return null;
+						}
+
+						const freshRatioResult = Float.parse(freshWorstFill.quote.ratio);
+						if (freshRatioResult.error || !freshRatioResult.value) {
+							console.warn('Failed to parse fresh ratio');
+							return null;
+						}
+
+						// Apply buffer
+						const freshBufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
+						if (freshBufferFloat.error || !freshBufferFloat.value) {
+							console.warn('Failed to parse buffer for fresh ratio');
+							return null;
+						}
+						const freshBufferedRatioResult = freshRatioResult.value.mul(freshBufferFloat.value);
+						if (freshBufferedRatioResult.error || !freshBufferedRatioResult.value) {
+							console.warn('Failed to apply buffer to fresh ratio');
+							return null;
+						}
+
+						return {
+							minimumInput: Float.fromBigint(0n).asHex(),
+							maximumInput: freshMaximumInputFloat.float.asHex(),
+							maximumIORatio: freshBufferedRatioResult.value.asHex(),
+							orders: takeOrderConfigs,
+							data: '0x'
+						};
+					}
+				: undefined;
 
 			// Execute transaction with walk result for accurate summary
 			await transactionStore.handleTakeOrders(
@@ -730,7 +923,8 @@
 					takerPaysToken: takerPaysInfo,
 					requestedTakerWantsAmount: requestedTakerWantsAmount,
 					simulation: walkResult
-				}
+				},
+				recalculateConfig
 			);
 		} catch (error) {
 			console.error('Market order error:', error);
@@ -745,34 +939,84 @@
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Amount to {orderSide === 'Buy' ? 'Buy' : 'Sell'}
+				<!-- Unified input with integrated toggle and token -->
+				<div class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50">
+					<!-- Left side: Buy/Spend or Sell toggle -->
+					{#if orderSide === 'Buy'}
+						<button
+							type="button"
+							on:click={() => {
+								inputMode = inputMode === 'amount' ? 'spend' : 'amount';
+								selectedAmount = 0n;
+							}}
+							class="flex items-center gap-1.5 pl-4 pr-2 py-3 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
+						>
+							{inputMode === 'amount' ? 'Buy' : 'Spend'}
+							<svg class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+							</svg>
+						</button>
+					{:else}
+						<span class="pl-4 pr-2 py-3 text-sm font-medium text-red-400">
+							Sell
+						</span>
+					{/if}
+
+					<!-- Middle: Amount input -->
+					<div class="flex-1">
+						<TradeAmountInput
+							bind:this={tradeAmountInputRef}
+							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
+							amountToken={inputMode === 'spend' ? paymentToken : assetToken}
+							balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
+							bind:amount={selectedAmount}
+							bind:balance={spendingTokenBalance}
+							bind:balanceDecimals={spendingTokenBalanceDecimals}
+							validate={validateSelectedAmount}
+							bind:isError={selectedAmountError}
+							showUnit={false}
+							showMaxButton={false}
+							compact={true}
+							noBorder={true}
+						/>
+					</div>
+
+					<!-- Right side: Token symbol -->
+					<span class="pl-2 pr-4 py-3 text-sm font-medium text-gray-300">
+						{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
+					</span>
 				</div>
-				<TradeAmountInput
-					bind:this={tradeAmountInputRef}
-					aria-label="Quantity"
-					amountToken={assetToken}
-					balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
-					bind:amount={selectedAmount}
-					bind:balance={spendingTokenBalance}
-					bind:balanceDecimals={spendingTokenBalanceDecimals}
-					validate={validateSelectedAmount}
-					bind:isError={selectedAmountError}
-					showUnit={false}
-					showMaxButton={false}
-				/>
+
+				<!-- Balance display -->
+				<div class="mt-1.5 text-sm text-gray-400">
+					{#if spendingTokenBalanceDecimals !== null}
+						{@const balanceFormatted = parseFloat(formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals))}
+						{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
+						Balance: {balanceRounded.toFixed(3)} {spendingToken?.symbol ?? ''}
+					{:else}
+						Balance: —
+					{/if}
+				</div>
+
 				<!-- Percentage buttons -->
 				<div class="mt-2 flex gap-2">
 					{#each [25, 50, 75, 100] as percent}
 						<button
 							type="button"
 							on:click={() => handlePercentageClick(percent)}
-							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+							disabled={percentageButtonsDisabled}
+							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-gray-700/50"
+							title={percentageButtonsDisabled ? 'Price data unavailable' : ''}
 						>
 							{percent === 100 ? 'Max' : `${percent}%`}
 						</button>
 					{/each}
 				</div>
+				{#if percentageButtonsDisabled}
+					<p class="mt-1 text-xs text-yellow-400/80">
+						Enter amount manually - price data loading
+					</p>
+				{/if}
 			</div>
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
@@ -798,6 +1042,19 @@
 						</div>
 					{/if}
 				</div>
+				{#if selectedAmount && selectedAmount > 0n && !isLoadingPrice && !priceError}
+					<p
+						class="mt-1 text-xs {isQuoteStale
+							? 'text-yellow-400'
+							: 'text-gray-500'}"
+					>
+						{#if isQuoteStale}
+							Price may be outdated ({quoteFreshnessSeconds}s ago)
+						{:else}
+							Updated {quoteFreshnessSeconds}s ago
+						{/if}
+					</p>
+				{/if}
 			</div>
 		</div>
 
@@ -805,15 +1062,29 @@
 		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 			<div class="space-y-2 text-sm">
-				<div class="flex justify-between">
-					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-					<span class="font-medium">
-						{selectedAmount
-							? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
-							: '0'}
-						{assetToken.symbol}
-					</span>
-				</div>
+				{#if inputMode === 'spend'}
+					<!-- Spend mode: show spending amount first -->
+					<div class="flex justify-between">
+						<span class="text-gray-400">Spending</span>
+						<span class="font-medium">
+							{selectedAmount
+								? parseFloat(formatUnits(selectedAmount, paymentToken?.decimals ?? 6)).toFixed(2)
+								: '0'}
+							{paymentTokenSymbol}
+						</span>
+					</div>
+				{:else}
+					<!-- Amount mode: show buying/selling amount -->
+					<div class="flex justify-between">
+						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+						<span class="font-medium">
+							{selectedAmount
+								? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+								: '0'}
+							{assetToken.symbol}
+						</span>
+					</div>
+				{/if}
 				<div class="flex justify-between">
 					<span class="text-gray-400">At market price</span>
 					<span class="font-medium">
@@ -826,9 +1097,9 @@
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Estimated</span>
+						<span class="text-gray-400">{estimatedTradeResult.label || 'Estimated'}</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{isLoadingPrice || priceError ? 'N/A' : requiredInputAmount}
+							{isLoadingPrice || priceError ? 'N/A' : estimatedTradeResult.value}
 						</span>
 					</div>
 					{#if insufficientBalanceError}
@@ -842,6 +1113,28 @@
 						>
 							There currently isn't enough liquidity to fully fill this order. Continue to fill as
 							much as possible.
+						</div>
+					{/if}
+					{#if priceError && selectedAmount && selectedAmount > 0n}
+						<div
+							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+						>
+							{#if priceErrorReason === 'no_quotes'}
+								No orders available within acceptable price range. Try a limit order instead to set
+								your own price.
+							{:else if priceErrorReason === 'no_fill'}
+								Order amount too large for current liquidity. Try a smaller amount or use a limit
+								order.
+							{:else}
+								Unable to fetch market price. Please try again or use a limit order.
+							{/if}
+						</div>
+					{/if}
+					{#if orderPreparationError}
+						<div
+							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+						>
+							{orderPreparationError}
 						</div>
 					{/if}
 				</div>
@@ -867,7 +1160,13 @@
 				{#if isLoadingPrice}
 					Loading market price...
 				{:else if priceError}
-					Price unavailable
+					{#if priceErrorReason === 'no_quotes'}
+						No liquidity available
+					{:else if priceErrorReason === 'no_fill'}
+						Amount exceeds liquidity
+					{:else}
+						Price unavailable
+					{/if}
 				{:else if !selectedAmount}
 					Enter an amount
 				{:else if insufficientBalanceError}
