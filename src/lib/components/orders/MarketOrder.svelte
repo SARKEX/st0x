@@ -768,7 +768,12 @@
 
 			// Calculate maximumInput based on walk result
 			// inputAmountFilled is already in native decimals (specified by inputDecimals from walkResult)
-			const maximumInputAmount = inputAmountFilled;
+			// For SELL and BUY (spend mode): apply 1.5x buffer to allow receiving more if price moves favorably
+			// For BUY (amount mode): use exact amount since user specified what they want to receive
+			const shouldBufferMaxInput = orderSide === 'Sell' || inputMode === 'spend';
+			const maximumInputAmount = shouldBufferMaxInput
+				? (inputAmountFilled * 15n) / 10n
+				: inputAmountFilled;
 			const maximumInputDecimals = inputDecimals;
 			const maximumInputFloat = Float.fromFixedDecimalLossy(
 				maximumInputAmount,
