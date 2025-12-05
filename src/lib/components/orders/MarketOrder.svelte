@@ -281,7 +281,7 @@
 			const tokensReceived = spendInTokens / marketPrice;
 			return {
 				value: `~${tokensReceived.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`,
-				label: 'Est. tokens received'
+				label: 'Est. tokens'
 			};
 		} else {
 			// Amount mode: show estimated cost
