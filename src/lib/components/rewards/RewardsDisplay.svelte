@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { signerAddress, connected } from 'svelte-wagmi';
-	import { browser } from '$app/environment';
 	import {
 		rewardsData,
 		rewardsLoading,
@@ -11,23 +10,23 @@
 		formatApy,
 		formatUsd,
 		showDetailsModal,
-		showRulesModal,
+		rewardsModalTab,
 		globalPoolApy,
 		fetchGlobalPoolApy
 	} from '$lib/stores/rewardsStore';
 
-	let showDropdown = false;
-	let dropdownRef: HTMLDivElement;
 	let lastFetchedAddress: string | null = null;
 	let showTooltip = false;
+	let isWalletConnected = false;
+	let containerRef: HTMLDivElement | null = null;
+	let hoverHideTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	// Fetch global pool APY on mount (doesn't require wallet)
 	onMount(() => {
 		fetchGlobalPoolApy();
-		if (browser) {
-			document.addEventListener('click', handleClickOutside);
-		}
 	});
+
+	$: isWalletConnected = $connected && !!$signerAddress;
 
 	// Fetch rewards when wallet connects/changes
 	$: if ($connected && $signerAddress && $signerAddress !== lastFetchedAddress) {
@@ -41,101 +40,111 @@
 		resetRewardsState();
 	}
 
-	function handleClickOutside(event: MouseEvent) {
-		if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
-			showDropdown = false;
-		}
-	}
-
-	function openDetailsModal() {
-		showDropdown = false;
+	function openModal(tab: 'details' | 'rules' = 'details') {
+		showTooltip = false;
+		rewardsModalTab.set(tab);
 		showDetailsModal.set(true);
 	}
 
-	function openRulesModal() {
-		showDropdown = false;
-		showRulesModal.set(true);
+	function handleMouseEnter() {
+		if (hoverHideTimeout) {
+			clearTimeout(hoverHideTimeout);
+			hoverHideTimeout = null;
+		}
+		showTooltip = true;
 	}
 
-	onDestroy(() => {
-		if (browser) {
-			document.removeEventListener('click', handleClickOutside);
+	function handleMouseLeave(event: MouseEvent) {
+		const related = event.relatedTarget as Node | null;
+		if (containerRef && related && containerRef.contains(related)) {
+			return;
 		}
-	});
+		hoverHideTimeout = setTimeout(() => {
+			showTooltip = false;
+		}, 80);
+	}
+
 </script>
 
-{#if $connected && $signerAddress}
-	<div class="relative" bind:this={dropdownRef} data-tutorial="boost-rewards">
-		<!-- Boost Rewards Button with Rainbow Wave Animation -->
-		<button
-			on:click={() => (showDropdown = !showDropdown)}
-			on:mouseenter={() => (showTooltip = true)}
-			on:mouseleave={() => (showTooltip = false)}
-			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
+<div
+	class="relative"
+	bind:this={containerRef}
+	data-tutorial="boost-rewards"
+	role="group"
+	on:mouseenter={handleMouseEnter}
+	on:mouseleave={handleMouseLeave}
+>
+	<!-- Boost Rewards Button with Rainbow Wave Animation -->
+	<button
+		on:click={() => openModal('details')}
+		class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
+	>
+		<!-- Animated rainbow border -->
+		<span class="rainbow-border pointer-events-none"></span>
+		<!-- Inner background with gradient -->
+		<span
+			class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
+		></span>
+
+		<!-- Rocket Icon -->
+		<svg
+			class="relative z-10 h-4 w-4 text-yellow-400"
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
 		>
-			<!-- Animated rainbow border -->
-			<span class="rainbow-border"></span>
-			<!-- Inner background with gradient -->
-			<span
-				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
-			></span>
+			<path
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				stroke-width="2"
+				d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
+			/>
+		</svg>
 
-			<!-- Rocket Icon -->
-			<svg
-				class="relative z-10 h-4 w-4 text-yellow-400"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
-				/>
-			</svg>
+		{#if $rewardsLoading && isWalletConnected}
+			<div class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-yellow-400" />
+			<span class="relative z-10 text-gray-400">Loading...</span>
+		{:else if $rewardsData}
+			<div class="relative z-10 flex items-center gap-2">
+				<span class="font-semibold text-white">Boost Rewards</span>
+				<span class="text-xs text-gray-400">|</span>
+				<span class="text-xs font-medium text-yellow-300">
+					{formatPoints($rewardsData.userPoints)} pts
+				</span>
+				<span class="text-xs font-bold text-green-400">
+					{formatApy($globalPoolApy)}
+				</span>
+			</div>
+		{:else}
+			<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
+			<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
+		{/if}
 
-			{#if $rewardsLoading}
-				<div
-					class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-yellow-400"
-				/>
-				<span class="relative z-10 text-gray-400">Loading...</span>
-			{:else if $rewardsData}
-				<div class="relative z-10 flex items-center gap-2">
-					<span class="font-semibold text-white">Boost Rewards</span>
-					<span class="text-xs text-gray-400">|</span>
-					<span class="text-xs font-medium text-yellow-300">
-						{formatPoints($rewardsData.userPoints)} pts
-					</span>
-					<span class="text-xs font-bold text-green-400">
-						{formatApy($globalPoolApy)}
-					</span>
-				</div>
-			{:else}
-				<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
-				<span class="relative z-10 text-xs text-gray-400">0 pts</span>
-				<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
-			{/if}
+		<svg
+			class="relative z-10 h-4 w-4 text-gray-400 transition-transform"
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+		>
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+		</svg>
+	</button>
 
-			<svg
-				class="relative z-10 h-4 w-4 text-gray-400 transition-transform"
-				class:rotate-180={showDropdown}
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-			</svg>
-		</button>
-
-		<!-- Hover Tooltip -->
-		{#if showTooltip && $rewardsData && !showDropdown}
+	<!-- Hover Tooltip -->
+	{#if showTooltip}
+		{#if $rewardsData}
 			{@const rocketBoostProgress =
 				$rewardsData.rocketBoostTargetPoints > 0
 					? Math.min(100, ($rewardsData.totalPoints / $rewardsData.rocketBoostTargetPoints) * 100)
 					: 0}
+			{@const projectedProgress = $rewardsData.projection
+				? Math.min(100, $rewardsData.projection.projectedProgress)
+				: 0}
 			<div
 				class="absolute right-0 top-full z-[160] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+				role="tooltip"
+				on:mouseenter={handleMouseEnter}
+				on:mouseleave={handleMouseLeave}
 			>
 				<div class="space-y-2 text-sm">
 					<div class="flex justify-between">
@@ -144,8 +153,7 @@
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Est. Reward</span>
-						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span
-						>
+						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span>
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Rewards APY</span>
@@ -153,13 +161,30 @@
 					</div>
 					<!-- RocketBoost Progress Bar -->
 					<div class="pt-1">
-						<div class="flex items-center justify-between text-xs text-gray-400">
+						<div class="text-xs text-gray-400">
 							<span>RocketBoost</span>
-							<span>{rocketBoostProgress.toFixed(0)}%</span>
 						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-400">Progress</span>
+							<span class="text-white">{rocketBoostProgress.toFixed(0)}%</span>
+						</div>
+						{#if projectedProgress > rocketBoostProgress}
+							<div class="flex items-center justify-between text-xs">
+								<span class="text-gray-400">Projected</span>
+								<span class="text-yellow-300">{projectedProgress.toFixed(0)}%</span>
+							</div>
+						{/if}
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
+							<!-- Projected progress (lighter) -->
+							{#if projectedProgress > rocketBoostProgress}
+								<div
+									class="absolute h-full bg-yellow-500/30"
+									style="width: {projectedProgress}%"
+								/>
+							{/if}
+							<!-- Current progress -->
 							<div
-								class="h-full transition-all {rocketBoostProgress >= 100
+								class="relative h-full transition-all {rocketBoostProgress >= 100
 									? 'bg-green-500'
 									: 'bg-yellow-500'}"
 								style="width: {rocketBoostProgress}%"
@@ -170,81 +195,43 @@
 							{/each}
 						</div>
 					</div>
+					<div class="pt-2 text-right">
+						<button
+							class="rounded-md bg-yellow-500/20 px-3 py-1 text-xs font-semibold text-yellow-300 transition hover:bg-yellow-500/30"
+							on:click={() => openModal('details')}
+						>
+							More
+						</button>
+					</div>
+				</div>
+			</div>
+		{:else}
+			<div
+				class="absolute right-0 top-full z-[160] mt-2 w-56 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+				role="tooltip"
+				on:mouseenter={handleMouseEnter}
+				on:mouseleave={handleMouseLeave}
+			>
+				<div class="space-y-2 text-sm text-gray-300">
+					<p class="font-semibold text-white">Boost Rewards</p>
+					<p>Connect your wallet to see your monthly points and estimated rewards.</p>
+					<div class="flex items-center justify-between text-xs text-gray-400">
+						<span>Current Rewards APY</span>
+						<span class="text-green-400">{formatApy($globalPoolApy)}</span>
+					</div>
+					<div class="pt-2 text-right">
+						<button
+							class="rounded-md bg-yellow-500/20 px-3 py-1 text-xs font-semibold text-yellow-300 transition hover:bg-yellow-500/30"
+							on:click={() => openModal('rules')}
+						>
+							More
+						</button>
+					</div>
 				</div>
 			</div>
 		{/if}
-
-		<!-- Dropdown Menu -->
-		{#if showDropdown}
-			<div
-				class="absolute right-0 top-full z-[150] mt-2 w-56 overflow-hidden rounded-lg border border-gray-700 bg-gray-800 shadow-xl"
-				role="menu"
-				tabindex="-1"
-			>
-				<button
-					on:click={openDetailsModal}
-					class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-gray-200 transition-colors hover:bg-gray-700"
-				>
-					<svg
-						class="h-4 w-4 text-yellow-400"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-						/>
-					</svg>
-					Rewards Details
-				</button>
-				<button
-					on:click={openRulesModal}
-					class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-gray-200 transition-colors hover:bg-gray-700"
-				>
-					<svg class="h-4 w-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
-					</svg>
-					About
-				</button>
-			</div>
-		{/if}
-	</div>
-{:else}
-	<!-- Simplified button for non-connected users (visible during tutorial) -->
-	<div data-tutorial="boost-rewards">
-		<button
-			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
-		>
-			<span class="rainbow-border"></span>
-			<span
-				class="absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900"
-			></span>
-			<svg
-				class="relative z-10 h-4 w-4 text-yellow-400"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
-				/>
-			</svg>
-			<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
-			<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
-		</button>
-	</div>
-{/if}
+	{/if}
+</div>
 
 <style>
 	/* Rainbow wave animation for the Boost Rewards button */

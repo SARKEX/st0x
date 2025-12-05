@@ -8,7 +8,54 @@ import {
 	type Hash,
 	type Hex
 } from 'viem';
-import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
+import {
+	readContract as wagmiReadContract,
+	sendTransaction as wagmiSendTransaction,
+	waitForTransactionReceipt as wagmiWaitForTransactionReceipt
+} from '@wagmi/core';
+
+// Retry wrapper for RPC calls that fail with "header not found" error
+// This is a known RPC provider issue related to load balancing
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000): Promise<T> {
+	let lastError: unknown;
+	for (let attempt = 0; attempt < maxRetries; attempt++) {
+		try {
+			return await fn();
+		} catch (error) {
+			lastError = error;
+			const errorMessage = String(error);
+			// Retry on "header not found" or "block not found" RPC errors
+			if (
+				errorMessage.includes('header not found') ||
+				errorMessage.includes('block not found') ||
+				(error as { code?: number })?.code === -32000
+			) {
+				if (attempt < maxRetries - 1) {
+					// Exponential backoff
+					await new Promise((resolve) => setTimeout(resolve, delayMs * Math.pow(2, attempt)));
+					continue;
+				}
+			}
+			throw error;
+		}
+	}
+	throw lastError;
+}
+
+// Wrapped wagmi functions with retry logic
+const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
+	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
+
+const sendTransaction: typeof wagmiSendTransaction = ((
+	...args: Parameters<typeof wagmiSendTransaction>
+) => withRetry(() => wagmiSendTransaction(...args))) as typeof wagmiSendTransaction;
+
+const waitForTransactionReceipt: typeof wagmiWaitForTransactionReceipt = ((
+	...args: Parameters<typeof wagmiWaitForTransactionReceipt>
+) =>
+	withRetry(() =>
+		wagmiWaitForTransactionReceipt(...args)
+	)) as typeof wagmiWaitForTransactionReceipt;
 import {
 	getTakeOrders3Calldata,
 	type SgOrder,
@@ -925,7 +972,8 @@ const transactionStore = () => {
 		args: TakeOrdersConfigV4,
 		raindexOrder: SgOrder,
 		requiredApprovalAmount: bigint,
-		params: TakeOrdersParams
+		params: TakeOrdersParams,
+		recalculateConfig?: () => Promise<TakeOrdersConfigV4 | null>
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -975,12 +1023,23 @@ const transactionStore = () => {
 			await waitForTransactionReceipt(config, { hash: approvalHash });
 		}
 
+		// If recalculateConfig is provided, refresh quotes and recalculate config
+		// This handles SELL and BUY (spend mode) where prices may have moved during approval
+		let finalConfig = args;
+		if (recalculateConfig) {
+			awaitWalletConfirmation(`Refreshing market prices...`);
+			const updatedConfig = await recalculateConfig();
+			if (updatedConfig) {
+				finalConfig = updatedConfig;
+			}
+		}
+
 		// Now take the order
 		awaitWalletConfirmation(`Taking order...`);
 
 		let result;
 		try {
-			result = getTakeOrders3Calldata(args);
+			result = getTakeOrders3Calldata(finalConfig);
 
 			if (result.error) {
 				return transactionError(result.error as unknown as TransactionErrorMessage);
@@ -1017,6 +1076,15 @@ const transactionStore = () => {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
+
+			// Check for insufficient allowance error and provide helpful message
+			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+			if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
+				return transactionError(
+					'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
+				);
+			}
+
 			const message =
 				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
 					? (errorMessage as TransactionErrorMessage)

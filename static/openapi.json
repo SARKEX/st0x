@@ -1,0 +1,370 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "st0x Public API",
+    "description": "Public API for querying st0x rewards data including APY, RocketBoost progress, and wallet statistics.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "st0x"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://www.st0x.io",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/api/public/rewards-apy": {
+      "get": {
+        "summary": "Get Current Rewards APY",
+        "description": "Returns the current annualized rewards APY, calculated using compound interest formula.",
+        "operationId": "getRewardsApy",
+        "tags": ["Rewards"],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardsApyResponse"
+                },
+                "example": {
+                  "success": true,
+                  "date": "2025-12-05",
+                  "apy": 42.5,
+                  "effectivePool": 12500,
+                  "basePool": 10000,
+                  "rocketBoostBonus": 2500
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/rocketboost": {
+      "get": {
+        "summary": "Get RocketBoost Progress",
+        "description": "Returns current and projected RocketBoost progress, including tier achievements and bonus amounts.",
+        "operationId": "getRocketBoost",
+        "tags": ["RocketBoost"],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RocketBoostResponse"
+                },
+                "example": {
+                  "success": true,
+                  "date": "2025-12-05",
+                  "current": {
+                    "progressPercent": 65.2,
+                    "totalPoints": 4033000000,
+                    "achievedBonus": 1500
+                  },
+                  "projected": {
+                    "progressPercent": 85.3,
+                    "daysElapsed": 5,
+                    "daysRemaining": 26
+                  },
+                  "tiers": {
+                    "tier25": { "target": 25, "bonus": 500, "achieved": true },
+                    "tier50": { "target": 50, "bonus": 1000, "achieved": true },
+                    "tier75": { "target": 75, "bonus": 1500, "achieved": false },
+                    "tier100": { "target": 100, "bonus": 2000, "achieved": false }
+                  },
+                  "totalPossibleBonus": 5000
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/wallet": {
+      "get": {
+        "summary": "Get Wallet Rewards Data",
+        "description": "Returns a wallet's current points, estimated reward share, and ranking.",
+        "operationId": "getWalletRewards",
+        "tags": ["Wallet"],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "description": "Ethereum wallet address (0x...)",
+            "schema": {
+              "type": "string",
+              "pattern": "^0x[a-fA-F0-9]{40}$"
+            },
+            "example": "0x1234567890abcdef1234567890abcdef12345678"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletResponse"
+                },
+                "example": {
+                  "success": true,
+                  "date": "2025-12-05",
+                  "wallet": "0x1234567890abcdef1234567890abcdef12345678",
+                  "points": 50000000,
+                  "sharePercent": 1.24,
+                  "estimatedReward": 155,
+                  "rank": 12
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (missing or invalid wallet address)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RewardsApyResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the request was successful"
+          },
+          "date": {
+            "type": "string",
+            "description": "Current date in YYYY-MM-DD format",
+            "example": "2025-12-05"
+          },
+          "apy": {
+            "type": "number",
+            "nullable": true,
+            "description": "Annualized APY percentage (compound). Null if insufficient data.",
+            "example": 42.5
+          },
+          "effectivePool": {
+            "type": "number",
+            "description": "Total reward pool including RocketBoost bonuses (USD)",
+            "example": 12500
+          },
+          "basePool": {
+            "type": "number",
+            "description": "Base reward pool before RocketBoost (USD)",
+            "example": 10000
+          },
+          "rocketBoostBonus": {
+            "type": "number",
+            "description": "Additional bonus from achieved RocketBoost tiers (USD)",
+            "example": 2500
+          }
+        },
+        "required": ["success", "date", "effectivePool", "basePool", "rocketBoostBonus"]
+      },
+      "RocketBoostResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "date": {
+            "type": "string",
+            "description": "Current date in YYYY-MM-DD format",
+            "example": "2025-12-05"
+          },
+          "current": {
+            "type": "object",
+            "properties": {
+              "progressPercent": {
+                "type": "number",
+                "description": "Current progress towards target (0-100)",
+                "example": 65.2
+              },
+              "totalPoints": {
+                "type": "number",
+                "description": "Total accumulated points this month",
+                "example": 4033000000
+              },
+              "achievedBonus": {
+                "type": "number",
+                "description": "Sum of achieved tier bonuses (USD)",
+                "example": 1500
+              }
+            }
+          },
+          "projected": {
+            "type": "object",
+            "description": "End-of-month projection based on current trend",
+            "properties": {
+              "progressPercent": {
+                "type": "number",
+                "description": "Projected progress at month end (0-100)",
+                "example": 85.3
+              },
+              "daysElapsed": {
+                "type": "integer",
+                "description": "Days with snapshot data",
+                "example": 5
+              },
+              "daysRemaining": {
+                "type": "integer",
+                "description": "Days remaining in month",
+                "example": 26
+              }
+            }
+          },
+          "tiers": {
+            "type": "object",
+            "description": "Status of each RocketBoost tier",
+            "properties": {
+              "tier25": { "$ref": "#/components/schemas/TierStatus" },
+              "tier50": { "$ref": "#/components/schemas/TierStatus" },
+              "tier75": { "$ref": "#/components/schemas/TierStatus" },
+              "tier100": { "$ref": "#/components/schemas/TierStatus" }
+            }
+          },
+          "totalPossibleBonus": {
+            "type": "number",
+            "description": "Maximum possible bonus if all tiers achieved (USD)",
+            "example": 5000
+          }
+        },
+        "required": ["success", "date", "current", "projected", "tiers", "totalPossibleBonus"]
+      },
+      "TierStatus": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "integer",
+            "description": "Progress percentage required to achieve this tier",
+            "example": 25
+          },
+          "bonus": {
+            "type": "number",
+            "description": "Bonus amount for achieving this tier (USD)",
+            "example": 500
+          },
+          "achieved": {
+            "type": "boolean",
+            "description": "Whether this tier has been achieved",
+            "example": true
+          }
+        },
+        "required": ["target", "bonus", "achieved"]
+      },
+      "WalletResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "date": {
+            "type": "string",
+            "description": "Current date in YYYY-MM-DD format",
+            "example": "2025-12-05"
+          },
+          "wallet": {
+            "type": "string",
+            "description": "Wallet address (lowercase)",
+            "example": "0x1234567890abcdef1234567890abcdef12345678"
+          },
+          "points": {
+            "type": "number",
+            "description": "User's accumulated points this month",
+            "example": 50000000
+          },
+          "sharePercent": {
+            "type": "number",
+            "description": "User's share of the total pool as percentage",
+            "example": 1.24
+          },
+          "estimatedReward": {
+            "type": "number",
+            "description": "Estimated reward in USD based on current share",
+            "example": 155
+          },
+          "rank": {
+            "type": "integer",
+            "nullable": true,
+            "description": "User's rank on the leaderboard. Null if user has no points.",
+            "example": 12
+          }
+        },
+        "required": ["success", "date", "wallet", "points", "sharePercent", "estimatedReward"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message",
+            "example": "Invalid wallet address format"
+          }
+        },
+        "required": ["success", "error"]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Rewards",
+      "description": "Global rewards pool information"
+    },
+    {
+      "name": "RocketBoost",
+      "description": "RocketBoost TVL bonus tracking"
+    },
+    {
+      "name": "Wallet",
+      "description": "Per-wallet rewards data"
+    }
+  ]
+}
