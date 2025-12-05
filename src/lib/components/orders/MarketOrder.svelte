@@ -949,7 +949,7 @@
 								inputMode = inputMode === 'amount' ? 'spend' : 'amount';
 								selectedAmount = 0n;
 							}}
-							class="flex items-center gap-1.5 border-r border-white/10 px-4 py-3 text-sm font-medium text-green-400 transition-colors hover:bg-gray-600/30"
+							class="flex items-center gap-1.5 pl-4 pr-2 py-3 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
 						>
 							{inputMode === 'amount' ? 'Buy' : 'Spend'}
 							<svg class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -957,7 +957,7 @@
 							</svg>
 						</button>
 					{:else}
-						<span class="border-r border-white/10 px-4 py-3 text-sm font-medium text-red-400">
+						<span class="pl-4 pr-2 py-3 text-sm font-medium text-red-400">
 							Sell
 						</span>
 					{/if}
@@ -982,7 +982,7 @@
 					</div>
 
 					<!-- Right side: Token symbol -->
-					<span class="border-l border-white/10 px-4 py-3 text-sm font-medium text-gray-300">
+					<span class="pl-2 pr-4 py-3 text-sm font-medium text-gray-300">
 						{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
 					</span>
 				</div>
