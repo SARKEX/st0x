@@ -21,15 +21,49 @@
 	<meta name="description" content="st0x Public API documentation for rewards, RocketBoost, and wallet data." />
 </svelte:head>
 
-<div class="api-docs-container" bind:this={container}></div>
+<div class="api-docs-wrapper">
+	<div class="api-docs-container" bind:this={container}></div>
+</div>
 
 <style>
-	.api-docs-container {
+	/* Wrapper resets Tailwind's base styles */
+	.api-docs-wrapper {
+		all: initial;
+		display: block;
+		position: relative;
 		min-height: 100vh;
 		background: #0f0f0f;
+		font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		isolation: isolate;
+		overflow-x: hidden;
 	}
 
-	:global(.api-docs-container .scalar-app) {
+	.api-docs-wrapper *,
+	.api-docs-wrapper *::before,
+	.api-docs-wrapper *::after {
+		box-sizing: border-box;
+	}
+
+	.api-docs-container {
 		min-height: 100vh;
+	}
+
+	/* Ensure Scalar styles take precedence */
+	:global(.api-docs-wrapper .scalar-app) {
+		min-height: 100vh;
+	}
+
+	:global(.api-docs-wrapper img) {
+		max-width: 100%;
+		height: auto;
+	}
+
+	:global(.api-docs-wrapper a) {
+		color: inherit;
+		text-decoration: inherit;
+	}
+
+	:global(.api-docs-wrapper button) {
+		cursor: pointer;
 	}
 </style>
