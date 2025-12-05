@@ -80,6 +80,8 @@ export const globalPoolApyLoading = writable(false);
 export const showDetailsModal = writable(false);
 export const showLeaderboardModal = writable(false);
 export const showRulesModal = writable(false);
+export type RewardsModalTab = 'details' | 'rules';
+export const rewardsModalTab = writable<RewardsModalTab>('details');
 
 // Derived stores for convenience
 export const hasRewardsData = derived(rewardsData, ($data) => $data !== null);

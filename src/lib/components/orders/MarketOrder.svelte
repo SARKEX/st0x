@@ -50,6 +50,7 @@
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
+	const IO_RATIO_BUFFER = 1.0025; // 0.25% buffer for execution-time price variance
 
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
@@ -702,11 +703,17 @@
 				return;
 			}
 
-			// Build TakeOrdersConfigV4 with worst price as maximum IO ratio
+			// Build TakeOrdersConfigV4 with worst IO ratio
+			// Convert price (quotePerAsset) to IO ratio based on order side:
+			// - BUY takes Ask orders: IO ratio = price (quote/asset)
+			// - SELL takes Bid orders: IO ratio = 1/price (asset/quote)
 			const worstPrice = executableOrders[executableOrders.length - 1].price;
-			const floatWorstPriceResult = Float.parse(worstPrice.toString());
-			if (floatWorstPriceResult.error || !floatWorstPriceResult.value) {
-				console.error('Failed to encode worst price as Float:', floatWorstPriceResult.error);
+			const worstIoRatio = orderSide === 'Buy' ? worstPrice : 1 / worstPrice;
+			// Apply buffer to make the max slightly more permissive for execution-time variance
+			const bufferedWorstIoRatio = worstIoRatio * IO_RATIO_BUFFER;
+			const floatWorstIoRatioResult = Float.parse(bufferedWorstIoRatio.toString());
+			if (floatWorstIoRatioResult.error || !floatWorstIoRatioResult.value) {
+				console.error('Failed to encode IO ratio as Float:', floatWorstIoRatioResult.error);
 				orderPreparationError = 'Price encoding error. Please try again.';
 				return;
 			}
@@ -771,7 +778,7 @@
 			const takeOrdersConfig: TakeOrdersConfigV4 = {
 				minimumInput: Float.fromBigint(0n).asHex(),
 				maximumInput: maximumInputFloat.float.asHex(),
-				maximumIORatio: floatWorstPriceResult.value.asHex(),
+				maximumIORatio: floatWorstIoRatioResult.value.asHex(),
 				orders: takeOrderConfigs,
 				data: '0x'
 			};
