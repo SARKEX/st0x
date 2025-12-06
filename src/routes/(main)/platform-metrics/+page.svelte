@@ -514,57 +514,65 @@
 				<LoadingSpinner size="lg" text="Loading metrics..." />
 			</div>
 		{:else}
-			<InfoBlock
-				variant="info"
-				title="Multi-Network Data"
-				description="Metrics aggregate active orderbook vaults and trades across all supported networks."
-			/>
+			<div class="hidden sm:block">
+				<InfoBlock
+					variant="info"
+					title="Multi-Network Data"
+					description="Metrics aggregate active orderbook vaults and trades across all supported networks."
+				/>
+			</div>
 
 			{#if vaultsError}
 				<InfoBlock variant="warning" title="Vault data incomplete" description={vaultsError} />
 			{/if}
 
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
 				<MetricCard
 					label="Total Locked Value"
 					value={formatQuoteDisplay(totalTVL)}
 					subtitle="Active orderbook tokens"
-					paddingClass="p-6"
+					paddingClass="p-4 sm:p-6"
 					showGradient={false}
-					valueClass="text-3xl font-bold"
+					valueClass="text-xl font-bold sm:text-3xl"
 				/>
 				<MetricCard
 					label="Trading Volume"
 					value={formatQuoteDisplay(tradingVolume)}
 					subtitle="Last 30 days"
-					paddingClass="p-6"
+					paddingClass="p-4 sm:p-6"
 					showGradient={false}
-					valueClass="text-3xl font-bold"
+					valueClass="text-xl font-bold sm:text-3xl"
 				/>
-				<MetricCard
-					label="Total Trades"
-					value={`${totalTrades}`}
-					subtitle="Last 30 days"
-					paddingClass="p-6"
-					showGradient={false}
-					valueClass="text-3xl font-bold"
-				/>
-				<MetricCard
-					label="Active Tokens"
-					value={`${activeST0x}`}
-					subtitle="Live on orderbook"
-					paddingClass="p-6"
-					showGradient={false}
-					valueClass="text-3xl font-bold"
-				/>
-				<MetricCard
-					label="Deployed Orders"
-					value={`${totalDeployedOrders}`}
-					subtitle="Active across networks"
-					paddingClass="p-6"
-					showGradient={false}
-					valueClass="text-3xl font-bold"
-				/>
+				<div class="hidden sm:block">
+					<MetricCard
+						label="Total Trades"
+						value={`${totalTrades}`}
+						subtitle="Last 30 days"
+						paddingClass="p-6"
+						showGradient={false}
+						valueClass="text-3xl font-bold"
+					/>
+				</div>
+				<div class="hidden sm:block">
+					<MetricCard
+						label="Active Tokens"
+						value={`${activeST0x}`}
+						subtitle="Live on orderbook"
+						paddingClass="p-6"
+						showGradient={false}
+						valueClass="text-3xl font-bold"
+					/>
+				</div>
+				<div class="hidden sm:block">
+					<MetricCard
+						label="Deployed Orders"
+						value={`${totalDeployedOrders}`}
+						subtitle="Active across networks"
+						paddingClass="p-6"
+						showGradient={false}
+						valueClass="text-3xl font-bold"
+					/>
+				</div>
 			</div>
 
 			<Section>

@@ -430,35 +430,37 @@
 				</div>
 
 				<!-- Overview Stats -->
-				<div class={gridStyles.responsive4}>
+				<div class="grid grid-cols-3 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
 					<MetricCard
 						label="Total Value"
 						value={`$${totalValue.toFixed(2)}`}
-						paddingClass="p-4"
+						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-2xl font-bold"
+						valueClass="text-lg font-bold sm:text-2xl"
 					/>
-					<MetricCard
-						label="24h Change"
-						value="TBD"
-						paddingClass="p-4"
-						showGradient={false}
-						change=""
-						valueClass="text-2xl font-bold text-gray-400"
-					/>
+					<div class="hidden sm:block">
+						<MetricCard
+							label="24h Change"
+							value="TBD"
+							paddingClass="p-4"
+							showGradient={false}
+							change=""
+							valueClass="text-2xl font-bold text-gray-400"
+						/>
+					</div>
 					<MetricCard
 						label="Active Orders"
 						value={`${activeOrdersCount}`}
-						paddingClass="p-4"
+						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-2xl font-bold"
+						valueClass="text-lg font-bold sm:text-2xl"
 					/>
 					<MetricCard
 						label="Active Vaults"
 						value={`${activeVaultsCount}`}
-						paddingClass="p-4"
+						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-2xl font-bold"
+						valueClass="text-lg font-bold sm:text-2xl"
 					/>
 				</div>
 			</Section>
@@ -768,13 +770,14 @@
 										<p class="hidden text-sm text-gray-400 sm:block">Additional vaults with custom IDs</p>
 									</div>
 									{#if dustVaultsCount > 0 || showDustVaults}
-										<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-400">
+										<label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm">
 											<input
 												type="checkbox"
 												bind:checked={showDustVaults}
-												class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+												class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 sm:h-4 sm:w-4"
 											/>
-											Show dust ({dustVaultsCount} vault{dustVaultsCount === 1 ? '' : 's'})
+											<span class="sm:hidden">Dust ({dustVaultsCount})</span>
+											<span class="hidden sm:inline">Show dust ({dustVaultsCount} vault{dustVaultsCount === 1 ? '' : 's'})</span>
 										</label>
 									{/if}
 								</div>
