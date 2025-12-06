@@ -415,7 +415,7 @@
 </script>
 
 <div
-	class="relative w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/80 p-6 shadow-2xl backdrop-blur-xl"
+	class="relative w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/80 p-4 shadow-2xl backdrop-blur-xl sm:p-6"
 >
 	<!-- Subtle glow effect -->
 	<div
@@ -461,7 +461,7 @@
 						placeholder="0"
 						value={topAmount}
 						on:input={handleTopInput}
-						class="w-full bg-transparent text-right text-2xl font-medium text-white placeholder-gray-600 focus:outline-none"
+						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
 					/>
 					{#if $connected && formattedUsdcBalance > 0 && isBuying}
 						<button
@@ -566,7 +566,7 @@
 						placeholder="0"
 						value={bottomAmount}
 						on:input={handleBottomInput}
-						class="w-full bg-transparent text-right text-2xl font-medium text-white placeholder-gray-600 focus:outline-none"
+						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
 					/>
 					{#if quote?.avgPrice}
 						<div class="text-xs text-gray-500">

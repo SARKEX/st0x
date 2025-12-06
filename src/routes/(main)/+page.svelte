@@ -160,32 +160,36 @@
 
 			<!-- Rewards APY Banner -->
 			<div class="mb-8 flex justify-center sm:mb-10">
-				<div class="rewards-banner relative overflow-hidden rounded-full px-6 py-3">
+				<div class="rewards-banner relative overflow-hidden rounded-2xl px-4 py-2.5 sm:rounded-full sm:px-6 sm:py-3">
 					<span class="rewards-border"></span>
-					<span class="absolute inset-[1px] z-0 rounded-full bg-gray-900/90"></span>
-					<div class="relative z-10 flex items-center gap-3 text-base">
-						<span class="relative flex h-2.5 w-2.5">
-							<span
-								class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"
-							></span>
-							<span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500"></span>
-						</span>
-						<span class="text-gray-300">Limited time monthly rewards boost:</span>
-						<span class="text-gray-500">·</span>
-						<span class="text-gray-400">Current APY</span>
-						<span class="font-bold tabular-nums text-white" class:animate-pulse={isAnimating}>
-							{formatApyDisplay(displayedApy)}%
-						</span>
+					<span class="absolute inset-[1px] z-0 rounded-2xl bg-gray-900/90 sm:rounded-full"></span>
+					<div class="relative z-10 flex flex-col items-center gap-1 text-sm sm:flex-row sm:gap-3 sm:text-base">
+						<div class="flex items-center gap-2">
+							<span class="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5">
+								<span
+									class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"
+								></span>
+								<span class="relative inline-flex h-2 w-2 rounded-full bg-green-500 sm:h-2.5 sm:w-2.5"></span>
+							</span>
+							<span class="text-gray-300">Rewards boost active</span>
+						</div>
+						<span class="hidden text-gray-500 sm:inline">·</span>
+						<div class="flex items-center gap-2">
+							<span class="text-gray-400">Current APY</span>
+							<span class="font-bold tabular-nums text-white" class:animate-pulse={isAnimating}>
+								{formatApyDisplay(displayedApy)}%
+							</span>
+						</div>
 					</div>
 				</div>
 			</div>
 
 			<!-- QuickTrade widget centered below hero -->
-			<div class="flex flex-col items-center gap-4">
+			<div class="flex w-full flex-col items-center gap-4 px-2 sm:px-0">
 				<QuickTrade />
 				<button
 					type="button"
-					class="rounded-lg bg-yellow-500 px-6 py-2.5 text-sm font-medium text-black transition hover:bg-yellow-400"
+					class="w-full max-w-md rounded-lg bg-yellow-500 px-6 py-3 text-sm font-medium text-black transition hover:bg-yellow-400 sm:w-auto sm:py-2.5"
 					on:click={() => goto('/trade/0x2289249984f1fa2ce86c4e8867e7eb819ea7df95')}
 				>
 					Launch Trading Terminal
@@ -201,16 +205,16 @@
 
 			<!-- Trust Indicators -->
 			<div
-				class="mt-16 grid grid-cols-1 gap-8 text-center sm:mt-20 sm:grid-cols-3 sm:gap-10 lg:mt-24 lg:gap-16"
+				class="mt-12 grid grid-cols-3 gap-3 text-center sm:mt-20 sm:gap-10 lg:mt-24 lg:gap-16"
 			>
 				<!-- Decentralised -->
-				<div class="p-3 sm:p-5">
-					<div class="mb-4 flex justify-center">
+				<div class="p-2 sm:p-5">
+					<div class="mb-2 flex justify-center sm:mb-4">
 						<div
-							class="flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
 						>
 							<svg
-								class="h-8 w-8 text-yellow-500 sm:h-10 sm:w-10"
+								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -224,20 +228,20 @@
 							</svg>
 						</div>
 					</div>
-					<h3 class="mb-2 text-lg font-semibold text-white sm:text-xl lg:text-2xl">
+					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
 						Decentralised
 					</h3>
-					<p class="text-sm text-gray-400 sm:text-base">24/7 instant settlement. No fees.</p>
+					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">24/7 instant settlement. No fees.</p>
 				</div>
 
 				<!-- Exchange-Linked Liquidity -->
-				<div class="p-3 sm:p-5">
-					<div class="mb-4 flex justify-center">
+				<div class="p-2 sm:p-5">
+					<div class="mb-2 flex justify-center sm:mb-4">
 						<div
-							class="flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
 						>
 							<svg
-								class="h-8 w-8 text-yellow-500 sm:h-10 sm:w-10"
+								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -266,22 +270,22 @@
 							</svg>
 						</div>
 					</div>
-					<h3 class="mb-2 text-lg font-semibold text-white sm:text-xl lg:text-2xl">
-						Exchange-Linked Liquidity
+					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
+						<span class="hidden sm:inline">Exchange-Linked </span>Liquidity
 					</h3>
-					<p class="text-sm text-gray-400 sm:text-base">
+					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
 						Tap into primary exchange liquidity on the NYSE, Nasdaq, and more.
 					</p>
 				</div>
 
 				<!-- Fully Backed -->
-				<div class="p-3 sm:p-5">
-					<div class="mb-4 flex justify-center">
+				<div class="p-2 sm:p-5">
+					<div class="mb-2 flex justify-center sm:mb-4">
 						<div
-							class="flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
 						>
 							<svg
-								class="h-8 w-8 text-yellow-500 sm:h-10 sm:w-10"
+								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -295,22 +299,22 @@
 							</svg>
 						</div>
 					</div>
-					<h3 class="mb-2 text-lg font-semibold text-white sm:text-xl lg:text-2xl">Fully Backed</h3>
-					<p class="text-sm text-gray-400 sm:text-base">
+					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">Fully Backed</h3>
+					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
 						Every token fully backed and legally redeemable for shares held by a regulated custodian
 					</p>
 				</div>
 			</div>
 
 			<!-- Pioneer Logos -->
-			<div class="mt-12 text-center sm:mt-16">
-				<p class="mb-4 text-sm text-gray-500">Built by pioneers from</p>
-				<div class="flex items-center justify-center gap-4 sm:gap-6">
+			<div class="mt-8 text-center sm:mt-16">
+				<p class="mb-3 text-xs text-gray-500 sm:mb-4 sm:text-sm">Built by pioneers from</p>
+				<div class="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
 					{#each pioneerLogos as logo}
 						<img
 							src={logo.src}
 							alt={logo.alt}
-							class="h-5 w-auto opacity-60 grayscale transition-opacity hover:opacity-100 hover:grayscale-0 sm:h-6"
+							class="h-4 w-auto opacity-60 grayscale transition-opacity hover:opacity-100 hover:grayscale-0 sm:h-6"
 							loading="lazy"
 						/>
 					{/each}
@@ -465,7 +469,7 @@
 	.rewards-border {
 		position: absolute;
 		inset: 0;
-		border-radius: 9999px;
+		border-radius: 1rem;
 		padding: 1px;
 		background: linear-gradient(
 			90deg,
@@ -489,12 +493,18 @@
 		mask-composite: exclude;
 	}
 
+	@media (min-width: 640px) {
+		.rewards-border {
+			border-radius: 9999px;
+		}
+	}
+
 	/* Subtle glow effect */
 	.rewards-banner::before {
 		content: '';
 		position: absolute;
 		inset: -2px;
-		border-radius: 9999px;
+		border-radius: 1rem;
 		background: linear-gradient(
 			90deg,
 			#ff6b6b40,
@@ -510,6 +520,12 @@
 		filter: blur(8px);
 		opacity: 0.5;
 		z-index: -1;
+	}
+
+	@media (min-width: 640px) {
+		.rewards-banner::before {
+			border-radius: 9999px;
+		}
 	}
 
 	@keyframes rainbow-wave {

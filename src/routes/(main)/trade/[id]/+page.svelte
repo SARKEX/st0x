@@ -779,45 +779,55 @@
 		</div>
 	</div>
 {:else}
-	<div class="space-y-6 p-4 sm:p-6">
+	<div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
 		<!-- Header Section with Chart -->
-		<div class="space-y-6">
-			<div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
+		<div class="space-y-4 sm:space-y-6">
+			<div class="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-5">
 				<!-- Left: Symbol info -->
-				<div class="space-y-4 xl:col-span-2">
+				<div class="space-y-3 sm:space-y-4 xl:col-span-2">
 					<div
 						class="overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
 						data-tutorial="symbol-overview"
 					>
-						<div class="border-b border-white/10 px-4 py-3">
+						<div class="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
-									<p class="text-xs uppercase tracking-wide text-gray-400">Off-chain Reference</p>
-									<p class="mt-1 text-base font-semibold text-gray-200">{tokenDisplayName}</p>
+									<p class="text-[10px] uppercase tracking-wide text-gray-400 sm:text-xs">Off-chain Reference</p>
+									<p class="mt-0.5 text-sm font-semibold text-gray-200 sm:mt-1 sm:text-base">{tokenDisplayName}</p>
 								</div>
 								{#if tradingViewSymbol}
-									<span class="text-sm text-gray-400">{tradingViewSymbol}</span>
+									<span class="text-xs text-gray-400 sm:text-sm">{tradingViewSymbol}</span>
 								{/if}
 							</div>
 						</div>
 						{#if tradingViewSymbol}
-							<TradingViewWidget
-								widgetType="symbol-info"
-								symbol={tradingViewSymbol}
-								height="420"
-								isTransparent={true}
-							/>
+							<div class="hidden sm:block">
+								<TradingViewWidget
+									widgetType="symbol-info"
+									symbol={tradingViewSymbol}
+									height="420"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="sm:hidden">
+								<TradingViewWidget
+									widgetType="symbol-info"
+									symbol={tradingViewSymbol}
+									height="280"
+									isTransparent={true}
+								/>
+							</div>
 						{:else}
-							<div class="flex h-48 items-center justify-center px-4 py-6 text-sm text-gray-400">
+							<div class="flex h-32 items-center justify-center px-4 py-6 text-sm text-gray-400 sm:h-48">
 								TradingView data unavailable for this token.
 							</div>
 						{/if}
 					</div>
-					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-4 backdrop-blur-sm">
-						<dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-3 backdrop-blur-sm sm:p-4">
+						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-3 sm:text-sm">
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Oracle Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Oracle Price</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -828,8 +838,8 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Confidence</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Confidence</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -840,8 +850,8 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Bid Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Bid Price</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
@@ -852,8 +862,8 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Offer Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Offer Price</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
@@ -865,20 +875,20 @@
 							</div>
 						</dl>
 						{#if oracleError}
-							<p class="mt-4 text-xs text-red-400">{oracleError}</p>
+							<p class="mt-2 text-xs text-red-400 sm:mt-4">{oracleError}</p>
 						{/if}
 					</div>
-					<div class="grid grid-cols-2 gap-3" data-tutorial="buy-sell-buttons">
+					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
 						<button
 							type="button"
-							class="rounded-xl bg-green-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900"
+							class="rounded-xl bg-green-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Buy')}
 						>
 							Buy
 						</button>
 						<button
 							type="button"
-							class="rounded-xl bg-red-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900"
+							class="rounded-xl bg-red-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Sell')}
 						>
 							Sell
@@ -886,34 +896,48 @@
 					</div>
 				</div>
 				<!-- Right: Overview and chart -->
-				<div class="flex h-full flex-col gap-4 xl:col-span-3" data-tutorial="tradingview">
+				<div class="flex h-full flex-col gap-3 sm:gap-4 xl:col-span-3" data-tutorial="tradingview">
 					{#if tradingViewSymbol}
 						<div
 							class="flex-1 overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
 						>
-							<TradingViewWidget
-								widgetType="symbol-overview"
-								symbol={tradingViewSymbol}
-								displayName={currentToken.name || currentToken.symbol}
-								dateRange="1D"
-								showVolume={false}
-								autosize={false}
-								height="485"
-								isTransparent={true}
-							/>
+							<div class="hidden sm:block">
+								<TradingViewWidget
+									widgetType="symbol-overview"
+									symbol={tradingViewSymbol}
+									displayName={currentToken.name || currentToken.symbol}
+									dateRange="1D"
+									showVolume={false}
+									autosize={false}
+									height="485"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="sm:hidden">
+								<TradingViewWidget
+									widgetType="symbol-overview"
+									symbol={tradingViewSymbol}
+									displayName={currentToken.name || currentToken.symbol}
+									dateRange="1D"
+									showVolume={false}
+									autosize={false}
+									height="320"
+									isTransparent={true}
+								/>
+							</div>
 						</div>
 					{:else}
 						<div class="flex-1 rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm">
-							<div class="flex h-[495px] items-center justify-center text-sm text-gray-400">
+							<div class="flex h-[280px] items-center justify-center text-sm text-gray-400 sm:h-[495px]">
 								TradingView data unavailable for this token.
 							</div>
 						</div>
 					{/if}
-					<div class="mb-[25px] mt-auto flex justify-end">
+					<div class="mt-auto flex justify-end sm:mb-[25px]">
 						<Button
 							variant="secondary"
 							size="md"
-							className="w-full rounded-xl border border-yellow-400/40 bg-yellow-500/20 px-4 py-3 text-base font-semibold text-yellow-300 shadow-lg shadow-yellow-500/30 transition hover:border-yellow-300 hover:bg-yellow-500/30 hover:text-white sm:w-auto"
+							className="w-full rounded-xl border border-yellow-400/40 bg-yellow-500/20 px-4 py-2.5 text-sm font-semibold text-yellow-300 shadow-lg shadow-yellow-500/30 transition hover:border-yellow-300 hover:bg-yellow-500/30 hover:text-white sm:w-auto sm:py-3 sm:text-base"
 							aria-label="Open terminal view"
 							on:click={(event) => openChartModal(event)}
 						>
@@ -923,15 +947,15 @@
 				</div>
 			</div>
 		</div>
-		<div class="space-y-6">
+		<div class="space-y-4 sm:space-y-6">
 			<div data-tutorial="dex-activity">
-				<div class="mb-6">
+				<div class="mb-4 sm:mb-6">
 					<div
-						class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+						class="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 					>
 						<div>
-							<h2 class="text-lg font-semibold">On-chain Market</h2>
-							<p class="text-sm text-gray-400">
+							<h2 class="text-base font-semibold sm:text-lg">On-chain Market</h2>
+							<p class="text-xs text-gray-400 sm:text-sm">
 								View on-chain trades, liquidity, orders, and vaults
 							</p>
 						</div>
@@ -1399,10 +1423,10 @@
 	</div>
 	{#if showTradePanel}
 		<div class="fixed inset-0 z-[2100] flex">
-			<button type="button" class="flex-1" aria-label="Close trade panel" on:click={closeTradePanel}
+			<button type="button" class="hidden flex-1 sm:block" aria-label="Close trade panel" on:click={closeTradePanel}
 			></button>
 			<aside
-				class="relative h-full w-full max-w-[20rem] border-l border-white/10 bg-gradient-to-b from-gray-950 to-gray-900 shadow-2xl"
+				class="relative h-full w-full border-l-0 border-white/10 bg-gradient-to-b from-gray-950 to-gray-900 shadow-2xl sm:max-w-[22rem] sm:border-l"
 				in:fly={{ x: 320, duration: 220 }}
 				out:fly={{ x: 320, duration: 180 }}
 				role="dialog"
@@ -1411,19 +1435,19 @@
 				data-tutorial="trade-panel"
 			>
 				<div class="flex h-full flex-col">
-					<div class="flex items-start justify-between border-b border-white/10 px-6 py-5">
-						<div class="flex items-start gap-3">
+					<div class="flex items-start justify-between border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+						<div class="flex items-start gap-2 sm:gap-3">
 							{#if currentPythToken?.logoUrl}
 								<img
 									src={currentPythToken.logoUrl}
 									alt={tokenDisplaySymbol || tokenDisplayName}
-									class="h-10 w-10 rounded-full border border-white/10 object-cover"
+									class="h-8 w-8 rounded-full border border-white/10 object-cover sm:h-10 sm:w-10"
 								/>
 							{/if}
 							<div>
-								<h2 class="text-lg font-semibold">{tokenDisplayName}</h2>
+								<h2 class="text-base font-semibold sm:text-lg">{tokenDisplayName}</h2>
 								{#if tokenDisplaySymbol}
-									<p class="text-sm text-gray-400">{tokenDisplaySymbol}</p>
+									<p class="text-xs text-gray-400 sm:text-sm">{tokenDisplaySymbol}</p>
 								{/if}
 							</div>
 						</div>
@@ -1446,12 +1470,12 @@
 							</svg>
 						</button>
 					</div>
-					<div class="flex-1 overflow-y-auto px-6 py-6">
-						<div class="space-y-6 pb-10">
-							<div class="grid grid-cols-2 gap-3" aria-label="Select order side">
+					<div class="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+						<div class="space-y-4 pb-10 sm:space-y-6">
+							<div class="grid grid-cols-2 gap-2 sm:gap-3" aria-label="Select order side">
 								<button
 									type="button"
-									class={`rounded-lg px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 ${
+									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Buy'
 											? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
 											: 'bg-white/5 text-gray-200 hover:bg-white/10'
@@ -1462,7 +1486,7 @@
 								</button>
 								<button
 									type="button"
-									class={`rounded-lg px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 ${
+									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Sell'
 											? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
 											: 'bg-white/5 text-gray-200 hover:bg-white/10'
@@ -1472,23 +1496,23 @@
 									Sell
 								</button>
 							</div>
-							<div class="space-y-2">
-								<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
+							<div class="space-y-1 sm:space-y-2">
+								<div class="flex flex-wrap items-center gap-1 text-xs font-medium text-gray-300 sm:gap-2 sm:text-sm">
 									<span>{panelSummaryVerb} {panelTokenLabel}</span>
 									<span class="text-gray-500">{panelSummaryPreposition}</span>
 									<span class="inline-flex items-center gap-1 text-gray-200">
 										{settlementTokenSymbol}
-										<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-4 w-4" />
+										<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
 									</span>
 								</div>
-								<div class="flex items-center gap-2 text-sm text-gray-400">
+								<div class="flex items-center gap-1 text-xs text-gray-400 sm:gap-2 sm:text-sm">
 									<span>On</span>
-									<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
+									<img src="/images/BASE.svg" alt="Base" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
 									<span>{$currentNetwork.displayName}</span>
 								</div>
 							</div>
-							<label class="block space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
-								<span id={PANEL_STRATEGY_LABEL_ID} class="block text-sm font-medium text-gray-300">
+							<label class="block space-y-1.5 sm:space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
+								<span id={PANEL_STRATEGY_LABEL_ID} class="block text-xs font-medium text-gray-300 sm:text-sm">
 									Order Type
 								</span>
 								<Select
@@ -1538,11 +1562,11 @@
 		</div>
 	{/if}
 	<!-- Compact Footer -->
-	<footer class="border-t border-white/5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+	<footer class="border-t border-white/5 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
 		<div class="mx-auto max-w-5xl">
 			<!-- Links Row -->
 			<div
-				class="mb-6 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-400 sm:gap-6 sm:text-sm"
+				class="mb-4 flex flex-wrap items-center justify-center gap-3 text-[10px] text-gray-400 sm:mb-6 sm:gap-6 sm:text-sm"
 			>
 				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
 				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
@@ -1553,7 +1577,7 @@
 			</div>
 
 			<!-- Social Links -->
-			<div class="mb-6 flex items-center justify-center gap-4">
+			<div class="mb-4 flex items-center justify-center gap-3 sm:mb-6 sm:gap-4">
 				<a
 					href="mailto:toby@st0x.io"
 					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
@@ -1634,14 +1658,14 @@
 			}}
 		></button>
 		<div class="relative z-10 flex h-full flex-col bg-gray-950">
-			<div class="flex items-center justify-between border-b border-white/10 px-6 py-5">
-				<div>
-					<p class="text-xs uppercase tracking-wide text-gray-500">Advanced Chart</p>
-					<h2 class="text-xl font-semibold text-white">{modalTitle}</h2>
+			<div class="flex items-center justify-between border-b border-white/10 px-3 py-3 sm:px-6 sm:py-5">
+				<div class="min-w-0 flex-1">
+					<p class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Advanced Chart</p>
+					<h2 class="truncate text-base font-semibold text-white sm:text-xl">{modalTitle}</h2>
 				</div>
 				<button
 					type="button"
-					class="rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+					class="ml-2 rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
 					on:click={closeChartModal}
 					aria-label="Close terminal view"
 				>
@@ -1658,8 +1682,8 @@
 					</svg>
 				</button>
 			</div>
-			<div class="flex-1 overflow-hidden px-6 pb-6 pt-4">
-				<div class="h-full w-full rounded-xl border border-white/10 bg-gray-900 p-2">
+			<div class="flex-1 overflow-hidden px-2 pb-2 pt-2 sm:px-6 sm:pb-6 sm:pt-4">
+				<div class="h-full w-full rounded-xl border border-white/10 bg-gray-900 p-1 sm:p-2">
 					{#if tradingViewSymbol}
 						<TradingViewChart symbol={tradingViewSymbol} interval="60" />
 					{:else}
@@ -1670,18 +1694,18 @@
 				</div>
 			</div>
 			<div
-				class="flex flex-col gap-3 border-t border-white/10 bg-gradient-to-r from-green-500/10 via-gray-900/80 to-red-500/10 px-6 py-6 sm:flex-row sm:justify-end"
+				class="flex flex-row gap-2 border-t border-white/10 bg-gradient-to-r from-green-500/10 via-gray-900/80 to-red-500/10 px-3 py-3 sm:gap-3 sm:justify-end sm:px-6 sm:py-6"
 			>
 				<button
 					type="button"
-					class="w-full rounded-2xl bg-green-500 px-8 py-4 text-lg font-semibold text-white shadow-xl shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:w-auto"
+					class="flex-1 rounded-xl bg-green-500 px-4 py-3 text-base font-semibold text-white shadow-xl shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
 					on:click={() => openTradePanel('Buy', { closeTerminal: false })}
 				>
 					Buy
 				</button>
 				<button
 					type="button"
-					class="w-full rounded-2xl bg-red-500 px-8 py-4 text-lg font-semibold text-white shadow-xl shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:w-auto"
+					class="flex-1 rounded-xl bg-red-500 px-4 py-3 text-base font-semibold text-white shadow-xl shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
 					on:click={() => openTradePanel('Sell', { closeTerminal: false })}
 				>
 					Sell

@@ -145,14 +145,14 @@
 </script>
 
 <div class="sticky top-0 z-[100] bg-transparent transition-all duration-300">
-	<div class="px-4 py-4 sm:px-6 sm:py-5">
-		<div class="flex items-center justify-between gap-3 lg:gap-4">
-			<div class="flex items-center gap-2 lg:gap-4">
+	<div class="px-3 py-3 sm:px-6 sm:py-5">
+		<div class="flex items-center justify-between gap-2 sm:gap-3 lg:gap-4">
+			<div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
 				{#if !isLandingPage}
 					<Button
 						variant="ghost"
 						size="sm"
-						className="p-2 lg:hidden"
+						className="p-1.5 sm:p-2 lg:hidden"
 						aria-label={isMobileSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
 						on:click={() => handleSidebarToggle('mobile')}
 					>
@@ -191,7 +191,7 @@
 					{/if}
 				{/if}
 				<a href="/" aria-label="Go to home" class="shrink-0">
-					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-8 w-auto lg:h-10" />
+					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-7 w-auto sm:h-8 lg:h-10" />
 				</a>
 				{#if title}
 					<div class="ml-2 hidden lg:block">
@@ -200,7 +200,7 @@
 				{/if}
 			</div>
 
-			<div class="flex min-w-0 flex-nowrap items-center gap-2 xl:gap-3" bind:this={actionCluster}>
+			<div class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3" bind:this={actionCluster}>
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
 						{#each NAV_ITEMS as item}
