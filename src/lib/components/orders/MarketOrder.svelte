@@ -775,7 +775,7 @@
 			}
 
 			// Parse the original hex ratio and apply buffer
-			const originalRatioResult = Float.parse(worstFill.quote.ratio);
+			const originalRatioResult = Float.fromHex(worstFill.quote.ratio as `0x${string}`);
 			if (originalRatioResult.error || !originalRatioResult.value) {
 				console.error('Failed to parse original ratio:', worstFill.quote.ratio);
 				orderPreparationError = 'Unable to calculate order price. Please try again.';
@@ -783,7 +783,6 @@
 			}
 
 			// Apply buffer by multiplying the ratio (makes it more permissive)
-			// Float.parse returns the ratio as-is, so we multiply by buffer factor
 			const bufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
 			if (bufferFloat.error || !bufferFloat.value) {
 				console.error('Failed to parse buffer');
@@ -883,7 +882,7 @@
 							return null;
 						}
 
-						const freshRatioResult = Float.parse(freshWorstFill.quote.ratio);
+						const freshRatioResult = Float.fromHex(freshWorstFill.quote.ratio as `0x${string}`);
 						if (freshRatioResult.error || !freshRatioResult.value) {
 							console.warn('Failed to parse fresh ratio');
 							return null;

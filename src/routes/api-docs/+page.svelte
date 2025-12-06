@@ -1,35 +1,31 @@
-<script lang="ts">
-	import { onMount } from 'svelte';
-
-	let container: HTMLDivElement;
-
-	onMount(async () => {
-		// Dynamically import Scalar to avoid SSR issues
-		const { createApiReference } = await import('@scalar/api-reference');
-
-		createApiReference(container, {
-			url: '/openapi.json',
-			theme: 'kepler',
-			hideModels: false,
-			hideDownloadButton: false
-		});
-	});
-</script>
-
 <svelte:head>
 	<title>API Documentation | st0x</title>
 	<meta name="description" content="st0x Public API documentation for rewards, RocketBoost, and wallet data." />
 </svelte:head>
 
-<div class="api-docs-container" bind:this={container}></div>
+<div class="api-docs-wrapper">
+	<iframe
+		src="/scalar.html"
+		title="API Documentation"
+		class="api-docs-iframe"
+	></iframe>
+</div>
 
 <style>
-	.api-docs-container {
-		min-height: 100vh;
-		background: #0f0f0f;
+	.api-docs-wrapper {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		width: 100vw;
+		height: 100vh;
+		overflow: hidden;
 	}
 
-	:global(.api-docs-container .scalar-app) {
-		min-height: 100vh;
+	.api-docs-iframe {
+		width: 100%;
+		height: 100%;
+		border: none;
 	}
 </style>

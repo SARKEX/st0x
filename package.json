@@ -73,6 +73,7 @@
 		"@vercel/speed-insights": "^1.2.0",
 		"@wagmi/connectors": "^5.0.0",
 		"@wagmi/core": "^2.0.0",
+		"ajv": "^8.17.1",
 		"cbor-web": "^9.0.1",
 		"ethers": "^6.10.0",
 		"flowbite-svelte-icons": "0.4.5",
