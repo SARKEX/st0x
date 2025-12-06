@@ -956,7 +956,7 @@
 					>
 						<div>
 							<h2 class="text-base font-semibold sm:text-lg">On-chain Market</h2>
-							<p class="text-xs text-gray-400 sm:text-sm">
+							<p class="hidden text-xs text-gray-400 sm:block sm:text-sm">
 								View on-chain trades, liquidity, orders, and vaults
 							</p>
 						</div>
@@ -970,10 +970,23 @@
 										decimals: 18,
 										image: currentPythToken?.logoUrl
 									})}
-								class="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+								class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
 							>
+								<!-- Wallet icon (mobile only) -->
 								<svg
-									class="h-4 w-4"
+									class="h-4 w-4 sm:hidden"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" stroke-linecap="round" stroke-linejoin="round" />
+									<path d="M3 5v14a2 2 0 0 0 2 2h16v-5" stroke-linecap="round" stroke-linejoin="round" />
+									<path d="M18 12a2 2 0 0 0 0 4h4v-4Z" stroke-linecap="round" stroke-linejoin="round" />
+								</svg>
+								<!-- Plus icon -->
+								<svg
+									class="h-3 w-3 sm:h-4 sm:w-4"
 									viewBox="0 0 24 24"
 									fill="none"
 									stroke="currentColor"
@@ -981,7 +994,8 @@
 								>
 									<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
 								</svg>
-								Track in Wallet
+								<span class="sm:hidden">Track</span>
+								<span class="hidden sm:inline">Track in Wallet</span>
 							</button>
 						{/if}
 					</div>

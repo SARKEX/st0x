@@ -346,7 +346,7 @@
 								<th class="px-3 py-3 text-left text-xs font-medium text-gray-400 sm:px-5 sm:py-4"
 									>Price</th
 								>
-								<th class="px-3 py-3 text-left text-xs font-medium text-gray-400 sm:px-5 sm:py-4"
+								<th class="hidden px-3 py-3 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-5 sm:py-4"
 									>TVL</th
 								>
 								<th
@@ -398,7 +398,7 @@
 												{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
 											</div>
 										</td>
-										<td class="px-3 py-3 sm:px-5 sm:py-4">
+										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
 											<div class="text-sm text-gray-300">
 												{#if marketCap != null}
 													{marketCap >= 1_000_000
