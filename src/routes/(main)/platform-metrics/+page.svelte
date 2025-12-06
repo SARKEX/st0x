@@ -568,16 +568,16 @@
 			</div>
 
 			<Section>
-				<div class="mb-6 flex items-center justify-between">
+				<div class="mb-4 flex items-center justify-between sm:mb-6">
 					<div>
-						<h2 class="text-lg font-semibold">Stats by Network</h2>
-						<p class="mt-1 text-sm text-gray-400">
+						<h2 class="text-base font-semibold sm:text-lg">Stats by Network</h2>
+						<p class="mt-1 hidden text-sm text-gray-400 sm:block">
 							Live metrics sourced from active orderbook vaults
 						</p>
 					</div>
-					<div class="flex items-center gap-2 text-sm text-green-400">
+					<div class="flex items-center gap-1.5 text-xs text-green-400 sm:gap-2 sm:text-sm">
 						<div class="h-2 w-2 rounded-full bg-green-400"></div>
-						Live Data
+						Live
 					</div>
 				</div>
 
@@ -595,17 +595,17 @@
 								TVL
 							</th>
 							<th
-								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								class="hidden p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:table-cell sm:p-3"
 							>
 								Active Tokens
 							</th>
 							<th
 								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 							>
-								Trading Volume
+								Volume
 							</th>
 							<th
-								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								class="hidden p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:table-cell sm:p-3"
 							>
 								Deployed Orders
 							</th>
@@ -634,11 +634,11 @@
 								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tvl, stats.network)}
 								</td>
-								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.tokenCount}</td>
+								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm">{stats.tokenCount}</td>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tradingVolume, stats.network)}
 								</td>
-								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.orderCount}</td>
+								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm">{stats.orderCount}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -646,11 +646,11 @@
 			</Section>
 
 			<Section>
-				<div class="mb-6">
-					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="mb-4 sm:mb-6">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 						<div>
-							<h2 class="text-lg font-semibold">Token Trading Volumes</h2>
-							<p class="mt-1 text-sm text-gray-400">
+							<h2 class="text-base font-semibold sm:text-lg">Token Volumes</h2>
+							<p class="mt-1 hidden text-sm text-gray-400 sm:block">
 								Aggregated orderbook activity for {selectedNetwork.displayName}
 							</p>
 						</div>
@@ -670,8 +670,8 @@
 						<thead>
 							<tr class="text-left text-xs font-medium uppercase tracking-wide text-gray-400">
 								<th class="sticky left-0 z-10 p-2 sm:p-3">Token</th>
-								<th class="p-2 text-right sm:p-3">Total Volume</th>
-								<th class="p-2 text-right sm:p-3">USD Value</th>
+								<th class="hidden p-2 text-right sm:table-cell sm:p-3">Total Volume</th>
+								<th class="p-2 text-right sm:p-3">Value</th>
 								<th class="p-2 text-right sm:p-3">Trades</th>
 							</tr>
 						</thead>
@@ -695,11 +695,11 @@
 											</div>
 										</div>
 									</td>
-									<td class="p-2 text-right text-yellow-400 sm:p-3"
+									<td class="hidden p-2 text-right text-yellow-400 sm:table-cell sm:p-3"
 										>{token.totalVolume.toFixed(3)}</td
 									>
-									<td class="p-2 text-right font-medium sm:p-3">{token.quoteValue}</td>
-									<td class="p-2 text-right sm:p-3">{token.trades}</td>
+									<td class="p-2 text-right text-xs font-medium sm:p-3 sm:text-sm">{token.quoteValue}</td>
+									<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{token.trades}</td>
 								</tr>
 							{/each}
 						</tbody>
