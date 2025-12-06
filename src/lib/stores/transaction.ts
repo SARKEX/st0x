@@ -972,7 +972,8 @@ const transactionStore = () => {
 		args: TakeOrdersConfigV4,
 		raindexOrder: SgOrder,
 		requiredApprovalAmount: bigint,
-		params: TakeOrdersParams
+		params: TakeOrdersParams,
+		recalculateConfig?: () => Promise<TakeOrdersConfigV4 | null>
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -1022,12 +1023,23 @@ const transactionStore = () => {
 			await waitForTransactionReceipt(config, { hash: approvalHash });
 		}
 
+		// If recalculateConfig is provided, refresh quotes and recalculate config
+		// This handles SELL and BUY (spend mode) where prices may have moved during approval
+		let finalConfig = args;
+		if (recalculateConfig) {
+			awaitWalletConfirmation(`Refreshing market prices...`);
+			const updatedConfig = await recalculateConfig();
+			if (updatedConfig) {
+				finalConfig = updatedConfig;
+			}
+		}
+
 		// Now take the order
 		awaitWalletConfirmation(`Taking order...`);
 
 		let result;
 		try {
-			result = getTakeOrders3Calldata(args);
+			result = getTakeOrders3Calldata(finalConfig);
 
 			if (result.error) {
 				return transactionError(result.error as unknown as TransactionErrorMessage);
@@ -1064,6 +1076,15 @@ const transactionStore = () => {
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
 				TransactionErrorMessage.GENERIC;
+
+			// Check for insufficient allowance error and provide helpful message
+			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+			if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
+				return transactionError(
+					'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
+				);
+			}
+
 			const message =
 				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
 					? (errorMessage as TransactionErrorMessage)

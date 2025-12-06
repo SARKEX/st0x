@@ -21,9 +21,9 @@ const PRICE_SCALE_NUMBER = Number(PRICE_SCALE);
 
 export interface QuoteFill {
 	quote: ProcessedQuote;
-	price: number; // Human-readable price (quote token per asset token)
-	quantityFilled: bigint; // Amount of asset filled (in asset decimals)
-	cost: bigint; // Quote token cost (in payment decimals)
+	price: number; // Human-readable price (payment per asset)
+	assetAmount: bigint; // Asset tokens traded in this fill (in asset decimals)
+	paymentAmount: bigint; // Payment tokens traded in this fill (in payment decimals)
 }
 
 export interface WalkQuotesOptions {
@@ -31,7 +31,21 @@ export interface WalkQuotesOptions {
 	orderSide: MarketOrderSide;
 	selectedAmount: bigint;
 	assetDecimals: number;
-	paymentDecimals: number; // Required for proper ratio calculation
+	paymentDecimals: number;
+	/**
+	 * Target mode - what does selectedAmount represent?
+	 *
+	 * 'receive' (default): selectedAmount is what you want to RECEIVE
+	 *   - BUY + receive: "I want to receive 20 tSTOX" → walk until 20 asset received
+	 *
+	 * 'spend': selectedAmount is what you want to SPEND (give away)
+	 *   - SELL + spend: "I want to sell 100 tSTOX" → walk until 100 asset given
+	 *   - BUY + spend: "I want to spend $500 USDC" → walk until $500 payment given
+	 *
+	 * Note: SELL is inherently a "spend" operation (you give away asset).
+	 * The 'receive' mode only makes sense for BUY orders.
+	 */
+	mode?: 'receive' | 'spend';
 }
 
 /**
@@ -246,9 +260,11 @@ function computeAvailableQuantity(
  * to provide a meaningful ratio despite different decimal scales.
  */
 export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
-	const { quotes, orderSide, selectedAmount, assetDecimals, paymentDecimals } = options;
+	const { quotes, orderSide, selectedAmount, assetDecimals, paymentDecimals, mode = 'receive' } = options;
 
 	// Determine which decimals apply to input/output based on order side
+	// BUY: input (receive) = asset, output (give) = payment
+	// SELL: input (receive) = payment, output (give) = asset
 	const inputDecimals = orderSide === 'Buy' ? assetDecimals : paymentDecimals;
 	const outputDecimals = orderSide === 'Buy' ? paymentDecimals : assetDecimals;
 
@@ -263,44 +279,99 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		};
 	}
 
-	// Work in asset decimals (no normalization to 18)
-	const targetAmount = selectedAmount; // Already in asset decimals
-	let quantityFilled = 0n; // Asset quantity in asset decimals
-	let totalCost = 0n; // Payment cost in payment decimals
+	// Determine what we're targeting based on mode and order side
+	//
+	// 'receive' mode: selectedAmount is what you want to RECEIVE
+	//   - BUY: receive asset → target asset input
+	//
+	// 'spend' mode: selectedAmount is what you want to SPEND (give away)
+	//   - SELL: spend asset → target asset output
+	//   - BUY: spend payment → target payment output
+	//
+	// Note: SELL is inherently spending asset, so SELL always targets asset.
+	// The mode distinction only matters for BUY (receive asset vs spend payment).
+
+	// Determine target mode and amount
+	// 'asset' mode: targeting asset amount (BUY receive or SELL spend)
+	// 'payment' mode: targeting payment amount (BUY spend)
+	const targetMode: 'asset' | 'payment' =
+		orderSide === 'Sell' || mode !== 'spend' ? 'asset' : 'payment';
+	const targetAmount = selectedAmount;
+
+	// Accumulators - always track asset and payment traded
+	let assetAccumulated = 0n; // Total asset tokens traded (in asset decimals)
+	let paymentAccumulated = 0n; // Total payment tokens traded (in payment decimals)
 	const fills: QuoteFill[] = [];
 
 	for (const quote of quotes) {
-		if (quantityFilled >= targetAmount) break;
+		// Check if we've reached our target
+		if (targetMode === 'asset' && assetAccumulated >= targetAmount) break;
+		if (targetMode === 'payment' && paymentAccumulated >= targetAmount) break;
 
 		const price = getQuotePrice(quote);
 		if (!price || price <= 0) continue;
 
-		const availableQuantity = computeAvailableQuantity(quote, orderSide, price, assetDecimals);
-		if (availableQuantity <= 0n) continue;
+		// How much asset this quote can provide (BUY) or absorb (SELL)
+		const availableAsset = computeAvailableQuantity(quote, orderSide, price, assetDecimals);
+		if (availableAsset <= 0n) continue;
 
-		const remaining = targetAmount - quantityFilled;
-		const quantityFromQuote = remaining < availableQuantity ? remaining : availableQuantity;
-		if (quantityFromQuote <= 0n) continue;
+		let assetFromQuote: bigint;
 
-		// Calculate cost in payment decimals: cost = quantity * price
-		// quantityFromQuote is in asset decimals, price is human-readable (payment per asset)
-		// Result should be in payment decimals
+		if (targetMode === 'asset') {
+			// Targeting asset (receive for BUY, spend for SELL): limit by remaining asset needed
+			const remainingAsset = targetAmount - assetAccumulated;
+			assetFromQuote = remainingAsset < availableAsset ? remainingAsset : availableAsset;
+		} else {
+			// Targeting payment to spend (BUY + spend mode): calculate asset for remaining budget
+			const remainingPaymentBudget = targetAmount - paymentAccumulated;
+			if (remainingPaymentBudget <= 0n) break;
+
+			// Calculate max asset for remaining budget: asset = budget / price
+			const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+			if (priceScaled <= 0n) continue;
+
+			const budgetInAssetScale = scaleAmount(remainingPaymentBudget, paymentDecimals, assetDecimals);
+			const maxAssetForBudget = (budgetInAssetScale * PRICE_SCALE) / priceScaled;
+
+			assetFromQuote = maxAssetForBudget < availableAsset ? maxAssetForBudget : availableAsset;
+		}
+
+		if (assetFromQuote <= 0n) continue;
+
+		// Calculate payment for this asset amount: payment = asset × price
 		const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
-		const costInAssetScale = (quantityFromQuote * priceScaled) / PRICE_SCALE;
-		// Convert from asset scale to payment scale
-		const costBigInt = scaleAmount(costInAssetScale, assetDecimals, paymentDecimals);
-		if (costBigInt <= 0n) continue;
+		const paymentInAssetScale = (assetFromQuote * priceScaled) / PRICE_SCALE;
+		const paymentFromQuote = scaleAmount(paymentInAssetScale, assetDecimals, paymentDecimals);
+		if (paymentFromQuote <= 0n) continue;
 
-		quantityFilled += quantityFromQuote;
-		totalCost += costBigInt;
-		fills.push({ quote, price, quantityFilled: quantityFromQuote, cost: costBigInt });
+		// In payment-spend mode, ensure we don't exceed the payment budget
+		if (targetMode === 'payment') {
+			const newPaymentTotal = paymentAccumulated + paymentFromQuote;
+			if (newPaymentTotal > targetAmount) {
+				// Adjust to exactly hit the budget
+				const adjustedPayment = targetAmount - paymentAccumulated;
+				// Recalculate asset for adjusted payment
+				const adjustedPaymentInAssetScale = scaleAmount(adjustedPayment, paymentDecimals, assetDecimals);
+				const adjustedAsset = (adjustedPaymentInAssetScale * PRICE_SCALE) / priceScaled;
+				if (adjustedAsset > 0n) {
+					assetAccumulated += adjustedAsset;
+					paymentAccumulated = targetAmount;
+					fills.push({ quote, price, assetAmount: adjustedAsset, paymentAmount: adjustedPayment });
+				}
+				break;
+			}
+		}
+
+		assetAccumulated += assetFromQuote;
+		paymentAccumulated += paymentFromQuote;
+		fills.push({ quote, price, assetAmount: assetFromQuote, paymentAmount: paymentFromQuote });
 	}
 
-	// Determine input/output based on order side
-	// For BUY: input = asset (received), output = payment (given)
-	// For SELL: input = payment (received), output = asset (given)
-	const inputAmountFilled = orderSide === 'Buy' ? quantityFilled : totalCost;
-	const outputAmountGiven = orderSide === 'Buy' ? totalCost : quantityFilled;
+	// Map to user perspective (input = received, output = given away)
+	// BUY: user receives asset, gives payment
+	// SELL: user receives payment, gives asset
+	const inputAmountFilled = orderSide === 'Buy' ? assetAccumulated : paymentAccumulated;
+	const outputAmountGiven = orderSide === 'Buy' ? paymentAccumulated : assetAccumulated;
 
 	// Normalize to token scale: (input/10^inputDecimals) / (output/10^outputDecimals)
 	const ioRatio =

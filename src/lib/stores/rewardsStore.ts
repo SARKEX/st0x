@@ -31,6 +31,14 @@ export interface LastMonthData {
 	rocketBoostAchievedAmount: number;
 }
 
+export interface ProjectionData {
+	daysElapsed: number;
+	daysRemaining: number;
+	avgDailyPoints: number;
+	projectedTotalPoints: number;
+	projectedProgress: number;
+}
+
 export interface UserRewardsData {
 	currentMonth: string;
 	userPoints: number;
@@ -50,6 +58,7 @@ export interface UserRewardsData {
 	rocketBoostTiersAchieved: RocketBoostTiersAchieved;
 	rocketBoostAchievedAmount: number;
 	effectivePool: number;
+	projection: ProjectionData;
 	lastMonth: LastMonthData | null;
 	leaderboard: {
 		top3: WalletRanking[];
@@ -79,6 +88,8 @@ export const publicLeaderboardLoading = writable(false);
 export const showDetailsModal = writable(false);
 export const showLeaderboardModal = writable(false);
 export const showRulesModal = writable(false);
+export type RewardsModalTab = 'details' | 'rules';
+export const rewardsModalTab = writable<RewardsModalTab>('details');
 
 // Derived stores for convenience
 export const hasRewardsData = derived(rewardsData, ($data) => $data !== null);
@@ -119,6 +130,7 @@ export async function fetchUserRewards(walletAddress: string): Promise<void> {
 			rocketBoostTiersAchieved: data.rocketBoostTiersAchieved,
 			rocketBoostAchievedAmount: data.rocketBoostAchievedAmount,
 			effectivePool: data.effectivePool,
+			projection: data.projection,
 			lastMonth: data.lastMonth,
 			leaderboard: data.leaderboard
 		});
