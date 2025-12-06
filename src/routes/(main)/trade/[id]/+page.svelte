@@ -223,6 +223,7 @@
 	] as const;
 	type OnchainTabId = (typeof ONCHAIN_TABS)[number]['id'];
 	let activeOnchainTab: OnchainTabId = 'market';
+	let isAboutCollapsed = true; // Collapsed by default on mobile
 
 	// Pagination state for vaults (orders pagination is handled by OrdersTable component)
 	let currentVaultsPage = 1;
@@ -1006,7 +1007,7 @@
 							historyRangeOptions={HISTORY_RANGE_OPTIONS}
 							on:rangeChange={(e) => (historyRange = e.detail.key)}
 						/>
-						<div class="mt-2 text-xs text-gray-400">
+						<div class="mt-2 hidden text-xs text-gray-400 sm:block">
 							All times are displayed in your local timezone
 						</div>
 					{:else if activeOnchainTab === 'orders'}
@@ -1179,13 +1180,33 @@
 				</div>
 			</div>
 		</div>
-		<!-- About Section -->
-		<div class="space-y-6">
-			<div>
-				<h2 class="text-lg font-semibold">About</h2>
-				<p class="text-sm text-gray-400">Learn more about the token or the equity</p>
-			</div>
-			<div class="grid gap-6 lg:grid-cols-2" data-tutorial="fundamentals">
+		<!-- About Section - Collapsible on mobile -->
+		<div class="space-y-4 sm:space-y-6">
+			<button
+				type="button"
+				class="flex w-full items-center justify-between sm:cursor-default"
+				on:click={() => (isAboutCollapsed = !isAboutCollapsed)}
+			>
+				<div>
+					<h2 class="text-base font-semibold sm:text-lg">About</h2>
+					<p class="hidden text-sm text-gray-400 sm:block">Learn more about the token or the equity</p>
+				</div>
+				<svg
+					class="h-5 w-5 text-gray-400 transition-transform sm:hidden"
+					class:rotate-180={!isAboutCollapsed}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+				</svg>
+			</button>
+			<div
+				class="grid gap-4 sm:gap-6 lg:grid-cols-2"
+				class:hidden={isAboutCollapsed}
+				class:sm:grid={isAboutCollapsed}
+				data-tutorial="fundamentals"
+			>
 				<!-- Token Details (Left) -->
 				<div class="space-y-4">
 					<div class="space-y-3">
@@ -1360,11 +1381,19 @@
 					</div>
 					{#if activeAssetTab === 'company'}
 						{#if tradingViewSymbol}
-							<div class="overflow-hidden">
+							<div class="hidden overflow-hidden sm:block">
 								<TradingViewWidget
 									widgetType="symbol-profile"
 									symbol={tradingViewSymbol}
 									height="480"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="overflow-hidden sm:hidden">
+								<TradingViewWidget
+									widgetType="symbol-profile"
+									symbol={tradingViewSymbol}
+									height="320"
 									isTransparent={true}
 								/>
 							</div>
@@ -1375,11 +1404,19 @@
 						{/if}
 					{:else if activeAssetTab === 'fundamentals'}
 						{#if tradingViewSymbol}
-							<div class="overflow-hidden">
+							<div class="hidden overflow-hidden sm:block">
 								<TradingViewWidget
 									widgetType="financials"
 									symbol={tradingViewSymbol}
 									height={520}
+									isTransparent={true}
+								/>
+							</div>
+							<div class="overflow-hidden sm:hidden">
+								<TradingViewWidget
+									widgetType="financials"
+									symbol={tradingViewSymbol}
+									height={360}
 									isTransparent={true}
 								/>
 							</div>
@@ -1390,11 +1427,19 @@
 						{/if}
 					{:else if activeAssetTab === 'technical'}
 						{#if tradingViewSymbol}
-							<div class="overflow-hidden">
+							<div class="hidden overflow-hidden sm:block">
 								<TradingViewWidget
 									widgetType="technical-analysis"
 									symbol={tradingViewSymbol}
 									height="520"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="overflow-hidden sm:hidden">
+								<TradingViewWidget
+									widgetType="technical-analysis"
+									symbol={tradingViewSymbol}
+									height="360"
 									isTransparent={true}
 								/>
 							</div>
@@ -1404,11 +1449,19 @@
 							</div>
 						{/if}
 					{:else if tradingViewSymbol}
-						<div class="overflow-hidden">
+						<div class="hidden overflow-hidden sm:block">
 							<TradingViewWidget
 								widgetType="timeline"
 								symbol={tradingViewSymbol}
 								height="600"
+								isTransparent={true}
+							/>
+						</div>
+						<div class="overflow-hidden sm:hidden">
+							<TradingViewWidget
+								widgetType="timeline"
+								symbol={tradingViewSymbol}
+								height="400"
 								isTransparent={true}
 							/>
 						</div>
@@ -1564,16 +1617,16 @@
 	<!-- Compact Footer -->
 	<footer class="border-t border-white/5 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
 		<div class="mx-auto max-w-5xl">
-			<!-- Links Row -->
+			<!-- Links Row - fewer on mobile -->
 			<div
 				class="mb-4 flex flex-wrap items-center justify-center gap-3 text-[10px] text-gray-400 sm:mb-6 sm:gap-6 sm:text-sm"
 			>
 				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
 				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
-				<a href="/compliance" class="transition-colors hover:text-yellow-500">Compliance</a>
 				<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
-				<a href="/audit" class="transition-colors hover:text-yellow-500">Audits</a>
-				<a href="/faqs" class="transition-colors hover:text-yellow-500">FAQs</a>
+				<a href="/compliance" class="hidden transition-colors hover:text-yellow-500 sm:inline">Compliance</a>
+				<a href="/audit" class="hidden transition-colors hover:text-yellow-500 sm:inline">Audits</a>
+				<a href="/faqs" class="hidden transition-colors hover:text-yellow-500 sm:inline">FAQs</a>
 			</div>
 
 			<!-- Social Links -->
