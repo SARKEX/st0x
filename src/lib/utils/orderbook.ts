@@ -16,7 +16,7 @@ import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tok
 
 export type MarketOrderSide = 'Buy' | 'Sell';
 
-const PRICE_SCALE = 10n ** 9n; // preserves 9 decimal places for prices
+const PRICE_SCALE = 10n ** 18n; // preserves 18 decimal places for prices
 const PRICE_SCALE_NUMBER = Number(PRICE_SCALE);
 
 export interface QuoteFill {
