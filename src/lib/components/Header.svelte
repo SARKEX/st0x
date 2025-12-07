@@ -1,6 +1,7 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
+	import PrivyWalletActions from './PrivyWalletActions.svelte';
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
 	import { tick } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -8,6 +9,9 @@
 	import { page } from '$app/stores';
 	import { wrongNetwork, sfts } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
+	// Unified auth
+	import { walletAddress, authMethod, isAuthenticated, userDisplayInfo } from '$lib/stores/authStore';
+	import { openAuthModal, logoutPrivy, privySession } from '$lib/stores/privyStore';
 
 	export let title: string;
 	export let isSidebarCollapsed = false;
@@ -139,7 +143,21 @@
 	}
 
 	function handleConnectWallet() {
-		$web3Modal.open();
+		// For wallet users who are already connected, open wallet modal to manage/disconnect
+		if ($authMethod === 'wallet') {
+			$web3Modal.open();
+		} else {
+			// Show unified auth modal for new connections
+			openAuthModal();
+		}
+	}
+
+	function handleDisconnect() {
+		if ($authMethod === 'privy') {
+			logoutPrivy();
+		} else {
+			$web3Modal.open();
+		}
 	}
 </script>
 
@@ -214,8 +232,24 @@
 					<RewardsDisplay />
 				{/if}
 
-				{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
-					<!-- Fully registered user -->
+				{#if $authMethod === 'privy' && $privySession}
+					<!-- Privy authenticated user -->
+					<div class="flex items-center gap-2">
+						<a href="/dashboard">
+							<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
+								<div class="flex items-center gap-2">
+									<span>My Dashboard</span>
+									<span class="text-[11px] font-normal text-yellow-300/80">
+										{$privySession.email || `...${$privySession.walletAddress.slice(-4)}`}
+									</span>
+								</div>
+							</Button>
+						</a>
+						<!-- Privy wallet actions (send, export, logout) -->
+						<PrivyWalletActions compact showLogout />
+					</div>
+				{:else if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
+					<!-- Wallet user (fully registered) -->
 					<div class="flex items-center gap-2">
 						{#if !isHamburgerMode}
 							<!-- Full dashboard button on desktop -->
@@ -242,7 +276,7 @@
 							size="sm"
 							className="p-2"
 							aria-label="Disconnect wallet"
-							on:click={handleConnectWallet}
+							on:click={handleDisconnect}
 						>
 							<svg
 								class="h-5 w-5 text-gray-400 hover:text-red-400"
@@ -260,14 +294,14 @@
 						</Button>
 					</div>
 				{:else}
-					<!-- Not connected or not registered -->
+					<!-- Not connected -->
 					<Button
 						on:click={handleConnectWallet}
 						variant="primary"
 						size="sm"
 						className="px-3 py-2 text-sm whitespace-nowrap"
 					>
-						Connect Wallet
+						Connect or Log In
 					</Button>
 				{/if}
 

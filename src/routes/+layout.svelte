@@ -10,6 +10,11 @@
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
 
+	// Privy integration
+	import PrivySvelteWrapper from '$lib/privy/PrivySvelteWrapper.svelte';
+	import AuthModal from '$lib/components/AuthModal.svelte';
+	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
+
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
 		const connectorsList = [injected()];
@@ -41,5 +46,12 @@
 </script>
 
 <QueryClientProvider client={queryClient}>
+	<!-- Privy SDK wrapper (invisible, handles auth state) -->
+	<PrivySvelteWrapper />
+
+	<!-- Global modals -->
+	<AuthModal />
+	<SendFundsModal />
+
 	<slot />
 </QueryClientProvider>
