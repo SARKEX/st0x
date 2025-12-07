@@ -9,6 +9,8 @@
 
 import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
 import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tokenMath';
+import { parseUnits } from "viem";
+
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -17,7 +19,6 @@ import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tok
 export type MarketOrderSide = 'Buy' | 'Sell';
 
 const PRICE_SCALE = 10n ** 18n; // preserves 18 decimal places for prices
-const PRICE_SCALE_NUMBER = Number(PRICE_SCALE);
 
 export interface QuoteFill {
 	quote: ProcessedQuote;
@@ -237,7 +238,7 @@ function computeAvailableQuantity(
 
 	// Calculate: assetAvailable = paymentAvailable / price
 	// Use PRICE_SCALE for precision in the division
-	const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+	const priceScaled = parseUnits(price.toString(), 18);
 	if (priceScaled <= 0n) return 0n;
 
 	// (maxOutput in payment decimals * PRICE_SCALE) / priceScaled gives us amount in payment decimals
@@ -327,7 +328,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 			if (remainingPaymentBudget <= 0n) break;
 
 			// Calculate max asset for remaining budget: asset = budget / price
-			const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+			const priceScaled = parseUnits(price.toString(), 18);
 			if (priceScaled <= 0n) continue;
 
 			const budgetInAssetScale = scaleAmount(remainingPaymentBudget, paymentDecimals, assetDecimals);
@@ -339,7 +340,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		if (assetFromQuote <= 0n) continue;
 
 		// Calculate payment for this asset amount: payment = asset × price
-		const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+		const priceScaled = parseUnits(price.toString(), 18);
 		const paymentInAssetScale = (assetFromQuote * priceScaled) / PRICE_SCALE;
 		const paymentFromQuote = scaleAmount(paymentInAssetScale, assetDecimals, paymentDecimals);
 		if (paymentFromQuote <= 0n) continue;
