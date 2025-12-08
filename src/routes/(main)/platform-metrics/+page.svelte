@@ -642,11 +642,15 @@
 								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tvl, stats.network)}
 								</td>
-								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm">{stats.tokenCount}</td>
+								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm"
+									>{stats.tokenCount}</td
+								>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tradingVolume, stats.network)}
 								</td>
-								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm">{stats.orderCount}</td>
+								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm"
+									>{stats.orderCount}</td
+								>
 							</tr>
 						{/each}
 					</tbody>
@@ -706,7 +710,9 @@
 									<td class="hidden p-2 text-right text-yellow-400 sm:table-cell sm:p-3"
 										>{token.totalVolume.toFixed(3)}</td
 									>
-									<td class="p-2 text-right text-xs font-medium sm:p-3 sm:text-sm">{token.quoteValue}</td>
+									<td class="p-2 text-right text-xs font-medium sm:p-3 sm:text-sm"
+										>{token.quoteValue}</td
+									>
 									<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{token.trades}</td>
 								</tr>
 							{/each}

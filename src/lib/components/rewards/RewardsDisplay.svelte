@@ -158,7 +158,8 @@
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Est. Reward</span>
-						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span>
+						<span class="font-medium text-green-400">{formatUsd($rewardsData.estimatedReward)}</span
+						>
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Rewards APY</span>
@@ -182,10 +183,7 @@
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
 							<!-- Projected progress (lighter) -->
 							{#if projectedProgress > rocketBoostProgress}
-								<div
-									class="absolute h-full bg-yellow-500/30"
-									style="width: {projectedProgress}%"
-								/>
+								<div class="absolute h-full bg-yellow-500/30" style="width: {projectedProgress}%" />
 							{/if}
 							<!-- Current progress -->
 							<div

@@ -171,7 +171,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:SIVR',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	} as unknown as CategorizedToken
 ];
 
 export const CRYPTO_TOKENS: CategorizedToken[] = [

@@ -9,8 +9,7 @@
 
 import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
 import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tokenMath';
-import { parseUnits } from "viem";
-
+import { parseUnits } from 'viem';
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -262,7 +261,14 @@ function computeAvailableQuantity(
  * to provide a meaningful ratio despite different decimal scales.
  */
 export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
-	const { quotes, orderSide, selectedAmount, assetDecimals, paymentDecimals, mode = 'receive' } = options;
+	const {
+		quotes,
+		orderSide,
+		selectedAmount,
+		assetDecimals,
+		paymentDecimals,
+		mode = 'receive'
+	} = options;
 
 	// Determine which decimals apply to input/output based on order side
 	// BUY: input (receive) = asset, output (give) = payment
@@ -332,7 +338,11 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 			const priceScaled = parseUnits(price.toString(), PRECISION);
 			if (priceScaled <= 0n) continue;
 
-			const budgetInAssetScale = scaleAmount(remainingPaymentBudget, paymentDecimals, assetDecimals);
+			const budgetInAssetScale = scaleAmount(
+				remainingPaymentBudget,
+				paymentDecimals,
+				assetDecimals
+			);
 			const maxAssetForBudget = (budgetInAssetScale * PRICE_SCALE) / priceScaled;
 
 			assetFromQuote = maxAssetForBudget < availableAsset ? maxAssetForBudget : availableAsset;
@@ -353,7 +363,11 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 				// Adjust to exactly hit the budget
 				const adjustedPayment = targetAmount - paymentAccumulated;
 				// Recalculate asset for adjusted payment
-				const adjustedPaymentInAssetScale = scaleAmount(adjustedPayment, paymentDecimals, assetDecimals);
+				const adjustedPaymentInAssetScale = scaleAmount(
+					adjustedPayment,
+					paymentDecimals,
+					assetDecimals
+				);
 				const adjustedAsset = (adjustedPaymentInAssetScale * PRICE_SCALE) / priceScaled;
 				if (adjustedAsset > 0n) {
 					assetAccumulated += adjustedAsset;

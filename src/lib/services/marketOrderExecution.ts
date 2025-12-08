@@ -13,7 +13,6 @@ import {
 import { createRaindexClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
 import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
-import type { WalkQuotesResult, QuoteFill } from '$lib/utils/orderbook';
 import {
 	type OrderV4,
 	type RaindexOrderQuote,
@@ -147,10 +146,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					if (sgOrderResult.error || !sgOrderResult.value) return;
 
 					const sgOrder = sgOrderResult.value;
-					const decodedOrder = AbiCoder.defaultAbiCoder().decode(
-						[OrderV4_ABI],
-						sgOrder.orderBytes
-					);
+					const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
 					const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
 					orderInfo.order = sgOrder;
@@ -171,10 +167,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// 5. Build TakeOrderConfigs
 		const takeOrderConfigs: TakeOrderConfigV4[] = [];
 		for (const orderInfo of executableOrders) {
-			if (
-				!orderInfo.orderData?.validInputs?.length ||
-				!orderInfo.orderData?.validOutputs?.length
-			) {
+			if (!orderInfo.orderData?.validInputs?.length || !orderInfo.orderData?.validOutputs?.length) {
 				continue;
 			}
 
@@ -250,76 +243,90 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		};
 
 		// 10. Determine taker perspective tokens
-		const takerWantsInfo: TokenInfo = orderSide === 'Buy'
-			? { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol }
-			: { address: paymentToken.address, decimals: paymentToken.decimals, symbol: paymentToken.symbol };
+		const takerWantsInfo: TokenInfo =
+			orderSide === 'Buy'
+				? { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol }
+				: {
+						address: paymentToken.address,
+						decimals: paymentToken.decimals,
+						symbol: paymentToken.symbol
+					};
 
-		const takerPaysInfo: TokenInfo = orderSide === 'Buy'
-			? { address: paymentToken.address, decimals: paymentToken.decimals, symbol: paymentToken.symbol }
-			: { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol };
+		const takerPaysInfo: TokenInfo =
+			orderSide === 'Buy'
+				? {
+						address: paymentToken.address,
+						decimals: paymentToken.decimals,
+						symbol: paymentToken.symbol
+					}
+				: { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol };
 
 		// 11. Calculate requested amount
-		const requestedTakerWantsAmount = orderSide === 'Buy'
-			? (inputMode === 'spend' ? inputAmountFilled : amount)
-			: inputAmountFilled;
+		const requestedTakerWantsAmount =
+			orderSide === 'Buy'
+				? inputMode === 'spend'
+					? inputAmountFilled
+					: amount
+				: inputAmountFilled;
 
 		// 12. Build recalculate callback if needed
 		const shouldRecalculate = orderSide === 'Sell' || inputMode === 'spend';
-		const recalculateConfig = shouldRecalculate && refreshQuotes
-			? async (): Promise<TakeOrdersConfigV4 | null> => {
-				try {
-					const freshQuotes = await refreshQuotes();
+		const recalculateConfig =
+			shouldRecalculate && refreshQuotes
+				? async (): Promise<TakeOrdersConfigV4 | null> => {
+						try {
+							const freshQuotes = await refreshQuotes();
 
-					const freshWalkResult = walkOrderbook({
-						quotes: freshQuotes,
-						orderSide,
-						selectedAmount: amount,
-						assetDecimals: assetToken.decimals,
-						paymentDecimals: paymentToken.decimals,
-						mode: inputMode === 'spend' ? 'spend' : 'receive'
-					});
+							const freshWalkResult = walkOrderbook({
+								quotes: freshQuotes,
+								orderSide,
+								selectedAmount: amount,
+								assetDecimals: assetToken.decimals,
+								paymentDecimals: paymentToken.decimals,
+								mode: inputMode === 'spend' ? 'spend' : 'receive'
+							});
 
-					if (!freshWalkResult || freshWalkResult.inputAmountFilled === 0n) {
-						return null;
+							if (!freshWalkResult || freshWalkResult.inputAmountFilled === 0n) {
+								return null;
+							}
+
+							const freshMaximumInputFloat = Float.fromFixedDecimalLossy(
+								freshWalkResult.inputAmountFilled,
+								freshWalkResult.inputDecimals
+							);
+
+							const freshWorstFill = freshWalkResult.fills[freshWalkResult.fills.length - 1];
+							if (!freshWorstFill?.quote?.ratio) {
+								return null;
+							}
+
+							const freshRatioResult = Float.fromHex(freshWorstFill.quote.ratio as `0x${string}`);
+							if (freshRatioResult.error || !freshRatioResult.value) {
+								return null;
+							}
+
+							const freshBufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
+							if (freshBufferFloat.error || !freshBufferFloat.value) {
+								return null;
+							}
+
+							const freshBufferedRatioResult = freshRatioResult.value.mul(freshBufferFloat.value);
+							if (freshBufferedRatioResult.error || !freshBufferedRatioResult.value) {
+								return null;
+							}
+
+							return {
+								minimumInput: Float.fromBigint(0n).asHex(),
+								maximumInput: freshMaximumInputFloat.float.asHex(),
+								maximumIORatio: freshBufferedRatioResult.value.asHex(),
+								orders: takeOrderConfigs,
+								data: '0x'
+							};
+						} catch {
+							return null;
+						}
 					}
-
-					const freshMaximumInputFloat = Float.fromFixedDecimalLossy(
-						freshWalkResult.inputAmountFilled,
-						freshWalkResult.inputDecimals
-					);
-
-					const freshWorstFill = freshWalkResult.fills[freshWalkResult.fills.length - 1];
-					if (!freshWorstFill?.quote?.ratio) {
-						return null;
-					}
-
-					const freshRatioResult = Float.fromHex(freshWorstFill.quote.ratio as `0x${string}`);
-					if (freshRatioResult.error || !freshRatioResult.value) {
-						return null;
-					}
-
-					const freshBufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
-					if (freshBufferFloat.error || !freshBufferFloat.value) {
-						return null;
-					}
-
-					const freshBufferedRatioResult = freshRatioResult.value.mul(freshBufferFloat.value);
-					if (freshBufferedRatioResult.error || !freshBufferedRatioResult.value) {
-						return null;
-					}
-
-					return {
-						minimumInput: Float.fromBigint(0n).asHex(),
-						maximumInput: freshMaximumInputFloat.float.asHex(),
-						maximumIORatio: freshBufferedRatioResult.value.asHex(),
-						orders: takeOrderConfigs,
-						data: '0x'
-					};
-				} catch {
-					return null;
-				}
-			}
-			: undefined;
+				: undefined;
 
 		// 13. Execute transaction
 		const params: TakeOrdersParams = {
@@ -393,7 +400,10 @@ export function filterQuotesForSide(
 /**
  * Sort quotes by price (best first)
  */
-export function sortQuotesByPrice(quotes: ProcessedQuote[], orderSide: 'Buy' | 'Sell'): ProcessedQuote[] {
+export function sortQuotesByPrice(
+	quotes: ProcessedQuote[],
+	orderSide: 'Buy' | 'Sell'
+): ProcessedQuote[] {
 	return [...quotes].sort((a, b) => {
 		if (orderSide === 'Buy') {
 			// For Buy: lowest price first (best ask)

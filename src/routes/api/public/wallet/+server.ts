@@ -37,7 +37,10 @@ async function getAllWalletData(): Promise<AllWalletData> {
 		CACHE_KEYS.allWalletData(),
 		async () => {
 			const now = new Date();
-			const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+			const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
+				2,
+				'0'
+			)}`;
 
 			const [monthlyData, poolConfig, excludedSet] = await Promise.all([
 				kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
@@ -132,7 +135,10 @@ export const GET: RequestHandler = async ({ url, request }) => {
 	const walletAddress = url.searchParams.get('address')?.toLowerCase();
 
 	if (!walletAddress) {
-		return json({ success: false, error: 'Wallet address required (use ?address=0x...)' }, { status: 400 });
+		return json(
+			{ success: false, error: 'Wallet address required (use ?address=0x...)' },
+			{ status: 400 }
+		);
 	}
 
 	// Validate address format
@@ -151,7 +157,8 @@ export const GET: RequestHandler = async ({ url, request }) => {
 
 		// Calculate share and reward
 		const sharePercent = allData.totalPoints > 0 ? (userPoints / allData.totalPoints) * 100 : 0;
-		const estimatedReward = allData.totalPoints > 0 ? (userPoints / allData.totalPoints) * allData.effectivePool : 0;
+		const estimatedReward =
+			allData.totalPoints > 0 ? (userPoints / allData.totalPoints) * allData.effectivePool : 0;
 
 		const response: WalletResponse = {
 			success: true,

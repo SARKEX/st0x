@@ -38,7 +38,10 @@ export const GET: RequestHandler = async ({ request }) => {
 			CACHE_KEYS.rewardsApy(),
 			async () => {
 				const now = new Date();
-				const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+				const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
+					2,
+					'0'
+				)}`;
 
 				const [monthlyData, poolConfig] = await Promise.all([
 					kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),

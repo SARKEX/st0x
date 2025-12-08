@@ -180,7 +180,10 @@
 				{/if}
 			</div>
 
-			<div class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3" bind:this={actionCluster}>
+			<div
+				class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3"
+				bind:this={actionCluster}
+			>
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
 						{#each NAV_ITEMS as item}
@@ -328,7 +331,12 @@
 					class="flex items-center gap-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3 text-base font-medium text-white transition-colors hover:from-blue-500 hover:to-purple-500"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+						/>
 					</svg>
 					<span>My Dashboard</span>
 					<span class="ml-auto text-sm text-white/70">...{$signerAddress.slice(-4)}</span>

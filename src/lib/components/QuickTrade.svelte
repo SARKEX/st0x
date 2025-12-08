@@ -11,7 +11,11 @@
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import Button from './ui/Button.svelte';
-	import { executeMarketOrder, filterQuotesForSide, sortQuotesByPrice } from '$lib/services/marketOrderExecution';
+	import {
+		executeMarketOrder,
+		filterQuotesForSide,
+		sortQuotesByPrice
+	} from '$lib/services/marketOrderExecution';
 
 	// ============ TOKEN SELECTION (completely independent) ============
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -110,12 +114,12 @@
 		queryKey: ['usdcBalance', $currentNetwork?.id, paymentToken?.address, $signerAddress],
 		queryFn: async () => {
 			if (!paymentToken?.address || !$signerAddress || !$wagmiConfig) return 0n;
-			return await readContract($wagmiConfig, {
+			return (await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: paymentToken.address as `0x${string}`,
 				functionName: 'balanceOf',
 				args: [$signerAddress as `0x${string}`]
-			}) as bigint;
+			})) as bigint;
 		},
 		enabled: Boolean(paymentToken?.address && $signerAddress && $wagmiConfig)
 	});
@@ -124,12 +128,12 @@
 		queryKey: ['tokenBalance', $currentNetwork?.id, selectedTokenAddress, $signerAddress],
 		queryFn: async () => {
 			if (!selectedTokenAddress || !$signerAddress || !$wagmiConfig) return 0n;
-			return await readContract($wagmiConfig, {
+			return (await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: selectedTokenAddress as `0x${string}`,
 				functionName: 'balanceOf',
 				args: [$signerAddress as `0x${string}`]
-			}) as bigint;
+			})) as bigint;
 		},
 		enabled: Boolean(selectedTokenAddress && $signerAddress && $wagmiConfig)
 	});
@@ -258,7 +262,12 @@
 		}
 	}
 
-	function walkUsdcToTokens(usdcAmount: number, quotes: ProcessedQuote[], assetDecimals: number, paymentDecimals: number) {
+	function walkUsdcToTokens(
+		usdcAmount: number,
+		quotes: ProcessedQuote[],
+		assetDecimals: number,
+		paymentDecimals: number
+	) {
 		let remainingUsdc = parseUnits(usdcAmount.toString(), paymentDecimals);
 		let totalTokensOut = 0n;
 		let weightedPriceSum = 0;
@@ -274,14 +283,19 @@
 				maxAssetAvailable = parseFloatHex(q.maxOutput, outputDecimals);
 				if (outputDecimals !== assetDecimals) {
 					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
-					maxAssetAvailable = outputDecimals < assetDecimals ? maxAssetAvailable * scale : maxAssetAvailable / scale;
+					maxAssetAvailable =
+						outputDecimals < assetDecimals ? maxAssetAvailable * scale : maxAssetAvailable / scale;
 				}
 			}
 			if (maxAssetAvailable <= 0n) continue;
 
-			const maxUsdcForQuote = BigInt(Math.ceil((Number(maxAssetAvailable) / 10 ** assetDecimals) * price * 10 ** paymentDecimals));
+			const maxUsdcForQuote = BigInt(
+				Math.ceil((Number(maxAssetAvailable) / 10 ** assetDecimals) * price * 10 ** paymentDecimals)
+			);
 			const usdcToUse = remainingUsdc < maxUsdcForQuote ? remainingUsdc : maxUsdcForQuote;
-			const tokensFromQuote = BigInt(Math.floor((Number(usdcToUse) / 10 ** paymentDecimals / price) * 10 ** assetDecimals));
+			const tokensFromQuote = BigInt(
+				Math.floor((Number(usdcToUse) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
+			);
 			if (tokensFromQuote <= 0n) continue;
 
 			totalTokensOut += tokensFromQuote;
@@ -297,7 +311,13 @@
 		};
 	}
 
-	function walkTokensToUsdc(tokenAmount: number, quotes: ProcessedQuote[], assetDecimals: number, paymentDecimals: number, direction: 'buy' | 'sell') {
+	function walkTokensToUsdc(
+		tokenAmount: number,
+		quotes: ProcessedQuote[],
+		assetDecimals: number,
+		paymentDecimals: number,
+		direction: 'buy' | 'sell'
+	) {
 		let remainingTokens = parseUnits(tokenAmount.toString(), assetDecimals);
 		let totalUsdc = 0n;
 		let weightedPriceSum = 0;
@@ -310,7 +330,8 @@
 
 			let maxAvailable = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? (direction === 'buy' ? assetDecimals : paymentDecimals);
+				const outputDecimals =
+					q.outputTokenDecimals ?? (direction === 'buy' ? assetDecimals : paymentDecimals);
 				maxAvailable = parseFloatHex(q.maxOutput, outputDecimals);
 			}
 			if (maxAvailable <= 0n) continue;
@@ -321,12 +342,20 @@
 			if (direction === 'buy') {
 				const maxTokens = maxAvailable;
 				tokensFromQuote = remainingTokens < maxTokens ? remainingTokens : maxTokens;
-				usdcFromQuote = BigInt(Math.ceil((Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals));
+				usdcFromQuote = BigInt(
+					Math.ceil((Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals)
+				);
 			} else {
 				const maxUsdcFromBid = maxAvailable;
-				const maxTokensForBid = BigInt(Math.floor((Number(maxUsdcFromBid) / 10 ** paymentDecimals / price) * 10 ** assetDecimals));
+				const maxTokensForBid = BigInt(
+					Math.floor((Number(maxUsdcFromBid) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
+				);
 				tokensFromQuote = remainingTokens < maxTokensForBid ? remainingTokens : maxTokensForBid;
-				usdcFromQuote = BigInt(Math.floor((Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals));
+				usdcFromQuote = BigInt(
+					Math.floor(
+						(Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals
+					)
+				);
 			}
 
 			if (tokensFromQuote <= 0n) continue;
@@ -344,7 +373,12 @@
 		};
 	}
 
-	function walkUsdcToTokensSell(usdcAmount: number, quotes: ProcessedQuote[], assetDecimals: number, paymentDecimals: number) {
+	function walkUsdcToTokensSell(
+		usdcAmount: number,
+		quotes: ProcessedQuote[],
+		assetDecimals: number,
+		paymentDecimals: number
+	) {
 		let remainingUsdc = parseUnits(usdcAmount.toString(), paymentDecimals);
 		let totalTokensNeeded = 0n;
 		let weightedPriceSum = 0;
@@ -362,7 +396,9 @@
 			if (maxUsdcFromBid <= 0n) continue;
 
 			const usdcToGet = remainingUsdc < maxUsdcFromBid ? remainingUsdc : maxUsdcFromBid;
-			const tokensNeeded = BigInt(Math.ceil((Number(usdcToGet) / 10 ** paymentDecimals / price) * 10 ** assetDecimals));
+			const tokensNeeded = BigInt(
+				Math.ceil((Number(usdcToGet) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
+			);
 			if (tokensNeeded <= 0n) continue;
 
 			totalTokensNeeded += tokensNeeded;
@@ -436,7 +472,12 @@
 		tradeError = null;
 
 		try {
-			const relevantQuotes = filterQuotesForSide(quotes, orderSide, selectedToken.address, paymentToken.address);
+			const relevantQuotes = filterQuotesForSide(
+				quotes,
+				orderSide,
+				selectedToken.address,
+				paymentToken.address
+			);
 			const sortedQuotes = sortQuotesByPrice(relevantQuotes, orderSide);
 
 			if (sortedQuotes.length === 0) {
@@ -448,14 +489,30 @@
 				orderSide,
 				amount: tradeAmount,
 				inputMode: 'amount',
-				assetToken: { address: selectedToken.address, decimals: selectedToken.decimals, symbol: selectedToken.symbol },
-				paymentToken: { address: paymentToken.address, decimals: paymentToken.decimals, symbol: paymentToken.symbol },
+				assetToken: {
+					address: selectedToken.address,
+					decimals: selectedToken.decimals,
+					symbol: selectedToken.symbol
+				},
+				paymentToken: {
+					address: paymentToken.address,
+					decimals: paymentToken.decimals,
+					symbol: paymentToken.symbol
+				},
 				quotes: sortedQuotes,
 				network: $currentNetwork,
 				refreshQuotes: async () => {
 					const freshCache = await refreshTokenQuotes($currentNetwork!.id, selectedToken!.address);
 					quotes = freshCache.quotes;
-					return sortQuotesByPrice(filterQuotesForSide(freshCache.quotes, orderSide, selectedToken!.address, paymentToken!.address), orderSide);
+					return sortQuotesByPrice(
+						filterQuotesForSide(
+							freshCache.quotes,
+							orderSide,
+							selectedToken!.address,
+							paymentToken!.address
+						),
+						orderSide
+					);
 				}
 			});
 
@@ -495,16 +552,26 @@
 <!-- Close dropdown when clicking outside -->
 <svelte:window on:click={closeDropdown} />
 
-<div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/80 p-4 shadow-2xl backdrop-blur-xl sm:p-6">
-	<div class="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-blue-500/20 via-transparent to-transparent opacity-50"></div>
+<div
+	class="relative w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/80 p-4 shadow-2xl backdrop-blur-xl sm:p-6"
+>
+	<div
+		class="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-blue-500/20 via-transparent to-transparent opacity-50"
+	></div>
 
 	<div class="relative space-y-4">
 		<!-- USDC section -->
 		<div class="space-y-1">
-			<div class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+			<div
+				class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
+			>
 				<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
 					{#if paymentToken?.logoUrl}
-						<img src={paymentToken.logoUrl} alt={paymentToken.symbol} class="h-6 w-6 rounded-full" />
+						<img
+							src={paymentToken.logoUrl}
+							alt={paymentToken.symbol}
+							class="h-6 w-6 rounded-full"
+						/>
 					{/if}
 					<span class="font-medium text-white">{paymentToken?.symbol ?? 'USDC'}</span>
 				</div>
@@ -553,15 +620,28 @@
 				on:click={handleSwapDirection}
 				class="rounded-full border border-white/10 bg-gray-800 p-2 transition hover:border-white/20 hover:bg-gray-700"
 			>
-				<svg class="h-4 w-4 text-gray-400 transition-transform duration-200" class:rotate-180={!isBuying} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+				<svg
+					class="h-4 w-4 text-gray-400 transition-transform duration-200"
+					class:rotate-180={!isBuying}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 14l-7 7m0 0l-7-7m7 7V3"
+					/>
 				</svg>
 			</button>
 		</div>
 
 		<!-- Token section -->
 		<div class="space-y-1">
-			<div class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+			<div
+				class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
+			>
 				<!-- Token selector - completely independent -->
 				<div class="relative">
 					<button
@@ -570,13 +650,27 @@
 						class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5 transition hover:bg-gray-700"
 					>
 						{#if selectedToken}
-							<img src={selectedToken.logoUrl} alt={selectedToken.symbol} class="h-6 w-6 rounded-full" />
+							<img
+								src={selectedToken.logoUrl}
+								alt={selectedToken.symbol}
+								class="h-6 w-6 rounded-full"
+							/>
 							<span class="font-medium text-white">{selectedToken.symbol}</span>
 						{:else}
 							<span class="text-gray-400">Select</span>
 						{/if}
-						<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+						<svg
+							class="h-4 w-4 text-gray-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 9l-7 7-7-7"
+							/>
 						</svg>
 					</button>
 
@@ -619,12 +713,10 @@
 				<span class="text-gray-500">
 					{#if $connected}
 						Balance: {formattedTokenBalance.toFixed(4)} {selectedToken?.symbol ?? ''}
-					{:else}
-						{#if quote?.avgPrice}
-							~{formatPrice(quote.avgPrice)}/token
-						{:else if isBuying ? bestAskPrice : bestBidPrice}
-							Best: {formatPrice((isBuying ? bestAskPrice : bestBidPrice) ?? 0)}
-						{/if}
+					{:else if quote?.avgPrice}
+						~{formatPrice(quote.avgPrice)}/token
+					{:else if isBuying ? bestAskPrice : bestBidPrice}
+						Best: {formatPrice((isBuying ? bestAskPrice : bestBidPrice) ?? 0)}
 					{/if}
 				</span>
 				<div class="flex items-center gap-1">
@@ -669,8 +761,19 @@
 				{#if isExecutingTrade}
 					<span class="flex items-center justify-center gap-2">
 						<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
 						</svg>
 						Processing...
 					</span>
@@ -679,8 +782,19 @@
 				{:else if isLoadingQuotes}
 					<span class="flex items-center justify-center gap-2">
 						<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
 						</svg>
 						Loading prices...
 					</span>

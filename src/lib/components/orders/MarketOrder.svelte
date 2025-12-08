@@ -1,12 +1,9 @@
 <script lang="ts">
 	import type { CategorizedToken } from '$lib/config/network';
 	import { currentNetwork } from '$lib/stores';
-	import {
-		type ProcessedQuote,
-		walkOrderbook
-	} from '$lib/api/orders';
+	import { type ProcessedQuote, walkOrderbook } from '$lib/api/orders';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
-		import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
+	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits, parseUnits } from 'viem';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -16,7 +13,11 @@
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import type { CreateQueryResult } from '@tanstack/svelte-query';
-	import { executeMarketOrder, filterQuotesForSide, sortQuotesByPrice } from '$lib/services/marketOrderExecution';
+	import {
+		executeMarketOrder,
+		filterQuotesForSide,
+		sortQuotesByPrice
+	} from '$lib/services/marketOrderExecution';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -106,7 +107,10 @@
 	// Percentage buttons need oracle price for BUY in 'amount' mode (to convert payment to asset amount)
 	// In 'spend' mode, no conversion needed - direct percentage of balance
 	$: percentageButtonsDisabled =
-		orderSide === 'Buy' && inputMode === 'amount' && !oraclePriceAvailable && spendingTokenBalance > 0n;
+		orderSide === 'Buy' &&
+		inputMode === 'amount' &&
+		!oraclePriceAvailable &&
+		spendingTokenBalance > 0n;
 
 	// Calculate the amount being spent and check against balance
 	$: {
@@ -601,7 +605,9 @@
 		<div class="space-y-4">
 			<div>
 				<!-- Unified input with integrated toggle and token -->
-				<div class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50">
+				<div
+					class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50"
+				>
 					<!-- Left side: Buy/Spend or Sell toggle -->
 					{#if orderSide === 'Buy'}
 						<button
@@ -610,17 +616,20 @@
 								inputMode = inputMode === 'amount' ? 'spend' : 'amount';
 								selectedAmount = 0n;
 							}}
-							class="flex items-center gap-1.5 pl-4 pr-2 py-3 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
+							class="flex items-center gap-1.5 py-3 pl-4 pr-2 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
 						>
 							{inputMode === 'amount' ? 'Buy' : 'Spend'}
 							<svg class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M8 9l4-4 4 4m0 6l-4 4-4-4"
+								/>
 							</svg>
 						</button>
 					{:else}
-						<span class="pl-4 pr-2 py-3 text-sm font-medium text-red-400">
-							Sell
-						</span>
+						<span class="py-3 pl-4 pr-2 text-sm font-medium text-red-400"> Sell </span>
 					{/if}
 
 					<!-- Middle: Amount input -->
@@ -643,7 +652,7 @@
 					</div>
 
 					<!-- Right side: Token symbol -->
-					<span class="pl-2 pr-4 py-3 text-sm font-medium text-gray-300">
+					<span class="py-3 pl-2 pr-4 text-sm font-medium text-gray-300">
 						{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
 					</span>
 				</div>
@@ -651,9 +660,12 @@
 				<!-- Balance display -->
 				<div class="mt-1.5 text-sm text-gray-400">
 					{#if spendingTokenBalanceDecimals !== null}
-						{@const balanceFormatted = parseFloat(formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals))}
+						{@const balanceFormatted = parseFloat(
+							formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
+						)}
 						{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
-						Balance: {balanceRounded.toFixed(3)} {spendingToken?.symbol ?? ''}
+						Balance: {balanceRounded.toFixed(3)}
+						{spendingToken?.symbol ?? ''}
 					{:else}
 						Balance: —
 					{/if}
@@ -674,9 +686,7 @@
 					{/each}
 				</div>
 				{#if percentageButtonsDisabled}
-					<p class="mt-1 text-xs text-yellow-400/80">
-						Enter amount manually - price data loading
-					</p>
+					<p class="mt-1 text-xs text-yellow-400/80">Enter amount manually - price data loading</p>
 				{/if}
 			</div>
 			<div>
@@ -704,11 +714,7 @@
 					{/if}
 				</div>
 				{#if selectedAmount && selectedAmount > 0n && !isLoadingPrice && !priceError}
-					<p
-						class="mt-1 text-xs {isQuoteStale
-							? 'text-yellow-400'
-							: 'text-gray-500'}"
-					>
+					<p class="mt-1 text-xs {isQuoteStale ? 'text-yellow-400' : 'text-gray-500'}">
 						{#if isQuoteStale}
 							Price may be outdated ({quoteFreshnessSeconds}s ago)
 						{:else}

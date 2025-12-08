@@ -793,8 +793,12 @@
 						<div class="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
-									<p class="text-[10px] uppercase tracking-wide text-gray-400 sm:text-xs">Off-chain Reference</p>
-									<p class="mt-0.5 text-sm font-semibold text-gray-200 sm:mt-1 sm:text-base">{tokenDisplayName}</p>
+									<p class="text-[10px] uppercase tracking-wide text-gray-400 sm:text-xs">
+										Off-chain Reference
+									</p>
+									<p class="mt-0.5 text-sm font-semibold text-gray-200 sm:mt-1 sm:text-base">
+										{tokenDisplayName}
+									</p>
 								</div>
 								{#if tradingViewSymbol}
 									<span class="text-xs text-gray-400 sm:text-sm">{tradingViewSymbol}</span>
@@ -819,7 +823,9 @@
 								/>
 							</div>
 						{:else}
-							<div class="flex h-32 items-center justify-center px-4 py-6 text-sm text-gray-400 sm:h-48">
+							<div
+								class="flex h-32 items-center justify-center px-4 py-6 text-sm text-gray-400 sm:h-48"
+							>
 								TradingView data unavailable for this token.
 							</div>
 						{/if}
@@ -827,7 +833,9 @@
 					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-3 backdrop-blur-sm sm:p-4">
 						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-3 sm:text-sm">
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Oracle Price</dt>
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Oracle Price
+								</dt>
 								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if oracleLoading}
 										Loading...
@@ -839,7 +847,9 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Confidence</dt>
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Confidence
+								</dt>
 								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if oracleLoading}
 										Loading...
@@ -851,7 +861,9 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Bid Price</dt>
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Bid Price
+								</dt>
 								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
@@ -863,7 +875,9 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Offer Price</dt>
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Offer Price
+								</dt>
 								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
@@ -929,7 +943,9 @@
 						</div>
 					{:else}
 						<div class="flex-1 rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm">
-							<div class="flex h-[280px] items-center justify-center text-sm text-gray-400 sm:h-[495px]">
+							<div
+								class="flex h-[280px] items-center justify-center text-sm text-gray-400 sm:h-[495px]"
+							>
 								TradingView data unavailable for this token.
 							</div>
 						</div>
@@ -980,9 +996,21 @@
 									stroke="currentColor"
 									stroke-width="2"
 								>
-									<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" stroke-linecap="round" stroke-linejoin="round" />
-									<path d="M3 5v14a2 2 0 0 0 2 2h16v-5" stroke-linecap="round" stroke-linejoin="round" />
-									<path d="M18 12a2 2 0 0 0 0 4h4v-4Z" stroke-linecap="round" stroke-linejoin="round" />
+									<path
+										d="M21 12V7H5a2 2 0 0 1 0-4h14v4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+									<path
+										d="M3 5v14a2 2 0 0 0 2 2h16v-5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+									<path
+										d="M18 12a2 2 0 0 0 0 4h4v-4Z"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
 								</svg>
 								<!-- Plus icon -->
 								<svg
@@ -1204,7 +1232,9 @@
 			>
 				<div>
 					<h2 class="text-base font-semibold sm:text-lg">About</h2>
-					<p class="hidden text-sm text-gray-400 sm:block">Learn more about the token or the equity</p>
+					<p class="hidden text-sm text-gray-400 sm:block">
+						Learn more about the token or the equity
+					</p>
 				</div>
 				<svg
 					class="h-5 w-5 text-gray-400 transition-transform sm:hidden"
@@ -1213,7 +1243,12 @@
 					stroke="currentColor"
 					viewBox="0 0 24 24"
 				>
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 9l-7 7-7-7"
+					/>
 				</svg>
 			</button>
 			<div
@@ -1491,7 +1526,11 @@
 	</div>
 	{#if showTradePanel}
 		<div class="fixed inset-0 z-[2100] flex">
-			<button type="button" class="hidden flex-1 sm:block" aria-label="Close trade panel" on:click={closeTradePanel}
+			<button
+				type="button"
+				class="hidden flex-1 sm:block"
+				aria-label="Close trade panel"
+				on:click={closeTradePanel}
 			></button>
 			<aside
 				class="relative h-full w-full border-l-0 border-white/10 bg-gradient-to-b from-gray-950 to-gray-900 shadow-2xl sm:max-w-[22rem] sm:border-l"
@@ -1503,7 +1542,9 @@
 				data-tutorial="trade-panel"
 			>
 				<div class="flex h-full flex-col">
-					<div class="flex items-start justify-between border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+					<div
+						class="flex items-start justify-between border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5"
+					>
 						<div class="flex items-start gap-2 sm:gap-3">
 							{#if currentPythToken?.logoUrl}
 								<img
@@ -1565,12 +1606,18 @@
 								</button>
 							</div>
 							<div class="space-y-1 sm:space-y-2">
-								<div class="flex flex-wrap items-center gap-1 text-xs font-medium text-gray-300 sm:gap-2 sm:text-sm">
+								<div
+									class="flex flex-wrap items-center gap-1 text-xs font-medium text-gray-300 sm:gap-2 sm:text-sm"
+								>
 									<span>{panelSummaryVerb} {panelTokenLabel}</span>
 									<span class="text-gray-500">{panelSummaryPreposition}</span>
 									<span class="inline-flex items-center gap-1 text-gray-200">
 										{settlementTokenSymbol}
-										<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+										<img
+											src={settlementTokenLogo}
+											alt={settlementTokenSymbol}
+											class="h-3.5 w-3.5 sm:h-4 sm:w-4"
+										/>
 									</span>
 								</div>
 								<div class="flex items-center gap-1 text-xs text-gray-400 sm:gap-2 sm:text-sm">
@@ -1580,7 +1627,10 @@
 								</div>
 							</div>
 							<label class="block space-y-1.5 sm:space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
-								<span id={PANEL_STRATEGY_LABEL_ID} class="block text-xs font-medium text-gray-300 sm:text-sm">
+								<span
+									id={PANEL_STRATEGY_LABEL_ID}
+									class="block text-xs font-medium text-gray-300 sm:text-sm"
+								>
 									Order Type
 								</span>
 								<Select
@@ -1639,7 +1689,9 @@
 				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
 				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
 				<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
-				<a href="/compliance" class="hidden transition-colors hover:text-yellow-500 sm:inline">Compliance</a>
+				<a href="/compliance" class="hidden transition-colors hover:text-yellow-500 sm:inline"
+					>Compliance</a
+				>
 				<a href="/audit" class="hidden transition-colors hover:text-yellow-500 sm:inline">Audits</a>
 				<a href="/faqs" class="hidden transition-colors hover:text-yellow-500 sm:inline">FAQs</a>
 			</div>
@@ -1726,7 +1778,9 @@
 			}}
 		></button>
 		<div class="relative z-10 flex h-full flex-col bg-gray-950">
-			<div class="flex items-center justify-between border-b border-white/10 px-3 py-3 sm:px-6 sm:py-5">
+			<div
+				class="flex items-center justify-between border-b border-white/10 px-3 py-3 sm:px-6 sm:py-5"
+			>
 				<div class="min-w-0 flex-1">
 					<p class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Advanced Chart</p>
 					<h2 class="truncate text-base font-semibold text-white sm:text-xl">{modalTitle}</h2>
@@ -1762,7 +1816,7 @@
 				</div>
 			</div>
 			<div
-				class="flex flex-row gap-2 border-t border-white/10 bg-gradient-to-r from-green-500/10 via-gray-900/80 to-red-500/10 px-3 py-3 sm:gap-3 sm:justify-end sm:px-6 sm:py-6"
+				class="flex flex-row gap-2 border-t border-white/10 bg-gradient-to-r from-green-500/10 via-gray-900/80 to-red-500/10 px-3 py-3 sm:justify-end sm:gap-3 sm:px-6 sm:py-6"
 			>
 				<button
 					type="button"

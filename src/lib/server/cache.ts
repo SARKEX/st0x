@@ -19,7 +19,11 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 	}
 }
 
-export async function cacheSet<T>(key: string, value: T, ttlSeconds = DEFAULT_TTL_SECONDS): Promise<void> {
+export async function cacheSet<T>(
+	key: string,
+	value: T,
+	ttlSeconds = DEFAULT_TTL_SECONDS
+): Promise<void> {
 	const client = await getKv();
 	if (!client) return;
 
@@ -129,8 +133,8 @@ export const CACHE_KEYS = {
 
 // TTL constants (in seconds)
 export const CACHE_TTL = {
-	SHORT: 5 * 60,        // 5 minutes
-	MEDIUM: 30 * 60,      // 30 minutes
-	LONG: 60 * 60,        // 1 hour
+	SHORT: 5 * 60, // 5 minutes
+	MEDIUM: 30 * 60, // 30 minutes
+	LONG: 60 * 60, // 1 hour
 	VERY_LONG: 6 * 60 * 60 // 6 hours
 } as const;

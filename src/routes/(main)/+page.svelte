@@ -20,7 +20,13 @@
 	}
 
 	// Typewriter animation for hero text
-	const typewriterWords = ['On-Chain', 'Collateralised', 'DeFi-Ready', 'Transferable', "Redeemable"];
+	const typewriterWords = [
+		'On-Chain',
+		'Collateralised',
+		'DeFi-Ready',
+		'Transferable',
+		'Redeemable'
+	];
 	let currentWordIndex = 0;
 	let displayedText = '';
 	let isDeleting = false;
@@ -204,21 +210,29 @@
 			<h1
 				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
 			>
-				Global Equities. <span class="text-yellow-400">{displayedText}</span><span class="animate-blink text-yellow-400">|</span>
+				Global Equities. <span class="text-yellow-400">{displayedText}</span><span
+					class="animate-blink text-yellow-400">|</span
+				>
 			</h1>
 
 			<!-- Rewards APY Banner -->
 			<div class="mb-8 flex justify-center px-2 sm:mb-10 sm:px-0">
-				<div class="rewards-banner relative w-full max-w-md overflow-hidden rounded-2xl px-4 py-2.5 sm:w-auto sm:max-w-none sm:rounded-full sm:px-6 sm:py-3">
+				<div
+					class="rewards-banner relative w-full max-w-md overflow-hidden rounded-2xl px-4 py-2.5 sm:w-auto sm:max-w-none sm:rounded-full sm:px-6 sm:py-3"
+				>
 					<span class="rewards-border"></span>
 					<span class="absolute inset-[1px] z-0 rounded-2xl bg-gray-900/90 sm:rounded-full"></span>
-					<div class="relative z-10 flex flex-col items-center gap-1 text-sm sm:flex-row sm:gap-3 sm:text-base">
+					<div
+						class="relative z-10 flex flex-col items-center gap-1 text-sm sm:flex-row sm:gap-3 sm:text-base"
+					>
 						<div class="flex items-center gap-2">
 							<span class="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5">
 								<span
 									class="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"
 								></span>
-								<span class="relative inline-flex h-2 w-2 rounded-full bg-green-500 sm:h-2.5 sm:w-2.5"></span>
+								<span
+									class="relative inline-flex h-2 w-2 rounded-full bg-green-500 sm:h-2.5 sm:w-2.5"
+								></span>
 							</span>
 							<span class="text-gray-300">Rewards boost active</span>
 						</div>
@@ -253,9 +267,7 @@
 			</div>
 
 			<!-- Trust Indicators -->
-			<div
-				class="mt-12 grid grid-cols-3 gap-3 text-center sm:mt-20 sm:gap-10 lg:mt-24 lg:gap-16"
-			>
+			<div class="mt-12 grid grid-cols-3 gap-3 text-center sm:mt-20 sm:gap-10 lg:mt-24 lg:gap-16">
 				<!-- Decentralised -->
 				<div class="p-2 sm:p-5">
 					<div class="mb-2 flex justify-center sm:mb-4">
@@ -280,7 +292,9 @@
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
 						Decentralised
 					</h3>
-					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">Withdraw to your wallet. Compatible with DeFi protocols</p>
+					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
+						Withdraw to your wallet. Compatible with DeFi protocols
+					</p>
 				</div>
 
 				<!-- Exchange-Linked Liquidity -->
@@ -296,10 +310,30 @@
 								viewBox="0 0 36 24"
 							>
 								<!-- Swap arrows in center -->
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 5l3 3-3 3" />
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M24 8H16a4 4 0 00-4 4" />
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-3-3 3-3" />
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 16h8a4 4 0 004-4" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="1.5"
+									d="M21 5l3 3-3 3"
+								/>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="1.5"
+									d="M24 8H16a4 4 0 00-4 4"
+								/>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="1.5"
+									d="M15 19l-3-3 3-3"
+								/>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="1.5"
+									d="M12 16h8a4 4 0 004-4"
+								/>
 								<!-- Institution building (top-left) -->
 								<g transform="translate(1, 1)" stroke-width="1.2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M0 4l4.5-3 4.5 3" />
@@ -340,11 +374,18 @@
 								<!-- Layered security circles with $ -->
 								<circle cx="12" cy="12" r="10" stroke-width="1.5" />
 								<circle cx="12" cy="12" r="7" stroke-dasharray="3 2" stroke-width="1.5" />
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9c-1.1 0-2 .6-2 1.3s.9 1.3 2 1.3 2 .6 2 1.3-.9 1.3-2 1.3m0-5.2c.7 0 1.4.3 1.7.6M12 9v-.5m0 .5v5.2m0 0v.5m0-.5c-.7 0-1.4-.3-1.7-.6" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="1.5"
+									d="M12 9c-1.1 0-2 .6-2 1.3s.9 1.3 2 1.3 2 .6 2 1.3-.9 1.3-2 1.3m0-5.2c.7 0 1.4.3 1.7.6M12 9v-.5m0 .5v5.2m0 0v.5m0-.5c-.7 0-1.4-.3-1.7-.6"
+								/>
 							</svg>
 						</div>
 					</div>
-					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">1:1 Collateralised</h3>
+					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
+						1:1 Collateralised
+					</h3>
 					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
 						Every token fully collateralised with a legal right of exchange.
 					</p>
@@ -392,7 +433,8 @@
 								<th class="px-3 py-3 text-left text-xs font-medium text-gray-400 sm:px-5 sm:py-4"
 									>Price</th
 								>
-								<th class="hidden px-3 py-3 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-5 sm:py-4"
+								<th
+									class="hidden px-3 py-3 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-5 sm:py-4"
 									>TVL</th
 								>
 								<th

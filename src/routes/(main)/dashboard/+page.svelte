@@ -11,7 +11,6 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { truncateAddress } from '$lib/utils/format';
-	import { gridStyles } from '$lib/styles/utils';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits, erc20Abi } from 'viem';
 	import { readContract } from '@wagmi/core';
@@ -478,7 +477,9 @@
 					<!-- Funds Section (Payment Tokens) -->
 					<Section>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Funds</h2>
-						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">Payment tokens available for trading</p>
+						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+							Payment tokens available for trading
+						</p>
 						{#if fundsHoldings.length > 0}
 							<div class="overflow-x-auto">
 								<Table>
@@ -537,7 +538,9 @@
 					<!-- Holdings Section (Asset Tokens) -->
 					<Section>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Holdings</h2>
-						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">Asset tokens combined across wallet and vaults</p>
+						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+							Asset tokens combined across wallet and vaults
+						</p>
 						{#if assetHoldings.length > 0}
 							<div class="overflow-x-auto">
 								<Table>
@@ -573,8 +576,7 @@
 											>
 											<th
 												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												></th
-											>
+											></th>
 										</tr>
 									</thead>
 									<tbody>
@@ -598,11 +600,15 @@
 												<td class="hidden px-2 py-2 font-medium sm:table-cell sm:px-4 sm:py-3"
 													>{holding.totalBalance.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 text-xs sm:px-4 sm:py-3 sm:text-sm">${holding.price.toFixed(2)}</td>
+												<td class="px-2 py-2 text-xs sm:px-4 sm:py-3 sm:text-sm"
+													>${holding.price.toFixed(2)}</td
+												>
 												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
 													>${holding.value.toFixed(2)}</td
 												>
-												<td class="hidden px-2 py-2 text-gray-400 sm:table-cell sm:px-4 sm:py-3"> TBD </td>
+												<td class="hidden px-2 py-2 text-gray-400 sm:table-cell sm:px-4 sm:py-3">
+													TBD
+												</td>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">
 													<div class="flex justify-center gap-2">
 														<Button
@@ -680,7 +686,9 @@
 						<!-- Default Vaults Section -->
 						<div class="mb-6 sm:mb-8">
 							<h2 class="mb-2 text-base font-semibold sm:text-lg">Default Vaults</h2>
-							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">Your primary vault for each token</p>
+							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+								Your primary vault for each token
+							</p>
 							{#if defaultVaults.length === 0}
 								<div class="py-4 text-sm text-gray-500">
 									No default vaults found. Default vaults are created automatically when you make a
@@ -693,7 +701,9 @@
 											<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
 												<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Token</th>
 												<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Balance</th>
-												<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4">Orders</th>
+												<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
+													>Orders</th
+												>
 												<th class="pb-2 font-medium sm:pb-3"></th>
 											</tr>
 										</thead>
@@ -707,7 +717,9 @@
 												<tr class="hover:bg-white/5">
 													<td class="py-2 pr-2 sm:py-3 sm:pr-4">
 														<div class="flex items-center gap-2">
-															<span class="text-xs text-gray-200 sm:text-sm">{vault.token.symbol}</span>
+															<span class="text-xs text-gray-200 sm:text-sm"
+																>{vault.token.symbol}</span
+															>
 															<a
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
@@ -739,7 +751,9 @@
 													<td class="py-2 pr-2 text-xs text-gray-300 sm:py-3 sm:pr-4 sm:text-sm"
 														>{balanceNum.toFixed(4)}</td
 													>
-													<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4">{ordersCount}</td>
+													<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4"
+														>{ordersCount}</td
+													>
 													<td class="py-2 sm:py-3">
 														{#if balance > 0n}
 															<Button
@@ -766,17 +780,23 @@
 								<div class="mb-3 flex items-center justify-between sm:mb-4">
 									<div>
 										<h2 class="text-base font-semibold sm:text-lg">Other Vaults</h2>
-										<p class="hidden text-sm text-gray-400 sm:block">Additional vaults with custom IDs</p>
+										<p class="hidden text-sm text-gray-400 sm:block">
+											Additional vaults with custom IDs
+										</p>
 									</div>
 									{#if dustVaultsCount > 0 || showDustVaults}
-										<label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm">
+										<label
+											class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm"
+										>
 											<input
 												type="checkbox"
 												bind:checked={showDustVaults}
 												class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 sm:h-4 sm:w-4"
 											/>
 											<span class="sm:hidden">Dust ({dustVaultsCount})</span>
-											<span class="hidden sm:inline">Show dust ({dustVaultsCount} vault{dustVaultsCount === 1 ? '' : 's'})</span>
+											<span class="hidden sm:inline"
+												>Show dust ({dustVaultsCount} vault{dustVaultsCount === 1 ? '' : 's'})</span
+											>
 										</label>
 									{/if}
 								</div>
@@ -786,9 +806,13 @@
 											<thead>
 												<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
 													<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Token</th>
-													<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4">Vault ID</th>
+													<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
+														>Vault ID</th
+													>
 													<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Balance</th>
-													<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4">Orders</th>
+													<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
+														>Orders</th
+													>
 													<th class="pb-2 font-medium sm:pb-3"></th>
 												</tr>
 											</thead>
@@ -802,7 +826,9 @@
 														(vault.ordersAsOutput?.length ?? 0)}
 													<tr class="hover:bg-white/5">
 														<td class="py-2 pr-2 sm:py-3 sm:pr-4">
-															<span class="text-xs text-gray-200 sm:text-sm">{vault.token.symbol}</span>
+															<span class="text-xs text-gray-200 sm:text-sm"
+																>{vault.token.symbol}</span
+															>
 														</td>
 														<td class="hidden py-2 pr-2 sm:table-cell sm:py-3 sm:pr-4">
 															<a
@@ -822,7 +848,9 @@
 														<td class="py-2 pr-2 text-xs text-gray-300 sm:py-3 sm:pr-4 sm:text-sm"
 															>{balanceNum.toFixed(4)}</td
 														>
-														<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4">{ordersCount}</td>
+														<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4"
+															>{ordersCount}</td
+														>
 														<td class="py-2 sm:py-3">
 															{#if balance > 0n}
 																<Button
