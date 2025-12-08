@@ -78,7 +78,21 @@
 
 	$: depositAmount = selectedAmount;
 	$: maxTradeAmount = selectedAmount ? selectedAmount / 10n : 0n;
-	$: minTradeAmount = selectedAmount ? selectedAmount / 50n : 0n;
+	// Min trade size is $1 USDC for Buy, or $1 worth of the asset token for Sell
+	$: minTradeAmount = (() => {
+		if (orderSide === 'Buy') {
+			// For Buy orders, min is 1 USDC (6 decimals)
+			const usdcDecimals = selectedOutputToken?.decimals ?? 6;
+			return BigInt(10 ** usdcDecimals);
+		} else {
+			// For Sell orders, min is $1 worth of the asset token
+			const price = parseFloat(selectedInitialRatio || '0');
+			if (price <= 0) return 0n;
+			const tokenDecimals = selectedInputToken?.decimals ?? 18;
+			const oneDollarWorth = 1 / price;
+			return BigInt(Math.floor(oneDollarWorth * 10 ** tokenDecimals));
+		}
+	})();
 
 	// Advanced options state
 	let showAdvancedOptions = false;

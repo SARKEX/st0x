@@ -1,19 +1,14 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import PageContainer from '$lib/components/ui/PageContainer.svelte';
-	import ProsePanel from '$lib/components/ui/ProsePanel.svelte';
 </script>
 
-<!-- Main Content -->
+<div class="relative z-10 min-h-screen">
+	<section class="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+		<div class="mx-auto max-w-3xl">
+			<h1 class="mb-6 text-4xl font-bold tracking-tight text-white sm:text-5xl">Audit Reports</h1>
+			<p class="text-gray-400">Coming soon.</p>
+		</div>
+	</section>
 
-<div>
-	<!-- Terms Content -->
-	<PageContainer>
-		<ProsePanel>
-			<h1 class="mb-6 text-4xl font-bold text-white">AUDIT REPORTS</h1>
-		</ProsePanel>
-	</PageContainer>
-
-	<!-- Footer -->
 	<Footer />
 </div>
