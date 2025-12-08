@@ -4,16 +4,13 @@
 	import { currentNetwork, oracleQuotes } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
-	import Footer from '$lib/components/Footer.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import Section from '$lib/components/ui/Section.svelte';
 	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
 	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
 	import TradingViewWidget from '$lib/components/charts/TradingViewWidget.svelte';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { containerStyles } from '$lib/styles/utils';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
@@ -226,6 +223,7 @@
 	] as const;
 	type OnchainTabId = (typeof ONCHAIN_TABS)[number]['id'];
 	let activeOnchainTab: OnchainTabId = 'market';
+	let isAboutCollapsed = false; // Not collapsed by default
 
 	// Pagination state for vaults (orders pagination is handled by OrdersTable component)
 	let currentVaultsPage = 1;
@@ -750,8 +748,8 @@
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
 	$: pageTitle = `Trade ${tokenDisplayName}`;
 	$: modalTitle = tokenDisplaySymbol
-		? `Terminal View — ${tokenDisplayName} (${tokenDisplaySymbol})`
-		: `Terminal View — ${tokenDisplayName}`;
+		? `Advanced Chart — ${tokenDisplayName} (${tokenDisplaySymbol})`
+		: `Advanced Chart — ${tokenDisplayName}`;
 	$: panelTokenLabel = tokenDisplaySymbol || currentToken?.symbol || tokenDisplayName;
 	$: panelSummaryVerb = panelOrderSide === 'Buy' ? 'Buying' : 'Selling';
 	$: panelSummaryPreposition = panelOrderSide === 'Buy' ? 'with' : 'for';
@@ -782,48 +780,63 @@
 		</div>
 	</div>
 {:else}
-	<div class="space-y-6 p-4 sm:p-6">
-		<div class="flex flex-col gap-1 text-left sm:flex-row sm:items-baseline sm:gap-3">
-			<h1 class="text-2xl font-bold">
-				Trade {tokenDisplayName}
-				{#if tokenDisplaySymbol}
-					<span class="ml-2 text-lg font-normal text-gray-400">({tokenDisplaySymbol})</span>
-				{/if}
-			</h1>
-		</div>
+	<div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
 		<!-- Header Section with Chart -->
-		<Section>
-			<div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
+		<div class="space-y-4 sm:space-y-6">
+			<div class="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-5">
 				<!-- Left: Symbol info -->
-				<div class="space-y-4 xl:col-span-2">
+				<div class="space-y-3 sm:space-y-4 xl:col-span-2">
 					<div
-						class={`${containerStyles.cardBordered} overflow-hidden p-0`}
+						class="overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
 						data-tutorial="symbol-overview"
 					>
-						<div class="border-b border-white/10 bg-gray-900/60 px-4 py-3">
+						<div class="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
-									<p class="text-xs uppercase tracking-wide text-gray-400">Off-chain Reference</p>
-									<p class="mt-1 text-base font-semibold text-gray-200">{tokenDisplayName}</p>
+									<p class="text-[10px] uppercase tracking-wide text-gray-400 sm:text-xs">
+										Off-chain Reference
+									</p>
+									<p class="mt-0.5 text-sm font-semibold text-gray-200 sm:mt-1 sm:text-base">
+										{tokenDisplayName}
+									</p>
 								</div>
 								{#if tradingViewSymbol}
-									<span class="text-sm text-gray-400">{tradingViewSymbol}</span>
+									<span class="text-xs text-gray-400 sm:text-sm">{tradingViewSymbol}</span>
 								{/if}
 							</div>
 						</div>
 						{#if tradingViewSymbol}
-							<TradingViewWidget widgetType="symbol-info" symbol={tradingViewSymbol} height="420" />
+							<div class="hidden sm:block">
+								<TradingViewWidget
+									widgetType="symbol-info"
+									symbol={tradingViewSymbol}
+									height="420"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="sm:hidden">
+								<TradingViewWidget
+									widgetType="symbol-info"
+									symbol={tradingViewSymbol}
+									height="280"
+									isTransparent={true}
+								/>
+							</div>
 						{:else}
-							<div class="flex h-48 items-center justify-center px-4 py-6 text-sm text-gray-400">
+							<div
+								class="flex h-32 items-center justify-center px-4 py-6 text-sm text-gray-400 sm:h-48"
+							>
 								TradingView data unavailable for this token.
 							</div>
 						{/if}
 					</div>
-					<div class={containerStyles.cardBordered}>
-						<dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-3 backdrop-blur-sm sm:p-4">
+						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-3 sm:text-sm">
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Oracle Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Oracle Price
+								</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -834,8 +847,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Confidence</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Confidence
+								</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -846,8 +861,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Bid Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Bid Price
+								</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
@@ -858,8 +875,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-500">Offer Price</dt>
-								<dd class="mt-1 font-medium text-gray-100">
+								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+									Offer Price
+								</dt>
+								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
@@ -871,20 +890,20 @@
 							</div>
 						</dl>
 						{#if oracleError}
-							<p class="mt-4 text-xs text-red-400">{oracleError}</p>
+							<p class="mt-2 text-xs text-red-400 sm:mt-4">{oracleError}</p>
 						{/if}
 					</div>
-					<div class="grid grid-cols-2 gap-3" data-tutorial="buy-sell-buttons">
+					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
 						<button
 							type="button"
-							class="rounded-xl bg-green-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900"
+							class="rounded-xl bg-green-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Buy')}
 						>
 							Buy
 						</button>
 						<button
 							type="button"
-							class="rounded-xl bg-red-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900"
+							class="rounded-xl bg-red-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Sell')}
 						>
 							Sell
@@ -892,49 +911,70 @@
 					</div>
 				</div>
 				<!-- Right: Overview and chart -->
-				<div class="flex h-full flex-col gap-4 xl:col-span-3" data-tutorial="tradingview">
+				<div class="flex h-full flex-col gap-3 sm:gap-4 xl:col-span-3" data-tutorial="tradingview">
 					{#if tradingViewSymbol}
-						<div class={`${containerStyles.cardBordered} flex-1 overflow-hidden p-0`}>
-							<TradingViewWidget
-								widgetType="symbol-overview"
-								symbol={tradingViewSymbol}
-								displayName={currentToken.name || currentToken.symbol}
-								dateRange="1D"
-								showVolume={false}
-								autosize={false}
-								height="485"
-							/>
+						<div
+							class="flex-1 overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
+						>
+							<div class="hidden sm:block">
+								<TradingViewWidget
+									widgetType="symbol-overview"
+									symbol={tradingViewSymbol}
+									displayName={currentToken.name || currentToken.symbol}
+									dateRange="1D"
+									showVolume={false}
+									autosize={false}
+									height="485"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="sm:hidden">
+								<TradingViewWidget
+									widgetType="symbol-overview"
+									symbol={tradingViewSymbol}
+									displayName={currentToken.name || currentToken.symbol}
+									dateRange="1D"
+									showVolume={false}
+									autosize={false}
+									height="320"
+									isTransparent={true}
+								/>
+							</div>
 						</div>
 					{:else}
-						<div class={`${containerStyles.cardBordered} flex-1`}>
-							<div class="flex h-[495px] items-center justify-center text-sm text-gray-400">
+						<div class="flex-1 rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm">
+							<div
+								class="flex h-[280px] items-center justify-center text-sm text-gray-400 sm:h-[495px]"
+							>
 								TradingView data unavailable for this token.
 							</div>
 						</div>
 					{/if}
-					<div class="mb-[25px] mt-auto flex justify-end">
+					<div class="mt-auto flex justify-end sm:mb-[25px]">
 						<Button
 							variant="secondary"
 							size="md"
-							className="w-full rounded-xl border border-yellow-400/40 bg-yellow-500/20 px-4 py-3 text-base font-semibold text-yellow-300 shadow-lg shadow-yellow-500/30 transition hover:border-yellow-300 hover:bg-yellow-500/30 hover:text-white sm:w-auto"
+							className="w-full rounded-xl border border-yellow-400/40 bg-yellow-500/20 px-4 py-2.5 text-sm font-semibold text-yellow-300 shadow-lg shadow-yellow-500/30 transition hover:border-yellow-300 hover:bg-yellow-500/30 hover:text-white sm:w-auto sm:py-3 sm:text-base"
 							aria-label="Open terminal view"
 							on:click={(event) => openChartModal(event)}
 						>
-							Terminal View
+							Advanced Chart
 						</Button>
 					</div>
 				</div>
 			</div>
-		</Section>
-		<Section>
+		</div>
+		<div class="space-y-4 sm:space-y-6">
 			<div data-tutorial="dex-activity">
-				<div class="mb-6">
+				<div class="mb-4 sm:mb-6">
 					<div
-						class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+						class="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 					>
 						<div>
-							<h2 class="text-base font-semibold text-white">DEX Activity</h2>
-							<p class="text-sm text-gray-400">View DEX trades, liquidity, orders, and vaults</p>
+							<h2 class="text-base font-semibold sm:text-lg">On-chain Market</h2>
+							<p class="hidden text-xs text-gray-400 sm:block sm:text-sm">
+								View on-chain trades, liquidity, orders, and vaults
+							</p>
 						</div>
 						{#if $connected}
 							<button
@@ -946,10 +986,35 @@
 										decimals: 18,
 										image: currentPythToken?.logoUrl
 									})}
-								class="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+								class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
 							>
+								<!-- Wallet icon (mobile only) -->
 								<svg
-									class="h-4 w-4"
+									class="h-4 w-4 sm:hidden"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										d="M21 12V7H5a2 2 0 0 1 0-4h14v4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+									<path
+										d="M3 5v14a2 2 0 0 0 2 2h16v-5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+									<path
+										d="M18 12a2 2 0 0 0 0 4h4v-4Z"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								<!-- Plus icon -->
+								<svg
+									class="h-3 w-3 sm:h-4 sm:w-4"
 									viewBox="0 0 24 24"
 									fill="none"
 									stroke="currentColor"
@@ -957,7 +1022,8 @@
 								>
 									<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
 								</svg>
-								Track in Wallet
+								<span class="sm:hidden">Track</span>
+								<span class="hidden sm:inline">Track in Wallet</span>
 							</button>
 						{/if}
 					</div>
@@ -968,250 +1034,230 @@
 					/>
 				</div>
 
-				{#if activeOnchainTab === 'market'}
-					<TokenMarketCharts
-						volumeBuckets={tradeVolumeBuckets}
-						depth={orderbookDepth}
-						{ohlcData}
-						rangeStartMs={historyRangeStartMs}
-						rangeEndMs={historyRangeEndMs}
-						isLoading={chartsLoading}
-						error={tradeQueryError}
-						{historyRange}
-						historyRangeOptions={HISTORY_RANGE_OPTIONS}
-						on:rangeChange={(e) => (historyRange = e.detail.key)}
-					/>
-					<div class="mt-2 text-xs text-gray-400">
-						All times are displayed in your local timezone
-					</div>
-				{:else if activeOnchainTab === 'orders'}
-					<div class="mt-4">
-						<OrdersTable
-							orders={tokenOrders}
-							isLoading={$orderbookQuotesQuery.isLoading}
-							isError={$orderbookQuotesQuery.isError}
-							errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
-							tokenAddress={currentToken?.address ?? null}
+				<!-- Fixed height container to prevent layout jumps between tabs -->
+				<div class="min-h-[320px] sm:min-h-[440px]">
+					{#if activeOnchainTab === 'market'}
+						<TokenMarketCharts
+							volumeBuckets={tradeVolumeBuckets}
+							depth={orderbookDepth}
+							{ohlcData}
+							rangeStartMs={historyRangeStartMs}
+							rangeEndMs={historyRangeEndMs}
+							isLoading={chartsLoading}
+							error={tradeQueryError}
+							{historyRange}
+							historyRangeOptions={HISTORY_RANGE_OPTIONS}
+							on:rangeChange={(e) => (historyRange = e.detail.key)}
 						/>
-					</div>
-				{:else if activeOnchainTab === 'vaults'}
-					<div class="mt-4">
-						{#if !$connected}
-							<div class="flex flex-col items-center justify-center gap-4 py-12">
-								<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
-								<Button variant="primary" size="md" on:click={() => $web3Modal.open()}>
-									Connect Wallet
-								</Button>
-							</div>
-						{:else if $userVaultsQuery.isLoading}
-							<div class="flex justify-center py-8">
-								<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
-							</div>
-						{:else if $userVaultsQuery.isError}
-							<div class="py-8 text-center text-sm text-red-400">
-								Error loading vaults: {$userVaultsQuery.error?.message}
-							</div>
-						{:else}
-							{@const allVaultData = $userVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
-							{@const vaults = currentToken
-								? allVaultData
-										.map((vd) => vd.raindexVault)
-										.filter((v) => {
-											const vaultTokenAddr = (v.token?.address ?? v.token?.id)?.toLowerCase();
-											const isCorrectToken = vaultTokenAddr === currentToken.address.toLowerCase();
-											const hasBalance = vaultBalanceToBigInt(v) > 0n;
-											return isCorrectToken && hasBalance;
-										})
-								: []}
-							{@const totalVaultBalance = vaults.reduce(
-								(sum, v) => sum + vaultBalanceToBigInt(v),
-								0n
-							)}
-							{@const walletBalance = $walletBalanceQuery.data ?? 0n}
-							{@const totalBalance = totalVaultBalance + walletBalance}
-							{@const tokenDecimals =
-								vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
-
-							{#if vaults.length === 0 && walletBalance === 0n}
-								<div class="py-8 text-center text-sm text-gray-400">
-									No position found for this token
+						<div class="mt-2 hidden text-xs text-gray-400 sm:block">
+							All times are displayed in your local timezone
+						</div>
+					{:else if activeOnchainTab === 'orders'}
+						<div class="mt-4">
+							<OrdersTable
+								orders={tokenOrders}
+								isLoading={$orderbookQuotesQuery.isLoading}
+								isError={$orderbookQuotesQuery.isError}
+								errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+								tokenAddress={currentToken?.address ?? null}
+								showTokenColumn={false}
+							/>
+						</div>
+					{:else if activeOnchainTab === 'vaults'}
+						<div class="mt-4">
+							{#if !$connected}
+								<div class="flex flex-col items-center justify-center gap-4 py-12">
+									<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
+									<Button variant="primary" size="md" on:click={() => $web3Modal.open()}>
+										Connect Wallet
+									</Button>
+								</div>
+							{:else if $userVaultsQuery.isLoading}
+								<div class="flex justify-center py-8">
+									<LoadingSpinner variant="inline" size="md" text="Loading vaults..." />
+								</div>
+							{:else if $userVaultsQuery.isError}
+								<div class="py-8 text-center text-sm text-red-400">
+									Error loading vaults: {$userVaultsQuery.error?.message}
 								</div>
 							{:else}
-								<!-- Two column layout: Vaults list on left, Summary on right -->
-								<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-									<!-- Left: Vaults list with pagination -->
-									<div>
-										{#if vaults.length > 0}
-											{@const vaultsPerPage = 10}
-											{@const totalPages = Math.ceil(vaults.length / vaultsPerPage)}
-											{@const startIndex = (currentVaultsPage - 1) * vaultsPerPage}
-											{@const endIndex = startIndex + vaultsPerPage}
-											{@const paginatedVaults = vaults.slice(startIndex, endIndex)}
+								{@const allVaultData = $userVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
+								{@const vaults = currentToken
+									? allVaultData
+											.map((vd) => vd.raindexVault)
+											.filter((v) => {
+												const vaultTokenAddr = (v.token?.address ?? v.token?.id)?.toLowerCase();
+												const isCorrectToken =
+													vaultTokenAddr === currentToken.address.toLowerCase();
+												const hasBalance = vaultBalanceToBigInt(v) > 0n;
+												return isCorrectToken && hasBalance;
+											})
+									: []}
+								{@const totalVaultBalance = vaults.reduce(
+									(sum, v) => sum + vaultBalanceToBigInt(v),
+									0n
+								)}
+								{@const walletBalance = $walletBalanceQuery.data ?? 0n}
+								{@const totalBalance = totalVaultBalance + walletBalance}
+								{@const tokenDecimals =
+									vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
 
-											<div class="space-y-2">
-												{#each paginatedVaults as vault}
-													{@const balance = vaultBalanceToBigInt(vault)}
-													{@const vaultIdHex = `0x${vault.vaultId.toString(16).padStart(64, '0')}`}
-													{@const raindexUrl = getRaindexVaultUrl(
-														$currentNetwork?.chainId ?? 8453,
-														vault.orderbook,
-														vault.id
-													)}
-													<div
-														class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
-													>
-														<div class="flex items-center gap-2 text-xs text-gray-400">
-															<a
-																href={raindexUrl}
-																target="_blank"
-																rel="noopener noreferrer"
-																class="text-blue-400 hover:text-blue-300 hover:underline"
-																title="View on Raindex"
+								{#if vaults.length === 0 && walletBalance === 0n}
+									<div class="py-8 text-center text-sm text-gray-400">
+										No position found for this token
+									</div>
+								{:else}
+									<!-- Two column layout: Vaults list on left, Summary on right -->
+									<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+										<!-- Left: Vaults list with pagination -->
+										<div>
+											{#if vaults.length > 0}
+												{@const vaultsPerPage = 10}
+												{@const totalPages = Math.ceil(vaults.length / vaultsPerPage)}
+												{@const startIndex = (currentVaultsPage - 1) * vaultsPerPage}
+												{@const endIndex = startIndex + vaultsPerPage}
+												{@const paginatedVaults = vaults.slice(startIndex, endIndex)}
+
+												<div class="space-y-2">
+													{#each paginatedVaults as vault}
+														{@const balance = vaultBalanceToBigInt(vault)}
+														{@const vaultIdHex = `0x${vault.vaultId
+															.toString(16)
+															.padStart(64, '0')}`}
+														{@const raindexUrl = getRaindexVaultUrl(
+															$currentNetwork?.chainId ?? 8453,
+															vault.orderbook,
+															vault.id
+														)}
+														<div
+															class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
+														>
+															<div class="flex items-center gap-2 text-xs text-gray-400">
+																<a
+																	href={raindexUrl}
+																	target="_blank"
+																	rel="noopener noreferrer"
+																	class="text-blue-400 hover:text-blue-300 hover:underline"
+																	title="View on Raindex"
+																>
+																	{vaultIdHex.slice(0, 8)}...
+																</a>
+																<span>•</span>
+																<span
+																	>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)}
+																	{vault.token.symbol}</span
+																>
+															</div>
+															<Button
+																variant="danger"
+																size="sm"
+																on:click={() => transactionStore.handleWithdraw(vault)}
 															>
-																{vaultIdHex.slice(0, 8)}...
-															</a>
-															<span>•</span>
-															<span
-																>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)}
-																{vault.token.symbol}</span
-															>
+																Withdraw
+															</Button>
 														</div>
-														<Button
-															variant="danger"
-															size="sm"
-															on:click={() => transactionStore.handleWithdraw(vault)}
-														>
-															Withdraw
-														</Button>
-													</div>
-												{/each}
-											</div>
-
-											<!-- Pagination -->
-											{#if totalPages > 1}
-												<div class="mt-4 flex items-center justify-center gap-2">
-													{#each Array.from({ length: totalPages }, (_, i) => i + 1) as pageNum}
-														<button
-															type="button"
-															class={`h-8 w-8 rounded-md text-sm font-medium transition ${
-																pageNum === currentVaultsPage
-																	? 'bg-blue-500 text-white'
-																	: 'bg-white/5 text-gray-400 hover:bg-white/10'
-															}`}
-															on:click={() => {
-																currentVaultsPage = pageNum;
-															}}
-														>
-															{pageNum}
-														</button>
 													{/each}
 												</div>
-											{/if}
-										{:else}
-											<div class="py-8 text-center text-sm text-gray-400">
-												No vaults with balance found
-											</div>
-										{/if}
-									</div>
 
-									<!-- Right: Summary table -->
-									<div class="rounded-lg border border-white/10 bg-white/5 p-4">
-										<h3 class="mb-4 text-sm font-semibold text-gray-100">Summary</h3>
-										<div class="space-y-3 text-sm">
-											<div class="flex justify-between text-gray-400">
-												<span>Vaults Subtotal:</span>
-												<span
-													>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)}
-													{currentToken?.symbol}</span
+												<!-- Pagination -->
+												{#if totalPages > 1}
+													<div class="mt-4 flex items-center justify-center gap-2">
+														{#each Array.from({ length: totalPages }, (_, i) => i + 1) as pageNum}
+															<button
+																type="button"
+																class={`h-8 w-8 rounded-md text-sm font-medium transition ${
+																	pageNum === currentVaultsPage
+																		? 'bg-blue-500 text-white'
+																		: 'bg-white/5 text-gray-400 hover:bg-white/10'
+																}`}
+																on:click={() => {
+																	currentVaultsPage = pageNum;
+																}}
+															>
+																{pageNum}
+															</button>
+														{/each}
+													</div>
+												{/if}
+											{:else}
+												<div class="py-8 text-center text-sm text-gray-400">
+													No vaults with balance found
+												</div>
+											{/if}
+										</div>
+
+										<!-- Right: Summary table -->
+										<div class="rounded-lg border border-white/10 bg-white/5 p-4">
+											<h3 class="mb-4 text-sm font-semibold text-gray-100">Summary</h3>
+											<div class="space-y-3 text-sm">
+												<div class="flex justify-between text-gray-400">
+													<span>Vaults Subtotal:</span>
+													<span
+														>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)}
+														{currentToken?.symbol}</span
+													>
+												</div>
+												<div class="flex justify-between text-gray-400">
+													<span>Wallet Balance:</span>
+													<span
+														>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)}
+														{currentToken?.symbol}</span
+													>
+												</div>
+												<div
+													class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100"
 												>
-											</div>
-											<div class="flex justify-between text-gray-400">
-												<span>Wallet Balance:</span>
-												<span
-													>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)}
-													{currentToken?.symbol}</span
-												>
-											</div>
-											<div
-												class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100"
-											>
-												<span>Total:</span>
-												<span
-													>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)}
-													{currentToken?.symbol}</span
-												>
+													<span>Total:</span>
+													<span
+														>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)}
+														{currentToken?.symbol}</span
+													>
+												</div>
 											</div>
 										</div>
 									</div>
-								</div>
+								{/if}
 							{/if}
-						{/if}
-					</div>
-				{/if}
-			</div>
-		</Section>
-		<!-- Tabbed Information Section -->
-		<Section>
-			<div class="grid gap-6 lg:grid-cols-2" data-tutorial="fundamentals">
-				<div class="space-y-4">
-					<div class="space-y-3">
-						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
-							Asset Details
-						</h3>
-						<TabNav tabs={ASSET_TABS} activeId={activeAssetTab} on:change={handleAssetTabChange} />
-					</div>
-					{#if activeAssetTab === 'company'}
-						{#if tradingViewSymbol}
-							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-								<TradingViewWidget
-									widgetType="symbol-profile"
-									symbol={tradingViewSymbol}
-									height="480"
-								/>
-							</div>
-						{:else}
-							<div class={`${containerStyles.cardBordered}`}>
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-							</div>
-						{/if}
-					{:else if activeAssetTab === 'fundamentals'}
-						{#if tradingViewSymbol}
-							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-								<TradingViewWidget
-									widgetType="financials"
-									symbol={tradingViewSymbol}
-									height={520}
-								/>
-							</div>
-						{:else}
-							<div class={`${containerStyles.cardBordered}`}>
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-							</div>
-						{/if}
-					{:else if activeAssetTab === 'technical'}
-						{#if tradingViewSymbol}
-							<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-								<TradingViewWidget
-									widgetType="technical-analysis"
-									symbol={tradingViewSymbol}
-									height="520"
-								/>
-							</div>
-						{:else}
-							<div class={`${containerStyles.cardBordered}`}>
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
-							</div>
-						{/if}
-					{:else if tradingViewSymbol}
-						<div class={`${containerStyles.cardBordered} overflow-hidden p-0`}>
-							<TradingViewWidget widgetType="timeline" symbol={tradingViewSymbol} height="600" />
-						</div>
-					{:else}
-						<div class={`${containerStyles.cardBordered}`}>
-							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
 						</div>
 					{/if}
 				</div>
+			</div>
+		</div>
+		<!-- About Section - Collapsible on mobile -->
+		<div class="space-y-4 sm:space-y-6">
+			<button
+				type="button"
+				class="flex w-full items-center justify-between sm:cursor-default"
+				on:click={() => (isAboutCollapsed = !isAboutCollapsed)}
+			>
+				<div>
+					<h2 class="text-base font-semibold sm:text-lg">About</h2>
+					<p class="hidden text-sm text-gray-400 sm:block">
+						Learn more about the token or the equity
+					</p>
+				</div>
+				<svg
+					class="h-5 w-5 text-gray-400 transition-transform sm:hidden"
+					class:rotate-180={!isAboutCollapsed}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 9l-7 7-7-7"
+					/>
+				</svg>
+			</button>
+			<div
+				class="grid gap-4 sm:gap-6 lg:grid-cols-2"
+				class:hidden={isAboutCollapsed}
+				class:sm:grid={isAboutCollapsed}
+				data-tutorial="fundamentals"
+			>
+				<!-- Token Details (Left) -->
 				<div class="space-y-4">
 					<div class="space-y-3">
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
@@ -1220,7 +1266,7 @@
 						<TabNav tabs={TOKEN_TABS} activeId={activeTokenTab} on:change={handleTokenTabChange} />
 					</div>
 					{#if activeTokenTab === 'contract'}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex items-center justify-between gap-2">
@@ -1264,7 +1310,7 @@
 							</div>
 						</div>
 					{:else if activeTokenTab === 'supply'}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex justify-between">
@@ -1286,7 +1332,7 @@
 							</div>
 						</div>
 					{:else if activeTokenTab === 'mints'}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<div class="mb-2 flex items-center justify-between">
 								<h3 class="font-semibold">Latest Mints</h3>
 								<ExternalLink
@@ -1296,9 +1342,11 @@
 								/>
 							</div>
 							{#if currentToken?.deposits?.length}
-								<div class="space-y-1">
+								<div>
 									{#each currentToken.deposits.slice(0, 5) as dep}
-										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+										<div
+											class="border-b border-white/5 px-2 py-3 transition-colors hover:bg-white/5"
+										>
 											<div class="flex items-center justify-between gap-3 text-xs">
 												<div class="min-w-0 truncate">
 													<span class="font-medium text-green-400">
@@ -1310,14 +1358,14 @@
 													<TxLink hash={dep.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-												<span class="text-gray-400">
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+												<span>
 													<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}
 													</span>
 												</span>
-												<span class="mx-2 text-gray-500">•</span>
+												<span class="text-gray-600">•</span>
 												<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
@@ -1328,7 +1376,7 @@
 							{/if}
 						</div>
 					{:else}
-						<div class={containerStyles.cardBordered}>
+						<div>
 							<div class="mb-2 flex items-center justify-between">
 								<h3 class="font-semibold">Latest Burns</h3>
 								<ExternalLink
@@ -1338,9 +1386,11 @@
 								/>
 							</div>
 							{#if currentToken?.withdraws?.length}
-								<div class="space-y-1">
+								<div>
 									{#each currentToken.withdraws.slice(0, 5) as w}
-										<div class="rounded border border-white/10 bg-gray-800/40 px-3 py-2">
+										<div
+											class="border-b border-white/5 px-2 py-3 transition-colors hover:bg-white/5"
+										>
 											<div class="flex items-center justify-between gap-3 text-xs">
 												<div class="min-w-0 truncate">
 													<span class="font-medium text-red-400">
@@ -1352,14 +1402,14 @@
 													<TxLink hash={w.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
-												<span class="text-gray-400">
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+												<span>
 													<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}
 													</span>
 												</span>
-												<span class="mx-2 text-gray-500">•</span>
+												<span class="text-gray-600">•</span>
 												<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
@@ -1371,15 +1421,119 @@
 						</div>
 					{/if}
 				</div>
+				<!-- Underlying Equity (Right) -->
+				<div class="space-y-4">
+					<div class="space-y-3">
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+							Equity Details
+						</h3>
+						<TabNav tabs={ASSET_TABS} activeId={activeAssetTab} on:change={handleAssetTabChange} />
+					</div>
+					{#if activeAssetTab === 'company'}
+						{#if tradingViewSymbol}
+							<div class="hidden overflow-hidden sm:block">
+								<TradingViewWidget
+									widgetType="symbol-profile"
+									symbol={tradingViewSymbol}
+									height="480"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="overflow-hidden sm:hidden">
+								<TradingViewWidget
+									widgetType="symbol-profile"
+									symbol={tradingViewSymbol}
+									height="320"
+									isTransparent={true}
+								/>
+							</div>
+						{:else}
+							<div class="p-4">
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if activeAssetTab === 'fundamentals'}
+						{#if tradingViewSymbol}
+							<div class="hidden overflow-hidden sm:block">
+								<TradingViewWidget
+									widgetType="financials"
+									symbol={tradingViewSymbol}
+									height={520}
+									isTransparent={true}
+								/>
+							</div>
+							<div class="overflow-hidden sm:hidden">
+								<TradingViewWidget
+									widgetType="financials"
+									symbol={tradingViewSymbol}
+									height={360}
+									isTransparent={true}
+								/>
+							</div>
+						{:else}
+							<div class="p-4">
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if activeAssetTab === 'technical'}
+						{#if tradingViewSymbol}
+							<div class="hidden overflow-hidden sm:block">
+								<TradingViewWidget
+									widgetType="technical-analysis"
+									symbol={tradingViewSymbol}
+									height="520"
+									isTransparent={true}
+								/>
+							</div>
+							<div class="overflow-hidden sm:hidden">
+								<TradingViewWidget
+									widgetType="technical-analysis"
+									symbol={tradingViewSymbol}
+									height="360"
+									isTransparent={true}
+								/>
+							</div>
+						{:else}
+							<div class="p-4">
+								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							</div>
+						{/if}
+					{:else if tradingViewSymbol}
+						<div class="hidden overflow-hidden sm:block">
+							<TradingViewWidget
+								widgetType="timeline"
+								symbol={tradingViewSymbol}
+								height="600"
+								isTransparent={true}
+							/>
+						</div>
+						<div class="overflow-hidden sm:hidden">
+							<TradingViewWidget
+								widgetType="timeline"
+								symbol={tradingViewSymbol}
+								height="400"
+								isTransparent={true}
+							/>
+						</div>
+					{:else}
+						<div class="p-4">
+							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+						</div>
+					{/if}
+				</div>
 			</div>
-		</Section>
+		</div>
 	</div>
 	{#if showTradePanel}
 		<div class="fixed inset-0 z-[2100] flex">
-			<button type="button" class="flex-1" aria-label="Close trade panel" on:click={closeTradePanel}
+			<button
+				type="button"
+				class="hidden flex-1 sm:block"
+				aria-label="Close trade panel"
+				on:click={closeTradePanel}
 			></button>
 			<aside
-				class="relative h-full w-full max-w-[20rem] border-l border-white/10 bg-gradient-to-b from-gray-950 to-gray-900 shadow-2xl"
+				class="relative h-full w-full border-l-0 border-white/10 bg-gradient-to-b from-gray-950 to-gray-900 shadow-2xl sm:max-w-[22rem] sm:border-l"
 				in:fly={{ x: 320, duration: 220 }}
 				out:fly={{ x: 320, duration: 180 }}
 				role="dialog"
@@ -1388,19 +1542,21 @@
 				data-tutorial="trade-panel"
 			>
 				<div class="flex h-full flex-col">
-					<div class="flex items-start justify-between border-b border-white/10 px-6 py-5">
-						<div class="flex items-start gap-3">
+					<div
+						class="flex items-start justify-between border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5"
+					>
+						<div class="flex items-start gap-2 sm:gap-3">
 							{#if currentPythToken?.logoUrl}
 								<img
 									src={currentPythToken.logoUrl}
 									alt={tokenDisplaySymbol || tokenDisplayName}
-									class="h-10 w-10 rounded-full border border-white/10 object-cover"
+									class="h-8 w-8 rounded-full border border-white/10 object-cover sm:h-10 sm:w-10"
 								/>
 							{/if}
 							<div>
-								<h2 class="text-lg font-semibold text-white">{tokenDisplayName}</h2>
+								<h2 class="text-base font-semibold sm:text-lg">{tokenDisplayName}</h2>
 								{#if tokenDisplaySymbol}
-									<p class="text-sm text-gray-400">{tokenDisplaySymbol}</p>
+									<p class="text-xs text-gray-400 sm:text-sm">{tokenDisplaySymbol}</p>
 								{/if}
 							</div>
 						</div>
@@ -1423,12 +1579,12 @@
 							</svg>
 						</button>
 					</div>
-					<div class="flex-1 overflow-y-auto px-6 py-6">
-						<div class="space-y-6 pb-10">
-							<div class="grid grid-cols-2 gap-3" aria-label="Select order side">
+					<div class="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+						<div class="space-y-4 pb-10 sm:space-y-6">
+							<div class="grid grid-cols-2 gap-2 sm:gap-3" aria-label="Select order side">
 								<button
 									type="button"
-									class={`rounded-lg px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 ${
+									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Buy'
 											? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
 											: 'bg-white/5 text-gray-200 hover:bg-white/10'
@@ -1439,7 +1595,7 @@
 								</button>
 								<button
 									type="button"
-									class={`rounded-lg px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 ${
+									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Sell'
 											? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
 											: 'bg-white/5 text-gray-200 hover:bg-white/10'
@@ -1449,23 +1605,32 @@
 									Sell
 								</button>
 							</div>
-							<div class="space-y-2">
-								<div class="flex items-center gap-2 text-sm font-medium text-gray-300">
+							<div class="space-y-1 sm:space-y-2">
+								<div
+									class="flex flex-wrap items-center gap-1 text-xs font-medium text-gray-300 sm:gap-2 sm:text-sm"
+								>
 									<span>{panelSummaryVerb} {panelTokenLabel}</span>
 									<span class="text-gray-500">{panelSummaryPreposition}</span>
 									<span class="inline-flex items-center gap-1 text-gray-200">
 										{settlementTokenSymbol}
-										<img src={settlementTokenLogo} alt={settlementTokenSymbol} class="h-4 w-4" />
+										<img
+											src={settlementTokenLogo}
+											alt={settlementTokenSymbol}
+											class="h-3.5 w-3.5 sm:h-4 sm:w-4"
+										/>
 									</span>
 								</div>
-								<div class="flex items-center gap-2 text-sm text-gray-400">
+								<div class="flex items-center gap-1 text-xs text-gray-400 sm:gap-2 sm:text-sm">
 									<span>On</span>
-									<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
+									<img src="/images/BASE.svg" alt="Base" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
 									<span>{$currentNetwork.displayName}</span>
 								</div>
 							</div>
-							<label class="block space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
-								<span id={PANEL_STRATEGY_LABEL_ID} class="block text-sm font-medium text-gray-300">
+							<label class="block space-y-1.5 sm:space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
+								<span
+									id={PANEL_STRATEGY_LABEL_ID}
+									class="block text-xs font-medium text-gray-300 sm:text-sm"
+								>
 									Order Type
 								</span>
 								<Select
@@ -1514,7 +1679,89 @@
 			</aside>
 		</div>
 	{/if}
-	<Footer />
+	<!-- Compact Footer -->
+	<footer class="border-t border-white/5 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+		<div class="mx-auto max-w-5xl">
+			<!-- Links Row - fewer on mobile -->
+			<div
+				class="mb-4 flex flex-wrap items-center justify-center gap-3 text-[10px] text-gray-400 sm:mb-6 sm:gap-6 sm:text-sm"
+			>
+				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
+				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
+				<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
+				<a href="/compliance" class="hidden transition-colors hover:text-yellow-500 sm:inline"
+					>Compliance</a
+				>
+				<a href="/audit" class="hidden transition-colors hover:text-yellow-500 sm:inline">Audits</a>
+				<a href="/faqs" class="hidden transition-colors hover:text-yellow-500 sm:inline">FAQs</a>
+			</div>
+
+			<!-- Social Links -->
+			<div class="mb-4 flex items-center justify-center gap-3 sm:mb-6 sm:gap-4">
+				<a
+					href="mailto:toby@st0x.io"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="Email"
+				>
+					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"
+						><path
+							d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 2v.01L12 13 4 6.01V6h16zM4 18V8.236l7.386 6.178a1 1 0 001.228 0L20 8.236V18H4z"
+						/></svg
+					>
+				</a>
+				<a
+					href="https://x.com/st0x_io"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="X"
+				>
+					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+						><path
+							d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+						/></svg
+					>
+				</a>
+				<a
+					href="https://t.me/+oIzo_I9xi745ODU0"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="Telegram"
+				>
+					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+						><path
+							d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
+						/></svg
+					>
+				</a>
+				<a
+					href="https://www.linkedin.com/company/st0x"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					aria-label="LinkedIn"
+				>
+					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+						><path
+							d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
+						/></svg
+					>
+				</a>
+			</div>
+
+			<!-- Copyright and Risk Warning -->
+			<div class="text-center">
+				<p class="mb-4 text-xs text-gray-500">
+					© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
+				</p>
+				<p class="text-[10px] leading-relaxed text-gray-600 sm:text-xs">
+					<span class="text-yellow-600">Risk Warning:</span> Trading tokenized assets involves substantial
+					risk. Past performance does not guarantee future results.
+				</p>
+			</div>
+		</div>
+	</footer>
 {/if}
 {#if showChartModal}
 	<div class="fixed inset-0 z-[2000]">
@@ -1531,14 +1778,16 @@
 			}}
 		></button>
 		<div class="relative z-10 flex h-full flex-col bg-gray-950">
-			<div class="flex items-center justify-between border-b border-white/10 px-6 py-5">
-				<div>
-					<p class="text-xs uppercase tracking-wide text-gray-500">Terminal View</p>
-					<h2 class="text-xl font-semibold text-white">{modalTitle}</h2>
+			<div
+				class="flex items-center justify-between border-b border-white/10 px-3 py-3 sm:px-6 sm:py-5"
+			>
+				<div class="min-w-0 flex-1">
+					<p class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Advanced Chart</p>
+					<h2 class="truncate text-base font-semibold text-white sm:text-xl">{modalTitle}</h2>
 				</div>
 				<button
 					type="button"
-					class="rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+					class="ml-2 rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
 					on:click={closeChartModal}
 					aria-label="Close terminal view"
 				>
@@ -1555,8 +1804,8 @@
 					</svg>
 				</button>
 			</div>
-			<div class="flex-1 overflow-hidden px-6 pb-6 pt-4">
-				<div class="h-full w-full rounded-xl border border-white/10 bg-gray-900 p-2">
+			<div class="flex-1 overflow-hidden px-2 pb-2 pt-2 sm:px-6 sm:pb-6 sm:pt-4">
+				<div class="h-full w-full rounded-xl border border-white/10 bg-gray-900 p-1 sm:p-2">
 					{#if tradingViewSymbol}
 						<TradingViewChart symbol={tradingViewSymbol} interval="60" />
 					{:else}
@@ -1567,18 +1816,18 @@
 				</div>
 			</div>
 			<div
-				class="flex flex-col gap-3 border-t border-white/10 bg-gradient-to-r from-green-500/10 via-gray-900/80 to-red-500/10 px-6 py-6 sm:flex-row sm:justify-end"
+				class="flex flex-row gap-2 border-t border-white/10 bg-gradient-to-r from-green-500/10 via-gray-900/80 to-red-500/10 px-3 py-3 sm:justify-end sm:gap-3 sm:px-6 sm:py-6"
 			>
 				<button
 					type="button"
-					class="w-full rounded-2xl bg-green-500 px-8 py-4 text-lg font-semibold text-white shadow-xl shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:w-auto"
+					class="flex-1 rounded-xl bg-green-500 px-4 py-3 text-base font-semibold text-white shadow-xl shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
 					on:click={() => openTradePanel('Buy', { closeTerminal: false })}
 				>
 					Buy
 				</button>
 				<button
 					type="button"
-					class="w-full rounded-2xl bg-red-500 px-8 py-4 text-lg font-semibold text-white shadow-xl shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:w-auto"
+					class="flex-1 rounded-xl bg-red-500 px-4 py-3 text-base font-semibold text-white shadow-xl shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
 					on:click={() => openTradePanel('Sell', { closeTerminal: false })}
 				>
 					Sell

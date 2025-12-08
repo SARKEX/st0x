@@ -1,10 +1,7 @@
 import { writable, derived } from 'svelte/store';
-import { browser } from '$app/environment';
-import { goto } from '$app/navigation';
-import { isTutorialHidden, hideTutorial as persistHideTutorial } from '$lib/utils/tutorialStorage';
+import { hideTutorial as persistHideTutorial } from '$lib/utils/tutorialStorage';
 
 export type TutorialStep =
-	| 'promo'
 	| 'welcome'
 	| 'boost-rewards'
 	| 'token-list'
@@ -16,7 +13,6 @@ export type TutorialStep =
 	| 'complete';
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
-	'promo',
 	'welcome',
 	'boost-rewards',
 	'token-list',
@@ -29,27 +25,13 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
 ];
 
 // Current tutorial step
-export const tutorialStep = writable<TutorialStep>('promo');
+export const tutorialStep = writable<TutorialStep>('welcome');
 
 // Whether tutorial is active (visible)
 export const tutorialActive = writable<boolean>(false);
 
 // Whether the trade panel should be open (for tutorial)
 export const tutorialWantsTradePanel = writable<boolean>(false);
-
-// Initialize tutorial state from localStorage
-export async function initTutorial(): Promise<void> {
-	if (!browser) return;
-	const hidden = isTutorialHidden();
-	if (!hidden) {
-		// Redirect to home page if not already there
-		if (window.location.pathname !== '/') {
-			await goto('/');
-		}
-		tutorialActive.set(true);
-		tutorialStep.set('promo');
-	}
-}
 
 // Advance to next step
 export function nextTutorialStep(): TutorialStep {

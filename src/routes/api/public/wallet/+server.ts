@@ -37,7 +37,10 @@ async function getAllWalletData(): Promise<AllWalletData> {
 		CACHE_KEYS.allWalletData(),
 		async () => {
 			const now = new Date();
-			const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+			const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
+				2,
+				'0'
+			)}`;
 
 			const [monthlyData, poolConfig, excludedSet] = await Promise.all([
 				kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
@@ -46,9 +49,11 @@ async function getAllWalletData(): Promise<AllWalletData> {
 			]);
 
 			let totalPoints = 0;
+			let snapshotCount = 0;
 			const rankings: { address: string; points: number }[] = [];
 
 			if (monthlyData) {
+				snapshotCount = monthlyData.snapshotCount ?? 0;
 				for (const [address, data] of Object.entries(monthlyData.wallets)) {
 					if (excludedSet.has(address.toLowerCase())) continue;
 					totalPoints += data.totalPoints;
@@ -65,12 +70,19 @@ async function getAllWalletData(): Promise<AllWalletData> {
 				wallets[r.address] = { points: r.points, rank: i + 1 };
 			});
 
-			// Calculate effective pool
+			// Calculate projected RocketBoost progress
 			const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
 			const daysInMonth = getDaysInMonth(currentMonth);
 			const rocketBoostTargetPoints = rocketBoostTvlTarget * 2 * daysInMonth * 100;
-			const progressPercent =
-				rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
+
+			// Project to end of month based on current pace
+			const daysElapsed = Math.max(1, Math.floor(snapshotCount / 2));
+			const currentDayOfMonth = now.getUTCDate();
+			const daysRemaining = daysInMonth - currentDayOfMonth + 1;
+			const avgDailyPoints = totalPoints / daysElapsed;
+			const projectedTotalPoints = totalPoints + avgDailyPoints * daysRemaining;
+			const projectedProgressPercent =
+				rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 			const rocketBoostAmounts = poolConfig?.rocketBoostAmounts ?? {
 				tier25: 0,
@@ -78,14 +90,16 @@ async function getAllWalletData(): Promise<AllWalletData> {
 				tier75: 0,
 				tier100: 0
 			};
-			const rocketBoostAchievedAmount =
-				(progressPercent >= 25 ? rocketBoostAmounts.tier25 : 0) +
-				(progressPercent >= 50 ? rocketBoostAmounts.tier50 : 0) +
-				(progressPercent >= 75 ? rocketBoostAmounts.tier75 : 0) +
-				(progressPercent >= 100 ? rocketBoostAmounts.tier100 : 0);
+
+			// Use projected progress to estimate RocketBoost bonus
+			const projectedRocketBoostAmount =
+				(projectedProgressPercent >= 25 ? rocketBoostAmounts.tier25 : 0) +
+				(projectedProgressPercent >= 50 ? rocketBoostAmounts.tier50 : 0) +
+				(projectedProgressPercent >= 75 ? rocketBoostAmounts.tier75 : 0) +
+				(projectedProgressPercent >= 100 ? rocketBoostAmounts.tier100 : 0);
 
 			const poolAmount = poolConfig?.poolAmount ?? 0;
-			const effectivePool = poolAmount + rocketBoostAchievedAmount;
+			const effectivePool = poolAmount + projectedRocketBoostAmount;
 
 			return {
 				month: currentMonth,
@@ -121,7 +135,10 @@ export const GET: RequestHandler = async ({ url, request }) => {
 	const walletAddress = url.searchParams.get('address')?.toLowerCase();
 
 	if (!walletAddress) {
-		return json({ success: false, error: 'Wallet address required (use ?address=0x...)' }, { status: 400 });
+		return json(
+			{ success: false, error: 'Wallet address required (use ?address=0x...)' },
+			{ status: 400 }
+		);
 	}
 
 	// Validate address format
@@ -140,7 +157,8 @@ export const GET: RequestHandler = async ({ url, request }) => {
 
 		// Calculate share and reward
 		const sharePercent = allData.totalPoints > 0 ? (userPoints / allData.totalPoints) * 100 : 0;
-		const estimatedReward = allData.totalPoints > 0 ? (userPoints / allData.totalPoints) * allData.effectivePool : 0;
+		const estimatedReward =
+			allData.totalPoints > 0 ? (userPoints / allData.totalPoints) * allData.effectivePool : 0;
 
 		const response: WalletResponse = {
 			success: true,

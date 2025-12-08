@@ -11,7 +11,6 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { truncateAddress } from '$lib/utils/format';
-	import { gridStyles } from '$lib/styles/utils';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits, erc20Abi } from 'viem';
 	import { readContract } from '@wagmi/core';
@@ -403,7 +402,7 @@
 </script>
 
 <!-- Main Content -->
-<div>
+<div class="relative z-10 min-h-screen text-white">
 	<PageContainer>
 		{#if isNetworkLoading}
 			<div class="flex flex-col items-center justify-center gap-4 py-8">
@@ -430,39 +429,37 @@
 				</div>
 
 				<!-- Overview Stats -->
-				<div class={gridStyles.responsive4}>
+				<div class="grid grid-cols-3 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
 					<MetricCard
 						label="Total Value"
 						value={`$${totalValue.toFixed(2)}`}
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
+						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-2xl font-bold"
+						valueClass="text-lg font-bold sm:text-2xl"
 					/>
-					<MetricCard
-						label="24h Change"
-						value="TBD"
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
-						showGradient={false}
-						change=""
-						valueClass="text-2xl font-bold text-gray-400"
-					/>
+					<div class="hidden sm:block">
+						<MetricCard
+							label="24h Change"
+							value="TBD"
+							paddingClass="p-4"
+							showGradient={false}
+							change=""
+							valueClass="text-2xl font-bold text-gray-400"
+						/>
+					</div>
 					<MetricCard
 						label="Active Orders"
 						value={`${activeOrdersCount}`}
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
+						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-2xl font-bold"
+						valueClass="text-lg font-bold sm:text-2xl"
 					/>
 					<MetricCard
 						label="Active Vaults"
 						value={`${activeVaultsCount}`}
-						cardClass="bg-gray-800/50 border border-white/10"
-						paddingClass="p-4"
+						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-2xl font-bold"
+						valueClass="text-lg font-bold sm:text-2xl"
 					/>
 				</div>
 			</Section>
@@ -479,23 +476,25 @@
 				{:else}
 					<!-- Funds Section (Payment Tokens) -->
 					<Section>
-						<h2 class="mb-4 text-lg font-semibold">Funds</h2>
-						<p class="mb-4 text-sm text-gray-400">Payment tokens available for trading</p>
+						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Funds</h2>
+						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+							Payment tokens available for trading
+						</p>
 						{#if fundsHoldings.length > 0}
 							<div class="overflow-x-auto">
 								<Table>
 									<thead>
-										<tr class="border-b border-white/10">
+										<tr>
 											<th
-												class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												>Token</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
 												>Wallet</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
 												>Vaults</th
 											>
 											<th
@@ -509,21 +508,21 @@
 											{@const paymentToken = (
 												PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []
 											).find((t) => t.address.toLowerCase() === holding.address.toLowerCase())}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
 														logoUrl={paymentToken?.logoUrl}
 														symbol={holding.symbol}
 														name={holding.name}
 													/>
 												</td>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.walletBalanceNum.toFixed(2)}</td
 												>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.vaultBalanceNum.toFixed(2)}</td
 												>
-												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3"
+												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
 													>{holding.totalBalance.toFixed(2)}</td
 												>
 											</tr>
@@ -538,27 +537,29 @@
 
 					<!-- Holdings Section (Asset Tokens) -->
 					<Section>
-						<h2 class="mb-4 text-lg font-semibold">Holdings</h2>
-						<p class="mb-4 text-sm text-gray-400">Asset tokens combined across wallet and vaults</p>
+						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Holdings</h2>
+						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+							Asset tokens combined across wallet and vaults
+						</p>
 						{#if assetHoldings.length > 0}
 							<div class="overflow-x-auto">
 								<Table>
 									<thead>
-										<tr class="border-b border-white/10">
+										<tr>
 											<th
-												class="sticky left-0 z-10 bg-gray-800 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												>Token</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
 												>Wallet</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
 												>Vaults</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
 												>Total</th
 											>
 											<th
@@ -570,19 +571,18 @@
 												>Value</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
 												>24h</th
 											>
 											<th
 												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>Actions</th
-											>
+											></th>
 										</tr>
 									</thead>
 									<tbody>
 										{#each assetHoldings as holding}
-											<tr class="border-b border-white/5 hover:bg-white/5">
-												<td class="sticky left-0 bg-gray-800 px-2 py-2 sm:px-4 sm:py-3">
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
 														logoUrl={ALL_TOKENS.find(
 															(s) => s.address.toLowerCase() === holding.address.toLowerCase()
@@ -591,21 +591,25 @@
 														name={holding.name}
 													/>
 												</td>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.walletBalanceNum.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 text-gray-300 sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.vaultBalanceNum.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 font-medium sm:table-cell sm:px-4 sm:py-3"
 													>{holding.totalBalance.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 sm:px-4 sm:py-3">${holding.price.toFixed(2)}</td>
-												<td class="px-2 py-2 font-medium sm:px-4 sm:py-3"
+												<td class="px-2 py-2 text-xs sm:px-4 sm:py-3 sm:text-sm"
+													>${holding.price.toFixed(2)}</td
+												>
+												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
 													>${holding.value.toFixed(2)}</td
 												>
-												<td class="px-2 py-2 text-gray-400 sm:px-4 sm:py-3"> TBD </td>
-												<td class="px-4 py-3">
+												<td class="hidden px-2 py-2 text-gray-400 sm:table-cell sm:px-4 sm:py-3">
+													TBD
+												</td>
+												<td class="px-2 py-2 sm:px-4 sm:py-3">
 													<div class="flex justify-center gap-2">
 														<Button
 															size="sm"
@@ -657,14 +661,13 @@
 				<!-- Orders Tab -->
 			{:else if activeTab === 'orders'}
 				<Section>
-					<h2 class="mb-4 text-lg font-semibold">Your Orders</h2>
+					<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Your Orders</h2>
 					<OrdersTable
 						orders={allOrders}
 						isLoading={$orderbookQuotesQuery.isLoading || $tradeActivityQuery.isLoading}
 						isError={$orderbookQuotesQuery.isError}
 						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
 						showOwnerFilter={false}
-						showWalletColumn={false}
 					/>
 				</Section>
 
@@ -681,20 +684,27 @@
 						<EmptyState description="No vaults found." />
 					{:else}
 						<!-- Default Vaults Section -->
-						<div class="mb-8">
-							<h2 class="mb-2 text-lg font-semibold">Default Vaults</h2>
-							<p class="mb-4 text-sm text-gray-400">Your primary vault for each token</p>
+						<div class="mb-6 sm:mb-8">
+							<h2 class="mb-2 text-base font-semibold sm:text-lg">Default Vaults</h2>
+							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+								Your primary vault for each token
+							</p>
 							{#if defaultVaults.length === 0}
-								<div class="py-4 text-sm text-gray-500">No default vaults found.</div>
+								<div class="py-4 text-sm text-gray-500">
+									No default vaults found. Default vaults are created automatically when you make a
+									limit or DCA order.
+								</div>
 							{:else}
 								<div class="overflow-x-auto">
 									<table class="w-full text-sm">
-										<thead class="border-b border-white/10">
+										<thead>
 											<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
-												<th class="pb-3 pr-4 font-medium">Token</th>
-												<th class="pb-3 pr-4 font-medium">Balance</th>
-												<th class="pb-3 pr-4 font-medium">Orders</th>
-												<th class="pb-3 font-medium">Actions</th>
+												<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Token</th>
+												<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Balance</th>
+												<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
+													>Orders</th
+												>
+												<th class="pb-2 font-medium sm:pb-3"></th>
 											</tr>
 										</thead>
 										<tbody>
@@ -704,10 +714,12 @@
 												{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
 												{@const ordersCount =
 													(vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
-												<tr class="border-b border-white/5 hover:bg-white/5">
-													<td class="py-3 pr-4">
+												<tr class="hover:bg-white/5">
+													<td class="py-2 pr-2 sm:py-3 sm:pr-4">
 														<div class="flex items-center gap-2">
-															<span class="text-gray-200">{vault.token.symbol}</span>
+															<span class="text-xs text-gray-200 sm:text-sm"
+																>{vault.token.symbol}</span
+															>
 															<a
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
@@ -721,7 +733,7 @@
 															>
 																<svg
 																	xmlns="http://www.w3.org/2000/svg"
-																	class="h-4 w-4"
+																	class="h-3.5 w-3.5 sm:h-4 sm:w-4"
 																	fill="none"
 																	viewBox="0 0 24 24"
 																	stroke="currentColor"
@@ -736,11 +748,13 @@
 															</a>
 														</div>
 													</td>
-													<td class="py-3 pr-4 text-gray-300"
-														>{balanceNum.toFixed(4)} {vault.token.symbol}</td
+													<td class="py-2 pr-2 text-xs text-gray-300 sm:py-3 sm:pr-4 sm:text-sm"
+														>{balanceNum.toFixed(4)}</td
 													>
-													<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
-													<td class="py-3">
+													<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4"
+														>{ordersCount}</td
+													>
+													<td class="py-2 sm:py-3">
 														{#if balance > 0n}
 															<Button
 																variant="danger"
@@ -763,32 +777,43 @@
 						<!-- Non-Default Vaults Section -->
 						{#if allNonDefaultVaults.length > 0}
 							<div>
-								<div class="mb-4 flex items-center justify-between">
+								<div class="mb-3 flex items-center justify-between sm:mb-4">
 									<div>
-										<h2 class="text-lg font-semibold">Other Vaults</h2>
-										<p class="text-sm text-gray-400">Additional vaults with custom IDs</p>
+										<h2 class="text-base font-semibold sm:text-lg">Other Vaults</h2>
+										<p class="hidden text-sm text-gray-400 sm:block">
+											Additional vaults with custom IDs
+										</p>
 									</div>
 									{#if dustVaultsCount > 0 || showDustVaults}
-										<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-400">
+										<label
+											class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm"
+										>
 											<input
 												type="checkbox"
 												bind:checked={showDustVaults}
-												class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+												class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 sm:h-4 sm:w-4"
 											/>
-											Show dust ({dustVaultsCount} vault{dustVaultsCount === 1 ? '' : 's'})
+											<span class="sm:hidden">Dust ({dustVaultsCount})</span>
+											<span class="hidden sm:inline"
+												>Show dust ({dustVaultsCount} vault{dustVaultsCount === 1 ? '' : 's'})</span
+											>
 										</label>
 									{/if}
 								</div>
 								{#if nonDefaultVaults.length > 0}
 									<div class="overflow-x-auto">
 										<table class="w-full text-sm">
-											<thead class="border-b border-white/10">
+											<thead>
 												<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
-													<th class="pb-3 pr-4 font-medium">Token</th>
-													<th class="pb-3 pr-4 font-medium">Vault ID</th>
-													<th class="pb-3 pr-4 font-medium">Balance</th>
-													<th class="pb-3 pr-4 font-medium">Orders</th>
-													<th class="pb-3 font-medium">Actions</th>
+													<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Token</th>
+													<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
+														>Vault ID</th
+													>
+													<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Balance</th>
+													<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
+														>Orders</th
+													>
+													<th class="pb-2 font-medium sm:pb-3"></th>
 												</tr>
 											</thead>
 											<tbody>
@@ -799,11 +824,13 @@
 													{@const ordersCount =
 														(vault.ordersAsInput?.length ?? 0) +
 														(vault.ordersAsOutput?.length ?? 0)}
-													<tr class="border-b border-white/5 hover:bg-white/5">
-														<td class="py-3 pr-4">
-															<span class="text-gray-200">{vault.token.symbol}</span>
+													<tr class="hover:bg-white/5">
+														<td class="py-2 pr-2 sm:py-3 sm:pr-4">
+															<span class="text-xs text-gray-200 sm:text-sm"
+																>{vault.token.symbol}</span
+															>
 														</td>
-														<td class="py-3 pr-4">
+														<td class="hidden py-2 pr-2 sm:table-cell sm:py-3 sm:pr-4">
 															<a
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
@@ -818,11 +845,13 @@
 																{vault.vaultId.slice(0, 10)}...{vault.vaultId.slice(-6)}
 															</a>
 														</td>
-														<td class="py-3 pr-4 text-gray-300"
-															>{balanceNum.toFixed(4)} {vault.token.symbol}</td
+														<td class="py-2 pr-2 text-xs text-gray-300 sm:py-3 sm:pr-4 sm:text-sm"
+															>{balanceNum.toFixed(4)}</td
 														>
-														<td class="py-3 pr-4 text-gray-400">{ordersCount}</td>
-														<td class="py-3">
+														<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4"
+															>{ordersCount}</td
+														>
+														<td class="py-2 sm:py-3">
 															{#if balance > 0n}
 																<Button
 																	variant="danger"

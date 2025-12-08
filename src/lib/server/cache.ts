@@ -19,7 +19,11 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 	}
 }
 
-export async function cacheSet<T>(key: string, value: T, ttlSeconds = DEFAULT_TTL_SECONDS): Promise<void> {
+export async function cacheSet<T>(
+	key: string,
+	value: T,
+	ttlSeconds = DEFAULT_TTL_SECONDS
+): Promise<void> {
 	const client = await getKv();
 	if (!client) return;
 
@@ -28,6 +32,29 @@ export async function cacheSet<T>(key: string, value: T, ttlSeconds = DEFAULT_TT
 	} catch (error) {
 		console.error('[Cache] Set error:', error);
 	}
+}
+
+export async function cacheDelete(key: string): Promise<void> {
+	const client = await getKv();
+	if (!client) return;
+
+	try {
+		await client.del(key);
+	} catch (error) {
+		console.error('[Cache] Delete error:', error);
+	}
+}
+
+/**
+ * Invalidate all public API caches (rewards APY, rocketboost, wallet data)
+ */
+export async function invalidatePublicApiCaches(): Promise<void> {
+	await Promise.all([
+		cacheDelete(CACHE_KEYS.rewardsApy()),
+		cacheDelete(CACHE_KEYS.rocketboost()),
+		cacheDelete(CACHE_KEYS.allWalletData())
+	]);
+	console.log('[Cache] Public API caches invalidated');
 }
 
 // In-memory locks to prevent cache stampede
@@ -106,8 +133,8 @@ export const CACHE_KEYS = {
 
 // TTL constants (in seconds)
 export const CACHE_TTL = {
-	SHORT: 5 * 60,        // 5 minutes
-	MEDIUM: 30 * 60,      // 30 minutes
-	LONG: 60 * 60,        // 1 hour
+	SHORT: 5 * 60, // 5 minutes
+	MEDIUM: 30 * 60, // 30 minutes
+	LONG: 60 * 60, // 1 hour
 	VERY_LONG: 6 * 60 * 60 // 6 hours
 } as const;

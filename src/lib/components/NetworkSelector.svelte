@@ -55,7 +55,7 @@
 <div class="network-selector relative z-[10000] inline-block shrink-0">
 	<button
 		on:click={toggleDropdown}
-		class="flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-gray-700/80 px-2 py-1 text-xs font-medium text-white transition-all duration-200 hover:border-yellow-500/30 hover:bg-gray-600/80 active:scale-95 sm:px-3 sm:py-2 sm:text-sm"
+		class="flex min-h-10 items-center gap-2 rounded-lg bg-transparent px-2 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-white/5 active:scale-95 sm:px-3 sm:py-2 sm:text-sm"
 	>
 		<div class="flex items-center gap-2">
 			<img

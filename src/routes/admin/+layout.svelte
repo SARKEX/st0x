@@ -6,7 +6,7 @@
 	export let data: LayoutData;
 
 	const navItems = [
-		{ href: '/admin', label: 'DEX Activity' },
+		{ href: '/admin', label: 'On-chain Market' },
 		{ href: '/admin/rewards', label: 'Rewards' },
 		{ href: '/admin/codes', label: 'Access Codes' }
 	];

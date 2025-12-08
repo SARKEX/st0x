@@ -46,7 +46,8 @@
 	{#if $transactionStore.status !== TransactionStatus.IDLE}
 		<div class="flex flex-col items-center justify-center gap-2 p-4 text-white">
 			{#if $transactionStore.status === TransactionStatus.ERROR}
-				{@const isUserRejection = $transactionStore.error === TransactionErrorMessage.USER_REJECTED_APPROVAL}
+				{@const isUserRejection =
+					$transactionStore.error === TransactionErrorMessage.USER_REJECTED_APPROVAL}
 				{@const isTimeout = $transactionStore.error === TransactionErrorMessage.TIMEOUT}
 				<div
 					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border {isUserRejection
@@ -56,7 +57,12 @@
 				>
 					{#if isUserRejection}
 						<!-- Hand/stop icon for user rejection -->
-						<svg class="h-10 w-10 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg
+							class="h-10 w-10 text-yellow-500"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -66,7 +72,12 @@
 						</svg>
 					{:else if isTimeout}
 						<!-- Clock icon for timeout -->
-						<svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg
+							class="h-10 w-10 text-red-500"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -75,7 +86,12 @@
 							/>
 						</svg>
 					{:else}
-						<svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg
+							class="h-10 w-10 text-red-500"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"

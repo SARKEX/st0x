@@ -1,29 +1,25 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import PageContainer from '$lib/components/ui/PageContainer.svelte';
-	import ProsePanel from '$lib/components/ui/ProsePanel.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 </script>
 
-<!-- Main Content -->
-<div>
-	<!-- Terms Content -->
-	<PageContainer>
-		<ProsePanel>
-			<h1 class="mb-6 text-4xl font-bold text-white">DEX Website Terms of Use</h1>
+<div class="relative z-10 min-h-screen">
+	<section class="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+		<div class="mx-auto max-w-3xl">
+			<h1 class="mb-6 text-4xl font-bold tracking-tight text-white sm:text-5xl">
+				DEX Website Terms of Use
+			</h1>
 
-			<p class="text-gray-400"><em>Last Updated: 30 June 2025</em></p>
+			<p class="mb-8 text-gray-500"><em>Last Updated: 30 June 2025</em></p>
 
-			<div class="my-6 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4">
+			<div class="mb-10 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-5">
 				<p class="font-semibold text-yellow-100">
-					<strong
-						>YOU MUST READ THESE TERMS OF USE BEFORE USING THE WEBSITE. BY USING THE WEBSITE, YOU
-						WILL BE DEEMED TO HAVE ACCEPTED THESE TERMS OF USE.</strong
-					>
+					YOU MUST READ THESE TERMS OF USE BEFORE USING THE WEBSITE. BY USING THE WEBSITE, YOU WILL
+					BE DEEMED TO HAVE ACCEPTED THESE TERMS OF USE.
 				</p>
 			</div>
 
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					SARK X (BVI) Ltd located at Craigmuir Chambers, Road Town, Tortola, VG 1110, British
 					Virgin Islands ("<strong class="text-white">Provider</strong>") is the owner and operator
@@ -54,7 +50,7 @@
 			</ol>
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">1. About the Website</h2>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					The Website acts as an interface with the decentralised exchange known as ST0x 'order
 					book' ("<strong class="text-white">DEX</strong>"). The DEX is decentralised, meaning that
@@ -78,7 +74,7 @@
 			</ol>
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">2. Who May Use the Website</h2>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>The Website is offered and available to users who are 18 years of age or older.</li>
 				<li>The Website is not intended for children under 18 years of age.</li>
 				<li>
@@ -93,7 +89,7 @@
 			</ol>
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">3. Changes to the Terms of Use</h2>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					We may revise and update these Terms of Use from time to time in our sole discretion. All
 					changes are effective immediately when they are posted to the Website.
@@ -111,7 +107,7 @@
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">
 				4. Accessing the Website and Account Security
 			</h2>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					We reserve the right to withdraw or amend the Website, and any service or material we
 					provide on the Website, in our sole discretion without notice.
@@ -143,7 +139,7 @@
 			</ol>
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">5. Intellectual Property Rights</h2>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					Unless otherwise indicated, the Website is our exclusive property and all:
 					<ol type="a" class="ml-6 mt-2 space-y-2">
@@ -193,11 +189,11 @@
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">6. Prohibited Uses</h2>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">6.1 Lawful Purpose</h3>
-			<p class="mb-4 text-gray-300">
+			<p class="mb-4 text-gray-400">
 				You may use the Website only for lawful purposes and in accordance with these Terms of Use.
 				You agree not to use the Website:
 			</p>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					in any way that violates any applicable federal, state, local, or international law or
 					regulation (including, without limitation, any laws regarding the export of data or
@@ -230,8 +226,8 @@
 			</ol>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">6.2 Lawful Use</h3>
-			<p class="mb-4 text-gray-300">Additionally, you agree not to:</p>
-			<ol class="space-y-4 text-gray-300">
+			<p class="mb-4 text-gray-400">Additionally, you agree not to:</p>
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					use the Website in any manner that could disable, overburden, damage, or impair the
 					Website or interfere with any other party's use of the Website, including their ability to
@@ -268,7 +264,7 @@
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">7. Reliance on Information Posted</h2>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">7.1 Reliance Disclaimer</h3>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					The information presented on or through the Website is made available solely for general
 					information purposes. We do not warrant the accuracy, completeness or usefulness of this
@@ -303,7 +299,7 @@
 			</ol>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">7.2 Changes to the Website</h3>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					We may update the content on the Website from time to time, but we make no warranty or
 					representation that its content is necessarily complete or up-to-date at any specific
@@ -318,7 +314,7 @@
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">8. Website Links</h2>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">8.1 Linking to the Website</h3>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					You may link to our homepage, provided you do so in a way that is fair and legal and does
 					not damage our reputation or take advantage of it.
@@ -335,7 +331,7 @@
 			</ol>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">8.2 Links from the Website</h3>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					If the Website contain links to other sites and resources provided by third parties, these
 					links are provided for your convenience only. This includes links contained in
@@ -353,7 +349,7 @@
 			</ol>
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">9. Geographic Restrictions</h2>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					The owner of the Website is based in the British Virgin Islands. We make no claims that
 					the Website or any of its content is accessible or appropriate outside of the British
@@ -371,7 +367,7 @@
 			</h2>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">10.1 Warranties disclaimer</h3>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					You understand that we cannot and do not guarantee or warrant that files available for
 					downloading from the internet or the Website will be free of viruses or other destructive
@@ -433,7 +429,7 @@
 			</ol>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">10.2 Limitation on Liability</h3>
-			<p class="mb-4 text-gray-300">
+			<p class="mb-4 text-gray-400">
 				<strong class="text-white"
 					>IN NO EVENT WILL SARK, ITS AFFILIATES OR THEIR LICENSORS, SERVICE PROVIDERS, EMPLOYEES,
 					AGENTS, OFFICERS, OR DIRECTORS BE LIABLE FOR DAMAGES OF ANY KIND, UNDER ANY LEGAL THEORY,
@@ -442,7 +438,7 @@
 					ITEMS OBTAINED THROUGH THE WEBSITE OR SUCH OTHER WEBSITE, INCLUDING:</strong
 				>
 			</p>
-			<ol class="space-y-2 text-gray-300">
+			<ol class="space-y-2 text-gray-400">
 				<li>
 					ANY DIRECT, INDIRECT, SPECIAL, INCIDENTAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, INCLUDING
 					BUT NOT LIMITED TO EMOTIONAL DISTRESS, LOSS OF REVENUE, LOSS OF PROFITS, LOSS OF BUSINESS
@@ -453,7 +449,7 @@
 					FORESEEABLE.
 				</li>
 			</ol>
-			<p class="text-gray-300">
+			<p class="text-gray-400">
 				<strong class="text-white"
 					>THE FOREGOING DOES NOT AFFECT ANY LIABILITY WHICH CANNOT BE EXCLUDED OR LIMITED UNDER
 					APPLICABLE LAW WHICH MAY INCLUDE FRAUD.</strong
@@ -461,7 +457,7 @@
 			</p>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">10.3 Indemnification</h3>
-			<p class="mb-4 text-gray-300">
+			<p class="mb-4 text-gray-400">
 				You agree to defend, indemnify, and hold harmless Provider, its affiliates, licensors, and
 				service providers, and its and their respective officers, directors, employees, contractors,
 				agents, licensors, suppliers, successors, and assigns from and against any claims,
@@ -469,7 +465,7 @@
 				reasonable attorneys' fees) arising out of or relating to your violation of these Terms of
 				Use or your use of the Website, including, but not limited to:
 			</p>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					any use of the Website' content, services and products other than as expressly authorized
 					in these Terms of Use; or
@@ -482,7 +478,7 @@
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">
 				11.1 Governing Law and Jurisdiction
 			</h3>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					All matters relating to the Website and these Terms of Use and any dispute or claim
 					arising therefrom or related thereto (in each case, including non-contractual disputes or
@@ -506,7 +502,7 @@
 			</ol>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">11.2 Waiver and Severability</h3>
-			<ol class="space-y-4 text-gray-300">
+			<ol class="space-y-4 text-gray-400">
 				<li>
 					No waiver by Provider of any term or condition set forth in these Terms of Use shall be
 					deemed a further or continuing waiver of such term or condition or a waiver of any other
@@ -522,15 +518,14 @@
 			</ol>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">11.3 Entire Agreement</h3>
-			<p class="text-gray-300">
+			<p class="text-gray-400">
 				The Terms of Use and other terms and conditions applicable at the time you access the
 				Website constitute the sole and entire agreement between you and Provider with respect to
 				the Website and supersede all prior and contemporaneous understandings, agreements,
 				representations and warranties, both written and oral, with respect to the Website.
 			</p>
-		</ProsePanel>
-	</PageContainer>
+		</div>
+	</section>
 
-	<!-- Footer -->
 	<Footer />
 </div>

@@ -76,6 +76,14 @@ export const rewardsError = writable<string | null>(null);
 export const globalPoolApy = writable<number | null>(null);
 export const globalPoolApyLoading = writable(false);
 
+// Public leaderboard data (for non-connected users)
+export interface PublicLeaderboardData {
+	allRankings: WalletRanking[];
+	totalWallets: number;
+}
+export const publicLeaderboardData = writable<PublicLeaderboardData | null>(null);
+export const publicLeaderboardLoading = writable(false);
+
 // Modal visibility stores
 export const showDetailsModal = writable(false);
 export const showLeaderboardModal = writable(false);
@@ -151,6 +159,29 @@ export async function fetchGlobalPoolApy(): Promise<void> {
 		// Silently fail - APY is not critical
 	} finally {
 		globalPoolApyLoading.set(false);
+	}
+}
+
+// Fetch public leaderboard (can be called without wallet connection)
+export async function fetchPublicLeaderboard(): Promise<void> {
+	if (!browser) return;
+
+	publicLeaderboardLoading.set(true);
+
+	try {
+		const response = await fetch('/api/rewards/leaderboard');
+		const data = await response.json();
+
+		if (response.ok && data.success) {
+			publicLeaderboardData.set({
+				allRankings: data.leaderboard,
+				totalWallets: data.totalWallets
+			});
+		}
+	} catch {
+		// Silently fail
+	} finally {
+		publicLeaderboardLoading.set(false);
 	}
 }
 

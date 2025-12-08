@@ -3,6 +3,7 @@
 	import { signerAddress } from 'svelte-wagmi';
 	import {
 		rewardsData,
+		publicLeaderboardData,
 		showLeaderboardModal,
 		formatPoints,
 		formatAddress
@@ -34,6 +35,12 @@
 		}
 	}
 
+	// Use rewardsData if available, otherwise use publicLeaderboardData
+	$: leaderboardRankings =
+		$rewardsData?.leaderboard?.allRankings ?? $publicLeaderboardData?.allRankings ?? [];
+	$: totalWallets = $rewardsData?.totalWallets ?? $publicLeaderboardData?.totalWallets ?? 0;
+	$: hasData = leaderboardRankings.length > 0;
+
 	// Scroll to user's position when modal opens
 	async function scrollToUser() {
 		await tick();
@@ -57,7 +64,7 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-{#if $showLeaderboardModal && $rewardsData}
+{#if $showLeaderboardModal && hasData}
 	<!-- Backdrop -->
 	<div
 		class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
@@ -100,7 +107,7 @@
 			<div class="flex flex-col p-6">
 				<!-- Full Leaderboard with scroll -->
 				<div bind:this={scrollContainer} class="max-h-[400px] space-y-2 overflow-y-auto pr-2">
-					{#each $rewardsData.leaderboard.allRankings as wallet}
+					{#each leaderboardRankings as wallet}
 						<div
 							class="flex items-center justify-between rounded-lg px-4 py-3 {wallet.address ===
 							$signerAddress?.toLowerCase()
@@ -144,7 +151,7 @@
 					class="mt-4 flex items-center justify-between rounded-lg bg-gray-700/30 px-4 py-3 text-sm"
 				>
 					<span class="text-gray-400">Total participants</span>
-					<span class="font-medium text-white">{$rewardsData.totalWallets}</span>
+					<span class="font-medium text-white">{totalWallets}</span>
 				</div>
 			</div>
 		</div>

@@ -507,90 +507,93 @@
 	$: metricsLoading = vaultsLoading || tradeLoading;
 </script>
 
-<div class="min-h-screen bg-gray-900 text-white">
+<div class="relative z-10 min-h-screen text-white">
 	<PageContainer>
 		{#if metricsLoading}
 			<div class="flex min-h-[60vh] items-center justify-center">
 				<LoadingSpinner size="lg" text="Loading metrics..." />
 			</div>
 		{:else}
-			<InfoBlock
-				variant="info"
-				title="Multi-Network Data"
-				description="Metrics aggregate active orderbook vaults and trades across all supported networks."
-			/>
+			<div class="hidden sm:block">
+				<InfoBlock
+					variant="info"
+					title="Multi-Network Data"
+					description="Metrics aggregate active orderbook vaults and trades across all supported networks."
+				/>
+			</div>
 
 			{#if vaultsError}
 				<InfoBlock variant="warning" title="Vault data incomplete" description={vaultsError} />
 			{/if}
 
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
 				<MetricCard
 					label="Total Locked Value"
 					value={formatQuoteDisplay(totalTVL)}
 					subtitle="Active orderbook tokens"
-					cardClass="bg-gray-800/50 border border-white/10"
-					paddingClass="p-6"
+					paddingClass="p-4 sm:p-6"
 					showGradient={false}
-					valueClass="text-3xl font-bold"
+					valueClass="text-xl font-bold sm:text-3xl"
 				/>
 				<MetricCard
 					label="Trading Volume"
 					value={formatQuoteDisplay(tradingVolume)}
 					subtitle="Last 30 days"
-					cardClass="bg-gray-800/50 border border-white/10"
-					paddingClass="p-6"
+					paddingClass="p-4 sm:p-6"
 					showGradient={false}
-					valueClass="text-3xl font-bold"
+					valueClass="text-xl font-bold sm:text-3xl"
 				/>
-				<MetricCard
-					label="Total Trades"
-					value={`${totalTrades}`}
-					subtitle="Last 30 days"
-					cardClass="bg-gray-800/50 border border-white/10"
-					paddingClass="p-6"
-					showGradient={false}
-					valueClass="text-3xl font-bold"
-				/>
-				<MetricCard
-					label="Active Tokens"
-					value={`${activeST0x}`}
-					subtitle="Live on orderbook"
-					cardClass="bg-gray-800/50 border border-white/10"
-					paddingClass="p-6"
-					showGradient={false}
-					valueClass="text-3xl font-bold"
-				/>
-				<MetricCard
-					label="Deployed Orders"
-					value={`${totalDeployedOrders}`}
-					subtitle="Active across networks"
-					cardClass="bg-gray-800/50 border border-white/10"
-					paddingClass="p-6"
-					showGradient={false}
-					valueClass="text-3xl font-bold"
-				/>
+				<div class="hidden sm:block">
+					<MetricCard
+						label="Total Trades"
+						value={`${totalTrades}`}
+						subtitle="Last 30 days"
+						paddingClass="p-6"
+						showGradient={false}
+						valueClass="text-3xl font-bold"
+					/>
+				</div>
+				<div class="hidden sm:block">
+					<MetricCard
+						label="Active Tokens"
+						value={`${activeST0x}`}
+						subtitle="Live on orderbook"
+						paddingClass="p-6"
+						showGradient={false}
+						valueClass="text-3xl font-bold"
+					/>
+				</div>
+				<div class="hidden sm:block">
+					<MetricCard
+						label="Deployed Orders"
+						value={`${totalDeployedOrders}`}
+						subtitle="Active across networks"
+						paddingClass="p-6"
+						showGradient={false}
+						valueClass="text-3xl font-bold"
+					/>
+				</div>
 			</div>
 
 			<Section>
-				<div class="mb-6 flex items-center justify-between">
+				<div class="mb-4 flex items-center justify-between sm:mb-6">
 					<div>
-						<h2 class="text-xl font-semibold">Stats by Network</h2>
-						<p class="mt-1 text-sm text-gray-400">
+						<h2 class="text-base font-semibold sm:text-lg">Stats by Network</h2>
+						<p class="mt-1 hidden text-sm text-gray-400 sm:block">
 							Live metrics sourced from active orderbook vaults
 						</p>
 					</div>
-					<div class="flex items-center gap-2 text-sm text-green-400">
+					<div class="flex items-center gap-1.5 text-xs text-green-400 sm:gap-2 sm:text-sm">
 						<div class="h-2 w-2 rounded-full bg-green-400"></div>
-						Live Data
+						Live
 					</div>
 				</div>
 
 				<Table>
 					<thead>
-						<tr class="border-b border-white/10">
+						<tr>
 							<th
-								class="sticky left-0 z-10 bg-gray-800 p-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								class="sticky left-0 z-10 p-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 							>
 								Network
 							</th>
@@ -600,17 +603,17 @@
 								TVL
 							</th>
 							<th
-								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								class="hidden p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:table-cell sm:p-3"
 							>
 								Active Tokens
 							</th>
 							<th
 								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 							>
-								Trading Volume
+								Volume
 							</th>
 							<th
-								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+								class="hidden p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:table-cell sm:p-3"
 							>
 								Deployed Orders
 							</th>
@@ -618,8 +621,8 @@
 					</thead>
 					<tbody>
 						{#each networkStats as stats}
-							<tr class="border-b border-white/5">
-								<td class="sticky left-0 bg-gray-800 p-2 sm:p-3 sm:text-sm">
+							<tr class="hover:bg-white/5">
+								<td class="sticky left-0 p-2 sm:p-3 sm:text-sm">
 									<div class="flex items-center gap-2 sm:gap-3">
 										<img
 											src={stats.network.chainId === 42161
@@ -639,11 +642,15 @@
 								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tvl, stats.network)}
 								</td>
-								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.tokenCount}</td>
+								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm"
+									>{stats.tokenCount}</td
+								>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tradingVolume, stats.network)}
 								</td>
-								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{stats.orderCount}</td>
+								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm"
+									>{stats.orderCount}</td
+								>
 							</tr>
 						{/each}
 					</tbody>
@@ -651,17 +658,17 @@
 			</Section>
 
 			<Section>
-				<div class="mb-6">
-					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="mb-4 sm:mb-6">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 						<div>
-							<h2 class="text-xl font-semibold">Token Trading Volumes</h2>
-							<p class="mt-1 text-sm text-gray-400">
+							<h2 class="text-base font-semibold sm:text-lg">Token Volumes</h2>
+							<p class="mt-1 hidden text-sm text-gray-400 sm:block">
 								Aggregated orderbook activity for {selectedNetwork.displayName}
 							</p>
 						</div>
 						<select
 							bind:value={selectedNetwork}
-							class="rounded-lg border border-white/10 bg-gray-800 px-4 py-2 text-sm focus:border-yellow-500 focus:outline-none"
+							class="rounded-lg bg-gray-800/50 px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
 						>
 							{#each networks as network}
 								<option value={network}>{network.displayName}</option>
@@ -673,19 +680,17 @@
 				<div class="overflow-x-auto">
 					<table class="w-full">
 						<thead>
-							<tr
-								class="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-400"
-							>
-								<th class="sticky left-0 z-10 bg-gray-800 p-2 sm:p-3">Token</th>
-								<th class="p-2 text-right sm:p-3">Total Volume</th>
-								<th class="p-2 text-right sm:p-3">USD Value</th>
+							<tr class="text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+								<th class="sticky left-0 z-10 p-2 sm:p-3">Token</th>
+								<th class="hidden p-2 text-right sm:table-cell sm:p-3">Total Volume</th>
+								<th class="p-2 text-right sm:p-3">Value</th>
 								<th class="p-2 text-right sm:p-3">Trades</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each tokenTradingData as token}
-								<tr class="border-b border-white/5 hover:bg-white/5">
-									<td class="sticky left-0 bg-gray-800 p-2 sm:p-3">
+								<tr class="hover:bg-white/5">
+									<td class="sticky left-0 p-2 sm:p-3">
 										<div class="flex items-center gap-3">
 											{#if token.logoUrl}
 												<img src={token.logoUrl} alt={token.symbol} class="h-8 w-8 rounded-full" />
@@ -702,11 +707,13 @@
 											</div>
 										</div>
 									</td>
-									<td class="p-2 text-right text-yellow-400 sm:p-3"
+									<td class="hidden p-2 text-right text-yellow-400 sm:table-cell sm:p-3"
 										>{token.totalVolume.toFixed(3)}</td
 									>
-									<td class="p-2 text-right font-medium sm:p-3">{token.quoteValue}</td>
-									<td class="p-2 text-right sm:p-3">{token.trades}</td>
+									<td class="p-2 text-right text-xs font-medium sm:p-3 sm:text-sm"
+										>{token.quoteValue}</td
+									>
+									<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">{token.trades}</td>
 								</tr>
 							{/each}
 						</tbody>

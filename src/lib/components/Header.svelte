@@ -1,5 +1,4 @@
 <script lang="ts">
-	import TickerTape from './TickerTape.svelte';
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
@@ -7,12 +6,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import { connected, signerAddress, web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { wrongNetwork } from '$lib/stores';
+	import { wrongNetwork, sfts } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
 
 	export let title: string;
 	export let isSidebarCollapsed = false;
-	export let isMobileSidebarOpen = false;
+	export let isLandingPage = false;
 
 	const dispatch = createEventDispatcher();
 
@@ -39,10 +38,17 @@
 
 	$: activePath = $page.url.pathname;
 
-	const NAV_ITEMS = [
-		{ name: 'Assets', href: '/' },
-		{ name: 'Strategies', href: '/strategies', showAlpha: true },
-		{ name: 'Platform Metrics', href: '/platform-metrics' }
+	// Get first token's trade URL for the Trade nav link
+	$: firstTokenId = $sfts?.[0]?.id;
+	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
+
+	// Check if we're on any trade page
+	$: isOnTradePage = activePath.startsWith('/trade/');
+
+	$: NAV_ITEMS = [
+		{ name: 'Trade', href: tradeHref, isActive: isOnTradePage, showAlpha: false },
+		{ name: 'Strategies', href: '/strategies', isActive: false, showAlpha: true },
+		{ name: 'Platform Metrics', href: '/platform-metrics', isActive: false, showAlpha: false }
 	];
 
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
@@ -137,67 +143,54 @@
 	}
 </script>
 
-<div class="sticky top-0 z-[100] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg">
-	<div class="hidden sm:block"><TickerTape /></div>
-	<div class="px-4 py-2 sm:px-6 sm:py-3">
-		<div class="flex items-center justify-between gap-3 lg:gap-4">
-			<div class="flex items-center gap-2 lg:gap-4">
-				<Button
-					variant="ghost"
-					size="sm"
-					className="p-2 lg:hidden"
-					aria-label={isMobileSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-					on:click={() => handleSidebarToggle('mobile')}
-				>
-					<svg
-						class="h-5 w-5 transition-transform duration-200"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						viewBox="0 0 24 24"
-						xmlns="http://www.w3.org/2000/svg"
-						class:rotate-180={isMobileSidebarOpen}
-					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-					</svg>
-				</Button>
-				{#if isSidebarCollapsed}
-					<Button
-						variant="ghost"
-						size="sm"
-						className="hidden p-2 lg:inline-flex"
-						aria-label="Expand sidebar"
-						on:click={() => handleSidebarToggle('desktop')}
-					>
-						<svg
-							class="h-5 w-5 transition-transform duration-200"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							viewBox="0 0 24 24"
-							xmlns="http://www.w3.org/2000/svg"
-							class:rotate-180={!isSidebarCollapsed}
+<div class="sticky top-0 z-[100] bg-transparent transition-all duration-300">
+	<div class="px-3 py-3 sm:px-6 sm:py-5">
+		<div class="flex items-center justify-between gap-2 sm:gap-3 lg:gap-4">
+			<div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
+				{#if !isLandingPage}
+					{#if isSidebarCollapsed}
+						<Button
+							variant="ghost"
+							size="sm"
+							className="hidden p-2 lg:inline-flex"
+							aria-label="Expand sidebar"
+							on:click={() => handleSidebarToggle('desktop')}
 						>
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-						</svg>
-					</Button>
+							<svg
+								class="h-5 w-5 transition-transform duration-200"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								viewBox="0 0 24 24"
+								xmlns="http://www.w3.org/2000/svg"
+								class:rotate-180={!isSidebarCollapsed}
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+							</svg>
+						</Button>
+					{/if}
 				{/if}
 				<a href="/" aria-label="Go to home" class="shrink-0">
-					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-8 w-auto lg:h-10" />
+					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-7 w-auto sm:h-8 lg:h-10" />
 				</a>
-				<div class="ml-2 hidden lg:block">
-					<h1 class="text-base font-bold">{title}</h1>
-				</div>
+				{#if title}
+					<div class="ml-2 hidden lg:block">
+						<h1 class="text-base font-bold">{title}</h1>
+					</div>
+				{/if}
 			</div>
 
-			<div class="flex min-w-0 flex-nowrap items-center gap-2 xl:gap-3" bind:this={actionCluster}>
+			<div
+				class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3"
+				bind:this={actionCluster}
+			>
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
 						{#each NAV_ITEMS as item}
 							<a
 								href={item.href}
 								class={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${DESKTOP_NAV_WIDTH} ${
-									activePath === item.href
+									item.isActive || activePath === item.href
 										? 'bg-yellow-500/20 text-yellow-500'
 										: 'text-gray-300 hover:bg-white/5 hover:text-white'
 								}`}
@@ -216,21 +209,27 @@
 
 				<NetworkSelector />
 
-				<RewardsDisplay />
+				<!-- Hide on mobile, show in hamburger menu instead -->
+				{#if !isHamburgerMode}
+					<RewardsDisplay />
+				{/if}
 
 				{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
 					<!-- Fully registered user -->
 					<div class="flex items-center gap-2">
-						<a href="/dashboard">
-							<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
-								<div class="flex items-center gap-2">
-									<span>My Dashboard</span>
-									<span class="text-[11px] font-normal text-yellow-300/80">
-										...{$signerAddress.slice(-4)}
-									</span>
-								</div>
-							</Button>
-						</a>
+						<!-- Hide dashboard button on mobile, show in hamburger menu -->
+						{#if !isHamburgerMode}
+							<a href="/dashboard">
+								<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
+									<div class="flex items-center gap-2">
+										<span>My Dashboard</span>
+										<span class="text-[11px] font-normal text-yellow-300/80">
+											...{$signerAddress.slice(-4)}
+										</span>
+									</div>
+								</Button>
+							</a>
+						{/if}
 						<Button
 							variant="ghost"
 							size="sm"
@@ -319,13 +318,38 @@
 		class="fixed left-0 right-0 top-[60px] z-[99] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg"
 	>
 		<div class="flex flex-col gap-4 p-4">
+			<!-- Boost Rewards in mobile menu -->
+			<div class="border-b border-white/10 pb-4">
+				<RewardsDisplay />
+			</div>
+
+			<!-- Dashboard link for connected users -->
+			{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
+				<a
+					href="/dashboard"
+					on:click={closeMobileNav}
+					class="flex items-center gap-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3 text-base font-medium text-white transition-colors hover:from-blue-500 hover:to-purple-500"
+				>
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+						/>
+					</svg>
+					<span>My Dashboard</span>
+					<span class="ml-auto text-sm text-white/70">...{$signerAddress.slice(-4)}</span>
+				</a>
+			{/if}
+
 			<nav class="flex flex-col gap-2">
 				{#each NAV_ITEMS as item}
 					<a
 						href={item.href}
 						on:click={closeMobileNav}
-						class="rounded-lg px-4 py-3 text-base font-medium transition-colors {activePath ===
-						item.href
+						class="rounded-lg px-4 py-3 text-base font-medium transition-colors {item.isActive ||
+						activePath === item.href
 							? 'bg-yellow-500/20 text-yellow-500'
 							: 'text-gray-300 hover:bg-white/5 hover:text-white'}"
 					>

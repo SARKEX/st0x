@@ -3,7 +3,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
-import { BLOB_READ_WRITE_TOKEN } from '$env/static/private';
 import {
 	kvGet,
 	kvSet,
@@ -11,6 +10,7 @@ import {
 	type MonthlyPointsData,
 	type SnapshotBlockRecord
 } from '$lib/server/kv';
+import { invalidatePublicApiCaches } from '$lib/server/cache';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 
 const POINTS_PER_DOLLAR = 100;
@@ -68,8 +68,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		// List ALL blobs from blob storage
 		const { blobs: allBlobs } = await list({
 			prefix: 'snapshots/',
-			limit: 1000,
-			token: BLOB_READ_WRITE_TOKEN
+			limit: 1000
 		});
 		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
 
@@ -247,6 +246,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		// Calculate total excluded points
 		const totalExcludedPoints = excludedWithPoints.reduce((sum, e) => sum + e.points, 0);
+
+		// Invalidate public API caches so they reflect new data immediately
+		await invalidatePublicApiCaches();
 
 		return json({
 			success: true,

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
-	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import type {
 		DepthSeries,
@@ -698,9 +697,9 @@
 		<!-- Row 1: Trade History (2/3) -->
 		<div
 			data-testid="trade-history-chart"
-			class={`${containerStyles.cardBordered} flex min-h-96 flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2`}
+			class="flex min-h-96 flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2"
 		>
-			<div class="border-b border-white/5 pb-3">
+			<div class="pb-3">
 				<div
 					class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 				>
@@ -759,9 +758,9 @@
 		<!-- Orderbook Depth (spans remaining column) -->
 		<div
 			data-testid="orderbook-depth-chart"
-			class={`${containerStyles.cardBordered} flex min-h-96 flex-col lg:row-span-1 xl:row-span-2`}
+			class="flex min-h-96 flex-col lg:row-span-1 xl:row-span-2"
 		>
-			<div class="border-b border-white/5 pb-3">
+			<div class="pb-3">
 				<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Orderbook Depth</h3>
 				<p class="mt-1 text-xs text-gray-500">Current on-chain liquidity</p>
 			</div>

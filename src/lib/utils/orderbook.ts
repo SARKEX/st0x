@@ -9,6 +9,7 @@
 
 import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
 import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tokenMath';
+import { parseUnits } from 'viem';
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -16,8 +17,8 @@ import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tok
 
 export type MarketOrderSide = 'Buy' | 'Sell';
 
-const PRICE_SCALE = 10n ** 9n; // preserves 9 decimal places for prices
-const PRICE_SCALE_NUMBER = Number(PRICE_SCALE);
+const PRICE_SCALE = 10n ** 18n; // preserves 18 decimal places for prices
+const PRECISION = 18;
 
 export interface QuoteFill {
 	quote: ProcessedQuote;
@@ -237,7 +238,7 @@ function computeAvailableQuantity(
 
 	// Calculate: assetAvailable = paymentAvailable / price
 	// Use PRICE_SCALE for precision in the division
-	const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+	const priceScaled = parseUnits(price.toString(), PRECISION);
 	if (priceScaled <= 0n) return 0n;
 
 	// (maxOutput in payment decimals * PRICE_SCALE) / priceScaled gives us amount in payment decimals
@@ -260,7 +261,14 @@ function computeAvailableQuantity(
  * to provide a meaningful ratio despite different decimal scales.
  */
 export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
-	const { quotes, orderSide, selectedAmount, assetDecimals, paymentDecimals, mode = 'receive' } = options;
+	const {
+		quotes,
+		orderSide,
+		selectedAmount,
+		assetDecimals,
+		paymentDecimals,
+		mode = 'receive'
+	} = options;
 
 	// Determine which decimals apply to input/output based on order side
 	// BUY: input (receive) = asset, output (give) = payment
@@ -327,10 +335,14 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 			if (remainingPaymentBudget <= 0n) break;
 
 			// Calculate max asset for remaining budget: asset = budget / price
-			const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+			const priceScaled = parseUnits(price.toString(), PRECISION);
 			if (priceScaled <= 0n) continue;
 
-			const budgetInAssetScale = scaleAmount(remainingPaymentBudget, paymentDecimals, assetDecimals);
+			const budgetInAssetScale = scaleAmount(
+				remainingPaymentBudget,
+				paymentDecimals,
+				assetDecimals
+			);
 			const maxAssetForBudget = (budgetInAssetScale * PRICE_SCALE) / priceScaled;
 
 			assetFromQuote = maxAssetForBudget < availableAsset ? maxAssetForBudget : availableAsset;
@@ -339,7 +351,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		if (assetFromQuote <= 0n) continue;
 
 		// Calculate payment for this asset amount: payment = asset × price
-		const priceScaled = BigInt(Math.round(price * PRICE_SCALE_NUMBER));
+		const priceScaled = parseUnits(price.toString(), PRECISION);
 		const paymentInAssetScale = (assetFromQuote * priceScaled) / PRICE_SCALE;
 		const paymentFromQuote = scaleAmount(paymentInAssetScale, assetDecimals, paymentDecimals);
 		if (paymentFromQuote <= 0n) continue;
@@ -351,7 +363,11 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 				// Adjust to exactly hit the budget
 				const adjustedPayment = targetAmount - paymentAccumulated;
 				// Recalculate asset for adjusted payment
-				const adjustedPaymentInAssetScale = scaleAmount(adjustedPayment, paymentDecimals, assetDecimals);
+				const adjustedPaymentInAssetScale = scaleAmount(
+					adjustedPayment,
+					paymentDecimals,
+					assetDecimals
+				);
 				const adjustedAsset = (adjustedPaymentInAssetScale * PRICE_SCALE) / priceScaled;
 				if (adjustedAsset > 0n) {
 					assetAccumulated += adjustedAsset;

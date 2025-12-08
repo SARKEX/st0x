@@ -38,7 +38,10 @@ export const GET: RequestHandler = async ({ request }) => {
 			CACHE_KEYS.rewardsApy(),
 			async () => {
 				const now = new Date();
-				const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+				const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
+					2,
+					'0'
+				)}`;
 
 				const [monthlyData, poolConfig] = await Promise.all([
 					kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
@@ -55,12 +58,19 @@ export const GET: RequestHandler = async ({ request }) => {
 					}
 				}
 
-				// Calculate RocketBoost progress and achieved amount
+				// Calculate RocketBoost projected progress
 				const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
 				const daysInMonth = getDaysInMonth(currentMonth);
 				const rocketBoostTargetPoints = rocketBoostTvlTarget * 2 * daysInMonth * 100;
-				const progressPercent =
-					rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
+
+				// Project to end of month based on current pace
+				const daysElapsed = Math.max(1, Math.floor(snapshotCount / 2));
+				const currentDayOfMonth = now.getUTCDate();
+				const daysRemaining = daysInMonth - currentDayOfMonth + 1;
+				const avgDailyPoints = totalPoints / daysElapsed;
+				const projectedTotalPoints = totalPoints + avgDailyPoints * daysRemaining;
+				const projectedProgressPercent =
+					rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 				const rocketBoostAmounts = poolConfig?.rocketBoostAmounts ?? {
 					tier25: 0,
@@ -68,14 +78,16 @@ export const GET: RequestHandler = async ({ request }) => {
 					tier75: 0,
 					tier100: 0
 				};
-				const rocketBoostAchievedAmount =
-					(progressPercent >= 25 ? rocketBoostAmounts.tier25 : 0) +
-					(progressPercent >= 50 ? rocketBoostAmounts.tier50 : 0) +
-					(progressPercent >= 75 ? rocketBoostAmounts.tier75 : 0) +
-					(progressPercent >= 100 ? rocketBoostAmounts.tier100 : 0);
+
+				// Use projected progress to estimate RocketBoost bonus
+				const projectedRocketBoostAmount =
+					(projectedProgressPercent >= 25 ? rocketBoostAmounts.tier25 : 0) +
+					(projectedProgressPercent >= 50 ? rocketBoostAmounts.tier50 : 0) +
+					(projectedProgressPercent >= 75 ? rocketBoostAmounts.tier75 : 0) +
+					(projectedProgressPercent >= 100 ? rocketBoostAmounts.tier100 : 0);
 
 				const poolAmount = poolConfig?.poolAmount ?? 0;
-				const effectivePool = poolAmount + rocketBoostAchievedAmount;
+				const effectivePool = poolAmount + projectedRocketBoostAmount;
 
 				// Calculate Pool APY (compound): ((1 + monthlyReturn) ^ 12 - 1) * 100
 				let poolApy: number | null = null;
@@ -94,7 +106,7 @@ export const GET: RequestHandler = async ({ request }) => {
 					apy: poolApy,
 					effectivePool,
 					basePool: poolAmount,
-					rocketBoostBonus: rocketBoostAchievedAmount
+					rocketBoostBonus: projectedRocketBoostAmount
 				};
 			},
 			CACHE_TTL.LONG // 1 hour cache
