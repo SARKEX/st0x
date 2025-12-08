@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { currentNetwork, sfts, vaultsQuery, oracleQuotes } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -19,6 +19,53 @@
 		tutorialStep.set('welcome');
 	}
 
+	// Typewriter animation for hero text
+	const typewriterWords = ['On-Chain', '1:1 Collateralised', 'DeFi-Ready', 'Transferable', "Redeemable"];
+	let currentWordIndex = 0;
+	let displayedText = '';
+	let isDeleting = false;
+	let typewriterTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	const TYPING_SPEED = 80;
+	const DELETING_SPEED = 50;
+	const PAUSE_AFTER_TYPING = 2000;
+	const PAUSE_AFTER_DELETING = 300;
+
+	function typewriterTick() {
+		const currentWord = typewriterWords[currentWordIndex];
+
+		if (!isDeleting) {
+			// Typing
+			if (displayedText.length < currentWord.length) {
+				displayedText = currentWord.slice(0, displayedText.length + 1);
+				typewriterTimeout = setTimeout(typewriterTick, TYPING_SPEED);
+			} else {
+				// Finished typing, pause then start deleting
+				typewriterTimeout = setTimeout(() => {
+					isDeleting = true;
+					typewriterTick();
+				}, PAUSE_AFTER_TYPING);
+			}
+		} else {
+			// Deleting
+			if (displayedText.length > 0) {
+				displayedText = displayedText.slice(0, -1);
+				typewriterTimeout = setTimeout(typewriterTick, DELETING_SPEED);
+			} else {
+				// Finished deleting, move to next word
+				isDeleting = false;
+				currentWordIndex = (currentWordIndex + 1) % typewriterWords.length;
+				typewriterTimeout = setTimeout(typewriterTick, PAUSE_AFTER_DELETING);
+			}
+		}
+	}
+
+	onDestroy(() => {
+		if (typewriterTimeout) {
+			clearTimeout(typewriterTimeout);
+		}
+	});
+
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
@@ -29,6 +76,8 @@
 
 	onMount(() => {
 		fetchGlobalPoolApy();
+		// Start typewriter animation
+		typewriterTick();
 	});
 
 	// Animate APY when it becomes available
@@ -155,7 +204,7 @@
 			<h1
 				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
 			>
-				Global Equities. On-Chain
+				Global Equities. <span class="text-yellow-400">{displayedText}</span><span class="animate-blink text-yellow-400">|</span>
 			</h1>
 
 			<!-- Rewards APY Banner -->
@@ -196,7 +245,7 @@
 				</button>
 				<button
 					type="button"
-					class="text-sm text-gray-500 underline decoration-gray-600 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500"
+					class="hidden text-sm text-gray-500 underline decoration-gray-600 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500 sm:inline-block"
 					on:click={startTour}
 				>
 					New? Take the tour 👉
@@ -231,7 +280,7 @@
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
 						Decentralised
 					</h3>
-					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">24/7 instant settlement. No fees.</p>
+					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">Transferable to wallet and across platforms. Compatible with DeFi protocols</p>
 				</div>
 
 				<!-- Exchange-Linked Liquidity -->
@@ -271,10 +320,10 @@
 						</div>
 					</div>
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
-						<span class="hidden sm:inline">Exchange-Linked </span>Liquidity
+						Scalable
 					</h3>
 					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
-						Tap into primary exchange liquidity on the NYSE, Nasdaq, and more.
+						New supply bridged real-time from primary markets for 24/7 trading
 					</p>
 				</div>
 
@@ -299,9 +348,9 @@
 							</svg>
 						</div>
 					</div>
-					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">Fully Backed</h3>
+					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">Redeemable</h3>
 					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
-						Every token fully backed and legally redeemable for shares held by a regulated custodian
+						Every token fully collateralised. Legal right of exchange for the underlying equity. 
 					</p>
 				</div>
 			</div>
@@ -534,6 +583,21 @@
 		}
 		100% {
 			background-position: 300% 50%;
+		}
+	}
+
+	/* Blinking cursor animation for typewriter */
+	.animate-blink {
+		animation: blink 1s step-end infinite;
+	}
+
+	@keyframes blink {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0;
 		}
 	}
 </style>
