@@ -21,7 +21,7 @@
 	export let showOwnerFilter = true;
 	export let showTypeFilter = true;
 	export let showClosedOrdersOption = true;
-	export let showWalletColumn = true;
+	export let showTokenColumn = true;
 
 	// For fetching closed orders (only needed when showClosedOrdersOption is true)
 	export let tokenAddress: string | null = null;
@@ -205,162 +205,49 @@
 </script>
 
 <div>
-	<!-- Filter controls -->
-	<div class="mb-4 flex flex-wrap items-center gap-4">
+	<!-- Filter controls - dropdowns in a row -->
+	<div class="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
 		{#if showOwnerFilter}
-			<div class="flex items-center gap-2">
-				<button
-					type="button"
-					class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-						selectedOrdersFilter === 'my'
-							? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-							: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-					}`}
-					on:click={() => {
-						selectedOrdersFilter = 'my';
-					}}
-					disabled={!$connected}
-				>
-					My Orders
-				</button>
-				<button
-					type="button"
-					class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-						selectedOrdersFilter === 'all'
-							? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-							: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-					}`}
-					on:click={() => {
-						selectedOrdersFilter = 'all';
-					}}
-				>
-					All Orders
-				</button>
-			</div>
+			<select
+				bind:value={selectedOrdersFilter}
+				disabled={!$connected && selectedOrdersFilter === 'my'}
+				class="rounded-md border border-white/10 bg-gray-800 px-2 py-1.5 text-xs font-medium text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+			>
+				<option value="my">My Orders</option>
+				<option value="all">All Orders</option>
+			</select>
 		{/if}
 
 		{#if showTypeFilter}
-			<div class="flex items-center gap-2">
-				<span class="text-xs text-gray-500">Type:</span>
-				<button
-					type="button"
-					class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-						selectedOrderTypeFilter === 'all'
-							? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-							: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-					}`}
-					on:click={() => {
-						selectedOrderTypeFilter = 'all';
-					}}
-				>
-					All
-				</button>
-				<button
-					type="button"
-					class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-						selectedOrderTypeFilter === 'limit'
-							? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-							: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-					}`}
-					on:click={() => {
-						selectedOrderTypeFilter = 'limit';
-					}}
-				>
-					Limit
-				</button>
-				<button
-					type="button"
-					class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-						selectedOrderTypeFilter === 'dca'
-							? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-							: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-					}`}
-					on:click={() => {
-						selectedOrderTypeFilter = 'dca';
-					}}
-				>
-					DCA
-				</button>
-				<button
-					type="button"
-					class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-						selectedOrderTypeFilter === 'market'
-							? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-							: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-					}`}
-					on:click={() => {
-						selectedOrderTypeFilter = 'market';
-					}}
-				>
-					Market
-				</button>
-				<button
-					type="button"
-					class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-						selectedOrderTypeFilter === 'custom'
-							? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-							: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-					}`}
-					on:click={() => {
-						selectedOrderTypeFilter = 'custom';
-					}}
-				>
-					Custom
-				</button>
-			</div>
+			<select
+				bind:value={selectedOrderTypeFilter}
+				class="rounded-md border border-white/10 bg-gray-800 px-2 py-1.5 text-xs font-medium text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+			>
+				<option value="all">All Types</option>
+				<option value="limit">Limit</option>
+				<option value="dca">DCA</option>
+				<option value="market">Market</option>
+				<option value="custom">Custom</option>
+			</select>
 		{/if}
 
-		<div class="flex items-center gap-2">
-			<span class="text-xs text-gray-500">Direction:</span>
-			<button
-				type="button"
-				class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-					selectedDirectionFilter === 'all'
-						? 'border border-blue-400/40 bg-blue-500/20 text-blue-300'
-						: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-				}`}
-				on:click={() => {
-					selectedDirectionFilter = 'all';
-				}}
-			>
-				All
-			</button>
-			<button
-				type="button"
-				class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-					selectedDirectionFilter === 'Buy'
-						? 'border border-green-400/40 bg-green-500/20 text-green-300'
-						: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-				}`}
-				on:click={() => {
-					selectedDirectionFilter = 'Buy';
-				}}
-			>
-				Buy
-			</button>
-			<button
-				type="button"
-				class={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-					selectedDirectionFilter === 'Sell'
-						? 'border border-red-400/40 bg-red-500/20 text-red-300'
-						: 'border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'
-				}`}
-				on:click={() => {
-					selectedDirectionFilter = 'Sell';
-				}}
-			>
-				Sell
-			</button>
-		</div>
+		<select
+			bind:value={selectedDirectionFilter}
+			class="rounded-md border border-white/10 bg-gray-800 px-2 py-1.5 text-xs font-medium text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+		>
+			<option value="all">All Directions</option>
+			<option value="Buy">Buy</option>
+			<option value="Sell">Sell</option>
+		</select>
 
 		{#if showClosedOrdersOption && selectedOrdersFilter === 'my' && $connected}
-			<label class="flex cursor-pointer items-center gap-2">
+			<label class="flex cursor-pointer items-center gap-1.5">
 				<input
 					type="checkbox"
 					bind:checked={showClosedOrders}
-					class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+					class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
 				/>
-				<span class="text-sm text-gray-400">Show closed orders</span>
+				<span class="text-xs text-gray-400">Closed</span>
 				{#if showClosedOrders && $closedOrdersQuery.isLoading}
 					<LoadingSpinner variant="inline" size="sm" />
 				{/if}
@@ -388,15 +275,17 @@
 				<thead class="border-b border-white/10">
 					<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
 						<th class="pb-3 pr-4 font-medium">Type</th>
-						<th class="pb-3 pr-4 font-medium">Token</th>
+						{#if showTokenColumn}
+							<th class="pb-3 pr-4 font-medium">Token</th>
+						{/if}
 						<th class="pb-3 pr-4 font-medium">Direction</th>
 						<th class="pb-3 pr-4 font-medium">Status</th>
 						<th class="pb-3 pr-4 font-medium">Amount</th>
 						<th class="pb-3 pr-4 font-medium">Price</th>
-						<th class="pb-3 pr-4 font-medium">Hash</th>
-						{#if showWalletColumn}
-							<th class="pb-3 pr-4 font-medium">Wallet</th>
-						{/if}
+						<th class="pb-3 pr-4 font-medium">
+							<span class="hidden sm:inline">Hash</span>
+							<span class="sm:hidden">Link</span>
+						</th>
 						{#if selectedOrdersFilter === 'my'}
 							<th class="pb-3 font-medium">Actions</th>
 						{/if}
@@ -418,7 +307,9 @@
 										Market
 									</span>
 								</td>
-								<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
+								{#if showTokenColumn}
+									<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
+								{/if}
 								<td class="py-3 pr-4">
 									<span
 										class={`text-xs font-medium ${
@@ -446,36 +337,32 @@
 								</td>
 								<td class="py-3 pr-4">
 									{#if txHash}
+										<!-- Desktop: show truncated hash -->
 										<a
 											href={`${$currentNetwork?.blockExplorer}/tx/${txHash}`}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+											class="hidden font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline sm:inline"
 											title={txHash}
 										>
 											{txHash.slice(0, 8)}...{txHash.slice(-6)}
+										</a>
+										<!-- Mobile: show link icon -->
+										<a
+											href={`${$currentNetwork?.blockExplorer}/tx/${txHash}`}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="inline-flex items-center justify-center text-blue-400 hover:text-blue-300 sm:hidden"
+											title="View transaction"
+										>
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+											</svg>
 										</a>
 									{:else}
 										—
 									{/if}
 								</td>
-								{#if showWalletColumn}
-									<td class="py-3 pr-4">
-										{#if $signerAddress}
-											<a
-												href={`${$currentNetwork?.blockExplorer}/address/${$signerAddress}`}
-												target="_blank"
-												rel="noopener noreferrer"
-												class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-												title={$signerAddress}
-											>
-												{$signerAddress.slice(0, 6)}...{$signerAddress.slice(-4)}
-											</a>
-										{:else}
-											—
-										{/if}
-									</td>
-								{/if}
 								{#if selectedOrdersFilter === 'my'}
 									<td class="py-3 text-gray-500">—</td>
 								{/if}
@@ -525,7 +412,9 @@
 										{typeLabel}
 									</span>
 								</td>
-								<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
+								{#if showTokenColumn}
+									<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
+								{/if}
 								<td class="py-3 pr-4">
 									<span class={`text-xs font-medium ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
 										{order.side}
@@ -559,40 +448,37 @@
 								<td class="py-3 pr-4 text-gray-300">{currentPrice}</td>
 								<td class="py-3 pr-4">
 									{#if quote}
+										{@const raindexUrl = getRaindexOrderUrl(
+											$currentNetwork?.id ?? 0,
+											orderbookId,
+											quote.orderHash
+										)}
+										<!-- Desktop: show truncated hash -->
 										<a
-											href={getRaindexOrderUrl(
-												$currentNetwork?.id ?? 0,
-												orderbookId,
-												quote.orderHash
-											)}
+											href={raindexUrl}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+											class="hidden font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline sm:inline"
 											title={quote.orderHash}
 										>
 											{quote.orderHash.slice(0, 8)}...{quote.orderHash.slice(-6)}
+										</a>
+										<!-- Mobile: show link icon -->
+										<a
+											href={raindexUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="inline-flex items-center justify-center text-blue-400 hover:text-blue-300 sm:hidden"
+											title="View on Raindex"
+										>
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+											</svg>
 										</a>
 									{:else}
 										—
 									{/if}
 								</td>
-								{#if showWalletColumn}
-									<td class="py-3 pr-4">
-										{#if orderOwner}
-											<a
-												href={`${$currentNetwork?.blockExplorer}/address/${orderOwner}`}
-												target="_blank"
-												rel="noopener noreferrer"
-												class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-												title={orderOwner}
-											>
-												{orderOwner.slice(0, 6)}...{orderOwner.slice(-4)}
-											</a>
-										{:else}
-											—
-										{/if}
-									</td>
-								{/if}
 								{#if selectedOrdersFilter === 'my'}
 									<td class="py-3">
 										{#if isMyOrder && quote}

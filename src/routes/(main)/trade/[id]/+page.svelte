@@ -223,7 +223,7 @@
 	] as const;
 	type OnchainTabId = (typeof ONCHAIN_TABS)[number]['id'];
 	let activeOnchainTab: OnchainTabId = 'market';
-	let isAboutCollapsed = true; // Collapsed by default on mobile
+	let isAboutCollapsed = false; // Not collapsed by default
 
 	// Pagination state for vaults (orders pagination is handled by OrdersTable component)
 	let currentVaultsPage = 1;
@@ -1032,6 +1032,7 @@
 								isError={$orderbookQuotesQuery.isError}
 								errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
 								tokenAddress={currentToken?.address ?? null}
+								showTokenColumn={false}
 							/>
 						</div>
 					{:else if activeOnchainTab === 'vaults'}

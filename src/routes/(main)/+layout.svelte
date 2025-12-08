@@ -166,8 +166,7 @@
 		<Header
 			title={pageTitle}
 			isSidebarCollapsed={useCleanLayout || sidebarCollapsed}
-			isMobileSidebarOpen={mobileSidebarOpen}
-			isLandingPage={useEnhancedBackground}
+			isLandingPage={useCleanLayout}
 			on:toggleSidebar={handleHeaderSidebarToggle}
 		/>
 

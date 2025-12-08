@@ -159,8 +159,8 @@
 			</h1>
 
 			<!-- Rewards APY Banner -->
-			<div class="mb-8 flex justify-center sm:mb-10">
-				<div class="rewards-banner relative overflow-hidden rounded-2xl px-4 py-2.5 sm:rounded-full sm:px-6 sm:py-3">
+			<div class="mb-8 flex justify-center px-2 sm:mb-10 sm:px-0">
+				<div class="rewards-banner relative w-full max-w-md overflow-hidden rounded-2xl px-4 py-2.5 sm:w-auto sm:max-w-none sm:rounded-full sm:px-6 sm:py-3">
 					<span class="rewards-border"></span>
 					<span class="absolute inset-[1px] z-0 rounded-2xl bg-gray-900/90 sm:rounded-full"></span>
 					<div class="relative z-10 flex flex-col items-center gap-1 text-sm sm:flex-row sm:gap-3 sm:text-base">

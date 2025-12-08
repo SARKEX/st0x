@@ -662,7 +662,6 @@
 						isError={$orderbookQuotesQuery.isError}
 						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
 						showOwnerFilter={false}
-						showWalletColumn={false}
 					/>
 				</Section>
 

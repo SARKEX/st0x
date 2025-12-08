@@ -57,7 +57,7 @@
 	}
 </script>
 
-<!-- Pull-out tab (desktop only) - always visible, positioned near top -->
+<!-- Pull-out tab (desktop) - always visible, positioned near top -->
 {#if desktop}
 	<button
 		on:click={toggleCollapse}
@@ -74,6 +74,24 @@
 			viewBox="0 0 24 24"
 		>
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+		</svg>
+	</button>
+{/if}
+
+<!-- Pull-out tab (mobile) - visible when sidebar is closed, highlighted for visibility -->
+{#if !desktop && !visible}
+	<button
+		on:click={() => dispatch('open')}
+		class="fixed left-0 top-1/3 z-[10001] flex items-center gap-1 rounded-r-lg border border-l-0 border-yellow-500/40 bg-gradient-to-r from-yellow-500/20 to-yellow-500/10 px-1.5 py-4 text-yellow-400 shadow-lg shadow-yellow-500/20 backdrop-blur-xl transition-all duration-300 hover:border-yellow-500/60 hover:bg-yellow-500/30 hover:pr-2.5 hover:text-yellow-300"
+		aria-label="Open token list"
+	>
+		<svg
+			class="h-4 w-4"
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+		>
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 		</svg>
 	</button>
 {/if}
