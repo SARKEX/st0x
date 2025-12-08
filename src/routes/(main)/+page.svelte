@@ -20,7 +20,7 @@
 	}
 
 	// Typewriter animation for hero text
-	const typewriterWords = ['On-Chain', '1:1 Collateralised', 'DeFi-Ready', 'Transferable', "Redeemable"];
+	const typewriterWords = ['On-Chain', 'Collateralised', 'DeFi-Ready', 'Transferable', "Redeemable"];
 	let currentWordIndex = 0;
 	let displayedText = '';
 	let isDeleting = false;
@@ -157,11 +157,11 @@
 	}
 
 	const pioneerLogos = [
-		{ alt: 'Holo', src: '/images/pioneers/holo.svg' },
-		{ alt: 'Microsoft', src: '/images/pioneers/microsoft.svg' },
-		{ alt: 'Nasdaq', src: '/images/pioneers/nasdaq.svg' },
-		{ alt: 'NYSE', src: '/images/pioneers/nyse.svg' },
-		{ alt: 'ICE', src: '/images/pioneers/ice.svg' }
+		{ alt: 'Holo', src: '/images/pioneers/holo.svg', scale: 0.8 },
+		{ alt: 'Microsoft', src: '/images/pioneers/microsoft.svg', scale: 1.05 },
+		{ alt: 'Nasdaq', src: '/images/pioneers/nasdaq.svg', scale: 1.05 },
+		{ alt: 'NYSE', src: '/images/pioneers/nyse.svg', scale: 1 },
+		{ alt: 'ICE', src: '/images/pioneers/ice.svg', scale: 1 }
 		// { alt: 'University of Oxford', src: '/images/pioneers/oxford.svg' },
 		// { alt: 'University of Sussex', src: '/images/pioneers/sussex.svg' }
 	];
@@ -280,7 +280,7 @@
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
 						Decentralised
 					</h3>
-					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">Transferable to wallet and across platforms. Compatible with DeFi protocols</p>
+					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">Withdraw to your wallet. Compatible with DeFi protocols</p>
 				</div>
 
 				<!-- Exchange-Linked Liquidity -->
@@ -290,40 +290,38 @@
 							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
 						>
 							<svg
-								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
+								class="h-8 w-8 text-yellow-500 sm:h-12 sm:w-12"
 								fill="none"
 								stroke="currentColor"
-								viewBox="0 0 24 24"
+								viewBox="0 0 36 24"
 							>
-								<!-- Small lightning bolt in top-left -->
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M7 2L5 6h2L5 10"
-								/>
-								<!-- Arrow 1: diagonal pointing bottom-left -->
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M14 10L6 18m0 0v-5m0 5h5"
-								/>
-								<!-- Arrow 2: diagonal pointing top-right -->
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M10 14l8-8m0 0v5m0-5h-5"
-								/>
+								<!-- Swap arrows in center -->
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 5l3 3-3 3" />
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M24 8H16a4 4 0 00-4 4" />
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-3-3 3-3" />
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 16h8a4 4 0 004-4" />
+								<!-- Institution building (top-left) -->
+								<g transform="translate(1, 1)" stroke-width="1.2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M0 4l4.5-3 4.5 3" />
+									<path d="M1 4v4" />
+									<path d="M4.5 4v4" />
+									<path d="M8 4v4" />
+									<path stroke-linecap="round" d="M0 8h9" />
+								</g>
+								<!-- Ethereum diamond (bottom-right) -->
+								<g transform="translate(28, 14)" stroke-width="1.2">
+									<path d="M3.5 0L7 5L3.5 6.5L0 5L3.5 0Z" />
+									<path d="M0 5L3.5 4L7 5" />
+									<path d="M3.5 6.5L7 5L3.5 9.5L0 5L3.5 6.5Z" />
+								</g>
 							</svg>
 						</div>
 					</div>
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
-						Scalable
+						Liquid
 					</h3>
 					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
-						New supply bridged real-time from primary markets for 24/7 trading
+						Supply bridged real-time from stock markets. 24/7 trading.
 					</p>
 				</div>
 
@@ -339,18 +337,16 @@
 								stroke="currentColor"
 								viewBox="0 0 24 24"
 							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-								/>
+								<!-- Layered security circles with $ -->
+								<circle cx="12" cy="12" r="10" stroke-width="1.5" />
+								<circle cx="12" cy="12" r="7" stroke-dasharray="3 2" stroke-width="1.5" />
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9c-1.1 0-2 .6-2 1.3s.9 1.3 2 1.3 2 .6 2 1.3-.9 1.3-2 1.3m0-5.2c.7 0 1.4.3 1.7.6M12 9v-.5m0 .5v5.2m0 0v.5m0-.5c-.7 0-1.4-.3-1.7-.6" />
 							</svg>
 						</div>
 					</div>
-					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">Redeemable</h3>
+					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">1:1 Collateralised</h3>
 					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
-						Every token fully collateralised. Legal right of exchange for the underlying equity. 
+						Every token fully collateralised with a legal right of exchange.
 					</p>
 				</div>
 			</div>
@@ -364,6 +360,7 @@
 							src={logo.src}
 							alt={logo.alt}
 							class="h-4 w-auto opacity-60 grayscale transition-opacity hover:opacity-100 hover:grayscale-0 sm:h-6"
+							style="transform: scale({logo.scale})"
 							loading="lazy"
 						/>
 					{/each}

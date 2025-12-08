@@ -11,6 +11,7 @@ import {
 	type MonthlyPointsData,
 	type SnapshotBlockRecord
 } from '$lib/server/kv';
+import { invalidatePublicApiCaches } from '$lib/server/cache';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 
 const POINTS_PER_DOLLAR = 100;
@@ -247,6 +248,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		// Calculate total excluded points
 		const totalExcludedPoints = excludedWithPoints.reduce((sum, e) => sum + e.points, 0);
+
+		// Invalidate public API caches so they reflect new data immediately
+		await invalidatePublicApiCaches();
 
 		return json({
 			success: true,

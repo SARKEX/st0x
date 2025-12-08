@@ -531,7 +531,7 @@
 					{#if quote && !quote.hasLiquidity}
 						<span class="text-yellow-500">Partial</span>
 					{/if}
-					{#if $connected && formattedUsdcBalance > 0}
+					{#if isBuying && $connected && formattedUsdcBalance > 0}
 						{#each [25, 50, 75, 100] as percent}
 							<button
 								type="button"
@@ -628,7 +628,7 @@
 					{/if}
 				</span>
 				<div class="flex items-center gap-1">
-					{#if $connected && formattedTokenBalance > 0}
+					{#if !isBuying && $connected && formattedTokenBalance > 0}
 						{#each [25, 50, 75, 100] as percent}
 							<button
 								type="button"
