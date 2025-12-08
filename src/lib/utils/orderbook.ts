@@ -19,6 +19,7 @@ import { parseUnits } from "viem";
 export type MarketOrderSide = 'Buy' | 'Sell';
 
 const PRICE_SCALE = 10n ** 18n; // preserves 18 decimal places for prices
+const PRECISION = 18;
 
 export interface QuoteFill {
 	quote: ProcessedQuote;
@@ -238,7 +239,7 @@ function computeAvailableQuantity(
 
 	// Calculate: assetAvailable = paymentAvailable / price
 	// Use PRICE_SCALE for precision in the division
-	const priceScaled = parseUnits(price.toString(), 18);
+	const priceScaled = parseUnits(price.toString(), PRECISION);
 	if (priceScaled <= 0n) return 0n;
 
 	// (maxOutput in payment decimals * PRICE_SCALE) / priceScaled gives us amount in payment decimals
@@ -328,7 +329,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 			if (remainingPaymentBudget <= 0n) break;
 
 			// Calculate max asset for remaining budget: asset = budget / price
-			const priceScaled = parseUnits(price.toString(), 18);
+			const priceScaled = parseUnits(price.toString(), PRECISION);
 			if (priceScaled <= 0n) continue;
 
 			const budgetInAssetScale = scaleAmount(remainingPaymentBudget, paymentDecimals, assetDecimals);
@@ -340,7 +341,7 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		if (assetFromQuote <= 0n) continue;
 
 		// Calculate payment for this asset amount: payment = asset × price
-		const priceScaled = parseUnits(price.toString(), 18);
+		const priceScaled = parseUnits(price.toString(), PRECISION);
 		const paymentInAssetScale = (assetFromQuote * priceScaled) / PRICE_SCALE;
 		const paymentFromQuote = scaleAmount(paymentInAssetScale, assetDecimals, paymentDecimals);
 		if (paymentFromQuote <= 0n) continue;
