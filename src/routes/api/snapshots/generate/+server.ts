@@ -2,7 +2,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
-import { BLOB_READ_WRITE_TOKEN } from '$env/static/private';
 import { fetchAllTransfers, TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
 import { generateAllTokenSnapshots } from '$lib/server/snapshots/processor';
 import { fetchPythPricesAtTimestamp } from '$lib/server/snapshots/pyth';
@@ -113,8 +112,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			const blob = await put(blobPath, JSON.stringify(snapshot, null, 2), {
 				access: 'public',
-				contentType: 'application/json',
-				token: BLOB_READ_WRITE_TOKEN
+				contentType: 'application/json'
 			});
 
 			storedBlobs.push({
