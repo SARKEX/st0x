@@ -4,12 +4,22 @@ import type { PythToken } from '$lib/types';
 // Payment tokens mapped by chain
 export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
+		// {
+		// 	chainId: 8453,
+		// 	address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+		// 	symbol: 'USDC',
+		// 	decimals: 6,
+		// 	name: 'USD Coin',
+		// 	logoUrl: '/images/USDC.png',
+		// 	priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+		// } as unknown as PythToken,
+		// Test USDC for testing
 		{
 			chainId: 8453,
-			address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-			symbol: 'USDC',
+			address: '0xE1d3ECe2425F8F350b8d2b8CB179D5a36AeE1c58',
+			symbol: 'testUSDC',
 			decimals: 6,
-			name: 'USD Coin',
+			name: 'Test USD Coin',
 			logoUrl: '/images/USDC.png',
 			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
 		} as unknown as PythToken
@@ -68,6 +78,20 @@ export interface CategorizedToken extends PythToken {
 }
 
 export const TOKENS: CategorizedToken[] = [
+	// Test ST0x token for testing
+	{
+		chainId: base.id,
+		address: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+		symbol: 'tSTOX',
+		decimals: 18,
+		name: 'Test ST0x Token',
+		logoUrl: '/images/IAU.png',
+		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:IAU',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
 		address: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
