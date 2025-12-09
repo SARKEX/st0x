@@ -285,35 +285,6 @@
 								</div>
 							</div>
 
-							<!-- Last Month Stats -->
-							{#if $rewardsData.lastMonth}
-								<div class="rounded-lg bg-gray-700/50 p-4">
-									<h3 class="mb-3 text-sm font-medium text-gray-300">
-										Last Month ({formatMonth($rewardsData.lastMonth.month)})
-									</h3>
-									<div class="grid grid-cols-2 gap-4">
-										<div>
-											<p class="text-xs text-gray-400">Your Points</p>
-											<p class="text-lg font-semibold text-white">
-												{formatPoints($rewardsData.lastMonth.userPoints)}
-											</p>
-										</div>
-										<div>
-											<p class="text-xs text-gray-400">Your Reward</p>
-											<p class="text-lg font-semibold text-green-400">
-												{formatUsd($rewardsData.lastMonth.reward)}
-											</p>
-										</div>
-									</div>
-									{#if $rewardsData.lastMonth.rocketBoostAchievedAmount > 0}
-										<p class="mt-2 text-xs text-green-400">
-											Includes {formatUsd($rewardsData.lastMonth.rocketBoostAchievedAmount)} RocketBoost
-											bonus
-										</p>
-									{/if}
-								</div>
-							{/if}
-
 							<!-- View Leaderboard Button -->
 							<button
 								on:click={openLeaderboard}

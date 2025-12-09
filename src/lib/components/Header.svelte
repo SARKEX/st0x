@@ -217,8 +217,8 @@
 				{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
 					<!-- Fully registered user -->
 					<div class="flex items-center gap-2">
-						<!-- Hide dashboard button on mobile, show in hamburger menu -->
 						{#if !isHamburgerMode}
+							<!-- Full dashboard button on desktop -->
 							<a href="/dashboard">
 								<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
 									<div class="flex items-center gap-2">
@@ -227,6 +227,13 @@
 											...{$signerAddress.slice(-4)}
 										</span>
 									</div>
+								</Button>
+							</a>
+						{:else}
+							<!-- Compact dashboard link on mobile/hamburger mode -->
+							<a href="/dashboard">
+								<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
+									Dashboard
 								</Button>
 							</a>
 						{/if}
@@ -322,26 +329,6 @@
 			<div class="border-b border-white/10 pb-4">
 				<RewardsDisplay />
 			</div>
-
-			<!-- Dashboard link for connected users -->
-			{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
-				<a
-					href="/dashboard"
-					on:click={closeMobileNav}
-					class="flex items-center gap-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3 text-base font-medium text-white transition-colors hover:from-blue-500 hover:to-purple-500"
-				>
-					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-						/>
-					</svg>
-					<span>My Dashboard</span>
-					<span class="ml-auto text-sm text-white/70">...{$signerAddress.slice(-4)}</span>
-				</a>
-			{/if}
 
 			<nav class="flex flex-col gap-2">
 				{#each NAV_ITEMS as item}
