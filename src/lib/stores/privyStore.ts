@@ -8,6 +8,10 @@ export interface PrivySession {
 	email?: string;
 	socialProvider?: string;
 	socialName?: string;
+	// Smart wallet info
+	smartWalletAddress?: string;
+	eoaAddress?: string;
+	walletType?: 'embedded' | 'smart' | 'eoa';
 }
 
 // Privy authentication state
@@ -20,6 +24,7 @@ export const privyReady = writable<boolean>(false);
 export const privyTriggerLogin = writable<boolean>(false);
 export const privyTriggerLogout = writable<boolean>(false);
 export const privyTriggerExportWallet = writable<boolean>(false);
+export const privyTriggerConnectWallet = writable<boolean>(false); // For EOA -> Smart wallet
 export const privyTriggerSendTransaction = writable<{
 	to: string;
 	value: string;
@@ -38,13 +43,23 @@ export const privyWalletAddress = derived(
 );
 
 /**
- * Trigger Privy login modal
+ * Trigger Privy login modal (email/social)
  */
 export function loginWithPrivy(): void {
 	privyLoading.set(true);
 	privyTriggerLogin.set(true);
 	// Reset trigger after a tick to allow React to pick it up
 	setTimeout(() => privyTriggerLogin.set(false), 100);
+}
+
+/**
+ * Trigger Privy wallet connection (EOA -> Smart Account)
+ * This allows users to connect MetaMask/Rabby and get a Privy smart account
+ */
+export function loginWithPrivyWallet(): void {
+	privyLoading.set(true);
+	privyTriggerConnectWallet.set(true);
+	setTimeout(() => privyTriggerConnectWallet.set(false), 100);
 }
 
 /**
@@ -125,5 +140,6 @@ export function resetPrivyState(): void {
 	privyTriggerLogin.set(false);
 	privyTriggerLogout.set(false);
 	privyTriggerExportWallet.set(false);
+	privyTriggerConnectWallet.set(false);
 	privyTriggerSendTransaction.set(null);
 }

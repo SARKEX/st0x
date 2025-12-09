@@ -74,6 +74,10 @@ export const userDisplayInfo = derived(
 		method: AuthMethod;
 		email?: string;
 		socialProvider?: string;
+		// Smart wallet info
+		walletType?: 'embedded' | 'smart' | 'eoa';
+		smartWalletAddress?: string;
+		eoaAddress?: string;
 	} => {
 		if (!$walletAddress) {
 			return { address: null, displayName: 'Not connected', method: 'none' };
@@ -88,6 +92,10 @@ export const userDisplayInfo = derived(
 				displayName = $privySession.email;
 			} else if ($privySession.socialName) {
 				displayName = $privySession.socialName;
+			} else if ($privySession.walletType === 'smart' && $privySession.eoaAddress) {
+				// For smart wallet users without email/social, show the EOA they connected with
+				const truncatedEoa = `${$privySession.eoaAddress.slice(0, 6)}...${$privySession.eoaAddress.slice(-4)}`;
+				displayName = `Smart (${truncatedEoa})`;
 			}
 
 			return {
@@ -95,7 +103,10 @@ export const userDisplayInfo = derived(
 				displayName,
 				method: 'privy',
 				email: $privySession.email,
-				socialProvider: $privySession.socialProvider
+				socialProvider: $privySession.socialProvider,
+				walletType: $privySession.walletType,
+				smartWalletAddress: $privySession.smartWalletAddress,
+				eoaAddress: $privySession.eoaAddress
 			};
 		}
 

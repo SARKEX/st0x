@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
-import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
+import { PrivyProvider, usePrivy, useWallets, useLoginWithOAuth, useConnectWallet } from '@privy-io/react-auth';
 import { base } from 'viem/chains';
 
 // Event types for Svelte-React communication
@@ -11,6 +11,10 @@ export interface PrivyEventData {
 		email?: string;
 		isAuthenticated?: boolean;
 		error?: string;
+		// Smart wallet info
+		smartWalletAddress?: string;
+		eoaAddress?: string;
+		walletType?: 'embedded' | 'smart' | 'eoa';
 	};
 }
 
@@ -20,6 +24,7 @@ interface PrivyBridgeProps {
 	triggerLogin?: boolean;
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
+	triggerConnectWallet?: boolean; // For EOA -> Smart wallet flow
 	triggerSendTransaction?: {
 		to: string;
 		value: string;
@@ -33,6 +38,7 @@ function PrivyBridge({
 	triggerLogin,
 	triggerLogout,
 	triggerExportWallet,
+	triggerConnectWallet,
 	triggerSendTransaction
 }: Omit<PrivyBridgeProps, 'appId'>) {
 	const {
@@ -41,13 +47,23 @@ function PrivyBridge({
 		user,
 		login,
 		logout,
-		exportWallet
+		exportWallet,
+		connectWallet
 	} = usePrivy();
 
 	const { wallets } = useWallets();
 
-	// Get embedded wallet
+	// Get embedded wallet (created by Privy for email/social login)
 	const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy');
+
+	// Get smart wallet if available
+	const smartWallet = wallets.find((w) => w.walletClientType === 'privy_smart_wallet');
+
+	// Get connected external wallet (MetaMask, Rabby, etc.)
+	const externalWallet = wallets.find((w) =>
+		w.walletClientType !== 'privy' &&
+		w.walletClientType !== 'privy_smart_wallet'
+	);
 
 	// Notify when ready
 	useEffect(() => {
@@ -62,7 +78,31 @@ function PrivyBridge({
 
 		if (authenticated && user) {
 			const email = user.email?.address;
-			const walletAddress = embeddedWallet?.address || user.wallet?.address;
+
+			// Determine wallet type and addresses
+			let walletAddress: string | undefined;
+			let walletType: 'embedded' | 'smart' | 'eoa' | undefined;
+			let smartWalletAddress: string | undefined;
+			let eoaAddress: string | undefined;
+
+			if (smartWallet) {
+				// User connected with external wallet and has smart wallet
+				walletType = 'smart';
+				walletAddress = smartWallet.address;
+				smartWalletAddress = smartWallet.address;
+				eoaAddress = externalWallet?.address;
+			} else if (embeddedWallet) {
+				// User logged in with email/social - has embedded wallet
+				walletType = 'embedded';
+				walletAddress = embeddedWallet.address;
+			} else if (externalWallet) {
+				// User connected with external wallet but no smart wallet created yet
+				walletType = 'eoa';
+				walletAddress = externalWallet.address;
+				eoaAddress = externalWallet.address;
+			} else {
+				walletAddress = user.wallet?.address;
+			}
 
 			onEvent({
 				type: 'authenticated',
@@ -70,7 +110,10 @@ function PrivyBridge({
 					userId: user.id,
 					walletAddress,
 					email,
-					isAuthenticated: true
+					isAuthenticated: true,
+					walletType,
+					smartWalletAddress,
+					eoaAddress
 				}
 			});
 		} else if (!authenticated) {
@@ -79,7 +122,7 @@ function PrivyBridge({
 				payload: { isAuthenticated: false }
 			});
 		}
-	}, [ready, authenticated, user, embeddedWallet?.address, onEvent]);
+	}, [ready, authenticated, user, embeddedWallet?.address, smartWallet?.address, externalWallet?.address, onEvent]);
 
 	// Notify wallet changes
 	useEffect(() => {
@@ -91,12 +134,20 @@ function PrivyBridge({
 		}
 	}, [embeddedWallet?.address, onEvent]);
 
-	// Handle login trigger
+	// Handle login trigger (email/social)
 	useEffect(() => {
 		if (triggerLogin && ready && !authenticated) {
 			login();
 		}
 	}, [triggerLogin, ready, authenticated, login]);
+
+	// Handle connect wallet trigger (EOA -> Smart wallet)
+	useEffect(() => {
+		if (triggerConnectWallet && ready && !authenticated) {
+			// Use connectWallet to trigger wallet connection flow
+			connectWallet();
+		}
+	}, [triggerConnectWallet, ready, authenticated, connectWallet]);
 
 	// Handle logout trigger
 	useEffect(() => {
@@ -168,7 +219,8 @@ export function PrivyReactProvider(props: PrivyBridgeProps) {
 		<PrivyProvider
 			appId={appId}
 			config={{
-				loginMethods: ['email', 'google', 'twitter', 'discord'],
+				// Enable wallet login alongside email/social for EOA -> Smart wallet flow
+				loginMethods: ['email', 'google', 'twitter', 'discord', 'wallet'],
 				appearance: {
 					theme: 'dark',
 					accentColor: '#6366f1',
@@ -177,6 +229,12 @@ export function PrivyReactProvider(props: PrivyBridgeProps) {
 				embeddedWallets: {
 					createOnLogin: 'users-without-wallets',
 					showWalletUIs: true
+				},
+				// Enable smart wallets - users who connect EOA get a smart contract account
+				externalWallets: {
+					coinbaseWallet: {
+						connectionOptions: 'smartWalletOnly'
+					}
 				},
 				defaultChain: base,
 				supportedChains: [base]

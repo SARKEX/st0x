@@ -11,6 +11,7 @@
 		privyTriggerLogin,
 		privyTriggerLogout,
 		privyTriggerExportWallet,
+		privyTriggerConnectWallet,
 		privyTriggerSendTransaction,
 		type PrivySession
 	} from '$lib/stores/privyStore';
@@ -24,6 +25,7 @@
 	let triggerLogin = false;
 	let triggerLogout = false;
 	let triggerExportWallet = false;
+	let triggerConnectWallet = false;
 	let triggerSendTx: { to: string; value: string; data?: string } | null = null;
 
 	const unsubLogin = privyTriggerLogin.subscribe((v) => {
@@ -36,6 +38,10 @@
 	});
 	const unsubExport = privyTriggerExportWallet.subscribe((v) => {
 		triggerExportWallet = v;
+		if (v && mounted) updateReactProps();
+	});
+	const unsubConnectWallet = privyTriggerConnectWallet.subscribe((v) => {
+		triggerConnectWallet = v;
 		if (v && mounted) updateReactProps();
 	});
 	const unsubSend = privyTriggerSendTransaction.subscribe((v) => {
@@ -52,6 +58,10 @@
 			email?: string;
 			isAuthenticated?: boolean;
 			error?: string;
+			// Smart wallet info
+			smartWalletAddress?: string;
+			eoaAddress?: string;
+			walletType?: 'embedded' | 'smart' | 'eoa';
 		};
 	}) {
 		switch (event.type) {
@@ -65,7 +75,10 @@
 					const session: PrivySession = {
 						userId: event.payload.userId || '',
 						walletAddress: event.payload.walletAddress || '',
-						email: event.payload.email
+						email: event.payload.email,
+						smartWalletAddress: event.payload.smartWalletAddress,
+						eoaAddress: event.payload.eoaAddress,
+						walletType: event.payload.walletType
 					};
 					privySession.set(session);
 					showAuthModal.set(false);
@@ -124,6 +137,7 @@
 					triggerLogin,
 					triggerLogout,
 					triggerExportWallet,
+					triggerConnectWallet,
 					triggerSendTransaction: triggerSendTx
 				})
 			);
@@ -155,6 +169,7 @@
 					triggerLogin,
 					triggerLogout,
 					triggerExportWallet,
+					triggerConnectWallet,
 					triggerSendTransaction: triggerSendTx
 				})
 			);
@@ -171,6 +186,7 @@
 		unsubLogin();
 		unsubLogout();
 		unsubExport();
+		unsubConnectWallet();
 		unsubSend();
 
 		if (reactRoot) {
