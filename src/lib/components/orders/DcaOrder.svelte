@@ -10,7 +10,7 @@
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
-	import { currentNetwork, oracleQuotes } from '$lib/stores';
+	import { currentNetwork, oracleQuotes, reviewStrategyOnDeploy } from '$lib/stores';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
@@ -446,6 +446,17 @@
 				Create Order
 			{/if}
 		</button>
+
+		<!-- Review Strategy Checkbox -->
+		<label class="mt-3 flex cursor-pointer items-center gap-2">
+			<input
+				type="checkbox"
+				checked={$reviewStrategyOnDeploy}
+				on:change={(e) => reviewStrategyOnDeploy.set(e.currentTarget.checked)}
+				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-800"
+			/>
+			<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
+		</label>
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">

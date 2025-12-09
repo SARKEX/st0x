@@ -79,7 +79,7 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from '$lib/services/orderDeployment';
-import { rainlangConfirmationModal } from '$lib/stores';
+import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { invalidateUserVaultQueries } from '$lib/queries/vaults';
@@ -377,28 +377,37 @@ const transactionStore = () => {
 		deploymentArgs: DeploymentTransactionArgs,
 		assetTokenInfo?: AssetTokenInfo
 	) => {
-		rainlangConfirmationModal.set({
-			show: true,
-			rainlangCode: composedRainlang,
-			onDeploy: () => {
-				rainlangConfirmationModal.set({
-					show: false,
-					rainlangCode: '',
-					onDeploy: null,
-					onCancel: null
-				});
-				handleStrategyDeployment(deploymentArgs, assetTokenInfo);
-			},
-			onCancel: () => {
-				rainlangConfirmationModal.set({
-					show: false,
-					rainlangCode: '',
-					onDeploy: null,
-					onCancel: null
-				});
-				reset();
-			}
-		});
+		// Check if user wants to review strategy source code before deploying
+		const shouldReview = get(reviewStrategyOnDeploy);
+
+		if (shouldReview) {
+			// Show modal for user to review and confirm
+			rainlangConfirmationModal.set({
+				show: true,
+				rainlangCode: composedRainlang,
+				onDeploy: () => {
+					rainlangConfirmationModal.set({
+						show: false,
+						rainlangCode: '',
+						onDeploy: null,
+						onCancel: null
+					});
+					handleStrategyDeployment(deploymentArgs, assetTokenInfo);
+				},
+				onCancel: () => {
+					rainlangConfirmationModal.set({
+						show: false,
+						rainlangCode: '',
+						onDeploy: null,
+						onCancel: null
+					});
+					reset();
+				}
+			});
+		} else {
+			// Skip modal and deploy directly
+			handleStrategyDeployment(deploymentArgs, assetTokenInfo);
+		}
 	};
 
 	const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {

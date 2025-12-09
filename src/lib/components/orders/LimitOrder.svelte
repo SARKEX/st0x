@@ -7,7 +7,7 @@
 	import { formatUnits, parseUnits } from 'viem';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/stores/transaction';
-	import { currentNetwork } from '$lib/stores';
+	import { currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
 	import { priceToIoratioString } from '$lib/utils/derivations';
 	import type { PythToken } from '$lib/types';
 	import { containerStyles } from '$lib/styles/utils';
@@ -444,6 +444,17 @@
 				Create Order
 			{/if}
 		</button>
+
+		<!-- Review Strategy Checkbox -->
+		<label class="mt-3 flex cursor-pointer items-center gap-2">
+			<input
+				type="checkbox"
+				checked={$reviewStrategyOnDeploy}
+				on:change={(e) => reviewStrategyOnDeploy.set(e.currentTarget.checked)}
+				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-800"
+			/>
+			<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
+		</label>
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">
