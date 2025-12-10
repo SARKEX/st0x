@@ -184,34 +184,34 @@ const transactionStore = () => {
 	const sendTransactionWithGas = async (
 		config: any,
 		args: {
-			data: Hex;
-			to: `0x${string}`;
-			value?: bigint;
+		  data: Hex;
+		  to: `0x${string}`;
+		  value?: bigint;
 		}
-	): Promise<Hash> => {
+	  ): Promise<Hash> => {
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
-
-		const [gasEstimate, nonce] = await Promise.all([
-			estimateGas(config, {
-				account: $signerAddress as `0x${string}`,
-				to: args.to,
-				data: args.data,
-				value: args.value
-			}),
-			getTransactionCount(config, {
-				address: $signerAddress as `0x${string}`
-			})
-		]);
-
+	  
+		// 1. Estimate gas
+		const gasEstimate = await estimateGas(config, {
+		  account: $signerAddress as `0x${string}`,
+		  to: args.to,
+		  data: args.data,
+		  value: args.value
+		});
+	  
+		// 2. Add a safety margin (e.g. +20%)
+		const gasWithBuffer = (gasEstimate * 120n) / 100n;
+	  
+		// 3. Let MetaMask pick the nonce; just pass gas + tx data
 		return await sendTransaction(config, {
-			to: args.to,
-			data: args.data,
-			value: args.value,
-			gas: gasEstimate,
-			nonce
+		  to: args.to,
+		  data: args.data,
+		  value: args.value,
+		  gas: gasWithBuffer
 		});
 	};
+	  
 
 	// Generic state update helper
 	const setState = (
