@@ -4,7 +4,7 @@
 	import { type ProcessedQuote, walkOrderbook } from '$lib/api/orders';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
-	import { formatUnits, parseUnits } from 'viem';
+	import { formatUnits } from 'viem';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
@@ -124,13 +124,14 @@
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else {
 			// For BUY in amount mode: user is spending the payment token (USDC)
-			// Calculate the estimated cost
+			// Calculate the estimated cost using floor to avoid false "insufficient balance" errors
+			// when clicking MAX button (precision errors from float conversion)
 			const assetDecimals = assetToken?.decimals ?? 18;
 			const paymentDecimals = paymentToken?.decimals ?? 6;
 			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
 			const estimatedCost = outputInTokens * marketPrice;
-			// Convert to bigint in payment token decimals
-			const estimatedCostBigInt = BigInt(Math.ceil(estimatedCost * 10 ** paymentDecimals));
+			// Use floor instead of ceil to prevent rounding up beyond actual balance
+			const estimatedCostBigInt = BigInt(Math.floor(estimatedCost * 10 ** paymentDecimals));
 			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
 		}
 	}
@@ -308,14 +309,12 @@
 
 			// Convert payment amount to asset amount using oracle price
 			// paymentAmount / price = assetAmount
-			// But we need to handle decimals properly:
-			// paymentToSpend is in payment decimals (e.g., 6 for USDC)
-			// We want result in asset decimals (e.g., 18)
+			// Use floor to ensure we don't exceed the balance when converting back
 			const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
 			const assetAmount = paymentInFloat / oraclePrice;
-			tradeAmountInputRef.setAmountValue(
-				parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals)
-			);
+			// Use floor to be conservative and prevent "not enough funds" errors
+			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
+			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
 		}
 	};
 

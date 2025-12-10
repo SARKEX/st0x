@@ -94,6 +94,40 @@
 	$: isInputTokenSameAsOutputToken =
 		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
 
+	// Min trade size is $1 USDC for Buy, or $1 worth of the asset token for Sell
+	// This matches the actual strategy configuration minimum
+	$: minTradeAmount = (() => {
+		if (orderSide === 'Buy') {
+			// For Buy orders, min is 1 USDC (settlement token)
+			const settlementDecimals = settlementToken?.decimals ?? 6;
+			return BigInt(10 ** settlementDecimals);
+		} else {
+			// For Sell orders, min is $1 worth of the asset token
+			const price = parseFloat(selectedInitialRatio || '0');
+			if (price <= 0) return 0n;
+			const tokenDecimals = assetToken?.decimals ?? 18;
+			const oneDollarWorth = 1 / price;
+			return BigInt(Math.floor(oneDollarWorth * 10 ** tokenDecimals));
+		}
+	})();
+
+	// Check if selected amount is below minimum trade size
+	$: belowMinTradeError = (() => {
+		if (!selectedAmount || selectedAmount === 0n) return false;
+		if (!selectedInitialRatio || parseFloat(selectedInitialRatio) <= 0) return false;
+		if (orderSide === 'Buy') {
+			// For buy: check if total cost is below $1
+			const price = parseFloat(selectedInitialRatio);
+			const assetDecimals = assetToken?.decimals ?? 18;
+			const totalCostValue =
+				parseFloat(formatUnits(selectedAmount, assetDecimals)) * price;
+			return totalCostValue < 1;
+		} else {
+			// For sell: check if asset amount is below $1 worth
+			return minTradeAmount > 0n && selectedAmount < minTradeAmount;
+		}
+	})();
+
 	// errors
 	let selectedInitialRatioError: boolean = false;
 	let selectedAmountError: boolean = false;
@@ -115,7 +149,8 @@
 		!assetToken ||
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
-		selectedAmountError;
+		selectedAmountError ||
+		belowMinTradeError;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
 	const handlePercentageClick = (percent: number) => {
@@ -143,11 +178,11 @@
 
 			// Convert settlement amount to asset amount using limit price
 			// settlementAmount / price = assetAmount
+			// Use floor to prevent rounding up beyond actual balance (fixes "not enough funds" on MAX)
 			const settlementInFloat = parseFloat(formatUnits(settlementToSpend, settlementDecimals));
 			const assetAmount = settlementInFloat / price;
-			tradeAmountInputRef.setAmountValue(
-				parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals)
-			);
+			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
+			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
 		}
 	};
 
@@ -367,6 +402,11 @@
 							{settlementLabel}
 						</span>
 					</div>
+					{#if belowMinTradeError}
+						<div class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300">
+							Minimum trade size is $1. Please increase your order amount.
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -437,6 +477,8 @@
 					Enter a limit price
 				{:else if !selectedAmount}
 					Enter an amount
+				{:else if belowMinTradeError}
+					Minimum trade is $1
 				{:else}
 					Complete all fields
 				{/if}

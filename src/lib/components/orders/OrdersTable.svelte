@@ -202,6 +202,19 @@
 		currentPage * ITEMS_PER_PAGE
 	);
 	$: totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
+
+	// Format timestamp to local time (short format: MM/DD HH:MM)
+	function formatLocalTime(timestamp: number): string {
+		if (!timestamp || timestamp === 0) return '—';
+		// Convert from seconds to milliseconds if needed
+		const ms = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+		const date = new Date(ms);
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		const hours = String(date.getHours()).padStart(2, '0');
+		const minutes = String(date.getMinutes()).padStart(2, '0');
+		return `${month}/${day} ${hours}:${minutes}`;
+	}
 </script>
 
 <div>
@@ -275,6 +288,7 @@
 				<thead class="border-b border-white/10">
 					<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
 						<th class="pb-3 pr-4 font-medium">Type</th>
+						<th class="pb-3 pr-4 font-medium">Time</th>
 						{#if showTokenColumn}
 							<th class="pb-3 pr-4 font-medium">Token</th>
 						{/if}
@@ -306,6 +320,9 @@
 									>
 										Market
 									</span>
+								</td>
+								<td class="py-3 pr-4 text-xs text-gray-400" title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}>
+									{formatLocalTime(order.timestamp)}
 								</td>
 								{#if showTokenColumn}
 									<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
@@ -416,6 +433,9 @@
 									<span class={`rounded px-2 py-0.5 text-xs font-medium ${typeClass}`}>
 										{typeLabel}
 									</span>
+								</td>
+								<td class="py-3 pr-4 text-xs text-gray-400" title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}>
+									{formatLocalTime(order.timestamp)}
 								</td>
 								{#if showTokenColumn}
 									<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>

@@ -94,6 +94,24 @@
 		}
 	})();
 
+	// Check if total budget is below minimum ($1)
+	$: belowMinTradeError = (() => {
+		if (!selectedAmount || selectedAmount === 0n) return false;
+		if (!selectedInitialRatio || parseFloat(selectedInitialRatio) <= 0) return false;
+		if (orderSide === 'Buy') {
+			// For buy: check if total budget is below $1
+			const budgetDecimals = selectedOutputToken?.decimals ?? 6;
+			const budgetValue = parseFloat(formatUnits(selectedAmount, budgetDecimals));
+			return budgetValue < 1;
+		} else {
+			// For sell: check if total asset amount is worth less than $1
+			const price = parseFloat(selectedInitialRatio);
+			const assetDecimals = selectedInputToken?.decimals ?? 18;
+			const totalValue = parseFloat(formatUnits(selectedAmount, assetDecimals)) * price;
+			return totalValue < 1;
+		}
+	})();
+
 	// Advanced options state
 	let showAdvancedOptions = false;
 	let selectedVaultOption = 'default' as 'default' | 'order-specific';
@@ -131,7 +149,8 @@
 		selectedBaselineError ||
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
-		priceGuardrailError;
+		priceGuardrailError ||
+		belowMinTradeError;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
 	// For DCA, amount token and balance token are always the same (both are the spending token)
@@ -366,6 +385,11 @@
 						{/if}
 					</span>
 				</div>
+				{#if belowMinTradeError}
+					<div class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300">
+						Minimum trade size is $1. Please increase your budget amount.
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -439,6 +463,8 @@
 					{orderSide === 'Buy' ? 'Enter a ceiling price' : 'Enter a floor price'}
 				{:else if !selectedInitialRatio}
 					Enter a start price
+				{:else if belowMinTradeError}
+					Minimum trade is $1
 				{:else}
 					Complete all fields
 				{/if}
