@@ -9,7 +9,7 @@
 	const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
 
 	// Tab types
-	type Tab = 'tokens' | 'codes' | 'wallets';
+	type Tab = 'tokens' | 'codes' | 'wallets' | 'transactions' | 'timeseries';
 	let activeTab: Tab = 'tokens';
 
 	// Period selector
@@ -101,6 +101,7 @@
 		tradeEvent: {
 			sender: string;
 			transaction: {
+				id: string;
 				from: string;
 			};
 		};
@@ -115,6 +116,27 @@
 		sold: number;
 		net: number;
 		decimals: number;
+		tradeCount: number;
+		usdcVolume: number;
+	}
+
+	interface TimeSeriesEntry {
+		date: string;
+		walletCount: number;
+		tradeCount: number;
+		usdcVolume: number;
+	}
+
+	interface TransactionEntry {
+		id: string;
+		timestamp: Date;
+		txHash: string;
+		wallet: string;
+		accessCode: string | null;
+		tokenSymbol: string;
+		direction: 'buy' | 'sell';
+		tokenAmount: number;
+		usdcAmount: number;
 	}
 
 	interface WalletStats {
@@ -147,6 +169,13 @@
 	let accessCodeStats: AccessCodeStats[] = [];
 	let accessCodes: AccessCode[] = [];
 	let walletToCode: Map<string, string> = new Map();
+
+	// Enhanced analytics data
+	let transactions: TransactionEntry[] = [];
+	let timeSeries: TimeSeriesEntry[] = [];
+	let meanTxSize = 0;
+	let medianTxSize = 0;
+	let cumulativeNetVolume = 0; // Platform net: sells - buys (USDC received - USDC spent)
 
 	// Network config
 	const network = networks[0]; // Base mainnet
@@ -327,6 +356,11 @@
 		const tokenMap = new Map<string, TokenStats>();
 		const walletMap = new Map<string, WalletStats>();
 		const codeMap = new Map<string, AccessCodeStats>();
+		const txList: TransactionEntry[] = [];
+		const usdcAmounts: number[] = [];
+
+		// Time series aggregation - group by day
+		const timeSeriesMap = new Map<string, { wallets: Set<string>; tradeCount: number; usdcVolume: number }>();
 
 		// Initialize code stats from access codes
 		for (const code of accessCodes) {
@@ -338,6 +372,9 @@
 				tradeCount: 0
 			});
 		}
+
+		// Track cumulative net volume (from platform perspective: sells - buys)
+		let platformNetUsdc = 0;
 
 		for (const trade of trades) {
 			const sender = trade.tradeEvent?.sender?.toLowerCase() || '';
@@ -371,6 +408,12 @@
 			}
 
 			totalUsdcVolume += usdcAmount;
+			if (usdcAmount > 0) {
+				usdcAmounts.push(usdcAmount);
+			}
+
+			// Track platform net (opposite of user direction)
+			platformNetUsdc -= usdcDirection;
 
 			// Token stats - track only tokens from our token list (non-USDC)
 			const assetToken =
@@ -389,7 +432,9 @@
 						bought: 0,
 						sold: 0,
 						net: 0,
-						decimals: assetToken.decimals
+						decimals: assetToken.decimals,
+						tradeCount: 0,
+						usdcVolume: 0
 					});
 				}
 				const stats = tokenMap.get(assetAddress)!;
@@ -399,7 +444,35 @@
 					stats.sold += assetAmount;
 				}
 				stats.net = stats.bought - stats.sold;
+				stats.tradeCount += 1;
+				stats.usdcVolume += usdcAmount;
 			}
+
+			// Build transaction entry
+			const timestamp = new Date(parseInt(trade.timestamp) * 1000);
+			const txHash = trade.tradeEvent?.transaction?.id || trade.id;
+
+			txList.push({
+				id: trade.id,
+				timestamp,
+				txHash,
+				wallet: sender,
+				accessCode: walletToCode.get(sender) || null,
+				tokenSymbol: assetToken.symbol,
+				direction: isBuying ? 'buy' : 'sell',
+				tokenAmount: assetAmount,
+				usdcAmount
+			});
+
+			// Time series aggregation
+			const dateKey = timestamp.toISOString().split('T')[0];
+			if (!timeSeriesMap.has(dateKey)) {
+				timeSeriesMap.set(dateKey, { wallets: new Set(), tradeCount: 0, usdcVolume: 0 });
+			}
+			const dayStats = timeSeriesMap.get(dateKey)!;
+			if (sender) dayStats.wallets.add(sender);
+			dayStats.tradeCount += 1;
+			dayStats.usdcVolume += usdcAmount;
 
 			// Wallet stats
 			if (sender) {
@@ -427,6 +500,34 @@
 				}
 			}
 		}
+
+		// Calculate mean and median
+		if (usdcAmounts.length > 0) {
+			meanTxSize = usdcAmounts.reduce((a, b) => a + b, 0) / usdcAmounts.length;
+			const sorted = [...usdcAmounts].sort((a, b) => a - b);
+			const mid = Math.floor(sorted.length / 2);
+			medianTxSize = sorted.length % 2 === 0
+				? (sorted[mid - 1] + sorted[mid]) / 2
+				: sorted[mid];
+		} else {
+			meanTxSize = 0;
+			medianTxSize = 0;
+		}
+
+		cumulativeNetVolume = platformNetUsdc;
+
+		// Build time series array sorted by date
+		timeSeries = Array.from(timeSeriesMap.entries())
+			.map(([date, data]) => ({
+				date,
+				walletCount: data.wallets.size,
+				tradeCount: data.tradeCount,
+				usdcVolume: data.usdcVolume
+			}))
+			.sort((a, b) => a.date.localeCompare(b.date));
+
+		// Sort transactions by timestamp descending (newest first)
+		transactions = txList.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
 		tokenStats = Array.from(tokenMap.values()).sort(
 			(a, b) => b.bought + b.sold - (a.bought + a.sold)
@@ -585,9 +686,33 @@
 			</Card>
 		</div>
 
+		<!-- Extended Stats -->
+		<div class="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+			<Card>
+				<div class="text-center">
+					<p class="text-2xl font-bold text-white">{formatUsd(meanTxSize)}</p>
+					<p class="mt-1 text-sm text-gray-400">Mean Tx Size</p>
+				</div>
+			</Card>
+			<Card>
+				<div class="text-center">
+					<p class="text-2xl font-bold text-white">{formatUsd(medianTxSize)}</p>
+					<p class="mt-1 text-sm text-gray-400">Median Tx Size</p>
+				</div>
+			</Card>
+			<Card>
+				<div class="text-center">
+					<p class="text-2xl font-bold {cumulativeNetVolume >= 0 ? 'text-green-400' : 'text-red-400'}">
+						{cumulativeNetVolume >= 0 ? '+' : ''}{formatUsd(cumulativeNetVolume)}
+					</p>
+					<p class="mt-1 text-sm text-gray-400">Net USDC Flow (Sells - Buys)</p>
+				</div>
+			</Card>
+		</div>
+
 		<!-- Tab Navigation -->
 		<div class="mb-6 border-b border-gray-700">
-			<nav class="-mb-px flex gap-6">
+			<nav class="-mb-px flex flex-wrap gap-6">
 				<button
 					on:click={() => (activeTab = 'tokens')}
 					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'tokens'
@@ -595,6 +720,22 @@
 						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 				>
 					By Token
+				</button>
+				<button
+					on:click={() => (activeTab = 'transactions')}
+					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'transactions'
+						? 'border-[#e8be89] text-[#e8be89]'
+						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+				>
+					Transactions
+				</button>
+				<button
+					on:click={() => (activeTab = 'timeseries')}
+					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'timeseries'
+						? 'border-[#e8be89] text-[#e8be89]'
+						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+				>
+					Activity Over Time
 				</button>
 				<button
 					on:click={() => (activeTab = 'codes')}
@@ -627,6 +768,8 @@
 							<thead>
 								<tr class="border-b border-gray-700 text-left text-gray-400">
 									<th class="pb-3 font-medium">Token</th>
+									<th class="pb-3 text-right font-medium">Trades</th>
+									<th class="pb-3 text-right font-medium">USDC Volume</th>
 									<th class="pb-3 text-right font-medium">Bought</th>
 									<th class="pb-3 text-right font-medium">Sold</th>
 									<th class="pb-3 text-right font-medium">Net</th>
@@ -638,6 +781,8 @@
 										<td class="py-3">
 											<span class="font-medium text-white">{token.symbol}</span>
 										</td>
+										<td class="py-3 text-right text-white">{token.tradeCount}</td>
+										<td class="py-3 text-right text-white">{formatUsd(token.usdcVolume)}</td>
 										<td class="py-3 text-right text-green-400">
 											+{formatNumber(token.bought)}
 										</td>
@@ -653,6 +798,165 @@
 								{/each}
 							</tbody>
 						</table>
+					</div>
+				{/if}
+			</Card>
+		{:else if activeTab === 'transactions'}
+			<!-- Transactions List -->
+			<Card>
+				{#if transactions.length === 0}
+					<p class="py-4 text-center text-gray-400">No transactions found</p>
+				{:else}
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-gray-700 text-left text-gray-400">
+									<th class="pb-3 font-medium">Time</th>
+									<th class="pb-3 font-medium">Wallet</th>
+									<th class="pb-3 font-medium">Code</th>
+									<th class="pb-3 font-medium">Token</th>
+									<th class="pb-3 text-center font-medium">Direction</th>
+									<th class="pb-3 text-right font-medium">Amount</th>
+									<th class="pb-3 text-right font-medium">USDC</th>
+									<th class="pb-3 font-medium">Tx</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each transactions.slice(0, 100) as tx}
+									<tr class="border-b border-gray-800">
+										<td class="py-3 text-gray-300">
+											{tx.timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+											<span class="text-gray-500">{tx.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+										</td>
+										<td class="py-3">
+											<a
+												href="https://basescan.org/address/{tx.wallet}"
+												target="_blank"
+												rel="noopener noreferrer"
+												class="font-mono text-blue-400 hover:underline"
+											>
+												{truncateAddress(tx.wallet)}
+											</a>
+										</td>
+										<td class="py-3">
+											{#if tx.accessCode}
+												<code class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]">
+													{tx.accessCode}
+												</code>
+											{:else}
+												<span class="text-gray-500">-</span>
+											{/if}
+										</td>
+										<td class="py-3 font-medium text-white">{tx.tokenSymbol}</td>
+										<td class="py-3 text-center">
+											<span class="rounded px-2 py-0.5 text-xs font-medium {tx.direction === 'buy' ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}">
+												{tx.direction.toUpperCase()}
+											</span>
+										</td>
+										<td class="py-3 text-right text-white">{formatNumber(tx.tokenAmount, 4)}</td>
+										<td class="py-3 text-right text-white">{formatUsd(tx.usdcAmount)}</td>
+										<td class="py-3">
+											<a
+												href="https://basescan.org/tx/{tx.txHash}"
+												target="_blank"
+												rel="noopener noreferrer"
+												class="text-blue-400 hover:underline"
+											>
+												View
+											</a>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+						{#if transactions.length > 100}
+							<p class="mt-4 text-center text-sm text-gray-500">
+								Showing latest 100 of {transactions.length} transactions
+							</p>
+						{/if}
+					</div>
+				{/if}
+			</Card>
+		{:else if activeTab === 'timeseries'}
+			<!-- Time Series / Activity Over Time -->
+			<Card>
+				{#if timeSeries.length === 0}
+					<p class="py-4 text-center text-gray-400">No activity data available</p>
+				{:else}
+					<div class="mb-6">
+						<h3 class="mb-4 text-lg font-medium text-white">Daily Activity</h3>
+						<div class="overflow-x-auto">
+							<table class="w-full text-sm">
+								<thead>
+									<tr class="border-b border-gray-700 text-left text-gray-400">
+										<th class="pb-3 font-medium">Date</th>
+										<th class="pb-3 text-right font-medium">Active Wallets</th>
+										<th class="pb-3 text-right font-medium">Transactions</th>
+										<th class="pb-3 text-right font-medium">USDC Volume</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each timeSeries as day}
+										<tr class="border-b border-gray-800">
+											<td class="py-3 text-white">{day.date}</td>
+											<td class="py-3 text-right text-white">{day.walletCount}</td>
+											<td class="py-3 text-right text-white">{day.tradeCount}</td>
+											<td class="py-3 text-right text-white">{formatUsd(day.usdcVolume)}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<!-- Simple bar chart visualization for wallet activity -->
+					<div class="mt-6">
+						<h3 class="mb-4 text-lg font-medium text-white">Wallets Over Time</h3>
+						<div class="flex h-40 items-end gap-1">
+							{#each timeSeries as day}
+								{@const maxWallets = Math.max(...timeSeries.map(d => d.walletCount), 1)}
+								<div class="group relative flex-1 min-w-[8px]">
+									<div
+										class="w-full bg-[#e8be89] rounded-t transition-all hover:bg-[#d4a976]"
+										style="height: {(day.walletCount / maxWallets) * 100}%"
+									></div>
+									<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+										<div class="rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg whitespace-nowrap">
+											{day.date}: {day.walletCount} wallets
+										</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+						<div class="mt-2 flex justify-between text-xs text-gray-500">
+							<span>{timeSeries[0]?.date}</span>
+							<span>{timeSeries[timeSeries.length - 1]?.date}</span>
+						</div>
+					</div>
+
+					<!-- Volume chart -->
+					<div class="mt-8">
+						<h3 class="mb-4 text-lg font-medium text-white">Volume Over Time</h3>
+						<div class="flex h-40 items-end gap-1">
+							{#each timeSeries as day}
+								{@const maxVolume = Math.max(...timeSeries.map(d => d.usdcVolume), 1)}
+								<div class="group relative flex-1 min-w-[8px]">
+									<div
+										class="w-full bg-blue-500 rounded-t transition-all hover:bg-blue-400"
+										style="height: {(day.usdcVolume / maxVolume) * 100}%"
+									></div>
+									<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+										<div class="rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg whitespace-nowrap">
+											{day.date}: {formatUsd(day.usdcVolume)}
+										</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+						<div class="mt-2 flex justify-between text-xs text-gray-500">
+							<span>{timeSeries[0]?.date}</span>
+							<span>{timeSeries[timeSeries.length - 1]?.date}</span>
+						</div>
 					</div>
 				{/if}
 			</Card>
