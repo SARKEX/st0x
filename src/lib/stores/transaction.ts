@@ -11,7 +11,9 @@ import {
 import {
 	readContract as wagmiReadContract,
 	sendTransaction as wagmiSendTransaction,
-	waitForTransactionReceipt as wagmiWaitForTransactionReceipt
+	waitForTransactionReceipt as wagmiWaitForTransactionReceipt,
+	estimateGas as wagmiEstimateGas,
+	getTransactionCount as wagmiGetTransactionCount
 } from '@wagmi/core';
 
 // Retry wrapper for RPC calls that fail with "header not found" error
@@ -56,6 +58,13 @@ const waitForTransactionReceipt: typeof wagmiWaitForTransactionReceipt = ((
 	withRetry(() =>
 		wagmiWaitForTransactionReceipt(...args)
 	)) as typeof wagmiWaitForTransactionReceipt;
+
+const estimateGas: typeof wagmiEstimateGas = ((...args: Parameters<typeof wagmiEstimateGas>) =>
+	withRetry(() => wagmiEstimateGas(...args))) as typeof wagmiEstimateGas;
+
+const getTransactionCount: typeof wagmiGetTransactionCount = ((
+	...args: Parameters<typeof wagmiGetTransactionCount>
+) => withRetry(() => wagmiGetTransactionCount(...args))) as typeof wagmiGetTransactionCount;
 import {
 	getTakeOrders3Calldata,
 	type SgOrder,
@@ -172,6 +181,38 @@ const transactionStore = () => {
 		return `0x${hex}` as `0x${string}`;
 	};
 
+	const sendTransactionWithGas = async (
+		config: any,
+		args: {
+		  data: Hex;
+		  to: `0x${string}`;
+		  value?: bigint;
+		}
+	  ): Promise<Hash> => {
+		const $signerAddress = get(signerAddress);
+		if (!$signerAddress) throw new Error('Signer address not found');
+	  
+		// 1. Estimate gas
+		const gasEstimate = await estimateGas(config, {
+		  account: $signerAddress as `0x${string}`,
+		  to: args.to,
+		  data: args.data,
+		  value: args.value
+		});
+	  
+		// 2. Add a safety margin (e.g. +20%)
+		const gasWithBuffer = (gasEstimate * 120n) / 100n;
+	  
+		// 3. Let MetaMask pick the nonce; just pass gas + tx data
+		return await sendTransaction(config, {
+		  to: args.to,
+		  data: args.data,
+		  value: args.value,
+		  gas: gasWithBuffer
+		});
+	};
+	  
+
 	// Generic state update helper
 	const setState = (
 		status: TransactionStatus,
@@ -267,13 +308,14 @@ const transactionStore = () => {
 			for (const approval of approvalsNeeded) {
 				try {
 					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
-					const hash = await sendTransaction(config, {
+					const hash = await sendTransactionWithGas(config, {
 						data: approval.calldata as Hex,
 						to: approval.token as `0x${string}`
 					});
 					awaitApprovalTx(hash);
 					await waitForTransactionReceipt(config, {
-						hash: hash
+						hash: hash,
+						confirmations: 2
 					});
 				} catch (error) {
 					if (isStaleWalletSessionError(error)) {
@@ -295,7 +337,7 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
-			hash = await sendTransaction(config, {
+			hash = await sendTransactionWithGas(config, {
 				data: deploymentArgs.deploymentCalldata as Hex,
 				to: deploymentArgs.orderbookAddress as `0x${string}`
 			});
@@ -475,14 +517,15 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
 
-			hash = await sendTransaction(config, {
+			hash = await sendTransactionWithGas(config, {
 				data: vaultWithdrawCalldata.value as Hex,
 				to: vault.orderbook as `0x${string}`
 			});
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
 			await waitForTransactionReceipt(config, {
-				hash: hash as `0x${string}`
+				hash: hash as `0x${string}`,
+				confirmations: 2
 			});
 
 			const network = get(currentNetwork);
@@ -668,7 +711,7 @@ const transactionStore = () => {
 
 					awaitWalletConfirmation(`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`);
 
-					const withdrawHash = await sendTransaction(config, {
+					const withdrawHash = await sendTransactionWithGas(config, {
 						data: vaultWithdrawCalldata.value as Hex,
 						to: vault.orderbook as `0x${string}`
 					});
@@ -676,7 +719,8 @@ const transactionStore = () => {
 					awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
 
 					await waitForTransactionReceipt(config, {
-						hash: withdrawHash as `0x${string}`
+						hash: withdrawHash as `0x${string}`,
+						confirmations: 2
 					});
 				}
 			}
@@ -689,7 +733,7 @@ const transactionStore = () => {
 
 			awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
 
-			const hash = await sendTransaction(config, {
+			const hash = await sendTransactionWithGas(config, {
 				data: removeCalldata.value as Hex,
 				to: order.orderbook as `0x${string}`
 			});
@@ -697,7 +741,8 @@ const transactionStore = () => {
 			awaitWalletConfirmation('Awaiting transaction confirmation...');
 
 			await waitForTransactionReceipt(config, {
-				hash: hash as `0x${string}`
+				hash: hash as `0x${string}`,
+				confirmations: 2
 			});
 
 			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
@@ -791,7 +836,7 @@ const transactionStore = () => {
 
 					awaitWalletConfirmation('Awaiting wallet confirmation to deactivate order...');
 
-					const removeHash = await sendTransaction(config, {
+					const removeHash = await sendTransactionWithGas(config, {
 						data: removeCalldata.value as Hex,
 						to: order.orderbook as `0x${string}`
 					});
@@ -799,7 +844,8 @@ const transactionStore = () => {
 					awaitWalletConfirmation('Awaiting deactivation confirmation...');
 
 					await waitForTransactionReceipt(config, {
-						hash: removeHash as `0x${string}`
+						hash: removeHash as `0x${string}`,
+						confirmations: 2
 					});
 				}
 			}
@@ -930,7 +976,7 @@ const transactionStore = () => {
 					`Awaiting wallet confirmation for withdrawal ${i + 1}/${vaultsWithBalance.length}...`
 				);
 
-				lastHash = await sendTransaction(config, {
+				lastHash = await sendTransactionWithGas(config, {
 					data: vaultWithdrawCalldata.value as Hex,
 					to: vault.orderbook as `0x${string}`
 				});
@@ -938,7 +984,8 @@ const transactionStore = () => {
 				awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
 				await waitForTransactionReceipt(config, {
-					hash: lastHash as `0x${string}`
+					hash: lastHash as `0x${string}`,
+					confirmations: 2
 				});
 			}
 
@@ -1019,7 +1066,7 @@ const transactionStore = () => {
 				`Awaiting wallet confirmation to approve ${approvalToken.token.symbol}...`
 			);
 
-			const approvalHash = await sendTransaction(config, {
+			const approvalHash = await sendTransactionWithGas(config, {
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',
@@ -1029,7 +1076,7 @@ const transactionStore = () => {
 			});
 
 			awaitApprovalTx(approvalHash);
-			await waitForTransactionReceipt(config, { hash: approvalHash });
+			await waitForTransactionReceipt(config, { hash: approvalHash, confirmations: 2 });
 		}
 
 		// If recalculateConfig is provided, refresh quotes and recalculate config
@@ -1068,13 +1115,13 @@ const transactionStore = () => {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
 			const calldata = normalizeCalldata(result.value as string | Uint8Array);
-			hash = await sendTransaction(config, {
+			hash = await sendTransactionWithGas(config, {
 				data: calldata as Hex,
 				to: raindexOrder.orderbook.id as `0x${string}`
 			});
 
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-			await waitForTransactionReceipt(config, { hash });
+			await waitForTransactionReceipt(config, { hash, confirmations: 2 });
 
 			awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
 		} catch (error) {
