@@ -94,38 +94,16 @@
 	$: isInputTokenSameAsOutputToken =
 		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
 
-	// Min trade size is $1 USDC for Buy, or $1 worth of the asset token for Sell
-	// This matches the actual strategy configuration minimum
-	$: minTradeAmount = (() => {
-		if (orderSide === 'Buy') {
-			// For Buy orders, min is 1 USDC (settlement token)
-			const settlementDecimals = settlementToken?.decimals ?? 6;
-			return BigInt(10 ** settlementDecimals);
-		} else {
-			// For Sell orders, min is $1 worth of the asset token
-			const price = parseFloat(selectedInitialRatio || '0');
-			if (price <= 0) return 0n;
-			const tokenDecimals = assetToken?.decimals ?? 18;
-			const oneDollarWorth = 1 / price;
-			return BigInt(Math.floor(oneDollarWorth * 10 ** tokenDecimals));
-		}
-	})();
-
-	// Check if selected amount is below minimum trade size
+	// Check if selected amount is below minimum trade size ($1)
+	// Uses same logic as DCA for consistency
 	$: belowMinTradeError = (() => {
 		if (!selectedAmount || selectedAmount === 0n) return false;
 		if (!selectedInitialRatio || parseFloat(selectedInitialRatio) <= 0) return false;
-		if (orderSide === 'Buy') {
-			// For buy: check if total cost is below $1
-			const price = parseFloat(selectedInitialRatio);
-			const assetDecimals = assetToken?.decimals ?? 18;
-			const totalCostValue =
-				parseFloat(formatUnits(selectedAmount, assetDecimals)) * price;
-			return totalCostValue < 1;
-		} else {
-			// For sell: check if asset amount is below $1 worth
-			return minTradeAmount > 0n && selectedAmount < minTradeAmount;
-		}
+		const price = parseFloat(selectedInitialRatio);
+		const assetDecimals = assetToken?.decimals ?? 18;
+		// For both buy and sell: check if total value (amount * price) is below $1
+		const totalValue = parseFloat(formatUnits(selectedAmount, assetDecimals)) * price;
+		return totalValue < 1;
 	})();
 
 	// errors
