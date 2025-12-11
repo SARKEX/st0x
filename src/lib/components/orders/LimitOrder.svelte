@@ -5,6 +5,7 @@
 	import { validateBaseline, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits, parseUnits } from 'viem';
+	import { priceToScaledBigInt, paymentToAsset } from '$lib/utils/bigIntMath';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/stores/transaction';
 	import { currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
@@ -154,13 +155,16 @@
 			// Calculate settlement amount to spend (percent of balance)
 			const settlementToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
 
-			// Convert settlement amount to asset amount using limit price
+			// Convert settlement amount to asset amount using BigInt arithmetic
 			// settlementAmount / price = assetAmount
-			// Use floor to prevent rounding up beyond actual balance (fixes "not enough funds" on MAX)
-			const settlementInFloat = parseFloat(formatUnits(settlementToSpend, settlementDecimals));
-			const assetAmount = settlementInFloat / price;
-			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
-			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
+			const scaledPrice = priceToScaledBigInt(price);
+			const assetAmountBigInt = paymentToAsset(
+				settlementToSpend,
+				settlementDecimals,
+				scaledPrice,
+				assetDecimals
+			);
+			tradeAmountInputRef.setAmountValue(assetAmountBigInt);
 		}
 	};
 
