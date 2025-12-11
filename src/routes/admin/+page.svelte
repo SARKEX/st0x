@@ -92,6 +92,7 @@
 		amount: string;
 		vault: {
 			token: VaultToken;
+			owner: string;
 		};
 	}
 
@@ -260,6 +261,9 @@
 	async function fetchAllTrades(): Promise<Trade[]> {
 		const { start: timestampGt, end: timestampLt } = getTimestampRange();
 
+		// Note: We fetch vault.owner to properly attribute trades to order owners
+		// tradeEvent.sender is the taker/solver, not the order owner
+		// The vault owner IS the order owner whose order got filled
 		const query = `query Trades($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!, $timestampLt: Int!) {
 			trades(
 				skip: $skip
@@ -283,6 +287,7 @@
 				outputVaultBalanceChange {
 					amount
 					vault {
+						owner
 						token {
 							address
 							symbol
@@ -293,6 +298,7 @@
 				inputVaultBalanceChange {
 					amount
 					vault {
+						owner
 						token {
 							address
 							symbol
@@ -377,7 +383,6 @@
 		let platformNetUsdc = 0;
 
 		for (const trade of trades) {
-			const sender = trade.tradeEvent?.sender?.toLowerCase() || '';
 			const input = trade.inputVaultBalanceChange;
 			const output = trade.outputVaultBalanceChange;
 
@@ -388,21 +393,29 @@
 
 			if (!inputToken || !outputToken) continue;
 
+			// Use vault owner (order owner) for attribution, not sender (taker/solver)
+			// Both input and output vaults belong to the same order owner
+			const orderOwner = (output.vault?.owner || input.vault?.owner || '').toLowerCase();
+			// Fallback to sender for legacy/direct market orders where vault owner might not be set
+			const attributeTo = orderOwner || trade.tradeEvent?.sender?.toLowerCase() || '';
+
 			// Use toDecimal to properly parse Float hex amounts from Rain orderbook
 			const inputAmount = toDecimal(input.amount, inputToken.decimals, { absolute: true }) ?? 0;
 			const outputAmount = toDecimal(output.amount, outputToken.decimals, { absolute: true }) ?? 0;
 
 			// Determine USDC volume and direction
-			// From the taker's perspective: input is what they receive, output is what they give
+			// From the order owner's perspective:
+			//   inputVaultBalanceChange = what they RECEIVE (tokens coming into their vault)
+			//   outputVaultBalanceChange = what they GIVE (tokens going out of their vault)
 			let usdcAmount = 0;
 			let usdcDirection = 0; // positive = spending USDC, negative = receiving USDC
 
 			if (inputToken.address.toLowerCase() === USDC_ADDRESS) {
-				// Taker receives USDC (selling asset for USDC)
+				// Order owner receives USDC (they sold asset for USDC)
 				usdcAmount = inputAmount;
 				usdcDirection = -inputAmount; // Receiving USDC = negative spend
 			} else if (outputToken.address.toLowerCase() === USDC_ADDRESS) {
-				// Taker gives USDC (buying asset with USDC)
+				// Order owner gives USDC (they bought asset with USDC)
 				usdcAmount = outputAmount;
 				usdcDirection = outputAmount; // Spending USDC = positive spend
 			}
@@ -420,6 +433,8 @@
 				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputToken : outputToken;
 			const assetAmount =
 				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputAmount : outputAmount;
+			// Order owner is BUYING if they give USDC (outputToken is USDC)
+			// Order owner is SELLING if they receive USDC (inputToken is USDC)
 			const isBuying = outputToken.address.toLowerCase() === USDC_ADDRESS;
 			const assetAddress = assetToken.address.toLowerCase();
 
@@ -456,8 +471,8 @@
 				id: trade.id,
 				timestamp,
 				txHash,
-				wallet: sender,
-				accessCode: walletToCode.get(sender) || null,
+				wallet: attributeTo,
+				accessCode: walletToCode.get(attributeTo) || null,
 				tokenSymbol: assetToken.symbol,
 				direction: isBuying ? 'buy' : 'sell',
 				tokenAmount: assetAmount,
@@ -470,28 +485,28 @@
 				timeSeriesMap.set(dateKey, { wallets: new Set(), tradeCount: 0, usdcVolume: 0 });
 			}
 			const dayStats = timeSeriesMap.get(dateKey)!;
-			if (sender) dayStats.wallets.add(sender);
+			if (attributeTo) dayStats.wallets.add(attributeTo);
 			dayStats.tradeCount += 1;
 			dayStats.usdcVolume += usdcAmount;
 
 			// Wallet stats
-			if (sender) {
-				if (!walletMap.has(sender)) {
-					walletMap.set(sender, {
-						address: sender,
-						accessCode: walletToCode.get(sender) || null,
+			if (attributeTo) {
+				if (!walletMap.has(attributeTo)) {
+					walletMap.set(attributeTo, {
+						address: attributeTo,
+						accessCode: walletToCode.get(attributeTo) || null,
 						totalUsdcVolume: 0,
 						netUsdcSpend: 0,
 						tradeCount: 0
 					});
 				}
-				const wStats = walletMap.get(sender)!;
+				const wStats = walletMap.get(attributeTo)!;
 				wStats.totalUsdcVolume += usdcAmount;
 				wStats.netUsdcSpend += usdcDirection;
 				wStats.tradeCount += 1;
 
 				// Access code stats
-				const accessCode = walletToCode.get(sender);
+				const accessCode = walletToCode.get(attributeTo);
 				if (accessCode && codeMap.has(accessCode)) {
 					const cStats = codeMap.get(accessCode)!;
 					cStats.totalUsdcVolume += usdcAmount;
