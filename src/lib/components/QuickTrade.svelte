@@ -437,14 +437,18 @@
 
 	function handleUsdcPercentClick(percent: number) {
 		const amount = (formattedUsdcBalance * percent) / 100;
-		topAmount = amount.toFixed(2);
+		// Use floor to prevent rounding up beyond actual balance (fixes "not enough funds" on MAX)
+		const flooredAmount = Math.floor(amount * 100) / 100;
+		topAmount = flooredAmount.toFixed(2);
 		lastEditedField = 'top';
 		refreshQuotesForCurrentToken();
 	}
 
 	function handleTokenPercentClick(percent: number) {
 		const amount = (formattedTokenBalance * percent) / 100;
-		bottomAmount = amount.toFixed(6);
+		// Use floor to prevent rounding up beyond actual balance (fixes "not enough funds" on MAX)
+		const flooredAmount = Math.floor(amount * 1e6) / 1e6;
+		bottomAmount = flooredAmount.toFixed(6);
 		lastEditedField = 'bottom';
 		refreshQuotesForCurrentToken();
 	}

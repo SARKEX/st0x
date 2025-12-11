@@ -94,6 +94,18 @@
 	$: isInputTokenSameAsOutputToken =
 		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
 
+	// Check if selected amount is below minimum trade size ($1)
+	// Uses same logic as DCA for consistency
+	$: belowMinTradeError = (() => {
+		if (!selectedAmount || selectedAmount === 0n) return false;
+		if (!selectedInitialRatio || parseFloat(selectedInitialRatio) <= 0) return false;
+		const price = parseFloat(selectedInitialRatio);
+		const assetDecimals = assetToken?.decimals ?? 18;
+		// For both buy and sell: check if total value (amount * price) is below $1
+		const totalValue = parseFloat(formatUnits(selectedAmount, assetDecimals)) * price;
+		return totalValue < 1;
+	})();
+
 	// errors
 	let selectedInitialRatioError: boolean = false;
 	let selectedAmountError: boolean = false;
@@ -115,7 +127,8 @@
 		!assetToken ||
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
-		selectedAmountError;
+		selectedAmountError ||
+		belowMinTradeError;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
 	const handlePercentageClick = (percent: number) => {
@@ -143,11 +156,11 @@
 
 			// Convert settlement amount to asset amount using limit price
 			// settlementAmount / price = assetAmount
+			// Use floor to prevent rounding up beyond actual balance (fixes "not enough funds" on MAX)
 			const settlementInFloat = parseFloat(formatUnits(settlementToSpend, settlementDecimals));
 			const assetAmount = settlementInFloat / price;
-			tradeAmountInputRef.setAmountValue(
-				parseUnits(assetAmount.toFixed(assetDecimals), assetDecimals)
-			);
+			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
+			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
 		}
 	};
 
@@ -367,6 +380,11 @@
 							{settlementLabel}
 						</span>
 					</div>
+					{#if belowMinTradeError}
+						<div class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300">
+							Minimum trade size is $1. Please increase your order amount.
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -437,6 +455,8 @@
 					Enter a limit price
 				{:else if !selectedAmount}
 					Enter an amount
+				{:else if belowMinTradeError}
+					Minimum trade is $1
 				{:else}
 					Complete all fields
 				{/if}
