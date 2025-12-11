@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import transactionStore from '$lib/stores/transaction';
-import { readContract, sendTransaction, waitForTransactionReceipt } from '@wagmi/core';
+import { readContract, sendTransaction, waitForTransactionReceipt, estimateGas } from '@wagmi/core';
 import { getTokensByCategory, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/config/network';
-import { rainlangConfirmationModal, currentNetwork } from '$lib/stores';
+import { rainlangConfirmationModal, currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
 
 const STOXs = getTokensByCategory('ST0x');
 import {
@@ -43,7 +43,8 @@ vi.mock('$lib/clients/raindex', () => ({
 vi.mock('@wagmi/core', () => ({
 	sendTransaction: vi.fn(),
 	waitForTransactionReceipt: vi.fn(),
-	readContract: vi.fn()
+	readContract: vi.fn(),
+	estimateGas: vi.fn()
 }));
 
 vi.mock('viem', async (importOriginal) => {
@@ -87,6 +88,9 @@ vi.mock('svelte/store', async () => {
 			if (store === rainlangConfirmationModal) return actual.get(store);
 			if (store === currentNetwork) {
 				return mockCurrentNetwork;
+			}
+			if (store === reviewStrategyOnDeploy) {
+				return true; // Enable modal flow for tests
 			}
 			// For writable stores from mockStores, manually get the value
 			if (
@@ -189,12 +193,13 @@ describe('transactionStore tests', () => {
 		vi.mocked(getDcaDeploymentArgs).mockResolvedValue(mockDeploymentArgsDca);
 		vi.mocked(getLimitOrderDeploymentArgs).mockResolvedValue(mockDeploymentArgsLimitOrder);
 		vi.mocked(getFolioDeploymentArgs).mockResolvedValue(mockDeploymentArgsFolio);
-		vi.mocked(sendTransaction).mockResolvedValue('0xtxhash');
+		vi.mocked(sendTransaction).mockResolvedValue('0xtxhash' as `0x${string}`);
 		vi.mocked(waitForTransactionReceipt).mockResolvedValue({
 			transactionHash: '0xtxhash',
 			status: 'success'
 		} as unknown as Awaited<ReturnType<typeof waitForTransactionReceipt>>);
 		vi.mocked(readContract).mockResolvedValue(1000000000000000000n);
+		vi.mocked(estimateGas).mockResolvedValue(100000n);
 		vi.mocked(decodeFunctionData).mockReturnValue({
 			functionName: 'approve',
 			args: ['0x1234', '0xde0b6b3a7640000'] // 1000000000000000000n in hex
@@ -304,8 +309,12 @@ describe('transactionStore tests', () => {
 			await vi.runAllTimersAsync();
 			await Promise.resolve();
 			await Promise.resolve();
+			await Promise.resolve();
 			attempts++;
 		}
+		// Give one more tick to ensure all async operations complete
+		await Promise.resolve();
+		await Promise.resolve();
 	}
 
 	// Unified parameterized tests for all deployment handlers
@@ -319,16 +328,20 @@ describe('transactionStore tests', () => {
 
 		it(`should call sendTransaction for approval and deployment handle${name}Deploy`, async () => {
 			const deployPromise = handler(transactionStore);
+			await vi.runAllTimersAsync();
 			await deployPromise;
 
 			// Simulate user clicking deploy button
 			const modal = get(rainlangConfirmationModal);
+			expect(modal.onDeploy).toBeDefined();
 			modal.onDeploy?.();
 
-			// Flush initial async operations
+			// Flush initial async operations and wait for all promises
 			await Promise.resolve();
 			await Promise.resolve();
 			await vi.runAllTimersAsync();
+			await Promise.resolve();
+			await Promise.resolve();
 
 			// Determine expected call count based on deployment type
 			const expectedCallCount = name === 'Folio' ? 8 : name === 'DSF' ? 3 : 2;
@@ -339,22 +352,26 @@ describe('transactionStore tests', () => {
 
 		it(`should call transactionSuccess with the correct arguments handle${name}Deploy`, async () => {
 			const deployPromise = handler(transactionStore);
+			await vi.runAllTimersAsync();
 			await deployPromise;
 
 			// Simulate user clicking deploy button
 			const modal = get(rainlangConfirmationModal);
+			expect(modal.onDeploy).toBeDefined();
 			modal.onDeploy?.();
 
-			// Flush initial async operations
+			// Flush initial async operations and wait for all promises
 			await Promise.resolve();
 			await Promise.resolve();
 			await vi.runAllTimersAsync();
+			await Promise.resolve();
+			await Promise.resolve();
 
 			// Determine expected call count based on deployment type
 			const expectedCallCount = name === 'Folio' ? 8 : name === 'DSF' ? 3 : 2;
 			await waitForTransactionCompletion(expectedCallCount);
 
-			// Advance timer to trigger the polling interval
+			// Advance timer to trigger the polling interval (immediate attempt happens first)
 			await vi.advanceTimersByTimeAsync(2000);
 
 			expect(createRaindexClient).toHaveBeenCalled();
