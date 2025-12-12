@@ -176,11 +176,13 @@
 	let timeSeries: TimeSeriesEntry[] = [];
 	let meanTxSize = 0;
 	let medianTxSize = 0;
-	let cumulativeNetVolume = 0; // Platform net: sells - buys (USDC received - USDC spent)
+	let cumulativeNetVolume = 0; // LP net USDC flow (positive = LP received USDC from user buys)
 
 	// Network config
 	const network = networks[0]; // Base mainnet
 	const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase();
+	// LP wallet that provides liquidity - used to calculate net platform inflow/outflow
+	const LP_WALLET = '0x71b94911fd1ce621fc40970450004c544e5287a8'.toLowerCase();
 
 	onMount(() => {
 		// Set default custom dates
@@ -365,6 +367,9 @@
 		const txList: TransactionEntry[] = [];
 		const usdcAmounts: number[] = [];
 
+		// Track unique transaction hashes to dedupe volume (solver fills multiple orders in one tx)
+		const seenTxHashes = new Set<string>();
+
 		// Time series aggregation - group by day
 		const timeSeriesMap = new Map<string, { wallets: Set<string>; tradeCount: number; usdcVolume: number }>();
 
@@ -379,8 +384,10 @@
 			});
 		}
 
-		// Track cumulative net volume (from platform perspective: sells - buys)
-		let platformNetUsdc = 0;
+		// Track LP wallet net flow (buys vs sells from LP perspective)
+		// Positive = LP received USDC (users bought from LP)
+		// Negative = LP spent USDC (users sold to LP)
+		let lpNetUsdc = 0;
 
 		for (const trade of trades) {
 			const input = trade.inputVaultBalanceChange;
@@ -420,13 +427,22 @@
 				usdcDirection = outputAmount; // Spending USDC = positive spend
 			}
 
-			totalUsdcVolume += usdcAmount;
-			if (usdcAmount > 0) {
-				usdcAmounts.push(usdcAmount);
+			// Only count volume once per unique transaction (dedupes solver multi-fills)
+			const txHash = trade.tradeEvent?.transaction?.id?.toLowerCase() || trade.id.toLowerCase();
+			if (!seenTxHashes.has(txHash)) {
+				seenTxHashes.add(txHash);
+				totalUsdcVolume += usdcAmount;
+				if (usdcAmount > 0) {
+					usdcAmounts.push(usdcAmount);
+				}
 			}
 
-			// Track platform net (opposite of user direction)
-			platformNetUsdc -= usdcDirection;
+			// Track LP wallet net flow only (orders owned by LP)
+			// From LP perspective: if they receive USDC (usdcDirection negative for owner),
+			// that means users bought from LP, so LP gains USDC
+			if (orderOwner === LP_WALLET) {
+				lpNetUsdc -= usdcDirection; // Flip sign: owner receiving = LP gaining
+			}
 
 			// Token stats - track only tokens from our token list (non-USDC)
 			const assetToken =
@@ -465,7 +481,6 @@
 
 			// Build transaction entry
 			const timestamp = new Date(parseInt(trade.timestamp) * 1000);
-			const txHash = trade.tradeEvent?.transaction?.id || trade.id;
 
 			txList.push({
 				id: trade.id,
@@ -529,7 +544,7 @@
 			medianTxSize = 0;
 		}
 
-		cumulativeNetVolume = platformNetUsdc;
+		cumulativeNetVolume = lpNetUsdc;
 
 		// Build time series array sorted by date
 		timeSeries = Array.from(timeSeriesMap.entries())
@@ -720,7 +735,7 @@
 					<p class="text-2xl font-bold {cumulativeNetVolume >= 0 ? 'text-green-400' : 'text-red-400'}">
 						{cumulativeNetVolume >= 0 ? '+' : ''}{formatUsd(cumulativeNetVolume)}
 					</p>
-					<p class="mt-1 text-sm text-gray-400">Net USDC Flow (Sells - Buys)</p>
+					<p class="mt-1 text-sm text-gray-400">LP Net USDC Flow</p>
 				</div>
 			</Card>
 		</div>
