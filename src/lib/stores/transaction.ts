@@ -13,7 +13,7 @@ import {
 	sendTransaction as wagmiSendTransaction,
 	waitForTransactionReceipt as wagmiWaitForTransactionReceipt,
 	estimateGas as wagmiEstimateGas,
-	getTransactionCount as wagmiGetTransactionCount
+	type Config
 } from '@wagmi/core';
 
 // Retry wrapper for RPC calls that fail with "header not found" error
@@ -62,9 +62,6 @@ const waitForTransactionReceipt: typeof wagmiWaitForTransactionReceipt = ((
 const estimateGas: typeof wagmiEstimateGas = ((...args: Parameters<typeof wagmiEstimateGas>) =>
 	withRetry(() => wagmiEstimateGas(...args))) as typeof wagmiEstimateGas;
 
-const getTransactionCount: typeof wagmiGetTransactionCount = ((
-	...args: Parameters<typeof wagmiGetTransactionCount>
-) => withRetry(() => wagmiGetTransactionCount(...args))) as typeof wagmiGetTransactionCount;
 import {
 	getTakeOrders3Calldata,
 	type SgOrder,
@@ -182,36 +179,35 @@ const transactionStore = () => {
 	};
 
 	const sendTransactionWithGas = async (
-		config: any,
+		config: Config,
 		args: {
-		  data: Hex;
-		  to: `0x${string}`;
-		  value?: bigint;
+			data: Hex;
+			to: `0x${string}`;
+			value?: bigint;
 		}
-	  ): Promise<Hash> => {
+	): Promise<Hash> => {
 		const $signerAddress = get(signerAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
-	  
+
 		// 1. Estimate gas
 		const gasEstimate = await estimateGas(config, {
-		  account: $signerAddress as `0x${string}`,
-		  to: args.to,
-		  data: args.data,
-		  value: args.value
+			account: $signerAddress as `0x${string}`,
+			to: args.to,
+			data: args.data,
+			value: args.value
 		});
-	  
+
 		// 2. Add a safety margin (e.g. +20%)
 		const gasWithBuffer = (gasEstimate * 120n) / 100n;
-	  
+
 		// 3. Let MetaMask pick the nonce; just pass gas + tx data
 		return await sendTransaction(config, {
-		  to: args.to,
-		  data: args.data,
-		  value: args.value,
-		  gas: gasWithBuffer
+			to: args.to,
+			data: args.data,
+			value: args.value,
+			gas: gasWithBuffer
 		});
 	};
-	  
 
 	// Generic state update helper
 	const setState = (

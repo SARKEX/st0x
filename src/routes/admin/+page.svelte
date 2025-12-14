@@ -371,7 +371,10 @@
 		const seenTxHashes = new Set<string>();
 
 		// Time series aggregation - group by day
-		const timeSeriesMap = new Map<string, { wallets: Set<string>; tradeCount: number; usdcVolume: number }>();
+		const timeSeriesMap = new Map<
+			string,
+			{ wallets: Set<string>; tradeCount: number; usdcVolume: number }
+		>();
 
 		// Initialize code stats from access codes
 		for (const code of accessCodes) {
@@ -536,9 +539,7 @@
 			meanTxSize = usdcAmounts.reduce((a, b) => a + b, 0) / usdcAmounts.length;
 			const sorted = [...usdcAmounts].sort((a, b) => a - b);
 			const mid = Math.floor(sorted.length / 2);
-			medianTxSize = sorted.length % 2 === 0
-				? (sorted[mid - 1] + sorted[mid]) / 2
-				: sorted[mid];
+			medianTxSize = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 		} else {
 			meanTxSize = 0;
 			medianTxSize = 0;
@@ -732,7 +733,11 @@
 			</Card>
 			<Card>
 				<div class="text-center">
-					<p class="text-2xl font-bold {cumulativeNetVolume >= 0 ? 'text-green-400' : 'text-red-400'}">
+					<p
+						class="text-2xl font-bold {cumulativeNetVolume >= 0
+							? 'text-green-400'
+							: 'text-red-400'}"
+					>
 						{cumulativeNetVolume >= 0 ? '+' : ''}{formatUsd(cumulativeNetVolume)}
 					</p>
 					<p class="mt-1 text-sm text-gray-400">LP Net USDC Flow</p>
@@ -856,7 +861,12 @@
 									<tr class="border-b border-gray-800">
 										<td class="py-3 text-gray-300">
 											{tx.timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-											<span class="text-gray-500">{tx.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+											<span class="text-gray-500"
+												>{tx.timestamp.toLocaleTimeString('en-US', {
+													hour: '2-digit',
+													minute: '2-digit'
+												})}</span
+											>
 										</td>
 										<td class="py-3">
 											<a
@@ -870,7 +880,9 @@
 										</td>
 										<td class="py-3">
 											{#if tx.accessCode}
-												<code class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]">
+												<code
+													class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]"
+												>
 													{tx.accessCode}
 												</code>
 											{:else}
@@ -879,7 +891,11 @@
 										</td>
 										<td class="py-3 font-medium text-white">{tx.tokenSymbol}</td>
 										<td class="py-3 text-center">
-											<span class="rounded px-2 py-0.5 text-xs font-medium {tx.direction === 'buy' ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}">
+											<span
+												class="rounded px-2 py-0.5 text-xs font-medium {tx.direction === 'buy'
+													? 'bg-green-900/40 text-green-400'
+													: 'bg-red-900/40 text-red-400'}"
+											>
 												{tx.direction.toUpperCase()}
 											</span>
 										</td>
@@ -944,14 +960,18 @@
 						<h3 class="mb-4 text-lg font-medium text-white">Wallets Over Time</h3>
 						<div class="flex h-40 items-end gap-1">
 							{#each timeSeries as day}
-								{@const maxWallets = Math.max(...timeSeries.map(d => d.walletCount), 1)}
-								<div class="group relative flex-1 min-w-[8px]">
+								{@const maxWallets = Math.max(...timeSeries.map((d) => d.walletCount), 1)}
+								<div class="group relative min-w-[8px] flex-1">
 									<div
-										class="w-full bg-[#e8be89] rounded-t transition-all hover:bg-[#d4a976]"
+										class="w-full rounded-t bg-[#e8be89] transition-all hover:bg-[#d4a976]"
 										style="height: {(day.walletCount / maxWallets) * 100}%"
 									></div>
-									<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-										<div class="rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg whitespace-nowrap">
+									<div
+										class="absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 group-hover:block"
+									>
+										<div
+											class="whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg"
+										>
 											{day.date}: {day.walletCount} wallets
 										</div>
 									</div>
@@ -969,14 +989,18 @@
 						<h3 class="mb-4 text-lg font-medium text-white">Volume Over Time</h3>
 						<div class="flex h-40 items-end gap-1">
 							{#each timeSeries as day}
-								{@const maxVolume = Math.max(...timeSeries.map(d => d.usdcVolume), 1)}
-								<div class="group relative flex-1 min-w-[8px]">
+								{@const maxVolume = Math.max(...timeSeries.map((d) => d.usdcVolume), 1)}
+								<div class="group relative min-w-[8px] flex-1">
 									<div
-										class="w-full bg-blue-500 rounded-t transition-all hover:bg-blue-400"
+										class="w-full rounded-t bg-blue-500 transition-all hover:bg-blue-400"
 										style="height: {(day.usdcVolume / maxVolume) * 100}%"
 									></div>
-									<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-										<div class="rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg whitespace-nowrap">
+									<div
+										class="absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 group-hover:block"
+									>
+										<div
+											class="whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg"
+										>
 											{day.date}: {formatUsd(day.usdcVolume)}
 										</div>
 									</div>
