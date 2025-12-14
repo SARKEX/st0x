@@ -411,20 +411,12 @@
 			const inputAmount = toDecimal(input.amount, inputToken.decimals, { absolute: true }) ?? 0;
 			const outputAmount = toDecimal(output.amount, outputToken.decimals, { absolute: true }) ?? 0;
 
-			// Determine USDC volume and direction FROM THE VAULT OWNER'S perspective:
-			//   inputVaultBalanceChange = what vault owner RECEIVES
-			//   outputVaultBalanceChange = what vault owner GIVES
+			// Determine USDC amount for volume tracking
 			let usdcAmount = 0;
-			let ownerUsdcDirection = 0; // positive = owner spending USDC, negative = owner receiving USDC
-
 			if (inputToken.address.toLowerCase() === USDC_ADDRESS) {
-				// Vault owner receives USDC (they sold asset for USDC)
 				usdcAmount = inputAmount;
-				ownerUsdcDirection = -inputAmount; // Receiving USDC = negative spend
 			} else if (outputToken.address.toLowerCase() === USDC_ADDRESS) {
-				// Vault owner gives USDC (they bought asset with USDC)
 				usdcAmount = outputAmount;
-				ownerUsdcDirection = outputAmount; // Spending USDC = positive spend
 			}
 
 			// Only count volume once per unique transaction (dedupes solver multi-fills)
@@ -438,51 +430,25 @@
 			}
 
 			// Track LP wallet net flow only (orders owned by LP)
+			// From vault owner's perspective: input = receive, output = give
 			if (vaultOwner === LP_WALLET) {
-				lpNetUsdc -= ownerUsdcDirection; // Flip sign: owner receiving = LP gaining
+				if (inputToken.address.toLowerCase() === USDC_ADDRESS) {
+					// LP received USDC (users bought from LP)
+					lpNetUsdc += inputAmount;
+				} else if (outputToken.address.toLowerCase() === USDC_ADDRESS) {
+					// LP gave USDC (users sold to LP)
+					lpNetUsdc -= outputAmount;
+				}
 			}
 
-			// Token stats - track only tokens from our token list (non-USDC)
+			// Token stats - track from vault owner's perspective
 			const assetToken =
 				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputToken : outputToken;
 			const assetAmount =
 				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputAmount : outputAmount;
-			// From vault owner's view: BUYING if they give USDC (outputToken is USDC)
 			const ownerIsBuying = outputToken.address.toLowerCase() === USDC_ADDRESS;
 			const assetAddress = assetToken.address.toLowerCase();
 
-			// Determine who to attribute this trade to and from which perspective
-			// Priority: If sender is a known user (has access code), use sender with TAKER perspective
-			// Otherwise use vault owner with MAKER perspective
-			const senderHasCode = walletToCode.has(sender);
-			const vaultOwnerHasCode = walletToCode.has(vaultOwner);
-
-			// For user attribution: prefer sender (taker) if they're a registered user
-			// The taker's perspective is OPPOSITE of the vault owner's
-			let attributeTo: string;
-			let userUsdcDirection: number;
-			let userIsBuying: boolean;
-
-			if (senderHasCode && sender !== vaultOwner) {
-				// Sender is a registered user doing a market order
-				// Their perspective is OPPOSITE of the vault owner
-				attributeTo = sender;
-				userUsdcDirection = -ownerUsdcDirection; // Flip direction for taker
-				userIsBuying = !ownerIsBuying; // Flip buy/sell for taker
-			} else if (vaultOwnerHasCode || vaultOwner) {
-				// Vault owner is a registered user OR fallback to vault owner
-				attributeTo = vaultOwner || sender;
-				userUsdcDirection = ownerUsdcDirection;
-				userIsBuying = ownerIsBuying;
-			} else {
-				// Fallback to sender
-				attributeTo = sender;
-				userUsdcDirection = -ownerUsdcDirection;
-				userIsBuying = !ownerIsBuying;
-			}
-
-			// Only track tokens that are in our token list
-			// Token stats use vault owner's perspective (platform-wide buying/selling)
 			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
 				if (!tokenMap.has(assetAddress)) {
 					tokenMap.set(assetAddress, {
@@ -497,7 +463,6 @@
 					});
 				}
 				const stats = tokenMap.get(assetAddress)!;
-				// Use owner's perspective for token stats (shows LP inventory changes)
 				if (ownerIsBuying) {
 					stats.bought += assetAmount;
 				} else {
@@ -508,56 +473,78 @@
 				stats.usdcVolume += usdcAmount;
 			}
 
-			// Build transaction entry - use user's perspective
+			// Build transaction entry
 			const timestamp = new Date(parseInt(trade.timestamp) * 1000);
 
-			txList.push({
-				id: trade.id,
-				timestamp,
-				txHash,
-				wallet: attributeTo,
-				accessCode: walletToCode.get(attributeTo) || null,
-				tokenSymbol: assetToken.symbol,
-				direction: userIsBuying ? 'buy' : 'sell',
-				tokenAmount: assetAmount,
-				usdcAmount
-			});
+			// Helper to add wallet stats
+			const addWalletStats = (wallet: string) => {
+				if (!wallet) return;
+				const hasCode = walletToCode.has(wallet);
+				// Only track wallets with access codes (excludes solvers)
+				if (!hasCode) return;
 
-			// Time series aggregation
-			const dateKey = timestamp.toISOString().split('T')[0];
-			if (!timeSeriesMap.has(dateKey)) {
-				timeSeriesMap.set(dateKey, { wallets: new Set(), tradeCount: 0, usdcVolume: 0 });
-			}
-			const dayStats = timeSeriesMap.get(dateKey)!;
-			if (attributeTo) dayStats.wallets.add(attributeTo);
-			dayStats.tradeCount += 1;
-			dayStats.usdcVolume += usdcAmount;
-
-			// Wallet stats - use user's perspective for direction
-			if (attributeTo) {
-				if (!walletMap.has(attributeTo)) {
-					walletMap.set(attributeTo, {
-						address: attributeTo,
-						accessCode: walletToCode.get(attributeTo) || null,
+				if (!walletMap.has(wallet)) {
+					walletMap.set(wallet, {
+						address: wallet,
+						accessCode: walletToCode.get(wallet) || null,
 						totalUsdcVolume: 0,
 						netUsdcSpend: 0,
 						tradeCount: 0
 					});
 				}
-				const wStats = walletMap.get(attributeTo)!;
+				const wStats = walletMap.get(wallet)!;
 				wStats.totalUsdcVolume += usdcAmount;
-				wStats.netUsdcSpend += userUsdcDirection;
 				wStats.tradeCount += 1;
 
 				// Access code stats
-				const accessCode = walletToCode.get(attributeTo);
+				const accessCode = walletToCode.get(wallet);
 				if (accessCode && codeMap.has(accessCode)) {
 					const cStats = codeMap.get(accessCode)!;
 					cStats.totalUsdcVolume += usdcAmount;
-					cStats.netUsdcSpend += userUsdcDirection;
 					cStats.tradeCount += 1;
 				}
+			};
+
+			// Credit BOTH vault owner and sender if they have access codes
+			// This captures both sides of the trade (maker and taker)
+			// Solvers without access codes are automatically excluded
+			addWalletStats(vaultOwner);
+			if (sender !== vaultOwner) {
+				addWalletStats(sender);
 			}
+
+			// For transactions list, show the primary actor (prefer registered user)
+			const senderHasCode = walletToCode.has(sender);
+			const vaultOwnerHasCode = walletToCode.has(vaultOwner);
+			const primaryWallet = senderHasCode
+				? sender
+				: vaultOwnerHasCode
+					? vaultOwner
+					: sender || vaultOwner;
+			const isBuying = senderHasCode && sender !== vaultOwner ? !ownerIsBuying : ownerIsBuying;
+
+			txList.push({
+				id: trade.id,
+				timestamp,
+				txHash,
+				wallet: primaryWallet,
+				accessCode: walletToCode.get(primaryWallet) || null,
+				tokenSymbol: assetToken.symbol,
+				direction: isBuying ? 'buy' : 'sell',
+				tokenAmount: assetAmount,
+				usdcAmount
+			});
+
+			// Time series aggregation - count unique wallets with access codes
+			const dateKey = timestamp.toISOString().split('T')[0];
+			if (!timeSeriesMap.has(dateKey)) {
+				timeSeriesMap.set(dateKey, { wallets: new Set(), tradeCount: 0, usdcVolume: 0 });
+			}
+			const dayStats = timeSeriesMap.get(dateKey)!;
+			if (walletToCode.has(vaultOwner)) dayStats.wallets.add(vaultOwner);
+			if (sender !== vaultOwner && walletToCode.has(sender)) dayStats.wallets.add(sender);
+			dayStats.tradeCount += 1;
+			dayStats.usdcVolume += usdcAmount;
 		}
 
 		// Calculate mean and median
