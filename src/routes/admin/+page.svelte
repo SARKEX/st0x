@@ -403,31 +403,28 @@
 
 			if (!inputToken || !outputToken) continue;
 
-			// Use vault owner (order owner) for attribution, not sender (taker/solver)
-			// Both input and output vaults belong to the same order owner
-			const orderOwner = (output.vault?.owner || input.vault?.owner || '').toLowerCase();
-			// Fallback to sender for legacy/direct market orders where vault owner might not be set
-			const attributeTo = orderOwner || trade.tradeEvent?.sender?.toLowerCase() || '';
+			// Get both vault owner and sender
+			const vaultOwner = (output.vault?.owner || input.vault?.owner || '').toLowerCase();
+			const sender = trade.tradeEvent?.sender?.toLowerCase() || '';
 
 			// Use toDecimal to properly parse Float hex amounts from Rain orderbook
 			const inputAmount = toDecimal(input.amount, inputToken.decimals, { absolute: true }) ?? 0;
 			const outputAmount = toDecimal(output.amount, outputToken.decimals, { absolute: true }) ?? 0;
 
-			// Determine USDC volume and direction
-			// From the order owner's perspective:
-			//   inputVaultBalanceChange = what they RECEIVE (tokens coming into their vault)
-			//   outputVaultBalanceChange = what they GIVE (tokens going out of their vault)
+			// Determine USDC volume and direction FROM THE VAULT OWNER'S perspective:
+			//   inputVaultBalanceChange = what vault owner RECEIVES
+			//   outputVaultBalanceChange = what vault owner GIVES
 			let usdcAmount = 0;
-			let usdcDirection = 0; // positive = spending USDC, negative = receiving USDC
+			let ownerUsdcDirection = 0; // positive = owner spending USDC, negative = owner receiving USDC
 
 			if (inputToken.address.toLowerCase() === USDC_ADDRESS) {
-				// Order owner receives USDC (they sold asset for USDC)
+				// Vault owner receives USDC (they sold asset for USDC)
 				usdcAmount = inputAmount;
-				usdcDirection = -inputAmount; // Receiving USDC = negative spend
+				ownerUsdcDirection = -inputAmount; // Receiving USDC = negative spend
 			} else if (outputToken.address.toLowerCase() === USDC_ADDRESS) {
-				// Order owner gives USDC (they bought asset with USDC)
+				// Vault owner gives USDC (they bought asset with USDC)
 				usdcAmount = outputAmount;
-				usdcDirection = outputAmount; // Spending USDC = positive spend
+				ownerUsdcDirection = outputAmount; // Spending USDC = positive spend
 			}
 
 			// Only count volume once per unique transaction (dedupes solver multi-fills)
@@ -441,10 +438,8 @@
 			}
 
 			// Track LP wallet net flow only (orders owned by LP)
-			// From LP perspective: if they receive USDC (usdcDirection negative for owner),
-			// that means users bought from LP, so LP gains USDC
-			if (orderOwner === LP_WALLET) {
-				lpNetUsdc -= usdcDirection; // Flip sign: owner receiving = LP gaining
+			if (vaultOwner === LP_WALLET) {
+				lpNetUsdc -= ownerUsdcDirection; // Flip sign: owner receiving = LP gaining
 			}
 
 			// Token stats - track only tokens from our token list (non-USDC)
@@ -452,12 +447,42 @@
 				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputToken : outputToken;
 			const assetAmount =
 				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputAmount : outputAmount;
-			// Order owner is BUYING if they give USDC (outputToken is USDC)
-			// Order owner is SELLING if they receive USDC (inputToken is USDC)
-			const isBuying = outputToken.address.toLowerCase() === USDC_ADDRESS;
+			// From vault owner's view: BUYING if they give USDC (outputToken is USDC)
+			const ownerIsBuying = outputToken.address.toLowerCase() === USDC_ADDRESS;
 			const assetAddress = assetToken.address.toLowerCase();
 
+			// Determine who to attribute this trade to and from which perspective
+			// Priority: If sender is a known user (has access code), use sender with TAKER perspective
+			// Otherwise use vault owner with MAKER perspective
+			const senderHasCode = walletToCode.has(sender);
+			const vaultOwnerHasCode = walletToCode.has(vaultOwner);
+
+			// For user attribution: prefer sender (taker) if they're a registered user
+			// The taker's perspective is OPPOSITE of the vault owner's
+			let attributeTo: string;
+			let userUsdcDirection: number;
+			let userIsBuying: boolean;
+
+			if (senderHasCode && sender !== vaultOwner) {
+				// Sender is a registered user doing a market order
+				// Their perspective is OPPOSITE of the vault owner
+				attributeTo = sender;
+				userUsdcDirection = -ownerUsdcDirection; // Flip direction for taker
+				userIsBuying = !ownerIsBuying; // Flip buy/sell for taker
+			} else if (vaultOwnerHasCode || vaultOwner) {
+				// Vault owner is a registered user OR fallback to vault owner
+				attributeTo = vaultOwner || sender;
+				userUsdcDirection = ownerUsdcDirection;
+				userIsBuying = ownerIsBuying;
+			} else {
+				// Fallback to sender
+				attributeTo = sender;
+				userUsdcDirection = -ownerUsdcDirection;
+				userIsBuying = !ownerIsBuying;
+			}
+
 			// Only track tokens that are in our token list
+			// Token stats use vault owner's perspective (platform-wide buying/selling)
 			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
 				if (!tokenMap.has(assetAddress)) {
 					tokenMap.set(assetAddress, {
@@ -472,7 +497,8 @@
 					});
 				}
 				const stats = tokenMap.get(assetAddress)!;
-				if (isBuying) {
+				// Use owner's perspective for token stats (shows LP inventory changes)
+				if (ownerIsBuying) {
 					stats.bought += assetAmount;
 				} else {
 					stats.sold += assetAmount;
@@ -482,7 +508,7 @@
 				stats.usdcVolume += usdcAmount;
 			}
 
-			// Build transaction entry
+			// Build transaction entry - use user's perspective
 			const timestamp = new Date(parseInt(trade.timestamp) * 1000);
 
 			txList.push({
@@ -492,7 +518,7 @@
 				wallet: attributeTo,
 				accessCode: walletToCode.get(attributeTo) || null,
 				tokenSymbol: assetToken.symbol,
-				direction: isBuying ? 'buy' : 'sell',
+				direction: userIsBuying ? 'buy' : 'sell',
 				tokenAmount: assetAmount,
 				usdcAmount
 			});
@@ -507,7 +533,7 @@
 			dayStats.tradeCount += 1;
 			dayStats.usdcVolume += usdcAmount;
 
-			// Wallet stats
+			// Wallet stats - use user's perspective for direction
 			if (attributeTo) {
 				if (!walletMap.has(attributeTo)) {
 					walletMap.set(attributeTo, {
@@ -520,7 +546,7 @@
 				}
 				const wStats = walletMap.get(attributeTo)!;
 				wStats.totalUsdcVolume += usdcAmount;
-				wStats.netUsdcSpend += usdcDirection;
+				wStats.netUsdcSpend += userUsdcDirection;
 				wStats.tradeCount += 1;
 
 				// Access code stats
@@ -528,7 +554,7 @@
 				if (accessCode && codeMap.has(accessCode)) {
 					const cStats = codeMap.get(accessCode)!;
 					cStats.totalUsdcVolume += usdcAmount;
-					cStats.netUsdcSpend += usdcDirection;
+					cStats.netUsdcSpend += userUsdcDirection;
 					cStats.tradeCount += 1;
 				}
 			}
