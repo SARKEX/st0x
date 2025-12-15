@@ -25,6 +25,7 @@ export const privyTriggerLogin = writable<boolean>(false);
 export const privyTriggerLogout = writable<boolean>(false);
 export const privyTriggerExportWallet = writable<boolean>(false);
 export const privyTriggerConnectWallet = writable<boolean>(false); // For EOA -> Smart wallet
+export const privyTriggerFundWallet = writable<{ amount?: string } | null>(null); // For Coinbase onramp
 export const privyTriggerSendTransaction = writable<{
 	to: string;
 	value: string;
@@ -34,6 +35,17 @@ export const privyTriggerSendTransaction = writable<{
 // UI modal states
 export const showAuthModal = writable<boolean>(false);
 export const showSendFundsModal = writable<boolean>(false);
+export const showDepositModal = writable<boolean>(false);
+
+// Pre-selected token for send modal
+export interface SendModalToken {
+	symbol: string;
+	address: string;
+	decimals: number;
+	balance: string; // formatted balance string
+	balanceRaw: bigint; // raw balance for max calculation
+}
+export const sendModalToken = writable<SendModalToken | null>(null);
 
 // Derived state
 export const isPrivyAuthenticated = derived(privySession, ($session) => $session !== null);
@@ -43,7 +55,7 @@ export const privyWalletAddress = derived(
 );
 
 /**
- * Trigger Privy login modal (email/social)
+ * Trigger Privy login modal (Google-only)
  */
 export function loginWithPrivy(): void {
 	privyLoading.set(true);
@@ -80,6 +92,15 @@ export function exportPrivyWallet(): void {
 }
 
 /**
+ * Trigger Coinbase onramp to buy crypto
+ * @param amount Optional amount in ETH to pre-fill
+ */
+export function fundPrivyWallet(amount?: string): void {
+	privyTriggerFundWallet.set({ amount });
+	setTimeout(() => privyTriggerFundWallet.set(null), 100);
+}
+
+/**
  * Send a transaction from the embedded wallet
  */
 export function sendTransaction(to: string, value: string, data?: string): void {
@@ -103,9 +124,10 @@ export function closeAuthModal(): void {
 }
 
 /**
- * Open the send funds modal
+ * Open the send funds modal, optionally with a pre-selected token
  */
-export function openSendFundsModal(): void {
+export function openSendFundsModal(token?: SendModalToken): void {
+	sendModalToken.set(token ?? null);
 	showSendFundsModal.set(true);
 }
 
@@ -114,6 +136,25 @@ export function openSendFundsModal(): void {
  */
 export function closeSendFundsModal(): void {
 	showSendFundsModal.set(false);
+	sendModalToken.set(null);
+}
+
+// Track which view to show when modal opens
+export const depositModalInitialView = writable<'options' | 'buy' | 'deposit'>('options');
+
+/**
+ * Open the deposit modal
+ */
+export function openDepositModal(initialView: 'options' | 'buy' | 'deposit' = 'options'): void {
+	depositModalInitialView.set(initialView);
+	showDepositModal.set(true);
+}
+
+/**
+ * Close the deposit modal
+ */
+export function closeDepositModal(): void {
+	showDepositModal.set(false);
 }
 
 /**
@@ -141,5 +182,6 @@ export function resetPrivyState(): void {
 	privyTriggerLogout.set(false);
 	privyTriggerExportWallet.set(false);
 	privyTriggerConnectWallet.set(false);
+	privyTriggerFundWallet.set(null);
 	privyTriggerSendTransaction.set(null);
 }

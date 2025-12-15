@@ -14,6 +14,7 @@
 	import PrivySvelteWrapper from '$lib/privy/PrivySvelteWrapper.svelte';
 	import AuthModal from '$lib/components/AuthModal.svelte';
 	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
+	import DepositModal from '$lib/components/DepositModal.svelte';
 
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
@@ -52,6 +53,7 @@
 	<!-- Global modals -->
 	<AuthModal />
 	<SendFundsModal />
+	<DepositModal />
 
 	<slot />
 </QueryClientProvider>

@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback } from 'react';
-import { PrivyProvider, usePrivy, useWallets, useLoginWithOAuth, useConnectWallet } from '@privy-io/react-auth';
+import React, { useEffect, useCallback, useRef } from 'react';
+import { PrivyProvider, usePrivy, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { base } from 'viem/chains';
 
 // Event types for Svelte-React communication
@@ -21,10 +21,14 @@ export interface PrivyEventData {
 interface PrivyBridgeProps {
 	appId: string;
 	onEvent: (event: PrivyEventData) => void;
+	onWalletProviderReady?: (provider: {
+		request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+	} | null) => void;
 	triggerLogin?: boolean;
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
 	triggerConnectWallet?: boolean; // For EOA -> Smart wallet flow
+	triggerFundWallet?: { amount?: string } | null; // For Coinbase onramp
 	triggerSendTransaction?: {
 		to: string;
 		value: string;
@@ -35,10 +39,12 @@ interface PrivyBridgeProps {
 // Inner component that uses Privy hooks
 function PrivyBridge({
 	onEvent,
+	onWalletProviderReady,
 	triggerLogin,
 	triggerLogout,
 	triggerExportWallet,
 	triggerConnectWallet,
+	triggerFundWallet,
 	triggerSendTransaction
 }: Omit<PrivyBridgeProps, 'appId'>) {
 	const {
@@ -52,6 +58,7 @@ function PrivyBridge({
 	} = usePrivy();
 
 	const { wallets } = useWallets();
+	const { fundWallet } = useFundWallet();
 
 	// Get embedded wallet (created by Privy for email/social login)
 	const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy');
@@ -64,6 +71,10 @@ function PrivyBridge({
 		w.walletClientType !== 'privy' &&
 		w.walletClientType !== 'privy_smart_wallet'
 	);
+
+	// Refs to prevent multiple triggers
+	const isExportingRef = useRef(false);
+	const isFundingRef = useRef(false);
 
 	// Notify when ready
 	useEffect(() => {
@@ -134,6 +145,22 @@ function PrivyBridge({
 		}
 	}, [embeddedWallet?.address, onEvent]);
 
+	// Expose wallet provider to Svelte when available
+	useEffect(() => {
+		if (embeddedWallet && onWalletProviderReady) {
+			// Get the Ethereum provider from the embedded wallet
+			embeddedWallet.getEthereumProvider().then((provider) => {
+				onWalletProviderReady(provider);
+			}).catch((err) => {
+				console.error('[privy] Failed to get wallet provider:', err);
+				onWalletProviderReady(null);
+			});
+		} else if (!embeddedWallet && onWalletProviderReady) {
+			// Clear provider when wallet is not available
+			onWalletProviderReady(null);
+		}
+	}, [embeddedWallet, onWalletProviderReady]);
+
 	// Handle login trigger (email/social)
 	useEffect(() => {
 		if (triggerLogin && ready && !authenticated) {
@@ -158,10 +185,67 @@ function PrivyBridge({
 
 	// Handle export wallet trigger
 	useEffect(() => {
-		if (triggerExportWallet && ready && authenticated && embeddedWallet) {
-			exportWallet();
+		if (triggerExportWallet && ready && authenticated && !isExportingRef.current) {
+			if (!embeddedWallet) {
+				console.warn('[privy] Export wallet triggered but no embedded wallet found. Available wallets:', wallets.map(w => w.walletClientType));
+				onEvent({
+					type: 'error',
+					payload: { error: 'No embedded wallet available to export. This feature is only available for email/social login users.' }
+				});
+				return;
+			}
+			// Set flag to prevent re-triggering
+			isExportingRef.current = true;
+			(async () => {
+				try {
+					await exportWallet();
+				} catch (error) {
+					console.error('[privy] Export wallet error:', error);
+					onEvent({
+						type: 'error',
+						payload: { error: (error as Error).message || 'Failed to export wallet' }
+					});
+				} finally {
+					// Reset flag after export completes or fails
+					isExportingRef.current = false;
+				}
+			})();
 		}
-	}, [triggerExportWallet, ready, authenticated, embeddedWallet, exportWallet]);
+	}, [triggerExportWallet, ready, authenticated]);
+
+	// Handle fund wallet trigger (Coinbase onramp)
+	useEffect(() => {
+		if (triggerFundWallet && ready && authenticated && !isFundingRef.current) {
+			const walletAddress = embeddedWallet?.address || smartWallet?.address || externalWallet?.address;
+			if (!walletAddress) {
+				console.warn('[privy] Fund wallet triggered but no wallet address found');
+				onEvent({
+					type: 'error',
+					payload: { error: 'No wallet address available to fund.' }
+				});
+				return;
+			}
+			// Set flag to prevent re-triggering
+			isFundingRef.current = true;
+			const amount = triggerFundWallet.amount;
+			(async () => {
+				try {
+					await fundWallet(walletAddress, {
+						chain: base,
+						...(amount ? { amount } : {})
+					});
+				} catch (error) {
+					console.error('[privy] Fund wallet error:', error);
+					onEvent({
+						type: 'error',
+						payload: { error: (error as Error).message || 'Failed to open funding' }
+					});
+				} finally {
+					isFundingRef.current = false;
+				}
+			})();
+		}
+	}, [triggerFundWallet, ready, authenticated]);
 
 	// Handle send transaction trigger
 	useEffect(() => {
@@ -219,12 +303,12 @@ export function PrivyReactProvider(props: PrivyBridgeProps) {
 		<PrivyProvider
 			appId={appId}
 			config={{
-				// Enable wallet login alongside email/social for EOA -> Smart wallet flow
-				loginMethods: ['email', 'google', 'twitter', 'discord', 'wallet'],
+				// Email and Google login via Privy
+				loginMethods: ['email', 'google'],
 				appearance: {
 					theme: 'dark',
 					accentColor: '#6366f1',
-					logo: '/images/logo-sidebar.svg'
+					logo: '/images/logo-privy.png'
 				},
 				embeddedWallets: {
 					createOnLogin: 'users-without-wallets',

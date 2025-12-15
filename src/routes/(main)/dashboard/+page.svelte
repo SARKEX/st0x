@@ -1,6 +1,13 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
-	import { connected, signerAddress, wagmiConfig } from 'svelte-wagmi';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { isAuthenticated, walletAddress, authMethod } from '$lib/stores/authStore';
+	import {
+		openSendFundsModal,
+		openDepositModal,
+		exportPrivyWallet,
+		type SendModalToken
+	} from '$lib/stores/privyStore';
 	import { currentNetwork, sfts } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
@@ -13,7 +20,7 @@
 	import { truncateAddress } from '$lib/utils/format';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits, erc20Abi } from 'viem';
-	import { readContract } from '@wagmi/core';
+	import { readContract, getBalance } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
@@ -57,12 +64,17 @@
 	})();
 
 	let isNetworkLoading = false;
-	const DASHBOARD_TABS = [
+	const BASE_TABS = [
 		{ id: 'portfolio', label: 'Portfolio' },
 		{ id: 'orders', label: 'Orders' },
 		{ id: 'vaults', label: 'Vaults' }
-	] as const;
-	type DashboardTabId = (typeof DASHBOARD_TABS)[number]['id'];
+	];
+	const WALLET_TAB = { id: 'wallet', label: 'Wallet Management' };
+
+	// Add Wallet Management tab for Privy users
+	$: DASHBOARD_TABS = $authMethod === 'privy' ? [...BASE_TABS, WALLET_TAB] : BASE_TABS;
+
+	type DashboardTabId = 'portfolio' | 'orders' | 'vaults' | 'wallet';
 	let activeTab: DashboardTabId = 'portfolio';
 
 	const handleDashboardTabChange = (event: CustomEvent<{ id: string }>) => {
@@ -71,6 +83,40 @@
 			activeTab = nextId as DashboardTabId;
 		}
 	};
+
+	// Helper to open send modal with a specific token
+	function handleWithdraw(holding: {
+		symbol: string;
+		address: string;
+		decimals: number;
+		walletBalance: bigint;
+		walletBalanceNum: number;
+	}) {
+		const token: SendModalToken = {
+			symbol: holding.symbol,
+			address: holding.address,
+			decimals: holding.decimals,
+			balance: holding.walletBalanceNum.toFixed(holding.decimals === 6 ? 2 : 4),
+			balanceRaw: holding.walletBalance
+		};
+		openSendFundsModal(token);
+	}
+
+	// Copy address to clipboard
+	let addressCopied = false;
+	async function copyAddress() {
+		if (!$walletAddress) return;
+		try {
+			await navigator.clipboard.writeText($walletAddress);
+			addressCopied = true;
+			setTimeout(() => (addressCopied = false), 2000);
+		} catch (err) {
+			console.error('Failed to copy:', err);
+		}
+	}
+
+	// Basescan URL for wallet
+	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
 
 	// Dust threshold for vaults (in token units)
 	const DUST_THRESHOLD = 0.0001;
@@ -88,14 +134,14 @@
 	}
 
 	// User Vaults Query - centralized with 60s polling on dashboard
-	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $signerAddress, 60_000);
+	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 60_000);
 
 	// Query user's wallet holdings from SFTs
 	$: walletHoldingsQuery = createQuery({
-		queryKey: ['walletHoldings', $signerAddress, $currentNetwork?.id, $sfts?.length],
-		enabled: !!($connected && $signerAddress && $sfts && $currentNetwork),
+		queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
+		enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork),
 		queryFn: () => {
-			if (!$sfts || !$signerAddress) return [];
+			if (!$sfts || !$walletAddress) return [];
 
 			const holdings: {
 				id: string;
@@ -109,7 +155,7 @@
 			for (const sft of $sfts) {
 				const userHolder = sft.tokenHolders.find(
 					(holder: { address: string }) =>
-						holder.address.toLowerCase() === $signerAddress.toLowerCase()
+						holder.address.toLowerCase() === $walletAddress.toLowerCase()
 				);
 
 				holdings.push({
@@ -128,11 +174,11 @@
 
 	// Query USDC wallet balance
 	$: usdcBalanceQuery = createQuery({
-		queryKey: ['usdcWalletBalance', $signerAddress, $currentNetwork?.chainId],
-		enabled: !!($connected && $signerAddress && $currentNetwork && $wagmiConfig),
+		queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
+		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
 		queryFn: async () => {
 			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-			if (paymentTokens.length === 0 || !$signerAddress) return [];
+			if (paymentTokens.length === 0 || !$walletAddress) return [];
 
 			const balances: {
 				id: string;
@@ -149,7 +195,7 @@
 						abi: erc20Abi,
 						address: token.address as `0x${string}`,
 						functionName: 'balanceOf',
-						args: [$signerAddress as `0x${string}`]
+						args: [$walletAddress as `0x${string}`]
 					});
 					balances.push({
 						id: token.address,
@@ -167,6 +213,35 @@
 			return balances;
 		}
 	});
+
+	// Query native ETH balance
+	$: ethBalanceQuery = createQuery({
+		queryKey: ['ethWalletBalance', $walletAddress, $currentNetwork?.chainId],
+		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig),
+		queryFn: async () => {
+			if (!$walletAddress) return null;
+			try {
+				const balance = await getBalance($wagmiConfig, {
+					address: $walletAddress as `0x${string}`
+				});
+				return {
+					id: 'eth',
+					address: 'native',
+					name: 'Ethereum',
+					symbol: 'ETH',
+					walletBalance: balance.value,
+					decimals: 18
+				};
+			} catch (e) {
+				console.error('Failed to fetch ETH balance:', e);
+				return null;
+			}
+		}
+	});
+
+	// ETH balance for gas checks
+	$: ethBalance = $ethBalanceQuery?.data?.walletBalance ?? 0n;
+	$: ethBalanceNum = parseFloat(formatUnits(ethBalance, 18));
 
 	// Combined portfolio: wallet + vaults
 	$: portfolioHoldings = (() => {
@@ -271,9 +346,36 @@
 		return new Set(paymentTokens.map((t) => t.address.toLowerCase()));
 	})();
 
-	$: fundsHoldings = portfolioHoldings.filter((h) =>
-		paymentTokenAddresses.has(h.address.toLowerCase())
-	);
+	// Build funds holdings (payment tokens + ETH)
+	$: fundsHoldings = (() => {
+		const funds = portfolioHoldings.filter((h) =>
+			paymentTokenAddresses.has(h.address.toLowerCase())
+		);
+
+		// Add ETH if we have a balance
+		const ethData = $ethBalanceQuery?.data;
+		if (ethData && ethData.walletBalance > 0n) {
+			const walletBalanceNum = parseFloat(formatUnits(ethData.walletBalance, 18));
+			funds.unshift({
+				id: 'eth',
+				address: 'native',
+				name: 'Ethereum',
+				symbol: 'ETH',
+				walletBalance: ethData.walletBalance,
+				vaultBalance: 0n,
+				decimals: 18,
+				totalBalance: walletBalanceNum,
+				walletBalanceNum,
+				vaultBalanceNum: 0,
+				price: 0, // ETH price not tracked in our feeds
+				value: 0,
+				priceChange: 0,
+				priceChangePercent: 0
+			});
+		}
+
+		return funds;
+	})();
 	$: assetHoldings = portfolioHoldings.filter(
 		(h) => !paymentTokenAddresses.has(h.address.toLowerCase())
 	);
@@ -286,8 +388,8 @@
 
 	// Filter user's market orders from trades
 	$: userMarketOrders = (() => {
-		if (!$signerAddress || !$tradeActivityQuery.data?.trades) return [];
-		const normalizedSender = $signerAddress.toLowerCase();
+		if (!$walletAddress || !$tradeActivityQuery.data?.trades) return [];
+		const normalizedSender = $walletAddress.toLowerCase();
 
 		return $tradeActivityQuery.data.trades.filter((trade: SgTrade) => {
 			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
@@ -300,8 +402,8 @@
 		const displayOrders: DisplayOrder[] = [];
 
 		// Add limit orders from quotes (only user's orders)
-		if ($orderbookQuotesQuery.data?.quotes && $signerAddress) {
-			const myAddress = $signerAddress.toLowerCase();
+		if ($orderbookQuotesQuery.data?.quotes && $walletAddress) {
+			const myAddress = $walletAddress.toLowerCase();
 			const myQuotes = $orderbookQuotesQuery.data.quotes.filter(
 				(q) => q.sgOrder?.owner?.toLowerCase() === myAddress
 			);
@@ -412,7 +514,7 @@
 					text="Switching to {$currentNetwork?.displayName || 'network'}..."
 				/>
 			</div>
-		{:else if !$connected}
+		{:else if !$isAuthenticated}
 			<WalletConnectionPrompt
 				description="Connect your wallet to access your dashboard and view your portfolio, orders, and vault positions on {$currentNetwork?.displayName ||
 					'this network'}."
@@ -420,12 +522,73 @@
 		{:else}
 			<!-- Dashboard Header -->
 			<Section>
-				<div class="mb-6">
-					<h1 class="text-2xl font-bold">My Dashboard</h1>
-					<p class="text-gray-400">
-						<span class="sm:hidden">…{($signerAddress || '').slice(-6)}</span>
-						<span class="hidden sm:inline">{truncateAddress($signerAddress || '')}</span>
-					</p>
+				<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+					<div>
+						<h1 class="text-2xl font-bold">My Dashboard</h1>
+						<div class="flex items-center gap-2 text-gray-400">
+							<span class="sm:hidden">…{($walletAddress || '').slice(-6)}</span>
+							<span class="hidden sm:inline">{truncateAddress($walletAddress || '')}</span>
+							{#if $authMethod === 'privy'}
+								<!-- Copy button -->
+								<button
+									type="button"
+									on:click={copyAddress}
+									class="rounded p-1 text-gray-500 hover:bg-white/10 hover:text-gray-300"
+									title="Copy address"
+								>
+									{#if addressCopied}
+										<svg class="h-4 w-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+										</svg>
+									{:else}
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+										</svg>
+									{/if}
+								</button>
+								<!-- Basescan link -->
+								<a
+									href={basescanUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="rounded p-1 text-gray-500 hover:bg-white/10 hover:text-gray-300"
+									title="View on Basescan"
+								>
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+									</svg>
+								</a>
+							{/if}
+						</div>
+					</div>
+					{#if $authMethod === 'privy'}
+						<div class="flex gap-2">
+							<Button variant="primary" size="sm" on:click={() => openDepositModal('buy')}>
+								<span class="flex items-center gap-1.5">
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+									Buy
+								</span>
+							</Button>
+							<Button variant="secondary" size="sm" on:click={() => openDepositModal()}>
+								<span class="flex items-center gap-1.5">
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+									</svg>
+									Add Funds
+								</span>
+							</Button>
+							<Button variant="secondary" size="sm" on:click={() => openSendFundsModal()}>
+								<span class="flex items-center gap-1.5">
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+									</svg>
+									Send
+								</span>
+							</Button>
+						</div>
+					{/if}
 				</div>
 
 				<!-- Overview Stats -->
@@ -501,30 +664,51 @@
 												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												>Total</th
 											>
+											{#if $authMethod === 'privy'}
+												<th class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"></th>
+											{/if}
 										</tr>
 									</thead>
 									<tbody>
 										{#each fundsHoldings as holding}
-											{@const paymentToken = (
+											{@const isEth = holding.address === 'native'}
+											{@const paymentToken = isEth ? null : (
 												PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []
 											).find((t) => t.address.toLowerCase() === holding.address.toLowerCase())}
+											{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
+											{@const decimalsForDisplay = holding.decimals === 6 ? 2 : 4}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
-														logoUrl={paymentToken?.logoUrl}
+														logoUrl={logoUrl}
 														symbol={holding.symbol}
 														name={holding.name}
 													/>
 												</td>
 												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{holding.walletBalanceNum.toFixed(2)}</td
+													>{holding.walletBalanceNum.toFixed(decimalsForDisplay)}</td
 												>
 												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{holding.vaultBalanceNum.toFixed(2)}</td
+													>{holding.vaultBalanceNum.toFixed(decimalsForDisplay)}</td
 												>
 												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
-													>{holding.totalBalance.toFixed(2)}</td
+													>{holding.totalBalance.toFixed(decimalsForDisplay)}</td
 												>
+												{#if $authMethod === 'privy'}
+													<td class="px-2 py-2 sm:px-4 sm:py-3">
+														{#if holding.walletBalanceNum > 0}
+															<Button
+																variant="secondary"
+																size="sm"
+																on:click={() => handleWithdraw(holding)}
+															>
+																Withdraw
+															</Button>
+														{:else}
+															<span class="text-gray-500">—</span>
+														{/if}
+													</td>
+												{/if}
 											</tr>
 										{/each}
 									</tbody>
@@ -616,6 +800,15 @@
 															variant="primary"
 															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
 														>
+														{#if $authMethod === 'privy' && holding.walletBalanceNum > 0}
+															<Button
+																size="sm"
+																variant="secondary"
+																on:click={() => handleWithdraw(holding)}
+															>
+																Withdraw
+															</Button>
+														{/if}
 														<button
 															type="button"
 															on:click={() =>
@@ -876,6 +1069,79 @@
 							</div>
 						{/if}
 					{/if}
+				</Section>
+
+				<!-- Wallet Management Tab (Privy only) -->
+			{:else if activeTab === 'wallet' && $authMethod === 'privy'}
+				<Section>
+					<div class="space-y-6">
+						<!-- Wallet Actions -->
+						<div>
+							<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Wallet Actions</h2>
+							<div class="flex flex-wrap gap-3">
+								<Button variant="primary" on:click={() => openDepositModal('buy')}>
+									<span class="flex items-center gap-2">
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+										</svg>
+										Buy Crypto
+									</span>
+								</Button>
+								<Button variant="secondary" on:click={() => openDepositModal()}>
+									<span class="flex items-center gap-2">
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+										</svg>
+										Add Funds
+									</span>
+								</Button>
+								<Button variant="secondary" on:click={() => openSendFundsModal()}>
+									<span class="flex items-center gap-2">
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+										</svg>
+										Send Funds
+									</span>
+								</Button>
+								<Button variant="ghost" on:click={() => exportPrivyWallet()}>
+									<span class="flex items-center gap-2">
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+										</svg>
+										Export Private Key
+									</span>
+								</Button>
+							</div>
+						</div>
+
+						<!-- Transaction History -->
+						<div>
+							<div class="mb-3 flex items-center justify-between sm:mb-4">
+								<div>
+									<h2 class="text-base font-semibold sm:text-lg">Transaction History</h2>
+									<p class="text-sm text-gray-400">
+										Raw blockchain transactions from your wallet
+									</p>
+								</div>
+								<a
+									href={basescanUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
+								>
+									View all on Basescan
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+									</svg>
+								</a>
+							</div>
+							<div class="rounded-lg border border-gray-700 bg-gray-800/50 p-6 text-center">
+								<p class="text-sm text-gray-400">
+									Transaction history is available on Basescan. Click the link above to view all your wallet transactions.
+								</p>
+							</div>
+						</div>
+					</div>
 				</Section>
 			{/if}
 		{/if}

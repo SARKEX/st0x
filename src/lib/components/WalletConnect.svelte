@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { wrongNetwork } from '$lib/stores';
-	import { web3Modal, signerAddress, connected } from 'svelte-wagmi';
+	import { isAuthenticated, walletAddress, promptAuth } from '$lib/stores/authStore';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	export let onConnect: (() => void) | undefined = undefined;
 
 	const handleClick = () => {
 		onConnect?.();
-		$web3Modal.open();
+		promptAuth();
 	};
 </script>
 
@@ -20,7 +20,7 @@
 	fullWidth={false}
 	className="px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm shrink-0"
 >
-	{#if $wrongNetwork || !$signerAddress || !$connected}
+	{#if $wrongNetwork || !$walletAddress || !$isAuthenticated}
 		<div class="flex items-center gap-1.5" data-testid="not-connected">
 			<span>Connect</span>
 			<span class="hidden sm:inline">Wallet</span>
@@ -35,10 +35,10 @@
 				/>
 			</svg>
 			<!-- Mobile: last 6 only -->
-			<span class="sm:hidden">…{$signerAddress.slice(-6)}</span>
+			<span class="sm:hidden">…{$walletAddress.slice(-6)}</span>
 			<!-- Desktop: full truncated 6...4 -->
 			<span class="hidden sm:inline"
-				>Connected {$signerAddress.slice(0, 6)}...{$signerAddress.slice(-4)}</span
+				>Connected {$walletAddress.slice(0, 6)}...{$walletAddress.slice(-4)}</span
 			>
 		</div>
 	{/if}

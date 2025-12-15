@@ -46,7 +46,8 @@
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { signerAddress, connected, web3Modal, wagmiConfig } from 'svelte-wagmi';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { promptWalletConnection, promptLogin, walletRegistered } from '$lib/stores/accessStore';
 	import { tutorialWantsTradePanel } from '$lib/stores/tutorialStore';
 	import { startVaultTutorial, vaultTutorialActive } from '$lib/stores/vaultTutorialStore';
@@ -91,10 +92,10 @@
 
 	// Filter trades from tradeActivityQuery to get user's market orders
 	$: userMarketOrders = (() => {
-		if (!$signerAddress || !currentToken?.address || !$tradeActivityQuery.data?.trades) {
+		if (!$walletAddress || !currentToken?.address || !$tradeActivityQuery.data?.trades) {
 			return [];
 		}
-		const normalizedSender = $signerAddress.toLowerCase();
+		const normalizedSender = $walletAddress.toLowerCase();
 		const normalizedToken = currentToken.address.toLowerCase();
 
 		return $tradeActivityQuery.data.trades.filter((trade: SgTrade) => {
@@ -167,31 +168,31 @@
 	})();
 
 	// User vaults query - uses centralized query with 15s polling (trade page)
-	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $signerAddress, 15_000);
+	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 15_000);
 
 	// Background prefetch of global caches when page loads
-	$: if (browser && $currentNetwork && $signerAddress) {
+	$: if (browser && $currentNetwork && $walletAddress) {
 		// Prefetch global orders and vaults in background (non-blocking)
 		prefetchGlobalOrders($currentNetwork.id).catch(() => {});
-		prefetchUserVaults($currentNetwork.id, $signerAddress).catch(() => {});
+		prefetchUserVaults($currentNetwork.id, $walletAddress).catch(() => {});
 	}
 
 	// Wallet balance query for this token
 	$: walletBalanceQuery = createQuery({
-		queryKey: ['walletBalance', $currentNetwork?.id, currentToken?.address, $signerAddress],
+		queryKey: ['walletBalance', $currentNetwork?.id, currentToken?.address, $walletAddress],
 		queryFn: async () => {
-			if (!currentToken?.address || !$signerAddress || !$wagmiConfig) {
+			if (!currentToken?.address || !$walletAddress || !$wagmiConfig) {
 				return 0n;
 			}
 			const balance = await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: currentToken.address as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$signerAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`]
 			});
 			return balance as bigint;
 		},
-		enabled: Boolean(currentToken?.address && $signerAddress && $wagmiConfig)
+		enabled: Boolean(currentToken?.address && $walletAddress && $wagmiConfig)
 	});
 	$: currentPythToken = TOKENS.find(
 		(token) =>
@@ -528,7 +529,7 @@
 	};
 	const openTradePanel = (side: 'Buy' | 'Sell', options: { closeTerminal?: boolean } = {}) => {
 		// Check if wallet is connected before opening trade panel
-		if (!$connected) {
+		if (!$isAuthenticated) {
 			promptWalletConnection();
 			return;
 		}
@@ -976,7 +977,7 @@
 								View on-chain trades, liquidity, orders, and vaults
 							</p>
 						</div>
-						{#if $connected}
+						{#if $isAuthenticated}
 							<button
 								type="button"
 								on:click={() =>
@@ -1065,10 +1066,10 @@
 						</div>
 					{:else if activeOnchainTab === 'vaults'}
 						<div class="mt-4">
-							{#if !$connected}
+							{#if !$isAuthenticated}
 								<div class="flex flex-col items-center justify-center gap-4 py-12">
 									<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
-									<Button variant="primary" size="md" on:click={() => $web3Modal.open()}>
+									<Button variant="primary" size="md" on:click={promptWalletConnection}>
 										Connect Wallet
 									</Button>
 								</div>

@@ -1,11 +1,10 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
-	import PrivyWalletActions from './PrivyWalletActions.svelte';
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
 	import { tick } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { connected, signerAddress, web3Modal } from 'svelte-wagmi';
+	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import { wrongNetwork, sfts } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
@@ -245,10 +244,30 @@
 								</div>
 							</Button>
 						</a>
-						<!-- Privy wallet actions (send, export, logout) -->
-						<PrivyWalletActions compact showLogout />
+						<!-- Logout button only - other wallet actions moved to dashboard -->
+						<Button
+							variant="ghost"
+							size="sm"
+							className="p-2"
+							aria-label="Log out"
+							on:click={handleDisconnect}
+						>
+							<svg
+								class="h-5 w-5 text-gray-400 hover:text-red-400"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+								/>
+							</svg>
+						</Button>
 					</div>
-				{:else if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
+				{:else if $isAuthenticated && !$wrongNetwork && $walletAddress && $walletRegistered}
 					<!-- Wallet user (fully registered) -->
 					<div class="flex items-center gap-2">
 						{#if !isHamburgerMode}
@@ -258,7 +277,7 @@
 									<div class="flex items-center gap-2">
 										<span>My Dashboard</span>
 										<span class="text-[11px] font-normal text-yellow-300/80">
-											...{$signerAddress.slice(-4)}
+											...{$walletAddress?.slice(-4)}
 										</span>
 									</div>
 								</Button>

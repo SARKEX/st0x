@@ -7,7 +7,7 @@
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits } from 'viem';
-	import { connected } from 'svelte-wagmi';
+	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
 	import { currentNetwork, oracleQuotes, reviewStrategyOnDeploy } from '$lib/stores';
@@ -144,7 +144,7 @@
 
 	const handleDcaDeploy = () => {
 		// Check if user is connected
-		if (!$connected) {
+		if (!$isAuthenticated) {
 			promptWalletConnection();
 			return;
 		}
@@ -153,7 +153,7 @@
 			promptLogin();
 			return;
 		}
-		if ($connected && $walletRegistered) {
+		if ($isAuthenticated && $walletRegistered) {
 			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
 			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 

@@ -1,24 +1,117 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onMount } from 'svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
 	import {
 		showSendFundsModal,
 		closeSendFundsModal,
 		privySession,
-		sendTransaction
+		sendModalToken
 	} from '$lib/stores/privyStore';
-	import { parseEther, formatEther, isAddress } from 'viem';
+	import { sendTransaction } from '$lib/services/walletService';
+	import { currentNetwork } from '$lib/stores';
+	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
+	import { parseEther, parseUnits, isAddress, encodeFunctionData, erc20Abi, formatUnits } from 'viem';
+	import { getBalance } from '@wagmi/core';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { createQuery } from '@tanstack/svelte-query';
+
+	// Minimum ETH balance recommended for gas (in ETH)
+	const MIN_ETH_FOR_GAS = 0.0005; // ~0.0005 ETH should cover basic transfers
+	const LOW_ETH_WARNING = 0.001; // Warn if below this amount
 
 	const dispatch = createEventDispatcher();
 
+	// Token type for the selector
+	interface TokenOption {
+		symbol: string;
+		name: string;
+		address: `0x${string}` | 'native';
+		decimals: number;
+		logoUrl?: string;
+	}
+
+	// Build available tokens list based on current network
+	$: availableTokens = (() => {
+		const tokens: TokenOption[] = [
+			{ symbol: 'ETH', name: 'Ethereum', address: 'native', decimals: 18 }
+		];
+
+		// Add payment tokens for current network (USDC, etc.)
+		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
+		for (const token of paymentTokens) {
+			tokens.push({
+				symbol: token.symbol,
+				name: token.name,
+				address: token.address as `0x${string}`,
+				decimals: token.decimals,
+				logoUrl: token.logoUrl
+			});
+		}
+
+		// Add asset tokens (tStocks) for current network
+		const assetTokens = TOKENS.filter((t) => t.chainId === $currentNetwork?.chainId);
+		for (const token of assetTokens) {
+			tokens.push({
+				symbol: token.symbol,
+				name: token.name,
+				address: token.address as `0x${string}`,
+				decimals: 18, // tStocks use 18 decimals
+				logoUrl: token.logoUrl
+			});
+		}
+
+		return tokens;
+	})();
+
+	// Query ETH balance for gas fee checks
+	$: ethBalanceQuery = createQuery({
+		queryKey: ['sendModalEthBalance', $privySession?.walletAddress, $currentNetwork?.chainId],
+		enabled: !!($showSendFundsModal && $privySession?.walletAddress && $wagmiConfig),
+		queryFn: async () => {
+			if (!$privySession?.walletAddress) return 0n;
+			try {
+				const balance = await getBalance($wagmiConfig, {
+					address: $privySession.walletAddress as `0x${string}`
+				});
+				return balance.value;
+			} catch (e) {
+				console.error('Failed to fetch ETH balance for gas check:', e);
+				return 0n;
+			}
+		},
+		staleTime: 30_000 // Cache for 30 seconds
+	});
+
+	// ETH balance in human-readable form
+	$: ethBalance = $ethBalanceQuery?.data ?? 0n;
+	$: ethBalanceNum = parseFloat(formatUnits(ethBalance, 18));
+	$: hasNoEthForGas = ethBalanceNum < MIN_ETH_FOR_GAS;
+	$: hasLowEthForGas = ethBalanceNum < LOW_ETH_WARNING && ethBalanceNum >= MIN_ETH_FOR_GAS;
+
+	// Check if sending ETH would leave insufficient gas
+	$: sendingEthAmount = selectedToken?.address === 'native' && amount ? parseFloat(amount) : 0;
+	$: wouldDrainEth = selectedToken?.address === 'native' && sendingEthAmount > 0 &&
+		(ethBalanceNum - sendingEthAmount) < MIN_ETH_FOR_GAS;
+
 	let recipientAddress = '';
 	let amount = '';
-	let selectedToken: 'ETH' | 'USDC' = 'ETH';
+	let selectedTokenSymbol = 'ETH';
 	let sending = false;
 	let error: string | null = null;
 	let txHash: string | null = null;
+
+	// When modal opens with pre-selected token, set it
+	$: if ($showSendFundsModal && $sendModalToken) {
+		selectedTokenSymbol = $sendModalToken.symbol;
+	}
+
+	// Get the selected token object
+	$: selectedToken = availableTokens.find((t) => t.symbol === selectedTokenSymbol) ?? availableTokens[0];
+
+	// Get balance display for pre-selected token
+	$: preSelectedBalance = $sendModalToken?.symbol === selectedTokenSymbol ? $sendModalToken.balance : null;
+	$: preSelectedBalanceRaw = $sendModalToken?.symbol === selectedTokenSymbol ? $sendModalToken.balanceRaw : null;
 
 	// Validation
 	$: isValidAddress = recipientAddress && isAddress(recipientAddress);
@@ -33,34 +126,53 @@
 	function resetForm() {
 		recipientAddress = '';
 		amount = '';
+		selectedTokenSymbol = 'ETH';
 		error = null;
 		txHash = null;
 		sending = false;
 	}
 
+	function handleMax() {
+		if (preSelectedBalanceRaw && $sendModalToken) {
+			// Use the raw balance to get exact amount
+			amount = formatUnits(preSelectedBalanceRaw, $sendModalToken.decimals);
+		}
+	}
+
 	async function handleSend() {
-		if (!canSend || !$privySession?.walletAddress) return;
+		if (!canSend || !$privySession?.walletAddress || !selectedToken) return;
 
 		error = null;
 		sending = true;
 
 		try {
-			if (selectedToken === 'ETH') {
-				// Send ETH
+			if (selectedToken.address === 'native') {
+				// Send native ETH
 				const valueInWei = parseEther(amount);
-				sendTransaction(recipientAddress, `0x${valueInWei.toString(16)}`);
-
-				// Note: The actual transaction is handled by the Privy SDK
-				// We'd need to listen for events from Privy to get the actual txHash
-				// For now, show a success message
-				txHash = 'pending'; // Placeholder - actual hash comes from Privy events
-
-				dispatch('sent', { to: recipientAddress, amount, token: selectedToken });
+				await sendTransaction({
+					to: recipientAddress as `0x${string}`,
+					value: valueInWei
+				});
 			} else {
-				// For ERC20 tokens like USDC, we'd need to encode the transfer call
-				// This would require the token contract address and ABI
-				error = 'Token transfers coming soon. Use ETH for now.';
+				// Send ERC20 token
+				const amountInUnits = parseUnits(amount, selectedToken.decimals);
+
+				// Encode the ERC20 transfer function call
+				const data = encodeFunctionData({
+					abi: erc20Abi,
+					functionName: 'transfer',
+					args: [recipientAddress as `0x${string}`, amountInUnits]
+				});
+
+				// Send transaction to the token contract
+				await sendTransaction({
+					to: selectedToken.address,
+					data
+				});
 			}
+
+			txHash = 'submitted';
+			dispatch('sent', { to: recipientAddress, amount, token: selectedToken.symbol });
 		} catch (err) {
 			console.error('[send] Error:', err);
 			error = (err as Error).message || 'Failed to send transaction';
@@ -111,7 +223,7 @@
 				<div class="text-center">
 					<h3 class="text-lg font-semibold text-white">Transaction Submitted</h3>
 					<p class="mt-1 text-sm text-gray-400">
-						Sending {amount} {selectedToken} to
+						Sending {amount} {selectedToken?.symbol} to
 					</p>
 					<p class="mt-1 font-mono text-xs text-gray-500">
 						{recipientAddress.slice(0, 10)}...{recipientAddress.slice(-8)}
@@ -124,8 +236,8 @@
 			<div class="space-y-4">
 				<!-- From address (read-only) -->
 				<div>
-					<label class="mb-1.5 block text-sm font-medium text-gray-300">From</label>
-					<div class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
+					<label class="mb-1.5 block text-sm font-medium text-gray-300" for="from-address">From</label>
+					<div id="from-address" class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
 						<span class="font-mono text-sm text-gray-400">
 							{$privySession?.walletAddress
 								? `${$privySession.walletAddress.slice(0, 10)}...${$privySession.walletAddress.slice(-8)}`
@@ -154,24 +266,43 @@
 
 				<!-- Token selector and amount -->
 				<div>
-					<label class="mb-1.5 block text-sm font-medium text-gray-300" for="amount">Amount</label>
+					<div class="mb-1.5 flex items-center justify-between">
+						<label class="text-sm font-medium text-gray-300" for="amount">Amount</label>
+						{#if preSelectedBalance}
+							<span class="text-xs text-gray-400">
+								Balance: <span class="text-gray-300">{preSelectedBalance}</span>
+							</span>
+						{/if}
+					</div>
 					<div class="flex gap-2">
 						<select
-							bind:value={selectedToken}
+							bind:value={selectedTokenSymbol}
 							class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 						>
-							<option value="ETH">ETH</option>
-							<option value="USDC" disabled>USDC (soon)</option>
+							{#each availableTokens as token}
+								<option value={token.symbol}>{token.symbol}</option>
+							{/each}
 						</select>
-						<input
-							id="amount"
-							type="text"
-							inputmode="decimal"
-							placeholder="0.0"
-							value={amount}
-							on:input={handleAmountInput}
-							class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-						/>
+						<div class="relative flex-1">
+							<input
+								id="amount"
+								type="text"
+								inputmode="decimal"
+								placeholder="0.0"
+								value={amount}
+								on:input={handleAmountInput}
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 pr-14 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+							/>
+							{#if preSelectedBalanceRaw}
+								<button
+									type="button"
+									on:click={handleMax}
+									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-yellow-400 hover:bg-gray-600"
+								>
+									MAX
+								</button>
+							{/if}
+						</div>
 					</div>
 				</div>
 
@@ -179,6 +310,28 @@
 				{#if error}
 					<div class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
 						<p class="text-sm text-red-400">{error}</p>
+					</div>
+				{/if}
+
+				<!-- Gas fee warnings -->
+				{#if hasNoEthForGas}
+					<div class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+						<p class="text-xs text-red-400">
+							<strong>No ETH for gas fees.</strong> You need ETH to pay for transaction fees.
+							Current balance: {ethBalanceNum.toFixed(6)} ETH
+						</p>
+					</div>
+				{:else if wouldDrainEth}
+					<div class="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2">
+						<p class="text-xs text-orange-400">
+							<strong>Low ETH after send.</strong> Sending this amount will leave you with less than {MIN_ETH_FOR_GAS} ETH for future gas fees. Consider keeping some ETH for transactions.
+						</p>
+					</div>
+				{:else if hasLowEthForGas}
+					<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
+						<p class="text-xs text-yellow-400">
+							<strong>Low ETH balance.</strong> You have {ethBalanceNum.toFixed(6)} ETH for gas fees. Consider depositing more ETH to avoid running out.
+						</p>
 					</div>
 				{/if}
 
@@ -213,7 +366,7 @@
 								Sending...
 							</span>
 						{:else}
-							Send {selectedToken}
+							Send {selectedToken?.symbol}
 						{/if}
 					</Button>
 				</div>

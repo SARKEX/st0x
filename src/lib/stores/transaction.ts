@@ -8,11 +8,12 @@ import {
 	type Hash,
 	type Hex
 } from 'viem';
+import { readContract as wagmiReadContract } from '@wagmi/core';
 import {
-	readContract as wagmiReadContract,
-	sendTransaction as wagmiSendTransaction,
-	waitForTransactionReceipt as wagmiWaitForTransactionReceipt
-} from '@wagmi/core';
+	sendTransaction as walletServiceSendTransaction,
+	waitForTransaction as walletServiceWaitForTransaction,
+	getSignerAddress
+} from '$lib/services/walletService';
 
 // Retry wrapper for RPC calls that fail with "header not found" error
 // This is a known RPC provider issue related to load balancing
@@ -46,16 +47,11 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
 	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
 
-const sendTransaction: typeof wagmiSendTransaction = ((
-	...args: Parameters<typeof wagmiSendTransaction>
-) => withRetry(() => wagmiSendTransaction(...args))) as typeof wagmiSendTransaction;
+// Unified send transaction (works with both Privy and wagmi wallets)
+const sendTransaction = walletServiceSendTransaction;
 
-const waitForTransactionReceipt: typeof wagmiWaitForTransactionReceipt = ((
-	...args: Parameters<typeof wagmiWaitForTransactionReceipt>
-) =>
-	withRetry(() =>
-		wagmiWaitForTransactionReceipt(...args)
-	)) as typeof wagmiWaitForTransactionReceipt;
+// Unified wait for transaction
+const waitForTransaction = walletServiceWaitForTransaction;
 import {
 	getTakeOrders3Calldata,
 	type SgOrder,
@@ -68,7 +64,8 @@ import { parseFloatHex, getRaindexOrderUrl, isPaymentToken } from '$lib/utils/to
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import type { TakeOrdersParams } from '$lib/types/transactions';
-import { signerAddress, wagmiConfig } from 'svelte-wagmi';
+import { wagmiConfig } from 'svelte-wagmi';
+import { walletAddress } from '$lib/stores/authStore';
 import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
@@ -207,7 +204,7 @@ const transactionStore = () => {
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
-		const $signerAddress = get(signerAddress);
+		const $signerAddress = get(walletAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
 
 		// Filter approvals: check balance + allowance in parallel, skip if already approved
@@ -267,14 +264,12 @@ const transactionStore = () => {
 			for (const approval of approvalsNeeded) {
 				try {
 					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
-					const hash = await sendTransaction(config, {
-						data: approval.calldata as Hex,
-						to: approval.token as `0x${string}`
+					const hash = await sendTransaction({
+						to: approval.token as `0x${string}`,
+						data: approval.calldata as Hex
 					});
 					awaitApprovalTx(hash);
-					await waitForTransactionReceipt(config, {
-						hash: hash
-					});
+					await waitForTransaction(hash);
 				} catch (error) {
 					if (isStaleWalletSessionError(error)) {
 						const msg = await handleStaleWalletSession(config);
@@ -295,9 +290,9 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
-			hash = await sendTransaction(config, {
-				data: deploymentArgs.deploymentCalldata as Hex,
-				to: deploymentArgs.orderbookAddress as `0x${string}`
+			hash = await sendTransaction({
+				to: deploymentArgs.orderbookAddress as `0x${string}`,
+				data: deploymentArgs.deploymentCalldata as Hex
 			});
 		} catch (error) {
 			if (isStaleWalletSessionError(error)) {
@@ -475,18 +470,16 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
 
-			hash = await sendTransaction(config, {
-				data: vaultWithdrawCalldata.value as Hex,
-				to: vault.orderbook as `0x${string}`
+			hash = await sendTransaction({
+				to: vault.orderbook as `0x${string}`,
+				data: vaultWithdrawCalldata.value as Hex
 			});
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
-			await waitForTransactionReceipt(config, {
-				hash: hash as `0x${string}`
-			});
+			await waitForTransaction(hash);
 
 			const network = get(currentNetwork);
-			const $signer = get(signerAddress);
+			const $signer = get(walletAddress);
 			const link = createRaindexLink(network.id, vault.orderbook, vault.id);
 
 			// Invalidate vault queries for this specific token
@@ -519,7 +512,7 @@ const transactionStore = () => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const network = get(currentNetwork);
-		const $signerAddress = get(signerAddress);
+		const $signerAddress = get(walletAddress);
 
 		if (!$signerAddress) {
 			throw new Error('Wallet not connected');
@@ -668,16 +661,14 @@ const transactionStore = () => {
 
 					awaitWalletConfirmation(`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`);
 
-					const withdrawHash = await sendTransaction(config, {
-						data: vaultWithdrawCalldata.value as Hex,
-						to: vault.orderbook as `0x${string}`
+					const withdrawHash = await sendTransaction({
+						to: vault.orderbook as `0x${string}`,
+						data: vaultWithdrawCalldata.value as Hex
 					});
 
 					awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
 
-					await waitForTransactionReceipt(config, {
-						hash: withdrawHash as `0x${string}`
-					});
+					await waitForTransaction(withdrawHash);
 				}
 			}
 
@@ -689,16 +680,14 @@ const transactionStore = () => {
 
 			awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
 
-			const hash = await sendTransaction(config, {
-				data: removeCalldata.value as Hex,
-				to: order.orderbook as `0x${string}`
+			const hash = await sendTransaction({
+				to: order.orderbook as `0x${string}`,
+				data: removeCalldata.value as Hex
 			});
 
 			awaitWalletConfirmation('Awaiting transaction confirmation...');
 
-			await waitForTransactionReceipt(config, {
-				hash: hash as `0x${string}`
-			});
+			await waitForTransaction(hash);
 
 			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
 
@@ -745,7 +734,7 @@ const transactionStore = () => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 		const network = get(currentNetwork);
-		const $signerAddress = get(signerAddress);
+		const $signerAddress = get(walletAddress);
 
 		if (!$signerAddress) {
 			throw new Error('Wallet not connected');
@@ -791,16 +780,14 @@ const transactionStore = () => {
 
 					awaitWalletConfirmation('Awaiting wallet confirmation to deactivate order...');
 
-					const removeHash = await sendTransaction(config, {
-						data: removeCalldata.value as Hex,
-						to: order.orderbook as `0x${string}`
+					const removeHash = await sendTransaction({
+						to: order.orderbook as `0x${string}`,
+						data: removeCalldata.value as Hex
 					});
 
 					awaitWalletConfirmation('Awaiting deactivation confirmation...');
 
-					await waitForTransactionReceipt(config, {
-						hash: removeHash as `0x${string}`
-					});
+					await waitForTransaction(removeHash);
 				}
 			}
 
@@ -930,16 +917,14 @@ const transactionStore = () => {
 					`Awaiting wallet confirmation for withdrawal ${i + 1}/${vaultsWithBalance.length}...`
 				);
 
-				lastHash = await sendTransaction(config, {
-					data: vaultWithdrawCalldata.value as Hex,
-					to: vault.orderbook as `0x${string}`
+				lastHash = await sendTransaction({
+					to: vault.orderbook as `0x${string}`,
+					data: vaultWithdrawCalldata.value as Hex
 				});
 
 				awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
-				await waitForTransactionReceipt(config, {
-					hash: lastHash as `0x${string}`
-				});
+				await waitForTransaction(lastHash);
 			}
 
 			const chainId = network.id;
@@ -986,7 +971,7 @@ const transactionStore = () => {
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
-		const $signerAddress = get(signerAddress);
+		const $signerAddress = get(walletAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
 		const inputIndex = params.ioIndexes.input;
 		const outputIndex = params.ioIndexes.output;
@@ -1019,17 +1004,17 @@ const transactionStore = () => {
 				`Awaiting wallet confirmation to approve ${approvalToken.token.symbol}...`
 			);
 
-			const approvalHash = await sendTransaction(config, {
+			const approvalHash = await sendTransaction({
+				to: approvalToken.token.address as `0x${string}`,
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',
 					args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
-				}) as Hex,
-				to: approvalToken.token.address as `0x${string}`
+				}) as Hex
 			});
 
 			awaitApprovalTx(approvalHash);
-			await waitForTransactionReceipt(config, { hash: approvalHash });
+			await waitForTransaction(approvalHash);
 		}
 
 		// If recalculateConfig is provided, refresh quotes and recalculate config
@@ -1068,13 +1053,13 @@ const transactionStore = () => {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
 			const calldata = normalizeCalldata(result.value as string | Uint8Array);
-			hash = await sendTransaction(config, {
-				data: calldata as Hex,
-				to: raindexOrder.orderbook.id as `0x${string}`
+			hash = await sendTransaction({
+				to: raindexOrder.orderbook.id as `0x${string}`,
+				data: calldata as Hex
 			});
 
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-			await waitForTransactionReceipt(config, { hash });
+			await waitForTransaction(hash);
 
 			awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
 		} catch (error) {
