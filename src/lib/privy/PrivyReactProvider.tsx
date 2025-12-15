@@ -28,7 +28,7 @@ interface PrivyBridgeProps {
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
 	triggerConnectWallet?: boolean; // For EOA -> Smart wallet flow
-	triggerFundWallet?: { amount?: string } | null; // For Coinbase onramp
+	triggerFundWallet?: { amount?: string; asset?: 'native-currency' | 'USDC' } | null; // For Coinbase onramp
 	triggerSendTransaction?: {
 		to: string;
 		value: string;
@@ -227,11 +227,13 @@ function PrivyBridge({
 			// Set flag to prevent re-triggering
 			isFundingRef.current = true;
 			const amount = triggerFundWallet.amount;
+			const asset = triggerFundWallet.asset;
 			(async () => {
 				try {
 					await fundWallet(walletAddress, {
 						chain: base,
-						...(amount ? { amount } : {})
+						...(amount ? { amount } : {}),
+						...(asset ? { asset } : {})
 					});
 				} catch (error) {
 					console.error('[privy] Fund wallet error:', error);

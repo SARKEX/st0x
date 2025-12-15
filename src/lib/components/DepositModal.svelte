@@ -8,6 +8,7 @@
 	let currentView: ModalView = 'options';
 	let copied = false;
 	let buyAmount = '';
+	let selectedToken: 'ETH' | 'USDC' = 'ETH';
 
 	// Set initial view when modal opens
 	$: if ($showDepositModal) {
@@ -18,6 +19,7 @@
 		closeDepositModal();
 		copied = false;
 		buyAmount = '';
+		selectedToken = 'ETH';
 		currentView = 'options'; // Reset to options view
 	}
 
@@ -28,7 +30,8 @@
 	function handleBuyCrypto() {
 		// Pass amount if specified, otherwise let Privy use default
 		const amount = buyAmount.trim() || undefined;
-		fundPrivyWallet(amount);
+		const asset = selectedToken === 'USDC' ? 'USDC' : 'native-currency';
+		fundPrivyWallet(amount, asset);
 		handleClose();
 	}
 
@@ -39,6 +42,7 @@
 	function goBack() {
 		currentView = 'options';
 		buyAmount = '';
+		selectedToken = 'ETH';
 	}
 
 	async function copyAddress() {
@@ -66,8 +70,8 @@
 		}
 	}
 
-	// Quick amount presets
-	const presetAmounts = ['0.01', '0.05', '0.1'];
+	// Quick amount presets - different for ETH vs USDC
+	$: presetAmounts = selectedToken === 'USDC' ? ['25', '50', '100'] : ['0.01', '0.05', '0.1'];
 
 	$: basescanUrl = $privySession?.walletAddress
 		? `https://basescan.org/address/${$privySession.walletAddress}`
@@ -163,13 +167,40 @@
 			</button>
 
 			<p class="text-sm text-gray-400">
-				Enter the amount of ETH you want to purchase.
+				Select a token and enter the amount you want to purchase.
 			</p>
+
+			<!-- Token Selection -->
+			<div>
+				<label class="mb-1.5 block text-sm font-medium text-gray-300">Token</label>
+				<div class="flex gap-2">
+					<button
+						type="button"
+						on:click={() => (selectedToken = 'ETH')}
+						class="flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition {selectedToken === 'ETH'
+							? 'border-blue-500 bg-blue-500/10 text-blue-400'
+							: 'border-gray-700 bg-gray-800 text-gray-300 hover:border-blue-500/50'}"
+					>
+						<img src="/images/ETH.svg" alt="ETH" class="h-5 w-5" />
+						ETH
+					</button>
+					<button
+						type="button"
+						on:click={() => (selectedToken = 'USDC')}
+						class="flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition {selectedToken === 'USDC'
+							? 'border-blue-500 bg-blue-500/10 text-blue-400'
+							: 'border-gray-700 bg-gray-800 text-gray-300 hover:border-blue-500/50'}"
+					>
+						<img src="/images/usdc.svg" alt="USDC" class="h-5 w-5" />
+						USDC
+					</button>
+				</div>
+			</div>
 
 			<!-- Amount Input -->
 			<div>
 				<label class="mb-1.5 block text-sm font-medium text-gray-300" for="buy-amount">
-					Amount (ETH)
+					Amount ({selectedToken})
 				</label>
 				<input
 					id="buy-amount"
@@ -192,7 +223,7 @@
 						class:border-blue-500={buyAmount === preset}
 						class:text-blue-400={buyAmount === preset}
 					>
-						{preset} ETH
+						{preset} {selectedToken}
 					</button>
 				{/each}
 			</div>

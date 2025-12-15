@@ -25,7 +25,7 @@ export const privyTriggerLogin = writable<boolean>(false);
 export const privyTriggerLogout = writable<boolean>(false);
 export const privyTriggerExportWallet = writable<boolean>(false);
 export const privyTriggerConnectWallet = writable<boolean>(false); // For EOA -> Smart wallet
-export const privyTriggerFundWallet = writable<{ amount?: string } | null>(null); // For Coinbase onramp
+export const privyTriggerFundWallet = writable<{ amount?: string; asset?: 'native-currency' | 'USDC' } | null>(null); // For Coinbase onramp
 export const privyTriggerSendTransaction = writable<{
 	to: string;
 	value: string;
@@ -96,10 +96,11 @@ export function exportPrivyWallet(): void {
 
 /**
  * Trigger Coinbase onramp to buy crypto
- * @param amount Optional amount in ETH to pre-fill
+ * @param amount Optional amount to pre-fill
+ * @param asset Optional asset to buy ('native-currency' for ETH, 'USDC' for USDC)
  */
-export function fundPrivyWallet(amount?: string): void {
-	privyTriggerFundWallet.set({ amount });
+export function fundPrivyWallet(amount?: string, asset?: 'native-currency' | 'USDC'): void {
+	privyTriggerFundWallet.set({ amount, asset });
 	setTimeout(() => privyTriggerFundWallet.set(null), 100);
 }
 
