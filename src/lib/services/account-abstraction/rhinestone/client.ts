@@ -4,10 +4,18 @@
  * Wrapper around the Rhinestone SDK for cross-chain transactions, swaps,
  * and gas sponsorship. Rhinestone provides unified chain abstraction.
  *
+ * EIP-7702 Support:
+ * Rhinestone's Warp infrastructure supports EIP-7702 Smart EOAs, allowing
+ * existing EOA users to gain smart account capabilities without migration.
+ * When accountType is '7702', the SDK uses the user's existing EOA address.
+ *
  * Key SDK methods:
  * - sdk.createAccount() - Create a smart account with ECDSA owners
  * - account.sendTransaction() - Execute cross-chain transactions with tokenRequests
  * - account.waitForExecution() - Wait for transaction completion
+ *
+ * References:
+ * - https://docs.rhinestone.dev/home/concepts/smart-eoas-eip-7702
  */
 
 import { RhinestoneSDK } from '@rhinestone/sdk';
@@ -105,18 +113,41 @@ export class RhinestoneClient {
 	}
 
 	/**
-	 * Create a Rhinestone smart account for a given wallet
-	 * This is used to enable cross-chain transactions with chain abstraction
+	 * Create a Rhinestone account for a given wallet
+	 *
+	 * For EIP-7702 mode (accountType: '7702'):
+	 * - Uses Rhinestone's Warp infrastructure to upgrade the EOA
+	 * - Preserves the user's existing EOA address
+	 * - Enables smart account features (batching, gas sponsorship)
+	 *
+	 * For standard mode (accountType: 'smart' or default):
+	 * - Creates a new smart account contract
+	 * - New address derived from owner
 	 */
 	async createAccount(walletAccount: Account): Promise<RhinestoneAccount> {
 		try {
-			// Create a Rhinestone smart account linked to the user's EOA
-			const rhinestoneAccount = await this.sdk.createAccount({
+			// Build createAccount options based on account type
+			const createAccountOptions: {
+				owners: { type: 'ecdsa'; accounts: Account[] };
+				accountType?: '7702';
+			} = {
 				owners: {
 					type: 'ecdsa',
 					accounts: [walletAccount]
 				}
-			});
+			};
+
+			// For EIP-7702 mode, add the accountType to signal EOA upgrade
+			// This tells Rhinestone to use Warp infrastructure to upgrade the EOA
+			// instead of creating a separate smart account
+			if (this.config.accountType === '7702') {
+				createAccountOptions.accountType = '7702';
+			}
+
+			// Create the account via Rhinestone SDK
+			// For 7702 mode: This upgrades the EOA to act as a smart account
+			// For smart mode: This creates a new smart account contract
+			const rhinestoneAccount = await this.sdk.createAccount(createAccountOptions);
 
 			return rhinestoneAccount as unknown as RhinestoneAccount;
 		} catch (error) {
@@ -126,6 +157,13 @@ export class RhinestoneClient {
 				{ originalError: error }
 			);
 		}
+	}
+
+	/**
+	 * Check if using EIP-7702 mode
+	 */
+	isEIP7702Mode(): boolean {
+		return this.config.accountType === '7702';
 	}
 
 	/**
@@ -399,6 +437,9 @@ export class RhinestoneClient {
 
 /**
  * Get or create the Rhinestone client singleton
+ *
+ * By default, uses EIP-7702 mode ('7702') for Privy users to preserve their EOA address.
+ * Set PUBLIC_RHINESTONE_ACCOUNT_TYPE=smart to use standard smart account mode.
  */
 export function getRhinestoneClient(): RhinestoneClient {
 	if (!rhinestoneInstance) {
@@ -417,11 +458,16 @@ export function getRhinestoneClient(): RhinestoneClient {
 			};
 		}
 
+		// Default to EIP-7702 mode for Privy users
+		// This preserves the user's EOA address while enabling smart account features
+		const accountType = (env.PUBLIC_RHINESTONE_ACCOUNT_TYPE as '7702' | 'smart') || '7702';
+
 		rhinestoneInstance = new RhinestoneClient({
 			apiKey: apiKey || '',
 			providerType: env.PUBLIC_ALCHEMY_API_KEY ? 'alchemy' : 'public',
 			providerApiKey: env.PUBLIC_ALCHEMY_API_KEY,
-			paymasterConfig
+			paymasterConfig,
+			accountType
 		});
 	}
 
