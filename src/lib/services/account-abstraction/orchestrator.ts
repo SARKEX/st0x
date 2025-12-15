@@ -5,15 +5,20 @@
  * - Cross-chain swap orchestration
  * - Gas sponsorship via Rhinestone paymaster
  * - Trade execution with AA features
+ *
+ * Integration points:
+ * - Called before market order execution when user selects non-Base/non-USDC payment
+ * - Handles cross-chain swap, then calls existing trade flow
  */
 
-import type { Address, Hash } from 'viem';
+import type { Address, Hash, Account, Hex } from 'viem';
 import {
 	type PaymentToken,
 	type TradeWithAAParams,
 	type TradeExecutionResult,
 	type ExecutionStep,
 	type GasEstimate,
+	type CrossChainSwapQuote,
 	type SupportedNetworkId,
 	SUPPORTED_NETWORKS,
 	SETTLEMENT_CHAIN_ID,
@@ -27,7 +32,10 @@ import {
 	getSwapToSettlementQuote,
 	getSwapFromSettlementQuote,
 	isSwapRequired,
-	validateSwap
+	validateSwap,
+	executeSwapToSettlement,
+	executeSwapFromSettlement,
+	getUSDCEquivalent
 } from './rhinestone/swaps';
 import { getWalletCapabilities, supportsEIP7702, isPrivyWalletReady } from './wallets/privy-7702';
 import { USDC_BASE, getDefaultPaymentToken } from './tokens';
@@ -55,14 +63,177 @@ export interface GasPaymentMethod {
 
 export class AccountAbstractionOrchestrator {
 	/**
+	 * Execute a cross-chain swap to get USDC on Base for trading
+	 *
+	 * This is called BEFORE the actual trade execution when user selects
+	 * a non-Base/non-USDC payment method.
+	 *
+	 * @param sourceToken - Token the user wants to pay with
+	 * @param amount - Amount of source token
+	 * @param recipient - Recipient address (user's address on Base)
+	 * @param walletAccount - User's wallet account for signing
+	 * @returns Result with USDC amount received and tx hash
+	 */
+	async executePreTradeSwap(
+		sourceToken: PaymentToken,
+		amount: bigint,
+		recipient: Address,
+		walletAccount: Account
+	): Promise<{
+		success: boolean;
+		usdcAmount: bigint;
+		txHash?: Hex;
+		intentId?: string;
+		error?: string;
+	}> {
+		try {
+			// Validate the swap
+			const validation = await validateSwap(sourceToken, amount, recipient);
+			if (!validation.valid) {
+				return { success: false, usdcAmount: 0n, error: validation.error };
+			}
+
+			// Check if swap is actually needed
+			if (!this.needsCrossChainSwap(sourceToken, SETTLEMENT_CHAIN_ID)) {
+				// Already USDC on Base, no swap needed
+				return { success: true, usdcAmount: amount };
+			}
+
+			// Check Rhinestone is configured
+			if (!isRhinestoneConfigured()) {
+				return {
+					success: false,
+					usdcAmount: 0n,
+					error: 'Cross-chain swaps require Rhinestone API key. Configure PUBLIC_RHINESTONE_API_KEY.'
+				};
+			}
+
+			// Execute the swap
+			const result = await executeSwapToSettlement(
+				sourceToken,
+				amount,
+				recipient,
+				walletAccount
+			);
+
+			return {
+				success: true,
+				usdcAmount: result.outputAmount,
+				txHash: result.txHash,
+				intentId: result.intentId
+			};
+		} catch (error) {
+			return {
+				success: false,
+				usdcAmount: 0n,
+				error: error instanceof Error ? error.message : 'Unknown swap error'
+			};
+		}
+	}
+
+	/**
+	 * Execute a swap from USDC on Base after selling tStocks
+	 *
+	 * Called AFTER the trade when user wants proceeds in different token/chain.
+	 */
+	async executePostTradeSwap(
+		targetToken: PaymentToken,
+		usdcAmount: bigint,
+		recipient: Address,
+		walletAccount: Account
+	): Promise<{
+		success: boolean;
+		outputAmount: bigint;
+		txHash?: Hex;
+		intentId?: string;
+		error?: string;
+	}> {
+		try {
+			// Check if swap is actually needed
+			if (!this.needsCrossChainSwap(USDC_BASE, targetToken.chainId) && targetToken.symbol === 'USDC') {
+				return { success: true, outputAmount: usdcAmount };
+			}
+
+			// Check Rhinestone is configured
+			if (!isRhinestoneConfigured()) {
+				return {
+					success: false,
+					outputAmount: 0n,
+					error: 'Cross-chain swaps require Rhinestone API key. Configure PUBLIC_RHINESTONE_API_KEY.'
+				};
+			}
+
+			// Execute the swap
+			const result = await executeSwapFromSettlement(
+				targetToken,
+				usdcAmount,
+				recipient,
+				walletAccount
+			);
+
+			return {
+				success: true,
+				outputAmount: result.outputAmount,
+				txHash: result.txHash,
+				intentId: result.intentId
+			};
+		} catch (error) {
+			return {
+				success: false,
+				outputAmount: 0n,
+				error: error instanceof Error ? error.message : 'Unknown swap error'
+			};
+		}
+	}
+
+	/**
+	 * Get a quote for converting source token to USDC on Base
+	 */
+	async getPreTradeQuote(
+		sourceToken: PaymentToken,
+		amount: bigint,
+		recipient: Address
+	): Promise<CrossChainSwapQuote | null> {
+		try {
+			if (!this.needsCrossChainSwap(sourceToken, SETTLEMENT_CHAIN_ID)) {
+				// No swap needed - return passthrough quote
+				return {
+					inputAmount: amount,
+					outputAmount: amount,
+					estimatedGas: {
+						gasLimit: 0n,
+						maxFeePerGas: 0n,
+						maxPriorityFeePerGas: 0n,
+						estimatedGasCostWei: 0n,
+						estimatedGasCostUSDC: 0n
+					},
+					route: { steps: [], totalSteps: 0, estimatedDuration: 0 },
+					expiresAt: Date.now() + 300000,
+					priceImpactBps: 0
+				};
+			}
+
+			return await getSwapToSettlementQuote(sourceToken, amount, recipient);
+		} catch {
+			return null;
+		}
+	}
+
+	/**
 	 * Execute a trade with account abstraction features
 	 *
-	 * This handles:
+	 * This handles the full flow:
 	 * 1. Cross-chain swaps if source token is on different chain
-	 * 2. Gas sponsorship via Rhinestone paymaster (if configured)
-	 * 3. Trade execution
+	 * 2. Trade execution (via existing flow)
+	 * 3. Optional post-trade swap if user wants proceeds elsewhere
+	 *
+	 * Note: For now, this orchestrates but the actual trade execution
+	 * should be handled by the existing marketOrderExecution flow.
 	 */
-	async executeTrade(params: TradeWithAAParams): Promise<TradeExecutionResult> {
+	async executeTrade(
+		params: TradeWithAAParams,
+		walletAccount?: Account
+	): Promise<TradeExecutionResult> {
 		const steps: ExecutionStep[] = [];
 
 		try {
@@ -85,7 +256,7 @@ export class AccountAbstractionOrchestrator {
 
 			// Step 2: Handle cross-chain swap if needed
 			let settlementAmount = params.sourceAmount;
-			let crossChainTxHash: Hash | undefined;
+			let crossChainTxHash: Hex | undefined;
 
 			if (this.needsCrossChainSwap(params.sourceToken, SETTLEMENT_CHAIN_ID)) {
 				steps.push({
@@ -95,17 +266,9 @@ export class AccountAbstractionOrchestrator {
 					description: `Swapping ${params.sourceToken.symbol} to USDC on Base`
 				});
 
-				// Get swap quote
-				const quote = await getSwapToSettlementQuote(
-					params.sourceToken,
-					params.sourceAmount,
-					params.walletAddress
-				);
-
-				steps[steps.length - 1].status = 'executing';
-
-				// TODO: Execute actual cross-chain swap via Rhinestone
+				// Check Rhinestone is configured
 				if (!isRhinestoneConfigured()) {
+					steps[steps.length - 1].status = 'failed';
 					return {
 						success: false,
 						error: 'Cross-chain swaps require Rhinestone API key configuration',
@@ -113,25 +276,54 @@ export class AccountAbstractionOrchestrator {
 					};
 				}
 
-				// Update settlement amount from quote
-				settlementAmount = quote.outputAmount;
+				// Need wallet account for signing
+				if (!walletAccount) {
+					steps[steps.length - 1].status = 'failed';
+					return {
+						success: false,
+						error: 'Wallet account required for cross-chain swap',
+						executionSteps: steps
+					};
+				}
+
+				steps[steps.length - 1].status = 'executing';
+
+				// Execute the swap
+				const swapResult = await executeSwapToSettlement(
+					params.sourceToken,
+					params.sourceAmount,
+					params.walletAddress,
+					walletAccount
+				);
+
+				// Update settlement amount from result
+				settlementAmount = swapResult.outputAmount;
+				crossChainTxHash = swapResult.txHash;
 				steps[steps.length - 1].status = 'confirmed';
+				steps[steps.length - 1].txHash = crossChainTxHash;
 			}
 
 			// Step 3: Execute the actual trade on Base
 			steps.push({
 				type: 'trade',
-				status: 'executing',
+				status: 'pending',
 				chainId: SETTLEMENT_CHAIN_ID,
 				description: params.tradeType === 'buy' ? 'Buying tStock' : 'Selling tStock'
 			});
 
-			// TODO: Integrate with existing market order execution
-			// This should hook into marketOrderExecution.ts
+			// The actual trade execution should be handled by the caller using marketOrderExecution
+			// Return success with the settlement amount that should be used for the trade
+			steps[steps.length - 1].status = 'executing';
+
 			return {
-				success: false,
-				error: 'Trade execution integration pending - use existing trade flow for now',
-				executionSteps: steps
+				success: true,
+				settlementUSDCAmount: settlementAmount,
+				crossChainTxHash,
+				executionSteps: steps,
+				// Note: Trade transaction will be executed separately via marketOrderExecution
+				message: settlementAmount !== params.sourceAmount
+					? `Swapped to ${Number(settlementAmount) / 1e6} USDC on Base. Ready for trade execution.`
+					: 'Ready for trade execution.'
 			};
 		} catch (error) {
 			const lastStep = steps[steps.length - 1];

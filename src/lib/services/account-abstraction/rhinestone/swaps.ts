@@ -3,9 +3,15 @@
  *
  * Handles cross-chain token swaps using Rhinestone's solver network.
  * Supports swapping any supported token to USDC on Base for tStock trading.
+ *
+ * Key flow:
+ * 1. User selects source token/chain (e.g., USDT on Arbitrum)
+ * 2. Get swap quote to USDC on Base (settlement)
+ * 3. Execute via Rhinestone's intent-based system
+ * 4. Solvers compete to fill the order, ensuring best execution
  */
 
-import type { Address, Hex } from 'viem';
+import type { Address, Hex, Account } from 'viem';
 import { encodeFunctionData, parseAbi } from 'viem';
 import { getRhinestoneClient } from './client';
 import {
@@ -298,4 +304,137 @@ export async function validateSwap(
 	}
 
 	return { valid: true };
+}
+
+/**
+ * Execute a swap from source token to USDC on Base (settlement)
+ *
+ * This is the main function used during tStock purchases when user
+ * pays with a non-USDC token or from a different chain.
+ */
+export async function executeSwapToSettlement(
+	sourceToken: PaymentToken,
+	amount: bigint,
+	recipient: Address,
+	walletAccount: Account
+): Promise<{ txHash: Hex; intentId: string; outputAmount: bigint }> {
+	const client = getRhinestoneClient();
+
+	// Validate the swap first
+	const validation = await validateSwap(sourceToken, amount, recipient);
+	if (!validation.valid) {
+		throw new AAError(validation.error || 'Swap validation failed', AAErrorCode.SWAP_FAILED);
+	}
+
+	// If already USDC on Base, no swap needed
+	if (sourceToken.chainId === SETTLEMENT_CHAIN_ID && sourceToken.symbol === 'USDC') {
+		// Return mock result - no actual swap executed
+		return {
+			txHash: '0x' as Hex,
+			intentId: '',
+			outputAmount: amount
+		};
+	}
+
+	// Get quote first to know expected output
+	const quote = await getSwapToSettlementQuote(sourceToken, amount, recipient);
+
+	// Execute the cross-chain swap
+	const swapParams: CrossChainSwapParams = {
+		sourceChain: sourceToken.chainId,
+		targetChain: SETTLEMENT_CHAIN_ID,
+		sourceToken,
+		targetToken: USDC_BASE,
+		amount,
+		recipient,
+		slippageBps: 50
+	};
+
+	const result = await client.executeCrossChainSwap(swapParams, walletAccount);
+
+	return {
+		txHash: result.txHash,
+		intentId: result.intentId,
+		outputAmount: quote.outputAmount
+	};
+}
+
+/**
+ * Execute a swap from USDC on Base to target token
+ *
+ * This is used after selling tStocks when user wants proceeds
+ * in a different token or on a different chain.
+ */
+export async function executeSwapFromSettlement(
+	targetToken: PaymentToken,
+	usdcAmount: bigint,
+	recipient: Address,
+	walletAccount: Account
+): Promise<{ txHash: Hex; intentId: string; outputAmount: bigint }> {
+	const client = getRhinestoneClient();
+
+	// If target is already USDC on Base, no swap needed
+	if (targetToken.chainId === SETTLEMENT_CHAIN_ID && targetToken.symbol === 'USDC') {
+		return {
+			txHash: '0x' as Hex,
+			intentId: '',
+			outputAmount: usdcAmount
+		};
+	}
+
+	// Get quote first
+	const quote = await getSwapFromSettlementQuote(targetToken, usdcAmount, recipient);
+
+	// Execute the cross-chain swap
+	const swapParams: CrossChainSwapParams = {
+		sourceChain: SETTLEMENT_CHAIN_ID,
+		targetChain: targetToken.chainId,
+		sourceToken: USDC_BASE,
+		targetToken,
+		amount: usdcAmount,
+		recipient,
+		slippageBps: 50
+	};
+
+	const result = await client.executeCrossChainSwap(swapParams, walletAccount);
+
+	return {
+		txHash: result.txHash,
+		intentId: result.intentId,
+		outputAmount: quote.outputAmount
+	};
+}
+
+/**
+ * Get the USDC equivalent amount for a token on any chain
+ * Used to display estimated costs in USDC terms
+ */
+export async function getUSDCEquivalent(
+	token: PaymentToken,
+	amount: bigint,
+	recipient: Address
+): Promise<bigint> {
+	// If already USDC, return as-is
+	if (token.symbol === 'USDC') {
+		return amount;
+	}
+
+	// For stablecoins (USDT), assume 1:1 with minor slippage
+	if (token.symbol === 'USDT') {
+		// 0.1% slippage for stablecoin swaps
+		return amount - (amount / 1000n);
+	}
+
+	// For ETH/WETH, would need price oracle
+	// For now, estimate based on typical market prices
+	if (token.symbol === 'ETH' || token.symbol === 'WETH') {
+		// This should use a price oracle in production
+		// Placeholder: 1 ETH = ~$3000 (scaled to 6 decimals from 18)
+		const ethPriceUSDC = 3000n * 10n ** 6n;
+		return (amount * ethPriceUSDC) / (10n ** 18n);
+	}
+
+	// Default: get quote
+	const quote = await getSwapToSettlementQuote(token, amount, recipient);
+	return quote.outputAmount;
 }
