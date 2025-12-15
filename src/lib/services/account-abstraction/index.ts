@@ -77,7 +77,10 @@ export {
 	isSwapRequired,
 	validateSwap,
 	estimateSwapCost,
-	encodeApproval
+	encodeApproval,
+	executeSwapToSettlement,
+	executeSwapFromSettlement,
+	getUSDCEquivalent
 } from './rhinestone/swaps';
 
 // =============================================================================
