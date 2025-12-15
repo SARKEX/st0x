@@ -1,13 +1,15 @@
 <script lang="ts">
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { showDepositModal, closeDepositModal, privySession, fundPrivyWallet, depositModalInitialView } from '$lib/stores/privyStore';
+	import OnramperModal from '$lib/components/OnramperModal.svelte';
+	import { showDepositModal, closeDepositModal, depositModalInitialView } from '$lib/stores/privyStore';
+	import { walletAddress } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 
 	type ModalView = 'options' | 'buy' | 'deposit';
 	let currentView: ModalView = 'options';
 	let copied = false;
-	let buyAmount = '';
+	let showOnramper = false;
 
 	// Set initial view when modal opens
 	$: if ($showDepositModal) {
@@ -17,7 +19,7 @@
 	function handleClose() {
 		closeDepositModal();
 		copied = false;
-		buyAmount = '';
+		showOnramper = false;
 		currentView = 'options'; // Reset to options view
 	}
 
@@ -26,9 +28,12 @@
 	}
 
 	function handleBuyCrypto() {
-		// Pass amount if specified, otherwise let Privy use default
-		const amount = buyAmount.trim() || undefined;
-		fundPrivyWallet(amount);
+		// Open Onramper modal
+		showOnramper = true;
+	}
+
+	function handleOnramperClose() {
+		showOnramper = false;
 		handleClose();
 	}
 
@@ -38,14 +43,13 @@
 
 	function goBack() {
 		currentView = 'options';
-		buyAmount = '';
 	}
 
 	async function copyAddress() {
-		if (!$privySession?.walletAddress) return;
+		if (!$walletAddress) return;
 
 		try {
-			await navigator.clipboard.writeText($privySession.walletAddress);
+			await navigator.clipboard.writeText($walletAddress);
 			copied = true;
 			setTimeout(() => (copied = false), 2000);
 		} catch (err) {
@@ -53,29 +57,13 @@
 		}
 	}
 
-	function handleAmountInput(e: Event) {
-		const input = e.target as HTMLInputElement;
-		// Only allow valid number input
-		const value = input.value.replace(/[^0-9.]/g, '');
-		// Prevent multiple decimals
-		const parts = value.split('.');
-		if (parts.length > 2) {
-			buyAmount = parts[0] + '.' + parts.slice(1).join('');
-		} else {
-			buyAmount = value;
-		}
-	}
-
-	// Quick amount presets
-	const presetAmounts = ['0.01', '0.05', '0.1'];
-
-	$: basescanUrl = $privySession?.walletAddress
-		? `https://basescan.org/address/${$privySession.walletAddress}`
+	$: basescanUrl = $walletAddress
+		? `https://basescan.org/address/${$walletAddress}`
 		: '';
 
 	// Generate QR code URL using free QR code API
-	$: qrCodeUrl = $privySession?.walletAddress
-		? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent($privySession.walletAddress)}`
+	$: qrCodeUrl = $walletAddress
+		? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent($walletAddress)}`
 		: '';
 
 	$: modalTitle = currentView === 'options'
@@ -85,8 +73,15 @@
 			: 'Deposit from Wallet';
 </script>
 
+<!-- Onramper Modal (separate from main modal) -->
+<OnramperModal
+	show={showOnramper}
+	walletAddress={$walletAddress}
+	onClose={handleOnramperClose}
+/>
+
 <Modal
-	show={$showDepositModal}
+	show={$showDepositModal && !showOnramper}
 	title={modalTitle}
 	maxWidthClass="max-w-md"
 	onClose={handleClose}
@@ -113,7 +108,7 @@
 					<div class="flex-1">
 						<h3 class="font-medium text-white">Buy with Card</h3>
 						<p class="mt-1 text-sm text-gray-400">
-							Purchase crypto using a debit card or bank account via Coinbase
+							Purchase crypto using a debit card, credit card, or bank transfer
 						</p>
 					</div>
 					<svg class="h-5 w-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,52 +158,37 @@
 			</button>
 
 			<p class="text-sm text-gray-400">
-				Enter the amount of ETH you want to purchase.
+				Purchase ETH or USDC on Base network using your preferred payment method.
 			</p>
 
-			<!-- Amount Input -->
-			<div>
-				<label class="mb-1.5 block text-sm font-medium text-gray-300" for="buy-amount">
-					Amount (ETH)
-				</label>
-				<input
-					id="buy-amount"
-					type="text"
-					inputmode="decimal"
-					placeholder="0.0"
-					value={buyAmount}
-					on:input={handleAmountInput}
-					class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-				/>
-			</div>
-
-			<!-- Quick Amount Presets -->
-			<div class="flex gap-2">
-				{#each presetAmounts as preset}
-					<button
-						type="button"
-						on:click={() => (buyAmount = preset)}
-						class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 transition hover:border-blue-500/50 hover:text-white"
-						class:border-blue-500={buyAmount === preset}
-						class:text-blue-400={buyAmount === preset}
-					>
-						{preset} ETH
-					</button>
-				{/each}
-			</div>
-
 			<!-- Info -->
-			<div class="rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2">
-				<p class="text-xs text-gray-400">
-					You'll be redirected to Coinbase to complete your purchase. Funds will be sent directly to your wallet.
-				</p>
+			<div class="rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-3">
+				<div class="flex items-start gap-3">
+					<svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					</svg>
+					<div class="text-xs text-gray-400">
+						<p class="mb-1">Powered by Onramper, supporting multiple payment providers for the best rates.</p>
+						<p>Funds will be sent directly to your wallet on Base.</p>
+					</div>
+				</div>
 			</div>
+
+			<!-- Wallet Address Display -->
+			{#if $walletAddress}
+				<div class="rounded-lg border border-gray-700 bg-gray-800 p-3">
+					<span class="mb-1 block text-xs font-medium text-gray-400">Destination Wallet</span>
+					<div class="break-all font-mono text-sm text-white">
+						{$walletAddress}
+					</div>
+				</div>
+			{/if}
 
 			<!-- Actions -->
 			<div class="flex gap-3">
 				<Button on:click={goBack} variant="secondary" fullWidth>Cancel</Button>
 				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>
-					Continue to Coinbase
+					Continue to Purchase
 				</Button>
 			</div>
 		</div>
@@ -233,7 +213,7 @@
 			</p>
 
 			<!-- QR Code -->
-			{#if $privySession?.walletAddress}
+			{#if $walletAddress}
 				<div class="flex justify-center">
 					<div class="rounded-lg bg-white p-3">
 						<img
@@ -250,7 +230,7 @@
 			<div class="rounded-lg border border-gray-700 bg-gray-800 p-4">
 				<span class="mb-2 block text-xs font-medium text-gray-400">Your Wallet Address</span>
 				<div class="break-all font-mono text-sm text-white">
-					{$privySession?.walletAddress || 'Not connected'}
+					{$walletAddress || 'Not connected'}
 				</div>
 			</div>
 
