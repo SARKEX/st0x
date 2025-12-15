@@ -44,6 +44,15 @@ export interface RhinestoneConfig {
 	providerType: 'alchemy' | 'infura' | 'public';
 	providerApiKey?: string;
 	paymasterConfig?: PaymasterConfig;
+	/**
+	 * Account type for Rhinestone SDK
+	 * - 'smart': Creates a new smart account (default, ERC-4337 style)
+	 * - '7702': Uses EIP-7702 to upgrade existing EOA (preserves address)
+	 *
+	 * For Privy embedded wallets, use '7702' to keep the user's EOA address
+	 * while gaining smart account capabilities.
+	 */
+	accountType?: 'smart' | '7702';
 }
 
 export interface PaymasterConfig {
