@@ -3,7 +3,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import OnramperModal from '$lib/components/OnramperModal.svelte';
 	import { showDepositModal, closeDepositModal, depositModalInitialView } from '$lib/stores/privyStore';
-	import { walletAddress } from '$lib/stores/authStore';
+	import { walletAddress, authMethod } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 
 	type ModalView = 'options' | 'buy' | 'deposit';
@@ -11,16 +11,24 @@
 	let copied = false;
 	let showOnramper = false;
 
-	// Set initial view when modal opens
+	// For external EOA users, go directly to buy view
+	// For Privy users, show options (buy or deposit)
 	$: if ($showDepositModal) {
-		currentView = $depositModalInitialView;
+		if ($authMethod === 'privy') {
+			// Privy users see options menu
+			currentView = $depositModalInitialView === 'deposit' ? 'deposit' :
+			              $depositModalInitialView === 'buy' ? 'buy' : 'options';
+		} else {
+			// External EOA users go directly to buy
+			currentView = 'buy';
+		}
 	}
 
 	function handleClose() {
 		closeDepositModal();
 		copied = false;
 		showOnramper = false;
-		currentView = 'options'; // Reset to options view
+		currentView = 'options';
 	}
 
 	function showBuyView() {
@@ -42,7 +50,12 @@
 	}
 
 	function goBack() {
-		currentView = 'options';
+		// For external EOA users, going back should close the modal
+		if ($authMethod !== 'privy') {
+			handleClose();
+		} else {
+			currentView = 'options';
+		}
 	}
 
 	async function copyAddress() {
@@ -87,7 +100,7 @@
 	onClose={handleClose}
 >
 	{#if currentView === 'options'}
-		<!-- Options View -->
+		<!-- Options View (Privy users only) -->
 		<div class="space-y-4">
 			<p class="text-sm text-gray-400">
 				Choose how you want to add funds to your wallet.
@@ -145,17 +158,19 @@
 	{:else if currentView === 'buy'}
 		<!-- Buy View -->
 		<div class="space-y-5">
-			<!-- Back button -->
-			<button
-				type="button"
-				on:click={goBack}
-				class="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
-			>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-				</svg>
-				Back
-			</button>
+			<!-- Back button (only for Privy users who have options) -->
+			{#if $authMethod === 'privy'}
+				<button
+					type="button"
+					on:click={goBack}
+					class="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+					</svg>
+					Back
+				</button>
+			{/if}
 
 			<p class="text-sm text-gray-400">
 				Purchase ETH or USDC on Base network using your preferred payment method.
@@ -186,7 +201,7 @@
 
 			<!-- Actions -->
 			<div class="flex gap-3">
-				<Button on:click={goBack} variant="secondary" fullWidth>Cancel</Button>
+				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
 				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>
 					Continue to Purchase
 				</Button>
@@ -194,7 +209,7 @@
 		</div>
 
 	{:else}
-		<!-- Deposit View -->
+		<!-- Deposit View (Privy users only) -->
 		<div class="space-y-5">
 			<!-- Back button -->
 			<button
