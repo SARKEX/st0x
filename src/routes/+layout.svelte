@@ -15,6 +15,7 @@
 	import AuthModal from '$lib/components/AuthModal.svelte';
 	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
 	import DepositModal from '$lib/components/DepositModal.svelte';
+	import WalletCreationFallback from '$lib/components/WalletCreationFallback.svelte';
 
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
@@ -54,6 +55,7 @@
 	<AuthModal />
 	<SendFundsModal />
 	<DepositModal />
+	<WalletCreationFallback />
 
 	<slot />
 </QueryClientProvider>

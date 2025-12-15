@@ -46,6 +46,22 @@
 	function toggleDropdown(e: MouseEvent) {
 		e.stopPropagation();
 		isDropdownOpen = !isDropdownOpen;
+		// Reset scroll indicators when opening
+		if (isDropdownOpen) {
+			canScrollUp = false;
+			canScrollDown = true;
+		}
+	}
+
+	// Scroll indicator state
+	let canScrollUp = false;
+	let canScrollDown = true;
+	let dropdownScrollEl: HTMLDivElement | null = null;
+
+	function handleDropdownScroll(e: Event) {
+		const el = e.target as HTMLDivElement;
+		canScrollUp = el.scrollTop > 0;
+		canScrollDown = el.scrollTop < el.scrollHeight - el.clientHeight - 1;
 	}
 
 	function closeDropdown() {
@@ -683,21 +699,43 @@
 						<!-- svelte-ignore a11y-no-static-element-interactions -->
 						<div
 							on:click|stopPropagation
-							class="absolute left-0 top-full z-[100] mt-2 w-64 rounded-xl border border-white/10 bg-gray-800 py-2 shadow-xl"
+							class="absolute left-0 top-full z-[100] mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-gray-800 shadow-xl"
 						>
-							{#each tradableTokens as token (token.address)}
-								<button
-									type="button"
-									on:click|stopPropagation={() => handleTokenSelect(token.address)}
-									class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/5"
-								>
-									<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
-									<div>
-										<div class="font-medium text-white">{token.symbol}</div>
-										<div class="text-xs text-gray-500">{token.name}</div>
-									</div>
-								</button>
-							{/each}
+							<!-- Scroll up indicator -->
+							{#if canScrollUp}
+								<div class="flex justify-center border-b border-white/5 py-1">
+									<svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+									</svg>
+								</div>
+							{/if}
+							<div
+								class="token-dropdown max-h-[232px] overflow-y-scroll py-2"
+								on:scroll={handleDropdownScroll}
+								bind:this={dropdownScrollEl}
+							>
+								{#each tradableTokens as token (token.address)}
+									<button
+										type="button"
+										on:click|stopPropagation={() => handleTokenSelect(token.address)}
+										class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/5"
+									>
+										<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
+										<div>
+											<div class="font-medium text-white">{token.symbol}</div>
+											<div class="text-xs text-gray-500">{token.name}</div>
+										</div>
+									</button>
+								{/each}
+							</div>
+							<!-- Scroll down indicator -->
+							{#if canScrollDown}
+								<div class="flex justify-center border-t border-white/5 py-1">
+									<svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+									</svg>
+								</div>
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -824,3 +862,29 @@
 		{/if}
 	</div>
 </div>
+
+<style>
+	.token-dropdown {
+		scrollbar-width: thin;
+		scrollbar-color: rgb(107 114 128) rgb(55 65 81);
+	}
+
+	.token-dropdown::-webkit-scrollbar {
+		width: 8px;
+		-webkit-appearance: none;
+	}
+
+	.token-dropdown::-webkit-scrollbar-track {
+		background: rgb(55 65 81);
+		border-radius: 4px;
+	}
+
+	.token-dropdown::-webkit-scrollbar-thumb {
+		background-color: rgb(107 114 128);
+		border-radius: 4px;
+	}
+
+	.token-dropdown::-webkit-scrollbar-thumb:hover {
+		background-color: rgb(156 163 175);
+	}
+</style>

@@ -4,7 +4,7 @@ import { base } from 'viem/chains';
 
 // Event types for Svelte-React communication
 export interface PrivyEventData {
-	type: 'ready' | 'authenticated' | 'logout' | 'wallet' | 'error';
+	type: 'ready' | 'authenticated' | 'logout' | 'wallet' | 'error' | 'token_refreshed' | 'needs_wallet_creation';
 	payload?: {
 		userId?: string;
 		walletAddress?: string;
@@ -15,6 +15,8 @@ export interface PrivyEventData {
 		smartWalletAddress?: string;
 		eoaAddress?: string;
 		walletType?: 'embedded' | 'smart' | 'eoa';
+		// Access token for server-side verification
+		accessToken?: string;
 	};
 }
 
@@ -30,12 +32,16 @@ interface PrivyBridgeProps {
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
 	triggerConnectWallet?: boolean; // For EOA -> Smart wallet flow
+	triggerCreateWallet?: boolean; // Fallback wallet creation
 	triggerSendTransaction?: {
 		to: string;
 		value: string;
 		data?: string;
 	} | null;
 }
+
+// Token refresh interval (refresh every 50 minutes to be safe before 1 hour expiry)
+const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000;
 
 // Inner component that uses Privy hooks
 function PrivyBridge({
@@ -45,9 +51,10 @@ function PrivyBridge({
 	triggerLogout,
 	triggerExportWallet,
 	triggerConnectWallet,
+	triggerCreateWallet,
 	triggerSendTransaction
 }: Omit<PrivyBridgeProps, 'appId'>) {
-	const { ready, authenticated, user, login, logout, exportWallet, connectWallet } = usePrivy();
+	const { ready, authenticated, user, login, logout, exportWallet, connectWallet, createWallet, getAccessToken } = usePrivy();
 
 	const { wallets } = useWallets();
 
@@ -174,6 +181,67 @@ function PrivyBridge({
 			connectWallet();
 		}
 	}, [triggerConnectWallet, ready, authenticated, connectWallet]);
+
+	// Handle fallback wallet creation trigger
+	// This is used when a user is authenticated but doesn't have an embedded wallet
+	// (e.g., they closed the app before wallet creation finished)
+	useEffect(() => {
+		if (triggerCreateWallet && ready && authenticated && !embeddedWallet) {
+			(async () => {
+				try {
+					await createWallet();
+				} catch (error) {
+					console.error('[privy] Fallback wallet creation error:', error);
+					onEvent({
+						type: 'error',
+						payload: { error: (error as Error).message || 'Failed to create wallet' }
+					});
+				}
+			})();
+		}
+	}, [triggerCreateWallet, ready, authenticated, embeddedWallet, createWallet, onEvent]);
+
+	// Detect users who are authenticated but don't have a wallet (needs fallback creation)
+	useEffect(() => {
+		if (ready && authenticated && user && !embeddedWallet && !externalWallet && !smartWallet) {
+			// User is authenticated but has no wallet - notify Svelte to show fallback UI
+			onEvent({
+				type: 'needs_wallet_creation',
+				payload: {
+					userId: user.id,
+					isAuthenticated: true
+				}
+			});
+		}
+	}, [ready, authenticated, user, embeddedWallet, externalWallet, smartWallet, onEvent]);
+
+	// Token refresh - periodically refresh access token before it expires
+	useEffect(() => {
+		if (!ready || !authenticated) return;
+
+		// Initial token fetch
+		const fetchToken = async () => {
+			try {
+				const token = await getAccessToken();
+				if (token) {
+					onEvent({
+						type: 'token_refreshed',
+						payload: { accessToken: token }
+					});
+				}
+			} catch (error) {
+				console.error('[privy] Token refresh error:', error);
+			}
+		};
+
+		// Fetch immediately on mount/auth change
+		fetchToken();
+
+		// Set up periodic refresh
+		const intervalId = setInterval(fetchToken, TOKEN_REFRESH_INTERVAL);
+
+		return () => clearInterval(intervalId);
+	}, [ready, authenticated, getAccessToken, onEvent]);
 
 	// Handle logout trigger
 	useEffect(() => {

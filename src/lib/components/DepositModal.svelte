@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import OnramperModal from '$lib/components/OnramperModal.svelte';
@@ -14,6 +16,36 @@
 	let currentView: ModalView = 'options';
 	let copied = false;
 	let showOnramper = false;
+
+	// QR code generation
+	let qrCodeDataUrl: string = '';
+	let qrCodeError: string | null = null;
+
+	// Dynamically import qrcode library (client-side only)
+	async function generateQrCode(data: string) {
+		if (!browser) return;
+		try {
+			const QRCode = (await import('qrcode')).default;
+			qrCodeDataUrl = await QRCode.toDataURL(data, {
+				width: 160,
+				margin: 2,
+				color: {
+					dark: '#000000',
+					light: '#FFFFFF'
+				}
+			});
+			qrCodeError = null;
+		} catch (err) {
+			console.error('Failed to generate QR code:', err);
+			qrCodeError = 'Failed to generate QR code';
+			qrCodeDataUrl = '';
+		}
+	}
+
+	// Generate QR code when wallet address changes and we're in deposit view
+	$: if ($walletAddress && currentView === 'deposit') {
+		generateQrCode($walletAddress);
+	}
 
 	// For external EOA users, go directly to buy view
 	// For Privy users, show options (buy or deposit)
@@ -79,13 +111,6 @@
 	}
 
 	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
-
-	// Generate QR code URL using free QR code API
-	$: qrCodeUrl = $walletAddress
-		? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-				$walletAddress
-			)}`
-		: '';
 
 	$: modalTitle =
 		currentView === 'options'
@@ -292,11 +317,24 @@
 				Send tokens to your wallet address on {$currentNetwork?.displayName || 'Base'} network.
 			</p>
 
-			<!-- QR Code -->
+			<!-- QR Code (generated client-side for privacy) -->
 			{#if $walletAddress}
 				<div class="flex justify-center">
 					<div class="rounded-lg bg-white p-3">
-						<img src={qrCodeUrl} alt="Wallet QR Code" class="h-40 w-40" loading="lazy" />
+						{#if qrCodeDataUrl}
+							<img src={qrCodeDataUrl} alt="Wallet QR Code" class="h-40 w-40" />
+						{:else if qrCodeError}
+							<div class="flex h-40 w-40 items-center justify-center text-center text-sm text-gray-500">
+								{qrCodeError}
+							</div>
+						{:else}
+							<div class="flex h-40 w-40 items-center justify-center">
+								<svg class="h-6 w-6 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+								</svg>
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/if}

@@ -387,7 +387,7 @@
 			</div>
 
 			<!-- Pioneer Logos -->
-			<div class="mt-8 text-center sm:mt-16">
+			<div class="relative z-0 mt-8 text-center sm:mt-16">
 				<p class="mb-3 text-xs text-gray-500 sm:mb-4 sm:text-sm">Built by pioneers from</p>
 				<div class="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
 					{#each pioneerLogos as logo}

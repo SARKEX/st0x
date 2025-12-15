@@ -7,8 +7,15 @@ import {
 	getSocialLoginInfo,
 	isPrivyConfigured
 } from '$lib/server/privy';
+import { validateCsrfToken, getCsrfTokenFromRequest } from '$lib/server/csrf';
 
 export const POST: RequestHandler = async ({ request }) => {
+	// CSRF protection - validate token from header
+	const csrfToken = getCsrfTokenFromRequest(request);
+	if (!csrfToken || !validateCsrfToken(csrfToken)) {
+		return json({ error: 'Invalid or missing CSRF token' }, { status: 403 });
+	}
+
 	// Check if Privy is configured
 	if (!isPrivyConfigured()) {
 		return json({ error: 'Privy not configured' }, { status: 503 });
