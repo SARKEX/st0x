@@ -9,7 +9,7 @@
 	import { wrongNetwork, sfts } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
 	// Unified auth
-	import { walletAddress, authMethod, isAuthenticated, userDisplayInfo } from '$lib/stores/authStore';
+	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutPrivy, privySession } from '$lib/stores/privyStore';
 
 	export let title: string;

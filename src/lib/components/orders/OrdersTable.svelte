@@ -321,7 +321,10 @@
 										Market
 									</span>
 								</td>
-								<td class="py-3 pr-4 text-xs text-gray-400" title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}>
+								<td
+									class="py-3 pr-4 text-xs text-gray-400"
+									title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}
+								>
 									{formatLocalTime(order.timestamp)}
 								</td>
 								{#if showTokenColumn}
@@ -434,7 +437,10 @@
 										{typeLabel}
 									</span>
 								</td>
-								<td class="py-3 pr-4 text-xs text-gray-400" title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}>
+								<td
+									class="py-3 pr-4 text-xs text-gray-400"
+									title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}
+								>
 									{formatLocalTime(order.timestamp)}
 								</td>
 								{#if showTokenColumn}

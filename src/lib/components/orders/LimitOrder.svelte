@@ -381,7 +381,9 @@
 						</span>
 					</div>
 					{#if belowMinTradeError}
-						<div class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300">
+						<div
+							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+						>
 							Minimum trade size is $1. Please increase your order amount.
 						</div>
 					{/if}

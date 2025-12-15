@@ -239,10 +239,6 @@
 		}
 	});
 
-	// ETH balance for gas checks
-	$: ethBalance = $ethBalanceQuery?.data?.walletBalance ?? 0n;
-	$: ethBalanceNum = parseFloat(formatUnits(ethBalance, 18));
-
 	// Combined portfolio: wallet + vaults
 	$: portfolioHoldings = (() => {
 		const walletHoldings = $walletHoldingsQuery?.data ?? [];
@@ -561,12 +557,27 @@
 								title="Copy address"
 							>
 								{#if addressCopied}
-									<svg class="h-4 w-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+									<svg
+										class="h-4 w-4 text-green-400"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M5 13l4 4L19 7"
+										/>
 									</svg>
 								{:else}
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+										/>
 									</svg>
 								{/if}
 							</button>
@@ -579,7 +590,12 @@
 								title="View on Basescan"
 							>
 								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+									/>
 								</svg>
 							</a>
 						</div>
@@ -588,7 +604,12 @@
 						<Button variant="primary" size="sm" on:click={() => openDepositModal()}>
 							<span class="flex items-center gap-1.5">
 								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M12 4v16m8-8H4"
+									/>
 								</svg>
 								Add Funds
 							</span>
@@ -597,7 +618,12 @@
 							<Button variant="secondary" size="sm" on:click={() => openSendFundsModal()}>
 								<span class="flex items-center gap-1.5">
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+										/>
 									</svg>
 									Withdraw
 								</span>
@@ -680,25 +706,25 @@
 												>Total</th
 											>
 											{#if $authMethod === 'privy'}
-												<th class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"></th>
+												<th
+													class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												></th>
 											{/if}
 										</tr>
 									</thead>
 									<tbody>
 										{#each fundsHoldings as holding}
 											{@const isEth = holding.address === 'native'}
-											{@const paymentToken = isEth ? null : (
-												PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []
-											).find((t) => t.address.toLowerCase() === holding.address.toLowerCase())}
+											{@const paymentToken = isEth
+												? null
+												: (PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []).find(
+														(t) => t.address.toLowerCase() === holding.address.toLowerCase()
+													)}
 											{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
 											{@const decimalsForDisplay = holding.decimals === 6 ? 2 : 4}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<TokenDisplay
-														logoUrl={logoUrl}
-														symbol={holding.symbol}
-														name={holding.name}
-													/>
+													<TokenDisplay {logoUrl} symbol={holding.symbol} name={holding.name} />
 												</td>
 												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.walletBalanceNum.toFixed(decimalsForDisplay)}</td
@@ -1097,7 +1123,12 @@
 								<Button variant="primary" on:click={() => openDepositModal('buy')}>
 									<span class="flex items-center gap-2">
 										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+											/>
 										</svg>
 										Buy Crypto
 									</span>
@@ -1105,7 +1136,12 @@
 								<Button variant="secondary" on:click={() => openDepositModal()}>
 									<span class="flex items-center gap-2">
 										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M12 4v16m8-8H4"
+											/>
 										</svg>
 										Add Funds
 									</span>
@@ -1113,7 +1149,12 @@
 								<Button variant="secondary" on:click={() => openSendFundsModal()}>
 									<span class="flex items-center gap-2">
 										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+											/>
 										</svg>
 										Withdraw
 									</span>
@@ -1121,7 +1162,12 @@
 								<Button variant="ghost" on:click={() => exportPrivyWallet()}>
 									<span class="flex items-center gap-2">
 										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+											/>
 										</svg>
 										Export Private Key
 									</span>
@@ -1134,9 +1180,7 @@
 							<div class="mb-3 flex items-center justify-between sm:mb-4">
 								<div>
 									<h2 class="text-base font-semibold sm:text-lg">Transaction History</h2>
-									<p class="text-sm text-gray-400">
-										Raw blockchain transactions from your wallet
-									</p>
+									<p class="text-sm text-gray-400">Raw blockchain transactions from your wallet</p>
 								</div>
 								<a
 									href={basescanUrl}
@@ -1146,13 +1190,19 @@
 								>
 									View all on Basescan
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+										/>
 									</svg>
 								</a>
 							</div>
 							<div class="rounded-lg border border-gray-700 bg-gray-800/50 p-6 text-center">
 								<p class="text-sm text-gray-400">
-									Transaction history is available on Basescan. Click the link above to view all your wallet transactions.
+									Transaction history is available on Basescan. Click the link above to view all
+									your wallet transactions.
 								</p>
 							</div>
 						</div>

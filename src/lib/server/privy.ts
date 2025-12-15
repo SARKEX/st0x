@@ -11,7 +11,9 @@ function getPrivyClient(): PrivyClient {
 		const appSecret = env.PRIVY_APP_SECRET;
 
 		if (!appId || !appSecret) {
-			throw new Error('Privy credentials not configured. Set PUBLIC_PRIVY_APP_ID and PRIVY_APP_SECRET.');
+			throw new Error(
+				'Privy credentials not configured. Set PUBLIC_PRIVY_APP_ID and PRIVY_APP_SECRET.'
+			);
 		}
 
 		privyClient = new PrivyClient(appId, appSecret);
@@ -59,18 +61,21 @@ export async function verifyPrivyToken(authToken: string): Promise<PrivyUser | n
 		return {
 			id: user.id,
 			createdAt: user.createdAt.getTime(),
-			linkedAccounts: user.linkedAccounts.map(account => ({
+			linkedAccounts: user.linkedAccounts.map((account) => ({
 				type: account.type,
-				address: 'address' in account ? (account.address ?? undefined) : undefined,
-				email: 'email' in account ? (account.email ?? undefined) : undefined,
-				name: 'name' in account ? (account.name ?? undefined) : undefined,
-				username: 'username' in account ? (account.username ?? undefined) : undefined,
-				verifiedAt: 'verifiedAt' in account && account.verifiedAt ? account.verifiedAt.getTime() : undefined
+				address: 'address' in account ? account.address ?? undefined : undefined,
+				email: 'email' in account ? account.email ?? undefined : undefined,
+				name: 'name' in account ? account.name ?? undefined : undefined,
+				username: 'username' in account ? account.username ?? undefined : undefined,
+				verifiedAt:
+					'verifiedAt' in account && account.verifiedAt ? account.verifiedAt.getTime() : undefined
 			})),
-			wallet: user.wallet ? {
-				address: user.wallet.address,
-				chainType: user.wallet.chainType
-			} : undefined
+			wallet: user.wallet
+				? {
+						address: user.wallet.address,
+						chainType: user.wallet.chainType
+					}
+				: undefined
 		};
 	} catch (error) {
 		console.error('[privy] Token verification failed:', error);
@@ -89,18 +94,21 @@ export async function getPrivyUser(userId: string): Promise<PrivyUser | null> {
 		return {
 			id: user.id,
 			createdAt: user.createdAt.getTime(),
-			linkedAccounts: user.linkedAccounts.map(account => ({
+			linkedAccounts: user.linkedAccounts.map((account) => ({
 				type: account.type,
-				address: 'address' in account ? (account.address ?? undefined) : undefined,
-				email: 'email' in account ? (account.email ?? undefined) : undefined,
-				name: 'name' in account ? (account.name ?? undefined) : undefined,
-				username: 'username' in account ? (account.username ?? undefined) : undefined,
-				verifiedAt: 'verifiedAt' in account && account.verifiedAt ? account.verifiedAt.getTime() : undefined
+				address: 'address' in account ? account.address ?? undefined : undefined,
+				email: 'email' in account ? account.email ?? undefined : undefined,
+				name: 'name' in account ? account.name ?? undefined : undefined,
+				username: 'username' in account ? account.username ?? undefined : undefined,
+				verifiedAt:
+					'verifiedAt' in account && account.verifiedAt ? account.verifiedAt.getTime() : undefined
 			})),
-			wallet: user.wallet ? {
-				address: user.wallet.address,
-				chainType: user.wallet.chainType
-			} : undefined
+			wallet: user.wallet
+				? {
+						address: user.wallet.address,
+						chainType: user.wallet.chainType
+					}
+				: undefined
 		};
 	} catch (error) {
 		console.error('[privy] Get user failed:', error);
@@ -119,7 +127,7 @@ export function getEmbeddedWalletAddress(user: PrivyUser): string | null {
 
 	// Then check linked accounts for embedded wallet
 	const embeddedWallet = user.linkedAccounts.find(
-		account => account.type === 'wallet' && account.address
+		(account) => account.type === 'wallet' && account.address
 	);
 
 	return embeddedWallet?.address ?? null;
@@ -130,7 +138,7 @@ export function getEmbeddedWalletAddress(user: PrivyUser): string | null {
  */
 export function getUserEmail(user: PrivyUser): string | null {
 	const emailAccount = user.linkedAccounts.find(
-		account => account.type === 'email' && account.email
+		(account) => account.type === 'email' && account.email
 	);
 	return emailAccount?.email ?? null;
 }
@@ -138,9 +146,13 @@ export function getUserEmail(user: PrivyUser): string | null {
 /**
  * Extract social login info from Privy user
  */
-export function getSocialLoginInfo(user: PrivyUser): { provider: string; name?: string; username?: string } | null {
-	const socialAccount = user.linkedAccounts.find(
-		account => ['google_oauth', 'twitter_oauth', 'discord_oauth', 'github_oauth', 'apple_oauth'].includes(account.type)
+export function getSocialLoginInfo(
+	user: PrivyUser
+): { provider: string; name?: string; username?: string } | null {
+	const socialAccount = user.linkedAccounts.find((account) =>
+		['google_oauth', 'twitter_oauth', 'discord_oauth', 'github_oauth', 'apple_oauth'].includes(
+			account.type
+		)
 	);
 
 	if (!socialAccount) return null;

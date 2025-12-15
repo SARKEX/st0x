@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Modal from '$lib/components/ui/Modal.svelte';
-	import { PUBLIC_ONRAMPER_API_KEY } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
 
 	export let show: boolean = false;
 	export let walletAddress: string | null = null;
@@ -11,36 +11,32 @@
 		if (!walletAddress) return '';
 
 		const params = new URLSearchParams({
-			apiKey: PUBLIC_ONRAMPER_API_KEY || 'pk_prod_01JF8SSS37YHPFHZ24XS3AGMKY', // Fallback to test key
+			apiKey: env.PUBLIC_ONRAMPER_API_KEY || 'pk_prod_01JF8SSS37YHPFHZ24XS3AGMKY', // Fallback to prod key
 			mode: 'buy',
 			// Use networkWallets for Base chain (wallet works for all tokens on that network)
 			networkWallets: `base:${walletAddress}`,
 			defaultCrypto: 'eth_base', // ETH on Base
 			onlyCryptos: 'eth_base,usdc_base', // Allow ETH and USDC on Base
 			isAddressEditable: 'false',
+			// Theming to match app styles
 			darkMode: 'true',
-			primaryColor: '3b82f6' // Blue-500 to match app theme
+			color: '4c77ba', // App primary color
+			fontFamily: "'DM Sans', sans-serif",
+			gFontPath: 'css2?family=DM+Sans:wght@400;500;600;700&display=swap'
 		});
 
 		// Use .dev domain for sandbox/testing, .com for production
-		const baseUrl = import.meta.env.DEV
-			? 'https://buy.onramper.dev'
-			: 'https://buy.onramper.com';
+		const baseUrl = import.meta.env.DEV ? 'https://buy.onramper.dev' : 'https://buy.onramper.com';
 		return `${baseUrl}?${params.toString()}`;
 	})();
 </script>
 
-<Modal
-	{show}
-	title="Buy Crypto"
-	maxWidthClass="max-w-lg"
-	maxHeightVh={90}
-	{onClose}
->
+<Modal {show} title="Buy Crypto" maxWidthClass="max-w-lg" maxHeightVh={90} {onClose}>
 	{#if walletAddress && onramperUrl}
 		<div class="flex flex-col items-center">
 			<p class="mb-4 text-sm text-gray-400">
-				Purchase crypto using your card or bank account. Funds will be sent directly to your wallet on Base.
+				Purchase crypto using your card or bank account. Funds will be sent directly to your wallet
+				on Base.
 			</p>
 			<div class="w-full overflow-hidden rounded-lg">
 				<iframe

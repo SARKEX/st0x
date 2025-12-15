@@ -2,7 +2,11 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import OnramperModal from '$lib/components/OnramperModal.svelte';
-	import { showDepositModal, closeDepositModal, depositModalInitialView } from '$lib/stores/privyStore';
+	import {
+		showDepositModal,
+		closeDepositModal,
+		depositModalInitialView
+	} from '$lib/stores/privyStore';
 	import { walletAddress, authMethod } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 
@@ -16,8 +20,12 @@
 	$: if ($showDepositModal) {
 		if ($authMethod === 'privy') {
 			// Privy users see options menu
-			currentView = $depositModalInitialView === 'deposit' ? 'deposit' :
-			              $depositModalInitialView === 'buy' ? 'buy' : 'options';
+			currentView =
+				$depositModalInitialView === 'deposit'
+					? 'deposit'
+					: $depositModalInitialView === 'buy'
+						? 'buy'
+						: 'options';
 		} else {
 			// External EOA users go directly to buy
 			currentView = 'buy';
@@ -70,28 +78,25 @@
 		}
 	}
 
-	$: basescanUrl = $walletAddress
-		? `https://basescan.org/address/${$walletAddress}`
-		: '';
+	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
 
 	// Generate QR code URL using free QR code API
 	$: qrCodeUrl = $walletAddress
-		? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent($walletAddress)}`
+		? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+				$walletAddress
+			)}`
 		: '';
 
-	$: modalTitle = currentView === 'options'
-		? 'Add Funds'
-		: currentView === 'buy'
-			? 'Buy Crypto'
-			: 'Deposit from Wallet';
+	$: modalTitle =
+		currentView === 'options'
+			? 'Add Funds'
+			: currentView === 'buy'
+				? 'Buy Crypto'
+				: 'Deposit from Wallet';
 </script>
 
 <!-- Onramper Modal (separate from main modal) -->
-<OnramperModal
-	show={showOnramper}
-	walletAddress={$walletAddress}
-	onClose={handleOnramperClose}
-/>
+<OnramperModal show={showOnramper} walletAddress={$walletAddress} onClose={handleOnramperClose} />
 
 <Modal
 	show={$showDepositModal && !showOnramper}
@@ -102,9 +107,7 @@
 	{#if currentView === 'options'}
 		<!-- Options View (Privy users only) -->
 		<div class="space-y-4">
-			<p class="text-sm text-gray-400">
-				Choose how you want to add funds to your wallet.
-			</p>
+			<p class="text-sm text-gray-400">Choose how you want to add funds to your wallet.</p>
 
 			<!-- Buy Crypto Option -->
 			<button
@@ -113,9 +116,21 @@
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
 			>
 				<div class="flex items-start gap-4">
-					<div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20">
-						<svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+					<div
+						class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20"
+					>
+						<svg
+							class="h-5 w-5 text-blue-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+							/>
 						</svg>
 					</div>
 					<div class="flex-1">
@@ -124,8 +139,18 @@
 							Purchase crypto using a debit card, credit card, or bank transfer
 						</p>
 					</div>
-					<svg class="h-5 w-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+					<svg
+						class="h-5 w-5 flex-shrink-0 text-gray-500"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M9 5l7 7-7 7"
+						/>
 					</svg>
 				</div>
 			</button>
@@ -137,9 +162,21 @@
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
 			>
 				<div class="flex items-start gap-4">
-					<div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-500/20">
-						<svg class="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+					<div
+						class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-500/20"
+					>
+						<svg
+							class="h-5 w-5 text-green-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 4v16m8-8H4"
+							/>
 						</svg>
 					</div>
 					<div class="flex-1">
@@ -148,13 +185,22 @@
 							Transfer crypto from another wallet or exchange
 						</p>
 					</div>
-					<svg class="h-5 w-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+					<svg
+						class="h-5 w-5 flex-shrink-0 text-gray-500"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M9 5l7 7-7 7"
+						/>
 					</svg>
 				</div>
 			</button>
 		</div>
-
 	{:else if currentView === 'buy'}
 		<!-- Buy View -->
 		<div class="space-y-5">
@@ -166,7 +212,12 @@
 					class="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
 				>
 					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M15 19l-7-7 7-7"
+						/>
 					</svg>
 					Back
 				</button>
@@ -179,11 +230,23 @@
 			<!-- Info -->
 			<div class="rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-3">
 				<div class="flex items-start gap-3">
-					<svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					<svg
+						class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
 					</svg>
 					<div class="text-xs text-gray-400">
-						<p class="mb-1">Powered by Onramper, supporting multiple payment providers for the best rates.</p>
+						<p class="mb-1">
+							Powered by Onramper, supporting multiple payment providers for the best rates.
+						</p>
 						<p>Funds will be sent directly to your wallet on Base.</p>
 					</div>
 				</div>
@@ -202,12 +265,9 @@
 			<!-- Actions -->
 			<div class="flex gap-3">
 				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
-				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>
-					Continue to Purchase
-				</Button>
+				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>Continue to Purchase</Button>
 			</div>
 		</div>
-
 	{:else}
 		<!-- Deposit View (Privy users only) -->
 		<div class="space-y-5">
@@ -218,7 +278,12 @@
 				class="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M15 19l-7-7 7-7"
+					/>
 				</svg>
 				Back
 			</button>
@@ -231,12 +296,7 @@
 			{#if $walletAddress}
 				<div class="flex justify-center">
 					<div class="rounded-lg bg-white p-3">
-						<img
-							src={qrCodeUrl}
-							alt="Wallet QR Code"
-							class="h-40 w-40"
-							loading="lazy"
-						/>
+						<img src={qrCodeUrl} alt="Wallet QR Code" class="h-40 w-40" loading="lazy" />
 					</div>
 				</div>
 			{/if}
@@ -254,15 +314,30 @@
 				<Button on:click={copyAddress} variant="secondary" fullWidth>
 					{#if copied}
 						<span class="flex items-center justify-center gap-2">
-							<svg class="h-4 w-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+							<svg
+								class="h-4 w-4 text-green-400"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M5 13l4 4L19 7"
+								/>
 							</svg>
 							Copied!
 						</span>
 					{:else}
 						<span class="flex items-center justify-center gap-2">
 							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+								/>
 							</svg>
 							Copy Address
 						</span>
@@ -272,7 +347,12 @@
 					<Button variant="ghost" fullWidth>
 						<span class="flex items-center justify-center gap-2">
 							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+								/>
 							</svg>
 							View on Basescan
 						</span>
@@ -283,7 +363,8 @@
 			<!-- Warning -->
 			<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
 				<p class="text-xs text-yellow-400">
-					Only send tokens on the {$currentNetwork?.displayName || 'Base'} network. Tokens sent on other networks may be lost.
+					Only send tokens on the {$currentNetwork?.displayName || 'Base'} network. Tokens sent on other
+					networks may be lost.
 				</p>
 			</div>
 

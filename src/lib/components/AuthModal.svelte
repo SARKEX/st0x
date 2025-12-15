@@ -2,7 +2,12 @@
 	import { web3Modal } from 'svelte-wagmi';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
-	import { showAuthModal, closeAuthModal, loginWithPrivy, privyLoading } from '$lib/stores/privyStore';
+	import {
+		showAuthModal,
+		closeAuthModal,
+		loginWithPrivy,
+		privyLoading
+	} from '$lib/stores/privyStore';
 
 	function handleClose() {
 		// Reset loading state when modal is closed (in case Privy modal was cancelled)
@@ -23,15 +28,18 @@
 
 <Modal show={$showAuthModal} title="Sign In" maxWidthClass="max-w-md" onClose={handleClose}>
 	<div class="space-y-6">
-		<p class="text-center text-gray-300">
-			Choose how you'd like to access the platform
-		</p>
+		<p class="text-center text-gray-300">Choose how you'd like to access the platform</p>
 
 		<!-- Privy Login (Email or Social) -->
 		<div class="rounded-lg border border-gray-700 bg-gray-800/50 p-4">
 			<div class="mb-3 flex items-center gap-3">
 				<div class="rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-600/20 p-2">
-					<svg class="h-5 w-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg
+						class="h-5 w-5 text-indigo-400"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
@@ -80,7 +88,12 @@
 			<div class="mt-3 flex items-center justify-center gap-3 text-xs text-gray-500">
 				<!-- Email icon -->
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+					/>
 				</svg>
 				<!-- Google -->
 				<svg class="h-4 w-4" viewBox="0 0 24 24">
