@@ -157,16 +157,21 @@ export interface TradeWithAAParams {
 export interface TradeExecutionResult {
 	success: boolean;
 	transactionHash?: Hash;
-	crossChainTxHash?: Hash;
+	crossChainTxHash?: Hex;
 	error?: string;
 	gasUsed?: bigint;
 	executionSteps: ExecutionStep[];
+	// Additional fields for AA orchestration
+	settlementUSDCAmount?: bigint; // Amount of USDC available on Base after any swaps
+	intentId?: string; // Rhinestone intent ID for tracking
+	message?: string; // Status message
 }
 
 export interface ExecutionStep {
 	type: 'approve' | 'swap' | 'bridge' | 'trade';
 	status: 'pending' | 'executing' | 'confirmed' | 'failed';
 	transactionHash?: Hash;
+	txHash?: Hex; // Alternative tx hash field
 	chainId: SupportedNetworkId;
 	description: string;
 }
