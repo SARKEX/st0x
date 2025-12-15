@@ -134,7 +134,7 @@
 						</svg>
 					</div>
 					<div class="flex-1">
-						<h3 class="font-medium text-white">Buy with Card</h3>
+						<h3 class="font-medium text-white">Buy with Card or Bank Transfer</h3>
 						<p class="mt-1 text-sm text-gray-400">
 							Purchase crypto using a debit card, credit card, or bank transfer
 						</p>
@@ -180,7 +180,7 @@
 						</svg>
 					</div>
 					<div class="flex-1">
-						<h3 class="font-medium text-white">Deposit from Wallet</h3>
+						<h3 class="font-medium text-white">Deposit Crypto</h3>
 						<p class="mt-1 text-sm text-gray-400">
 							Transfer crypto from another wallet or exchange
 						</p>
