@@ -55,13 +55,16 @@ export const privyWalletAddress = derived(
 );
 
 /**
- * Trigger Privy login modal (Google-only)
+ * Trigger Privy login modal (Email or Social)
  */
 export function loginWithPrivy(): void {
 	privyLoading.set(true);
 	privyTriggerLogin.set(true);
 	// Reset trigger after a tick to allow React to pick it up
 	setTimeout(() => privyTriggerLogin.set(false), 100);
+	// Reset loading after 2s - Privy modal should appear by then
+	// If user cancels Privy modal, this ensures the button is clickable again
+	setTimeout(() => privyLoading.set(false), 2000);
 }
 
 /**

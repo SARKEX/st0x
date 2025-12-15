@@ -171,7 +171,6 @@ function PrivyBridge({
 	// Handle connect wallet trigger (EOA -> Smart wallet)
 	useEffect(() => {
 		if (triggerConnectWallet && ready && !authenticated) {
-			// Use connectWallet to trigger wallet connection flow
 			connectWallet();
 		}
 	}, [triggerConnectWallet, ready, authenticated, connectWallet]);
