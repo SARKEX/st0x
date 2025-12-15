@@ -10,3 +10,9 @@ export const mockSignerAddressStore = writable<string>('');
 export const mockChainIdStore = writable<number>(8453);
 export const mockConnectedStore = writable<boolean>(false);
 export const mockWagmiConfigStore = writable<Config>(mockWeb3Config);
+
+// Mock for authStore's walletAddress
+export const mockWalletAddressStore = writable<string | null>(null);
+
+// Mock for authStore's authMethod
+export const mockAuthMethodStore = writable<'wallet' | 'privy' | null>('wallet');

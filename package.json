@@ -34,6 +34,8 @@
 		"@testing-library/svelte": "5.1.0",
 		"@types/eslint": "8.56.7",
 		"@types/pako": "^2.0.3",
+		"@types/react": "^18.2.0",
+		"@types/react-dom": "^18.2.0",
 		"@wagmi/cli": "2.1.8",
 		"autoprefixer": "10.4.19",
 		"eslint": "9.0.0",
@@ -62,6 +64,8 @@
 		"@ethersproject/bytes": "^5.8.0",
 		"@fontsource/ia-writer-mono": "^5.2.5",
 		"@graphql-codegen/typescript-document-nodes": "^4.0.12",
+		"@privy-io/react-auth": "^2.0.0",
+		"@privy-io/server-auth": "^1.0.0",
 		"@rainlanguage/float": "^0.0.0-alpha.39",
 		"@rainlanguage/orderbook": "=0.0.1-alpha.196",
 		"@scalar/api-reference": "^1.40.1",
@@ -82,7 +86,10 @@
 		"nyse-holidays": "^1.2.0",
 		"pako": "^2.1.0",
 		"pinata-web3": "^0.4.1",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
 		"rehype-katex-svelte": "1.2.0",
+		"svelte-preprocess-react": "^1.0.0",
 		"svelte-wagmi": "1.0.7"
 	}
 }

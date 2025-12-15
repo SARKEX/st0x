@@ -12,7 +12,7 @@
 	import type { PythToken } from '$lib/types';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { connected } from 'svelte-wagmi';
+	import { isAuthenticated } from '$lib/stores/authStore';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
@@ -167,7 +167,7 @@
 	const handleDeploy = async () => {
 		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
 		// Check if user is connected
-		if (!$connected) {
+		if (!$isAuthenticated) {
 			promptWalletConnection();
 			return;
 		}
@@ -381,7 +381,9 @@
 						</span>
 					</div>
 					{#if belowMinTradeError}
-						<div class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300">
+						<div
+							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+						>
 							Minimum trade size is $1. Please increase your order amount.
 						</div>
 					{/if}

@@ -4,10 +4,13 @@
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
 	import { tick } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { connected, signerAddress, web3Modal } from 'svelte-wagmi';
+	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import { wrongNetwork, sfts } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
+	// Unified auth
+	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
+	import { openAuthModal, logoutPrivy, privySession } from '$lib/stores/privyStore';
 
 	export let title: string;
 	export let isSidebarCollapsed = false;
@@ -139,7 +142,21 @@
 	}
 
 	function handleConnectWallet() {
-		$web3Modal.open();
+		// For wallet users who are already connected, open wallet modal to manage/disconnect
+		if ($authMethod === 'wallet') {
+			$web3Modal.open();
+		} else {
+			// Show unified auth modal for new connections
+			openAuthModal();
+		}
+	}
+
+	function handleDisconnect() {
+		if ($authMethod === 'privy') {
+			logoutPrivy();
+		} else {
+			$web3Modal.open();
+		}
 	}
 </script>
 
@@ -214,8 +231,44 @@
 					<RewardsDisplay />
 				{/if}
 
-				{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
-					<!-- Fully registered user -->
+				{#if $authMethod === 'privy' && $privySession}
+					<!-- Privy authenticated user -->
+					<div class="flex items-center gap-2">
+						<a href="/dashboard">
+							<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
+								<div class="flex items-center gap-2">
+									<span>My Dashboard</span>
+									<span class="text-[11px] font-normal text-yellow-300/80">
+										{$privySession.email || `...${$privySession.walletAddress.slice(-4)}`}
+									</span>
+								</div>
+							</Button>
+						</a>
+						<!-- Logout button only - other wallet actions moved to dashboard -->
+						<Button
+							variant="ghost"
+							size="sm"
+							className="p-2"
+							aria-label="Log out"
+							on:click={handleDisconnect}
+						>
+							<svg
+								class="h-5 w-5 text-gray-400 hover:text-red-400"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+								/>
+							</svg>
+						</Button>
+					</div>
+				{:else if $isAuthenticated && !$wrongNetwork && $walletAddress && $walletRegistered}
+					<!-- Wallet user (fully registered) -->
 					<div class="flex items-center gap-2">
 						{#if !isHamburgerMode}
 							<!-- Full dashboard button on desktop -->
@@ -224,7 +277,7 @@
 									<div class="flex items-center gap-2">
 										<span>My Dashboard</span>
 										<span class="text-[11px] font-normal text-yellow-300/80">
-											...{$signerAddress.slice(-4)}
+											...{$walletAddress?.slice(-4)}
 										</span>
 									</div>
 								</Button>
@@ -242,7 +295,7 @@
 							size="sm"
 							className="p-2"
 							aria-label="Disconnect wallet"
-							on:click={handleConnectWallet}
+							on:click={handleDisconnect}
 						>
 							<svg
 								class="h-5 w-5 text-gray-400 hover:text-red-400"
@@ -260,14 +313,14 @@
 						</Button>
 					</div>
 				{:else}
-					<!-- Not connected or not registered -->
+					<!-- Not connected -->
 					<Button
 						on:click={handleConnectWallet}
 						variant="primary"
 						size="sm"
 						className="px-3 py-2 text-sm whitespace-nowrap"
 					>
-						Connect Wallet
+						Connect or Log In
 					</Button>
 				{/if}
 

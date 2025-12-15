@@ -7,7 +7,7 @@
 	import { formatUnits } from 'viem';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { connected } from 'svelte-wagmi';
+	import { isAuthenticated } from '$lib/stores/authStore';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
@@ -513,7 +513,7 @@
 
 	const handleMarketOrder = async () => {
 		// Check if user is connected
-		if (!$connected) {
+		if (!$isAuthenticated) {
 			promptWalletConnection();
 			return;
 		}
