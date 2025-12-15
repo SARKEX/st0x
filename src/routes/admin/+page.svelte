@@ -156,6 +156,12 @@
 		tradeCount: number;
 	}
 
+	// Daily breakdown types for pivot tables
+	interface DailyStats {
+		tradeCount: number;
+		usdcVolume: number;
+	}
+
 	// State
 	let loading = true;
 	let error = '';
@@ -165,9 +171,7 @@
 	// Data
 	let totalTransactions = 0;
 	let totalUsdcVolume = 0;
-	let tokenStats: TokenStats[] = [];
 	let walletStats: WalletStats[] = [];
-	let accessCodeStats: AccessCodeStats[] = [];
 	let accessCodes: AccessCode[] = [];
 	let walletToCode: Map<string, string> = new Map();
 
@@ -177,6 +181,15 @@
 	let meanTxSize = 0;
 	let medianTxSize = 0;
 	let cumulativeNetVolume = 0; // LP net USDC flow (positive = LP received USDC from user buys)
+
+	// Daily breakdown data for pivot tables
+	let dailyTokenStats: Map<string, Map<string, DailyStats>> = new Map(); // date -> token -> stats
+	let dailyWalletStats: Map<string, Map<string, DailyStats>> = new Map(); // date -> wallet -> stats
+	let dailyCodeStats: Map<string, Map<string, DailyStats>> = new Map(); // date -> code -> stats
+	let allDates: string[] = [];
+	let allTokenSymbols: string[] = [];
+	let allWalletAddresses: string[] = [];
+	let allAccessCodes: string[] = [];
 
 	// Network config
 	const network = networks[0]; // Base mainnet
@@ -376,6 +389,34 @@
 			{ wallets: Set<string>; tradeCount: number; usdcVolume: number }
 		>();
 
+		// Daily breakdown maps for pivot tables
+		const dailyTokenMap = new Map<string, Map<string, DailyStats>>(); // date -> token -> stats
+		const dailyWalletMap = new Map<string, Map<string, DailyStats>>(); // date -> wallet -> stats
+		const dailyCodeMap = new Map<string, Map<string, DailyStats>>(); // date -> code -> stats
+		const tokenSymbolSet = new Set<string>();
+		const walletAddressSet = new Set<string>();
+		const codeSet = new Set<string>();
+		const dateSet = new Set<string>();
+
+		// Helper to add daily stats
+		const addDailyStats = (
+			map: Map<string, Map<string, DailyStats>>,
+			date: string,
+			key: string,
+			usdcAmount: number
+		) => {
+			if (!map.has(date)) {
+				map.set(date, new Map());
+			}
+			const dayMap = map.get(date)!;
+			if (!dayMap.has(key)) {
+				dayMap.set(key, { tradeCount: 0, usdcVolume: 0 });
+			}
+			const stats = dayMap.get(key)!;
+			stats.tradeCount += 1;
+			stats.usdcVolume += usdcAmount;
+		};
+
 		// Initialize code stats from access codes
 		for (const code of accessCodes) {
 			codeMap.set(code.code, {
@@ -537,6 +578,7 @@
 
 			// Time series aggregation - count unique wallets with access codes
 			const dateKey = timestamp.toISOString().split('T')[0];
+			dateSet.add(dateKey);
 			if (!timeSeriesMap.has(dateKey)) {
 				timeSeriesMap.set(dateKey, { wallets: new Set(), tradeCount: 0, usdcVolume: 0 });
 			}
@@ -545,6 +587,30 @@
 			if (sender !== vaultOwner && walletToCode.has(sender)) dayStats.wallets.add(sender);
 			dayStats.tradeCount += 1;
 			dayStats.usdcVolume += usdcAmount;
+
+			// Daily breakdown by token
+			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
+				tokenSymbolSet.add(assetToken.symbol);
+				addDailyStats(dailyTokenMap, dateKey, assetToken.symbol, usdcAmount);
+			}
+
+			// Daily breakdown by wallet and code (for registered users only)
+			const addDailyWalletAndCode = (wallet: string) => {
+				if (!wallet || !walletToCode.has(wallet)) return;
+				walletAddressSet.add(wallet);
+				addDailyStats(dailyWalletMap, dateKey, wallet, usdcAmount);
+
+				const code = walletToCode.get(wallet);
+				if (code) {
+					codeSet.add(code);
+					addDailyStats(dailyCodeMap, dateKey, code, usdcAmount);
+				}
+			};
+
+			addDailyWalletAndCode(vaultOwner);
+			if (sender !== vaultOwner) {
+				addDailyWalletAndCode(sender);
+			}
 		}
 
 		// Calculate mean and median
@@ -573,15 +639,18 @@
 		// Sort transactions by timestamp descending (newest first)
 		transactions = txList.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-		tokenStats = Array.from(tokenMap.values()).sort(
-			(a, b) => b.bought + b.sold - (a.bought + a.sold)
-		);
 		walletStats = Array.from(walletMap.values()).sort(
 			(a, b) => b.totalUsdcVolume - a.totalUsdcVolume
 		);
-		accessCodeStats = Array.from(codeMap.values()).sort(
-			(a, b) => b.totalUsdcVolume - a.totalUsdcVolume
-		);
+
+		// Populate daily breakdown data for pivot tables
+		dailyTokenStats = dailyTokenMap;
+		dailyWalletStats = dailyWalletMap;
+		dailyCodeStats = dailyCodeMap;
+		allDates = Array.from(dateSet).sort();
+		allTokenSymbols = Array.from(tokenSymbolSet).sort();
+		allWalletAddresses = Array.from(walletAddressSet);
+		allAccessCodes = Array.from(codeSet).sort();
 	}
 
 	function formatTime(date: Date | null): string {
@@ -806,44 +875,61 @@
 
 		<!-- Tab Content -->
 		{#if activeTab === 'tokens'}
-			<!-- Token Stats -->
+			<!-- Token Stats - Daily Breakdown -->
 			<Card>
-				{#if tokenStats.length === 0}
+				{#if allDates.length === 0 || allTokenSymbols.length === 0}
 					<p class="py-4 text-center text-gray-400">No token activity found</p>
 				{:else}
+					<h3 class="mb-4 text-lg font-medium text-white">Daily Transaction Count by Token</h3>
 					<div class="overflow-x-auto">
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="border-b border-gray-700 text-left text-gray-400">
-									<th class="pb-3 font-medium">Token</th>
-									<th class="pb-3 text-right font-medium">Trades</th>
-									<th class="pb-3 text-right font-medium">USDC Volume</th>
-									<th class="pb-3 text-right font-medium">Bought</th>
-									<th class="pb-3 text-right font-medium">Sold</th>
-									<th class="pb-3 text-right font-medium">Net</th>
+									<th class="sticky left-0 bg-gray-900 pb-3 pr-4 font-medium">Date</th>
+									{#each allTokenSymbols as symbol}
+										<th class="min-w-[80px] pb-3 text-right font-medium">{symbol}</th>
+									{/each}
+									<th class="min-w-[80px] pb-3 text-right font-medium text-[#e8be89]">Total</th>
 								</tr>
 							</thead>
 							<tbody>
-								{#each tokenStats as token}
+								{#each allDates as date}
+									{@const dayData = dailyTokenStats.get(date)}
+									{@const dayTotal = allTokenSymbols.reduce(
+										(sum, s) => sum + (dayData?.get(s)?.tradeCount || 0),
+										0
+									)}
 									<tr class="border-b border-gray-800">
-										<td class="py-3">
-											<span class="font-medium text-white">{token.symbol}</span>
-										</td>
-										<td class="py-3 text-right text-white">{token.tradeCount}</td>
-										<td class="py-3 text-right text-white">{formatUsd(token.usdcVolume)}</td>
-										<td class="py-3 text-right text-green-400">
-											+{formatNumber(token.bought)}
-										</td>
-										<td class="py-3 text-right text-red-400">
-											-{formatNumber(token.sold)}
-										</td>
-										<td
-											class="py-3 text-right {token.net >= 0 ? 'text-green-400' : 'text-red-400'}"
-										>
-											{token.net >= 0 ? '+' : ''}{formatNumber(token.net)}
-										</td>
+										<td class="sticky left-0 bg-gray-900 py-2 pr-4 text-white">{date}</td>
+										{#each allTokenSymbols as symbol}
+											{@const stats = dayData?.get(symbol)}
+											<td class="py-2 text-right text-white">{stats?.tradeCount || 0}</td>
+										{/each}
+										<td class="py-2 text-right font-medium text-[#e8be89]">{dayTotal}</td>
 									</tr>
 								{/each}
+								<!-- Totals row -->
+								<tr class="border-t-2 border-[#e8be89] bg-gray-800/50 font-medium">
+									<td class="sticky left-0 bg-gray-800 py-3 pr-4 text-[#e8be89]">Total</td>
+									{#each allTokenSymbols as symbol}
+										{@const symbolTotal = allDates.reduce(
+											(sum, d) => sum + (dailyTokenStats.get(d)?.get(symbol)?.tradeCount || 0),
+											0
+										)}
+										<td class="py-3 text-right text-[#e8be89]">{symbolTotal}</td>
+									{/each}
+									<td class="py-3 text-right text-[#e8be89]"
+										>{allDates.reduce(
+											(sum, d) =>
+												sum +
+												allTokenSymbols.reduce(
+													(s2, sym) => s2 + (dailyTokenStats.get(d)?.get(sym)?.tradeCount || 0),
+													0
+												),
+											0
+										)}</td
+									>
+								</tr>
 							</tbody>
 						</table>
 					</div>
@@ -1028,42 +1114,63 @@
 				{/if}
 			</Card>
 		{:else if activeTab === 'codes'}
-			<!-- Access Code Stats -->
+			<!-- Access Code Stats - Daily Breakdown -->
 			<Card>
-				{#if accessCodeStats.length === 0}
-					<p class="py-4 text-center text-gray-400">No access codes found</p>
+				{#if allDates.length === 0 || allAccessCodes.length === 0}
+					<p class="py-4 text-center text-gray-400">No access code activity found</p>
 				{:else}
+					<h3 class="mb-4 text-lg font-medium text-white">
+						Daily Transaction Count by Access Code
+					</h3>
 					<div class="overflow-x-auto">
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="border-b border-gray-700 text-left text-gray-400">
-									<th class="pb-3 font-medium">Code</th>
-									<th class="pb-3 text-right font-medium">Wallets</th>
-									<th class="pb-3 text-right font-medium">Trades</th>
-									<th class="pb-3 text-right font-medium">USDC Volume</th>
-									<th class="pb-3 text-right font-medium">Net USDC Spend</th>
+									<th class="sticky left-0 bg-gray-900 pb-3 pr-4 font-medium">Date</th>
+									{#each allAccessCodes as code}
+										<th class="min-w-[80px] pb-3 text-right font-medium">{code}</th>
+									{/each}
+									<th class="min-w-[80px] pb-3 text-right font-medium text-[#e8be89]">Total</th>
 								</tr>
 							</thead>
 							<tbody>
-								{#each accessCodeStats as code}
+								{#each allDates as date}
+									{@const dayData = dailyCodeStats.get(date)}
+									{@const dayTotal = allAccessCodes.reduce(
+										(sum, c) => sum + (dayData?.get(c)?.tradeCount || 0),
+										0
+									)}
 									<tr class="border-b border-gray-800">
-										<td class="py-3">
-											<code class="rounded bg-gray-800 px-2 py-0.5 font-mono text-[#e8be89]">
-												{code.code}
-											</code>
-										</td>
-										<td class="py-3 text-right text-white">{code.walletCount}</td>
-										<td class="py-3 text-right text-white">{code.tradeCount}</td>
-										<td class="py-3 text-right text-white">{formatUsd(code.totalUsdcVolume)}</td>
-										<td
-											class="py-3 text-right {code.netUsdcSpend >= 0
-												? 'text-red-400'
-												: 'text-green-400'}"
-										>
-											{code.netUsdcSpend >= 0 ? '-' : '+'}{formatUsd(Math.abs(code.netUsdcSpend))}
-										</td>
+										<td class="sticky left-0 bg-gray-900 py-2 pr-4 text-white">{date}</td>
+										{#each allAccessCodes as code}
+											{@const stats = dayData?.get(code)}
+											<td class="py-2 text-right text-white">{stats?.tradeCount || 0}</td>
+										{/each}
+										<td class="py-2 text-right font-medium text-[#e8be89]">{dayTotal}</td>
 									</tr>
 								{/each}
+								<!-- Totals row -->
+								<tr class="border-t-2 border-[#e8be89] bg-gray-800/50 font-medium">
+									<td class="sticky left-0 bg-gray-800 py-3 pr-4 text-[#e8be89]">Total</td>
+									{#each allAccessCodes as code}
+										{@const codeTotal = allDates.reduce(
+											(sum, d) => sum + (dailyCodeStats.get(d)?.get(code)?.tradeCount || 0),
+											0
+										)}
+										<td class="py-3 text-right text-[#e8be89]">{codeTotal}</td>
+									{/each}
+									<td class="py-3 text-right text-[#e8be89]"
+										>{allDates.reduce(
+											(sum, d) =>
+												sum +
+												allAccessCodes.reduce(
+													(s2, c) => s2 + (dailyCodeStats.get(d)?.get(c)?.tradeCount || 0),
+													0
+												),
+											0
+										)}</td
+									>
+								</tr>
 							</tbody>
 						</table>
 					</div>
@@ -1078,66 +1185,72 @@
 				</a>
 			</div>
 		{:else if activeTab === 'wallets'}
-			<!-- Wallet Stats -->
+			<!-- Wallet Stats - Daily Breakdown -->
 			<Card>
-				{#if walletStats.length === 0}
+				{#if allDates.length === 0 || allWalletAddresses.length === 0}
 					<p class="py-4 text-center text-gray-400">No wallet activity found</p>
 				{:else}
+					<h3 class="mb-4 text-lg font-medium text-white">Daily Transaction Count by Wallet</h3>
 					<div class="overflow-x-auto">
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="border-b border-gray-700 text-left text-gray-400">
-									<th class="pb-3 font-medium">Wallet</th>
-									<th class="pb-3 font-medium">Access Code</th>
-									<th class="pb-3 text-right font-medium">Trades</th>
-									<th class="pb-3 text-right font-medium">USDC Volume</th>
-									<th class="pb-3 text-right font-medium">Net USDC Spend</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each walletStats.slice(0, 50) as wallet}
-									<tr class="border-b border-gray-800">
-										<td class="py-3">
+									<th class="sticky left-0 bg-gray-900 pb-3 pr-4 font-medium">Date</th>
+									{#each allWalletAddresses as wallet}
+										<th class="min-w-[100px] pb-3 text-right font-medium">
 											<a
-												href="https://basescan.org/address/{wallet.address}"
+												href="https://basescan.org/address/{wallet}"
 												target="_blank"
 												rel="noopener noreferrer"
 												class="font-mono text-blue-400 hover:underline"
 											>
-												{truncateAddress(wallet.address)}
+												{truncateAddress(wallet)}
 											</a>
-										</td>
-										<td class="py-3">
-											{#if wallet.accessCode}
-												<code
-													class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]"
-												>
-													{wallet.accessCode}
-												</code>
-											{:else}
-												<span class="text-gray-500">-</span>
-											{/if}
-										</td>
-										<td class="py-3 text-right text-white">{wallet.tradeCount}</td>
-										<td class="py-3 text-right text-white">{formatUsd(wallet.totalUsdcVolume)}</td>
-										<td
-											class="py-3 text-right {wallet.netUsdcSpend >= 0
-												? 'text-red-400'
-												: 'text-green-400'}"
-										>
-											{wallet.netUsdcSpend >= 0 ? '-' : '+'}{formatUsd(
-												Math.abs(wallet.netUsdcSpend)
-											)}
-										</td>
+										</th>
+									{/each}
+									<th class="min-w-[80px] pb-3 text-right font-medium text-[#e8be89]">Total</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each allDates as date}
+									{@const dayData = dailyWalletStats.get(date)}
+									{@const dayTotal = allWalletAddresses.reduce(
+										(sum, w) => sum + (dayData?.get(w)?.tradeCount || 0),
+										0
+									)}
+									<tr class="border-b border-gray-800">
+										<td class="sticky left-0 bg-gray-900 py-2 pr-4 text-white">{date}</td>
+										{#each allWalletAddresses as wallet}
+											{@const stats = dayData?.get(wallet)}
+											<td class="py-2 text-right text-white">{stats?.tradeCount || 0}</td>
+										{/each}
+										<td class="py-2 text-right font-medium text-[#e8be89]">{dayTotal}</td>
 									</tr>
 								{/each}
+								<!-- Totals row -->
+								<tr class="border-t-2 border-[#e8be89] bg-gray-800/50 font-medium">
+									<td class="sticky left-0 bg-gray-800 py-3 pr-4 text-[#e8be89]">Total</td>
+									{#each allWalletAddresses as wallet}
+										{@const walletTotal = allDates.reduce(
+											(sum, d) => sum + (dailyWalletStats.get(d)?.get(wallet)?.tradeCount || 0),
+											0
+										)}
+										<td class="py-3 text-right text-[#e8be89]">{walletTotal}</td>
+									{/each}
+									<td class="py-3 text-right text-[#e8be89]"
+										>{allDates.reduce(
+											(sum, d) =>
+												sum +
+												allWalletAddresses.reduce(
+													(s2, w) => s2 + (dailyWalletStats.get(d)?.get(w)?.tradeCount || 0),
+													0
+												),
+											0
+										)}</td
+									>
+								</tr>
 							</tbody>
 						</table>
-						{#if walletStats.length > 50}
-							<p class="mt-4 text-center text-sm text-gray-500">
-								Showing top 50 of {walletStats.length} wallets
-							</p>
-						{/if}
 					</div>
 				{/if}
 			</Card>
