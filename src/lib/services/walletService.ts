@@ -43,13 +43,6 @@ export function getPrivyWalletProvider(): typeof privyWalletProvider {
 }
 
 /**
- * Generate a unique request ID
- */
-function generateRequestId(): string {
-	return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-/**
  * Resolve a pending request (called from React)
  */
 export function resolveRequest(requestId: string, result: unknown): void {
