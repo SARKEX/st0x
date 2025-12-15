@@ -1,7 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
 	import { onMount } from 'svelte';
-	import { signerAddress, connected } from 'svelte-wagmi';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
@@ -16,29 +15,13 @@
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { rainlangConfirmationModal } from '$lib/stores';
-	import { checkWalletAccess, resetAccessState } from '$lib/stores/accessStore';
 	import { checkAndStoreAccessCodeFromUrl } from '$lib/utils/accessCodeStorage';
-
-	// Track wallet address to detect changes
-	let lastCheckedAddress: string | null = null;
+	// Note: Access check is handled by accessStore's subscription to walletAddress
 
 	// Check for access code in URL params on mount
 	onMount(() => {
 		checkAndStoreAccessCodeFromUrl();
 	});
-
-	// Check wallet registration when wallet connects or changes
-	// Shows modal if not registered, which will auto-disconnect if dismissed
-	$: if (browser && $signerAddress && $connected && $signerAddress !== lastCheckedAddress) {
-		lastCheckedAddress = $signerAddress;
-		checkWalletAccess($signerAddress);
-	}
-
-	// Reset state when wallet disconnects
-	$: if (browser && !$connected && lastCheckedAddress) {
-		lastCheckedAddress = null;
-		resetAccessState();
-	}
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;

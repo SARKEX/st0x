@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatUnits } from 'viem';
 	import { currentNetwork } from '$lib/stores';
-	import { signerAddress, connected } from 'svelte-wagmi';
+	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
@@ -47,14 +47,14 @@
 	}
 
 	// Update selected filter when connection changes
-	$: if (!$connected && selectedOrdersFilter === 'my') {
+	$: if (!$isAuthenticated && selectedOrdersFilter === 'my') {
 		selectedOrdersFilter = 'all';
 	}
 
 	// Helper function to create the closed orders query
 	function createClosedOrdersQuery(
 		network: typeof $currentNetwork,
-		signer: typeof $signerAddress,
+		signer: typeof $walletAddress,
 		token: string | null,
 		enabled: boolean
 	) {
@@ -90,7 +90,7 @@
 	$: shouldFetchClosedOrders = showClosedOrders && showClosedOrdersOption;
 	$: closedOrdersQuery = createClosedOrdersQuery(
 		$currentNetwork,
-		$signerAddress,
+		$walletAddress,
 		tokenAddress,
 		shouldFetchClosedOrders
 	);
@@ -100,8 +100,8 @@
 		let result = [...orders];
 
 		// Filter by owner if "My Orders" is selected
-		if (selectedOrdersFilter === 'my' && $signerAddress) {
-			const myAddress = $signerAddress.toLowerCase();
+		if (selectedOrdersFilter === 'my' && $walletAddress) {
+			const myAddress = $walletAddress.toLowerCase();
 			result = result.filter((o) => {
 				// For limit orders, check quote owner
 				if (o.quote?.sgOrder?.owner) {
@@ -223,7 +223,7 @@
 		{#if showOwnerFilter}
 			<select
 				bind:value={selectedOrdersFilter}
-				disabled={!$connected && selectedOrdersFilter === 'my'}
+				disabled={!$isAuthenticated && selectedOrdersFilter === 'my'}
 				class="rounded-md border border-white/10 bg-gray-800 px-2 py-1.5 text-xs font-medium text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 			>
 				<option value="my">My Orders</option>
@@ -253,7 +253,7 @@
 			<option value="Sell">Sell</option>
 		</select>
 
-		{#if showClosedOrdersOption && selectedOrdersFilter === 'my' && $connected}
+		{#if showClosedOrdersOption && selectedOrdersFilter === 'my' && $isAuthenticated}
 			<label class="flex cursor-pointer items-center gap-1.5">
 				<input
 					type="checkbox"
@@ -419,7 +419,7 @@
 								order.price !== undefined && order.price !== null && Number.isFinite(order.price)
 									? order.price.toFixed(3)
 									: '—'}
-							{@const isMyOrder = orderOwner.toLowerCase() === $signerAddress?.toLowerCase()}
+							{@const isMyOrder = orderOwner.toLowerCase() === $walletAddress?.toLowerCase()}
 							{@const typeLabel =
 								order.type === 'dca' ? 'DCA' : order.type === 'custom' ? 'Custom' : 'Limit'}
 							{@const typeClass =

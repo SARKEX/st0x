@@ -1,6 +1,7 @@
 import { mdsvex } from 'mdsvex';
 import adapter from '@sveltejs/adapter-vercel';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import preprocessReact from 'svelte-preprocess-react/preprocessReact';
 import rehypeKatexSvelte from "rehype-katex-svelte";
 import remarkMath from 'remark-math'
 
@@ -8,6 +9,7 @@ import remarkMath from 'remark-math'
 const config = {
 	preprocess: [
 		vitePreprocess(),
+		preprocessReact(),
 		mdsvex({
 			remarkPlugins: [remarkMath],
 			rehypePlugins: [rehypeKatexSvelte],
