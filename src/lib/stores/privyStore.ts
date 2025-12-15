@@ -1,5 +1,4 @@
 import { writable, derived, get } from 'svelte/store';
-import { browser } from '$app/environment';
 
 // Privy session data - populated by React SDK events
 export interface PrivySession {
@@ -25,7 +24,6 @@ export const privyTriggerLogin = writable<boolean>(false);
 export const privyTriggerLogout = writable<boolean>(false);
 export const privyTriggerExportWallet = writable<boolean>(false);
 export const privyTriggerConnectWallet = writable<boolean>(false); // For EOA -> Smart wallet
-export const privyTriggerFundWallet = writable<{ amount?: string; asset?: 'native-currency' | 'USDC' } | null>(null); // For Coinbase onramp
 export const privyTriggerSendTransaction = writable<{
 	to: string;
 	value: string;
@@ -92,16 +90,6 @@ export function logoutPrivy(): void {
 export function exportPrivyWallet(): void {
 	privyTriggerExportWallet.set(true);
 	setTimeout(() => privyTriggerExportWallet.set(false), 100);
-}
-
-/**
- * Trigger Coinbase onramp to buy crypto
- * @param amount Optional amount to pre-fill
- * @param asset Optional asset to buy ('native-currency' for ETH, 'USDC' for USDC)
- */
-export function fundPrivyWallet(amount?: string, asset?: 'native-currency' | 'USDC'): void {
-	privyTriggerFundWallet.set({ amount, asset });
-	setTimeout(() => privyTriggerFundWallet.set(null), 100);
 }
 
 /**
@@ -186,6 +174,5 @@ export function resetPrivyState(): void {
 	privyTriggerLogout.set(false);
 	privyTriggerExportWallet.set(false);
 	privyTriggerConnectWallet.set(false);
-	privyTriggerFundWallet.set(null);
 	privyTriggerSendTransaction.set(null);
 }

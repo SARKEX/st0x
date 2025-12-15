@@ -1,6 +1,11 @@
 import { derived, get } from 'svelte/store';
 import { signerAddress, connected } from 'svelte-wagmi';
-import { privySession, privyWalletAddress, isPrivyAuthenticated, showAuthModal } from './privyStore';
+import {
+	privySession,
+	privyWalletAddress,
+	isPrivyAuthenticated,
+	showAuthModal
+} from './privyStore';
 import { wrongNetwork } from './index';
 
 // Auth method enum
@@ -44,10 +49,7 @@ export const walletAddress = derived(
 /**
  * Is user authenticated (either method)
  */
-export const isAuthenticated = derived(
-	authMethod,
-	($authMethod) => $authMethod !== 'none'
-);
+export const isAuthenticated = derived(authMethod, ($authMethod) => $authMethod !== 'none');
 
 /**
  * Is user fully ready to interact (authenticated + correct network for wallet users)
@@ -94,7 +96,10 @@ export const userDisplayInfo = derived(
 				displayName = $privySession.socialName;
 			} else if ($privySession.walletType === 'smart' && $privySession.eoaAddress) {
 				// For smart wallet users without email/social, show the EOA they connected with
-				const truncatedEoa = `${$privySession.eoaAddress.slice(0, 6)}...${$privySession.eoaAddress.slice(-4)}`;
+				const truncatedEoa = `${$privySession.eoaAddress.slice(
+					0,
+					6
+				)}...${$privySession.eoaAddress.slice(-4)}`;
 				displayName = `Smart (${truncatedEoa})`;
 			}
 

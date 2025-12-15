@@ -20,13 +20,7 @@
 	}
 
 	// Typewriter animation for hero text
-	const typewriterWords = [
-		'On-Chain',
-		'Collateralised',
-		'DeFi-Ready',
-		'Transferable',
-		'Redeemable'
-	];
+	const typewriterWords = ['Global', 'Collateralised', 'DeFi-Ready', 'Transferable', 'Redeemable'];
 	let currentWordIndex = 0;
 	let displayedText = '';
 	let isDeleting = false;
@@ -210,7 +204,7 @@
 			<h1
 				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
 			>
-				Global Equities. <span class="text-yellow-400">{displayedText}</span><span
+				Tokenised Equities. <span class="text-yellow-400">{displayedText}</span><span
 					class="animate-blink text-yellow-400">|</span
 				>
 			</h1>

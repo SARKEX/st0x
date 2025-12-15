@@ -13,7 +13,6 @@
 		privyTriggerLogout,
 		privyTriggerExportWallet,
 		privyTriggerConnectWallet,
-		privyTriggerFundWallet,
 		privyTriggerSendTransaction,
 		type PrivySession
 	} from '$lib/stores/privyStore';
@@ -81,14 +80,13 @@
 {#if browser && appId}
 	<!-- Privy React Provider using svelte-preprocess-react -->
 	<react:PrivyReactProvider
-		appId={appId}
+		{appId}
 		onEvent={handlePrivyEvent}
 		onWalletProviderReady={handleWalletProviderReady}
 		triggerLogin={$privyTriggerLogin}
 		triggerLogout={$privyTriggerLogout}
 		triggerExportWallet={$privyTriggerExportWallet}
 		triggerConnectWallet={$privyTriggerConnectWallet}
-		triggerFundWallet={$privyTriggerFundWallet}
 		triggerSendTransaction={$privyTriggerSendTransaction}
 	/>
 {:else if browser && !appId}

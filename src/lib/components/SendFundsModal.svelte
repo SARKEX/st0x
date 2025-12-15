@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { createEventDispatcher } from 'svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import {
@@ -11,7 +11,14 @@
 	import { sendTransaction } from '$lib/services/walletService';
 	import { currentNetwork } from '$lib/stores';
 	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
-	import { parseEther, parseUnits, isAddress, encodeFunctionData, erc20Abi, formatUnits } from 'viem';
+	import {
+		parseEther,
+		parseUnits,
+		isAddress,
+		encodeFunctionData,
+		erc20Abi,
+		formatUnits
+	} from 'viem';
 	import { getBalance } from '@wagmi/core';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -91,8 +98,10 @@
 
 	// Check if sending ETH would leave insufficient gas
 	$: sendingEthAmount = selectedToken?.address === 'native' && amount ? parseFloat(amount) : 0;
-	$: wouldDrainEth = selectedToken?.address === 'native' && sendingEthAmount > 0 &&
-		(ethBalanceNum - sendingEthAmount) < MIN_ETH_FOR_GAS;
+	$: wouldDrainEth =
+		selectedToken?.address === 'native' &&
+		sendingEthAmount > 0 &&
+		ethBalanceNum - sendingEthAmount < MIN_ETH_FOR_GAS;
 
 	let recipientAddress = '';
 	let amount = '';
@@ -107,11 +116,14 @@
 	}
 
 	// Get the selected token object
-	$: selectedToken = availableTokens.find((t) => t.symbol === selectedTokenSymbol) ?? availableTokens[0];
+	$: selectedToken =
+		availableTokens.find((t) => t.symbol === selectedTokenSymbol) ?? availableTokens[0];
 
 	// Get balance display for pre-selected token
-	$: preSelectedBalance = $sendModalToken?.symbol === selectedTokenSymbol ? $sendModalToken.balance : null;
-	$: preSelectedBalanceRaw = $sendModalToken?.symbol === selectedTokenSymbol ? $sendModalToken.balanceRaw : null;
+	$: preSelectedBalance =
+		$sendModalToken?.symbol === selectedTokenSymbol ? $sendModalToken.balance : null;
+	$: preSelectedBalanceRaw =
+		$sendModalToken?.symbol === selectedTokenSymbol ? $sendModalToken.balanceRaw : null;
 
 	// Validation
 	$: isValidAddress = recipientAddress && isAddress(recipientAddress);
@@ -200,12 +212,7 @@
 	}
 </script>
 
-<Modal
-	show={$showSendFundsModal}
-	title="Send Funds"
-	maxWidthClass="max-w-md"
-	onClose={handleClose}
->
+<Modal show={$showSendFundsModal} title="Send Funds" maxWidthClass="max-w-md" onClose={handleClose}>
 	<div class="space-y-5">
 		{#if txHash}
 			<!-- Success State -->
@@ -223,7 +230,8 @@
 				<div class="text-center">
 					<h3 class="text-lg font-semibold text-white">Transaction Submitted</h3>
 					<p class="mt-1 text-sm text-gray-400">
-						Sending {amount} {selectedToken?.symbol} to
+						Sending {amount}
+						{selectedToken?.symbol} to
 					</p>
 					<p class="mt-1 font-mono text-xs text-gray-500">
 						{recipientAddress.slice(0, 10)}...{recipientAddress.slice(-8)}
@@ -236,11 +244,16 @@
 			<div class="space-y-4">
 				<!-- From address (read-only) -->
 				<div>
-					<label class="mb-1.5 block text-sm font-medium text-gray-300" for="from-address">From</label>
+					<label class="mb-1.5 block text-sm font-medium text-gray-300" for="from-address"
+						>From</label
+					>
 					<div id="from-address" class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
 						<span class="font-mono text-sm text-gray-400">
 							{$privySession?.walletAddress
-								? `${$privySession.walletAddress.slice(0, 10)}...${$privySession.walletAddress.slice(-8)}`
+								? `${$privySession.walletAddress.slice(
+										0,
+										10
+									)}...${$privySession.walletAddress.slice(-8)}`
 								: 'Not connected'}
 						</span>
 					</div>
@@ -324,13 +337,15 @@
 				{:else if wouldDrainEth}
 					<div class="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2">
 						<p class="text-xs text-orange-400">
-							<strong>Low ETH after send.</strong> Sending this amount will leave you with less than {MIN_ETH_FOR_GAS} ETH for future gas fees. Consider keeping some ETH for transactions.
+							<strong>Low ETH after send.</strong> Sending this amount will leave you with less than {MIN_ETH_FOR_GAS}
+							ETH for future gas fees. Consider keeping some ETH for transactions.
 						</p>
 					</div>
 				{:else if hasLowEthForGas}
 					<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
 						<p class="text-xs text-yellow-400">
-							<strong>Low ETH balance.</strong> You have {ethBalanceNum.toFixed(6)} ETH for gas fees. Consider depositing more ETH to avoid running out.
+							<strong>Low ETH balance.</strong> You have {ethBalanceNum.toFixed(6)} ETH for gas fees.
+							Consider depositing more ETH to avoid running out.
 						</p>
 					</div>
 				{/if}

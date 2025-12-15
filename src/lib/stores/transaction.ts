@@ -11,8 +11,7 @@ import {
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import {
 	sendTransaction as walletServiceSendTransaction,
-	waitForTransaction as walletServiceWaitForTransaction,
-	getSignerAddress
+	waitForTransaction as walletServiceWaitForTransaction
 } from '$lib/services/walletService';
 
 // Retry wrapper for RPC calls that fail with "header not found" error
