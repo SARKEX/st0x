@@ -17,6 +17,16 @@
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 
+	// Account Abstraction imports
+	import TokenNetworkSelector from '$lib/components/aa/TokenNetworkSelector.svelte';
+	import {
+		type PaymentToken,
+		SUPPORTED_NETWORKS,
+		USDC_BASE,
+		isRhinestoneConfigured
+	} from '$lib/services/account-abstraction';
+	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
+
 	/**
 	 * assetToken: The non-settlement token being traded (from prop)
 	 */
@@ -25,6 +35,16 @@
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let buyPrice: number | null = null; // Best bid price (what you get when selling)
 	export let sellPrice: number | null = null; // Best ask price (what you pay when buying)
+
+	// AA state
+	let selectedSourceToken: PaymentToken | null = USDC_BASE;
+	let isDeploying = false;
+	let deployError: string | null = null;
+	$: isAAEnabled = isRhinestoneConfigured();
+	$: needsSwap =
+		selectedSourceToken &&
+		(selectedSourceToken.chainId !== SUPPORTED_NETWORKS.BASE ||
+			selectedSourceToken.symbol !== 'USDC');
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -128,7 +148,9 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		selectedAmountError ||
-		belowMinTradeError;
+		belowMinTradeError ||
+		isDeploying ||
+		$isSwapping;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
 	const handlePercentageClick = (percent: number) => {
@@ -187,57 +209,90 @@
 			return;
 		}
 
-		// Prepare deploy data
-		let deployData: {
-			inputToken: CategorizedToken;
-			outputToken: CategorizedToken;
-			ioRatio: string;
-			depositAmount: bigint;
-			inputVaultId: Hex | undefined;
-		};
+		isDeploying = true;
+		deployError = null;
 
-		// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
-		const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+		try {
+			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
+			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 
-		if (orderType === 'Bid') {
-			// Bid order (user buying): Places order to buy asset with the settlement token
-			// User specifies quantity to acquire and price willing to pay
-			// Price interpretation: "I pay X quote tokens per 1 asset"
-			// The deployed order uses inverted ratio: 1/X
-			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
-			const price = parseFloat(selectedInitialRatio || '0');
-			const settlementNeeded = parseFloat(assetQuantity) * price;
-			const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
+			// Calculate the settlement amount needed for Buy orders
+			let settlementAmount: bigint;
+			if (orderType === 'Bid') {
+				const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
+				const price = parseFloat(selectedInitialRatio || '0');
+				const settlementNeeded = parseFloat(assetQuantity) * price;
+				settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
 
-			deployData = {
-				inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
-				outputToken: orderOutputToken, // payment token (token to be deposited as payment)
-				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
-				ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
-				depositAmount: settlementAmount, // Payment amount in settlement token
-				inputVaultId: selectedInputVaultId
+				// For Buy orders: Check if cross-chain swap is needed
+				// If user selected a non-USDC token or different chain, swap first
+				if (needsSwap && selectedSourceToken) {
+					// Calculate amount in source token (accounting for different decimals)
+					const sourceDecimals = selectedSourceToken.decimals;
+					// Add 1% buffer for price movement during swap
+					const swapAmount = BigInt(
+						Math.ceil(
+							parseFloat(formatUnits(settlementAmount, settlementToken.decimals)) *
+								1.01 *
+								10 ** sourceDecimals
+						)
+					);
+
+					// Execute the cross-chain swap
+					const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount);
+					if (swapResult === null) {
+						// Swap failed
+						deployError = $swapError || 'Cross-chain swap failed';
+						return;
+					}
+
+					// Update settlement amount to use the USDC received
+					settlementAmount = swapResult;
+				}
+			}
+
+			// Prepare deploy data
+			let deployData: {
+				inputToken: CategorizedToken;
+				outputToken: CategorizedToken;
+				ioRatio: string;
+				depositAmount: bigint;
+				inputVaultId: Hex | undefined;
 			};
-		} else {
-			// Ask order (user selling): Places order to sell asset for the settlement token
-			// User specifies quantity to offer and price willing to receive
-			// Price interpretation: "I receive X quote tokens per 1 asset"
-			// The deployed order uses direct ratio: X
-			deployData = {
-				inputToken: orderInputToken, // payment token (token expected in return)
-				outputToken: orderOutputToken, // Asset (token being offered for sale)
-				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
-				ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
-				depositAmount: selectedAmount, // Asset amount being offered
-				inputVaultId: selectedInputVaultId
-			};
-		}
 
-		// Check if price warning is needed
-		if (checkPriceWarning()) {
-			pendingDeployData = deployData;
-			showPriceWarning = true;
-		} else {
-			transactionStore.handleLimitDeploy(deployData);
+			if (orderType === 'Bid') {
+				// Bid order (user buying): Places order to buy asset with the settlement token
+				deployData = {
+					inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
+					outputToken: orderOutputToken, // payment token (token to be deposited as payment)
+					ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
+					depositAmount: settlementAmount!, // Payment amount in settlement token
+					inputVaultId: selectedInputVaultId
+				};
+			} else {
+				// Ask order (user selling): Places order to sell asset for the settlement token
+				deployData = {
+					inputToken: orderInputToken, // payment token (token expected in return)
+					outputToken: orderOutputToken, // Asset (token being offered for sale)
+					ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
+					depositAmount: selectedAmount, // Asset amount being offered
+					inputVaultId: selectedInputVaultId
+				};
+			}
+
+			// Check if price warning is needed
+			if (checkPriceWarning()) {
+				pendingDeployData = deployData;
+				showPriceWarning = true;
+			} else {
+				transactionStore.handleLimitDeploy(deployData);
+			}
+		} catch (error) {
+			console.error('Limit order deployment error:', error);
+			deployError = error instanceof Error ? error.message : 'Unknown error occurred';
+		} finally {
+			isDeploying = false;
+			aaPaymentStore.clearError();
 		}
 	};
 
@@ -304,6 +359,26 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0 && orderInputToken && orderOutputToken && assetToken}
 	<div class="space-y-4">
+		<!-- Cross-chain payment selector (Buy orders only) -->
+		{#if orderSide === 'Buy' && isAAEnabled}
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Pay with</div>
+				<TokenNetworkSelector
+					bind:selectedToken={selectedSourceToken}
+					disabled={isDeploying || $isSwapping}
+				/>
+				{#if $isSwapping}
+					<div class="mt-2 flex items-center gap-2 text-sm text-yellow-400">
+						<LoadingSpinner size="sm" />
+						Swapping to USDC on Base...
+					</div>
+				{/if}
+				{#if deployError}
+					<div class="mt-2 text-sm text-red-400">{deployError}</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>

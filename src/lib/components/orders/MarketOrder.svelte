@@ -20,7 +20,27 @@
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 
+	// Account Abstraction imports
+	import TokenNetworkSelector from '$lib/components/aa/TokenNetworkSelector.svelte';
+	import {
+		type PaymentToken,
+		SUPPORTED_NETWORKS,
+		USDC_BASE,
+		isRhinestoneConfigured
+	} from '$lib/services/account-abstraction';
+	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
+
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
+
+	// AA state for Buy orders (source token)
+	let selectedSourceToken: PaymentToken | null = USDC_BASE;
+
+	$: isAAEnabled = isRhinestoneConfigured();
+	$: needsSwap =
+		orderSide === 'Buy' &&
+		selectedSourceToken &&
+		(selectedSourceToken.chainId !== SUPPORTED_NETWORKS.BASE ||
+			selectedSourceToken.symbol !== 'USDC');
 
 	// Input mode: 'amount' = specify asset quantity, 'spend' = specify payment amount
 	let inputMode: 'amount' | 'spend' = 'amount';
@@ -645,6 +665,41 @@
 				return;
 			}
 
+			// For BUY orders: Check if cross-chain swap is needed
+			// If user selected a non-USDC token or different chain, swap to USDC on Base first
+			let effectiveAmount = selectedAmount;
+			if (orderSide === 'Buy' && needsSwap && selectedSourceToken) {
+				// Calculate the amount to swap based on input mode
+				let swapAmount: bigint;
+				if (inputMode === 'spend') {
+					// In spend mode, selectedAmount is already the payment amount
+					swapAmount = selectedAmount;
+				} else {
+					// In amount mode, calculate the payment amount from market price
+					const assetDecimals = assetToken.decimals;
+					const sourceDecimals = selectedSourceToken.decimals;
+					const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
+					const estimatedCost = outputInTokens * marketPrice;
+					// Add 1% buffer for price movement during swap
+					swapAmount = BigInt(Math.ceil(estimatedCost * 1.01 * 10 ** sourceDecimals));
+				}
+
+				// Execute the cross-chain swap
+				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount);
+				if (swapResult === null) {
+					// Swap failed - error is already set in store
+					orderPreparationError = $swapError || 'Cross-chain swap failed';
+					return;
+				}
+
+				// Use the USDC amount received from the swap
+				// For amount mode, keep selectedAmount (asset quantity) unchanged
+				// For spend mode, update to the USDC amount received
+				if (inputMode === 'spend') {
+					effectiveAmount = swapResult;
+				}
+			}
+
 			// Refresh orderbook quotes if stale
 			const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
 			const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
@@ -665,9 +720,10 @@
 			}
 
 			// Execute market order using shared service
+			// After swap (if any), we now have USDC on Base, so use the network's payment token
 			const result = await executeMarketOrder({
 				orderSide,
-				amount: selectedAmount,
+				amount: inputMode === 'spend' ? effectiveAmount : selectedAmount,
 				inputMode,
 				assetToken: {
 					address: assetToken.address,
@@ -695,12 +751,30 @@
 			orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
 		} finally {
 			isSubmittingMarketOrder = false;
+			aaPaymentStore.clearError();
 		}
 	};
 </script>
 
 {#if $currentNetwork && assetToken}
 	<div class="space-y-4">
+		<!-- Cross-chain payment selector (Buy orders only) -->
+		{#if orderSide === 'Buy' && isAAEnabled}
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Pay with</div>
+				<TokenNetworkSelector
+					bind:selectedToken={selectedSourceToken}
+					disabled={isSubmittingMarketOrder || $isSwapping}
+				/>
+				{#if $isSwapping}
+					<div class="mt-2 flex items-center gap-2 text-sm text-yellow-400">
+						<LoadingSpinner size="sm" />
+						Swapping to USDC on Base...
+					</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
