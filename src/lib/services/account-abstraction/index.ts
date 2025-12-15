@@ -96,8 +96,14 @@ export {
 	encodeBatchCall,
 	encodeExecute,
 	checkEOADelegateStatus,
+	getERC7579Implementation,
+	signEIP7702Authorization,
+	createPrivyWalletClient,
+	getPrivyAccountForRhinestone,
 	type EIP7702WalletCapabilities,
-	type EOADelegateStatus
+	type EOADelegateStatus,
+	type EIP7702SignedAuthorization,
+	type EIP7702AuthorizationOptions
 } from './wallets/privy-7702';
 
 // =============================================================================
