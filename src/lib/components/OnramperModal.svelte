@@ -22,7 +22,11 @@
 			primaryColor: '3b82f6' // Blue-500 to match app theme
 		});
 
-		return `https://buy.onramper.com?${params.toString()}`;
+		// Use .dev domain for sandbox/testing, .com for production
+		const baseUrl = import.meta.env.DEV
+			? 'https://buy.onramper.dev'
+			: 'https://buy.onramper.com';
+		return `${baseUrl}?${params.toString()}`;
 	})();
 </script>
 

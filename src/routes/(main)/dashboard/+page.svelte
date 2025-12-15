@@ -347,10 +347,35 @@
 	})();
 
 	// Build funds holdings (payment tokens + ETH)
+	// Always show USDC even if balance is 0
 	$: fundsHoldings = (() => {
 		const funds = portfolioHoldings.filter((h) =>
 			paymentTokenAddresses.has(h.address.toLowerCase())
 		);
+
+		// Ensure USDC is always shown (even with 0 balance)
+		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
+		for (const token of paymentTokens) {
+			const exists = funds.some((f) => f.address.toLowerCase() === token.address.toLowerCase());
+			if (!exists) {
+				funds.push({
+					id: token.address,
+					address: token.address,
+					name: token.name,
+					symbol: token.symbol,
+					walletBalance: 0n,
+					vaultBalance: 0n,
+					decimals: token.decimals,
+					totalBalance: 0,
+					walletBalanceNum: 0,
+					vaultBalanceNum: 0,
+					price: 1, // USDC is pegged to $1
+					value: 0,
+					priceChange: 0,
+					priceChangePercent: 0
+				});
+			}
+		}
 
 		// Add ETH if we have a balance
 		const ethData = $ethBalanceQuery?.data;
@@ -574,7 +599,7 @@
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
 									</svg>
-									Send
+									Withdraw
 								</span>
 							</Button>
 						{/if}
@@ -1090,7 +1115,7 @@
 										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
 										</svg>
-										Send Funds
+										Withdraw
 									</span>
 								</Button>
 								<Button variant="ghost" on:click={() => exportPrivyWallet()}>
