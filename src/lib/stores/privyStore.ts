@@ -24,11 +24,16 @@ export const privyTriggerLogin = writable<boolean>(false);
 export const privyTriggerLogout = writable<boolean>(false);
 export const privyTriggerExportWallet = writable<boolean>(false);
 export const privyTriggerConnectWallet = writable<boolean>(false); // For EOA -> Smart wallet
+export const privyTriggerCreateWallet = writable<boolean>(false); // Fallback wallet creation
 export const privyTriggerSendTransaction = writable<{
 	to: string;
 	value: string;
 	data?: string;
 } | null>(null);
+
+// Token management
+export const privyAccessToken = writable<string | null>(null);
+export const privyNeedsWalletCreation = writable<boolean>(false);
 
 // UI modal states
 export const showAuthModal = writable<boolean>(false);
@@ -90,6 +95,16 @@ export function logoutPrivy(): void {
 export function exportPrivyWallet(): void {
 	privyTriggerExportWallet.set(true);
 	setTimeout(() => privyTriggerExportWallet.set(false), 100);
+}
+
+/**
+ * Trigger fallback wallet creation for authenticated users without a wallet
+ * This handles the case where wallet creation failed or was interrupted during login
+ */
+export function createPrivyWallet(): void {
+	privyLoading.set(true);
+	privyTriggerCreateWallet.set(true);
+	setTimeout(() => privyTriggerCreateWallet.set(false), 100);
 }
 
 /**
@@ -174,5 +189,8 @@ export function resetPrivyState(): void {
 	privyTriggerLogout.set(false);
 	privyTriggerExportWallet.set(false);
 	privyTriggerConnectWallet.set(false);
+	privyTriggerCreateWallet.set(false);
 	privyTriggerSendTransaction.set(null);
+	privyAccessToken.set(null);
+	privyNeedsWalletCreation.set(false);
 }

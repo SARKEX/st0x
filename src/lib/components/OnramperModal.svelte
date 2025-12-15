@@ -26,6 +26,14 @@
 		isLoading = true;
 		error = null;
 
+		// Validate API key is configured
+		const apiKey = env.PUBLIC_ONRAMPER_API_KEY;
+		if (!apiKey) {
+			error = 'Onramper is not configured. Please contact support.';
+			isLoading = false;
+			return;
+		}
+
 		try {
 			const response = await fetch('/api/onramper/sign-url', {
 				method: 'POST',
@@ -41,7 +49,7 @@
 
 			// Build the full URL with signature
 			const params = new URLSearchParams({
-				apiKey: env.PUBLIC_ONRAMPER_API_KEY || 'pk_prod_01JF8SSS37YHPFHZ24XS3AGMKY',
+				apiKey,
 				mode: 'buy',
 				networkWallets: data.networkWallets,
 				defaultCrypto: 'eth_base',
@@ -54,10 +62,12 @@
 				signature: data.signature
 			});
 
-			// Use .dev domain for sandbox/testing, .com for production
-			const baseUrl = import.meta.env.DEV
-				? 'https://buy.onramper.dev'
-				: 'https://buy.onramper.com';
+			// Use environment variable to determine Onramper domain
+			// PUBLIC_ONRAMPER_ENV should be 'production' for live, anything else for sandbox
+			const isProduction = env.PUBLIC_ONRAMPER_ENV === 'production';
+			const baseUrl = isProduction
+				? 'https://buy.onramper.com'
+				: 'https://buy.onramper.dev';
 			onramperUrl = `${baseUrl}?${params.toString()}`;
 		} catch (err) {
 			console.error('[Onramper] Failed to get signed URL:', err);

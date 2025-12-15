@@ -13,7 +13,10 @@
 		privyTriggerLogout,
 		privyTriggerExportWallet,
 		privyTriggerConnectWallet,
+		privyTriggerCreateWallet,
 		privyTriggerSendTransaction,
+		privyAccessToken,
+		privyNeedsWalletCreation,
 		type PrivySession
 	} from '$lib/stores/privyStore';
 	import { setPrivyWalletProvider } from '$lib/services/walletService';
@@ -73,6 +76,17 @@
 				privyError.set(event.payload?.error || 'Unknown error');
 				privyLoading.set(false);
 				break;
+
+			case 'token_refreshed':
+				if (event.payload?.accessToken) {
+					privyAccessToken.set(event.payload.accessToken);
+				}
+				break;
+
+			case 'needs_wallet_creation':
+				privyNeedsWalletCreation.set(true);
+				privyLoading.set(false);
+				break;
 		}
 	}
 </script>
@@ -87,6 +101,7 @@
 		triggerLogout={$privyTriggerLogout}
 		triggerExportWallet={$privyTriggerExportWallet}
 		triggerConnectWallet={$privyTriggerConnectWallet}
+		triggerCreateWallet={$privyTriggerCreateWallet}
 		triggerSendTransaction={$privyTriggerSendTransaction}
 	/>
 {:else if browser && !appId}
