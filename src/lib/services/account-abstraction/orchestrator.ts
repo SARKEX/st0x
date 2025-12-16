@@ -520,6 +520,9 @@ export class AccountAbstractionOrchestrator {
 
 	/**
 	 * Get available gas payment options
+	 *
+	 * Rhinestone has native gas sponsorship - sponsors pay by depositing USDC on Base.
+	 * No external paymaster (Pimlico/Biconomy) is needed.
 	 */
 	getGasPaymentOptions(chainId: SupportedNetworkId): GasPaymentOption[] {
 		const options: GasPaymentOption[] = [];
@@ -533,20 +536,21 @@ export class AccountAbstractionOrchestrator {
 			description: 'Standard gas payment using ETH'
 		});
 
-		// Sponsored gas (via Rhinestone paymaster)
+		// Sponsored gas (via Rhinestone native sponsorship)
+		// Requires: deposit USDC to sponsorship wallet + set PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true
 		if (rhinestoneClient.hasPaymasterConfig()) {
 			options.push({
 				method: 'sponsored',
 				available: true,
 				label: 'Sponsored',
-				description: 'Gas fees sponsored via Rhinestone paymaster'
+				description: 'Gas fees sponsored (paid from USDC sponsorship balance)'
 			});
 		} else {
 			options.push({
 				method: 'sponsored',
 				available: false,
 				label: 'Sponsored',
-				description: 'Requires Rhinestone paymaster configuration'
+				description: 'Enable with PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true'
 			});
 		}
 

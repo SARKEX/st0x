@@ -56,7 +56,16 @@ export interface RhinestoneConfig {
 }
 
 export interface PaymasterConfig {
-	type: 'pimlico' | 'biconomy';
+	/**
+	 * Rhinestone native sponsorship (recommended)
+	 * - Deposit USDC on Base to your sponsorship wallet
+	 * - Set sponsored: true in transactions
+	 * - Covers gas, bridging (3bps), and swap fees (50bps)
+	 *
+	 * Legacy external paymasters (not recommended)
+	 * - 'pimlico' or 'biconomy' require separate API keys
+	 */
+	type: 'rhinestone' | 'pimlico' | 'biconomy';
 	apiKey?: string;
 	sponsorshipEnabled?: boolean;
 }
