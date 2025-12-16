@@ -30,7 +30,7 @@ export const privyTriggerSendTransaction = writable<{
 	value: string;
 	data?: string;
 } | null>(null);
-export const privyTriggerFundWallet = writable<{ amount?: string } | null>(null);
+export const privyTriggerFundWallet = writable<{ amount?: string } | null>(null); // Coinbase onramp
 
 // Token management
 export const privyAccessToken = writable<string | null>(null);
