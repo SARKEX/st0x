@@ -39,6 +39,13 @@ import {
 } from './rhinestone/swaps';
 import { getWalletCapabilities, supportsEIP7702, isPrivyWalletReady } from './wallets/privy-7702';
 import { USDC_BASE, getDefaultPaymentToken } from './tokens';
+import { getBalanceChecker, formatBalanceShortfall } from './rhinestone/balanceChecker';
+import { getPriceOracle } from './rhinestone/priceOracle';
+import { getGasOracle } from './rhinestone/gasOracle';
+import { monitorTransaction, type TransactionUpdate } from './rhinestone/transactionMonitor';
+
+// Rhinestone Spoke Pool address for approvals
+const RHINESTONE_SPOKE_POOL = '0x8a9e2e4c0e29e91f4d0b7b8c1f3c2a5e6d7f0a1b' as Address; // TODO: Get actual address from SDK
 
 // =============================================================================
 // Types
@@ -72,13 +79,15 @@ export class AccountAbstractionOrchestrator {
 	 * @param amount - Amount of source token
 	 * @param recipient - Recipient address (user's address on Base)
 	 * @param walletAccount - User's wallet account for signing
+	 * @param onStatusChange - Optional callback for transaction status updates
 	 * @returns Result with USDC amount received and tx hash
 	 */
 	async executePreTradeSwap(
 		sourceToken: PaymentToken,
 		amount: bigint,
 		recipient: Address,
-		walletAccount: Account
+		walletAccount: Account,
+		onStatusChange?: (update: TransactionUpdate) => void
 	): Promise<{
 		success: boolean;
 		usdcAmount: bigint;
@@ -108,6 +117,22 @@ export class AccountAbstractionOrchestrator {
 				};
 			}
 
+			// Check balance before attempting swap
+			const balanceChecker = getBalanceChecker();
+			const balanceCheck = await balanceChecker.checkSufficientBalance(
+				sourceToken,
+				recipient,
+				amount
+			);
+
+			if (!balanceCheck.hasEnough) {
+				return {
+					success: false,
+					usdcAmount: 0n,
+					error: formatBalanceShortfall(balanceCheck)
+				};
+			}
+
 			// Execute the swap
 			const result = await executeSwapToSettlement(
 				sourceToken,
@@ -115,6 +140,16 @@ export class AccountAbstractionOrchestrator {
 				recipient,
 				walletAccount
 			);
+
+			// Start monitoring the transaction if we have an intentId
+			if (result.intentId && onStatusChange) {
+				monitorTransaction(
+					result.intentId,
+					sourceToken.chainId,
+					SETTLEMENT_CHAIN_ID,
+					onStatusChange
+				);
+			}
 
 			return {
 				success: true,
@@ -217,6 +252,32 @@ export class AccountAbstractionOrchestrator {
 		} catch {
 			return null;
 		}
+	}
+
+	/**
+	 * Check if a quote is still valid (not expired)
+	 */
+	isQuoteValid(quote: CrossChainSwapQuote): boolean {
+		// Add 5 second buffer before expiry
+		return quote.expiresAt > Date.now() + 5000;
+	}
+
+	/**
+	 * Get a fresh quote, refreshing if the current one is expired or about to expire
+	 */
+	async getOrRefreshQuote(
+		sourceToken: PaymentToken,
+		amount: bigint,
+		recipient: Address,
+		currentQuote?: CrossChainSwapQuote | null
+	): Promise<CrossChainSwapQuote | null> {
+		// If we have a valid quote, return it
+		if (currentQuote && this.isQuoteValid(currentQuote)) {
+			return currentQuote;
+		}
+
+		// Otherwise fetch a fresh quote
+		return this.getPreTradeQuote(sourceToken, amount, recipient);
 	}
 
 	/**
@@ -340,34 +401,45 @@ export class AccountAbstractionOrchestrator {
 	}
 
 	/**
-	 * Estimate gas for a trade
+	 * Estimate gas for a trade using real-time gas and price oracles
 	 */
 	async estimateTradeGas(params: TradeWithAAParams): Promise<GasEstimate> {
+		const gasOracle = getGasOracle();
+		const priceOracle = getPriceOracle();
+
 		// Base gas estimate for a typical trade
 		let totalGasLimit = 300000n; // Base trade gas
 
 		// Add cross-chain swap gas if needed
 		if (this.needsCrossChainSwap(params.sourceToken, SETTLEMENT_CHAIN_ID)) {
-			totalGasLimit += 200000n; // Additional for cross-chain coordination
+			totalGasLimit += gasOracle.getDefaultGasLimit('bridge');
 		}
 
-		// Add approval gas if first trade
-		totalGasLimit += 50000n; // ERC20 approval
+		// Check if approval is needed and add gas for it
+		const balanceChecker = getBalanceChecker();
+		const approvalCheck = await balanceChecker.needsApproval(
+			params.sourceToken,
+			params.walletAddress,
+			RHINESTONE_SPOKE_POOL,
+			params.sourceAmount
+		);
 
-		// Current gas prices (simplified - should use actual gas oracle)
-		const maxFeePerGas = 1000000000n; // 1 gwei
-		const maxPriorityFeePerGas = 100000000n; // 0.1 gwei
+		if (approvalCheck.needsApproval) {
+			totalGasLimit += gasOracle.getDefaultGasLimit('approve');
+		}
 
-		const estimatedGasCostWei = totalGasLimit * maxFeePerGas;
+		// Get real gas prices from the source chain
+		const gasPrices = await gasOracle.getGasPrice(params.sourceToken.chainId);
 
-		// Convert to USDC (assuming ~$3500 ETH)
-		const ETH_PRICE_USD = 3500n;
-		const estimatedGasCostUSDC = (estimatedGasCostWei * ETH_PRICE_USD * 10n ** 6n) / 10n ** 18n;
+		const estimatedGasCostWei = totalGasLimit * gasPrices.maxFeePerGas;
+
+		// Get real ETH price and convert to USDC
+		const estimatedGasCostUSDC = await priceOracle.convertGasToUSDC(estimatedGasCostWei);
 
 		return {
 			gasLimit: totalGasLimit,
-			maxFeePerGas,
-			maxPriorityFeePerGas,
+			maxFeePerGas: gasPrices.maxFeePerGas,
+			maxPriorityFeePerGas: gasPrices.maxPriorityFeePerGas,
 			estimatedGasCostWei,
 			estimatedGasCostUSDC
 		};
@@ -394,23 +466,55 @@ export class AccountAbstractionOrchestrator {
 	}
 
 	/**
-	 * Prepare a cross-chain swap (get quote and check approvals)
+	 * Prepare a cross-chain swap (get quote, check balance, and check approvals)
 	 */
 	async prepareCrossChainSwap(
 		sourceToken: PaymentToken,
 		amount: bigint,
 		recipient: Address
 	): Promise<{
-		quote: unknown;
+		quote: CrossChainSwapQuote | null;
 		approvalNeeded: boolean;
 		approvalAmount?: bigint;
+		hasBalance: boolean;
+		balanceShortfall?: bigint;
+		error?: string;
 	}> {
+		const balanceChecker = getBalanceChecker();
+
+		// Check balance first
+		const balanceCheck = await balanceChecker.checkSufficientBalance(
+			sourceToken,
+			recipient,
+			amount
+		);
+
+		if (!balanceCheck.hasEnough) {
+			return {
+				quote: null,
+				approvalNeeded: false,
+				hasBalance: false,
+				balanceShortfall: balanceCheck.shortfall,
+				error: formatBalanceShortfall(balanceCheck)
+			};
+		}
+
+		// Get quote
 		const quote = await getSwapToSettlementQuote(sourceToken, amount, recipient);
+
+		// Check if approval is needed
+		const approvalCheck = await balanceChecker.needsApproval(
+			sourceToken,
+			recipient,
+			RHINESTONE_SPOKE_POOL,
+			amount
+		);
 
 		return {
 			quote,
-			approvalNeeded: true, // Assume approval needed for now
-			approvalAmount: amount
+			approvalNeeded: approvalCheck.needsApproval,
+			approvalAmount: approvalCheck.needsApproval ? amount : undefined,
+			hasBalance: true
 		};
 	}
 

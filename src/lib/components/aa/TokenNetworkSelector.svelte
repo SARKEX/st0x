@@ -4,25 +4,41 @@
 	 *
 	 * Allows users to select which token and network they want to pay with.
 	 * Shows cross-chain swap information when selecting non-USDC tokens or different networks.
+	 * Integrates with aaPaymentStore for cross-chain swap orchestration.
 	 */
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onMount } from 'svelte';
 	import {
 		type PaymentToken,
 		type SupportedNetworkId,
 		SUPPORTED_NETWORKS,
 		NETWORK_NAMES,
-		getPaymentTokensForNetwork
+		getPaymentTokensForNetwork,
+		USDC_BASE,
+		isRhinestoneConfigured
 	} from '$lib/services/account-abstraction';
+	import { aaPaymentStore } from '$lib/stores/aaPaymentStore';
 
 	// Props
 	export let selectedToken: PaymentToken | null = null;
 	export let disabled: boolean = false;
 	export let showNetworkWarning: boolean = true;
+	export let syncWithStore: boolean = true; // Whether to sync with aaPaymentStore
 
 	const dispatch = createEventDispatcher<{
 		select: { token: PaymentToken };
 		change: { token: PaymentToken };
 	}>();
+
+	// Check if AA is available
+	const isAAAvailable = isRhinestoneConfigured();
+
+	// Initialize with USDC on Base if no token selected
+	onMount(() => {
+		if (!selectedToken && syncWithStore) {
+			selectedToken = USDC_BASE;
+			aaPaymentStore.setSourceToken(USDC_BASE);
+		}
+	});
 
 	// State
 	let isOpen = false;
@@ -60,6 +76,9 @@
 
 	function selectToken(token: PaymentToken) {
 		selectedToken = token;
+		if (syncWithStore) {
+			aaPaymentStore.setSourceToken(token);
+		}
 		dispatch('select', { token });
 		dispatch('change', { token });
 		isOpen = false;

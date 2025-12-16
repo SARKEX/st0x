@@ -16,7 +16,31 @@
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 
+	// Account Abstraction imports
+	import TokenNetworkSelector from '$lib/components/aa/TokenNetworkSelector.svelte';
+	import {
+		type PaymentToken,
+		SUPPORTED_NETWORKS,
+		USDC_BASE,
+		isRhinestoneConfigured
+	} from '$lib/services/account-abstraction';
+	import {
+		aaPaymentStore,
+		isSwapping,
+		swapError
+	} from '$lib/stores/aaPaymentStore';
+
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
+
+	// AA state
+	let selectedSourceToken: PaymentToken | null = USDC_BASE;
+	let isDeploying = false;
+	let deployError: string | null = null;
+	$: isAAEnabled = isRhinestoneConfigured();
+	$: needsSwap =
+		selectedSourceToken &&
+		(selectedSourceToken.chainId !== SUPPORTED_NETWORKS.BASE ||
+			selectedSourceToken.symbol !== 'USDC');
 
 	$: actionButtonClass =
 		orderSide === 'Buy'
@@ -150,7 +174,9 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		priceGuardrailError ||
-		belowMinTradeError;
+		belowMinTradeError ||
+		isDeploying ||
+		$isSwapping;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
 	// For DCA, amount token and balance token are always the same (both are the spending token)
@@ -161,7 +187,7 @@
 		tradeAmountInputRef.setAmountValue(percentAmount);
 	};
 
-	const handleDcaDeploy = () => {
+	const handleDcaDeploy = async () => {
 		// Check if user is connected
 		if (!$isAuthenticated) {
 			promptWalletConnection();
@@ -172,9 +198,40 @@
 			promptLogin();
 			return;
 		}
-		if ($isAuthenticated && $walletRegistered) {
+
+		isDeploying = true;
+		deployError = null;
+
+		try {
 			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
 			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+
+			// For Buy orders: Check if cross-chain swap is needed
+			let effectiveDepositAmount = depositAmount;
+			if (orderType === 'Bid' && needsSwap && selectedSourceToken) {
+				// Calculate amount in source token (accounting for different decimals)
+				const sourceDecimals = selectedSourceToken.decimals;
+				const settlementDecimals = selectedOutputToken?.decimals ?? 6;
+				// Add 1% buffer for price movement during swap
+				const swapAmount = BigInt(
+					Math.ceil(
+						parseFloat(formatUnits(depositAmount, settlementDecimals)) *
+							1.01 *
+							10 ** sourceDecimals
+					)
+				);
+
+				// Execute the cross-chain swap
+				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount);
+				if (swapResult === null) {
+					// Swap failed
+					deployError = $swapError || 'Cross-chain swap failed';
+					return;
+				}
+
+				// Update deposit amount to use the USDC received
+				effectiveDepositAmount = swapResult;
+			}
 
 			// Bid (buying): Accumulate asset over time using the settlement token
 			// Ask (selling): Accumulate the settlement token over time by selling the asset
@@ -183,7 +240,7 @@
 			transactionStore.handleDcaDeploy({
 				outputToken: outputTok,
 				inputToken: inputTok,
-				budgetAmount: selectedAmount,
+				budgetAmount: orderType === 'Bid' ? effectiveDepositAmount : selectedAmount,
 				selectedPeriod: selectedPeriod,
 				selectedPeriodUnit: selectedPeriodUnit,
 				// DCA price inversion logic:
@@ -193,9 +250,15 @@
 				kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
-				depositAmount: depositAmount,
+				depositAmount: effectiveDepositAmount,
 				inputVaultId: selectedInputVaultId
 			});
+		} catch (error) {
+			console.error('DCA order deployment error:', error);
+			deployError = error instanceof Error ? error.message : 'Unknown error occurred';
+		} finally {
+			isDeploying = false;
+			aaPaymentStore.clearError();
 		}
 	};
 
@@ -239,6 +302,26 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0}
 	<div class="space-y-4">
+		<!-- Cross-chain payment selector (Buy orders only) -->
+		{#if orderSide === 'Buy' && isAAEnabled}
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Pay with</div>
+				<TokenNetworkSelector
+					bind:selectedToken={selectedSourceToken}
+					disabled={isDeploying || $isSwapping}
+				/>
+				{#if $isSwapping}
+					<div class="mt-2 flex items-center gap-2 text-sm text-yellow-400">
+						<LoadingSpinner size="sm" />
+						Swapping to USDC on Base...
+					</div>
+				{/if}
+				{#if deployError}
+					<div class="mt-2 text-sm text-red-400">{deployError}</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Target Amount and Period -->
 		<div class="space-y-4">
 			<div>

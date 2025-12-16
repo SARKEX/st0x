@@ -15,7 +15,12 @@ export default defineConfig(({ mode }) => ({
 	  esbuildOptions: {
 		target: 'es2022',
 		supported: { 'top-level-await': true }
-	  }
+	  },
+	  include: ['@rhinestone/sdk']
+	},
+	ssr: {
+	  // Don't externalize the Rhinestone SDK during SSR builds
+	  noExternal: ['@rhinestone/sdk', '@rhinestone/shared-configs']
 	},
 	build: {
 	  target: 'es2022',
