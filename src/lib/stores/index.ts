@@ -1,6 +1,4 @@
 import { derived, writable, type Readable } from 'svelte/store';
-import { chainId } from 'svelte-wagmi';
-import { walletAddress } from '$lib/stores/authStore';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 import type { Network } from '$lib/config/network';
@@ -30,10 +28,9 @@ function createNetworkQueryStore<T>(
 
 export const sftMetadata = writable<MetaV1S[] | null>(null);
 export const currentNetwork = writable<Network>(networks[0]); // Base is default
-export const wrongNetwork = derived(
-	[chainId, walletAddress, currentNetwork],
-	([$chainId, $walletAddress, $currentNetwork]) => $walletAddress && $chainId !== $currentNetwork.id
-);
+
+// Re-export wrongNetwork from authStore to maintain backward compatibility
+export { wrongNetwork } from './authStore';
 
 export const vaultsQuery = createNetworkQueryStore(currentNetwork, (network) =>
 	createVaultsQuery(network ?? null)

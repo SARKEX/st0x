@@ -1,12 +1,12 @@
 import { derived, get } from 'svelte/store';
-import { signerAddress, connected } from 'svelte-wagmi';
+import { signerAddress, connected, chainId } from 'svelte-wagmi';
 import {
 	privySession,
 	privyWalletAddress,
 	isPrivyAuthenticated,
 	showAuthModal
 } from './privyStore';
-import { wrongNetwork } from './index';
+import { currentNetwork } from './index';
 
 // Auth method enum
 export type AuthMethod = 'wallet' | 'privy' | 'none';
@@ -50,6 +50,14 @@ export const walletAddress = derived(
  * Is user authenticated (either method)
  */
 export const isAuthenticated = derived(authMethod, ($authMethod) => $authMethod !== 'none');
+
+/**
+ * Check if user is on the wrong network (for wallet users)
+ */
+export const wrongNetwork = derived(
+	[chainId, walletAddress, currentNetwork],
+	([$chainId, $walletAddress, $currentNetwork]) => $walletAddress && $chainId !== $currentNetwork.id
+);
 
 /**
  * Is user fully ready to interact (authenticated + correct network for wallet users)
