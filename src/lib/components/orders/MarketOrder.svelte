@@ -18,6 +18,7 @@
 		filterQuotesForSide,
 		sortQuotesByPrice
 	} from '$lib/services/marketOrderExecution';
+	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -138,11 +139,13 @@
 
 	// Liquidity warning: check if there's enough liquidity within price guard
 	let insufficientLiquidityWarning: boolean = false;
+	let availableLiquidityFormatted: string = '0';
 
 	// Calculate available liquidity within price guard
 	$: {
 		if (!selectedAmount || selectedAmount === 0n || !assetToken) {
 			insufficientLiquidityWarning = false;
+			availableLiquidityFormatted = '0';
 		} else {
 			const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 			const assetAddressNormalized = normalizeAddress(assetToken.address);
@@ -221,12 +224,18 @@
 						// For BUY: outputAmountGiven is payment capacity
 						const availablePaymentCapacity = walkResult.outputAmountGiven;
 						insufficientLiquidityWarning = selectedAmount > availablePaymentCapacity;
+						// Format available amount for display
+						const availableFloat = parseFloat(formatUnits(availablePaymentCapacity, paymentDecimals));
+						availableLiquidityFormatted = `${availableFloat.toFixed(2)} ${paymentToken?.symbol ?? 'USDC'}`;
 					} else {
 						// In amount mode, selectedAmount is asset amount
 						// For BUY: inputAmountFilled is asset amount, For SELL: outputAmountGiven is asset amount
 						const availableAssetAmount =
 							orderSide === 'Buy' ? walkResult.inputAmountFilled : walkResult.outputAmountGiven;
 						insufficientLiquidityWarning = selectedAmount > availableAssetAmount;
+						// Format available amount for display
+						const availableFloat = parseFloat(formatUnits(availableAssetAmount, assetDecimals));
+						availableLiquidityFormatted = `${availableFloat.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`;
 					}
 				}
 			}
@@ -777,8 +786,11 @@
 						<div
 							class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
 						>
-							There currently isn't enough liquidity to fully fill this order. Continue to fill as
-							much as possible.
+							There currently isn't enough orderbook liquidity to fully fill this order. Continue to
+							fill approx. {availableLiquidityFormatted}.
+							{#if isOutsideMarketHours()}
+								<br /><br />This might be because US markets are currently closed.
+							{/if}
 						</div>
 					{/if}
 					{#if priceError && selectedAmount && selectedAmount > 0n}

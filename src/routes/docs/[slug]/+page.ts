@@ -2,6 +2,9 @@ import slugFromPath from '$lib/docs/slugFromPath.js';
 import { error } from '@sveltejs/kit';
 import { base } from '$app/paths';
 
+// Disable SSR to avoid component serialization issues on Vercel
+export const ssr = false;
+
 export const load = async ({ params }) => {
 	const basePath = base;
 	const modules = import.meta.glob(`/src/docs/**/*.{md,svx,svelte.md}`);
