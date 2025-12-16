@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { signerAddress } from 'svelte-wagmi';
+	import { walletAddress } from '$lib/stores/authStore';
 	import { createEventDispatcher } from 'svelte';
 	import { handleDecimalSeparator } from '$lib/utils/input';
 	import type { ValidateFunction } from '$lib/utils/validation';
@@ -76,7 +76,7 @@
 		{/if}
 		{#if maxButton}
 			<button
-				disabled={!$signerAddress}
+				disabled={!$walletAddress}
 				data-testid={'set-val-to-max'}
 				on:click={setValueToMax}
 				class="flex cursor-pointer items-center self-stretch border-l border-white/10 bg-transparent pl-3 pr-4 text-sm text-white transition-colors hover:bg-gray-600/50 sm:text-base"

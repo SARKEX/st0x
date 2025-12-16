@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { signerAddress } from 'svelte-wagmi';
+	import { walletAddress } from '$lib/stores/authStore';
 	import {
 		rewardsData,
 		publicLeaderboardData,
@@ -110,7 +110,7 @@
 					{#each leaderboardRankings as wallet}
 						<div
 							class="flex items-center justify-between rounded-lg px-4 py-3 {wallet.address ===
-							$signerAddress?.toLowerCase()
+							$walletAddress?.toLowerCase()
 								? 'border border-yellow-500/50 bg-yellow-500/10'
 								: 'bg-gray-700/50'}"
 						>
@@ -124,17 +124,17 @@
 								{/if}
 								<div>
 									<p class="font-mono text-sm text-white">
-										{wallet.address === $signerAddress?.toLowerCase()
+										{wallet.address === $walletAddress?.toLowerCase()
 											? 'You'
 											: formatAddress(wallet.address)}
 									</p>
-									{#if wallet.address === $signerAddress?.toLowerCase()}
+									{#if wallet.address === $walletAddress?.toLowerCase()}
 										<p class="text-xs text-yellow-400">Your position</p>
 									{/if}
 								</div>
 							</div>
 							<span
-								class="font-medium {wallet.address === $signerAddress?.toLowerCase()
+								class="font-medium {wallet.address === $walletAddress?.toLowerCase()
 									? 'text-yellow-400'
 									: wallet.rank <= 3
 										? 'text-yellow-400'
