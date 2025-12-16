@@ -12,7 +12,6 @@
  */
 
 import { get } from 'svelte/store';
-import { signerAddress } from 'svelte-wagmi';
 import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import type { Token } from '$lib/types';
 import type { Network } from '$lib/config/network';
@@ -20,6 +19,7 @@ import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { RAIN_STRATEGIES_COMMIT } from '$lib/clients/raindex';
+import { walletAddress } from '$lib/stores/authStore';
 
 // Default input vault ID for DCA and limit orders (32 bytes, padded)
 // Using a simple constant allows multiple orders to share the same input vault
@@ -141,8 +141,8 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 
 	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-	const $signerAddress = get(signerAddress);
-	if (!$signerAddress) throw new Error('Signer address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	// DCA vault management:
 	// - Input vault: Use provided vault ID if specified, otherwise let system generate random
@@ -155,7 +155,7 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
 
@@ -191,8 +191,8 @@ export const getLimitOrderDeploymentArgs = async (
 
 	gui.setDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-	const $signerAddress = get(signerAddress);
-	if (!$signerAddress) throw new Error('Signer address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	// Limit order vault management:
 	// - Input vault: Use provided vault ID if specified, otherwise let system generate random
@@ -205,7 +205,7 @@ export const getLimitOrderDeploymentArgs = async (
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
 
@@ -262,8 +262,8 @@ export const getMarketMakingDeploymentArgs = async (
 	gui.setDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
 	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
 
-	const $signerAddress = get(signerAddress);
-	if (!$signerAddress) throw new Error('Signer address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	// DSF vault management:
 	// - All vaults (input and output) are newly generated and unique (not tracked)
@@ -281,7 +281,7 @@ export const getMarketMakingDeploymentArgs = async (
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) {
 		throw new Error(deploymentArgsResult.error.readableMsg);
 	}
@@ -313,6 +313,7 @@ export type FolioDeploymentArgs = {
 };
 
 export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploymentArgs) => {
+	console.log('getFolioDeploymentArgs');
 	const folioStrategy = await fetchStrategy('folio.rain');
 
 	const guiResult = await DotrainOrderGui.newWithDeployment(
@@ -350,8 +351,8 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 	gui.setDeposit('token6', formatUnits(args.depositAmount6, args.selectedToken6.decimals));
 	gui.setDeposit('token7', formatUnits(args.depositAmount7, args.selectedToken7.decimals));
 
-	const $signerAddress = get(signerAddress);
-	if (!$signerAddress) throw new Error('Signer address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	// Folio vault management:
 	// - All vaults (input and output) are newly generated and unique (not tracked)
@@ -375,9 +376,10 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($signerAddress);
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
+	console.log('deploymentArgs', deploymentArgs);
 
 	return {
 		composedRainlang,

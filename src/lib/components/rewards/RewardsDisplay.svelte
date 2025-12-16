@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { signerAddress, connected } from 'svelte-wagmi';
+	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { browser } from '$app/environment';
 	import {
 		rewardsData,
@@ -32,13 +32,13 @@
 	});
 
 	// Fetch rewards when wallet connects/changes
-	$: if ($connected && $signerAddress && $signerAddress !== lastFetchedAddress) {
-		lastFetchedAddress = $signerAddress;
-		fetchUserRewards($signerAddress);
+	$: if ($isAuthenticated && $walletAddress && $walletAddress !== lastFetchedAddress) {
+		lastFetchedAddress = $walletAddress;
+		fetchUserRewards($walletAddress);
 	}
 
 	// Reset when wallet disconnects
-	$: if (!$connected && lastFetchedAddress) {
+	$: if (!$isAuthenticated && lastFetchedAddress) {
 		lastFetchedAddress = null;
 		resetRewardsState();
 	}
@@ -62,7 +62,7 @@
 	async function openLeaderboardModal() {
 		showDropdown = false;
 		// Fetch public leaderboard if not connected
-		if (!$connected) {
+		if (!$isAuthenticated) {
 			await fetchPublicLeaderboard();
 		}
 		showLeaderboardModal.set(true);
@@ -75,7 +75,7 @@
 	});
 </script>
 
-{#if $connected && $signerAddress}
+{#if $isAuthenticated && $walletAddress}
 	<div class="relative" bind:this={dropdownRef} data-tutorial="boost-rewards">
 		<!-- Boost Rewards Button with Rainbow Wave Animation -->
 		<button

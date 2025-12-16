@@ -6,8 +6,9 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { connected } from 'svelte-wagmi';
-	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
+	import { isAuthenticated } from '$lib/stores/authStore';
+	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
+	import { openAuthModal } from '$lib/stores/privyStore';
 
 	const STRATEGY_TYPES = [
 		{ id: 'portfolio', name: 'Portfolio Strategy' },
@@ -36,7 +37,7 @@
 <div>
 	<!-- Strategies Content -->
 	<PageContainer>
-		{#if !$connected || !$walletRegistered}
+		{#if !$isAuthenticated || !$walletRegistered}
 			<!-- Login gate for strategies -->
 			<div class="flex min-h-[60vh] items-center justify-center">
 				<div class="max-w-md text-center">
@@ -63,11 +64,11 @@
 						portfolio management and market making.
 					</p>
 					<Button
-						on:click={() => (!$connected ? promptWalletConnection() : promptLogin())}
+						on:click={() => (!$isAuthenticated ? openAuthModal() : promptLogin())}
 						variant="primary"
 						size="lg"
 					>
-						Connect Wallet
+						Connect or Log In
 					</Button>
 				</div>
 			</div>

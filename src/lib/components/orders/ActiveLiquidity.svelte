@@ -12,7 +12,7 @@
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
-	import { connected } from 'svelte-wagmi';
+	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId } from '$lib/utils/derivations';
 	import { currentNetwork } from '$lib/stores';
@@ -95,7 +95,7 @@
 		isToken1SameAsToken2;
 
 	const handleDsfDeploy = () => {
-		if ($connected) {
+		if ($isAuthenticated) {
 			transactionStore.handleDsfDeploy({
 				token1: selectedToken1,
 				token2: selectedToken2,

@@ -1212,8 +1212,6 @@ const transactionStore = () => {
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
-		const config = get(wagmiConfig);
-		if (!config) throw new Error('Wagmi config not found');
 		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
 		const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args);
