@@ -18,9 +18,19 @@
  * - https://docs.rhinestone.dev/home/concepts/smart-eoas-eip-7702
  */
 
-import { RhinestoneSDK, getOrchestrator } from '@rhinestone/sdk';
+import { RhinestoneSDK } from '@rhinestone/sdk';
 import type { IntentRoute, IntentCost } from '@rhinestone/sdk/dist/src/orchestrator';
-import { createPublicClient, http, encodeFunctionData, erc20Abi, type Address, type Chain, type Hex, type Account } from 'viem';
+import { getOrchestrator } from '@rhinestone/sdk/dist/src/orchestrator';
+import {
+	createPublicClient,
+	http,
+	encodeFunctionData,
+	erc20Abi,
+	type Address,
+	type Chain,
+	type Hex,
+	type Account
+} from 'viem';
 import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import {
 	type RhinestoneConfig,
@@ -62,7 +72,10 @@ interface RhinestoneAccount {
 		calls: Array<{ to: Address; value: bigint; data: Hex }>;
 		tokenRequests?: Array<{ address: Address; amount: bigint }>;
 	}) => Promise<{ hash: Hex; intentId: string }>;
-	waitForExecution: (transaction: { hash: Hex; intentId: string }) => Promise<{ status: string; txHash: Hex }>;
+	waitForExecution: (transaction: {
+		hash: Hex;
+		intentId: string;
+	}) => Promise<{ status: string; txHash: Hex }>;
 	getAddress: (chainId: number) => Promise<Address>;
 }
 
@@ -139,7 +152,9 @@ export class RhinestoneClient {
 			return rhinestoneAccount as unknown as RhinestoneAccount;
 		} catch (error) {
 			throw new AAError(
-				`Failed to create Rhinestone account: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				`Failed to create Rhinestone account: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
 				AAErrorCode.RHINESTONE_ERROR,
 				{ originalError: error }
 			);
@@ -225,7 +240,7 @@ export class RhinestoneClient {
 				const destinationAmount = tokenReceived?.destinationAmount
 					? BigInt(tokenReceived.destinationAmount)
 					: params.amount;
-				const fee = tokenReceived?.fee ? BigInt(tokenReceived.fee) : 0n;
+				const _fee = tokenReceived?.fee ? BigInt(tokenReceived.fee) : 0n;
 
 				// Extract gas prices from signedMetadata if available
 				const gasPrices = route.intentOp?.signedMetadata?.gasPrices || {};
@@ -366,10 +381,7 @@ export class RhinestoneClient {
 		try {
 			// Validate API key is configured
 			if (!this.config.apiKey) {
-				throw new AAError(
-					'Rhinestone API key not configured',
-					AAErrorCode.RHINESTONE_ERROR
-				);
+				throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
 			}
 
 			// Get a fresh quote to ensure pricing is current
@@ -442,10 +454,7 @@ export class RhinestoneClient {
 		try {
 			// Validate API key
 			if (!this.config.apiKey) {
-				throw new AAError(
-					'Rhinestone API key not configured',
-					AAErrorCode.RHINESTONE_ERROR
-				);
+				throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
 			}
 
 			// Validate networks
@@ -470,16 +479,17 @@ export class RhinestoneClient {
 			const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
 
 			// Build token requests from the params
-			const tokenRequests = params.tokenRequests?.map(req => ({
-				address: req.token as Address,
-				amount: req.amount
-			})) || [];
+			const tokenRequests =
+				params.tokenRequests?.map((req) => ({
+					address: req.token as Address,
+					amount: req.amount
+				})) || [];
 
 			// Execute cross-chain transaction
 			const transaction = await rhinestoneAccount.sendTransaction({
 				sourceChain,
 				targetChain,
-				calls: params.calls.map(call => ({
+				calls: params.calls.map((call) => ({
 					to: call.to as Address,
 					value: call.value || 0n,
 					data: call.data as Hex
@@ -572,9 +582,7 @@ export function getRhinestoneClient(): RhinestoneClient {
 
 		// Rhinestone native sponsorship - deposit USDC on Base to your sponsorship wallet
 		const sponsorship: SponsorshipConfig | undefined =
-			env.PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED === 'true'
-				? { enabled: true }
-				: undefined;
+			env.PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED === 'true' ? { enabled: true } : undefined;
 
 		// Default to EIP-7702 mode for Privy users
 		// This preserves the user's EOA address while enabling smart account features

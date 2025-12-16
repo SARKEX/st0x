@@ -6,18 +6,14 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import type { Address, Account, Hex } from 'viem';
+import type { Address, Hex } from 'viem';
 import {
 	type PaymentToken,
-	type SupportedNetworkId,
 	type CrossChainSwapQuote,
-	SUPPORTED_NETWORKS,
 	SETTLEMENT_CHAIN_ID,
 	getAAOrchestrator,
 	isRhinestoneConfigured,
-	getDefaultPaymentToken,
 	getBalanceChecker,
-	formatBalanceShortfall,
 	USDC_BASE
 } from '$lib/services/account-abstraction';
 import { getPrivyAccountForRhinestone } from '$lib/services/account-abstraction/wallets/privy-7702';
@@ -30,12 +26,7 @@ const QUOTE_REFRESH_INTERVAL_MS = 45000;
 // Types
 // =============================================================================
 
-export type AAPaymentStatus =
-	| 'idle'
-	| 'checking'
-	| 'swapping'
-	| 'swap_complete'
-	| 'error';
+export type AAPaymentStatus = 'idle' | 'checking' | 'swapping' | 'swap_complete' | 'error';
 
 export interface AAPaymentState {
 	// Selected source token (what user wants to pay with - for Buy orders)
@@ -150,8 +141,7 @@ function createAAPaymentStore() {
 
 			// No swap needed if already USDC on Base
 			return !(
-				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID &&
-				state.sourceToken.symbol === 'USDC'
+				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC'
 			);
 		},
 
@@ -172,8 +162,7 @@ function createAAPaymentStore() {
 			}
 
 			const isAlreadyUSDCOnBase =
-				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID &&
-				state.sourceToken.symbol === 'USDC';
+				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC';
 
 			if (isAlreadyUSDCOnBase) {
 				update((s) => ({ ...s, status: 'idle', swapResult: null }));
@@ -235,7 +224,7 @@ function createAAPaymentStore() {
 					...s,
 					status: 'swap_complete',
 					swapResult: {
-						txHash: result.txHash || '0x' as Hex,
+						txHash: result.txHash || ('0x' as Hex),
 						intentId: result.intentId || '',
 						usdcAmount: result.usdcAmount
 					}
@@ -294,8 +283,7 @@ function createAAPaymentStore() {
 			if (!state.sourceToken || !$walletAddress) return null;
 
 			const isAlreadyUSDCOnBase =
-				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID &&
-				state.sourceToken.symbol === 'USDC';
+				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC';
 
 			if (isAlreadyUSDCOnBase) {
 				return {
@@ -325,9 +313,7 @@ function createAAPaymentStore() {
 					}));
 				}
 
-				return quote
-					? { ...quote, requiresSwap: true }
-					: null;
+				return quote ? { ...quote, requiresSwap: true } : null;
 			} catch {
 				return null;
 			}
@@ -349,8 +335,7 @@ function createAAPaymentStore() {
 				if (!state.sourceToken || !$walletAddress) return;
 
 				const isAlreadyUSDCOnBase =
-					state.sourceToken.chainId === SETTLEMENT_CHAIN_ID &&
-					state.sourceToken.symbol === 'USDC';
+					state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC';
 
 				if (isAlreadyUSDCOnBase) return;
 
@@ -567,42 +552,27 @@ export const aaPaymentStore = createAAPaymentStore();
 /**
  * Whether AA is enabled and configured
  */
-export const isAAEnabled = derived(
-	aaPaymentStore,
-	($store) => $store.isAAEnabled
-);
+export const isAAEnabled = derived(aaPaymentStore, ($store) => $store.isAAEnabled);
 
 /**
  * Currently selected source token
  */
-export const selectedSourceToken = derived(
-	aaPaymentStore,
-	($store) => $store.sourceToken
-);
+export const selectedSourceToken = derived(aaPaymentStore, ($store) => $store.sourceToken);
 
 /**
  * Whether a swap is currently in progress
  */
-export const isSwapping = derived(
-	aaPaymentStore,
-	($store) => $store.status === 'swapping'
-);
+export const isSwapping = derived(aaPaymentStore, ($store) => $store.status === 'swapping');
 
 /**
  * Current swap status
  */
-export const swapStatus = derived(
-	aaPaymentStore,
-	($store) => $store.status
-);
+export const swapStatus = derived(aaPaymentStore, ($store) => $store.status);
 
 /**
  * Any error from the swap
  */
-export const swapError = derived(
-	aaPaymentStore,
-	($store) => $store.error
-);
+export const swapError = derived(aaPaymentStore, ($store) => $store.error);
 
 /**
  * Currently selected destination token (for Sell orders)
@@ -631,18 +601,12 @@ export const pendingPostTradeSwap = derived(
 /**
  * Cached quote
  */
-export const cachedQuote = derived(
-	aaPaymentStore,
-	($store) => $store.cachedQuote
-);
+export const cachedQuote = derived(aaPaymentStore, ($store) => $store.cachedQuote);
 
 /**
  * Balance check result
  */
-export const balanceCheck = derived(
-	aaPaymentStore,
-	($store) => $store.balanceCheck
-);
+export const balanceCheck = derived(aaPaymentStore, ($store) => $store.balanceCheck);
 
 /**
  * Whether user has sufficient balance

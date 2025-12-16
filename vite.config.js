@@ -19,8 +19,8 @@ export default defineConfig(({ mode }) => ({
 	  include: ['@rhinestone/sdk']
 	},
 	ssr: {
-	  // Don't externalize the Rhinestone SDK during SSR builds
-	  noExternal: ['@rhinestone/sdk', '@rhinestone/shared-configs']
+	  // Externalize Rhinestone SDK during SSR to avoid circular dependency issues
+	  external: ['@rhinestone/sdk', '@rhinestone/shared-configs']
 	},
 	build: {
 	  target: 'es2022',

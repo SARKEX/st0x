@@ -28,7 +28,7 @@ const poolInitPromise: Map<number, Promise<ClientPool>> = new Map();
  * Initialize the client pool for a network.
  * Creates 2 clients for load balancing (both use the same strategies YAML config).
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 async function initializePool(_network: Network): Promise<ClientPool> {
 	const strategiesYaml = await getStrategiesYaml();
 

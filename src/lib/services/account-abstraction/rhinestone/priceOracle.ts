@@ -57,9 +57,8 @@ export class PriceOracle {
 	private parsePythPrice(entry: HermesEntry): number | null {
 		if (!entry.price) return null;
 
-		const price = typeof entry.price.price === 'string'
-			? parseFloat(entry.price.price)
-			: entry.price.price;
+		const price =
+			typeof entry.price.price === 'string' ? parseFloat(entry.price.price) : entry.price.price;
 		const expo = entry.price.expo;
 
 		// Price = price * 10^expo
@@ -105,7 +104,10 @@ export class PriceOracle {
 				}
 			}
 		} catch (error) {
-			console.warn('Failed to fetch ETH price from Pyth:', error instanceof Error ? error.message : 'Unknown');
+			console.warn(
+				'Failed to fetch ETH price from Pyth:',
+				error instanceof Error ? error.message : 'Unknown'
+			);
 		}
 
 		// Return default price on failure
@@ -172,7 +174,10 @@ export class PriceOracle {
 					}
 				}
 			} catch (error) {
-				console.warn('Failed to fetch prices from Pyth:', error instanceof Error ? error.message : 'Unknown');
+				console.warn(
+					'Failed to fetch prices from Pyth:',
+					error instanceof Error ? error.message : 'Unknown'
+				);
 			}
 		}
 

@@ -23,7 +23,7 @@
  * - https://docs.rhinestone.dev/sdk/smart-sessions/overview
  */
 
-import type { Address, Hex, Hash, WalletClient, Account } from 'viem';
+import type { Address, Hex, WalletClient, Account } from 'viem';
 import {
 	createPublicClient,
 	createWalletClient,
@@ -39,13 +39,12 @@ import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chai
 import { get } from 'svelte/store';
 import {
 	type EIP7702Authorization,
-	type SignedAuthorization,
 	type SupportedNetworkId,
 	SUPPORTED_NETWORKS,
 	AAError,
 	AAErrorCode
 } from '../types';
-import { privySession, privyReady, type PrivySession } from '$lib/stores/privyStore';
+import { privySession, privyReady } from '$lib/stores/privyStore';
 import { getPrivyWalletProvider } from '$lib/services/walletService';
 
 /**
@@ -159,9 +158,7 @@ export function supportsEIP7702(): boolean {
 /**
  * Check if the wallet has been delegated to a smart account
  */
-export async function checkDelegationStatus(
-	chainId: SupportedNetworkId
-): Promise<{
+export async function checkDelegationStatus(chainId: SupportedNetworkId): Promise<{
 	isDelegated: boolean;
 	delegateContract?: Address;
 }> {
@@ -390,9 +387,7 @@ export function getPrivyAccountForRhinestone(): Account | null {
 /**
  * Encode a batch call for the smart account
  */
-export function encodeBatchCall(
-	calls: Array<{ to: Address; data: Hex; value?: bigint }>
-): Hex {
+export function encodeBatchCall(calls: Array<{ to: Address; data: Hex; value?: bigint }>): Hex {
 	// Simple7702Account uses executeBatch(Call[] calldata calls)
 	const abi = parseAbi([
 		'function executeBatch((address target, uint256 value, bytes data)[] calls)'
@@ -415,9 +410,7 @@ export function encodeBatchCall(
  * Encode a single execute call
  */
 export function encodeExecute(call: { to: Address; data: Hex; value?: bigint }): Hex {
-	const abi = parseAbi([
-		'function execute(address target, uint256 value, bytes calldata data)'
-	]);
+	const abi = parseAbi(['function execute(address target, uint256 value, bytes calldata data)']);
 
 	return encodeFunctionData({
 		abi,
@@ -457,8 +450,8 @@ export interface EOADelegateStatus {
  * Check EOA delegate status (stub)
  */
 export async function checkEOADelegateStatus(
-	walletAddress: Address,
-	chainId: SupportedNetworkId
+	_walletAddress: Address,
+	_chainId: SupportedNetworkId
 ): Promise<EOADelegateStatus> {
 	// TODO: Implement when delegate contracts are deployed
 	return {

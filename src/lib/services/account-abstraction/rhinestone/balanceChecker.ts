@@ -5,7 +5,14 @@
  * Supports both native ETH and ERC20 tokens.
  */
 
-import { createPublicClient, http, erc20Abi, type Address, type PublicClient } from 'viem';
+import {
+	createPublicClient,
+	http,
+	erc20Abi,
+	type Address,
+	type PublicClient,
+	type Chain
+} from 'viem';
 import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { SUPPORTED_NETWORKS, type SupportedNetworkId, type PaymentToken } from '../types';
 
@@ -21,7 +28,7 @@ const RPC_URLS: Record<SupportedNetworkId, string> = {
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: 'https://sepolia-rollup.arbitrum.io/rpc'
 };
 
-const CHAIN_CONFIG: Record<SupportedNetworkId, typeof base> = {
+const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 	[SUPPORTED_NETWORKS.BASE]: base,
 	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
 	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
@@ -65,7 +72,7 @@ export class BalanceChecker {
 			const client = createPublicClient({
 				chain: CHAIN_CONFIG[chainId],
 				transport: http(RPC_URLS[chainId])
-			});
+			}) as PublicClient;
 			this.clients.set(chainId, client);
 		}
 		return this.clients.get(chainId)!;
@@ -159,11 +166,7 @@ export class BalanceChecker {
 	/**
 	 * Check ERC20 allowance for a spender
 	 */
-	async checkAllowance(
-		token: PaymentToken,
-		owner: Address,
-		spender: Address
-	): Promise<bigint> {
+	async checkAllowance(token: PaymentToken, owner: Address, spender: Address): Promise<bigint> {
 		if (token.isNative) {
 			// Native tokens don't need approval
 			return BigInt(2) ** BigInt(256) - BigInt(1); // Max uint256

@@ -281,7 +281,7 @@ export async function estimateSwapCost(
 export async function validateSwap(
 	sourceToken: PaymentToken,
 	amount: bigint,
-	userAddress: Address
+	_userAddress: Address
 ): Promise<{ valid: boolean; error?: string }> {
 	const client = getRhinestoneClient();
 
@@ -422,7 +422,7 @@ export async function getUSDCEquivalent(
 	// For stablecoins (USDT), assume 1:1 with minor slippage
 	if (token.symbol === 'USDT') {
 		// 0.1% slippage for stablecoin swaps
-		return amount - (amount / 1000n);
+		return amount - amount / 1000n;
 	}
 
 	// For ETH/WETH, would need price oracle
@@ -431,7 +431,7 @@ export async function getUSDCEquivalent(
 		// This should use a price oracle in production
 		// Placeholder: 1 ETH = ~$3000 (scaled to 6 decimals from 18)
 		const ethPriceUSDC = 3000n * 10n ** 6n;
-		return (amount * ethPriceUSDC) / (10n ** 18n);
+		return (amount * ethPriceUSDC) / 10n ** 18n;
 	}
 
 	// Default: get quote

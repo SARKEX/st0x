@@ -25,11 +25,7 @@
 		USDC_BASE,
 		isRhinestoneConfigured
 	} from '$lib/services/account-abstraction';
-	import {
-		aaPaymentStore,
-		isSwapping,
-		swapError
-	} from '$lib/stores/aaPaymentStore';
+	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
 
 	/**
 	 * assetToken: The non-settlement token being traded (from prop)

@@ -13,8 +13,7 @@
 		SUPPORTED_NETWORKS,
 		NETWORK_NAMES,
 		getPaymentTokensForNetwork,
-		USDC_BASE,
-		isRhinestoneConfigured
+		USDC_BASE
 	} from '$lib/services/account-abstraction';
 	import { aaPaymentStore } from '$lib/stores/aaPaymentStore';
 
@@ -28,9 +27,6 @@
 		select: { token: PaymentToken };
 		change: { token: PaymentToken };
 	}>();
-
-	// Check if AA is available
-	const isAAAvailable = isRhinestoneConfigured();
 
 	// Initialize with USDC on Base if no token selected
 	onMount(() => {
@@ -55,8 +51,7 @@
 	$: availableTokens = getPaymentTokensForNetwork(selectedNetwork).filter((t) => !t.isNative);
 
 	// Check if selection requires cross-chain swap
-	$: requiresCrossChainSwap =
-		selectedToken && selectedToken.chainId !== SUPPORTED_NETWORKS.BASE;
+	$: requiresCrossChainSwap = selectedToken && selectedToken.chainId !== SUPPORTED_NETWORKS.BASE;
 
 	$: requiresTokenSwap = selectedToken && selectedToken.symbol !== 'USDC';
 
@@ -125,14 +120,7 @@
 		{:else}
 			<span class="placeholder">Select token</span>
 		{/if}
-		<svg
-			class="chevron"
-			class:open={isOpen}
-			width="16"
-			height="16"
-			viewBox="0 0 16 16"
-			fill="none"
-		>
+		<svg class="chevron" class:open={isOpen} width="16" height="16" viewBox="0 0 16 16" fill="none">
 			<path
 				d="M4 6L8 10L12 6"
 				stroke="currentColor"
@@ -190,22 +178,12 @@
 	{#if showNetworkWarning && selectedToken && (requiresCrossChainSwap || requiresTokenSwap)}
 		<div class="swap-notice">
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-				<path
-					d="M8 14A6 6 0 108 2a6 6 0 000 12z"
-					stroke="currentColor"
-					stroke-width="1.5"
-				/>
-				<path
-					d="M8 5v3M8 11h.01"
-					stroke="currentColor"
-					stroke-width="1.5"
-					stroke-linecap="round"
-				/>
+				<path d="M8 14A6 6 0 108 2a6 6 0 000 12z" stroke="currentColor" stroke-width="1.5" />
+				<path d="M8 5v3M8 11h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 			</svg>
 			<span>
 				{#if requiresCrossChainSwap && requiresTokenSwap}
-					Will swap {selectedToken.symbol} on {getNetworkName(selectedToken.chainId)} → USDC
-					on Base
+					Will swap {selectedToken.symbol} on {getNetworkName(selectedToken.chainId)} → USDC on Base
 				{:else if requiresCrossChainSwap}
 					Will bridge USDC from {getNetworkName(selectedToken.chainId)} to Base
 				{:else if requiresTokenSwap}
