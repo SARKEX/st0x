@@ -18,7 +18,8 @@
  * - https://docs.rhinestone.dev/home/concepts/smart-eoas-eip-7702
  */
 
-import { RhinestoneSDK } from '@rhinestone/sdk';
+import { RhinestoneSDK, getOrchestrator } from '@rhinestone/sdk';
+import type { IntentRoute, IntentCost } from '@rhinestone/sdk/dist/src/orchestrator';
 import { createPublicClient, http, encodeFunctionData, erc20Abi, type Address, type Chain, type Hex, type Account } from 'viem';
 import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import {
@@ -32,6 +33,7 @@ import {
 	AAError,
 	AAErrorCode
 } from '../types';
+import { getGasOracle } from './gasOracle';
 import { env } from '$env/dynamic/public';
 
 // Chain configurations
@@ -167,7 +169,13 @@ export class RhinestoneClient {
 	}
 
 	/**
-	 * Get a quote for a cross-chain swap
+	 * Get a quote for a cross-chain swap using Rhinestone Orchestrator
+	 *
+	 * Uses the Orchestrator's getIntentRoute endpoint to get real-time quotes
+	 * from the solver network. The response includes:
+	 * - intentCost: actual costs including fees
+	 * - gasPrices: current gas prices per chain
+	 * - tokenPrices: current token prices for conversion
 	 */
 	async getSwapQuote(params: CrossChainSwapParams): Promise<CrossChainSwapQuote> {
 		try {
@@ -185,46 +193,168 @@ export class RhinestoneClient {
 				);
 			}
 
-			// Rhinestone uses intent-based swaps where solvers compete to fill orders
-			// The SDK automatically handles quote retrieval through the orchestrator
-			// Price impact is minimal due to solver competition
-
-			// Estimate based on current market conditions
-			// In production, this would call the actual SDK quote endpoint
 			const isSameChain = params.sourceChain === params.targetChain;
-			const estimatedDuration = isSameChain ? 15 : 60; // seconds
-			const baseGasCost = isSameChain ? 100000n : 500000n;
 
-			const quote: CrossChainSwapQuote = {
-				inputAmount: params.amount,
-				outputAmount: params.amount, // Solver competition ensures near 1:1 for stablecoins
-				estimatedGas: {
-					gasLimit: baseGasCost,
-					maxFeePerGas: 1000000000n, // 1 gwei
-					maxPriorityFeePerGas: 100000000n, // 0.1 gwei
-					estimatedGasCostWei: baseGasCost * 1000000000n,
-					estimatedGasCostUSDC: isSameChain ? 500000n : 1500000n // $0.50 or $1.50
-				},
-				route: {
-					steps: [
+			// Get the orchestrator instance
+			const orchestrator = getOrchestrator(this.config.apiKey);
+
+			try {
+				// Build the intent input for the orchestrator
+				// We're requesting the target token amount on the destination chain
+				const intentInput = {
+					account: {
+						address: params.recipient,
+						accountType: 'EOA' as const,
+						setupOps: []
+					},
+					destinationChainId: params.targetChain,
+					destinationExecutions: [], // Empty for pure token transfer
+					tokenRequests: [
 						{
-							type: isSameChain ? 'swap' : 'bridge',
-							chainId: params.sourceChain,
-							protocol: 'rhinestone-solver',
-							tokenIn: params.sourceToken.address,
-							tokenOut: params.targetToken.address,
-							amountIn: params.amount,
-							amountOut: params.amount
+							tokenAddress: params.targetToken.address,
+							amount: params.amount
 						}
 					],
-					totalSteps: 1,
-					estimatedDuration
-				},
-				expiresAt: Date.now() + 60000, // 1 minute expiry
-				priceImpactBps: 10 // 0.1% price impact (minimal due to solver competition)
-			};
+					// Restrict source to specific chain/token if provided
+					accountAccessList: {
+						chainTokens: {
+							[params.sourceChain]: [params.sourceToken.address]
+						}
+					},
+					options: {
+						topupCompact: false,
+						settlementLayers: isSameChain ? ['SAME_CHAIN' as const] : undefined
+					}
+				};
 
-			return quote;
+				// Get the route from the orchestrator
+				const route: IntentRoute = await orchestrator.getIntentRoute(intentInput);
+				const intentCost: IntentCost = route.intentCost;
+
+				// Extract cost information from the response
+				// tokensReceived contains the actual costs per token
+				const tokenReceived = intentCost.tokensReceived?.[0];
+				const amountSpent = tokenReceived?.amountSpent
+					? BigInt(tokenReceived.amountSpent)
+					: params.amount;
+				const destinationAmount = tokenReceived?.destinationAmount
+					? BigInt(tokenReceived.destinationAmount)
+					: params.amount;
+				const fee = tokenReceived?.fee ? BigInt(tokenReceived.fee) : 0n;
+
+				// Extract gas prices from signedMetadata if available
+				const gasPrices = route.intentOp?.signedMetadata?.gasPrices || {};
+				const sourceChainGasPrice = gasPrices[params.sourceChain.toString()]
+					? BigInt(gasPrices[params.sourceChain.toString()])
+					: 1000000000n; // Default 1 gwei
+
+				// Estimate gas based on operation complexity
+				const baseGasLimit = isSameChain ? 150000n : 500000n;
+				const estimatedGasCostWei = baseGasLimit * sourceChainGasPrice;
+
+				// Get USDC price for gas cost conversion (from tokenPrices in metadata)
+				const tokenPrices = route.intentOp?.signedMetadata?.tokenPrices || {};
+				const ethPrice = tokenPrices['ETH'] || 2500; // Default ETH price
+				const usdcDecimals = 6;
+
+				// Convert gas cost from ETH to USDC
+				// estimatedGasCostWei is in wei (18 decimals), convert to ETH then to USDC
+				const gasCostInEth = Number(estimatedGasCostWei) / 1e18;
+				const gasCostInUSDC = BigInt(Math.ceil(gasCostInEth * ethPrice * 10 ** usdcDecimals));
+
+				// Calculate price impact in basis points
+				// (inputAmount - outputAmount) / inputAmount * 10000
+				const priceImpactBps =
+					amountSpent > 0n
+						? Number(((amountSpent - destinationAmount) * 10000n) / amountSpent)
+						: 10;
+
+				const quote: CrossChainSwapQuote = {
+					inputAmount: amountSpent,
+					outputAmount: destinationAmount,
+					estimatedGas: {
+						gasLimit: baseGasLimit,
+						maxFeePerGas: sourceChainGasPrice,
+						maxPriorityFeePerGas: sourceChainGasPrice / 10n, // 10% of base fee
+						estimatedGasCostWei,
+						estimatedGasCostUSDC: gasCostInUSDC
+					},
+					route: {
+						steps: [
+							{
+								type: isSameChain ? 'swap' : 'bridge',
+								chainId: params.sourceChain,
+								protocol: 'rhinestone-solver',
+								tokenIn: params.sourceToken.address,
+								tokenOut: params.targetToken.address,
+								amountIn: amountSpent,
+								amountOut: destinationAmount
+							}
+						],
+						totalSteps: 1,
+						estimatedDuration: isSameChain ? 15 : 60
+					},
+					expiresAt: Date.now() + 60000, // 1 minute expiry
+					priceImpactBps: Math.max(priceImpactBps, 0)
+				};
+
+				return quote;
+			} catch (orchestratorError) {
+				// If the orchestrator call fails (e.g., no API key, network issues),
+				// fall back to gas oracle for gas prices but estimate swap amounts
+				console.warn(
+					'Orchestrator quote failed, using gas oracle fallback:',
+					orchestratorError instanceof Error ? orchestratorError.message : 'Unknown error'
+				);
+
+				// Use gas oracle for real-time gas prices
+				const gasOracle = getGasOracle();
+				const operationType = isSameChain ? 'swap' : 'bridge';
+				const gasLimit = gasOracle.getDefaultGasLimit(operationType);
+
+				// Fetch current gas prices from the source chain
+				const gasPrices = await gasOracle.getGasPrice(params.sourceChain);
+
+				// Estimate gas cost
+				const estimatedGasCostWei = gasLimit * gasPrices.maxFeePerGas;
+
+				// Convert to USDC (using default ETH price of $2500 as fallback)
+				const defaultEthPrice = 2500;
+				const estimatedGasCostUSDC = gasOracle.convertToUSDC(estimatedGasCostWei, defaultEthPrice);
+
+				const estimatedDuration = isSameChain ? 15 : 60;
+
+				const quote: CrossChainSwapQuote = {
+					inputAmount: params.amount,
+					outputAmount: params.amount, // Assume 1:1 for stablecoins in fallback
+					estimatedGas: {
+						gasLimit,
+						maxFeePerGas: gasPrices.maxFeePerGas,
+						maxPriorityFeePerGas: gasPrices.maxPriorityFeePerGas,
+						estimatedGasCostWei,
+						estimatedGasCostUSDC
+					},
+					route: {
+						steps: [
+							{
+								type: isSameChain ? 'swap' : 'bridge',
+								chainId: params.sourceChain,
+								protocol: 'rhinestone-solver',
+								tokenIn: params.sourceToken.address,
+								tokenOut: params.targetToken.address,
+								amountIn: params.amount,
+								amountOut: params.amount
+							}
+						],
+						totalSteps: 1,
+						estimatedDuration
+					},
+					expiresAt: Date.now() + 60000,
+					priceImpactBps: 10 // 0.1% estimated
+				};
+
+				return quote;
+			}
 		} catch (error) {
 			if (error instanceof AAError) throw error;
 			throw new AAError(

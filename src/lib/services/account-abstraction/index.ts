@@ -71,6 +71,37 @@ export {
 export { RhinestoneClient, getRhinestoneClient, isRhinestoneConfigured } from './rhinestone/client';
 
 export {
+	GasOracle,
+	getGasOracle,
+	createGasOracle,
+	type GasPriceData,
+	type GasOracleConfig
+} from './rhinestone/gasOracle';
+
+export {
+	BalanceChecker,
+	getBalanceChecker,
+	formatBalanceShortfall,
+	type BalanceCheckResult
+} from './rhinestone/balanceChecker';
+
+export {
+	PriceOracle,
+	getPriceOracle,
+	type TokenPrice
+} from './rhinestone/priceOracle';
+
+export {
+	TransactionMonitor,
+	getTransactionMonitor,
+	monitorTransaction,
+	getStatusDescription,
+	type IntentStatus,
+	type MonitoredTransaction,
+	type TransactionUpdate
+} from './rhinestone/transactionMonitor';
+
+export {
 	getSwapToSettlementQuote,
 	getSwapFromSettlementQuote,
 	calculateOptimalRoute,
