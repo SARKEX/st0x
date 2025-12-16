@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
+import { PrivyProvider, usePrivy, useWallets, useFundWallet } from '@privy-io/react-auth';
 import { base } from 'viem/chains';
 
 // Event types for Svelte-React communication
@@ -18,12 +18,11 @@ export interface PrivyEventData {
 		email?: string;
 		isAuthenticated?: boolean;
 		error?: string;
+		accessToken?: string;
 		// Smart wallet info
 		smartWalletAddress?: string;
 		eoaAddress?: string;
 		walletType?: 'embedded' | 'smart' | 'eoa';
-		// Access token for server-side verification
-		accessToken?: string;
 	};
 }
 
@@ -39,16 +38,13 @@ interface PrivyBridgeProps {
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
 	triggerConnectWallet?: boolean; // For EOA -> Smart wallet flow
-	triggerCreateWallet?: boolean; // Fallback wallet creation
+	triggerFundWallet?: { amount?: string } | null; // For Coinbase onramp
 	triggerSendTransaction?: {
 		to: string;
 		value: string;
 		data?: string;
 	} | null;
 }
-
-// Token refresh interval (refresh every 50 minutes to be safe before 1 hour expiry)
-const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000;
 
 // Inner component that uses Privy hooks
 function PrivyBridge({
@@ -58,7 +54,7 @@ function PrivyBridge({
 	triggerLogout,
 	triggerExportWallet,
 	triggerConnectWallet,
-	triggerCreateWallet,
+	triggerFundWallet,
 	triggerSendTransaction
 }: Omit<PrivyBridgeProps, 'appId'>) {
 	const {
@@ -74,6 +70,7 @@ function PrivyBridge({
 	} = usePrivy();
 
 	const { wallets } = useWallets();
+	const { fundWallet } = useFundWallet();
 
 	// Get embedded wallet (created by Privy for email/social login)
 	const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy');
@@ -88,6 +85,7 @@ function PrivyBridge({
 
 	// Refs to prevent multiple triggers
 	const isExportingRef = useRef(false);
+	const isFundingRef = useRef(false);
 	const hasCheckedWalletRef = useRef(false);
 	const wasAuthenticatedRef = useRef(false);
 	const hasEmittedReadyRef = useRef(false);
@@ -233,95 +231,6 @@ function PrivyBridge({
 		}
 	}, [triggerConnectWallet, ready, authenticated, connectWallet]);
 
-	// Handle fallback wallet creation trigger
-	// This is used when a user is authenticated but doesn't have an embedded wallet
-	// (e.g., they closed the app before wallet creation finished)
-	useEffect(() => {
-		if (triggerCreateWallet && ready && authenticated && !embeddedWallet) {
-			(async () => {
-				try {
-					await createWallet();
-				} catch (error) {
-					console.error('[privy] Fallback wallet creation error:', error);
-					onEventRef.current({
-						type: 'error',
-						payload: { error: (error as Error).message || 'Failed to create wallet' }
-					});
-				}
-			})();
-		}
-	}, [triggerCreateWallet, ready, authenticated, embeddedWallet, createWallet]);
-
-	// Detect users who are authenticated but don't have a wallet (needs fallback creation)
-	// Use a delay to allow wallets array to populate after authentication
-	useEffect(() => {
-		// Reset the check flag on logout
-		if (!authenticated) {
-			hasCheckedWalletRef.current = false;
-			return;
-		}
-
-		// Only check once per authentication session
-		if (hasCheckedWalletRef.current) return;
-
-		// If user already has a wallet (from wallets array OR user object), mark as checked
-		// user.wallet?.address is set by Privy before the wallets array is populated
-		if (embeddedWallet || externalWallet || smartWallet || user?.wallet?.address) {
-			hasCheckedWalletRef.current = true;
-			return;
-		}
-
-		// Delay check to allow wallets to load from Privy
-		const timeoutId = setTimeout(() => {
-			// Re-check all wallet sources - user.wallet might be populated by now
-			const hasAnyWallet = embeddedWallet || externalWallet || smartWallet || user?.wallet?.address;
-			if (ready && authenticated && user && !hasAnyWallet) {
-				hasCheckedWalletRef.current = true;
-				// User is authenticated but has no wallet - notify Svelte to show fallback UI
-				onEventRef.current({
-					type: 'needs_wallet_creation',
-					payload: {
-						userId: user.id,
-						isAuthenticated: true
-					}
-				});
-			} else if (hasAnyWallet) {
-				// Wallet was found, just mark as checked
-				hasCheckedWalletRef.current = true;
-			}
-		}, 2500); // Wait 2.5 seconds for wallets to load (increased from 1.5s)
-
-		return () => clearTimeout(timeoutId);
-	}, [ready, authenticated, user, embeddedWallet, externalWallet, smartWallet]);
-
-	// Token refresh - periodically refresh access token before it expires
-	useEffect(() => {
-		if (!ready || !authenticated) return;
-
-		// Initial token fetch
-		const fetchToken = async () => {
-			try {
-				const token = await getAccessToken();
-				if (token) {
-					onEventRef.current({
-						type: 'token_refreshed',
-						payload: { accessToken: token }
-					});
-				}
-			} catch (error) {
-				console.error('[privy] Token refresh error:', error);
-			}
-		};
-
-		// Fetch immediately on mount/auth change
-		fetchToken();
-
-		// Set up periodic refresh
-		const intervalId = setInterval(fetchToken, TOKEN_REFRESH_INTERVAL);
-
-		return () => clearInterval(intervalId);
-	}, [ready, authenticated, getAccessToken]);
-
 	// Handle logout trigger
 	useEffect(() => {
 		if (triggerLogout && ready && authenticated) {
@@ -364,6 +273,41 @@ function PrivyBridge({
 			})();
 		}
 	}, [triggerExportWallet, ready, authenticated, embeddedWallet, wallets, exportWallet]);
+
+	// Handle fund wallet trigger (Coinbase onramp)
+	useEffect(() => {
+		if (triggerFundWallet && ready && authenticated && !isFundingRef.current) {
+			const walletAddress =
+				embeddedWallet?.address || smartWallet?.address || externalWallet?.address;
+			if (!walletAddress) {
+				console.warn('[privy] Fund wallet triggered but no wallet address found');
+				onEvent({
+					type: 'error',
+					payload: { error: 'No wallet address available to fund.' }
+				});
+				return;
+			}
+			// Set flag to prevent re-triggering
+			isFundingRef.current = true;
+			const amount = triggerFundWallet.amount;
+			(async () => {
+				try {
+					await fundWallet(walletAddress, {
+						chain: base,
+						...(amount ? { amount } : {})
+					});
+				} catch (error) {
+					console.error('[privy] Fund wallet error:', error);
+					onEvent({
+						type: 'error',
+						payload: { error: (error as Error).message || 'Failed to open funding' }
+					});
+				} finally {
+					isFundingRef.current = false;
+				}
+			})();
+		}
+	}, [triggerFundWallet, ready, authenticated]);
 
 	// Handle send transaction trigger
 	useEffect(() => {

@@ -143,7 +143,8 @@ export class TransactionMonitor {
 				const newStatus = this.mapStatus(statusResult.status);
 
 				if (newStatus !== tx.status) {
-					const txHash = statusResult.txHash;
+					// txHash may not be present on all status responses
+					const txHash = (statusResult as { txHash?: string }).txHash;
 					this.updateStatus(intentId, newStatus, txHash);
 				}
 

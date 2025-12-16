@@ -28,11 +28,7 @@
 		USDC_BASE,
 		isRhinestoneConfigured
 	} from '$lib/services/account-abstraction';
-	import {
-		aaPaymentStore,
-		isSwapping,
-		swapError
-	} from '$lib/stores/aaPaymentStore';
+	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 

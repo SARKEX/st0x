@@ -7,11 +7,7 @@
 	 * - Sponsored (via Rhinestone paymaster, if configured)
 	 */
 	import { createEventDispatcher } from 'svelte';
-	import {
-		type GasPaymentOption,
-		type SupportedNetworkId,
-		getAAOrchestrator
-	} from '$lib/services/account-abstraction';
+	import { type SupportedNetworkId, getAAOrchestrator } from '$lib/services/account-abstraction';
 
 	// Props
 	export let chainId: SupportedNetworkId;
@@ -30,9 +26,7 @@
 
 	// Format gas estimates
 	$: formattedGasETH =
-		estimatedGasETH > 0n
-			? `${(Number(estimatedGasETH) / 1e18).toFixed(6)} ETH`
-			: 'Calculating...';
+		estimatedGasETH > 0n ? `${(Number(estimatedGasETH) / 1e18).toFixed(6)} ETH` : 'Calculating...';
 
 	function selectMethod(method: 'native' | 'sponsored') {
 		if (disabled) return;

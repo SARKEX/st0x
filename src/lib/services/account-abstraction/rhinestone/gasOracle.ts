@@ -5,7 +5,7 @@
  * Includes caching to minimize RPC calls and provide consistent quotes.
  */
 
-import { createPublicClient, http, type PublicClient } from 'viem';
+import { createPublicClient, http, type PublicClient, type Chain } from 'viem';
 import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { SUPPORTED_NETWORKS, type SupportedNetworkId } from '../types';
 
@@ -38,7 +38,7 @@ const RPC_URLS: Record<SupportedNetworkId, string> = {
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: 'https://sepolia-rollup.arbitrum.io/rpc'
 };
 
-const CHAIN_CONFIG: Record<SupportedNetworkId, typeof base> = {
+const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 	[SUPPORTED_NETWORKS.BASE]: base,
 	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
 	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
@@ -76,7 +76,7 @@ export class GasOracle {
 			const client = createPublicClient({
 				chain,
 				transport: http(rpcUrl)
-			});
+			}) as PublicClient;
 
 			this.clients.set(chainId, client);
 		}
@@ -152,7 +152,9 @@ export class GasOracle {
 	/**
 	 * Get gas prices for multiple chains in parallel
 	 */
-	async getGasPrices(chainIds: SupportedNetworkId[]): Promise<Map<SupportedNetworkId, GasPriceData>> {
+	async getGasPrices(
+		chainIds: SupportedNetworkId[]
+	): Promise<Map<SupportedNetworkId, GasPriceData>> {
 		const results = new Map<SupportedNetworkId, GasPriceData>();
 
 		// Fetch all in parallel

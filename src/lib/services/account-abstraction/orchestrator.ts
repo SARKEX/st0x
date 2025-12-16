@@ -11,7 +11,7 @@
  * - Handles cross-chain swap, then calls existing trade flow
  */
 
-import type { Address, Hash, Account, Hex } from 'viem';
+import type { Address, Account, Hex } from 'viem';
 import {
 	type PaymentToken,
 	type TradeWithAAParams,
@@ -20,25 +20,19 @@ import {
 	type GasEstimate,
 	type CrossChainSwapQuote,
 	type SupportedNetworkId,
-	SUPPORTED_NETWORKS,
-	SETTLEMENT_CHAIN_ID,
-	AAError,
-	AAErrorCode
+	SETTLEMENT_CHAIN_ID
 } from './types';
 
 // Import sub-services
 import { getRhinestoneClient, isRhinestoneConfigured } from './rhinestone/client';
 import {
 	getSwapToSettlementQuote,
-	getSwapFromSettlementQuote,
-	isSwapRequired,
 	validateSwap,
 	executeSwapToSettlement,
-	executeSwapFromSettlement,
-	getUSDCEquivalent
+	executeSwapFromSettlement
 } from './rhinestone/swaps';
-import { getWalletCapabilities, supportsEIP7702, isPrivyWalletReady } from './wallets/privy-7702';
-import { USDC_BASE, getDefaultPaymentToken } from './tokens';
+import { supportsEIP7702 } from './wallets/privy-7702';
+import { USDC_BASE } from './tokens';
 import { getBalanceChecker, formatBalanceShortfall } from './rhinestone/balanceChecker';
 import { getPriceOracle } from './rhinestone/priceOracle';
 import { getGasOracle } from './rhinestone/gasOracle';
@@ -112,7 +106,8 @@ export class AccountAbstractionOrchestrator {
 				return {
 					success: false,
 					usdcAmount: 0n,
-					error: 'Cross-chain swaps require Rhinestone API key. Configure PUBLIC_RHINESTONE_API_KEY.'
+					error:
+						'Cross-chain swaps require Rhinestone API key. Configure PUBLIC_RHINESTONE_API_KEY.'
 				};
 			}
 
@@ -133,12 +128,7 @@ export class AccountAbstractionOrchestrator {
 			}
 
 			// Execute the swap
-			const result = await executeSwapToSettlement(
-				sourceToken,
-				amount,
-				recipient,
-				walletAccount
-			);
+			const result = await executeSwapToSettlement(sourceToken, amount, recipient, walletAccount);
 
 			// Start monitoring the transaction if we have an intentId
 			if (result.intentId && onStatusChange) {
@@ -184,7 +174,10 @@ export class AccountAbstractionOrchestrator {
 	}> {
 		try {
 			// Check if swap is actually needed
-			if (!this.needsCrossChainSwap(USDC_BASE, targetToken.chainId) && targetToken.symbol === 'USDC') {
+			if (
+				!this.needsCrossChainSwap(USDC_BASE, targetToken.chainId) &&
+				targetToken.symbol === 'USDC'
+			) {
 				return { success: true, outputAmount: usdcAmount };
 			}
 
@@ -193,7 +186,8 @@ export class AccountAbstractionOrchestrator {
 				return {
 					success: false,
 					outputAmount: 0n,
-					error: 'Cross-chain swaps require Rhinestone API key. Configure PUBLIC_RHINESTONE_API_KEY.'
+					error:
+						'Cross-chain swaps require Rhinestone API key. Configure PUBLIC_RHINESTONE_API_KEY.'
 				};
 			}
 
@@ -381,9 +375,12 @@ export class AccountAbstractionOrchestrator {
 				crossChainTxHash,
 				executionSteps: steps,
 				// Note: Trade transaction will be executed separately via marketOrderExecution
-				message: settlementAmount !== params.sourceAmount
-					? `Swapped to ${Number(settlementAmount) / 1e6} USDC on Base. Ready for trade execution.`
-					: 'Ready for trade execution.'
+				message:
+					settlementAmount !== params.sourceAmount
+						? `Swapped to ${
+								Number(settlementAmount) / 1e6
+							} USDC on Base. Ready for trade execution.`
+						: 'Ready for trade execution.'
 			};
 		} catch (error) {
 			const lastStep = steps[steps.length - 1];
@@ -447,10 +444,7 @@ export class AccountAbstractionOrchestrator {
 	/**
 	 * Check if a cross-chain swap is needed
 	 */
-	needsCrossChainSwap(
-		sourceToken: PaymentToken,
-		targetChainId: SupportedNetworkId
-	): boolean {
+	needsCrossChainSwap(sourceToken: PaymentToken, targetChainId: SupportedNetworkId): boolean {
 		// If different chain, definitely needs swap
 		if (sourceToken.chainId !== targetChainId) {
 			return true;
@@ -522,7 +516,7 @@ export class AccountAbstractionOrchestrator {
 	 *
 	 * Rhinestone has native gas sponsorship - sponsors pay by depositing USDC on Base.
 	 */
-	getGasPaymentOptions(chainId: SupportedNetworkId): GasPaymentOption[] {
+	getGasPaymentOptions(_chainId: SupportedNetworkId): GasPaymentOption[] {
 		const options: GasPaymentOption[] = [];
 		const rhinestoneClient = getRhinestoneClient();
 

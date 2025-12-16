@@ -17,6 +17,16 @@ export default [
 				...globals.browser,
 				...globals.node
 			}
+		},
+		rules: {
+			// Allow unused variables with underscore prefix (intentionally unused)
+			'@typescript-eslint/no-unused-vars': [
+				'error',
+				{
+					argsIgnorePattern: '^_',
+					varsIgnorePattern: '^_'
+				}
+			]
 		}
 	},
 	{

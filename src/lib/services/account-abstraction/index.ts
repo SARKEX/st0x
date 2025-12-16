@@ -85,11 +85,7 @@ export {
 	type BalanceCheckResult
 } from './rhinestone/balanceChecker';
 
-export {
-	PriceOracle,
-	getPriceOracle,
-	type TokenPrice
-} from './rhinestone/priceOracle';
+export { PriceOracle, getPriceOracle, type TokenPrice } from './rhinestone/priceOracle';
 
 export {
 	TransactionMonitor,

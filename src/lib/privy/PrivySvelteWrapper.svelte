@@ -15,6 +15,7 @@
 		privyTriggerConnectWallet,
 		privyTriggerCreateWallet,
 		privyTriggerSendTransaction,
+		privyTriggerFundWallet,
 		privyAccessToken,
 		privyNeedsWalletCreation,
 		type PrivySession
@@ -103,6 +104,7 @@
 		triggerConnectWallet={$privyTriggerConnectWallet}
 		triggerCreateWallet={$privyTriggerCreateWallet}
 		triggerSendTransaction={$privyTriggerSendTransaction}
+		triggerFundWallet={$privyTriggerFundWallet}
 	/>
 {:else if browser && !appId}
 	<!-- No Privy app ID configured -->

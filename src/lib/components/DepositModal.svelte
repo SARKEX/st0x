@@ -1,73 +1,30 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import OnramperModal from '$lib/components/OnramperModal.svelte';
 	import {
 		showDepositModal,
 		closeDepositModal,
+		privySession,
+		fundPrivyWallet,
 		depositModalInitialView
 	} from '$lib/stores/privyStore';
-	import { walletAddress, authMethod } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 
 	type ModalView = 'options' | 'buy' | 'deposit';
 	let currentView: ModalView = 'options';
 	let copied = false;
-	let showOnramper = false;
+	let buyAmount = '';
 
-	// QR code generation
-	let qrCodeDataUrl: string = '';
-	let qrCodeError: string | null = null;
-
-	// Dynamically import qrcode library (client-side only)
-	async function generateQrCode(data: string) {
-		if (!browser) return;
-		try {
-			const QRCode = (await import('qrcode')).default;
-			qrCodeDataUrl = await QRCode.toDataURL(data, {
-				width: 160,
-				margin: 2,
-				color: {
-					dark: '#000000',
-					light: '#FFFFFF'
-				}
-			});
-			qrCodeError = null;
-		} catch (err) {
-			console.error('Failed to generate QR code:', err);
-			qrCodeError = 'Failed to generate QR code';
-			qrCodeDataUrl = '';
-		}
-	}
-
-	// Generate QR code when wallet address changes and we're in deposit view
-	$: if ($walletAddress && currentView === 'deposit') {
-		generateQrCode($walletAddress);
-	}
-
-	// For external EOA users, go directly to buy view
-	// For Privy users, show options (buy or deposit)
+	// Set initial view when modal opens
 	$: if ($showDepositModal) {
-		if ($authMethod === 'privy') {
-			// Privy users see options menu
-			currentView =
-				$depositModalInitialView === 'deposit'
-					? 'deposit'
-					: $depositModalInitialView === 'buy'
-						? 'buy'
-						: 'options';
-		} else {
-			// External EOA users go directly to buy
-			currentView = 'buy';
-		}
+		currentView = $depositModalInitialView;
 	}
 
 	function handleClose() {
 		closeDepositModal();
 		copied = false;
-		showOnramper = false;
-		currentView = 'options';
+		buyAmount = '';
+		currentView = 'options'; // Reset to options view
 	}
 
 	function showBuyView() {
@@ -75,12 +32,9 @@
 	}
 
 	function handleBuyCrypto() {
-		// Open Onramper modal
-		showOnramper = true;
-	}
-
-	function handleOnramperClose() {
-		showOnramper = false;
+		// Pass amount if specified, otherwise let Privy use default
+		const amount = buyAmount.trim() || undefined;
+		fundPrivyWallet(amount);
 		handleClose();
 	}
 
@@ -89,19 +43,15 @@
 	}
 
 	function goBack() {
-		// For external EOA users, going back should close the modal
-		if ($authMethod !== 'privy') {
-			handleClose();
-		} else {
-			currentView = 'options';
-		}
+		currentView = 'options';
+		buyAmount = '';
 	}
 
 	async function copyAddress() {
-		if (!$walletAddress) return;
+		if (!$privySession?.walletAddress) return;
 
 		try {
-			await navigator.clipboard.writeText($walletAddress);
+			await navigator.clipboard.writeText($privySession.walletAddress);
 			copied = true;
 			setTimeout(() => (copied = false), 2000);
 		} catch (err) {
@@ -109,7 +59,32 @@
 		}
 	}
 
-	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
+	function handleAmountInput(e: Event) {
+		const input = e.target as HTMLInputElement;
+		// Only allow valid number input
+		const value = input.value.replace(/[^0-9.]/g, '');
+		// Prevent multiple decimals
+		const parts = value.split('.');
+		if (parts.length > 2) {
+			buyAmount = parts[0] + '.' + parts.slice(1).join('');
+		} else {
+			buyAmount = value;
+		}
+	}
+
+	// Quick amount presets
+	const presetAmounts = ['0.01', '0.05', '0.1'];
+
+	$: basescanUrl = $privySession?.walletAddress
+		? `https://basescan.org/address/${$privySession.walletAddress}`
+		: '';
+
+	// Generate QR code URL using free QR code API
+	$: qrCodeUrl = $privySession?.walletAddress
+		? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+				$privySession.walletAddress
+			)}`
+		: '';
 
 	$: modalTitle =
 		currentView === 'options'
@@ -119,17 +94,9 @@
 				: 'Deposit from Wallet';
 </script>
 
-<!-- Onramper Modal (separate from main modal) -->
-<OnramperModal show={showOnramper} walletAddress={$walletAddress} onClose={handleOnramperClose} />
-
-<Modal
-	show={$showDepositModal && !showOnramper}
-	title={modalTitle}
-	maxWidthClass="max-w-md"
-	onClose={handleClose}
->
+<Modal show={$showDepositModal} title={modalTitle} maxWidthClass="max-w-md" onClose={handleClose}>
 	{#if currentView === 'options'}
-		<!-- Options View (Privy users only) -->
+		<!-- Options View -->
 		<div class="space-y-4">
 			<p class="text-sm text-gray-400">Choose how you want to add funds to your wallet.</p>
 
@@ -158,9 +125,9 @@
 						</svg>
 					</div>
 					<div class="flex-1">
-						<h3 class="font-medium text-white">Buy with Card or Bank Transfer</h3>
+						<h3 class="font-medium text-white">Buy with Card</h3>
 						<p class="mt-1 text-sm text-gray-400">
-							Purchase crypto using a debit card, credit card, or bank transfer
+							Purchase crypto using a debit card or bank account via Coinbase
 						</p>
 					</div>
 					<svg
@@ -204,7 +171,7 @@
 						</svg>
 					</div>
 					<div class="flex-1">
-						<h3 class="font-medium text-white">Deposit Crypto</h3>
+						<h3 class="font-medium text-white">Deposit from Wallet</h3>
 						<p class="mt-1 text-sm text-gray-400">
 							Transfer crypto from another wallet or exchange
 						</p>
@@ -228,72 +195,72 @@
 	{:else if currentView === 'buy'}
 		<!-- Buy View -->
 		<div class="space-y-5">
-			<!-- Back button (only for Privy users who have options) -->
-			{#if $authMethod === 'privy'}
-				<button
-					type="button"
-					on:click={goBack}
-					class="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
-				>
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M15 19l-7-7 7-7"
-						/>
-					</svg>
-					Back
-				</button>
-			{/if}
+			<!-- Back button -->
+			<button
+				type="button"
+				on:click={goBack}
+				class="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M15 19l-7-7 7-7"
+					/>
+				</svg>
+				Back
+			</button>
 
-			<p class="text-sm text-gray-400">
-				Purchase ETH or USDC on Base network using your preferred payment method.
-			</p>
+			<p class="text-sm text-gray-400">Enter the amount of ETH you want to purchase.</p>
 
-			<!-- Info -->
-			<div class="rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-3">
-				<div class="flex items-start gap-3">
-					<svg
-						class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
-					</svg>
-					<div class="text-xs text-gray-400">
-						<p class="mb-1">
-							Powered by Onramper, supporting multiple payment providers for the best rates.
-						</p>
-						<p>Funds will be sent directly to your wallet on Base.</p>
-					</div>
-				</div>
+			<!-- Amount Input -->
+			<div>
+				<label class="mb-1.5 block text-sm font-medium text-gray-300" for="buy-amount">
+					Amount (ETH)
+				</label>
+				<input
+					id="buy-amount"
+					type="text"
+					inputmode="decimal"
+					placeholder="0.0"
+					value={buyAmount}
+					on:input={handleAmountInput}
+					class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+				/>
 			</div>
 
-			<!-- Wallet Address Display -->
-			{#if $walletAddress}
-				<div class="rounded-lg border border-gray-700 bg-gray-800 p-3">
-					<span class="mb-1 block text-xs font-medium text-gray-400">Destination Wallet</span>
-					<div class="break-all font-mono text-sm text-white">
-						{$walletAddress}
-					</div>
-				</div>
-			{/if}
+			<!-- Quick Amount Presets -->
+			<div class="flex gap-2">
+				{#each presetAmounts as preset}
+					<button
+						type="button"
+						on:click={() => (buyAmount = preset)}
+						class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 transition hover:border-blue-500/50 hover:text-white"
+						class:border-blue-500={buyAmount === preset}
+						class:text-blue-400={buyAmount === preset}
+					>
+						{preset} ETH
+					</button>
+				{/each}
+			</div>
+
+			<!-- Info -->
+			<div class="rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2">
+				<p class="text-xs text-gray-400">
+					You'll be redirected to Coinbase to complete your purchase. Funds will be sent directly to
+					your wallet.
+				</p>
+			</div>
 
 			<!-- Actions -->
 			<div class="flex gap-3">
-				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
-				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>Continue to Purchase</Button>
+				<Button on:click={goBack} variant="secondary" fullWidth>Cancel</Button>
+				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>Continue to Coinbase</Button>
 			</div>
 		</div>
 	{:else}
-		<!-- Deposit View (Privy users only) -->
+		<!-- Deposit View -->
 		<div class="space-y-5">
 			<!-- Back button -->
 			<button
@@ -316,37 +283,11 @@
 				Send tokens to your wallet address on {$currentNetwork?.displayName || 'Base'} network.
 			</p>
 
-			<!-- QR Code (generated client-side for privacy) -->
-			{#if $walletAddress}
+			<!-- QR Code -->
+			{#if $privySession?.walletAddress}
 				<div class="flex justify-center">
 					<div class="rounded-lg bg-white p-3">
-						{#if qrCodeDataUrl}
-							<img src={qrCodeDataUrl} alt="Wallet QR Code" class="h-40 w-40" />
-						{:else if qrCodeError}
-							<div
-								class="flex h-40 w-40 items-center justify-center text-center text-sm text-gray-500"
-							>
-								{qrCodeError}
-							</div>
-						{:else}
-							<div class="flex h-40 w-40 items-center justify-center">
-								<svg class="h-6 w-6 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
-									<circle
-										class="opacity-25"
-										cx="12"
-										cy="12"
-										r="10"
-										stroke="currentColor"
-										stroke-width="4"
-									/>
-									<path
-										class="opacity-75"
-										fill="currentColor"
-										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-									/>
-								</svg>
-							</div>
-						{/if}
+						<img src={qrCodeUrl} alt="Wallet QR Code" class="h-40 w-40" loading="lazy" />
 					</div>
 				</div>
 			{/if}
@@ -355,7 +296,7 @@
 			<div class="rounded-lg border border-gray-700 bg-gray-800 p-4">
 				<span class="mb-2 block text-xs font-medium text-gray-400">Your Wallet Address</span>
 				<div class="break-all font-mono text-sm text-white">
-					{$walletAddress || 'Not connected'}
+					{$privySession?.walletAddress || 'Not connected'}
 				</div>
 			</div>
 

@@ -24,11 +24,7 @@
 		USDC_BASE,
 		isRhinestoneConfigured
 	} from '$lib/services/account-abstraction';
-	import {
-		aaPaymentStore,
-		isSwapping,
-		swapError
-	} from '$lib/stores/aaPaymentStore';
+	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -215,9 +211,7 @@
 				// Add 1% buffer for price movement during swap
 				const swapAmount = BigInt(
 					Math.ceil(
-						parseFloat(formatUnits(depositAmount, settlementDecimals)) *
-							1.01 *
-							10 ** sourceDecimals
+						parseFloat(formatUnits(depositAmount, settlementDecimals)) * 1.01 * 10 ** sourceDecimals
 					)
 				);
 

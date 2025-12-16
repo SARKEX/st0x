@@ -30,6 +30,7 @@ export const privyTriggerSendTransaction = writable<{
 	value: string;
 	data?: string;
 } | null>(null);
+export const privyTriggerFundWallet = writable<{ amount?: string } | null>(null);
 
 // Token management
 export const privyAccessToken = writable<string | null>(null);
@@ -114,6 +115,16 @@ export function sendTransaction(to: string, value: string, data?: string): void 
 	privyTriggerSendTransaction.set({ to, value, data });
 	// Clear after transaction is initiated
 	setTimeout(() => privyTriggerSendTransaction.set(null), 500);
+}
+
+/**
+ * Fund the Privy wallet using Coinbase onramp
+ * @param amount Optional amount of ETH to purchase
+ */
+export function fundPrivyWallet(amount?: string): void {
+	privyTriggerFundWallet.set({ amount });
+	// Clear after funding is initiated
+	setTimeout(() => privyTriggerFundWallet.set(null), 500);
 }
 
 /**
