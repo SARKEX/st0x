@@ -435,6 +435,8 @@
 		const target = e.target as HTMLInputElement;
 		topAmount = target.value;
 		lastEditedField = 'top';
+		// Clear the other field to prevent both having user-entered values while prices load
+		bottomAmount = '';
 		// Refresh quotes when user enters a value
 		if (topAmount) refreshQuotesForCurrentToken();
 	}
@@ -443,6 +445,8 @@
 		const target = e.target as HTMLInputElement;
 		bottomAmount = target.value;
 		lastEditedField = 'bottom';
+		// Clear the other field to prevent both having user-entered values while prices load
+		topAmount = '';
 		// Refresh quotes when user enters a value
 		if (bottomAmount) refreshQuotesForCurrentToken();
 	}
