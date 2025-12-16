@@ -43,7 +43,7 @@ export interface RhinestoneConfig {
 	apiKey: string;
 	providerType: 'alchemy' | 'infura' | 'public';
 	providerApiKey?: string;
-	paymasterConfig?: PaymasterConfig;
+	sponsorship?: SponsorshipConfig;
 	/**
 	 * Account type for Rhinestone SDK
 	 * - 'smart': Creates a new smart account (default, ERC-4337 style)
@@ -55,19 +55,21 @@ export interface RhinestoneConfig {
 	accountType?: 'smart' | '7702';
 }
 
-export interface PaymasterConfig {
+export interface SponsorshipConfig {
 	/**
-	 * Rhinestone native sponsorship (recommended)
-	 * - Deposit USDC on Base to your sponsorship wallet
-	 * - Set sponsored: true in transactions
-	 * - Covers gas, bridging (3bps), and swap fees (50bps)
+	 * Rhinestone native gas sponsorship
 	 *
-	 * Legacy external paymasters (not recommended)
-	 * - 'pimlico' or 'biconomy' require separate API keys
+	 * Setup:
+	 * 1. Get your sponsorship deposit wallet from Rhinestone Dashboard
+	 * 2. Deposit USDC on Base to that wallet
+	 * 3. Set PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true
+	 *
+	 * Covers:
+	 * - Transaction gas
+	 * - Bridging fees (3 bps)
+	 * - Swap fees (50 bps spread)
 	 */
-	type: 'rhinestone' | 'pimlico' | 'biconomy';
-	apiKey?: string;
-	sponsorshipEnabled?: boolean;
+	enabled: boolean;
 }
 
 export interface CrossChainSwapParams {

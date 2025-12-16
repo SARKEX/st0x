@@ -28,7 +28,7 @@ import {
 	type CrossChainSwapQuote,
 	type OmnichainTransactionParams,
 	type SupportedNetworkId,
-	type PaymasterConfig,
+	type SponsorshipConfig,
 	SUPPORTED_NETWORKS,
 	AAError,
 	AAErrorCode
@@ -74,7 +74,7 @@ let rhinestoneInstance: RhinestoneClient | null = null;
  * Provides methods for:
  * - Cross-chain swaps (any token to any token)
  * - Omnichain transactions
- * - Gas sponsorship via built-in paymaster
+ * - Gas sponsorship (native, deposit USDC on Base)
  * - Quote retrieval
  */
 export class RhinestoneClient {
@@ -536,17 +536,17 @@ export class RhinestoneClient {
 	}
 
 	/**
-	 * Check if paymaster/gas sponsorship is configured
+	 * Check if gas sponsorship is enabled
 	 */
-	hasPaymasterConfig(): boolean {
-		return Boolean(this.config.paymasterConfig);
+	isSponsorshipEnabled(): boolean {
+		return this.config.sponsorship?.enabled ?? false;
 	}
 
 	/**
-	 * Get paymaster configuration
+	 * Get sponsorship configuration
 	 */
-	getPaymasterConfig(): PaymasterConfig | undefined {
-		return this.config.paymasterConfig;
+	getSponsorshipConfig(): SponsorshipConfig | undefined {
+		return this.config.sponsorship;
 	}
 }
 
@@ -556,13 +556,11 @@ export class RhinestoneClient {
  * By default, uses EIP-7702 mode ('7702') for Privy users to preserve their EOA address.
  * Set PUBLIC_RHINESTONE_ACCOUNT_TYPE=smart to use standard smart account mode.
  *
- * Gas Sponsorship:
- * Rhinestone has native gas sponsorship - no external paymaster (Pimlico/Biconomy) needed.
- * To enable:
- * 1. Contact Rhinestone team for your sponsorship deposit wallet
+ * Gas Sponsorship (native to Rhinestone):
+ * 1. Get your deposit wallet from Rhinestone Dashboard
  * 2. Deposit USDC on Base to that wallet
  * 3. Set PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true
- * 4. Transactions will automatically use your sponsorship balance
+ * 4. Transactions will use your sponsorship balance
  */
 export function getRhinestoneClient(): RhinestoneClient {
 	if (!rhinestoneInstance) {
@@ -572,15 +570,11 @@ export function getRhinestoneClient(): RhinestoneClient {
 			console.warn('Rhinestone API key not configured. Cross-chain features will be limited.');
 		}
 
-		// Rhinestone native sponsorship config
-		// No external paymaster API key needed - just deposit USDC to your sponsorship wallet
-		let paymasterConfig: PaymasterConfig | undefined;
-		if (env.PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED === 'true') {
-			paymasterConfig = {
-				type: 'rhinestone',
-				sponsorshipEnabled: true
-			};
-		}
+		// Rhinestone native sponsorship - deposit USDC on Base to your sponsorship wallet
+		const sponsorship: SponsorshipConfig | undefined =
+			env.PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED === 'true'
+				? { enabled: true }
+				: undefined;
 
 		// Default to EIP-7702 mode for Privy users
 		// This preserves the user's EOA address while enabling smart account features
@@ -590,7 +584,7 @@ export function getRhinestoneClient(): RhinestoneClient {
 			apiKey: apiKey || '',
 			providerType: env.PUBLIC_ALCHEMY_API_KEY ? 'alchemy' : 'public',
 			providerApiKey: env.PUBLIC_ALCHEMY_API_KEY,
-			paymasterConfig,
+			sponsorship,
 			accountType
 		});
 	}
