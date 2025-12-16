@@ -6,7 +6,7 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
 		{
 			chainId: 8453,
-			address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+			address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
 			symbol: 'USDC',
 			decimals: 6,
 			name: 'USD Coin',
@@ -135,6 +135,19 @@ export const TOKENS: CategorizedToken[] = [
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
+		address: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+		symbol: 'tSTOX',
+		decimals: 18,
+		name: 'tTSOx',
+		logoUrl: '/images/IAU.png',
+		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:IAU',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
 		address: '0xb616f8b391d1adc118fd7e4063526d5530d49b10',
 		symbol: 'tCOIN',
 		decimals: 18,
@@ -225,7 +238,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
-		address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+		address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
 		symbol: 'USDC',
 		decimals: 6,
 		name: 'USD Coin',
