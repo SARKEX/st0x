@@ -71,6 +71,7 @@ function PrivyBridge({
 
 	// Refs to prevent multiple triggers
 	const isExportingRef = useRef(false);
+	const hasCheckedWalletRef = useRef(false);
 
 	// Notify when ready
 	useEffect(() => {
@@ -202,17 +203,39 @@ function PrivyBridge({
 	}, [triggerCreateWallet, ready, authenticated, embeddedWallet, createWallet, onEvent]);
 
 	// Detect users who are authenticated but don't have a wallet (needs fallback creation)
+	// Use a delay to allow wallets array to populate after authentication
 	useEffect(() => {
-		if (ready && authenticated && user && !embeddedWallet && !externalWallet && !smartWallet) {
-			// User is authenticated but has no wallet - notify Svelte to show fallback UI
-			onEvent({
-				type: 'needs_wallet_creation',
-				payload: {
-					userId: user.id,
-					isAuthenticated: true
-				}
-			});
+		// Reset the check flag on logout
+		if (!authenticated) {
+			hasCheckedWalletRef.current = false;
+			return;
 		}
+
+		// Only check once per authentication session
+		if (hasCheckedWalletRef.current) return;
+
+		// If user already has a wallet, mark as checked and don't show modal
+		if (embeddedWallet || externalWallet || smartWallet) {
+			hasCheckedWalletRef.current = true;
+			return;
+		}
+
+		// Delay check to allow wallets to load from Privy
+		const timeoutId = setTimeout(() => {
+			if (ready && authenticated && user && !embeddedWallet && !externalWallet && !smartWallet) {
+				hasCheckedWalletRef.current = true;
+				// User is authenticated but has no wallet - notify Svelte to show fallback UI
+				onEvent({
+					type: 'needs_wallet_creation',
+					payload: {
+						userId: user.id,
+						isAuthenticated: true
+					}
+				});
+			}
+		}, 1500); // Wait 1.5 seconds for wallets to load
+
+		return () => clearTimeout(timeoutId);
 	}, [ready, authenticated, user, embeddedWallet, externalWallet, smartWallet, onEvent]);
 
 	// Token refresh - periodically refresh access token before it expires
