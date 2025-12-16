@@ -72,20 +72,51 @@ function PrivyBridge({
 	// Refs to prevent multiple triggers
 	const isExportingRef = useRef(false);
 	const hasCheckedWalletRef = useRef(false);
+	const wasAuthenticatedRef = useRef(false);
+	const hasEmittedReadyRef = useRef(false);
+	const lastEmittedWalletRef = useRef<string | null>(null);
 
-	// Notify when ready
+	// Use refs for callbacks to avoid infinite loops from dependency changes
+	const onEventRef = useRef(onEvent);
+	const onWalletProviderReadyRef = useRef(onWalletProviderReady);
+
+	// Keep refs up to date
 	useEffect(() => {
-		if (ready) {
-			onEvent({ type: 'ready' });
+		onEventRef.current = onEvent;
+	}, [onEvent]);
+
+	useEffect(() => {
+		onWalletProviderReadyRef.current = onWalletProviderReady;
+	}, [onWalletProviderReady]);
+
+	// Notify when ready (only once)
+	useEffect(() => {
+		if (ready && !hasEmittedReadyRef.current) {
+			hasEmittedReadyRef.current = true;
+			onEventRef.current({ type: 'ready' });
 		}
-	}, [ready, onEvent]);
+	}, [ready]);
 
 	// Notify authentication state changes
 	useEffect(() => {
 		if (!ready) return;
 
 		if (authenticated && user) {
-			const email = user.email?.address;
+			// Track that user became authenticated
+			wasAuthenticatedRef.current = true;
+
+			// Get email from various sources (email login, Google login, or linked accounts)
+			let email = user.email?.address || user.google?.email;
+
+			// Also check linkedAccounts for Google email if not found
+			if (!email && user.linkedAccounts) {
+				const googleAccount = user.linkedAccounts.find(
+					(account) => account.type === 'google_oauth'
+				);
+				if (googleAccount && 'email' in googleAccount && googleAccount.email) {
+					email = googleAccount.email;
+				}
+			}
 
 			// Determine wallet type and addresses
 			let walletAddress: string | undefined;
@@ -112,7 +143,7 @@ function PrivyBridge({
 				walletAddress = user.wallet?.address;
 			}
 
-			onEvent({
+			onEventRef.current({
 				type: 'authenticated',
 				payload: {
 					userId: user.id,
@@ -124,8 +155,10 @@ function PrivyBridge({
 					eoaAddress
 				}
 			});
-		} else if (!authenticated) {
-			onEvent({
+		} else if (!authenticated && wasAuthenticatedRef.current) {
+			// Only emit logout if user was previously authenticated (actual logout, not initial load)
+			wasAuthenticatedRef.current = false;
+			onEventRef.current({
 				type: 'logout',
 				payload: { isAuthenticated: false }
 			});
@@ -136,38 +169,38 @@ function PrivyBridge({
 		user,
 		embeddedWallet?.address,
 		smartWallet?.address,
-		externalWallet?.address,
-		onEvent
+		externalWallet?.address
 	]);
 
-	// Notify wallet changes
+	// Notify wallet changes (only when address actually changes)
 	useEffect(() => {
-		if (embeddedWallet?.address) {
-			onEvent({
+		if (embeddedWallet?.address && embeddedWallet.address !== lastEmittedWalletRef.current) {
+			lastEmittedWalletRef.current = embeddedWallet.address;
+			onEventRef.current({
 				type: 'wallet',
 				payload: { walletAddress: embeddedWallet.address }
 			});
 		}
-	}, [embeddedWallet?.address, onEvent]);
+	}, [embeddedWallet?.address]);
 
 	// Expose wallet provider to Svelte when available
 	useEffect(() => {
-		if (embeddedWallet && onWalletProviderReady) {
+		if (embeddedWallet && onWalletProviderReadyRef.current) {
 			// Get the Ethereum provider from the embedded wallet
 			embeddedWallet
 				.getEthereumProvider()
 				.then((provider) => {
-					onWalletProviderReady(provider);
+					onWalletProviderReadyRef.current?.(provider);
 				})
 				.catch((err) => {
 					console.error('[privy] Failed to get wallet provider:', err);
-					onWalletProviderReady(null);
+					onWalletProviderReadyRef.current?.(null);
 				});
-		} else if (!embeddedWallet && onWalletProviderReady) {
+		} else if (!embeddedWallet && onWalletProviderReadyRef.current) {
 			// Clear provider when wallet is not available
-			onWalletProviderReady(null);
+			onWalletProviderReadyRef.current(null);
 		}
-	}, [embeddedWallet, onWalletProviderReady]);
+	}, [embeddedWallet]);
 
 	// Handle login trigger (email/social)
 	useEffect(() => {
@@ -193,14 +226,14 @@ function PrivyBridge({
 					await createWallet();
 				} catch (error) {
 					console.error('[privy] Fallback wallet creation error:', error);
-					onEvent({
+					onEventRef.current({
 						type: 'error',
 						payload: { error: (error as Error).message || 'Failed to create wallet' }
 					});
 				}
 			})();
 		}
-	}, [triggerCreateWallet, ready, authenticated, embeddedWallet, createWallet, onEvent]);
+	}, [triggerCreateWallet, ready, authenticated, embeddedWallet, createWallet]);
 
 	// Detect users who are authenticated but don't have a wallet (needs fallback creation)
 	// Use a delay to allow wallets array to populate after authentication
@@ -214,29 +247,35 @@ function PrivyBridge({
 		// Only check once per authentication session
 		if (hasCheckedWalletRef.current) return;
 
-		// If user already has a wallet, mark as checked and don't show modal
-		if (embeddedWallet || externalWallet || smartWallet) {
+		// If user already has a wallet (from wallets array OR user object), mark as checked
+		// user.wallet?.address is set by Privy before the wallets array is populated
+		if (embeddedWallet || externalWallet || smartWallet || user?.wallet?.address) {
 			hasCheckedWalletRef.current = true;
 			return;
 		}
 
 		// Delay check to allow wallets to load from Privy
 		const timeoutId = setTimeout(() => {
-			if (ready && authenticated && user && !embeddedWallet && !externalWallet && !smartWallet) {
+			// Re-check all wallet sources - user.wallet might be populated by now
+			const hasAnyWallet = embeddedWallet || externalWallet || smartWallet || user?.wallet?.address;
+			if (ready && authenticated && user && !hasAnyWallet) {
 				hasCheckedWalletRef.current = true;
 				// User is authenticated but has no wallet - notify Svelte to show fallback UI
-				onEvent({
+				onEventRef.current({
 					type: 'needs_wallet_creation',
 					payload: {
 						userId: user.id,
 						isAuthenticated: true
 					}
 				});
+			} else if (hasAnyWallet) {
+				// Wallet was found, just mark as checked
+				hasCheckedWalletRef.current = true;
 			}
-		}, 1500); // Wait 1.5 seconds for wallets to load
+		}, 2500); // Wait 2.5 seconds for wallets to load (increased from 1.5s)
 
 		return () => clearTimeout(timeoutId);
-	}, [ready, authenticated, user, embeddedWallet, externalWallet, smartWallet, onEvent]);
+	}, [ready, authenticated, user, embeddedWallet, externalWallet, smartWallet]);
 
 	// Token refresh - periodically refresh access token before it expires
 	useEffect(() => {
@@ -247,7 +286,7 @@ function PrivyBridge({
 			try {
 				const token = await getAccessToken();
 				if (token) {
-					onEvent({
+					onEventRef.current({
 						type: 'token_refreshed',
 						payload: { accessToken: token }
 					});
@@ -264,7 +303,7 @@ function PrivyBridge({
 		const intervalId = setInterval(fetchToken, TOKEN_REFRESH_INTERVAL);
 
 		return () => clearInterval(intervalId);
-	}, [ready, authenticated, getAccessToken, onEvent]);
+	}, [ready, authenticated, getAccessToken]);
 
 	// Handle logout trigger
 	useEffect(() => {
@@ -281,7 +320,7 @@ function PrivyBridge({
 					'[privy] Export wallet triggered but no embedded wallet found. Available wallets:',
 					wallets.map((w) => w.walletClientType)
 				);
-				onEvent({
+				onEventRef.current({
 					type: 'error',
 					payload: {
 						error:
@@ -297,7 +336,7 @@ function PrivyBridge({
 					await exportWallet();
 				} catch (error) {
 					console.error('[privy] Export wallet error:', error);
-					onEvent({
+					onEventRef.current({
 						type: 'error',
 						payload: { error: (error as Error).message || 'Failed to export wallet' }
 					});
@@ -307,7 +346,7 @@ function PrivyBridge({
 				}
 			})();
 		}
-	}, [triggerExportWallet, ready, authenticated]);
+	}, [triggerExportWallet, ready, authenticated, embeddedWallet, wallets, exportWallet]);
 
 	// Handle send transaction trigger
 	useEffect(() => {
@@ -326,20 +365,20 @@ function PrivyBridge({
 							}
 						]
 					});
-					onEvent({
+					onEventRef.current({
 						type: 'wallet',
 						payload: { walletAddress: embeddedWallet.address }
 					});
 					console.log('[privy] Transaction sent:', txHash);
 				} catch (error) {
-					onEvent({
+					onEventRef.current({
 						type: 'error',
 						payload: { error: (error as Error).message }
 					});
 				}
 			})();
 		}
-	}, [triggerSendTransaction, embeddedWallet, onEvent]);
+	}, [triggerSendTransaction, embeddedWallet]);
 
 	// This component doesn't render anything visible
 	return null;

@@ -270,26 +270,16 @@
 				{:else if $isAuthenticated && !$wrongNetwork && $walletAddress && $walletRegistered}
 					<!-- Wallet user (fully registered) -->
 					<div class="flex items-center gap-2">
-						{#if !isHamburgerMode}
-							<!-- Full dashboard button on desktop -->
-							<a href="/dashboard">
-								<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
-									<div class="flex items-center gap-2">
-										<span>My Dashboard</span>
-										<span class="text-[11px] font-normal text-yellow-300/80">
-											...{$walletAddress?.slice(-4)}
-										</span>
-									</div>
-								</Button>
-							</a>
-						{:else}
-							<!-- Compact dashboard link on mobile/hamburger mode -->
-							<a href="/dashboard">
-								<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
-									Dashboard
-								</Button>
-							</a>
-						{/if}
+						<a href="/dashboard">
+							<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
+								<div class="flex items-center gap-2">
+									<span>My Dashboard</span>
+									<span class="text-[11px] font-normal text-yellow-300/80">
+										...{$walletAddress?.slice(-4)}
+									</span>
+								</div>
+							</Button>
+						</a>
 						<Button
 							variant="ghost"
 							size="sm"
