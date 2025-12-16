@@ -78,7 +78,7 @@ function hashEIP7702Authorization(auth: EIP7702Authorization): Hex {
  *
  * These contracts allow EOAs to act as modular smart accounts:
  * - Support batching (executeBatch)
- * - Support gas sponsorship via paymasters
+ * - Support gas sponsorship via Rhinestone
  * - Compatible with Rhinestone's cross-chain infrastructure
  *
  * Using the MetaMask EIP-7702 Delegator which is ERC-7579 compliant

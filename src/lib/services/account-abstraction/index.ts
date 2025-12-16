@@ -5,7 +5,7 @@
  *
  * Features:
  * - Cross-chain swaps (USDT/ETH → USDC) via Rhinestone solver network
- * - Gas sponsorship via Rhinestone paymaster
+ * - Gas sponsorship via Rhinestone (native, deposit USDC on Base)
  * - EIP-7702 Smart EOAs for Privy users
  *
  * @example

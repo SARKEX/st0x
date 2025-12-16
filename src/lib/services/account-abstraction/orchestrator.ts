@@ -3,7 +3,7 @@
  *
  * Central coordinator for Rhinestone-based account abstraction:
  * - Cross-chain swap orchestration
- * - Gas sponsorship via Rhinestone paymaster
+ * - Gas sponsorship via Rhinestone (native, deposit USDC on Base)
  * - Trade execution with AA features
  *
  * Integration points:
@@ -44,8 +44,8 @@ import { getPriceOracle } from './rhinestone/priceOracle';
 import { getGasOracle } from './rhinestone/gasOracle';
 import { monitorTransaction, type TransactionUpdate } from './rhinestone/transactionMonitor';
 
-// Rhinestone Spoke Pool address for approvals
-const RHINESTONE_SPOKE_POOL = '0x8a9e2e4c0e29e91f4d0b7b8c1f3c2a5e6d7f0a1b' as Address; // TODO: Get actual address from SDK
+// Rhinestone Spoke Pool address for approvals (from @rhinestone/sdk)
+const RHINESTONE_SPOKE_POOL = '0x000000000060f6e853447881951574cdd0663530' as Address;
 
 // =============================================================================
 // Types
@@ -61,7 +61,6 @@ export interface GasPaymentOption {
 
 export interface GasPaymentMethod {
 	type: 'native' | 'sponsored';
-	paymasterAddress?: Address;
 }
 
 // =============================================================================
@@ -522,7 +521,6 @@ export class AccountAbstractionOrchestrator {
 	 * Get available gas payment options
 	 *
 	 * Rhinestone has native gas sponsorship - sponsors pay by depositing USDC on Base.
-	 * No external paymaster (Pimlico/Biconomy) is needed.
 	 */
 	getGasPaymentOptions(chainId: SupportedNetworkId): GasPaymentOption[] {
 		const options: GasPaymentOption[] = [];
@@ -538,7 +536,7 @@ export class AccountAbstractionOrchestrator {
 
 		// Sponsored gas (via Rhinestone native sponsorship)
 		// Requires: deposit USDC to sponsorship wallet + set PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true
-		if (rhinestoneClient.hasPaymasterConfig()) {
+		if (rhinestoneClient.isSponsorshipEnabled()) {
 			options.push({
 				method: 'sponsored',
 				available: true,
@@ -567,7 +565,7 @@ export class AccountAbstractionOrchestrator {
 	): Promise<GasPaymentMethod> {
 		const rhinestoneClient = getRhinestoneClient();
 
-		if (preferredMethod === 'sponsored' && rhinestoneClient.hasPaymasterConfig()) {
+		if (preferredMethod === 'sponsored' && rhinestoneClient.isSponsorshipEnabled()) {
 			return { type: 'sponsored' };
 		}
 
@@ -614,7 +612,7 @@ export function getAAFeatureStatus(): {
 
 	return {
 		crossChainSwaps: isRhinestoneConfigured(),
-		gasSponsorship: rhinestoneClient.hasPaymasterConfig(),
+		gasSponsorship: rhinestoneClient.isSponsorshipEnabled(),
 		eip7702: supportsEIP7702()
 	};
 }
