@@ -236,6 +236,28 @@
 		return Number(totalUsdc) / 10 ** paymentDecimals;
 	})();
 
+	// Calculate maximum tokens that can be bought (sum of ask maxOutput)
+	$: maxBuyTokensAvailable = (() => {
+		if (askQuotes.length === 0 || !selectedToken) return 0;
+		let totalTokens = 0n;
+		const assetDecimals = selectedToken.decimals ?? 18;
+
+		for (const q of askQuotes) {
+			let maxAssetAvailable = 0n;
+			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
+				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
+				maxAssetAvailable = parseFloatHex(q.maxOutput, outputDecimals);
+				if (outputDecimals !== assetDecimals) {
+					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
+					maxAssetAvailable =
+						outputDecimals < assetDecimals ? maxAssetAvailable * scale : maxAssetAvailable / scale;
+				}
+			}
+			if (maxAssetAvailable > 0n) totalTokens += maxAssetAvailable;
+		}
+		return Number(totalTokens) / 10 ** assetDecimals;
+	})();
+
 	// Calculate maximum tokens that can be sold
 	$: maxSellTokensAvailable = (() => {
 		if (bidQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
@@ -260,6 +282,28 @@
 		return Number(totalTokens) / 10 ** assetDecimals;
 	})();
 
+	// Calculate maximum USDC that can be received when selling (sum of bid maxOutput)
+	$: maxSellUsdcAvailable = (() => {
+		if (bidQuotes.length === 0 || !paymentToken) return 0;
+		let totalUsdc = 0n;
+		const paymentDecimals = paymentToken.decimals ?? 6;
+
+		for (const q of bidQuotes) {
+			let maxUsdcFromBid = 0n;
+			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
+				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
+				maxUsdcFromBid = parseFloatHex(q.maxOutput, outputDecimals);
+				if (outputDecimals !== paymentDecimals) {
+					const scale = 10n ** BigInt(Math.abs(paymentDecimals - outputDecimals));
+					maxUsdcFromBid =
+						outputDecimals < paymentDecimals ? maxUsdcFromBid * scale : maxUsdcFromBid / scale;
+				}
+			}
+			if (maxUsdcFromBid > 0n) totalUsdc += maxUsdcFromBid;
+		}
+		return Number(totalUsdc) / 10 ** paymentDecimals;
+	})();
+
 	// ============ QUOTE CALCULATION ============
 	$: quote = computeQuote(
 		isBuying,
@@ -282,44 +326,64 @@
 		} else {
 			topAmount = newValue;
 		}
-		// Cap amounts if liquidity is insufficient
-		capAmountsIfNeeded();
+		// Note: We no longer cap while typing - capping happens on blur
 	}
 
-	// Track if we've already capped to prevent cyclic updates
-	let hasAlreadyCappedBuy = false;
-	let hasAlreadyCappedSell = false;
+	// Track if we capped due to liquidity - persists until user types again
+	let showLiquidityWarning = false;
+	let hasCappedThisBlur = false;
 
 	// Cap amounts at max available when liquidity is insufficient
 	function capAmountsIfNeeded() {
-		if (!quote || quote.hasLiquidity) {
-			hasAlreadyCappedBuy = false;
-			hasAlreadyCappedSell = false;
+		// If there's sufficient liquidity and we haven't capped, nothing to do
+		if (!quote || (quote.hasLiquidity && !showLiquidityWarning)) {
 			return;
 		}
 
-		if (isBuying && lastEditedField === 'top' && !hasAlreadyCappedBuy) {
-			// Cap USDC when buying and there's not enough liquidity
-			const enteredUsdc = parseFloat(topAmount);
-			if (Number.isFinite(enteredUsdc) && enteredUsdc > maxBuyUsdcAvailable && maxBuyUsdcAvailable > 0) {
-				topAmount = maxBuyUsdcAvailable.toFixed(2);
-				hasAlreadyCappedBuy = true;
-			}
-		} else if (!isBuying && lastEditedField === 'bottom' && !hasAlreadyCappedSell) {
-			// Cap tokens when selling and there's not enough liquidity
-			const enteredTokens = parseFloat(bottomAmount);
-			if (Number.isFinite(enteredTokens) && enteredTokens > maxSellTokensAvailable && maxSellTokensAvailable > 0) {
-				bottomAmount = formatTokenAmount(maxSellTokensAvailable);
-				hasAlreadyCappedSell = true;
+		// If we already capped on this blur event, don't cap again
+		if (hasCappedThisBlur) return;
+
+		// If there's not enough liquidity, cap and show warning
+		if (!quote.hasLiquidity) {
+			if (isBuying) {
+				if (lastEditedField === 'top') {
+					// User edited USDC amount - cap USDC to max available
+					const enteredUsdc = parseFloat(topAmount);
+					if (Number.isFinite(enteredUsdc) && enteredUsdc > maxBuyUsdcAvailable && maxBuyUsdcAvailable > 0) {
+						topAmount = maxBuyUsdcAvailable.toFixed(2);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				} else if (lastEditedField === 'bottom') {
+					// User edited token amount - cap tokens to max available
+					const enteredTokens = parseFloat(bottomAmount);
+					if (Number.isFinite(enteredTokens) && enteredTokens > maxBuyTokensAvailable && maxBuyTokensAvailable > 0) {
+						bottomAmount = formatTokenAmount(maxBuyTokensAvailable);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				}
+			} else {
+				// Selling
+				if (lastEditedField === 'bottom') {
+					// User edited token amount - cap tokens to max available
+					const enteredTokens = parseFloat(bottomAmount);
+					if (Number.isFinite(enteredTokens) && enteredTokens > maxSellTokensAvailable && maxSellTokensAvailable > 0) {
+						bottomAmount = formatTokenAmount(maxSellTokensAvailable);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				} else if (lastEditedField === 'top') {
+					// User edited USDC amount - cap USDC to max available
+					const enteredUsdc = parseFloat(topAmount);
+					if (Number.isFinite(enteredUsdc) && enteredUsdc > maxSellUsdcAvailable && maxSellUsdcAvailable > 0) {
+						topAmount = maxSellUsdcAvailable.toFixed(2);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				}
 			}
 		}
-	}
-
-	// Reset cap flags when direction changes
-	$: if (isBuying) {
-		hasAlreadyCappedSell = false;
-	} else {
-		hasAlreadyCappedBuy = false;
 	}
 
 	function computeQuote(
@@ -523,8 +587,9 @@
 		const target = e.target as HTMLInputElement;
 		topAmount = target.value;
 		lastEditedField = 'top';
-		// Reset cap flag to allow new value to be processed
-		hasAlreadyCappedBuy = false;
+		// Reset warning flags when user starts typing
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
 		// Clear the other field to prevent both having user-entered values while prices load
 		bottomAmount = '';
 		// Refresh quotes when user enters a value
@@ -535,8 +600,9 @@
 		const target = e.target as HTMLInputElement;
 		bottomAmount = target.value;
 		lastEditedField = 'bottom';
-		// Reset cap flag to allow new value to be processed
-		hasAlreadyCappedSell = false;
+		// Reset warning flags when user starts typing
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
 		// Clear the other field to prevent both having user-entered values while prices load
 		topAmount = '';
 		// Refresh quotes when user enters a value
@@ -553,7 +619,8 @@
 		const flooredAmount = Math.floor(amount * 100) / 100;
 		topAmount = flooredAmount.toFixed(2);
 		lastEditedField = 'top';
-		hasAlreadyCappedBuy = false;
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
 		refreshQuotesForCurrentToken();
 	}
 
@@ -563,7 +630,8 @@
 		const flooredAmount = Math.floor(amount * 1e6) / 1e6;
 		bottomAmount = flooredAmount.toFixed(6);
 		lastEditedField = 'bottom';
-		hasAlreadyCappedSell = false;
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
 		refreshQuotesForCurrentToken();
 	}
 
@@ -700,6 +768,7 @@
 						placeholder="0"
 						value={topAmount}
 						on:input={handleTopInput}
+						on:blur={capAmountsIfNeeded}
 						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
 					/>
 				</div>
@@ -726,9 +795,13 @@
 					{/if}
 				</div>
 			</div>
-			{#if isBuying && quote && !quote.hasLiquidity}
+			{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
 				<div class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300">
-					Not enough liquidity to fully fill your order. Max available: ~{maxBuyUsdcAvailable.toFixed(2)} {paymentToken?.symbol ?? 'USDC'}.
+					{#if showLiquidityWarning}
+						Order capped to max available liquidity.
+					{:else}
+						Not enough liquidity to fully fill your order.
+					{/if}
 					{#if isOutsideMarketHours()}
 						<br />This might be because US markets are currently closed.
 					{/if}
@@ -850,6 +923,7 @@
 						placeholder="0"
 						value={bottomAmount}
 						on:input={handleBottomInput}
+						on:blur={capAmountsIfNeeded}
 						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
 					/>
 				</div>
@@ -878,9 +952,13 @@
 					{/if}
 				</div>
 			</div>
-			{#if !isBuying && quote && !quote.hasLiquidity}
+			{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
 				<div class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300">
-					Not enough liquidity to fully fill your order. Max available: ~{maxSellTokensAvailable.toFixed(4)} {selectedToken?.symbol ?? 'tokens'}.
+					{#if showLiquidityWarning}
+						Order capped to max available liquidity.
+					{:else}
+						Not enough liquidity to fully fill your order.
+					{/if}
 					{#if isOutsideMarketHours()}
 						<br />This might be because US markets are currently closed.
 					{/if}
