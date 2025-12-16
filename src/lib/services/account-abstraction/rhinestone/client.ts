@@ -84,34 +84,19 @@ export class RhinestoneClient {
 	constructor(config: RhinestoneConfig) {
 		this.config = config;
 
-		// Build SDK configuration based on what's provided
-		if (config.paymasterConfig?.apiKey && (config.paymasterConfig.type === 'pimlico' || config.paymasterConfig.type === 'biconomy')) {
-			// With paymaster
-			if (config.providerType === 'alchemy' && config.providerApiKey) {
-				this.sdk = new RhinestoneSDK({
-					apiKey: config.apiKey,
-					provider: { type: 'alchemy', apiKey: config.providerApiKey },
-					paymaster: { type: config.paymasterConfig.type, apiKey: config.paymasterConfig.apiKey }
-				});
-			} else {
-				this.sdk = new RhinestoneSDK({
-					apiKey: config.apiKey,
-					paymaster: { type: config.paymasterConfig.type, apiKey: config.paymasterConfig.apiKey }
-				});
-			}
-		} else {
-			// Without paymaster
-			if (config.providerType === 'alchemy' && config.providerApiKey) {
-				this.sdk = new RhinestoneSDK({
-					apiKey: config.apiKey,
-					provider: { type: 'alchemy', apiKey: config.providerApiKey }
-				});
-			} else {
-				this.sdk = new RhinestoneSDK({
-					apiKey: config.apiKey
-				});
-			}
+		// Build SDK configuration
+		// Note: Rhinestone has native gas sponsorship - no external paymaster needed
+		// Just set sponsored: true in transactions and deposit USDC to your sponsorship wallet
+		const sdkConfig: { apiKey: string; provider?: { type: 'alchemy'; apiKey: string } } = {
+			apiKey: config.apiKey
+		};
+
+		// Add Alchemy provider if configured (for better RPC performance)
+		if (config.providerType === 'alchemy' && config.providerApiKey) {
+			sdkConfig.provider = { type: 'alchemy', apiKey: config.providerApiKey };
 		}
+
+		this.sdk = new RhinestoneSDK(sdkConfig);
 	}
 
 	/**
@@ -570,6 +555,14 @@ export class RhinestoneClient {
  *
  * By default, uses EIP-7702 mode ('7702') for Privy users to preserve their EOA address.
  * Set PUBLIC_RHINESTONE_ACCOUNT_TYPE=smart to use standard smart account mode.
+ *
+ * Gas Sponsorship:
+ * Rhinestone has native gas sponsorship - no external paymaster (Pimlico/Biconomy) needed.
+ * To enable:
+ * 1. Contact Rhinestone team for your sponsorship deposit wallet
+ * 2. Deposit USDC on Base to that wallet
+ * 3. Set PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true
+ * 4. Transactions will automatically use your sponsorship balance
  */
 export function getRhinestoneClient(): RhinestoneClient {
 	if (!rhinestoneInstance) {
@@ -579,12 +572,13 @@ export function getRhinestoneClient(): RhinestoneClient {
 			console.warn('Rhinestone API key not configured. Cross-chain features will be limited.');
 		}
 
-		// Build paymaster config if Pimlico key is available
+		// Rhinestone native sponsorship config
+		// No external paymaster API key needed - just deposit USDC to your sponsorship wallet
 		let paymasterConfig: PaymasterConfig | undefined;
-		if (env.PUBLIC_PIMLICO_API_KEY) {
+		if (env.PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED === 'true') {
 			paymasterConfig = {
-				type: 'pimlico',
-				apiKey: env.PUBLIC_PIMLICO_API_KEY
+				type: 'rhinestone',
+				sponsorshipEnabled: true
 			};
 		}
 
