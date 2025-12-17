@@ -12,7 +12,7 @@
 					<h3 class="mb-3 text-xl font-semibold text-white">What is ST0x?</h3>
 					<p class="leading-relaxed text-gray-400">
 						ST0x is a decentralized exchange (DEX) enabling 24/7 trading of tokenized real-world
-						equities such as Apple, Tesla, and ETFs on-chain. It bridges traditional finance and
+						equities such as Nvidia, Tesla, and ETFs on-chain. It bridges traditional finance and
 						DeFi.
 					</p>
 				</div>
@@ -55,7 +55,7 @@
 					</p>
 				</div>
 
-				<div class="border-b border-white/10 pb-8">
+				<!-- <div class="border-b border-white/10 pb-8">
 					<h3 class="mb-3 text-xl font-semibold text-white">Is ST0x regulated?</h3>
 					<p class="leading-relaxed text-gray-400">
 						ST0x is structured to avoid exchange or brokerage licensing by:
@@ -65,7 +65,7 @@
 						<li>Utilizing separate regulated issuers.</li>
 						<li>Requiring KYC/KYB only during token issuance, not secondary trading.</li>
 					</ul>
-				</div>
+				</div> -->
 
 				<div class="border-b border-white/10 pb-8">
 					<h3 class="mb-3 text-xl font-semibold text-white">How do I access ST0x?</h3>
