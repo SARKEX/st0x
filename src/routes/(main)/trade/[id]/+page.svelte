@@ -1668,6 +1668,8 @@
 										orderSide={panelOrderSide}
 										assetToken={currentPythToken}
 										{orderbookQuotesQuery}
+										{buyPrice}
+										{sellPrice}
 									/>
 								{:else if panelStrategy === 'dca'}
 									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />

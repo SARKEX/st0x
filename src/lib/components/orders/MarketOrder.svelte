@@ -36,6 +36,11 @@
 	 * orderbookQuotesQuery: The orderbook quotes query (passed from parent)
 	 */
 	export let orderbookQuotesQuery: CreateQueryResult<OrderbookQuoteCache, Error>;
+	/**
+	 * Best bid/ask prices from orderbook (passed from parent)
+	 */
+	export let buyPrice: number | null = null;
+	export let sellPrice: number | null = null;
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
@@ -77,6 +82,11 @@
 	let priceError = false;
 	let priceErrorReason: 'no_quotes' | 'no_fill' | 'error' | null = null;
 	let orderPreparationError: string | null = null;
+
+	// Best orderbook price based on order side (from parent props)
+	// Buy: use sellPrice (best ask - what you pay when buying)
+	// Sell: use buyPrice (best bid - what you get when selling)
+	$: bestOrderbookPrice = orderSide === 'Buy' ? sellPrice : buyPrice;
 
 	// Clear preparation error when inputs change
 	$: if (selectedAmount || orderSide) {
@@ -712,7 +722,9 @@
 					<input
 						type="text"
 						value={!selectedAmount || selectedAmount === 0n
-							? ''
+							? bestOrderbookPrice !== null
+								? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+								: 'No quotes available'
 							: isLoadingPrice
 								? 'Loading...'
 								: priceError
@@ -767,13 +779,25 @@
 					</div>
 				{/if}
 				<div class="flex justify-between">
-					<span class="text-gray-400">At market price</span>
+					<span class="text-gray-400">
+						{#if !selectedAmount || selectedAmount === 0n}
+							{orderSide === 'Buy' ? 'Best ask' : 'Best bid'}
+						{:else}
+							Avg. price
+						{/if}
+					</span>
 					<span class="font-medium">
-						{isLoadingPrice
-							? 'Loading...'
-							: priceError
-								? 'N/A'
-								: `~${marketPrice.toFixed(2)} ${paymentTokenSymbol}`}
+						{#if !selectedAmount || selectedAmount === 0n}
+							{bestOrderbookPrice !== null
+								? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+								: 'N/A'}
+						{:else if isLoadingPrice}
+							Loading...
+						{:else if priceError}
+							N/A
+						{:else}
+							~{marketPrice.toFixed(2)} {paymentTokenSymbol}
+						{/if}
 					</span>
 				</div>
 				<div class="mt-2 border-t border-white/10 pt-2">
@@ -840,24 +864,6 @@
 					<LoadingSpinner size="sm" />
 					Preparing order...
 				</span>
-			{:else if disableDeploy}
-				{#if isLoadingPrice}
-					Loading market price...
-				{:else if priceError}
-					{#if priceErrorReason === 'no_quotes'}
-						No liquidity available
-					{:else if priceErrorReason === 'no_fill'}
-						Amount exceeds liquidity
-					{:else}
-						Price unavailable
-					{/if}
-				{:else if !selectedAmount}
-					Enter an amount
-				{:else if insufficientBalanceError}
-					Insufficient {spendingToken?.symbol ?? 'token'} balance
-				{:else}
-					Complete all fields
-				{/if}
 			{:else}
 				Place Market Order
 			{/if}
