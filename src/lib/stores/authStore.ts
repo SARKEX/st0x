@@ -1,4 +1,4 @@
-import { derived, get } from 'svelte/store';
+import { derived, get, type Readable } from 'svelte/store';
 import { signerAddress, connected, chainId } from 'svelte-wagmi';
 import {
 	privySession,
@@ -6,7 +6,7 @@ import {
 	isPrivyAuthenticated,
 	showAuthModal
 } from './privyStore';
-import { currentNetwork } from './index';
+import type { Network } from '$lib/config/network';
 
 // Auth method enum
 export type AuthMethod = 'wallet' | 'privy' | 'none';
@@ -53,10 +53,73 @@ export const isAuthenticated = derived(authMethod, ($authMethod) => $authMethod 
 
 /**
  * Check if user is on the wrong network (for wallet users)
+ * Uses lazy import to avoid circular dependency initialization issues
  */
+let _currentNetworkStore: Readable<Network> | null = null;
+
 export const wrongNetwork = derived(
-	[chainId, walletAddress, currentNetwork],
-	([$chainId, $walletAddress, $currentNetwork]) => $walletAddress && $chainId !== $currentNetwork.id
+	[chainId, walletAddress],
+	([$chainId, $walletAddress], set) => {
+		// Access currentNetwork lazily to avoid initialization order issues
+		// Import it when the store is subscribed to, not at module load time
+		let unsubscribeNetwork: (() => void) | null = null;
+		let isActive = true;
+		
+		// Helper to compute and set the value
+		const updateValue = ($currentNetwork: Network) => {
+			if (isActive) {
+				set(!!($walletAddress && $chainId !== $currentNetwork.id));
+			}
+		};
+		
+		// Check if we already have the store (from a previous subscription)
+		if (_currentNetworkStore) {
+			const currentValue = get(_currentNetworkStore);
+			updateValue(currentValue);
+			
+			// Subscribe to changes
+			unsubscribeNetwork = _currentNetworkStore.subscribe(($currentNetwork) => {
+				if (isActive) {
+					updateValue($currentNetwork);
+				}
+			});
+		} else {
+			// Use dynamic import to break the circular dependency
+			import('./index')
+				.then((module) => {
+					if (!isActive) return;
+					const currentNetwork = module.currentNetwork;
+					_currentNetworkStore = currentNetwork;
+					
+					// Get initial value and update
+					const initialValue = get(currentNetwork);
+					updateValue(initialValue);
+					
+					// Subscribe to currentNetwork changes
+					unsubscribeNetwork = currentNetwork.subscribe(($currentNetwork) => {
+						if (isActive) {
+							updateValue($currentNetwork);
+						}
+					});
+				})
+				.catch((error) => {
+					// If import fails, set to false (assume correct network)
+					// This should only happen during initial load
+					console.warn('Failed to load currentNetwork store:', error);
+					if (isActive) {
+						set(false);
+					}
+				});
+		}
+		
+		return () => {
+			isActive = false;
+			if (unsubscribeNetwork) {
+				unsubscribeNetwork();
+			}
+		};
+	},
+	false
 );
 
 /**
