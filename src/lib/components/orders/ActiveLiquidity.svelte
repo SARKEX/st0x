@@ -105,7 +105,11 @@
 				maxAmount: maxTradeAmount,
 				minAmount: minTradeAmount,
 				depositAmountToken1: depositAmount1,
-				depositAmountToken2: depositAmount2
+				depositAmountToken2: depositAmount2,
+				inputVaultIdToken1: inputVaultId1,
+				inputVaultIdToken2: inputVaultId2,
+				outputVaultIdToken1: outputVaultId1,
+				outputVaultIdToken2: outputVaultId2
 			});
 		}
 	};
