@@ -349,7 +349,11 @@
 				if (lastEditedField === 'top') {
 					// User edited USDC amount - cap USDC to max available
 					const enteredUsdc = parseFloat(topAmount);
-					if (Number.isFinite(enteredUsdc) && enteredUsdc > maxBuyUsdcAvailable && maxBuyUsdcAvailable > 0) {
+					if (
+						Number.isFinite(enteredUsdc) &&
+						enteredUsdc > maxBuyUsdcAvailable &&
+						maxBuyUsdcAvailable > 0
+					) {
 						topAmount = maxBuyUsdcAvailable.toFixed(2);
 						showLiquidityWarning = true;
 						hasCappedThisBlur = true;
@@ -357,7 +361,11 @@
 				} else if (lastEditedField === 'bottom') {
 					// User edited token amount - cap tokens to max available
 					const enteredTokens = parseFloat(bottomAmount);
-					if (Number.isFinite(enteredTokens) && enteredTokens > maxBuyTokensAvailable && maxBuyTokensAvailable > 0) {
+					if (
+						Number.isFinite(enteredTokens) &&
+						enteredTokens > maxBuyTokensAvailable &&
+						maxBuyTokensAvailable > 0
+					) {
 						bottomAmount = formatTokenAmount(maxBuyTokensAvailable);
 						showLiquidityWarning = true;
 						hasCappedThisBlur = true;
@@ -368,7 +376,11 @@
 				if (lastEditedField === 'bottom') {
 					// User edited token amount - cap tokens to max available
 					const enteredTokens = parseFloat(bottomAmount);
-					if (Number.isFinite(enteredTokens) && enteredTokens > maxSellTokensAvailable && maxSellTokensAvailable > 0) {
+					if (
+						Number.isFinite(enteredTokens) &&
+						enteredTokens > maxSellTokensAvailable &&
+						maxSellTokensAvailable > 0
+					) {
 						bottomAmount = formatTokenAmount(maxSellTokensAvailable);
 						showLiquidityWarning = true;
 						hasCappedThisBlur = true;
@@ -376,7 +388,11 @@
 				} else if (lastEditedField === 'top') {
 					// User edited USDC amount - cap USDC to max available
 					const enteredUsdc = parseFloat(topAmount);
-					if (Number.isFinite(enteredUsdc) && enteredUsdc > maxSellUsdcAvailable && maxSellUsdcAvailable > 0) {
+					if (
+						Number.isFinite(enteredUsdc) &&
+						enteredUsdc > maxSellUsdcAvailable &&
+						maxSellUsdcAvailable > 0
+					) {
 						topAmount = maxSellUsdcAvailable.toFixed(2);
 						showLiquidityWarning = true;
 						hasCappedThisBlur = true;
@@ -796,7 +812,9 @@
 				</div>
 			</div>
 			{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
-				<div class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300">
+				<div
+					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+				>
 					{#if showLiquidityWarning}
 						Order capped to max available liquidity.
 					{:else}
@@ -880,8 +898,18 @@
 							<!-- Scroll up indicator -->
 							{#if canScrollUp}
 								<div class="flex justify-center border-b border-white/5 py-1">
-									<svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+									<svg
+										class="h-4 w-4 text-gray-500"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M5 15l7-7 7 7"
+										/>
 									</svg>
 								</div>
 							{/if}
@@ -907,8 +935,18 @@
 							<!-- Scroll down indicator -->
 							{#if canScrollDown}
 								<div class="flex justify-center border-t border-white/5 py-1">
-									<svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+									<svg
+										class="h-4 w-4 text-gray-500"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 9l-7 7-7-7"
+										/>
 									</svg>
 								</div>
 							{/if}
@@ -953,7 +991,9 @@
 				</div>
 			</div>
 			{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
-				<div class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300">
+				<div
+					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+				>
 					{#if showLiquidityWarning}
 						Order capped to max available liquidity.
 					{:else}

@@ -225,8 +225,12 @@
 						const availablePaymentCapacity = walkResult.outputAmountGiven;
 						insufficientLiquidityWarning = selectedAmount > availablePaymentCapacity;
 						// Format available amount for display
-						const availableFloat = parseFloat(formatUnits(availablePaymentCapacity, paymentDecimals));
-						availableLiquidityFormatted = `${availableFloat.toFixed(2)} ${paymentToken?.symbol ?? 'USDC'}`;
+						const availableFloat = parseFloat(
+							formatUnits(availablePaymentCapacity, paymentDecimals)
+						);
+						availableLiquidityFormatted = `${availableFloat.toFixed(2)} ${
+							paymentToken?.symbol ?? 'USDC'
+						}`;
 					} else {
 						// In amount mode, selectedAmount is asset amount
 						// For BUY: inputAmountFilled is asset amount, For SELL: outputAmountGiven is asset amount
@@ -235,7 +239,9 @@
 						insufficientLiquidityWarning = selectedAmount > availableAssetAmount;
 						// Format available amount for display
 						const availableFloat = parseFloat(formatUnits(availableAssetAmount, assetDecimals));
-						availableLiquidityFormatted = `${availableFloat.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`;
+						availableLiquidityFormatted = `${availableFloat.toFixed(4)} ${
+							assetToken?.symbol ?? 'tokens'
+						}`;
 					}
 				}
 			}

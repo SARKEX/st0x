@@ -20,13 +20,7 @@
 	}
 
 	// Typewriter animation for hero text
-	const typewriterWords = [
-		'Global',
-		'Collateralised',
-		'DeFi-Ready',
-		'Transferable',
-		'Redeemable'
-	];
+	const typewriterWords = ['Global', 'Collateralised', 'DeFi-Ready', 'Transferable', 'Redeemable'];
 	let currentWordIndex = 0;
 	let displayedText = '';
 	let isDeleting = false;

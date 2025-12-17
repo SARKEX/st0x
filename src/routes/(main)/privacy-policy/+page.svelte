@@ -24,8 +24,19 @@
 				<p>Toby Meller and Nicholas Magliocchetti</p>
 				<p>Craigmuir Chambers, Road Town, Tortola</p>
 				<p>VG 1110, British Virgin Islands</p>
-				<p>E-Mail: <a href="mailto:toby@st0x.io" class="text-blue-400 underline hover:text-blue-300">toby@st0x.io</a></p>
-				<p>Web: <a href="https://st0x.io" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline hover:text-blue-300">www.st0x.io</a></p>
+				<p>
+					E-Mail: <a href="mailto:toby@st0x.io" class="text-blue-400 underline hover:text-blue-300"
+						>toby@st0x.io</a
+					>
+				</p>
+				<p>
+					Web: <a
+						href="https://st0x.io"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="text-blue-400 underline hover:text-blue-300">www.st0x.io</a
+					>
+				</p>
 			</div>
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">
