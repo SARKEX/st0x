@@ -46,12 +46,12 @@
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
 
 	// Calculate effective breakpoint based on what's taking up space
-	// Base: 1280px for the nav content itself
+	// Base: 1400px for the nav content itself
 	// +256px when sidebar is expanded (not landing page and not collapsed)
 	// +352px when trade panel is open
 	$: sidebarOffset = !isLandingPage && !isSidebarCollapsed ? 256 : 0;
 	$: tradePanelOffset = $tradePanelOpen ? 352 : 0;
-	$: effectiveBreakpoint = 1280 + sidebarOffset + tradePanelOffset;
+	$: effectiveBreakpoint = 1400 + sidebarOffset + tradePanelOffset;
 	$: isHamburgerMode = windowWidth < effectiveBreakpoint;
 	$: if (!isHamburgerMode) mobileNavOpen = false;
 
@@ -78,6 +78,13 @@
 		} else {
 			$web3Modal.open();
 		}
+	}
+
+	// Truncate email to show first 3 chars + @domain (e.g., "ala...@gmail.com")
+	function truncateEmail(email: string): string {
+		const atIndex = email.indexOf('@');
+		if (atIndex <= 3) return email;
+		return `${email.slice(0, 3)}...${email.slice(atIndex)}`;
 	}
 </script>
 
@@ -134,7 +141,7 @@
 								<div class="flex items-center gap-2">
 									<span>My Dashboard</span>
 									<span class="text-[11px] font-normal text-yellow-300/80">
-										{$privySession.email || `...${$privySession.walletAddress.slice(-4)}`}
+										{$privySession.email ? truncateEmail($privySession.email) : `...${$privySession.walletAddress.slice(-4)}`}
 									</span>
 								</div>
 							</Button>
