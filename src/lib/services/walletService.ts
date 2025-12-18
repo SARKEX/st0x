@@ -17,15 +17,6 @@ let privyWalletProvider: {
 	request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 } | null = null;
 
-// Pending request map for async operations
-const pendingRequests = new Map<
-	string,
-	{
-		resolve: (value: unknown) => void;
-		reject: (error: Error) => void;
-	}
->();
-
 /**
  * Set the Privy wallet provider (called from React)
  */
@@ -40,28 +31,6 @@ export function setPrivyWalletProvider(
  */
 export function getPrivyWalletProvider(): typeof privyWalletProvider {
 	return privyWalletProvider;
-}
-
-/**
- * Resolve a pending request (called from React)
- */
-export function resolveRequest(requestId: string, result: unknown): void {
-	const pending = pendingRequests.get(requestId);
-	if (pending) {
-		pending.resolve(result);
-		pendingRequests.delete(requestId);
-	}
-}
-
-/**
- * Reject a pending request (called from React)
- */
-export function rejectRequest(requestId: string, error: Error): void {
-	const pending = pendingRequests.get(requestId);
-	if (pending) {
-		pending.reject(error);
-		pendingRequests.delete(requestId);
-	}
 }
 
 // Retry wrapper for RPC calls
@@ -110,17 +79,36 @@ export async function sendTransaction(params: {
 			throw new Error('Privy wallet address not available');
 		}
 
+		// Ensure we're on Base network (chain ID 8453)
+		try {
+			await privyWalletProvider!.request({
+				method: 'wallet_switchEthereumChain',
+				params: [{ chainId: '0x2105' }] // 8453 in hex
+			});
+		} catch {
+			// Chain might already be correct, or not supported - continue anyway
+		}
+
+		// Build transaction params - let Privy handle gas estimation
+		const txParams: Record<string, string> = {
+			from: walletAddress,
+			to: params.to
+		};
+
+		// Only add data if provided and not empty
+		if (params.data && params.data !== '0x') {
+			txParams.data = params.data;
+		}
+
+		// Only add value if provided and non-zero
+		if (params.value && params.value > 0n) {
+			txParams.value = `0x${params.value.toString(16)}`;
+		}
+
 		const txHash = await withRetry(async () => {
 			const result = await privyWalletProvider!.request({
 				method: 'eth_sendTransaction',
-				params: [
-					{
-						from: walletAddress,
-						to: params.to,
-						data: params.data || '0x',
-						value: params.value ? `0x${params.value.toString(16)}` : '0x0'
-					}
-				]
+				params: [txParams]
 			});
 			return result as Hash;
 		});

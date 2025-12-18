@@ -11,21 +11,8 @@
 	import { sendTransaction } from '$lib/services/walletService';
 	import { currentNetwork } from '$lib/stores';
 	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
-	import {
-		parseEther,
-		parseUnits,
-		isAddress,
-		encodeFunctionData,
-		erc20Abi,
-		formatUnits
-	} from 'viem';
-	import { getBalance } from '@wagmi/core';
-	import { wagmiConfig } from 'svelte-wagmi';
-	import { createQuery } from '@tanstack/svelte-query';
-
-	// Minimum ETH balance recommended for gas (in ETH)
-	const MIN_ETH_FOR_GAS = 0.0005; // ~0.0005 ETH should cover basic transfers
-	const LOW_ETH_WARNING = 0.001; // Warn if below this amount
+	import { parseEther, parseUnits, isAddress, encodeFunctionData, erc20Abi, formatUnits } from 'viem';
+	import { queryClient } from '$lib/clients/queryClient';
 
 	const dispatch = createEventDispatcher();
 
@@ -70,38 +57,6 @@
 
 		return tokens;
 	})();
-
-	// Query ETH balance for gas fee checks
-	$: ethBalanceQuery = createQuery({
-		queryKey: ['sendModalEthBalance', $privySession?.walletAddress, $currentNetwork?.chainId],
-		enabled: !!($showSendFundsModal && $privySession?.walletAddress && $wagmiConfig),
-		queryFn: async () => {
-			if (!$privySession?.walletAddress) return 0n;
-			try {
-				const balance = await getBalance($wagmiConfig, {
-					address: $privySession.walletAddress as `0x${string}`
-				});
-				return balance.value;
-			} catch (e) {
-				console.error('Failed to fetch ETH balance for gas check:', e);
-				return 0n;
-			}
-		},
-		staleTime: 30_000 // Cache for 30 seconds
-	});
-
-	// ETH balance in human-readable form
-	$: ethBalance = $ethBalanceQuery?.data ?? 0n;
-	$: ethBalanceNum = parseFloat(formatUnits(ethBalance, 18));
-	$: hasNoEthForGas = ethBalanceNum < MIN_ETH_FOR_GAS;
-	$: hasLowEthForGas = ethBalanceNum < LOW_ETH_WARNING && ethBalanceNum >= MIN_ETH_FOR_GAS;
-
-	// Check if sending ETH would leave insufficient gas
-	$: sendingEthAmount = selectedToken?.address === 'native' && amount ? parseFloat(amount) : 0;
-	$: wouldDrainEth =
-		selectedToken?.address === 'native' &&
-		sendingEthAmount > 0 &&
-		ethBalanceNum - sendingEthAmount < MIN_ETH_FOR_GAS;
 
 	let recipientAddress = '';
 	let amount = '';
@@ -158,10 +113,12 @@
 		sending = true;
 
 		try {
+			let hash: string;
+
 			if (selectedToken.address === 'native') {
 				// Send native ETH
 				const valueInWei = parseEther(amount);
-				await sendTransaction({
+				hash = await sendTransaction({
 					to: recipientAddress as `0x${string}`,
 					value: valueInWei
 				});
@@ -177,14 +134,19 @@
 				});
 
 				// Send transaction to the token contract
-				await sendTransaction({
+				hash = await sendTransaction({
 					to: selectedToken.address,
 					data
 				});
 			}
 
-			txHash = 'submitted';
-			dispatch('sent', { to: recipientAddress, amount, token: selectedToken.symbol });
+			txHash = hash;
+			dispatch('sent', { to: recipientAddress, amount, token: selectedToken.symbol, txHash: hash });
+
+			// Invalidate balance queries to refresh the page
+			queryClient.invalidateQueries({ queryKey: ['usdcWalletBalance'] });
+			queryClient.invalidateQueries({ queryKey: ['ethWalletBalance'] });
+			queryClient.invalidateQueries({ queryKey: ['sftHoldings'] });
 		} catch (err) {
 			console.error('[send] Error:', err);
 			error = (err as Error).message || 'Failed to send transaction';
@@ -236,6 +198,17 @@
 					<p class="mt-1 font-mono text-xs text-gray-500">
 						{recipientAddress.slice(0, 10)}...{recipientAddress.slice(-8)}
 					</p>
+					<a
+						href="{$currentNetwork?.blockExplorer}/tx/{txHash}"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+					>
+						View on BaseScan
+						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+						</svg>
+					</a>
 				</div>
 				<Button on:click={handleClose} variant="primary" fullWidth>Done</Button>
 			</div>
@@ -325,37 +298,6 @@
 						<p class="text-sm text-red-400">{error}</p>
 					</div>
 				{/if}
-
-				<!-- Gas fee warnings -->
-				{#if hasNoEthForGas}
-					<div class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-						<p class="text-xs text-red-400">
-							<strong>No ETH for gas fees.</strong> You need ETH to pay for transaction fees.
-							Current balance: {ethBalanceNum.toFixed(6)} ETH
-						</p>
-					</div>
-				{:else if wouldDrainEth}
-					<div class="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2">
-						<p class="text-xs text-orange-400">
-							<strong>Low ETH after send.</strong> Sending this amount will leave you with less than {MIN_ETH_FOR_GAS}
-							ETH for future gas fees. Consider keeping some ETH for transactions.
-						</p>
-					</div>
-				{:else if hasLowEthForGas}
-					<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
-						<p class="text-xs text-yellow-400">
-							<strong>Low ETH balance.</strong> You have {ethBalanceNum.toFixed(6)} ETH for gas fees.
-							Consider depositing more ETH to avoid running out.
-						</p>
-					</div>
-				{/if}
-
-				<!-- Warning -->
-				<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
-					<p class="text-xs text-yellow-400">
-						Always double-check the recipient address. Transactions cannot be reversed.
-					</p>
-				</div>
 
 				<!-- Actions -->
 				<div class="flex gap-3 pt-2">

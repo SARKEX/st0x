@@ -49,19 +49,6 @@ export function parseSequentialVaultNumber(vaultId: bigint | string): number | u
 	return undefined;
 }
 
-/**
- * Generates a random vault ID using Web Crypto API
- * Used internally for vaults that should be unique per order
- */
-function generateRandomVaultId(): Hex {
-	const array = new Uint8Array(32);
-	crypto.getRandomValues(array);
-	const hexString = Array.from(array)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-	return `0x${hexString}`;
-}
-
 // Strategy cache - keyed by commit hash + filename
 // Since strategies are from a pinned commit, they never change
 const strategyCache = new Map<string, string>();

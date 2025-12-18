@@ -56,7 +56,7 @@ import {
 	type SgOrder,
 	type TakeOrdersConfigV4,
 	type DeploymentTransactionArgs,
-	RaindexVault,
+	type RaindexVault,
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
 import { parseFloatHex, getRaindexOrderUrl, isPaymentToken } from '$lib/utils/tokenMath';
@@ -975,24 +975,25 @@ const transactionStore = () => {
 		const inputIndex = params.ioIndexes.input;
 		const outputIndex = params.ioIndexes.output;
 
-		// Get the tokens from the order
-		const inputToken = raindexOrder.inputs[inputIndex];
-		if (!inputToken) {
+		// Validate IO indexes are within bounds
+		if (!params.orderData.validInputs[inputIndex]) {
 			return transactionError('No input token found in order' as TransactionErrorMessage);
 		}
-
-		const outputToken = raindexOrder.outputs[outputIndex];
-		if (!outputToken) {
+		if (!params.orderData.validOutputs[outputIndex]) {
 			return transactionError('No output token found in order' as TransactionErrorMessage);
 		}
 
-		const approvalToken = inputToken;
+		// Use takerPaysToken from params for approval - this is what the user gives away
+		// Note: We don't use raindexOrder.inputs[inputIndex] because SgOrder.inputs from
+		// the subgraph may have different ordering than OrderV4.validInputs
+		const approvalTokenAddress = params.takerPaysToken.address;
+		const approvalTokenSymbol = params.takerPaysToken.symbol;
 
 		// Check current allowance for the token that needs approval
 		checkingWalletAllowance(`Checking token allowance...`);
 		const currentAllowance = await readContract(config, {
 			abi: erc20Abi,
-			address: approvalToken.token.address as `0x${string}`,
+			address: approvalTokenAddress as `0x${string}`,
 			functionName: 'allowance',
 			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
@@ -1000,11 +1001,11 @@ const transactionStore = () => {
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
 			awaitWalletConfirmation(
-				`Awaiting wallet confirmation to approve ${approvalToken.token.symbol}...`
+				`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`
 			);
 
 			const approvalHash = await sendTransaction({
-				to: approvalToken.token.address as `0x${string}`,
+				to: approvalTokenAddress as `0x${string}`,
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'approve',

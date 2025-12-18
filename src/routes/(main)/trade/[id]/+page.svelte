@@ -1069,7 +1069,7 @@
 							{#if !$isAuthenticated}
 								<div class="flex flex-col items-center justify-center gap-4 py-12">
 									<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
-									<Button variant="primary" size="md" on:click={promptWalletConnection}>
+									<Button variant="primary" size="md" on:click={() => promptWalletConnection()}>
 										Connect Wallet
 									</Button>
 								</div>
@@ -1669,6 +1669,8 @@
 										orderSide={panelOrderSide}
 										assetToken={currentPythToken}
 										{orderbookQuotesQuery}
+										{buyPrice}
+										{sellPrice}
 									/>
 								{:else if panelStrategy === 'dca'}
 									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
