@@ -1,8 +1,7 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
-	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
-	import { tick } from 'svelte';
+	import { createEventDispatcher, onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
@@ -20,18 +19,12 @@
 
 	let mobileNavOpen = false;
 	let windowWidth = 0;
-	let navTooWide = false;
-	let actionCluster: HTMLDivElement | null = null;
-	let clusterObserver: ResizeObserver | null = null;
 
-	type SidebarToggleTarget = 'mobile' | 'desktop';
-
-	function handleSidebarToggle(target: SidebarToggleTarget) {
+	function handleSidebarToggle(target: 'mobile' | 'desktop') {
 		dispatch('toggleSidebar', { target });
 	}
 
 	function toggleMobileNav() {
-		if (!isHamburgerMode) return;
 		mobileNavOpen = !mobileNavOpen;
 	}
 
@@ -40,12 +33,8 @@
 	}
 
 	$: activePath = $page.url.pathname;
-
-	// Get first token's trade URL for the Trade nav link
 	$: firstTokenId = $sfts?.[0]?.id;
 	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
-
-	// Check if we're on any trade page
 	$: isOnTradePage = activePath.startsWith('/trade/');
 
 	$: NAV_ITEMS = [
@@ -56,93 +45,16 @@
 
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
 
-	let isHamburgerMode = true;
-
-	function cleanupObserver() {
-		if (clusterObserver) {
-			clusterObserver.disconnect();
-			clusterObserver = null;
-		}
-	}
-
-	async function checkNavOverflow() {
-		await tick();
-		if (!actionCluster || windowWidth < 1024) {
-			if (windowWidth < 1024 && navTooWide) {
-				navTooWide = false;
-			}
-			return;
-		}
-		// Always check overflow state - don't skip when already in hamburger mode
-		// This ensures we can recover when space becomes available again (e.g., trade panel closes)
-		const needsHamburger = actionCluster.scrollWidth > actionCluster.clientWidth + 1;
-		if (needsHamburger !== navTooWide) {
-			navTooWide = needsHamburger;
-		}
-	}
-
-	function setupObserver() {
-		// Keep observer running even in hamburger mode (due to navTooWide) so we can detect
-		// when space becomes available again (e.g., trade panel closes)
-		if (!actionCluster || windowWidth < 1024) {
-			cleanupObserver();
-			return;
-		}
-		if (!clusterObserver) {
-			clusterObserver = new ResizeObserver(() => {
-				checkNavOverflow();
-			});
-		}
-		const observer = clusterObserver;
-		observer.disconnect();
-		observer.observe(actionCluster);
-		checkNavOverflow();
-	}
+	// Simple breakpoint: hamburger mode below 1024px (lg)
+	$: isHamburgerMode = windowWidth < 1024;
+	$: if (!isHamburgerMode) mobileNavOpen = false;
 
 	onMount(() => {
 		windowWidth = window.innerWidth;
-		tick().then(() => {
-			checkNavOverflow();
-		});
-		const handleResize = () => {
-			windowWidth = window.innerWidth;
-			if (windowWidth < 1024) {
-				navTooWide = false;
-				cleanupObserver();
-			} else if (navTooWide) {
-				navTooWide = false;
-				tick().then(() => {
-					setupObserver();
-					checkNavOverflow();
-				});
-			} else {
-				checkNavOverflow();
-			}
-		};
+		const handleResize = () => (windowWidth = window.innerWidth);
 		window.addEventListener('resize', handleResize);
-		return () => {
-			window.removeEventListener('resize', handleResize);
-		};
+		return () => window.removeEventListener('resize', handleResize);
 	});
-
-	onDestroy(() => {
-		cleanupObserver();
-	});
-
-	$: {
-		// Always keep observer running on desktop so we can detect space changes
-		// (e.g., trade panel opening/closing)
-		if (windowWidth >= 1024) {
-			setupObserver();
-		} else {
-			cleanupObserver();
-		}
-	}
-
-	$: isHamburgerMode = windowWidth < 1024 || navTooWide;
-	$: if (!isHamburgerMode) {
-		mobileNavOpen = false;
-	}
 
 	function handleConnectWallet() {
 		// For wallet users who are already connected, open wallet modal to manage/disconnect
@@ -200,10 +112,7 @@
 				{/if}
 			</div>
 
-			<div
-				class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3"
-				bind:this={actionCluster}
-			>
+			<div class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3">
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
 						{#each NAV_ITEMS as item}
