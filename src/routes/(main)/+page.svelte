@@ -204,7 +204,8 @@
 			<h1
 				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
 			>
-				Tokenised Equities. <span class="text-yellow-400">{displayedText}</span><span
+				Tokenised Equities.<br class="sm:hidden" />
+				<span class="text-yellow-400">{displayedText}</span><span
 					class="animate-blink text-yellow-400">|</span
 				>
 			</h1>
