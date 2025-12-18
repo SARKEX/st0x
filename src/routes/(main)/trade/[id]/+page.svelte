@@ -1691,10 +1691,6 @@
 				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
 				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
 				<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
-				<a href="/compliance" class="hidden transition-colors hover:text-yellow-500 sm:inline"
-					>Compliance</a
-				>
-				<a href="/audit" class="hidden transition-colors hover:text-yellow-500 sm:inline">Audits</a>
 				<a href="/faqs" class="hidden transition-colors hover:text-yellow-500 sm:inline">FAQs</a>
 			</div>
 
