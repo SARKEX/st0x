@@ -256,7 +256,6 @@ export const getMarketMakingDeploymentArgs = async (
 	const $walletAddress = get(walletAddress);
 	if (!$walletAddress) throw new Error('Wallet address not found');
 
-
 	if (args.inputVaultIdToken1) {
 		gui.setVaultId('input', 'token1', args.inputVaultIdToken1);
 	}
@@ -360,7 +359,6 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 
 	const $walletAddress = get(walletAddress);
 	if (!$walletAddress) throw new Error('Wallet address not found');
-
 
 	if (args.inputVaultId1) {
 		gui.setVaultId('input', 'token1', args.inputVaultId1);

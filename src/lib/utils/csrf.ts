@@ -50,10 +50,7 @@ export function clearCsrfToken(): void {
  * Make a fetch request with CSRF protection
  * Automatically includes the CSRF token in the X-CSRF-Token header
  */
-export async function fetchWithCsrf(
-	url: string,
-	options: RequestInit = {}
-): Promise<Response> {
+export async function fetchWithCsrf(url: string, options: RequestInit = {}): Promise<Response> {
 	const token = await getCsrfToken();
 
 	const headers = new Headers(options.headers);

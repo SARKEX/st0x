@@ -4,7 +4,14 @@ import { base } from 'viem/chains';
 
 // Event types for Svelte-React communication
 export interface PrivyEventData {
-	type: 'ready' | 'authenticated' | 'logout' | 'wallet' | 'error' | 'token_refreshed' | 'needs_wallet_creation';
+	type:
+		| 'ready'
+		| 'authenticated'
+		| 'logout'
+		| 'wallet'
+		| 'error'
+		| 'token_refreshed'
+		| 'needs_wallet_creation';
 	payload?: {
 		userId?: string;
 		walletAddress?: string;
@@ -54,7 +61,17 @@ function PrivyBridge({
 	triggerCreateWallet,
 	triggerSendTransaction
 }: Omit<PrivyBridgeProps, 'appId'>) {
-	const { ready, authenticated, user, login, logout, exportWallet, connectWallet, createWallet, getAccessToken } = usePrivy();
+	const {
+		ready,
+		authenticated,
+		user,
+		login,
+		logout,
+		exportWallet,
+		connectWallet,
+		createWallet,
+		getAccessToken
+	} = usePrivy();
 
 	const { wallets } = useWallets();
 

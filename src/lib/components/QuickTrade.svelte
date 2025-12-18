@@ -800,7 +800,7 @@
 					{/if}
 				</span>
 				<div class="flex items-center gap-1">
-{#if isBuying && $isAuthenticated && $walletAddress && formattedUsdcBalance > 0}
+					{#if isBuying && $isAuthenticated && $walletAddress && formattedUsdcBalance > 0}
 						{#each [25, 50, 75, 100] as percent}
 							<button
 								type="button"

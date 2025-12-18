@@ -168,17 +168,6 @@ const transactionStore = () => {
 		return `0x${hex}` as `0x${string}`;
 	};
 
-	const sendTransactionWithGas = async (args: {
-		data: Hex;
-		to: `0x${string}`;
-		value?: bigint;
-		gas?: bigint;
-	}): Promise<Hash> => {
-		// Use the unified sendTransaction from walletService
-		// Gas estimation is handled internally by walletService
-		return await sendTransaction(args);
-	};
-
 	// Generic state update helper
 	const setState = (
 		status: TransactionStatus,
@@ -1011,9 +1000,7 @@ const transactionStore = () => {
 
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
-			awaitWalletConfirmation(
-				`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`
-			);
+			awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
 
 			const approvalHash = await sendTransaction({
 				to: approvalTokenAddress as `0x${string}`,

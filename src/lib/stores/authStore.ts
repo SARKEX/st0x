@@ -64,19 +64,19 @@ export const wrongNetwork = derived(
 		// Import it when the store is subscribed to, not at module load time
 		let unsubscribeNetwork: (() => void) | null = null;
 		let isActive = true;
-		
+
 		// Helper to compute and set the value
 		const updateValue = ($currentNetwork: Network) => {
 			if (isActive) {
 				set(!!($walletAddress && $chainId !== $currentNetwork.id));
 			}
 		};
-		
+
 		// Check if we already have the store (from a previous subscription)
 		if (_currentNetworkStore) {
 			const currentValue = get(_currentNetworkStore);
 			updateValue(currentValue);
-			
+
 			// Subscribe to changes
 			unsubscribeNetwork = _currentNetworkStore.subscribe(($currentNetwork) => {
 				if (isActive) {
@@ -90,11 +90,11 @@ export const wrongNetwork = derived(
 					if (!isActive) return;
 					const currentNetwork = module.currentNetwork;
 					_currentNetworkStore = currentNetwork;
-					
+
 					// Get initial value and update
 					const initialValue = get(currentNetwork);
 					updateValue(initialValue);
-					
+
 					// Subscribe to currentNetwork changes
 					unsubscribeNetwork = currentNetwork.subscribe(($currentNetwork) => {
 						if (isActive) {
@@ -111,7 +111,7 @@ export const wrongNetwork = derived(
 					}
 				});
 		}
-		
+
 		return () => {
 			isActive = false;
 			if (unsubscribeNetwork) {

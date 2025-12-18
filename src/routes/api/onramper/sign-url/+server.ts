@@ -40,10 +40,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	// Check if secret key is configured
 	if (!ONRAMPER_SECRET_KEY) {
 		console.error('[Onramper] ONRAMPER_SECRET_KEY not configured');
-		return json(
-			{ success: false, error: 'Onramper signing not configured' },
-			{ status: 500 }
-		);
+		return json({ success: false, error: 'Onramper signing not configured' }, { status: 500 });
 	}
 
 	try {
@@ -51,18 +48,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		const { walletAddress } = body;
 
 		if (!walletAddress) {
-			return json(
-				{ success: false, error: 'Wallet address required' },
-				{ status: 400 }
-			);
+			return json({ success: false, error: 'Wallet address required' }, { status: 400 });
 		}
 
 		// Validate address format
 		if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-			return json(
-				{ success: false, error: 'Invalid wallet address format' },
-				{ status: 400 }
-			);
+			return json({ success: false, error: 'Invalid wallet address format' }, { status: 400 });
 		}
 
 		// Build the networkWallets value (must be lowercase network ID)
@@ -81,9 +72,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 	} catch (error) {
 		console.error('[Onramper] Error generating signature:', error);
-		return json(
-			{ success: false, error: 'Failed to generate signature' },
-			{ status: 500 }
-		);
+		return json({ success: false, error: 'Failed to generate signature' }, { status: 500 });
 	}
 };

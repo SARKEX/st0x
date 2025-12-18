@@ -27,12 +27,7 @@
 	<div class="space-y-5">
 		<div class="flex justify-center">
 			<div class="flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20">
-				<svg
-					class="h-8 w-8 text-yellow-400"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
+				<svg class="h-8 w-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"

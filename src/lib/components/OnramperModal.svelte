@@ -65,9 +65,7 @@
 			// Use environment variable to determine Onramper domain
 			// PUBLIC_ONRAMPER_ENV should be 'production' for live, anything else for sandbox
 			const isProduction = env.PUBLIC_ONRAMPER_ENV === 'production';
-			const baseUrl = isProduction
-				? 'https://buy.onramper.com'
-				: 'https://buy.onramper.dev';
+			const baseUrl = isProduction ? 'https://buy.onramper.com' : 'https://buy.onramper.dev';
 			onramperUrl = `${baseUrl}?${params.toString()}`;
 		} catch (err) {
 			console.error('[Onramper] Failed to get signed URL:', err);
@@ -85,7 +83,9 @@
 		</div>
 	{:else if error}
 		<div class="py-8 text-center">
-			<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
+			<div
+				class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20"
+			>
 				<svg class="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
 						stroke-linecap="round"

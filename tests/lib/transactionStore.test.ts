@@ -75,10 +75,11 @@ vi.mock('svelte-wagmi', async () => {
 });
 
 vi.mock('$lib/stores/authStore', async () => {
-	const { mockWalletAddressStore, mockAuthMethodStore } = await import('../mocks/mockStores');
+	const { mockWalletAddressStore, mockAuthMethodStore, mockWrongNetworkStore } = await import('../mocks/mockStores');
 	return {
 		walletAddress: mockWalletAddressStore,
-		authMethod: mockAuthMethodStore
+		authMethod: mockAuthMethodStore,
+		wrongNetwork: mockWrongNetworkStore
 	};
 });
 
@@ -261,7 +262,11 @@ describe('transactionStore tests', () => {
 					maxAmount: 1000000000000000000n,
 					minAmount: 1000000000000000000n,
 					depositAmountToken1: 1000000000000000000n,
-					depositAmountToken2: 1000000000000000000n
+					depositAmountToken2: 1000000000000000000n,
+					inputVaultIdToken1: undefined,
+					inputVaultIdToken2: undefined,
+					outputVaultIdToken1: undefined,
+					outputVaultIdToken2: undefined
 				}),
 			expectedFn: getMarketMakingDeploymentArgs
 		},
@@ -312,7 +317,21 @@ describe('transactionStore tests', () => {
 					depositAmount4: 4000000000000000000n,
 					depositAmount5: 5000000000000000000n,
 					depositAmount6: 6000000000000000000n,
-					depositAmount7: 7000000000000000000n
+					depositAmount7: 7000000000000000000n,
+					inputVaultId1: undefined,
+					inputVaultId2: undefined,
+					inputVaultId3: undefined,
+					inputVaultId4: undefined,
+					inputVaultId5: undefined,
+					inputVaultId6: undefined,
+					inputVaultId7: undefined,
+					outputVaultId1: undefined,
+					outputVaultId2: undefined,
+					outputVaultId3: undefined,
+					outputVaultId4: undefined,
+					outputVaultId5: undefined,
+					outputVaultId6: undefined,
+					outputVaultId7: undefined
 				}),
 			expectedFn: getFolioDeploymentArgs
 		}
