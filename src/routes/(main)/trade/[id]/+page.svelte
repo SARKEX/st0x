@@ -780,7 +780,10 @@
 		</div>
 	</div>
 {:else}
-	<div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
+	<div
+		class="space-y-4 p-3 transition-[margin] duration-200 sm:space-y-6 sm:p-6"
+		class:sm:mr-[22rem]={showTradePanel}
+	>
 		<!-- Header Section with Chart -->
 		<div class="space-y-4 sm:space-y-6">
 			<div class="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-5">
@@ -1224,7 +1227,7 @@
 			</div>
 		</div>
 		<!-- About Section - Collapsible on mobile -->
-		<div class="space-y-4 sm:space-y-6">
+		<div class="space-y-4 overflow-x-hidden sm:space-y-6">
 			<button
 				type="button"
 				class="flex w-full items-center justify-between sm:cursor-default"
@@ -1252,13 +1255,13 @@
 				</svg>
 			</button>
 			<div
-				class="grid gap-4 sm:gap-6 lg:grid-cols-2"
+				class="grid gap-4 overflow-x-hidden sm:gap-6 lg:grid-cols-2"
 				class:hidden={isAboutCollapsed}
 				class:sm:grid={isAboutCollapsed}
 				data-tutorial="fundamentals"
 			>
 				<!-- Token Details (Left) -->
-				<div class="space-y-4">
+				<div class="min-w-0 space-y-4">
 					<div class="space-y-3">
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
 							Token Details
@@ -1422,7 +1425,7 @@
 					{/if}
 				</div>
 				<!-- Underlying Equity (Right) -->
-				<div class="space-y-4">
+				<div class="min-w-0 space-y-4">
 					<div class="space-y-3">
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
 							Equity Details
