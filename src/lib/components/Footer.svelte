@@ -7,9 +7,7 @@
 		>
 			<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
 			<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
-			<a href="/compliance" class="transition-colors hover:text-yellow-500">Compliance</a>
 			<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
-			<a href="/audit" class="transition-colors hover:text-yellow-500">Audits</a>
 			<a href="/faqs" class="transition-colors hover:text-yellow-500">FAQs</a>
 		</div>
 

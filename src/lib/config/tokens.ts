@@ -184,6 +184,32 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:SIVR',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x43422a9d11a6640ef0d5f65292ef8adf87cf8522',
+		symbol: 'tCRCL',
+		decimals: 18,
+		name: 'Circle Internet Group Inc ST0x',
+		logoUrl: '/images/CRCL.png',
+		priceFeedId: '0x92b8527aabe59ea2b12230f7b532769b133ffb118dfbd48ff676f14b273f1365',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:CRCL',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
+		address: '0x6192539a2036c786aba3ca6a2222ff7a0f9c287e',
+		symbol: 'tPPLT',
+		decimals: 18,
+		name: 'abrdn Physical Platinum Shares ETF ST0x',
+		logoUrl: '/images/SIVR.png',
+		priceFeedId: '0x782410278b6c8aa2d437812281526012808404aa14c243f73fb9939eeb88d430',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:PPLT',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	} as unknown as CategorizedToken
 ];
 

@@ -168,6 +168,17 @@ const transactionStore = () => {
 		return `0x${hex}` as `0x${string}`;
 	};
 
+	const sendTransactionWithGas = async (args: {
+		data: Hex;
+		to: `0x${string}`;
+		value?: bigint;
+		gas?: bigint;
+	}): Promise<Hash> => {
+		// Use the unified sendTransaction from walletService
+		// Gas estimation is handled internally by walletService
+		return await sendTransaction(args);
+	};
+
 	// Generic state update helper
 	const setState = (
 		status: TransactionStatus,
