@@ -25,7 +25,7 @@
 
 	let sidebarExpanded = true;
 	let mobileSidebarOpen = false;
-	let sidebarCollapsed = false;
+	let sidebarCollapsed = true;
 
 	// Check if current page should use the clean/floating layout (no sidebar, transparent header)
 	$: isLandingPage = $page.url.pathname === '/';
