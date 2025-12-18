@@ -42,8 +42,14 @@
 
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
 
-	// Hamburger mode below 1024px, or below 1400px when trade panel is open (needs more space)
-	$: isHamburgerMode = windowWidth < 1024 || ($tradePanelOpen && windowWidth < 1400);
+	// Calculate effective breakpoint based on what's taking up space
+	// Base: 1280px for the nav content itself
+	// +256px when sidebar is expanded (not landing page and not collapsed)
+	// +352px when trade panel is open
+	$: sidebarOffset = !isLandingPage && !isSidebarCollapsed ? 256 : 0;
+	$: tradePanelOffset = $tradePanelOpen ? 352 : 0;
+	$: effectiveBreakpoint = 1280 + sidebarOffset + tradePanelOffset;
+	$: isHamburgerMode = windowWidth < effectiveBreakpoint;
 	$: if (!isHamburgerMode) mobileNavOpen = false;
 
 	onMount(() => {
