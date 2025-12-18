@@ -311,12 +311,19 @@ export async function validateSwap(
  *
  * This is the main function used during tStock purchases when user
  * pays with a non-USDC token or from a different chain.
+ *
+ * @param sourceToken - The token to swap from
+ * @param amount - Amount to swap (in source token decimals)
+ * @param recipient - The address to receive USDC
+ * @param walletAccount - User's wallet account for signing
+ * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
  */
 export async function executeSwapToSettlement(
 	sourceToken: PaymentToken,
 	amount: bigint,
 	recipient: Address,
-	walletAccount: Account
+	walletAccount: Account,
+	feeAsset?: string
 ): Promise<{ txHash: Hex; intentId: string; outputAmount: bigint }> {
 	const client = getRhinestoneClient();
 
@@ -350,7 +357,7 @@ export async function executeSwapToSettlement(
 		slippageBps: 50
 	};
 
-	const result = await client.executeCrossChainSwap(swapParams, walletAccount);
+	const result = await client.executeCrossChainSwap(swapParams, walletAccount, feeAsset);
 
 	return {
 		txHash: result.txHash,
@@ -364,12 +371,19 @@ export async function executeSwapToSettlement(
  *
  * This is used after selling tStocks when user wants proceeds
  * in a different token or on a different chain.
+ *
+ * @param targetToken - The token to receive
+ * @param usdcAmount - Amount of USDC to swap (in USDC decimals)
+ * @param recipient - The address to receive target token
+ * @param walletAccount - User's wallet account for signing
+ * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
  */
 export async function executeSwapFromSettlement(
 	targetToken: PaymentToken,
 	usdcAmount: bigint,
 	recipient: Address,
-	walletAccount: Account
+	walletAccount: Account,
+	feeAsset?: string
 ): Promise<{ txHash: Hex; intentId: string; outputAmount: bigint }> {
 	const client = getRhinestoneClient();
 
@@ -396,7 +410,7 @@ export async function executeSwapFromSettlement(
 		slippageBps: 50
 	};
 
-	const result = await client.executeCrossChainSwap(swapParams, walletAccount);
+	const result = await client.executeCrossChainSwap(swapParams, walletAccount, feeAsset);
 
 	return {
 		txHash: result.txHash,

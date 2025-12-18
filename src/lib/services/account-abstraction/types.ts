@@ -168,7 +168,10 @@ export interface TradeWithAAParams {
 	slippageBps: number;
 
 	// Gas payment preference
-	gasPaymentMethod: 'native' | 'sponsored';
+	// - native: pay with ETH
+	// - erc20: pay with USDC from user's balance (Base only)
+	// - sponsored: app sponsors gas
+	gasPaymentMethod: 'native' | 'erc20' | 'sponsored';
 
 	// Wallet address
 	walletAddress: Address;
