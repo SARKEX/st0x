@@ -46,12 +46,12 @@
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
 
 	// Calculate effective breakpoint based on what's taking up space
-	// Base: 1400px for the nav content itself
+	// Base: 1350px for the nav content itself
 	// +256px when sidebar is expanded (not landing page and not collapsed)
 	// +352px when trade panel is open
 	$: sidebarOffset = !isLandingPage && !isSidebarCollapsed ? 256 : 0;
 	$: tradePanelOffset = $tradePanelOpen ? 352 : 0;
-	$: effectiveBreakpoint = 1400 + sidebarOffset + tradePanelOffset;
+	$: effectiveBreakpoint = 1350 + sidebarOffset + tradePanelOffset;
 	$: isHamburgerMode = windowWidth < effectiveBreakpoint;
 	$: if (!isHamburgerMode) mobileNavOpen = false;
 
