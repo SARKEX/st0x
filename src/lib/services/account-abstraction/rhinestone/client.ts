@@ -71,6 +71,7 @@ interface RhinestoneAccount {
 		targetChain: Chain;
 		calls: Array<{ to: Address; value: bigint; data: Hex }>;
 		tokenRequests?: Array<{ address: Address; amount: bigint }>;
+		feeAsset?: string; // For ERC20 gas payment - e.g., 'USDC'
 	}) => Promise<{ hash: Hex; intentId: string }>;
 	waitForExecution: (transaction: {
 		hash: Hex;
@@ -373,10 +374,15 @@ export class RhinestoneClient {
 	 * 2. Build the transaction with tokenRequests (what tokens to pull from source chain)
 	 * 3. Execute via sendTransaction which handles cross-chain coordination
 	 * 4. Wait for execution completion
+	 *
+	 * @param params - Swap parameters
+	 * @param walletAccount - User's wallet account for signing
+	 * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
 	 */
 	async executeCrossChainSwap(
 		params: CrossChainSwapParams,
-		walletAccount: Account
+		walletAccount: Account,
+		feeAsset?: string
 	): Promise<{ txHash: Hex; intentId: string }> {
 		try {
 			// Validate API key is configured
@@ -412,6 +418,7 @@ export class RhinestoneClient {
 
 			// Execute cross-chain transaction via Rhinestone
 			// tokenRequests tells the solver what tokens to pull from source chain
+			// feeAsset specifies which token to use for gas payment (e.g., 'USDC')
 			const transaction = await rhinestoneAccount.sendTransaction({
 				sourceChain,
 				targetChain,
@@ -421,7 +428,8 @@ export class RhinestoneClient {
 						address: params.sourceToken.address as Address,
 						amount: params.amount
 					}
-				]
+				],
+				...(feeAsset && { feeAsset })
 			});
 
 			// Wait for execution to complete
@@ -446,10 +454,15 @@ export class RhinestoneClient {
 	 *
 	 * Use this when you need to execute specific contract calls on a target chain
 	 * while sourcing funds from another chain.
+	 *
+	 * @param params - Transaction parameters
+	 * @param walletAccount - User's wallet account for signing
+	 * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
 	 */
 	async executeOmnichainTransaction(
 		params: OmnichainTransactionParams,
-		walletAccount: Account
+		walletAccount: Account,
+		feeAsset?: string
 	): Promise<{ txHash: Hex; intentId: string }> {
 		try {
 			// Validate API key
@@ -486,6 +499,7 @@ export class RhinestoneClient {
 				})) || [];
 
 			// Execute cross-chain transaction
+			// feeAsset specifies which token to use for gas payment (e.g., 'USDC')
 			const transaction = await rhinestoneAccount.sendTransaction({
 				sourceChain,
 				targetChain,
@@ -494,7 +508,8 @@ export class RhinestoneClient {
 					value: call.value || 0n,
 					data: call.data as Hex
 				})),
-				tokenRequests
+				tokenRequests,
+				...(feeAsset && { feeAsset })
 			});
 
 			// Wait for execution
