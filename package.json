@@ -71,7 +71,7 @@
 		"@graphql-codegen/typescript-document-nodes": "^4.0.12",
 		"@rainlanguage/float": "^0.0.0-alpha.39",
 		"@rainlanguage/orderbook": "=0.0.1-alpha.196",
-		"@rhinestone/sdk": "^1.0.39",
+		"@rhinestone/sdk": "^1.1.1",
 		"@scalar/api-reference": "^1.40.1",
 		"@sveltejs/adapter-static": "3.0.6",
 		"@testing-library/user-event": "14.5.2",

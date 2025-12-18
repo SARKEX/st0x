@@ -206,3 +206,112 @@ export function getSignerAddress(): string | null {
 
 	return null;
 }
+
+/**
+ * Send a transaction with optional ERC20 gas payment via Rhinestone
+ *
+ * When payInStablecoin is true, uses Rhinestone's omnichain transaction
+ * to pay gas with USDC instead of ETH. Requires Rhinestone API key.
+ *
+ * @param params - Transaction parameters
+ * @param payInStablecoin - If true, pay gas with USDC via Rhinestone
+ */
+export async function sendTransactionWithGasOption(
+	params: {
+		to: `0x${string}`;
+		data?: Hex;
+		value?: bigint;
+	},
+	payInStablecoin: boolean
+): Promise<Hash> {
+	// If not paying in stablecoin, use regular transaction
+	if (!payInStablecoin) {
+		return sendTransaction(params);
+	}
+
+	// For stablecoin gas payment, we need to use Rhinestone
+	const method = get(authMethod);
+
+	if (method !== 'dynamic') {
+		// Rhinestone ERC20 gas payment currently only works with Dynamic embedded wallets
+		// Fall back to regular transaction for external wallets
+		console.warn('ERC20 gas payment only available for Dynamic wallets, falling back to ETH gas');
+		return sendTransaction(params);
+	}
+
+	// Dynamic import to avoid circular dependencies
+	const { getRhinestoneClient, isRhinestoneConfigured } = await import(
+		'./account-abstraction/rhinestone/client'
+	);
+	const { getDynamicAccountForRhinestone } = await import('./account-abstraction/wallets/dynamic');
+	const { SUPPORTED_NETWORKS } = await import('./account-abstraction/types');
+
+	if (!isRhinestoneConfigured()) {
+		console.warn('Rhinestone not configured, falling back to ETH gas');
+		return sendTransaction(params);
+	}
+
+	const walletAccount = await getDynamicAccountForRhinestone();
+	if (!walletAccount) {
+		console.warn('Could not get wallet account for Rhinestone, falling back to ETH gas');
+		return sendTransaction(params);
+	}
+
+	try {
+		const rhinestoneClient = getRhinestoneClient();
+
+		console.log('[Rhinestone] Executing same-chain transaction with USDC gas payment', {
+			to: params.to,
+			value: params.value?.toString(),
+			dataLength: params.data?.length,
+			walletAddress: walletAccount.address
+		});
+
+		// Execute same-chain transaction with USDC gas payment
+		// For same-chain, use executeSameChainTransaction with 'chain' parameter
+		const result = await rhinestoneClient.executeSameChainTransaction(
+			{
+				chainId: SUPPORTED_NETWORKS.BASE,
+				calls: [
+					{
+						to: params.to,
+						value: params.value || 0n,
+						data: params.data || '0x'
+					}
+				]
+			},
+			walletAccount,
+			'USDC' // Pay gas in USDC
+		);
+
+		console.log('[Rhinestone] Transaction successful:', result);
+		return result.txHash;
+	} catch (error) {
+		console.error('[Rhinestone] ERC20 gas payment failed:', error);
+		console.error('[Rhinestone] Error details:', {
+			name: (error as Error)?.name,
+			message: (error as Error)?.message,
+			stack: (error as Error)?.stack,
+			cause: (error as unknown as { cause?: unknown })?.cause
+		});
+
+		// Extract meaningful error message
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+		// Check for common error cases and provide user-friendly messages
+		if (errorMessage.toLowerCase().includes('insufficient balance')) {
+			throw new Error(
+				'Insufficient USDC balance to pay gas fees. Please add USDC to your wallet or disable "Pay fees in stablecoin" option.'
+			);
+		}
+
+		if (errorMessage.toLowerCase().includes('api key')) {
+			throw new Error(
+				'Rhinestone API key not configured. Please contact support or disable "Pay fees in stablecoin" option.'
+			);
+		}
+
+		// Re-throw with clear message
+		throw new Error(`Failed to pay gas with USDC: ${errorMessage}`);
+	}
+}

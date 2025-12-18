@@ -8,9 +8,10 @@
 		dynamicSession,
 		sendModalToken
 	} from '$lib/stores/dynamicStore';
-	import { sendTransaction } from '$lib/services/walletService';
-	import { currentNetwork } from '$lib/stores';
+	import { sendTransactionWithGasOption } from '$lib/services/walletService';
+	import { currentNetwork, payFeesInStablecoin } from '$lib/stores';
 	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
+	import type { SupportedNetworkId } from '$lib/services/account-abstraction';
 	import {
 		parseEther,
 		parseUnits,
@@ -71,6 +72,7 @@
 	let sending = false;
 	let error: string | null = null;
 	let txHash: string | null = null;
+	let sendingMaxETH = false; // Flag to indicate we want to send max ETH
 
 	// When modal opens with pre-selected token, set it
 	$: if ($showSendFundsModal && $sendModalToken) {
@@ -104,13 +106,27 @@
 		error = null;
 		txHash = null;
 		sending = false;
+		sendingMaxETH = false;
 	}
 
 	function handleMax() {
 		if (preSelectedBalanceRaw && $sendModalToken) {
-			// Use the raw balance to get exact amount
-			amount = formatUnits(preSelectedBalanceRaw, $sendModalToken.decimals);
+			// For native ETH, set flag to calculate exact amount at send time
+			if (selectedToken?.address === 'native') {
+				sendingMaxETH = true;
+				// Show approximate amount for display (will be recalculated precisely at send time)
+				amount = formatUnits(preSelectedBalanceRaw, $sendModalToken.decimals);
+			} else {
+				// For ERC20 tokens, use the full balance (gas is paid in ETH)
+				sendingMaxETH = false;
+				amount = formatUnits(preSelectedBalanceRaw, $sendModalToken.decimals);
+			}
 		}
+	}
+
+	// Clear sendingMaxETH flag when user manually edits the amount
+	function handleAmountChange() {
+		sendingMaxETH = false;
 	}
 
 	async function handleSend() {
@@ -124,11 +140,44 @@
 
 			if (selectedToken.address === 'native') {
 				// Send native ETH
-				const valueInWei = parseEther(amount);
-				hash = await sendTransaction({
-					to: recipientAddress as `0x${string}`,
-					value: valueInWei
-				});
+				let valueInWei: bigint;
+
+				if (sendingMaxETH && preSelectedBalanceRaw) {
+					// Calculate exact amount: balance - actual gas cost
+					// This is calculated right before sending for maximum precision
+					const { createPublicClient } = await import('viem');
+					const { base } = await import('viem/chains');
+					const { createRpcTransport } = await import('$lib/utils/rpc');
+
+					const publicClient = createPublicClient({
+						chain: base,
+						// Cast chainId to SupportedNetworkId for RPC transport
+						transport: createRpcTransport($currentNetwork.chainId as SupportedNetworkId)
+					});
+
+					// Get current gas price
+					const gasPrice = await publicClient.getGasPrice();
+					// ETH transfer is always exactly 21000 gas
+					const gasLimit = 21000n;
+					// Add small buffer (1%) for any price movement during tx submission
+					const gasCost = (gasLimit * gasPrice * 101n) / 100n;
+
+					valueInWei = preSelectedBalanceRaw - gasCost;
+
+					if (valueInWei <= 0n) {
+						throw new Error('Insufficient balance to cover gas fees');
+					}
+				} else {
+					valueInWei = parseEther(amount);
+				}
+
+				hash = await sendTransactionWithGasOption(
+					{
+						to: recipientAddress as `0x${string}`,
+						value: valueInWei
+					},
+					$payFeesInStablecoin
+				);
 			} else {
 				// Send ERC20 token
 				const amountInUnits = parseUnits(amount, selectedToken.decimals);
@@ -141,10 +190,13 @@
 				});
 
 				// Send transaction to the token contract
-				hash = await sendTransaction({
-					to: selectedToken.address,
-					data
-				});
+				hash = await sendTransactionWithGasOption(
+					{
+						to: selectedToken.address,
+						data
+					},
+					$payFeesInStablecoin
+				);
 			}
 
 			txHash = hash;
@@ -178,6 +230,8 @@
 		} else {
 			amount = value;
 		}
+		// Clear sendingMaxETH flag since user is manually editing
+		handleAmountChange();
 	}
 </script>
 
@@ -295,13 +349,20 @@
 								<button
 									type="button"
 									on:click={handleMax}
-									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-yellow-400 hover:bg-gray-600"
+									class="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-xs font-medium {sendingMaxETH
+										? 'bg-yellow-500 text-black'
+										: 'bg-gray-700 text-yellow-400 hover:bg-gray-600'}"
 								>
 									MAX
 								</button>
 							{/if}
 						</div>
 					</div>
+					{#if sendingMaxETH}
+						<p class="text-xs text-yellow-400/80">
+							Sending max ETH: exact amount will be calculated at send time to cover gas
+						</p>
+					{/if}
 				</div>
 
 				<!-- Error message -->
@@ -310,6 +371,40 @@
 						<p class="text-sm text-red-400">{error}</p>
 					</div>
 				{/if}
+
+				<!-- Pay fees in stablecoin option -->
+				<label
+					class="flex cursor-pointer items-center gap-2 py-2"
+					title="Pay gas fees using USDC on Base instead of ETH"
+				>
+					<input
+						type="checkbox"
+						checked={$payFeesInStablecoin}
+						on:change={() => payFeesInStablecoin.toggle()}
+						class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+					/>
+					<span class="text-sm text-gray-300">Pay fees in stablecoin</span>
+					<span class="group relative">
+						<svg
+							class="h-4 w-4 text-gray-500"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+						<span
+							class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-xs text-gray-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+						>
+							Pay gas fees using USDC on Base instead of ETH. No ETH required.
+						</span>
+					</span>
+				</label>
 
 				<!-- Actions -->
 				<div class="flex gap-3 pt-2">

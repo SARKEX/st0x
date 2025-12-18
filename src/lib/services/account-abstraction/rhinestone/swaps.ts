@@ -215,6 +215,7 @@ function getUSDCAddress(chainId: SupportedNetworkId): Address {
 	const addresses: Record<SupportedNetworkId, Address> = {
 		[SUPPORTED_NETWORKS.BASE]: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
 		[SUPPORTED_NETWORKS.ARBITRUM]: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+		[SUPPORTED_NETWORKS.OPTIMISM]: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
 		[SUPPORTED_NETWORKS.ETHEREUM]: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
 		[SUPPORTED_NETWORKS.BASE_SEPOLIA]: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
 		[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'
@@ -311,12 +312,19 @@ export async function validateSwap(
  *
  * This is the main function used during tStock purchases when user
  * pays with a non-USDC token or from a different chain.
+ *
+ * @param sourceToken - The token to swap from
+ * @param amount - Amount to swap (in source token decimals)
+ * @param recipient - The address to receive USDC
+ * @param walletAccount - User's wallet account for signing
+ * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
  */
 export async function executeSwapToSettlement(
 	sourceToken: PaymentToken,
 	amount: bigint,
 	recipient: Address,
-	walletAccount: Account
+	walletAccount: Account,
+	feeAsset?: string
 ): Promise<{ txHash: Hex; intentId: string; outputAmount: bigint }> {
 	const client = getRhinestoneClient();
 
@@ -339,7 +347,32 @@ export async function executeSwapToSettlement(
 	// Get quote first to know expected output
 	const quote = await getSwapToSettlementQuote(sourceToken, amount, recipient);
 
-	// Execute the cross-chain swap
+	// Check if this is a same-chain swap (e.g., WETH → USDC on Base)
+	const isSameChain = sourceToken.chainId === SETTLEMENT_CHAIN_ID;
+
+	if (isSameChain) {
+		// For same-chain swaps, use executeSameChainSwap which handles tokenRequests properly
+		const result = await client.executeSameChainSwap(
+			{
+				chainId: sourceToken.chainId,
+				sourceToken,
+				targetToken: USDC_BASE,
+				amount,
+				recipient,
+				slippageBps: 50
+			},
+			walletAccount,
+			feeAsset
+		);
+
+		return {
+			txHash: result.txHash,
+			intentId: result.intentId,
+			outputAmount: quote.outputAmount
+		};
+	}
+
+	// Execute cross-chain swap for different chains
 	const swapParams: CrossChainSwapParams = {
 		sourceChain: sourceToken.chainId,
 		targetChain: SETTLEMENT_CHAIN_ID,
@@ -350,7 +383,7 @@ export async function executeSwapToSettlement(
 		slippageBps: 50
 	};
 
-	const result = await client.executeCrossChainSwap(swapParams, walletAccount);
+	const result = await client.executeCrossChainSwap(swapParams, walletAccount, feeAsset);
 
 	return {
 		txHash: result.txHash,
@@ -364,12 +397,19 @@ export async function executeSwapToSettlement(
  *
  * This is used after selling tStocks when user wants proceeds
  * in a different token or on a different chain.
+ *
+ * @param targetToken - The token to receive
+ * @param usdcAmount - Amount of USDC to swap (in USDC decimals)
+ * @param recipient - The address to receive target token
+ * @param walletAccount - User's wallet account for signing
+ * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
  */
 export async function executeSwapFromSettlement(
 	targetToken: PaymentToken,
 	usdcAmount: bigint,
 	recipient: Address,
-	walletAccount: Account
+	walletAccount: Account,
+	feeAsset?: string
 ): Promise<{ txHash: Hex; intentId: string; outputAmount: bigint }> {
 	const client = getRhinestoneClient();
 
@@ -396,7 +436,7 @@ export async function executeSwapFromSettlement(
 		slippageBps: 50
 	};
 
-	const result = await client.executeCrossChainSwap(swapParams, walletAccount);
+	const result = await client.executeCrossChainSwap(swapParams, walletAccount, feeAsset);
 
 	return {
 		txHash: result.txHash,

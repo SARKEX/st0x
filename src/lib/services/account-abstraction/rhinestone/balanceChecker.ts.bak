@@ -5,7 +5,13 @@
  * Supports both native ETH and ERC20 tokens.
  */
 
-import { createPublicClient, erc20Abi, type Address, type PublicClient, type Chain } from 'viem';
+import {
+	createPublicClient,
+	erc20Abi,
+	type Address,
+	type PublicClient,
+	type Chain
+} from 'viem';
 import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { SUPPORTED_NETWORKS, type SupportedNetworkId, type PaymentToken } from '../types';
 
@@ -19,7 +25,6 @@ import { createRpcTransport } from '$lib/utils/rpc';
 const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 	[SUPPORTED_NETWORKS.BASE]: base,
 	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
-	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
 	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
 	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia

@@ -31,7 +31,7 @@ import {
 	executeSwapToSettlement,
 	executeSwapFromSettlement
 } from './rhinestone/swaps';
-import { supportsEIP7702 } from './wallets/privy-7702';
+import { supportsEIP7702 } from './wallets/dynamic';
 import { USDC_BASE } from './tokens';
 import { getBalanceChecker, formatBalanceShortfall } from './rhinestone/balanceChecker';
 import { getPriceOracle } from './rhinestone/priceOracle';
@@ -46,15 +46,17 @@ const RHINESTONE_SPOKE_POOL = '0x000000000060f6e853447881951574cdd0663530' as Ad
 // =============================================================================
 
 export interface GasPaymentOption {
-	method: 'native' | 'sponsored';
+	method: 'native' | 'erc20' | 'sponsored';
 	available: boolean;
 	label: string;
 	description: string;
 	estimatedCost?: string;
+	feeAsset?: string; // For erc20 method - e.g., 'USDC'
 }
 
 export interface GasPaymentMethod {
-	type: 'native' | 'sponsored';
+	type: 'native' | 'erc20' | 'sponsored';
+	feeAsset?: string; // For erc20 method - e.g., 'USDC'
 }
 
 // =============================================================================
@@ -73,6 +75,7 @@ export class AccountAbstractionOrchestrator {
 	 * @param recipient - Recipient address (user's address on Base)
 	 * @param walletAccount - User's wallet account for signing
 	 * @param onStatusChange - Optional callback for transaction status updates
+	 * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
 	 * @returns Result with USDC amount received and tx hash
 	 */
 	async executePreTradeSwap(
@@ -80,7 +83,8 @@ export class AccountAbstractionOrchestrator {
 		amount: bigint,
 		recipient: Address,
 		walletAccount: Account,
-		onStatusChange?: (update: TransactionUpdate) => void
+		onStatusChange?: (update: TransactionUpdate) => void,
+		feeAsset?: string
 	): Promise<{
 		success: boolean;
 		usdcAmount: bigint;
@@ -128,7 +132,13 @@ export class AccountAbstractionOrchestrator {
 			}
 
 			// Execute the swap
-			const result = await executeSwapToSettlement(sourceToken, amount, recipient, walletAccount);
+			const result = await executeSwapToSettlement(
+				sourceToken,
+				amount,
+				recipient,
+				walletAccount,
+				feeAsset
+			);
 
 			// Start monitoring the transaction if we have an intentId
 			if (result.intentId && onStatusChange) {
@@ -159,12 +169,19 @@ export class AccountAbstractionOrchestrator {
 	 * Execute a swap from USDC on Base after selling tStocks
 	 *
 	 * Called AFTER the trade when user wants proceeds in different token/chain.
+	 *
+	 * @param targetToken - The token to receive
+	 * @param usdcAmount - Amount of USDC to swap
+	 * @param recipient - The address to receive target token
+	 * @param walletAccount - User's wallet account for signing
+	 * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
 	 */
 	async executePostTradeSwap(
 		targetToken: PaymentToken,
 		usdcAmount: bigint,
 		recipient: Address,
-		walletAccount: Account
+		walletAccount: Account,
+		feeAsset?: string
 	): Promise<{
 		success: boolean;
 		outputAmount: bigint;
@@ -196,7 +213,8 @@ export class AccountAbstractionOrchestrator {
 				targetToken,
 				usdcAmount,
 				recipient,
-				walletAccount
+				walletAccount,
+				feeAsset
 			);
 
 			return {
@@ -342,12 +360,16 @@ export class AccountAbstractionOrchestrator {
 
 				steps[steps.length - 1].status = 'executing';
 
+				// Determine feeAsset based on gas payment method
+				const feeAsset = params.gasPaymentMethod === 'erc20' ? 'USDC' : undefined;
+
 				// Execute the swap
 				const swapResult = await executeSwapToSettlement(
 					params.sourceToken,
 					params.sourceAmount,
 					params.walletAddress,
-					walletAccount
+					walletAccount,
+					feeAsset
 				);
 
 				// Update settlement amount from result
@@ -514,9 +536,12 @@ export class AccountAbstractionOrchestrator {
 	/**
 	 * Get available gas payment options
 	 *
-	 * Rhinestone has native gas sponsorship - sponsors pay by depositing USDC on Base.
+	 * Options:
+	 * - native: User pays with ETH
+	 * - erc20: User pays with USDC from their balance (Base only)
+	 * - sponsored: App sponsors gas (requires deposit to Rhinestone)
 	 */
-	getGasPaymentOptions(_chainId: SupportedNetworkId): GasPaymentOption[] {
+	getGasPaymentOptions(chainId: SupportedNetworkId): GasPaymentOption[] {
 		const options: GasPaymentOption[] = [];
 		const rhinestoneClient = getRhinestoneClient();
 
@@ -528,6 +553,19 @@ export class AccountAbstractionOrchestrator {
 			description: 'Standard gas payment using ETH'
 		});
 
+		// ERC20 gas payment - user pays with USDC (Base only)
+		// This uses Rhinestone's feeAsset feature
+		if (chainId === 8453) {
+			// Base mainnet
+			options.push({
+				method: 'erc20',
+				available: true,
+				label: 'Pay with USDC',
+				description: 'Pay gas fees using USDC from your balance',
+				feeAsset: 'USDC'
+			});
+		}
+
 		// Sponsored gas (via Rhinestone native sponsorship)
 		// Requires: deposit USDC to sponsorship wallet + set PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true
 		if (rhinestoneClient.isSponsorshipEnabled()) {
@@ -535,14 +573,7 @@ export class AccountAbstractionOrchestrator {
 				method: 'sponsored',
 				available: true,
 				label: 'Sponsored',
-				description: 'Gas fees sponsored (paid from USDC sponsorship balance)'
-			});
-		} else {
-			options.push({
-				method: 'sponsored',
-				available: false,
-				label: 'Sponsored',
-				description: 'Enable with PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED=true'
+				description: 'Gas fees sponsored (free for you)'
 			});
 		}
 
@@ -553,14 +584,18 @@ export class AccountAbstractionOrchestrator {
 	 * Select gas payment method
 	 */
 	async selectGasPaymentMethod(
-		walletAddress: Address,
+		_walletAddress: Address,
 		chainId: SupportedNetworkId,
-		preferredMethod: 'native' | 'sponsored'
+		preferredMethod: 'native' | 'erc20' | 'sponsored'
 	): Promise<GasPaymentMethod> {
 		const rhinestoneClient = getRhinestoneClient();
 
 		if (preferredMethod === 'sponsored' && rhinestoneClient.isSponsorshipEnabled()) {
 			return { type: 'sponsored' };
+		}
+
+		if (preferredMethod === 'erc20' && chainId === 8453) {
+			return { type: 'erc20', feeAsset: 'USDC' };
 		}
 
 		return { type: 'native' };

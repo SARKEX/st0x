@@ -33,7 +33,6 @@ export interface GasOracleConfig {
 const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 	[SUPPORTED_NETWORKS.BASE]: base,
 	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
-	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
 	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
 	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia

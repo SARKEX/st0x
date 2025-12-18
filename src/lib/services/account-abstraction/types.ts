@@ -13,6 +13,7 @@ import type { Address, Hash, Hex } from 'viem';
 export const SUPPORTED_NETWORKS = {
 	BASE: 8453,
 	ARBITRUM: 42161,
+	OPTIMISM: 10,
 	ETHEREUM: 1,
 	BASE_SEPOLIA: 84532,
 	ARBITRUM_SEPOLIA: 421614
@@ -168,7 +169,10 @@ export interface TradeWithAAParams {
 	slippageBps: number;
 
 	// Gas payment preference
-	gasPaymentMethod: 'native' | 'sponsored';
+	// - native: pay with ETH
+	// - erc20: pay with USDC from user's balance (Base only)
+	// - sponsored: app sponsors gas
+	gasPaymentMethod: 'native' | 'erc20' | 'sponsored';
 
 	// Wallet address
 	walletAddress: Address;

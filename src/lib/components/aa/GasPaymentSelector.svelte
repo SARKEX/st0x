@@ -4,20 +4,24 @@
 	 *
 	 * Allows users to choose how they want to pay for gas:
 	 * - Native ETH (default)
+	 * - ERC20 (pay with USDC, available on Base)
 	 * - Sponsored (via Rhinestone paymaster, if configured)
 	 */
 	import { createEventDispatcher } from 'svelte';
 	import { type SupportedNetworkId, getAAOrchestrator } from '$lib/services/account-abstraction';
 
+	type GasMethod = 'native' | 'erc20' | 'sponsored';
+
 	// Props
 	export let chainId: SupportedNetworkId;
-	export let selectedMethod: 'native' | 'sponsored' = 'native';
+	export let selectedMethod: GasMethod = 'native';
 	export let estimatedGasETH: bigint = 0n;
+	export let estimatedGasUSDC: bigint = 0n;
 	export let disabled: boolean = false;
 	export let compact: boolean = false;
 
 	const dispatch = createEventDispatcher<{
-		change: { method: 'native' | 'sponsored' };
+		change: { method: GasMethod; feeAsset?: string };
 	}>();
 
 	// Get available options
@@ -27,21 +31,27 @@
 	// Format gas estimates
 	$: formattedGasETH =
 		estimatedGasETH > 0n ? `${(Number(estimatedGasETH) / 1e18).toFixed(6)} ETH` : 'Calculating...';
+	$: formattedGasUSDC =
+		estimatedGasUSDC > 0n
+			? `${(Number(estimatedGasUSDC) / 1e6).toFixed(2)} USDC`
+			: 'Calculating...';
 
-	function selectMethod(method: 'native' | 'sponsored') {
+	function selectMethod(method: GasMethod) {
 		if (disabled) return;
 
 		const option = options.find((o) => o.method === method);
 		if (option && option.available) {
 			selectedMethod = method;
-			dispatch('change', { method });
+			dispatch('change', { method, feeAsset: option.feeAsset });
 		}
 	}
 
-	function getEstimate(method: 'native' | 'sponsored'): string {
+	function getEstimate(method: GasMethod): string {
 		switch (method) {
 			case 'native':
 				return formattedGasETH;
+			case 'erc20':
+				return formattedGasUSDC;
 			case 'sponsored':
 				return 'Free';
 			default:
@@ -73,6 +83,17 @@
 						<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
 							<path d="M10 1L3 10l7 4 7-4-7-9z" fill="currentColor" opacity="0.3" />
 							<path d="M10 19l7-9-7 4-7-4 7 9z" fill="currentColor" />
+						</svg>
+					{:else if option.method === 'erc20'}
+						<!-- USDC Dollar icon -->
+						<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+							<circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" />
+							<path
+								d="M10 5v10M12.5 7.5c0-1.1-1.1-2-2.5-2s-2.5.9-2.5 2c0 1.1 1.1 2 2.5 2s2.5.9 2.5 2c0 1.1-1.1 2-2.5 2s-2.5-.9-2.5-2"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
 						</svg>
 					{:else if option.method === 'sponsored'}
 						<svg width="20" height="20" viewBox="0 0 20 20" fill="none">

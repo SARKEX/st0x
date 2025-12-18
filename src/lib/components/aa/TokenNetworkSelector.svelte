@@ -2,11 +2,11 @@
 	/**
 	 * Token & Network Selector Component
 	 *
-	 * Allows users to select which token and network they want to pay with.
-	 * Shows cross-chain swap information when selecting non-USDC tokens or different networks.
-	 * Integrates with aaPaymentStore for cross-chain swap orchestration.
+	 * Shows all payment tokens across all networks in a single dropdown.
+	 * Highlights networks where user has balances with dividers.
 	 */
 	import { createEventDispatcher, onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import {
 		type PaymentToken,
 		type SupportedNetworkId,
@@ -16,12 +16,22 @@
 		USDC_BASE
 	} from '$lib/services/account-abstraction';
 	import { aaPaymentStore } from '$lib/stores/aaPaymentStore';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
+	import {
+		fetchAllTokenBalances,
+		getBalanceQueryKey,
+		BALANCE_QUERY_OPTIONS,
+		getTokenBalance as getTokenBalanceFromStore,
+		type TokenBalance
+	} from '$lib/stores/balanceStore';
 
 	// Props
 	export let selectedToken: PaymentToken | null = null;
 	export let disabled: boolean = false;
 	export let showNetworkWarning: boolean = true;
-	export let syncWithStore: boolean = true; // Whether to sync with aaPaymentStore
+	export let syncWithStore: boolean = true;
 
 	const dispatch = createEventDispatcher<{
 		select: { token: PaymentToken };
@@ -38,35 +48,84 @@
 
 	// State
 	let isOpen = false;
-	let selectedNetwork: SupportedNetworkId = SUPPORTED_NETWORKS.BASE;
 
-	// Available networks (mainnet only for now)
+	// Available networks
 	const availableNetworks: SupportedNetworkId[] = [
 		SUPPORTED_NETWORKS.BASE,
 		SUPPORTED_NETWORKS.ARBITRUM,
+		SUPPORTED_NETWORKS.OPTIMISM,
 		SUPPORTED_NETWORKS.ETHEREUM
 	];
 
-	// Get tokens for selected network (exclude native ETH, show only ERC20s)
-	$: availableTokens = getPaymentTokensForNetwork(selectedNetwork).filter((t) => !t.isNative);
+	// Helper to check if token has non-zero balance
+	function hasNonZeroBalance(token: PaymentToken, balances: TokenBalance[]): boolean {
+		const match = balances.find(
+			(b) =>
+				b?.token?.address?.toLowerCase() === token.address.toLowerCase() &&
+				b?.token?.chainId === token.chainId
+		);
+		return match ? match.balance > 0n : false;
+	}
+
+	// Filter tokens to only show those with non-zero balances
+	$: allNetworkTokens = availableNetworks
+		.map((network) => {
+			const tokens = getPaymentTokensForNetwork(network);
+			const tokenBalances = $tokenBalancesQuery?.data ?? [];
+
+			// If balances haven't loaded yet, show all tokens
+			const hasLoadedBalances = tokenBalances.length > 0;
+
+			const filteredTokens = hasLoadedBalances
+				? tokens.filter((token) => hasNonZeroBalance(token, tokenBalances))
+				: tokens;
+
+			return {
+				network,
+				networkName: NETWORK_NAMES[network] || `Chain ${network}`,
+				tokens: filteredTokens,
+				totalBalance: 0
+			};
+		})
+		// Filter out networks with no tokens
+		.filter((networkGroup) => networkGroup.tokens.length > 0);
+
+	// Use centralized balance store (shared with Dashboard and NetworkSelector)
+	// Shares cache with other components, so no additional RPC calls
+	$: tokenBalancesQuery = createQuery({
+		queryKey: getBalanceQueryKey($walletAddress),
+		enabled: browser && !!($isAuthenticated && $walletAddress && $wagmiConfig),
+		...BALANCE_QUERY_OPTIONS,
+		queryFn: async () => {
+			if (!$walletAddress || !$wagmiConfig) return [];
+
+			// Fetch all balances once using centralized store
+			return await fetchAllTokenBalances($walletAddress as `0x${string}`, $wagmiConfig);
+		}
+	});
+
+	// Helper to get token balance info
+	function getTokenBalanceInfo(token: PaymentToken): { formatted: number; isStablecoin: boolean } {
+		try {
+			const tokenBalances = $tokenBalancesQuery?.data ?? [];
+			const balance = getTokenBalanceFromStore(tokenBalances, token.address, token.chainId);
+			const isStablecoin = token.symbol === 'USDC' || token.symbol === 'USDT';
+			return {
+				formatted: balance?.balanceFormatted ?? 0,
+				isStablecoin
+			};
+		} catch (error) {
+			console.error('[TokenNetworkSelector] Error getting token balance:', error);
+			return { formatted: 0, isStablecoin: false };
+		}
+	}
 
 	// Check if selection requires cross-chain swap
 	$: requiresCrossChainSwap = selectedToken && selectedToken.chainId !== SUPPORTED_NETWORKS.BASE;
-
 	$: requiresTokenSwap = selectedToken && selectedToken.symbol !== 'USDC';
 
-	// Helper to get network name
 	function getNetworkName(chainId: number): string {
 		return NETWORK_NAMES[chainId as SupportedNetworkId] || `Chain ${chainId}`;
-	}
-
-	function selectNetwork(network: SupportedNetworkId) {
-		selectedNetwork = network;
-		// Auto-select first token (USDC) when changing network
-		const tokens = getPaymentTokensForNetwork(network).filter((t) => !t.isNative);
-		if (tokens.length > 0) {
-			selectToken(tokens[0]);
-		}
 	}
 
 	function selectToken(token: PaymentToken) {
@@ -79,20 +138,17 @@
 		isOpen = false;
 	}
 
-	function toggleDropdown() {
+	function toggleDropdown(event: MouseEvent) {
 		if (!disabled) {
+			event.stopPropagation(); // Prevent handleClickOutside from immediately closing
 			isOpen = !isOpen;
 		}
-	}
-
-	function closeDropdown() {
-		isOpen = false;
 	}
 
 	function handleClickOutside(event: MouseEvent) {
 		const target = event.target as HTMLElement;
 		if (!target.closest('.token-network-selector')) {
-			closeDropdown();
+			isOpen = false;
 		}
 	}
 </script>
@@ -134,43 +190,55 @@
 	<!-- Dropdown -->
 	{#if isOpen}
 		<div class="dropdown" role="listbox">
-			<!-- Network Tabs -->
-			<div class="network-tabs">
-				{#each availableNetworks as network}
-					<button
-						type="button"
-						class="network-tab"
-						class:active={selectedNetwork === network}
-						on:click={() => selectNetwork(network)}
-					>
-						{NETWORK_NAMES[network]}
-					</button>
-				{/each}
-			</div>
+			<!-- Loading indicator -->
+			{#if $tokenBalancesQuery?.isLoading}
+				<div class="loading-state">
+					<div class="spinner"></div>
+					<span>Loading balances...</span>
+				</div>
+			{:else if allNetworkTokens.length === 0}
+				<div class="empty-state">
+					<span>No tokens with balance</span>
+				</div>
+			{/if}
 
-			<!-- Token List -->
-			<div class="token-list">
-				{#each availableTokens as token}
-					<button
-						type="button"
-						class="token-option"
-						class:selected={selectedToken?.address === token.address &&
-							selectedToken?.chainId === token.chainId}
-						on:click={() => selectToken(token)}
-						role="option"
-						aria-selected={selectedToken?.address === token.address}
-					>
-						<img src={token.logoUrl} alt={token.symbol} class="token-icon" />
-						<div class="token-details">
-							<span class="token-name">{token.symbol}</span>
-							<span class="token-full-name">{token.name}</span>
-						</div>
-						{#if token.symbol !== 'USDC' || token.chainId !== SUPPORTED_NETWORKS.BASE}
-							<span class="swap-badge">Swap</span>
-						{/if}
-					</button>
-				{/each}
-			</div>
+			<!-- Payment Options -->
+			{#each allNetworkTokens as { network: _network, networkName, tokens }}
+				<div class="network-group">
+					<div class="network-label">{networkName}</div>
+					{#each tokens as token}
+						{@const balanceInfo = getTokenBalanceInfo(token)}
+						{@const isSelected =
+							selectedToken?.address === token.address && selectedToken?.chainId === token.chainId}
+						<button
+							type="button"
+							class="token-option"
+							class:selected={isSelected}
+							on:click={() => selectToken(token)}
+							role="option"
+							aria-selected={isSelected}
+						>
+							<img src={token.logoUrl} alt={token.symbol} class="token-icon" />
+							<div class="token-details">
+								<span class="token-name">{token.symbol}</span>
+								<span class="token-full-name">{token.name}</span>
+							</div>
+							{#if balanceInfo.formatted > 0}
+								<span class="balance-badge">
+									{#if balanceInfo.isStablecoin}
+										${balanceInfo.formatted.toFixed(2)}
+									{:else}
+										{balanceInfo.formatted.toFixed(4)} {token.symbol}
+									{/if}
+								</span>
+							{/if}
+							{#if token.symbol !== 'USDC' || token.chainId !== SUPPORTED_NETWORKS.BASE}
+								<span class="swap-badge">Swap</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/each}
 		</div>
 	{/if}
 
@@ -279,38 +347,22 @@
 		overflow: hidden;
 		z-index: 50;
 		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-	}
-
-	.network-tabs {
-		display: flex;
-		border-bottom: 1px solid var(--color-border, #2d2d44);
-	}
-
-	.network-tab {
-		flex: 1;
-		padding: 0.75rem;
-		background: none;
-		border: none;
-		color: var(--color-text-secondary, #9ca3af);
-		font-size: 0.8rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.network-tab:hover {
-		color: var(--color-text, #ffffff);
-		background: rgba(255, 255, 255, 0.05);
-	}
-
-	.network-tab.active {
-		color: var(--color-primary, #6366f1);
-		border-bottom: 2px solid var(--color-primary, #6366f1);
-		margin-bottom: -1px;
-	}
-
-	.token-list {
-		max-height: 240px;
+		max-height: 400px;
 		overflow-y: auto;
+	}
+
+	.network-group {
+		margin-bottom: 0.25rem;
+	}
+
+	.network-label {
+		padding: 0.5rem 1rem;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: var(--color-text-secondary, #9ca3af);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 	}
 
 	.token-option {
@@ -318,7 +370,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.75rem 1rem;
+		padding: 0.75rem 1rem 0.75rem 2rem;
 		background: none;
 		border: none;
 		color: var(--color-text, #ffffff);
@@ -350,6 +402,15 @@
 		color: var(--color-text-secondary, #9ca3af);
 	}
 
+	.balance-badge {
+		font-size: 0.75rem;
+		padding: 0.2rem 0.5rem;
+		background: rgba(16, 185, 129, 0.1);
+		color: #10b981;
+		border-radius: 0.25rem;
+		font-weight: 600;
+	}
+
 	.swap-badge {
 		font-size: 0.65rem;
 		padding: 0.2rem 0.5rem;
@@ -374,5 +435,40 @@
 
 	.swap-notice svg {
 		flex-shrink: 0;
+	}
+
+	.loading-state {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		padding: 1rem;
+		color: var(--color-text-secondary, #9ca3af);
+		font-size: 0.875rem;
+	}
+
+	.empty-state {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1.5rem 1rem;
+		color: var(--color-text-secondary, #9ca3af);
+		font-size: 0.875rem;
+		text-align: center;
+	}
+
+	.spinner {
+		width: 16px;
+		height: 16px;
+		border: 2px solid rgba(255, 255, 255, 0.1);
+		border-top-color: var(--color-primary, #6366f1);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>
