@@ -84,3 +84,6 @@ function createReviewStrategyStore() {
 }
 
 export const reviewStrategyOnDeploy = createReviewStrategyStore();
+
+// Store for trade panel visibility (used to squish layout on large screens)
+export const tradePanelOpen = writable<boolean>(false);

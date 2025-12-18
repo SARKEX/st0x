@@ -14,7 +14,7 @@
 	import TickerTape from '$lib/components/TickerTape.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-	import { rainlangConfirmationModal } from '$lib/stores';
+	import { rainlangConfirmationModal, tradePanelOpen } from '$lib/stores';
 	import { checkAndStoreAccessCodeFromUrl } from '$lib/utils/accessCodeStorage';
 	// Note: Access check is handled by accessStore's subscription to walletAddress
 
@@ -144,6 +144,7 @@
 		class="relative z-10 transition-all duration-300"
 		class:lg:ml-64={!useCleanLayout && !sidebarCollapsed}
 		class:lg:ml-0={useCleanLayout || sidebarCollapsed}
+		class:lg:mr-[22rem]={isTradePage && $tradePanelOpen}
 	>
 		<!-- Header for all screen sizes -->
 		<Header

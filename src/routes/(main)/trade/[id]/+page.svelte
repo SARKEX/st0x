@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { currentNetwork, oracleQuotes } from '$lib/stores';
+	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -244,6 +244,9 @@
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
 	let panelStrategy: 'limit' | 'dca' | 'market' = 'market';
 	let panelOpenedFromTerminal = false;
+
+	// Sync trade panel state with store (for layout squishing on lg screens)
+	$: tradePanelOpen.set(showTradePanel);
 
 	// Track if the trade panel was opened by the tutorial
 	let panelOpenedByTutorial = false;
@@ -781,10 +784,7 @@
 		</div>
 	</div>
 {:else}
-	<div
-		class="space-y-4 p-3 transition-[margin] duration-200 sm:space-y-6 sm:p-6"
-		class:sm:mr-[22rem]={showTradePanel}
-	>
+	<div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
 		<!-- Header Section with Chart -->
 		<div class="space-y-4 sm:space-y-6">
 			<div class="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-5">
