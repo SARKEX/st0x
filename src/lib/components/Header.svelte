@@ -43,12 +43,12 @@
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
 
 	// Calculate effective breakpoint based on what's taking up space
-	// Base: 1280px for the nav content itself
+	// Base: 1350px for the nav content itself
 	// +256px when sidebar is expanded (not landing page and not collapsed)
 	// +352px when trade panel is open
 	$: sidebarOffset = !isLandingPage && !isSidebarCollapsed ? 256 : 0;
 	$: tradePanelOffset = $tradePanelOpen ? 352 : 0;
-	$: effectiveBreakpoint = 1280 + sidebarOffset + tradePanelOffset;
+	$: effectiveBreakpoint = 1350 + sidebarOffset + tradePanelOffset;
 	$: isHamburgerMode = windowWidth < effectiveBreakpoint;
 	$: if (!isHamburgerMode) mobileNavOpen = false;
 
@@ -68,29 +68,6 @@
 	<div class="px-3 py-3 sm:px-6 sm:py-5">
 		<div class="flex items-center justify-between gap-2 sm:gap-3 lg:gap-4">
 			<div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
-				{#if !isLandingPage}
-					{#if isSidebarCollapsed}
-						<Button
-							variant="ghost"
-							size="sm"
-							className="hidden p-2 lg:inline-flex"
-							aria-label="Expand sidebar"
-							on:click={() => handleSidebarToggle('desktop')}
-						>
-							<svg
-								class="h-5 w-5 transition-transform duration-200"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								viewBox="0 0 24 24"
-								xmlns="http://www.w3.org/2000/svg"
-								class:rotate-180={!isSidebarCollapsed}
-							>
-								<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-							</svg>
-						</Button>
-					{/if}
-				{/if}
 				<a href="/" aria-label="Go to home" class="shrink-0">
 					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-7 w-auto sm:h-8 lg:h-10" />
 				</a>
