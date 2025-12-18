@@ -70,9 +70,8 @@
 			}
 			return;
 		}
-		if (isHamburgerMode && navTooWide) {
-			return;
-		}
+		// Always check overflow state - don't skip when already in hamburger mode
+		// This ensures we can recover when space becomes available again (e.g., trade panel closes)
 		const needsHamburger = actionCluster.scrollWidth > actionCluster.clientWidth + 1;
 		if (needsHamburger !== navTooWide) {
 			navTooWide = needsHamburger;
@@ -80,7 +79,9 @@
 	}
 
 	function setupObserver() {
-		if (!actionCluster || windowWidth < 1024 || isHamburgerMode) {
+		// Keep observer running even in hamburger mode (due to navTooWide) so we can detect
+		// when space becomes available again (e.g., trade panel closes)
+		if (!actionCluster || windowWidth < 1024) {
 			cleanupObserver();
 			return;
 		}
@@ -126,7 +127,9 @@
 	});
 
 	$: {
-		if (!isHamburgerMode) {
+		// Always keep observer running on desktop so we can detect space changes
+		// (e.g., trade panel opening/closing)
+		if (windowWidth >= 1024) {
 			setupObserver();
 		} else {
 			cleanupObserver();
