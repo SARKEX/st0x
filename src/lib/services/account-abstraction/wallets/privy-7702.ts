@@ -35,6 +35,7 @@ import {
 	encodeAbiParameters,
 	type Chain
 } from 'viem';
+import { toAccount } from 'viem/accounts';
 import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { get } from 'svelte/store';
 import {
@@ -365,23 +366,49 @@ export async function createPrivyWalletClient(
 /**
  * Get a viem Account object from the Privy session for use with Rhinestone SDK
  *
- * Note: For EIP-7702, the Rhinestone SDK should work with the delegated EOA.
- * The SDK's createAccount may create a separate smart account address,
- * but with EIP-7702, we want to keep the user's EOA address.
+ * Creates a proper LocalAccount that can sign transactions using the Privy provider.
+ * This is required for Rhinestone SDK to execute transactions.
  */
 export function getPrivyAccountForRhinestone(): Account | null {
 	const session = get(privySession);
+	const provider = getPrivyWalletProvider();
 
-	if (!session?.walletAddress) {
+	if (!session?.walletAddress || !provider) {
 		return null;
 	}
 
-	// Create a minimal account object that can be used with viem/Rhinestone
-	// The actual signing will be done through the Privy provider
-	return {
-		address: session.walletAddress as Address,
-		type: 'local'
-	} as Account;
+	const address = session.walletAddress as Address;
+
+	// Create a proper LocalAccount with signing capabilities using the Privy provider
+	// viem's toAccount helper creates an account from custom signing functions
+	return toAccount({
+		address,
+		async signMessage({ message }) {
+			// Convert message to string if needed
+			const msgToSign = typeof message === 'string' ? message : message.raw;
+			const signature = await provider.request({
+				method: 'personal_sign',
+				params: [msgToSign, address]
+			});
+			return signature as Hex;
+		},
+		async signTransaction(transaction) {
+			// For EIP-7702, transactions are signed through eth_signTransaction
+			const signature = await provider.request({
+				method: 'eth_signTransaction',
+				params: [transaction]
+			});
+			return signature as Hex;
+		},
+		async signTypedData(typedData) {
+			// Sign typed data (EIP-712)
+			const signature = await provider.request({
+				method: 'eth_signTypedData_v4',
+				params: [address, JSON.stringify(typedData)]
+			});
+			return signature as Hex;
+		}
+	});
 }
 
 /**
