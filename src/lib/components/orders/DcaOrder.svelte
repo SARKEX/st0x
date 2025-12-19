@@ -7,6 +7,7 @@
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits } from 'viem';
+	import { priceToScaledBigInt, paymentToAsset, PRICE_SCALE } from '$lib/utils/bigIntMath';
 	import { connected } from 'svelte-wagmi';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
@@ -86,11 +87,16 @@
 			return BigInt(10 ** usdcDecimals);
 		} else {
 			// For Sell orders, min is $1 worth of the asset token
+			// Using BigInt arithmetic to avoid floating-point precision issues
 			const price = parseFloat(selectedInitialRatio || '0');
 			if (price <= 0) return 0n;
 			const tokenDecimals = selectedInputToken?.decimals ?? 18;
-			const oneDollarWorth = 1 / price;
-			return BigInt(Math.floor(oneDollarWorth * 10 ** tokenDecimals));
+			const paymentDecimals = selectedOutputToken?.decimals ?? 6;
+			// $1 in payment token decimals
+			const oneDollar = BigInt(10 ** paymentDecimals);
+			// Convert $1 to asset amount using BigInt math
+			const scaledPrice = priceToScaledBigInt(price);
+			return paymentToAsset(oneDollar, paymentDecimals, scaledPrice, tokenDecimals);
 		}
 	})();
 

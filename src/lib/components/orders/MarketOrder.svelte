@@ -5,6 +5,11 @@
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
+	import {
+		priceToScaledBigInt,
+		paymentToAsset,
+		assetToPaymentCeil
+	} from '$lib/utils/bigIntMath';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { connected } from 'svelte-wagmi';
@@ -135,14 +140,17 @@
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else {
 			// For BUY in amount mode: user is spending the payment token (USDC)
-			// Calculate the estimated cost using floor to avoid false "insufficient balance" errors
-			// when clicking MAX button (precision errors from float conversion)
+			// Calculate the estimated cost using BigInt arithmetic
 			const assetDecimals = assetToken?.decimals ?? 18;
 			const paymentDecimals = paymentToken?.decimals ?? 6;
-			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
-			const estimatedCost = outputInTokens * marketPrice;
-			// Use floor instead of ceil to prevent rounding up beyond actual balance
-			const estimatedCostBigInt = BigInt(Math.floor(estimatedCost * 10 ** paymentDecimals));
+			const scaledPrice = priceToScaledBigInt(marketPrice);
+			// Calculate payment needed using BigInt math with floor to avoid false "insufficient balance" errors
+			const estimatedCostBigInt = assetToPaymentCeil(
+				selectedAmount,
+				assetDecimals,
+				scaledPrice,
+				paymentDecimals
+			);
 			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
 		}
 	}
@@ -279,18 +287,33 @@
 	// In spend mode: show how many asset tokens you'll receive
 	$: estimatedTradeResult = (() => {
 		if (!selectedAmount || !marketPrice) return { value: '0.00', label: '' };
+		const scaledPrice = priceToScaledBigInt(marketPrice);
 		if (inputMode === 'spend') {
-			// Spend mode: show estimated tokens received
-			const spendInTokens = parseFloat(formatUnits(selectedAmount, paymentToken?.decimals || 6));
-			const tokensReceived = spendInTokens / marketPrice;
+			// Spend mode: show estimated tokens received using BigInt math
+			const paymentDecimals = paymentToken?.decimals ?? 6;
+			const assetDecimals = assetToken?.decimals ?? 18;
+			const tokensReceivedBigInt = paymentToAsset(
+				selectedAmount,
+				paymentDecimals,
+				scaledPrice,
+				assetDecimals
+			);
+			const tokensReceived = parseFloat(formatUnits(tokensReceivedBigInt, assetDecimals));
 			return {
 				value: `~${tokensReceived.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`,
 				label: 'Est. tokens'
 			};
 		} else {
-			// Amount mode: show estimated cost
-			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
-			const total = outputInTokens * marketPrice;
+			// Amount mode: show estimated cost using BigInt math
+			const assetDecimals = assetToken?.decimals ?? 18;
+			const paymentDecimals = paymentToken?.decimals ?? 6;
+			const totalBigInt = assetToPaymentCeil(
+				selectedAmount,
+				assetDecimals,
+				scaledPrice,
+				paymentDecimals
+			);
+			const total = parseFloat(formatUnits(totalBigInt, paymentDecimals));
 			return {
 				value: `~${total.toFixed(2)} ${paymentTokenSymbol}`,
 				label: 'Est. cost'
@@ -332,14 +355,17 @@
 			// Calculate payment amount to spend (percent of balance)
 			const paymentToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
 
-			// Convert payment amount to asset amount using oracle price
+			// Convert payment amount to asset amount using BigInt arithmetic
 			// paymentAmount / price = assetAmount
-			// Use floor to ensure we don't exceed the balance when converting back
-			const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
-			const assetAmount = paymentInFloat / oraclePrice;
-			// Use floor to be conservative and prevent "not enough funds" errors
-			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
-			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
+			// Using scaled BigInt math to avoid floating-point precision issues
+			const scaledPrice = priceToScaledBigInt(oraclePrice);
+			const assetAmountBigInt = paymentToAsset(
+				paymentToSpend,
+				paymentDecimals,
+				scaledPrice,
+				assetDecimals
+			);
+			tradeAmountInputRef.setAmountValue(assetAmountBigInt);
 		}
 	};
 

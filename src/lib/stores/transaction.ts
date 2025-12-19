@@ -70,6 +70,7 @@ import {
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
 import { parseFloatHex, getRaindexOrderUrl, isPaymentToken } from '$lib/utils/tokenMath';
+import { bigIntRatio } from '$lib/utils/bigIntMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import type { TakeOrdersParams } from '$lib/types/transactions';
@@ -1217,26 +1218,23 @@ const transactionStore = () => {
 			totalOutputAmount += outputAmount;
 		}
 
-		// Calculate actual ioRatio from transaction data
+		// Calculate actual ioRatio from transaction data using BigInt precision
 		const actualIoRatio =
 			totalOutputAmount > 0n
-				? parseFloat(formatUnits(totalInputAmount, inputTokenDecimals)) /
-					parseFloat(formatUnits(totalOutputAmount, outputTokenDecimals))
+				? bigIntRatio(totalInputAmount, inputTokenDecimals, totalOutputAmount, outputTokenDecimals)
 				: 0;
 
 		// Use the user's actual requested input amount
 		const requestedInputAmount = params.requestedTakerWantsAmount;
 
 		// Check if fill is complete (within 99.9% tolerance)
-		// Need to normalize both amounts to the same decimal scale for comparison
-		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
-		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
-
+		// Use BigInt ratio for precise fill percentage calculation
 		let fillPercentage = 0;
 		let isNoFill = false;
 
-		if (inputRequestedDecimal > 0) {
-			fillPercentage = inputFilledDecimal / inputRequestedDecimal;
+		if (requestedInputAmount > 0n) {
+			// Both amounts have same decimals (inputTokenDecimals), so we can compare directly
+			fillPercentage = bigIntRatio(totalInputAmount, inputTokenDecimals, requestedInputAmount, inputTokenDecimals);
 		} else {
 			// No requested quantity means no tokens requested
 			isNoFill = true;

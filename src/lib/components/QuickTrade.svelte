@@ -630,10 +630,10 @@
 	}
 
 	function handleUsdcPercentClick(percent: number) {
-		const amount = (formattedUsdcBalance * percent) / 100;
-		// Use floor to prevent rounding up beyond actual balance (fixes "not enough funds" on MAX)
-		const flooredAmount = Math.floor(amount * 100) / 100;
-		topAmount = flooredAmount.toFixed(2);
+		// Use BigInt arithmetic to avoid floating-point precision issues
+		const percentAmount = (usdcBalance * BigInt(percent)) / 100n;
+		const amount = Number(formatUnits(percentAmount, usdcDecimals));
+		topAmount = amount.toFixed(2);
 		lastEditedField = 'top';
 		showLiquidityWarning = false;
 		hasCappedThisBlur = false;
@@ -641,10 +641,10 @@
 	}
 
 	function handleTokenPercentClick(percent: number) {
-		const amount = (formattedTokenBalance * percent) / 100;
-		// Use floor to prevent rounding up beyond actual balance (fixes "not enough funds" on MAX)
-		const flooredAmount = Math.floor(amount * 1e6) / 1e6;
-		bottomAmount = flooredAmount.toFixed(6);
+		// Use BigInt arithmetic to avoid floating-point precision issues
+		const percentAmount = (tokenBalance * BigInt(percent)) / 100n;
+		const amount = Number(formatUnits(percentAmount, tokenDecimals));
+		bottomAmount = amount.toFixed(6);
 		lastEditedField = 'bottom';
 		showLiquidityWarning = false;
 		hasCappedThisBlur = false;

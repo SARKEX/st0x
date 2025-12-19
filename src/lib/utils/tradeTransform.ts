@@ -1,5 +1,6 @@
 import { formatUnits } from 'viem';
 import { parseFloatHex } from '$lib/utils/tokenMath';
+import { bigIntRatio } from '$lib/utils/bigIntMath';
 import { TOKENS } from '$lib/config/tokens';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DisplayOrder } from '$lib/types/orders';
@@ -70,15 +71,15 @@ export function transformTradeToDisplayOrder(
 		? parseFloatHex(outputAmountHex, outputDecimals, true)
 		: 0n;
 
-	// Calculate price (payment / asset) from taker's perspective
+	// Calculate price (payment / asset) from taker's perspective using BigInt precision
 	// Order's input = what taker gave, Order's output = what taker received
 	// Buy: taker gave payment (order's input), received asset (order's output) -> price = input/output
 	// Sell: taker gave asset (order's input), received payment (order's output) -> price = output/input
 	let price: number | undefined;
 	if (inputAmountBigInt > 0n && outputAmountBigInt > 0n) {
-		const inputValue = parseFloat(formatUnits(inputAmountBigInt, inputDecimals));
-		const outputValue = parseFloat(formatUnits(outputAmountBigInt, outputDecimals));
-		price = isBuy ? inputValue / outputValue : outputValue / inputValue;
+		price = isBuy
+			? bigIntRatio(inputAmountBigInt, inputDecimals, outputAmountBigInt, outputDecimals)
+			: bigIntRatio(outputAmountBigInt, outputDecimals, inputAmountBigInt, inputDecimals);
 	}
 
 	return {
