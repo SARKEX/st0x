@@ -11,6 +11,7 @@ import {
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import {
 	sendTransaction as walletServiceSendTransaction,
+	sendTransactionWithGasOption,
 	waitForTransaction as walletServiceWaitForTransaction
 } from '$lib/services/walletService';
 
@@ -75,7 +76,7 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from '$lib/services/orderDeployment';
-import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
+import { rainlangConfirmationModal, reviewStrategyOnDeploy, payFeesInStablecoin } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { invalidateUserVaultQueries } from '$lib/queries/vaults';
@@ -258,15 +259,21 @@ const transactionStore = () => {
 			}
 		}
 
+		// Get user preference for gas payment
+		const useStablecoinGas = get(payFeesInStablecoin);
+
 		// Only execute approvals that are actually needed
 		if (approvalsNeeded.length > 0) {
 			for (const approval of approvalsNeeded) {
 				try {
 					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
-					const hash = await sendTransaction({
-						to: approval.token as `0x${string}`,
-						data: approval.calldata as Hex
-					});
+					const hash = await sendTransactionWithGasOption(
+						{
+							to: approval.token as `0x${string}`,
+							data: approval.calldata as Hex
+						},
+						useStablecoinGas
+					);
 					awaitApprovalTx(hash);
 					await waitForTransaction(hash);
 				} catch (error) {
@@ -274,14 +281,18 @@ const transactionStore = () => {
 						const msg = await handleStaleWalletSession(config);
 						return transactionError(msg as TransactionErrorMessage);
 					}
+
+					// Extract error message from various error formats
 					const errorMessage =
 						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+						(error instanceof Error ? error.message : null) ||
 						TransactionErrorMessage.GENERIC;
-					const message =
-						typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-							? (errorMessage as TransactionErrorMessage)
-							: TransactionErrorMessage.GENERIC;
-					return transactionError(message);
+
+					if (typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC) {
+						return transactionError(errorMessage as TransactionErrorMessage);
+					}
+
+					return transactionError(TransactionErrorMessage.GENERIC);
 				}
 			}
 		}
@@ -289,23 +300,30 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
-			hash = await sendTransaction({
-				to: deploymentArgs.orderbookAddress as `0x${string}`,
-				data: deploymentArgs.deploymentCalldata as Hex
-			});
+			hash = await sendTransactionWithGasOption(
+				{
+					to: deploymentArgs.orderbookAddress as `0x${string}`,
+					data: deploymentArgs.deploymentCalldata as Hex
+				},
+				useStablecoinGas
+			);
 		} catch (error) {
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
+
+			// Extract error message from various error formats
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				(error instanceof Error ? error.message : null) ||
 				TransactionErrorMessage.GENERIC;
-			const message =
-				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-					? (errorMessage as TransactionErrorMessage)
-					: TransactionErrorMessage.GENERIC;
-			return transactionError(message);
+
+			if (typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC) {
+				return transactionError(errorMessage as TransactionErrorMessage);
+			}
+
+			return transactionError(TransactionErrorMessage.GENERIC);
 		}
 
 		const network = get(currentNetwork);
@@ -462,6 +480,9 @@ const transactionStore = () => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
 
+		// Get user preference for gas payment
+		const useStablecoinGas = get(payFeesInStablecoin);
+
 		// vault.balance is already a Float instance, use it directly
 		const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
 		if (vaultWithdrawCalldata.error) throw new Error(vaultWithdrawCalldata.error.readableMsg);
@@ -469,10 +490,13 @@ const transactionStore = () => {
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
 
-			hash = await sendTransaction({
-				to: vault.orderbook as `0x${string}`,
-				data: vaultWithdrawCalldata.value as Hex
-			});
+			hash = await sendTransactionWithGasOption(
+				{
+					to: vault.orderbook as `0x${string}`,
+					data: vaultWithdrawCalldata.value as Hex
+				},
+				useStablecoinGas
+			);
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
 			await waitForTransaction(hash);
@@ -512,6 +536,9 @@ const transactionStore = () => {
 		if (!config) throw new Error('Wagmi config not found');
 		const network = get(currentNetwork);
 		const $signerAddress = get(walletAddress);
+
+		// Get user preference for gas payment
+		const useStablecoinGas = get(payFeesInStablecoin);
 
 		if (!$signerAddress) {
 			throw new Error('Wallet not connected');
@@ -660,10 +687,13 @@ const transactionStore = () => {
 
 					awaitWalletConfirmation(`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`);
 
-					const withdrawHash = await sendTransaction({
-						to: vault.orderbook as `0x${string}`,
-						data: vaultWithdrawCalldata.value as Hex
-					});
+					const withdrawHash = await sendTransactionWithGasOption(
+						{
+							to: vault.orderbook as `0x${string}`,
+							data: vaultWithdrawCalldata.value as Hex
+						},
+						useStablecoinGas
+					);
 
 					awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
 
@@ -679,10 +709,13 @@ const transactionStore = () => {
 
 			awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
 
-			const hash = await sendTransaction({
-				to: order.orderbook as `0x${string}`,
-				data: removeCalldata.value as Hex
-			});
+			const hash = await sendTransactionWithGasOption(
+				{
+					to: order.orderbook as `0x${string}`,
+					data: removeCalldata.value as Hex
+				},
+				useStablecoinGas
+			);
 
 			awaitWalletConfirmation('Awaiting transaction confirmation...');
 
@@ -735,6 +768,9 @@ const transactionStore = () => {
 		const network = get(currentNetwork);
 		const $signerAddress = get(walletAddress);
 
+		// Get user preference for gas payment
+		const useStablecoinGas = get(payFeesInStablecoin);
+
 		if (!$signerAddress) {
 			throw new Error('Wallet not connected');
 		}
@@ -779,10 +815,13 @@ const transactionStore = () => {
 
 					awaitWalletConfirmation('Awaiting wallet confirmation to deactivate order...');
 
-					const removeHash = await sendTransaction({
-						to: order.orderbook as `0x${string}`,
-						data: removeCalldata.value as Hex
-					});
+					const removeHash = await sendTransactionWithGasOption(
+						{
+							to: order.orderbook as `0x${string}`,
+							data: removeCalldata.value as Hex
+						},
+						useStablecoinGas
+					);
 
 					awaitWalletConfirmation('Awaiting deactivation confirmation...');
 
@@ -916,10 +955,13 @@ const transactionStore = () => {
 					`Awaiting wallet confirmation for withdrawal ${i + 1}/${vaultsWithBalance.length}...`
 				);
 
-				lastHash = await sendTransaction({
-					to: vault.orderbook as `0x${string}`,
-					data: vaultWithdrawCalldata.value as Hex
-				});
+				lastHash = await sendTransactionWithGasOption(
+					{
+						to: vault.orderbook as `0x${string}`,
+						data: vaultWithdrawCalldata.value as Hex
+					},
+					useStablecoinGas
+				);
 
 				awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
@@ -998,21 +1040,46 @@ const transactionStore = () => {
 			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
 		});
 
+		// Get user preference for gas payment
+		const useStablecoinGas = get(payFeesInStablecoin);
+
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
-			awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+			try {
+				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
 
-			const approvalHash = await sendTransaction({
-				to: approvalTokenAddress as `0x${string}`,
-				data: encodeFunctionData({
-					abi: erc20Abi,
-					functionName: 'approve',
-					args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
-				}) as Hex
-			});
+				const approvalHash = await sendTransactionWithGasOption(
+					{
+						to: approvalTokenAddress as `0x${string}`,
+						data: encodeFunctionData({
+							abi: erc20Abi,
+							functionName: 'approve',
+							args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
+						}) as Hex
+					},
+					useStablecoinGas
+				);
 
-			awaitApprovalTx(approvalHash);
-			await waitForTransaction(approvalHash);
+				awaitApprovalTx(approvalHash);
+				await waitForTransaction(approvalHash);
+			} catch (error) {
+				if (isStaleWalletSessionError(error)) {
+					const msg = await handleStaleWalletSession(config);
+					return transactionError(msg as TransactionErrorMessage);
+				}
+
+				// Extract error message from various error formats
+				const errorMessage =
+					(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+					(error instanceof Error ? error.message : null) ||
+					TransactionErrorMessage.GENERIC;
+
+				if (typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC) {
+					return transactionError(errorMessage as TransactionErrorMessage);
+				}
+
+				return transactionError(TransactionErrorMessage.GENERIC);
+			}
 		}
 
 		// If recalculateConfig is provided, refresh quotes and recalculate config
@@ -1051,10 +1118,13 @@ const transactionStore = () => {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
 
 			const calldata = normalizeCalldata(result.value as string | Uint8Array);
-			hash = await sendTransaction({
-				to: raindexOrder.orderbook.id as `0x${string}`,
-				data: calldata as Hex
-			});
+			hash = await sendTransactionWithGasOption(
+				{
+					to: raindexOrder.orderbook.id as `0x${string}`,
+					data: calldata as Hex
+				},
+				useStablecoinGas
+			);
 
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 			await waitForTransaction(hash);
@@ -1065,23 +1135,19 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
+
+			// Extract error message from various error formats
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				(error instanceof Error ? error.message : null) ||
 				TransactionErrorMessage.GENERIC;
 
-			// Check for insufficient allowance error and provide helpful message
-			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
-			if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
-				return transactionError(
-					'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
-				);
+			// Return the error message directly if it's meaningful
+			if (typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC) {
+				return transactionError(errorMessage as TransactionErrorMessage);
 			}
 
-			const message =
-				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-					? (errorMessage as TransactionErrorMessage)
-					: TransactionErrorMessage.GENERIC;
-			return transactionError(message);
+			return transactionError(TransactionErrorMessage.GENERIC);
 		}
 
 		const network = get(currentNetwork) as Network;

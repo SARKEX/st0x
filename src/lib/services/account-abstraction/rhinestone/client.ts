@@ -64,20 +64,67 @@ const RPC_URLS: Record<SupportedNetworkId, string> = {
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: 'https://sepolia-rollup.arbitrum.io/rpc'
 };
 
-// Type for Rhinestone account
+// Type for Rhinestone account transaction params
+// Supports both same-chain (chain) and cross-chain (sourceChains/targetChain)
+type RhinestoneTransactionParams =
+	| {
+			// Same-chain transaction format
+			chain: Chain;
+			calls: Array<{ to: Address; value: bigint; data: Hex }>;
+			tokenRequests?: Array<{ address: Address; amount: bigint }>;
+			feeAsset?: string;
+			sourceAssets?: { [chainId: number]: string[] };
+	  }
+	| {
+			// Cross-chain transaction format
+			sourceChain?: Chain;
+			sourceChains?: Chain[];
+			targetChain: Chain;
+			calls: Array<{ to: Address; value: bigint; data: Hex }>;
+			tokenRequests?: Array<{ address: Address; amount: bigint }>;
+			feeAsset?: string;
+			sourceAssets?: { [chainId: number]: string[] };
+	  };
+
+// Type for Rhinestone account (matching SDK types)
+interface TransactionResult {
+	type: 'intent';
+	id: bigint;
+	sourceChains?: number[];
+	targetChain: number;
+}
+
+interface TransactionStatus {
+	fill: {
+		hash: Hex | undefined;
+		chainId: number;
+	};
+	claims: {
+		hash: Hex | undefined;
+		chainId: number;
+	}[];
+}
+
+interface Portfolio {
+	chains: Array<{
+		chainId: number;
+		tokens: Array<{
+			address: string;
+			symbol: string;
+			balance: string;
+			decimals: number;
+		}>;
+	}>;
+}
+
 interface RhinestoneAccount {
-	sendTransaction: (params: {
-		sourceChain: Chain;
-		targetChain: Chain;
-		calls: Array<{ to: Address; value: bigint; data: Hex }>;
-		tokenRequests?: Array<{ address: Address; amount: bigint }>;
-		feeAsset?: string; // For ERC20 gas payment - e.g., 'USDC'
-	}) => Promise<{ hash: Hex; intentId: string }>;
-	waitForExecution: (transaction: {
-		hash: Hex;
-		intentId: string;
-	}) => Promise<{ status: string; txHash: Hex }>;
-	getAddress: (chainId: number) => Promise<Address>;
+	sendTransaction: (params: RhinestoneTransactionParams) => Promise<TransactionResult>;
+	waitForExecution: (
+		result: TransactionResult,
+		acceptsPreconfirmations?: boolean
+	) => Promise<TransactionStatus>;
+	getAddress: () => Address;
+	getPortfolio: (onTestnets?: boolean) => Promise<Portfolio>;
 }
 
 let rhinestoneInstance: RhinestoneClient | null = null;
@@ -127,6 +174,11 @@ export class RhinestoneClient {
 	 */
 	async createAccount(walletAccount: Account): Promise<RhinestoneAccount> {
 		try {
+			console.log('[Rhinestone Client] createAccount called', {
+				walletAddress: walletAccount.address,
+				accountType: this.config.accountType
+			});
+
 			// Build createAccount options based on account type
 			const createAccountOptions: {
 				owners: { type: 'ecdsa'; accounts: Account[] };
@@ -145,13 +197,20 @@ export class RhinestoneClient {
 				createAccountOptions.accountType = '7702';
 			}
 
+			console.log('[Rhinestone Client] Calling SDK createAccount with options:', {
+				ownersType: createAccountOptions.owners.type,
+				accountType: createAccountOptions.accountType
+			});
+
 			// Create the account via Rhinestone SDK
 			// For 7702 mode: This upgrades the EOA to act as a smart account
 			// For smart mode: This creates a new smart account contract
 			const rhinestoneAccount = await this.sdk.createAccount(createAccountOptions);
 
+			console.log('[Rhinestone Client] Account created successfully');
 			return rhinestoneAccount as unknown as RhinestoneAccount;
 		} catch (error) {
+			console.error('[Rhinestone Client] createAccount failed:', error);
 			throw new AAError(
 				`Failed to create Rhinestone account: ${
 					error instanceof Error ? error.message : 'Unknown error'
@@ -419,7 +478,7 @@ export class RhinestoneClient {
 			// Execute cross-chain transaction via Rhinestone
 			// tokenRequests tells the solver what tokens to pull from source chain
 			// feeAsset specifies which token to use for gas payment (e.g., 'USDC')
-			const transaction = await rhinestoneAccount.sendTransaction({
+			const transactionResult = await rhinestoneAccount.sendTransaction({
 				sourceChain,
 				targetChain,
 				calls: [transferCall],
@@ -433,11 +492,20 @@ export class RhinestoneClient {
 			});
 
 			// Wait for execution to complete
-			const result = await rhinestoneAccount.waitForExecution(transaction);
+			const status = await rhinestoneAccount.waitForExecution(transactionResult);
+
+			// Extract tx hash from the fill result
+			const txHash = status.fill.hash;
+			if (!txHash) {
+				throw new AAError(
+					'Transaction completed but no hash returned',
+					AAErrorCode.TRANSACTION_FAILED
+				);
+			}
 
 			return {
-				txHash: result.txHash,
-				intentId: transaction.intentId
+				txHash,
+				intentId: transactionResult.id.toString()
 			};
 		} catch (error) {
 			if (error instanceof AAError) throw error;
@@ -465,6 +533,14 @@ export class RhinestoneClient {
 		feeAsset?: string
 	): Promise<{ txHash: Hex; intentId: string }> {
 		try {
+			console.log('[Rhinestone Client] executeOmnichainTransaction called', {
+				sourceChain: params.sourceChain,
+				targetChain: params.targetChain,
+				callsCount: params.calls.length,
+				feeAsset,
+				walletAddress: walletAccount.address
+			});
+
 			// Validate API key
 			if (!this.config.apiKey) {
 				throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
@@ -485,7 +561,9 @@ export class RhinestoneClient {
 			}
 
 			// Create Rhinestone account
+			console.log('[Rhinestone Client] Creating Rhinestone account...');
 			const rhinestoneAccount = await this.createAccount(walletAccount);
+			console.log('[Rhinestone Client] Account created successfully');
 
 			// Get chain configs
 			const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
@@ -500,7 +578,15 @@ export class RhinestoneClient {
 
 			// Execute cross-chain transaction
 			// feeAsset specifies which token to use for gas payment (e.g., 'USDC')
-			const transaction = await rhinestoneAccount.sendTransaction({
+			console.log('[Rhinestone Client] Sending transaction...', {
+				sourceChainId: sourceChain.id,
+				targetChainId: targetChain.id,
+				callsCount: params.calls.length,
+				tokenRequestsCount: tokenRequests.length,
+				feeAsset
+			});
+
+			const transactionResult = await rhinestoneAccount.sendTransaction({
 				sourceChain,
 				targetChain,
 				calls: params.calls.map((call) => ({
@@ -512,17 +598,164 @@ export class RhinestoneClient {
 				...(feeAsset && { feeAsset })
 			});
 
+			console.log('[Rhinestone Client] Transaction sent, waiting for execution...', {
+				intentId: transactionResult.id.toString(),
+				targetChain: transactionResult.targetChain
+			});
+
 			// Wait for execution
-			const result = await rhinestoneAccount.waitForExecution(transaction);
+			const status = await rhinestoneAccount.waitForExecution(transactionResult);
+			console.log('[Rhinestone Client] Execution complete:', status);
+
+			// Extract tx hash from the fill result
+			const txHash = status.fill.hash;
+			if (!txHash) {
+				throw new AAError(
+					'Transaction completed but no hash returned',
+					AAErrorCode.TRANSACTION_FAILED
+				);
+			}
 
 			return {
-				txHash: result.txHash,
-				intentId: transaction.intentId
+				txHash,
+				intentId: transactionResult.id.toString()
 			};
 		} catch (error) {
 			if (error instanceof AAError) throw error;
 			throw new AAError(
 				`Omnichain transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				AAErrorCode.TRANSACTION_FAILED,
+				{ originalError: error }
+			);
+		}
+	}
+
+	/**
+	 * Execute a same-chain transaction with optional ERC20 gas payment
+	 *
+	 * For same-chain transactions, we use the 'chain' parameter (not sourceChain/targetChain).
+	 * This is the correct format per Rhinestone SDK types.
+	 *
+	 * @param params - Transaction parameters with chainId and calls
+	 * @param walletAccount - User's wallet account for signing
+	 * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
+	 */
+	async executeSameChainTransaction(
+		params: {
+			chainId: SupportedNetworkId;
+			calls: Array<{ to: string; value?: bigint; data?: string }>;
+		},
+		walletAccount: Account,
+		feeAsset?: string
+	): Promise<{ txHash: Hex; intentId: string }> {
+		try {
+			console.log('[Rhinestone Client] executeSameChainTransaction called', {
+				chainId: params.chainId,
+				callsCount: params.calls.length,
+				feeAsset,
+				walletAddress: walletAccount.address
+			});
+
+			// Validate API key
+			if (!this.config.apiKey) {
+				throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
+			}
+
+			// Validate network
+			if (!this.isSupportedNetwork(params.chainId)) {
+				throw new AAError(
+					`Chain ${params.chainId} not supported`,
+					AAErrorCode.UNSUPPORTED_NETWORK
+				);
+			}
+
+			// Create Rhinestone account
+			console.log('[Rhinestone Client] Creating Rhinestone account...');
+			const rhinestoneAccount = await this.createAccount(walletAccount);
+
+			// Check what address Rhinestone is using (synchronous call, no chainId param)
+			const rhinestoneAddress = rhinestoneAccount.getAddress();
+			console.log('[Rhinestone Client] Account created successfully', {
+				rhinestoneAddress,
+				walletAddress: walletAccount.address,
+				addressMatch: rhinestoneAddress === walletAccount.address
+			});
+
+			// Try to get portfolio to see what balances Rhinestone recognizes
+			try {
+				const portfolio = await rhinestoneAccount.getPortfolio(false);
+				console.log('[Rhinestone Client] Portfolio:', JSON.stringify(portfolio, null, 2));
+			} catch (portfolioError) {
+				console.log('[Rhinestone Client] Could not fetch portfolio:', portfolioError);
+			}
+
+			// Get chain config
+			const chain = CHAIN_CONFIG[params.chainId];
+
+			// Build same-chain transaction with correct format
+			// Per SDK types: SameChainTransaction uses 'chain' (not sourceChain/targetChain)
+			// We need to specify sourceAssets to tell Rhinestone which tokens are available
+			const transactionParams: {
+				chain: Chain;
+				calls: Array<{ to: Address; value: bigint; data: Hex }>;
+				feeAsset?: string;
+				sourceAssets?: { [chainId: number]: string[] };
+			} = {
+				chain, // Same-chain uses 'chain' parameter
+				calls: params.calls.map((call) => ({
+					to: call.to as Address,
+					value: call.value || 0n,
+					data: (call.data || '0x') as Hex
+				}))
+			};
+
+			// If paying with USDC, specify it as both feeAsset and sourceAsset
+			if (feeAsset) {
+				transactionParams.feeAsset = feeAsset;
+				// Tell Rhinestone that USDC is available on this chain
+				transactionParams.sourceAssets = {
+					[chain.id]: [feeAsset]
+				};
+			}
+
+			console.log('[Rhinestone Client] Sending same-chain transaction...', {
+				chainId: chain.id,
+				callsCount: params.calls.length,
+				feeAsset,
+				sourceAssets: transactionParams.sourceAssets
+			});
+
+			const transactionResult = await rhinestoneAccount.sendTransaction(
+				transactionParams as RhinestoneTransactionParams
+			);
+
+			console.log('[Rhinestone Client] Transaction sent, waiting for execution...', {
+				intentId: transactionResult.id.toString(),
+				targetChain: transactionResult.targetChain
+			});
+
+			// Wait for execution
+			const status = await rhinestoneAccount.waitForExecution(transactionResult);
+			console.log('[Rhinestone Client] Execution complete:', status);
+
+			// Extract tx hash from the fill result
+			const txHash = status.fill.hash;
+			if (!txHash) {
+				throw new AAError(
+					'Transaction completed but no hash returned',
+					AAErrorCode.TRANSACTION_FAILED
+				);
+			}
+
+			return {
+				txHash,
+				intentId: transactionResult.id.toString()
+			};
+		} catch (error) {
+			console.error('[Rhinestone Client] executeSameChainTransaction failed:', error);
+			if (error instanceof AAError) throw error;
+			throw new AAError(
+				`Same-chain transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
 				AAErrorCode.TRANSACTION_FAILED,
 				{ originalError: error }
 			);
