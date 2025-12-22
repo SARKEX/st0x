@@ -125,6 +125,8 @@ interface RhinestoneAccount {
 	) => Promise<TransactionStatus>;
 	getAddress: () => Address;
 	getPortfolio: (onTestnets?: boolean) => Promise<Portfolio>;
+	signEip7702InitData: () => Promise<Hex>;
+	isDeployed: (chain: Chain) => Promise<boolean>;
 }
 
 let rhinestoneInstance: RhinestoneClient | null = null;
@@ -692,6 +694,26 @@ export class RhinestoneClient {
 			// Get chain config
 			const chain = CHAIN_CONFIG[params.chainId];
 
+			// For EIP-7702 mode, check if the account needs initialization
+			let eip7702InitSignature: Hex | undefined;
+			if (this.config.accountType === '7702') {
+				try {
+					// Check if the account is already deployed/initialized on this chain
+					const isDeployed = await rhinestoneAccount.isDeployed(chain);
+					console.log('[Rhinestone Client] EIP-7702 account deployed status:', isDeployed);
+
+					if (!isDeployed) {
+						// Sign the EIP-7702 init data for the first transaction
+						console.log('[Rhinestone Client] Signing EIP-7702 init data for first transaction...');
+						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
+						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
+					}
+				} catch (initError) {
+					console.warn('[Rhinestone Client] Could not check/sign EIP-7702 init:', initError);
+					// Continue anyway, the SDK might handle this automatically
+				}
+			}
+
 			// Build same-chain transaction with correct format
 			// Per SDK types: SameChainTransaction uses 'chain' (not sourceChain/targetChain)
 			// We need to specify sourceAssets to tell Rhinestone which tokens are available
@@ -700,6 +722,7 @@ export class RhinestoneClient {
 				calls: Array<{ to: Address; value: bigint; data: Hex }>;
 				feeAsset?: string;
 				sourceAssets?: { [chainId: number]: string[] };
+				eip7702InitSignature?: Hex;
 			} = {
 				chain, // Same-chain uses 'chain' parameter
 				calls: params.calls.map((call) => ({
@@ -718,11 +741,17 @@ export class RhinestoneClient {
 				};
 			}
 
+			// Include EIP-7702 init signature if we have one
+			if (eip7702InitSignature) {
+				transactionParams.eip7702InitSignature = eip7702InitSignature;
+			}
+
 			console.log('[Rhinestone Client] Sending same-chain transaction...', {
 				chainId: chain.id,
 				callsCount: params.calls.length,
 				feeAsset,
-				sourceAssets: transactionParams.sourceAssets
+				sourceAssets: transactionParams.sourceAssets,
+				hasEip7702Init: Boolean(eip7702InitSignature)
 			});
 
 			const transactionResult = await rhinestoneAccount.sendTransaction(
@@ -753,6 +782,23 @@ export class RhinestoneClient {
 			};
 		} catch (error) {
 			console.error('[Rhinestone Client] executeSameChainTransaction failed:', error);
+
+			// Log additional context for orchestrator errors
+			const orchestratorError = error as {
+				context?: unknown;
+				errorType?: string;
+				traceId?: string;
+			};
+			if (orchestratorError.context) {
+				console.error('[Rhinestone Client] Error context:', JSON.stringify(orchestratorError.context, null, 2));
+			}
+			if (orchestratorError.errorType) {
+				console.error('[Rhinestone Client] Error type:', orchestratorError.errorType);
+			}
+			if (orchestratorError.traceId) {
+				console.error('[Rhinestone Client] Trace ID:', orchestratorError.traceId);
+			}
+
 			if (error instanceof AAError) throw error;
 			throw new AAError(
 				`Same-chain transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
