@@ -1,0 +1,110 @@
+<script lang="ts">
+	import { browser } from '$app/environment';
+	import { env } from '$env/dynamic/public';
+	import { used } from 'svelte-preprocess-react';
+	import { DynamicReactProvider, type DynamicEventData } from './DynamicReactProvider';
+	import {
+		dynamicSession,
+		dynamicLoading,
+		dynamicError,
+		dynamicReady,
+		showAuthModal,
+		dynamicTriggerLogin,
+		dynamicTriggerLogout,
+		dynamicTriggerExportWallet,
+		dynamicAccessToken,
+		dynamicNeedsWalletCreation,
+		type DynamicSession
+	} from '$lib/stores/dynamicStore';
+	import { setDynamicWalletProvider } from '$lib/services/walletService';
+
+	// Prevent TypeScript warning about unused import (used via react: prefix)
+	used(DynamicReactProvider);
+
+	// Get environment ID
+	$: environmentId = browser ? env.PUBLIC_DYNAMIC_ENVIRONMENT_ID : '';
+
+	// Handle wallet provider from React
+	function handleWalletProviderReady(
+		provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null
+	) {
+		setDynamicWalletProvider(provider);
+	}
+
+	// Handle events from React
+	function handleDynamicEvent(event: DynamicEventData) {
+		switch (event.type) {
+			case 'ready':
+				dynamicReady.set(true);
+				dynamicLoading.set(false);
+				break;
+
+			case 'authenticated':
+				if (event.payload) {
+					const session: DynamicSession = {
+						userId: event.payload.userId || '',
+						walletAddress: event.payload.walletAddress || '',
+						email: event.payload.email,
+						walletType: event.payload.walletType
+					};
+					dynamicSession.set(session);
+					showAuthModal.set(false);
+					dynamicError.set(null);
+				}
+				dynamicLoading.set(false);
+				break;
+
+			case 'logout':
+				dynamicSession.set(null);
+				dynamicLoading.set(false);
+				break;
+
+			case 'wallet':
+				if (event.payload?.walletAddress) {
+					dynamicSession.update((s) =>
+						s ? { ...s, walletAddress: event.payload!.walletAddress! } : null
+					);
+				}
+				break;
+
+			case 'error':
+				dynamicError.set(event.payload?.error || 'Unknown error');
+				dynamicLoading.set(false);
+				break;
+
+			case 'token_refreshed':
+				if (event.payload?.accessToken) {
+					dynamicAccessToken.set(event.payload.accessToken);
+				}
+				break;
+
+			case 'needs_wallet_creation':
+				dynamicNeedsWalletCreation.set(true);
+				dynamicLoading.set(false);
+				break;
+		}
+	}
+</script>
+
+{#if browser && environmentId}
+	<!-- Dynamic React Provider using svelte-preprocess-react -->
+	<react:DynamicReactProvider
+		{environmentId}
+		onEvent={handleDynamicEvent}
+		onWalletProviderReady={handleWalletProviderReady}
+		triggerLogin={$dynamicTriggerLogin}
+		triggerLogout={$dynamicTriggerLogout}
+		triggerExportWallet={$dynamicTriggerExportWallet}
+	/>
+{:else if browser && !environmentId}
+	<!-- No Dynamic environment ID configured -->
+	{(() => {
+		console.warn('[dynamic] No PUBLIC_DYNAMIC_ENVIRONMENT_ID configured');
+		dynamicLoading.set(false);
+		return '';
+	})()}
+{/if}
+
+<style>
+	/* The React component renders Dynamic modals via portals to body, no visible content here */
+</style>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../../app.css';
 	import { onMount } from 'svelte';
-	import { signerAddress, connected } from 'svelte-wagmi';
+	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
@@ -29,13 +29,13 @@
 
 	// Check wallet registration when wallet connects or changes
 	// Shows modal if not registered, which will auto-disconnect if dismissed
-	$: if (browser && $signerAddress && $connected && $signerAddress !== lastCheckedAddress) {
-		lastCheckedAddress = $signerAddress;
-		checkWalletAccess($signerAddress);
+	$: if (browser && $walletAddress && $isAuthenticated && $walletAddress !== lastCheckedAddress) {
+		lastCheckedAddress = $walletAddress;
+		checkWalletAccess($walletAddress);
 	}
 
 	// Reset state when wallet disconnects
-	$: if (browser && !$connected && lastCheckedAddress) {
+	$: if (browser && !$isAuthenticated && lastCheckedAddress) {
 		lastCheckedAddress = null;
 		resetAccessState();
 	}

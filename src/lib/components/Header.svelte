@@ -3,7 +3,7 @@
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
 	import { createEventDispatcher, onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { connected, signerAddress, web3Modal } from 'svelte-wagmi';
+	import { isAuthenticated, walletAddress, promptAuth } from '$lib/stores/authStore';
 	import { page } from '$app/stores';
 	import { wrongNetwork, sfts, tradePanelOpen } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
@@ -60,7 +60,7 @@
 	});
 
 	function handleConnectWallet() {
-		$web3Modal.open();
+		promptAuth();
 	}
 </script>
 
@@ -109,7 +109,7 @@
 					<RewardsDisplay />
 				{/if}
 
-				{#if $connected && !$wrongNetwork && $signerAddress && $walletRegistered}
+				{#if $isAuthenticated && !$wrongNetwork && $walletAddress && $walletRegistered}
 					<!-- Fully registered user -->
 					<div class="flex items-center gap-2">
 						{#if !isHamburgerMode}
@@ -119,7 +119,7 @@
 									<div class="flex items-center gap-2">
 										<span>My Dashboard</span>
 										<span class="text-[11px] font-normal text-yellow-300/80">
-											...{$signerAddress.slice(-4)}
+											...{$walletAddress?.slice(-4)}
 										</span>
 									</div>
 								</Button>

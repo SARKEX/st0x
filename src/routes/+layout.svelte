@@ -10,6 +10,13 @@
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
 
+	// Dynamic integration
+	import DynamicSvelteWrapper from '$lib/dynamic/DynamicSvelteWrapper.svelte';
+	import AuthModal from '$lib/components/AuthModal.svelte';
+	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
+	import DepositModal from '$lib/components/DepositModal.svelte';
+	import WalletCreationFallback from '$lib/components/WalletCreationFallback.svelte';
+
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
 		const connectorsList = [injected()];
@@ -41,5 +48,14 @@
 </script>
 
 <QueryClientProvider client={queryClient}>
+	<!-- Dynamic SDK wrapper (invisible, handles auth state) -->
+	<DynamicSvelteWrapper />
+
+	<!-- Global modals -->
+	<AuthModal />
+	<SendFundsModal />
+	<DepositModal />
+	<WalletCreationFallback />
+
 	<slot />
 </QueryClientProvider>
