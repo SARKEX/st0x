@@ -44,6 +44,7 @@ import {
 	AAErrorCode
 } from '../types';
 import { getGasOracle } from './gasOracle';
+import { USDC_BASE } from '../tokens';
 import { env } from '$env/dynamic/public';
 
 // Chain configurations
@@ -167,6 +168,7 @@ export class RhinestoneClient {
 	 * - Uses Rhinestone's Warp infrastructure to upgrade the EOA
 	 * - Preserves the user's existing EOA address
 	 * - Enables smart account features (batching, gas sponsorship)
+	 * - IMPORTANT: Must set `eoa` in config for SDK to use EOA address
 	 *
 	 * For standard mode (accountType: 'smart' or default):
 	 * - Creates a new smart account contract
@@ -180,31 +182,42 @@ export class RhinestoneClient {
 			});
 
 			// Build createAccount options based on account type
-			const createAccountOptions: {
+			// For EIP-7702 mode, we must provide:
+			// - account.type: smart account implementation (e.g., 'nexus')
+			// - eoa: the EOA account for signing and address derivation
+			// - owners: the wallet owners
+			type CreateAccountConfig = {
 				owners: { type: 'ecdsa'; accounts: Account[] };
-				accountType?: '7702';
-			} = {
+				account?: { type: 'nexus' };
+				eoa?: Account;
+			};
+
+			const createAccountOptions: CreateAccountConfig = {
 				owners: {
 					type: 'ecdsa',
 					accounts: [walletAccount]
 				}
 			};
 
-			// For EIP-7702 mode, add the accountType to signal EOA upgrade
-			// This tells Rhinestone to use Warp infrastructure to upgrade the EOA
-			// instead of creating a separate smart account
+			// For EIP-7702 mode, set both account type and eoa
+			// This tells the SDK to:
+			// 1. Use the EOA address (walletAccount.address) as the account address
+			// 2. Use Nexus as the smart account implementation for 7702 delegation
 			if (this.config.accountType === '7702') {
-				createAccountOptions.accountType = '7702';
+				createAccountOptions.account = { type: 'nexus' };
+				createAccountOptions.eoa = walletAccount;
 			}
 
 			console.log('[Rhinestone Client] Calling SDK createAccount with options:', {
 				ownersType: createAccountOptions.owners.type,
-				accountType: createAccountOptions.accountType
+				accountType: createAccountOptions.account?.type,
+				hasEoa: !!createAccountOptions.eoa,
+				eoaAddress: createAccountOptions.eoa?.address
 			});
 
 			// Create the account via Rhinestone SDK
-			// For 7702 mode: This upgrades the EOA to act as a smart account
-			// For smart mode: This creates a new smart account contract
+			// For 7702 mode: SDK's getAddress() will return eoa.address
+			// For smart mode: SDK calculates counterfactual smart account address
 			const rhinestoneAccount = await this.sdk.createAccount(createAccountOptions);
 
 			console.log('[Rhinestone Client] Account created successfully');
@@ -710,12 +723,20 @@ export class RhinestoneClient {
 			};
 
 			// If paying with USDC, specify it as both feeAsset and sourceAsset
+			// The SDK's feeAsset can be a symbol like 'USDC', but sourceAssets
+			// must use the actual token address so the orchestrator can verify balance
 			if (feeAsset) {
 				transactionParams.feeAsset = feeAsset;
-				// Tell Rhinestone that USDC is available on this chain
-				transactionParams.sourceAssets = {
-					[chain.id]: [feeAsset]
-				};
+				// Get the actual USDC address for this chain
+				// Currently only Base is supported for ERC20 gas payment
+				const usdcAddress =
+					params.chainId === SUPPORTED_NETWORKS.BASE ? USDC_BASE.address : undefined;
+				if (usdcAddress) {
+					// Tell Rhinestone that USDC is available on this chain using the actual address
+					transactionParams.sourceAssets = {
+						[chain.id]: [usdcAddress]
+					};
+				}
 			}
 
 			console.log('[Rhinestone Client] Sending same-chain transaction...', {
