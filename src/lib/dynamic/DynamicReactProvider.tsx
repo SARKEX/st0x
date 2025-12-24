@@ -148,43 +148,45 @@ function DynamicBridge({
 	// Expose wallet provider to Svelte when available
 	useEffect(() => {
 		if (activeWallet && onWalletProviderReadyRef.current) {
-			// Get the wallet client from the wallet connector
-			activeWallet.connector?.getWalletClient()
-				.then((walletClient) => {
-					// Create an EIP-1193 compatible provider wrapper
-					if (walletClient) {
-						const provider = {
-							request: async (args: { method: string; params?: unknown[] }) => {
-								// Route common methods through the wallet client
-								if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
-									const tx = args.params[0] as { to: string; value?: string; data?: string };
-									return walletClient.sendTransaction({
-										to: tx.to as `0x${string}`,
-										value: tx.value ? BigInt(tx.value) : undefined,
-										data: tx.data as `0x${string}` | undefined
-									});
-								}
-								if (args.method === 'personal_sign' && args.params) {
-									const [message] = args.params as [string, string];
-									return walletClient.signMessage({ message });
-								}
-								if (args.method === 'wallet_switchEthereumChain') {
-									// Dynamic handles chain switching internally
-									return null;
-								}
-								// For other methods, try the wallet client's transport
-								return (walletClient.transport as { request?: (args: unknown) => Promise<unknown> })?.request?.(args);
-							}
-						};
-						onWalletProviderReadyRef.current?.(provider);
-					} else {
-						onWalletProviderReadyRef.current?.(null);
+			// Create an EIP-1193 compatible provider wrapper using the wallet directly
+			const provider = {
+				request: async (args: { method: string; params?: unknown[] }) => {
+					// For signing messages, use the wallet's signMessage method directly
+					if (args.method === 'personal_sign' && args.params) {
+						const [message] = args.params as [string, string];
+						// Dynamic's wallet has a signMessage method
+						return activeWallet.signMessage(message);
 					}
-				})
-				.catch((err) => {
-					console.error('[dynamic] Failed to get wallet client:', err);
-					onWalletProviderReadyRef.current?.(null);
-				});
+
+					// For transactions and other methods, get the wallet client
+					const walletClient = await activeWallet.connector?.getWalletClient();
+
+					if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
+						if (!walletClient) {
+							throw new Error('Wallet client not available for transaction');
+						}
+						const tx = args.params[0] as { to: string; value?: string; data?: string };
+						return walletClient.sendTransaction({
+							to: tx.to as `0x${string}`,
+							value: tx.value ? BigInt(tx.value) : undefined,
+							data: tx.data as `0x${string}` | undefined
+						});
+					}
+
+					if (args.method === 'wallet_switchEthereumChain') {
+						// Dynamic handles chain switching internally
+						return null;
+					}
+
+					// For other methods, try the wallet client's transport
+					if (walletClient) {
+						return (walletClient.transport as { request?: (args: unknown) => Promise<unknown> })?.request?.(args);
+					}
+
+					throw new Error(`Method ${args.method} not supported`);
+				}
+			};
+			onWalletProviderReadyRef.current?.(provider);
 		} else if (!activeWallet && onWalletProviderReadyRef.current) {
 			// Clear provider when wallet is not available
 			onWalletProviderReadyRef.current(null);
