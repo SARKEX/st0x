@@ -1,25 +1,25 @@
 import { derived, get, type Readable } from 'svelte/store';
 import { signerAddress, connected, chainId } from 'svelte-wagmi';
 import {
-	privySession,
-	privyWalletAddress,
-	isPrivyAuthenticated,
+	dynamicSession,
+	dynamicWalletAddress,
+	isDynamicAuthenticated,
 	showAuthModal
-} from './privyStore';
+} from './dynamicStore';
 import type { Network } from '$lib/config/network';
 
 // Auth method enum
-export type AuthMethod = 'wallet' | 'privy' | 'none';
+export type AuthMethod = 'wallet' | 'dynamic' | 'none';
 
 /**
  * Derived store for the current authentication method
  */
 export const authMethod = derived(
-	[connected, signerAddress, isPrivyAuthenticated],
-	([$connected, $signerAddress, $isPrivyAuthenticated]): AuthMethod => {
-		// Privy takes precedence if authenticated
-		if ($isPrivyAuthenticated) {
-			return 'privy';
+	[connected, signerAddress, isDynamicAuthenticated],
+	([$connected, $signerAddress, $isDynamicAuthenticated]): AuthMethod => {
+		// Dynamic takes precedence if authenticated
+		if ($isDynamicAuthenticated) {
+			return 'dynamic';
 		}
 		// Then check direct wallet connection
 		if ($connected && $signerAddress) {
@@ -30,14 +30,14 @@ export const authMethod = derived(
 );
 
 /**
- * Unified wallet address - works for both wallet and Privy auth
+ * Unified wallet address - works for both wallet and Dynamic auth
  */
 export const walletAddress = derived(
-	[authMethod, signerAddress, privyWalletAddress],
-	([$authMethod, $signerAddress, $privyWalletAddress]): string | null => {
+	[authMethod, signerAddress, dynamicWalletAddress],
+	([$authMethod, $signerAddress, $dynamicWalletAddress]): string | null => {
 		switch ($authMethod) {
-			case 'privy':
-				return $privyWalletAddress;
+			case 'dynamic':
+				return $dynamicWalletAddress;
 			case 'wallet':
 				return $signerAddress ?? null;
 			default:
@@ -129,8 +129,8 @@ export const isReady = derived(
 	[authMethod, walletAddress, wrongNetwork],
 	([$authMethod, $walletAddress, $wrongNetwork]): boolean => {
 		if (!$walletAddress) return false;
-		// Privy users don't need network check (we control their wallet)
-		if ($authMethod === 'privy') return true;
+		// Dynamic users don't need network check (we control their wallet)
+		if ($authMethod === 'dynamic') return true;
 		// Wallet users need correct network
 		return !$wrongNetwork;
 	}
@@ -140,17 +140,15 @@ export const isReady = derived(
  * User display info
  */
 export const userDisplayInfo = derived(
-	[authMethod, walletAddress, privySession],
-	([$authMethod, $walletAddress, $privySession]): {
+	[authMethod, walletAddress, dynamicSession],
+	([$authMethod, $walletAddress, $dynamicSession]): {
 		address: string | null;
 		displayName: string;
 		method: AuthMethod;
 		email?: string;
 		socialProvider?: string;
-		// Smart wallet info
-		walletType?: 'embedded' | 'smart' | 'eoa';
-		smartWalletAddress?: string;
-		eoaAddress?: string;
+		// Wallet info
+		walletType?: 'embedded' | 'external';
 	} => {
 		if (!$walletAddress) {
 			return { address: null, displayName: 'Not connected', method: 'none' };
@@ -158,31 +156,22 @@ export const userDisplayInfo = derived(
 
 		const truncatedAddress = `${$walletAddress.slice(0, 6)}...${$walletAddress.slice(-4)}`;
 
-		if ($authMethod === 'privy' && $privySession) {
-			// For Privy users, show email or social name if available
+		if ($authMethod === 'dynamic' && $dynamicSession) {
+			// For Dynamic users, show email or social name if available
 			let displayName = truncatedAddress;
-			if ($privySession.email) {
-				displayName = $privySession.email;
-			} else if ($privySession.socialName) {
-				displayName = $privySession.socialName;
-			} else if ($privySession.walletType === 'smart' && $privySession.eoaAddress) {
-				// For smart wallet users without email/social, show the EOA they connected with
-				const truncatedEoa = `${$privySession.eoaAddress.slice(
-					0,
-					6
-				)}...${$privySession.eoaAddress.slice(-4)}`;
-				displayName = `Smart (${truncatedEoa})`;
+			if ($dynamicSession.email) {
+				displayName = $dynamicSession.email;
+			} else if ($dynamicSession.socialName) {
+				displayName = $dynamicSession.socialName;
 			}
 
 			return {
 				address: $walletAddress,
 				displayName,
-				method: 'privy',
-				email: $privySession.email,
-				socialProvider: $privySession.socialProvider,
-				walletType: $privySession.walletType,
-				smartWalletAddress: $privySession.smartWalletAddress,
-				eoaAddress: $privySession.eoaAddress
+				method: 'dynamic',
+				email: $dynamicSession.email,
+				socialProvider: $dynamicSession.socialProvider,
+				walletType: $dynamicSession.walletType
 			};
 		}
 

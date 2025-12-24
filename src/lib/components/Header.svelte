@@ -9,7 +9,7 @@
 	import { walletRegistered } from '$lib/stores/accessStore';
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
-	import { openAuthModal, logoutPrivy, privySession } from '$lib/stores/privyStore';
+	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
 
 	export let title: string;
 	export let isSidebarCollapsed = false;
@@ -73,8 +73,8 @@
 	}
 
 	function handleDisconnect() {
-		if ($authMethod === 'privy') {
-			logoutPrivy();
+		if ($authMethod === 'dynamic') {
+			logoutDynamic();
 		} else {
 			$web3Modal.open();
 		}
@@ -133,15 +133,15 @@
 					<RewardsDisplay />
 				{/if}
 
-				{#if $authMethod === 'privy' && $privySession}
-					<!-- Privy authenticated user -->
+				{#if $authMethod === 'dynamic' && $dynamicSession}
+					<!-- Dynamic authenticated user -->
 					<div class="flex items-center gap-2">
 						<a href="/dashboard">
 							<Button variant="primary" size="sm" className="px-3 py-2 text-sm whitespace-nowrap">
 								<div class="flex items-center gap-2">
 									<span>My Dashboard</span>
 									<span class="text-[11px] font-normal text-yellow-300/80">
-										{$privySession.email ? truncateEmail($privySession.email) : `...${$privySession.walletAddress.slice(-4)}`}
+										{$dynamicSession.email ? truncateEmail($dynamicSession.email) : `...${$dynamicSession.walletAddress.slice(-4)}`}
 									</span>
 								</div>
 							</Button>

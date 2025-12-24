@@ -1,5 +1,5 @@
 /**
- * Unified wallet service that routes to Privy or wagmi based on auth method
+ * Unified wallet service that routes to Dynamic or wagmi based on auth method
  */
 import { get } from 'svelte/store';
 import { wagmiConfig, signerAddress } from 'svelte-wagmi';
@@ -10,27 +10,27 @@ import {
 } from '@wagmi/core';
 import type { Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
-import { privyWalletAddress } from '$lib/stores/privyStore';
+import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
 
-// Store for Privy wallet provider (set by React component)
-let privyWalletProvider: {
+// Store for Dynamic wallet provider (set by React component)
+let dynamicWalletProvider: {
 	request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 } | null = null;
 
 /**
- * Set the Privy wallet provider (called from React)
+ * Set the Dynamic wallet provider (called from React)
  */
-export function setPrivyWalletProvider(
+export function setDynamicWalletProvider(
 	provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null
 ): void {
-	privyWalletProvider = provider;
+	dynamicWalletProvider = provider;
 }
 
 /**
- * Get the current Privy wallet provider
+ * Get the current Dynamic wallet provider
  */
-export function getPrivyWalletProvider(): typeof privyWalletProvider {
-	return privyWalletProvider;
+export function getDynamicWalletProvider(): typeof dynamicWalletProvider {
+	return dynamicWalletProvider;
 }
 
 // Retry wrapper for RPC calls
@@ -68,20 +68,20 @@ export async function sendTransaction(params: {
 }): Promise<Hash> {
 	const method = get(authMethod);
 
-	if (method === 'privy') {
-		// Use Privy's embedded wallet
-		if (!privyWalletProvider) {
-			throw new Error('Privy wallet provider not available');
+	if (method === 'dynamic') {
+		// Use Dynamic's embedded wallet
+		if (!dynamicWalletProvider) {
+			throw new Error('Dynamic wallet provider not available');
 		}
 
-		const walletAddress = get(privyWalletAddress);
+		const walletAddress = get(dynamicWalletAddress);
 		if (!walletAddress) {
-			throw new Error('Privy wallet address not available');
+			throw new Error('Dynamic wallet address not available');
 		}
 
 		// Ensure we're on Base network (chain ID 8453)
 		try {
-			await privyWalletProvider!.request({
+			await dynamicWalletProvider!.request({
 				method: 'wallet_switchEthereumChain',
 				params: [{ chainId: '0x2105' }] // 8453 in hex
 			});
@@ -89,7 +89,7 @@ export async function sendTransaction(params: {
 			// Chain might already be correct, or not supported - continue anyway
 		}
 
-		// Build transaction params - let Privy handle gas estimation
+		// Build transaction params - let Dynamic handle gas estimation
 		const txParams: Record<string, string> = {
 			from: walletAddress,
 			to: params.to
@@ -106,7 +106,7 @@ export async function sendTransaction(params: {
 		}
 
 		const txHash = await withRetry(async () => {
-			const result = await privyWalletProvider!.request({
+			const result = await dynamicWalletProvider!.request({
 				method: 'eth_sendTransaction',
 				params: [txParams]
 			});
@@ -144,7 +144,7 @@ export async function waitForTransaction(hash: Hash): Promise<void> {
 		throw new Error('Wagmi config not available');
 	}
 
-	// Use wagmi for receipt - works for both Privy and wagmi transactions
+	// Use wagmi for receipt - works for both Dynamic and wagmi transactions
 	await withRetry(() => wagmiWaitForTransactionReceipt(config, { hash }));
 }
 
@@ -154,18 +154,18 @@ export async function waitForTransaction(hash: Hash): Promise<void> {
 export async function signMessage(message: string): Promise<`0x${string}`> {
 	const method = get(authMethod);
 
-	if (method === 'privy') {
-		// Use Privy's embedded wallet
-		if (!privyWalletProvider) {
-			throw new Error('Privy wallet provider not available');
+	if (method === 'dynamic') {
+		// Use Dynamic's embedded wallet
+		if (!dynamicWalletProvider) {
+			throw new Error('Dynamic wallet provider not available');
 		}
 
-		const walletAddress = get(privyWalletAddress);
+		const walletAddress = get(dynamicWalletAddress);
 		if (!walletAddress) {
-			throw new Error('Privy wallet address not available');
+			throw new Error('Dynamic wallet address not available');
 		}
 
-		const signature = await privyWalletProvider.request({
+		const signature = await dynamicWalletProvider.request({
 			method: 'personal_sign',
 			params: [message, walletAddress]
 		});
@@ -191,8 +191,8 @@ export async function signMessage(message: string): Promise<`0x${string}`> {
 export function getSignerAddress(): string | null {
 	const method = get(authMethod);
 
-	if (method === 'privy') {
-		return get(privyWalletAddress);
+	if (method === 'dynamic') {
+		return get(dynamicWalletAddress);
 	} else if (method === 'wallet') {
 		return get(signerAddress) ?? null;
 	}

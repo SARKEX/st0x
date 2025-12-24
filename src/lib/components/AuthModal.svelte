@@ -5,13 +5,13 @@
 	import {
 		showAuthModal,
 		closeAuthModal,
-		loginWithPrivy,
-		privyLoading
-	} from '$lib/stores/privyStore';
+		loginWithDynamic,
+		dynamicLoading
+	} from '$lib/stores/dynamicStore';
 
 	function handleClose() {
-		// Reset loading state when modal is closed (in case Privy modal was cancelled)
-		privyLoading.set(false);
+		// Reset loading state when modal is closed (in case Dynamic modal was cancelled)
+		dynamicLoading.set(false);
 		closeAuthModal();
 	}
 
@@ -20,9 +20,9 @@
 		handleClose();
 	}
 
-	function handlePrivyLogin() {
-		loginWithPrivy();
-		// Modal stays open briefly while Privy loads, then Privy shows its own modal
+	function handleDynamicLogin() {
+		loginWithDynamic();
+		// Modal stays open briefly while Dynamic loads, then Dynamic shows its own modal
 	}
 </script>
 
@@ -30,7 +30,7 @@
 	<div class="space-y-6">
 		<p class="text-center text-gray-300">Choose how you'd like to access the platform</p>
 
-		<!-- Privy Login (Email or Social) -->
+		<!-- Dynamic Login (Email or Social) -->
 		<div class="rounded-lg border border-gray-700 bg-gray-800/50 p-4">
 			<div class="mb-3 flex items-center gap-3">
 				<div class="rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-600/20 p-2">
@@ -55,13 +55,13 @@
 			</div>
 
 			<Button
-				on:click={handlePrivyLogin}
+				on:click={handleDynamicLogin}
 				variant="primary"
 				fullWidth
 				size="md"
-				disabled={$privyLoading}
+				disabled={$dynamicLoading}
 			>
-				{#if $privyLoading}
+				{#if $dynamicLoading}
 					<span class="flex items-center gap-2">
 						<svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
 							<circle

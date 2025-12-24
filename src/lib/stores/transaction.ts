@@ -46,7 +46,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
 	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
 
-// Unified send transaction (works with both Privy and wagmi wallets)
+// Unified send transaction (works with both Dynamic and wagmi wallets)
 const sendTransaction = walletServiceSendTransaction;
 
 // Unified wait for transaction
