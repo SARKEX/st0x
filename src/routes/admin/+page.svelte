@@ -1,24 +1,59 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { networks } from '$lib/config/networks';
 	import { TOKENS } from '$lib/config/tokens';
 	import { toDecimal } from '$lib/utils/tokenMath';
 
+	// Chart.js types
+	type ChartInstance = {
+		destroy: () => void;
+		update: (mode?: string) => void;
+		data: { labels?: string[]; datasets?: Array<Record<string, unknown>> };
+		options: Record<string, unknown>;
+	} | null;
+
+	type ChartConfigurationLike = {
+		type: string;
+		data?: Record<string, unknown>;
+		options?: Record<string, unknown>;
+	};
+
+	type ChartConstructor = new (
+		ctx: CanvasRenderingContext2D,
+		config: ChartConfigurationLike
+	) => ChartInstance;
+
+	interface ChartJsWindow extends Window {
+		Chart?: ChartConstructor;
+	}
+
+	// Chart.js state
+	let ChartCtor: ChartConstructor | null = null;
+	let tokenChartCanvas: HTMLCanvasElement | null = null;
+	let tokenChart: ChartInstance = null;
+	let codeChartCanvas: HTMLCanvasElement | null = null;
+	let codeChart: ChartInstance = null;
+	let walletChartCanvas: HTMLCanvasElement | null = null;
+	let walletChart: ChartInstance = null;
+	let chartLibLoaded = false;
+
 	// Build set of valid token addresses (lowercase) from the token list (asset tokens only, not USDC)
 	const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
 
 	// Tab types
-	type Tab = 'tokens' | 'codes' | 'wallets' | 'transactions' | 'timeseries';
+	type Tab = 'tokens' | 'codes' | 'wallets' | 'transactions';
 	let activeTab: Tab = 'tokens';
 
 	// Period selector
-	type PeriodPreset = '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
+	type PeriodPreset = '24h' | '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
 	let selectedPeriod: PeriodPreset = '30d';
 	let customStartDate = '';
 	let customEndDate = '';
 
 	const periodPresets: { value: PeriodPreset; label: string }[] = [
+		{ value: '24h', label: '24H' },
 		{ value: '7d', label: '7D' },
 		{ value: '30d', label: '30D' },
 		{ value: '90d', label: '90D' },
@@ -39,6 +74,8 @@
 
 		const dayInSeconds = 24 * 60 * 60;
 		switch (selectedPeriod) {
+			case '24h':
+				return { start: now - dayInSeconds, end: now };
 			case '7d':
 				return { start: now - 7 * dayInSeconds, end: now };
 			case '30d':
@@ -121,13 +158,6 @@
 		usdcVolume: number;
 	}
 
-	interface TimeSeriesEntry {
-		date: string;
-		walletCount: number;
-		tradeCount: number;
-		usdcVolume: number;
-	}
-
 	interface TransactionEntry {
 		id: string;
 		timestamp: Date;
@@ -166,7 +196,6 @@
 	let loading = true;
 	let error = '';
 	let lastUpdated: Date | null = null;
-	let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
 	// Data
 	let totalTransactions = 0;
@@ -177,7 +206,6 @@
 
 	// Enhanced analytics data
 	let transactions: TransactionEntry[] = [];
-	let timeSeries: TimeSeriesEntry[] = [];
 	let meanTxSize = 0;
 	let medianTxSize = 0;
 	let cumulativeNetVolume = 0; // LP net USDC flow (positive = LP received USDC from user buys)
@@ -190,6 +218,454 @@
 	let allTokenSymbols: string[] = [];
 	let allWalletAddresses: string[] = [];
 	let allAccessCodes: string[] = [];
+
+	// Token chart controls
+	let selectedTokens: Set<string> = new Set();
+	let tokenChartMetric: 'count' | 'usdc' = 'count';
+	let tokenDropdownOpen = false;
+
+	// Initialize selected tokens when allTokenSymbols changes
+	$: if (allTokenSymbols.length > 0 && selectedTokens.size === 0) {
+		selectedTokens = new Set(allTokenSymbols);
+	}
+
+	function toggleToken(symbol: string) {
+		if (selectedTokens.has(symbol)) {
+			selectedTokens.delete(symbol);
+		} else {
+			selectedTokens.add(symbol);
+		}
+		selectedTokens = selectedTokens; // Trigger reactivity
+	}
+
+	function selectAllTokens() {
+		selectedTokens = new Set(allTokenSymbols);
+	}
+
+	function clearAllTokens() {
+		selectedTokens = new Set();
+	}
+
+	function closeDropdownOnClickOutside(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		if (!target.closest('.token-dropdown')) {
+			tokenDropdownOpen = false;
+		}
+		if (!target.closest('.code-dropdown')) {
+			codeDropdownOpen = false;
+		}
+		if (!target.closest('.wallet-dropdown')) {
+			walletDropdownOpen = false;
+		}
+	}
+
+	// Access code chart controls
+	let selectedCode: string | null = null;
+	let codeChartMetric: 'count' | 'usdc' = 'count';
+	let codeDropdownOpen = false;
+
+	// Initialize selected code when allAccessCodes changes
+	$: if (allAccessCodes.length > 0 && selectedCode === null) {
+		selectedCode = allAccessCodes[0];
+	}
+
+	// Get chart data for selected access code
+	$: codeChartData = allDates.map((date) => {
+		const dayData = dailyCodeStats.get(date);
+		const stats = selectedCode ? dayData?.get(selectedCode) : null;
+		const value = codeChartMetric === 'count' ? (stats?.tradeCount || 0) : (stats?.usdcVolume || 0);
+		return { date, value };
+	});
+
+	// Wallet chart controls
+	let selectedWallets: Set<string> = new Set();
+	let walletChartMetric: 'count' | 'usdc' = 'count';
+	let walletDropdownOpen = false;
+
+	// Initialize selected wallets when allWalletAddresses changes
+	$: if (allWalletAddresses.length > 0 && selectedWallets.size === 0) {
+		selectedWallets = new Set(allWalletAddresses.slice(0, 5)); // Default to first 5
+	}
+
+	function toggleWallet(wallet: string) {
+		if (selectedWallets.has(wallet)) {
+			selectedWallets.delete(wallet);
+		} else {
+			selectedWallets.add(wallet);
+		}
+		selectedWallets = selectedWallets;
+	}
+
+	function selectAllWallets() {
+		selectedWallets = new Set(allWalletAddresses);
+	}
+
+	function clearAllWallets() {
+		selectedWallets = new Set();
+	}
+
+	// Get chart data for selected wallets
+	$: walletChartData = allDates.map((date) => {
+		const dayData = dailyWalletStats.get(date);
+		let total = 0;
+		for (const wallet of allWalletAddresses) {
+			if (selectedWallets.has(wallet)) {
+				const stats = dayData?.get(wallet);
+				total += walletChartMetric === 'count' ? (stats?.tradeCount || 0) : (stats?.usdcVolume || 0);
+			}
+		}
+		return { date, total };
+	});
+
+	// Get chart data for selected tokens
+	$: tokenChartData = allDates.map((date) => {
+		const dayData = dailyTokenStats.get(date);
+		const tokenValues: Record<string, number> = {};
+		let total = 0;
+
+		for (const symbol of allTokenSymbols) {
+			if (selectedTokens.has(symbol)) {
+				const stats = dayData?.get(symbol);
+				const value =
+					tokenChartMetric === 'count' ? stats?.tradeCount || 0 : stats?.usdcVolume || 0;
+				tokenValues[symbol] = value;
+				total += value;
+			}
+		}
+
+		return { date, tokenValues, total };
+	});
+
+	// Script loading helper
+	const scriptPromises = new Map<string, Promise<void>>();
+
+	function loadScript(src: string): Promise<void> {
+		if (!browser) return Promise.resolve();
+
+		if (scriptPromises.has(src)) {
+			return scriptPromises.get(src)!;
+		}
+
+		const existing = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
+		if (existing?.dataset.loaded === 'true') {
+			return Promise.resolve();
+		}
+
+		if (existing && existing.dataset.loading === 'true') {
+			return new Promise<void>((resolve, reject) => {
+				existing.addEventListener('load', () => resolve(), { once: true });
+				existing.addEventListener(
+					'error',
+					() => reject(new Error(`Failed to load script: ${src}`)),
+					{ once: true }
+				);
+			});
+		}
+
+		const promise = new Promise<void>((resolve, reject) => {
+			const script = document.createElement('script');
+			script.src = src;
+			script.async = true;
+			script.dataset.loading = 'true';
+			script.addEventListener(
+				'load',
+				() => {
+					script.dataset.loading = 'false';
+					script.dataset.loaded = 'true';
+					resolve();
+				},
+				{ once: true }
+			);
+			script.addEventListener(
+				'error',
+				() => {
+					script.dataset.loading = 'false';
+					reject(new Error(`Failed to load script: ${src}`));
+				},
+				{ once: true }
+			);
+			document.head.appendChild(script);
+		});
+
+		promise.catch(() => {
+			scriptPromises.delete(src);
+		});
+
+		scriptPromises.set(src, promise);
+		return promise;
+	}
+
+	async function ensureChartLib(): Promise<ChartConstructor | null> {
+		if (!browser) return null;
+		if (ChartCtor) return ChartCtor;
+
+		if (typeof window !== 'undefined' && (window as ChartJsWindow).Chart) {
+			ChartCtor = (window as ChartJsWindow).Chart ?? null;
+			chartLibLoaded = true;
+			return ChartCtor;
+		}
+
+		try {
+			await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js');
+			const chartGlobal = (window as ChartJsWindow).Chart ?? null;
+			if (!chartGlobal) {
+				throw new Error('Chart.js global not found');
+			}
+			ChartCtor = chartGlobal;
+			chartLibLoaded = true;
+			return ChartCtor;
+		} catch (err) {
+			console.error('[admin] Failed to load Chart.js', err);
+			return null;
+		}
+	}
+
+	function updateTokenChart() {
+		if (!ChartCtor || !tokenChartCanvas) return;
+		const ctx = tokenChartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		// Destroy existing chart
+		if (tokenChart) {
+			tokenChart.destroy();
+			tokenChart = null;
+		}
+
+		// Single dataset showing total of selected tokens
+		const chartLabel =
+			tokenChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume';
+
+		tokenChart = new ChartCtor(ctx, {
+			type: 'bar',
+			data: {
+				labels: tokenChartData.map((d) => d.date),
+				datasets: [
+					{
+						label: chartLabel,
+						data: tokenChartData.map((day) => day.total),
+						backgroundColor: '#e8be89',
+						borderColor: '#d4a976',
+						borderWidth: 1,
+						borderRadius: 4
+					}
+				]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				animation: false,
+				interaction: {
+					mode: 'index',
+					intersect: false
+				},
+				plugins: {
+					legend: {
+						display: false
+					},
+					tooltip: {
+						backgroundColor: 'rgba(17, 24, 39, 0.95)',
+						titleColor: '#f3f4f6',
+						bodyColor: '#d1d5db',
+						borderColor: 'rgba(75, 85, 99, 0.3)',
+						borderWidth: 1,
+						padding: 12,
+						callbacks: {
+							label: (context: { parsed?: { y?: number } }) => {
+								const value = context.parsed?.y || 0;
+								if (tokenChartMetric === 'usdc') {
+									return formatUsd(value);
+								}
+								return `${value} transactions`;
+							}
+						}
+					}
+				},
+				scales: {
+					x: {
+						ticks: {
+							color: '#9ca3af',
+							maxRotation: 45,
+							minRotation: 0
+						},
+						grid: {
+							color: 'rgba(75, 85, 99, 0.2)'
+						}
+					},
+					y: {
+						beginAtZero: true,
+						ticks: {
+							color: '#9ca3af',
+							callback: (value: string | number) => {
+								const num = Number(value);
+								if (tokenChartMetric === 'usdc') {
+									if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
+									return `$${num.toFixed(0)}`;
+								}
+								return num;
+							}
+						},
+						grid: {
+							color: 'rgba(75, 85, 99, 0.2)'
+						}
+					}
+				}
+			}
+		});
+	}
+
+	// Reactively update chart when data or selections change
+	$: if (browser && chartLibLoaded && tokenChartCanvas && activeTab === 'tokens') {
+		void tokenChartData;
+		void selectedTokens;
+		void tokenChartMetric;
+		setTimeout(() => updateTokenChart(), 0);
+	}
+
+	function updateCodeChart() {
+		if (!ChartCtor || !codeChartCanvas) return;
+		const ctx = codeChartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		if (codeChart) {
+			codeChart.destroy();
+			codeChart = null;
+		}
+
+		const chartLabel = codeChartMetric === 'count' ? 'Transactions' : 'USDC Volume';
+
+		codeChart = new ChartCtor(ctx, {
+			type: 'bar',
+			data: {
+				labels: codeChartData.map((d) => d.date),
+				datasets: [
+					{
+						label: chartLabel,
+						data: codeChartData.map((d) => d.value),
+						backgroundColor: '#e8be89',
+						borderColor: '#d4a976',
+						borderWidth: 1,
+						borderRadius: 4
+					}
+				]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				animation: false,
+				plugins: {
+					legend: { display: false },
+					tooltip: {
+						backgroundColor: 'rgba(17, 24, 39, 0.95)',
+						titleColor: '#f3f4f6',
+						bodyColor: '#d1d5db',
+						callbacks: {
+							label: (context: { parsed?: { y?: number } }) => {
+								const value = context.parsed?.y || 0;
+								return codeChartMetric === 'usdc' ? formatUsd(value) : `${value} transactions`;
+							}
+						}
+					}
+				},
+				scales: {
+					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					y: {
+						beginAtZero: true,
+						ticks: {
+							color: '#9ca3af',
+							callback: (value: string | number) => {
+								const num = Number(value);
+								if (codeChartMetric === 'usdc') {
+									return num >= 1000 ? `$${(num / 1000).toFixed(0)}k` : `$${num.toFixed(0)}`;
+								}
+								return num;
+							}
+						},
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					}
+				}
+			}
+		});
+	}
+
+	$: if (browser && chartLibLoaded && codeChartCanvas && activeTab === 'codes') {
+		void codeChartData;
+		void selectedCode;
+		void codeChartMetric;
+		setTimeout(() => updateCodeChart(), 0);
+	}
+
+	function updateWalletChart() {
+		if (!ChartCtor || !walletChartCanvas) return;
+		const ctx = walletChartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		if (walletChart) {
+			walletChart.destroy();
+			walletChart = null;
+		}
+
+		const chartLabel = walletChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume';
+
+		walletChart = new ChartCtor(ctx, {
+			type: 'bar',
+			data: {
+				labels: walletChartData.map((d) => d.date),
+				datasets: [
+					{
+						label: chartLabel,
+						data: walletChartData.map((d) => d.total),
+						backgroundColor: '#e8be89',
+						borderColor: '#d4a976',
+						borderWidth: 1,
+						borderRadius: 4
+					}
+				]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				animation: false,
+				plugins: {
+					legend: { display: false },
+					tooltip: {
+						backgroundColor: 'rgba(17, 24, 39, 0.95)',
+						titleColor: '#f3f4f6',
+						bodyColor: '#d1d5db',
+						callbacks: {
+							label: (context: { parsed?: { y?: number } }) => {
+								const value = context.parsed?.y || 0;
+								return walletChartMetric === 'usdc' ? formatUsd(value) : `${value} transactions`;
+							}
+						}
+					}
+				},
+				scales: {
+					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					y: {
+						beginAtZero: true,
+						ticks: {
+							color: '#9ca3af',
+							callback: (value: string | number) => {
+								const num = Number(value);
+								if (walletChartMetric === 'usdc') {
+									return num >= 1000 ? `$${(num / 1000).toFixed(0)}k` : `$${num.toFixed(0)}`;
+								}
+								return num;
+							}
+						},
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					}
+				}
+			}
+		});
+	}
+
+	$: if (browser && chartLibLoaded && walletChartCanvas && activeTab === 'wallets') {
+		void walletChartData;
+		void selectedWallets;
+		void walletChartMetric;
+		setTimeout(() => updateWalletChart(), 0);
+	}
 
 	// Network config
 	const network = networks[0]; // Base mainnet
@@ -205,13 +681,31 @@
 		customStartDate = thirtyDaysAgo.toISOString().split('T')[0];
 
 		loadAllData();
-		// Auto-refresh every 30 seconds
-		refreshInterval = setInterval(loadAllData, 30000);
+
+		// Load Chart.js library
+		ensureChartLib();
+
+		// Close dropdown on click outside
+		document.addEventListener('click', closeDropdownOnClickOutside);
 	});
 
 	onDestroy(() => {
-		if (refreshInterval) {
-			clearInterval(refreshInterval);
+		// Destroy charts on unmount
+		if (tokenChart) {
+			tokenChart.destroy();
+			tokenChart = null;
+		}
+		if (codeChart) {
+			codeChart.destroy();
+			codeChart = null;
+		}
+		if (walletChart) {
+			walletChart.destroy();
+			walletChart = null;
+		}
+		// Remove event listener
+		if (browser) {
+			document.removeEventListener('click', closeDropdownOnClickOutside);
 		}
 	});
 
@@ -371,7 +865,6 @@
 	}
 
 	function processTradeData(trades: Trade[]) {
-		totalTransactions = trades.length;
 		totalUsdcVolume = 0;
 
 		const tokenMap = new Map<string, TokenStats>();
@@ -380,14 +873,8 @@
 		const txList: TransactionEntry[] = [];
 		const usdcAmounts: number[] = [];
 
-		// Track unique transaction hashes to dedupe volume (solver fills multiple orders in one tx)
+		// Track unique transaction hashes to dedupe (solver fills multiple orders in one tx)
 		const seenTxHashes = new Set<string>();
-
-		// Time series aggregation - group by day
-		const timeSeriesMap = new Map<
-			string,
-			{ wallets: Set<string>; tradeCount: number; usdcVolume: number }
-		>();
 
 		// Daily breakdown maps for pivot tables
 		const dailyTokenMap = new Map<string, Map<string, DailyStats>>(); // date -> token -> stats
@@ -398,11 +885,18 @@
 		const codeSet = new Set<string>();
 		const dateSet = new Set<string>();
 
-		// Helper to add daily stats
+		// Track unique txHashes per (date, key) to dedupe transaction counts
+		const seenTokenTx = new Set<string>(); // "date|token|txHash"
+		const seenWalletTx = new Set<string>(); // "date|wallet|txHash"
+		const seenCodeTx = new Set<string>(); // "date|code|txHash"
+
+		// Helper to add daily stats (only counts tx once per unique txHash per date/key)
 		const addDailyStats = (
 			map: Map<string, Map<string, DailyStats>>,
+			seenSet: Set<string>,
 			date: string,
 			key: string,
+			txHash: string,
 			usdcAmount: number
 		) => {
 			if (!map.has(date)) {
@@ -413,7 +907,14 @@
 				dayMap.set(key, { tradeCount: 0, usdcVolume: 0 });
 			}
 			const stats = dayMap.get(key)!;
-			stats.tradeCount += 1;
+
+			// Only increment tradeCount once per unique txHash for this date/key
+			const dedupeKey = `${date}|${key}|${txHash}`;
+			if (!seenSet.has(dedupeKey)) {
+				seenSet.add(dedupeKey);
+				stats.tradeCount += 1;
+			}
+			// Always add volume (already deduped at global level)
 			stats.usdcVolume += usdcAmount;
 		};
 
@@ -576,34 +1077,26 @@
 				usdcAmount
 			});
 
-			// Time series aggregation - count unique wallets with access codes
+			// Daily breakdown
 			const dateKey = timestamp.toISOString().split('T')[0];
 			dateSet.add(dateKey);
-			if (!timeSeriesMap.has(dateKey)) {
-				timeSeriesMap.set(dateKey, { wallets: new Set(), tradeCount: 0, usdcVolume: 0 });
-			}
-			const dayStats = timeSeriesMap.get(dateKey)!;
-			if (walletToCode.has(vaultOwner)) dayStats.wallets.add(vaultOwner);
-			if (sender !== vaultOwner && walletToCode.has(sender)) dayStats.wallets.add(sender);
-			dayStats.tradeCount += 1;
-			dayStats.usdcVolume += usdcAmount;
 
-			// Daily breakdown by token
+			// Daily breakdown by token (deduped by txHash)
 			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
 				tokenSymbolSet.add(assetToken.symbol);
-				addDailyStats(dailyTokenMap, dateKey, assetToken.symbol, usdcAmount);
+				addDailyStats(dailyTokenMap, seenTokenTx, dateKey, assetToken.symbol, txHash, usdcAmount);
 			}
 
-			// Daily breakdown by wallet and code (for registered users only)
+			// Daily breakdown by wallet and code (for registered users only, deduped by txHash)
 			const addDailyWalletAndCode = (wallet: string) => {
 				if (!wallet || !walletToCode.has(wallet)) return;
 				walletAddressSet.add(wallet);
-				addDailyStats(dailyWalletMap, dateKey, wallet, usdcAmount);
+				addDailyStats(dailyWalletMap, seenWalletTx, dateKey, wallet, txHash, usdcAmount);
 
 				const code = walletToCode.get(wallet);
 				if (code) {
 					codeSet.add(code);
-					addDailyStats(dailyCodeMap, dateKey, code, usdcAmount);
+					addDailyStats(dailyCodeMap, seenCodeTx, dateKey, code, txHash, usdcAmount);
 				}
 			};
 
@@ -612,6 +1105,9 @@
 				addDailyWalletAndCode(sender);
 			}
 		}
+
+		// Total unique transactions (deduped by txHash)
+		totalTransactions = seenTxHashes.size;
 
 		// Calculate mean and median
 		if (usdcAmounts.length > 0) {
@@ -625,16 +1121,6 @@
 		}
 
 		cumulativeNetVolume = lpNetUsdc;
-
-		// Build time series array sorted by date
-		timeSeries = Array.from(timeSeriesMap.entries())
-			.map(([date, data]) => ({
-				date,
-				walletCount: data.wallets.size,
-				tradeCount: data.tradeCount,
-				usdcVolume: data.usdcVolume
-			}))
-			.sort((a, b) => a.date.localeCompare(b.date));
 
 		// Sort transactions by timestamp descending (newest first)
 		transactions = txList.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -684,6 +1170,8 @@
 
 	function getPeriodLabel(): string {
 		switch (selectedPeriod) {
+			case '24h':
+				return 'Last 24 hours';
 			case '7d':
 				return 'Last 7 days';
 			case '30d':
@@ -705,11 +1193,33 @@
 <div class="py-8">
 	<div class="mb-6 flex items-center justify-between">
 		<h1 class="text-2xl font-semibold">On-chain Market</h1>
-		{#if lastUpdated}
-			<span class="text-xs text-gray-500">
-				Auto-refreshes every 30s &middot; Last updated: {formatTime(lastUpdated)}
-			</span>
-		{/if}
+		<div class="flex items-center gap-3">
+			{#if lastUpdated}
+				<span class="text-xs text-gray-500">
+					Last updated: {formatTime(lastUpdated)}
+				</span>
+			{/if}
+			<button
+				on:click={loadAllData}
+				disabled={loading}
+				class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white transition-colors hover:border-gray-500 hover:bg-gray-700 disabled:opacity-50"
+			>
+				<svg
+					class="h-4 w-4 {loading ? 'animate-spin' : ''}"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+					/>
+				</svg>
+				Refresh
+			</button>
+		</div>
 	</div>
 
 	<!-- Period Selector -->
@@ -847,14 +1357,6 @@
 					Transactions
 				</button>
 				<button
-					on:click={() => (activeTab = 'timeseries')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'timeseries'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					Activity Over Time
-				</button>
-				<button
 					on:click={() => (activeTab = 'codes')}
 					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'codes'
 						? 'border-[#e8be89] text-[#e8be89]'
@@ -875,64 +1377,124 @@
 
 		<!-- Tab Content -->
 		{#if activeTab === 'tokens'}
-			<!-- Token Stats - Daily Breakdown -->
+			<!-- Token Stats - Bar Chart -->
 			<Card>
 				{#if allDates.length === 0 || allTokenSymbols.length === 0}
 					<p class="py-4 text-center text-gray-400">No token activity found</p>
 				{:else}
-					<h3 class="mb-4 text-lg font-medium text-white">Daily Transaction Count by Token</h3>
-					<div class="overflow-x-auto">
-						<table class="w-full text-sm">
-							<thead>
-								<tr class="border-b border-gray-700 text-left text-gray-400">
-									<th class="sticky left-0 bg-gray-900 pb-3 pr-4 font-medium">Date</th>
-									{#each allTokenSymbols as symbol}
-										<th class="min-w-[80px] pb-3 text-right font-medium">{symbol}</th>
-									{/each}
-									<th class="min-w-[80px] pb-3 text-right font-medium text-[#e8be89]">Total</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each allDates as date}
-									{@const dayData = dailyTokenStats.get(date)}
-									{@const dayTotal = allTokenSymbols.reduce(
-										(sum, s) => sum + (dayData?.get(s)?.tradeCount || 0),
-										0
-									)}
-									<tr class="border-b border-gray-800">
-										<td class="sticky left-0 bg-gray-900 py-2 pr-4 text-white">{date}</td>
-										{#each allTokenSymbols as symbol}
-											{@const stats = dayData?.get(symbol)}
-											<td class="py-2 text-right text-white">{stats?.tradeCount || 0}</td>
-										{/each}
-										<td class="py-2 text-right font-medium text-[#e8be89]">{dayTotal}</td>
-									</tr>
-								{/each}
-								<!-- Totals row -->
-								<tr class="border-t-2 border-[#e8be89] bg-gray-800/50 font-medium">
-									<td class="sticky left-0 bg-gray-800 py-3 pr-4 text-[#e8be89]">Total</td>
-									{#each allTokenSymbols as symbol}
-										{@const symbolTotal = allDates.reduce(
-											(sum, d) => sum + (dailyTokenStats.get(d)?.get(symbol)?.tradeCount || 0),
-											0
-										)}
-										<td class="py-3 text-right text-[#e8be89]">{symbolTotal}</td>
-									{/each}
-									<td class="py-3 text-right text-[#e8be89]"
-										>{allDates.reduce(
-											(sum, d) =>
-												sum +
-												allTokenSymbols.reduce(
-													(s2, sym) => s2 + (dailyTokenStats.get(d)?.get(sym)?.tradeCount || 0),
-													0
-												),
-											0
-										)}</td
+					<!-- Controls Row -->
+					<div class="mb-6 flex flex-wrap items-center gap-4">
+						<h3 class="text-lg font-medium text-white">
+							Daily {tokenChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
+						</h3>
+
+						<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+							<!-- Token Dropdown -->
+							<div class="token-dropdown relative">
+								<button
+									on:click={() => (tokenDropdownOpen = !tokenDropdownOpen)}
+									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+								>
+									<span>
+										{#if selectedTokens.size === allTokenSymbols.length}
+											All Tokens
+										{:else if selectedTokens.size === 0}
+											No Tokens
+										{:else}
+											{selectedTokens.size} Token{selectedTokens.size > 1 ? 's' : ''}
+										{/if}
+									</span>
+									<svg
+										class="h-4 w-4 transition-transform {tokenDropdownOpen ? 'rotate-180' : ''}"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
 									>
-								</tr>
-							</tbody>
-						</table>
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+									</svg>
+								</button>
+
+								{#if tokenDropdownOpen}
+									<div class="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+										<div class="border-b border-gray-700 px-3 py-2">
+											<div class="flex gap-2">
+												<button
+													on:click={selectAllTokens}
+													class="text-xs text-[#e8be89] hover:underline"
+												>
+													Select All
+												</button>
+												<span class="text-gray-600">|</span>
+												<button
+													on:click={clearAllTokens}
+													class="text-xs text-gray-400 hover:underline"
+												>
+													Clear
+												</button>
+											</div>
+										</div>
+										{#each allTokenSymbols as symbol}
+											<button
+												on:click={() => toggleToken(symbol)}
+												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
+											>
+												<span
+													class="flex h-4 w-4 items-center justify-center rounded border {selectedTokens.has(symbol)
+														? 'border-[#e8be89] bg-[#e8be89]'
+														: 'border-gray-500'}"
+												>
+													{#if selectedTokens.has(symbol)}
+														<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+														</svg>
+													{/if}
+												</span>
+												<span class="text-white">{symbol}</span>
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
+
+							<!-- Metric Toggle -->
+							<div class="flex rounded-lg bg-gray-800 p-1">
+								<button
+									on:click={() => (tokenChartMetric = 'count')}
+									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {tokenChartMetric ===
+									'count'
+										? 'bg-[#e8be89] text-gray-900'
+										: 'text-gray-400 hover:text-white'}"
+								>
+									# of Tx
+								</button>
+								<button
+									on:click={() => (tokenChartMetric = 'usdc')}
+									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {tokenChartMetric ===
+									'usdc'
+										? 'bg-[#e8be89] text-gray-900'
+										: 'text-gray-400 hover:text-white'}"
+								>
+									USDC Value
+								</button>
+							</div>
+						</div>
 					</div>
+
+					<!-- Chart.js Bar Chart -->
+					{#if selectedTokens.size > 0}
+						<div class="relative h-80">
+							{#if !chartLibLoaded}
+								<div class="absolute inset-0 flex items-center justify-center">
+									<div class="text-gray-400">Loading chart...</div>
+								</div>
+							{/if}
+							<canvas bind:this={tokenChartCanvas} class="h-full w-full"></canvas>
+						</div>
+					{:else}
+						<p class="py-8 text-center text-gray-400">
+							Select at least one token to view the chart
+						</p>
+					{/if}
 				{/if}
 			</Card>
 		{:else if activeTab === 'transactions'}
@@ -1022,158 +1584,85 @@
 					</div>
 				{/if}
 			</Card>
-		{:else if activeTab === 'timeseries'}
-			<!-- Time Series / Activity Over Time -->
-			<Card>
-				{#if timeSeries.length === 0}
-					<p class="py-4 text-center text-gray-400">No activity data available</p>
-				{:else}
-					<div class="mb-6">
-						<h3 class="mb-4 text-lg font-medium text-white">Daily Activity</h3>
-						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
-								<thead>
-									<tr class="border-b border-gray-700 text-left text-gray-400">
-										<th class="pb-3 font-medium">Date</th>
-										<th class="pb-3 text-right font-medium">Active Wallets</th>
-										<th class="pb-3 text-right font-medium">Transactions</th>
-										<th class="pb-3 text-right font-medium">USDC Volume</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each timeSeries as day}
-										<tr class="border-b border-gray-800">
-											<td class="py-3 text-white">{day.date}</td>
-											<td class="py-3 text-right text-white">{day.walletCount}</td>
-											<td class="py-3 text-right text-white">{day.tradeCount}</td>
-											<td class="py-3 text-right text-white">{formatUsd(day.usdcVolume)}</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					</div>
-
-					<!-- Simple bar chart visualization for wallet activity -->
-					<div class="mt-6">
-						<h3 class="mb-4 text-lg font-medium text-white">Wallets Over Time</h3>
-						<div class="flex h-40 items-end gap-1">
-							{#each timeSeries as day}
-								{@const maxWallets = Math.max(...timeSeries.map((d) => d.walletCount), 1)}
-								<div class="group relative min-w-[8px] flex-1">
-									<div
-										class="w-full rounded-t bg-[#e8be89] transition-all hover:bg-[#d4a976]"
-										style="height: {(day.walletCount / maxWallets) * 100}%"
-									></div>
-									<div
-										class="absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 group-hover:block"
-									>
-										<div
-											class="whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg"
-										>
-											{day.date}: {day.walletCount} wallets
-										</div>
-									</div>
-								</div>
-							{/each}
-						</div>
-						<div class="mt-2 flex justify-between text-xs text-gray-500">
-							<span>{timeSeries[0]?.date}</span>
-							<span>{timeSeries[timeSeries.length - 1]?.date}</span>
-						</div>
-					</div>
-
-					<!-- Volume chart -->
-					<div class="mt-8">
-						<h3 class="mb-4 text-lg font-medium text-white">Volume Over Time</h3>
-						<div class="flex h-40 items-end gap-1">
-							{#each timeSeries as day}
-								{@const maxVolume = Math.max(...timeSeries.map((d) => d.usdcVolume), 1)}
-								<div class="group relative min-w-[8px] flex-1">
-									<div
-										class="w-full rounded-t bg-blue-500 transition-all hover:bg-blue-400"
-										style="height: {(day.usdcVolume / maxVolume) * 100}%"
-									></div>
-									<div
-										class="absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 group-hover:block"
-									>
-										<div
-											class="whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg"
-										>
-											{day.date}: {formatUsd(day.usdcVolume)}
-										</div>
-									</div>
-								</div>
-							{/each}
-						</div>
-						<div class="mt-2 flex justify-between text-xs text-gray-500">
-							<span>{timeSeries[0]?.date}</span>
-							<span>{timeSeries[timeSeries.length - 1]?.date}</span>
-						</div>
-					</div>
-				{/if}
-			</Card>
 		{:else if activeTab === 'codes'}
-			<!-- Access Code Stats - Daily Breakdown -->
+			<!-- Access Code Stats - Bar Chart -->
 			<Card>
 				{#if allDates.length === 0 || allAccessCodes.length === 0}
 					<p class="py-4 text-center text-gray-400">No access code activity found</p>
 				{:else}
-					<h3 class="mb-4 text-lg font-medium text-white">
-						Daily Transaction Count by Access Code
-					</h3>
-					<div class="overflow-x-auto">
-						<table class="w-full text-sm">
-							<thead>
-								<tr class="border-b border-gray-700 text-left text-gray-400">
-									<th class="sticky left-0 bg-gray-900 pb-3 pr-4 font-medium">Date</th>
-									{#each allAccessCodes as code}
-										<th class="min-w-[80px] pb-3 text-right font-medium">{code}</th>
-									{/each}
-									<th class="min-w-[80px] pb-3 text-right font-medium text-[#e8be89]">Total</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each allDates as date}
-									{@const dayData = dailyCodeStats.get(date)}
-									{@const dayTotal = allAccessCodes.reduce(
-										(sum, c) => sum + (dayData?.get(c)?.tradeCount || 0),
-										0
-									)}
-									<tr class="border-b border-gray-800">
-										<td class="sticky left-0 bg-gray-900 py-2 pr-4 text-white">{date}</td>
-										{#each allAccessCodes as code}
-											{@const stats = dayData?.get(code)}
-											<td class="py-2 text-right text-white">{stats?.tradeCount || 0}</td>
-										{/each}
-										<td class="py-2 text-right font-medium text-[#e8be89]">{dayTotal}</td>
-									</tr>
-								{/each}
-								<!-- Totals row -->
-								<tr class="border-t-2 border-[#e8be89] bg-gray-800/50 font-medium">
-									<td class="sticky left-0 bg-gray-800 py-3 pr-4 text-[#e8be89]">Total</td>
-									{#each allAccessCodes as code}
-										{@const codeTotal = allDates.reduce(
-											(sum, d) => sum + (dailyCodeStats.get(d)?.get(code)?.tradeCount || 0),
-											0
-										)}
-										<td class="py-3 text-right text-[#e8be89]">{codeTotal}</td>
-									{/each}
-									<td class="py-3 text-right text-[#e8be89]"
-										>{allDates.reduce(
-											(sum, d) =>
-												sum +
-												allAccessCodes.reduce(
-													(s2, c) => s2 + (dailyCodeStats.get(d)?.get(c)?.tradeCount || 0),
-													0
-												),
-											0
-										)}</td
+					<!-- Controls Row -->
+					<div class="mb-6 flex flex-wrap items-center gap-4">
+						<h3 class="text-lg font-medium text-white">
+							Daily {codeChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
+						</h3>
+
+						<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+							<!-- Code Dropdown (Single Select) -->
+							<div class="code-dropdown relative">
+								<button
+									on:click={() => (codeDropdownOpen = !codeDropdownOpen)}
+									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+								>
+									<span>{selectedCode || 'Select Code'}</span>
+									<svg
+										class="h-4 w-4 transition-transform {codeDropdownOpen ? 'rotate-180' : ''}"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
 									>
-								</tr>
-							</tbody>
-						</table>
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+									</svg>
+								</button>
+
+								{#if codeDropdownOpen}
+									<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+										{#each allAccessCodes as code}
+											<button
+												on:click={() => { selectedCode = code; codeDropdownOpen = false; }}
+												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700 {selectedCode === code ? 'bg-gray-700 text-[#e8be89]' : 'text-white'}"
+											>
+												{code}
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
+
+							<!-- Metric Toggle -->
+							<div class="flex rounded-lg bg-gray-800 p-1">
+								<button
+									on:click={() => (codeChartMetric = 'count')}
+									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {codeChartMetric === 'count'
+										? 'bg-[#e8be89] text-gray-900'
+										: 'text-gray-400 hover:text-white'}"
+								>
+									# of Tx
+								</button>
+								<button
+									on:click={() => (codeChartMetric = 'usdc')}
+									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {codeChartMetric === 'usdc'
+										? 'bg-[#e8be89] text-gray-900'
+										: 'text-gray-400 hover:text-white'}"
+								>
+									USDC Value
+								</button>
+							</div>
+						</div>
 					</div>
+
+					<!-- Chart -->
+					{#if selectedCode}
+						<div class="relative h-80">
+							{#if !chartLibLoaded}
+								<div class="absolute inset-0 flex items-center justify-center">
+									<div class="text-gray-400">Loading chart...</div>
+								</div>
+							{/if}
+							<canvas bind:this={codeChartCanvas} class="h-full w-full"></canvas>
+						</div>
+					{:else}
+						<p class="py-8 text-center text-gray-400">Select an access code to view the chart</p>
+					{/if}
 				{/if}
 			</Card>
 			<div class="mt-4">
@@ -1185,73 +1674,120 @@
 				</a>
 			</div>
 		{:else if activeTab === 'wallets'}
-			<!-- Wallet Stats - Daily Breakdown -->
+			<!-- Wallet Stats - Bar Chart -->
 			<Card>
 				{#if allDates.length === 0 || allWalletAddresses.length === 0}
 					<p class="py-4 text-center text-gray-400">No wallet activity found</p>
 				{:else}
-					<h3 class="mb-4 text-lg font-medium text-white">Daily Transaction Count by Wallet</h3>
-					<div class="overflow-x-auto">
-						<table class="w-full text-sm">
-							<thead>
-								<tr class="border-b border-gray-700 text-left text-gray-400">
-									<th class="sticky left-0 bg-gray-900 pb-3 pr-4 font-medium">Date</th>
-									{#each allWalletAddresses as wallet}
-										<th class="min-w-[100px] pb-3 text-right font-medium">
-											<a
-												href="https://basescan.org/address/{wallet}"
-												target="_blank"
-												rel="noopener noreferrer"
-												class="font-mono text-blue-400 hover:underline"
-											>
-												{truncateAddress(wallet)}
-											</a>
-										</th>
-									{/each}
-									<th class="min-w-[80px] pb-3 text-right font-medium text-[#e8be89]">Total</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each allDates as date}
-									{@const dayData = dailyWalletStats.get(date)}
-									{@const dayTotal = allWalletAddresses.reduce(
-										(sum, w) => sum + (dayData?.get(w)?.tradeCount || 0),
-										0
-									)}
-									<tr class="border-b border-gray-800">
-										<td class="sticky left-0 bg-gray-900 py-2 pr-4 text-white">{date}</td>
-										{#each allWalletAddresses as wallet}
-											{@const stats = dayData?.get(wallet)}
-											<td class="py-2 text-right text-white">{stats?.tradeCount || 0}</td>
-										{/each}
-										<td class="py-2 text-right font-medium text-[#e8be89]">{dayTotal}</td>
-									</tr>
-								{/each}
-								<!-- Totals row -->
-								<tr class="border-t-2 border-[#e8be89] bg-gray-800/50 font-medium">
-									<td class="sticky left-0 bg-gray-800 py-3 pr-4 text-[#e8be89]">Total</td>
-									{#each allWalletAddresses as wallet}
-										{@const walletTotal = allDates.reduce(
-											(sum, d) => sum + (dailyWalletStats.get(d)?.get(wallet)?.tradeCount || 0),
-											0
-										)}
-										<td class="py-3 text-right text-[#e8be89]">{walletTotal}</td>
-									{/each}
-									<td class="py-3 text-right text-[#e8be89]"
-										>{allDates.reduce(
-											(sum, d) =>
-												sum +
-												allWalletAddresses.reduce(
-													(s2, w) => s2 + (dailyWalletStats.get(d)?.get(w)?.tradeCount || 0),
-													0
-												),
-											0
-										)}</td
+					<!-- Controls Row -->
+					<div class="mb-6 flex flex-wrap items-center gap-4">
+						<h3 class="text-lg font-medium text-white">
+							Daily {walletChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
+						</h3>
+
+						<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+							<!-- Wallet Dropdown -->
+							<div class="wallet-dropdown relative">
+								<button
+									on:click={() => (walletDropdownOpen = !walletDropdownOpen)}
+									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+								>
+									<span>
+										{#if selectedWallets.size === allWalletAddresses.length}
+											All Wallets
+										{:else if selectedWallets.size === 0}
+											No Wallets
+										{:else}
+											{selectedWallets.size} Wallet{selectedWallets.size > 1 ? 's' : ''}
+										{/if}
+									</span>
+									<svg
+										class="h-4 w-4 transition-transform {walletDropdownOpen ? 'rotate-180' : ''}"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
 									>
-								</tr>
-							</tbody>
-						</table>
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+									</svg>
+								</button>
+
+								{#if walletDropdownOpen}
+									<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+										<div class="border-b border-gray-700 px-3 py-2">
+											<div class="flex gap-2">
+												<button
+													on:click={selectAllWallets}
+													class="text-xs text-[#e8be89] hover:underline"
+												>
+													Select All
+												</button>
+												<span class="text-gray-600">|</span>
+												<button
+													on:click={clearAllWallets}
+													class="text-xs text-gray-400 hover:underline"
+												>
+													Clear
+												</button>
+											</div>
+										</div>
+										{#each allWalletAddresses as wallet}
+											<button
+												on:click={() => toggleWallet(wallet)}
+												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
+											>
+												<span
+													class="flex h-4 w-4 items-center justify-center rounded border {selectedWallets.has(wallet)
+														? 'border-[#e8be89] bg-[#e8be89]'
+														: 'border-gray-500'}"
+												>
+													{#if selectedWallets.has(wallet)}
+														<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+														</svg>
+													{/if}
+												</span>
+												<span class="font-mono text-white">{truncateAddress(wallet)}</span>
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
+
+							<!-- Metric Toggle -->
+							<div class="flex rounded-lg bg-gray-800 p-1">
+								<button
+									on:click={() => (walletChartMetric = 'count')}
+									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {walletChartMetric === 'count'
+										? 'bg-[#e8be89] text-gray-900'
+										: 'text-gray-400 hover:text-white'}"
+								>
+									# of Tx
+								</button>
+								<button
+									on:click={() => (walletChartMetric = 'usdc')}
+									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {walletChartMetric === 'usdc'
+										? 'bg-[#e8be89] text-gray-900'
+										: 'text-gray-400 hover:text-white'}"
+								>
+									USDC Value
+								</button>
+							</div>
+						</div>
 					</div>
+
+					<!-- Chart -->
+					{#if selectedWallets.size > 0}
+						<div class="relative h-80">
+							{#if !chartLibLoaded}
+								<div class="absolute inset-0 flex items-center justify-center">
+									<div class="text-gray-400">Loading chart...</div>
+								</div>
+							{/if}
+							<canvas bind:this={walletChartCanvas} class="h-full w-full"></canvas>
+						</div>
+					{:else}
+						<p class="py-8 text-center text-gray-400">Select at least one wallet to view the chart</p>
+					{/if}
 				{/if}
 			</Card>
 		{/if}
