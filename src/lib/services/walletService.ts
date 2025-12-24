@@ -105,15 +105,22 @@ export async function sendTransaction(params: {
 			txParams.value = `0x${params.value.toString(16)}`;
 		}
 
-		const txHash = await withRetry(async () => {
-			const result = await dynamicWalletProvider!.request({
-				method: 'eth_sendTransaction',
-				params: [txParams]
+		try {
+			const txHash = await withRetry(async () => {
+				const result = await dynamicWalletProvider!.request({
+					method: 'eth_sendTransaction',
+					params: [txParams]
+				});
+				return result as Hash;
 			});
-			return result as Hash;
-		});
 
-		return txHash;
+			return txHash;
+		} catch (error) {
+			console.error('[walletService] Dynamic transaction error:', error);
+			// Re-throw with better error message if available
+			const errorMessage = (error as Error)?.message || 'Transaction failed';
+			throw new Error(errorMessage);
+		}
 	} else if (method === 'wallet') {
 		// Use wagmi
 		const config = get(wagmiConfig);

@@ -1000,19 +1000,45 @@ const transactionStore = () => {
 
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
-			awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+			try {
+				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
 
-			const approvalHash = await sendTransaction({
-				to: approvalTokenAddress as `0x${string}`,
-				data: encodeFunctionData({
-					abi: erc20Abi,
-					functionName: 'approve',
-					args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
-				}) as Hex
-			});
+				const approvalHash = await sendTransaction({
+					to: approvalTokenAddress as `0x${string}`,
+					data: encodeFunctionData({
+						abi: erc20Abi,
+						functionName: 'approve',
+						args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
+					}) as Hex
+				});
 
-			awaitApprovalTx(approvalHash);
-			await waitForTransaction(approvalHash);
+				awaitApprovalTx(approvalHash);
+				await waitForTransaction(approvalHash);
+			} catch (approvalError) {
+				console.error('[handleTakeOrders] Approval error:', approvalError);
+				if (isStaleWalletSessionError(approvalError)) {
+					const msg = await handleStaleWalletSession(config);
+					return transactionError(msg as TransactionErrorMessage);
+				}
+
+				// Extract error message from various sources
+				const errorMessage =
+					(approvalError as unknown as { cause?: { details?: string } })?.cause?.details ||
+					(approvalError as Error)?.message ||
+					TransactionErrorMessage.APPROVAL_FAILED;
+
+				// Check for authentication errors
+				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+				if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+					return transactionError(errorMessage as TransactionErrorMessage);
+				}
+
+				return transactionError(
+					typeof errorMessage === 'string'
+						? (errorMessage as TransactionErrorMessage)
+						: TransactionErrorMessage.APPROVAL_FAILED
+				);
+			}
 		}
 
 		// If recalculateConfig is provided, refresh quotes and recalculate config
@@ -1065,9 +1091,14 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
+
+			// Try to get error message from various sources
 			const errorMessage =
 				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				(error as Error)?.message ||
 				TransactionErrorMessage.GENERIC;
+
+			console.error('[handleTakeOrders] Transaction error:', error);
 
 			// Check for insufficient allowance error and provide helpful message
 			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
@@ -1075,6 +1106,11 @@ const transactionStore = () => {
 				return transactionError(
 					'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
 				);
+			}
+
+			// Check for authentication errors
+			if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+				return transactionError(errorMessage as TransactionErrorMessage);
 			}
 
 			const message =
