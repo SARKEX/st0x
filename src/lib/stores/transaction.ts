@@ -64,7 +64,7 @@ import { TransactionErrorMessage } from '$lib/types/errors';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import { wagmiConfig } from 'svelte-wagmi';
-import { walletAddress } from '$lib/stores/authStore';
+import { walletAddress, authMethod } from '$lib/stores/authStore';
 import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
@@ -108,11 +108,16 @@ function createRaindexLink(
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
 
+// Dynamic embedded wallet signing has a 16KB payload size limit
+// External wallets (MetaMask, etc.) don't have this limitation
+const DYNAMIC_MAX_PAYLOAD_SIZE_BYTES = 16 * 1024;
+
 export enum TransactionStatus {
 	IDLE = 'Idle',
 	CHECKING_ALLOWANCE = 'Checking your approved spend...',
 	PENDING_WALLET = 'Waiting for wallet confirmation...',
 	PENDING_APPROVAL = 'Approving spend...',
+	PENDING_MULTI_TX_ACKNOWLEDGMENT = 'Multiple transactions required',
 	SUCCESS = 'Success! Transaction confirmed',
 	ERROR = 'Something went wrong'
 }
@@ -140,9 +145,16 @@ export interface AssetTokenInfo {
 	decimals: number;
 }
 
+// Multi-transaction tracking for split orders
+export interface MultiTxProgress {
+	currentBatch: number;
+	totalBatches: number;
+}
+
 export interface TransactionMetadata {
 	marketOrderSummary?: MarketOrderSummary;
 	assetTokenInfo?: AssetTokenInfo; // For limit/DCA order deployments
+	multiTxProgress?: MultiTxProgress; // For split order transactions
 }
 
 const initialState = {
@@ -151,7 +163,9 @@ const initialState = {
 	hash: '',
 	data: null as TransactionMetadata | null,
 	functionName: '',
-	message: ''
+	message: '',
+	multiTxAcknowledged: false,
+	onMultiTxAcknowledge: null as (() => void) | null
 };
 
 const transactionStore = () => {
@@ -189,13 +203,42 @@ const transactionStore = () => {
 
 	const checkingWalletAllowance = (message?: string) =>
 		setState(TransactionStatus.CHECKING_ALLOWANCE, { message });
-	const awaitWalletConfirmation = (message?: string) =>
-		setState(TransactionStatus.PENDING_WALLET, { message });
+	const awaitWalletConfirmation = (message?: string, data?: TransactionMetadata) =>
+		setState(TransactionStatus.PENDING_WALLET, { message, data });
 	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
 	const transactionSuccess = (hash: string, message?: string, data?: TransactionMetadata) =>
 		setState(TransactionStatus.SUCCESS, { hash, message, data });
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
+
+	// Multi-transaction acknowledgment
+	const awaitMultiTxAcknowledgment = (
+		totalBatches: number,
+		onAcknowledge: () => void
+	): Promise<void> => {
+		return new Promise((resolve) => {
+			update((state) => ({
+				...state,
+				status: TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT,
+				message: `This order requires ${totalBatches} separate transactions due to payload size limits. You will be asked to sign ${totalBatches} times.`,
+				data: { multiTxProgress: { currentBatch: 0, totalBatches } },
+				onMultiTxAcknowledge: () => {
+					update((s) => ({ ...s, multiTxAcknowledged: true, onMultiTxAcknowledge: null }));
+					onAcknowledge();
+					resolve();
+				}
+			}));
+		});
+	};
+
+	const acknowledgeMultiTx = () => {
+		update((state) => {
+			if (state.onMultiTxAcknowledge) {
+				state.onMultiTxAcknowledge();
+			}
+			return state;
+		});
+	};
 
 	const handleStrategyDeployment = async (
 		deploymentArgs: DeploymentTransactionArgs,
@@ -954,6 +997,66 @@ const transactionStore = () => {
 	};
 
 	/**
+	 * Split orders into batches that fit within the payload size limit.
+	 * Uses binary search to pack as many orders as possible in each batch.
+	 */
+	const splitOrdersIntoBatches = (
+		config: TakeOrdersConfigV4
+	): { batches: TakeOrdersConfigV4[]; needsSplit: boolean } => {
+		// Try with all orders first
+		const fullResult = getTakeOrders3Calldata(config);
+		if (!fullResult.error && fullResult.value) {
+			const calldata = normalizeCalldata(fullResult.value as string | Uint8Array);
+			const payloadSize = new Blob([calldata]).size;
+
+			if (payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES) {
+				return { batches: [config], needsSplit: false };
+			}
+		}
+
+		// Need to split - use greedy approach to pack orders
+		const orders = config.orders;
+		const batches: TakeOrdersConfigV4[] = [];
+		let currentBatchOrders: typeof orders = [];
+
+		for (const order of orders) {
+			// Try adding this order to current batch
+			const testOrders = [...currentBatchOrders, order];
+			const testConfig: TakeOrdersConfigV4 = {
+				...config,
+				orders: testOrders
+			};
+
+			const testResult = getTakeOrders3Calldata(testConfig);
+			if (!testResult.error && testResult.value) {
+				const calldata = normalizeCalldata(testResult.value as string | Uint8Array);
+				const payloadSize = new Blob([calldata]).size;
+
+				if (payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES) {
+					// Order fits, add to current batch
+					currentBatchOrders = testOrders;
+				} else {
+					// Order doesn't fit, start a new batch
+					if (currentBatchOrders.length > 0) {
+						batches.push({ ...config, orders: currentBatchOrders });
+					}
+					currentBatchOrders = [order];
+				}
+			} else {
+				// Failed to generate calldata, skip this order
+				console.error('Failed to generate calldata for order batch test');
+			}
+		}
+
+		// Don't forget the last batch
+		if (currentBatchOrders.length > 0) {
+			batches.push({ ...config, orders: currentBatchOrders });
+		}
+
+		return { batches, needsSplit: batches.length > 1 };
+	};
+
+	/**
 	 * Executes a market order by taking existing orders from the orderbook.
 	 *
 	 * Perspective: TAKER (user executing against orderbook)
@@ -1052,83 +1155,139 @@ const transactionStore = () => {
 			}
 		}
 
-		// Now take the order
-		awaitWalletConfirmation(`Taking order...`);
+		// Check if we need to split into multiple batches (only for Dynamic wallet due to 16KB payload limit)
+		awaitWalletConfirmation(`Preparing order...`);
+		const isDynamicWallet = get(authMethod) === 'dynamic';
+		const { batches, needsSplit } = isDynamicWallet
+			? splitOrdersIntoBatches(finalConfig)
+			: { batches: [finalConfig], needsSplit: false };
 
-		let result;
-		try {
-			result = getTakeOrders3Calldata(finalConfig);
+		if (batches.length === 0) {
+			return transactionError('Failed to prepare order batches' as TransactionErrorMessage);
+		}
 
-			if (result.error) {
-				return transactionError(result.error as unknown as TransactionErrorMessage);
-			}
+		// If we need multiple transactions (Dynamic wallet only), show acknowledgment modal
+		if (needsSplit) {
+			await new Promise<void>((resolve) => {
+				update((state) => ({
+					...state,
+					status: TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT,
+					message: `This order requires ${batches.length} separate transactions due to payload size limits. You will be asked to sign ${batches.length} times.`,
+					data: { multiTxProgress: { currentBatch: 0, totalBatches: batches.length } },
+					onMultiTxAcknowledge: () => {
+						update((s) => ({ ...s, multiTxAcknowledged: true, onMultiTxAcknowledge: null }));
+						resolve();
+					}
+				}));
+			});
+		}
 
-			if (!result.value) {
+		// Execute each batch
+		const allTransactionHashes: Hash[] = [];
+		for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+			const batchConfig = batches[batchIndex];
+			const isMultiBatch = batches.length > 1;
+			const batchLabel = isMultiBatch ? ` (${batchIndex + 1}/${batches.length})` : '';
+
+			let result;
+			try {
+				result = getTakeOrders3Calldata(batchConfig);
+
+				if (result.error) {
+					return transactionError(result.error as unknown as TransactionErrorMessage);
+				}
+
+				if (!result.value) {
+					return transactionError(
+						'Failed to generate transaction calldata' as TransactionErrorMessage
+					);
+				}
+			} catch {
 				return transactionError(
 					'Failed to generate transaction calldata' as TransactionErrorMessage
 				);
 			}
-		} catch {
-			return transactionError('Failed to generate transaction calldata' as TransactionErrorMessage);
-		}
 
-		let hash: Hash;
-		try {
-			awaitWalletConfirmation(`Awaiting wallet confirmation to take order...`);
+			let hash: Hash;
+			try {
+				const progressData: TransactionMetadata = isMultiBatch
+					? { multiTxProgress: { currentBatch: batchIndex + 1, totalBatches: batches.length } }
+					: {};
 
-			const calldata = normalizeCalldata(result.value as string | Uint8Array);
-			hash = await sendTransaction({
-				to: raindexOrder.orderbook.id as `0x${string}`,
-				data: calldata as Hex
-			});
-
-			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-			await waitForTransaction(hash);
-
-			awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
-		} catch (error) {
-			if (isStaleWalletSessionError(error)) {
-				const msg = await handleStaleWalletSession(config);
-				return transactionError(msg as TransactionErrorMessage);
-			}
-
-			// Try to get error message from various sources
-			const errorMessage =
-				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
-				(error as Error)?.message ||
-				TransactionErrorMessage.GENERIC;
-
-			console.error('[handleTakeOrders] Transaction error:', error);
-
-			// Check for insufficient allowance error and provide helpful message
-			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
-			if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
-				return transactionError(
-					'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
+				awaitWalletConfirmation(
+					`Awaiting wallet confirmation to take order${batchLabel}...`,
+					progressData
 				);
-			}
 
-			// Check for authentication errors
-			if (errorStr.includes('authentication') || errorStr.includes('log in')) {
-				return transactionError(errorMessage as TransactionErrorMessage);
-			}
+				const calldata = normalizeCalldata(result.value as string | Uint8Array);
+				hash = await sendTransaction({
+					to: raindexOrder.orderbook.id as `0x${string}`,
+					data: calldata as Hex
+				});
 
-			const message =
-				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-					? (errorMessage as TransactionErrorMessage)
-					: TransactionErrorMessage.GENERIC;
-			return transactionError(message);
+				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`, progressData);
+				await waitForTransaction(hash);
+
+				allTransactionHashes.push(hash);
+
+				if (batchIndex < batches.length - 1) {
+					awaitWalletConfirmation(
+						`Transaction ${batchIndex + 1} confirmed. Preparing next batch...`,
+						progressData
+					);
+				} else {
+					awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
+				}
+			} catch (error) {
+				if (isStaleWalletSessionError(error)) {
+					const msg = await handleStaleWalletSession(config);
+					return transactionError(msg as TransactionErrorMessage);
+				}
+
+				// Try to get error message from various sources
+				const errorMessage =
+					(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+					(error as Error)?.message ||
+					TransactionErrorMessage.GENERIC;
+
+				console.error('[handleTakeOrders] Transaction error:', error);
+
+				// Check for insufficient allowance error and provide helpful message
+				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+				if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
+					return transactionError(
+						'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
+					);
+				}
+
+				// Check for authentication errors
+				if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+					return transactionError(errorMessage as TransactionErrorMessage);
+				}
+
+				const message =
+					typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+						? (errorMessage as TransactionErrorMessage)
+						: TransactionErrorMessage.GENERIC;
+				return transactionError(message);
+			}
 		}
+
+		// Use the last transaction hash for the success display
+		const hash = allTransactionHashes[allTransactionHashes.length - 1];
 
 		const network = get(currentNetwork) as Network;
-		// Poll subgraph for the transaction to appear in trades (5 minute timeout)
+		// Poll subgraph for all transactions to appear in trades (5 minute timeout)
 		const pollPendingTrades = async () => {
 			const MAX_ATTEMPTS = 60; // 5 minutes at 5s interval
 			for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
 				const now = Math.floor(Date.now() / 1000);
 				const trades = await getTrades(now - 600, now, network);
-				const allTrades = trades.filter(
-					(t) => t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
+				// Look for trades from ANY of our transaction hashes
+				const allTrades = trades.filter((t) =>
+					allTransactionHashes.some(
+						(txHash) => t.tradeEvent?.transaction?.id.toLowerCase() === txHash.toLowerCase()
+					)
 				) as unknown as Array<{
 					tradeEvent?: { transaction?: { id?: string } };
 					order?: { orderHash?: string };
@@ -1147,6 +1306,7 @@ const transactionStore = () => {
 				const validTrades = allTrades.filter(
 					(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
 				);
+				// Wait until we have trades from all transactions (or at least some)
 				if (validTrades.length > 0) {
 					return validTrades;
 				}
@@ -1262,6 +1422,7 @@ const transactionStore = () => {
 		awaitApprovalTx,
 		transactionSuccess,
 		transactionError,
+		acknowledgeMultiTx,
 		handleDcaDeploy,
 		handleLimitDeploy,
 		handleDsfDeploy,
