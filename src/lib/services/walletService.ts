@@ -6,11 +6,15 @@ import { wagmiConfig, signerAddress } from 'svelte-wagmi';
 import {
 	sendTransaction as wagmiSendTransaction,
 	signMessage as wagmiSignMessage,
-	waitForTransactionReceipt as wagmiWaitForTransactionReceipt
+	waitForTransactionReceipt as wagmiWaitForTransactionReceipt,
+	estimateGas as wagmiEstimateGas
 } from '@wagmi/core';
 import type { Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
 import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
+
+// Gas buffer multiplier (20% extra gas for safety)
+const GAS_BUFFER_MULTIPLIER = 1.2;
 
 // Store for Dynamic wallet provider (set by React component)
 let dynamicWalletProvider: {
@@ -67,6 +71,23 @@ export async function sendTransaction(params: {
 	value?: bigint;
 }): Promise<Hash> {
 	const method = get(authMethod);
+	const config = get(wagmiConfig);
+
+	// Estimate gas with buffer using wagmi (works for both wallet types)
+	let gasWithBuffer: bigint | undefined;
+	if (config) {
+		try {
+			const estimatedGas = await wagmiEstimateGas(config, {
+				to: params.to,
+				data: params.data,
+				value: params.value
+			});
+			gasWithBuffer = BigInt(Math.ceil(Number(estimatedGas) * GAS_BUFFER_MULTIPLIER));
+			console.log('[walletService] Gas estimated:', estimatedGas.toString(), '-> with buffer:', gasWithBuffer.toString());
+		} catch (gasError) {
+			console.warn('[walletService] Gas estimation failed, letting wallet handle it:', gasError);
+		}
+	}
 
 	if (method === 'dynamic') {
 		// Use Dynamic's embedded wallet
@@ -89,7 +110,7 @@ export async function sendTransaction(params: {
 			// Chain might already be correct, or not supported - continue anyway
 		}
 
-		// Build transaction params - let Dynamic handle gas estimation
+		// Build transaction params with gas buffer
 		const txParams: Record<string, string> = {
 			from: walletAddress,
 			to: params.to
@@ -103,6 +124,11 @@ export async function sendTransaction(params: {
 		// Only add value if provided and non-zero
 		if (params.value && params.value > 0n) {
 			txParams.value = `0x${params.value.toString(16)}`;
+		}
+
+		// Add gas with buffer if we estimated it
+		if (gasWithBuffer) {
+			txParams.gas = `0x${gasWithBuffer.toString(16)}`;
 		}
 
 		try {
@@ -122,8 +148,7 @@ export async function sendTransaction(params: {
 			throw new Error(errorMessage);
 		}
 	} else if (method === 'wallet') {
-		// Use wagmi
-		const config = get(wagmiConfig);
+		// Use wagmi with gas buffer
 		if (!config) {
 			throw new Error('Wagmi config not available');
 		}
@@ -132,7 +157,8 @@ export async function sendTransaction(params: {
 			wagmiSendTransaction(config, {
 				to: params.to,
 				data: params.data,
-				value: params.value
+				value: params.value,
+				gas: gasWithBuffer
 			})
 		);
 

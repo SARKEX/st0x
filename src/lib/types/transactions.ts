@@ -43,4 +43,8 @@ export interface TakeOrdersParams {
 
 	// Optional: pre-calculated simulation for validation
 	simulation?: OrderSimulation;
+
+	// Optional: per-order fill amounts (parallel to orders array in TakeOrdersConfigV4)
+	// Used for calculating per-batch maximumInput when splitting large orders
+	orderFillAmounts?: bigint[];
 }

@@ -59,6 +59,7 @@ import {
 	type RaindexVault,
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
+import { Float } from '@rainlanguage/float';
 import { parseFloatHex, getRaindexOrderUrl, isPaymentToken } from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
@@ -998,28 +999,58 @@ const transactionStore = () => {
 
 	/**
 	 * Split orders into batches that fit within the payload size limit.
-	 * Uses binary search to pack as many orders as possible in each batch.
+	 * Uses greedy approach to pack as many orders as possible in each batch.
+	 *
+	 * @param config - The full TakeOrdersConfigV4 to split
+	 * @param orderFillAmounts - Optional array of fill amounts parallel to config.orders
+	 *                           Used to calculate per-batch maximumInput
+	 * @param inputDecimals - Decimal places of the input token (required if orderFillAmounts provided)
 	 */
 	const splitOrdersIntoBatches = (
-		config: TakeOrdersConfigV4
+		config: TakeOrdersConfigV4,
+		orderFillAmounts?: bigint[],
+		inputDecimals?: number
 	): { batches: TakeOrdersConfigV4[]; needsSplit: boolean } => {
+		const LOG_PREFIX = '[splitOrdersIntoBatches]';
+
+		console.log(`${LOG_PREFIX} Starting batch split analysis`, {
+			totalOrders: config.orders.length,
+			maxPayloadSize: DYNAMIC_MAX_PAYLOAD_SIZE_BYTES,
+			hasOrderFillAmounts: !!orderFillAmounts,
+			inputDecimals
+		});
+
 		// Try with all orders first
 		const fullResult = getTakeOrders3Calldata(config);
 		if (!fullResult.error && fullResult.value) {
 			const calldata = normalizeCalldata(fullResult.value as string | Uint8Array);
 			const payloadSize = new Blob([calldata]).size;
 
+			console.log(`${LOG_PREFIX} Full payload analysis`, {
+				totalOrders: config.orders.length,
+				payloadSize,
+				maxAllowed: DYNAMIC_MAX_PAYLOAD_SIZE_BYTES,
+				fitsInSingleTx: payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES
+			});
+
 			if (payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES) {
+				console.log(`${LOG_PREFIX} No split needed - all orders fit in single transaction`);
 				return { batches: [config], needsSplit: false };
 			}
 		}
 
+		console.log(`${LOG_PREFIX} Split required - payload exceeds limit, starting greedy packing`);
+
 		// Need to split - use greedy approach to pack orders
 		const orders = config.orders;
 		const batches: TakeOrdersConfigV4[] = [];
+		const batchPayloadSizes: number[] = [];
 		let currentBatchOrders: typeof orders = [];
+		let currentBatchIndices: number[] = [];
+		let currentBatchPayloadSize = 0;
 
-		for (const order of orders) {
+		for (let i = 0; i < orders.length; i++) {
+			const order = orders[i];
 			// Try adding this order to current batch
 			const testOrders = [...currentBatchOrders, order];
 			const testConfig: TakeOrdersConfigV4 = {
@@ -1035,23 +1066,101 @@ const transactionStore = () => {
 				if (payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES) {
 					// Order fits, add to current batch
 					currentBatchOrders = testOrders;
+					currentBatchIndices = [...currentBatchIndices, i];
+					currentBatchPayloadSize = payloadSize;
 				} else {
 					// Order doesn't fit, start a new batch
 					if (currentBatchOrders.length > 0) {
-						batches.push({ ...config, orders: currentBatchOrders });
+						// Calculate per-batch maximumInput if fill amounts provided
+						let batchMaximumInput = config.maximumInput;
+						let batchFillTotal = 0n;
+						if (orderFillAmounts && inputDecimals !== undefined) {
+							batchFillTotal = currentBatchIndices.reduce(
+								(sum, idx) => sum + (orderFillAmounts[idx] ?? 0n),
+								0n
+							);
+							if (batchFillTotal > 0n) {
+								const batchMaxInputFloat = Float.fromFixedDecimalLossy(
+									batchFillTotal,
+									inputDecimals
+								);
+								batchMaximumInput = batchMaxInputFloat.float.asHex();
+							}
+						}
+
+						console.log(`${LOG_PREFIX} Batch ${batches.length + 1} finalized`, {
+							orderCount: currentBatchOrders.length,
+							orderIndices: currentBatchIndices,
+							payloadSize: currentBatchPayloadSize,
+							batchFillTotal: batchFillTotal.toString(),
+							maximumInput: batchMaximumInput
+						});
+
+						batches.push({
+							...config,
+							orders: currentBatchOrders,
+							maximumInput: batchMaximumInput
+						});
+						batchPayloadSizes.push(currentBatchPayloadSize);
 					}
 					currentBatchOrders = [order];
+					currentBatchIndices = [i];
+					// Recalculate payload size for single order
+					const singleOrderResult = getTakeOrders3Calldata({ ...config, orders: [order] });
+					if (!singleOrderResult.error && singleOrderResult.value) {
+						const singleCalldata = normalizeCalldata(singleOrderResult.value as string | Uint8Array);
+						currentBatchPayloadSize = new Blob([singleCalldata]).size;
+					}
 				}
 			} else {
 				// Failed to generate calldata, skip this order
-				console.error('Failed to generate calldata for order batch test');
+				console.error(`${LOG_PREFIX} Failed to generate calldata for order ${i}, skipping`);
 			}
 		}
 
 		// Don't forget the last batch
 		if (currentBatchOrders.length > 0) {
-			batches.push({ ...config, orders: currentBatchOrders });
+			// Calculate per-batch maximumInput if fill amounts provided
+			let batchMaximumInput = config.maximumInput;
+			let batchFillTotal = 0n;
+			if (orderFillAmounts && inputDecimals !== undefined) {
+				batchFillTotal = currentBatchIndices.reduce(
+					(sum, idx) => sum + (orderFillAmounts[idx] ?? 0n),
+					0n
+				);
+				if (batchFillTotal > 0n) {
+					const batchMaxInputFloat = Float.fromFixedDecimalLossy(batchFillTotal, inputDecimals);
+					batchMaximumInput = batchMaxInputFloat.float.asHex();
+				}
+			}
+
+			console.log(`${LOG_PREFIX} Batch ${batches.length + 1} finalized (final)`, {
+				orderCount: currentBatchOrders.length,
+				orderIndices: currentBatchIndices,
+				payloadSize: currentBatchPayloadSize,
+				batchFillTotal: batchFillTotal.toString(),
+				maximumInput: batchMaximumInput
+			});
+
+			batches.push({
+				...config,
+				orders: currentBatchOrders,
+				maximumInput: batchMaximumInput
+			});
+			batchPayloadSizes.push(currentBatchPayloadSize);
 		}
+
+		// Log summary
+		console.log(`${LOG_PREFIX} Split complete`, {
+			totalBatches: batches.length,
+			needsSplit: batches.length > 1,
+			batchSummary: batches.map((b, i) => ({
+				batch: i + 1,
+				orders: b.orders.length,
+				payloadSize: batchPayloadSizes[i],
+				maximumInput: b.maximumInput
+			}))
+		});
 
 		return { batches, needsSplit: batches.length > 1 };
 	};
@@ -1158,9 +1267,30 @@ const transactionStore = () => {
 		// Check if we need to split into multiple batches (only for Dynamic wallet due to 16KB payload limit)
 		awaitWalletConfirmation(`Preparing order...`);
 		const isDynamicWallet = get(authMethod) === 'dynamic';
+
+		console.log('[handleTakeOrders] Preparing order batches', {
+			isDynamicWallet,
+			totalOrders: finalConfig.orders.length,
+			hasOrderFillAmounts: !!params.orderFillAmounts,
+			orderFillAmounts: params.orderFillAmounts?.map((a) => a.toString()),
+			takerWantsDecimals: params.takerWantsToken.decimals,
+			originalMaximumInput: finalConfig.maximumInput,
+			originalMaximumIORatio: finalConfig.maximumIORatio
+		});
+
 		const { batches, needsSplit } = isDynamicWallet
-			? splitOrdersIntoBatches(finalConfig)
+			? splitOrdersIntoBatches(
+					finalConfig,
+					params.orderFillAmounts,
+					params.takerWantsToken.decimals
+				)
 			: { batches: [finalConfig], needsSplit: false };
+
+		if (!isDynamicWallet) {
+			console.log('[handleTakeOrders] Non-Dynamic wallet - skipping split, using single batch', {
+				orderCount: finalConfig.orders.length
+			});
+		}
 
 		if (batches.length === 0) {
 			return transactionError('Failed to prepare order batches' as TransactionErrorMessage);
@@ -1184,29 +1314,56 @@ const transactionStore = () => {
 
 		// Execute each batch
 		const allTransactionHashes: Hash[] = [];
+		const TX_LOG_PREFIX = '[handleTakeOrders]';
+
+		console.log(`${TX_LOG_PREFIX} Starting batch execution`, {
+			totalBatches: batches.length,
+			needsSplit,
+			isDynamicWallet
+		});
+
 		for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
 			const batchConfig = batches[batchIndex];
 			const isMultiBatch = batches.length > 1;
 			const batchLabel = isMultiBatch ? ` (${batchIndex + 1}/${batches.length})` : '';
+
+			console.log(`${TX_LOG_PREFIX} Preparing batch ${batchIndex + 1}/${batches.length}`, {
+				orderCount: batchConfig.orders.length,
+				maximumInput: batchConfig.maximumInput,
+				maximumIORatio: batchConfig.maximumIORatio,
+				minimumInput: batchConfig.minimumInput
+			});
 
 			let result;
 			try {
 				result = getTakeOrders3Calldata(batchConfig);
 
 				if (result.error) {
+					console.error(`${TX_LOG_PREFIX} Failed to generate calldata`, result.error);
 					return transactionError(result.error as unknown as TransactionErrorMessage);
 				}
 
 				if (!result.value) {
+					console.error(`${TX_LOG_PREFIX} No calldata value returned`);
 					return transactionError(
 						'Failed to generate transaction calldata' as TransactionErrorMessage
 					);
 				}
-			} catch {
+			} catch (calldataError) {
+				console.error(`${TX_LOG_PREFIX} Exception generating calldata`, calldataError);
 				return transactionError(
 					'Failed to generate transaction calldata' as TransactionErrorMessage
 				);
 			}
+
+			const calldata = normalizeCalldata(result.value as string | Uint8Array);
+			const payloadSize = new Blob([calldata]).size;
+
+			console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} calldata generated`, {
+				payloadSize,
+				calldataLength: calldata.length,
+				targetOrderbook: raindexOrder.orderbook.id
+			});
 
 			let hash: Hash;
 			try {
@@ -1219,14 +1376,20 @@ const transactionStore = () => {
 					progressData
 				);
 
-				const calldata = normalizeCalldata(result.value as string | Uint8Array);
 				hash = await sendTransaction({
 					to: raindexOrder.orderbook.id as `0x${string}`,
 					data: calldata as Hex
 				});
 
+				console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} transaction submitted`, {
+					hash,
+					orderCount: batchConfig.orders.length
+				});
+
 				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`, progressData);
 				await waitForTransaction(hash);
+
+				console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} transaction confirmed`, { hash });
 
 				allTransactionHashes.push(hash);
 
@@ -1239,6 +1402,15 @@ const transactionStore = () => {
 					awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
 				}
 			} catch (error) {
+				console.error(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} failed`, {
+					batchIndex,
+					totalBatches: batches.length,
+					orderCount: batchConfig.orders.length,
+					maximumInput: batchConfig.maximumInput,
+					maximumIORatio: batchConfig.maximumIORatio,
+					error
+				});
+
 				if (isStaleWalletSessionError(error)) {
 					const msg = await handleStaleWalletSession(config);
 					return transactionError(msg as TransactionErrorMessage);
