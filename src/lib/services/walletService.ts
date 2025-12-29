@@ -17,6 +17,10 @@ import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
 // Complex transactions like takeOrders often need more gas than estimated
 const GAS_BUFFER_MULTIPLIER = 2.0;
 
+// Fallback gas limit when estimation fails (2M gas - conservative for complex transactions)
+// This is especially important for takeOrders which can consume 500k-1M+ gas
+const FALLBACK_GAS_LIMIT = 2_000_000n;
+
 // Store for Dynamic wallet provider (set by React component)
 let dynamicWalletProvider: {
 	request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -84,6 +88,12 @@ export async function sendTransaction(params: {
 	let gasWithBuffer: bigint | undefined;
 	if (config && fromAddress) {
 		try {
+			console.log('[walletService] Attempting gas estimation', {
+				to: params.to,
+				dataLength: params.data?.length,
+				hasValue: !!params.value,
+				fromAddress
+			});
 			const estimatedGas = await wagmiEstimateGas(config, {
 				account: fromAddress,
 				to: params.to,
@@ -98,8 +108,52 @@ export async function sendTransaction(params: {
 				gasWithBuffer.toString()
 			);
 		} catch (gasError) {
-			console.warn('[walletService] Gas estimation failed, letting wallet handle it:', gasError);
+			// Log detailed error information
+			const errorMessage = (gasError as Error)?.message || String(gasError);
+			const errorCode = (gasError as { code?: number | string })?.code;
+			const errorDetails = (gasError as { details?: string })?.details;
+			const errorCause = (gasError as { cause?: unknown })?.cause;
+
+			console.error('[walletService] Gas estimation failed:', {
+				error: gasError,
+				message: errorMessage,
+				code: errorCode,
+				details: errorDetails,
+				cause: errorCause,
+				to: params.to,
+				dataLength: params.data?.length,
+				fromAddress
+			});
+
+			// Check if it's a specific error type that suggests the transaction would revert
+			const errorStr = errorMessage.toLowerCase();
+			if (
+				errorStr.includes('execution reverted') ||
+				errorStr.includes('revert') ||
+				errorStr.includes('invalid') ||
+				errorStr.includes('out of gas')
+			) {
+				console.warn(
+					'[walletService] Gas estimation failed due to transaction revert - this might indicate the transaction will fail. Using fallback gas limit anyway.'
+				);
+			}
+
+			// Use fallback gas limit for complex transactions
+			// This is especially important for takeOrders which can fail estimation but need significant gas
+			gasWithBuffer = FALLBACK_GAS_LIMIT;
+			console.warn(
+				`[walletService] Using fallback gas limit: ${gasWithBuffer.toString()} (${FALLBACK_GAS_LIMIT.toString()} wei)`
+			);
 		}
+	} else {
+		// If we don't have config or address, use fallback
+		if (!config) {
+			console.warn('[walletService] No wagmi config, using fallback gas limit');
+		}
+		if (!fromAddress) {
+			console.warn('[walletService] No from address, using fallback gas limit');
+		}
+		gasWithBuffer = FALLBACK_GAS_LIMIT;
 	}
 
 	if (method === 'dynamic') {
@@ -138,15 +192,20 @@ export async function sendTransaction(params: {
 			txParams.value = `0x${params.value.toString(16)}`;
 		}
 
-		// Add gas with buffer if we estimated it
+		// Always set gas (either from estimation or fallback)
+		// This ensures we have control over gas limits for complex transactions
 		if (gasWithBuffer) {
 			txParams.gas = `0x${gasWithBuffer.toString(16)}`;
 			console.log('[walletService] Dynamic transaction gas set:', {
 				gasHex: txParams.gas,
-				gasDecimal: gasWithBuffer.toString()
+				gasDecimal: gasWithBuffer.toString(),
+				isFallback: gasWithBuffer === FALLBACK_GAS_LIMIT
 			});
 		} else {
-			console.warn('[walletService] No gas buffer set, Dynamic wallet will estimate');
+			// This should never happen now, but add safety check
+			console.error('[walletService] CRITICAL: No gas buffer set, using fallback');
+			gasWithBuffer = FALLBACK_GAS_LIMIT;
+			txParams.gas = `0x${gasWithBuffer.toString(16)}`;
 		}
 
 		try {
