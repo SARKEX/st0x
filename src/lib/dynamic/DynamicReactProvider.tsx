@@ -238,13 +238,14 @@ function DynamicBridge({
 							console.error('[dynamic] Wallet client is null after getClients()');
 							throw new Error('Wallet client not available for transaction');
 						}
-						const tx = args.params[0] as { to: string; value?: string; data?: string };
-						console.log('[dynamic] Sending transaction to:', tx.to);
+						const tx = args.params[0] as { to: string; value?: string; data?: string; gas?: string };
+						console.log('[dynamic] Sending transaction to:', tx.to, 'gas:', tx.gas);
 						try {
 							const result = await walletClient.sendTransaction({
 								to: tx.to as `0x${string}`,
 								value: tx.value ? BigInt(tx.value) : undefined,
-								data: tx.data as `0x${string}` | undefined
+								data: tx.data as `0x${string}` | undefined,
+								gas: tx.gas ? BigInt(tx.gas) : undefined
 							});
 							console.log('[dynamic] Transaction sent successfully:', result);
 							return result;

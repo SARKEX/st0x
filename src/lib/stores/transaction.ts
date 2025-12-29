@@ -1452,6 +1452,8 @@ const transactionStore = () => {
 		// Poll subgraph for all transactions to appear in trades (5 minute timeout)
 		const pollPendingTrades = async () => {
 			const MAX_ATTEMPTS = 60; // 5 minutes at 5s interval
+			const totalBatches = allTransactionHashes.length;
+
 			for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
 				const now = Math.floor(Date.now() / 1000);
 				const trades = await getTrades(now - 600, now, network);
@@ -1478,10 +1480,43 @@ const transactionStore = () => {
 				const validTrades = allTrades.filter(
 					(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
 				);
-				// Wait until we have trades from all transactions (or at least some)
-				if (validTrades.length > 0) {
-					return validTrades;
+
+				// For multi-batch transactions, wait until we have trades from ALL transaction hashes
+				if (totalBatches > 1) {
+					const indexedTxHashes = new Set(
+						validTrades.map((t) => t.tradeEvent?.transaction?.id?.toLowerCase())
+					);
+					const allBatchesIndexed = allTransactionHashes.every((txHash) =>
+						indexedTxHashes.has(txHash.toLowerCase())
+					);
+
+					console.log('[pollPendingTrades] Multi-batch progress', {
+						attempt,
+						totalBatches,
+						indexedBatches: indexedTxHashes.size,
+						allBatchesIndexed,
+						validTradesCount: validTrades.length
+					});
+
+					if (allBatchesIndexed) {
+						return validTrades;
+					}
+
+					// After 30 seconds (6 attempts), return whatever we have if we have any trades
+					// This prevents waiting too long if one batch had no fills
+					if (attempt >= 6 && validTrades.length > 0) {
+						console.log(
+							'[pollPendingTrades] Timeout waiting for all batches, returning partial results'
+						);
+						return validTrades;
+					}
+				} else {
+					// Single batch - return as soon as we have trades
+					if (validTrades.length > 0) {
+						return validTrades;
+					}
 				}
+
 				await new Promise((resolve) => setTimeout(resolve, 5_000));
 			}
 			return [];

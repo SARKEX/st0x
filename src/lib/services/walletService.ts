@@ -13,8 +13,9 @@ import type { Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
 import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
 
-// Gas buffer multiplier (20% extra gas for safety)
-const GAS_BUFFER_MULTIPLIER = 1.2;
+// Gas buffer multiplier (100% extra gas for safety)
+// Complex transactions like takeOrders often need more gas than estimated
+const GAS_BUFFER_MULTIPLIER = 2.0;
 
 // Store for Dynamic wallet provider (set by React component)
 let dynamicWalletProvider: {
@@ -73,17 +74,29 @@ export async function sendTransaction(params: {
 	const method = get(authMethod);
 	const config = get(wagmiConfig);
 
+	// Get the appropriate wallet address based on auth method
+	const fromAddress =
+		method === 'dynamic'
+			? (get(dynamicWalletAddress) as `0x${string}` | undefined)
+			: (get(signerAddress) as `0x${string}` | undefined);
+
 	// Estimate gas with buffer using wagmi (works for both wallet types)
 	let gasWithBuffer: bigint | undefined;
-	if (config) {
+	if (config && fromAddress) {
 		try {
 			const estimatedGas = await wagmiEstimateGas(config, {
+				account: fromAddress,
 				to: params.to,
 				data: params.data,
 				value: params.value
 			});
 			gasWithBuffer = BigInt(Math.ceil(Number(estimatedGas) * GAS_BUFFER_MULTIPLIER));
-			console.log('[walletService] Gas estimated:', estimatedGas.toString(), '-> with buffer:', gasWithBuffer.toString());
+			console.log(
+				'[walletService] Gas estimated:',
+				estimatedGas.toString(),
+				'-> with buffer:',
+				gasWithBuffer.toString()
+			);
 		} catch (gasError) {
 			console.warn('[walletService] Gas estimation failed, letting wallet handle it:', gasError);
 		}
@@ -95,8 +108,7 @@ export async function sendTransaction(params: {
 			throw new Error('Dynamic wallet provider not available');
 		}
 
-		const walletAddress = get(dynamicWalletAddress);
-		if (!walletAddress) {
+		if (!fromAddress) {
 			throw new Error('Dynamic wallet address not available');
 		}
 
@@ -112,7 +124,7 @@ export async function sendTransaction(params: {
 
 		// Build transaction params with gas buffer
 		const txParams: Record<string, string> = {
-			from: walletAddress,
+			from: fromAddress,
 			to: params.to
 		};
 
@@ -129,10 +141,21 @@ export async function sendTransaction(params: {
 		// Add gas with buffer if we estimated it
 		if (gasWithBuffer) {
 			txParams.gas = `0x${gasWithBuffer.toString(16)}`;
+			console.log('[walletService] Dynamic transaction gas set:', {
+				gasHex: txParams.gas,
+				gasDecimal: gasWithBuffer.toString()
+			});
+		} else {
+			console.warn('[walletService] No gas buffer set, Dynamic wallet will estimate');
 		}
 
 		try {
 			const txHash = await withRetry(async () => {
+				console.log('[walletService] Sending Dynamic transaction with params:', {
+					to: txParams.to,
+					gas: txParams.gas,
+					dataLength: txParams.data?.length
+				});
 				const result = await dynamicWalletProvider!.request({
 					method: 'eth_sendTransaction',
 					params: [txParams]
