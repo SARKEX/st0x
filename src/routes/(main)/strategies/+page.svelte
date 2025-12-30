@@ -8,7 +8,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
-	import { openAuthModal } from '$lib/stores/privyStore';
+	import { openAuthModal } from '$lib/stores/dynamicStore';
 
 	const STRATEGY_TYPES = [
 		{ id: 'portfolio', name: 'Portfolio Strategy' },

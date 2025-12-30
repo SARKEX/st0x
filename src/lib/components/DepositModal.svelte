@@ -7,7 +7,7 @@
 		showDepositModal,
 		closeDepositModal,
 		depositModalInitialView
-	} from '$lib/stores/privyStore';
+	} from '$lib/stores/dynamicStore';
 	import { walletAddress, authMethod } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 
@@ -47,10 +47,10 @@
 	}
 
 	// For external EOA users, go directly to buy view
-	// For Privy users, show options (buy or deposit)
+	// For Dynamic users, show options (buy or deposit)
 	$: if ($showDepositModal) {
-		if ($authMethod === 'privy') {
-			// Privy users see options menu
+		if ($authMethod === 'dynamic') {
+			// Dynamic users see options menu
 			currentView =
 				$depositModalInitialView === 'deposit'
 					? 'deposit'
@@ -90,7 +90,7 @@
 
 	function goBack() {
 		// For external EOA users, going back should close the modal
-		if ($authMethod !== 'privy') {
+		if ($authMethod !== 'dynamic') {
 			handleClose();
 		} else {
 			currentView = 'options';
@@ -129,7 +129,7 @@
 	onClose={handleClose}
 >
 	{#if currentView === 'options'}
-		<!-- Options View (Privy users only) -->
+		<!-- Options View (Dynamic users only) -->
 		<div class="space-y-4">
 			<p class="text-sm text-gray-400">Choose how you want to add funds to your wallet.</p>
 
@@ -228,8 +228,8 @@
 	{:else if currentView === 'buy'}
 		<!-- Buy View -->
 		<div class="space-y-5">
-			<!-- Back button (only for Privy users who have options) -->
-			{#if $authMethod === 'privy'}
+			<!-- Back button (only for Dynamic users who have options) -->
+			{#if $authMethod === 'dynamic'}
 				<button
 					type="button"
 					on:click={goBack}
@@ -293,7 +293,7 @@
 			</div>
 		</div>
 	{:else}
-		<!-- Deposit View (Privy users only) -->
+		<!-- Deposit View (Dynamic users only) -->
 		<div class="space-y-5">
 			<!-- Back button -->
 			<button

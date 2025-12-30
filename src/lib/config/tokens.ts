@@ -4,16 +4,7 @@ import type { PythToken } from '$lib/types';
 // Payment tokens mapped by chain
 export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
-		{
-			chainId: 8453,
-			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Real Base USDC
-			symbol: 'USDC',
-			decimals: 6,
-			name: 'USD Coin',
-			logoUrl: '/images/USDC.png',
-			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		} as unknown as PythToken
-		// Test USDC (comment out for production):
+		// Test USDC (primary for testing - swap with real USDC for production):
 		// {
 		// 	chainId: 8453,
 		// 	address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
@@ -22,7 +13,17 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 		// 	name: 'USD Coin (Test)',
 		// 	logoUrl: '/images/USDC.png',
 		// 	priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		// } as unknown as PythToken
+		// } as unknown as PythToken,
+		// Real Base USDC (comment out test USDC above and move this first for production):
+		{
+			chainId: 8453,
+			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+			symbol: 'USDC',
+			decimals: 6,
+			name: 'USD Coin',
+			logoUrl: '/images/USDC.png',
+			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+		} as unknown as PythToken
 	]
 };
 

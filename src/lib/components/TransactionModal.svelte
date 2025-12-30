@@ -14,6 +14,10 @@
 		return transactionStore.reset();
 	};
 
+	const handleMultiTxAcknowledge = () => {
+		transactionStore.acknowledgeMultiTx();
+	};
+
 	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
 	$: marketOrderDisplay = marketOrderSummary
 		? translateMarketOrderForDisplay(marketOrderSummary)
@@ -21,6 +25,9 @@
 
 	// Asset token info for limit/DCA order deployments
 	$: assetTokenInfo = $transactionStore.data?.assetTokenInfo;
+
+	// Multi-transaction progress
+	$: multiTxProgress = $transactionStore.data?.multiTxProgress;
 
 	// Helper function to format quantity with max 2 decimals
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
@@ -288,6 +295,35 @@
 				<Button on:click={() => handleClose()} className="mt-6" dataTestId="dismiss-button"
 					>Dismiss</Button
 				>
+			{:else if $transactionStore.status === TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT}
+				<!-- Multi-transaction acknowledgment state -->
+				<div
+					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-yellow-500/30 bg-yellow-500/20"
+					data-testid="multi-tx-icon"
+				>
+					<svg
+						class="h-10 w-10 text-yellow-500"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+				</div>
+				<p class="text-xl font-bold text-white" data-testid="multi-tx-title">
+					Multiple Transactions Required
+				</p>
+				<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
+					{$transactionStore.message}
+				</p>
+				<Button on:click={handleMultiTxAcknowledge} className="mt-6" dataTestId="multi-tx-ok-button">
+					OK
+				</Button>
 			{:else if $transactionStore.status === TransactionStatus.CHECKING_ALLOWANCE || $transactionStore.status === TransactionStatus.PENDING_WALLET || $transactionStore.status === TransactionStatus.PENDING_APPROVAL}
 				<div
 					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-gray-600/30 bg-gray-700/30"
@@ -298,6 +334,11 @@
 				<p class="text-lg font-medium text-gray-200" data-testid="pending-message">
 					{$transactionStore.message || $transactionStore.status}
 				</p>
+				{#if multiTxProgress && multiTxProgress.totalBatches > 1}
+					<p class="mt-2 text-sm text-gray-400" data-testid="multi-tx-progress">
+						Transaction {multiTxProgress.currentBatch} of {multiTxProgress.totalBatches}
+					</p>
+				{/if}
 			{/if}
 		</div>
 	{/if}

@@ -7,9 +7,9 @@ const {
 	mockConnected,
 	mockChainId,
 	mockCurrentNetwork,
-	mockPrivySession,
-	mockPrivyWalletAddress,
-	mockIsPrivyAuthenticated,
+	mockDynamicSession,
+	mockDynamicWalletAddress,
+	mockIsDynamicAuthenticated,
 	mockShowAuthModal
 } = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
@@ -18,9 +18,9 @@ const {
 		mockConnected: writable<boolean>(false),
 		mockChainId: writable<number>(8453),
 		mockCurrentNetwork: writable({ id: 8453, name: 'Base' }),
-		mockPrivySession: writable<{ userId: string; walletAddress: string; email?: string } | null>(null),
-		mockPrivyWalletAddress: writable<string | null>(null),
-		mockIsPrivyAuthenticated: writable<boolean>(false),
+		mockDynamicSession: writable<{ userId: string; walletAddress: string; email?: string } | null>(null),
+		mockDynamicWalletAddress: writable<string | null>(null),
+		mockIsDynamicAuthenticated: writable<boolean>(false),
 		mockShowAuthModal: writable<boolean>(false)
 	};
 });
@@ -37,11 +37,11 @@ vi.mock('$app/environment', () => ({
 	browser: true
 }));
 
-// Mock privy stores
-vi.mock('$lib/stores/privyStore', () => ({
-	privySession: mockPrivySession,
-	privyWalletAddress: mockPrivyWalletAddress,
-	isPrivyAuthenticated: mockIsPrivyAuthenticated,
+// Mock dynamic stores
+vi.mock('$lib/stores/dynamicStore', () => ({
+	dynamicSession: mockDynamicSession,
+	dynamicWalletAddress: mockDynamicWalletAddress,
+	isDynamicAuthenticated: mockIsDynamicAuthenticated,
 	showAuthModal: mockShowAuthModal
 }));
 
@@ -70,9 +70,9 @@ describe('authStore', () => {
 		mockConnected.set(false);
 		mockChainId.set(8453); // Base network
 		mockCurrentNetwork.set({ id: 8453, name: 'Base' });
-		mockPrivySession.set(null);
-		mockPrivyWalletAddress.set(null);
-		mockIsPrivyAuthenticated.set(false);
+		mockDynamicSession.set(null);
+		mockDynamicWalletAddress.set(null);
+		mockIsDynamicAuthenticated.set(false);
 		mockShowAuthModal.set(false);
 	});
 
@@ -81,9 +81,9 @@ describe('authStore', () => {
 			expect(get(authMethod)).toBe('none');
 		});
 
-		it('should return "privy" when Privy is authenticated', () => {
-			mockIsPrivyAuthenticated.set(true);
-			expect(get(authMethod)).toBe('privy');
+		it('should return "dynamic" when Dynamic is authenticated', () => {
+			mockIsDynamicAuthenticated.set(true);
+			expect(get(authMethod)).toBe('dynamic');
 		});
 
 		it('should return "wallet" when wallet is connected', () => {
@@ -92,11 +92,11 @@ describe('authStore', () => {
 			expect(get(authMethod)).toBe('wallet');
 		});
 
-		it('should prioritize Privy over wallet connection', () => {
-			mockIsPrivyAuthenticated.set(true);
+		it('should prioritize Dynamic over wallet connection', () => {
+			mockIsDynamicAuthenticated.set(true);
 			mockConnected.set(true);
 			mockSignerAddress.set('0x1234567890abcdef1234567890abcdef12345678');
-			expect(get(authMethod)).toBe('privy');
+			expect(get(authMethod)).toBe('dynamic');
 		});
 	});
 
@@ -105,11 +105,11 @@ describe('authStore', () => {
 			expect(get(walletAddress)).toBeNull();
 		});
 
-		it('should return Privy wallet address when Privy authenticated', () => {
-			const privyAddress = '0xprivyWallet1234567890abcdef12345678';
-			mockIsPrivyAuthenticated.set(true);
-			mockPrivyWalletAddress.set(privyAddress);
-			expect(get(walletAddress)).toBe(privyAddress);
+		it('should return Dynamic wallet address when Dynamic authenticated', () => {
+			const dynamicAddress = '0xdynamicWallet1234567890abcdef12345678';
+			mockIsDynamicAuthenticated.set(true);
+			mockDynamicWalletAddress.set(dynamicAddress);
+			expect(get(walletAddress)).toBe(dynamicAddress);
 		});
 
 		it('should return signer address when wallet connected', () => {
@@ -125,8 +125,8 @@ describe('authStore', () => {
 			expect(get(isAuthenticated)).toBe(false);
 		});
 
-		it('should be true when Privy authenticated', () => {
-			mockIsPrivyAuthenticated.set(true);
+		it('should be true when Dynamic authenticated', () => {
+			mockIsDynamicAuthenticated.set(true);
 			expect(get(isAuthenticated)).toBe(true);
 		});
 
@@ -142,10 +142,10 @@ describe('authStore', () => {
 			expect(get(isReady)).toBe(false);
 		});
 
-		it('should be true for Privy users (no network check needed)', () => {
-			mockIsPrivyAuthenticated.set(true);
-			mockPrivyWalletAddress.set('0xprivyWallet1234567890abcdef12345678');
-			mockChainId.set(1); // Even with wrong network, Privy should be ready
+		it('should be true for Dynamic users (no network check needed)', () => {
+			mockIsDynamicAuthenticated.set(true);
+			mockDynamicWalletAddress.set('0xdynamicWallet1234567890abcdef12345678');
+			mockChainId.set(1); // Even with wrong network, Dynamic should be ready
 			expect(get(isReady)).toBe(true);
 		});
 
@@ -176,10 +176,10 @@ describe('authStore', () => {
 			expect(info.address).toBeNull();
 		});
 
-		it('should show email for Privy users with email', () => {
-			mockIsPrivyAuthenticated.set(true);
-			mockPrivyWalletAddress.set('0x1234567890abcdef1234567890abcdef12345678');
-			mockPrivySession.set({
+		it('should show email for Dynamic users with email', () => {
+			mockIsDynamicAuthenticated.set(true);
+			mockDynamicWalletAddress.set('0x1234567890abcdef1234567890abcdef12345678');
+			mockDynamicSession.set({
 				userId: 'user-123',
 				walletAddress: '0x1234567890abcdef1234567890abcdef12345678',
 				email: 'test@example.com'
@@ -187,7 +187,7 @@ describe('authStore', () => {
 
 			const info = get(userDisplayInfo);
 			expect(info.displayName).toBe('test@example.com');
-			expect(info.method).toBe('privy');
+			expect(info.method).toBe('dynamic');
 			expect(info.email).toBe('test@example.com');
 		});
 
@@ -217,13 +217,13 @@ describe('authStore', () => {
 		});
 
 		it('getCurrentAuthMethod should return current method', () => {
-			mockIsPrivyAuthenticated.set(true);
-			expect(getCurrentAuthMethod()).toBe('privy');
+			mockIsDynamicAuthenticated.set(true);
+			expect(getCurrentAuthMethod()).toBe('dynamic');
 		});
 
 		it('checkIsAuthenticated should return auth status', () => {
 			expect(checkIsAuthenticated()).toBe(false);
-			mockIsPrivyAuthenticated.set(true);
+			mockIsDynamicAuthenticated.set(true);
 			expect(checkIsAuthenticated()).toBe(true);
 		});
 	});

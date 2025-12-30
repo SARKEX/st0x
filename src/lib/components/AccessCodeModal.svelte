@@ -3,7 +3,7 @@
 	import { disconnect } from '@wagmi/core';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { walletAddress, authMethod } from '$lib/stores/authStore';
-	import { logoutPrivy } from '$lib/stores/privyStore';
+	import { logoutDynamic } from '$lib/stores/dynamicStore';
 	import { signMessage } from '$lib/services/walletService';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
@@ -42,8 +42,8 @@
 		error = '';
 		// Auto-disconnect if user closes modal without registering
 		if (!$walletRegistered) {
-			if ($authMethod === 'privy') {
-				logoutPrivy();
+			if ($authMethod === 'dynamic') {
+				logoutDynamic();
 			} else if ($wagmiConfig) {
 				await disconnect($wagmiConfig);
 			}
@@ -51,8 +51,8 @@
 	}
 
 	async function handleDisconnect() {
-		if ($authMethod === 'privy') {
-			logoutPrivy();
+		if ($authMethod === 'dynamic') {
+			logoutDynamic();
 		} else if ($wagmiConfig) {
 			await disconnect($wagmiConfig);
 		}
@@ -77,7 +77,7 @@
 			// Create message to sign
 			const message = createSignMessage($walletAddress, accessCode.trim().toUpperCase());
 
-			// Request signature from wallet (works with both Privy and wagmi)
+			// Request signature from wallet (works with both Dynamic and wagmi)
 			const signature = await signMessage(message);
 
 			// Register with backend

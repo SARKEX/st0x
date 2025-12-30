@@ -5,9 +5,9 @@
 	import {
 		showSendFundsModal,
 		closeSendFundsModal,
-		privySession,
+		dynamicSession,
 		sendModalToken
-	} from '$lib/stores/privyStore';
+	} from '$lib/stores/dynamicStore';
 	import { sendTransaction } from '$lib/services/walletService';
 	import { currentNetwork } from '$lib/stores';
 	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
@@ -114,7 +114,7 @@
 	}
 
 	async function handleSend() {
-		if (!canSend || !$privySession?.walletAddress || !selectedToken) return;
+		if (!canSend || !$dynamicSession?.walletAddress || !selectedToken) return;
 
 		error = null;
 		sending = true;
@@ -234,11 +234,11 @@
 					>
 					<div id="from-address" class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
 						<span class="font-mono text-sm text-gray-400">
-							{$privySession?.walletAddress
-								? `${$privySession.walletAddress.slice(
+							{$dynamicSession?.walletAddress
+								? `${$dynamicSession.walletAddress.slice(
 										0,
 										10
-									)}...${$privySession.walletAddress.slice(-8)}`
+									)}...${$dynamicSession.walletAddress.slice(-8)}`
 								: 'Not connected'}
 						</span>
 					</div>

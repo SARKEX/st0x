@@ -23,6 +23,7 @@ import {
 import { AbiCoder } from 'ethers';
 import { Float } from '@rainlanguage/float';
 import transactionStore from '$lib/stores/transaction';
+import { getSignerAddress } from '$lib/services/walletService';
 
 // Constants
 const IO_RATIO_BUFFER = 1.0025; // 0.25% buffer for execution-time price variance
@@ -158,14 +159,36 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			})
 		);
 
-		// 4. Filter to only executable orders
-		const executableOrders = orderInfos.filter((info) => info.orderData?.owner);
+		// 4. Filter to only executable orders (exclude user's own orders)
+		const userAddress = getSignerAddress()?.toLowerCase();
+		const executableOrders = orderInfos.filter((info) => {
+			if (!info.orderData?.owner) return false;
+			// Cannot take your own order - contract will reject it
+			if (userAddress && info.orderData.owner.toLowerCase() === userAddress) {
+				console.log('[marketOrderExecution] Excluding own order:', info.order.orderHash);
+				return false;
+			}
+			return true;
+		});
 		if (executableOrders.length === 0) {
 			return { success: false, error: 'Orders temporarily unavailable. Please try again.' };
 		}
 
-		// 5. Build TakeOrderConfigs
+		// 5. Compute per-order fill amounts from walkResult
+		// Group fills by orderHash to get total fill amount per order
+		// For Buy: takerWantsToken is asset, so sum assetAmount
+		// For Sell: takerWantsToken is payment, so sum paymentAmount
+		const fillAmountsByOrderHash = new Map<string, bigint>();
+		for (const fill of walkResult.fills) {
+			const orderHash = fill.quote.orderHash;
+			const fillAmount = orderSide === 'Buy' ? fill.assetAmount : fill.paymentAmount;
+			const current = fillAmountsByOrderHash.get(orderHash) ?? 0n;
+			fillAmountsByOrderHash.set(orderHash, current + fillAmount);
+		}
+
+		// 6. Build TakeOrderConfigs with parallel fill amounts array
 		const takeOrderConfigs: TakeOrderConfigV4[] = [];
+		const orderFillAmounts: bigint[] = [];
 		for (const orderInfo of executableOrders) {
 			if (!orderInfo.orderData?.validInputs?.length || !orderInfo.orderData?.validOutputs?.length) {
 				continue;
@@ -186,6 +209,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				outputIOIndex: outputIndex.toString(),
 				signedContext: []
 			});
+
+			// Add fill amount for this order (parallel to takeOrderConfigs)
+			const orderHash = orderInfo.order.orderHash;
+			orderFillAmounts.push(fillAmountsByOrderHash.get(orderHash) ?? 0n);
 		}
 
 		if (takeOrderConfigs.length === 0) {
@@ -194,7 +221,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		const primaryOrder = executableOrders[0];
 
-		// 6. Calculate approval amount
+		// 7. Calculate approval amount
 		const { inputAmountFilled, outputAmountGiven, inputDecimals } = walkResult;
 
 		let requiredApprovalAmount: bigint;
@@ -209,10 +236,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			requiredApprovalAmount = amount;
 		}
 
-		// 7. Calculate maximumInput
+		// 8. Calculate maximumInput
 		const maximumInputFloat = Float.fromFixedDecimalLossy(inputAmountFilled, inputDecimals);
 
-		// 8. Get worst fill ratio and apply buffer
+		// 9. Get worst fill ratio and apply buffer
 		const worstFill = walkResult.fills[walkResult.fills.length - 1];
 		if (!worstFill?.quote?.ratio) {
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
@@ -233,7 +260,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
 
-		// 9. Build TakeOrdersConfig
+		// 10. Build TakeOrdersConfig
 		const takeOrdersConfig: TakeOrdersConfigV4 = {
 			minimumInput: Float.fromBigint(0n).asHex(),
 			maximumInput: maximumInputFloat.float.asHex(),
@@ -242,7 +269,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			data: '0x'
 		};
 
-		// 10. Determine taker perspective tokens
+		// 11. Determine taker perspective tokens
 		const takerWantsInfo: TokenInfo =
 			orderSide === 'Buy'
 				? { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol }
@@ -261,7 +288,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					}
 				: { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol };
 
-		// 11. Calculate requested amount
+		// 12. Calculate requested amount
 		const requestedTakerWantsAmount =
 			orderSide === 'Buy'
 				? inputMode === 'spend'
@@ -269,7 +296,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					: amount
 				: inputAmountFilled;
 
-		// 12. Build recalculate callback if needed
+		// 13. Build recalculate callback if needed
 		const shouldRecalculate = orderSide === 'Sell' || inputMode === 'spend';
 		const recalculateConfig =
 			shouldRecalculate && refreshQuotes
@@ -328,14 +355,15 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					}
 				: undefined;
 
-		// 13. Execute transaction
+		// 14. Execute transaction
 		const params: TakeOrdersParams = {
 			orderData: primaryOrder.orderData,
 			ioIndexes: { input: primaryOrder.inputIOIndex, output: primaryOrder.outputIOIndex },
 			takerWantsToken: takerWantsInfo,
 			takerPaysToken: takerPaysInfo,
 			requestedTakerWantsAmount,
-			simulation: walkResult
+			simulation: walkResult,
+			orderFillAmounts
 		};
 
 		await transactionStore.handleTakeOrders(

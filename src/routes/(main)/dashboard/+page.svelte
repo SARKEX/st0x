@@ -5,9 +5,9 @@
 	import {
 		openSendFundsModal,
 		openDepositModal,
-		exportPrivyWallet,
+		exportDynamicWallet,
 		type SendModalToken
-	} from '$lib/stores/privyStore';
+	} from '$lib/stores/dynamicStore';
 	import { currentNetwork, sfts } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
@@ -71,8 +71,8 @@
 	];
 	const WALLET_TAB = { id: 'wallet', label: 'Wallet Management' };
 
-	// Add Wallet Management tab for Privy users
-	$: DASHBOARD_TABS = $authMethod === 'privy' ? [...BASE_TABS, WALLET_TAB] : BASE_TABS;
+	// Add Wallet Management tab for Dynamic users
+	$: DASHBOARD_TABS = $authMethod === 'dynamic' ? [...BASE_TABS, WALLET_TAB] : BASE_TABS;
 
 	type DashboardTabId = 'portfolio' | 'orders' | 'vaults' | 'wallet';
 	let activeTab: DashboardTabId = 'portfolio';
@@ -614,7 +614,7 @@
 								Add Funds
 							</span>
 						</Button>
-						{#if $authMethod === 'privy'}
+						{#if $authMethod === 'dynamic'}
 							<Button variant="secondary" size="sm" on:click={() => openSendFundsModal()}>
 								<span class="flex items-center gap-1.5">
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -705,7 +705,7 @@
 												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												>Total</th
 											>
-											{#if $authMethod === 'privy'}
+											{#if $authMethod === 'dynamic'}
 												<th
 													class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												></th>
@@ -735,7 +735,7 @@
 												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
 													>{holding.totalBalance.toFixed(decimalsForDisplay)}</td
 												>
-												{#if $authMethod === 'privy'}
+												{#if $authMethod === 'dynamic'}
 													<td class="px-2 py-2 sm:px-4 sm:py-3">
 														{#if holding.walletBalanceNum > 0}
 															<Button
@@ -841,7 +841,7 @@
 															variant="primary"
 															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
 														>
-														{#if $authMethod === 'privy' && holding.walletBalanceNum > 0}
+														{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
 															<Button
 																size="sm"
 																variant="secondary"
@@ -1112,8 +1112,8 @@
 					{/if}
 				</Section>
 
-				<!-- Wallet Management Tab (Privy only) -->
-			{:else if activeTab === 'wallet' && $authMethod === 'privy'}
+				<!-- Wallet Management Tab (Dynamic only) -->
+			{:else if activeTab === 'wallet' && $authMethod === 'dynamic'}
 				<Section>
 					<div class="space-y-6">
 						<!-- Wallet Actions -->
@@ -1159,7 +1159,7 @@
 										Withdraw
 									</span>
 								</Button>
-								<Button variant="ghost" on:click={() => exportPrivyWallet()}>
+								<Button variant="ghost" on:click={() => exportDynamicWallet()}>
 									<span class="flex items-center gap-2">
 										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 											<path

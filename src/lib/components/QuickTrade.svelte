@@ -9,7 +9,7 @@
 	import { onMount } from 'svelte';
 	import { refreshTokenQuotes, prefetchGlobalOrders } from '$lib/queries/orderbook';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
-	import { openAuthModal } from '$lib/stores/privyStore';
+	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import Button from './ui/Button.svelte';
