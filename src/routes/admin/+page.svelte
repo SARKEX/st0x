@@ -39,12 +39,28 @@
 	let walletChart: ChartInstance = null;
 	let chartLibLoaded = false;
 
+	// TVL Chart.js state
+	let tvlTokenChartCanvas: HTMLCanvasElement | null = null;
+	let tvlTokenChart: ChartInstance = null;
+	let tvlCodeChartCanvas: HTMLCanvasElement | null = null;
+	let tvlCodeChart: ChartInstance = null;
+	let tvlWalletChartCanvas: HTMLCanvasElement | null = null;
+	let tvlWalletChart: ChartInstance = null;
+
 	// Build set of valid token addresses (lowercase) from the token list (asset tokens only, not USDC)
 	const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
+
+	// Section types (top-level navigation)
+	type Section = 'activity' | 'tvl';
+	let activeSection: Section = 'activity';
 
 	// Tab types
 	type Tab = 'tokens' | 'codes' | 'wallets' | 'transactions';
 	let activeTab: Tab = 'tokens';
+
+	// TVL Tab types
+	type TvlTab = 'tokens' | 'codes' | 'wallets';
+	let activeTvlTab: TvlTab = 'tokens';
 
 	// Period selector
 	type PeriodPreset = '24h' | '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
@@ -192,6 +208,43 @@
 		usdcVolume: number;
 	}
 
+	// TVL data types (from snapshots)
+	interface WalletTvlEntry {
+		address: string;
+		tvl: number;
+		tokenBreakdown: Record<string, number>;
+		accessCode: string | null;
+	}
+
+	interface CodeTvlEntry {
+		code: string;
+		tvl: number;
+		walletCount: number;
+	}
+
+	interface DailyTvlEntry {
+		date: string;
+		timestamp: number;
+		blockNumber: number;
+		totalTvl: number;
+		tokenTvl: Record<string, number>;
+		walletTvl: Record<string, number>;
+		codeTvl: Record<string, number>;
+	}
+
+	interface TvlData {
+		latest: {
+			timestamp: number;
+			blockNumber: number;
+			totalTvl: number;
+			tokenTvl: Record<string, number>;
+			walletTvl: WalletTvlEntry[];
+			codeTvl: CodeTvlEntry[];
+			walletCount: number;
+		} | null;
+		daily: DailyTvlEntry[];
+	}
+
 	// State
 	let loading = true;
 	let error = '';
@@ -209,6 +262,12 @@
 	let meanTxSize = 0;
 	let medianTxSize = 0;
 	let cumulativeNetVolume = 0; // LP net USDC flow (positive = LP received USDC from user buys)
+
+	// TVL data (from snapshots)
+	let tvlLoading = false;
+	let tvlError = '';
+	let tvlData: TvlData = { latest: null, daily: [] };
+	let tvlLastUpdated: Date | null = null;
 
 	// Daily breakdown data for pivot tables
 	let dailyTokenStats: Map<string, Map<string, DailyStats>> = new Map(); // date -> token -> stats
@@ -256,6 +315,16 @@
 		}
 		if (!target.closest('.wallet-dropdown')) {
 			walletDropdownOpen = false;
+		}
+		// TVL dropdowns
+		if (!target.closest('.tvl-token-dropdown')) {
+			tvlTokenDropdownOpen = false;
+		}
+		if (!target.closest('.tvl-code-dropdown')) {
+			tvlCodeDropdownOpen = false;
+		}
+		if (!target.closest('.tvl-wallet-dropdown')) {
+			tvlWalletDropdownOpen = false;
 		}
 	}
 
@@ -334,6 +403,114 @@
 		}
 
 		return { date, tokenValues, total };
+	});
+
+	// TVL Token chart controls (snapshot-based)
+	let tvlSelectedTokens: Set<string> = new Set();
+	let tvlTokenDropdownOpen = false;
+
+	// Get available token symbols from TVL data
+	$: tvlTokenSymbols = tvlData.latest ? Object.keys(tvlData.latest.tokenTvl).sort() : [];
+
+	// Initialize selected tokens when tvlTokenSymbols changes
+	$: if (tvlTokenSymbols.length > 0 && tvlSelectedTokens.size === 0) {
+		tvlSelectedTokens = new Set(tvlTokenSymbols);
+	}
+
+	function toggleTvlToken(symbol: string) {
+		if (tvlSelectedTokens.has(symbol)) {
+			tvlSelectedTokens.delete(symbol);
+		} else {
+			tvlSelectedTokens.add(symbol);
+		}
+		tvlSelectedTokens = tvlSelectedTokens;
+	}
+
+	function selectAllTvlTokens() {
+		tvlSelectedTokens = new Set(tvlTokenSymbols);
+	}
+
+	function clearAllTvlTokens() {
+		tvlSelectedTokens = new Set();
+	}
+
+	// TVL chart data from snapshots - daily TVL by token
+	$: tvlTokenChartData = tvlData.daily.map((entry) => {
+		const tokenValues: Record<string, number> = {};
+		let total = 0;
+
+		for (const symbol of tvlTokenSymbols) {
+			if (tvlSelectedTokens.has(symbol)) {
+				const value = entry.tokenTvl[symbol] || 0;
+				tokenValues[symbol] = value;
+				total += value;
+			}
+		}
+
+		return { date: entry.date, tokenValues, total };
+	});
+
+	// TVL dates from snapshot data
+	$: tvlDates = tvlData.daily.map(d => d.date);
+
+	// TVL Code chart controls
+	let tvlSelectedCode: string | null = null;
+	let tvlCodeDropdownOpen = false;
+
+	// Get available codes from TVL data
+	$: tvlCodes = tvlData.latest ? tvlData.latest.codeTvl.map(c => c.code).sort() : [];
+
+	// Initialize selected code when tvlCodes changes
+	$: if (tvlCodes.length > 0 && tvlSelectedCode === null) {
+		tvlSelectedCode = tvlCodes[0];
+	}
+
+	// TVL chart data for selected code
+	$: tvlCodeChartData = tvlData.daily.map((entry) => ({
+		date: entry.date,
+		value: tvlSelectedCode ? (entry.codeTvl[tvlSelectedCode] || 0) : 0
+	}));
+
+	// TVL Wallet chart controls
+	let tvlSelectedWallets: Set<string> = new Set();
+	let tvlWalletDropdownOpen = false;
+
+	// Get available wallets from TVL data (top 20 by TVL)
+	$: tvlWalletAddresses = tvlData.latest
+		? tvlData.latest.walletTvl.slice(0, 20).map(w => w.address)
+		: [];
+
+	// Initialize selected wallets when tvlWalletAddresses changes
+	$: if (tvlWalletAddresses.length > 0 && tvlSelectedWallets.size === 0) {
+		tvlSelectedWallets = new Set(tvlWalletAddresses.slice(0, 5));
+	}
+
+	function toggleTvlWallet(wallet: string) {
+		if (tvlSelectedWallets.has(wallet)) {
+			tvlSelectedWallets.delete(wallet);
+		} else {
+			tvlSelectedWallets.add(wallet);
+		}
+		tvlSelectedWallets = tvlSelectedWallets;
+	}
+
+	function selectAllTvlWallets() {
+		tvlSelectedWallets = new Set(tvlWalletAddresses);
+	}
+
+	function clearAllTvlWallets() {
+		tvlSelectedWallets = new Set();
+	}
+
+	// TVL chart data for selected wallets
+	$: tvlWalletChartData = tvlData.daily.map((entry) => {
+		let total = 0;
+		for (const wallet of tvlWalletAddresses) {
+			if (tvlSelectedWallets.has(wallet)) {
+				total += entry.walletTvl[wallet] || 0;
+			}
+		}
+		return { date: entry.date, total };
 	});
 
 	// Script loading helper
@@ -667,11 +844,252 @@
 		setTimeout(() => updateWalletChart(), 0);
 	}
 
+	// TVL Chart update functions
+	function updateTvlTokenChart() {
+		if (!ChartCtor || !tvlTokenChartCanvas) return;
+		const ctx = tvlTokenChartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		if (tvlTokenChart) {
+			tvlTokenChart.destroy();
+			tvlTokenChart = null;
+		}
+
+		tvlTokenChart = new ChartCtor(ctx, {
+			type: 'bar',
+			data: {
+				labels: tvlTokenChartData.map((d) => d.date),
+				datasets: [
+					{
+						label: 'TVL (USD)',
+						data: tvlTokenChartData.map((day) => day.total),
+						backgroundColor: '#e8be89',
+						borderColor: '#d4a976',
+						borderWidth: 1,
+						borderRadius: 4
+					}
+				]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				animation: false,
+				interaction: { mode: 'index', intersect: false },
+				plugins: {
+					legend: { display: false },
+					tooltip: {
+						backgroundColor: 'rgba(17, 24, 39, 0.95)',
+						titleColor: '#f3f4f6',
+						bodyColor: '#d1d5db',
+						borderColor: 'rgba(75, 85, 99, 0.3)',
+						borderWidth: 1,
+						padding: 12,
+						callbacks: {
+							label: (context: { parsed?: { y?: number } }) => {
+								const value = context.parsed?.y || 0;
+								return formatUsd(value);
+							}
+						}
+					}
+				},
+				scales: {
+					x: { ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 0 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					y: {
+						beginAtZero: true,
+						ticks: {
+							color: '#9ca3af',
+							callback: (value: string | number) => {
+								const num = Number(value);
+								if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
+								if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
+								return `$${num.toFixed(0)}`;
+							}
+						},
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					}
+				}
+			}
+		});
+	}
+
+	$: if (browser && chartLibLoaded && tvlTokenChartCanvas && activeSection === 'tvl' && activeTvlTab === 'tokens') {
+		void tvlTokenChartData;
+		void tvlSelectedTokens;
+		setTimeout(() => updateTvlTokenChart(), 0);
+	}
+
+	// TVL Code Chart update function
+	function updateTvlCodeChart() {
+		if (!ChartCtor || !tvlCodeChartCanvas) return;
+		const ctx = tvlCodeChartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		if (tvlCodeChart) {
+			tvlCodeChart.destroy();
+			tvlCodeChart = null;
+		}
+
+		tvlCodeChart = new ChartCtor(ctx, {
+			type: 'bar',
+			data: {
+				labels: tvlCodeChartData.map((d) => d.date),
+				datasets: [
+					{
+						label: 'TVL (USD)',
+						data: tvlCodeChartData.map((d) => d.value),
+						backgroundColor: '#e8be89',
+						borderColor: '#d4a976',
+						borderWidth: 1,
+						borderRadius: 4
+					}
+				]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				animation: false,
+				plugins: {
+					legend: { display: false },
+					tooltip: {
+						backgroundColor: 'rgba(17, 24, 39, 0.95)',
+						titleColor: '#f3f4f6',
+						bodyColor: '#d1d5db',
+						callbacks: {
+							label: (context: { parsed?: { y?: number } }) => {
+								const value = context.parsed?.y || 0;
+								return formatUsd(value);
+							}
+						}
+					}
+				},
+				scales: {
+					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					y: {
+						beginAtZero: true,
+						ticks: {
+							color: '#9ca3af',
+							callback: (value: string | number) => {
+								const num = Number(value);
+								if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
+								if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
+								return `$${num.toFixed(0)}`;
+							}
+						},
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					}
+				}
+			}
+		});
+	}
+
+	$: if (browser && chartLibLoaded && tvlCodeChartCanvas && activeSection === 'tvl' && activeTvlTab === 'codes') {
+		void tvlCodeChartData;
+		void tvlSelectedCode;
+		setTimeout(() => updateTvlCodeChart(), 0);
+	}
+
+	// TVL Wallet Chart update function
+	function updateTvlWalletChart() {
+		if (!ChartCtor || !tvlWalletChartCanvas) return;
+		const ctx = tvlWalletChartCanvas.getContext('2d');
+		if (!ctx) return;
+
+		if (tvlWalletChart) {
+			tvlWalletChart.destroy();
+			tvlWalletChart = null;
+		}
+
+		tvlWalletChart = new ChartCtor(ctx, {
+			type: 'bar',
+			data: {
+				labels: tvlWalletChartData.map((d) => d.date),
+				datasets: [
+					{
+						label: 'TVL (USD)',
+						data: tvlWalletChartData.map((d) => d.total),
+						backgroundColor: '#e8be89',
+						borderColor: '#d4a976',
+						borderWidth: 1,
+						borderRadius: 4
+					}
+				]
+			},
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				animation: false,
+				plugins: {
+					legend: { display: false },
+					tooltip: {
+						backgroundColor: 'rgba(17, 24, 39, 0.95)',
+						titleColor: '#f3f4f6',
+						bodyColor: '#d1d5db',
+						callbacks: {
+							label: (context: { parsed?: { y?: number } }) => {
+								const value = context.parsed?.y || 0;
+								return formatUsd(value);
+							}
+						}
+					}
+				},
+				scales: {
+					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					y: {
+						beginAtZero: true,
+						ticks: {
+							color: '#9ca3af',
+							callback: (value: string | number) => {
+								const num = Number(value);
+								if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
+								if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
+								return `$${num.toFixed(0)}`;
+							}
+						},
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					}
+				}
+			}
+		});
+	}
+
+	$: if (browser && chartLibLoaded && tvlWalletChartCanvas && activeSection === 'tvl' && activeTvlTab === 'wallets') {
+		void tvlWalletChartData;
+		void tvlSelectedWallets;
+		setTimeout(() => updateTvlWalletChart(), 0);
+	}
+
 	// Network config
 	const network = networks[0]; // Base mainnet
 	const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase();
 	// LP wallet that provides liquidity - used to calculate net platform inflow/outflow
 	const LP_WALLET = '0x71b94911fd1ce621fc40970450004c544e5287a8'.toLowerCase();
+
+	// Fetch TVL data from snapshots
+	async function fetchTvlData() {
+		tvlLoading = true;
+		tvlError = '';
+
+		try {
+			const res = await fetch('/api/admin/tvl?limit=90');
+			if (!res.ok) throw new Error('Failed to fetch TVL data');
+
+			const data = await res.json();
+			if (!data.success) {
+				throw new Error(data.error || 'Unknown error');
+			}
+
+			tvlData = {
+				latest: data.latest,
+				daily: data.daily
+			};
+			tvlLastUpdated = new Date();
+		} catch (err) {
+			tvlError = err instanceof Error ? err.message : 'Failed to load TVL data';
+			console.error('Failed to load TVL data:', err);
+		} finally {
+			tvlLoading = false;
+		}
+	}
 
 	onMount(() => {
 		// Set default custom dates
@@ -681,6 +1099,7 @@
 		customStartDate = thirtyDaysAgo.toISOString().split('T')[0];
 
 		loadAllData();
+		fetchTvlData();
 
 		// Load Chart.js library
 		ensureChartLib();
@@ -702,6 +1121,19 @@
 		if (walletChart) {
 			walletChart.destroy();
 			walletChart = null;
+		}
+		// Destroy TVL charts
+		if (tvlTokenChart) {
+			tvlTokenChart.destroy();
+			tvlTokenChart = null;
+		}
+		if (tvlCodeChart) {
+			tvlCodeChart.destroy();
+			tvlCodeChart = null;
+		}
+		if (tvlWalletChart) {
+			tvlWalletChart.destroy();
+			tvlWalletChart = null;
 		}
 		// Remove event listener
 		if (browser) {
@@ -1191,9 +1623,25 @@
 </script>
 
 <div class="py-8">
-	<div class="mb-6 flex items-center justify-between">
-		<h1 class="text-2xl font-semibold">On-chain Market</h1>
-		<div class="flex items-center gap-3">
+	<!-- Section Selector -->
+	<div class="mb-6 flex items-center gap-6 border-b border-gray-700">
+		<button
+			on:click={() => (activeSection = 'activity')}
+			class="border-b-2 pb-3 text-lg font-semibold transition-colors {activeSection === 'activity'
+				? 'border-[#e8be89] text-[#e8be89]'
+				: 'border-transparent text-gray-400 hover:text-gray-300'}"
+		>
+			Trading Vol
+		</button>
+		<button
+			on:click={() => (activeSection = 'tvl')}
+			class="border-b-2 pb-3 text-lg font-semibold transition-colors {activeSection === 'tvl'
+				? 'border-[#e8be89] text-[#e8be89]'
+				: 'border-transparent text-gray-400 hover:text-gray-300'}"
+		>
+			TVL
+		</button>
+		<div class="ml-auto flex items-center gap-3 pb-3">
 			{#if lastUpdated}
 				<span class="text-xs text-gray-500">
 					Last updated: {formatTime(lastUpdated)}
@@ -1221,6 +1669,9 @@
 			</button>
 		</div>
 	</div>
+
+	{#if activeSection === 'activity'}
+	<!-- Trading Vol Section -->
 
 	<!-- Period Selector -->
 	<div class="mb-6">
@@ -1791,5 +2242,437 @@
 				{/if}
 			</Card>
 		{/if}
+	{/if}
+
+	{:else if activeSection === 'tvl'}
+	<!-- TVL Section (Snapshot-based) -->
+
+	{#if tvlError}
+		<div class="mb-6 rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
+			{tvlError}
+		</div>
+	{/if}
+
+	{#if tvlLoading && !tvlLastUpdated}
+		<div class="flex items-center gap-3 text-gray-400">
+			<div
+				class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+			></div>
+			Loading TVL data from snapshots...
+		</div>
+	{:else if !tvlData.latest}
+		<div class="text-center text-gray-400 py-8">
+			<p>No TVL data available</p>
+			<p class="text-sm mt-2">Snapshots have not been generated yet.</p>
+		</div>
+	{:else}
+		<!-- Latest TVL Headline -->
+		<div class="mb-8">
+			<Card>
+				<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+					<div>
+						<p class="text-4xl font-bold text-[#e8be89]">{formatUsd(tvlData.latest.totalTvl)}</p>
+						<p class="mt-1 text-sm text-gray-400">Total Value Locked (TVL)</p>
+					</div>
+					<div class="text-right">
+						<p class="text-sm text-gray-400">
+							Snapshot: {new Date(tvlData.latest.timestamp * 1000).toLocaleString()}
+						</p>
+						<p class="text-xs text-gray-500">
+							Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} wallets
+						</p>
+						<p class="text-xs text-gray-500 mt-1 italic">
+							Approx. end of day balances
+						</p>
+					</div>
+				</div>
+			</Card>
+		</div>
+
+		<!-- TVL by Token Breakdown -->
+		<div class="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			{#each Object.entries(tvlData.latest.tokenTvl).sort((a, b) => b[1] - a[1]) as [symbol, tvl]}
+				<Card>
+					<div class="text-center">
+						<p class="text-xl font-bold text-white">{formatUsd(tvl)}</p>
+						<p class="mt-1 text-sm text-gray-400">{symbol}</p>
+						<p class="text-xs text-gray-500">
+							{tvlData.latest.totalTvl > 0 ? ((tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
+						</p>
+					</div>
+				</Card>
+			{/each}
+		</div>
+
+		<!-- TVL Tab Navigation -->
+		<div class="mb-6 border-b border-gray-700">
+			<nav class="-mb-px flex flex-wrap gap-6">
+				<button
+					on:click={() => (activeTvlTab = 'tokens')}
+					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'tokens'
+						? 'border-[#e8be89] text-[#e8be89]'
+						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+				>
+					By Token
+				</button>
+				<button
+					on:click={() => (activeTvlTab = 'codes')}
+					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'codes'
+						? 'border-[#e8be89] text-[#e8be89]'
+						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+				>
+					By Access Code
+				</button>
+				<button
+					on:click={() => (activeTvlTab = 'wallets')}
+					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'wallets'
+						? 'border-[#e8be89] text-[#e8be89]'
+						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+				>
+					By Wallet
+				</button>
+			</nav>
+		</div>
+
+		<!-- TVL Tab Content -->
+		{#if activeTvlTab === 'tokens'}
+			<!-- Daily TVL by Token Chart -->
+			<Card>
+				<div class="mb-6 flex flex-wrap items-center gap-4">
+					<h3 class="text-lg font-medium text-white">Daily TVL by Token</h3>
+
+					<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+						<!-- Token Dropdown -->
+						<div class="tvl-token-dropdown relative">
+							<button
+								on:click={() => (tvlTokenDropdownOpen = !tvlTokenDropdownOpen)}
+								class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+							>
+								<span>
+									{#if tvlSelectedTokens.size === tvlTokenSymbols.length}
+										All Tokens
+									{:else if tvlSelectedTokens.size === 0}
+										No Tokens
+									{:else}
+										{tvlSelectedTokens.size} Token{tvlSelectedTokens.size > 1 ? 's' : ''}
+									{/if}
+								</span>
+								<svg
+									class="h-4 w-4 transition-transform {tvlTokenDropdownOpen ? 'rotate-180' : ''}"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+								</svg>
+							</button>
+
+							{#if tvlTokenDropdownOpen}
+								<div class="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+									<div class="border-b border-gray-700 px-3 py-2">
+										<div class="flex gap-2">
+											<button
+												on:click={selectAllTvlTokens}
+												class="text-xs text-[#e8be89] hover:underline"
+											>
+												Select All
+											</button>
+											<span class="text-gray-600">|</span>
+											<button
+												on:click={clearAllTvlTokens}
+												class="text-xs text-gray-400 hover:underline"
+											>
+												Clear
+											</button>
+										</div>
+									</div>
+									{#each tvlTokenSymbols as symbol}
+										<button
+											on:click={() => toggleTvlToken(symbol)}
+											class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
+										>
+											<span
+												class="flex h-4 w-4 items-center justify-center rounded border {tvlSelectedTokens.has(symbol)
+													? 'border-[#e8be89] bg-[#e8be89]'
+													: 'border-gray-500'}"
+											>
+												{#if tvlSelectedTokens.has(symbol)}
+													<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+													</svg>
+												{/if}
+											</span>
+											<span class="text-white">{symbol}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+
+				<!-- Chart -->
+				{#if tvlSelectedTokens.size > 0 && tvlTokenChartData.length > 0}
+					<div class="relative h-80">
+						{#if !chartLibLoaded}
+							<div class="absolute inset-0 flex items-center justify-center">
+								<div class="text-gray-400">Loading chart...</div>
+							</div>
+						{/if}
+						<canvas bind:this={tvlTokenChartCanvas} class="h-full w-full"></canvas>
+					</div>
+				{:else if tvlTokenChartData.length === 0}
+					<p class="py-8 text-center text-gray-400">No historical TVL data available</p>
+				{:else}
+					<p class="py-8 text-center text-gray-400">Select at least one token to view the chart</p>
+				{/if}
+			</Card>
+		{:else if activeTvlTab === 'codes'}
+			<!-- TVL by Access Code -->
+			<Card>
+				<div class="mb-6 flex flex-wrap items-center gap-4">
+					<h3 class="text-lg font-medium text-white">Daily TVL by Access Code</h3>
+
+					<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+						<!-- Code Dropdown -->
+						<div class="tvl-code-dropdown relative">
+							<button
+								on:click={() => (tvlCodeDropdownOpen = !tvlCodeDropdownOpen)}
+								class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+							>
+								<span>
+									{#if tvlSelectedCode}
+										{tvlSelectedCode}
+									{:else}
+										Select Code
+									{/if}
+								</span>
+								<svg
+									class="h-4 w-4 transition-transform {tvlCodeDropdownOpen ? 'rotate-180' : ''}"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+								</svg>
+							</button>
+
+							{#if tvlCodeDropdownOpen}
+								<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+									{#each tvlCodes as code}
+										<button
+											on:click={() => { tvlSelectedCode = code; tvlCodeDropdownOpen = false; }}
+											class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700 {tvlSelectedCode === code ? 'bg-gray-700' : ''}"
+										>
+											<span class="text-white">{code}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+
+				<!-- Current Code TVL Stats -->
+				{#if tvlSelectedCode && tvlData.latest}
+					{@const codeEntry = tvlData.latest.codeTvl.find(c => c.code === tvlSelectedCode)}
+					{#if codeEntry}
+						<div class="mb-6 grid gap-4 sm:grid-cols-3">
+							<div class="rounded-lg bg-gray-800/50 p-4 text-center">
+								<p class="text-2xl font-bold text-[#e8be89]">{formatUsd(codeEntry.tvl)}</p>
+								<p class="mt-1 text-sm text-gray-400">Current TVL</p>
+							</div>
+							<div class="rounded-lg bg-gray-800/50 p-4 text-center">
+								<p class="text-2xl font-bold text-white">{codeEntry.walletCount}</p>
+								<p class="mt-1 text-sm text-gray-400">Wallets</p>
+							</div>
+							<div class="rounded-lg bg-gray-800/50 p-4 text-center">
+								<p class="text-2xl font-bold text-white">
+									{tvlData.latest.totalTvl > 0 ? ((codeEntry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
+								</p>
+								<p class="mt-1 text-sm text-gray-400">Share of Total</p>
+							</div>
+						</div>
+					{/if}
+				{/if}
+
+				<!-- Chart -->
+				{#if tvlSelectedCode && tvlCodeChartData.length > 0}
+					<div class="relative h-80">
+						{#if !chartLibLoaded}
+							<div class="absolute inset-0 flex items-center justify-center">
+								<div class="text-gray-400">Loading chart...</div>
+							</div>
+						{/if}
+						<canvas bind:this={tvlCodeChartCanvas} class="h-full w-full"></canvas>
+					</div>
+				{:else if tvlCodes.length === 0}
+					<p class="py-8 text-center text-gray-400">No access codes with TVL found</p>
+				{:else}
+					<p class="py-8 text-center text-gray-400">Select an access code to view TVL history</p>
+				{/if}
+			</Card>
+
+			<!-- Code TVL Leaderboard -->
+			{#if tvlData.latest && tvlData.latest.codeTvl.length > 0}
+				<Card>
+					<h3 class="mb-4 text-lg font-medium text-white">Access Code TVL Leaderboard</h3>
+					<div class="overflow-x-auto">
+						<table class="w-full text-left text-sm">
+							<thead>
+								<tr class="border-b border-gray-700 text-gray-400">
+									<th class="pb-3 pr-4">Rank</th>
+									<th class="pb-3 pr-4">Access Code</th>
+									<th class="pb-3 pr-4 text-right">TVL</th>
+									<th class="pb-3 pr-4 text-right">Wallets</th>
+									<th class="pb-3 text-right">Share</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each tvlData.latest.codeTvl.slice(0, 20) as entry, i}
+									<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+										<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
+										<td class="py-3 pr-4 font-mono text-white">{entry.code}</td>
+										<td class="py-3 pr-4 text-right font-medium text-[#e8be89]">{formatUsd(entry.tvl)}</td>
+										<td class="py-3 pr-4 text-right text-gray-300">{entry.walletCount}</td>
+										<td class="py-3 text-right text-gray-400">
+											{tvlData.latest.totalTvl > 0 ? ((entry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</Card>
+			{/if}
+		{:else if activeTvlTab === 'wallets'}
+			<!-- TVL by Wallet -->
+			<Card>
+				<div class="mb-6 flex flex-wrap items-center gap-4">
+					<h3 class="text-lg font-medium text-white">Daily TVL by Wallet</h3>
+
+					<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+						<!-- Wallet Dropdown -->
+						<div class="tvl-wallet-dropdown relative">
+							<button
+								on:click={() => (tvlWalletDropdownOpen = !tvlWalletDropdownOpen)}
+								class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+							>
+								<span>
+									{#if tvlSelectedWallets.size === tvlWalletAddresses.length}
+										All Wallets (Top 20)
+									{:else if tvlSelectedWallets.size === 0}
+										No Wallets
+									{:else}
+										{tvlSelectedWallets.size} Wallet{tvlSelectedWallets.size > 1 ? 's' : ''}
+									{/if}
+								</span>
+								<svg
+									class="h-4 w-4 transition-transform {tvlWalletDropdownOpen ? 'rotate-180' : ''}"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+								</svg>
+							</button>
+
+							{#if tvlWalletDropdownOpen}
+								<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+									<div class="border-b border-gray-700 px-3 py-2">
+										<div class="flex gap-2">
+											<button
+												on:click={selectAllTvlWallets}
+												class="text-xs text-[#e8be89] hover:underline"
+											>
+												Select All
+											</button>
+											<span class="text-gray-600">|</span>
+											<button
+												on:click={clearAllTvlWallets}
+												class="text-xs text-gray-400 hover:underline"
+											>
+												Clear
+											</button>
+										</div>
+									</div>
+									{#each tvlWalletAddresses as wallet}
+										<button
+											on:click={() => toggleTvlWallet(wallet)}
+											class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
+										>
+											<span
+												class="flex h-4 w-4 items-center justify-center rounded border {tvlSelectedWallets.has(wallet)
+													? 'border-[#e8be89] bg-[#e8be89]'
+													: 'border-gray-500'}"
+											>
+												{#if tvlSelectedWallets.has(wallet)}
+													<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+													</svg>
+												{/if}
+											</span>
+											<span class="font-mono text-xs text-white">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+
+				<!-- Chart -->
+				{#if tvlSelectedWallets.size > 0 && tvlWalletChartData.length > 0}
+					<div class="relative h-80">
+						{#if !chartLibLoaded}
+							<div class="absolute inset-0 flex items-center justify-center">
+								<div class="text-gray-400">Loading chart...</div>
+							</div>
+						{/if}
+						<canvas bind:this={tvlWalletChartCanvas} class="h-full w-full"></canvas>
+					</div>
+				{:else if tvlWalletAddresses.length === 0}
+					<p class="py-8 text-center text-gray-400">No wallets with TVL found</p>
+				{:else}
+					<p class="py-8 text-center text-gray-400">Select at least one wallet to view the chart</p>
+				{/if}
+			</Card>
+
+			<!-- Wallet TVL Leaderboard -->
+			{#if tvlData.latest && tvlData.latest.walletTvl.length > 0}
+				<Card>
+					<h3 class="mb-4 text-lg font-medium text-white">Wallet TVL Leaderboard</h3>
+					<div class="overflow-x-auto">
+						<table class="w-full text-left text-sm">
+							<thead>
+								<tr class="border-b border-gray-700 text-gray-400">
+									<th class="pb-3 pr-4">Rank</th>
+									<th class="pb-3 pr-4">Wallet</th>
+									<th class="pb-3 pr-4">Access Code</th>
+									<th class="pb-3 pr-4 text-right">TVL</th>
+									<th class="pb-3 text-right">Share</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each tvlData.latest.walletTvl.slice(0, 20) as entry, i}
+									<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+										<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
+										<td class="py-3 pr-4 font-mono text-xs text-white">
+											{entry.address.slice(0, 6)}...{entry.address.slice(-4)}
+										</td>
+										<td class="py-3 pr-4 text-gray-300">{entry.accessCode || '-'}</td>
+										<td class="py-3 pr-4 text-right font-medium text-[#e8be89]">{formatUsd(entry.tvl)}</td>
+										<td class="py-3 text-right text-gray-400">
+											{tvlData.latest.totalTvl > 0 ? ((entry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</Card>
+			{/if}
+		{/if}
+	{/if}
 	{/if}
 </div>

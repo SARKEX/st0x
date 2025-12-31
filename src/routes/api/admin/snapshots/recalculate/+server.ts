@@ -12,10 +12,19 @@ import {
 } from '$lib/server/kv';
 import { invalidatePublicApiCaches } from '$lib/server/cache';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
+import { env } from '$env/dynamic/private';
 
 const POINTS_PER_DOLLAR = 100;
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
+	// Check if Blob token is available (required for Vercel Blob storage)
+	if (!env.BLOB_READ_WRITE_TOKEN) {
+		return json(
+			{ error: 'Blob storage not configured (missing BLOB_READ_WRITE_TOKEN)' },
+			{ status: 503 }
+		);
+	}
+
 	try {
 		// Verify admin session
 		const token = cookies.get('auth-session');
@@ -68,7 +77,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		// List ALL blobs from blob storage
 		const { blobs: allBlobs } = await list({
 			prefix: 'snapshots/',
-			limit: 1000
+			limit: 1000,
+			token: env.BLOB_READ_WRITE_TOKEN
 		});
 		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
 
