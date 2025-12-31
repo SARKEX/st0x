@@ -82,7 +82,7 @@
 			on:click={() => (showDropdown = !showDropdown)}
 			on:mouseenter={() => (showTooltip = true)}
 			on:mouseleave={() => (showTooltip = false)}
-			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
+			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-all"
 		>
 			<!-- Animated rainbow border -->
 			<span class="rainbow-border pointer-events-none"></span>
@@ -113,19 +113,19 @@
 				<span class="relative z-10 text-gray-400">Loading...</span>
 			{:else if $rewardsData}
 				<div class="relative z-10 flex items-center gap-2">
-					<span class="font-semibold text-white">Boost Rewards</span>
-					<span class="text-xs text-gray-400">|</span>
+					<span class="hidden font-semibold text-white min-[1900px]:inline">Boost Rewards</span>
+					<span class="hidden text-xs text-gray-400 min-[1900px]:inline">|</span>
 					<span class="text-xs font-medium text-yellow-300">
 						{formatPoints($rewardsData.userPoints)} pts
 					</span>
 					<span class="text-xs font-bold text-green-400">
-						{formatApy($globalPoolApy)}
+						{formatApy($globalPoolApy)} APY
 					</span>
 				</div>
 			{:else}
-				<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
+				<span class="relative z-10 hidden font-semibold text-white min-[1900px]:inline">Boost Rewards</span>
 				<span class="relative z-10 text-xs text-gray-400">0 pts</span>
-				<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
+				<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)} APY</span>
 			{/if}
 
 			<svg
@@ -252,7 +252,7 @@
 			on:click={() => (showDropdown = !showDropdown)}
 			on:mouseenter={() => (showTooltip = true)}
 			on:mouseleave={() => (showTooltip = false)}
-			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all"
+			class="rainbow-button group relative flex h-10 items-center gap-2 overflow-hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-all"
 		>
 			<span class="rainbow-border pointer-events-none"></span>
 			<span
@@ -271,8 +271,8 @@
 					d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
 				/>
 			</svg>
-			<span class="relative z-10 font-semibold text-white">Boost Rewards</span>
-			<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)}</span>
+			<span class="relative z-10 hidden font-semibold text-white min-[1900px]:inline">Boost Rewards</span>
+			<span class="relative z-10 text-xs text-green-400">{formatApy($globalPoolApy)} APY</span>
 			<svg
 				class="relative z-10 h-4 w-4 text-gray-400 transition-transform"
 				class:rotate-180={showDropdown}

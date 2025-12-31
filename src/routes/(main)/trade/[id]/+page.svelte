@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { currentNetwork, oracleQuotes } from '$lib/stores';
+	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
 	import { formatUnits } from 'viem';
 	import { TOKENS } from '$lib/config/network';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -243,6 +243,9 @@
 	let panelOrderSide: 'Buy' | 'Sell' = 'Buy';
 	let panelStrategy: 'limit' | 'dca' | 'market' = 'market';
 	let panelOpenedFromTerminal = false;
+
+	// Sync trade panel state with store (for layout squishing on lg screens)
+	$: tradePanelOpen.set(showTradePanel);
 
 	// Track if the trade panel was opened by the tutorial
 	let panelOpenedByTutorial = false;
@@ -1224,7 +1227,7 @@
 			</div>
 		</div>
 		<!-- About Section - Collapsible on mobile -->
-		<div class="space-y-4 sm:space-y-6">
+		<div class="space-y-4 overflow-x-hidden sm:space-y-6">
 			<button
 				type="button"
 				class="flex w-full items-center justify-between sm:cursor-default"
@@ -1252,13 +1255,13 @@
 				</svg>
 			</button>
 			<div
-				class="grid gap-4 sm:gap-6 lg:grid-cols-2"
+				class="grid gap-4 overflow-x-hidden sm:gap-6 lg:grid-cols-2"
 				class:hidden={isAboutCollapsed}
 				class:sm:grid={isAboutCollapsed}
 				data-tutorial="fundamentals"
 			>
 				<!-- Token Details (Left) -->
-				<div class="space-y-4">
+				<div class="min-w-0 space-y-4">
 					<div class="space-y-3">
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
 							Token Details
@@ -1422,7 +1425,7 @@
 					{/if}
 				</div>
 				<!-- Underlying Equity (Right) -->
-				<div class="space-y-4">
+				<div class="min-w-0 space-y-4">
 					<div class="space-y-3">
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
 							Equity Details
@@ -1668,6 +1671,8 @@
 										orderSide={panelOrderSide}
 										assetToken={currentPythToken}
 										{orderbookQuotesQuery}
+										{buyPrice}
+										{sellPrice}
 									/>
 								{:else if panelStrategy === 'dca'}
 									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
@@ -1689,10 +1694,6 @@
 				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
 				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
 				<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
-				<a href="/compliance" class="hidden transition-colors hover:text-yellow-500 sm:inline"
-					>Compliance</a
-				>
-				<a href="/audit" class="hidden transition-colors hover:text-yellow-500 sm:inline">Audits</a>
 				<a href="/faqs" class="hidden transition-colors hover:text-yellow-500 sm:inline">FAQs</a>
 			</div>
 

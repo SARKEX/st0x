@@ -16,6 +16,7 @@
 		filterQuotesForSide,
 		sortQuotesByPrice
 	} from '$lib/services/marketOrderExecution';
+	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 
 	// ============ TOKEN SELECTION (completely independent) ============
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -46,6 +47,22 @@
 	function toggleDropdown(e: MouseEvent) {
 		e.stopPropagation();
 		isDropdownOpen = !isDropdownOpen;
+		// Reset scroll indicators when opening
+		if (isDropdownOpen) {
+			canScrollUp = false;
+			canScrollDown = true;
+		}
+	}
+
+	// Scroll indicator state
+	let canScrollUp = false;
+	let canScrollDown = true;
+	let dropdownScrollEl: HTMLDivElement | null = null;
+
+	function handleDropdownScroll(e: Event) {
+		const el = e.target as HTMLDivElement;
+		canScrollUp = el.scrollTop > 0;
+		canScrollDown = el.scrollTop < el.scrollHeight - el.clientHeight - 1;
 	}
 
 	function closeDropdown() {
@@ -194,6 +211,99 @@
 	$: bestAskPrice = askQuotes.length > 0 ? askQuotes[0].quotePerAsset : null;
 	$: bestBidPrice = bidQuotes.length > 0 ? bidQuotes[0].quotePerAsset : null;
 
+	// ============ MAX LIQUIDITY CALCULATION ============
+	// Calculate maximum USDC that can be spent when buying
+	$: maxBuyUsdcAvailable = (() => {
+		if (askQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
+		let totalUsdc = 0n;
+		const paymentDecimals = paymentToken.decimals ?? 6;
+		const assetDecimals = selectedToken.decimals ?? 18;
+
+		for (const q of askQuotes) {
+			const price = q.quotePerAsset ?? 0;
+			if (price <= 0) continue;
+			let maxAssetAvailable = 0n;
+			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
+				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
+				maxAssetAvailable = parseFloatHex(q.maxOutput, outputDecimals);
+			}
+			if (maxAssetAvailable <= 0n) continue;
+			const usdcForQuote = BigInt(
+				Math.ceil((Number(maxAssetAvailable) / 10 ** assetDecimals) * price * 10 ** paymentDecimals)
+			);
+			totalUsdc += usdcForQuote;
+		}
+		return Number(totalUsdc) / 10 ** paymentDecimals;
+	})();
+
+	// Calculate maximum tokens that can be bought (sum of ask maxOutput)
+	$: maxBuyTokensAvailable = (() => {
+		if (askQuotes.length === 0 || !selectedToken) return 0;
+		let totalTokens = 0n;
+		const assetDecimals = selectedToken.decimals ?? 18;
+
+		for (const q of askQuotes) {
+			let maxAssetAvailable = 0n;
+			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
+				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
+				maxAssetAvailable = parseFloatHex(q.maxOutput, outputDecimals);
+				if (outputDecimals !== assetDecimals) {
+					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
+					maxAssetAvailable =
+						outputDecimals < assetDecimals ? maxAssetAvailable * scale : maxAssetAvailable / scale;
+				}
+			}
+			if (maxAssetAvailable > 0n) totalTokens += maxAssetAvailable;
+		}
+		return Number(totalTokens) / 10 ** assetDecimals;
+	})();
+
+	// Calculate maximum tokens that can be sold
+	$: maxSellTokensAvailable = (() => {
+		if (bidQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
+		let totalTokens = 0n;
+		const paymentDecimals = paymentToken.decimals ?? 6;
+		const assetDecimals = selectedToken.decimals ?? 18;
+
+		for (const q of bidQuotes) {
+			const price = q.quotePerAsset ?? 0;
+			if (price <= 0) continue;
+			let maxUsdcFromBid = 0n;
+			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
+				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
+				maxUsdcFromBid = parseFloatHex(q.maxOutput, outputDecimals);
+			}
+			if (maxUsdcFromBid <= 0n) continue;
+			const tokensForBid = BigInt(
+				Math.floor((Number(maxUsdcFromBid) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
+			);
+			totalTokens += tokensForBid;
+		}
+		return Number(totalTokens) / 10 ** assetDecimals;
+	})();
+
+	// Calculate maximum USDC that can be received when selling (sum of bid maxOutput)
+	$: maxSellUsdcAvailable = (() => {
+		if (bidQuotes.length === 0 || !paymentToken) return 0;
+		let totalUsdc = 0n;
+		const paymentDecimals = paymentToken.decimals ?? 6;
+
+		for (const q of bidQuotes) {
+			let maxUsdcFromBid = 0n;
+			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
+				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
+				maxUsdcFromBid = parseFloatHex(q.maxOutput, outputDecimals);
+				if (outputDecimals !== paymentDecimals) {
+					const scale = 10n ** BigInt(Math.abs(paymentDecimals - outputDecimals));
+					maxUsdcFromBid =
+						outputDecimals < paymentDecimals ? maxUsdcFromBid * scale : maxUsdcFromBid / scale;
+				}
+			}
+			if (maxUsdcFromBid > 0n) totalUsdc += maxUsdcFromBid;
+		}
+		return Number(totalUsdc) / 10 ** paymentDecimals;
+	})();
+
 	// ============ QUOTE CALCULATION ============
 	$: quote = computeQuote(
 		isBuying,
@@ -215,6 +325,80 @@
 			bottomAmount = newValue;
 		} else {
 			topAmount = newValue;
+		}
+		// Note: We no longer cap while typing - capping happens on blur
+	}
+
+	// Track if we capped due to liquidity - persists until user types again
+	let showLiquidityWarning = false;
+	let hasCappedThisBlur = false;
+
+	// Cap amounts at max available when liquidity is insufficient
+	function capAmountsIfNeeded() {
+		// If there's sufficient liquidity and we haven't capped, nothing to do
+		if (!quote || (quote.hasLiquidity && !showLiquidityWarning)) {
+			return;
+		}
+
+		// If we already capped on this blur event, don't cap again
+		if (hasCappedThisBlur) return;
+
+		// If there's not enough liquidity, cap and show warning
+		if (!quote.hasLiquidity) {
+			if (isBuying) {
+				if (lastEditedField === 'top') {
+					// User edited USDC amount - cap USDC to max available
+					const enteredUsdc = parseFloat(topAmount);
+					if (
+						Number.isFinite(enteredUsdc) &&
+						enteredUsdc > maxBuyUsdcAvailable &&
+						maxBuyUsdcAvailable > 0
+					) {
+						topAmount = maxBuyUsdcAvailable.toFixed(2);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				} else if (lastEditedField === 'bottom') {
+					// User edited token amount - cap tokens to max available
+					const enteredTokens = parseFloat(bottomAmount);
+					if (
+						Number.isFinite(enteredTokens) &&
+						enteredTokens > maxBuyTokensAvailable &&
+						maxBuyTokensAvailable > 0
+					) {
+						bottomAmount = formatTokenAmount(maxBuyTokensAvailable);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				}
+			} else {
+				// Selling
+				if (lastEditedField === 'bottom') {
+					// User edited token amount - cap tokens to max available
+					const enteredTokens = parseFloat(bottomAmount);
+					if (
+						Number.isFinite(enteredTokens) &&
+						enteredTokens > maxSellTokensAvailable &&
+						maxSellTokensAvailable > 0
+					) {
+						bottomAmount = formatTokenAmount(maxSellTokensAvailable);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				} else if (lastEditedField === 'top') {
+					// User edited USDC amount - cap USDC to max available
+					const enteredUsdc = parseFloat(topAmount);
+					if (
+						Number.isFinite(enteredUsdc) &&
+						enteredUsdc > maxSellUsdcAvailable &&
+						maxSellUsdcAvailable > 0
+					) {
+						topAmount = maxSellUsdcAvailable.toFixed(2);
+						showLiquidityWarning = true;
+						hasCappedThisBlur = true;
+					}
+				}
+			}
 		}
 	}
 
@@ -419,6 +603,11 @@
 		const target = e.target as HTMLInputElement;
 		topAmount = target.value;
 		lastEditedField = 'top';
+		// Reset warning flags when user starts typing
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
+		// Clear the other field to prevent both having user-entered values while prices load
+		bottomAmount = '';
 		// Refresh quotes when user enters a value
 		if (topAmount) refreshQuotesForCurrentToken();
 	}
@@ -427,6 +616,11 @@
 		const target = e.target as HTMLInputElement;
 		bottomAmount = target.value;
 		lastEditedField = 'bottom';
+		// Reset warning flags when user starts typing
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
+		// Clear the other field to prevent both having user-entered values while prices load
+		topAmount = '';
 		// Refresh quotes when user enters a value
 		if (bottomAmount) refreshQuotesForCurrentToken();
 	}
@@ -441,6 +635,8 @@
 		const flooredAmount = Math.floor(amount * 100) / 100;
 		topAmount = flooredAmount.toFixed(2);
 		lastEditedField = 'top';
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
 		refreshQuotesForCurrentToken();
 	}
 
@@ -450,6 +646,8 @@
 		const flooredAmount = Math.floor(amount * 1e6) / 1e6;
 		bottomAmount = flooredAmount.toFixed(6);
 		lastEditedField = 'bottom';
+		showLiquidityWarning = false;
+		hasCappedThisBlur = false;
 		refreshQuotesForCurrentToken();
 	}
 
@@ -586,6 +784,7 @@
 						placeholder="0"
 						value={topAmount}
 						on:input={handleTopInput}
+						on:blur={capAmountsIfNeeded}
 						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
 					/>
 				</div>
@@ -599,9 +798,6 @@
 					{/if}
 				</span>
 				<div class="flex items-center gap-1">
-					{#if quote && !quote.hasLiquidity}
-						<span class="text-yellow-500">Partial</span>
-					{/if}
 					{#if isBuying && $connected && formattedUsdcBalance > 0}
 						{#each [25, 50, 75, 100] as percent}
 							<button
@@ -615,6 +811,20 @@
 					{/if}
 				</div>
 			</div>
+			{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
+				<div
+					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+				>
+					{#if showLiquidityWarning}
+						Order capped to max available liquidity.
+					{:else}
+						Not enough liquidity to fully fill your order.
+					{/if}
+					{#if isOutsideMarketHours()}
+						<br />This might be because US markets are currently closed.
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		<!-- Direction arrow -->
@@ -683,21 +893,63 @@
 						<!-- svelte-ignore a11y-no-static-element-interactions -->
 						<div
 							on:click|stopPropagation
-							class="absolute left-0 top-full z-[100] mt-2 w-64 rounded-xl border border-white/10 bg-gray-800 py-2 shadow-xl"
+							class="absolute left-0 top-full z-[100] mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-gray-800 shadow-xl"
 						>
-							{#each tradableTokens as token (token.address)}
-								<button
-									type="button"
-									on:click|stopPropagation={() => handleTokenSelect(token.address)}
-									class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/5"
-								>
-									<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
-									<div>
-										<div class="font-medium text-white">{token.symbol}</div>
-										<div class="text-xs text-gray-500">{token.name}</div>
-									</div>
-								</button>
-							{/each}
+							<!-- Scroll up indicator -->
+							{#if canScrollUp}
+								<div class="flex justify-center border-b border-white/5 py-1">
+									<svg
+										class="h-4 w-4 text-gray-500"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M5 15l7-7 7 7"
+										/>
+									</svg>
+								</div>
+							{/if}
+							<div
+								class="token-dropdown max-h-[232px] overflow-y-scroll py-2"
+								on:scroll={handleDropdownScroll}
+								bind:this={dropdownScrollEl}
+							>
+								{#each tradableTokens as token (token.address)}
+									<button
+										type="button"
+										on:click|stopPropagation={() => handleTokenSelect(token.address)}
+										class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/5"
+									>
+										<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
+										<div>
+											<div class="font-medium text-white">{token.symbol}</div>
+											<div class="text-xs text-gray-500">{token.name}</div>
+										</div>
+									</button>
+								{/each}
+							</div>
+							<!-- Scroll down indicator -->
+							{#if canScrollDown}
+								<div class="flex justify-center border-t border-white/5 py-1">
+									<svg
+										class="h-4 w-4 text-gray-500"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg>
+								</div>
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -709,6 +961,7 @@
 						placeholder="0"
 						value={bottomAmount}
 						on:input={handleBottomInput}
+						on:blur={capAmountsIfNeeded}
 						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
 					/>
 				</div>
@@ -737,6 +990,20 @@
 					{/if}
 				</div>
 			</div>
+			{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
+				<div
+					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+				>
+					{#if showLiquidityWarning}
+						Order capped to max available liquidity.
+					{:else}
+						Not enough liquidity to fully fill your order.
+					{/if}
+					{#if isOutsideMarketHours()}
+						<br />This might be because US markets are currently closed.
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		<!-- Network info -->
@@ -824,3 +1091,29 @@
 		{/if}
 	</div>
 </div>
+
+<style>
+	.token-dropdown {
+		scrollbar-width: thin;
+		scrollbar-color: rgb(107 114 128) rgb(55 65 81);
+	}
+
+	.token-dropdown::-webkit-scrollbar {
+		width: 8px;
+		-webkit-appearance: none;
+	}
+
+	.token-dropdown::-webkit-scrollbar-track {
+		background: rgb(55 65 81);
+		border-radius: 4px;
+	}
+
+	.token-dropdown::-webkit-scrollbar-thumb {
+		background-color: rgb(107 114 128);
+		border-radius: 4px;
+	}
+
+	.token-dropdown::-webkit-scrollbar-thumb:hover {
+		background-color: rgb(156 163 175);
+	}
+</style>

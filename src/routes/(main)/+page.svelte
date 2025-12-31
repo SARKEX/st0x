@@ -204,7 +204,8 @@
 			<h1
 				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
 			>
-				Tokenised Equities. <span class="text-yellow-400">{displayedText}</span><span
+				Tokenised Equities.<br class="sm:hidden" />
+				<span class="text-yellow-400">{displayedText}</span><span
 					class="animate-blink text-yellow-400">|</span
 				>
 			</h1>
@@ -387,7 +388,7 @@
 			</div>
 
 			<!-- Pioneer Logos -->
-			<div class="mt-8 text-center sm:mt-16">
+			<div class="relative z-0 mt-8 text-center sm:mt-16">
 				<p class="mb-3 text-xs text-gray-500 sm:mb-4 sm:text-sm">Built by pioneers from</p>
 				<div class="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
 					{#each pioneerLogos as logo}

@@ -1,12 +1,11 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
-	import { createEventDispatcher, onDestroy, onMount } from 'svelte';
-	import { tick } from 'svelte';
+	import { createEventDispatcher, onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { connected, signerAddress, web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { wrongNetwork, sfts } from '$lib/stores';
+	import { wrongNetwork, sfts, tradePanelOpen } from '$lib/stores';
 	import { walletRegistered } from '$lib/stores/accessStore';
 
 	export let title: string;
@@ -17,18 +16,12 @@
 
 	let mobileNavOpen = false;
 	let windowWidth = 0;
-	let navTooWide = false;
-	let actionCluster: HTMLDivElement | null = null;
-	let clusterObserver: ResizeObserver | null = null;
 
-	type SidebarToggleTarget = 'mobile' | 'desktop';
-
-	function handleSidebarToggle(target: SidebarToggleTarget) {
+	function handleSidebarToggle(target: 'mobile' | 'desktop') {
 		dispatch('toggleSidebar', { target });
 	}
 
 	function toggleMobileNav() {
-		if (!isHamburgerMode) return;
 		mobileNavOpen = !mobileNavOpen;
 	}
 
@@ -37,12 +30,8 @@
 	}
 
 	$: activePath = $page.url.pathname;
-
-	// Get first token's trade URL for the Trade nav link
 	$: firstTokenId = $sfts?.[0]?.id;
 	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
-
-	// Check if we're on any trade page
 	$: isOnTradePage = activePath.startsWith('/trade/');
 
 	$: NAV_ITEMS = [
@@ -53,90 +42,22 @@
 
 	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
 
-	let isHamburgerMode = true;
-
-	function cleanupObserver() {
-		if (clusterObserver) {
-			clusterObserver.disconnect();
-			clusterObserver = null;
-		}
-	}
-
-	async function checkNavOverflow() {
-		await tick();
-		if (!actionCluster || windowWidth < 1024) {
-			if (windowWidth < 1024 && navTooWide) {
-				navTooWide = false;
-			}
-			return;
-		}
-		if (isHamburgerMode && navTooWide) {
-			return;
-		}
-		const needsHamburger = actionCluster.scrollWidth > actionCluster.clientWidth + 1;
-		if (needsHamburger !== navTooWide) {
-			navTooWide = needsHamburger;
-		}
-	}
-
-	function setupObserver() {
-		if (!actionCluster || windowWidth < 1024 || isHamburgerMode) {
-			cleanupObserver();
-			return;
-		}
-		if (!clusterObserver) {
-			clusterObserver = new ResizeObserver(() => {
-				checkNavOverflow();
-			});
-		}
-		const observer = clusterObserver;
-		observer.disconnect();
-		observer.observe(actionCluster);
-		checkNavOverflow();
-	}
+	// Calculate effective breakpoint based on what's taking up space
+	// Base: 1350px for the nav content itself
+	// +256px when sidebar is expanded (not landing page and not collapsed)
+	// +352px when trade panel is open
+	$: sidebarOffset = !isLandingPage && !isSidebarCollapsed ? 256 : 0;
+	$: tradePanelOffset = $tradePanelOpen ? 352 : 0;
+	$: effectiveBreakpoint = 1350 + sidebarOffset + tradePanelOffset;
+	$: isHamburgerMode = windowWidth < effectiveBreakpoint;
+	$: if (!isHamburgerMode) mobileNavOpen = false;
 
 	onMount(() => {
 		windowWidth = window.innerWidth;
-		tick().then(() => {
-			checkNavOverflow();
-		});
-		const handleResize = () => {
-			windowWidth = window.innerWidth;
-			if (windowWidth < 1024) {
-				navTooWide = false;
-				cleanupObserver();
-			} else if (navTooWide) {
-				navTooWide = false;
-				tick().then(() => {
-					setupObserver();
-					checkNavOverflow();
-				});
-			} else {
-				checkNavOverflow();
-			}
-		};
+		const handleResize = () => (windowWidth = window.innerWidth);
 		window.addEventListener('resize', handleResize);
-		return () => {
-			window.removeEventListener('resize', handleResize);
-		};
+		return () => window.removeEventListener('resize', handleResize);
 	});
-
-	onDestroy(() => {
-		cleanupObserver();
-	});
-
-	$: {
-		if (!isHamburgerMode) {
-			setupObserver();
-		} else {
-			cleanupObserver();
-		}
-	}
-
-	$: isHamburgerMode = windowWidth < 1024 || navTooWide;
-	$: if (!isHamburgerMode) {
-		mobileNavOpen = false;
-	}
 
 	function handleConnectWallet() {
 		$web3Modal.open();
@@ -147,29 +68,6 @@
 	<div class="px-3 py-3 sm:px-6 sm:py-5">
 		<div class="flex items-center justify-between gap-2 sm:gap-3 lg:gap-4">
 			<div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
-				{#if !isLandingPage}
-					{#if isSidebarCollapsed}
-						<Button
-							variant="ghost"
-							size="sm"
-							className="hidden p-2 lg:inline-flex"
-							aria-label="Expand sidebar"
-							on:click={() => handleSidebarToggle('desktop')}
-						>
-							<svg
-								class="h-5 w-5 transition-transform duration-200"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								viewBox="0 0 24 24"
-								xmlns="http://www.w3.org/2000/svg"
-								class:rotate-180={!isSidebarCollapsed}
-							>
-								<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-							</svg>
-						</Button>
-					{/if}
-				{/if}
 				<a href="/" aria-label="Go to home" class="shrink-0">
 					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-7 w-auto sm:h-8 lg:h-10" />
 				</a>
@@ -180,10 +78,7 @@
 				{/if}
 			</div>
 
-			<div
-				class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3"
-				bind:this={actionCluster}
-			>
+			<div class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3">
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
 						{#each NAV_ITEMS as item}
