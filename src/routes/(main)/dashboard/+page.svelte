@@ -6,6 +6,7 @@
 		openSendFundsModal,
 		openDepositModal,
 		exportDynamicWallet,
+		dynamicSession,
 		type SendModalToken
 	} from '$lib/stores/dynamicStore';
 	import { currentNetwork, sfts } from '$lib/stores';
@@ -20,7 +21,7 @@
 	import { truncateAddress } from '$lib/utils/format';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits, erc20Abi } from 'viem';
-	import { readContract, getBalance } from '@wagmi/core';
+	import { readContracts, getBalance } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
@@ -136,81 +137,115 @@
 	// User Vaults Query - centralized with 60s polling on dashboard
 	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 60_000);
 
-	// Query user's wallet holdings from SFTs
+	// Query user's wallet holdings from SFTs - fetches balances via multicall (single RPC request)
 	$: walletHoldingsQuery = createQuery({
 		queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
-		enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork),
-		queryFn: () => {
-			if (!$sfts || !$walletAddress) return [];
+		enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork && $wagmiConfig),
+		refetchOnMount: 'always', // Refetch when navigating to dashboard
+		refetchInterval: 300_000, // Poll every 5 minutes as backup
+		staleTime: 30_000, // Consider data fresh for 30 seconds
+		queryFn: async () => {
+			if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
 
-			const holdings: {
-				id: string;
-				address: string;
-				name: string;
-				symbol: string;
-				walletBalance: bigint;
-				decimals: number;
-			}[] = [];
+			// Build multicall contracts array for all SFT balances
+			const contracts = $sfts.map((sft) => ({
+				abi: erc20Abi,
+				address: sft.address as `0x${string}`,
+				functionName: 'balanceOf' as const,
+				args: [$walletAddress as `0x${string}`]
+			}));
 
-			for (const sft of $sfts) {
-				const userHolder = sft.tokenHolders.find(
-					(holder: { address: string }) =>
-						holder.address.toLowerCase() === $walletAddress.toLowerCase()
-				);
+			try {
+				// Single multicall for all token balances
+				const results = await readContracts($wagmiConfig, { contracts });
 
-				holdings.push({
-					id: sft.id,
-					address: sft.address,
-					name: sft.name,
-					symbol: sft.symbol,
-					walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
-					decimals: 18
+				return $sfts.map((sft, index) => {
+					const result = results[index];
+					let walletBalance = 0n;
+
+					if (result.status === 'success') {
+						walletBalance = result.result as bigint;
+					} else {
+						// Fall back to subgraph data if multicall fails for this token
+						const userHolder = sft.tokenHolders.find(
+							(holder: { address: string }) =>
+								holder.address.toLowerCase() === $walletAddress!.toLowerCase()
+						);
+						walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
+					}
+
+					return {
+						id: sft.id,
+						address: sft.address,
+						name: sft.name,
+						symbol: sft.symbol,
+						walletBalance,
+						decimals: 18
+					};
+				});
+			} catch (e) {
+				console.error('Multicall failed for wallet holdings:', e);
+				// Fall back to subgraph data for all tokens
+				return $sfts.map((sft) => {
+					const userHolder = sft.tokenHolders.find(
+						(holder: { address: string }) =>
+							holder.address.toLowerCase() === $walletAddress!.toLowerCase()
+					);
+					return {
+						id: sft.id,
+						address: sft.address,
+						name: sft.name,
+						symbol: sft.symbol,
+						walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
+						decimals: 18
+					};
 				});
 			}
-
-			return holdings;
 		}
 	});
 
-	// Query USDC wallet balance
+	// Query USDC wallet balance via multicall
 	$: usdcBalanceQuery = createQuery({
 		queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
 		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+		refetchOnMount: 'always', // Refetch when navigating to dashboard
+		refetchInterval: 300_000, // Poll every 5 minutes as backup
+		staleTime: 30_000, // Consider data fresh for 30 seconds
 		queryFn: async () => {
 			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
 			if (paymentTokens.length === 0 || !$walletAddress) return [];
 
-			const balances: {
-				id: string;
-				address: string;
-				name: string;
-				symbol: string;
-				walletBalance: bigint;
-				decimals: number;
-			}[] = [];
+			// Build multicall contracts array
+			const contracts = paymentTokens.map((token) => ({
+				abi: erc20Abi,
+				address: token.address as `0x${string}`,
+				functionName: 'balanceOf' as const,
+				args: [$walletAddress as `0x${string}`]
+			}));
 
-			for (const token of paymentTokens) {
-				try {
-					const balance = await readContract($wagmiConfig, {
-						abi: erc20Abi,
-						address: token.address as `0x${string}`,
-						functionName: 'balanceOf',
-						args: [$walletAddress as `0x${string}`]
-					});
-					balances.push({
-						id: token.address,
-						address: token.address,
-						name: token.name,
-						symbol: token.symbol,
-						walletBalance: balance as bigint,
-						decimals: token.decimals
-					});
-				} catch (e) {
-					console.error(`Failed to fetch balance for ${token.symbol}:`, e);
-				}
+			try {
+				const results = await readContracts($wagmiConfig, { contracts });
+
+				return paymentTokens
+					.map((token, index) => {
+						const result = results[index];
+						if (result.status === 'success') {
+							return {
+								id: token.address,
+								address: token.address,
+								name: token.name,
+								symbol: token.symbol,
+								walletBalance: result.result as bigint,
+								decimals: token.decimals
+							};
+						}
+						return null;
+					})
+					.filter((b): b is NonNullable<typeof b> => b !== null);
+			} catch (e) {
+				console.error('Multicall failed for USDC balance:', e);
+				return [];
 			}
-
-			return balances;
 		}
 	});
 
@@ -218,6 +253,9 @@
 	$: ethBalanceQuery = createQuery({
 		queryKey: ['ethWalletBalance', $walletAddress, $currentNetwork?.chainId],
 		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig),
+		refetchOnMount: 'always', // Refetch when navigating to dashboard
+		refetchInterval: 300_000, // Poll every 5 minutes as backup
+		staleTime: 30_000, // Consider data fresh for 30 seconds
 		queryFn: async () => {
 			if (!$walletAddress) return null;
 			try {
@@ -404,8 +442,8 @@
 	// Orders: Fetch orderbook quotes for all tokens
 	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, true);
 
-	// Trade activity for market orders
-	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+	// Trade activity for market orders - poll every 5 minutes, refetch on mount
+	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 300_000);
 
 	// Filter user's market orders from trades
 	$: userMarketOrders = (() => {
@@ -522,6 +560,9 @@
 
 	$: activeOrdersCount = allOrders.filter((o) => o.type !== 'market' && o.isActive).length;
 	$: activeVaultsCount = sortedVaults.filter((v) => BigInt(v.vault.balance) > 0n).length;
+
+	// Check if wallet is embedded (hide track token buttons for embedded wallets)
+	$: isEmbeddedWallet = $authMethod === 'dynamic' && $dynamicSession?.walletType === 'embedded';
 </script>
 
 <!-- Main Content -->
@@ -850,35 +891,37 @@
 																Withdraw
 															</Button>
 														{/if}
-														<button
-															type="button"
-															on:click={() =>
-																addTokenToWallet({
-																	address: holding.address,
-																	symbol: holding.symbol,
-																	decimals: holding.decimals,
-																	image: ALL_TOKENS.find(
-																		(s) => s.address.toLowerCase() === holding.address.toLowerCase()
-																	)?.logoUrl
-																})}
-															class="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
-															title="Track in Wallet"
-														>
-															<svg
-																class="h-3 w-3"
-																viewBox="0 0 24 24"
-																fill="none"
-																stroke="currentColor"
-																stroke-width="2"
+														{#if !isEmbeddedWallet}
+															<button
+																type="button"
+																on:click={() =>
+																	addTokenToWallet({
+																		address: holding.address,
+																		symbol: holding.symbol,
+																		decimals: holding.decimals,
+																		image: ALL_TOKENS.find(
+																			(s) => s.address.toLowerCase() === holding.address.toLowerCase()
+																		)?.logoUrl
+																	})}
+																class="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+																title="Track in Wallet"
 															>
-																<path
-																	d="M12 5v14M5 12h14"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																/>
-															</svg>
-															Track
-														</button>
+																<svg
+																	class="h-3 w-3"
+																	viewBox="0 0 24 24"
+																	fill="none"
+																	stroke="currentColor"
+																	stroke-width="2"
+																>
+																	<path
+																		d="M12 5v14M5 12h14"
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																	/>
+																</svg>
+																Track
+															</button>
+														{/if}
 													</div>
 												</td>
 											</tr>

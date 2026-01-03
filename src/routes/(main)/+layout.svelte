@@ -12,6 +12,7 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import TickerTape from '$lib/components/TickerTape.svelte';
+	import LowFundsBanner from '$lib/components/LowFundsBanner.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { rainlangConfirmationModal, tradePanelOpen } from '$lib/stores';
@@ -153,6 +154,9 @@
 			isLandingPage={useCleanLayout}
 			on:toggleSidebar={handleHeaderSidebarToggle}
 		/>
+
+		<!-- Low funds banner (shown when wallet has no USDC) -->
+		<LowFundsBanner />
 
 		<!-- Ticker tape underneath header (trade pages only) -->
 		{#if isTradePage}

@@ -80,6 +80,7 @@ import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { invalidateUserVaultQueries } from '$lib/queries/vaults';
+import { invalidateDashboardBalances } from '$lib/queries/balances';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
@@ -383,6 +384,7 @@ const transactionStore = () => {
 		const immediateLink = await tryFetchOrderLink();
 		if (immediateLink) {
 			invalidateOrderQueries();
+			invalidateDashboardBalances();
 			return transactionSuccess(hash, immediateLink, metadata);
 		}
 
@@ -393,6 +395,7 @@ const transactionStore = () => {
 			if (attempts >= maxAttempts) {
 				clearInterval(interval);
 				invalidateOrderQueries();
+				invalidateDashboardBalances();
 				return transactionSuccess(hash, 'Order deployed successfully!', metadata);
 			}
 
@@ -401,6 +404,7 @@ const transactionStore = () => {
 				if (link) {
 					clearInterval(interval);
 					invalidateOrderQueries();
+					invalidateDashboardBalances();
 					return transactionSuccess(hash, link, metadata);
 				}
 			} catch (error) {
@@ -528,6 +532,7 @@ const transactionStore = () => {
 			// Invalidate vault queries for this specific token
 			const tokenAddress = vault.token?.address ?? vault.token?.id;
 			invalidateUserVaultQueries(network.id, $signer ?? undefined, tokenAddress);
+			invalidateDashboardBalances();
 
 			return transactionSuccess(hash, link);
 		} catch (error) {
@@ -1609,6 +1614,9 @@ const transactionStore = () => {
 			raindexOrder.orderHash,
 			'View order on Raindex'
 		);
+
+		// Invalidate dashboard balances after successful market order
+		invalidateDashboardBalances();
 
 		return transactionSuccess(hash, orderLink, { marketOrderSummary: summary });
 	};

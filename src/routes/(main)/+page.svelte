@@ -229,11 +229,11 @@
 									class="relative inline-flex h-2 w-2 rounded-full bg-green-500 sm:h-2.5 sm:w-2.5"
 								></span>
 							</span>
-							<span class="text-gray-300">Rewards boost active</span>
+							<span class="text-gray-200">Rewards boost active</span>
 						</div>
-						<span class="hidden text-gray-500 sm:inline">·</span>
+						<span class="hidden text-gray-400 sm:inline">·</span>
 						<div class="flex items-center gap-2">
-							<span class="text-gray-400">Current APY</span>
+							<span class="text-gray-300">Current APY</span>
 							<span class="font-bold tabular-nums text-white" class:animate-pulse={isAnimating}>
 								{formatApyDisplay(displayedApy)}%
 							</span>
@@ -254,7 +254,7 @@
 				</button>
 				<button
 					type="button"
-					class="hidden text-sm text-gray-500 underline decoration-gray-600 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500 sm:inline-block"
+					class="hidden text-sm text-gray-400 underline decoration-gray-500 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500 sm:inline-block"
 					on:click={startTour}
 				>
 					New? Take the tour 👉
@@ -287,7 +287,7 @@
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
 						Decentralised
 					</h3>
-					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
+					<p class="hidden text-sm text-gray-300 sm:block sm:text-base">
 						Withdraw to your wallet. Compatible with DeFi protocols
 					</p>
 				</div>
@@ -349,7 +349,7 @@
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
 						Liquid
 					</h3>
-					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
+					<p class="hidden text-sm text-gray-300 sm:block sm:text-base">
 						Supply bridged real-time from stock markets. 24/7 trading.
 					</p>
 				</div>
@@ -381,7 +381,7 @@
 					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
 						1:1 Collateralised
 					</h3>
-					<p class="hidden text-sm text-gray-400 sm:block sm:text-base">
+					<p class="hidden text-sm text-gray-300 sm:block sm:text-base">
 						Every token fully collateralised with a legal right of exchange.
 					</p>
 				</div>
@@ -389,7 +389,7 @@
 
 			<!-- Pioneer Logos -->
 			<div class="relative z-0 mt-8 text-center sm:mt-16">
-				<p class="mb-3 text-xs text-gray-500 sm:mb-4 sm:text-sm">Built by pioneers from</p>
+				<p class="mb-3 text-xs text-gray-400 sm:mb-4 sm:text-sm">Built by pioneers from</p>
 				<div class="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
 					{#each pioneerLogos as logo}
 						<img
@@ -527,7 +527,7 @@
 				</div>
 
 				<!-- More Coming Soon -->
-				<p class="mt-6 text-center text-base text-gray-500">More equities coming soon!</p>
+				<p class="mt-6 text-center text-base text-gray-400">More equities coming soon!</p>
 			{:else}
 				<div class="flex w-full items-center justify-center py-16">
 					<EmptyState
