@@ -15,6 +15,10 @@ function isPublicPath(path: string): boolean {
 	if (path === '/access' || path.startsWith('/access/')) return true;
 	if (path.startsWith('/api/access/')) return true;
 
+	// Dynamic auth API
+	if (path.startsWith('/api/auth/dynamic/')) return true;
+	if (path.startsWith('/auth/dynamic/')) return true;
+
 	// Admin login page (admin area itself is protected by layout)
 	if (path === '/admin/login') return true;
 

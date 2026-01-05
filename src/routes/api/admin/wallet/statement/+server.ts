@@ -23,7 +23,10 @@ function isAuthenticated(cookies: { get: (name: string) => string | undefined })
 	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
 }
 
-async function fetchSnapshot(tokenSymbol: string, blockNumber: number): Promise<BlockSnapshot | null> {
+async function fetchSnapshot(
+	tokenSymbol: string,
+	blockNumber: number
+): Promise<BlockSnapshot | null> {
 	// Check if Blob token is available (required for Vercel Blob storage)
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return null;
@@ -44,7 +47,10 @@ async function fetchSnapshot(tokenSymbol: string, blockNumber: number): Promise<
 
 		return await response.json();
 	} catch (error) {
-		console.error(`[Wallet Statement] Error fetching snapshot ${tokenSymbol}/${blockNumber}:`, error);
+		console.error(
+			`[Wallet Statement] Error fetching snapshot ${tokenSymbol}/${blockNumber}:`,
+			error
+		);
 		return null;
 	}
 }

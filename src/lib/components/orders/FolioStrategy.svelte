@@ -8,7 +8,7 @@
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
-	import { connected } from 'svelte-wagmi';
+	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId } from '$lib/utils/derivations';
 	import { currentNetwork } from '$lib/stores';
@@ -165,7 +165,7 @@
 		outputVaultId7Error;
 
 	const handleFolioDeploy = () => {
-		if ($connected) {
+		if ($isAuthenticated) {
 			transactionStore.handleFolioDeploy({
 				selectedToken1: selectedToken1,
 				selectedToken2: selectedToken2,
@@ -182,7 +182,21 @@
 				depositAmount4: depositAmount4,
 				depositAmount5: depositAmount5,
 				depositAmount6: depositAmount6,
-				depositAmount7: depositAmount7
+				depositAmount7: depositAmount7,
+				inputVaultId1: inputVaultId1,
+				inputVaultId2: inputVaultId2,
+				inputVaultId3: inputVaultId3,
+				inputVaultId4: inputVaultId4,
+				inputVaultId5: inputVaultId5,
+				inputVaultId6: inputVaultId6,
+				inputVaultId7: inputVaultId7,
+				outputVaultId1: outputVaultId1,
+				outputVaultId2: outputVaultId2,
+				outputVaultId3: outputVaultId3,
+				outputVaultId4: outputVaultId4,
+				outputVaultId5: outputVaultId5,
+				outputVaultId6: outputVaultId6,
+				outputVaultId7: outputVaultId7
 			});
 		}
 	};

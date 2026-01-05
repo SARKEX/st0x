@@ -107,16 +107,17 @@ export type TokenPriceSummary = {
 
 /**
  * Classify an order type based on its rainlang source.
- * Returns null for orders that should be hidden (e.g., dynamic spread).
+ * Returns 'dynamic-spread' for dynamic spread orders (contains "other-vwaio").
  */
 export function classifyOrderType(rainlang: string | undefined): OrderType | null {
 	if (!rainlang) {
 		return 'custom';
 	}
 
-	// Dynamic Spread - contains "other-vwaio" - should be hidden from order tab
-	if (rainlang.includes('other-vwaio')) {
-		return null; // Return null to indicate this should be filtered out
+	// Dynamic Spread - contains "other-vwaio"
+	const hasOtherVwaio = rainlang.includes('other-vwaio');
+	if (hasOtherVwaio) {
+		return 'dynamic-spread'; // Return 'dynamic-spread' instead of null
 	}
 
 	// Extract the handle-io section content

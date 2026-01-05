@@ -12,11 +12,11 @@ export type TradeMetricPayload = TradeActivityPayload;
 
 const WINDOW_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
-export function createTradeActivityQuery(network: Network | null) {
+export function createTradeActivityQuery(network: Network | null, pollInterval: number = 300_000) {
 	return createQuery<TradeActivityPayload>({
 		queryKey: ['tradeActivity', network?.id],
 		enabled: Boolean(network),
-		refetchInterval: 300_000,
+		refetchInterval: pollInterval,
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
 			const from = now - WINDOW_SECONDS;

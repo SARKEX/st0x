@@ -9,9 +9,18 @@
 	import { formatUnits } from 'viem';
 	import { translateMarketOrderForDisplay } from '$lib/utils/transactionDisplay';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
+	import { authMethod } from '$lib/stores/authStore';
+	import { dynamicSession } from '$lib/stores/dynamicStore';
+
+	// Hide track in wallet buttons for embedded wallets
+	$: isEmbeddedWallet = $authMethod === 'dynamic' && $dynamicSession?.walletType === 'embedded';
 
 	const handleClose = () => {
 		return transactionStore.reset();
+	};
+
+	const handleMultiTxAcknowledge = () => {
+		transactionStore.acknowledgeMultiTx();
 	};
 
 	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
@@ -21,6 +30,9 @@
 
 	// Asset token info for limit/DCA order deployments
 	$: assetTokenInfo = $transactionStore.data?.assetTokenInfo;
+
+	// Multi-transaction progress
+	$: multiTxProgress = $transactionStore.data?.multiTxProgress;
 
 	// Helper function to format quantity with max 2 decimals
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
@@ -220,8 +232,8 @@
 								</div>
 							{/if}
 						</div>
-						<!-- Track in Wallet button - only for Buy orders with non-zero fill -->
-						{#if marketOrderDisplay.direction === 'Buy' && !marketOrderDisplay.isNoFill && marketOrderDisplay.assetAddress}
+						<!-- Track in Wallet button - only for Buy orders with non-zero fill, hidden for embedded wallets -->
+						{#if marketOrderDisplay.direction === 'Buy' && !marketOrderDisplay.isNoFill && marketOrderDisplay.assetAddress && !isEmbeddedWallet}
 							<button
 								type="button"
 								on:click={() =>
@@ -259,8 +271,8 @@
 						</div>
 					{/if}
 
-					<!-- Track in Wallet button for limit/DCA order deployments (not market orders) -->
-					{#if assetTokenInfo && !marketOrderDisplay}
+					<!-- Track in Wallet button for limit/DCA order deployments (not market orders), hidden for embedded wallets -->
+					{#if assetTokenInfo && !marketOrderDisplay && !isEmbeddedWallet}
 						<button
 							type="button"
 							on:click={() =>
@@ -288,6 +300,39 @@
 				<Button on:click={() => handleClose()} className="mt-6" dataTestId="dismiss-button"
 					>Dismiss</Button
 				>
+			{:else if $transactionStore.status === TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT}
+				<!-- Multi-transaction acknowledgment state -->
+				<div
+					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-yellow-500/30 bg-yellow-500/20"
+					data-testid="multi-tx-icon"
+				>
+					<svg
+						class="h-10 w-10 text-yellow-500"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+				</div>
+				<p class="text-xl font-bold text-white" data-testid="multi-tx-title">
+					Multiple Transactions Required
+				</p>
+				<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
+					{$transactionStore.message}
+				</p>
+				<Button
+					on:click={handleMultiTxAcknowledge}
+					className="mt-6"
+					dataTestId="multi-tx-ok-button"
+				>
+					OK
+				</Button>
 			{:else if $transactionStore.status === TransactionStatus.CHECKING_ALLOWANCE || $transactionStore.status === TransactionStatus.PENDING_WALLET || $transactionStore.status === TransactionStatus.PENDING_APPROVAL}
 				<div
 					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-gray-600/30 bg-gray-700/30"
@@ -298,6 +343,11 @@
 				<p class="text-lg font-medium text-gray-200" data-testid="pending-message">
 					{$transactionStore.message || $transactionStore.status}
 				</p>
+				{#if multiTxProgress && multiTxProgress.totalBatches > 1}
+					<p class="mt-2 text-sm text-gray-400" data-testid="multi-tx-progress">
+						Transaction {multiTxProgress.currentBatch} of {multiTxProgress.totalBatches}
+					</p>
+				{/if}
 			{/if}
 		</div>
 	{/if}

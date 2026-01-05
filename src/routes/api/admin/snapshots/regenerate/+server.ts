@@ -55,7 +55,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			// Single block regeneration
 			const targetBlock = allBlocks.find((b) => b.blockNumber === blockNumber);
 			if (!targetBlock) {
-				return json({ error: `Block ${blockNumber} not found in canonical blocks` }, { status: 404 });
+				return json(
+					{ error: `Block ${blockNumber} not found in canonical blocks` },
+					{ status: 404 }
+				);
 			}
 			blocksToRegenerate = [targetBlock];
 		} else if (month) {
@@ -70,7 +73,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		console.log(`[Regenerate] Starting regeneration of ${blocksToRegenerate.length} blocks`);
-		console.log(`[Regenerate] TOKEN_ADDRESSES: ${TOKEN_ADDRESSES.length} tokens configured: ${TOKEN_ADDRESSES.join(', ')}`);
+		console.log(
+			`[Regenerate] TOKEN_ADDRESSES: ${
+				TOKEN_ADDRESSES.length
+			} tokens configured: ${TOKEN_ADDRESSES.join(', ')}`
+		);
 
 		const results: {
 			blockNumber: number;
@@ -86,12 +93,18 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				console.log(`[Regenerate] Processing block ${block.blockNumber} (${block.date})`);
 
 				// Generate snapshots using the updated code (with correct vault attribution)
-				console.log(`[Regenerate] Calling generateAllTokenSnapshots_v2 for block ${block.blockNumber}...`);
+				console.log(
+					`[Regenerate] Calling generateAllTokenSnapshots_v2 for block ${block.blockNumber}...`
+				);
 				const snapshots = await generateAllTokenSnapshots_v2(block.blockNumber);
-				console.log(`[Regenerate] Generated ${snapshots.length} snapshots for block ${block.blockNumber}`);
+				console.log(
+					`[Regenerate] Generated ${snapshots.length} snapshots for block ${block.blockNumber}`
+				);
 
 				if (snapshots.length === 0) {
-					console.warn(`[Regenerate] WARNING: No snapshots generated for block ${block.blockNumber}`);
+					console.warn(
+						`[Regenerate] WARNING: No snapshots generated for block ${block.blockNumber}`
+					);
 				}
 
 				// Store each token's snapshot to blob (overwrites existing)
@@ -119,7 +132,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 					tokensGenerated: snapshots.length,
 					success: true
 				});
-				console.log(`[Regenerate] Successfully processed block ${block.blockNumber}: ${snapshots.length} tokens`);
+				console.log(
+					`[Regenerate] Successfully processed block ${block.blockNumber}: ${snapshots.length} tokens`
+				);
 			} catch (error) {
 				console.error(`[Regenerate] Error processing block ${block.blockNumber}:`, error);
 				results.push({

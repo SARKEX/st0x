@@ -2,12 +2,13 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits, parseUnits } from 'viem';
-	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
+	import { wagmiConfig } from 'svelte-wagmi';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
 	import type { Token } from '$lib/types';
 	import type { ValidateFunction } from '$lib/utils/validation';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import { walletAddress } from '$lib/stores/authStore';
 
 	export let amountToken: Token;
 	export let balanceToken: Token | undefined = undefined;
@@ -88,14 +89,15 @@
 	$: balancePromise = (async () => {
 		const token = balanceToken ?? amountToken;
 		if (!token) return null;
-		if (!$signerAddress) return null;
+		if (!$walletAddress) return null;
+		if (!$wagmiConfig) return null;
 		const fingerprint = getTokenFingerprint(token);
 		const [tokenBalance, tokenDecimals] = await Promise.all([
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: token.address as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$signerAddress as Hex]
+				args: [$walletAddress as Hex]
 			}),
 			readContract($wagmiConfig, {
 				abi: erc20Abi,

@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { signMessage, disconnect } from '@wagmi/core';
-	import { signerAddress, wagmiConfig } from 'svelte-wagmi';
+	import { disconnect } from '@wagmi/core';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { walletAddress, authMethod } from '$lib/stores/authStore';
+	import { logoutDynamic } from '$lib/stores/dynamicStore';
+	import { signMessage } from '$lib/services/walletService';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import {
@@ -38,20 +41,26 @@
 		showAccessCodeModal.set(false);
 		error = '';
 		// Auto-disconnect if user closes modal without registering
-		if (!$walletRegistered && $wagmiConfig) {
-			await disconnect($wagmiConfig);
+		if (!$walletRegistered) {
+			if ($authMethod === 'dynamic') {
+				logoutDynamic();
+			} else if ($wagmiConfig) {
+				await disconnect($wagmiConfig);
+			}
 		}
 	}
 
 	async function handleDisconnect() {
-		if ($wagmiConfig) {
+		if ($authMethod === 'dynamic') {
+			logoutDynamic();
+		} else if ($wagmiConfig) {
 			await disconnect($wagmiConfig);
 		}
 		handleClose();
 	}
 
 	async function handleSubmit() {
-		if (!$signerAddress || !$wagmiConfig) {
+		if (!$walletAddress) {
 			error = 'Wallet not connected';
 			return;
 		}
@@ -66,13 +75,13 @@
 
 		try {
 			// Create message to sign
-			const message = createSignMessage($signerAddress, accessCode.trim().toUpperCase());
+			const message = createSignMessage($walletAddress, accessCode.trim().toUpperCase());
 
-			// Request signature from wallet
-			const signature = await signMessage($wagmiConfig, { message });
+			// Request signature from wallet (works with both Dynamic and wagmi)
+			const signature = await signMessage(message);
 
 			// Register with backend
-			const result = await registerWallet($signerAddress, accessCode.trim(), signature, message);
+			const result = await registerWallet($walletAddress, accessCode.trim(), signature, message);
 
 			if (result.success) {
 				// Clear stored code after successful registration
@@ -119,7 +128,7 @@
 					/>
 				</svg>
 				<span class="text-sm text-gray-300">
-					{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}
+					{$walletAddress?.slice(0, 6)}...{$walletAddress?.slice(-4)}
 				</span>
 			</div>
 			<button

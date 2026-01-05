@@ -342,7 +342,7 @@
 	$: codeChartData = allDates.map((date) => {
 		const dayData = dailyCodeStats.get(date);
 		const stats = selectedCode ? dayData?.get(selectedCode) : null;
-		const value = codeChartMetric === 'count' ? (stats?.tradeCount || 0) : (stats?.usdcVolume || 0);
+		const value = codeChartMetric === 'count' ? stats?.tradeCount || 0 : stats?.usdcVolume || 0;
 		return { date, value };
 	});
 
@@ -380,7 +380,7 @@
 		for (const wallet of allWalletAddresses) {
 			if (selectedWallets.has(wallet)) {
 				const stats = dayData?.get(wallet);
-				total += walletChartMetric === 'count' ? (stats?.tradeCount || 0) : (stats?.usdcVolume || 0);
+				total += walletChartMetric === 'count' ? stats?.tradeCount || 0 : stats?.usdcVolume || 0;
 			}
 		}
 		return { date, total };
@@ -450,15 +450,12 @@
 		return { date: entry.date, tokenValues, total };
 	});
 
-	// TVL dates from snapshot data
-	$: tvlDates = tvlData.daily.map(d => d.date);
-
 	// TVL Code chart controls
 	let tvlSelectedCode: string | null = null;
 	let tvlCodeDropdownOpen = false;
 
 	// Get available codes from TVL data
-	$: tvlCodes = tvlData.latest ? tvlData.latest.codeTvl.map(c => c.code).sort() : [];
+	$: tvlCodes = tvlData.latest ? tvlData.latest.codeTvl.map((c) => c.code).sort() : [];
 
 	// Initialize selected code when tvlCodes changes
 	$: if (tvlCodes.length > 0 && tvlSelectedCode === null) {
@@ -468,7 +465,7 @@
 	// TVL chart data for selected code
 	$: tvlCodeChartData = tvlData.daily.map((entry) => ({
 		date: entry.date,
-		value: tvlSelectedCode ? (entry.codeTvl[tvlSelectedCode] || 0) : 0
+		value: tvlSelectedCode ? entry.codeTvl[tvlSelectedCode] || 0 : 0
 	}));
 
 	// TVL Wallet chart controls
@@ -477,7 +474,7 @@
 
 	// Get available wallets from TVL data (top 20 by TVL)
 	$: tvlWalletAddresses = tvlData.latest
-		? tvlData.latest.walletTvl.slice(0, 20).map(w => w.address)
+		? tvlData.latest.walletTvl.slice(0, 20).map((w) => w.address)
 		: [];
 
 	// Initialize selected wallets when tvlWalletAddresses changes
@@ -609,8 +606,7 @@
 		}
 
 		// Single dataset showing total of selected tokens
-		const chartLabel =
-			tokenChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume';
+		const chartLabel = tokenChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume';
 
 		tokenChart = new ChartCtor(ctx, {
 			type: 'bar',
@@ -744,7 +740,10 @@
 					}
 				},
 				scales: {
-					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					x: {
+						ticks: { color: '#9ca3af', maxRotation: 45 },
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					},
 					y: {
 						beginAtZero: true,
 						ticks: {
@@ -817,7 +816,10 @@
 					}
 				},
 				scales: {
-					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					x: {
+						ticks: { color: '#9ca3af', maxRotation: 45 },
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					},
 					y: {
 						beginAtZero: true,
 						ticks: {
@@ -893,7 +895,10 @@
 					}
 				},
 				scales: {
-					x: { ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 0 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					x: {
+						ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 0 },
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					},
 					y: {
 						beginAtZero: true,
 						ticks: {
@@ -912,7 +917,13 @@
 		});
 	}
 
-	$: if (browser && chartLibLoaded && tvlTokenChartCanvas && activeSection === 'tvl' && activeTvlTab === 'tokens') {
+	$: if (
+		browser &&
+		chartLibLoaded &&
+		tvlTokenChartCanvas &&
+		activeSection === 'tvl' &&
+		activeTvlTab === 'tokens'
+	) {
 		void tvlTokenChartData;
 		void tvlSelectedTokens;
 		setTimeout(() => updateTvlTokenChart(), 0);
@@ -963,7 +974,10 @@
 					}
 				},
 				scales: {
-					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					x: {
+						ticks: { color: '#9ca3af', maxRotation: 45 },
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					},
 					y: {
 						beginAtZero: true,
 						ticks: {
@@ -982,7 +996,13 @@
 		});
 	}
 
-	$: if (browser && chartLibLoaded && tvlCodeChartCanvas && activeSection === 'tvl' && activeTvlTab === 'codes') {
+	$: if (
+		browser &&
+		chartLibLoaded &&
+		tvlCodeChartCanvas &&
+		activeSection === 'tvl' &&
+		activeTvlTab === 'codes'
+	) {
 		void tvlCodeChartData;
 		void tvlSelectedCode;
 		setTimeout(() => updateTvlCodeChart(), 0);
@@ -1033,7 +1053,10 @@
 					}
 				},
 				scales: {
-					x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+					x: {
+						ticks: { color: '#9ca3af', maxRotation: 45 },
+						grid: { color: 'rgba(75, 85, 99, 0.2)' }
+					},
 					y: {
 						beginAtZero: true,
 						ticks: {
@@ -1052,7 +1075,13 @@
 		});
 	}
 
-	$: if (browser && chartLibLoaded && tvlWalletChartCanvas && activeSection === 'tvl' && activeTvlTab === 'wallets') {
+	$: if (
+		browser &&
+		chartLibLoaded &&
+		tvlWalletChartCanvas &&
+		activeSection === 'tvl' &&
+		activeTvlTab === 'wallets'
+	) {
 		void tvlWalletChartData;
 		void tvlSelectedWallets;
 		setTimeout(() => updateTvlWalletChart(), 0);
@@ -1671,232 +1700,813 @@
 	</div>
 
 	{#if activeSection === 'activity'}
-	<!-- Trading Vol Section -->
+		<!-- Trading Vol Section -->
 
-	<!-- Period Selector -->
-	<div class="mb-6">
-		<Card>
-			<div class="flex flex-wrap items-center gap-4">
-				<span class="text-sm font-medium text-gray-400">Period:</span>
-				<div class="flex flex-wrap gap-2">
-					{#each periodPresets as preset}
+		<!-- Period Selector -->
+		<div class="mb-6">
+			<Card>
+				<div class="flex flex-wrap items-center gap-4">
+					<span class="text-sm font-medium text-gray-400">Period:</span>
+					<div class="flex flex-wrap gap-2">
+						{#each periodPresets as preset}
+							<button
+								on:click={() => selectPeriod(preset.value)}
+								class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {selectedPeriod ===
+								preset.value
+									? 'bg-[#e8be89] text-gray-900'
+									: 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+							>
+								{preset.label}
+							</button>
+						{/each}
+					</div>
+					<div class="flex items-center gap-2">
+						<span class="text-sm text-gray-500">|</span>
+						<input
+							type="date"
+							bind:value={customStartDate}
+							class="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+						/>
+						<span class="text-sm text-gray-400">to</span>
+						<input
+							type="date"
+							bind:value={customEndDate}
+							class="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+						/>
 						<button
-							on:click={() => selectPeriod(preset.value)}
-							class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {selectedPeriod ===
-							preset.value
-								? 'bg-[#e8be89] text-gray-900'
-								: 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+							on:click={applyCustomRange}
+							class="rounded-md bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-600"
 						>
-							{preset.label}
+							Apply
 						</button>
-					{/each}
+					</div>
 				</div>
-				<div class="flex items-center gap-2">
-					<span class="text-sm text-gray-500">|</span>
-					<input
-						type="date"
-						bind:value={customStartDate}
-						class="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-white focus:border-[#e8be89] focus:outline-none"
-					/>
-					<span class="text-sm text-gray-400">to</span>
-					<input
-						type="date"
-						bind:value={customEndDate}
-						class="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-white focus:border-[#e8be89] focus:outline-none"
-					/>
-					<button
-						on:click={applyCustomRange}
-						class="rounded-md bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-600"
-					>
-						Apply
-					</button>
-				</div>
+				{#if selectedPeriod === 'custom'}
+					<p class="mt-2 text-xs text-gray-500">Showing data for: {getPeriodLabel()}</p>
+				{/if}
+			</Card>
+		</div>
+
+		{#if error}
+			<div class="mb-6 rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
+				{error}
 			</div>
-			{#if selectedPeriod === 'custom'}
-				<p class="mt-2 text-xs text-gray-500">Showing data for: {getPeriodLabel()}</p>
-			{/if}
-		</Card>
-	</div>
+		{/if}
 
-	{#if error}
-		<div class="mb-6 rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
-			{error}
-		</div>
-	{/if}
+		{#if loading && !lastUpdated}
+			<div class="flex items-center gap-3 text-gray-400">
+				<div
+					class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+				></div>
+				Loading analytics...
+			</div>
+		{:else}
+			<!-- Overview Stats -->
+			<div class="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+				<Card>
+					<div class="text-center">
+						<p class="text-3xl font-bold text-[#e8be89]">{totalTransactions}</p>
+						<p class="mt-1 text-sm text-gray-400">Total Transactions</p>
+					</div>
+				</Card>
+				<Card>
+					<div class="text-center">
+						<p class="text-3xl font-bold text-[#e8be89]">{formatUsd(totalUsdcVolume)}</p>
+						<p class="mt-1 text-sm text-gray-400">Total USDC Volume</p>
+					</div>
+				</Card>
+				<Card>
+					<div class="text-center">
+						<p class="text-3xl font-bold text-[#e8be89]">{accessCodes.length}</p>
+						<p class="mt-1 text-sm text-gray-400">Access Codes</p>
+					</div>
+				</Card>
+				<Card>
+					<div class="text-center">
+						<p class="text-3xl font-bold text-[#e8be89]">{walletStats.length}</p>
+						<p class="mt-1 text-sm text-gray-400">Active Wallets</p>
+					</div>
+				</Card>
+			</div>
 
-	{#if loading && !lastUpdated}
-		<div class="flex items-center gap-3 text-gray-400">
-			<div
-				class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
-			></div>
-			Loading analytics...
-		</div>
-	{:else}
-		<!-- Overview Stats -->
-		<div class="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-			<Card>
-				<div class="text-center">
-					<p class="text-3xl font-bold text-[#e8be89]">{totalTransactions}</p>
-					<p class="mt-1 text-sm text-gray-400">Total Transactions</p>
-				</div>
-			</Card>
-			<Card>
-				<div class="text-center">
-					<p class="text-3xl font-bold text-[#e8be89]">{formatUsd(totalUsdcVolume)}</p>
-					<p class="mt-1 text-sm text-gray-400">Total USDC Volume</p>
-				</div>
-			</Card>
-			<Card>
-				<div class="text-center">
-					<p class="text-3xl font-bold text-[#e8be89]">{accessCodes.length}</p>
-					<p class="mt-1 text-sm text-gray-400">Access Codes</p>
-				</div>
-			</Card>
-			<Card>
-				<div class="text-center">
-					<p class="text-3xl font-bold text-[#e8be89]">{walletStats.length}</p>
-					<p class="mt-1 text-sm text-gray-400">Active Wallets</p>
-				</div>
-			</Card>
-		</div>
+			<!-- Extended Stats -->
+			<div class="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+				<Card>
+					<div class="text-center">
+						<p class="text-2xl font-bold text-white">{formatUsd(meanTxSize)}</p>
+						<p class="mt-1 text-sm text-gray-400">Mean Tx Size</p>
+					</div>
+				</Card>
+				<Card>
+					<div class="text-center">
+						<p class="text-2xl font-bold text-white">{formatUsd(medianTxSize)}</p>
+						<p class="mt-1 text-sm text-gray-400">Median Tx Size</p>
+					</div>
+				</Card>
+				<Card>
+					<div class="text-center">
+						<p
+							class="text-2xl font-bold {cumulativeNetVolume >= 0
+								? 'text-green-400'
+								: 'text-red-400'}"
+						>
+							{cumulativeNetVolume >= 0 ? '+' : ''}{formatUsd(cumulativeNetVolume)}
+						</p>
+						<p class="mt-1 text-sm text-gray-400">LP Net USDC Flow</p>
+					</div>
+				</Card>
+			</div>
 
-		<!-- Extended Stats -->
-		<div class="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-			<Card>
-				<div class="text-center">
-					<p class="text-2xl font-bold text-white">{formatUsd(meanTxSize)}</p>
-					<p class="mt-1 text-sm text-gray-400">Mean Tx Size</p>
-				</div>
-			</Card>
-			<Card>
-				<div class="text-center">
-					<p class="text-2xl font-bold text-white">{formatUsd(medianTxSize)}</p>
-					<p class="mt-1 text-sm text-gray-400">Median Tx Size</p>
-				</div>
-			</Card>
-			<Card>
-				<div class="text-center">
-					<p
-						class="text-2xl font-bold {cumulativeNetVolume >= 0
-							? 'text-green-400'
-							: 'text-red-400'}"
+			<!-- Tab Navigation -->
+			<div class="mb-6 border-b border-gray-700">
+				<nav class="-mb-px flex flex-wrap gap-6">
+					<button
+						on:click={() => (activeTab = 'tokens')}
+						class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'tokens'
+							? 'border-[#e8be89] text-[#e8be89]'
+							: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 					>
-						{cumulativeNetVolume >= 0 ? '+' : ''}{formatUsd(cumulativeNetVolume)}
-					</p>
-					<p class="mt-1 text-sm text-gray-400">LP Net USDC Flow</p>
+						By Token
+					</button>
+					<button
+						on:click={() => (activeTab = 'transactions')}
+						class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab ===
+						'transactions'
+							? 'border-[#e8be89] text-[#e8be89]'
+							: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+					>
+						Transactions
+					</button>
+					<button
+						on:click={() => (activeTab = 'codes')}
+						class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'codes'
+							? 'border-[#e8be89] text-[#e8be89]'
+							: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+					>
+						By Access Code
+					</button>
+					<button
+						on:click={() => (activeTab = 'wallets')}
+						class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'wallets'
+							? 'border-[#e8be89] text-[#e8be89]'
+							: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+					>
+						By Wallet
+					</button>
+				</nav>
+			</div>
+
+			<!-- Tab Content -->
+			{#if activeTab === 'tokens'}
+				<!-- Token Stats - Bar Chart -->
+				<Card>
+					{#if allDates.length === 0 || allTokenSymbols.length === 0}
+						<p class="py-4 text-center text-gray-400">No token activity found</p>
+					{:else}
+						<!-- Controls Row -->
+						<div class="mb-6 flex flex-wrap items-center gap-4">
+							<h3 class="text-lg font-medium text-white">
+								Daily {tokenChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
+							</h3>
+
+							<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+								<!-- Token Dropdown -->
+								<div class="token-dropdown relative">
+									<button
+										on:click={() => (tokenDropdownOpen = !tokenDropdownOpen)}
+										class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+									>
+										<span>
+											{#if selectedTokens.size === allTokenSymbols.length}
+												All Tokens
+											{:else if selectedTokens.size === 0}
+												No Tokens
+											{:else}
+												{selectedTokens.size} Token{selectedTokens.size > 1 ? 's' : ''}
+											{/if}
+										</span>
+										<svg
+											class="h-4 w-4 transition-transform {tokenDropdownOpen ? 'rotate-180' : ''}"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M19 9l-7 7-7-7"
+											/>
+										</svg>
+									</button>
+
+									{#if tokenDropdownOpen}
+										<div
+											class="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+										>
+											<div class="border-b border-gray-700 px-3 py-2">
+												<div class="flex gap-2">
+													<button
+														on:click={selectAllTokens}
+														class="text-xs text-[#e8be89] hover:underline"
+													>
+														Select All
+													</button>
+													<span class="text-gray-600">|</span>
+													<button
+														on:click={clearAllTokens}
+														class="text-xs text-gray-400 hover:underline"
+													>
+														Clear
+													</button>
+												</div>
+											</div>
+											{#each allTokenSymbols as symbol}
+												<button
+													on:click={() => toggleToken(symbol)}
+													class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
+												>
+													<span
+														class="flex h-4 w-4 items-center justify-center rounded border {selectedTokens.has(
+															symbol
+														)
+															? 'border-[#e8be89] bg-[#e8be89]'
+															: 'border-gray-500'}"
+													>
+														{#if selectedTokens.has(symbol)}
+															<svg
+																class="h-3 w-3 text-gray-900"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="3"
+																	d="M5 13l4 4L19 7"
+																/>
+															</svg>
+														{/if}
+													</span>
+													<span class="text-white">{symbol}</span>
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+
+								<!-- Metric Toggle -->
+								<div class="flex rounded-lg bg-gray-800 p-1">
+									<button
+										on:click={() => (tokenChartMetric = 'count')}
+										class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {tokenChartMetric ===
+										'count'
+											? 'bg-[#e8be89] text-gray-900'
+											: 'text-gray-400 hover:text-white'}"
+									>
+										# of Tx
+									</button>
+									<button
+										on:click={() => (tokenChartMetric = 'usdc')}
+										class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {tokenChartMetric ===
+										'usdc'
+											? 'bg-[#e8be89] text-gray-900'
+											: 'text-gray-400 hover:text-white'}"
+									>
+										USDC Value
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Chart.js Bar Chart -->
+						{#if selectedTokens.size > 0}
+							<div class="relative h-80">
+								{#if !chartLibLoaded}
+									<div class="absolute inset-0 flex items-center justify-center">
+										<div class="text-gray-400">Loading chart...</div>
+									</div>
+								{/if}
+								<canvas bind:this={tokenChartCanvas} class="h-full w-full"></canvas>
+							</div>
+						{:else}
+							<p class="py-8 text-center text-gray-400">
+								Select at least one token to view the chart
+							</p>
+						{/if}
+					{/if}
+				</Card>
+			{:else if activeTab === 'transactions'}
+				<!-- Transactions List -->
+				<Card>
+					{#if transactions.length === 0}
+						<p class="py-4 text-center text-gray-400">No transactions found</p>
+					{:else}
+						<div class="overflow-x-auto">
+							<table class="w-full text-sm">
+								<thead>
+									<tr class="border-b border-gray-700 text-left text-gray-400">
+										<th class="pb-3 font-medium">Time</th>
+										<th class="pb-3 font-medium">Wallet</th>
+										<th class="pb-3 font-medium">Code</th>
+										<th class="pb-3 font-medium">Token</th>
+										<th class="pb-3 text-center font-medium">Direction</th>
+										<th class="pb-3 text-right font-medium">Amount</th>
+										<th class="pb-3 text-right font-medium">USDC</th>
+										<th class="pb-3 font-medium">Tx</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each transactions.slice(0, 100) as tx}
+										<tr class="border-b border-gray-800">
+											<td class="py-3 text-gray-300">
+												{tx.timestamp.toLocaleDateString('en-US', {
+													month: 'short',
+													day: 'numeric'
+												})}
+												<span class="text-gray-500"
+													>{tx.timestamp.toLocaleTimeString('en-US', {
+														hour: '2-digit',
+														minute: '2-digit'
+													})}</span
+												>
+											</td>
+											<td class="py-3">
+												<a
+													href="https://basescan.org/address/{tx.wallet}"
+													target="_blank"
+													rel="noopener noreferrer"
+													class="font-mono text-blue-400 hover:underline"
+												>
+													{truncateAddress(tx.wallet)}
+												</a>
+											</td>
+											<td class="py-3">
+												{#if tx.accessCode}
+													<code
+														class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]"
+													>
+														{tx.accessCode}
+													</code>
+												{:else}
+													<span class="text-gray-500">-</span>
+												{/if}
+											</td>
+											<td class="py-3 font-medium text-white">{tx.tokenSymbol}</td>
+											<td class="py-3 text-center">
+												<span
+													class="rounded px-2 py-0.5 text-xs font-medium {tx.direction === 'buy'
+														? 'bg-green-900/40 text-green-400'
+														: 'bg-red-900/40 text-red-400'}"
+												>
+													{tx.direction.toUpperCase()}
+												</span>
+											</td>
+											<td class="py-3 text-right text-white">{formatNumber(tx.tokenAmount, 4)}</td>
+											<td class="py-3 text-right text-white">{formatUsd(tx.usdcAmount)}</td>
+											<td class="py-3">
+												<a
+													href="https://basescan.org/tx/{tx.txHash}"
+													target="_blank"
+													rel="noopener noreferrer"
+													class="text-blue-400 hover:underline"
+												>
+													View
+												</a>
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+							{#if transactions.length > 100}
+								<p class="mt-4 text-center text-sm text-gray-500">
+									Showing latest 100 of {transactions.length} transactions
+								</p>
+							{/if}
+						</div>
+					{/if}
+				</Card>
+			{:else if activeTab === 'codes'}
+				<!-- Access Code Stats - Bar Chart -->
+				<Card>
+					{#if allDates.length === 0 || allAccessCodes.length === 0}
+						<p class="py-4 text-center text-gray-400">No access code activity found</p>
+					{:else}
+						<!-- Controls Row -->
+						<div class="mb-6 flex flex-wrap items-center gap-4">
+							<h3 class="text-lg font-medium text-white">
+								Daily {codeChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
+							</h3>
+
+							<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+								<!-- Code Dropdown (Single Select) -->
+								<div class="code-dropdown relative">
+									<button
+										on:click={() => (codeDropdownOpen = !codeDropdownOpen)}
+										class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+									>
+										<span>{selectedCode || 'Select Code'}</span>
+										<svg
+											class="h-4 w-4 transition-transform {codeDropdownOpen ? 'rotate-180' : ''}"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M19 9l-7 7-7-7"
+											/>
+										</svg>
+									</button>
+
+									{#if codeDropdownOpen}
+										<div
+											class="absolute left-0 top-full z-20 mt-1 max-h-64 w-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+										>
+											{#each allAccessCodes as code}
+												<button
+													on:click={() => {
+														selectedCode = code;
+														codeDropdownOpen = false;
+													}}
+													class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700 {selectedCode ===
+													code
+														? 'bg-gray-700 text-[#e8be89]'
+														: 'text-white'}"
+												>
+													{code}
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+
+								<!-- Metric Toggle -->
+								<div class="flex rounded-lg bg-gray-800 p-1">
+									<button
+										on:click={() => (codeChartMetric = 'count')}
+										class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {codeChartMetric ===
+										'count'
+											? 'bg-[#e8be89] text-gray-900'
+											: 'text-gray-400 hover:text-white'}"
+									>
+										# of Tx
+									</button>
+									<button
+										on:click={() => (codeChartMetric = 'usdc')}
+										class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {codeChartMetric ===
+										'usdc'
+											? 'bg-[#e8be89] text-gray-900'
+											: 'text-gray-400 hover:text-white'}"
+									>
+										USDC Value
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Chart -->
+						{#if selectedCode}
+							<div class="relative h-80">
+								{#if !chartLibLoaded}
+									<div class="absolute inset-0 flex items-center justify-center">
+										<div class="text-gray-400">Loading chart...</div>
+									</div>
+								{/if}
+								<canvas bind:this={codeChartCanvas} class="h-full w-full"></canvas>
+							</div>
+						{:else}
+							<p class="py-8 text-center text-gray-400">Select an access code to view the chart</p>
+						{/if}
+					{/if}
+				</Card>
+				<div class="mt-4">
+					<a
+						href="/admin/codes"
+						class="inline-block rounded-lg bg-[#e8be89] px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-[#d4a976]"
+					>
+						Manage Access Codes
+					</a>
 				</div>
-			</Card>
-		</div>
+			{:else if activeTab === 'wallets'}
+				<!-- Wallet Stats - Bar Chart -->
+				<Card>
+					{#if allDates.length === 0 || allWalletAddresses.length === 0}
+						<p class="py-4 text-center text-gray-400">No wallet activity found</p>
+					{:else}
+						<!-- Controls Row -->
+						<div class="mb-6 flex flex-wrap items-center gap-4">
+							<h3 class="text-lg font-medium text-white">
+								Daily {walletChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
+							</h3>
 
-		<!-- Tab Navigation -->
-		<div class="mb-6 border-b border-gray-700">
-			<nav class="-mb-px flex flex-wrap gap-6">
-				<button
-					on:click={() => (activeTab = 'tokens')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'tokens'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					By Token
-				</button>
-				<button
-					on:click={() => (activeTab = 'transactions')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'transactions'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					Transactions
-				</button>
-				<button
-					on:click={() => (activeTab = 'codes')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'codes'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					By Access Code
-				</button>
-				<button
-					on:click={() => (activeTab = 'wallets')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'wallets'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					By Wallet
-				</button>
-			</nav>
-		</div>
+							<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
+								<!-- Wallet Dropdown -->
+								<div class="wallet-dropdown relative">
+									<button
+										on:click={() => (walletDropdownOpen = !walletDropdownOpen)}
+										class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+									>
+										<span>
+											{#if selectedWallets.size === allWalletAddresses.length}
+												All Wallets
+											{:else if selectedWallets.size === 0}
+												No Wallets
+											{:else}
+												{selectedWallets.size} Wallet{selectedWallets.size > 1 ? 's' : ''}
+											{/if}
+										</span>
+										<svg
+											class="h-4 w-4 transition-transform {walletDropdownOpen ? 'rotate-180' : ''}"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M19 9l-7 7-7-7"
+											/>
+										</svg>
+									</button>
 
-		<!-- Tab Content -->
-		{#if activeTab === 'tokens'}
-			<!-- Token Stats - Bar Chart -->
-			<Card>
-				{#if allDates.length === 0 || allTokenSymbols.length === 0}
-					<p class="py-4 text-center text-gray-400">No token activity found</p>
-				{:else}
-					<!-- Controls Row -->
+									{#if walletDropdownOpen}
+										<div
+											class="absolute left-0 top-full z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+										>
+											<div class="border-b border-gray-700 px-3 py-2">
+												<div class="flex gap-2">
+													<button
+														on:click={selectAllWallets}
+														class="text-xs text-[#e8be89] hover:underline"
+													>
+														Select All
+													</button>
+													<span class="text-gray-600">|</span>
+													<button
+														on:click={clearAllWallets}
+														class="text-xs text-gray-400 hover:underline"
+													>
+														Clear
+													</button>
+												</div>
+											</div>
+											{#each allWalletAddresses as wallet}
+												<button
+													on:click={() => toggleWallet(wallet)}
+													class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
+												>
+													<span
+														class="flex h-4 w-4 items-center justify-center rounded border {selectedWallets.has(
+															wallet
+														)
+															? 'border-[#e8be89] bg-[#e8be89]'
+															: 'border-gray-500'}"
+													>
+														{#if selectedWallets.has(wallet)}
+															<svg
+																class="h-3 w-3 text-gray-900"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="3"
+																	d="M5 13l4 4L19 7"
+																/>
+															</svg>
+														{/if}
+													</span>
+													<span class="font-mono text-white">{truncateAddress(wallet)}</span>
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+
+								<!-- Metric Toggle -->
+								<div class="flex rounded-lg bg-gray-800 p-1">
+									<button
+										on:click={() => (walletChartMetric = 'count')}
+										class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {walletChartMetric ===
+										'count'
+											? 'bg-[#e8be89] text-gray-900'
+											: 'text-gray-400 hover:text-white'}"
+									>
+										# of Tx
+									</button>
+									<button
+										on:click={() => (walletChartMetric = 'usdc')}
+										class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {walletChartMetric ===
+										'usdc'
+											? 'bg-[#e8be89] text-gray-900'
+											: 'text-gray-400 hover:text-white'}"
+									>
+										USDC Value
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Chart -->
+						{#if selectedWallets.size > 0}
+							<div class="relative h-80">
+								{#if !chartLibLoaded}
+									<div class="absolute inset-0 flex items-center justify-center">
+										<div class="text-gray-400">Loading chart...</div>
+									</div>
+								{/if}
+								<canvas bind:this={walletChartCanvas} class="h-full w-full"></canvas>
+							</div>
+						{:else}
+							<p class="py-8 text-center text-gray-400">
+								Select at least one wallet to view the chart
+							</p>
+						{/if}
+					{/if}
+				</Card>
+			{/if}
+		{/if}
+	{:else if activeSection === 'tvl'}
+		<!-- TVL Section (Snapshot-based) -->
+
+		{#if tvlError}
+			<div class="mb-6 rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
+				{tvlError}
+			</div>
+		{/if}
+
+		{#if tvlLoading && !tvlLastUpdated}
+			<div class="flex items-center gap-3 text-gray-400">
+				<div
+					class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+				></div>
+				Loading TVL data from snapshots...
+			</div>
+		{:else if !tvlData.latest}
+			<div class="py-8 text-center text-gray-400">
+				<p>No TVL data available</p>
+				<p class="mt-2 text-sm">Snapshots have not been generated yet.</p>
+			</div>
+		{:else}
+			<!-- Latest TVL Headline -->
+			<div class="mb-8">
+				<Card>
+					<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+						<div>
+							<p class="text-4xl font-bold text-[#e8be89]">{formatUsd(tvlData.latest.totalTvl)}</p>
+							<p class="mt-1 text-sm text-gray-400">Total Value Locked (TVL)</p>
+						</div>
+						<div class="text-right">
+							<p class="text-sm text-gray-400">
+								Snapshot: {new Date(tvlData.latest.timestamp * 1000).toLocaleString()}
+							</p>
+							<p class="text-xs text-gray-500">
+								Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} wallets
+							</p>
+							<p class="mt-1 text-xs italic text-gray-500">Approx. end of day balances</p>
+						</div>
+					</div>
+				</Card>
+			</div>
+
+			<!-- TVL by Token Breakdown -->
+			<div class="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				{#each Object.entries(tvlData.latest.tokenTvl).sort((a, b) => b[1] - a[1]) as [symbol, tvl]}
+					<Card>
+						<div class="text-center">
+							<p class="text-xl font-bold text-white">{formatUsd(tvl)}</p>
+							<p class="mt-1 text-sm text-gray-400">{symbol}</p>
+							<p class="text-xs text-gray-500">
+								{tvlData.latest.totalTvl > 0
+									? ((tvl / tvlData.latest.totalTvl) * 100).toFixed(1)
+									: 0}%
+							</p>
+						</div>
+					</Card>
+				{/each}
+			</div>
+
+			<!-- TVL Tab Navigation -->
+			<div class="mb-6 border-b border-gray-700">
+				<nav class="-mb-px flex flex-wrap gap-6">
+					<button
+						on:click={() => (activeTvlTab = 'tokens')}
+						class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'tokens'
+							? 'border-[#e8be89] text-[#e8be89]'
+							: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+					>
+						By Token
+					</button>
+					<button
+						on:click={() => (activeTvlTab = 'codes')}
+						class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'codes'
+							? 'border-[#e8be89] text-[#e8be89]'
+							: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+					>
+						By Access Code
+					</button>
+					<button
+						on:click={() => (activeTvlTab = 'wallets')}
+						class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'wallets'
+							? 'border-[#e8be89] text-[#e8be89]'
+							: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+					>
+						By Wallet
+					</button>
+				</nav>
+			</div>
+
+			<!-- TVL Tab Content -->
+			{#if activeTvlTab === 'tokens'}
+				<!-- Daily TVL by Token Chart -->
+				<Card>
 					<div class="mb-6 flex flex-wrap items-center gap-4">
-						<h3 class="text-lg font-medium text-white">
-							Daily {tokenChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
-						</h3>
+						<h3 class="text-lg font-medium text-white">Daily TVL by Token</h3>
 
 						<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
 							<!-- Token Dropdown -->
-							<div class="token-dropdown relative">
+							<div class="tvl-token-dropdown relative">
 								<button
-									on:click={() => (tokenDropdownOpen = !tokenDropdownOpen)}
+									on:click={() => (tvlTokenDropdownOpen = !tvlTokenDropdownOpen)}
 									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
 								>
 									<span>
-										{#if selectedTokens.size === allTokenSymbols.length}
+										{#if tvlSelectedTokens.size === tvlTokenSymbols.length}
 											All Tokens
-										{:else if selectedTokens.size === 0}
+										{:else if tvlSelectedTokens.size === 0}
 											No Tokens
 										{:else}
-											{selectedTokens.size} Token{selectedTokens.size > 1 ? 's' : ''}
+											{tvlSelectedTokens.size} Token{tvlSelectedTokens.size > 1 ? 's' : ''}
 										{/if}
 									</span>
 									<svg
-										class="h-4 w-4 transition-transform {tokenDropdownOpen ? 'rotate-180' : ''}"
+										class="h-4 w-4 transition-transform {tvlTokenDropdownOpen ? 'rotate-180' : ''}"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
 									>
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 9l-7 7-7-7"
+										/>
 									</svg>
 								</button>
 
-								{#if tokenDropdownOpen}
-									<div class="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+								{#if tvlTokenDropdownOpen}
+									<div
+										class="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+									>
 										<div class="border-b border-gray-700 px-3 py-2">
 											<div class="flex gap-2">
 												<button
-													on:click={selectAllTokens}
+													on:click={selectAllTvlTokens}
 													class="text-xs text-[#e8be89] hover:underline"
 												>
 													Select All
 												</button>
 												<span class="text-gray-600">|</span>
 												<button
-													on:click={clearAllTokens}
+													on:click={clearAllTvlTokens}
 													class="text-xs text-gray-400 hover:underline"
 												>
 													Clear
 												</button>
 											</div>
 										</div>
-										{#each allTokenSymbols as symbol}
+										{#each tvlTokenSymbols as symbol}
 											<button
-												on:click={() => toggleToken(symbol)}
+												on:click={() => toggleTvlToken(symbol)}
 												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
 											>
 												<span
-													class="flex h-4 w-4 items-center justify-center rounded border {selectedTokens.has(symbol)
+													class="flex h-4 w-4 items-center justify-center rounded border {tvlSelectedTokens.has(
+														symbol
+													)
 														? 'border-[#e8be89] bg-[#e8be89]'
 														: 'border-gray-500'}"
 												>
-													{#if selectedTokens.has(symbol)}
-														<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+													{#if tvlSelectedTokens.has(symbol)}
+														<svg
+															class="h-3 w-3 text-gray-900"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="3"
+																d="M5 13l4 4L19 7"
+															/>
 														</svg>
 													{/if}
 												</span>
@@ -1906,773 +2516,319 @@
 									</div>
 								{/if}
 							</div>
-
-							<!-- Metric Toggle -->
-							<div class="flex rounded-lg bg-gray-800 p-1">
-								<button
-									on:click={() => (tokenChartMetric = 'count')}
-									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {tokenChartMetric ===
-									'count'
-										? 'bg-[#e8be89] text-gray-900'
-										: 'text-gray-400 hover:text-white'}"
-								>
-									# of Tx
-								</button>
-								<button
-									on:click={() => (tokenChartMetric = 'usdc')}
-									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {tokenChartMetric ===
-									'usdc'
-										? 'bg-[#e8be89] text-gray-900'
-										: 'text-gray-400 hover:text-white'}"
-								>
-									USDC Value
-								</button>
-							</div>
 						</div>
 					</div>
 
-					<!-- Chart.js Bar Chart -->
-					{#if selectedTokens.size > 0}
+					<!-- Chart -->
+					{#if tvlSelectedTokens.size > 0 && tvlTokenChartData.length > 0}
 						<div class="relative h-80">
 							{#if !chartLibLoaded}
 								<div class="absolute inset-0 flex items-center justify-center">
 									<div class="text-gray-400">Loading chart...</div>
 								</div>
 							{/if}
-							<canvas bind:this={tokenChartCanvas} class="h-full w-full"></canvas>
+							<canvas bind:this={tvlTokenChartCanvas} class="h-full w-full"></canvas>
 						</div>
+					{:else if tvlTokenChartData.length === 0}
+						<p class="py-8 text-center text-gray-400">No historical TVL data available</p>
 					{:else}
 						<p class="py-8 text-center text-gray-400">
 							Select at least one token to view the chart
 						</p>
 					{/if}
-				{/if}
-			</Card>
-		{:else if activeTab === 'transactions'}
-			<!-- Transactions List -->
-			<Card>
-				{#if transactions.length === 0}
-					<p class="py-4 text-center text-gray-400">No transactions found</p>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="w-full text-sm">
-							<thead>
-								<tr class="border-b border-gray-700 text-left text-gray-400">
-									<th class="pb-3 font-medium">Time</th>
-									<th class="pb-3 font-medium">Wallet</th>
-									<th class="pb-3 font-medium">Code</th>
-									<th class="pb-3 font-medium">Token</th>
-									<th class="pb-3 text-center font-medium">Direction</th>
-									<th class="pb-3 text-right font-medium">Amount</th>
-									<th class="pb-3 text-right font-medium">USDC</th>
-									<th class="pb-3 font-medium">Tx</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each transactions.slice(0, 100) as tx}
-									<tr class="border-b border-gray-800">
-										<td class="py-3 text-gray-300">
-											{tx.timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-											<span class="text-gray-500"
-												>{tx.timestamp.toLocaleTimeString('en-US', {
-													hour: '2-digit',
-													minute: '2-digit'
-												})}</span
-											>
-										</td>
-										<td class="py-3">
-											<a
-												href="https://basescan.org/address/{tx.wallet}"
-												target="_blank"
-												rel="noopener noreferrer"
-												class="font-mono text-blue-400 hover:underline"
-											>
-												{truncateAddress(tx.wallet)}
-											</a>
-										</td>
-										<td class="py-3">
-											{#if tx.accessCode}
-												<code
-													class="rounded bg-gray-800 px-2 py-0.5 font-mono text-xs text-[#e8be89]"
-												>
-													{tx.accessCode}
-												</code>
-											{:else}
-												<span class="text-gray-500">-</span>
-											{/if}
-										</td>
-										<td class="py-3 font-medium text-white">{tx.tokenSymbol}</td>
-										<td class="py-3 text-center">
-											<span
-												class="rounded px-2 py-0.5 text-xs font-medium {tx.direction === 'buy'
-													? 'bg-green-900/40 text-green-400'
-													: 'bg-red-900/40 text-red-400'}"
-											>
-												{tx.direction.toUpperCase()}
-											</span>
-										</td>
-										<td class="py-3 text-right text-white">{formatNumber(tx.tokenAmount, 4)}</td>
-										<td class="py-3 text-right text-white">{formatUsd(tx.usdcAmount)}</td>
-										<td class="py-3">
-											<a
-												href="https://basescan.org/tx/{tx.txHash}"
-												target="_blank"
-												rel="noopener noreferrer"
-												class="text-blue-400 hover:underline"
-											>
-												View
-											</a>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-						{#if transactions.length > 100}
-							<p class="mt-4 text-center text-sm text-gray-500">
-								Showing latest 100 of {transactions.length} transactions
-							</p>
-						{/if}
-					</div>
-				{/if}
-			</Card>
-		{:else if activeTab === 'codes'}
-			<!-- Access Code Stats - Bar Chart -->
-			<Card>
-				{#if allDates.length === 0 || allAccessCodes.length === 0}
-					<p class="py-4 text-center text-gray-400">No access code activity found</p>
-				{:else}
-					<!-- Controls Row -->
+				</Card>
+			{:else if activeTvlTab === 'codes'}
+				<!-- TVL by Access Code -->
+				<Card>
 					<div class="mb-6 flex flex-wrap items-center gap-4">
-						<h3 class="text-lg font-medium text-white">
-							Daily {codeChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
-						</h3>
+						<h3 class="text-lg font-medium text-white">Daily TVL by Access Code</h3>
 
 						<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
-							<!-- Code Dropdown (Single Select) -->
-							<div class="code-dropdown relative">
+							<!-- Code Dropdown -->
+							<div class="tvl-code-dropdown relative">
 								<button
-									on:click={() => (codeDropdownOpen = !codeDropdownOpen)}
+									on:click={() => (tvlCodeDropdownOpen = !tvlCodeDropdownOpen)}
 									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
 								>
-									<span>{selectedCode || 'Select Code'}</span>
+									<span>
+										{#if tvlSelectedCode}
+											{tvlSelectedCode}
+										{:else}
+											Select Code
+										{/if}
+									</span>
 									<svg
-										class="h-4 w-4 transition-transform {codeDropdownOpen ? 'rotate-180' : ''}"
+										class="h-4 w-4 transition-transform {tvlCodeDropdownOpen ? 'rotate-180' : ''}"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
 									>
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 9l-7 7-7-7"
+										/>
 									</svg>
 								</button>
 
-								{#if codeDropdownOpen}
-									<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
-										{#each allAccessCodes as code}
+								{#if tvlCodeDropdownOpen}
+									<div
+										class="absolute left-0 top-full z-20 mt-1 max-h-64 w-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+									>
+										{#each tvlCodes as code}
 											<button
-												on:click={() => { selectedCode = code; codeDropdownOpen = false; }}
-												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700 {selectedCode === code ? 'bg-gray-700 text-[#e8be89]' : 'text-white'}"
+												on:click={() => {
+													tvlSelectedCode = code;
+													tvlCodeDropdownOpen = false;
+												}}
+												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700 {tvlSelectedCode ===
+												code
+													? 'bg-gray-700'
+													: ''}"
 											>
-												{code}
+												<span class="text-white">{code}</span>
 											</button>
 										{/each}
 									</div>
 								{/if}
 							</div>
-
-							<!-- Metric Toggle -->
-							<div class="flex rounded-lg bg-gray-800 p-1">
-								<button
-									on:click={() => (codeChartMetric = 'count')}
-									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {codeChartMetric === 'count'
-										? 'bg-[#e8be89] text-gray-900'
-										: 'text-gray-400 hover:text-white'}"
-								>
-									# of Tx
-								</button>
-								<button
-									on:click={() => (codeChartMetric = 'usdc')}
-									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {codeChartMetric === 'usdc'
-										? 'bg-[#e8be89] text-gray-900'
-										: 'text-gray-400 hover:text-white'}"
-								>
-									USDC Value
-								</button>
-							</div>
 						</div>
 					</div>
 
+					<!-- Current Code TVL Stats -->
+					{#if tvlSelectedCode && tvlData.latest}
+						{@const codeEntry = tvlData.latest.codeTvl.find((c) => c.code === tvlSelectedCode)}
+						{#if codeEntry}
+							<div class="mb-6 grid gap-4 sm:grid-cols-3">
+								<div class="rounded-lg bg-gray-800/50 p-4 text-center">
+									<p class="text-2xl font-bold text-[#e8be89]">{formatUsd(codeEntry.tvl)}</p>
+									<p class="mt-1 text-sm text-gray-400">Current TVL</p>
+								</div>
+								<div class="rounded-lg bg-gray-800/50 p-4 text-center">
+									<p class="text-2xl font-bold text-white">{codeEntry.walletCount}</p>
+									<p class="mt-1 text-sm text-gray-400">Wallets</p>
+								</div>
+								<div class="rounded-lg bg-gray-800/50 p-4 text-center">
+									<p class="text-2xl font-bold text-white">
+										{tvlData.latest.totalTvl > 0
+											? ((codeEntry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1)
+											: 0}%
+									</p>
+									<p class="mt-1 text-sm text-gray-400">Share of Total</p>
+								</div>
+							</div>
+						{/if}
+					{/if}
+
 					<!-- Chart -->
-					{#if selectedCode}
+					{#if tvlSelectedCode && tvlCodeChartData.length > 0}
 						<div class="relative h-80">
 							{#if !chartLibLoaded}
 								<div class="absolute inset-0 flex items-center justify-center">
 									<div class="text-gray-400">Loading chart...</div>
 								</div>
 							{/if}
-							<canvas bind:this={codeChartCanvas} class="h-full w-full"></canvas>
+							<canvas bind:this={tvlCodeChartCanvas} class="h-full w-full"></canvas>
 						</div>
+					{:else if tvlCodes.length === 0}
+						<p class="py-8 text-center text-gray-400">No access codes with TVL found</p>
 					{:else}
-						<p class="py-8 text-center text-gray-400">Select an access code to view the chart</p>
+						<p class="py-8 text-center text-gray-400">Select an access code to view TVL history</p>
 					{/if}
+				</Card>
+
+				<!-- Code TVL Leaderboard -->
+				{#if tvlData.latest && tvlData.latest.codeTvl.length > 0}
+					<Card>
+						<h3 class="mb-4 text-lg font-medium text-white">Access Code TVL Leaderboard</h3>
+						<div class="overflow-x-auto">
+							<table class="w-full text-left text-sm">
+								<thead>
+									<tr class="border-b border-gray-700 text-gray-400">
+										<th class="pb-3 pr-4">Rank</th>
+										<th class="pb-3 pr-4">Access Code</th>
+										<th class="pb-3 pr-4 text-right">TVL</th>
+										<th class="pb-3 pr-4 text-right">Wallets</th>
+										<th class="pb-3 text-right">Share</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each tvlData.latest.codeTvl.slice(0, 20) as entry, i}
+										<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+											<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
+											<td class="py-3 pr-4 font-mono text-white">{entry.code}</td>
+											<td class="py-3 pr-4 text-right font-medium text-[#e8be89]"
+												>{formatUsd(entry.tvl)}</td
+											>
+											<td class="py-3 pr-4 text-right text-gray-300">{entry.walletCount}</td>
+											<td class="py-3 text-right text-gray-400">
+												{tvlData.latest.totalTvl > 0
+													? ((entry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1)
+													: 0}%
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</Card>
 				{/if}
-			</Card>
-			<div class="mt-4">
-				<a
-					href="/admin/codes"
-					class="inline-block rounded-lg bg-[#e8be89] px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-[#d4a976]"
-				>
-					Manage Access Codes
-				</a>
-			</div>
-		{:else if activeTab === 'wallets'}
-			<!-- Wallet Stats - Bar Chart -->
-			<Card>
-				{#if allDates.length === 0 || allWalletAddresses.length === 0}
-					<p class="py-4 text-center text-gray-400">No wallet activity found</p>
-				{:else}
-					<!-- Controls Row -->
+			{:else if activeTvlTab === 'wallets'}
+				<!-- TVL by Wallet -->
+				<Card>
 					<div class="mb-6 flex flex-wrap items-center gap-4">
-						<h3 class="text-lg font-medium text-white">
-							Daily {walletChartMetric === 'count' ? 'Transaction Count' : 'USDC Volume'}
-						</h3>
+						<h3 class="text-lg font-medium text-white">Daily TVL by Wallet</h3>
 
 						<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
 							<!-- Wallet Dropdown -->
-							<div class="wallet-dropdown relative">
+							<div class="tvl-wallet-dropdown relative">
 								<button
-									on:click={() => (walletDropdownOpen = !walletDropdownOpen)}
+									on:click={() => (tvlWalletDropdownOpen = !tvlWalletDropdownOpen)}
 									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
 								>
 									<span>
-										{#if selectedWallets.size === allWalletAddresses.length}
-											All Wallets
-										{:else if selectedWallets.size === 0}
+										{#if tvlSelectedWallets.size === tvlWalletAddresses.length}
+											All Wallets (Top 20)
+										{:else if tvlSelectedWallets.size === 0}
 											No Wallets
 										{:else}
-											{selectedWallets.size} Wallet{selectedWallets.size > 1 ? 's' : ''}
+											{tvlSelectedWallets.size} Wallet{tvlSelectedWallets.size > 1 ? 's' : ''}
 										{/if}
 									</span>
 									<svg
-										class="h-4 w-4 transition-transform {walletDropdownOpen ? 'rotate-180' : ''}"
+										class="h-4 w-4 transition-transform {tvlWalletDropdownOpen ? 'rotate-180' : ''}"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
 									>
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 9l-7 7-7-7"
+										/>
 									</svg>
 								</button>
 
-								{#if walletDropdownOpen}
-									<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
+								{#if tvlWalletDropdownOpen}
+									<div
+										class="absolute left-0 top-full z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+									>
 										<div class="border-b border-gray-700 px-3 py-2">
 											<div class="flex gap-2">
 												<button
-													on:click={selectAllWallets}
+													on:click={selectAllTvlWallets}
 													class="text-xs text-[#e8be89] hover:underline"
 												>
 													Select All
 												</button>
 												<span class="text-gray-600">|</span>
 												<button
-													on:click={clearAllWallets}
+													on:click={clearAllTvlWallets}
 													class="text-xs text-gray-400 hover:underline"
 												>
 													Clear
 												</button>
 											</div>
 										</div>
-										{#each allWalletAddresses as wallet}
+										{#each tvlWalletAddresses as wallet}
 											<button
-												on:click={() => toggleWallet(wallet)}
+												on:click={() => toggleTvlWallet(wallet)}
 												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
 											>
 												<span
-													class="flex h-4 w-4 items-center justify-center rounded border {selectedWallets.has(wallet)
+													class="flex h-4 w-4 items-center justify-center rounded border {tvlSelectedWallets.has(
+														wallet
+													)
 														? 'border-[#e8be89] bg-[#e8be89]'
 														: 'border-gray-500'}"
 												>
-													{#if selectedWallets.has(wallet)}
-														<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+													{#if tvlSelectedWallets.has(wallet)}
+														<svg
+															class="h-3 w-3 text-gray-900"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="3"
+																d="M5 13l4 4L19 7"
+															/>
 														</svg>
 													{/if}
 												</span>
-												<span class="font-mono text-white">{truncateAddress(wallet)}</span>
+												<span class="font-mono text-xs text-white"
+													>{wallet.slice(0, 6)}...{wallet.slice(-4)}</span
+												>
 											</button>
 										{/each}
 									</div>
 								{/if}
 							</div>
-
-							<!-- Metric Toggle -->
-							<div class="flex rounded-lg bg-gray-800 p-1">
-								<button
-									on:click={() => (walletChartMetric = 'count')}
-									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {walletChartMetric === 'count'
-										? 'bg-[#e8be89] text-gray-900'
-										: 'text-gray-400 hover:text-white'}"
-								>
-									# of Tx
-								</button>
-								<button
-									on:click={() => (walletChartMetric = 'usdc')}
-									class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {walletChartMetric === 'usdc'
-										? 'bg-[#e8be89] text-gray-900'
-										: 'text-gray-400 hover:text-white'}"
-								>
-									USDC Value
-								</button>
-							</div>
 						</div>
 					</div>
 
 					<!-- Chart -->
-					{#if selectedWallets.size > 0}
+					{#if tvlSelectedWallets.size > 0 && tvlWalletChartData.length > 0}
 						<div class="relative h-80">
 							{#if !chartLibLoaded}
 								<div class="absolute inset-0 flex items-center justify-center">
 									<div class="text-gray-400">Loading chart...</div>
 								</div>
 							{/if}
-							<canvas bind:this={walletChartCanvas} class="h-full w-full"></canvas>
+							<canvas bind:this={tvlWalletChartCanvas} class="h-full w-full"></canvas>
 						</div>
+					{:else if tvlWalletAddresses.length === 0}
+						<p class="py-8 text-center text-gray-400">No wallets with TVL found</p>
 					{:else}
-						<p class="py-8 text-center text-gray-400">Select at least one wallet to view the chart</p>
+						<p class="py-8 text-center text-gray-400">
+							Select at least one wallet to view the chart
+						</p>
 					{/if}
-				{/if}
-			</Card>
-		{/if}
-	{/if}
-
-	{:else if activeSection === 'tvl'}
-	<!-- TVL Section (Snapshot-based) -->
-
-	{#if tvlError}
-		<div class="mb-6 rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
-			{tvlError}
-		</div>
-	{/if}
-
-	{#if tvlLoading && !tvlLastUpdated}
-		<div class="flex items-center gap-3 text-gray-400">
-			<div
-				class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
-			></div>
-			Loading TVL data from snapshots...
-		</div>
-	{:else if !tvlData.latest}
-		<div class="text-center text-gray-400 py-8">
-			<p>No TVL data available</p>
-			<p class="text-sm mt-2">Snapshots have not been generated yet.</p>
-		</div>
-	{:else}
-		<!-- Latest TVL Headline -->
-		<div class="mb-8">
-			<Card>
-				<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-					<div>
-						<p class="text-4xl font-bold text-[#e8be89]">{formatUsd(tvlData.latest.totalTvl)}</p>
-						<p class="mt-1 text-sm text-gray-400">Total Value Locked (TVL)</p>
-					</div>
-					<div class="text-right">
-						<p class="text-sm text-gray-400">
-							Snapshot: {new Date(tvlData.latest.timestamp * 1000).toLocaleString()}
-						</p>
-						<p class="text-xs text-gray-500">
-							Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} wallets
-						</p>
-						<p class="text-xs text-gray-500 mt-1 italic">
-							Approx. end of day balances
-						</p>
-					</div>
-				</div>
-			</Card>
-		</div>
-
-		<!-- TVL by Token Breakdown -->
-		<div class="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			{#each Object.entries(tvlData.latest.tokenTvl).sort((a, b) => b[1] - a[1]) as [symbol, tvl]}
-				<Card>
-					<div class="text-center">
-						<p class="text-xl font-bold text-white">{formatUsd(tvl)}</p>
-						<p class="mt-1 text-sm text-gray-400">{symbol}</p>
-						<p class="text-xs text-gray-500">
-							{tvlData.latest.totalTvl > 0 ? ((tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
-						</p>
-					</div>
 				</Card>
-			{/each}
-		</div>
 
-		<!-- TVL Tab Navigation -->
-		<div class="mb-6 border-b border-gray-700">
-			<nav class="-mb-px flex flex-wrap gap-6">
-				<button
-					on:click={() => (activeTvlTab = 'tokens')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'tokens'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					By Token
-				</button>
-				<button
-					on:click={() => (activeTvlTab = 'codes')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'codes'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					By Access Code
-				</button>
-				<button
-					on:click={() => (activeTvlTab = 'wallets')}
-					class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTvlTab === 'wallets'
-						? 'border-[#e8be89] text-[#e8be89]'
-						: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
-				>
-					By Wallet
-				</button>
-			</nav>
-		</div>
-
-		<!-- TVL Tab Content -->
-		{#if activeTvlTab === 'tokens'}
-			<!-- Daily TVL by Token Chart -->
-			<Card>
-				<div class="mb-6 flex flex-wrap items-center gap-4">
-					<h3 class="text-lg font-medium text-white">Daily TVL by Token</h3>
-
-					<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
-						<!-- Token Dropdown -->
-						<div class="tvl-token-dropdown relative">
-							<button
-								on:click={() => (tvlTokenDropdownOpen = !tvlTokenDropdownOpen)}
-								class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
-							>
-								<span>
-									{#if tvlSelectedTokens.size === tvlTokenSymbols.length}
-										All Tokens
-									{:else if tvlSelectedTokens.size === 0}
-										No Tokens
-									{:else}
-										{tvlSelectedTokens.size} Token{tvlSelectedTokens.size > 1 ? 's' : ''}
-									{/if}
-								</span>
-								<svg
-									class="h-4 w-4 transition-transform {tvlTokenDropdownOpen ? 'rotate-180' : ''}"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-								</svg>
-							</button>
-
-							{#if tvlTokenDropdownOpen}
-								<div class="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
-									<div class="border-b border-gray-700 px-3 py-2">
-										<div class="flex gap-2">
-											<button
-												on:click={selectAllTvlTokens}
-												class="text-xs text-[#e8be89] hover:underline"
-											>
-												Select All
-											</button>
-											<span class="text-gray-600">|</span>
-											<button
-												on:click={clearAllTvlTokens}
-												class="text-xs text-gray-400 hover:underline"
-											>
-												Clear
-											</button>
-										</div>
-									</div>
-									{#each tvlTokenSymbols as symbol}
-										<button
-											on:click={() => toggleTvlToken(symbol)}
-											class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
-										>
-											<span
-												class="flex h-4 w-4 items-center justify-center rounded border {tvlSelectedTokens.has(symbol)
-													? 'border-[#e8be89] bg-[#e8be89]'
-													: 'border-gray-500'}"
-											>
-												{#if tvlSelectedTokens.has(symbol)}
-													<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-													</svg>
-												{/if}
-											</span>
-											<span class="text-white">{symbol}</span>
-										</button>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					</div>
-				</div>
-
-				<!-- Chart -->
-				{#if tvlSelectedTokens.size > 0 && tvlTokenChartData.length > 0}
-					<div class="relative h-80">
-						{#if !chartLibLoaded}
-							<div class="absolute inset-0 flex items-center justify-center">
-								<div class="text-gray-400">Loading chart...</div>
-							</div>
-						{/if}
-						<canvas bind:this={tvlTokenChartCanvas} class="h-full w-full"></canvas>
-					</div>
-				{:else if tvlTokenChartData.length === 0}
-					<p class="py-8 text-center text-gray-400">No historical TVL data available</p>
-				{:else}
-					<p class="py-8 text-center text-gray-400">Select at least one token to view the chart</p>
-				{/if}
-			</Card>
-		{:else if activeTvlTab === 'codes'}
-			<!-- TVL by Access Code -->
-			<Card>
-				<div class="mb-6 flex flex-wrap items-center gap-4">
-					<h3 class="text-lg font-medium text-white">Daily TVL by Access Code</h3>
-
-					<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
-						<!-- Code Dropdown -->
-						<div class="tvl-code-dropdown relative">
-							<button
-								on:click={() => (tvlCodeDropdownOpen = !tvlCodeDropdownOpen)}
-								class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
-							>
-								<span>
-									{#if tvlSelectedCode}
-										{tvlSelectedCode}
-									{:else}
-										Select Code
-									{/if}
-								</span>
-								<svg
-									class="h-4 w-4 transition-transform {tvlCodeDropdownOpen ? 'rotate-180' : ''}"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-								</svg>
-							</button>
-
-							{#if tvlCodeDropdownOpen}
-								<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
-									{#each tvlCodes as code}
-										<button
-											on:click={() => { tvlSelectedCode = code; tvlCodeDropdownOpen = false; }}
-											class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700 {tvlSelectedCode === code ? 'bg-gray-700' : ''}"
-										>
-											<span class="text-white">{code}</span>
-										</button>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					</div>
-				</div>
-
-				<!-- Current Code TVL Stats -->
-				{#if tvlSelectedCode && tvlData.latest}
-					{@const codeEntry = tvlData.latest.codeTvl.find(c => c.code === tvlSelectedCode)}
-					{#if codeEntry}
-						<div class="mb-6 grid gap-4 sm:grid-cols-3">
-							<div class="rounded-lg bg-gray-800/50 p-4 text-center">
-								<p class="text-2xl font-bold text-[#e8be89]">{formatUsd(codeEntry.tvl)}</p>
-								<p class="mt-1 text-sm text-gray-400">Current TVL</p>
-							</div>
-							<div class="rounded-lg bg-gray-800/50 p-4 text-center">
-								<p class="text-2xl font-bold text-white">{codeEntry.walletCount}</p>
-								<p class="mt-1 text-sm text-gray-400">Wallets</p>
-							</div>
-							<div class="rounded-lg bg-gray-800/50 p-4 text-center">
-								<p class="text-2xl font-bold text-white">
-									{tvlData.latest.totalTvl > 0 ? ((codeEntry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
-								</p>
-								<p class="mt-1 text-sm text-gray-400">Share of Total</p>
-							</div>
-						</div>
-					{/if}
-				{/if}
-
-				<!-- Chart -->
-				{#if tvlSelectedCode && tvlCodeChartData.length > 0}
-					<div class="relative h-80">
-						{#if !chartLibLoaded}
-							<div class="absolute inset-0 flex items-center justify-center">
-								<div class="text-gray-400">Loading chart...</div>
-							</div>
-						{/if}
-						<canvas bind:this={tvlCodeChartCanvas} class="h-full w-full"></canvas>
-					</div>
-				{:else if tvlCodes.length === 0}
-					<p class="py-8 text-center text-gray-400">No access codes with TVL found</p>
-				{:else}
-					<p class="py-8 text-center text-gray-400">Select an access code to view TVL history</p>
-				{/if}
-			</Card>
-
-			<!-- Code TVL Leaderboard -->
-			{#if tvlData.latest && tvlData.latest.codeTvl.length > 0}
-				<Card>
-					<h3 class="mb-4 text-lg font-medium text-white">Access Code TVL Leaderboard</h3>
-					<div class="overflow-x-auto">
-						<table class="w-full text-left text-sm">
-							<thead>
-								<tr class="border-b border-gray-700 text-gray-400">
-									<th class="pb-3 pr-4">Rank</th>
-									<th class="pb-3 pr-4">Access Code</th>
-									<th class="pb-3 pr-4 text-right">TVL</th>
-									<th class="pb-3 pr-4 text-right">Wallets</th>
-									<th class="pb-3 text-right">Share</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each tvlData.latest.codeTvl.slice(0, 20) as entry, i}
-									<tr class="border-b border-gray-800 hover:bg-gray-800/50">
-										<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
-										<td class="py-3 pr-4 font-mono text-white">{entry.code}</td>
-										<td class="py-3 pr-4 text-right font-medium text-[#e8be89]">{formatUsd(entry.tvl)}</td>
-										<td class="py-3 pr-4 text-right text-gray-300">{entry.walletCount}</td>
-										<td class="py-3 text-right text-gray-400">
-											{tvlData.latest.totalTvl > 0 ? ((entry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
-										</td>
+				<!-- Wallet TVL Leaderboard -->
+				{#if tvlData.latest && tvlData.latest.walletTvl.length > 0}
+					<Card>
+						<h3 class="mb-4 text-lg font-medium text-white">Wallet TVL Leaderboard</h3>
+						<div class="overflow-x-auto">
+							<table class="w-full text-left text-sm">
+								<thead>
+									<tr class="border-b border-gray-700 text-gray-400">
+										<th class="pb-3 pr-4">Rank</th>
+										<th class="pb-3 pr-4">Wallet</th>
+										<th class="pb-3 pr-4">Access Code</th>
+										<th class="pb-3 pr-4 text-right">TVL</th>
+										<th class="pb-3 text-right">Share</th>
 									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</Card>
-			{/if}
-		{:else if activeTvlTab === 'wallets'}
-			<!-- TVL by Wallet -->
-			<Card>
-				<div class="mb-6 flex flex-wrap items-center gap-4">
-					<h3 class="text-lg font-medium text-white">Daily TVL by Wallet</h3>
-
-					<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
-						<!-- Wallet Dropdown -->
-						<div class="tvl-wallet-dropdown relative">
-							<button
-								on:click={() => (tvlWalletDropdownOpen = !tvlWalletDropdownOpen)}
-								class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
-							>
-								<span>
-									{#if tvlSelectedWallets.size === tvlWalletAddresses.length}
-										All Wallets (Top 20)
-									{:else if tvlSelectedWallets.size === 0}
-										No Wallets
-									{:else}
-										{tvlSelectedWallets.size} Wallet{tvlSelectedWallets.size > 1 ? 's' : ''}
-									{/if}
-								</span>
-								<svg
-									class="h-4 w-4 transition-transform {tvlWalletDropdownOpen ? 'rotate-180' : ''}"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-								</svg>
-							</button>
-
-							{#if tvlWalletDropdownOpen}
-								<div class="absolute left-0 top-full z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl">
-									<div class="border-b border-gray-700 px-3 py-2">
-										<div class="flex gap-2">
-											<button
-												on:click={selectAllTvlWallets}
-												class="text-xs text-[#e8be89] hover:underline"
+								</thead>
+								<tbody>
+									{#each tvlData.latest.walletTvl.slice(0, 20) as entry, i}
+										<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+											<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
+											<td class="py-3 pr-4 font-mono text-xs text-white">
+												{entry.address.slice(0, 6)}...{entry.address.slice(-4)}
+											</td>
+											<td class="py-3 pr-4 text-gray-300">{entry.accessCode || '-'}</td>
+											<td class="py-3 pr-4 text-right font-medium text-[#e8be89]"
+												>{formatUsd(entry.tvl)}</td
 											>
-												Select All
-											</button>
-											<span class="text-gray-600">|</span>
-											<button
-												on:click={clearAllTvlWallets}
-												class="text-xs text-gray-400 hover:underline"
-											>
-												Clear
-											</button>
-										</div>
-									</div>
-									{#each tvlWalletAddresses as wallet}
-										<button
-											on:click={() => toggleTvlWallet(wallet)}
-											class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
-										>
-											<span
-												class="flex h-4 w-4 items-center justify-center rounded border {tvlSelectedWallets.has(wallet)
-													? 'border-[#e8be89] bg-[#e8be89]'
-													: 'border-gray-500'}"
-											>
-												{#if tvlSelectedWallets.has(wallet)}
-													<svg class="h-3 w-3 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-													</svg>
-												{/if}
-											</span>
-											<span class="font-mono text-xs text-white">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
-										</button>
+											<td class="py-3 text-right text-gray-400">
+												{tvlData.latest.totalTvl > 0
+													? ((entry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1)
+													: 0}%
+											</td>
+										</tr>
 									{/each}
-								</div>
-							{/if}
+								</tbody>
+							</table>
 						</div>
-					</div>
-				</div>
-
-				<!-- Chart -->
-				{#if tvlSelectedWallets.size > 0 && tvlWalletChartData.length > 0}
-					<div class="relative h-80">
-						{#if !chartLibLoaded}
-							<div class="absolute inset-0 flex items-center justify-center">
-								<div class="text-gray-400">Loading chart...</div>
-							</div>
-						{/if}
-						<canvas bind:this={tvlWalletChartCanvas} class="h-full w-full"></canvas>
-					</div>
-				{:else if tvlWalletAddresses.length === 0}
-					<p class="py-8 text-center text-gray-400">No wallets with TVL found</p>
-				{:else}
-					<p class="py-8 text-center text-gray-400">Select at least one wallet to view the chart</p>
+					</Card>
 				{/if}
-			</Card>
-
-			<!-- Wallet TVL Leaderboard -->
-			{#if tvlData.latest && tvlData.latest.walletTvl.length > 0}
-				<Card>
-					<h3 class="mb-4 text-lg font-medium text-white">Wallet TVL Leaderboard</h3>
-					<div class="overflow-x-auto">
-						<table class="w-full text-left text-sm">
-							<thead>
-								<tr class="border-b border-gray-700 text-gray-400">
-									<th class="pb-3 pr-4">Rank</th>
-									<th class="pb-3 pr-4">Wallet</th>
-									<th class="pb-3 pr-4">Access Code</th>
-									<th class="pb-3 pr-4 text-right">TVL</th>
-									<th class="pb-3 text-right">Share</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each tvlData.latest.walletTvl.slice(0, 20) as entry, i}
-									<tr class="border-b border-gray-800 hover:bg-gray-800/50">
-										<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
-										<td class="py-3 pr-4 font-mono text-xs text-white">
-											{entry.address.slice(0, 6)}...{entry.address.slice(-4)}
-										</td>
-										<td class="py-3 pr-4 text-gray-300">{entry.accessCode || '-'}</td>
-										<td class="py-3 pr-4 text-right font-medium text-[#e8be89]">{formatUsd(entry.tvl)}</td>
-										<td class="py-3 text-right text-gray-400">
-											{tvlData.latest.totalTvl > 0 ? ((entry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1) : 0}%
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</Card>
 			{/if}
 		{/if}
-	{/if}
 	{/if}
 </div>

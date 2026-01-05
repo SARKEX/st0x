@@ -43,7 +43,11 @@ export interface VaultHolding {
  * Returns vault holdings that can be attributed to their owners
  * @param blockNumber - If provided, queries vault state at this specific block
  */
-async function fetchVaults(skip: number, tokenAddresses: string[], blockNumber?: number): Promise<SubgraphVault[]> {
+async function fetchVaults(
+	skip: number,
+	tokenAddresses: string[],
+	blockNumber?: number
+): Promise<SubgraphVault[]> {
 	// Note: We fetch all vaults and filter client-side because:
 	// 1. Token entity ID in subgraph may not match token address directly
 	// 2. balance_gt filter may not work if balance is stored as Bytes type
@@ -149,7 +153,11 @@ export async function fetchAllVaultHoldings(
 	let hasMore = true;
 	const allVaults: VaultHolding[] = [];
 
-	console.log(`[Vaults] Fetching vault holdings for ${tokenAddresses.length} tokens${blockNumber ? ` at block ${blockNumber}` : ''}`);
+	console.log(
+		`[Vaults] Fetching vault holdings for ${tokenAddresses.length} tokens${
+			blockNumber ? ` at block ${blockNumber}` : ''
+		}`
+	);
 	console.log(`[Vaults] Token addresses: ${tokenAddresses.join(', ')}`);
 	console.log(`[Vaults] Subgraph URL: ${ORDERBOOK_SUBGRAPH_URL}`);
 

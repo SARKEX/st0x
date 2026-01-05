@@ -74,13 +74,26 @@ vi.mock('svelte-wagmi', async () => {
 	};
 });
 
+vi.mock('$lib/stores/authStore', async () => {
+	const { mockWalletAddressStore, mockAuthMethodStore, mockWrongNetworkStore } = await import('../mocks/mockStores');
+	return {
+		walletAddress: mockWalletAddressStore,
+		authMethod: mockAuthMethodStore,
+		wrongNetwork: mockWrongNetworkStore
+	};
+});
+
 vi.mock('svelte/store', async () => {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const actual = (await vi.importActual('svelte/store')) as any;
 	// Import stores to check against them
-	const { mockSignerAddressStore, mockWagmiConfigStore, mockChainIdStore } = await import(
-		'../mocks/mockStores'
-	);
+	const {
+		mockSignerAddressStore,
+		mockWagmiConfigStore,
+		mockChainIdStore,
+		mockWalletAddressStore,
+		mockAuthMethodStore
+	} = await import('../mocks/mockStores');
 	return {
 		...actual,
 		get: vi.fn().mockImplementation((store: unknown) => {
@@ -96,7 +109,9 @@ vi.mock('svelte/store', async () => {
 			if (
 				store === mockSignerAddressStore ||
 				store === mockWagmiConfigStore ||
-				store === mockChainIdStore
+				store === mockChainIdStore ||
+				store === mockWalletAddressStore ||
+				store === mockAuthMethodStore
 			) {
 				let value: unknown;
 				const unsubscribe = (
@@ -184,9 +199,12 @@ describe('transactionStore tests', () => {
 		transactionStore.reset();
 
 		// Set up the mock stores with proper values
-		const { mockSignerAddressStore, mockWagmiConfigStore } = await import('../mocks/mockStores');
+		const { mockSignerAddressStore, mockWagmiConfigStore, mockWalletAddressStore } = await import(
+			'../mocks/mockStores'
+		);
 		const { mockWeb3Config } = await import('../mocks/mockWagmiConfig');
 		mockSignerAddressStore.set('0x1234567890123456789012345678901234567890');
+		mockWalletAddressStore.set('0x1234567890123456789012345678901234567890');
 		mockWagmiConfigStore.set(mockWeb3Config);
 
 		vi.mocked(getMarketMakingDeploymentArgs).mockResolvedValue(mockDeploymentArgsMarketMaking);
@@ -244,7 +262,11 @@ describe('transactionStore tests', () => {
 					maxAmount: 1000000000000000000n,
 					minAmount: 1000000000000000000n,
 					depositAmountToken1: 1000000000000000000n,
-					depositAmountToken2: 1000000000000000000n
+					depositAmountToken2: 1000000000000000000n,
+					inputVaultIdToken1: undefined,
+					inputVaultIdToken2: undefined,
+					outputVaultIdToken1: undefined,
+					outputVaultIdToken2: undefined
 				}),
 			expectedFn: getMarketMakingDeploymentArgs
 		},
@@ -295,7 +317,21 @@ describe('transactionStore tests', () => {
 					depositAmount4: 4000000000000000000n,
 					depositAmount5: 5000000000000000000n,
 					depositAmount6: 6000000000000000000n,
-					depositAmount7: 7000000000000000000n
+					depositAmount7: 7000000000000000000n,
+					inputVaultId1: undefined,
+					inputVaultId2: undefined,
+					inputVaultId3: undefined,
+					inputVaultId4: undefined,
+					inputVaultId5: undefined,
+					inputVaultId6: undefined,
+					inputVaultId7: undefined,
+					outputVaultId1: undefined,
+					outputVaultId2: undefined,
+					outputVaultId3: undefined,
+					outputVaultId4: undefined,
+					outputVaultId5: undefined,
+					outputVaultId6: undefined,
+					outputVaultId7: undefined
 				}),
 			expectedFn: getFolioDeploymentArgs
 		}

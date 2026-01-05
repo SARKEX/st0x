@@ -241,31 +241,33 @@
 		}
 
 		// Aggregate by referral code
-		return referralsData.map((ref) => {
-			const walletDetails = ref.wallets.map((addr) => {
-				const data = walletRewards.get(addr.toLowerCase());
+		return referralsData
+			.map((ref) => {
+				const walletDetails = ref.wallets.map((addr) => {
+					const data = walletRewards.get(addr.toLowerCase());
+					return {
+						address: addr,
+						points: data?.points ?? 0,
+						reward: data?.reward ?? 0
+					};
+				});
+
+				// Sort by reward descending
+				walletDetails.sort((a, b) => b.reward - a.reward);
+
+				const totalPoints = walletDetails.reduce((sum, w) => sum + w.points, 0);
+				const totalReward = walletDetails.reduce((sum, w) => sum + w.reward, 0);
+
 				return {
-					address: addr,
-					points: data?.points ?? 0,
-					reward: data?.reward ?? 0
+					code: ref.code,
+					label: ref.label,
+					wallets: walletDetails,
+					totalPoints,
+					totalReward,
+					walletCount: ref.wallets.length
 				};
-			});
-
-			// Sort by reward descending
-			walletDetails.sort((a, b) => b.reward - a.reward);
-
-			const totalPoints = walletDetails.reduce((sum, w) => sum + w.points, 0);
-			const totalReward = walletDetails.reduce((sum, w) => sum + w.reward, 0);
-
-			return {
-				code: ref.code,
-				label: ref.label,
-				wallets: walletDetails,
-				totalPoints,
-				totalReward,
-				walletCount: ref.wallets.length
-			};
-		}).sort((a, b) => b.totalReward - a.totalReward);
+			})
+			.sort((a, b) => b.totalReward - a.totalReward);
 	})();
 
 	// ===== Statement Modal State =====
@@ -333,7 +335,11 @@
 		statementData = null;
 
 		try {
-			const res = await fetch(`/api/admin/referrals/statement?code=${encodeURIComponent(code)}&month=${encodeURIComponent(selectedMonth)}`);
+			const res = await fetch(
+				`/api/admin/referrals/statement?code=${encodeURIComponent(code)}&month=${encodeURIComponent(
+					selectedMonth
+				)}`
+			);
 			const data = await res.json();
 
 			if (!res.ok) {
@@ -373,7 +379,11 @@
 		lines.push('=== Wallet Summary ===');
 		lines.push('Rank,Wallet,Snapshots,Avg USD Value,Total USD Value,Total Points');
 		statementData.walletSummary.forEach((wallet, i) => {
-			lines.push(`${i + 1},${wallet.address},${wallet.snapshotCount},${wallet.avgUsdValue.toFixed(2)},${wallet.totalUsdValue.toFixed(2)},${wallet.totalPoints.toFixed(0)}`);
+			lines.push(
+				`${i + 1},${wallet.address},${wallet.snapshotCount},${wallet.avgUsdValue.toFixed(
+					2
+				)},${wallet.totalUsdValue.toFixed(2)},${wallet.totalPoints.toFixed(0)}`
+			);
 		});
 		lines.push('');
 
@@ -381,7 +391,11 @@
 		lines.push('=== Snapshot Summary ===');
 		lines.push('Rank,Date,Block Number,Wallets,USD Value,Points');
 		statementData.snapshots.forEach((snapshot, i) => {
-			lines.push(`${i + 1},${snapshot.date},${snapshot.blockNumber},${snapshot.wallets.length},${snapshot.totalUsdValue.toFixed(2)},${snapshot.totalPoints.toFixed(0)}`);
+			lines.push(
+				`${i + 1},${snapshot.date},${snapshot.blockNumber},${
+					snapshot.wallets.length
+				},${snapshot.totalUsdValue.toFixed(2)},${snapshot.totalPoints.toFixed(0)}`
+			);
 		});
 		lines.push('');
 
@@ -391,7 +405,13 @@
 		statementData.snapshots.forEach((snapshot) => {
 			snapshot.wallets.forEach((wallet) => {
 				wallet.holdings.forEach((holding) => {
-					lines.push(`${snapshot.date},${snapshot.blockNumber},${wallet.address},${holding.symbol},${holding.quantity},${holding.price.toFixed(2)},${holding.usdValue.toFixed(2)},${holding.points.toFixed(0)}`);
+					lines.push(
+						`${snapshot.date},${snapshot.blockNumber},${wallet.address},${holding.symbol},${
+							holding.quantity
+						},${holding.price.toFixed(2)},${holding.usdValue.toFixed(2)},${holding.points.toFixed(
+							0
+						)}`
+					);
 				});
 			});
 		});
@@ -864,7 +884,11 @@
 				await loadAggregatedData();
 			}
 		} catch (err) {
-			alert(`Error regenerating block ${blockNumber}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			alert(
+				`Error regenerating block ${blockNumber}: ${
+					err instanceof Error ? err.message : 'Unknown error'
+				}`
+			);
 		} finally {
 			regeneratingBlockNumber = null;
 		}
@@ -1529,7 +1553,11 @@
 		walletStatementData = null;
 
 		try {
-			const res = await fetch(`/api/admin/wallet/statement?wallet=${encodeURIComponent(walletAddress)}&month=${encodeURIComponent(selectedMonth)}`);
+			const res = await fetch(
+				`/api/admin/wallet/statement?wallet=${encodeURIComponent(
+					walletAddress
+				)}&month=${encodeURIComponent(selectedMonth)}`
+			);
 			const data = await res.json();
 
 			if (!res.ok) {
@@ -1570,10 +1598,18 @@
 		lines.push('Date,Block Number,Token,Quantity,Pyth Price,USD Value,Points');
 		walletStatementData.snapshots.forEach((snapshot) => {
 			snapshot.holdings.forEach((holding) => {
-				lines.push(`${snapshot.date},${snapshot.blockNumber},${holding.symbol},${holding.quantity},${holding.price.toFixed(2)},${holding.usdValue.toFixed(2)},${holding.points.toFixed(0)}`);
+				lines.push(
+					`${snapshot.date},${snapshot.blockNumber},${holding.symbol},${
+						holding.quantity
+					},${holding.price.toFixed(2)},${holding.usdValue.toFixed(2)},${holding.points.toFixed(0)}`
+				);
 			});
 			// Add snapshot subtotal
-			lines.push(`${snapshot.date},${snapshot.blockNumber},SUBTOTAL,,,${snapshot.totalUsdValue.toFixed(2)},${snapshot.totalPoints.toFixed(0)}`);
+			lines.push(
+				`${snapshot.date},${snapshot.blockNumber},SUBTOTAL,,,${snapshot.totalUsdValue.toFixed(
+					2
+				)},${snapshot.totalPoints.toFixed(0)}`
+			);
 		});
 
 		const csv = lines.join('\n');
@@ -1581,7 +1617,9 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `wallet-statement-${walletStatementData.wallet.slice(0, 8)}-${walletStatementData.month}.csv`;
+		a.download = `wallet-statement-${walletStatementData.wallet.slice(0, 8)}-${
+			walletStatementData.month
+		}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -1599,13 +1637,21 @@
 
 		// Header info
 		doc.setFontSize(10);
-		doc.text(`Wallet: ${walletStatementData.wallet.slice(0, 6)}...${walletStatementData.wallet.slice(-4)}`, 14, y);
+		doc.text(
+			`Wallet: ${walletStatementData.wallet.slice(0, 6)}...${walletStatementData.wallet.slice(-4)}`,
+			14,
+			y
+		);
 		doc.text(`Month: ${walletStatementData.month}`, 120, y);
 		y += 6;
 		doc.text(`Total Snapshots: ${walletStatementData.totals.snapshotCount}`, 14, y);
 		doc.text(`Avg USD Value: $${walletStatementData.totals.avgUsdValue.toFixed(2)}`, 120, y);
 		y += 6;
-		doc.text(`End of month USD value: $${walletStatementData.totals.totalUsdValue.toFixed(2)}`, 14, y);
+		doc.text(
+			`End of month USD value: $${walletStatementData.totals.totalUsdValue.toFixed(2)}`,
+			14,
+			y
+		);
 		doc.text(`Total Points: ${walletStatementData.totals.totalPoints.toLocaleString()}`, 120, y);
 		y += 12;
 
@@ -1623,7 +1669,13 @@
 			doc.setFontSize(10);
 			doc.text(`${snapshot.date} - Block #${snapshot.blockNumber.toLocaleString()}`, 14, y);
 			doc.setFontSize(8);
-			doc.text(`Total: $${snapshot.totalUsdValue.toFixed(2)} | ${snapshot.totalPoints.toLocaleString()} pts`, 140, y);
+			doc.text(
+				`Total: $${snapshot.totalUsdValue.toFixed(
+					2
+				)} | ${snapshot.totalPoints.toLocaleString()} pts`,
+				140,
+				y
+			);
 			y += 4;
 
 			if (snapshot.holdings.length > 0) {
@@ -1648,7 +1700,9 @@
 		doc.setFontSize(8);
 		doc.text('Points = (Token Quantity × Pyth Price) × 100', 14, y + 5);
 
-		doc.save(`wallet-statement-${walletStatementData.wallet.slice(0, 8)}-${walletStatementData.month}.pdf`);
+		doc.save(
+			`wallet-statement-${walletStatementData.wallet.slice(0, 8)}-${walletStatementData.month}.pdf`
+		);
 	}
 </script>
 
@@ -1906,11 +1960,16 @@
 					<div class="border-t border-yellow-600/30 p-4">
 						<p class="mb-3 text-xs text-gray-400">
 							This will regenerate all snapshot data for the selected month using the current code.
-							Use this if snapshot generation logic has been fixed/improved (e.g., vault attribution fixes).
-							<strong class="text-yellow-400">After regenerating, click "Recalculate Points" to update the points data.</strong>
+							Use this if snapshot generation logic has been fixed/improved (e.g., vault attribution
+							fixes).
+							<strong class="text-yellow-400"
+								>After regenerating, click "Recalculate Points" to update the points data.</strong
+							>
 						</p>
 						{#if !selectedMonth}
-							<p class="text-sm text-yellow-400">Please select a month above to enable regeneration.</p>
+							<p class="text-sm text-yellow-400">
+								Please select a month above to enable regeneration.
+							</p>
 						{:else}
 							<div class="flex flex-wrap items-center gap-3">
 								<input
@@ -1944,7 +2003,8 @@
 							<div class="mt-3 rounded-md bg-green-900/30 p-3 text-sm">
 								<p class="font-medium text-green-400">Regeneration complete!</p>
 								<p class="mt-1 text-gray-300">
-									{regenerateResult.successful} successful, {regenerateResult.failed} failed out of {regenerateResult.totalBlocks} blocks
+									{regenerateResult.successful} successful, {regenerateResult.failed} failed out of {regenerateResult.totalBlocks}
+									blocks
 								</p>
 								{#if regenerateResult.failed > 0}
 									<div class="mt-2 rounded bg-red-900/30 p-2 text-xs">
@@ -2119,7 +2179,7 @@
 								type="text"
 								bind:value={walletSearchQuery}
 								placeholder="Search wallet address..."
-								class="w-64 rounded-lg border border-gray-600 bg-gray-800 pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
+								class="w-64 rounded-lg border border-gray-600 bg-gray-800 py-2 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
 							/>
 							<svg
 								class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
@@ -2127,7 +2187,12 @@
 								stroke="currentColor"
 								viewBox="0 0 24 24"
 							>
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+								/>
 							</svg>
 							{#if walletSearchQuery}
 								<button
@@ -2135,7 +2200,12 @@
 									class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
 								>
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M6 18L18 6M6 6l12 12"
+										/>
 									</svg>
 								</button>
 							{/if}
@@ -2167,9 +2237,14 @@
 					{:else}
 						<!-- Scroll indicator container -->
 						<div class="relative">
-							<div class="max-h-[500px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-700" style="scrollbar-gutter: stable;">
+							<div
+								class="max-h-[500px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-700"
+								style="scrollbar-gutter: stable;"
+							>
 								<table class="w-full text-left text-sm">
-									<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400 z-10">
+									<thead
+										class="sticky top-0 z-10 border-b border-gray-700 bg-gray-900 text-gray-400"
+									>
 										<tr>
 											<th class="whitespace-nowrap px-3 py-3">#</th>
 											<th class="whitespace-nowrap px-3 py-3">Wallet</th>
@@ -2232,32 +2307,32 @@
 											</tr>
 										{/each}
 									</tbody>
-								{#if currentMonthPool}
-									<tfoot class="border-t border-gray-600 bg-gray-800/50">
-										<tr>
-											<td class="py-3 pr-4"></td>
-											<td class="py-3 pr-4 font-semibold text-white">Total</td>
-											<td class="py-3 pr-4 text-right font-mono font-semibold text-white">
-												{totalPoints.toLocaleString()}
-											</td>
-											<td class="py-3 pr-4 text-right font-mono text-gray-300">100%</td>
-											<td class="py-3 pr-4 text-right font-mono font-semibold text-[#e8be89]">
-												{formatUsd(effectivePoolAmount)}
-											</td>
-											<td class="py-3 pr-4"></td>
-										</tr>
-									</tfoot>
-								{/if}
-							</table>
-							{#if filteredWalletRows.length > 100}
-								<p class="mt-4 text-center text-sm text-gray-500">
-									Showing top 100 of {filteredWalletRows.length} wallets
-									{#if walletSearchQuery && filteredWalletRows.length !== walletRows.length}
-										(filtered from {walletRows.length} total)
+									{#if currentMonthPool}
+										<tfoot class="border-t border-gray-600 bg-gray-800/50">
+											<tr>
+												<td class="py-3 pr-4"></td>
+												<td class="py-3 pr-4 font-semibold text-white">Total</td>
+												<td class="py-3 pr-4 text-right font-mono font-semibold text-white">
+													{totalPoints.toLocaleString()}
+												</td>
+												<td class="py-3 pr-4 text-right font-mono text-gray-300">100%</td>
+												<td class="py-3 pr-4 text-right font-mono font-semibold text-[#e8be89]">
+													{formatUsd(effectivePoolAmount)}
+												</td>
+												<td class="py-3 pr-4"></td>
+											</tr>
+										</tfoot>
 									{/if}
-								</p>
-							{/if}
-						</div>
+								</table>
+								{#if filteredWalletRows.length > 100}
+									<p class="mt-4 text-center text-sm text-gray-500">
+										Showing top 100 of {filteredWalletRows.length} wallets
+										{#if walletSearchQuery && filteredWalletRows.length !== walletRows.length}
+											(filtered from {walletRows.length} total)
+										{/if}
+									</p>
+								{/if}
+							</div>
 						</div>
 					{/if}
 				</Card>
@@ -2332,14 +2407,17 @@
 												<button
 													on:click|stopPropagation={() => regenerateSingleBlock(block.blockNumber)}
 													disabled={regeneratingBlockNumber !== null}
-													class="rounded px-2 py-1 text-xs font-medium transition-colors {regeneratingBlockNumber === block.blockNumber
+													class="rounded px-2 py-1 text-xs font-medium transition-colors {regeneratingBlockNumber ===
+													block.blockNumber
 														? 'cursor-wait bg-yellow-600/50 text-yellow-200'
 														: 'bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/40'} disabled:opacity-50"
 													title="Regenerate this snapshot"
 												>
 													{#if regeneratingBlockNumber === block.blockNumber}
 														<span class="flex items-center gap-1">
-															<div class="h-3 w-3 animate-spin rounded-full border border-yellow-400/30 border-t-yellow-400"></div>
+															<div
+																class="h-3 w-3 animate-spin rounded-full border border-yellow-400/30 border-t-yellow-400"
+															></div>
 															Regenerating...
 														</span>
 													{:else}
@@ -3314,7 +3392,7 @@
 				</div>
 			{:else if referralRewardsData.length === 0}
 				<Card>
-					<p class="text-center text-gray-400 py-8">
+					<p class="py-8 text-center text-gray-400">
 						{#if !monthlyData?.wallets}
 							Select a month in the Monthly Points tab to view referral rewards.
 						{:else}
@@ -3363,15 +3441,22 @@
 							<tbody>
 								{#each referralRewardsData as ref, i}
 									<tr
-										class="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer {selectedReferralCode === ref.code ? 'bg-gray-800/70' : ''}"
+										class="cursor-pointer border-b border-gray-800 hover:bg-gray-800/50 {selectedReferralCode ===
+										ref.code
+											? 'bg-gray-800/70'
+											: ''}"
 										on:click={() => (selectedReferralCode = ref.code)}
 									>
 										<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
 										<td class="py-3 pr-4 font-mono text-white">{ref.code}</td>
 										<td class="py-3 pr-4 text-gray-300">{ref.label || '-'}</td>
 										<td class="py-3 pr-4 text-right text-gray-300">{ref.walletCount}</td>
-										<td class="py-3 pr-4 text-right text-gray-300">{ref.totalPoints.toLocaleString()}</td>
-										<td class="py-3 pr-4 text-right font-medium text-[#e8be89]">{formatUsd(ref.totalReward)}</td>
+										<td class="py-3 pr-4 text-right text-gray-300"
+											>{ref.totalPoints.toLocaleString()}</td
+										>
+										<td class="py-3 pr-4 text-right font-medium text-[#e8be89]"
+											>{formatUsd(ref.totalReward)}</td
+										>
 										<td class="py-3 text-right">
 											<button
 												on:click|stopPropagation={() => generateStatement(ref.code)}
@@ -3401,11 +3486,14 @@
 										{/if}
 									</h3>
 									<p class="mt-1 text-sm text-gray-400">
-										{selectedRef.walletCount} wallets &middot; {selectedRef.totalPoints.toLocaleString()} points
+										{selectedRef.walletCount} wallets &middot; {selectedRef.totalPoints.toLocaleString()}
+										points
 									</p>
 								</div>
 								<div class="text-right">
-									<p class="text-2xl font-bold text-[#e8be89]">{formatUsd(selectedRef.totalReward)}</p>
+									<p class="text-2xl font-bold text-[#e8be89]">
+										{formatUsd(selectedRef.totalReward)}
+									</p>
 									<p class="text-sm text-gray-400">Total Rewards</p>
 								</div>
 							</div>
@@ -3431,7 +3519,11 @@
 													<td class="py-2 pr-4 text-right text-gray-300">
 														{wallet.points > 0 ? wallet.points.toLocaleString() : '-'}
 													</td>
-													<td class="py-2 text-right font-medium {wallet.reward > 0 ? 'text-[#e8be89]' : 'text-gray-500'}">
+													<td
+														class="py-2 text-right font-medium {wallet.reward > 0
+															? 'text-[#e8be89]'
+															: 'text-gray-500'}"
+													>
 														{wallet.reward > 0 ? formatUsd(wallet.reward) : '-'}
 													</td>
 												</tr>
@@ -3440,7 +3532,7 @@
 									</table>
 								</div>
 							{:else}
-								<p class="text-center text-gray-400 py-4">No wallets registered with this code</p>
+								<p class="py-4 text-center text-gray-400">No wallets registered with this code</p>
 							{/if}
 						</Card>
 					{/if}
@@ -3522,7 +3614,6 @@
 
 <!-- Airdrop CSV Modal -->
 {#if airdropModalOpen}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
 		on:click={closeAirdropModal}
@@ -3539,9 +3630,7 @@
 			aria-modal="true"
 			aria-labelledby="airdrop-title"
 		>
-			<h2 id="airdrop-title" class="mb-2 text-xl font-semibold text-white">
-				Generate Airdrop CSV
-			</h2>
+			<h2 id="airdrop-title" class="mb-2 text-xl font-semibold text-white">Generate Airdrop CSV</h2>
 			<p class="mb-4 text-sm text-gray-400">
 				Generate a CSV file to distribute tokens proportionally based on points for
 				<strong class="text-[#e8be89]">{selectedMonth}</strong>.
@@ -3622,7 +3711,8 @@
 			</div>
 
 			<p class="mt-4 text-xs text-gray-500">
-				The CSV follows the Safe/Gnosis format for batch transfers with columns: token_type, token_address, receiver, amount, id
+				The CSV follows the Safe/Gnosis format for batch transfers with columns: token_type,
+				token_address, receiver, amount, id
 			</p>
 		</div>
 	</div>
@@ -3630,9 +3720,8 @@
 
 <!-- Statement Modal -->
 {#if statementModalOpen}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 overflow-y-auto"
+		class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
 		on:click={closeStatementModal}
 		on:keydown={(e) => e.key === 'Escape' && closeStatementModal()}
 		role="button"
@@ -3649,9 +3738,7 @@
 		>
 			<div class="mb-4 flex items-center justify-between">
 				<div>
-					<h2 id="statement-title" class="text-xl font-semibold text-white">
-						Points Statement
-					</h2>
+					<h2 id="statement-title" class="text-xl font-semibold text-white">Points Statement</h2>
 					<p class="mt-1 text-sm text-gray-400">
 						Referral Code: <strong class="text-[#e8be89]">{statementCode}</strong>
 						&middot; Month: <strong class="text-[#e8be89]">{selectedMonth}</strong>
@@ -3662,7 +3749,12 @@
 					class="rounded-lg p-2 text-gray-400 hover:bg-gray-700 hover:text-white"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
 					</svg>
 				</button>
 			</div>
@@ -3681,10 +3773,10 @@
 					{statementError}
 				</div>
 			{:else if statementData}
-				<div class="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+				<div class="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
 					<!-- Totals Summary -->
 					<div class="rounded-lg bg-gray-900/50 p-4">
-						<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 text-center">
+						<div class="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
 							<div>
 								<p class="text-2xl font-bold text-[#e8be89]">{statementData.totals.walletCount}</p>
 								<p class="text-sm text-gray-400">Wallets</p>
@@ -3694,11 +3786,15 @@
 								<p class="text-sm text-gray-400">Snapshots</p>
 							</div>
 							<div>
-								<p class="text-2xl font-bold text-white">{formatUsd(statementData.totals.totalUsdValue)}</p>
+								<p class="text-2xl font-bold text-white">
+									{formatUsd(statementData.totals.totalUsdValue)}
+								</p>
 								<p class="text-sm text-gray-400">Total USD Value</p>
 							</div>
 							<div>
-								<p class="text-2xl font-bold text-[#e8be89]">{statementData.totals.totalPoints.toLocaleString()}</p>
+								<p class="text-2xl font-bold text-[#e8be89]">
+									{statementData.totals.totalPoints.toLocaleString()}
+								</p>
 								<p class="text-sm text-gray-400">Total Points</p>
 							</div>
 						</div>
@@ -3727,9 +3823,15 @@
 												{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
 											</td>
 											<td class="px-4 py-2 text-right text-gray-300">{wallet.snapshotCount}</td>
-											<td class="px-4 py-2 text-right text-gray-300">{formatUsd(wallet.avgUsdValue)}</td>
-											<td class="px-4 py-2 text-right text-gray-300">{formatUsd(wallet.totalUsdValue)}</td>
-											<td class="px-4 py-2 text-right font-medium text-[#e8be89]">{wallet.totalPoints.toLocaleString()}</td>
+											<td class="px-4 py-2 text-right text-gray-300"
+												>{formatUsd(wallet.avgUsdValue)}</td
+											>
+											<td class="px-4 py-2 text-right text-gray-300"
+												>{formatUsd(wallet.totalUsdValue)}</td
+											>
+											<td class="px-4 py-2 text-right font-medium text-[#e8be89]"
+												>{wallet.totalPoints.toLocaleString()}</td
+											>
 										</tr>
 									{/each}
 								</tbody>
@@ -3757,10 +3859,16 @@
 										<tr class="border-t border-gray-700 hover:bg-gray-800/50">
 											<td class="px-4 py-2 text-gray-400">{i + 1}</td>
 											<td class="px-4 py-2 text-white">{snapshot.date}</td>
-											<td class="px-4 py-2 font-mono text-gray-300">{snapshot.blockNumber.toLocaleString()}</td>
+											<td class="px-4 py-2 font-mono text-gray-300"
+												>{snapshot.blockNumber.toLocaleString()}</td
+											>
 											<td class="px-4 py-2 text-right text-gray-300">{snapshot.wallets.length}</td>
-											<td class="px-4 py-2 text-right text-gray-300">{formatUsd(snapshot.totalUsdValue)}</td>
-											<td class="px-4 py-2 text-right font-medium text-[#e8be89]">{snapshot.totalPoints.toLocaleString()}</td>
+											<td class="px-4 py-2 text-right text-gray-300"
+												>{formatUsd(snapshot.totalUsdValue)}</td
+											>
+											<td class="px-4 py-2 text-right font-medium text-[#e8be89]"
+												>{snapshot.totalPoints.toLocaleString()}</td
+											>
 										</tr>
 									{/each}
 								</tbody>
@@ -3773,17 +3881,23 @@
 						<h3 class="mb-3 text-lg font-medium text-white">3. Detailed Breakdown by Snapshot</h3>
 						<div class="space-y-4">
 							{#each statementData.snapshots as snapshot}
-								<div class="rounded-lg border border-gray-700 overflow-hidden">
-									<div class="bg-gray-900/70 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+								<div class="overflow-hidden rounded-lg border border-gray-700">
+									<div
+										class="flex flex-wrap items-center justify-between gap-2 bg-gray-900/70 px-4 py-3"
+									>
 										<div>
 											<span class="font-medium text-white">{snapshot.date}</span>
-											<span class="ml-2 font-mono text-sm text-gray-400">Block #{snapshot.blockNumber.toLocaleString()}</span>
+											<span class="ml-2 font-mono text-sm text-gray-400"
+												>Block #{snapshot.blockNumber.toLocaleString()}</span
+											>
 										</div>
 										<div class="text-sm">
 											<span class="text-gray-400">Total:</span>
 											<span class="ml-1 text-white">{formatUsd(snapshot.totalUsdValue)}</span>
 											<span class="ml-2 text-gray-400">|</span>
-											<span class="ml-2 text-[#e8be89]">{snapshot.totalPoints.toLocaleString()} pts</span>
+											<span class="ml-2 text-[#e8be89]"
+												>{snapshot.totalPoints.toLocaleString()} pts</span
+											>
 										</div>
 									</div>
 
@@ -3805,13 +3919,18 @@
 														{#each wallet.holdings as holding, holdingIdx}
 															<tr class="border-t border-gray-800 hover:bg-gray-800/30">
 																{#if holdingIdx === 0}
-																	<td class="px-3 py-1.5 font-mono text-white" rowspan={wallet.holdings.length}>
+																	<td
+																		class="px-3 py-1.5 font-mono text-white"
+																		rowspan={wallet.holdings.length}
+																	>
 																		{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
 																	</td>
 																{/if}
 																<td class="px-3 py-1.5 text-gray-300">{holding.symbol}</td>
 																<td class="px-3 py-1.5 text-right font-mono text-gray-300">
-																	{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+																	{holding.quantity.toLocaleString(undefined, {
+																		maximumFractionDigits: 4
+																	})}
 																</td>
 																<td class="px-3 py-1.5 text-right font-mono text-gray-300">
 																	${holding.price.toFixed(2)}
@@ -3820,15 +3939,23 @@
 																	{formatUsd(holding.usdValue)}
 																</td>
 																<td class="px-3 py-1.5 text-right text-[#e8be89]">
-																	{holding.points.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+																	{holding.points.toLocaleString(undefined, {
+																		maximumFractionDigits: 0
+																	})}
 																</td>
 															</tr>
 														{/each}
 														<!-- Wallet subtotal -->
 														<tr class="bg-gray-800/40 font-medium">
 															<td class="px-3 py-1.5 text-gray-400" colspan="4">Subtotal</td>
-															<td class="px-3 py-1.5 text-right text-white">{formatUsd(wallet.totalUsdValue)}</td>
-															<td class="px-3 py-1.5 text-right text-[#e8be89]">{wallet.totalPoints.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+															<td class="px-3 py-1.5 text-right text-white"
+																>{formatUsd(wallet.totalUsdValue)}</td
+															>
+															<td class="px-3 py-1.5 text-right text-[#e8be89]"
+																>{wallet.totalPoints.toLocaleString(undefined, {
+																	maximumFractionDigits: 0
+																})}</td
+															>
 														</tr>
 													{/each}
 												</tbody>
@@ -3844,12 +3971,11 @@
 
 					<!-- Formula explanation -->
 					<div class="rounded-lg bg-gray-900/30 p-4 text-sm">
-						<p class="font-medium text-gray-300 mb-2">Points Calculation Formula:</p>
-						<p class="text-gray-400">
-							Points = (Token Quantity × Pyth Price) × 100
-						</p>
-						<p class="text-gray-500 mt-1 text-xs">
-							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate across all snapshots within the month.
+						<p class="mb-2 font-medium text-gray-300">Points Calculation Formula:</p>
+						<p class="text-gray-400">Points = (Token Quantity × Pyth Price) × 100</p>
+						<p class="mt-1 text-xs text-gray-500">
+							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate
+							across all snapshots within the month.
 						</p>
 					</div>
 				</div>
@@ -3860,7 +3986,12 @@
 						class="flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600"
 					>
 						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
 						</svg>
 						Export CSV
 					</button>
@@ -3869,7 +4000,12 @@
 						class="flex items-center gap-2 rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
 					>
 						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
 						</svg>
 						Export PDF
 					</button>
@@ -3887,9 +4023,8 @@
 
 <!-- Wallet Statement Modal -->
 {#if walletStatementModalOpen}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 overflow-y-auto"
+		class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
 		on:click={closeWalletStatementModal}
 		on:keydown={(e) => e.key === 'Escape' && closeWalletStatementModal()}
 		role="button"
@@ -3915,7 +4050,8 @@
 							target="_blank"
 							rel="noopener noreferrer"
 							class="font-mono text-[#e8be89] hover:underline"
-						>{walletStatementAddress.slice(0, 6)}...{walletStatementAddress.slice(-4)}</a>
+							>{walletStatementAddress.slice(0, 6)}...{walletStatementAddress.slice(-4)}</a
+						>
 						&middot; Month: <strong class="text-[#e8be89]">{selectedMonth}</strong>
 					</p>
 				</div>
@@ -3924,7 +4060,12 @@
 					class="rounded-lg p-2 text-gray-400 hover:bg-gray-700 hover:text-white"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
 					</svg>
 				</button>
 			</div>
@@ -3943,20 +4084,26 @@
 					{walletStatementError}
 				</div>
 			{:else if walletStatementData}
-				<div class="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+				<div class="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
 					<!-- Totals Summary -->
 					<div class="rounded-lg bg-gray-900/50 p-4">
 						<div class="grid grid-cols-3 gap-4 text-center">
 							<div>
-								<p class="text-2xl font-bold text-white">{walletStatementData.totals.snapshotCount}</p>
+								<p class="text-2xl font-bold text-white">
+									{walletStatementData.totals.snapshotCount}
+								</p>
 								<p class="text-sm text-gray-400">Snapshots</p>
 							</div>
 							<div>
-								<p class="text-2xl font-bold text-white">{formatUsd(walletStatementData.totals.avgUsdValue)}</p>
+								<p class="text-2xl font-bold text-white">
+									{formatUsd(walletStatementData.totals.avgUsdValue)}
+								</p>
 								<p class="text-sm text-gray-400">Avg USD Value</p>
 							</div>
 							<div>
-								<p class="text-2xl font-bold text-[#e8be89]">{walletStatementData.totals.totalPoints.toLocaleString()}</p>
+								<p class="text-2xl font-bold text-[#e8be89]">
+									{walletStatementData.totals.totalPoints.toLocaleString()}
+								</p>
 								<p class="text-sm text-gray-400">Total Points</p>
 							</div>
 						</div>
@@ -3967,17 +4114,23 @@
 						<h3 class="mb-3 text-lg font-medium text-white">Holdings by Snapshot</h3>
 						<div class="space-y-4">
 							{#each walletStatementData.snapshots as snapshot}
-								<div class="rounded-lg border border-gray-700 overflow-hidden">
-									<div class="bg-gray-900/70 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+								<div class="overflow-hidden rounded-lg border border-gray-700">
+									<div
+										class="flex flex-wrap items-center justify-between gap-2 bg-gray-900/70 px-4 py-3"
+									>
 										<div>
 											<span class="font-medium text-white">{snapshot.date}</span>
-											<span class="ml-2 font-mono text-sm text-gray-400">Block #{snapshot.blockNumber.toLocaleString()}</span>
+											<span class="ml-2 font-mono text-sm text-gray-400"
+												>Block #{snapshot.blockNumber.toLocaleString()}</span
+											>
 										</div>
 										<div class="text-sm">
 											<span class="text-gray-400">Total:</span>
 											<span class="ml-1 text-white">{formatUsd(snapshot.totalUsdValue)}</span>
 											<span class="ml-2 text-gray-400">|</span>
-											<span class="ml-2 text-[#e8be89]">{snapshot.totalPoints.toLocaleString()} pts</span>
+											<span class="ml-2 text-[#e8be89]"
+												>{snapshot.totalPoints.toLocaleString()} pts</span
+											>
 										</div>
 									</div>
 
@@ -3998,7 +4151,9 @@
 														<tr class="border-t border-gray-800 hover:bg-gray-800/30">
 															<td class="px-4 py-2 font-medium text-[#e8be89]">{holding.symbol}</td>
 															<td class="px-4 py-2 text-right font-mono text-gray-300">
-																{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+																{holding.quantity.toLocaleString(undefined, {
+																	maximumFractionDigits: 4
+																})}
 															</td>
 															<td class="px-4 py-2 text-right font-mono text-gray-300">
 																${holding.price.toFixed(2)}
@@ -4007,7 +4162,9 @@
 																{formatUsd(holding.usdValue)}
 															</td>
 															<td class="px-4 py-2 text-right text-[#e8be89]">
-																{holding.points.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+																{holding.points.toLocaleString(undefined, {
+																	maximumFractionDigits: 0
+																})}
 															</td>
 														</tr>
 													{/each}
@@ -4024,12 +4181,11 @@
 
 					<!-- Formula explanation -->
 					<div class="rounded-lg bg-gray-900/30 p-4 text-sm">
-						<p class="font-medium text-gray-300 mb-2">Points Calculation Formula:</p>
-						<p class="text-gray-400">
-							Points = (Token Quantity × Pyth Price) × 100
-						</p>
-						<p class="text-gray-500 mt-1 text-xs">
-							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate across all snapshots within the month.
+						<p class="mb-2 font-medium text-gray-300">Points Calculation Formula:</p>
+						<p class="text-gray-400">Points = (Token Quantity × Pyth Price) × 100</p>
+						<p class="mt-1 text-xs text-gray-500">
+							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate
+							across all snapshots within the month.
 						</p>
 					</div>
 				</div>
@@ -4040,7 +4196,12 @@
 						class="flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600"
 					>
 						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
 						</svg>
 						Export CSV
 					</button>
@@ -4049,7 +4210,12 @@
 						class="flex items-center gap-2 rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
 					>
 						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
 						</svg>
 						Export PDF
 					</button>

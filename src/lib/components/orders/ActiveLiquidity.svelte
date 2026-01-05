@@ -12,7 +12,7 @@
 	import VaultIdInput from '$lib/components/VaultIdInput.svelte';
 	import type { Hex } from 'viem';
 	import { formatUnits } from 'viem';
-	import { connected } from 'svelte-wagmi';
+	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId } from '$lib/utils/derivations';
 	import { currentNetwork } from '$lib/stores';
@@ -95,7 +95,7 @@
 		isToken1SameAsToken2;
 
 	const handleDsfDeploy = () => {
-		if ($connected) {
+		if ($isAuthenticated) {
 			transactionStore.handleDsfDeploy({
 				token1: selectedToken1,
 				token2: selectedToken2,
@@ -105,7 +105,11 @@
 				maxAmount: maxTradeAmount,
 				minAmount: minTradeAmount,
 				depositAmountToken1: depositAmount1,
-				depositAmountToken2: depositAmount2
+				depositAmountToken2: depositAmount2,
+				inputVaultIdToken1: inputVaultId1,
+				inputVaultIdToken2: inputVaultId2,
+				outputVaultIdToken1: outputVaultId1,
+				outputVaultIdToken2: outputVaultId2
 			});
 		}
 	};

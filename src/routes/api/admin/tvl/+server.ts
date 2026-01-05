@@ -49,11 +49,6 @@ interface TvlResponse {
 	error?: string;
 }
 
-interface RegisteredWallet {
-	address: string;
-	accessCode: string;
-}
-
 /**
  * Fetch all registered wallets and build wallet -> code mapping
  */
@@ -62,11 +57,11 @@ async function fetchWalletToCodeMapping(): Promise<Map<string, string>> {
 
 	try {
 		// Fetch all access codes
-		const allCodes = await kvGet<string[]>(KV_KEYS.allCodes()) || [];
+		const allCodes = (await kvGet<string[]>(KV_KEYS.allCodes())) || [];
 
 		// Fetch wallets for each code
 		for (const code of allCodes) {
-			const walletAddresses = await kvGet<string[]>(KV_KEYS.codeWallets(code)) || [];
+			const walletAddresses = (await kvGet<string[]>(KV_KEYS.codeWallets(code))) || [];
 			for (const address of walletAddresses) {
 				walletToCode.set(address.toLowerCase(), code);
 			}
@@ -81,7 +76,10 @@ async function fetchWalletToCodeMapping(): Promise<Map<string, string>> {
 /**
  * Fetch a snapshot from Vercel Blob
  */
-async function fetchSnapshot(tokenSymbol: string, blockNumber: number): Promise<BlockSnapshot | null> {
+async function fetchSnapshot(
+	tokenSymbol: string,
+	blockNumber: number
+): Promise<BlockSnapshot | null> {
 	// Check if Blob token is available (required for Vercel Blob storage)
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return null;
@@ -128,7 +126,7 @@ async function calculateDetailedTvlAtBlock(
 	let totalTvl = 0;
 
 	// Fetch all token snapshots in parallel
-	const snapshotPromises = tokenSymbols.map(symbol => fetchSnapshot(symbol, blockNumber));
+	const snapshotPromises = tokenSymbols.map((symbol) => fetchSnapshot(symbol, blockNumber));
 	const snapshots = await Promise.all(snapshotPromises);
 
 	for (let i = 0; i < snapshots.length; i++) {
@@ -245,7 +243,7 @@ async function calculateSimpleTvlAtBlock(
 	let totalTvl = 0;
 
 	// Fetch all token snapshots in parallel
-	const snapshotPromises = tokenSymbols.map(symbol => fetchSnapshot(symbol, blockNumber));
+	const snapshotPromises = tokenSymbols.map((symbol) => fetchSnapshot(symbol, blockNumber));
 	const snapshots = await Promise.all(snapshotPromises);
 
 	for (let i = 0; i < snapshots.length; i++) {
@@ -337,7 +335,11 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Calculate detailed TVL for the latest snapshot
 		const latestBlock = sortedBlocks[0];
-		const latestTvl = await calculateDetailedTvlAtBlock(latestBlock.blockNumber, walletToCode, excludedWallets);
+		const latestTvl = await calculateDetailedTvlAtBlock(
+			latestBlock.blockNumber,
+			walletToCode,
+			excludedWallets
+		);
 
 		// Calculate TVL for each day (in parallel, but limit concurrency)
 		const dailyTvl: DailyTvlEntry[] = [];
@@ -349,7 +351,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			const batchResults = await Promise.all(
 				batch.map(async (date) => {
 					const block = blocksByDate.get(date)!;
-					const tvl = await calculateSimpleTvlAtBlock(block.blockNumber, walletToCode, excludedWallets);
+					const tvl = await calculateSimpleTvlAtBlock(
+						block.blockNumber,
+						walletToCode,
+						excludedWallets
+					);
 
 					if (tvl) {
 						return {
@@ -378,25 +384,29 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		return json({
 			success: true,
-			latest: latestTvl ? {
-				timestamp: latestBlock.timestamp,
-				blockNumber: latestBlock.blockNumber,
-				totalTvl: latestTvl.totalTvl,
-				tokenTvl: latestTvl.tokenTvl,
-				walletTvl: latestTvl.walletTvl,
-				codeTvl: latestTvl.codeTvl,
-				walletCount: latestTvl.walletTvl.length
-			} : null,
+			latest: latestTvl
+				? {
+						timestamp: latestBlock.timestamp,
+						blockNumber: latestBlock.blockNumber,
+						totalTvl: latestTvl.totalTvl,
+						tokenTvl: latestTvl.tokenTvl,
+						walletTvl: latestTvl.walletTvl,
+						codeTvl: latestTvl.codeTvl,
+						walletCount: latestTvl.walletTvl.length
+					}
+				: null,
 			daily: dailyTvl
 		} as TvlResponse);
-
 	} catch (error) {
 		console.error('[TVL API] Error:', error);
-		return json({
-			success: false,
-			latest: null,
-			daily: [],
-			error: error instanceof Error ? error.message : 'Unknown error'
-		} as TvlResponse, { status: 500 });
+		return json(
+			{
+				success: false,
+				latest: null,
+				daily: [],
+				error: error instanceof Error ? error.message : 'Unknown error'
+			} as TvlResponse,
+			{ status: 500 }
+		);
 	}
 };

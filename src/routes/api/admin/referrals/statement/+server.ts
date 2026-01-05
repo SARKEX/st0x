@@ -24,7 +24,10 @@ function isAuthenticated(cookies: { get: (name: string) => string | undefined })
 	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
 }
 
-async function fetchSnapshot(tokenSymbol: string, blockNumber: number): Promise<BlockSnapshot | null> {
+async function fetchSnapshot(
+	tokenSymbol: string,
+	blockNumber: number
+): Promise<BlockSnapshot | null> {
 	// Check if Blob token is available (required for Vercel Blob storage)
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return null;
@@ -141,7 +144,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 				// Check each wallet in the code
 				for (const walletAddress of codeWallets) {
 					const normalizedAddress = walletAddress.toLowerCase();
-					const balanceStr = snapshot.balances[normalizedAddress] || snapshot.balances[walletAddress];
+					const balanceStr =
+						snapshot.balances[normalizedAddress] || snapshot.balances[walletAddress];
 
 					if (!balanceStr) continue;
 
@@ -201,7 +205,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		}
 
 		// Calculate wallet summary across all snapshots
-		const walletSummary = new Map<string, { totalUsdValue: number; totalPoints: number; snapshotCount: number }>();
+		const walletSummary = new Map<
+			string,
+			{ totalUsdValue: number; totalPoints: number; snapshotCount: number }
+		>();
 
 		for (const snapshot of snapshotsData) {
 			for (const wallet of snapshot.wallets) {

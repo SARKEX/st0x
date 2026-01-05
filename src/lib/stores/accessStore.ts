@@ -1,6 +1,6 @@
 import { writable, derived } from 'svelte/store';
-import { signerAddress, connected } from 'svelte-wagmi';
 import { browser } from '$app/environment';
+import { isAuthenticated, walletAddress } from './authStore';
 
 // Access state
 export const walletRegistered = writable<boolean | null>(null); // null = not checked yet
@@ -23,9 +23,9 @@ export function promptLogin() {
 
 // Derived store for access status
 export const accessStatus = derived(
-	[connected, signerAddress, walletRegistered, checkingAccess],
-	([$connected, $signerAddress, $walletRegistered, $checkingAccess]) => {
-		if (!$connected || !$signerAddress) {
+	[isAuthenticated, walletAddress, walletRegistered, checkingAccess],
+	([$isAuthenticated, $walletAddress, $walletRegistered, $checkingAccess]) => {
+		if (!$isAuthenticated || !$walletAddress) {
 			return 'disconnected';
 		}
 		if ($checkingAccess) {
@@ -144,7 +144,7 @@ export function resetAccessState() {
 let currentAddress: string | null = null;
 
 if (browser) {
-	signerAddress.subscribe((address) => {
+	walletAddress.subscribe((address) => {
 		if (address && address !== currentAddress) {
 			currentAddress = address;
 			// Check registration and show modal if not registered

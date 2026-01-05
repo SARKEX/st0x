@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { connected, signerAddress, web3Modal, wagmiConfig } from 'svelte-wagmi';
+	import { web3Modal, wagmiConfig } from 'svelte-wagmi';
+	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { readContract } from '@wagmi/core';
@@ -7,7 +8,8 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { refreshTokenQuotes, prefetchGlobalOrders } from '$lib/queries/orderbook';
-	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
+	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
+	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import Button from './ui/Button.svelte';
@@ -128,31 +130,31 @@
 
 	// ============ BALANCE QUERIES ============
 	$: usdcBalanceQuery = createQuery({
-		queryKey: ['usdcBalance', $currentNetwork?.id, paymentToken?.address, $signerAddress],
+		queryKey: ['usdcBalance', $currentNetwork?.id, paymentToken?.address, $walletAddress],
 		queryFn: async () => {
-			if (!paymentToken?.address || !$signerAddress || !$wagmiConfig) return 0n;
+			if (!paymentToken?.address || !$walletAddress || !$wagmiConfig) return 0n;
 			return (await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: paymentToken.address as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$signerAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`]
 			})) as bigint;
 		},
-		enabled: Boolean(paymentToken?.address && $signerAddress && $wagmiConfig)
+		enabled: Boolean(paymentToken?.address && $walletAddress && $wagmiConfig)
 	});
 
 	$: tokenBalanceQuery = createQuery({
-		queryKey: ['tokenBalance', $currentNetwork?.id, selectedTokenAddress, $signerAddress],
+		queryKey: ['tokenBalance', $currentNetwork?.id, selectedTokenAddress, $walletAddress],
 		queryFn: async () => {
-			if (!selectedTokenAddress || !$signerAddress || !$wagmiConfig) return 0n;
+			if (!selectedTokenAddress || !$walletAddress || !$wagmiConfig) return 0n;
 			return (await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: selectedTokenAddress as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$signerAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`]
 			})) as bigint;
 		},
-		enabled: Boolean(selectedTokenAddress && $signerAddress && $wagmiConfig)
+		enabled: Boolean(selectedTokenAddress && $walletAddress && $wagmiConfig)
 	});
 
 	$: usdcBalance = $usdcBalanceQuery.data ?? 0n;
@@ -653,8 +655,8 @@
 
 	// ============ TRADE EXECUTION ============
 	async function handleTrade() {
-		if (!$connected) {
-			promptWalletConnection();
+		if (!$isAuthenticated) {
+			openAuthModal();
 			return;
 		}
 		if (!$walletRegistered) {
@@ -791,14 +793,14 @@
 			</div>
 			<div class="flex items-center justify-between px-1 text-xs">
 				<span class="text-gray-500">
-					{#if $connected}
+					{#if $isAuthenticated && $walletAddress}
 						Balance: {formattedUsdcBalance.toFixed(2)} {paymentToken?.symbol ?? 'USDC'}
 					{:else}
 						&nbsp;
 					{/if}
 				</span>
 				<div class="flex items-center gap-1">
-					{#if isBuying && $connected && formattedUsdcBalance > 0}
+					{#if isBuying && $isAuthenticated && $walletAddress && formattedUsdcBalance > 0}
 						{#each [25, 50, 75, 100] as percent}
 							<button
 								type="button"
@@ -968,7 +970,7 @@
 			</div>
 			<div class="flex items-center justify-between px-1 text-xs">
 				<span class="text-gray-500">
-					{#if $connected}
+					{#if $isAuthenticated && $walletAddress}
 						Balance: {formattedTokenBalance.toFixed(4)} {selectedToken?.symbol ?? ''}
 					{:else if quote?.avgPrice}
 						~{formatPrice(quote.avgPrice)}/token
@@ -977,7 +979,7 @@
 					{/if}
 				</span>
 				<div class="flex items-center gap-1">
-					{#if !isBuying && $connected && formattedTokenBalance > 0}
+					{#if !isBuying && $isAuthenticated && $walletAddress && formattedTokenBalance > 0}
 						{#each [25, 50, 75, 100] as percent}
 							<button
 								type="button"
@@ -1021,7 +1023,7 @@
 		{/if}
 
 		<!-- Action button -->
-		{#if $connected}
+		{#if $isAuthenticated && $walletAddress}
 			<Button
 				variant="primary"
 				size="lg"

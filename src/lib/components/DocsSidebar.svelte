@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
-	import { signerAddress, connected } from 'svelte-wagmi';
+	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
@@ -83,11 +83,11 @@
 			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
 				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
 					<div class="text-sm font-semibold text-yellow-500">{$currentNetwork.name}</div>
-					{#if $connected}
+					{#if $isAuthenticated && $walletAddress}
 						<div class="text-xs text-gray-400 sm:ml-2">
-							<span class="sm:hidden">…{$signerAddress?.slice(-6)}</span>
+							<span class="sm:hidden">…{$walletAddress?.slice(-6)}</span>
 							<span class="hidden sm:inline"
-								>{$signerAddress?.slice(0, 6)}...{$signerAddress?.slice(-4)}</span
+								>{$walletAddress?.slice(0, 6)}...{$walletAddress?.slice(-4)}</span
 							>
 						</div>
 					{:else}
