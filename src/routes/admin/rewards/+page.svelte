@@ -3,9 +3,11 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import type { BlockSnapshot } from '$lib/server/snapshots/types';
 	import { TOKENS } from '$lib/config/tokens';
+	import { jsPDF } from 'jspdf';
+	import autoTable from 'jspdf-autotable';
 
 	// Tab management
-	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'pool';
+	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'pool' | 'referrals';
 	let activeTab: Tab = 'points';
 
 	// Hide excluded wallets toggle (hidden by default)
@@ -60,8 +62,492 @@
 		};
 	} | null = null;
 
+	// Regenerate snapshots state
+	let regenerateLoading = false;
+	let regenerateError = '';
+	let regenerateConfirmText = '';
+	let regenerateResult: {
+		successful: number;
+		failed: number;
+		totalBlocks: number;
+		results: Array<{
+			blockNumber: number;
+			date: string;
+			tokensGenerated: number;
+			success: boolean;
+			error?: string;
+		}>;
+	} | null = null;
+
 	// Pool config for current month (for reward calculations)
-	let currentMonthPool: RewardsPoolConfig | null = null;
+	// Reactively find pool config for selected month (avoids race condition on mount)
+	$: currentMonthPool = poolConfigs.find((p) => p.month === selectedMonth) || null;
+
+	// ===== Airdrop CSV Modal State =====
+	let airdropModalOpen = false;
+	let airdropTokenAddress = '';
+	let airdropTotalTokens = '';
+	let airdropError = '';
+
+	function openAirdropModal() {
+		airdropTokenAddress = '';
+		airdropTotalTokens = '';
+		airdropError = '';
+		airdropModalOpen = true;
+	}
+
+	function closeAirdropModal() {
+		airdropModalOpen = false;
+	}
+
+	function generateAirdropCsv() {
+		if (!monthlyData?.wallets || monthlyData.wallets.length === 0) {
+			airdropError = 'No wallet data available for this month';
+			return;
+		}
+
+		if (!airdropTokenAddress.trim()) {
+			airdropError = 'Please enter a token contract address';
+			return;
+		}
+
+		// Validate token address format (basic check)
+		if (!/^0x[a-fA-F0-9]{40}$/.test(airdropTokenAddress.trim())) {
+			airdropError = 'Invalid token address format';
+			return;
+		}
+
+		const totalTokens = parseFloat(airdropTotalTokens);
+		if (isNaN(totalTokens) || totalTokens <= 0) {
+			airdropError = 'Please enter a valid number of tokens to distribute';
+			return;
+		}
+
+		airdropError = '';
+
+		// Calculate total points (excluding excluded wallets)
+		const eligibleWallets = monthlyData.wallets.filter(
+			(w) => !excludedWalletsInData.has(w.address.toLowerCase()) && w.totalPoints > 0
+		);
+
+		const totalPoints = eligibleWallets.reduce((sum, w) => sum + w.totalPoints, 0);
+
+		if (totalPoints === 0) {
+			airdropError = 'No eligible wallets with points found';
+			return;
+		}
+
+		// Generate CSV rows
+		const csvRows: string[] = ['token_type,token_address,receiver,amount,id'];
+
+		for (const wallet of eligibleWallets) {
+			const share = wallet.totalPoints / totalPoints;
+			const amount = totalTokens * share;
+
+			// Format amount with high precision (18 decimals for most ERC20 tokens)
+			// Using toFixed to avoid scientific notation
+			const formattedAmount = amount.toFixed(18).replace(/\.?0+$/, '');
+
+			csvRows.push(`erc20,${airdropTokenAddress.trim()},${wallet.address},${formattedAmount},`);
+		}
+
+		// Create and download the CSV file
+		const csvContent = csvRows.join('\n');
+		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.setAttribute('href', url);
+		link.setAttribute('download', `airdrop-${selectedMonth}-${Date.now()}.csv`);
+		link.style.visibility = 'hidden';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		URL.revokeObjectURL(url);
+
+		closeAirdropModal();
+	}
+
+	// ===== Referrals Tab State =====
+	interface ReferralCodeData {
+		code: string;
+		label: string | null;
+		wallets: string[];
+		createdAt: string;
+	}
+	let referralsLoading = false;
+	let referralsError = '';
+	let referralsData: ReferralCodeData[] = [];
+	let selectedReferralCode: string | null = null;
+
+	async function loadReferrals() {
+		referralsLoading = true;
+		referralsError = '';
+
+		try {
+			const res = await fetch('/api/admin/referrals');
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to load referrals');
+			}
+
+			referralsData = data.referrals || [];
+			// Select first code by default if available
+			if (referralsData.length > 0 && !selectedReferralCode) {
+				selectedReferralCode = referralsData[0].code;
+			}
+		} catch (err) {
+			referralsError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			referralsLoading = false;
+		}
+	}
+
+	// Calculate referral rewards by joining wallet data with referral codes
+	$: referralRewardsData = (() => {
+		if (!referralsData.length || !monthlyData?.wallets) return [];
+
+		// Build wallet rewards lookup
+		const walletRewards = new Map<string, { points: number; reward: number }>();
+		const allPoints = monthlyData.wallets.reduce((sum, w) => sum + w.totalPoints, 0);
+		const basePool = currentMonthPool?.poolAmount ?? 0;
+
+		// Calculate achieved rocket boost
+		const rocketBoostAmts = currentMonthPool?.rocketBoostAmounts ?? {
+			tier25: 0,
+			tier50: 0,
+			tier75: 0,
+			tier100: 0
+		};
+		const daysInMonth = selectedMonth ? getDaysInMonth(selectedMonth) : 30;
+		const rocketBoostTarget = (currentMonthPool?.rocketBoostTvlTarget ?? 0) * 2 * daysInMonth * 100;
+		const progressPct = rocketBoostTarget > 0 ? (allPoints / rocketBoostTarget) * 100 : 0;
+		const achievedAmount =
+			(progressPct >= 25 ? rocketBoostAmts.tier25 : 0) +
+			(progressPct >= 50 ? rocketBoostAmts.tier50 : 0) +
+			(progressPct >= 75 ? rocketBoostAmts.tier75 : 0) +
+			(progressPct >= 100 ? rocketBoostAmts.tier100 : 0);
+		const totalPool = basePool + achievedAmount;
+
+		for (const wallet of monthlyData.wallets) {
+			const isExcluded = excludedWalletsInData.has(wallet.address.toLowerCase());
+			if (!isExcluded && wallet.totalPoints > 0) {
+				const share = allPoints > 0 ? wallet.totalPoints / allPoints : 0;
+				walletRewards.set(wallet.address.toLowerCase(), {
+					points: wallet.totalPoints,
+					reward: share * totalPool
+				});
+			}
+		}
+
+		// Aggregate by referral code
+		return referralsData
+			.map((ref) => {
+				const walletDetails = ref.wallets.map((addr) => {
+					const data = walletRewards.get(addr.toLowerCase());
+					return {
+						address: addr,
+						points: data?.points ?? 0,
+						reward: data?.reward ?? 0
+					};
+				});
+
+				// Sort by reward descending
+				walletDetails.sort((a, b) => b.reward - a.reward);
+
+				const totalPoints = walletDetails.reduce((sum, w) => sum + w.points, 0);
+				const totalReward = walletDetails.reduce((sum, w) => sum + w.reward, 0);
+
+				return {
+					code: ref.code,
+					label: ref.label,
+					wallets: walletDetails,
+					totalPoints,
+					totalReward,
+					walletCount: ref.wallets.length
+				};
+			})
+			.sort((a, b) => b.totalReward - a.totalReward);
+	})();
+
+	// ===== Statement Modal State =====
+	interface WalletTokenHolding {
+		symbol: string;
+		quantity: number;
+		price: number;
+		usdValue: number;
+		points: number;
+	}
+
+	interface SnapshotWalletData {
+		address: string;
+		holdings: WalletTokenHolding[];
+		totalUsdValue: number;
+		totalPoints: number;
+	}
+
+	interface SnapshotData {
+		blockNumber: number;
+		timestamp: number;
+		date: string;
+		wallets: SnapshotWalletData[];
+		totalUsdValue: number;
+		totalPoints: number;
+	}
+
+	interface WalletSummary {
+		address: string;
+		totalUsdValue: number;
+		totalPoints: number;
+		snapshotCount: number;
+		avgUsdValue: number;
+	}
+
+	interface StatementData {
+		code: string;
+		month: string;
+		walletSummary: WalletSummary[];
+		snapshots: SnapshotData[];
+		totals: {
+			totalUsdValue: number;
+			totalPoints: number;
+			snapshotCount: number;
+			walletCount: number;
+		};
+	}
+
+	let statementModalOpen = false;
+	let statementLoading = false;
+	let statementError = '';
+	let statementData: StatementData | null = null;
+	let statementCode = '';
+
+	async function generateStatement(code: string) {
+		if (!selectedMonth) {
+			statementError = 'Please select a month first';
+			return;
+		}
+
+		statementCode = code;
+		statementModalOpen = true;
+		statementLoading = true;
+		statementError = '';
+		statementData = null;
+
+		try {
+			const res = await fetch(
+				`/api/admin/referrals/statement?code=${encodeURIComponent(code)}&month=${encodeURIComponent(
+					selectedMonth
+				)}`
+			);
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to generate statement');
+			}
+
+			statementData = data;
+		} catch (err) {
+			statementError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			statementLoading = false;
+		}
+	}
+
+	function closeStatementModal() {
+		statementModalOpen = false;
+		statementData = null;
+		statementError = '';
+	}
+
+	function exportReferralStatementCSV() {
+		if (!statementData) return;
+
+		const lines: string[] = [];
+
+		// Header info
+		lines.push(`Referral Code Statement`);
+		lines.push(`Code,${statementData.code}`);
+		lines.push(`Month,${statementData.month}`);
+		lines.push(`Total Wallets,${statementData.totals.walletCount}`);
+		lines.push(`Total Snapshots,${statementData.totals.snapshotCount}`);
+		lines.push(`Total USD Value,${statementData.totals.totalUsdValue.toFixed(2)}`);
+		lines.push(`Total Points,${statementData.totals.totalPoints.toFixed(0)}`);
+		lines.push('');
+
+		// Wallet Summary
+		lines.push('=== Wallet Summary ===');
+		lines.push('Rank,Wallet,Snapshots,Avg USD Value,Total USD Value,Total Points');
+		statementData.walletSummary.forEach((wallet, i) => {
+			lines.push(
+				`${i + 1},${wallet.address},${wallet.snapshotCount},${wallet.avgUsdValue.toFixed(
+					2
+				)},${wallet.totalUsdValue.toFixed(2)},${wallet.totalPoints.toFixed(0)}`
+			);
+		});
+		lines.push('');
+
+		// Snapshot Summary
+		lines.push('=== Snapshot Summary ===');
+		lines.push('Rank,Date,Block Number,Wallets,USD Value,Points');
+		statementData.snapshots.forEach((snapshot, i) => {
+			lines.push(
+				`${i + 1},${snapshot.date},${snapshot.blockNumber},${
+					snapshot.wallets.length
+				},${snapshot.totalUsdValue.toFixed(2)},${snapshot.totalPoints.toFixed(0)}`
+			);
+		});
+		lines.push('');
+
+		// Detailed Breakdown
+		lines.push('=== Detailed Breakdown ===');
+		lines.push('Date,Block Number,Wallet,Token,Quantity,Pyth Price,USD Value,Points');
+		statementData.snapshots.forEach((snapshot) => {
+			snapshot.wallets.forEach((wallet) => {
+				wallet.holdings.forEach((holding) => {
+					lines.push(
+						`${snapshot.date},${snapshot.blockNumber},${wallet.address},${holding.symbol},${
+							holding.quantity
+						},${holding.price.toFixed(2)},${holding.usdValue.toFixed(2)},${holding.points.toFixed(
+							0
+						)}`
+					);
+				});
+			});
+		});
+
+		const csv = lines.join('\n');
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `referral-statement-${statementData.code}-${statementData.month}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function exportReferralStatementPDF() {
+		if (!statementData) return;
+
+		const doc = new jsPDF();
+		let y = 20;
+
+		// Title
+		doc.setFontSize(18);
+		doc.text('Referral Code Points Statement', 14, y);
+		y += 10;
+
+		// Header info
+		doc.setFontSize(10);
+		doc.text(`Code: ${statementData.code}`, 14, y);
+		doc.text(`Month: ${statementData.month}`, 100, y);
+		y += 6;
+		doc.text(`Wallets: ${statementData.totals.walletCount}`, 14, y);
+		doc.text(`Snapshots: ${statementData.totals.snapshotCount}`, 100, y);
+		y += 6;
+		doc.text(`Total USD Value: $${statementData.totals.totalUsdValue.toFixed(2)}`, 14, y);
+		doc.text(`Total Points: ${statementData.totals.totalPoints.toLocaleString()}`, 100, y);
+		y += 12;
+
+		// Wallet Summary Table
+		doc.setFontSize(12);
+		doc.text('1. Summary by Wallet', 14, y);
+		y += 4;
+
+		autoTable(doc, {
+			startY: y,
+			head: [['#', 'Wallet', 'Snapshots', 'Avg USD', 'Total USD', 'Points']],
+			body: statementData.walletSummary.map((w, i) => [
+				i + 1,
+				w.address.slice(0, 6) + '...' + w.address.slice(-4),
+				w.snapshotCount,
+				'$' + w.avgUsdValue.toFixed(2),
+				'$' + w.totalUsdValue.toFixed(2),
+				w.totalPoints.toLocaleString()
+			]),
+			styles: { fontSize: 8 },
+			headStyles: { fillColor: [232, 190, 137] }
+		});
+
+		y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+		// Check if need new page
+		if (y > 250) {
+			doc.addPage();
+			y = 20;
+		}
+
+		// Snapshot Summary Table
+		doc.setFontSize(12);
+		doc.text('2. Summary by Snapshot', 14, y);
+		y += 4;
+
+		autoTable(doc, {
+			startY: y,
+			head: [['#', 'Date', 'Block', 'Wallets', 'USD Value', 'Points']],
+			body: statementData.snapshots.map((s, i) => [
+				i + 1,
+				s.date,
+				s.blockNumber.toLocaleString(),
+				s.wallets.length,
+				'$' + s.totalUsdValue.toFixed(2),
+				s.totalPoints.toLocaleString()
+			]),
+			styles: { fontSize: 8 },
+			headStyles: { fillColor: [232, 190, 137] }
+		});
+
+		y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+		// Detailed breakdown (new page)
+		doc.addPage();
+		y = 20;
+		doc.setFontSize(12);
+		doc.text('3. Detailed Breakdown', 14, y);
+		y += 8;
+
+		statementData.snapshots.forEach((snapshot) => {
+			if (y > 250) {
+				doc.addPage();
+				y = 20;
+			}
+
+			doc.setFontSize(10);
+			doc.text(`${snapshot.date} - Block #${snapshot.blockNumber.toLocaleString()}`, 14, y);
+			y += 4;
+
+			const detailRows: (string | number)[][] = [];
+			snapshot.wallets.forEach((wallet) => {
+				wallet.holdings.forEach((holding) => {
+					detailRows.push([
+						wallet.address.slice(0, 6) + '...' + wallet.address.slice(-4),
+						holding.symbol,
+						holding.quantity.toFixed(4),
+						'$' + holding.price.toFixed(2),
+						'$' + holding.usdValue.toFixed(2),
+						holding.points.toLocaleString()
+					]);
+				});
+			});
+
+			if (detailRows.length > 0) {
+				autoTable(doc, {
+					startY: y,
+					head: [['Wallet', 'Token', 'Quantity', 'Price', 'USD Value', 'Points']],
+					body: detailRows,
+					styles: { fontSize: 7 },
+					headStyles: { fillColor: [100, 100, 100] }
+				});
+				y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+			}
+		});
+
+		// Footer
+		doc.setFontSize(8);
+		doc.text('Points = (Token Quantity × Pyth Price) × 100', 14, y + 5);
+
+		doc.save(`referral-statement-${statementData.code}-${statementData.month}.pdf`);
+	}
 
 	// ===== Snapshots Tab State =====
 	interface SnapshotBlockRecord {
@@ -88,6 +574,9 @@
 	}
 	let aggregatedWalletData: AggregatedWalletData[] = [];
 	let aggregatedDataLoading = false;
+
+	// Single block regeneration state
+	let regeneratingBlockNumber: number | null = null;
 
 	// Derived: wallet points from current snapshot
 	// Uses current KV excluded wallets list instead of snapshot file's list
@@ -221,6 +710,7 @@
 		loadExcludedWallets();
 		loadCanonicalBlocks();
 		loadPoolConfigs();
+		loadReferrals();
 	});
 
 	// ===== Points Functions =====
@@ -259,9 +749,6 @@
 
 			// Update excluded wallets set
 			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
-
-			// Find pool config for selected month
-			currentMonthPool = poolConfigs.find((p) => p.month === selectedMonth) || null;
 		} catch (err) {
 			pointsError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -307,6 +794,103 @@
 			recalculateError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
 			recalculateLoading = false;
+		}
+	}
+
+	async function regenerateSnapshots() {
+		if (!selectedMonth) return;
+		if (regenerateConfirmText !== 'REGENERATE') {
+			regenerateError = 'Please type REGENERATE to confirm';
+			return;
+		}
+
+		regenerateLoading = true;
+		regenerateError = '';
+		regenerateResult = null;
+
+		try {
+			const res = await fetch('/api/admin/snapshots/regenerate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					confirmText: regenerateConfirmText,
+					month: selectedMonth
+				})
+			});
+
+			const data = await res.json();
+
+			if (!res.ok || !data.success) {
+				throw new Error(data.error || 'Failed to regenerate snapshots');
+			}
+
+			regenerateResult = {
+				successful: data.successful,
+				failed: data.failed,
+				totalBlocks: data.totalBlocks,
+				results: data.results
+			};
+
+			// Clear confirm text
+			regenerateConfirmText = '';
+
+			// Show message to run recalculate points
+			alert(
+				`Regenerated ${data.successful} snapshots (${data.failed} failed). Please click "Recalculate Points" to update monthly points data.`
+			);
+		} catch (err) {
+			regenerateError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			regenerateLoading = false;
+		}
+	}
+
+	async function regenerateSingleBlock(blockNumber: number) {
+		if (regeneratingBlockNumber !== null) return; // Already regenerating
+
+		regeneratingBlockNumber = blockNumber;
+
+		try {
+			const res = await fetch('/api/admin/snapshots/regenerate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ blockNumber })
+			});
+
+			const data = await res.json();
+
+			if (!res.ok || !data.success) {
+				throw new Error(data.error || 'Failed to regenerate snapshot');
+			}
+
+			// Check if the individual block result was successful
+			const blockResult = data.results?.[0];
+			if (blockResult && !blockResult.success) {
+				throw new Error(blockResult.error || 'Block regeneration failed');
+			}
+
+			if (!blockResult || blockResult.tokensGenerated === 0) {
+				alert(
+					`Warning: Block ${blockNumber} regeneration returned 0 tokens. This may indicate an issue. Check server logs for details.`
+				);
+			} else {
+				alert(
+					`Block ${blockNumber} regenerated successfully (${blockResult.tokensGenerated} tokens). Use "Recalculate Points" to update monthly data.`
+				);
+			}
+
+			// Reload the snapshot data if this block is currently selected
+			if (selectedCanonicalBlock === blockNumber) {
+				await loadAggregatedData();
+			}
+		} catch (err) {
+			alert(
+				`Error regenerating block ${blockNumber}: ${
+					err instanceof Error ? err.message : 'Unknown error'
+				}`
+			);
+		} finally {
+			regeneratingBlockNumber = null;
 		}
 	}
 
@@ -906,9 +1490,220 @@
 		return address.slice(0, 6) + '...' + address.slice(-4);
 	}
 
+	// ===== Wallet Search & Filter =====
+	let walletSearchQuery = '';
+
 	// Pass dependencies as parameters so Svelte tracks them for reactivity
 	$: walletRows = getWalletRows(monthlyData, hideExcluded, excludedWalletsInData, currentMonthPool);
 	$: totalPoints = walletRows.reduce((sum, r) => sum + r.totalPoints, 0);
+
+	// Filter wallets by search query (case-insensitive partial match)
+	$: filteredWalletRows = walletSearchQuery.trim()
+		? walletRows.filter((row) =>
+				row.address.toLowerCase().includes(walletSearchQuery.trim().toLowerCase())
+			)
+		: walletRows;
+
+	// ===== Wallet Statement Modal =====
+	interface WalletTokenHolding {
+		symbol: string;
+		quantity: number;
+		price: number;
+		usdValue: number;
+		points: number;
+	}
+
+	interface WalletSnapshotData {
+		blockNumber: number;
+		timestamp: number;
+		date: string;
+		holdings: WalletTokenHolding[];
+		totalUsdValue: number;
+		totalPoints: number;
+	}
+
+	interface WalletStatementData {
+		wallet: string;
+		month: string;
+		snapshots: WalletSnapshotData[];
+		totals: {
+			totalUsdValue: number;
+			totalPoints: number;
+			avgUsdValue: number;
+			snapshotCount: number;
+		};
+	}
+
+	let walletStatementModalOpen = false;
+	let walletStatementLoading = false;
+	let walletStatementError = '';
+	let walletStatementData: WalletStatementData | null = null;
+	let walletStatementAddress = '';
+
+	async function generateWalletStatement(walletAddress: string) {
+		if (!selectedMonth) {
+			walletStatementError = 'Please select a month first';
+			return;
+		}
+
+		walletStatementAddress = walletAddress;
+		walletStatementModalOpen = true;
+		walletStatementLoading = true;
+		walletStatementError = '';
+		walletStatementData = null;
+
+		try {
+			const res = await fetch(
+				`/api/admin/wallet/statement?wallet=${encodeURIComponent(
+					walletAddress
+				)}&month=${encodeURIComponent(selectedMonth)}`
+			);
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to generate wallet statement');
+			}
+
+			walletStatementData = data;
+		} catch (err) {
+			walletStatementError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			walletStatementLoading = false;
+		}
+	}
+
+	function closeWalletStatementModal() {
+		walletStatementModalOpen = false;
+		walletStatementData = null;
+		walletStatementError = '';
+	}
+
+	function exportWalletStatementCSV() {
+		if (!walletStatementData) return;
+
+		const lines: string[] = [];
+
+		// Header info
+		lines.push(`Wallet Points Statement`);
+		lines.push(`Wallet,${walletStatementData.wallet}`);
+		lines.push(`Month,${walletStatementData.month}`);
+		lines.push(`Total Snapshots,${walletStatementData.totals.snapshotCount}`);
+		lines.push(`Avg USD Value,${walletStatementData.totals.avgUsdValue.toFixed(2)}`);
+		lines.push(`End of month USD value,${walletStatementData.totals.totalUsdValue.toFixed(2)}`);
+		lines.push(`Total Points,${walletStatementData.totals.totalPoints.toFixed(0)}`);
+		lines.push('');
+
+		// Detailed by Snapshot
+		lines.push('=== Holdings by Snapshot ===');
+		lines.push('Date,Block Number,Token,Quantity,Pyth Price,USD Value,Points');
+		walletStatementData.snapshots.forEach((snapshot) => {
+			snapshot.holdings.forEach((holding) => {
+				lines.push(
+					`${snapshot.date},${snapshot.blockNumber},${holding.symbol},${
+						holding.quantity
+					},${holding.price.toFixed(2)},${holding.usdValue.toFixed(2)},${holding.points.toFixed(0)}`
+				);
+			});
+			// Add snapshot subtotal
+			lines.push(
+				`${snapshot.date},${snapshot.blockNumber},SUBTOTAL,,,${snapshot.totalUsdValue.toFixed(
+					2
+				)},${snapshot.totalPoints.toFixed(0)}`
+			);
+		});
+
+		const csv = lines.join('\n');
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `wallet-statement-${walletStatementData.wallet.slice(0, 8)}-${
+			walletStatementData.month
+		}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function exportWalletStatementPDF() {
+		if (!walletStatementData) return;
+
+		const doc = new jsPDF();
+		let y = 20;
+
+		// Title
+		doc.setFontSize(18);
+		doc.text('Wallet Points Statement', 14, y);
+		y += 10;
+
+		// Header info
+		doc.setFontSize(10);
+		doc.text(
+			`Wallet: ${walletStatementData.wallet.slice(0, 6)}...${walletStatementData.wallet.slice(-4)}`,
+			14,
+			y
+		);
+		doc.text(`Month: ${walletStatementData.month}`, 120, y);
+		y += 6;
+		doc.text(`Total Snapshots: ${walletStatementData.totals.snapshotCount}`, 14, y);
+		doc.text(`Avg USD Value: $${walletStatementData.totals.avgUsdValue.toFixed(2)}`, 120, y);
+		y += 6;
+		doc.text(
+			`End of month USD value: $${walletStatementData.totals.totalUsdValue.toFixed(2)}`,
+			14,
+			y
+		);
+		doc.text(`Total Points: ${walletStatementData.totals.totalPoints.toLocaleString()}`, 120, y);
+		y += 12;
+
+		// Holdings by Snapshot
+		doc.setFontSize(12);
+		doc.text('Holdings by Snapshot', 14, y);
+		y += 8;
+
+		walletStatementData.snapshots.forEach((snapshot) => {
+			if (y > 250) {
+				doc.addPage();
+				y = 20;
+			}
+
+			doc.setFontSize(10);
+			doc.text(`${snapshot.date} - Block #${snapshot.blockNumber.toLocaleString()}`, 14, y);
+			doc.setFontSize(8);
+			doc.text(
+				`Total: $${snapshot.totalUsdValue.toFixed(
+					2
+				)} | ${snapshot.totalPoints.toLocaleString()} pts`,
+				140,
+				y
+			);
+			y += 4;
+
+			if (snapshot.holdings.length > 0) {
+				autoTable(doc, {
+					startY: y,
+					head: [['Token', 'Quantity', 'Pyth Price', 'USD Value', 'Points']],
+					body: snapshot.holdings.map((h) => [
+						h.symbol,
+						h.quantity.toFixed(4),
+						'$' + h.price.toFixed(2),
+						'$' + h.usdValue.toFixed(2),
+						h.points.toLocaleString()
+					]),
+					styles: { fontSize: 8 },
+					headStyles: { fillColor: [232, 190, 137] }
+				});
+				y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+			}
+		});
+
+		// Footer
+		doc.setFontSize(8);
+		doc.text('Points = (Token Quantity × Pyth Price) × 100', 14, y + 5);
+
+		doc.save(
+			`wallet-statement-${walletStatementData.wallet.slice(0, 8)}-${walletStatementData.month}.pdf`
+		);
+	}
 </script>
 
 <svelte:head>
@@ -966,6 +1761,14 @@
 			>
 				Rewards Pool
 			</button>
+			<button
+				on:click={() => (activeTab = 'referrals')}
+				class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'referrals'
+					? 'border-[#e8be89] text-[#e8be89]'
+					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+			>
+				Referrals
+			</button>
 		</nav>
 	</div>
 
@@ -1008,22 +1811,31 @@
 							</span>
 						{/if}
 					</div>
-					<button
-						on:click={recalculatePoints}
-						disabled={recalculateLoading || !selectedMonth}
-						class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						{#if recalculateLoading}
-							<span class="flex items-center gap-2">
-								<div
-									class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
-								></div>
-								Recalculating...
-							</span>
-						{:else}
-							Recalculate Points
-						{/if}
-					</button>
+					<div class="flex gap-2">
+						<button
+							on:click={recalculatePoints}
+							disabled={recalculateLoading || !selectedMonth}
+							class="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{#if recalculateLoading}
+								<span class="flex items-center gap-2">
+									<div
+										class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+									></div>
+									Recalculating...
+								</span>
+							{:else}
+								Recalculate Points
+							{/if}
+						</button>
+						<button
+							on:click={openAirdropModal}
+							disabled={!selectedMonth || !monthlyData?.wallets?.length}
+							class="rounded-md bg-[#e8be89] px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-[#d4a876] disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							Generate Airdrop CSV
+						</button>
+					</div>
 				</div>
 
 				{#if recalculateError}
@@ -1139,6 +1951,77 @@
 						{/if}
 					</div>
 				{/if}
+
+				<!-- Regenerate Snapshots Section -->
+				<details class="mt-4 rounded-md border border-yellow-600/50 bg-yellow-900/10">
+					<summary class="cursor-pointer px-4 py-3 text-sm font-medium text-yellow-400">
+						Advanced: Regenerate Snapshots for {selectedMonth || 'selected month'}
+					</summary>
+					<div class="border-t border-yellow-600/30 p-4">
+						<p class="mb-3 text-xs text-gray-400">
+							This will regenerate all snapshot data for the selected month using the current code.
+							Use this if snapshot generation logic has been fixed/improved (e.g., vault attribution
+							fixes).
+							<strong class="text-yellow-400"
+								>After regenerating, click "Recalculate Points" to update the points data.</strong
+							>
+						</p>
+						{#if !selectedMonth}
+							<p class="text-sm text-yellow-400">
+								Please select a month above to enable regeneration.
+							</p>
+						{:else}
+							<div class="flex flex-wrap items-center gap-3">
+								<input
+									type="text"
+									bind:value={regenerateConfirmText}
+									placeholder="Type REGENERATE to confirm"
+									class="rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none"
+								/>
+								<button
+									on:click={regenerateSnapshots}
+									disabled={regenerateLoading || regenerateConfirmText !== 'REGENERATE'}
+									class="rounded-md bg-yellow-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-yellow-700 disabled:cursor-not-allowed disabled:opacity-50"
+								>
+									{#if regenerateLoading}
+										<span class="flex items-center gap-2">
+											<div
+												class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+											></div>
+											Regenerating...
+										</span>
+									{:else}
+										Regenerate Snapshots
+									{/if}
+								</button>
+							</div>
+						{/if}
+						{#if regenerateError}
+							<p class="mt-3 text-sm text-red-400">{regenerateError}</p>
+						{/if}
+						{#if regenerateResult}
+							<div class="mt-3 rounded-md bg-green-900/30 p-3 text-sm">
+								<p class="font-medium text-green-400">Regeneration complete!</p>
+								<p class="mt-1 text-gray-300">
+									{regenerateResult.successful} successful, {regenerateResult.failed} failed out of {regenerateResult.totalBlocks}
+									blocks
+								</p>
+								{#if regenerateResult.failed > 0}
+									<div class="mt-2 rounded bg-red-900/30 p-2 text-xs">
+										<p class="font-medium text-red-400">Failed blocks:</p>
+										<ul class="mt-1 max-h-32 space-y-0.5 overflow-y-auto text-gray-400">
+											{#each regenerateResult.results.filter((r) => !r.success) as failed}
+												<li class="font-mono">
+													Block {failed.blockNumber} ({failed.date}): {failed.error}
+												</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				</details>
 			</Card>
 
 			<!-- Pool Config Info -->
@@ -1283,10 +2166,58 @@
 
 				<!-- Wallet Points Table -->
 				<Card>
-					<h2 class="mb-4 text-lg font-semibold text-white">Wallet Points Rankings</h2>
-					<p class="mb-4 text-sm text-gray-400">
-						Points = 100 per $1 USD of holdings at each snapshot
-					</p>
+					<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+						<div>
+							<h2 class="text-lg font-semibold text-white">Wallet Points Rankings</h2>
+							<p class="mt-1 text-sm text-gray-400">
+								Points = 100 per $1 USD of holdings at each snapshot
+							</p>
+						</div>
+						<!-- Search Input -->
+						<div class="relative">
+							<input
+								type="text"
+								bind:value={walletSearchQuery}
+								placeholder="Search wallet address..."
+								class="w-64 rounded-lg border border-gray-600 bg-gray-800 py-2 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
+							/>
+							<svg
+								class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+								/>
+							</svg>
+							{#if walletSearchQuery}
+								<button
+									on:click={() => (walletSearchQuery = '')}
+									class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+								>
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M6 18L18 6M6 6l12 12"
+										/>
+									</svg>
+								</button>
+							{/if}
+						</div>
+					</div>
+
+					{#if walletSearchQuery && filteredWalletRows.length !== walletRows.length}
+						<p class="mb-3 text-sm text-gray-400">
+							Showing {filteredWalletRows.length} of {walletRows.length} wallets matching "{walletSearchQuery}"
+						</p>
+					{/if}
+
 					{#if walletRows.length === 0}
 						<div class="py-8 text-center">
 							<p class="text-gray-400">No wallet data available</p>
@@ -1299,84 +2230,109 @@
 								</p>
 							{/if}
 						</div>
+					{:else if filteredWalletRows.length === 0}
+						<div class="py-8 text-center">
+							<p class="text-gray-400">No wallets match your search</p>
+						</div>
 					{:else}
-						<div class="max-h-[500px] overflow-x-auto overflow-y-auto">
-							<table class="w-full text-left text-sm">
-								<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400">
-									<tr>
-										<th class="whitespace-nowrap pb-3 pr-4">#</th>
-										<th class="whitespace-nowrap pb-3 pr-4">Wallet</th>
-										<th class="whitespace-nowrap pb-3 pr-4 text-right">Points</th>
-										<th class="whitespace-nowrap pb-3 pr-4 text-right">Share</th>
-										{#if currentMonthPool}
-											<th class="whitespace-nowrap pb-3 text-right">Reward</th>
-										{:else}
-											<th class="whitespace-nowrap pb-3 text-right">Tokens</th>
-										{/if}
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-gray-800">
-									{#each walletRows.slice(0, 100) as row, i}
-										<tr class="hover:bg-gray-800/30 {row.isExcluded ? 'bg-yellow-900/10' : ''}">
-											<td class="py-2 pr-4 text-gray-500">{i + 1}</td>
-											<td class="py-2 pr-4">
-												<div class="flex items-center gap-2">
-													<a
-														href="https://basescan.org/address/{row.address}"
-														target="_blank"
-														rel="noopener noreferrer"
-														class="font-mono text-blue-400 hover:underline"
-													>
-														{formatAddress(row.address)}
-													</a>
-													{#if row.isExcluded}
-														<span
-															class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-xs text-yellow-400"
-														>
-															excluded
-														</span>
-													{/if}
-												</div>
-											</td>
-											<td class="py-2 pr-4 text-right font-mono text-white">
-												{row.totalPoints.toLocaleString()}
-											</td>
-											<td class="py-2 pr-4 text-right font-mono text-gray-300">
-												{(row.share * 100).toFixed(2)}%
-											</td>
-											{#if currentMonthPool}
-												<td class="py-2 text-right font-mono font-semibold text-[#e8be89]">
-													{formatUsd(row.rewardActual)}
-												</td>
-											{:else}
-												<td class="py-2 text-right text-gray-400">
-													{row.tokenCount}
-												</td>
-											{/if}
-										</tr>
-									{/each}
-								</tbody>
-								{#if currentMonthPool}
-									<tfoot class="border-t border-gray-600 bg-gray-800/50">
+						<!-- Scroll indicator container -->
+						<div class="relative">
+							<div
+								class="max-h-[500px] overflow-x-auto overflow-y-auto rounded-lg border border-gray-700"
+								style="scrollbar-gutter: stable;"
+							>
+								<table class="w-full text-left text-sm">
+									<thead
+										class="sticky top-0 z-10 border-b border-gray-700 bg-gray-900 text-gray-400"
+									>
 										<tr>
-											<td class="py-3 pr-4"></td>
-											<td class="py-3 pr-4 font-semibold text-white">Total</td>
-											<td class="py-3 pr-4 text-right font-mono font-semibold text-white">
-												{totalPoints.toLocaleString()}
-											</td>
-											<td class="py-3 pr-4 text-right font-mono text-gray-300">100%</td>
-											<td class="py-3 text-right font-mono font-semibold text-[#e8be89]">
-												{formatUsd(effectivePoolAmount)}
-											</td>
+											<th class="whitespace-nowrap px-3 py-3">#</th>
+											<th class="whitespace-nowrap px-3 py-3">Wallet</th>
+											<th class="whitespace-nowrap px-3 py-3 text-right">Points</th>
+											<th class="whitespace-nowrap px-3 py-3 text-right">Share</th>
+											{#if currentMonthPool}
+												<th class="whitespace-nowrap px-3 py-3 text-right">Reward</th>
+											{:else}
+												<th class="whitespace-nowrap px-3 py-3 text-right">Tokens</th>
+											{/if}
+											<th class="whitespace-nowrap px-3 py-3 text-right">Actions</th>
 										</tr>
-									</tfoot>
+									</thead>
+									<tbody class="divide-y divide-gray-800">
+										{#each filteredWalletRows.slice(0, 100) as row, i}
+											<tr class="hover:bg-gray-800/30 {row.isExcluded ? 'bg-yellow-900/10' : ''}">
+												<td class="px-3 py-2 text-gray-500">{i + 1}</td>
+												<td class="px-3 py-2">
+													<div class="flex items-center gap-2">
+														<a
+															href="https://basescan.org/address/{row.address}"
+															target="_blank"
+															rel="noopener noreferrer"
+															class="font-mono text-blue-400 hover:underline"
+														>
+															{formatAddress(row.address)}
+														</a>
+														{#if row.isExcluded}
+															<span
+																class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-xs text-yellow-400"
+															>
+																excluded
+															</span>
+														{/if}
+													</div>
+												</td>
+												<td class="px-3 py-2 text-right font-mono text-white">
+													{row.totalPoints.toLocaleString()}
+												</td>
+												<td class="px-3 py-2 text-right font-mono text-gray-300">
+													{(row.share * 100).toFixed(2)}%
+												</td>
+												{#if currentMonthPool}
+													<td class="px-3 py-2 text-right font-mono font-semibold text-[#e8be89]">
+														{formatUsd(row.rewardActual)}
+													</td>
+												{:else}
+													<td class="px-3 py-2 text-right text-gray-400">
+														{row.tokenCount}
+													</td>
+												{/if}
+												<td class="px-3 py-2 text-right">
+													<button
+														on:click={() => generateWalletStatement(row.address)}
+														class="rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-600 hover:text-white"
+													>
+														Statement
+													</button>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+									{#if currentMonthPool}
+										<tfoot class="border-t border-gray-600 bg-gray-800/50">
+											<tr>
+												<td class="py-3 pr-4"></td>
+												<td class="py-3 pr-4 font-semibold text-white">Total</td>
+												<td class="py-3 pr-4 text-right font-mono font-semibold text-white">
+													{totalPoints.toLocaleString()}
+												</td>
+												<td class="py-3 pr-4 text-right font-mono text-gray-300">100%</td>
+												<td class="py-3 pr-4 text-right font-mono font-semibold text-[#e8be89]">
+													{formatUsd(effectivePoolAmount)}
+												</td>
+												<td class="py-3 pr-4"></td>
+											</tr>
+										</tfoot>
+									{/if}
+								</table>
+								{#if filteredWalletRows.length > 100}
+									<p class="mt-4 text-center text-sm text-gray-500">
+										Showing top 100 of {filteredWalletRows.length} wallets
+										{#if walletSearchQuery && filteredWalletRows.length !== walletRows.length}
+											(filtered from {walletRows.length} total)
+										{/if}
+									</p>
 								{/if}
-							</table>
-							{#if walletRows.length > 100}
-								<p class="mt-4 text-center text-sm text-gray-500">
-									Showing top 100 of {walletRows.length} wallets
-								</p>
-							{/if}
+							</div>
 						</div>
 					{/if}
 				</Card>
@@ -1417,9 +2373,10 @@
 							<table class="w-full text-left text-sm">
 								<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400">
 									<tr>
-										<th class="pb-2 pr-4">Date</th>
-										<th class="pb-2 pr-4">Time (NY)</th>
-										<th class="pb-2">Block</th>
+										<th class="pb-2 pr-3">Date</th>
+										<th class="pb-2 pr-3">Time</th>
+										<th class="pb-2 pr-3">Block</th>
+										<th class="pb-2 text-right">Actions</th>
 									</tr>
 								</thead>
 								<tbody class="divide-y divide-gray-800">
@@ -1431,8 +2388,8 @@
 												: 'hover:bg-gray-800/50'}"
 											on:click={() => selectCanonicalBlock(block.blockNumber)}
 										>
-											<td class="py-2 pr-4 text-gray-300">{block.date}</td>
-											<td class="py-2 pr-4 text-gray-300">
+											<td class="py-2 pr-3 text-gray-300">{block.date}</td>
+											<td class="py-2 pr-3 text-gray-300">
 												{new Date(block.timestamp * 1000).toLocaleTimeString('en-US', {
 													timeZone: 'America/New_York',
 													hour: '2-digit',
@@ -1440,11 +2397,33 @@
 												})}
 											</td>
 											<td
-												class="py-2 font-mono {selectedCanonicalBlock === block.blockNumber
+												class="py-2 pr-3 font-mono {selectedCanonicalBlock === block.blockNumber
 													? 'text-[#e8be89]'
 													: 'text-white'}"
 											>
 												{block.blockNumber}
+											</td>
+											<td class="py-2 text-right">
+												<button
+													on:click|stopPropagation={() => regenerateSingleBlock(block.blockNumber)}
+													disabled={regeneratingBlockNumber !== null}
+													class="rounded px-2 py-1 text-xs font-medium transition-colors {regeneratingBlockNumber ===
+													block.blockNumber
+														? 'cursor-wait bg-yellow-600/50 text-yellow-200'
+														: 'bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/40'} disabled:opacity-50"
+													title="Regenerate this snapshot"
+												>
+													{#if regeneratingBlockNumber === block.blockNumber}
+														<span class="flex items-center gap-1">
+															<div
+																class="h-3 w-3 animate-spin rounded-full border border-yellow-400/30 border-t-yellow-400"
+															></div>
+															Regenerating...
+														</span>
+													{:else}
+														Regenerate
+													{/if}
+												</button>
 											</td>
 										</tr>
 									{/each}
@@ -2394,6 +3373,173 @@
 			</Card>
 		</div>
 	{/if}
+
+	<!-- Referrals Tab -->
+	{#if activeTab === 'referrals'}
+		<div class="space-y-6">
+			{#if referralsError}
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
+					{referralsError}
+				</div>
+			{/if}
+
+			{#if referralsLoading}
+				<div class="flex items-center gap-3 text-gray-400">
+					<div
+						class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+					></div>
+					Loading referrals data...
+				</div>
+			{:else if referralRewardsData.length === 0}
+				<Card>
+					<p class="py-8 text-center text-gray-400">
+						{#if !monthlyData?.wallets}
+							Select a month in the Monthly Points tab to view referral rewards.
+						{:else}
+							No referral codes found.
+						{/if}
+					</p>
+				</Card>
+			{:else}
+				<!-- Month selector info -->
+				<Card>
+					<div class="flex flex-wrap items-center justify-between gap-4">
+						<div>
+							<h2 class="text-lg font-semibold text-white">Referral Rewards</h2>
+							<p class="mt-1 text-sm text-gray-400">
+								Showing rewards for <strong class="text-[#e8be89]">{selectedMonth || 'N/A'}</strong>
+								{#if monthlyData}
+									&middot; {monthlyData.walletCount} wallets
+								{/if}
+							</p>
+						</div>
+						<div class="text-right">
+							<p class="text-2xl font-bold text-[#e8be89]">
+								{formatUsd(referralRewardsData.reduce((sum, r) => sum + r.totalReward, 0))}
+							</p>
+							<p class="text-sm text-gray-400">Total Rewards</p>
+						</div>
+					</div>
+				</Card>
+
+				<!-- Referral Code Leaderboard -->
+				<Card>
+					<h3 class="mb-4 text-lg font-medium text-white">Referral Code Leaderboard</h3>
+					<div class="overflow-x-auto">
+						<table class="w-full text-left text-sm">
+							<thead>
+								<tr class="border-b border-gray-700 text-gray-400">
+									<th class="pb-3 pr-4">Rank</th>
+									<th class="pb-3 pr-4">Code</th>
+									<th class="pb-3 pr-4">Label</th>
+									<th class="pb-3 pr-4 text-right">Wallets</th>
+									<th class="pb-3 pr-4 text-right">Total Points</th>
+									<th class="pb-3 pr-4 text-right">Total Rewards</th>
+									<th class="pb-3 text-right">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each referralRewardsData as ref, i}
+									<tr
+										class="cursor-pointer border-b border-gray-800 hover:bg-gray-800/50 {selectedReferralCode ===
+										ref.code
+											? 'bg-gray-800/70'
+											: ''}"
+										on:click={() => (selectedReferralCode = ref.code)}
+									>
+										<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
+										<td class="py-3 pr-4 font-mono text-white">{ref.code}</td>
+										<td class="py-3 pr-4 text-gray-300">{ref.label || '-'}</td>
+										<td class="py-3 pr-4 text-right text-gray-300">{ref.walletCount}</td>
+										<td class="py-3 pr-4 text-right text-gray-300"
+											>{ref.totalPoints.toLocaleString()}</td
+										>
+										<td class="py-3 pr-4 text-right font-medium text-[#e8be89]"
+											>{formatUsd(ref.totalReward)}</td
+										>
+										<td class="py-3 text-right">
+											<button
+												on:click|stopPropagation={() => generateStatement(ref.code)}
+												class="rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-600 hover:text-white"
+											>
+												Statement
+											</button>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</Card>
+
+				<!-- Selected Code Details -->
+				{#if selectedReferralCode}
+					{@const selectedRef = referralRewardsData.find((r) => r.code === selectedReferralCode)}
+					{#if selectedRef}
+						<Card>
+							<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+								<div>
+									<h3 class="text-lg font-medium text-white">
+										{selectedRef.code}
+										{#if selectedRef.label}
+											<span class="ml-2 text-sm text-gray-400">({selectedRef.label})</span>
+										{/if}
+									</h3>
+									<p class="mt-1 text-sm text-gray-400">
+										{selectedRef.walletCount} wallets &middot; {selectedRef.totalPoints.toLocaleString()}
+										points
+									</p>
+								</div>
+								<div class="text-right">
+									<p class="text-2xl font-bold text-[#e8be89]">
+										{formatUsd(selectedRef.totalReward)}
+									</p>
+									<p class="text-sm text-gray-400">Total Rewards</p>
+								</div>
+							</div>
+
+							{#if selectedRef.wallets.length > 0}
+								<div class="overflow-x-auto">
+									<table class="w-full text-left text-sm">
+										<thead>
+											<tr class="border-b border-gray-700 text-gray-400">
+												<th class="pb-3 pr-4">#</th>
+												<th class="pb-3 pr-4">Wallet</th>
+												<th class="pb-3 pr-4 text-right">Points</th>
+												<th class="pb-3 text-right">Reward</th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each selectedRef.wallets as wallet, i}
+												<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+													<td class="py-2 pr-4 text-gray-400">{i + 1}</td>
+													<td class="py-2 pr-4 font-mono text-xs text-white">
+														{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+													</td>
+													<td class="py-2 pr-4 text-right text-gray-300">
+														{wallet.points > 0 ? wallet.points.toLocaleString() : '-'}
+													</td>
+													<td
+														class="py-2 text-right font-medium {wallet.reward > 0
+															? 'text-[#e8be89]'
+															: 'text-gray-500'}"
+													>
+														{wallet.reward > 0 ? formatUsd(wallet.reward) : '-'}
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{:else}
+								<p class="py-4 text-center text-gray-400">No wallets registered with this code</p>
+							{/if}
+						</Card>
+					{/if}
+				{/if}
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <!-- Confirmation Modal for Manual Trigger -->
@@ -2462,6 +3608,625 @@
 					Generate Snapshots
 				</button>
 			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Airdrop CSV Modal -->
+{#if airdropModalOpen}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+		on:click={closeAirdropModal}
+		on:keydown={(e) => e.key === 'Escape' && closeAirdropModal()}
+		role="button"
+		tabindex="0"
+	>
+		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+		<div
+			class="w-full max-w-md rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-2xl"
+			on:click|stopPropagation
+			on:keydown|stopPropagation
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="airdrop-title"
+		>
+			<h2 id="airdrop-title" class="mb-2 text-xl font-semibold text-white">Generate Airdrop CSV</h2>
+			<p class="mb-4 text-sm text-gray-400">
+				Generate a CSV file to distribute tokens proportionally based on points for
+				<strong class="text-[#e8be89]">{selectedMonth}</strong>.
+			</p>
+
+			{#if monthlyData}
+				<div class="mb-4 rounded-md bg-gray-900/50 p-3 text-sm">
+					<div class="grid grid-cols-2 gap-2 text-gray-300">
+						<div>Eligible Wallets:</div>
+						<div class="text-right font-medium text-white">
+							{monthlyData.wallets.filter(
+								(w) => !excludedWalletsInData.has(w.address.toLowerCase()) && w.totalPoints > 0
+							).length}
+						</div>
+						<div>Total Points:</div>
+						<div class="text-right font-medium text-white">
+							{monthlyData.wallets
+								.filter(
+									(w) => !excludedWalletsInData.has(w.address.toLowerCase()) && w.totalPoints > 0
+								)
+								.reduce((sum, w) => sum + w.totalPoints, 0)
+								.toLocaleString()}
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			<div class="space-y-4">
+				<div>
+					<label for="tokenAddress" class="mb-1 block text-sm font-medium text-gray-300">
+						Token Contract Address
+					</label>
+					<input
+						type="text"
+						id="tokenAddress"
+						bind:value={airdropTokenAddress}
+						placeholder="0x..."
+						class="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 font-mono text-sm text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
+					/>
+				</div>
+
+				<div>
+					<label for="totalTokens" class="mb-1 block text-sm font-medium text-gray-300">
+						Total Tokens to Distribute
+					</label>
+					<input
+						type="number"
+						id="totalTokens"
+						bind:value={airdropTotalTokens}
+						placeholder="e.g. 1000000"
+						step="any"
+						min="0"
+						class="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
+					/>
+					<p class="mt-1 text-xs text-gray-500">
+						Enter the human-readable amount (e.g. 1000 for 1000 tokens, not wei)
+					</p>
+				</div>
+			</div>
+
+			{#if airdropError}
+				<p class="mt-3 text-sm text-red-400">{airdropError}</p>
+			{/if}
+
+			<div class="mt-6 flex gap-3">
+				<button
+					on:click={closeAirdropModal}
+					class="flex-1 rounded-md border border-gray-600 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+				>
+					Cancel
+				</button>
+				<button
+					on:click={generateAirdropCsv}
+					class="flex-1 rounded-md bg-[#e8be89] px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-[#d4a876]"
+				>
+					Download CSV
+				</button>
+			</div>
+
+			<p class="mt-4 text-xs text-gray-500">
+				The CSV follows the Safe/Gnosis format for batch transfers with columns: token_type,
+				token_address, receiver, amount, id
+			</p>
+		</div>
+	</div>
+{/if}
+
+<!-- Statement Modal -->
+{#if statementModalOpen}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
+		on:click={closeStatementModal}
+		on:keydown={(e) => e.key === 'Escape' && closeStatementModal()}
+		role="button"
+		tabindex="0"
+	>
+		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+		<div
+			class="my-8 w-full max-w-5xl rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-2xl"
+			on:click|stopPropagation
+			on:keydown|stopPropagation
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="statement-title"
+		>
+			<div class="mb-4 flex items-center justify-between">
+				<div>
+					<h2 id="statement-title" class="text-xl font-semibold text-white">Points Statement</h2>
+					<p class="mt-1 text-sm text-gray-400">
+						Referral Code: <strong class="text-[#e8be89]">{statementCode}</strong>
+						&middot; Month: <strong class="text-[#e8be89]">{selectedMonth}</strong>
+					</p>
+				</div>
+				<button
+					on:click={closeStatementModal}
+					class="rounded-lg p-2 text-gray-400 hover:bg-gray-700 hover:text-white"
+				>
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			{#if statementLoading}
+				<div class="flex items-center justify-center py-12">
+					<div class="flex items-center gap-3 text-gray-400">
+						<div
+							class="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+						></div>
+						Loading statement data...
+					</div>
+				</div>
+			{:else if statementError}
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-4 text-sm text-red-300">
+					{statementError}
+				</div>
+			{:else if statementData}
+				<div class="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
+					<!-- Totals Summary -->
+					<div class="rounded-lg bg-gray-900/50 p-4">
+						<div class="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
+							<div>
+								<p class="text-2xl font-bold text-[#e8be89]">{statementData.totals.walletCount}</p>
+								<p class="text-sm text-gray-400">Wallets</p>
+							</div>
+							<div>
+								<p class="text-2xl font-bold text-white">{statementData.totals.snapshotCount}</p>
+								<p class="text-sm text-gray-400">Snapshots</p>
+							</div>
+							<div>
+								<p class="text-2xl font-bold text-white">
+									{formatUsd(statementData.totals.totalUsdValue)}
+								</p>
+								<p class="text-sm text-gray-400">Total USD Value</p>
+							</div>
+							<div>
+								<p class="text-2xl font-bold text-[#e8be89]">
+									{statementData.totals.totalPoints.toLocaleString()}
+								</p>
+								<p class="text-sm text-gray-400">Total Points</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- 1. Summary by Wallet -->
+					<div>
+						<h3 class="mb-3 text-lg font-medium text-white">1. Summary by Wallet</h3>
+						<div class="overflow-x-auto rounded-lg border border-gray-700">
+							<table class="w-full text-left text-sm">
+								<thead class="bg-gray-900/50">
+									<tr class="text-gray-400">
+										<th class="px-4 py-3">#</th>
+										<th class="px-4 py-3">Wallet</th>
+										<th class="px-4 py-3 text-right">Snapshots</th>
+										<th class="px-4 py-3 text-right">Avg USD Value</th>
+										<th class="px-4 py-3 text-right">Total USD Value</th>
+										<th class="px-4 py-3 text-right">Total Points</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each statementData.walletSummary as wallet, i}
+										<tr class="border-t border-gray-700 hover:bg-gray-800/50">
+											<td class="px-4 py-2 text-gray-400">{i + 1}</td>
+											<td class="px-4 py-2 font-mono text-xs text-white">
+												{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+											</td>
+											<td class="px-4 py-2 text-right text-gray-300">{wallet.snapshotCount}</td>
+											<td class="px-4 py-2 text-right text-gray-300"
+												>{formatUsd(wallet.avgUsdValue)}</td
+											>
+											<td class="px-4 py-2 text-right text-gray-300"
+												>{formatUsd(wallet.totalUsdValue)}</td
+											>
+											<td class="px-4 py-2 text-right font-medium text-[#e8be89]"
+												>{wallet.totalPoints.toLocaleString()}</td
+											>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<!-- 2. Summary by Snapshot -->
+					<div>
+						<h3 class="mb-3 text-lg font-medium text-white">2. Summary by Snapshot</h3>
+						<div class="overflow-x-auto rounded-lg border border-gray-700">
+							<table class="w-full text-left text-sm">
+								<thead class="bg-gray-900/50">
+									<tr class="text-gray-400">
+										<th class="px-4 py-3">#</th>
+										<th class="px-4 py-3">Date</th>
+										<th class="px-4 py-3">Block Number</th>
+										<th class="px-4 py-3 text-right">Wallets</th>
+										<th class="px-4 py-3 text-right">USD Value</th>
+										<th class="px-4 py-3 text-right">Points</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each statementData.snapshots as snapshot, i}
+										<tr class="border-t border-gray-700 hover:bg-gray-800/50">
+											<td class="px-4 py-2 text-gray-400">{i + 1}</td>
+											<td class="px-4 py-2 text-white">{snapshot.date}</td>
+											<td class="px-4 py-2 font-mono text-gray-300"
+												>{snapshot.blockNumber.toLocaleString()}</td
+											>
+											<td class="px-4 py-2 text-right text-gray-300">{snapshot.wallets.length}</td>
+											<td class="px-4 py-2 text-right text-gray-300"
+												>{formatUsd(snapshot.totalUsdValue)}</td
+											>
+											<td class="px-4 py-2 text-right font-medium text-[#e8be89]"
+												>{snapshot.totalPoints.toLocaleString()}</td
+											>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<!-- 3. Detailed Breakdown -->
+					<div>
+						<h3 class="mb-3 text-lg font-medium text-white">3. Detailed Breakdown by Snapshot</h3>
+						<div class="space-y-4">
+							{#each statementData.snapshots as snapshot}
+								<div class="overflow-hidden rounded-lg border border-gray-700">
+									<div
+										class="flex flex-wrap items-center justify-between gap-2 bg-gray-900/70 px-4 py-3"
+									>
+										<div>
+											<span class="font-medium text-white">{snapshot.date}</span>
+											<span class="ml-2 font-mono text-sm text-gray-400"
+												>Block #{snapshot.blockNumber.toLocaleString()}</span
+											>
+										</div>
+										<div class="text-sm">
+											<span class="text-gray-400">Total:</span>
+											<span class="ml-1 text-white">{formatUsd(snapshot.totalUsdValue)}</span>
+											<span class="ml-2 text-gray-400">|</span>
+											<span class="ml-2 text-[#e8be89]"
+												>{snapshot.totalPoints.toLocaleString()} pts</span
+											>
+										</div>
+									</div>
+
+									{#if snapshot.wallets.length > 0}
+										<div class="overflow-x-auto">
+											<table class="w-full text-left text-xs">
+												<thead class="bg-gray-900/30">
+													<tr class="text-gray-400">
+														<th class="px-3 py-2">Wallet</th>
+														<th class="px-3 py-2">Token</th>
+														<th class="px-3 py-2 text-right">Quantity</th>
+														<th class="px-3 py-2 text-right">Pyth Price</th>
+														<th class="px-3 py-2 text-right">USD Value</th>
+														<th class="px-3 py-2 text-right">Points</th>
+													</tr>
+												</thead>
+												<tbody>
+													{#each snapshot.wallets as wallet}
+														{#each wallet.holdings as holding, holdingIdx}
+															<tr class="border-t border-gray-800 hover:bg-gray-800/30">
+																{#if holdingIdx === 0}
+																	<td
+																		class="px-3 py-1.5 font-mono text-white"
+																		rowspan={wallet.holdings.length}
+																	>
+																		{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+																	</td>
+																{/if}
+																<td class="px-3 py-1.5 text-gray-300">{holding.symbol}</td>
+																<td class="px-3 py-1.5 text-right font-mono text-gray-300">
+																	{holding.quantity.toLocaleString(undefined, {
+																		maximumFractionDigits: 4
+																	})}
+																</td>
+																<td class="px-3 py-1.5 text-right font-mono text-gray-300">
+																	${holding.price.toFixed(2)}
+																</td>
+																<td class="px-3 py-1.5 text-right text-gray-300">
+																	{formatUsd(holding.usdValue)}
+																</td>
+																<td class="px-3 py-1.5 text-right text-[#e8be89]">
+																	{holding.points.toLocaleString(undefined, {
+																		maximumFractionDigits: 0
+																	})}
+																</td>
+															</tr>
+														{/each}
+														<!-- Wallet subtotal -->
+														<tr class="bg-gray-800/40 font-medium">
+															<td class="px-3 py-1.5 text-gray-400" colspan="4">Subtotal</td>
+															<td class="px-3 py-1.5 text-right text-white"
+																>{formatUsd(wallet.totalUsdValue)}</td
+															>
+															<td class="px-3 py-1.5 text-right text-[#e8be89]"
+																>{wallet.totalPoints.toLocaleString(undefined, {
+																	maximumFractionDigits: 0
+																})}</td
+															>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									{:else}
+										<p class="px-4 py-3 text-sm text-gray-400">No holdings for this snapshot</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+
+					<!-- Formula explanation -->
+					<div class="rounded-lg bg-gray-900/30 p-4 text-sm">
+						<p class="mb-2 font-medium text-gray-300">Points Calculation Formula:</p>
+						<p class="text-gray-400">Points = (Token Quantity × Pyth Price) × 100</p>
+						<p class="mt-1 text-xs text-gray-500">
+							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate
+							across all snapshots within the month.
+						</p>
+					</div>
+				</div>
+
+				<div class="mt-6 flex justify-end gap-3">
+					<button
+						on:click={exportReferralStatementCSV}
+						class="flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
+						</svg>
+						Export CSV
+					</button>
+					<button
+						on:click={exportReferralStatementPDF}
+						class="flex items-center gap-2 rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
+						</svg>
+						Export PDF
+					</button>
+					<button
+						on:click={closeStatementModal}
+						class="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600"
+					>
+						Close
+					</button>
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}
+
+<!-- Wallet Statement Modal -->
+{#if walletStatementModalOpen}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
+		on:click={closeWalletStatementModal}
+		on:keydown={(e) => e.key === 'Escape' && closeWalletStatementModal()}
+		role="button"
+		tabindex="0"
+	>
+		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+		<div
+			class="my-8 w-full max-w-4xl rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-2xl"
+			on:click|stopPropagation
+			on:keydown|stopPropagation
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="wallet-statement-title"
+		>
+			<div class="mb-4 flex items-center justify-between">
+				<div>
+					<h2 id="wallet-statement-title" class="text-xl font-semibold text-white">
+						Wallet Points Statement
+					</h2>
+					<p class="mt-1 text-sm text-gray-400">
+						Wallet: <a
+							href="https://basescan.org/address/{walletStatementAddress}"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="font-mono text-[#e8be89] hover:underline"
+							>{walletStatementAddress.slice(0, 6)}...{walletStatementAddress.slice(-4)}</a
+						>
+						&middot; Month: <strong class="text-[#e8be89]">{selectedMonth}</strong>
+					</p>
+				</div>
+				<button
+					on:click={closeWalletStatementModal}
+					class="rounded-lg p-2 text-gray-400 hover:bg-gray-700 hover:text-white"
+				>
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			{#if walletStatementLoading}
+				<div class="flex items-center justify-center py-12">
+					<div class="flex items-center gap-3 text-gray-400">
+						<div
+							class="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+						></div>
+						Loading wallet statement...
+					</div>
+				</div>
+			{:else if walletStatementError}
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-4 text-sm text-red-300">
+					{walletStatementError}
+				</div>
+			{:else if walletStatementData}
+				<div class="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
+					<!-- Totals Summary -->
+					<div class="rounded-lg bg-gray-900/50 p-4">
+						<div class="grid grid-cols-3 gap-4 text-center">
+							<div>
+								<p class="text-2xl font-bold text-white">
+									{walletStatementData.totals.snapshotCount}
+								</p>
+								<p class="text-sm text-gray-400">Snapshots</p>
+							</div>
+							<div>
+								<p class="text-2xl font-bold text-white">
+									{formatUsd(walletStatementData.totals.avgUsdValue)}
+								</p>
+								<p class="text-sm text-gray-400">Avg USD Value</p>
+							</div>
+							<div>
+								<p class="text-2xl font-bold text-[#e8be89]">
+									{walletStatementData.totals.totalPoints.toLocaleString()}
+								</p>
+								<p class="text-sm text-gray-400">Total Points</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Snapshots Table -->
+					<div>
+						<h3 class="mb-3 text-lg font-medium text-white">Holdings by Snapshot</h3>
+						<div class="space-y-4">
+							{#each walletStatementData.snapshots as snapshot}
+								<div class="overflow-hidden rounded-lg border border-gray-700">
+									<div
+										class="flex flex-wrap items-center justify-between gap-2 bg-gray-900/70 px-4 py-3"
+									>
+										<div>
+											<span class="font-medium text-white">{snapshot.date}</span>
+											<span class="ml-2 font-mono text-sm text-gray-400"
+												>Block #{snapshot.blockNumber.toLocaleString()}</span
+											>
+										</div>
+										<div class="text-sm">
+											<span class="text-gray-400">Total:</span>
+											<span class="ml-1 text-white">{formatUsd(snapshot.totalUsdValue)}</span>
+											<span class="ml-2 text-gray-400">|</span>
+											<span class="ml-2 text-[#e8be89]"
+												>{snapshot.totalPoints.toLocaleString()} pts</span
+											>
+										</div>
+									</div>
+
+									{#if snapshot.holdings.length > 0}
+										<div class="overflow-x-auto">
+											<table class="w-full text-left text-sm">
+												<thead class="bg-gray-900/30">
+													<tr class="text-gray-400">
+														<th class="px-4 py-2">Token</th>
+														<th class="px-4 py-2 text-right">Quantity</th>
+														<th class="px-4 py-2 text-right">Pyth Price</th>
+														<th class="px-4 py-2 text-right">USD Value</th>
+														<th class="px-4 py-2 text-right">Points</th>
+													</tr>
+												</thead>
+												<tbody>
+													{#each snapshot.holdings as holding}
+														<tr class="border-t border-gray-800 hover:bg-gray-800/30">
+															<td class="px-4 py-2 font-medium text-[#e8be89]">{holding.symbol}</td>
+															<td class="px-4 py-2 text-right font-mono text-gray-300">
+																{holding.quantity.toLocaleString(undefined, {
+																	maximumFractionDigits: 4
+																})}
+															</td>
+															<td class="px-4 py-2 text-right font-mono text-gray-300">
+																${holding.price.toFixed(2)}
+															</td>
+															<td class="px-4 py-2 text-right text-gray-300">
+																{formatUsd(holding.usdValue)}
+															</td>
+															<td class="px-4 py-2 text-right text-[#e8be89]">
+																{holding.points.toLocaleString(undefined, {
+																	maximumFractionDigits: 0
+																})}
+															</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									{:else}
+										<p class="px-4 py-3 text-sm text-gray-400">No holdings for this snapshot</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+
+					<!-- Formula explanation -->
+					<div class="rounded-lg bg-gray-900/30 p-4 text-sm">
+						<p class="mb-2 font-medium text-gray-300">Points Calculation Formula:</p>
+						<p class="text-gray-400">Points = (Token Quantity × Pyth Price) × 100</p>
+						<p class="mt-1 text-xs text-gray-500">
+							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate
+							across all snapshots within the month.
+						</p>
+					</div>
+				</div>
+
+				<div class="mt-6 flex justify-end gap-3">
+					<button
+						on:click={exportWalletStatementCSV}
+						class="flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
+						</svg>
+						Export CSV
+					</button>
+					<button
+						on:click={exportWalletStatementPDF}
+						class="flex items-center gap-2 rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+							/>
+						</svg>
+						Export PDF
+					</button>
+					<button
+						on:click={closeWalletStatementModal}
+						class="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600"
+					>
+						Close
+					</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 {/if}

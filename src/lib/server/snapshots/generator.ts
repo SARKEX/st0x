@@ -165,8 +165,8 @@ export async function generateTokenSnapshot(
 	const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, [normalizedToken]);
 	const price = prices.get(normalizedToken);
 
-	// Fetch vault holdings for this token
-	const vaultHoldings = await fetchAllVaultHoldings([normalizedToken]);
+	// Fetch vault holdings for this token at the specific block
+	const vaultHoldings = await fetchAllVaultHoldings([normalizedToken], blockNumber);
 
 	// Fetch excluded wallets from KV
 	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
@@ -199,8 +199,8 @@ export async function generateAllTokenSnapshots_v2(blockNumber: number): Promise
 	// Fetch Pyth prices for all tokens at block timestamp (may be adjusted for market hours)
 	const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, TOKEN_ADDRESSES);
 
-	// Fetch vault holdings for all tokens
-	const vaultHoldings = await fetchAllVaultHoldings(TOKEN_ADDRESSES);
+	// Fetch vault holdings for all tokens at the specific block
+	const vaultHoldings = await fetchAllVaultHoldings(TOKEN_ADDRESSES, blockNumber);
 
 	// Fetch excluded wallets from KV
 	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];

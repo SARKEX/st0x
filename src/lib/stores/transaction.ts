@@ -49,7 +49,7 @@ const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagm
 // Unified send transaction (works with both Dynamic and wagmi wallets)
 const sendTransaction = walletServiceSendTransaction;
 
-// Unified wait for transaction
+// Unified wait for transaction (works with both Dynamic and wagmi wallets, includes retry logic)
 const waitForTransaction = walletServiceWaitForTransaction;
 import {
 	getTakeOrders3Calldata,
@@ -1093,7 +1093,9 @@ const transactionStore = () => {
 					// Recalculate payload size for single order
 					const singleOrderResult = getTakeOrders3Calldata({ ...config, orders: [order] });
 					if (!singleOrderResult.error && singleOrderResult.value) {
-						const singleCalldata = normalizeCalldata(singleOrderResult.value as string | Uint8Array);
+						const singleCalldata = normalizeCalldata(
+							singleOrderResult.value as string | Uint8Array
+						);
 						currentBatchPayloadSize = new Blob([singleCalldata]).size;
 					}
 				}
@@ -1198,7 +1200,9 @@ const transactionStore = () => {
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
 			try {
-				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+				awaitWalletConfirmation(
+					`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`
+				);
 
 				const approvalHash = await sendTransaction({
 					to: approvalTokenAddress as `0x${string}`,

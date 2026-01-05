@@ -1,5 +1,11 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { DynamicContextProvider, useDynamicContext, useUserWallets, getAuthToken, useEmbeddedReveal } from '@dynamic-labs/sdk-react-core';
+import {
+	DynamicContextProvider,
+	useDynamicContext,
+	useUserWallets,
+	getAuthToken,
+	useEmbeddedReveal
+} from '@dynamic-labs/sdk-react-core';
 import { EthereumWalletConnectors, isEthereumWallet } from '@dynamic-labs/ethereum';
 
 // Static logo URL for Dynamic branding - served from /static/logo.svg
@@ -7,13 +13,7 @@ export const ST0X_LOGO_URL = '/logo.svg';
 
 // Event types for Svelte-React communication
 export interface DynamicEventData {
-	type:
-		| 'ready'
-		| 'authenticated'
-		| 'logout'
-		| 'wallet'
-		| 'error'
-		| 'token_refreshed';
+	type: 'ready' | 'authenticated' | 'logout' | 'wallet' | 'error' | 'token_refreshed';
 	payload?: {
 		userId?: string;
 		walletAddress?: string;
@@ -57,13 +57,7 @@ function DynamicBridge({
 	triggerExportWallet,
 	triggerSendTransaction
 }: Omit<DynamicBridgeProps, 'environmentId'>) {
-	const {
-		sdkHasLoaded,
-		user,
-		primaryWallet,
-		handleLogOut,
-		setShowAuthFlow
-	} = useDynamicContext();
+	const { sdkHasLoaded, user, primaryWallet, handleLogOut, setShowAuthFlow } = useDynamicContext();
 
 	const userWallets = useUserWallets();
 	const { initExportProcess } = useEmbeddedReveal();
@@ -178,10 +172,18 @@ function DynamicBridge({
 
 				// Only retry wallet client if we don't have one or if it's been more than 5 seconds since last attempt
 				const now = Date.now();
-				if (!cachedWalletClient && (now - lastWalletClientAttempt > 5000 || lastWalletClientAttempt === 0)) {
+				if (
+					!cachedWalletClient &&
+					(now - lastWalletClientAttempt > 5000 || lastWalletClientAttempt === 0)
+				) {
 					lastWalletClientAttempt = now;
 					try {
-						console.log('[dynamic] Getting wallet client for chain', BASE_CHAIN_ID, 'auth token present:', !!authToken);
+						console.log(
+							'[dynamic] Getting wallet client for chain',
+							BASE_CHAIN_ID,
+							'auth token present:',
+							!!authToken
+						);
 						cachedWalletClient = await activeWallet.getWalletClient(BASE_CHAIN_ID);
 						console.log('[dynamic] Got wallet client:', cachedWalletClient ? 'success' : 'null');
 					} catch (error) {
@@ -238,7 +240,12 @@ function DynamicBridge({
 							console.error('[dynamic] Wallet client is null after getClients()');
 							throw new Error('Wallet client not available for transaction');
 						}
-						const tx = args.params[0] as { to: string; value?: string; data?: string; gas?: string };
+						const tx = args.params[0] as {
+							to: string;
+							value?: string;
+							data?: string;
+							gas?: string;
+						};
 						console.log('[dynamic] Sending transaction to:', tx.to, 'gas:', tx.gas);
 						try {
 							const result = await walletClient.sendTransaction({

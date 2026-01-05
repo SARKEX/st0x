@@ -41,12 +41,41 @@ export interface VaultHolding {
 /**
  * Fetch all vaults with non-zero balances for our tokens
  * Returns vault holdings that can be attributed to their owners
+ * @param blockNumber - If provided, queries vault state at this specific block
  */
-async function fetchVaults(skip: number, tokenAddresses: string[]): Promise<SubgraphVault[]> {
+async function fetchVaults(
+	skip: number,
+	tokenAddresses: string[],
+	blockNumber?: number
+): Promise<SubgraphVault[]> {
 	// Note: We fetch all vaults and filter client-side because:
 	// 1. Token entity ID in subgraph may not match token address directly
 	// 2. balance_gt filter may not work if balance is stored as Bytes type
-	const query = `
+	const query = blockNumber
+		? `
+		query getVaults($skip: Int!, $first: Int!, $blockNumber: Int!) {
+			vaults(
+				skip: $skip
+				first: $first
+				block: { number: $blockNumber }
+			) {
+				id
+				vaultId
+				owner
+				token {
+					id
+					address
+					symbol
+					decimals
+				}
+				balance
+				orderbook {
+					id
+				}
+			}
+		}
+	`
+		: `
 		query getVaults($skip: Int!, $first: Int!) {
 			vaults(
 				skip: $skip
@@ -69,15 +98,20 @@ async function fetchVaults(skip: number, tokenAddresses: string[]): Promise<Subg
 		}
 	`;
 
+	const variables: Record<string, number> = {
+		skip,
+		first: BATCH_SIZE
+	};
+	if (blockNumber) {
+		variables.blockNumber = blockNumber;
+	}
+
 	const response = await fetch(ORDERBOOK_SUBGRAPH_URL, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
 			query,
-			variables: {
-				skip,
-				first: BATCH_SIZE
-			}
+			variables
 		})
 	});
 
@@ -109,21 +143,27 @@ async function fetchVaults(skip: number, tokenAddresses: string[]): Promise<Subg
 /**
  * Fetch all vault holdings for our tokens
  * Groups holdings by owner address
+ * @param blockNumber - If provided, queries vault state at this specific block
  */
 export async function fetchAllVaultHoldings(
-	tokenAddresses: string[] = TOKEN_ADDRESSES
+	tokenAddresses: string[] = TOKEN_ADDRESSES,
+	blockNumber?: number
 ): Promise<VaultHolding[]> {
 	let skip = 0;
 	let hasMore = true;
 	const allVaults: VaultHolding[] = [];
 
-	console.log(`[Vaults] Fetching vault holdings for ${tokenAddresses.length} tokens`);
+	console.log(
+		`[Vaults] Fetching vault holdings for ${tokenAddresses.length} tokens${
+			blockNumber ? ` at block ${blockNumber}` : ''
+		}`
+	);
 	console.log(`[Vaults] Token addresses: ${tokenAddresses.join(', ')}`);
 	console.log(`[Vaults] Subgraph URL: ${ORDERBOOK_SUBGRAPH_URL}`);
 
 	try {
 		while (hasMore) {
-			const batch = await fetchVaults(skip, tokenAddresses);
+			const batch = await fetchVaults(skip, tokenAddresses, blockNumber);
 
 			console.log(`[Vaults] Raw batch response:`, JSON.stringify(batch.slice(0, 2), null, 2));
 

@@ -83,6 +83,8 @@
 		"ethers": "^6.10.0",
 		"flowbite-svelte-icons": "0.4.5",
 		"highlight.js": "^11.11.1",
+		"jspdf": "^3.0.4",
+		"jspdf-autotable": "^5.0.2",
 		"lightweight-charts": "=4.2.0",
 		"nyse-holidays": "^1.2.0",
 		"pako": "^2.1.0",

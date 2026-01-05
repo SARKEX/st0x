@@ -2,8 +2,17 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
+import { env } from '$env/dynamic/private';
 
 export const GET: RequestHandler = async ({ url }) => {
+	// Check if Blob token is available (required for Vercel Blob storage)
+	if (!env.BLOB_READ_WRITE_TOKEN) {
+		return json(
+			{ error: 'Blob storage not configured (missing BLOB_READ_WRITE_TOKEN)' },
+			{ status: 503 }
+		);
+	}
+
 	try {
 		const tokenSymbol = url.searchParams.get('token');
 		const limit = parseInt(url.searchParams.get('limit') || '50');
@@ -13,7 +22,8 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const { blobs } = await list({
 			prefix,
-			limit
+			limit,
+			token: env.BLOB_READ_WRITE_TOKEN
 		});
 
 		// Parse blob paths to extract metadata

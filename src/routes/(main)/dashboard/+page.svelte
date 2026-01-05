@@ -900,7 +900,8 @@
 																		symbol: holding.symbol,
 																		decimals: holding.decimals,
 																		image: ALL_TOKENS.find(
-																			(s) => s.address.toLowerCase() === holding.address.toLowerCase()
+																			(s) =>
+																				s.address.toLowerCase() === holding.address.toLowerCase()
 																		)?.logoUrl
 																	})}
 																class="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"

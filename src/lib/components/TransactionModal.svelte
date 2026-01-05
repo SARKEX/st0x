@@ -326,7 +326,11 @@
 				<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
 					{$transactionStore.message}
 				</p>
-				<Button on:click={handleMultiTxAcknowledge} className="mt-6" dataTestId="multi-tx-ok-button">
+				<Button
+					on:click={handleMultiTxAcknowledge}
+					className="mt-6"
+					dataTestId="multi-tx-ok-button"
+				>
 					OK
 				</Button>
 			{:else if $transactionStore.status === TransactionStatus.CHECKING_ALLOWANCE || $transactionStore.status === TransactionStatus.PENDING_WALLET || $transactionStore.status === TransactionStatus.PENDING_APPROVAL}

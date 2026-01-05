@@ -135,7 +135,9 @@
 								<div class="flex items-center gap-2">
 									<span>My Dashboard</span>
 									<span class="text-[11px] font-normal text-yellow-300/80">
-										{$dynamicSession.email ? truncateEmail($dynamicSession.email) : `...${$dynamicSession.walletAddress.slice(-4)}`}
+										{$dynamicSession.email
+											? truncateEmail($dynamicSession.email)
+											: `...${$dynamicSession.walletAddress.slice(-4)}`}
 									</span>
 								</div>
 							</Button>

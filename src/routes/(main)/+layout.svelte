@@ -51,15 +51,6 @@
 		sidebarCollapsed = event.detail.collapsed;
 	}
 
-	function handleHeaderSidebarToggle(event: CustomEvent<{ target: 'mobile' | 'desktop' }>) {
-		if (event.detail?.target === 'desktop') {
-			sidebarCollapsed = !sidebarCollapsed;
-			mobileSidebarOpen = false;
-		} else {
-			mobileSidebarOpen = !mobileSidebarOpen;
-		}
-	}
-
 	// Get page title based on current route
 	$: pageTitle = getPageTitle($page.url.pathname);
 
@@ -152,7 +143,6 @@
 			title={pageTitle}
 			isSidebarCollapsed={useCleanLayout || sidebarCollapsed}
 			isLandingPage={useCleanLayout}
-			on:toggleSidebar={handleHeaderSidebarToggle}
 		/>
 
 		<!-- Low funds banner (shown when wallet has no USDC) -->
