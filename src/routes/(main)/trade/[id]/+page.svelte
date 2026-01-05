@@ -47,7 +47,8 @@
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
-	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
+	import { isAuthenticated, walletAddress, authMethod } from '$lib/stores/authStore';
+	import { dynamicSession } from '$lib/stores/dynamicStore';
 	import { promptWalletConnection, promptLogin, walletRegistered } from '$lib/stores/accessStore';
 	import { tutorialWantsTradePanel } from '$lib/stores/tutorialStore';
 	import { startVaultTutorial, vaultTutorialActive } from '$lib/stores/vaultTutorialStore';
@@ -67,6 +68,9 @@
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	$: tokenId = $page.params.id;
+
+	// Hide track in wallet buttons for embedded wallets
+	$: isEmbeddedWallet = $authMethod === 'dynamic' && $dynamicSession?.walletType === 'embedded';
 
 	// Get queryClient for cache lookup
 	const queryClient = useQueryClient();
@@ -980,7 +984,7 @@
 								View on-chain trades, liquidity, orders, and vaults
 							</p>
 						</div>
-						{#if $isAuthenticated}
+						{#if $isAuthenticated && !isEmbeddedWallet}
 							<button
 								type="button"
 								on:click={() =>

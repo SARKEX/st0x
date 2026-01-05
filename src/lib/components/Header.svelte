@@ -1,7 +1,7 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
@@ -15,14 +15,8 @@
 	export let isSidebarCollapsed = false;
 	export let isLandingPage = false;
 
-	const dispatch = createEventDispatcher();
-
 	let mobileNavOpen = false;
 	let windowWidth = 0;
-
-	function handleSidebarToggle(target: 'mobile' | 'desktop') {
-		dispatch('toggleSidebar', { target });
-	}
 
 	function toggleMobileNav() {
 		mobileNavOpen = !mobileNavOpen;

@@ -213,26 +213,6 @@ const transactionStore = () => {
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
 
-	// Multi-transaction acknowledgment
-	const awaitMultiTxAcknowledgment = (
-		totalBatches: number,
-		onAcknowledge: () => void
-	): Promise<void> => {
-		return new Promise((resolve) => {
-			update((state) => ({
-				...state,
-				status: TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT,
-				message: `This order requires ${totalBatches} separate transactions due to payload size limits. You will be asked to sign ${totalBatches} times.`,
-				data: { multiTxProgress: { currentBatch: 0, totalBatches } },
-				onMultiTxAcknowledge: () => {
-					update((s) => ({ ...s, multiTxAcknowledged: true, onMultiTxAcknowledge: null }));
-					onAcknowledge();
-					resolve();
-				}
-			}));
-		});
-	};
-
 	const acknowledgeMultiTx = () => {
 		update((state) => {
 			if (state.onMultiTxAcknowledge) {

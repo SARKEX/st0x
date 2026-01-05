@@ -9,6 +9,11 @@
 	import { formatUnits } from 'viem';
 	import { translateMarketOrderForDisplay } from '$lib/utils/transactionDisplay';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
+	import { authMethod } from '$lib/stores/authStore';
+	import { dynamicSession } from '$lib/stores/dynamicStore';
+
+	// Hide track in wallet buttons for embedded wallets
+	$: isEmbeddedWallet = $authMethod === 'dynamic' && $dynamicSession?.walletType === 'embedded';
 
 	const handleClose = () => {
 		return transactionStore.reset();
@@ -227,8 +232,8 @@
 								</div>
 							{/if}
 						</div>
-						<!-- Track in Wallet button - only for Buy orders with non-zero fill -->
-						{#if marketOrderDisplay.direction === 'Buy' && !marketOrderDisplay.isNoFill && marketOrderDisplay.assetAddress}
+						<!-- Track in Wallet button - only for Buy orders with non-zero fill, hidden for embedded wallets -->
+						{#if marketOrderDisplay.direction === 'Buy' && !marketOrderDisplay.isNoFill && marketOrderDisplay.assetAddress && !isEmbeddedWallet}
 							<button
 								type="button"
 								on:click={() =>
@@ -266,8 +271,8 @@
 						</div>
 					{/if}
 
-					<!-- Track in Wallet button for limit/DCA order deployments (not market orders) -->
-					{#if assetTokenInfo && !marketOrderDisplay}
+					<!-- Track in Wallet button for limit/DCA order deployments (not market orders), hidden for embedded wallets -->
+					{#if assetTokenInfo && !marketOrderDisplay && !isEmbeddedWallet}
 						<button
 							type="button"
 							on:click={() =>
