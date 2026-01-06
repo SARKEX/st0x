@@ -212,6 +212,19 @@ export const TOKENS: CategorizedToken[] = [
 	} as unknown as CategorizedToken,
 	{
 		chainId: base.id,
+		address: '0xf8fdfd6a686346d34b3143fc23072aa45c9e8386',
+		symbol: 'tBMNR',
+		decimals: 18,
+		name: 'Bitmine Immersion Technologies, Inc ST0x',
+		logoUrl: '/images/BMNR.png',
+		priceFeedId: '0x54e2e127c93950de5a710100fd1cd387aba1ec8920850efdb05da5fee57d2e32',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:BMNR',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	} as unknown as CategorizedToken,
+	{
+		chainId: base.id,
 		address: '0x6192539a2036c786aba3ca6a2222ff7a0f9c287e',
 		symbol: 'tPPLT',
 		decimals: 18,
