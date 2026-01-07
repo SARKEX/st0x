@@ -111,27 +111,19 @@ export {
 } from './rhinestone/swaps';
 
 // =============================================================================
-// EIP-7702 / Privy Integration
+// EIP-7702 / Dynamic Integration
 // =============================================================================
 
 export {
 	supportsEIP7702,
-	checkDelegationStatus,
-	getWalletCapabilities,
-	getPrivyWalletAddress,
-	isPrivyWalletReady,
-	encodeBatchCall,
-	encodeExecute,
-	checkEOADelegateStatus,
-	getERC7579Implementation,
-	signEIP7702Authorization,
-	createPrivyWalletClient,
-	getPrivyAccountForRhinestone,
-	type EIP7702WalletCapabilities,
-	type EOADelegateStatus,
-	type EIP7702SignedAuthorization,
-	type EIP7702AuthorizationOptions
-} from './wallets/privy-7702';
+	isDynamicWalletReady,
+	getDynamicWalletAddress,
+	isDynamicEmbeddedWallet,
+	createDynamicWalletClient,
+	getDynamicAccountForRhinestone,
+	createDynamicPublicClient,
+	signMessage
+} from './wallets/dynamic';
 
 // =============================================================================
 // Orchestrator (Main Entry Point)

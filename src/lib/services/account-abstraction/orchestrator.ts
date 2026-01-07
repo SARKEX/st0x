@@ -31,7 +31,7 @@ import {
 	executeSwapToSettlement,
 	executeSwapFromSettlement
 } from './rhinestone/swaps';
-import { supportsEIP7702 } from './wallets/privy-7702';
+import { supportsEIP7702 } from './wallets/dynamic';
 import { USDC_BASE } from './tokens';
 import { getBalanceChecker, formatBalanceShortfall } from './rhinestone/balanceChecker';
 import { getPriceOracle } from './rhinestone/priceOracle';

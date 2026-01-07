@@ -185,6 +185,7 @@ export class RhinestoneClient {
 			const createAccountOptions: {
 				owners: { type: 'ecdsa'; accounts: Account[] };
 				accountType?: '7702';
+				eoa?: Account;
 			} = {
 				owners: {
 					type: 'ecdsa',
@@ -192,11 +193,12 @@ export class RhinestoneClient {
 				}
 			};
 
-			// For EIP-7702 mode, add the accountType to signal EOA upgrade
-			// This tells Rhinestone to use Warp infrastructure to upgrade the EOA
+			// For EIP-7702 mode, add the accountType and eoa parameter
+			// This tells Rhinestone to use EIP-7702 to upgrade the EOA
 			// instead of creating a separate smart account
 			if (this.config.accountType === '7702') {
 				createAccountOptions.accountType = '7702';
+				createAccountOptions.eoa = walletAccount;
 			}
 
 			console.log('[Rhinestone Client] Calling SDK createAccount with options:', {
@@ -466,6 +468,26 @@ export class RhinestoneClient {
 			const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
 			const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
 
+			// For EIP-7702 mode, check if the account needs initialization
+			let eip7702InitSignature: Hex | undefined;
+			if (this.config.accountType === '7702') {
+				try {
+					// Check if the account is already deployed/initialized on the target chain
+					const isDeployed = await rhinestoneAccount.isDeployed(targetChain);
+					console.log('[Rhinestone Client] EIP-7702 account deployed status:', isDeployed);
+
+					if (!isDeployed) {
+						// Sign the EIP-7702 init data for the first transaction
+						console.log('[Rhinestone Client] Signing EIP-7702 init data for first cross-chain transaction...');
+						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
+						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
+					}
+				} catch (initError) {
+					console.warn('[Rhinestone Client] Could not check/sign EIP-7702 init:', initError);
+					// Continue anyway, the SDK might handle this automatically
+				}
+			}
+
 			// Build the swap call - transfer target token to recipient
 			const transferCall = {
 				to: params.targetToken.address as Address,
@@ -480,7 +502,14 @@ export class RhinestoneClient {
 			// Execute cross-chain transaction via Rhinestone
 			// tokenRequests tells the solver what tokens to pull from source chain
 			// feeAsset specifies which token to use for gas payment (e.g., 'USDC')
-			const transactionResult = await rhinestoneAccount.sendTransaction({
+			const transactionParams: {
+				sourceChain: Chain;
+				targetChain: Chain;
+				calls: Array<{ to: Address; value: bigint; data: Hex }>;
+				tokenRequests: Array<{ address: Address; amount: bigint }>;
+				feeAsset?: string;
+				eip7702InitSignature?: Hex;
+			} = {
 				sourceChain,
 				targetChain,
 				calls: [transferCall],
@@ -489,9 +518,19 @@ export class RhinestoneClient {
 						address: params.sourceToken.address as Address,
 						amount: params.amount
 					}
-				],
-				...(feeAsset && { feeAsset })
-			});
+				]
+			};
+
+			if (feeAsset) {
+				transactionParams.feeAsset = feeAsset;
+			}
+
+			// Include EIP-7702 init signature if we have one
+			if (eip7702InitSignature) {
+				transactionParams.eip7702InitSignature = eip7702InitSignature;
+			}
+
+			const transactionResult = await rhinestoneAccount.sendTransaction(transactionParams);
 
 			// Wait for execution to complete
 			const status = await rhinestoneAccount.waitForExecution(transactionResult);
@@ -571,6 +610,26 @@ export class RhinestoneClient {
 			const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
 			const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
 
+			// For EIP-7702 mode, check if the account needs initialization
+			let eip7702InitSignature: Hex | undefined;
+			if (this.config.accountType === '7702') {
+				try {
+					// Check if the account is already deployed/initialized on the target chain
+					const isDeployed = await rhinestoneAccount.isDeployed(targetChain);
+					console.log('[Rhinestone Client] EIP-7702 account deployed status:', isDeployed);
+
+					if (!isDeployed) {
+						// Sign the EIP-7702 init data for the first transaction
+						console.log('[Rhinestone Client] Signing EIP-7702 init data for first omnichain transaction...');
+						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
+						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
+					}
+				} catch (initError) {
+					console.warn('[Rhinestone Client] Could not check/sign EIP-7702 init:', initError);
+					// Continue anyway, the SDK might handle this automatically
+				}
+			}
+
 			// Build token requests from the params
 			const tokenRequests =
 				params.tokenRequests?.map((req) => ({
@@ -585,10 +644,18 @@ export class RhinestoneClient {
 				targetChainId: targetChain.id,
 				callsCount: params.calls.length,
 				tokenRequestsCount: tokenRequests.length,
-				feeAsset
+				feeAsset,
+				hasEip7702Init: Boolean(eip7702InitSignature)
 			});
 
-			const transactionResult = await rhinestoneAccount.sendTransaction({
+			const transactionParams: {
+				sourceChain: Chain;
+				targetChain: Chain;
+				calls: Array<{ to: Address; value: bigint; data: Hex }>;
+				tokenRequests: Array<{ address: Address; amount: bigint }>;
+				feeAsset?: string;
+				eip7702InitSignature?: Hex;
+			} = {
 				sourceChain,
 				targetChain,
 				calls: params.calls.map((call) => ({
@@ -596,9 +663,19 @@ export class RhinestoneClient {
 					value: call.value || 0n,
 					data: call.data as Hex
 				})),
-				tokenRequests,
-				...(feeAsset && { feeAsset })
-			});
+				tokenRequests
+			};
+
+			if (feeAsset) {
+				transactionParams.feeAsset = feeAsset;
+			}
+
+			// Include EIP-7702 init signature if we have one
+			if (eip7702InitSignature) {
+				transactionParams.eip7702InitSignature = eip7702InitSignature;
+			}
+
+			const transactionResult = await rhinestoneAccount.sendTransaction(transactionParams);
 
 			console.log('[Rhinestone Client] Transaction sent, waiting for execution...', {
 				intentId: transactionResult.id.toString(),

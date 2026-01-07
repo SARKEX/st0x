@@ -340,10 +340,10 @@ export async function sendTransactionWithGasOption(
 	// For stablecoin gas payment, we need to use Rhinestone
 	const method = get(authMethod);
 
-	if (method !== 'privy') {
-		// Rhinestone ERC20 gas payment currently only works with Privy embedded wallets
+	if (method !== 'dynamic') {
+		// Rhinestone ERC20 gas payment currently only works with Dynamic embedded wallets
 		// Fall back to regular transaction for external wallets
-		console.warn('ERC20 gas payment only available for Privy wallets, falling back to ETH gas');
+		console.warn('ERC20 gas payment only available for Dynamic wallets, falling back to ETH gas');
 		return sendTransaction(params);
 	}
 
@@ -351,7 +351,7 @@ export async function sendTransactionWithGasOption(
 	const { getRhinestoneClient, isRhinestoneConfigured } = await import(
 		'./account-abstraction/rhinestone/client'
 	);
-	const { getPrivyAccountForRhinestone } = await import('./account-abstraction/wallets/privy-7702');
+	const { getDynamicAccountForRhinestone } = await import('./account-abstraction/wallets/dynamic');
 	const { SUPPORTED_NETWORKS } = await import('./account-abstraction/types');
 
 	if (!isRhinestoneConfigured()) {
@@ -359,7 +359,7 @@ export async function sendTransactionWithGasOption(
 		return sendTransaction(params);
 	}
 
-	const walletAccount = getPrivyAccountForRhinestone();
+	const walletAccount = await getDynamicAccountForRhinestone();
 	if (!walletAccount) {
 		console.warn('Could not get wallet account for Rhinestone, falling back to ETH gas');
 		return sendTransaction(params);

@@ -16,7 +16,7 @@ import {
 	getBalanceChecker,
 	USDC_BASE
 } from '$lib/services/account-abstraction';
-import { getPrivyAccountForRhinestone } from '$lib/services/account-abstraction/wallets/privy-7702';
+import { getDynamicAccountForRhinestone, isDynamicWalletReady } from '$lib/services/account-abstraction/wallets/dynamic';
 import { walletAddress } from '$lib/stores/authStore';
 
 // Quote refresh interval (45 seconds - quotes expire at 60s)
@@ -189,7 +189,7 @@ function createAAPaymentStore() {
 			}
 
 			// Get wallet account for Rhinestone
-			const walletAccount = getPrivyAccountForRhinestone();
+			const walletAccount = await getDynamicAccountForRhinestone();
 			if (!walletAccount) {
 				update((s) => ({
 					...s,
@@ -467,7 +467,7 @@ function createAAPaymentStore() {
 			}
 
 			// Get wallet account for Rhinestone
-			const walletAccount = getPrivyAccountForRhinestone();
+			const walletAccount = await getDynamicAccountForRhinestone();
 			if (!walletAccount) {
 				update((s) => ({
 					...s,
