@@ -2,7 +2,7 @@
 // TVL = sum of (balance / 1e18) * price for all wallets, all tokens
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
+import { kvGet, KV_KEYS, getExcludedWalletsSet, type SnapshotBlockRecord } from '$lib/server/kv';
 import { list } from '@vercel/blob';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { TOKENS } from '$lib/config/tokens';
@@ -299,12 +299,11 @@ export const GET: RequestHandler = async ({ url }) => {
 		const limitParam = url.searchParams.get('limit');
 		const limit = limitParam ? parseInt(limitParam) : 90; // Default to 90 days
 
-		// Get wallet-to-code mapping
-		const walletToCode = await fetchWalletToCodeMapping();
-
-		// Get excluded wallets
-		const excludedWalletsList = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
-		const excludedWallets = new Set(excludedWalletsList.map((w) => w.toLowerCase()));
+		// Get wallet-to-code mapping and excluded wallets
+		const [walletToCode, excludedWallets] = await Promise.all([
+			fetchWalletToCodeMapping(),
+			getExcludedWalletsSet()
+		]);
 
 		// Get all snapshot block records
 		const allBlocks = (await kvGet<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];

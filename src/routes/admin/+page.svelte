@@ -1777,12 +1777,6 @@
 				</Card>
 				<Card>
 					<div class="text-center">
-						<p class="text-3xl font-bold text-[#e8be89]">{accessCodes.length}</p>
-						<p class="mt-1 text-sm text-gray-400">Access Codes</p>
-					</div>
-				</Card>
-				<Card>
-					<div class="text-center">
 						<p class="text-3xl font-bold text-[#e8be89]">{walletStats.length}</p>
 						<p class="mt-1 text-sm text-gray-400">Active Wallets</p>
 					</div>
@@ -1790,7 +1784,7 @@
 			</div>
 
 			<!-- Extended Stats -->
-			<div class="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+			<div class="mb-8 grid gap-6 sm:grid-cols-2">
 				<Card>
 					<div class="text-center">
 						<p class="text-2xl font-bold text-white">{formatUsd(meanTxSize)}</p>
@@ -1801,18 +1795,6 @@
 					<div class="text-center">
 						<p class="text-2xl font-bold text-white">{formatUsd(medianTxSize)}</p>
 						<p class="mt-1 text-sm text-gray-400">Median Tx Size</p>
-					</div>
-				</Card>
-				<Card>
-					<div class="text-center">
-						<p
-							class="text-2xl font-bold {cumulativeNetVolume >= 0
-								? 'text-green-400'
-								: 'text-red-400'}"
-						>
-							{cumulativeNetVolume >= 0 ? '+' : ''}{formatUsd(cumulativeNetVolume)}
-						</p>
-						<p class="mt-1 text-sm text-gray-400">LP Net USDC Flow</p>
 					</div>
 				</Card>
 			</div>

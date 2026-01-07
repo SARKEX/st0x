@@ -1,6 +1,10 @@
 {
 	"crons": [
 		{
+			"path": "/api/admin/pools/update-cache",
+			"schedule": "56 23 * * *"
+		},
+		{
 			"path": "/api/cron/snapshots",
 			"schedule": "1 0 * * *"
 		}

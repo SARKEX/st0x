@@ -60,7 +60,7 @@
 	$: showBanner = $isAuthenticated && hasNoFunds && !dismissed;
 
 	function handleAddFunds() {
-		openDepositModal('buy');
+		openDepositModal();
 	}
 
 	function handleDismiss() {

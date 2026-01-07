@@ -4,16 +4,11 @@ import type { RequestHandler } from './$types';
 import {
 	kvGet,
 	KV_KEYS,
+	getExcludedWalletsSet,
 	type MonthlyPointsData,
 	type RewardsPoolConfig,
 	type RocketBoostTiers
 } from '$lib/server/kv';
-
-// Get excluded wallets set for filtering
-async function getExcludedWalletsSet(): Promise<Set<string>> {
-	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
-	return new Set(excludedWallets.map((w) => w.toLowerCase()));
-}
 
 interface WalletRanking {
 	address: string;

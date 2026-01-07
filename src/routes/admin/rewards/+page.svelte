@@ -83,6 +83,42 @@
 	// Reactively find pool config for selected month (avoids race condition on mount)
 	$: currentMonthPool = poolConfigs.find((p) => p.month === selectedMonth) || null;
 
+	// ===== Contract Check State =====
+	// Contract type: null = EOA, 'v2' = V2 pool, 'v3' = V3 pool, 'unknown' = other contract
+	let contractMap: Record<string, string | null> = {};
+	let lastCheckedWallets: string[] = []; // Track which wallets we've checked
+
+	// Auto-check contracts when wallet data changes
+	$: if (monthlyData?.wallets && monthlyData.wallets.length > 0) {
+		const currentAddresses = monthlyData.wallets.map((w) => w.address.toLowerCase()).sort();
+		const lastAddresses = lastCheckedWallets.sort();
+		// Only check if wallet list has changed
+		if (JSON.stringify(currentAddresses) !== JSON.stringify(lastAddresses)) {
+			checkContracts(monthlyData.wallets.map((w) => w.address));
+		}
+	}
+
+	async function checkContracts(addresses: string[]) {
+		if (addresses.length === 0) return;
+
+		lastCheckedWallets = addresses.map((a) => a.toLowerCase());
+
+		try {
+			const res = await fetch('/api/admin/check-contracts', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ addresses })
+			});
+
+			const data = await res.json();
+			if (res.ok && data.success) {
+				contractMap = data.contracts;
+			}
+		} catch {
+			// Silently fail - contract check is not critical
+		}
+	}
+
 	// ===== Airdrop CSV Modal State =====
 	let airdropModalOpen = false;
 	let airdropTokenAddress = '';
@@ -622,6 +658,14 @@
 	let blockNumber = '';
 	let previewLoading = false;
 	let previewError = '';
+	let previewProgress: {
+		step: number;
+		total: number;
+		message: string;
+		tokenIndex?: number;
+		totalTokens?: number;
+		tokenSymbol?: string;
+	} | null = null;
 	let previewResult: {
 		success: boolean;
 		blockNumber: number;
@@ -656,6 +700,60 @@
 	} | null = null;
 	let selectedWallet: string | null = null;
 	let selectedTokenFilter: string = ''; // token symbol (defaults to first token)
+
+	// ===== LP Pool Cache State =====
+	let poolCacheLoading = false;
+	let poolCacheUpdating = false;
+	let poolCacheError = '';
+	let poolCacheData: {
+		v2Pools: string[];
+		v3Pools: string[];
+		v2Count: number;
+		v3Count: number;
+	} | null = null;
+
+	async function fetchPoolCache() {
+		poolCacheLoading = true;
+		poolCacheError = '';
+		try {
+			const res = await fetch('/api/admin/pools/update-cache?view=1');
+			const data = await res.json();
+			if (res.ok) {
+				poolCacheData = data;
+			} else {
+				poolCacheError = data.error || 'Failed to fetch pool cache';
+			}
+		} catch (err) {
+			poolCacheError = err instanceof Error ? err.message : 'Failed to fetch pool cache';
+		} finally {
+			poolCacheLoading = false;
+		}
+	}
+
+	async function updatePoolCache() {
+		poolCacheUpdating = true;
+		poolCacheError = '';
+		try {
+			const res = await fetch('/api/admin/pools/update-cache', {
+				method: 'POST'
+			});
+			const data = await res.json();
+			if (res.ok && data.success) {
+				poolCacheData = {
+					v2Pools: data.v2Pools,
+					v3Pools: data.v3Pools,
+					v2Count: data.v2Pools.length,
+					v3Count: data.v3Pools.length
+				};
+			} else {
+				poolCacheError = data.error || 'Failed to update pool cache';
+			}
+		} catch (err) {
+			poolCacheError = err instanceof Error ? err.message : 'Failed to update pool cache';
+		} finally {
+			poolCacheUpdating = false;
+		}
+	}
 
 	// ===== Excluded Wallets Tab State =====
 	let excludedLoading = false;
@@ -711,6 +809,7 @@
 		loadCanonicalBlocks();
 		loadPoolConfigs();
 		loadReferrals();
+		fetchPoolCache();
 	});
 
 	// ===== Points Functions =====
@@ -1202,25 +1301,71 @@
 		previewLoading = true;
 		previewError = '';
 		previewResult = null;
+		previewProgress = null;
 		selectedWallet = null;
 		selectedTokenFilter = '';
 
 		try {
-			const res = await fetch(`/api/snapshots/preview?block=${blockNumber.trim()}`);
-			const data = await res.json();
+			// Use EventSource for streaming progress updates
+			const eventSource = new EventSource(
+				`/api/snapshots/preview-stream?block=${blockNumber.trim()}`
+			);
 
-			if (!res.ok || !data.success) {
-				throw new Error(data.error || 'Failed to generate preview');
-			}
+			eventSource.addEventListener('progress', (event) => {
+				const data = JSON.parse(event.data);
+				previewProgress = {
+					step: data.step,
+					total: data.total,
+					message: data.message
+				};
+			});
 
-			previewResult = data;
-			// Default to first token
-			if (data.tokenSummary?.length > 0) {
-				selectedTokenFilter = data.tokenSummary[0].token;
-			}
+			eventSource.addEventListener('lp-progress', (event) => {
+				const data = JSON.parse(event.data);
+				previewProgress = {
+					step: 5,
+					total: 6,
+					message: `Processing ${data.tokenSymbol}...`,
+					tokenIndex: data.tokenIndex,
+					totalTokens: data.totalTokens,
+					tokenSymbol: data.tokenSymbol
+				};
+			});
+
+			eventSource.addEventListener('complete', (event) => {
+				const data = JSON.parse(event.data);
+				previewResult = data;
+				previewProgress = null;
+				previewLoading = false;
+				eventSource.close();
+
+				// Default to first token
+				if (data.tokenSummary?.length > 0) {
+					selectedTokenFilter = data.tokenSummary[0].token;
+				}
+			});
+
+			eventSource.addEventListener('error', (event) => {
+				try {
+					const data = JSON.parse((event as MessageEvent).data);
+					previewError = data.message || 'Unknown error';
+				} catch {
+					previewError = 'Connection error';
+				}
+				previewProgress = null;
+				previewLoading = false;
+				eventSource.close();
+			});
+
+			eventSource.onerror = () => {
+				previewError = 'Connection lost';
+				previewProgress = null;
+				previewLoading = false;
+				eventSource.close();
+			};
 		} catch (err) {
 			previewError = err instanceof Error ? err.message : 'Unknown error';
-		} finally {
+			previewProgress = null;
 			previewLoading = false;
 		}
 	}
@@ -2279,6 +2424,25 @@
 																excluded
 															</span>
 														{/if}
+														{#if contractMap[row.address.toLowerCase()] === 'v2'}
+															<span
+																class="rounded bg-purple-900/50 px-1.5 py-0.5 text-xs text-purple-400"
+															>
+																v2 pool
+															</span>
+														{:else if contractMap[row.address.toLowerCase()] === 'v3'}
+															<span
+																class="rounded bg-purple-900/50 px-1.5 py-0.5 text-xs text-purple-400"
+															>
+																v3 pool
+															</span>
+														{:else if contractMap[row.address.toLowerCase()] === 'unknown'}
+															<span
+																class="rounded bg-purple-900/50 px-1.5 py-0.5 text-xs text-purple-400"
+															>
+																contract
+															</span>
+														{/if}
 													</div>
 												</td>
 												<td class="px-3 py-2 text-right font-mono text-white">
@@ -2764,6 +2928,34 @@
 	<!-- Preview Tab -->
 	{#if activeTab === 'preview'}
 		<div class="space-y-6">
+			<!-- LP Pool Cache Section -->
+			<Card>
+				<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h3 class="text-sm font-medium text-gray-300">LP Pool Cache</h3>
+						{#if poolCacheLoading}
+							<p class="mt-1 text-xs text-gray-500">Loading...</p>
+						{:else if poolCacheData}
+							<p class="mt-1 text-xs text-gray-500">
+								{poolCacheData.v2Count} V2 pools, {poolCacheData.v3Count} V3 pools cached
+							</p>
+						{:else}
+							<p class="mt-1 text-xs text-gray-500">No pools cached yet</p>
+						{/if}
+						{#if poolCacheError}
+							<p class="mt-1 text-xs text-red-400">{poolCacheError}</p>
+						{/if}
+					</div>
+					<button
+						on:click={updatePoolCache}
+						disabled={poolCacheUpdating}
+						class="rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{poolCacheUpdating ? 'Updating...' : 'Update Pool Cache'}
+					</button>
+				</div>
+			</Card>
+
 			<!-- Input Section -->
 			<Card>
 				<div class="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -2798,11 +2990,43 @@
 
 			{#if previewLoading}
 				<Card>
-					<div class="flex items-center justify-center gap-3 py-12 text-gray-400">
-						<div
-							class="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
-						></div>
-						<span>Generating snapshot preview... This may take a minute.</span>
+					<div class="py-8">
+						<div class="mb-4 flex items-center justify-center gap-3 text-gray-400">
+							<div
+								class="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+							></div>
+							<span>Generating snapshot preview...</span>
+						</div>
+
+						{#if previewProgress}
+							<div class="mx-auto max-w-md space-y-3">
+								<!-- Overall progress bar -->
+								<div class="h-2 w-full overflow-hidden rounded-full bg-gray-700">
+									<div
+										class="h-full bg-[#e8be89] transition-all duration-300"
+										style="width: {(previewProgress.step / previewProgress.total) * 100}%"
+									></div>
+								</div>
+
+								<!-- Step info -->
+								<div class="text-center text-sm text-gray-400">
+									Step {previewProgress.step}/{previewProgress.total}: {previewProgress.message}
+								</div>
+
+								<!-- Token progress (when processing LP attribution) -->
+								{#if previewProgress.tokenIndex !== undefined && previewProgress.totalTokens}
+									<div class="mt-2 text-center text-xs text-gray-500">
+										Token {previewProgress.tokenIndex + 1}/{previewProgress.totalTokens}
+									</div>
+									<div class="h-1 w-full overflow-hidden rounded-full bg-gray-800">
+										<div
+											class="h-full bg-[#e8be89]/50 transition-all duration-300"
+											style="width: {((previewProgress.tokenIndex + 1) / previewProgress.totalTokens) * 100}%"
+										></div>
+									</div>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				</Card>
 			{/if}

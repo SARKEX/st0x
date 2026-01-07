@@ -1,5 +1,5 @@
 // Recalculate monthly points from existing blob snapshots
-// This is useful if snapshots were generated before points tracking was working
+// Uses the same calculation logic as the daily cron for consistency
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
@@ -7,14 +7,18 @@ import {
 	kvGet,
 	kvSet,
 	KV_KEYS,
+	getExcludedWalletsSet,
 	type MonthlyPointsData,
 	type SnapshotBlockRecord
 } from '$lib/server/kv';
 import { invalidatePublicApiCaches } from '$lib/server/cache';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { env } from '$env/dynamic/private';
-
-const POINTS_PER_DOLLAR = 100;
+import {
+	calculateWalletPointsFromSnapshots,
+	createEmptyMonthlyData,
+	mergeWalletPointsIntoMonthlyData
+} from '$lib/server/snapshots/points';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	// Check if Blob token is available (required for Vercel Blob storage)
@@ -56,9 +60,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		console.log(`[Recalculate] Found ${monthBlocks.length} blocks for ${month}`);
 
-		// Get excluded wallets
-		const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
-		const excludedSet = new Set(excludedWallets.map((w) => w.toLowerCase()));
+		// Get excluded wallets for reporting (not for filtering - that happens at query time)
+		const excludedSet = await getExcludedWalletsSet();
 
 		// Get existing monthly data to compare
 		const existingData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
@@ -66,9 +69,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const existingTotalPoints = existingData
 			? Object.values(existingData.wallets).reduce((sum, w) => sum + w.totalPoints, 0)
 			: 0;
-
-		// Track excluded wallets that had points
-		const excludedWithPoints: { address: string; points: number }[] = [];
 
 		// Create a set of block numbers we're looking for
 		const targetBlocks = new Set(monthBlocks.map((b) => b.blockNumber));
@@ -82,12 +82,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		});
 		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
 
-		// Debug: show sample blob paths
-		if (allBlobs.length > 0) {
-			const samplePaths = allBlobs.slice(0, 3).map((b) => b.pathname);
-			console.log(`[Recalculate] Sample blob pathnames: ${JSON.stringify(samplePaths)}`);
-		}
-
 		// Debug: extract all block numbers from blobs
 		const allBlobBlocks = new Set<number>();
 		for (const blob of allBlobs) {
@@ -98,18 +92,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				allBlobBlocks.add(blockNumber);
 			}
 		}
-		console.log(
-			`[Recalculate] All blob block numbers: ${Array.from(allBlobBlocks)
-				.slice(0, 10)
-				.join(', ')}...`
-		);
 
-		// Parse blob paths and filter for our target blocks
-		const blobsForMonth: Array<{
-			token: string;
-			blockNumber: number;
-			url: string;
-		}> = [];
+		// Group blobs by block number
+		const blobsByBlock = new Map<number, Array<{ token: string; url: string }>>();
 
 		for (const blob of allBlobs) {
 			const pathParts = blob.pathname.split('/');
@@ -118,106 +103,54 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			const blockNumber = parseInt(fileName.replace('.json', ''));
 
 			if (targetBlocks.has(blockNumber)) {
-				blobsForMonth.push({
+				if (!blobsByBlock.has(blockNumber)) {
+					blobsByBlock.set(blockNumber, []);
+				}
+				blobsByBlock.get(blockNumber)!.push({
 					token: tokenSymbol,
-					blockNumber,
 					url: blob.url
 				});
 			}
 		}
 
-		console.log(`[Recalculate] Found ${blobsForMonth.length} blobs for target blocks`);
+		console.log(`[Recalculate] Found blobs for ${blobsByBlock.size} blocks`);
 
-		// Initialize new monthly data
-		const monthlyData: MonthlyPointsData = {
-			month,
-			snapshotCount: 0,
-			blockNumbers: [],
-			wallets: {},
-			updatedAt: new Date().toISOString()
-		};
+		// Initialize new monthly data using shared function
+		const monthlyData = createEmptyMonthlyData(month);
 
-		let totalPointsRecalculated = 0;
 		const tokensProcessed = new Set<string>();
-		const processedBlocks = new Set<number>();
 
-		// Process each blob
-		for (const blobInfo of blobsForMonth) {
+		// Process each block using the same functions as the daily cron
+		for (const [blockNumber, blobs] of blobsByBlock) {
 			try {
-				console.log(`[Recalculate] Fetching ${blobInfo.token} at block ${blobInfo.blockNumber}`);
+				console.log(`[Recalculate] Processing block ${blockNumber} with ${blobs.length} tokens`);
 
-				const response = await fetch(blobInfo.url);
-				if (!response.ok) {
-					console.log(`[Recalculate] Failed to fetch ${blobInfo.url}`);
-					continue;
+				// Fetch all snapshots for this block
+				const snapshots: BlockSnapshot[] = [];
+				for (const blobInfo of blobs) {
+					const response = await fetch(blobInfo.url);
+					if (response.ok) {
+						const snapshot: BlockSnapshot = await response.json();
+						snapshots.push(snapshot);
+						tokensProcessed.add(blobInfo.token);
+					}
 				}
 
-				const snapshot: BlockSnapshot = await response.json();
-				tokensProcessed.add(blobInfo.token);
-				processedBlocks.add(blobInfo.blockNumber);
+				if (snapshots.length === 0) continue;
 
-				// Calculate points from this snapshot
-				const price = snapshot.price?.price ?? 0;
-				const tokenAddress = snapshot.tokenAddress.toLowerCase();
+				// Use the same calculation function as updateMonthlyPoints (includes LP attribution)
+				const walletPoints = await calculateWalletPointsFromSnapshots(snapshots, blockNumber);
+
+				// Use shared merge function - same logic as updateMonthlyPoints
+				mergeWalletPointsIntoMonthlyData(monthlyData, walletPoints, blockNumber);
 
 				console.log(
-					`[Recalculate] ${blobInfo.token}: price=${price}, balances=${
-						Object.keys(snapshot.balances).length
-					}`
+					`[Recalculate] Block ${blockNumber}: ${walletPoints.size} wallets with points`
 				);
-
-				for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
-					const address = walletAddress.toLowerCase();
-					const balance = BigInt(balanceStr);
-
-					// Skip negative balances (can occur from transfer replay ordering issues)
-					if (balance <= 0n) continue;
-
-					const balanceFloat = Number(balance) / 1e18;
-					const usdValue = balanceFloat * price;
-					const points = usdValue * POINTS_PER_DOLLAR;
-
-					// Skip excluded wallets but track their points
-					if (excludedSet.has(address)) {
-						// Track excluded wallet's points for reporting
-						const existing = excludedWithPoints.find((e) => e.address === address);
-						if (existing) {
-							existing.points += points;
-						} else {
-							excludedWithPoints.push({ address, points });
-						}
-						continue;
-					}
-
-					if (!monthlyData.wallets[address]) {
-						monthlyData.wallets[address] = {
-							tokens: {},
-							totalPoints: 0
-						};
-					}
-
-					const wallet = monthlyData.wallets[address];
-
-					if (!wallet.tokens[tokenAddress]) {
-						wallet.tokens[tokenAddress] = {
-							points: 0,
-							lastBalance: '0'
-						};
-					}
-
-					wallet.tokens[tokenAddress].points += points;
-					wallet.tokens[tokenAddress].lastBalance = balanceStr;
-					wallet.totalPoints += points;
-					totalPointsRecalculated += points;
-				}
 			} catch (err) {
-				console.error(`[Recalculate] Error processing ${blobInfo.url}:`, err);
+				console.error(`[Recalculate] Error processing block ${blockNumber}:`, err);
 			}
 		}
-
-		// Update snapshot count and block numbers
-		monthlyData.blockNumbers = Array.from(processedBlocks).sort((a, b) => a - b);
-		monthlyData.snapshotCount = processedBlocks.size;
 
 		// Floor all points to 0 (reset any negative points)
 		for (const wallet of Object.values(monthlyData.wallets)) {
@@ -239,23 +172,29 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		const walletCount = Object.keys(monthlyData.wallets).length;
+		const totalPointsRecalculated = Object.values(monthlyData.wallets).reduce(
+			(sum, w) => sum + w.totalPoints,
+			0
+		);
+
+		// Calculate excluded wallet stats for reporting (they're stored, but excluded at query time)
+		const excludedWalletsInData = Object.entries(monthlyData.wallets)
+			.filter(([address]) => excludedSet.has(address))
+			.map(([address, data]) => ({
+				address,
+				points: Math.round(data.totalPoints)
+			}))
+			.filter((e) => e.points > 0);
+
+		const totalExcludedPoints = excludedWalletsInData.reduce((sum, e) => sum + e.points, 0);
 
 		console.log(
-			`[Recalculate] Completed: ${
-				monthlyData.snapshotCount
-			} snapshots, ${walletCount} wallets, ${Math.round(
+			`[Recalculate] Completed: ${monthlyData.snapshotCount} snapshots, ${walletCount} wallets, ${Math.round(
 				totalPointsRecalculated
 			).toLocaleString()} total points`
 		);
 		console.log(`[Recalculate] Tokens processed: ${Array.from(tokensProcessed).join(', ')}`);
 		console.log(`[Recalculate] Block numbers: ${monthlyData.blockNumbers.join(', ')}`);
-
-		// Debug: show first few wallets
-		const walletSample = Object.entries(monthlyData.wallets).slice(0, 3);
-		console.log(`[Recalculate] Sample wallets:`, JSON.stringify(walletSample, null, 2));
-
-		// Calculate total excluded points
-		const totalExcludedPoints = excludedWithPoints.reduce((sum, e) => sum + e.points, 0);
 
 		// Invalidate public API caches so they reflect new data immediately
 		await invalidatePublicApiCaches();
@@ -271,21 +210,20 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			comparison: {
 				previousWalletCount: existingWalletCount,
 				previousTotalPoints: Math.round(existingTotalPoints),
-				walletsRemoved: existingWalletCount - walletCount,
-				pointsRemoved: Math.round(existingTotalPoints - totalPointsRecalculated)
+				walletDelta: walletCount - existingWalletCount,
+				pointsDelta: Math.round(totalPointsRecalculated - existingTotalPoints)
 			},
-			excludedWalletsApplied: excludedWithPoints
-				.filter((e) => e.points > 0)
-				.map((e) => ({
-					address: e.address,
-					pointsExcluded: Math.round(e.points)
-				})),
-			totalExcludedPoints: Math.round(totalExcludedPoints),
+			// Excluded wallets are stored but filtered at query time - show for visibility
+			excludedWalletsInfo: {
+				count: excludedWalletsInData.length,
+				totalPoints: Math.round(totalExcludedPoints),
+				wallets: excludedWalletsInData.slice(0, 10) // Top 10 for brevity
+			},
 			debug: {
 				blocksFound: monthBlocks.length,
 				totalBlobsInStorage: allBlobs.length,
-				blobsMatchingMonth: blobsForMonth.length,
-				excludedWalletsCount: excludedWallets.length,
+				blobsMatchingMonth: blobsByBlock.size,
+				excludedWalletsCount: excludedSet.size,
 				targetBlockNumbers: Array.from(targetBlocks),
 				sampleBlobPaths: allBlobs.slice(0, 3).map((b) => b.pathname),
 				allBlobBlockNumbers: Array.from(allBlobBlocks).slice(0, 10)
