@@ -7,30 +7,25 @@
 
 import {
 	createPublicClient,
-	http,
 	erc20Abi,
 	type Address,
 	type PublicClient,
 	type Chain
 } from 'viem';
-import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
+import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { SUPPORTED_NETWORKS, type SupportedNetworkId, type PaymentToken } from '../types';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const RPC_URLS: Record<SupportedNetworkId, string> = {
-	[SUPPORTED_NETWORKS.BASE]: 'https://mainnet.base.org',
-	[SUPPORTED_NETWORKS.ARBITRUM]: 'https://arb1.arbitrum.io/rpc',
-	[SUPPORTED_NETWORKS.ETHEREUM]: 'https://eth.llamarpc.com',
-	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: 'https://sepolia.base.org',
-	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: 'https://sepolia-rollup.arbitrum.io/rpc'
-};
+// Import RPC utilities for fallbacks and load balancing
+import { createRpcTransport } from '$lib/utils/rpc';
 
 const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 	[SUPPORTED_NETWORKS.BASE]: base,
 	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
+	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
 	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
 	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia
@@ -71,7 +66,7 @@ export class BalanceChecker {
 		if (!this.clients.has(chainId)) {
 			const client = createPublicClient({
 				chain: CHAIN_CONFIG[chainId],
-				transport: http(RPC_URLS[chainId])
+				transport: createRpcTransport(chainId)
 			}) as PublicClient;
 			this.clients.set(chainId, client);
 		}

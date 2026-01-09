@@ -13,6 +13,7 @@ import type { Address, Hash, Hex } from 'viem';
 export const SUPPORTED_NETWORKS = {
 	BASE: 8453,
 	ARBITRUM: 42161,
+	OPTIMISM: 10,
 	ETHEREUM: 1,
 	BASE_SEPOLIA: 84532,
 	ARBITRUM_SEPOLIA: 421614

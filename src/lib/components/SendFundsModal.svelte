@@ -144,12 +144,14 @@
 				if (sendingMaxETH && preSelectedBalanceRaw) {
 					// Calculate exact amount: balance - actual gas cost
 					// This is calculated right before sending for maximum precision
-					const { createPublicClient, http } = await import('viem');
+					const { createPublicClient } = await import('viem');
 					const { base } = await import('viem/chains');
+					const { createRpcTransport } = await import('$lib/utils/rpc');
 
 					const publicClient = createPublicClient({
 						chain: base,
-						transport: http()
+						// Cast chainId to SupportedNetworkId for RPC transport
+						transport: createRpcTransport($currentNetwork.chainId as any)
 					});
 
 					// Get current gas price

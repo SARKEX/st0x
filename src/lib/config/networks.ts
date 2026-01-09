@@ -30,13 +30,22 @@ export interface Network {
 const basePaymentTokens = PAYMENT_TOKENS_BY_NETWORK[8453] ?? [];
 const baseDefaultPaymentToken = DEFAULT_PAYMENT_TOKENS[8453];
 
+const arbitrumPaymentTokens = PAYMENT_TOKENS_BY_NETWORK[42161] ?? [];
+const arbitrumDefaultPaymentToken = DEFAULT_PAYMENT_TOKENS[42161];
+
+const optimismPaymentTokens = PAYMENT_TOKENS_BY_NETWORK[10] ?? [];
+const optimismDefaultPaymentToken = DEFAULT_PAYMENT_TOKENS[10];
+
+const ethereumPaymentTokens = PAYMENT_TOKENS_BY_NETWORK[1] ?? [];
+const ethereumDefaultPaymentToken = DEFAULT_PAYMENT_TOKENS[1];
+
 export const networks: Network[] = [
 	{
 		id: 8453,
 		chainId: 8453,
 		name: 'base',
 		raindexNetworkSlug: 'base',
-		displayName: 'Base Mainnet',
+		displayName: 'Base',
 		currencySymbol: 'ETH',
 		blockExplorer: 'https://basescan.org',
 		sftExplorer: 'https://stox2.h20.market',
@@ -60,6 +69,82 @@ export const networks: Network[] = [
 		orderbook_subgraph_urls_inactive: [],
 		paymentTokens: basePaymentTokens,
 		defaultPaymentToken: baseDefaultPaymentToken!
+	},
+	{
+		id: 42161,
+		chainId: 42161,
+		name: 'arbitrum',
+		raindexNetworkSlug: 'arbitrum',
+		displayName: 'Arbitrum',
+		currencySymbol: 'ETH',
+		blockExplorer: 'https://arbiscan.io',
+		sftExplorer: '',
+		blockExplorerIcon: 'etherscan',
+		rpcUrl: 'https://arb1.arbitrum.io/rpc',
+		fallbackRpcUrls: [
+			'https://arb1.arbitrum.io/rpc',
+			'https://arbitrum.llamarpc.com',
+			'https://arbitrum-one.public.blastapi.io',
+			'https://arbitrum-one.publicnode.com'
+		],
+		icon: 'ethereum',
+		subgraph_url: '',
+		metadata_subgraph_url: '',
+		orderbook_subgraph_url: '',
+		orderbook_subgraph_urls_inactive: [],
+		paymentTokens: arbitrumPaymentTokens,
+		defaultPaymentToken: arbitrumDefaultPaymentToken!
+	},
+	{
+		id: 10,
+		chainId: 10,
+		name: 'optimism',
+		raindexNetworkSlug: 'optimism',
+		displayName: 'Optimism',
+		currencySymbol: 'ETH',
+		blockExplorer: 'https://optimistic.etherscan.io',
+		sftExplorer: '',
+		blockExplorerIcon: 'etherscan',
+		rpcUrl: 'https://mainnet.optimism.io',
+		fallbackRpcUrls: [
+			'https://mainnet.optimism.io',
+			'https://optimism.llamarpc.com',
+			'https://optimism.publicnode.com',
+			'https://optimism-mainnet.public.blastapi.io',
+			'https://rpc.ankr.com/optimism'
+		],
+		icon: 'ethereum',
+		subgraph_url: '',
+		metadata_subgraph_url: '',
+		orderbook_subgraph_url: '',
+		orderbook_subgraph_urls_inactive: [],
+		paymentTokens: optimismPaymentTokens,
+		defaultPaymentToken: optimismDefaultPaymentToken!
+	},
+	{
+		id: 1,
+		chainId: 1,
+		name: 'ethereum',
+		raindexNetworkSlug: 'ethereum',
+		displayName: 'Ethereum',
+		currencySymbol: 'ETH',
+		blockExplorer: 'https://etherscan.io',
+		sftExplorer: '',
+		blockExplorerIcon: 'etherscan',
+		rpcUrl: 'https://eth.llamarpc.com',
+		fallbackRpcUrls: [
+			'https://eth.llamarpc.com',
+			'https://ethereum.publicnode.com',
+			'https://rpc.ankr.com/eth',
+			'https://eth.meowrpc.com'
+		],
+		icon: 'ethereum',
+		subgraph_url: '',
+		metadata_subgraph_url: '',
+		orderbook_subgraph_url: '',
+		orderbook_subgraph_urls_inactive: [],
+		paymentTokens: ethereumPaymentTokens,
+		defaultPaymentToken: ethereumDefaultPaymentToken!
 	}
 ];
 

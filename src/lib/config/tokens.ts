@@ -4,17 +4,7 @@ import type { PythToken } from '$lib/types';
 // Payment tokens mapped by chain
 export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
-		// Test USDC (primary for testing - swap with real USDC for production):
-		// {
-		// 	chainId: 8453,
-		// 	address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
-		// 	symbol: 'USDC',
-		// 	decimals: 6,
-		// 	name: 'USD Coin (Test)',
-		// 	logoUrl: '/images/USDC.png',
-		// 	priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		// } as unknown as PythToken,
-		// Real Base USDC (comment out test USDC above and move this first for production):
+		// Base - USDC
 		{
 			chainId: 8453,
 			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -23,6 +13,122 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 			name: 'USD Coin',
 			logoUrl: '/images/USDC.png',
 			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+		} as unknown as PythToken,
+		// Base - USDT
+		{
+			chainId: 8453,
+			address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+			symbol: 'USDT',
+			decimals: 6,
+			name: 'Tether USD',
+			logoUrl: '/images/USDT.png',
+			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
+		} as unknown as PythToken,
+		// Base - WETH
+		{
+			chainId: 8453,
+			address: '0x4200000000000000000000000000000000000006',
+			symbol: 'WETH',
+			decimals: 18,
+			name: 'Wrapped Ether',
+			logoUrl: '/images/ETH.svg',
+			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
+		} as unknown as PythToken
+	],
+	42161: [
+		// Arbitrum - USDC
+		{
+			chainId: 42161,
+			address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+			symbol: 'USDC',
+			decimals: 6,
+			name: 'USD Coin',
+			logoUrl: '/images/USDC.png',
+			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+		} as unknown as PythToken,
+		// Arbitrum - USDT
+		{
+			chainId: 42161,
+			address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+			symbol: 'USDT',
+			decimals: 6,
+			name: 'Tether USD',
+			logoUrl: '/images/USDT.png',
+			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
+		} as unknown as PythToken,
+		// Arbitrum - WETH
+		{
+			chainId: 42161,
+			address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+			symbol: 'WETH',
+			decimals: 18,
+			name: 'Wrapped Ether',
+			logoUrl: '/images/ETH.svg',
+			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
+		} as unknown as PythToken
+	],
+	10: [
+		// Optimism - USDC
+		{
+			chainId: 10,
+			address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
+			symbol: 'USDC',
+			decimals: 6,
+			name: 'USD Coin',
+			logoUrl: '/images/USDC.png',
+			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+		} as unknown as PythToken,
+		// Optimism - USDT
+		{
+			chainId: 10,
+			address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
+			symbol: 'USDT',
+			decimals: 6,
+			name: 'Tether USD',
+			logoUrl: '/images/USDT.png',
+			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
+		} as unknown as PythToken,
+		// Optimism - WETH
+		{
+			chainId: 10,
+			address: '0x4200000000000000000000000000000000000006',
+			symbol: 'WETH',
+			decimals: 18,
+			name: 'Wrapped Ether',
+			logoUrl: '/images/ETH.svg',
+			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
+		} as unknown as PythToken
+	],
+	1: [
+		// Ethereum - USDC
+		{
+			chainId: 1,
+			address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+			symbol: 'USDC',
+			decimals: 6,
+			name: 'USD Coin',
+			logoUrl: '/images/USDC.png',
+			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
+		} as unknown as PythToken,
+		// Ethereum - USDT
+		{
+			chainId: 1,
+			address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+			symbol: 'USDT',
+			decimals: 6,
+			name: 'Tether USD',
+			logoUrl: '/images/USDT.png',
+			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
+		} as unknown as PythToken,
+		// Ethereum - WETH
+		{
+			chainId: 1,
+			address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+			symbol: 'WETH',
+			decimals: 18,
+			name: 'Wrapped Ether',
+			logoUrl: '/images/ETH.svg',
+			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
 		} as unknown as PythToken
 	]
 };

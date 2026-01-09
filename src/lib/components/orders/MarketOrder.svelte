@@ -26,7 +26,8 @@
 		type PaymentToken,
 		SUPPORTED_NETWORKS,
 		USDC_BASE,
-		isRhinestoneConfigured
+		isRhinestoneConfigured,
+		getPriceOracle
 	} from '$lib/services/account-abstraction';
 	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
 
@@ -129,18 +130,19 @@
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
 	// Token being spent
-	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
+	// For Buy orders, use selectedSourceToken if available (USDT/WETH), otherwise default to paymentToken
+	$: spendingToken = orderSide === 'Buy' ? (selectedSourceToken || paymentToken) : assetToken;
 
-	// Check if oracle price is available (needed for BUY percentage calculations)
+	// Check if oracle price is available (used for price guards)
 	$: oracleAddress = assetToken?.address?.toLowerCase();
 	$: oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
 	$: oraclePriceAvailable = oracleEntry?.price && oracleEntry.price > 0;
-	// Percentage buttons need oracle price for BUY in 'amount' mode (to convert payment to asset amount)
+	// Percentage buttons need market price for BUY in 'amount' mode (to convert payment to asset amount)
 	// In 'spend' mode, no conversion needed - direct percentage of balance
 	$: percentageButtonsDisabled =
 		orderSide === 'Buy' &&
 		inputMode === 'amount' &&
-		!oraclePriceAvailable &&
+		(!marketPrice || marketPrice <= 0) &&
 		spendingTokenBalance > 0n;
 
 	// Calculate the amount being spent and check against balance
@@ -321,7 +323,7 @@
 	let isSubmittingMarketOrder = false;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
-	const handlePercentageClick = (percent: number) => {
+	const handlePercentageClick = async (percent: number) => {
 		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
 		if (spendingTokenBalanceDecimals === null) return;
 		if (!tradeAmountInputRef) return;
@@ -335,13 +337,9 @@
 			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
 			tradeAmountInputRef.setAmountValue(percentAmount);
 		} else {
-			// For BUY in amount mode: balance is in payment token (USDC), need to convert to asset amount
-			// We need the oracle price to estimate how much asset we can buy
-			const oracleAddress = assetToken?.address?.toLowerCase();
-			const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
-			const oraclePrice = oracleEntry?.price;
-
-			if (!oraclePrice || oraclePrice <= 0) {
+			// For BUY in amount mode: balance is in payment token, need to convert to asset amount
+			// Use marketPrice (from orderbook) since that's what execution uses
+			if (!marketPrice || marketPrice <= 0) {
 				// Fall back: can't convert without price - just don't set anything
 				return;
 			}
@@ -351,12 +349,22 @@
 
 			// Calculate payment amount to spend (percent of balance)
 			const paymentToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
-
-			// Convert payment amount to asset amount using oracle price
-			// paymentAmount / price = assetAmount
-			// Use floor to ensure we don't exceed the balance when converting back
 			const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
-			const assetAmount = paymentInFloat / oraclePrice;
+
+			// For non-stablecoin spending tokens (WETH), convert to USD value first
+			let paymentValueInUSD = paymentInFloat;
+			const isNonStablecoin = selectedSourceToken && selectedSourceToken.symbol !== 'USDC' && selectedSourceToken.symbol !== 'USDT';
+			if (isNonStablecoin) {
+				const priceOracle = getPriceOracle();
+				const tokenSymbol = selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+				const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
+				const tokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
+				paymentValueInUSD = paymentInFloat * tokenPriceUSD;
+			}
+
+			// Convert USD value to asset amount using market price (same price source as execution)
+			// assetAmount = paymentValueInUSD / assetPriceInUSD
+			const assetAmount = paymentValueInUSD / marketPrice;
 			// Use floor to be conservative and prevent "not enough funds" errors
 			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
 			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
@@ -596,20 +604,41 @@
 				// Calculate the amount to swap based on input mode
 				let swapAmount: bigint;
 				if (inputMode === 'spend') {
-					// In spend mode, selectedAmount is already the payment amount
+					// In spend mode, selectedAmount is already the payment amount in source token units
 					swapAmount = selectedAmount;
 				} else {
 					// In amount mode, calculate the payment amount from market price
 					const assetDecimals = assetToken.decimals;
 					const sourceDecimals = selectedSourceToken.decimals;
 					const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
-					const estimatedCost = outputInTokens * marketPrice;
-					// Add 1% buffer for price movement during swap
-					swapAmount = BigInt(Math.ceil(estimatedCost * 1.01 * 10 ** sourceDecimals));
+					// estimatedCostUSD is the cost in USD terms
+					const estimatedCostUSD = outputInTokens * marketPrice;
+
+					// For stablecoins (USDC, USDT), 1 token ≈ $1
+					// For non-stablecoins (WETH), we need to convert using the token's price
+					const isStablecoin =
+						selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
+
+					if (isStablecoin) {
+						// Add 1% buffer for price movement during swap
+						swapAmount = BigInt(Math.ceil(estimatedCostUSD * 1.01 * 10 ** sourceDecimals));
+					} else {
+						// Get the source token's price in USD (e.g., ETH price)
+						const priceOracle = getPriceOracle();
+						const tokenSymbol = selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+						const tokenPrice = await priceOracle.getTokenPrices([tokenSymbol]);
+						const sourceTokenPriceUSD = tokenPrice.get(tokenSymbol)?.priceUsd ?? 2500; // Default ETH price
+
+						// Convert USD cost to source token amount
+						// sourceTokenAmount = estimatedCostUSD / sourceTokenPriceUSD
+						const sourceTokenAmount = estimatedCostUSD / sourceTokenPriceUSD;
+						// Add 2% buffer for price movement and precision during swap
+						swapAmount = BigInt(Math.ceil(sourceTokenAmount * 1.02 * 10 ** sourceDecimals));
+					}
 				}
 
 				// Execute the cross-chain swap
-				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount);
+				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount, $payFeesInStablecoin);
 				if (swapResult === null) {
 					// Swap failed - error is already set in store
 					orderPreparationError = $swapError || 'Cross-chain swap failed';
@@ -735,8 +764,8 @@
 						<TradeAmountInput
 							bind:this={tradeAmountInputRef}
 							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
-							amountToken={inputMode === 'spend' ? paymentToken : assetToken}
-							balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
+							amountToken={inputMode === 'spend' ? (selectedSourceToken || paymentToken) : assetToken}
+							balanceToken={orderSide === 'Buy' ? (selectedSourceToken || paymentToken) : assetToken}
 							bind:amount={selectedAmount}
 							bind:balance={spendingTokenBalance}
 							bind:balanceDecimals={spendingTokenBalanceDecimals}

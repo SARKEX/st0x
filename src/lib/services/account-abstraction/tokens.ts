@@ -144,6 +144,47 @@ export const WETH_ETHEREUM: PaymentToken = {
 	priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' as Hex
 };
 
+export const USDC_OPTIMISM: PaymentToken = {
+	address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85' as Address,
+	symbol: 'USDC',
+	decimals: 6,
+	name: 'USD Coin',
+	chainId: SUPPORTED_NETWORKS.OPTIMISM,
+	logoUrl: '/images/USDC.png',
+	priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a' as Hex
+};
+
+export const USDT_OPTIMISM: PaymentToken = {
+	address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58' as Address,
+	symbol: 'USDT',
+	decimals: 6,
+	name: 'Tether USD',
+	chainId: SUPPORTED_NETWORKS.OPTIMISM,
+	logoUrl: '/images/USDT.png',
+	priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b' as Hex
+};
+
+export const ETH_OPTIMISM: PaymentToken = {
+	address: '0x0000000000000000000000000000000000000000' as Address,
+	symbol: 'ETH',
+	decimals: 18,
+	name: 'Ethereum',
+	chainId: SUPPORTED_NETWORKS.OPTIMISM,
+	logoUrl: '/images/ETH.svg',
+	priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' as Hex,
+	isNative: true
+};
+
+export const WETH_OPTIMISM: PaymentToken = {
+	address: '0x4200000000000000000000000000000000000006' as Address,
+	symbol: 'WETH',
+	decimals: 18,
+	name: 'Wrapped Ether',
+	chainId: SUPPORTED_NETWORKS.OPTIMISM,
+	logoUrl: '/images/ETH.svg',
+	priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' as Hex
+};
+
 // =============================================================================
 // Token Collections by Network
 // =============================================================================
@@ -151,6 +192,7 @@ export const WETH_ETHEREUM: PaymentToken = {
 export const PAYMENT_TOKENS_MULTI_NETWORK: Record<SupportedNetworkId, PaymentToken[]> = {
 	[SUPPORTED_NETWORKS.BASE]: [USDC_BASE, USDT_BASE, ETH_BASE, WETH_BASE],
 	[SUPPORTED_NETWORKS.ARBITRUM]: [USDC_ARBITRUM, USDT_ARBITRUM, ETH_ARBITRUM, WETH_ARBITRUM],
+	[SUPPORTED_NETWORKS.OPTIMISM]: [USDC_OPTIMISM, USDT_OPTIMISM, ETH_OPTIMISM, WETH_OPTIMISM],
 	[SUPPORTED_NETWORKS.ETHEREUM]: [USDC_ETHEREUM, USDT_ETHEREUM, ETH_ETHEREUM, WETH_ETHEREUM],
 	// Testnet tokens (for development)
 	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: [
@@ -244,6 +286,7 @@ export function getWrappedToken(nativeToken: PaymentToken): PaymentToken | undef
 export const NETWORK_NAMES: Record<SupportedNetworkId, string> = {
 	[SUPPORTED_NETWORKS.BASE]: 'Base',
 	[SUPPORTED_NETWORKS.ARBITRUM]: 'Arbitrum One',
+	[SUPPORTED_NETWORKS.OPTIMISM]: 'Optimism',
 	[SUPPORTED_NETWORKS.ETHEREUM]: 'Ethereum',
 	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: 'Base Sepolia',
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: 'Arbitrum Sepolia'
@@ -255,6 +298,7 @@ export const NETWORK_NAMES: Record<SupportedNetworkId, string> = {
 export const NETWORK_ICONS: Record<SupportedNetworkId, string> = {
 	[SUPPORTED_NETWORKS.BASE]: '/images/chains/base.svg',
 	[SUPPORTED_NETWORKS.ARBITRUM]: '/images/chains/arbitrum.svg',
+	[SUPPORTED_NETWORKS.OPTIMISM]: '/images/chains/optimism.svg',
 	[SUPPORTED_NETWORKS.ETHEREUM]: '/images/chains/ethereum.svg',
 	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: '/images/chains/base.svg',
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: '/images/chains/arbitrum.svg'

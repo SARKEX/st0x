@@ -86,6 +86,19 @@
 		inputAmount = formatUnits(newAmount, amountDecimals);
 	}
 
+	// Reset balance when balanceToken changes to prevent stale balance from previous token
+	let balanceTokenFingerprint: string | undefined;
+	$: {
+		const token = balanceToken ?? amountToken;
+		const newFingerprint = getTokenFingerprint(token);
+		if (balanceTokenFingerprint !== undefined && newFingerprint !== balanceTokenFingerprint) {
+			// Token changed, reset balance immediately
+			balance = 0n;
+			balanceDecimals = null;
+		}
+		balanceTokenFingerprint = newFingerprint;
+	}
+
 	$: balancePromise = (async () => {
 		const token = balanceToken ?? amountToken;
 		if (!token) return null;

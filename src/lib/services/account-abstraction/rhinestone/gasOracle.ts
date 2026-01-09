@@ -5,9 +5,10 @@
  * Includes caching to minimize RPC calls and provide consistent quotes.
  */
 
-import { createPublicClient, http, type PublicClient, type Chain } from 'viem';
-import { base, arbitrum, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
+import { createPublicClient, type PublicClient, type Chain } from 'viem';
+import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { SUPPORTED_NETWORKS, type SupportedNetworkId } from '../types';
+import { createRpcTransport } from '$lib/utils/rpc';
 
 // =============================================================================
 // Types
@@ -29,18 +30,10 @@ export interface GasOracleConfig {
 // Constants
 // =============================================================================
 
-// RPC URLs for fetching gas prices
-const RPC_URLS: Record<SupportedNetworkId, string> = {
-	[SUPPORTED_NETWORKS.BASE]: 'https://mainnet.base.org',
-	[SUPPORTED_NETWORKS.ARBITRUM]: 'https://arb1.arbitrum.io/rpc',
-	[SUPPORTED_NETWORKS.ETHEREUM]: 'https://eth.llamarpc.com',
-	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: 'https://sepolia.base.org',
-	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: 'https://sepolia-rollup.arbitrum.io/rpc'
-};
-
 const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 	[SUPPORTED_NETWORKS.BASE]: base,
 	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
+	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
 	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
 	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
 	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia
@@ -71,11 +64,10 @@ export class GasOracle {
 	private getClient(chainId: SupportedNetworkId): PublicClient {
 		if (!this.clients.has(chainId)) {
 			const chain = CHAIN_CONFIG[chainId];
-			const rpcUrl = RPC_URLS[chainId];
 
 			const client = createPublicClient({
 				chain,
-				transport: http(rpcUrl)
+				transport: createRpcTransport(chainId)
 			}) as PublicClient;
 
 			this.clients.set(chainId, client);

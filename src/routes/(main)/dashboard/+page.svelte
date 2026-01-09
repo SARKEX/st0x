@@ -24,7 +24,9 @@
 	import { readContracts, getBalance } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
+	import type { SupportedNetworkId } from '$lib/services/account-abstraction';
 	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -38,6 +40,12 @@
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
+	import {
+		fetchAllTokenBalances,
+		getBalanceQueryKey,
+		BALANCE_QUERY_OPTIONS,
+		type TokenBalance
+	} from '$lib/stores/balanceStore';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 
 	// Default vault ID (0x1 padded to 32 bytes)
@@ -47,20 +55,26 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Set of valid token addresses (asset tokens + payment tokens) for filtering
+	// Include tokens from ALL networks for cross-chain balance display
 	$: validTokenAddresses = (() => {
-		if (!$currentNetwork) return new Set<string>();
 		const addresses = new Set<string>();
-		// Add asset tokens for current network
-		for (const token of TOKENS) {
-			if (token.chainId === $currentNetwork.chainId) {
+
+		// Add all asset tokens (from current network)
+		if ($currentNetwork) {
+			for (const token of TOKENS) {
+				if (token.chainId === $currentNetwork.chainId) {
+					addresses.add(token.address.toLowerCase());
+				}
+			}
+		}
+
+		// Add payment tokens from ALL networks (for cross-chain display)
+		for (const paymentTokens of Object.values(PAYMENT_TOKENS_BY_NETWORK)) {
+			for (const token of paymentTokens) {
 				addresses.add(token.address.toLowerCase());
 			}
 		}
-		// Add payment tokens for current network
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-		for (const token of paymentTokens) {
-			addresses.add(token.address.toLowerCase());
-		}
+
 		return addresses;
 	})();
 
@@ -204,48 +218,76 @@
 		}
 	});
 
-	// Query USDC wallet balance via multicall
-	$: usdcBalanceQuery = createQuery({
-		queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
-		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
-		refetchOnMount: 'always', // Refetch when navigating to dashboard
-		refetchInterval: 300_000, // Poll every 5 minutes as backup
-		staleTime: 30_000, // Consider data fresh for 30 seconds
+	// Use centralized balance store for optimized RPC calls
+	// This query is shared across NetworkSelector, TokenNetworkSelector, and Dashboard
+	// Query payment token balances across ALL chains (Base, Arbitrum, Ethereum, Optimism)
+	// Uses shared cache to minimize RPC calls
+	$: multiChainBalanceQuery = createQuery({
+		queryKey: getBalanceQueryKey($walletAddress),
+		enabled: browser && !!($isAuthenticated && $walletAddress && $wagmiConfig),
+		...BALANCE_QUERY_OPTIONS,
 		queryFn: async () => {
-			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-			if (paymentTokens.length === 0 || !$walletAddress) return [];
+			if (!$walletAddress || !$wagmiConfig) return [];
 
-			// Build multicall contracts array
-			const contracts = paymentTokens.map((token) => ({
-				abi: erc20Abi,
-				address: token.address as `0x${string}`,
-				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
+			// Map chain IDs to display names
+			const chainNames: Record<number, string> = {
+				8453: 'Base',
+				42161: 'Arbitrum',
+				10: 'Optimism',
+				1: 'Ethereum'
+			};
+
+			// Use centralized balance fetcher (single optimized batch call)
+			const tokenBalances = await fetchAllTokenBalances(
+				$walletAddress as `0x${string}`,
+				$wagmiConfig
+			);
+
+			// Transform to dashboard format
+			const dashboardBalances = tokenBalances.map((tb) => ({
+				id: `${tb.token.address}-${tb.token.chainId}`,
+				address: tb.token.address,
+				name: tb.token.name,
+				symbol: tb.token.symbol,
+				chainId: tb.token.chainId,
+				chainName: chainNames[tb.token.chainId] || `Chain ${tb.token.chainId}`,
+				walletBalance: tb.balance,
+				decimals: tb.token.decimals
 			}));
 
-			try {
-				const results = await readContracts($wagmiConfig, { contracts });
-
-				return paymentTokens
-					.map((token, index) => {
-						const result = results[index];
-						if (result.status === 'success') {
-							return {
-								id: token.address,
-								address: token.address,
-								name: token.name,
-								symbol: token.symbol,
-								walletBalance: result.result as bigint,
-								decimals: token.decimals
-							};
-						}
-						return null;
-					})
-					.filter((b): b is NonNullable<typeof b> => b !== null);
-			} catch (e) {
-				console.error('Multicall failed for USDC balance:', e);
-				return [];
+			// Debug log for non-zero balances
+			for (const balance of dashboardBalances) {
+				if (balance.walletBalance > 0n) {
+					console.log(
+						`[Dashboard] ${balance.symbol} on ${balance.chainName}: ${formatUnits(balance.walletBalance, balance.decimals)}`
+					);
+				}
 			}
+
+			// Include USDC on current network even if balance is 0
+			const hasCurrentNetworkUSDC = dashboardBalances.some(
+				(b) => b.symbol === 'USDC' && b.chainId === $currentNetwork?.chainId
+			);
+
+			if (!hasCurrentNetworkUSDC && $currentNetwork) {
+				const usdcToken = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId]?.find(
+					(t) => t.symbol === 'USDC'
+				);
+				if (usdcToken) {
+					dashboardBalances.push({
+						id: `${usdcToken.address}-${usdcToken.chainId}`,
+						address: usdcToken.address as `0x${string}`,
+						name: usdcToken.name,
+						symbol: usdcToken.symbol,
+						chainId: usdcToken.chainId as SupportedNetworkId,
+						chainName: chainNames[usdcToken.chainId] || `Chain ${usdcToken.chainId}`,
+						walletBalance: 0n,
+						decimals: usdcToken.decimals
+					});
+				}
+			}
+
+			return dashboardBalances;
 		}
 	});
 
@@ -280,11 +322,11 @@
 	// Combined portfolio: wallet + vaults
 	$: portfolioHoldings = (() => {
 		const walletHoldings = $walletHoldingsQuery?.data ?? [];
-		const usdcHoldings = $usdcBalanceQuery?.data ?? [];
+		const multiChainHoldings = $multiChainBalanceQuery?.data ?? [];
 		const vaultPages = $vaultsListQuery?.data?.pages ?? [];
 		const allVaults = vaultPages.flatMap((p) => p.vaults ?? []);
 
-		// Build map by token address
+		// Build map by token address + chain
 		const holdingsMap = new Map<
 			string,
 			{
@@ -292,6 +334,8 @@
 				address: string;
 				name: string;
 				symbol: string;
+				chainId?: number;
+				chainName?: string;
 				walletBalance: bigint;
 				vaultBalance: bigint;
 				decimals: number;
@@ -300,15 +344,20 @@
 
 		// Add wallet holdings (SFT tokens)
 		for (const h of walletHoldings) {
+			if (!h?.address) continue;
 			holdingsMap.set(h.address.toLowerCase(), {
 				...h,
 				vaultBalance: 0n
 			});
 		}
 
-		// Add USDC/payment token wallet holdings
-		for (const h of usdcHoldings) {
-			holdingsMap.set(h.address.toLowerCase(), {
+		// Add multi-chain payment token wallet holdings
+		for (const h of multiChainHoldings) {
+			// Skip entries with undefined address
+			if (!h?.address) continue;
+			// Use unique key that includes chain ID
+			const key = `${h.address.toLowerCase()}-${h.chainId}`;
+			holdingsMap.set(key, {
 				...h,
 				vaultBalance: 0n
 			});
@@ -373,30 +422,51 @@
 
 	$: totalValue = portfolioHoldings.reduce((sum, h) => sum + h.value, 0);
 
-	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
-	$: paymentTokenAddresses = (() => {
-		if (!$currentNetwork) return new Set<string>();
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-		return new Set(paymentTokens.map((t) => t.address.toLowerCase()));
+	// Build a set of all payment token addresses across all chains
+	$: allPaymentTokenAddresses = (() => {
+		const addresses = new Set<string>();
+		for (const paymentTokens of Object.values(PAYMENT_TOKENS_BY_NETWORK)) {
+			for (const token of paymentTokens) {
+				addresses.add(token.address.toLowerCase());
+			}
+		}
+		return addresses;
 	})();
 
-	// Build funds holdings (payment tokens + ETH)
-	// Always show USDC even if balance is 0
+	// Build funds holdings (payment tokens + ETH from all chains)
+	// Always show USDC on current network even if balance is 0, show others only if balance > 0
 	$: fundsHoldings = (() => {
 		const funds = portfolioHoldings.filter((h) =>
-			paymentTokenAddresses.has(h.address.toLowerCase())
+			allPaymentTokenAddresses.has(h.address.toLowerCase())
 		);
 
-		// Ensure USDC is always shown (even with 0 balance)
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
-		for (const token of paymentTokens) {
-			const exists = funds.some((f) => f.address.toLowerCase() === token.address.toLowerCase());
+		// Ensure USDC on current network is always shown (even with 0 balance)
+		const currentChainPaymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
+		for (const token of currentChainPaymentTokens) {
+			if (token.symbol !== 'USDC') continue;
+
+			const exists = funds.some(
+				(f) =>
+					f.address.toLowerCase() === token.address.toLowerCase() &&
+					f.chainId === token.chainId
+			);
+
+			// Only add zero-balance entry for USDC on current network
 			if (!exists) {
 				funds.push({
-					id: token.address,
+					id: `${token.address}-${token.chainId}`,
 					address: token.address,
 					name: token.name,
 					symbol: token.symbol,
+					chainId: token.chainId,
+					chainName:
+						token.chainId === 8453
+							? 'Base'
+							: token.chainId === 42161
+								? 'Arbitrum'
+								: token.chainId === 10
+									? 'Optimism'
+									: 'Ethereum',
 					walletBalance: 0n,
 					vaultBalance: 0n,
 					decimals: token.decimals,
@@ -436,7 +506,7 @@
 		return funds;
 	})();
 	$: assetHoldings = portfolioHoldings.filter(
-		(h) => !paymentTokenAddresses.has(h.address.toLowerCase())
+		(h) => !allPaymentTokenAddresses.has(h.address.toLowerCase())
 	);
 
 	// Orders: Fetch orderbook quotes for all tokens
@@ -714,7 +784,7 @@
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}
-				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
+				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $multiChainBalanceQuery.isLoading}
 					<Section>
 						<LoadingSpinner variant="inline" size="md" text="Loading portfolio..." />
 					</Section>
@@ -758,14 +828,17 @@
 											{@const isEth = holding.address === 'native'}
 											{@const paymentToken = isEth
 												? null
-												: (PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []).find(
+												: (PAYMENT_TOKENS_BY_NETWORK[holding.chainId ?? $currentNetwork?.chainId ?? 0] ?? []).find(
 														(t) => t.address.toLowerCase() === holding.address.toLowerCase()
 													)}
 											{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
 											{@const decimalsForDisplay = holding.decimals === 6 ? 2 : 4}
+											{@const displaySymbol = holding.chainId && holding.chainId !== $currentNetwork?.chainId
+												? `${holding.symbol} (${holding.chainName || holding.chainId})`
+												: holding.symbol}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<TokenDisplay {logoUrl} symbol={holding.symbol} name={holding.name} />
+													<TokenDisplay {logoUrl} symbol={displaySymbol} name={holding.name} />
 												</td>
 												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.walletBalanceNum.toFixed(decimalsForDisplay)}</td

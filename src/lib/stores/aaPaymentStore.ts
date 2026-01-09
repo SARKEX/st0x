@@ -150,9 +150,10 @@ function createAAPaymentStore() {
 		 * Call this before order execution if needsSwap() returns true
 		 *
 		 * @param amount - Amount of source token to swap
+		 * @param useStablecoinGas - Whether to pay gas in stablecoins (USDC)
 		 * @returns USDC amount received on Base, or null if swap failed/not needed
 		 */
-		executeSwapIfNeeded: async (amount: bigint): Promise<bigint | null> => {
+		executeSwapIfNeeded: async (amount: bigint, useStablecoinGas: boolean = false): Promise<bigint | null> => {
 			const state = get({ subscribe });
 			const $walletAddress = get(walletAddress);
 
@@ -204,11 +205,14 @@ function createAAPaymentStore() {
 
 			try {
 				const orchestrator = getAAOrchestrator();
+				const feeAsset = useStablecoinGas ? 'USDC' : undefined;
 				const result = await orchestrator.executePreTradeSwap(
 					state.sourceToken,
 					amount,
 					$walletAddress as Address,
-					walletAccount
+					walletAccount,
+					undefined, // onStatusChange
+					feeAsset
 				);
 
 				if (!result.success) {
