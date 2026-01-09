@@ -16,7 +16,7 @@ import {
 	getBalanceChecker,
 	USDC_BASE
 } from '$lib/services/account-abstraction';
-import { getDynamicAccountForRhinestone, isDynamicWalletReady } from '$lib/services/account-abstraction/wallets/dynamic';
+import { getDynamicAccountForRhinestone } from '$lib/services/account-abstraction/wallets/dynamic';
 import { walletAddress } from '$lib/stores/authStore';
 
 // Quote refresh interval (45 seconds - quotes expire at 60s)
@@ -153,7 +153,10 @@ function createAAPaymentStore() {
 		 * @param useStablecoinGas - Whether to pay gas in stablecoins (USDC)
 		 * @returns USDC amount received on Base, or null if swap failed/not needed
 		 */
-		executeSwapIfNeeded: async (amount: bigint, useStablecoinGas: boolean = false): Promise<bigint | null> => {
+		executeSwapIfNeeded: async (
+			amount: bigint,
+			useStablecoinGas: boolean = false
+		): Promise<bigint | null> => {
 			const state = get({ subscribe });
 			const $walletAddress = get(walletAddress);
 

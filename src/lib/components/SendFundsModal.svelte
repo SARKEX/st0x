@@ -11,6 +11,7 @@
 	import { sendTransactionWithGasOption } from '$lib/services/walletService';
 	import { currentNetwork, payFeesInStablecoin } from '$lib/stores';
 	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
+	import type { SupportedNetworkId } from '$lib/services/account-abstraction';
 	import {
 		parseEther,
 		parseUnits,
@@ -151,7 +152,7 @@
 					const publicClient = createPublicClient({
 						chain: base,
 						// Cast chainId to SupportedNetworkId for RPC transport
-						transport: createRpcTransport($currentNetwork.chainId as any)
+						transport: createRpcTransport($currentNetwork.chainId as SupportedNetworkId)
 					});
 
 					// Get current gas price

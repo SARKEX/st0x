@@ -57,14 +57,6 @@
 		SUPPORTED_NETWORKS.ETHEREUM
 	];
 
-	// Get all tokens for all networks
-	interface NetworkTokens {
-		network: SupportedNetworkId;
-		networkName: string;
-		tokens: PaymentToken[];
-		totalBalance: number;
-	}
-
 	// Helper to check if token has non-zero balance
 	function hasNonZeroBalance(token: PaymentToken, balances: TokenBalance[]): boolean {
 		const match = balances.find(
@@ -211,7 +203,7 @@
 			{/if}
 
 			<!-- Payment Options -->
-			{#each allNetworkTokens as { network, networkName, tokens }}
+			{#each allNetworkTokens as { network: _network, networkName, tokens }}
 				<div class="network-group">
 					<div class="network-label">{networkName}</div>
 					{#each tokens as token}
@@ -359,16 +351,6 @@
 		overflow-y: auto;
 	}
 
-	.section-header {
-		padding: 0.5rem 1rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--color-text-secondary, #9ca3af);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		background: rgba(255, 255, 255, 0.02);
-	}
-
 	.network-group {
 		margin-bottom: 0.25rem;
 	}
@@ -381,16 +363,6 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-	}
-
-	.network-label.highlighted {
-		color: var(--color-primary, #6366f1);
-	}
-
-	.network-balance {
-		font-size: 0.75rem;
-		color: #10b981;
-		font-weight: 600;
 	}
 
 	.token-option {
@@ -439,11 +411,6 @@
 		font-weight: 600;
 	}
 
-	.balance-badge.highlighted {
-		background: rgba(16, 185, 129, 0.2);
-		color: #10b981;
-	}
-
 	.swap-badge {
 		font-size: 0.65rem;
 		padding: 0.2rem 0.5rem;
@@ -452,12 +419,6 @@
 		border-radius: 0.25rem;
 		text-transform: uppercase;
 		font-weight: 600;
-	}
-
-	.divider {
-		height: 1px;
-		background: var(--color-border, #2d2d44);
-		margin: 0.5rem 0;
 	}
 
 	.swap-notice {

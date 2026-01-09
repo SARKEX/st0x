@@ -9,7 +9,6 @@
  * - Deduplicating queries from multiple components
  */
 
-import { QueryClient } from '@tanstack/svelte-query';
 import {
 	type SupportedNetworkId,
 	type PaymentToken,

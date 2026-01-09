@@ -48,7 +48,7 @@ const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagm
 	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
 
 // Unified send transaction (works with both Privy and wagmi wallets)
-const sendTransaction = walletServiceSendTransaction;
+const _sendTransaction = walletServiceSendTransaction;
 
 // Unified wait for transaction
 const waitForTransaction = walletServiceWaitForTransaction;
@@ -76,7 +76,11 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from '$lib/services/orderDeployment';
-import { rainlangConfirmationModal, reviewStrategyOnDeploy, payFeesInStablecoin } from '$lib/stores';
+import {
+	rainlangConfirmationModal,
+	reviewStrategyOnDeploy,
+	payFeesInStablecoin
+} from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { invalidateUserVaultQueries } from '$lib/queries/vaults';
@@ -288,7 +292,10 @@ const transactionStore = () => {
 						(error instanceof Error ? error.message : null) ||
 						TransactionErrorMessage.GENERIC;
 
-					if (typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC) {
+					if (
+						typeof errorMessage === 'string' &&
+						errorMessage !== TransactionErrorMessage.GENERIC
+					) {
 						return transactionError(errorMessage as TransactionErrorMessage);
 					}
 
@@ -1046,7 +1053,9 @@ const transactionStore = () => {
 		if (currentAllowance < requiredApprovalAmount) {
 			// Need to approve more tokens
 			try {
-				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+				awaitWalletConfirmation(
+					`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`
+				);
 
 				const approvalHash = await sendTransactionWithGasOption(
 					{

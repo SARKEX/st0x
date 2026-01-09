@@ -5,13 +5,7 @@
  * Supports both native ETH and ERC20 tokens.
  */
 
-import {
-	createPublicClient,
-	erc20Abi,
-	type Address,
-	type PublicClient,
-	type Chain
-} from 'viem';
+import { createPublicClient, erc20Abi, type Address, type PublicClient, type Chain } from 'viem';
 import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { SUPPORTED_NETWORKS, type SupportedNetworkId, type PaymentToken } from '../types';
 

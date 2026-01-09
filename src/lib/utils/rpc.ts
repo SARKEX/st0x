@@ -9,7 +9,10 @@
  */
 
 import { http, fallback, type Transport } from 'viem';
-import { type SupportedNetworkId, SUPPORTED_NETWORKS } from '$lib/services/account-abstraction/types';
+import {
+	type SupportedNetworkId,
+	SUPPORTED_NETWORKS
+} from '$lib/services/account-abstraction/types';
 
 // =============================================================================
 // RPC Configuration
@@ -289,10 +292,7 @@ export function createLoadBalancedTransport(chainId: SupportedNetworkId): Transp
 	const startIndex = roundRobinIndexes.get(chainId) ?? 0;
 
 	// Rotate the endpoints array to start from the next endpoint
-	const rotatedEndpoints = [
-		...endpoints.slice(startIndex),
-		...endpoints.slice(0, startIndex)
-	];
+	const rotatedEndpoints = [...endpoints.slice(startIndex), ...endpoints.slice(0, startIndex)];
 
 	// Update index for next call
 	roundRobinIndexes.set(chainId, (startIndex + 1) % endpoints.length);
@@ -364,11 +364,7 @@ export function shouldRetry(error: unknown): boolean {
  * }
  * ```
  */
-export function handleRpcError(
-	chainId: SupportedNetworkId,
-	error: unknown,
-	url?: string
-): void {
+export function handleRpcError(chainId: SupportedNetworkId, error: unknown, url?: string): void {
 	if (!isRateLimitError(error) && !isTimeoutError(error)) {
 		return; // Not a rate limit or timeout error, don't mark as failed
 	}
@@ -384,27 +380,33 @@ export function handleRpcError(
 	}
 }
 
+interface EndpointHealthStatus {
+	failures: number;
+	consecutiveFailures: number;
+	lastFailure: string | null;
+	inCooldown: boolean;
+	cooldownEndsAt: string | null;
+}
+
 /**
  * Get health status for all endpoints on a chain
  * Useful for debugging
  */
-export function getEndpointHealthStatus(chainId: SupportedNetworkId): Record<string, any> {
+export function getEndpointHealthStatus(
+	chainId: SupportedNetworkId
+): Record<string, EndpointHealthStatus> {
 	initHealthTracking(chainId);
 	const healthMap = endpointHealth.get(chainId)!;
 	const now = Date.now();
 
-	const status: Record<string, any> = {};
+	const status: Record<string, EndpointHealthStatus> = {};
 	for (const [url, health] of healthMap.entries()) {
 		status[url] = {
 			failures: health.failures,
 			consecutiveFailures: health.consecutiveFailures,
-			lastFailure: health.lastFailure
-				? new Date(health.lastFailure).toISOString()
-				: null,
+			lastFailure: health.lastFailure ? new Date(health.lastFailure).toISOString() : null,
 			inCooldown: health.cooldownUntil ? now < health.cooldownUntil : false,
-			cooldownEndsAt: health.cooldownUntil
-				? new Date(health.cooldownUntil).toISOString()
-				: null
+			cooldownEndsAt: health.cooldownUntil ? new Date(health.cooldownUntil).toISOString() : null
 		};
 	}
 

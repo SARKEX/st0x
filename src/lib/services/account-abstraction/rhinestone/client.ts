@@ -23,7 +23,6 @@ import type { IntentRoute, IntentCost } from '@rhinestone/sdk/dist/src/orchestra
 import { getOrchestrator } from '@rhinestone/sdk/dist/src/orchestrator';
 import {
 	createPublicClient,
-	http,
 	encodeFunctionData,
 	erc20Abi,
 	type Address,
@@ -140,7 +139,11 @@ interface RhinestoneAccount {
 	prepareTransaction: (params: RhinestoneTransactionParams) => Promise<PreparedTransaction>;
 	signTransaction: (preparedTx: PreparedTransaction) => Promise<SignedTransaction>;
 	signAuthorizations: (preparedTx: PreparedTransaction) => Promise<Hex[]>;
-	submitTransaction: (signedTx: SignedTransaction, authorizations?: Hex[], dryRun?: boolean) => Promise<TransactionResult>;
+	submitTransaction: (
+		signedTx: SignedTransaction,
+		authorizations?: Hex[],
+		dryRun?: boolean
+	) => Promise<TransactionResult>;
 	waitForExecution: (
 		result: TransactionResult,
 		acceptsPreconfirmations?: boolean
@@ -501,7 +504,9 @@ export class RhinestoneClient {
 				if (!isDeployed) {
 					// Sign the EIP-7702 init data for the first transaction
 					// This is REQUIRED for EOA accounts in EIP-7702 mode
-					console.log('[Rhinestone Client] Signing EIP-7702 init data for first cross-chain transaction...');
+					console.log(
+						'[Rhinestone Client] Signing EIP-7702 init data for first cross-chain transaction...'
+					);
 					try {
 						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
 						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
@@ -509,14 +514,12 @@ export class RhinestoneClient {
 						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
 
 						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage = `Failed to sign EIP-7702 initialization: ${actualError}. ` +
-							'Please try again.';
+						const errorMessage =
+							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
 
-						throw new AAError(
-							errorMessage,
-							AAErrorCode.AUTHORIZATION_REJECTED,
-							{ originalError: signError }
-						);
+						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
+							originalError: signError
+						});
 					}
 				}
 			}
@@ -657,7 +660,9 @@ export class RhinestoneClient {
 				if (!isDeployed) {
 					// Sign the EIP-7702 init data for the first transaction
 					// This is REQUIRED for EOA accounts in EIP-7702 mode
-					console.log('[Rhinestone Client] Signing EIP-7702 init data for first omnichain transaction...');
+					console.log(
+						'[Rhinestone Client] Signing EIP-7702 init data for first omnichain transaction...'
+					);
 					try {
 						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
 						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
@@ -665,14 +670,12 @@ export class RhinestoneClient {
 						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
 
 						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage = `Failed to sign EIP-7702 initialization: ${actualError}. ` +
-							'Please try again.';
+						const errorMessage =
+							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
 
-						throw new AAError(
-							errorMessage,
-							AAErrorCode.AUTHORIZATION_REJECTED,
-							{ originalError: signError }
-						);
+						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
+							originalError: signError
+						});
 					}
 				}
 			}
@@ -796,10 +799,7 @@ export class RhinestoneClient {
 
 			// Validate network
 			if (!this.isSupportedNetwork(params.chainId)) {
-				throw new AAError(
-					`Chain ${params.chainId} not supported`,
-					AAErrorCode.UNSUPPORTED_NETWORK
-				);
+				throw new AAError(`Chain ${params.chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
 			}
 
 			// Create Rhinestone account
@@ -823,14 +823,12 @@ export class RhinestoneClient {
 						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
 
 						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage = `Failed to sign EIP-7702 initialization: ${actualError}. ` +
-							'Please try again.';
+						const errorMessage =
+							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
 
-						throw new AAError(
-							errorMessage,
-							AAErrorCode.AUTHORIZATION_REJECTED,
-							{ originalError: signError }
-						);
+						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
+							originalError: signError
+						});
 					}
 				}
 			}
@@ -902,10 +900,7 @@ export class RhinestoneClient {
 
 			const txHash = status.fill.hash;
 			if (!txHash) {
-				throw new AAError(
-					'Swap completed but no hash returned',
-					AAErrorCode.TRANSACTION_FAILED
-				);
+				throw new AAError('Swap completed but no hash returned', AAErrorCode.TRANSACTION_FAILED);
 			}
 
 			return {
@@ -957,10 +952,7 @@ export class RhinestoneClient {
 
 			// Validate network
 			if (!this.isSupportedNetwork(params.chainId)) {
-				throw new AAError(
-					`Chain ${params.chainId} not supported`,
-					AAErrorCode.UNSUPPORTED_NETWORK
-				);
+				throw new AAError(`Chain ${params.chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
 			}
 
 			// Create Rhinestone account
@@ -1004,14 +996,12 @@ export class RhinestoneClient {
 						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
 
 						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage = `Failed to sign EIP-7702 initialization: ${actualError}. ` +
-							'Please try again.';
+						const errorMessage =
+							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
 
-						throw new AAError(
-							errorMessage,
-							AAErrorCode.AUTHORIZATION_REJECTED,
-							{ originalError: signError }
-						);
+						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
+							originalError: signError
+						});
 					}
 				}
 			}
@@ -1088,7 +1078,10 @@ export class RhinestoneClient {
 				traceId?: string;
 			};
 			if (orchestratorError.context) {
-				console.error('[Rhinestone Client] Error context:', JSON.stringify(orchestratorError.context, null, 2));
+				console.error(
+					'[Rhinestone Client] Error context:',
+					JSON.stringify(orchestratorError.context, null, 2)
+				);
 			}
 			if (orchestratorError.errorType) {
 				console.error('[Rhinestone Client] Error type:', orchestratorError.errorType);
@@ -1099,7 +1092,9 @@ export class RhinestoneClient {
 
 			if (error instanceof AAError) throw error;
 			throw new AAError(
-				`Same-chain transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				`Same-chain transaction failed: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
 				AAErrorCode.TRANSACTION_FAILED,
 				{ originalError: error }
 			);
@@ -1189,7 +1184,7 @@ export function getRhinestoneClient(): RhinestoneClient {
 		} else {
 			// Auto-detect based on wallet type
 			// Import at runtime to avoid circular dependencies
-			const { isDynamicEmbeddedWallet } = require('./wallets/dynamic');
+			const { isDynamicEmbeddedWallet } = await import('./wallets/dynamic');
 			const isEmbedded = isDynamicEmbeddedWallet();
 
 			// Use 'smart' for embedded wallets (more reliable)

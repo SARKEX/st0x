@@ -131,12 +131,12 @@
 
 	// Token being spent
 	// For Buy orders, use selectedSourceToken if available (USDT/WETH), otherwise default to paymentToken
-	$: spendingToken = orderSide === 'Buy' ? (selectedSourceToken || paymentToken) : assetToken;
+	$: spendingToken = orderSide === 'Buy' ? selectedSourceToken || paymentToken : assetToken;
 
 	// Check if oracle price is available (used for price guards)
 	$: oracleAddress = assetToken?.address?.toLowerCase();
 	$: oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
-	$: oraclePriceAvailable = oracleEntry?.price && oracleEntry.price > 0;
+	$: _oraclePriceAvailable = oracleEntry?.price && oracleEntry.price > 0;
 	// Percentage buttons need market price for BUY in 'amount' mode (to convert payment to asset amount)
 	// In 'spend' mode, no conversion needed - direct percentage of balance
 	$: percentageButtonsDisabled =
@@ -353,10 +353,14 @@
 
 			// For non-stablecoin spending tokens (WETH), convert to USD value first
 			let paymentValueInUSD = paymentInFloat;
-			const isNonStablecoin = selectedSourceToken && selectedSourceToken.symbol !== 'USDC' && selectedSourceToken.symbol !== 'USDT';
+			const isNonStablecoin =
+				selectedSourceToken &&
+				selectedSourceToken.symbol !== 'USDC' &&
+				selectedSourceToken.symbol !== 'USDT';
 			if (isNonStablecoin) {
 				const priceOracle = getPriceOracle();
-				const tokenSymbol = selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+				const tokenSymbol =
+					selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
 				const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
 				const tokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
 				paymentValueInUSD = paymentInFloat * tokenPriceUSD;
@@ -625,7 +629,8 @@
 					} else {
 						// Get the source token's price in USD (e.g., ETH price)
 						const priceOracle = getPriceOracle();
-						const tokenSymbol = selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+						const tokenSymbol =
+							selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
 						const tokenPrice = await priceOracle.getTokenPrices([tokenSymbol]);
 						const sourceTokenPriceUSD = tokenPrice.get(tokenSymbol)?.priceUsd ?? 2500; // Default ETH price
 
@@ -638,7 +643,10 @@
 				}
 
 				// Execute the cross-chain swap
-				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount, $payFeesInStablecoin);
+				const swapResult = await aaPaymentStore.executeSwapIfNeeded(
+					swapAmount,
+					$payFeesInStablecoin
+				);
 				if (swapResult === null) {
 					// Swap failed - error is already set in store
 					orderPreparationError = $swapError || 'Cross-chain swap failed';
@@ -764,8 +772,8 @@
 						<TradeAmountInput
 							bind:this={tradeAmountInputRef}
 							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
-							amountToken={inputMode === 'spend' ? (selectedSourceToken || paymentToken) : assetToken}
-							balanceToken={orderSide === 'Buy' ? (selectedSourceToken || paymentToken) : assetToken}
+							amountToken={inputMode === 'spend' ? selectedSourceToken || paymentToken : assetToken}
+							balanceToken={orderSide === 'Buy' ? selectedSourceToken || paymentToken : assetToken}
 							bind:amount={selectedAmount}
 							bind:balance={spendingTokenBalance}
 							bind:balanceDecimals={spendingTokenBalanceDecimals}
@@ -953,9 +961,12 @@
 		</div>
 
 		<!-- Pay fees in stablecoin option -->
-		<label class="flex cursor-pointer items-center gap-2 py-2" title={orderSide === 'Buy'
-			? 'Pay gas fees using the stablecoin you selected above instead of ETH'
-			: 'Pay gas fees using USDC on Base instead of ETH'}>
+		<label
+			class="flex cursor-pointer items-center gap-2 py-2"
+			title={orderSide === 'Buy'
+				? 'Pay gas fees using the stablecoin you selected above instead of ETH'
+				: 'Pay gas fees using USDC on Base instead of ETH'}
+		>
 			<input
 				type="checkbox"
 				checked={$payFeesInStablecoin}
@@ -965,11 +976,19 @@
 			<span class="text-sm text-gray-300">Pay fees in stablecoin</span>
 			<span class="group relative">
 				<svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+					/>
 				</svg>
-				<span class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-xs text-gray-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+				<span
+					class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-xs text-gray-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+				>
 					{#if orderSide === 'Buy'}
-						Pay gas fees using the stablecoin/network you selected to buy with (e.g., USDC or USDT on various networks). No ETH required.
+						Pay gas fees using the stablecoin/network you selected to buy with (e.g., USDC or USDT
+						on various networks). No ETH required.
 					{:else}
 						Pay gas fees using USDC on Base (your settlement token). No ETH required.
 					{/if}

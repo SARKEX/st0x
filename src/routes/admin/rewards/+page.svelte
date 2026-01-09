@@ -894,7 +894,6 @@
 		}
 	}
 
-	/* eslint-disable @typescript-eslint/no-unused-vars */
 	// Parameters are used to force Svelte to track dependencies
 	function getWalletRows(
 		_monthlyData: typeof monthlyData,
@@ -902,7 +901,6 @@
 		_excludedWalletsInData: Set<string>,
 		_currentMonthPool: typeof currentMonthPool
 	) {
-		/* eslint-enable @typescript-eslint/no-unused-vars */
 		if (!monthlyData?.wallets) {
 			return [];
 		}

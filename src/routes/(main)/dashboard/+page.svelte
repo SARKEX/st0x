@@ -43,8 +43,7 @@
 	import {
 		fetchAllTokenBalances,
 		getBalanceQueryKey,
-		BALANCE_QUERY_OPTIONS,
-		type TokenBalance
+		BALANCE_QUERY_OPTIONS
 	} from '$lib/stores/balanceStore';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 
@@ -259,7 +258,10 @@
 			for (const balance of dashboardBalances) {
 				if (balance.walletBalance > 0n) {
 					console.log(
-						`[Dashboard] ${balance.symbol} on ${balance.chainName}: ${formatUnits(balance.walletBalance, balance.decimals)}`
+						`[Dashboard] ${balance.symbol} on ${balance.chainName}: ${formatUnits(
+							balance.walletBalance,
+							balance.decimals
+						)}`
 					);
 				}
 			}
@@ -441,14 +443,14 @@
 		);
 
 		// Ensure USDC on current network is always shown (even with 0 balance)
-		const currentChainPaymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
+		const currentChainPaymentTokens =
+			PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
 		for (const token of currentChainPaymentTokens) {
 			if (token.symbol !== 'USDC') continue;
 
 			const exists = funds.some(
 				(f) =>
-					f.address.toLowerCase() === token.address.toLowerCase() &&
-					f.chainId === token.chainId
+					f.address.toLowerCase() === token.address.toLowerCase() && f.chainId === token.chainId
 			);
 
 			// Only add zero-balance entry for USDC on current network
@@ -828,14 +830,17 @@
 											{@const isEth = holding.address === 'native'}
 											{@const paymentToken = isEth
 												? null
-												: (PAYMENT_TOKENS_BY_NETWORK[holding.chainId ?? $currentNetwork?.chainId ?? 0] ?? []).find(
-														(t) => t.address.toLowerCase() === holding.address.toLowerCase()
-													)}
+												: (
+														PAYMENT_TOKENS_BY_NETWORK[
+															holding.chainId ?? $currentNetwork?.chainId ?? 0
+														] ?? []
+													).find((t) => t.address.toLowerCase() === holding.address.toLowerCase())}
 											{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
 											{@const decimalsForDisplay = holding.decimals === 6 ? 2 : 4}
-											{@const displaySymbol = holding.chainId && holding.chainId !== $currentNetwork?.chainId
-												? `${holding.symbol} (${holding.chainName || holding.chainId})`
-												: holding.symbol}
+											{@const displaySymbol =
+												holding.chainId && holding.chainId !== $currentNetwork?.chainId
+													? `${holding.symbol} (${holding.chainName || holding.chainId})`
+													: holding.symbol}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay {logoUrl} symbol={displaySymbol} name={holding.name} />

@@ -32,7 +32,9 @@
 	$: formattedGasETH =
 		estimatedGasETH > 0n ? `${(Number(estimatedGasETH) / 1e18).toFixed(6)} ETH` : 'Calculating...';
 	$: formattedGasUSDC =
-		estimatedGasUSDC > 0n ? `${(Number(estimatedGasUSDC) / 1e6).toFixed(2)} USDC` : 'Calculating...';
+		estimatedGasUSDC > 0n
+			? `${(Number(estimatedGasUSDC) / 1e6).toFixed(2)} USDC`
+			: 'Calculating...';
 
 	function selectMethod(method: GasMethod) {
 		if (disabled) return;

@@ -16,22 +16,11 @@
  */
 
 import type { Address, Hex, WalletClient, Account } from 'viem';
-import {
-	createPublicClient,
-	createWalletClient,
-	custom,
-	http,
-	type Chain
-} from 'viem';
+import { createPublicClient, createWalletClient, custom, type Chain } from 'viem';
 import { toAccount } from 'viem/accounts';
 import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { get } from 'svelte/store';
-import {
-	type SupportedNetworkId,
-	SUPPORTED_NETWORKS,
-	AAError,
-	AAErrorCode
-} from '../types';
+import { type SupportedNetworkId, SUPPORTED_NETWORKS, AAError, AAErrorCode } from '../types';
 import { dynamicSession } from '$lib/stores/dynamicStore';
 import { getDynamicWalletProvider } from '$lib/services/walletService';
 
@@ -175,7 +164,9 @@ export async function getDynamicAccountForRhinestone(
 	} catch (error) {
 		console.error('[Dynamic Wallet] Failed to create account:', error);
 		throw new AAError(
-			`Failed to create Dynamic account: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			`Failed to create Dynamic account: ${
+				error instanceof Error ? error.message : 'Unknown error'
+			}`,
 			AAErrorCode.WALLET_NOT_CONNECTED,
 			{ originalError: error }
 		);
@@ -185,9 +176,9 @@ export async function getDynamicAccountForRhinestone(
 /**
  * Create a public client for reading blockchain data
  */
-export function createDynamicPublicClient(chainId: SupportedNetworkId) {
+export async function createDynamicPublicClient(chainId: SupportedNetworkId) {
 	// Use createRpcTransport for automatic fallbacks and load balancing
-	const { createRpcTransport } = require('$lib/utils/rpc');
+	const { createRpcTransport } = await import('$lib/utils/rpc');
 	return createPublicClient({
 		chain: CHAIN_CONFIGS[chainId],
 		transport: createRpcTransport(chainId)

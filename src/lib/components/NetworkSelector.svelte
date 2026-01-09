@@ -11,8 +11,7 @@
 		fetchAllTokenBalances,
 		getBalanceQueryKey,
 		BALANCE_QUERY_OPTIONS,
-		getNetworkTotalUSD,
-		type TokenBalance
+		getNetworkTotalUSD
 	} from '$lib/stores/balanceStore';
 
 	let isOpen = false;
@@ -60,7 +59,11 @@
 
 	// Networks with balances > dust threshold, excluding current network
 	$: otherNetworksWithBalances = ($networkBalancesQuery?.data ?? [])
-		.filter((item) => item?.network?.chainId !== $currentNetwork?.chainId && (item?.totalValue ?? 0) >= DUST_THRESHOLD)
+		.filter(
+			(item) =>
+				item?.network?.chainId !== $currentNetwork?.chainId &&
+				(item?.totalValue ?? 0) >= DUST_THRESHOLD
+		)
 		.sort((a, b) => (b?.totalValue ?? 0) - (a?.totalValue ?? 0));
 
 	async function selectNetwork(network: (typeof networks)[0]) {
@@ -160,9 +163,7 @@
 				<!-- Other Networks with Balances Section -->
 				{#if otherNetworksWithBalances.length > 0}
 					<div class="my-2 border-t border-white/10"></div>
-					<div class="mb-1 px-2 py-1 text-xs font-medium text-gray-400">
-						Networks with Balances
-					</div>
+					<div class="mb-1 px-2 py-1 text-xs font-medium text-gray-400">Networks with Balances</div>
 					{#each otherNetworksWithBalances as item}
 						{#if item?.network && item?.totalValue}
 							<button
