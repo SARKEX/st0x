@@ -1,12 +1,8 @@
 // API endpoint to check which addresses are smart contracts vs EOAs
-// Uses the cached known pools for fast lookups
+// Uses RPC to detect pool types
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import {
-	getPoolType,
-	loadKnownPoolsFromCache,
-	type PoolType
-} from '$lib/server/snapshots/lp-attribution';
+import { getPoolType, type PoolType } from '$lib/server/snapshots/pool-discovery';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -15,9 +11,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!Array.isArray(addresses) || addresses.length === 0) {
 			return json({ error: 'addresses must be a non-empty array' }, { status: 400 });
 		}
-
-		// Load cached pools first
-		await loadKnownPoolsFromCache();
 
 		// Limit to 100 addresses per request to avoid timeouts
 		const addressesToCheck = addresses.slice(0, 100);

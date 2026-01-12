@@ -39,11 +39,13 @@ interface TvlResponse {
 	latest: {
 		timestamp: number;
 		blockNumber: number;
-		totalTvl: number;
+		totalTvl: number; // All wallets including excluded
+		eligibleTvl: number; // Excluding excluded wallets
 		tokenTvl: Record<string, number>;
 		walletTvl: WalletTvlEntry[];
 		codeTvl: CodeTvlEntry[];
 		walletCount: number;
+		excludedWalletCount: number;
 	} | null;
 	daily: DailyTvlEntry[];
 	error?: string;
@@ -113,17 +115,19 @@ async function calculateDetailedTvlAtBlock(
 	walletToCode: Map<string, string>,
 	excludedWallets: Set<string>
 ): Promise<{
-	totalTvl: number;
+	totalTvl: number; // All wallets including excluded
+	eligibleTvl: number; // Excluding excluded wallets
 	tokenTvl: Record<string, number>;
 	walletTvl: WalletTvlEntry[];
 	codeTvl: CodeTvlEntry[];
-	// Simplified maps for daily data
 	walletTvlMap: Record<string, number>;
 	codeTvlMap: Record<string, number>;
+	excludedWalletCount: number;
 } | null> {
 	const tokenTvl: Record<string, number> = {};
-	const walletData = new Map<string, { tvl: number; tokenBreakdown: Record<string, number> }>();
+	const walletData = new Map<string, { tvl: number; tokenBreakdown: Record<string, number>; isExcluded: boolean }>();
 	let totalTvl = 0;
+	let eligibleTvl = 0;
 
 	// Fetch all token snapshots in parallel
 	const snapshotPromises = tokenSymbols.map((symbol) => fetchSnapshot(symbol, blockNumber));
@@ -147,32 +151,42 @@ async function calculateDetailedTvlAtBlock(
 			if (balance <= 0n) continue;
 
 			const address = walletAddress.toLowerCase();
-
-			// Skip excluded wallets
-			if (excludedWallets.has(address)) continue;
+			const isExcluded = excludedWallets.has(address);
 
 			const balanceFloat = Number(balance) / 1e18;
 			const usdValue = balanceFloat * price;
+
+			// Always add to total TVL
 			tokenTotal += usdValue;
 
-			// Track per-wallet TVL
+			// Track per-wallet TVL (including excluded for tracking)
 			if (!walletData.has(address)) {
-				walletData.set(address, { tvl: 0, tokenBreakdown: {} });
+				walletData.set(address, { tvl: 0, tokenBreakdown: {}, isExcluded });
 			}
 			const wallet = walletData.get(address)!;
 			wallet.tvl += usdValue;
 			wallet.tokenBreakdown[symbol] = (wallet.tokenBreakdown[symbol] || 0) + usdValue;
+
+			// Only add to eligible TVL if not excluded
+			if (!isExcluded) {
+				eligibleTvl += usdValue;
+			}
 		}
 
 		tokenTvl[symbol] = tokenTotal;
 		totalTvl += tokenTotal;
 	}
 
-	// Build wallet TVL entries with access code info
+	// Build wallet TVL entries with access code info (excluding excluded wallets from list)
 	const walletTvl: WalletTvlEntry[] = [];
 	const walletTvlMap: Record<string, number> = {};
+	let excludedWalletCount = 0;
 
 	for (const [address, data] of walletData) {
+		if (data.isExcluded) {
+			excludedWalletCount++;
+			continue; // Don't include excluded wallets in the wallet list
+		}
 		walletTvl.push({
 			address,
 			tvl: data.tvl,
@@ -185,7 +199,7 @@ async function calculateDetailedTvlAtBlock(
 	// Sort by TVL descending
 	walletTvl.sort((a, b) => b.tvl - a.tvl);
 
-	// Aggregate TVL by access code
+	// Aggregate TVL by access code (only non-excluded wallets)
 	const codeAggregation = new Map<string, { tvl: number; walletCount: number }>();
 
 	for (const wallet of walletTvl) {
@@ -216,11 +230,13 @@ async function calculateDetailedTvlAtBlock(
 
 	return {
 		totalTvl,
+		eligibleTvl,
 		tokenTvl,
 		walletTvl,
 		codeTvl,
 		walletTvlMap,
-		codeTvlMap
+		codeTvlMap,
+		excludedWalletCount
 	};
 }
 
@@ -388,10 +404,12 @@ export const GET: RequestHandler = async ({ url }) => {
 						timestamp: latestBlock.timestamp,
 						blockNumber: latestBlock.blockNumber,
 						totalTvl: latestTvl.totalTvl,
+						eligibleTvl: latestTvl.eligibleTvl,
 						tokenTvl: latestTvl.tokenTvl,
 						walletTvl: latestTvl.walletTvl,
 						codeTvl: latestTvl.codeTvl,
-						walletCount: latestTvl.walletTvl.length
+						walletCount: latestTvl.walletTvl.length,
+						excludedWalletCount: latestTvl.excludedWalletCount
 					}
 				: null,
 			daily: dailyTvl

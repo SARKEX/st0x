@@ -236,11 +236,13 @@
 		latest: {
 			timestamp: number;
 			blockNumber: number;
-			totalTvl: number;
+			totalTvl: number; // All wallets including excluded
+			eligibleTvl: number; // Excluding excluded wallets
 			tokenTvl: Record<string, number>;
 			walletTvl: WalletTvlEntry[];
 			codeTvl: CodeTvlEntry[];
 			walletCount: number;
+			excludedWalletCount: number;
 		} | null;
 		daily: DailyTvlEntry[];
 	}
@@ -2343,14 +2345,20 @@
 					<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 						<div>
 							<p class="text-4xl font-bold text-[#e8be89]">{formatUsd(tvlData.latest.totalTvl)}</p>
-							<p class="mt-1 text-sm text-gray-400">Total Value Locked (TVL)</p>
+							<p class="mt-1 text-sm text-gray-400">Total Value Locked (All ST0x Tokens)</p>
+							<div class="mt-3 border-t border-gray-700 pt-3">
+								<p class="text-2xl font-semibold text-white">{formatUsd(tvlData.latest.eligibleTvl)}</p>
+								<p class="text-xs text-gray-400">
+									Eligible TVL (excluding {tvlData.latest.excludedWalletCount} excluded wallet{tvlData.latest.excludedWalletCount !== 1 ? 's' : ''})
+								</p>
+							</div>
 						</div>
 						<div class="text-right">
 							<p class="text-sm text-gray-400">
 								Snapshot: {new Date(tvlData.latest.timestamp * 1000).toLocaleString()}
 							</p>
 							<p class="text-xs text-gray-500">
-								Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} wallets
+								Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} eligible wallets
 							</p>
 							<p class="mt-1 text-xs italic text-gray-500">Approx. end of day balances</p>
 						</div>

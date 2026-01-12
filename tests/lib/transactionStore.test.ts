@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import transactionStore from '$lib/stores/transaction';
 import { readContract, sendTransaction, waitForTransactionReceipt, estimateGas } from '@wagmi/core';
-import { getTokensByCategory, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/config/network';
+import { TOKENS, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/config/network';
 import { rainlangConfirmationModal, currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
 
-const STOXs = getTokensByCategory('ST0x');
+const STOXs = TOKENS;
 import {
 	getMarketMakingDeploymentArgs,
 	getDcaDeploymentArgs,

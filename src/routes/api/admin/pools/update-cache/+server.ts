@@ -7,11 +7,8 @@ import type { RequestHandler } from './$types';
 import { TOKENS } from '$lib/config/tokens';
 import { fetchAllTransfers } from '$lib/server/snapshots/scraper';
 import { getCurrentBlockNumber } from '$lib/server/snapshots/generator';
-import {
-	getPoolType,
-	saveKnownPoolsToCache,
-	getKnownPools
-} from '$lib/server/snapshots/lp-attribution';
+import { getPoolType } from '$lib/server/snapshots/pool-discovery';
+import { saveKnownPoolsToCache, getKnownPools } from '$lib/server/snapshots/lp-attribution';
 
 // Shared pool discovery logic
 async function discoverAndCachePools() {
@@ -87,10 +84,20 @@ async function discoverAndCachePools() {
 	};
 }
 
+function handleError(error: unknown) {
+	console.error('[Pool Cache] Error:', error);
+	return json(
+		{
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error'
+		},
+		{ status: 500 }
+	);
+}
+
 // GET: Used by Vercel cron to run pool discovery
 // Add ?view=1 query param to just view current cache without updating
 export const GET: RequestHandler = async ({ url }) => {
-	// If ?view=1, just return current cache
 	if (url.searchParams.get('view') === '1') {
 		const pools = getKnownPools();
 		return json({
@@ -101,19 +108,11 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	}
 
-	// Otherwise, run pool discovery (for cron)
 	try {
 		const result = await discoverAndCachePools();
 		return json(result);
 	} catch (error) {
-		console.error('[Pool Cache] Error:', error);
-		return json(
-			{
-				success: false,
-				error: error instanceof Error ? error.message : 'Unknown error'
-			},
-			{ status: 500 }
-		);
+		return handleError(error);
 	}
 };
 
@@ -123,13 +122,6 @@ export const POST: RequestHandler = async () => {
 		const result = await discoverAndCachePools();
 		return json(result);
 	} catch (error) {
-		console.error('[Pool Cache] Error:', error);
-		return json(
-			{
-				success: false,
-				error: error instanceof Error ? error.message : 'Unknown error'
-			},
-			{ status: 500 }
-		);
+		return handleError(error);
 	}
 };
