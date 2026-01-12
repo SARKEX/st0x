@@ -82,8 +82,17 @@ export const KV_KEYS = {
 	excludedWallets: () => 'rewards:excluded_wallets', // List of wallet addresses excluded from TVL
 	// Rewards pool configuration
 	rewardsPool: (month: string) => `rewards:pool:${month}`, // Rewards pool config (YYYY-MM)
-	rewardsPoolList: () => 'rewards:pool:__all__' // List of all months with pool config
+	rewardsPoolList: () => 'rewards:pool:__all__', // List of all months with pool config
+	// LP pool cache for fast pool type lookup
+	knownPools: () => 'lp:known_pools' // { v2: string[], v3: string[] }
 } as const;
+
+// Type for known pools cache
+export interface KnownPoolsCache {
+	v2: string[];
+	v3: string[];
+	updatedAt: string;
+}
 
 // Types for snapshot block records
 export interface SnapshotBlockRecord {
@@ -141,4 +150,13 @@ export interface RewardsPoolConfig {
 	rocketBoostTvlTarget: number; // TVL target in USD (converts to points target)
 	notes: string; // Optional admin notes
 	updatedAt: string;
+}
+
+/**
+ * Get excluded wallets as a lowercase Set for efficient lookup.
+ * Used for filtering wallets from TVL/APY calculations.
+ */
+export async function getExcludedWalletsSet(): Promise<Set<string>> {
+	const wallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
+	return new Set(wallets.map((w) => w.toLowerCase()));
 }

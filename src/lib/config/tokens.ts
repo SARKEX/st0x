@@ -4,17 +4,6 @@ import type { PythToken } from '$lib/types';
 // Payment tokens mapped by chain
 export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
-		// Test USDC (primary for testing - swap with real USDC for production):
-		// {
-		// 	chainId: 8453,
-		// 	address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
-		// 	symbol: 'USDC',
-		// 	decimals: 6,
-		// 	name: 'USD Coin (Test)',
-		// 	logoUrl: '/images/USDC.png',
-		// 	priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		// } as unknown as PythToken,
-		// Real Base USDC (comment out test USDC above and move this first for production):
 		{
 			chainId: 8453,
 			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -23,7 +12,7 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 			name: 'USD Coin',
 			logoUrl: '/images/USDC.png',
 			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		} as unknown as PythToken
+		} as PythToken
 	]
 };
 
@@ -34,8 +23,6 @@ export const DEFAULT_PAYMENT_TOKENS: Record<number, PythToken> = Object.fromEntr
 	])
 );
 
-export const USDC_TOKENS = PAYMENT_TOKENS_BY_NETWORK;
-
 export function getPaymentTokensForNetwork(chainId: number): PythToken[] {
 	return PAYMENT_TOKENS_BY_NETWORK[chainId] ?? [];
 }
@@ -45,24 +32,8 @@ export function getDefaultPaymentTokenForNetwork(chainId: number): PythToken | u
 	return first;
 }
 
-// Back-compat exports for legacy settlement naming and USDC helpers
-export const SETTLEMENT_TOKENS_BY_NETWORK = PAYMENT_TOKENS_BY_NETWORK;
-export const DEFAULT_SETTLEMENT_TOKENS = DEFAULT_PAYMENT_TOKENS;
-
-export function getSettlementTokensForNetwork(chainId: number): PythToken[] {
-	return getPaymentTokensForNetwork(chainId);
-}
-
-export function getDefaultSettlementTokenForNetwork(chainId: number): PythToken | undefined {
-	return getDefaultPaymentTokenForNetwork(chainId);
-}
-
-export function getUsdcTokenForNetwork(chainId: number): PythToken | undefined {
-	return getDefaultPaymentTokenForNetwork(chainId);
-}
-
-// Define token categories
-export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
+// Token categories
+export type TokenCategory = 'ST0x' | 'CRYPTO';
 
 export interface LimitOrder {
 	orderHash: string;
@@ -91,7 +62,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:NVDA',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0x8d8c315db61f60dcc3c66cdb48ca87fc643e35ea',
@@ -104,7 +75,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:AMZN',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0x470b06815a2e286df8c38c9c73280e0760088623',
@@ -117,7 +88,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:TSLA',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0xff647ad8c4b065bd746911bb9ea1a33c38c63604',
@@ -130,7 +101,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:MSTR',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0xd0a90b7c9ae5facbe09ca4c576a3795eda53b397',
@@ -143,21 +114,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:IAU',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
-	// Test token (comment out for production):
-	// {
-	// 	chainId: base.id,
-	// 	address: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
-	// 	symbol: 'tSTOX',
-	// 	decimals: 18,
-	// 	name: 'tSTOX',
-	// 	logoUrl: '/images/IAU.png',
-	// 	priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
-	// 	category: 'ST0x',
-	// 	tradingViewSymbol: 'AMEX:IAU',
-	// 	tradingViewMarket: 'america',
-	// 	limitOrders: []
-	// } as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0xb616f8b391d1adc118fd7e4063526d5530d49b10',
@@ -170,7 +127,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:COIN',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
@@ -183,7 +140,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:SPLG',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0x826a85de1f7b70f4c7450c0f882a6db06000ed80',
@@ -196,7 +153,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:SIVR',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0x43422a9d11a6640ef0d5f65292ef8adf87cf8522',
@@ -209,7 +166,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NYSE:CRCL',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0xf8fdfd6a686346d34b3143fc23072aa45c9e8386',
@@ -222,7 +179,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:BMNR',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
 		address: '0x6192539a2036c786aba3ca6a2222ff7a0f9c287e',
@@ -235,7 +192,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:PPLT',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	} as unknown as CategorizedToken
+	}
 ];
 
 export const CRYPTO_TOKENS: CategorizedToken[] = [
@@ -250,7 +207,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO',
 		tradingViewSymbol: 'BINANCE:BTCUSDT',
 		tradingViewMarket: 'crypto'
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: arbitrum.id,
 		address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
@@ -262,7 +219,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO',
 		tradingViewSymbol: 'BINANCE:ETHUSDT',
 		tradingViewMarket: 'crypto'
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: arbitrum.id,
 		address: '0x912CE59144191C1204E64559FE8253a0e49E6548',
@@ -274,7 +231,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO',
 		tradingViewSymbol: 'BINANCE:ARBUSDT',
 		tradingViewMarket: 'crypto'
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: arbitrum.id,
 		address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
@@ -286,10 +243,10 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO',
 		tradingViewSymbol: 'KRAKEN:USDCUSD',
 		tradingViewMarket: 'crypto'
-	} as unknown as CategorizedToken,
+	},
 	{
 		chainId: base.id,
-		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Real Base USDC
+		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 		symbol: 'USDC',
 		decimals: 6,
 		name: 'USD Coin',
@@ -298,13 +255,8 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		category: 'CRYPTO',
 		tradingViewSymbol: 'KRAKEN:USDCUSD',
 		tradingViewMarket: 'crypto'
-	} as unknown as CategorizedToken
+	}
 ];
-
-// Helper functions to get tokens by category
-export function getTokensByCategory(category: TokenCategory): CategorizedToken[] {
-	return TOKENS.filter((token) => token.category === category);
-}
 
 export function getAllTokens(): CategorizedToken[] {
 	return TOKENS;

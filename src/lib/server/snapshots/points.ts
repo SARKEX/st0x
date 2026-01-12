@@ -1,6 +1,7 @@
 // Monthly points calculation and storage
 // Awards 100 points per $1 USD of holdings at each snapshot
 // Points accumulate within a calendar month, reset to 0 for new month
+// LP Attribution: Pool balances are attributed to LP holders proportionally
 
 import {
 	getKv,
@@ -11,6 +12,7 @@ import {
 	type WalletMonthlyPoints
 } from '$lib/server/kv';
 import type { BlockSnapshot } from './types';
+import { processBalancesWithLPAttribution } from './lp-attribution';
 
 const POINTS_PER_DOLLAR = 100;
 
@@ -24,34 +26,144 @@ function getMonthFromTimestamp(timestamp: number): string {
 	return `${year}-${month}`;
 }
 
+/** Type for wallet points from a single block calculation */
+export type WalletPointsMap = Map<string, { tokens: Map<string, { points: number; balance: bigint }>; totalPoints: number }>;
+
 /**
  * Calculate points for each wallet from a set of snapshots for a single block
  * Points = 100 per $1 USD of holdings
+ * LP Attribution: Pool balances are attributed to LP holders proportionally
  */
-function calculateWalletPointsFromSnapshots(
-	snapshots: BlockSnapshot[]
-): Map<string, { tokens: Map<string, { points: number; balance: bigint }>; totalPoints: number }> {
-	const walletPoints = new Map<
-		string,
-		{ tokens: Map<string, { points: number; balance: bigint }>; totalPoints: number }
-	>();
+export async function calculateWalletPointsFromSnapshots(
+	snapshots: BlockSnapshot[],
+	blockNumber: number
+): Promise<WalletPointsMap> {
+	const walletPoints: WalletPointsMap = new Map();
+	const totalTokens = snapshots.length;
 
-	for (const snapshot of snapshots) {
-		const price = snapshot.price?.price ?? 0;
-		const tokenAddress = snapshot.tokenAddress.toLowerCase();
+	console.log(`[Points] Processing ${totalTokens} tokens in parallel...`);
+	const startTime = Date.now();
 
-		for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
+	// Process all tokens in parallel for LP attribution
+	const processedSnapshots = await Promise.all(
+		snapshots.map(async (snapshot, i) => {
+			const price = snapshot.price?.price ?? 0;
+			const tokenAddress = snapshot.tokenAddress.toLowerCase();
+			const holdersCount = Object.keys(snapshot.balances).length;
+
+			const lpStart = Date.now();
+			let balancesToProcess = snapshot.balances;
+			let poolsProcessedCount = 0;
+
+			try {
+				const { modifiedBalances, poolsProcessed } = await processBalancesWithLPAttribution(
+					snapshot.balances,
+					tokenAddress,
+					blockNumber
+				);
+				balancesToProcess = modifiedBalances;
+				poolsProcessedCount = poolsProcessed.length;
+			} catch (err) {
+				console.warn(`[Points] LP Attribution failed for ${snapshot.tokenSymbol}:`, err);
+			}
+
+			const lpTime = Date.now() - lpStart;
+			console.log(
+				`[Points] ${snapshot.tokenSymbol}: ${holdersCount} holders, ${poolsProcessedCount} pools (${lpTime}ms)`
+			);
+
+			return { tokenAddress, price, balancesToProcess };
+		})
+	);
+
+	// Merge results into walletPoints (sequential to avoid race conditions)
+	for (const { tokenAddress, price, balancesToProcess } of processedSnapshots) {
+		for (const [walletAddress, balanceStr] of Object.entries(balancesToProcess)) {
 			const address = walletAddress.toLowerCase();
 			const balance = BigInt(balanceStr);
 
-			// Skip negative balances (treat as 0 points)
 			if (balance <= 0n) continue;
 
-			// Calculate USD value: (balance / 10^18) * price
 			const balanceFloat = Number(balance) / 1e18;
 			const usdValue = balanceFloat * price;
+			const points = usdValue * POINTS_PER_DOLLAR;
 
-			// Calculate points: 100 per $1
+			if (!walletPoints.has(address)) {
+				walletPoints.set(address, { tokens: new Map(), totalPoints: 0 });
+			}
+
+			const wallet = walletPoints.get(address)!;
+			wallet.tokens.set(tokenAddress, { points, balance });
+			wallet.totalPoints += points;
+		}
+	}
+
+	console.log(`[Points] All ${totalTokens} tokens processed in ${Date.now() - startTime}ms`);
+	return walletPoints;
+}
+
+/** Progress callback type for streaming updates */
+export type ProgressCallback = (
+	tokenIndex: number,
+	tokenSymbol: string,
+	holdersCount: number,
+	poolsFound: number
+) => void;
+
+/**
+ * Calculate points with progress callback for streaming updates
+ * Processes tokens in parallel but reports progress as each completes
+ */
+export async function calculateWalletPointsFromSnapshotsWithProgress(
+	snapshots: BlockSnapshot[],
+	blockNumber: number,
+	onProgress?: ProgressCallback
+): Promise<WalletPointsMap> {
+	const walletPoints: WalletPointsMap = new Map();
+	let completedCount = 0;
+
+	// Process all tokens in parallel
+	const processedSnapshots = await Promise.all(
+		snapshots.map(async (snapshot, i) => {
+			const price = snapshot.price?.price ?? 0;
+			const tokenAddress = snapshot.tokenAddress.toLowerCase();
+			const holdersCount = Object.keys(snapshot.balances).length;
+
+			let balancesToProcess = snapshot.balances;
+			let poolsProcessedCount = 0;
+
+			try {
+				const { modifiedBalances, poolsProcessed } = await processBalancesWithLPAttribution(
+					snapshot.balances,
+					tokenAddress,
+					blockNumber
+				);
+				balancesToProcess = modifiedBalances;
+				poolsProcessedCount = poolsProcessed.length;
+			} catch (err) {
+				console.warn(`[Points] LP Attribution failed for ${snapshot.tokenSymbol}:`, err);
+			}
+
+			// Report progress as each token completes
+			completedCount++;
+			if (onProgress) {
+				onProgress(completedCount - 1, snapshot.tokenSymbol, holdersCount, poolsProcessedCount);
+			}
+
+			return { tokenAddress, price, balancesToProcess };
+		})
+	);
+
+	// Merge results into walletPoints
+	for (const { tokenAddress, price, balancesToProcess } of processedSnapshots) {
+		for (const [walletAddress, balanceStr] of Object.entries(balancesToProcess)) {
+			const address = walletAddress.toLowerCase();
+			const balance = BigInt(balanceStr);
+
+			if (balance <= 0n) continue;
+
+			const balanceFloat = Number(balance) / 1e18;
+			const usdValue = balanceFloat * price;
 			const points = usdValue * POINTS_PER_DOLLAR;
 
 			if (!walletPoints.has(address)) {
@@ -65,6 +177,62 @@ function calculateWalletPointsFromSnapshots(
 	}
 
 	return walletPoints;
+}
+
+/**
+ * Create empty monthly points data structure
+ */
+export function createEmptyMonthlyData(month: string): MonthlyPointsData {
+	return {
+		month,
+		snapshotCount: 0,
+		blockNumbers: [],
+		wallets: {},
+		updatedAt: new Date().toISOString()
+	};
+}
+
+/**
+ * Merge wallet points from a single block into monthly data
+ * This is the single source of truth for accumulating points
+ */
+export function mergeWalletPointsIntoMonthlyData(
+	monthlyData: MonthlyPointsData,
+	walletPoints: WalletPointsMap,
+	blockNumber: number
+): void {
+	for (const [walletAddress, walletData] of walletPoints) {
+		if (!monthlyData.wallets[walletAddress]) {
+			monthlyData.wallets[walletAddress] = {
+				tokens: {},
+				totalPoints: 0
+			};
+		}
+
+		const walletMonthly = monthlyData.wallets[walletAddress];
+
+		// Update per-token points
+		for (const [tokenAddress, tokenData] of walletData.tokens) {
+			if (!walletMonthly.tokens[tokenAddress]) {
+				walletMonthly.tokens[tokenAddress] = {
+					points: 0,
+					lastBalance: '0'
+				};
+			}
+
+			const tokenMonthly = walletMonthly.tokens[tokenAddress];
+			tokenMonthly.points += tokenData.points;
+			tokenMonthly.lastBalance = tokenData.balance.toString();
+		}
+
+		// Update total points
+		walletMonthly.totalPoints += walletData.totalPoints;
+	}
+
+	// Update metadata
+	monthlyData.snapshotCount += 1;
+	monthlyData.blockNumbers.push(blockNumber);
+	monthlyData.updatedAt = new Date().toISOString();
 }
 
 /**
@@ -96,13 +264,7 @@ export async function updateMonthlyPoints(
 
 	if (!monthlyData) {
 		console.log(`[Points] Creating new month entry for ${month}`);
-		monthlyData = {
-			month,
-			snapshotCount: 0,
-			blockNumbers: [],
-			wallets: {},
-			updatedAt: new Date().toISOString()
-		};
+		monthlyData = createEmptyMonthlyData(month);
 	}
 
 	// Check if this block is already included
@@ -111,42 +273,11 @@ export async function updateMonthlyPoints(
 		return;
 	}
 
-	// Calculate points from this snapshot
-	const walletPoints = calculateWalletPointsFromSnapshots(snapshots);
+	// Calculate points from this snapshot (with LP attribution)
+	const walletPoints = await calculateWalletPointsFromSnapshots(snapshots, blockNumber);
 
-	// Add points to running totals
-	for (const [walletAddress, walletData] of walletPoints) {
-		if (!monthlyData.wallets[walletAddress]) {
-			monthlyData.wallets[walletAddress] = {
-				tokens: {},
-				totalPoints: 0
-			};
-		}
-
-		const walletMonthly = monthlyData.wallets[walletAddress];
-
-		// Update per-token points
-		for (const [tokenAddress, tokenData] of walletData.tokens) {
-			if (!walletMonthly.tokens[tokenAddress]) {
-				walletMonthly.tokens[tokenAddress] = {
-					points: 0,
-					lastBalance: '0'
-				};
-			}
-
-			const tokenMonthly = walletMonthly.tokens[tokenAddress];
-			tokenMonthly.points += tokenData.points;
-			tokenMonthly.lastBalance = tokenData.balance.toString();
-		}
-
-		// Update total points
-		walletMonthly.totalPoints += walletData.totalPoints;
-	}
-
-	// Update month metadata
-	monthlyData.snapshotCount += 1;
-	monthlyData.blockNumbers.push(blockNumber);
-	monthlyData.updatedAt = new Date().toISOString();
+	// Merge into monthly data using shared function
+	mergeWalletPointsIntoMonthlyData(monthlyData, walletPoints, blockNumber);
 
 	// Save updated data
 	await kvSet(KV_KEYS.monthlyPoints(month), monthlyData);

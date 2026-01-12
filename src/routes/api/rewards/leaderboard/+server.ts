@@ -1,13 +1,7 @@
 // Public API endpoint to get leaderboard data (no wallet required)
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, type MonthlyPointsData } from '$lib/server/kv';
-
-// Get excluded wallets set for filtering
-async function getExcludedWalletsSet(): Promise<Set<string>> {
-	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
-	return new Set(excludedWallets.map((w) => w.toLowerCase()));
-}
+import { kvGet, KV_KEYS, getExcludedWalletsSet, type MonthlyPointsData } from '$lib/server/kv';
 
 interface WalletRanking {
 	address: string;

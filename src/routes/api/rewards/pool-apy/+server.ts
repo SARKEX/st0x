@@ -1,7 +1,13 @@
 // API endpoint to get the global pool APY (same for all users)
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, type MonthlyPointsData, type RewardsPoolConfig } from '$lib/server/kv';
+import {
+	kvGet,
+	KV_KEYS,
+	getExcludedWalletsSet,
+	type MonthlyPointsData,
+	type RewardsPoolConfig
+} from '$lib/server/kv';
 
 export const GET: RequestHandler = async () => {
 	try {
@@ -12,19 +18,21 @@ export const GET: RequestHandler = async () => {
 			'0'
 		)}`;
 
-		// Get current month's points data and pool config
-		const [monthlyData, poolConfig] = await Promise.all([
+		// Get current month's points data, pool config, and excluded wallets
+		const [monthlyData, poolConfig, excludedWalletsSet] = await Promise.all([
 			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-			kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth))
+			kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
+			getExcludedWalletsSet()
 		]);
 
-		// Calculate total points
+		// Calculate total points (excluding excluded wallets)
 		let totalPoints = 0;
 		let snapshotCount = 0;
 
 		if (monthlyData) {
 			snapshotCount = monthlyData.snapshotCount ?? 0;
-			for (const data of Object.values(monthlyData.wallets)) {
+			for (const [walletAddress, data] of Object.entries(monthlyData.wallets)) {
+				if (excludedWalletsSet.has(walletAddress.toLowerCase())) continue;
 				totalPoints += data.totalPoints;
 			}
 		}

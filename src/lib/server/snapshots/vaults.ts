@@ -202,25 +202,3 @@ export async function fetchAllVaultHoldings(
 		return [];
 	}
 }
-
-/**
- * Group vault holdings by owner and token
- * Returns a map of owner -> tokenAddress -> total balance
- */
-export function groupVaultHoldingsByOwner(
-	holdings: VaultHolding[]
-): Map<string, Map<string, bigint>> {
-	const ownerHoldings = new Map<string, Map<string, bigint>>();
-
-	for (const holding of holdings) {
-		if (!ownerHoldings.has(holding.owner)) {
-			ownerHoldings.set(holding.owner, new Map());
-		}
-
-		const ownerTokens = ownerHoldings.get(holding.owner)!;
-		const currentBalance = ownerTokens.get(holding.tokenAddress) || 0n;
-		ownerTokens.set(holding.tokenAddress, currentBalance + BigInt(holding.balance));
-	}
-
-	return ownerHoldings;
-}

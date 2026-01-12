@@ -298,21 +298,6 @@
 		return total;
 	})();
 
-	$: activeST0x = (() => {
-		const set = new Set<string>();
-		vaultsByNetwork.forEach((vaults, networkId) => {
-			const activeSet = activeTokensByNetwork.get(networkId);
-			vaults.forEach((vault) => {
-				const address = normalizeAddress(vault.token.address);
-				if (!address) return;
-				if (activeSet && activeSet.size > 0 && !activeSet.has(address)) return;
-				if (vaultBalanceToNumber(vault) <= 0) return;
-				set.add(address);
-			});
-		});
-		return set.size;
-	})();
-
 	$: totalDeployedOrders = (() => {
 		const hashes = new Set<string>();
 		orderbookStates.forEach(({ query }) => {
@@ -528,7 +513,7 @@
 
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
 				<MetricCard
-					label="Total Locked Value"
+					label="Total Orderbook Inventory"
 					value={formatQuoteDisplay(totalTVL)}
 					subtitle="Active orderbook tokens"
 					paddingClass="p-4 sm:p-6"
@@ -548,16 +533,6 @@
 						label="Total Trades"
 						value={`${totalTrades}`}
 						subtitle="Last 30 days"
-						paddingClass="p-6"
-						showGradient={false}
-						valueClass="text-3xl font-bold"
-					/>
-				</div>
-				<div class="hidden sm:block">
-					<MetricCard
-						label="Active Tokens"
-						value={`${activeST0x}`}
-						subtitle="Live on orderbook"
 						paddingClass="p-6"
 						showGradient={false}
 						valueClass="text-3xl font-bold"
@@ -600,12 +575,7 @@
 							<th
 								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 							>
-								TVL
-							</th>
-							<th
-								class="hidden p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:table-cell sm:p-3"
-							>
-								Active Tokens
+								Inventory
 							</th>
 							<th
 								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
@@ -642,9 +612,6 @@
 								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tvl, stats.network)}
 								</td>
-								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm"
-									>{stats.tokenCount}</td
-								>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tradingVolume, stats.network)}
 								</td>

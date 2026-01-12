@@ -1,7 +1,13 @@
 // Public API endpoint to get wallet rewards data (points and estimated share)
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, type MonthlyPointsData, type RewardsPoolConfig } from '$lib/server/kv';
+import {
+	kvGet,
+	KV_KEYS,
+	getExcludedWalletsSet,
+	type MonthlyPointsData,
+	type RewardsPoolConfig
+} from '$lib/server/kv';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 
@@ -23,12 +29,6 @@ interface WalletResponse {
 	sharePercent: number;
 	estimatedReward: number;
 	rank: number | null;
-}
-
-// Get excluded wallets set for filtering
-async function getExcludedWalletsSet(): Promise<Set<string>> {
-	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
-	return new Set(excludedWallets.map((w) => w.toLowerCase()));
 }
 
 // Compute and cache all wallet data once

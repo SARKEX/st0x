@@ -6,7 +6,6 @@ import {
 	getNetworkByChainId,
 	getNetworkByName,
 	getDefaultPaymentTokenForNetwork,
-	getTokensByCategory,
 	getAllTokens,
 	getTokensByNetwork,
 	getCryptoTokensByNetwork,
@@ -78,30 +77,6 @@ describe('network', () => {
 			expect(token?.address).toBeDefined();
 			expect(token?.name).toBeDefined();
 			expect(token?.priceFeedId).toBeDefined();
-		});
-	});
-
-	describe('getTokensByCategory', () => {
-		it.each([
-			['ST0x', (tokens: any[]) => tokens.length > 0],
-			['ETFs', (tokens: any[]) => Array.isArray(tokens)],
-			['CRYPTO' as any, (tokens: any[]) => tokens.length === 0], // CRYPTO tokens in separate array
-			['UNKNOWN' as any, (tokens: any[]) => tokens.length === 0]
-		])('should get tokens for category %s', (category, validator) => {
-			const tokens = getTokensByCategory(category);
-			expect(validator(tokens)).toBe(true);
-			expect(
-				tokens.every(
-					(t) => t.category === category || category === 'CRYPTO' || category === 'UNKNOWN'
-				)
-			).toBe(true);
-		});
-
-		it('should not include duplicate tokens', () => {
-			const tokens = getTokensByCategory('ST0x');
-			const addresses = tokens.map((t) => t.address.toLowerCase());
-			const uniqueAddresses = new Set(addresses);
-			expect(addresses.length).toBe(uniqueAddresses.size);
 		});
 	});
 
@@ -208,7 +183,7 @@ describe('network', () => {
 
 	describe('token properties validation', () => {
 		it('should have all required properties for ST0x tokens', () => {
-			const tokens = getTokensByCategory('ST0x');
+			const tokens = TOKENS.filter((t) => t.category === 'ST0x');
 			tokens.forEach((token) => {
 				expect(token.address).toBeDefined();
 				expect(token.symbol).toBeDefined();
