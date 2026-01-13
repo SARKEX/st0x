@@ -1241,12 +1241,21 @@ export class RhinestoneClient {
 										address?: Address;
 										contract?: Address;
 									}>;
+									account?: {
+										requiredDelegations?: {
+											[chainId: string]: {
+												address?: Address;
+												contract?: Address;
+											};
+										};
+									};
 								};
 								[key: string]: unknown;
 							} | undefined;
 							
 							// Check if we can get authorization requirements from the intent op
-							const authRequirements = intentOp?.signedMetadata?.authorizations;
+							const authRequirements = intentOp?.signedMetadata?.account?.requiredDelegations;
+
 							console.log('[Rhinestone Client] Authorization requirements:', authRequirements);
 							
 							// If we don't have explicit requirements, we need to construct the authorization
@@ -1257,14 +1266,11 @@ export class RhinestoneClient {
 							let authAddress: Address | undefined;
 							let authChainId = requiredChainId;
 							
-							if (authRequirements && authRequirements.length > 0) {
-								// Use the first requirement that matches our chain
-								const matchingReq = authRequirements.find(req => 
-									(req.chainId || requiredChainId) === requiredChainId
-								);
-								if (matchingReq) {
-									authAddress = (matchingReq.address || matchingReq.contract) as Address | undefined;
-									authChainId = matchingReq.chainId || requiredChainId;
+							// authRequirements is an object keyed by chain ID: {8453: {address: ..., contract: ...}}
+							if (authRequirements && typeof authRequirements === 'object') {
+								const chainReq = authRequirements[requiredChainId.toString()];
+								if (chainReq) {
+									authAddress = (chainReq.address || chainReq.contract) as Address | undefined;
 								}
 							}
 							
@@ -1296,11 +1302,13 @@ export class RhinestoneClient {
 								
 								// Construct EIP-7702 authorization typed data
 								// EIP-7702 uses a specific typed data structure for authorizations
+								// Note: The domain structure must match exactly what Rhinestone expects
+								// The signature must recover to the EOA address (walletAccount.address)
 								const typedData = {
 									domain: {
-										chainId: authChainId,
-										name: 'EIP-7702',
-										version: '1'
+										chainId: authChainId
+										// Note: EIP-7702 authorizations typically don't use name/version/verifyingContract
+										// The domain is minimal to ensure signature recovery matches the EOA
 									},
 									types: {
 										Authorization: [
