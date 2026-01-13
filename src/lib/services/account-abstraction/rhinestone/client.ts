@@ -26,6 +26,7 @@ import {
 	encodeFunctionData,
 	erc20Abi,
 	parseSignature,
+	recoverTypedDataAddress,
 	type Address,
 	type Chain,
 	type Hex,
@@ -1302,13 +1303,12 @@ export class RhinestoneClient {
 								
 								// Construct EIP-7702 authorization typed data
 								// EIP-7702 uses a specific typed data structure for authorizations
-								// Note: The domain structure must match exactly what Rhinestone expects
-								// The signature must recover to the EOA address (walletAccount.address)
+								// The domain must include the EOA address as verifyingContract to ensure
+								// signature recovery matches the EOA address
 								const typedData = {
 									domain: {
-										chainId: authChainId
-										// Note: EIP-7702 authorizations typically don't use name/version/verifyingContract
-										// The domain is minimal to ensure signature recovery matches the EOA
+										chainId: authChainId,
+										verifyingContract: walletAccount.address
 									},
 									types: {
 										Authorization: [
@@ -1328,11 +1328,36 @@ export class RhinestoneClient {
 								console.log('[Rhinestone Client] Signing EIP-7702 authorization:', {
 									chainId: authChainId,
 									address: authAddress,
-									nonce
+									nonce,
+									verifyingContract: walletAccount.address
 								});
 								
 								// Sign the typed data
 								const sig = await walletAccount.signTypedData(typedData);
+								
+								// Verify the signature recovers to the correct EOA address
+								const recoveredAddress = await recoverTypedDataAddress({
+									domain: typedData.domain,
+									types: typedData.types,
+									primaryType: typedData.primaryType,
+									message: typedData.message,
+									signature: sig
+								});
+								
+								console.log('[Rhinestone Client] Signature recovery check:', {
+									recoveredAddress,
+									expectedAddress: walletAccount.address,
+									match: recoveredAddress.toLowerCase() === walletAccount.address.toLowerCase()
+								});
+								
+								// If signature doesn't recover to EOA, the typed data structure is wrong
+								if (recoveredAddress.toLowerCase() !== walletAccount.address.toLowerCase()) {
+									throw new AAError(
+										`EIP-7702 authorization signature recovers to ${recoveredAddress} but expected ${walletAccount.address}. ` +
+										'The typed data structure may be incorrect.',
+										AAErrorCode.AUTHORIZATION_REJECTED
+									);
+								}
 								
 								// Parse the signature
 								const parsedSig = parseSignature(sig);
