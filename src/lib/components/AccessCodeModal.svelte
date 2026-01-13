@@ -45,7 +45,12 @@
 			if ($authMethod === 'dynamic') {
 				logoutDynamic();
 			} else if ($wagmiConfig) {
-				await disconnect($wagmiConfig);
+				try {
+					await disconnect($wagmiConfig);
+				} catch (err) {
+					// Ignore disconnect errors - connection may already be invalid
+					console.warn('Failed to disconnect wallet:', err);
+				}
 			}
 		}
 	}
@@ -54,7 +59,12 @@
 		if ($authMethod === 'dynamic') {
 			logoutDynamic();
 		} else if ($wagmiConfig) {
-			await disconnect($wagmiConfig);
+			try {
+				await disconnect($wagmiConfig);
+			} catch (err) {
+				// Ignore disconnect errors - connection may already be invalid
+				console.warn('Failed to disconnect wallet:', err);
+			}
 		}
 		handleClose();
 	}

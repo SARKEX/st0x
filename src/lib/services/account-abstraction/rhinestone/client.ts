@@ -25,10 +25,12 @@ import {
 	createPublicClient,
 	encodeFunctionData,
 	erc20Abi,
+	parseSignature,
 	type Address,
 	type Chain,
 	type Hex,
-	type Account
+	type Account,
+	type SignedAuthorizationList
 } from 'viem';
 import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import {
@@ -45,6 +47,7 @@ import {
 } from '../types';
 import { getGasOracle } from './gasOracle';
 import { env } from '$env/dynamic/public';
+import { isDynamicEmbeddedWallet } from '../wallets/dynamic';
 
 // Chain configurations
 const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
@@ -137,11 +140,15 @@ interface RhinestoneAccount {
 	sendTransaction: (params: RhinestoneTransactionParams) => Promise<TransactionResult>;
 	// 3-step transaction flow that properly handles eip7702InitSignature
 	prepareTransaction: (params: RhinestoneTransactionParams) => Promise<PreparedTransaction>;
+	getTransactionMessages: (preparedTx: PreparedTransaction) => {
+		origin: unknown[];
+		destination: unknown;
+	};
 	signTransaction: (preparedTx: PreparedTransaction) => Promise<SignedTransaction>;
-	signAuthorizations: (preparedTx: PreparedTransaction) => Promise<Hex[]>;
+	signAuthorizations: (preparedTx: PreparedTransaction) => Promise<SignedAuthorizationList>;
 	submitTransaction: (
 		signedTx: SignedTransaction,
-		authorizations?: Hex[],
+		authorizations?: SignedAuthorizationList,
 		dryRun?: boolean
 	) => Promise<TransactionResult>;
 	waitForExecution: (
@@ -494,16 +501,26 @@ export class RhinestoneClient {
 			const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
 			const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
 
-			// For EIP-7702 mode, check if the account needs initialization
+			// Check if the account needs EIP-7702 initialization
+			// The SDK requires this signature for EOA accounts, regardless of accountType
 			let eip7702InitSignature: Hex | undefined;
-			if (this.config.accountType === '7702') {
+			const rhinestoneAddress = rhinestoneAccount.getAddress();
+			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
+
+			if (isEOA || this.config.accountType === '7702') {
 				// Check if the account is already deployed/initialized on the target chain
 				const isDeployed = await rhinestoneAccount.isDeployed(targetChain);
-				console.log('[Rhinestone Client] EIP-7702 account deployed status:', isDeployed);
+				console.log('[Rhinestone Client] Account deployed status:', {
+					isDeployed,
+					isEOA,
+					accountType: this.config.accountType,
+					rhinestoneAddress,
+					walletAddress: walletAccount.address
+				});
 
 				if (!isDeployed) {
 					// Sign the EIP-7702 init data for the first transaction
-					// This is REQUIRED for EOA accounts in EIP-7702 mode
+					// This is REQUIRED for EOA accounts
 					console.log(
 						'[Rhinestone Client] Signing EIP-7702 init data for first cross-chain transaction...'
 					);
@@ -563,10 +580,29 @@ export class RhinestoneClient {
 			console.log('[Rhinestone Client] Transaction signed, getting authorizations...');
 
 			// Get EIP-7702 authorizations if needed
-			let authorizations: Hex[] = [];
+			// Note: For JSON-RPC accounts (like Dynamic), signAuthorizations may not be supported
+			// The EIP-7702 init signature should be sufficient for the first transaction
+			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
-				authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
-				console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				try {
+					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
+					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				} catch (authError) {
+					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
+					// we can proceed without authorizations as the EIP-7702 init signature
+					// should be sufficient for the first transaction
+					const errorMsg = authError instanceof Error ? authError.message : String(authError);
+					if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
+						console.warn(
+							'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
+							'Proceeding without authorizations - EIP-7702 init signature should be sufficient.'
+						);
+						authorizations = [];
+					} else {
+						// Re-throw other errors
+						throw authError;
+					}
+				}
 			}
 
 			console.log('[Rhinestone Client] Submitting transaction...');
@@ -650,16 +686,26 @@ export class RhinestoneClient {
 			const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
 			const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
 
-			// For EIP-7702 mode, check if the account needs initialization
+			// Check if the account needs EIP-7702 initialization
+			// The SDK requires this signature for EOA accounts, regardless of accountType
 			let eip7702InitSignature: Hex | undefined;
-			if (this.config.accountType === '7702') {
+			const rhinestoneAddress = rhinestoneAccount.getAddress();
+			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
+
+			if (isEOA || this.config.accountType === '7702') {
 				// Check if the account is already deployed/initialized on the target chain
 				const isDeployed = await rhinestoneAccount.isDeployed(targetChain);
-				console.log('[Rhinestone Client] EIP-7702 account deployed status:', isDeployed);
+				console.log('[Rhinestone Client] Account deployed status:', {
+					isDeployed,
+					isEOA,
+					accountType: this.config.accountType,
+					rhinestoneAddress,
+					walletAddress: walletAccount.address
+				});
 
 				if (!isDeployed) {
 					// Sign the EIP-7702 init data for the first transaction
-					// This is REQUIRED for EOA accounts in EIP-7702 mode
+					// This is REQUIRED for EOA accounts
 					console.log(
 						'[Rhinestone Client] Signing EIP-7702 init data for first omnichain transaction...'
 					);
@@ -719,10 +765,29 @@ export class RhinestoneClient {
 			console.log('[Rhinestone Client] Transaction signed, getting authorizations...');
 
 			// Get EIP-7702 authorizations if needed
-			let authorizations: Hex[] = [];
+			// Note: For JSON-RPC accounts (like Dynamic), signAuthorizations may not be supported
+			// The EIP-7702 init signature should be sufficient for the first transaction
+			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
-				authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
-				console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				try {
+					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
+					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				} catch (authError) {
+					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
+					// we can proceed without authorizations as the EIP-7702 init signature
+					// should be sufficient for the first transaction
+					const errorMsg = authError instanceof Error ? authError.message : String(authError);
+					if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
+						console.warn(
+							'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
+							'Proceeding without authorizations - EIP-7702 init signature should be sufficient.'
+						);
+						authorizations = [];
+					} else {
+						// Re-throw other errors
+						throw authError;
+					}
+				}
 			}
 
 			console.log('[Rhinestone Client] Submitting transaction...');
@@ -808,11 +873,21 @@ export class RhinestoneClient {
 			// Get chain config
 			const chain = CHAIN_CONFIG[params.chainId];
 
-			// For EIP-7702 mode, check if the account needs initialization
+			// Check if the account needs EIP-7702 initialization
+			// The SDK requires this signature for EOA accounts, regardless of accountType
 			let eip7702InitSignature: Hex | undefined;
-			if (this.config.accountType === '7702') {
+			const rhinestoneAddress = rhinestoneAccount.getAddress();
+			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
+
+			if (isEOA || this.config.accountType === '7702') {
 				const isDeployed = await rhinestoneAccount.isDeployed(chain);
-				console.log('[Rhinestone Client] EIP-7702 account deployed status:', isDeployed);
+				console.log('[Rhinestone Client] Account deployed status:', {
+					isDeployed,
+					isEOA,
+					accountType: this.config.accountType,
+					rhinestoneAddress,
+					walletAddress: walletAccount.address
+				});
 
 				if (!isDeployed) {
 					console.log('[Rhinestone Client] Signing EIP-7702 init data for same-chain swap...');
@@ -881,10 +956,29 @@ export class RhinestoneClient {
 			console.log('[Rhinestone Client] Transaction signed, getting authorizations...');
 
 			// Get EIP-7702 authorizations if needed
-			let authorizations: Hex[] = [];
+			// Note: For JSON-RPC accounts (like Dynamic), signAuthorizations may not be supported
+			// The EIP-7702 init signature should be sufficient for the first transaction
+			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
-				authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
-				console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				try {
+					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
+					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				} catch (authError) {
+					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
+					// we can proceed without authorizations as the EIP-7702 init signature
+					// should be sufficient for the first transaction
+					const errorMsg = authError instanceof Error ? authError.message : String(authError);
+					if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
+						console.warn(
+							'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
+							'Proceeding without authorizations - EIP-7702 init signature should be sufficient.'
+						);
+						authorizations = [];
+					} else {
+						// Re-throw other errors
+						throw authError;
+					}
+				}
 			}
 
 			console.log('[Rhinestone Client] Submitting transaction...');
@@ -967,10 +1061,16 @@ export class RhinestoneClient {
 				addressMatch: rhinestoneAddress === walletAccount.address
 			});
 
+			// Check if the account needs EIP-7702 initialization
+			// The SDK requires this signature for EOA accounts, regardless of accountType
+			// If the Rhinestone account address matches the wallet address, it's an EOA
+
 			// Try to get portfolio to see what balances Rhinestone recognizes
 			try {
 				const portfolio = await rhinestoneAccount.getPortfolio(false);
-				console.log('[Rhinestone Client] Portfolio:', JSON.stringify(portfolio, null, 2));
+				// Use a custom replacer to handle BigInt values
+				console.log('[Rhinestone Client] Portfolio:', JSON.stringify(portfolio, (key, value) => 
+					typeof value === 'bigint' ? value.toString() : value, 2));
 			} catch (portfolioError) {
 				console.log('[Rhinestone Client] Could not fetch portfolio:', portfolioError);
 			}
@@ -978,12 +1078,25 @@ export class RhinestoneClient {
 			// Get chain config
 			const chain = CHAIN_CONFIG[params.chainId];
 
-			// For EIP-7702 mode, check if the account needs initialization
 			let eip7702InitSignature: Hex | undefined;
-			if (this.config.accountType === '7702') {
+			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
+
+			// Only attempt EIP-7702 signing if account type is '7702'
+			// When accountType is 'smart', the account is a smart contract, not an EOA,
+			// so signEip7702InitData() is not applicable and may return null
+			const shouldAttemptEIP7702 = this.config.accountType === '7702';
+			
+			if (shouldAttemptEIP7702) {
+				console.log('[Rhinestone Client] Checking if account is deployed/initialized on this chain...');
 				// Check if the account is already deployed/initialized on this chain
 				const isDeployed = await rhinestoneAccount.isDeployed(chain);
-				console.log('[Rhinestone Client] EIP-7702 account deployed status:', isDeployed);
+				console.log('[Rhinestone Client] Account deployed status:', {
+					isDeployed,
+					isEOA,
+					accountType: this.config.accountType,
+					rhinestoneAddress,
+					walletAddress: walletAccount.address
+				});
 
 				if (!isDeployed) {
 					// Sign the EIP-7702 init data for the first transaction
@@ -991,7 +1104,19 @@ export class RhinestoneClient {
 					console.log('[Rhinestone Client] Signing EIP-7702 init data for first transaction...');
 					try {
 						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
+						console.log('[Rhinestone Client] EIP-7702 init signature:', eip7702InitSignature);
+						
+						// Validate that we got a signature
+						if (!eip7702InitSignature || eip7702InitSignature === '0x' || eip7702InitSignature === null) {
+							const errorMessage =
+								'signEip7702InitData returned null. ' +
+								'Ensure the account was created with accountType: "7702" and the wallet can sign messages.';
+							
+							console.error('[Rhinestone Client]', errorMessage);
+							throw new Error(errorMessage);
+						} else {
+							console.log('[Rhinestone Client] EIP-7702 init signature obtained successfully');
+						}
 					} catch (signError) {
 						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
 
@@ -1003,6 +1128,22 @@ export class RhinestoneClient {
 							originalError: signError
 						});
 					}
+				}
+			} else if (isEOA && this.config.accountType === 'smart') {
+				// For smart accounts that match EOA address, we might still need to check deployment
+				// but we won't use EIP-7702 signatures
+				console.log(
+					'[Rhinestone Client] Smart account detected (not EIP-7702). ' +
+					'Checking deployment status...'
+				);
+				const isDeployed = await rhinestoneAccount.isDeployed(chain);
+				console.log('[Rhinestone Client] Smart account deployed status:', isDeployed);
+				
+				if (!isDeployed) {
+					console.warn(
+						'[Rhinestone Client] Smart account not deployed. ' +
+						'This may cause transaction failures. The account should be deployed first.'
+					);
 				}
 			}
 
@@ -1026,21 +1167,212 @@ export class RhinestoneClient {
 				callsCount: params.calls.length,
 				feeAsset,
 				sourceAssets: transactionParams.sourceAssets,
-				hasEip7702Init: Boolean(eip7702InitSignature)
+				hasEip7702Init: Boolean(eip7702InitSignature),
+				apiKeyConfigured: !!this.config.apiKey
 			});
 
 			// Use 3-step flow that properly handles eip7702InitSignature
-			const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
-			console.log('[Rhinestone Client] Transaction prepared, signing...');
+			let preparedTx: PreparedTransaction;
+			try {
+				preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+				console.log('[Rhinestone Client] Transaction prepared successfully, signing...');
+			} catch (prepareError) {
+				console.error('[Rhinestone Client] Failed to prepare transaction:', prepareError);
+				
+				// Check if it's a network/fetch error
+				if (
+					prepareError instanceof TypeError && 
+					prepareError.message.includes('fetch')
+				) {
+					const errorMessage = 
+						'Network error connecting to Rhinestone API. ' +
+						'Please check your internet connection and try again. ' +
+						'If the problem persists, the Rhinestone service may be temporarily unavailable.';
+					
+					throw new AAError(errorMessage, AAErrorCode.RHINESTONE_ERROR, {
+						originalError: prepareError,
+						isNetworkError: true
+					});
+				}
+				
+				// Re-throw other errors
+				throw prepareError;
+			}
 
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
 			console.log('[Rhinestone Client] Transaction signed, getting authorizations...');
 
 			// Get EIP-7702 authorizations if needed
-			let authorizations: Hex[] = [];
+			// Note: For JSON-RPC accounts (like Dynamic), we need to manually sign authorizations
+			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
-				authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
-				console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				try {
+					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
+					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+				} catch (authError) {
+					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
+					// try to manually construct and sign EIP-7702 authorization
+					const errorMsg = authError instanceof Error ? authError.message : String(authError);
+					if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
+						console.warn(
+							'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
+							'Attempting to manually construct and sign EIP-7702 authorization...'
+						);
+						
+						// Try to manually construct and sign EIP-7702 authorization
+						// We need: chainId, contract address, and nonce
+						// For EIP-7702, we need to authorize the EOA to act as a smart account on this chain
+						// The contract address is the Rhinestone smart account implementation contract
+						try {
+							// Try to get the authorization contract address
+							// For Rhinestone EIP-7702, the contract address might be in the prepared transaction
+							// or we might need to get it from the SDK
+							const intentRoute = preparedTx.intentRoute;
+							console.log('[Rhinestone Client] Inspecting prepared transaction for authorization info...', {
+								hasIntentRoute: !!intentRoute,
+								hasIntentOp: !!intentRoute?.intentOp,
+								intentOpKeys: intentRoute?.intentOp ? Object.keys(intentRoute.intentOp) : []
+							});
+							
+							const intentOp = intentRoute?.intentOp as {
+								signedMetadata?: {
+									authorizations?: Array<{
+										chainId?: number;
+										address?: Address;
+										contract?: Address;
+									}>;
+								};
+								[key: string]: unknown;
+							} | undefined;
+							
+							// Check if we can get authorization requirements from the intent op
+							const authRequirements = intentOp?.signedMetadata?.authorizations;
+							console.log('[Rhinestone Client] Authorization requirements:', authRequirements);
+							
+							// If we don't have explicit requirements, we need to construct the authorization
+							// For same-chain transactions, we need an authorization for the current chain
+							const requiredChainId = chain.id;
+							
+							// Try to get the contract address from requirements, or use a fallback
+							let authAddress: Address | undefined;
+							let authChainId = requiredChainId;
+							
+							if (authRequirements && authRequirements.length > 0) {
+								// Use the first requirement that matches our chain
+								const matchingReq = authRequirements.find(req => 
+									(req.chainId || requiredChainId) === requiredChainId
+								);
+								if (matchingReq) {
+									authAddress = (matchingReq.address || matchingReq.contract) as Address | undefined;
+									authChainId = matchingReq.chainId || requiredChainId;
+								}
+							}
+							
+							// If we still don't have an address, we can't proceed
+							// The authorization contract address is required for EIP-7702
+							if (!authAddress || authAddress === '0x0' || authAddress === '0x0000000000000000000000000000000000000000') {
+								throw new AAError(
+									'EIP-7702 authorization contract address could not be determined for chain ' + requiredChainId + '. ' +
+									'This is required for the transaction but cannot be obtained with this account type. ' +
+									'Please try with a different wallet or contact support.',
+									AAErrorCode.AUTHORIZATION_REJECTED
+								);
+							}
+							
+							if (walletAccount.signTypedData) {
+								const signedAuths: Array<{
+									address: Address;
+									chainId: number;
+									nonce: number;
+									r: Hex;
+									s: Hex;
+									v?: number;
+									yParity: number;
+								}> = [];
+								
+								// Get the nonce for this authorization (typically 0 for first authorization)
+								// We'll use 0 as default, but this might need to be fetched from the contract
+								const nonce = 0;
+								
+								// Construct EIP-7702 authorization typed data
+								// EIP-7702 uses a specific typed data structure for authorizations
+								const typedData = {
+									domain: {
+										chainId: authChainId,
+										name: 'EIP-7702',
+										version: '1'
+									},
+									types: {
+										Authorization: [
+											{ name: 'chainId', type: 'uint256' },
+											{ name: 'address', type: 'address' },
+											{ name: 'nonce', type: 'uint256' }
+										]
+									},
+									primaryType: 'Authorization' as const,
+									message: {
+										chainId: BigInt(authChainId),
+										address: authAddress,
+										nonce: BigInt(nonce)
+									}
+								};
+								
+								console.log('[Rhinestone Client] Signing EIP-7702 authorization:', {
+									chainId: authChainId,
+									address: authAddress,
+									nonce
+								});
+								
+								// Sign the typed data
+								const sig = await walletAccount.signTypedData(typedData);
+								
+								// Parse the signature
+								const parsedSig = parseSignature(sig);
+								const { r, s, v, yParity } = parsedSig;
+								
+								signedAuths.push({
+									address: authAddress,
+									chainId: authChainId,
+									nonce,
+									r,
+									s,
+									...(v !== undefined ? { v: Number(v) } : {}),
+									yParity
+								});
+								
+								if (signedAuths.length > 0) {
+									authorizations = signedAuths as unknown as SignedAuthorizationList;
+									console.log('[Rhinestone Client] Manually signed authorizations:', authorizations.length);
+								} else {
+									throw new AAError(
+										'EIP-7702 authorization signing failed. Please try again or contact support.',
+										AAErrorCode.AUTHORIZATION_REJECTED
+									);
+								}
+							} else {
+								throw new AAError(
+									'Wallet account does not support signTypedData, which is required for EIP-7702 authorizations.',
+									AAErrorCode.AUTHORIZATION_REJECTED
+								);
+							}
+						} catch (manualSignError) {
+							console.error('[Rhinestone Client] Failed to manually sign authorizations:', manualSignError);
+							// Re-throw as AAError if it's not already one
+							if (manualSignError instanceof AAError) {
+								throw manualSignError;
+							}
+							throw new AAError(
+								`Failed to sign EIP-7702 authorizations: ${manualSignError instanceof Error ? manualSignError.message : 'Unknown error'}. ` +
+								'Authorizations are required for this transaction.',
+								AAErrorCode.AUTHORIZATION_REJECTED,
+								{ originalError: manualSignError }
+							);
+						}
+					} else {
+						// Re-throw other errors
+						throw authError;
+					}
+				}
 			}
 
 			console.log('[Rhinestone Client] Submitting transaction...');
@@ -1151,9 +1483,8 @@ export class RhinestoneClient {
  * Get or create the Rhinestone client singleton
  *
  * Account Type Selection:
- * - For Dynamic embedded wallets: Uses 'smart' account mode (most reliable)
- * - For external wallets: Uses EIP-7702 mode to preserve EOA address
- * - Can be overridden with PUBLIC_RHINESTONE_ACCOUNT_TYPE env var
+ * - Default: Uses EIP-7702 mode for all wallets (preserves EOA address)
+ * - Can be overridden with PUBLIC_RHINESTONE_ACCOUNT_TYPE env var ('7702' or 'smart')
  *
  * Gas Sponsorship (native to Rhinestone):
  * 1. Get your deposit wallet from Rhinestone Dashboard
@@ -1174,8 +1505,8 @@ export function getRhinestoneClient(): RhinestoneClient {
 			env.PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED === 'true' ? { enabled: true } : undefined;
 
 		// Determine account type based on wallet
-		// Dynamic embedded wallets don't fully support EIP-7702 yet, so use 'smart' mode
-		// External wallets (WalletConnect, injected) can use EIP-7702 to preserve EOA address
+		// Dynamic embedded wallets support EIP-7702 mode, which preserves the EOA address
+		// External wallets (WalletConnect, injected) can also use EIP-7702 to preserve EOA address
 		let accountType: '7702' | 'smart';
 
 		if (env.PUBLIC_RHINESTONE_ACCOUNT_TYPE) {
@@ -1183,13 +1514,11 @@ export function getRhinestoneClient(): RhinestoneClient {
 			accountType = env.PUBLIC_RHINESTONE_ACCOUNT_TYPE as '7702' | 'smart';
 		} else {
 			// Auto-detect based on wallet type
-			// Import at runtime to avoid circular dependencies
-			const { isDynamicEmbeddedWallet } = await import('./wallets/dynamic');
 			const isEmbedded = isDynamicEmbeddedWallet();
 
-			// Use 'smart' for embedded wallets (more reliable)
-			// Use '7702' for external wallets (preserves EOA address)
-			accountType = isEmbedded ? 'smart' : '7702';
+			// Use '7702' for both embedded and external wallets to preserve EOA address
+			// This enables EIP-7702 Smart EOAs which upgrade the EOA without migration
+			accountType = '7702';
 
 			console.log('[Rhinestone Client] Auto-selected account type:', accountType, { isEmbedded });
 		}

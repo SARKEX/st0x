@@ -262,6 +262,43 @@ function DynamicBridge({
 						}
 					}
 
+					// For typed data signing (EIP-712), use the wallet client
+					if (args.method === 'eth_signTypedData_v4' && args.params?.[0] && args.params?.[1]) {
+						console.log('[dynamic] Handling eth_signTypedData_v4');
+						const { walletClient } = await getClients();
+						if (!walletClient) {
+							console.error('[dynamic] Wallet client is null after getClients()');
+							throw new Error('Wallet client not available for typed data signing');
+						}
+						const address = args.params[0] as string;
+						const typedDataStr = args.params[1] as string;
+						
+						// Parse the typed data - it might be a JSON string or already an object
+						let typedData: any;
+						try {
+							typedData = typeof typedDataStr === 'string' ? JSON.parse(typedDataStr) : typedDataStr;
+						} catch (parseError) {
+							console.error('[dynamic] Failed to parse typed data:', parseError);
+							throw new Error('Invalid typed data format');
+						}
+						
+						try {
+							// The wallet client should already have the account set
+							// But we need to ensure the typed data format matches viem's expected format
+							const result = await walletClient.signTypedData({
+								domain: typedData.domain,
+								types: typedData.types,
+								primaryType: typedData.primaryType,
+								message: typedData.message
+							});
+							console.log('[dynamic] Typed data signed successfully');
+							return result;
+						} catch (signError) {
+							console.error('[dynamic] Typed data signing failed:', signError);
+							throw signError;
+						}
+					}
+
 					// For read methods, try the public client first (better RPC support)
 					const readMethods = [
 						'eth_chainId',

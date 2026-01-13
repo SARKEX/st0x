@@ -17,9 +17,9 @@
 
 import type { Address, Hex, WalletClient, Account } from 'viem';
 import { createPublicClient, createWalletClient, custom, type Chain } from 'viem';
-import { toAccount } from 'viem/accounts';
 import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { get } from 'svelte/store';
+import { walletClientToAccount } from '@rhinestone/sdk';
 import { type SupportedNetworkId, SUPPORTED_NETWORKS, AAError, AAErrorCode } from '../types';
 import { dynamicSession } from '$lib/stores/dynamicStore';
 import { getDynamicWalletProvider } from '$lib/services/walletService';
@@ -89,10 +89,13 @@ export async function createDynamicWalletClient(
 /**
  * Create a viem Account from the Dynamic wallet for use with Rhinestone SDK
  *
- * This follows the Rhinestone + Dynamic integration pattern:
- * 1. Get the wallet provider from Dynamic
- * 2. Create a LocalAccount with signing methods
- * 3. Pass this account to Rhinestone SDK
+ * This follows the Rhinestone + Dynamic integration pattern from:
+ * https://docs.rhinestone.dev/smart-wallet/core/signers/dynamic
+ *
+ * Key flow:
+ * 1. Create a wagmi wallet client from Dynamic provider
+ * 2. Use walletClientToAccount() from Rhinestone SDK to create a viem Account
+ * 3. Pass this account to Rhinestone SDK as an ECDSA owner
  *
  * @param chainId - Optional chain ID (defaults to Base)
  * @returns Account object ready for Rhinestone SDK
@@ -117,44 +120,53 @@ export async function getDynamicAccountForRhinestone(
 	}
 
 	try {
-		const address = session.walletAddress as Address;
+		// Step 1: Create a wagmi wallet client from Dynamic provider
+		// This uses viem's createWalletClient with the Dynamic provider
+		const walletClient = await createDynamicWalletClient(chainId);
+		
+		if (!walletClient) {
+			throw new AAError(
+				'Failed to create wallet client from Dynamic provider',
+				AAErrorCode.WALLET_NOT_CONNECTED
+			);
+		}
 
-		// Create a LocalAccount using toAccount with custom signing functions
-		// This wraps the Dynamic provider and makes it compatible with Rhinestone SDK
-		const account = toAccount({
-			address,
-			async signMessage({ message }) {
-				// Sign a message using Dynamic's provider
-				const msgToSign = typeof message === 'string' ? message : message.raw;
-				const signature = await provider.request({
-					method: 'personal_sign',
-					params: [msgToSign, address]
-				});
-				return signature as Hex;
-			},
-			async signTransaction(transaction) {
-				// Sign a transaction using Dynamic's provider
-				const signature = await provider.request({
-					method: 'eth_signTransaction',
-					params: [transaction]
-				});
-				return signature as Hex;
-			},
-			async signTypedData(typedData) {
-				// Sign typed data (EIP-712) using Dynamic's provider
-				// Use a custom replacer to handle BigInt values which JSON.stringify can't serialize
-				const jsonString = JSON.stringify(typedData, (key, value) =>
-					typeof value === 'bigint' ? value.toString() : value
-				);
-				const signature = await provider.request({
-					method: 'eth_signTypedData_v4',
-					params: [address, jsonString]
-				});
-				return signature as Hex;
+		// Step 2: Use Rhinestone SDK's walletClientToAccount to convert wallet client to Account
+		// This is the recommended approach per Rhinestone docs for Dynamic integration
+		const account = walletClientToAccount(walletClient);
+
+		// Test message signing to verify the account works
+		if (account.signMessage) {
+			try {
+				const testMessage = 'Test message for Dynamic wallet signing';
+				const messageSig = await account.signMessage({ message: testMessage });
+				console.log('[Dynamic Wallet] signMessage test OK:', messageSig);
+			} catch (e) {
+				console.error('[Dynamic Wallet] signMessage test FAIL:', e);
 			}
-		});
+		}
 
-		console.log('[Dynamic Wallet] Created account for Rhinestone:', {
+		// Test typed data signing to verify EIP-712 works
+		if (account.signTypedData) {
+			try {
+				const sig = await account.signTypedData({
+					domain: {
+						name: 'Test',
+						version: '1',
+						chainId: chainId,
+						verifyingContract: '0x0000000000000000000000000000000000000000'
+					},
+					types: { Test: [{ name: 'value', type: 'uint256' }] },
+					primaryType: 'Test',
+					message: { value: 1n }
+				} as any);
+				console.log('[Dynamic Wallet] signTypedData test OK:', sig);
+			} catch (e) {
+				console.error('[Dynamic Wallet] signTypedData test FAIL:', e);
+			}
+		}
+
+		console.log('[Dynamic Wallet] Created account for Rhinestone using walletClientToAccount:', {
 			address: account.address,
 			chainId,
 			type: account.type
