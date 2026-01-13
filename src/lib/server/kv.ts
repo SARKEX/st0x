@@ -80,6 +80,8 @@ export const KV_KEYS = {
 	monthlyPointsList: () => 'snapshots:points:__all__', // List of all months with data
 	// Excluded wallets for rewards
 	excludedWallets: () => 'rewards:excluded_wallets', // List of wallet addresses excluded from TVL
+	// Team wallets - excluded from TVL stats but still eligible for rewards
+	teamWallets: () => 'rewards:team_wallets', // List of team wallet addresses
 	// Rewards pool configuration
 	rewardsPool: (month: string) => `rewards:pool:${month}`, // Rewards pool config (YYYY-MM)
 	rewardsPoolList: () => 'rewards:pool:__all__', // List of all months with pool config
@@ -158,5 +160,14 @@ export interface RewardsPoolConfig {
  */
 export async function getExcludedWalletsSet(): Promise<Set<string>> {
 	const wallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
+	return new Set(wallets.map((w) => w.toLowerCase()));
+}
+
+/**
+ * Get team wallets as a lowercase Set for efficient lookup.
+ * Team wallets are excluded from TVL stats but still eligible for rewards.
+ */
+export async function getTeamWalletsSet(): Promise<Set<string>> {
+	const wallets = (await kvGet<string[]>(KV_KEYS.teamWallets())) || [];
 	return new Set(wallets.map((w) => w.toLowerCase()));
 }

@@ -40,8 +40,8 @@
 	let chartLibLoaded = false;
 
 	// TVL Chart.js state
-	let tvlTokenChartCanvas: HTMLCanvasElement | null = null;
-	let tvlTokenChart: ChartInstance = null;
+	let tvlChartCanvas: HTMLCanvasElement | null = null;
+	let tvlChart: ChartInstance = null;
 	let tvlCodeChartCanvas: HTMLCanvasElement | null = null;
 	let tvlCodeChart: ChartInstance = null;
 	let tvlWalletChartCanvas: HTMLCanvasElement | null = null;
@@ -226,7 +226,9 @@
 		date: string;
 		timestamp: number;
 		blockNumber: number;
-		totalTvl: number;
+		totalTvl: number; // All wallets
+		eligibleTvl: number; // Excluding excluded wallets
+		tvlExcludingTeam: number; // Excluding both excluded and team wallets
 		tokenTvl: Record<string, number>;
 		walletTvl: Record<string, number>;
 		codeTvl: Record<string, number>;
@@ -238,11 +240,13 @@
 			blockNumber: number;
 			totalTvl: number; // All wallets including excluded
 			eligibleTvl: number; // Excluding excluded wallets
+			tvlExcludingTeam: number; // Excluding both excluded wallets AND team wallets
 			tokenTvl: Record<string, number>;
 			walletTvl: WalletTvlEntry[];
 			codeTvl: CodeTvlEntry[];
 			walletCount: number;
 			excludedWalletCount: number;
+			teamWalletCount: number;
 		} | null;
 		daily: DailyTvlEntry[];
 	}
@@ -319,8 +323,8 @@
 			walletDropdownOpen = false;
 		}
 		// TVL dropdowns
-		if (!target.closest('.tvl-token-dropdown')) {
-			tvlTokenDropdownOpen = false;
+		if (!target.closest('.tvl-filter-dropdown')) {
+			tvlFilterDropdownOpen = false;
 		}
 		if (!target.closest('.tvl-code-dropdown')) {
 			tvlCodeDropdownOpen = false;
@@ -407,49 +411,43 @@
 		return { date, tokenValues, total };
 	});
 
-	// TVL Token chart controls (snapshot-based)
-	let tvlSelectedTokens: Set<string> = new Set();
-	let tvlTokenDropdownOpen = false;
+	// TVL chart filter controls
+	type TvlFilterOption = 'all' | 'non-liquidity' | 'non-team';
+	let tvlFilter: TvlFilterOption = 'non-team';
+	let tvlFilterDropdownOpen = false;
 
-	// Get available token symbols from TVL data
+	const tvlFilterOptions: { value: TvlFilterOption; label: string; description: string }[] = [
+		{ value: 'all', label: 'All Wallets', description: 'Total TVL including all wallets' },
+		{
+			value: 'non-liquidity',
+			label: 'Non-Liquidity',
+			description: 'Excludes liquidity/excluded wallets'
+		},
+		{
+			value: 'non-team',
+			label: 'Non-Team',
+			description: 'Excludes liquidity and team wallets'
+		}
+	];
+
+	// Get available token symbols from TVL data (still needed for other parts)
 	$: tvlTokenSymbols = tvlData.latest ? Object.keys(tvlData.latest.tokenTvl).sort() : [];
 
-	// Initialize selected tokens when tvlTokenSymbols changes
-	$: if (tvlTokenSymbols.length > 0 && tvlSelectedTokens.size === 0) {
-		tvlSelectedTokens = new Set(tvlTokenSymbols);
-	}
-
-	function toggleTvlToken(symbol: string) {
-		if (tvlSelectedTokens.has(symbol)) {
-			tvlSelectedTokens.delete(symbol);
-		} else {
-			tvlSelectedTokens.add(symbol);
+	// TVL chart data based on selected filter
+	$: tvlChartData = tvlData.daily.map((entry) => {
+		let value: number;
+		switch (tvlFilter) {
+			case 'all':
+				value = entry.totalTvl;
+				break;
+			case 'non-liquidity':
+				value = entry.eligibleTvl;
+				break;
+			case 'non-team':
+				value = entry.tvlExcludingTeam;
+				break;
 		}
-		tvlSelectedTokens = tvlSelectedTokens;
-	}
-
-	function selectAllTvlTokens() {
-		tvlSelectedTokens = new Set(tvlTokenSymbols);
-	}
-
-	function clearAllTvlTokens() {
-		tvlSelectedTokens = new Set();
-	}
-
-	// TVL chart data from snapshots - daily TVL by token
-	$: tvlTokenChartData = tvlData.daily.map((entry) => {
-		const tokenValues: Record<string, number> = {};
-		let total = 0;
-
-		for (const symbol of tvlTokenSymbols) {
-			if (tvlSelectedTokens.has(symbol)) {
-				const value = entry.tokenTvl[symbol] || 0;
-				tokenValues[symbol] = value;
-				total += value;
-			}
-		}
-
-		return { date: entry.date, tokenValues, total };
+		return { date: entry.date, value };
 	});
 
 	// TVL Code chart controls
@@ -849,24 +847,26 @@
 	}
 
 	// TVL Chart update functions
-	function updateTvlTokenChart() {
-		if (!ChartCtor || !tvlTokenChartCanvas) return;
-		const ctx = tvlTokenChartCanvas.getContext('2d');
+	function updateTvlChart() {
+		if (!ChartCtor || !tvlChartCanvas) return;
+		const ctx = tvlChartCanvas.getContext('2d');
 		if (!ctx) return;
 
-		if (tvlTokenChart) {
-			tvlTokenChart.destroy();
-			tvlTokenChart = null;
+		if (tvlChart) {
+			tvlChart.destroy();
+			tvlChart = null;
 		}
 
-		tvlTokenChart = new ChartCtor(ctx, {
+		const filterLabel = tvlFilterOptions.find((o) => o.value === tvlFilter)?.label || 'TVL';
+
+		tvlChart = new ChartCtor(ctx, {
 			type: 'bar',
 			data: {
-				labels: tvlTokenChartData.map((d) => d.date),
+				labels: tvlChartData.map((d) => d.date),
 				datasets: [
 					{
-						label: 'TVL (USD)',
-						data: tvlTokenChartData.map((day) => day.total),
+						label: `${filterLabel} (USD)`,
+						data: tvlChartData.map((day) => day.value),
 						backgroundColor: '#e8be89',
 						borderColor: '#d4a976',
 						borderWidth: 1,
@@ -922,13 +922,13 @@
 	$: if (
 		browser &&
 		chartLibLoaded &&
-		tvlTokenChartCanvas &&
+		tvlChartCanvas &&
 		activeSection === 'tvl' &&
 		activeTvlTab === 'tokens'
 	) {
-		void tvlTokenChartData;
-		void tvlSelectedTokens;
-		setTimeout(() => updateTvlTokenChart(), 0);
+		void tvlChartData;
+		void tvlFilter;
+		setTimeout(() => updateTvlChart(), 0);
 	}
 
 	// TVL Code Chart update function
@@ -1154,9 +1154,9 @@
 			walletChart = null;
 		}
 		// Destroy TVL charts
-		if (tvlTokenChart) {
-			tvlTokenChart.destroy();
-			tvlTokenChart = null;
+		if (tvlChart) {
+			tvlChart.destroy();
+			tvlChart = null;
 		}
 		if (tvlCodeChart) {
 			tvlCodeChart.destroy();
@@ -2352,6 +2352,12 @@
 									Eligible TVL (excluding {tvlData.latest.excludedWalletCount} excluded wallet{tvlData.latest.excludedWalletCount !== 1 ? 's' : ''})
 								</p>
 							</div>
+							<div class="mt-3 border-t border-gray-700 pt-3">
+								<p class="text-2xl font-semibold text-green-400">{formatUsd(tvlData.latest.tvlExcludingTeam)}</p>
+								<p class="text-xs text-gray-400">
+									TVL Excluding Team (excluding {tvlData.latest.excludedWalletCount} excluded + {tvlData.latest.teamWalletCount} team wallet{tvlData.latest.teamWalletCount !== 1 ? 's' : ''})
+								</p>
+							</div>
 						</div>
 						<div class="text-right">
 							<p class="text-sm text-gray-400">
@@ -2415,29 +2421,23 @@
 
 			<!-- TVL Tab Content -->
 			{#if activeTvlTab === 'tokens'}
-				<!-- Daily TVL by Token Chart -->
+				<!-- Daily TVL Chart -->
 				<Card>
 					<div class="mb-6 flex flex-wrap items-center gap-4">
-						<h3 class="text-lg font-medium text-white">Daily TVL by Token</h3>
+						<h3 class="text-lg font-medium text-white">Daily TVL</h3>
 
 						<div class="flex flex-1 flex-wrap items-center justify-end gap-3">
-							<!-- Token Dropdown -->
-							<div class="tvl-token-dropdown relative">
+							<!-- Wallet Filter Dropdown -->
+							<div class="tvl-filter-dropdown relative">
 								<button
-									on:click={() => (tvlTokenDropdownOpen = !tvlTokenDropdownOpen)}
+									on:click={() => (tvlFilterDropdownOpen = !tvlFilterDropdownOpen)}
 									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
 								>
 									<span>
-										{#if tvlSelectedTokens.size === tvlTokenSymbols.length}
-											All Tokens
-										{:else if tvlSelectedTokens.size === 0}
-											No Tokens
-										{:else}
-											{tvlSelectedTokens.size} Token{tvlSelectedTokens.size > 1 ? 's' : ''}
-										{/if}
+										{tvlFilterOptions.find((o) => o.value === tvlFilter)?.label || 'Select Filter'}
 									</span>
 									<svg
-										class="h-4 w-4 transition-transform {tvlTokenDropdownOpen ? 'rotate-180' : ''}"
+										class="h-4 w-4 transition-transform {tvlFilterDropdownOpen ? 'rotate-180' : ''}"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -2451,56 +2451,23 @@
 									</svg>
 								</button>
 
-								{#if tvlTokenDropdownOpen}
+								{#if tvlFilterDropdownOpen}
 									<div
-										class="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+										class="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
 									>
-										<div class="border-b border-gray-700 px-3 py-2">
-											<div class="flex gap-2">
-												<button
-													on:click={selectAllTvlTokens}
-													class="text-xs text-[#e8be89] hover:underline"
-												>
-													Select All
-												</button>
-												<span class="text-gray-600">|</span>
-												<button
-													on:click={clearAllTvlTokens}
-													class="text-xs text-gray-400 hover:underline"
-												>
-													Clear
-												</button>
-											</div>
-										</div>
-										{#each tvlTokenSymbols as symbol}
+										{#each tvlFilterOptions as option}
 											<button
-												on:click={() => toggleTvlToken(symbol)}
-												class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-700"
+												on:click={() => {
+													tvlFilter = option.value;
+													tvlFilterDropdownOpen = false;
+												}}
+												class="flex w-full flex-col px-3 py-2 text-left hover:bg-gray-700 {tvlFilter ===
+												option.value
+													? 'bg-gray-700'
+													: ''}"
 											>
-												<span
-													class="flex h-4 w-4 items-center justify-center rounded border {tvlSelectedTokens.has(
-														symbol
-													)
-														? 'border-[#e8be89] bg-[#e8be89]'
-														: 'border-gray-500'}"
-												>
-													{#if tvlSelectedTokens.has(symbol)}
-														<svg
-															class="h-3 w-3 text-gray-900"
-															fill="none"
-															stroke="currentColor"
-															viewBox="0 0 24 24"
-														>
-															<path
-																stroke-linecap="round"
-																stroke-linejoin="round"
-																stroke-width="3"
-																d="M5 13l4 4L19 7"
-															/>
-														</svg>
-													{/if}
-												</span>
-												<span class="text-white">{symbol}</span>
+												<span class="text-sm font-medium text-white">{option.label}</span>
+												<span class="text-xs text-gray-400">{option.description}</span>
 											</button>
 										{/each}
 									</div>
@@ -2510,21 +2477,17 @@
 					</div>
 
 					<!-- Chart -->
-					{#if tvlSelectedTokens.size > 0 && tvlTokenChartData.length > 0}
+					{#if tvlChartData.length > 0}
 						<div class="relative h-80">
 							{#if !chartLibLoaded}
 								<div class="absolute inset-0 flex items-center justify-center">
 									<div class="text-gray-400">Loading chart...</div>
 								</div>
 							{/if}
-							<canvas bind:this={tvlTokenChartCanvas} class="h-full w-full"></canvas>
+							<canvas bind:this={tvlChartCanvas} class="h-full w-full"></canvas>
 						</div>
-					{:else if tvlTokenChartData.length === 0}
-						<p class="py-8 text-center text-gray-400">No historical TVL data available</p>
 					{:else}
-						<p class="py-8 text-center text-gray-400">
-							Select at least one token to view the chart
-						</p>
+						<p class="py-8 text-center text-gray-400">No historical TVL data available</p>
 					{/if}
 				</Card>
 			{:else if activeTvlTab === 'codes'}

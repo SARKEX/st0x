@@ -2,7 +2,13 @@
 // TVL = sum of (balance / 1e18) * price for all wallets, all tokens
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, getExcludedWalletsSet, type SnapshotBlockRecord } from '$lib/server/kv';
+import {
+	kvGet,
+	KV_KEYS,
+	getExcludedWalletsSet,
+	getTeamWalletsSet,
+	type SnapshotBlockRecord
+} from '$lib/server/kv';
 import { list } from '@vercel/blob';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { TOKENS } from '$lib/config/tokens';
@@ -28,7 +34,9 @@ interface DailyTvlEntry {
 	date: string; // YYYY-MM-DD
 	timestamp: number;
 	blockNumber: number;
-	totalTvl: number;
+	totalTvl: number; // All wallets
+	eligibleTvl: number; // Excluding excluded wallets
+	tvlExcludingTeam: number; // Excluding both excluded and team wallets
 	tokenTvl: Record<string, number>; // symbol -> TVL
 	walletTvl: Record<string, number>; // wallet address -> TVL
 	codeTvl: Record<string, number>; // code -> TVL
@@ -41,11 +49,13 @@ interface TvlResponse {
 		blockNumber: number;
 		totalTvl: number; // All wallets including excluded
 		eligibleTvl: number; // Excluding excluded wallets
+		tvlExcludingTeam: number; // Excluding both excluded wallets AND team wallets
 		tokenTvl: Record<string, number>;
 		walletTvl: WalletTvlEntry[];
 		codeTvl: CodeTvlEntry[];
 		walletCount: number;
 		excludedWalletCount: number;
+		teamWalletCount: number;
 	} | null;
 	daily: DailyTvlEntry[];
 	error?: string;
@@ -113,21 +123,28 @@ async function fetchSnapshot(
 async function calculateDetailedTvlAtBlock(
 	blockNumber: number,
 	walletToCode: Map<string, string>,
-	excludedWallets: Set<string>
+	excludedWallets: Set<string>,
+	teamWallets: Set<string>
 ): Promise<{
 	totalTvl: number; // All wallets including excluded
 	eligibleTvl: number; // Excluding excluded wallets
+	tvlExcludingTeam: number; // Excluding both excluded wallets AND team wallets
 	tokenTvl: Record<string, number>;
 	walletTvl: WalletTvlEntry[];
 	codeTvl: CodeTvlEntry[];
 	walletTvlMap: Record<string, number>;
 	codeTvlMap: Record<string, number>;
 	excludedWalletCount: number;
+	teamWalletCount: number;
 } | null> {
 	const tokenTvl: Record<string, number> = {};
-	const walletData = new Map<string, { tvl: number; tokenBreakdown: Record<string, number>; isExcluded: boolean }>();
+	const walletData = new Map<
+		string,
+		{ tvl: number; tokenBreakdown: Record<string, number>; isExcluded: boolean; isTeam: boolean }
+	>();
 	let totalTvl = 0;
 	let eligibleTvl = 0;
+	let tvlExcludingTeam = 0;
 
 	// Fetch all token snapshots in parallel
 	const snapshotPromises = tokenSymbols.map((symbol) => fetchSnapshot(symbol, blockNumber));
@@ -152,6 +169,7 @@ async function calculateDetailedTvlAtBlock(
 
 			const address = walletAddress.toLowerCase();
 			const isExcluded = excludedWallets.has(address);
+			const isTeam = teamWallets.has(address);
 
 			const balanceFloat = Number(balance) / 1e18;
 			const usdValue = balanceFloat * price;
@@ -161,7 +179,7 @@ async function calculateDetailedTvlAtBlock(
 
 			// Track per-wallet TVL (including excluded for tracking)
 			if (!walletData.has(address)) {
-				walletData.set(address, { tvl: 0, tokenBreakdown: {}, isExcluded });
+				walletData.set(address, { tvl: 0, tokenBreakdown: {}, isExcluded, isTeam });
 			}
 			const wallet = walletData.get(address)!;
 			wallet.tvl += usdValue;
@@ -170,6 +188,11 @@ async function calculateDetailedTvlAtBlock(
 			// Only add to eligible TVL if not excluded
 			if (!isExcluded) {
 				eligibleTvl += usdValue;
+			}
+
+			// Only add to tvlExcludingTeam if not excluded AND not team
+			if (!isExcluded && !isTeam) {
+				tvlExcludingTeam += usdValue;
 			}
 		}
 
@@ -181,11 +204,16 @@ async function calculateDetailedTvlAtBlock(
 	const walletTvl: WalletTvlEntry[] = [];
 	const walletTvlMap: Record<string, number> = {};
 	let excludedWalletCount = 0;
+	let teamWalletCount = 0;
 
 	for (const [address, data] of walletData) {
 		if (data.isExcluded) {
 			excludedWalletCount++;
 			continue; // Don't include excluded wallets in the wallet list
+		}
+		if (data.isTeam) {
+			teamWalletCount++;
+			// Team wallets ARE included in the wallet list (they're eligible for rewards)
 		}
 		walletTvl.push({
 			address,
@@ -231,12 +259,14 @@ async function calculateDetailedTvlAtBlock(
 	return {
 		totalTvl,
 		eligibleTvl,
+		tvlExcludingTeam,
 		tokenTvl,
 		walletTvl,
 		codeTvl,
 		walletTvlMap,
 		codeTvlMap,
-		excludedWalletCount
+		excludedWalletCount,
+		teamWalletCount
 	};
 }
 
@@ -246,9 +276,12 @@ async function calculateDetailedTvlAtBlock(
 async function calculateSimpleTvlAtBlock(
 	blockNumber: number,
 	walletToCode: Map<string, string>,
-	excludedWallets: Set<string>
+	excludedWallets: Set<string>,
+	teamWallets: Set<string>
 ): Promise<{
 	totalTvl: number;
+	eligibleTvl: number;
+	tvlExcludingTeam: number;
 	tokenTvl: Record<string, number>;
 	walletTvl: Record<string, number>;
 	codeTvl: Record<string, number>;
@@ -257,6 +290,8 @@ async function calculateSimpleTvlAtBlock(
 	const walletTvl: Record<string, number> = {};
 	const codeTvl: Record<string, number> = {};
 	let totalTvl = 0;
+	let eligibleTvl = 0;
+	let tvlExcludingTeam = 0;
 
 	// Fetch all token snapshots in parallel
 	const snapshotPromises = tokenSymbols.map((symbol) => fetchSnapshot(symbol, blockNumber));
@@ -280,21 +315,32 @@ async function calculateSimpleTvlAtBlock(
 			if (balance <= 0n) continue;
 
 			const address = walletAddress.toLowerCase();
-
-			// Skip excluded wallets
-			if (excludedWallets.has(address)) continue;
+			const isExcluded = excludedWallets.has(address);
+			const isTeam = teamWallets.has(address);
 
 			const balanceFloat = Number(balance) / 1e18;
 			const usdValue = balanceFloat * price;
+
+			// Always add to total TVL
 			tokenTotal += usdValue;
 
-			// Track per-wallet TVL
-			walletTvl[address] = (walletTvl[address] || 0) + usdValue;
+			// Add to eligible TVL if not excluded
+			if (!isExcluded) {
+				eligibleTvl += usdValue;
 
-			// Track per-code TVL
-			const code = walletToCode.get(address);
-			if (code) {
-				codeTvl[code] = (codeTvl[code] || 0) + usdValue;
+				// Track per-wallet TVL (only non-excluded)
+				walletTvl[address] = (walletTvl[address] || 0) + usdValue;
+
+				// Track per-code TVL (only non-excluded)
+				const code = walletToCode.get(address);
+				if (code) {
+					codeTvl[code] = (codeTvl[code] || 0) + usdValue;
+				}
+			}
+
+			// Add to tvlExcludingTeam if not excluded AND not team
+			if (!isExcluded && !isTeam) {
+				tvlExcludingTeam += usdValue;
 			}
 		}
 
@@ -304,6 +350,8 @@ async function calculateSimpleTvlAtBlock(
 
 	return {
 		totalTvl,
+		eligibleTvl,
+		tvlExcludingTeam,
 		tokenTvl,
 		walletTvl,
 		codeTvl
@@ -315,10 +363,11 @@ export const GET: RequestHandler = async ({ url }) => {
 		const limitParam = url.searchParams.get('limit');
 		const limit = limitParam ? parseInt(limitParam) : 90; // Default to 90 days
 
-		// Get wallet-to-code mapping and excluded wallets
-		const [walletToCode, excludedWallets] = await Promise.all([
+		// Get wallet-to-code mapping, excluded wallets, and team wallets
+		const [walletToCode, excludedWallets, teamWallets] = await Promise.all([
 			fetchWalletToCodeMapping(),
-			getExcludedWalletsSet()
+			getExcludedWalletsSet(),
+			getTeamWalletsSet()
 		]);
 
 		// Get all snapshot block records
@@ -353,7 +402,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		const latestTvl = await calculateDetailedTvlAtBlock(
 			latestBlock.blockNumber,
 			walletToCode,
-			excludedWallets
+			excludedWallets,
+			teamWallets
 		);
 
 		// Calculate TVL for each day (in parallel, but limit concurrency)
@@ -369,7 +419,8 @@ export const GET: RequestHandler = async ({ url }) => {
 					const tvl = await calculateSimpleTvlAtBlock(
 						block.blockNumber,
 						walletToCode,
-						excludedWallets
+						excludedWallets,
+						teamWallets
 					);
 
 					if (tvl) {
@@ -378,6 +429,8 @@ export const GET: RequestHandler = async ({ url }) => {
 							timestamp: block.timestamp,
 							blockNumber: block.blockNumber,
 							totalTvl: tvl.totalTvl,
+							eligibleTvl: tvl.eligibleTvl,
+							tvlExcludingTeam: tvl.tvlExcludingTeam,
 							tokenTvl: tvl.tokenTvl,
 							walletTvl: tvl.walletTvl,
 							codeTvl: tvl.codeTvl
@@ -405,11 +458,13 @@ export const GET: RequestHandler = async ({ url }) => {
 						blockNumber: latestBlock.blockNumber,
 						totalTvl: latestTvl.totalTvl,
 						eligibleTvl: latestTvl.eligibleTvl,
+						tvlExcludingTeam: latestTvl.tvlExcludingTeam,
 						tokenTvl: latestTvl.tokenTvl,
 						walletTvl: latestTvl.walletTvl,
 						codeTvl: latestTvl.codeTvl,
 						walletCount: latestTvl.walletTvl.length,
-						excludedWalletCount: latestTvl.excludedWalletCount
+						excludedWalletCount: latestTvl.excludedWalletCount,
+						teamWalletCount: latestTvl.teamWalletCount
 					}
 				: null,
 			daily: dailyTvl

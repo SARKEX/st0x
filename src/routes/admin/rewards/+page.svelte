@@ -7,7 +7,7 @@
 	import autoTable from 'jspdf-autotable';
 
 	// Tab management
-	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'pool' | 'referrals';
+	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'team' | 'pool' | 'referrals';
 	let activeTab: Tab = 'points';
 
 	// Hide excluded wallets toggle (hidden by default)
@@ -762,6 +762,13 @@
 	let newWalletAddress = '';
 	let addingWallet = false;
 
+	// ===== Team Wallets Tab State =====
+	let teamLoading = false;
+	let teamError = '';
+	let teamWallets: string[] = [];
+	let newTeamWalletAddress = '';
+	let addingTeamWallet = false;
+
 	// ===== Rewards Pool Tab State =====
 	interface RocketBoostTiers {
 		tier25: number;
@@ -806,6 +813,7 @@
 	onMount(() => {
 		loadAvailableMonths();
 		loadExcludedWallets();
+		loadTeamWallets();
 		loadCanonicalBlocks();
 		loadPoolConfigs();
 		loadReferrals();
@@ -1488,6 +1496,87 @@
 		}
 	}
 
+	// ===== Team Wallets Functions =====
+	async function loadTeamWallets() {
+		teamLoading = true;
+		teamError = '';
+
+		try {
+			const res = await fetch('/api/admin/team-wallets');
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to load team wallets');
+			}
+
+			teamWallets = data.wallets || [];
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			teamLoading = false;
+		}
+	}
+
+	async function addTeamWallet() {
+		if (!newTeamWalletAddress.trim()) return;
+
+		// Basic validation
+		const address = newTeamWalletAddress.trim().toLowerCase();
+		if (!/^0x[a-f0-9]{40}$/i.test(address)) {
+			teamError = 'Invalid Ethereum address';
+			return;
+		}
+
+		if (teamWallets.includes(address)) {
+			teamError = 'Address already in team wallets list';
+			return;
+		}
+
+		addingTeamWallet = true;
+		teamError = '';
+
+		try {
+			const res = await fetch('/api/admin/team-wallets', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'add', address })
+			});
+
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to add wallet');
+			}
+
+			teamWallets = data.wallets || [];
+			newTeamWalletAddress = '';
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			addingTeamWallet = false;
+		}
+	}
+
+	async function removeTeamWallet(address: string) {
+		try {
+			const res = await fetch('/api/admin/team-wallets', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'remove', address })
+			});
+
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to remove wallet');
+			}
+
+			teamWallets = data.wallets || [];
+		} catch (err) {
+			teamError = err instanceof Error ? err.message : 'Unknown error';
+		}
+	}
+
 	// ===== Rewards Pool Functions =====
 	async function loadPoolConfigs() {
 		poolLoading = true;
@@ -1897,6 +1986,14 @@
 					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 			>
 				Excluded Wallets
+			</button>
+			<button
+				on:click={() => (activeTab = 'team')}
+				class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'team'
+					? 'border-[#e8be89] text-[#e8be89]'
+					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+			>
+				Team Wallets
 			</button>
 			<button
 				on:click={() => (activeTab = 'pool')}
@@ -3341,6 +3438,84 @@
 								</a>
 								<button
 									on:click={() => removeExcludedWallet(wallet)}
+									class="rounded px-3 py-1 text-sm text-red-400 transition-colors hover:bg-red-900/30"
+								>
+									Remove
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</Card>
+		</div>
+	{/if}
+
+	<!-- Team Wallets Tab -->
+	{#if activeTab === 'team'}
+		<div class="space-y-6">
+			<!-- Add Wallet Form -->
+			<Card>
+				<h2 class="mb-4 text-lg font-semibold text-white">Add Team Wallet</h2>
+				<div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+					<div class="flex-1">
+						<label for="newTeamWallet" class="mb-2 block text-sm font-medium text-gray-300">
+							Wallet Address
+						</label>
+						<input
+							id="newTeamWallet"
+							type="text"
+							bind:value={newTeamWalletAddress}
+							placeholder="0x..."
+							class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 font-mono text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
+							on:keydown={(e) => e.key === 'Enter' && addTeamWallet()}
+						/>
+					</div>
+					<button
+						on:click={addTeamWallet}
+						disabled={addingTeamWallet}
+						class="rounded-lg bg-[#e8be89] px-6 py-2.5 font-medium text-black transition-colors hover:bg-[#d4a875] disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{addingTeamWallet ? 'Adding...' : 'Add Wallet'}
+					</button>
+				</div>
+				<p class="mt-2 text-sm text-gray-500">
+					Team wallets are excluded from "TVL Excluding Team" stats but are still eligible for
+					rewards (unlike excluded wallets which are not eligible).
+				</p>
+			</Card>
+
+			{#if teamError}
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
+					{teamError}
+				</div>
+			{/if}
+
+			<!-- Team Wallets List -->
+			<Card>
+				<h2 class="mb-4 text-lg font-semibold text-white">Team Wallets</h2>
+				{#if teamLoading}
+					<div class="flex items-center justify-center gap-3 py-8 text-gray-400">
+						<div
+							class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+						></div>
+						Loading...
+					</div>
+				{:else if teamWallets.length === 0}
+					<p class="py-4 text-center text-gray-400">No team wallets configured</p>
+				{:else}
+					<div class="space-y-2">
+						{#each teamWallets as wallet}
+							<div class="flex items-center justify-between rounded-lg bg-gray-800/50 px-4 py-3">
+								<a
+									href="https://basescan.org/address/{wallet}"
+									target="_blank"
+									rel="noopener noreferrer"
+									class="font-mono text-blue-400 hover:underline"
+								>
+									{wallet}
+								</a>
+								<button
+									on:click={() => removeTeamWallet(wallet)}
 									class="rounded px-3 py-1 text-sm text-red-400 transition-colors hover:bg-red-900/30"
 								>
 									Remove

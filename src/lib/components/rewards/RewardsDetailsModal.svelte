@@ -385,7 +385,7 @@
 								<li class="flex gap-3">
 									<span class="flex-shrink-0 font-medium text-yellow-400">9.</span>
 									<span>
-										Rewards below US$0.50 will be rounded down to $0 and not distributed.
+										Rewards below US$0.10 may be rounded down to $0 and not distributed.
 									</span>
 								</li>
 							</ol>
