@@ -6,6 +6,8 @@
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
 	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
 	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
+	import RewardsAnnouncementModal from '$lib/components/rewards/RewardsAnnouncementModal.svelte';
+	import { initRewardsAnnouncement } from '$lib/stores/rewardsStore';
 	import AccessCodeModal from '$lib/components/AccessCodeModal.svelte';
 	import WalletConnectionModal from '$lib/components/WalletConnectionModal.svelte';
 	import Tutorial from '$lib/components/Tutorial.svelte';
@@ -22,6 +24,7 @@
 	// Check for access code in URL params on mount
 	onMount(() => {
 		checkAndStoreAccessCodeFromUrl();
+		initRewardsAnnouncement();
 	});
 
 	let sidebarExpanded = true;
@@ -167,6 +170,7 @@
 	<RewardsDetailsModal />
 	<RewardsLeaderboardModal />
 	<RewardsRulesModal />
+	<RewardsAnnouncementModal />
 
 	<!-- Access/Connection Modals -->
 	<AccessCodeModal />

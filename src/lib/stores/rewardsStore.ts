@@ -88,8 +88,33 @@ export const publicLeaderboardLoading = writable(false);
 export const showDetailsModal = writable(false);
 export const showLeaderboardModal = writable(false);
 export const showRulesModal = writable(false);
+export const showRewardsAnnouncementModal = writable(false);
 export type RewardsModalTab = 'details' | 'rules';
 export const rewardsModalTab = writable<RewardsModalTab>('details');
+
+// Local storage key for rewards announcement
+const REWARDS_ANNOUNCEMENT_SEEN_KEY = 'st0x_rewards_announcement_month1_seen';
+
+// Check if user has seen the rewards announcement
+export function hasSeenRewardsAnnouncement(): boolean {
+	if (!browser) return true;
+	return localStorage.getItem(REWARDS_ANNOUNCEMENT_SEEN_KEY) === 'true';
+}
+
+// Mark rewards announcement as seen
+export function markRewardsAnnouncementSeen(): void {
+	if (!browser) return;
+	localStorage.setItem(REWARDS_ANNOUNCEMENT_SEEN_KEY, 'true');
+	showRewardsAnnouncementModal.set(false);
+}
+
+// Initialize announcement modal on first visit
+export function initRewardsAnnouncement(): void {
+	if (!browser) return;
+	if (!hasSeenRewardsAnnouncement()) {
+		showRewardsAnnouncementModal.set(true);
+	}
+}
 
 // Derived stores for convenience
 export const hasRewardsData = derived(rewardsData, ($data) => $data !== null);

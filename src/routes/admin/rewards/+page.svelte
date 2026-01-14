@@ -1014,8 +1014,10 @@
 			return [];
 		}
 
-		// Calculate total points for share calculation
-		const allPoints = monthlyData.wallets.reduce((sum, w) => sum + w.totalPoints, 0);
+		// Calculate total points for share calculation (excluding excluded wallets)
+		const allPoints = monthlyData.wallets
+			.filter((w) => !excludedWalletsInData.has(w.address.toLowerCase()))
+			.reduce((sum, w) => sum + w.totalPoints, 0);
 
 		// Calculate total RocketBoost amount available
 		const rocketBoostAmts = currentMonthPool?.rocketBoostAmounts ?? {
@@ -1042,7 +1044,8 @@
 
 		const rows = monthlyData.wallets.map((wallet) => {
 			const isExcluded = excludedWalletsInData.has(wallet.address.toLowerCase());
-			const share = allPoints > 0 ? wallet.totalPoints / allPoints : 0;
+			// Excluded wallets get 0 share since they don't receive rewards
+			const share = isExcluded ? 0 : (allPoints > 0 ? wallet.totalPoints / allPoints : 0);
 
 			// Calculate rewards
 			const basePool = currentMonthPool?.poolAmount ?? 0;
