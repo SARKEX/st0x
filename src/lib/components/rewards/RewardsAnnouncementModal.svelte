@@ -12,7 +12,7 @@
 	};
 
 	const APY = '78.5';
-	const TRANSACTION_HASH: string = ''; // Leave empty for now, can be filled in later
+	const TRANSACTION_HASH: string = '0xd79eed1893e9d9cf2da7873c201b5d716463350e9bf9b4d61ac7936ae5ebf674'; // Leave empty for now, can be filled in later
 
 	let addingToWallet = false;
 	let addedToWallet = false;
