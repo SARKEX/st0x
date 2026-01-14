@@ -84,17 +84,8 @@ export const KV_KEYS = {
 	teamWallets: () => 'rewards:team_wallets', // List of team wallet addresses
 	// Rewards pool configuration
 	rewardsPool: (month: string) => `rewards:pool:${month}`, // Rewards pool config (YYYY-MM)
-	rewardsPoolList: () => 'rewards:pool:__all__', // List of all months with pool config
-	// LP pool cache for fast pool type lookup
-	knownPools: () => 'lp:known_pools' // { v2: string[], v3: string[] }
+	rewardsPoolList: () => 'rewards:pool:__all__' // List of all months with pool config
 } as const;
-
-// Type for known pools cache
-export interface KnownPoolsCache {
-	v2: string[];
-	v3: string[];
-	updatedAt: string;
-}
 
 // Types for snapshot block records
 export interface SnapshotBlockRecord {

@@ -1,7 +1,6 @@
 // Monthly points calculation and storage
 // Awards 100 points per $1 USD of holdings at each snapshot
 // Points accumulate within a calendar month, reset to 0 for new month
-// LP Attribution: Pool balances are attributed to LP holders proportionally
 
 import {
 	getKv,
@@ -12,7 +11,6 @@ import {
 	type WalletMonthlyPoints
 } from '$lib/server/kv';
 import type { BlockSnapshot } from './types';
-import { processBalancesWithLPAttribution } from './lp-attribution';
 
 const POINTS_PER_DOLLAR = 100;
 
@@ -32,53 +30,26 @@ export type WalletPointsMap = Map<string, { tokens: Map<string, { points: number
 /**
  * Calculate points for each wallet from a set of snapshots for a single block
  * Points = 100 per $1 USD of holdings
- * LP Attribution: Pool balances are attributed to LP holders proportionally
  */
-export async function calculateWalletPointsFromSnapshots(
+export function calculateWalletPointsFromSnapshots(
 	snapshots: BlockSnapshot[],
-	blockNumber: number
-): Promise<WalletPointsMap> {
+	_blockNumber: number
+): WalletPointsMap {
 	const walletPoints: WalletPointsMap = new Map();
 	const totalTokens = snapshots.length;
 
-	console.log(`[Points] Processing ${totalTokens} tokens in parallel...`);
+	console.log(`[Points] Processing ${totalTokens} tokens...`);
 	const startTime = Date.now();
 
-	// Process all tokens in parallel for LP attribution
-	const processedSnapshots = await Promise.all(
-		snapshots.map(async (snapshot, i) => {
-			const price = snapshot.price?.price ?? 0;
-			const tokenAddress = snapshot.tokenAddress.toLowerCase();
-			const holdersCount = Object.keys(snapshot.balances).length;
+	// Process all token snapshots
+	for (const snapshot of snapshots) {
+		const price = snapshot.price?.price ?? 0;
+		const tokenAddress = snapshot.tokenAddress.toLowerCase();
+		const holdersCount = Object.keys(snapshot.balances).length;
 
-			const lpStart = Date.now();
-			let balancesToProcess = snapshot.balances;
-			let poolsProcessedCount = 0;
+		console.log(`[Points] ${snapshot.tokenSymbol}: ${holdersCount} holders`);
 
-			try {
-				const { modifiedBalances, poolsProcessed } = await processBalancesWithLPAttribution(
-					snapshot.balances,
-					tokenAddress,
-					blockNumber
-				);
-				balancesToProcess = modifiedBalances;
-				poolsProcessedCount = poolsProcessed.length;
-			} catch (err) {
-				console.warn(`[Points] LP Attribution failed for ${snapshot.tokenSymbol}:`, err);
-			}
-
-			const lpTime = Date.now() - lpStart;
-			console.log(
-				`[Points] ${snapshot.tokenSymbol}: ${holdersCount} holders, ${poolsProcessedCount} pools (${lpTime}ms)`
-			);
-
-			return { tokenAddress, price, balancesToProcess };
-		})
-	);
-
-	// Merge results into walletPoints (sequential to avoid race conditions)
-	for (const { tokenAddress, price, balancesToProcess } of processedSnapshots) {
-		for (const [walletAddress, balanceStr] of Object.entries(balancesToProcess)) {
+		for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
 			const address = walletAddress.toLowerCase();
 			const balance = BigInt(balanceStr);
 
@@ -106,57 +77,32 @@ export async function calculateWalletPointsFromSnapshots(
 export type ProgressCallback = (
 	tokenIndex: number,
 	tokenSymbol: string,
-	holdersCount: number,
-	poolsFound: number
+	holdersCount: number
 ) => void;
 
 /**
  * Calculate points with progress callback for streaming updates
- * Processes tokens in parallel but reports progress as each completes
  */
-export async function calculateWalletPointsFromSnapshotsWithProgress(
+export function calculateWalletPointsFromSnapshotsWithProgress(
 	snapshots: BlockSnapshot[],
-	blockNumber: number,
+	_blockNumber: number,
 	onProgress?: ProgressCallback
-): Promise<WalletPointsMap> {
+): WalletPointsMap {
 	const walletPoints: WalletPointsMap = new Map();
-	let completedCount = 0;
 
-	// Process all tokens in parallel
-	const processedSnapshots = await Promise.all(
-		snapshots.map(async (snapshot, i) => {
-			const price = snapshot.price?.price ?? 0;
-			const tokenAddress = snapshot.tokenAddress.toLowerCase();
-			const holdersCount = Object.keys(snapshot.balances).length;
+	// Process all token snapshots
+	for (let i = 0; i < snapshots.length; i++) {
+		const snapshot = snapshots[i];
+		const price = snapshot.price?.price ?? 0;
+		const tokenAddress = snapshot.tokenAddress.toLowerCase();
+		const holdersCount = Object.keys(snapshot.balances).length;
 
-			let balancesToProcess = snapshot.balances;
-			let poolsProcessedCount = 0;
+		// Report progress
+		if (onProgress) {
+			onProgress(i, snapshot.tokenSymbol, holdersCount);
+		}
 
-			try {
-				const { modifiedBalances, poolsProcessed } = await processBalancesWithLPAttribution(
-					snapshot.balances,
-					tokenAddress,
-					blockNumber
-				);
-				balancesToProcess = modifiedBalances;
-				poolsProcessedCount = poolsProcessed.length;
-			} catch (err) {
-				console.warn(`[Points] LP Attribution failed for ${snapshot.tokenSymbol}:`, err);
-			}
-
-			// Report progress as each token completes
-			completedCount++;
-			if (onProgress) {
-				onProgress(completedCount - 1, snapshot.tokenSymbol, holdersCount, poolsProcessedCount);
-			}
-
-			return { tokenAddress, price, balancesToProcess };
-		})
-	);
-
-	// Merge results into walletPoints
-	for (const { tokenAddress, price, balancesToProcess } of processedSnapshots) {
-		for (const [walletAddress, balanceStr] of Object.entries(balancesToProcess)) {
+		for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
 			const address = walletAddress.toLowerCase();
 			const balance = BigInt(balanceStr);
 
@@ -273,8 +219,8 @@ export async function updateMonthlyPoints(
 		return;
 	}
 
-	// Calculate points from this snapshot (with LP attribution)
-	const walletPoints = await calculateWalletPointsFromSnapshots(snapshots, blockNumber);
+	// Calculate points from this snapshot
+	const walletPoints = calculateWalletPointsFromSnapshots(snapshots, blockNumber);
 
 	// Merge into monthly data using shared function
 	mergeWalletPointsIntoMonthlyData(monthlyData, walletPoints, blockNumber);

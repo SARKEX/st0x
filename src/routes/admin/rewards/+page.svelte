@@ -701,60 +701,6 @@
 	let selectedWallet: string | null = null;
 	let selectedTokenFilter: string = ''; // token symbol (defaults to first token)
 
-	// ===== LP Pool Cache State =====
-	let poolCacheLoading = false;
-	let poolCacheUpdating = false;
-	let poolCacheError = '';
-	let poolCacheData: {
-		v2Pools: string[];
-		v3Pools: string[];
-		v2Count: number;
-		v3Count: number;
-	} | null = null;
-
-	async function fetchPoolCache() {
-		poolCacheLoading = true;
-		poolCacheError = '';
-		try {
-			const res = await fetch('/api/admin/pools/update-cache?view=1');
-			const data = await res.json();
-			if (res.ok) {
-				poolCacheData = data;
-			} else {
-				poolCacheError = data.error || 'Failed to fetch pool cache';
-			}
-		} catch (err) {
-			poolCacheError = err instanceof Error ? err.message : 'Failed to fetch pool cache';
-		} finally {
-			poolCacheLoading = false;
-		}
-	}
-
-	async function updatePoolCache() {
-		poolCacheUpdating = true;
-		poolCacheError = '';
-		try {
-			const res = await fetch('/api/admin/pools/update-cache', {
-				method: 'POST'
-			});
-			const data = await res.json();
-			if (res.ok && data.success) {
-				poolCacheData = {
-					v2Pools: data.v2Pools,
-					v3Pools: data.v3Pools,
-					v2Count: data.v2Pools.length,
-					v3Count: data.v3Pools.length
-				};
-			} else {
-				poolCacheError = data.error || 'Failed to update pool cache';
-			}
-		} catch (err) {
-			poolCacheError = err instanceof Error ? err.message : 'Failed to update pool cache';
-		} finally {
-			poolCacheUpdating = false;
-		}
-	}
-
 	// ===== Excluded Wallets Tab State =====
 	let excludedLoading = false;
 	let excludedError = '';
@@ -817,7 +763,6 @@
 		loadCanonicalBlocks();
 		loadPoolConfigs();
 		loadReferrals();
-		fetchPoolCache();
 	});
 
 	// ===== Points Functions =====
@@ -1328,7 +1273,7 @@
 				};
 			});
 
-			eventSource.addEventListener('lp-progress', (event) => {
+			eventSource.addEventListener('token-progress', (event) => {
 				const data = JSON.parse(event.data);
 				previewProgress = {
 					step: 5,
@@ -3025,34 +2970,6 @@
 	<!-- Preview Tab -->
 	{#if activeTab === 'preview'}
 		<div class="space-y-6">
-			<!-- LP Pool Cache Section -->
-			<Card>
-				<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-					<div>
-						<h3 class="text-sm font-medium text-gray-300">LP Pool Cache</h3>
-						{#if poolCacheLoading}
-							<p class="mt-1 text-xs text-gray-500">Loading...</p>
-						{:else if poolCacheData}
-							<p class="mt-1 text-xs text-gray-500">
-								{poolCacheData.v2Count} V2 pools, {poolCacheData.v3Count} V3 pools cached
-							</p>
-						{:else}
-							<p class="mt-1 text-xs text-gray-500">No pools cached yet</p>
-						{/if}
-						{#if poolCacheError}
-							<p class="mt-1 text-xs text-red-400">{poolCacheError}</p>
-						{/if}
-					</div>
-					<button
-						on:click={updatePoolCache}
-						disabled={poolCacheUpdating}
-						class="rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						{poolCacheUpdating ? 'Updating...' : 'Update Pool Cache'}
-					</button>
-				</div>
-			</Card>
-
 			<!-- Input Section -->
 			<Card>
 				<div class="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -3110,7 +3027,7 @@
 									Step {previewProgress.step}/{previewProgress.total}: {previewProgress.message}
 								</div>
 
-								<!-- Token progress (when processing LP attribution) -->
+								<!-- Token progress -->
 								{#if previewProgress.tokenIndex !== undefined && previewProgress.totalTokens}
 									<div class="mt-2 text-center text-xs text-gray-500">
 										Token {previewProgress.tokenIndex + 1}/{previewProgress.totalTokens}

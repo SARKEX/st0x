@@ -75,23 +75,22 @@ export const GET: RequestHandler = async ({ url }) => {
 					done: true
 				});
 
-				// Step 5: Calculate wallet points with LP attribution (with progress callback)
+				// Step 5: Calculate wallet points
 				sendEvent('progress', {
 					step: 5,
 					total: 6,
-					message: 'Calculating points with LP attribution...'
+					message: 'Calculating points...'
 				});
 
-				const walletPointsMap = await calculateWalletPointsFromSnapshotsWithProgress(
+				const walletPointsMap = calculateWalletPointsFromSnapshotsWithProgress(
 					snapshots,
 					targetBlock,
-					(tokenIndex, tokenSymbol, holdersCount, poolsFound) => {
-						sendEvent('lp-progress', {
+					(tokenIndex, tokenSymbol, holdersCount) => {
+						sendEvent('token-progress', {
 							tokenIndex,
 							totalTokens: snapshots.length,
 							tokenSymbol,
-							holdersCount,
-							poolsFound
+							holdersCount
 						});
 					}
 				);

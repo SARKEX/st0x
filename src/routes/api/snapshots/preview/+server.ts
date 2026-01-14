@@ -55,10 +55,10 @@ export const GET: RequestHandler = async ({ url }) => {
 			priceConfidence: s.price?.confidence ?? null
 		}));
 
-		// Use the same calculation function as points.ts (includes LP attribution)
-		console.log(`[Preview] Step 5/6: Calculating wallet points with LP attribution...`);
+		// Use the same calculation function as points.ts
+		console.log(`[Preview] Step 5/6: Calculating wallet points...`);
 		stepStart = Date.now();
-		const walletPointsMap = await calculateWalletPointsFromSnapshots(snapshots, targetBlock);
+		const walletPointsMap = calculateWalletPointsFromSnapshots(snapshots, targetBlock);
 		console.log(`[Preview] Step 5/6: Done - ${walletPointsMap.size} wallets (${Date.now() - stepStart}ms)`);
 
 		// Build token address to symbol map for display
@@ -112,7 +112,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			tokensProcessed: snapshots.length,
 			walletCount: wallets.length,
 			excludedCount: wallets.filter((w) => w.isExcluded).length,
-			// Main data: wallets ranked by holdings (with LP attribution applied)
+			// Main data: wallets ranked by holdings
 			wallets,
 			// Tools data: per-token breakdown
 			tokenSummary,
