@@ -1204,206 +1204,91 @@ export class RhinestoneClient {
 			console.log('[Rhinestone Client] Transaction signed, getting authorizations...');
 
 			// Get EIP-7702 authorizations if needed
-			// Note: For JSON-RPC accounts (like Dynamic), we need to manually sign authorizations
+			// For same-chain transactions with feeAsset (USDC gas payment), authorizations are REQUIRED
+			// to cover the chain where the transaction executes (chain 8453 in this case)
 			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
 				try {
 					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
 					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
+					
+					// Log authorization details for debugging
+					if (authorizations.length > 0) {
+						console.log('[Rhinestone Client] Authorizations:', JSON.stringify(authorizations, (key, value) => 
+							typeof value === 'bigint' ? value.toString() : value, 2));
+					}
 				} catch (authError) {
-					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
-					// try to manually construct and sign EIP-7702 authorization
 					const errorMsg = authError instanceof Error ? authError.message : String(authError);
-					if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
-						console.warn(
-							'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
-							'Attempting to manually construct and sign EIP-7702 authorization...'
-						);
+					console.error('[Rhinestone Client] signAuthorizations failed:', {
+						error: errorMsg,
+						errorType: authError instanceof Error ? authError.constructor.name : typeof authError,
+						chainId: chain.id,
+						feeAsset,
+						accountType: this.config.accountType
+					});
+					
+					// For same-chain transactions with feeAsset, authorizations are required
+					// The SDK needs to know which chains the account is authorized to use
+					if (feeAsset) {
+						// Check if this is a JSON-RPC account limitation
+						const isJsonRpcError = errorMsg.includes('JSON-RPC') || 
+							errorMsg.includes('Account type') || 
+							errorMsg.includes('undefined') ||
+							errorMsg.includes('not supported');
 						
-						// Try to manually construct and sign EIP-7702 authorization
-						// We need: chainId, contract address, and nonce
-						// For EIP-7702, we need to authorize the EOA to act as a smart account on this chain
-						// The contract address is the Rhinestone smart account implementation contract
-						try {
-							// Try to get the authorization contract address
-							// For Rhinestone EIP-7702, the contract address might be in the prepared transaction
-							// or we might need to get it from the SDK
-							const intentRoute = preparedTx.intentRoute;
-							console.log('[Rhinestone Client] Inspecting prepared transaction for authorization info...', {
-								hasIntentRoute: !!intentRoute,
-								hasIntentOp: !!intentRoute?.intentOp,
-								intentOpKeys: intentRoute?.intentOp ? Object.keys(intentRoute.intentOp) : []
-							});
-							
-							const intentOp = intentRoute?.intentOp as {
-								signedMetadata?: {
-									authorizations?: Array<{
-										chainId?: number;
-										address?: Address;
-										contract?: Address;
-									}>;
-									account?: {
-										requiredDelegations?: {
-											[chainId: string]: {
-												address?: Address;
-												contract?: Address;
-											};
-										};
-									};
-								};
-								[key: string]: unknown;
-							} | undefined;
-							
-							// Check if we can get authorization requirements from the intent op
-							const authRequirements = intentOp?.signedMetadata?.account?.requiredDelegations;
-
-							console.log('[Rhinestone Client] Authorization requirements:', authRequirements);
-							
-							// If we don't have explicit requirements, we need to construct the authorization
-							// For same-chain transactions, we need an authorization for the current chain
-							const requiredChainId = chain.id;
-							
-							// Try to get the contract address from requirements, or use a fallback
-							let authAddress: Address | undefined;
-							let authChainId = requiredChainId;
-							
-							// authRequirements is an object keyed by chain ID: {8453: {address: ..., contract: ...}}
-							if (authRequirements && typeof authRequirements === 'object') {
-								const chainReq = authRequirements[requiredChainId.toString()];
-								if (chainReq) {
-									authAddress = (chainReq.address || chainReq.contract) as Address | undefined;
-								}
-							}
-							
-							// If we still don't have an address, we can't proceed
-							// The authorization contract address is required for EIP-7702
-							if (!authAddress || authAddress === '0x0' || authAddress === '0x0000000000000000000000000000000000000000') {
-								throw new AAError(
-									'EIP-7702 authorization contract address could not be determined for chain ' + requiredChainId + '. ' +
-									'This is required for the transaction but cannot be obtained with this account type. ' +
-									'Please try with a different wallet or contact support.',
-									AAErrorCode.AUTHORIZATION_REJECTED
-								);
-							}
-							
-							if (walletAccount.signTypedData) {
-								const signedAuths: Array<{
-									address: Address;
-									chainId: number;
-									nonce: number;
-									r: Hex;
-									s: Hex;
-									v?: number;
-									yParity: number;
-								}> = [];
-								
-								// Get the nonce for this authorization (typically 0 for first authorization)
-								// We'll use 0 as default, but this might need to be fetched from the contract
-								const nonce = 0;
-								
-								// Construct EIP-7702 authorization typed data
-								// EIP-7702 uses a specific typed data structure for authorizations
-								// The domain must include the EOA address as verifyingContract to ensure
-								// signature recovery matches the EOA address
-								const typedData = {
-									domain: {
-										chainId: authChainId,
-										verifyingContract: walletAccount.address
-									},
-									types: {
-										Authorization: [
-											{ name: 'chainId', type: 'uint256' },
-											{ name: 'address', type: 'address' },
-											{ name: 'nonce', type: 'uint256' }
-										]
-									},
-									primaryType: 'Authorization' as const,
-									message: {
-										chainId: BigInt(authChainId),
-										address: authAddress,
-										nonce: BigInt(nonce)
-									}
-								};
-								
-								console.log('[Rhinestone Client] Signing EIP-7702 authorization:', {
-									chainId: authChainId,
-									address: authAddress,
-									nonce,
-									verifyingContract: walletAccount.address
-								});
-								
-								// Sign the typed data
-								const sig = await walletAccount.signTypedData(typedData);
-								
-								// Verify the signature recovers to the correct EOA address
-								const recoveredAddress = await recoverTypedDataAddress({
-									domain: typedData.domain,
-									types: typedData.types,
-									primaryType: typedData.primaryType,
-									message: typedData.message,
-									signature: sig
-								});
-								
-								console.log('[Rhinestone Client] Signature recovery check:', {
-									recoveredAddress,
-									expectedAddress: walletAccount.address,
-									match: recoveredAddress.toLowerCase() === walletAccount.address.toLowerCase()
-								});
-								
-								// If signature doesn't recover to EOA, the typed data structure is wrong
-								if (recoveredAddress.toLowerCase() !== walletAccount.address.toLowerCase()) {
-									throw new AAError(
-										`EIP-7702 authorization signature recovers to ${recoveredAddress} but expected ${walletAccount.address}. ` +
-										'The typed data structure may be incorrect.',
-										AAErrorCode.AUTHORIZATION_REJECTED
-									);
-								}
-								
-								// Parse the signature
-								const parsedSig = parseSignature(sig);
-								const { r, s, v, yParity } = parsedSig;
-								
-								signedAuths.push({
-									address: authAddress,
-									chainId: authChainId,
-									nonce,
-									r,
-									s,
-									...(v !== undefined ? { v: Number(v) } : {}),
-									yParity
-								});
-								
-								if (signedAuths.length > 0) {
-									authorizations = signedAuths as unknown as SignedAuthorizationList;
-									console.log('[Rhinestone Client] Manually signed authorizations:', authorizations.length);
-								} else {
-									throw new AAError(
-										'EIP-7702 authorization signing failed. Please try again or contact support.',
-										AAErrorCode.AUTHORIZATION_REJECTED
-									);
-								}
-							} else {
-								throw new AAError(
-									'Wallet account does not support signTypedData, which is required for EIP-7702 authorizations.',
-									AAErrorCode.AUTHORIZATION_REJECTED
-								);
-							}
-						} catch (manualSignError) {
-							console.error('[Rhinestone Client] Failed to manually sign authorizations:', manualSignError);
-							// Re-throw as AAError if it's not already one
-							if (manualSignError instanceof AAError) {
-								throw manualSignError;
-							}
+						if (isJsonRpcError) {
+							// JSON-RPC accounts (like Dynamic wallets) don't support viem's signAuthorization
+							// This is a known limitation. The workaround is to use native gas (ETH) instead of USDC
 							throw new AAError(
-								`Failed to sign EIP-7702 authorizations: ${manualSignError instanceof Error ? manualSignError.message : 'Unknown error'}. ` +
-								'Authorizations are required for this transaction.',
+								'USDC gas payment is not supported with this wallet type. ' +
+								'Your wallet (Dynamic embedded wallet) does not support EIP-7702 authorization signing ' +
+								'required for ERC20 gas payment. ' +
+								'Please use native gas (ETH) instead of USDC for gas payment, or use a different wallet that supports EIP-7702 authorizations.',
 								AAErrorCode.AUTHORIZATION_REJECTED,
-								{ originalError: manualSignError }
+								{ 
+									originalError: authError,
+									suggestedFix: 'Use native gas (ETH) instead of USDC for gas payment',
+									isJsonRpcAccount: true
+								}
+							);
+						}
+						
+						const isDeployed = await rhinestoneAccount.isDeployed(chain);
+						if (!isDeployed) {
+							// Account not deployed - authorizations are definitely required
+							throw new AAError(
+								`Failed to generate EIP-7702 authorizations required for USDC gas payment: ${errorMsg}. ` +
+								'Authorizations are required for same-chain transactions with ERC20 gas payment. ' +
+								'Please ensure your wallet supports EIP-7702 authorization signing, or use native gas (ETH) instead.',
+								AAErrorCode.AUTHORIZATION_REJECTED,
+								{ originalError: authError }
+							);
+						} else {
+							// Account is deployed, but we still need authorizations for feeAsset
+							// The SDK requires authorizations to cover the chain even for deployed accounts
+							// when using feeAsset
+							throw new AAError(
+								`Failed to generate EIP-7702 authorizations required for USDC gas payment: ${errorMsg}. ` +
+								'Authorizations are required for same-chain transactions with ERC20 gas payment, ' +
+								'even for deployed accounts. Please ensure your wallet supports EIP-7702 authorization signing, ' +
+								'or use native gas (ETH) instead.',
+								AAErrorCode.AUTHORIZATION_REJECTED,
+								{ originalError: authError }
 							);
 						}
 					} else {
-						// Re-throw other errors
-						throw authError;
+						// No feeAsset - for native gas, we might be able to proceed without authorizations
+						// if the account is deployed
+						if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
+							console.warn(
+								'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
+								'Proceeding without authorizations - EIP-7702 init signature should be sufficient.'
+							);
+							authorizations = [];
+						} else {
+							// Re-throw other errors
+							throw authError;
+						}
 					}
 				}
 			}

@@ -405,6 +405,23 @@ export async function sendTransactionWithGasOption(
 
 		// Extract meaningful error message
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		
+		// Check if this is a JSON-RPC account authorization error
+		// If so, automatically fall back to native gas (ETH) instead of failing
+		const isJsonRpcAuthError = 
+			errorMessage.includes('not supported with this wallet type') ||
+			errorMessage.includes('does not support EIP-7702 authorization') ||
+			errorMessage.includes('JSON-RPC') ||
+			((error as { cause?: { isJsonRpcAccount?: boolean } })?.cause?.isJsonRpcAccount === true);
+		
+		if (isJsonRpcAuthError) {
+			console.warn(
+				'[Rhinestone] USDC gas payment not supported with this wallet type. ' +
+				'Automatically falling back to native gas (ETH)...'
+			);
+			// Fall back to native gas payment
+			return sendTransaction(params);
+		}
 
 		// Check for common error cases and provide user-friendly messages
 		if (errorMessage.toLowerCase().includes('insufficient balance')) {
