@@ -87,6 +87,15 @@ export async function createDynamicWalletClient(
 }
 
 /**
+ * Result type for getDynamicAccountForRhinestone
+ * Returns both the account and wallet client for flexible usage
+ */
+export interface DynamicAccountResult {
+	account: Account;
+	walletClient: WalletClient;
+}
+
+/**
  * Create a viem Account from the Dynamic wallet for use with Rhinestone SDK
  *
  * This follows the Rhinestone + Dynamic integration pattern from:
@@ -97,8 +106,13 @@ export async function createDynamicWalletClient(
  * 2. Use walletClientToAccount() from Rhinestone SDK to create a viem Account
  * 3. Pass this account to Rhinestone SDK as an ECDSA owner
  *
+ * For EIP-7702 authorization signing:
+ * - The wallet client's signAuthorization method is used directly
+ * - This works around viem's limitation with JSON-RPC accounts
+ *
  * @param chainId - Optional chain ID (defaults to Base)
- * @returns Account object ready for Rhinestone SDK
+ * @param returnWalletClient - If true, returns both account and wallet client
+ * @returns Account object (or DynamicAccountResult if returnWalletClient is true)
  *
  * @example
  * ```ts
@@ -108,10 +122,21 @@ export async function createDynamicWalletClient(
  *   accountType: '7702' // For EIP-7702 mode
  * });
  * ```
+ * 
+ * @example
+ * ```ts
+ * // Get both account and wallet client for authorization signing
+ * const { account, walletClient } = await getDynamicAccountForRhinestone(chainId, true);
+ * const authorization = await walletClient.signAuthorization({
+ *   account: account,
+ *   contractAddress: delegateContractAddress
+ * });
+ * ```
  */
 export async function getDynamicAccountForRhinestone(
-	chainId: SupportedNetworkId = SUPPORTED_NETWORKS.BASE
-): Promise<Account | null> {
+	chainId: SupportedNetworkId = SUPPORTED_NETWORKS.BASE,
+	returnWalletClient: boolean = false
+): Promise<Account | DynamicAccountResult | null> {
 	const session = get(dynamicSession);
 	const provider = getDynamicWalletProvider();
 
@@ -134,6 +159,10 @@ export async function getDynamicAccountForRhinestone(
 		// Step 2: Use Rhinestone SDK's walletClientToAccount to convert wallet client to Account
 		// This is the recommended approach per Rhinestone docs for Dynamic integration
 		const account = walletClientToAccount(walletClient);
+
+		// ✅ Patch missing `type` so viem doesn't throw AccountTypeNotSupportedError
+		// Prefer whatever viem gave us, fallback to 'json-rpc'
+		(account as any).type ??= (walletClient.account as any)?.type ?? 'json-rpc';
 
 		// Test message signing to verify the account works
 		if (account.signMessage) {
@@ -169,8 +198,14 @@ export async function getDynamicAccountForRhinestone(
 		console.log('[Dynamic Wallet] Created account for Rhinestone using walletClientToAccount:', {
 			address: account.address,
 			chainId,
-			type: account.type
+			type: account.type,
+			returnWalletClient
 		});
+
+		// Return both account and wallet client if requested
+		if (returnWalletClient) {
+			return { account, walletClient };
+		}
 
 		return account;
 	} catch (error) {

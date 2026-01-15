@@ -414,10 +414,20 @@ export async function sendTransactionWithGasOption(
 			errorMessage.includes('JSON-RPC') ||
 			((error as { cause?: { isJsonRpcAccount?: boolean } })?.cause?.isJsonRpcAccount === true);
 		
-		if (isJsonRpcAuthError) {
+		// Check if this is a network error connecting to Rhinestone API
+		// If so, automatically fall back to native gas (ETH) instead of failing
+		const isNetworkError = 
+			errorMessage.includes('Network error connecting to Rhinestone API') ||
+			errorMessage.includes('Failed to fetch') ||
+			errorMessage.includes('network') && errorMessage.toLowerCase().includes('error') ||
+			((error as { cause?: { isNetworkError?: boolean } })?.cause?.isNetworkError === true);
+		
+		if (isJsonRpcAuthError || isNetworkError) {
+			const reason = isJsonRpcAuthError 
+				? 'USDC gas payment not supported with this wallet type'
+				: 'Network error connecting to Rhinestone API';
 			console.warn(
-				'[Rhinestone] USDC gas payment not supported with this wallet type. ' +
-				'Automatically falling back to native gas (ETH)...'
+				`[Rhinestone] ${reason}. Automatically falling back to native gas (ETH)...`
 			);
 			// Fall back to native gas payment
 			return sendTransaction(params);

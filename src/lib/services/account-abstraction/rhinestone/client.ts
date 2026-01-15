@@ -31,7 +31,8 @@ import {
 	type Chain,
 	type Hex,
 	type Account,
-	type SignedAuthorizationList
+	type SignedAuthorizationList,
+	type WalletClient
 } from 'viem';
 import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import {
@@ -64,6 +65,16 @@ const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 // Import RPC utilities for fallbacks and load balancing
 import { createRpcTransport } from '$lib/utils/rpc';
 
+
+function isJsonRpcAccount(account: Account): boolean {
+	return (account as any)?.type === 'json-rpc';
+  }
+  
+  function isErc20Gas(feeAsset?: string): boolean {
+	// Treat any non-empty string other than ETH as ERC20 gas payment intent
+	if (!feeAsset) return false;
+	return feeAsset.toUpperCase() !== 'ETH';
+  }
 // Type for Rhinestone account transaction params
 // Supports both same-chain (chain) and cross-chain (sourceChains/targetChain)
 type RhinestoneTransactionParams =
@@ -176,6 +187,8 @@ let rhinestoneInstance: RhinestoneClient | null = null;
 export class RhinestoneClient {
 	private sdk: RhinestoneSDK;
 	private config: RhinestoneConfig;
+	// Store wallet client for authorization signing (needed for JSON-RPC accounts)
+	private walletClientCache: Map<string, WalletClient> = new Map();
 
 	constructor(config: RhinestoneConfig) {
 		this.config = config;
@@ -868,6 +881,27 @@ export class RhinestoneClient {
 				throw new AAError(`Chain ${params.chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
 			}
 
+			// Get a quote first to ensure the orchestrator has token configuration/price data
+			// This is REQUIRED because the orchestrator needs to know about both tokens
+			// before it can prepare the swap transaction. The quote call populates the
+			// orchestrator's internal cache with token configs and prices.
+			console.log('[Rhinestone Client] Getting quote to populate orchestrator token data...');
+			const quote = await this.getSwapQuote({
+				sourceChain: params.chainId,
+				targetChain: params.chainId,
+				sourceToken: params.sourceToken,
+				targetToken: params.targetToken,
+				amount: params.amount,
+				recipient: params.recipient,
+				slippageBps: params.slippageBps
+			});
+			console.log('[Rhinestone Client] Quote obtained successfully, orchestrator has token data');
+			
+			// Check if quote has expired
+			if (Date.now() > quote.expiresAt) {
+				throw new AAError('Quote has expired, please try again', AAErrorCode.QUOTE_EXPIRED);
+			}
+
 			// Create Rhinestone account
 			const rhinestoneAccount = await this.createAccount(walletAccount);
 
@@ -911,13 +945,14 @@ export class RhinestoneClient {
 
 			// Build the transfer call for the target token
 			// The solver will handle the swap and then execute this transfer
+			// Use the quote's outputAmount for the transfer amount
 			const transferCall = {
 				to: params.targetToken.address as Address,
 				value: 0n,
 				data: encodeFunctionData({
 					abi: erc20Abi,
 					functionName: 'transfer',
-					args: [params.recipient, params.amount] // Amount will be adjusted by solver
+					args: [params.recipient, quote.outputAmount] // Use quote output amount
 				})
 			};
 
@@ -926,6 +961,30 @@ export class RhinestoneClient {
 			// 1. Pull sourceToken from user
 			// 2. Swap it to targetToken via solver network
 			// 3. Execute the transfer call
+			// 
+			// For same-chain swaps, we need to provide sourceAssets to help the orchestrator
+			// understand which tokens are available and their configurations
+			// Try both symbols and addresses - the orchestrator might need addresses for lookup
+			const sourceAssetsTokens: string[] = [];
+			
+			// Add token addresses (more reliable for orchestrator lookup)
+			sourceAssetsTokens.push(params.sourceToken.address);
+			if (params.targetToken.address.toLowerCase() !== params.sourceToken.address.toLowerCase()) {
+				sourceAssetsTokens.push(params.targetToken.address);
+			}
+			
+			// Also add symbols as fallback (some orchestrator configs might use symbols)
+			if (params.sourceToken.symbol) {
+				sourceAssetsTokens.push(params.sourceToken.symbol);
+			}
+			if (params.targetToken.symbol && params.targetToken.symbol !== params.sourceToken.symbol) {
+				sourceAssetsTokens.push(params.targetToken.symbol);
+			}
+			// Also include feeAsset if specified and not already in the list
+			if (feeAsset && !sourceAssetsTokens.includes(feeAsset)) {
+				sourceAssetsTokens.push(feeAsset);
+			}
+
 			const transactionParams: RhinestoneTransactionParams = {
 				chain,
 				calls: [transferCall],
@@ -935,6 +994,9 @@ export class RhinestoneClient {
 						amount: params.amount
 					}
 				],
+				// Provide sourceAssets to help orchestrator with token configuration
+				// Include both source and target tokens so orchestrator has price/config data
+				sourceAssets: sourceAssetsTokens.length > 0 ? { [chain.id]: sourceAssetsTokens } : undefined,
 				feeAsset: feeAsset,
 				eip7702InitSignature: eip7702InitSignature
 			};
@@ -942,9 +1004,12 @@ export class RhinestoneClient {
 			console.log('[Rhinestone Client] Preparing same-chain swap transaction...', {
 				chainId: chain.id,
 				sourceToken: params.sourceToken.address,
+				sourceTokenSymbol: params.sourceToken.symbol,
 				targetToken: params.targetToken.address,
+				targetTokenSymbol: params.targetToken.symbol,
 				amount: params.amount.toString(),
 				feeAsset,
+				sourceAssets: transactionParams.sourceAssets,
 				hasEip7702Init: Boolean(eip7702InitSignature)
 			});
 
@@ -1005,9 +1070,28 @@ export class RhinestoneClient {
 		} catch (error) {
 			console.error('[Rhinestone Client] executeSameChainSwap failed:', error);
 
+			// Check if it's an orchestrator error about missing token config
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			if (errorMessage.includes('Missing arbitrary token config') || errorMessage.includes('price for swapped token')) {
+				// This error suggests the orchestrator doesn't have price/config data for one of the tokens
+				// Try to provide more helpful error message
+				throw new AAError(
+					`Swap failed: The orchestrator doesn't have price or configuration data for one of the tokens in this swap. ` +
+					`Source token: ${params.sourceToken.symbol} (${params.sourceToken.address}), ` +
+					`Target token: ${params.targetToken.symbol} (${params.targetToken.address}). ` +
+					`This might happen with less common tokens. Try using a more common token pair, or contact support.`,
+					AAErrorCode.SWAP_FAILED,
+					{ 
+						originalError: error,
+						sourceToken: params.sourceToken,
+						targetToken: params.targetToken
+					}
+				);
+			}
+
 			if (error instanceof AAError) throw error;
 			throw new AAError(
-				`Same-chain swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				`Same-chain swap failed: ${errorMessage}`,
 				AAErrorCode.SWAP_FAILED,
 				{ originalError: error }
 			);
@@ -1050,6 +1134,22 @@ export class RhinestoneClient {
 				throw new AAError(`Chain ${params.chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
 			}
 
+			// Get wallet client for authorization signing (needed for JSON-RPC accounts)
+			// Try to get both account and wallet client from Dynamic
+			let walletClient: WalletClient | undefined;
+			try {
+				const { getDynamicAccountForRhinestone } = await import('../wallets/dynamic');
+				const result = await getDynamicAccountForRhinestone(params.chainId, true);
+				if (result && typeof result === 'object' && 'walletClient' in result) {
+					walletClient = result.walletClient;
+					// Cache the wallet client for this chain
+					this.walletClientCache.set(`${walletAccount.address}-${params.chainId}`, walletClient);
+					console.log('[Rhinestone Client] Wallet client cached for authorization signing');
+				}
+			} catch (walletClientError) {
+				console.warn('[Rhinestone Client] Could not get wallet client (will try to get it later if needed):', walletClientError);
+			}
+
 			// Create Rhinestone account
 			console.log('[Rhinestone Client] Creating Rhinestone account...');
 			const rhinestoneAccount = await this.createAccount(walletAccount);
@@ -1078,6 +1178,24 @@ export class RhinestoneClient {
 
 			// Get chain config
 			const chain = CHAIN_CONFIG[params.chainId];
+
+			// Hard guard: ERC20 gas payment requires EIP-7702 authorization signing.
+			// viem cannot sign EIP-7702 authorizations with json-rpc accounts (e.g. Dynamic embedded wallet provider).
+			// if (this.config.accountType === '7702' && isErc20Gas(feeAsset) && isJsonRpcAccount(walletAccount)) {
+			// 	throw new AAError(
+			// 	'USDC gas payment is not supported with this wallet type. ' +
+			// 		'This wallet exposes a JSON-RPC signer, which cannot sign EIP-7702 authorizations required for ERC20 gas payment. ' +
+			// 		'Please use native gas (ETH) instead.',
+			// 	AAErrorCode.AUTHORIZATION_REJECTED,
+			// 	{
+			// 		suggestedFix: 'Use native gas (ETH) instead of USDC for gas payment',
+			// 		isJsonRpcAccount: true,
+			// 		walletAccountType: (walletAccount as any)?.type,
+			// 		feeAsset
+			// 	}
+			// 	);
+			// }
+  
 
 			let eip7702InitSignature: Hex | undefined;
 			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
@@ -1176,6 +1294,7 @@ export class RhinestoneClient {
 			let preparedTx: PreparedTransaction;
 			try {
 				preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+				console.log('transactionParams : ', transactionParams);
 				console.log('[Rhinestone Client] Transaction prepared successfully, signing...');
 			} catch (prepareError) {
 				console.error('[Rhinestone Client] Failed to prepare transaction:', prepareError);
@@ -1208,6 +1327,52 @@ export class RhinestoneClient {
 			// to cover the chain where the transaction executes (chain 8453 in this case)
 			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
+				// TEST: Try signAuthorizations with a minimal test transaction first
+				// Use wallet client approach for JSON-RPC accounts
+				try {
+					console.log('[Rhinestone Client] TEST: Testing signAuthorizations with minimal transaction using wallet client...');
+					const testTxParams: RhinestoneTransactionParams = {
+						chain,
+						calls: [{
+							to: rhinestoneAccount.getAddress(), // Self-call for minimal test
+							value: 0n,
+							data: '0x' as Hex
+						}],
+						feeAsset: feeAsset,
+						eip7702InitSignature: eip7702InitSignature
+					};
+					const testPreparedTx = await rhinestoneAccount.prepareTransaction(testTxParams);
+					console.log('testPreparedTx : ', testPreparedTx);
+					
+					// Try using wallet client's signAuthorization instead of account's signAuthorizations
+					// This works with JSON-RPC accounts
+					if (walletClient) {
+						try {
+							const testAuths = await this.manualSignAuthorization(
+								walletAccount,
+								chain,
+								rhinestoneAccount.getAddress(),
+								testPreparedTx,
+								walletClient
+							);
+							console.log('[Rhinestone Client] TEST: signAuthorizations via wallet client works! Test authorizations:', testAuths.length);
+						} catch (walletClientTestError) {
+							console.warn('[Rhinestone Client] TEST: Wallet client signAuthorization test failed:', 
+								walletClientTestError instanceof Error ? walletClientTestError.message : String(walletClientTestError));
+							// Fall through to try account's signAuthorizations
+							const testAuths = await rhinestoneAccount.signAuthorizations(testPreparedTx);
+							console.log('[Rhinestone Client] TEST: signAuthorizations works! Test authorizations:', testAuths.length);
+						}
+					} else {
+						// No wallet client available, try account's signAuthorizations (will likely fail for JSON-RPC)
+						const testAuths = await rhinestoneAccount.signAuthorizations(testPreparedTx);
+						console.log('[Rhinestone Client] TEST: signAuthorizations works! Test authorizations:', testAuths.length);
+					}
+				} catch (testError) {
+					console.warn('[Rhinestone Client] TEST: signAuthorizations test failed (this is OK, will use wallet client for actual tx):', 
+						testError instanceof Error ? testError.message : String(testError));
+				}
+
 				try {
 					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
 					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
@@ -1237,20 +1402,35 @@ export class RhinestoneClient {
 							errorMsg.includes('not supported');
 						
 						if (isJsonRpcError) {
-							// JSON-RPC accounts (like Dynamic wallets) don't support viem's signAuthorization
-							// This is a known limitation. The workaround is to use native gas (ETH) instead of USDC
-							throw new AAError(
-								'USDC gas payment is not supported with this wallet type. ' +
-								'Your wallet (Dynamic embedded wallet) does not support EIP-7702 authorization signing ' +
-								'required for ERC20 gas payment. ' +
-								'Please use native gas (ETH) instead of USDC for gas payment, or use a different wallet that supports EIP-7702 authorizations.',
-								AAErrorCode.AUTHORIZATION_REJECTED,
-								{ 
-									originalError: authError,
-									suggestedFix: 'Use native gas (ETH) instead of USDC for gas payment',
-									isJsonRpcAccount: true
-								}
-							);
+							// Try to manually sign authorization using Dynamic wallet client
+							// This is a workaround for JSON-RPC accounts that don't support viem's signAuthorization
+							try {
+								console.log('[Rhinestone Client] Attempting to manually sign authorization with Dynamic wallet client...');
+								authorizations = await this.manualSignAuthorization(
+									walletAccount,
+									chain,
+									rhinestoneAccount.getAddress(),
+									preparedTx,
+									walletClient
+								);
+								console.log('[Rhinestone Client] Manually signed authorizations:', authorizations.length);
+							} catch (manualSignError) {
+								console.error('[Rhinestone Client] Manual authorization signing failed:', manualSignError);
+								// Fall back to error - the wallet doesn't support authorization signing
+								throw new AAError(
+									'USDC gas payment is not supported with this wallet type. ' +
+									'Your wallet (Dynamic embedded wallet) does not support EIP-7702 authorization signing ' +
+									'required for ERC20 gas payment. ' +
+									'Please use native gas (ETH) instead of USDC for gas payment, or use a different wallet that supports EIP-7702 authorizations.',
+									AAErrorCode.AUTHORIZATION_REJECTED,
+									{ 
+										originalError: authError,
+										manualSignError: manualSignError instanceof Error ? manualSignError.message : String(manualSignError),
+										suggestedFix: 'Use native gas (ETH) instead of USDC for gas payment',
+										isJsonRpcAccount: true
+									}
+								);
+							}
 						}
 						
 						const isDeployed = await rhinestoneAccount.isDeployed(chain);
@@ -1348,6 +1528,156 @@ export class RhinestoneClient {
 				AAErrorCode.TRANSACTION_FAILED,
 				{ originalError: error }
 			);
+		}
+	}
+
+	/**
+	 * Manually sign EIP-7702 authorization using Dynamic wallet client
+	 * 
+	 * This is a workaround for JSON-RPC accounts that don't support viem's signAuthorization.
+	 * We use the wallet client's signAuthorization method directly, which works with JSON-RPC accounts.
+	 * 
+	 * @param walletAccount - The wallet account
+	 * @param chain - The chain to authorize
+	 * @param accountAddress - The account address (EOA address)
+	 * @param preparedTx - The prepared transaction (to extract delegate contract address)
+	 * @param walletClient - Optional wallet client (will be fetched if not provided)
+	 * @returns Signed authorization list
+	 */
+	private async manualSignAuthorization(
+		walletAccount: Account,
+		chain: Chain,
+		accountAddress: Address,
+		preparedTx: PreparedTransaction,
+		walletClient?: WalletClient
+	): Promise<SignedAuthorizationList> {
+		try {
+			// Get wallet client if not provided
+			if (!walletClient) {
+				// Try to get from cache first
+				const cacheKey = `${walletAccount.address}-${chain.id}`;
+				walletClient = this.walletClientCache.get(cacheKey);
+				
+				if (!walletClient) {
+					// Try to get the Dynamic wallet client
+					const { createDynamicWalletClient } = await import('../wallets/dynamic');
+					const fetchedWalletClient = await createDynamicWalletClient(chain.id as SupportedNetworkId);
+					
+					if (fetchedWalletClient) {
+						walletClient = fetchedWalletClient;
+						this.walletClientCache.set(cacheKey, walletClient);
+					}
+				}
+			}
+			
+			if (!walletClient) {
+				throw new Error('Failed to get Dynamic wallet client');
+			}
+
+			// Get the nonce for the account
+			const publicClient = this.createPublicClient(chain.id as SupportedNetworkId);
+			const nonce = await publicClient.getTransactionCount({ address: accountAddress });
+
+			// Get delegate contract address from Rhinestone SDK
+			// For EIP-7702, the delegate is the smart account implementation
+			// We need to create a Rhinestone account to access this information
+			let delegateContractAddress: Address | undefined;
+			
+			try {
+				// Create a Rhinestone account to get the delegate address
+				const tempRhinestoneAccount = await this.createAccount(walletAccount);
+				
+				// Try to get transaction messages which might contain delegate information
+				const messages = tempRhinestoneAccount.getTransactionMessages(preparedTx);
+				
+				// The delegate address might be in the messages structure
+				// For EIP-7702, it's typically in the authorization data
+				if (messages && typeof messages === 'object') {
+					// Log messages for debugging
+					console.log('[Rhinestone Client] Transaction messages:', JSON.stringify(messages, (key, value) => 
+						typeof value === 'bigint' ? value.toString() : value, 2));
+					
+					// Try to extract delegate address from messages
+					// The structure varies, so we check multiple possible locations
+					const messagesStr = JSON.stringify(messages);
+					
+					// Look for address-like patterns in the messages
+					const addressPattern = /0x[a-fA-F0-9]{40}/g;
+					const addresses = messagesStr.match(addressPattern);
+					
+					if (addresses && addresses.length > 0) {
+						// The delegate address is likely one of these addresses
+						// For EIP-7702, it should be the smart account implementation
+						// We'll try the first non-account address we find
+						for (const addr of addresses) {
+							if (addr.toLowerCase() !== accountAddress.toLowerCase()) {
+								delegateContractAddress = addr as Address;
+								console.log('[Rhinestone Client] Found potential delegate address:', delegateContractAddress);
+								break;
+							}
+						}
+					}
+				}
+				
+				// If we still don't have it, try to get it from the SDK's account
+				// The SDK might expose the implementation address
+				if (!delegateContractAddress && (tempRhinestoneAccount as any).implementation) {
+					delegateContractAddress = (tempRhinestoneAccount as any).implementation as Address;
+					console.log('[Rhinestone Client] Got delegate address from account implementation:', delegateContractAddress);
+				}
+			} catch (msgError) {
+				console.warn('[Rhinestone Client] Could not extract delegate address:', msgError);
+			}
+
+			// Use wallet client's signAuthorization method
+			// This works with JSON-RPC accounts because the wallet client handles the RPC call
+			if (typeof walletClient.signAuthorization === 'function') {
+				if (!delegateContractAddress) {
+					// If we still don't have the delegate address, we need to throw an error
+					// The delegate address is required for EIP-7702 authorization
+					throw new Error(
+						'Delegate contract address required for EIP-7702 authorization. ' +
+						'Could not extract it from Rhinestone SDK. ' +
+						'This might be a limitation of the SDK or the account type.'
+					);
+				}
+				
+				try {
+					console.log('[Rhinestone Client] Using wallet client signAuthorization with delegate:', delegateContractAddress);
+					
+					const authorization = await walletClient.signAuthorization({
+						account: walletAccount,
+						contractAddress: delegateContractAddress
+					});
+					
+					console.log('[Rhinestone Client] Authorization signed successfully:', {
+						chainId: chain.id,
+						delegate: delegateContractAddress,
+						nonce: nonce.toString()
+					});
+					
+					// Convert to SignedAuthorizationList format
+					// Viem expects number for chainId and nonce, and requires yParity
+					const signedAuth = {
+						chainId: Number(chain.id),
+						address: delegateContractAddress,
+						nonce: Number(nonce),
+						r: authorization.r,
+						s: authorization.s,
+						yParity: authorization.yParity ?? (authorization.v !== undefined ? (authorization.v === 0n ? 0 : 1) : 0)
+					};
+					
+					return [signedAuth] as unknown as SignedAuthorizationList;
+				} catch (signError) {
+					console.error('[Rhinestone Client] Wallet client signAuthorization failed:', signError);
+					throw signError;
+				}
+			} else {
+				throw new Error('Wallet client does not support signAuthorization method');
+			}
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			throw new Error(`Failed to manually sign authorization: ${errorMsg}`);
 		}
 	}
 
