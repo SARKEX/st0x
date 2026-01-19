@@ -12,7 +12,8 @@
 	};
 
 	const APY = '78.5';
-	const TRANSACTION_HASH: string = '0xd79eed1893e9d9cf2da7873c201b5d716463350e9bf9b4d61ac7936ae5ebf674'; // Leave empty for now, can be filled in later
+	const TRANSACTION_HASH: string =
+		'0xd79eed1893e9d9cf2da7873c201b5d716463350e9bf9b4d61ac7936ae5ebf674'; // Leave empty for now, can be filled in later
 
 	let addingToWallet = false;
 	let addedToWallet = false;
@@ -74,14 +75,21 @@
 		>
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-gray-700 px-5 py-3">
-				<h2 id="modal-title" class="text-base font-semibold text-white">Month 1 Rewards Distributed</h2>
+				<h2 id="modal-title" class="text-base font-semibold text-white">
+					Month 1 Rewards Distributed
+				</h2>
 				<button
 					on:click={handleClose}
 					class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 					aria-label="Close modal"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
 					</svg>
 				</button>
 			</div>
@@ -110,8 +118,8 @@
 				<div class="relative z-10 space-y-4">
 					<!-- Celebration text -->
 					<div class="text-center">
-						<div class="mb-2 text-4xl animate-bounce-slow">&#127881;</div>
-						<p class="text-lg font-bold text-white drop-shadow-glow">Congratulations!</p>
+						<div class="animate-bounce-slow mb-2 text-4xl">&#127881;</div>
+						<p class="drop-shadow-glow text-lg font-bold text-white">Congratulations!</p>
 						<p class="text-sm text-gray-400">Month 1 rewards have been distributed</p>
 						<div class="mt-3 inline-flex items-center gap-2">
 							<span class="text-sm text-gray-400">Approx APY</span>
@@ -135,7 +143,12 @@
 								aria-label="Copy contract address"
 							>
 								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+									/>
 								</svg>
 							</button>
 						</div>
@@ -151,16 +164,23 @@
 								rel="noopener noreferrer"
 								class="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 							>
-								<code class="text-xs">{TRANSACTION_HASH.slice(0, 10)}...{TRANSACTION_HASH.slice(-6)}</code>
+								<code class="text-xs"
+									>{TRANSACTION_HASH.slice(0, 10)}...{TRANSACTION_HASH.slice(-6)}</code
+								>
 								<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+									/>
 								</svg>
 							</a>
 						</div>
 					{:else}
 						<div class="flex items-center justify-between text-sm">
 							<span class="text-gray-400">Transaction</span>
-							<span class="text-xs text-gray-500 italic">Coming soon</span>
+							<span class="text-xs italic text-gray-500">Coming soon</span>
 						</div>
 					{/if}
 
@@ -174,18 +194,39 @@
 						>
 							{#if addedToWallet}
 								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M5 13l4 4L19 7"
+									/>
 								</svg>
 								<span>Added</span>
 							{:else if addingToWallet}
 								<svg class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+									<circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									/>
+									<path
+										class="opacity-75"
+										fill="currentColor"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+									/>
 								</svg>
 								<span>Adding...</span>
 							{:else}
 								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+									/>
 								</svg>
 								<span>Add to Wallet</span>
 							{/if}
@@ -265,13 +306,30 @@
 		z-index: 5;
 	}
 
-	.sparkle-1 { top: 10%; left: 10%; animation-delay: 0s; }
-	.sparkle-2 { top: 15%; right: 15%; animation-delay: 0.5s; }
-	.sparkle-3 { bottom: 20%; left: 15%; animation-delay: 1s; }
-	.sparkle-4 { bottom: 25%; right: 10%; animation-delay: 0.3s; }
+	.sparkle-1 {
+		top: 10%;
+		left: 10%;
+		animation-delay: 0s;
+	}
+	.sparkle-2 {
+		top: 15%;
+		right: 15%;
+		animation-delay: 0.5s;
+	}
+	.sparkle-3 {
+		bottom: 20%;
+		left: 15%;
+		animation-delay: 1s;
+	}
+	.sparkle-4 {
+		bottom: 25%;
+		right: 10%;
+		animation-delay: 0.3s;
+	}
 
 	@keyframes sparkle {
-		0%, 100% {
+		0%,
+		100% {
 			opacity: 0.3;
 			transform: scale(0.8) rotate(0deg);
 		}
@@ -287,7 +345,8 @@
 	}
 
 	@keyframes bounce-slow {
-		0%, 100% {
+		0%,
+		100% {
 			transform: translateY(0);
 		}
 		50% {
@@ -302,7 +361,9 @@
 
 	/* Green glow for APY badge */
 	.shadow-glow-green {
-		box-shadow: 0 0 20px rgba(52, 211, 153, 0.3), 0 0 40px rgba(52, 211, 153, 0.1);
+		box-shadow:
+			0 0 20px rgba(52, 211, 153, 0.3),
+			0 0 40px rgba(52, 211, 153, 0.1);
 	}
 
 	/* APY value pulse */
@@ -311,11 +372,14 @@
 	}
 
 	@keyframes pulse-glow {
-		0%, 100% {
+		0%,
+		100% {
 			text-shadow: 0 0 10px rgba(52, 211, 153, 0.5);
 		}
 		50% {
-			text-shadow: 0 0 20px rgba(52, 211, 153, 0.8), 0 0 30px rgba(52, 211, 153, 0.4);
+			text-shadow:
+				0 0 20px rgba(52, 211, 153, 0.8),
+				0 0 30px rgba(52, 211, 153, 0.4);
 		}
 	}
 

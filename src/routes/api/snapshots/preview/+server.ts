@@ -30,7 +30,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		console.log(`[Preview] Step 2/6: Generating token snapshots (transfers, prices, vaults)...`);
 		stepStart = Date.now();
 		const snapshots = await generateAllTokenSnapshots_v2(targetBlock);
-		console.log(`[Preview] Step 2/6: Done - ${snapshots.length} tokens (${Date.now() - stepStart}ms)`);
+		console.log(
+			`[Preview] Step 2/6: Done - ${snapshots.length} tokens (${Date.now() - stepStart}ms)`
+		);
 
 		// Get timestamp and excluded wallets for response metadata
 		console.log(`[Preview] Step 3/6: Getting block timestamp...`);
@@ -43,7 +45,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		stepStart = Date.now();
 		const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 		const excludedSet = new Set(excludedWallets.map((w) => w.toLowerCase()));
-		console.log(`[Preview] Step 4/6: Done - ${excludedWallets.length} excluded (${Date.now() - stepStart}ms)`);
+		console.log(
+			`[Preview] Step 4/6: Done - ${excludedWallets.length} excluded (${Date.now() - stepStart}ms)`
+		);
 
 		// Calculate per-token summary stats (for tools section)
 		const tokenSummary = snapshots.map((s) => ({
@@ -59,7 +63,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		console.log(`[Preview] Step 5/6: Calculating wallet points...`);
 		stepStart = Date.now();
 		const walletPointsMap = calculateWalletPointsFromSnapshots(snapshots, targetBlock);
-		console.log(`[Preview] Step 5/6: Done - ${walletPointsMap.size} wallets (${Date.now() - stepStart}ms)`);
+		console.log(
+			`[Preview] Step 5/6: Done - ${walletPointsMap.size} wallets (${Date.now() - stepStart}ms)`
+		);
 
 		// Build token address to symbol map for display
 		const tokenSymbolMap = new Map<string, string>();
@@ -119,7 +125,9 @@ export const GET: RequestHandler = async ({ url }) => {
 			snapshots
 		};
 		console.log(`[Preview] Step 6/6: Done (${Date.now() - stepStart}ms)`);
-		console.log(`[Preview] ✓ Complete! Total time: ${((Date.now() - overallStart) / 1000).toFixed(1)}s`);
+		console.log(
+			`[Preview] ✓ Complete! Total time: ${((Date.now() - overallStart) / 1000).toFixed(1)}s`
+		);
 
 		return json(response);
 	} catch (error) {

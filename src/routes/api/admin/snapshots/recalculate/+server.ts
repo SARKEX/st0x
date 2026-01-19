@@ -144,9 +144,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				// Use shared merge function - same logic as updateMonthlyPoints
 				mergeWalletPointsIntoMonthlyData(monthlyData, walletPoints, blockNumber);
 
-				console.log(
-					`[Recalculate] Block ${blockNumber}: ${walletPoints.size} wallets with points`
-				);
+				console.log(`[Recalculate] Block ${blockNumber}: ${walletPoints.size} wallets with points`);
 			} catch (err) {
 				console.error(`[Recalculate] Error processing block ${blockNumber}:`, err);
 			}
@@ -189,7 +187,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const totalExcludedPoints = excludedWalletsInData.reduce((sum, e) => sum + e.points, 0);
 
 		console.log(
-			`[Recalculate] Completed: ${monthlyData.snapshotCount} snapshots, ${walletCount} wallets, ${Math.round(
+			`[Recalculate] Completed: ${
+				monthlyData.snapshotCount
+			} snapshots, ${walletCount} wallets, ${Math.round(
 				totalPointsRecalculated
 			).toLocaleString()} total points`
 		);

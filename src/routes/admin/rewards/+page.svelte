@@ -990,7 +990,7 @@
 		const rows = monthlyData.wallets.map((wallet) => {
 			const isExcluded = excludedWalletsInData.has(wallet.address.toLowerCase());
 			// Excluded wallets get 0 share since they don't receive rewards
-			const share = isExcluded ? 0 : (allPoints > 0 ? wallet.totalPoints / allPoints : 0);
+			const share = isExcluded ? 0 : allPoints > 0 ? wallet.totalPoints / allPoints : 0;
 
 			// Calculate rewards
 			const basePool = currentMonthPool?.poolAmount ?? 0;
@@ -3038,7 +3038,9 @@
 									<div class="h-1 w-full overflow-hidden rounded-full bg-gray-800">
 										<div
 											class="h-full bg-[#e8be89]/50 transition-all duration-300"
-											style="width: {((previewProgress.tokenIndex + 1) / previewProgress.totalTokens) * 100}%"
+											style="width: {((previewProgress.tokenIndex + 1) /
+												previewProgress.totalTokens) *
+												100}%"
 										></div>
 									</div>
 								{/if}

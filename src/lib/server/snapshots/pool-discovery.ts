@@ -114,10 +114,7 @@ function getPublicClient() {
  * Check if an address is a V2 or V3 pool via RPC
  * Used for pool discovery (not rewards calculation)
  */
-export async function getPoolType(
-	address: string,
-	blockNumber?: bigint
-): Promise<PoolType> {
+export async function getPoolType(address: string, blockNumber?: bigint): Promise<PoolType> {
 	const addressLower = address.toLowerCase();
 	const client = getPublicClient();
 

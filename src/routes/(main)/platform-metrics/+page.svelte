@@ -26,6 +26,14 @@
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 
+	interface TvlApiResponse {
+		success: boolean;
+		latest: {
+			totalTvl: number;
+			tokenTvl: Record<string, number>;
+		} | null;
+	}
+
 	type AnalyzedTrade = {
 		trade: SgTrade;
 		analysis: TradeAnalysis;
@@ -34,6 +42,8 @@
 	type NetworkStat = {
 		network: (typeof networks)[number];
 		tvl: number;
+		networkTvl: number;
+		dexLiquidity: number;
 		tokenCount: number;
 		tradingVolume: number;
 		orderCount: number;
@@ -51,6 +61,7 @@
 
 	onMount(() => {
 		void loadVaults();
+		void loadAdminTvl();
 	});
 
 	$: priceFeedStates = networks.map((network, index) => ({
@@ -87,6 +98,38 @@
 	let vaultsByNetwork = new Map<number, RaindexVault[]>();
 	let vaultsLoading = true;
 	let vaultsError: string | null = null;
+
+	// TVL from admin API (includes all wallets)
+	let adminTvl: number | null = null;
+	let adminTokenTvl: Record<string, number> = {};
+	let adminTvlLoading = true;
+	let adminTvlError: string | null = null;
+
+	async function loadAdminTvl() {
+		adminTvlLoading = true;
+		adminTvlError = null;
+		try {
+			const response = await fetch('/api/admin/tvl?limit=1');
+			if (!response.ok) {
+				throw new Error('Failed to fetch TVL');
+			}
+			const data = (await response.json()) as TvlApiResponse;
+			if (data.success && data.latest) {
+				adminTvl = data.latest.totalTvl;
+				adminTokenTvl = data.latest.tokenTvl ?? {};
+			} else {
+				adminTvl = null;
+				adminTokenTvl = {};
+			}
+		} catch (error) {
+			console.error('Failed to load admin TVL:', error);
+			adminTvlError = error instanceof Error ? error.message : 'Failed to load TVL';
+			adminTvl = null;
+			adminTokenTvl = {};
+		} finally {
+			adminTvlLoading = false;
+		}
+	}
 
 	async function loadVaults() {
 		vaultsLoading = true;
@@ -240,32 +283,6 @@
 		return Number.isFinite(balance) ? balance : 0;
 	}
 
-	// Aggregate metrics
-	$: totalTVL = (() => {
-		if (vaultsLoading) return 0;
-		let total = 0;
-		vaultsByNetwork.forEach((vaults, networkId) => {
-			const activeSet = activeTokensByNetwork.get(networkId);
-			vaults.forEach((vault) => {
-				const address = normalizeAddress(vault.token.address);
-				if (activeSet && activeSet.size > 0 && (!address || !activeSet.has(address))) return;
-				const balance = vaultBalanceToNumber(vault);
-				if (balance <= 0) return;
-				const tokenInfo = address ? tokenLookup(address) : undefined;
-				const symbol = tokenInfo?.symbol ?? vault.token.symbol;
-				let price = symbol ? findNetworkQuote(symbol, networkId)?.close ?? null : null;
-				if (price == null) {
-					price = getMidPrice(networkId, address);
-				}
-				if (price == null) {
-					price = 1;
-				}
-				total += balance * price;
-			});
-		});
-		return total;
-	})();
-
 	$: tradingVolume = (() => {
 		let volume = 0;
 		analyzedTradesByNetwork.forEach((entries, chainId) => {
@@ -298,16 +315,87 @@
 		return total;
 	})();
 
-	$: totalDeployedOrders = (() => {
-		const hashes = new Set<string>();
-		orderbookStates.forEach(({ query }) => {
-			query?.data?.quotes?.forEach((quote) => {
-				if (quote.orderHash) {
-					hashes.add(quote.orderHash.toLowerCase());
+	// Build a set of tStock addresses for identification
+	$: tStockAddresses = new Set<string>(
+		TOKENS.filter((t) => t.category === 'ST0x')
+			.map((t) => normalizeAddress(t.address))
+			.filter(Boolean) as string[]
+	);
+
+	// Build payment token addresses for each network
+	$: paymentTokenAddresses = new Set<string>(
+		networks
+			.map((n) => normalizeAddress(n.defaultPaymentToken?.address))
+			.filter(Boolean) as string[]
+	);
+
+	// Calculate DEX Liquidity:
+	// 1. Total USDC value of tStocks in output vaults (vault is used as ordersAsOutput)
+	// 2. Plus total USDC in output vaults WHERE the input vault is a tStock
+	$: dexLiquidity = (() => {
+		if (vaultsLoading) return 0;
+		let total = 0;
+
+		// First, build a map of orderHash -> whether order has a tStock as input
+		// This is done by looking at all vaults' ordersAsInput
+		const orderHashHasTStockInput = new Map<string, boolean>();
+		vaultsByNetwork.forEach((vaults) => {
+			vaults.forEach((vault) => {
+				const address = normalizeAddress(vault.token.address);
+				const isTStock = address ? tStockAddresses.has(address) : false;
+				// If this vault is used as input for orders, mark those orders
+				if (isTStock && vault.ordersAsInput?.length > 0) {
+					vault.ordersAsInput.forEach((order) => {
+						const hash = order.orderHash?.toLowerCase();
+						if (hash) {
+							orderHashHasTStockInput.set(hash, true);
+						}
+					});
 				}
 			});
 		});
-		return hashes.size;
+
+		// Now calculate DEX liquidity
+		vaultsByNetwork.forEach((vaults, networkId) => {
+			vaults.forEach((vault) => {
+				const address = normalizeAddress(vault.token.address);
+				if (!address) return;
+				const balance = vaultBalanceToNumber(vault);
+				if (balance <= 0) return;
+
+				const isTStock = tStockAddresses.has(address);
+				const isPaymentToken = paymentTokenAddresses.has(address);
+				const hasOrdersAsOutput = vault.ordersAsOutput && vault.ordersAsOutput.length > 0;
+
+				if (!hasOrdersAsOutput) return;
+
+				if (isTStock) {
+					// Part 1: tStock in output vaults - get USDC value
+					const tokenInfo = tokenLookup(address);
+					const symbol = tokenInfo?.symbol ?? vault.token.symbol;
+					let price = symbol ? findNetworkQuote(symbol, networkId)?.close ?? null : null;
+					if (price == null) {
+						price = getMidPrice(networkId, address);
+					}
+					if (price == null) {
+						price = 0; // Don't assume price 1 for tStocks without price data
+					}
+					total += balance * price;
+				} else if (isPaymentToken) {
+					// Part 2: USDC in output vaults where input is a tStock
+					// Check if any of this vault's orders have a tStock as input
+					const hasTStockInputOrder = vault.ordersAsOutput?.some((order) => {
+						const hash = order.orderHash?.toLowerCase();
+						return hash ? orderHashHasTStockInput.get(hash) === true : false;
+					});
+					if (hasTStockInputOrder) {
+						total += balance; // USDC value is 1:1
+					}
+				}
+			});
+		});
+
+		return total;
 	})();
 
 	function getActiveVaultsForNetwork(networkId: number): RaindexVault[] {
@@ -324,6 +412,7 @@
 
 	$: networkStats = networks.map<NetworkStat>((network) => {
 		const vaults = getActiveVaultsForNetwork(network.chainId);
+		const allNetworkVaults = vaultsByNetwork.get(network.chainId) ?? [];
 
 		// Aggregate vault balances by token
 		const tokenBalances = new Map<string, number>();
@@ -354,6 +443,59 @@
 			tvl += balance * price;
 		});
 
+		// Calculate per-network DEX liquidity
+		let networkDexLiquidity = 0;
+		const paymentTokenAddress = normalizeAddress(network.defaultPaymentToken?.address);
+
+		// Build order -> tStock input map for this network
+		const orderHashHasTStockInput = new Map<string, boolean>();
+		allNetworkVaults.forEach((vault) => {
+			const address = normalizeAddress(vault.token.address);
+			const isTStock = address ? tStockAddresses.has(address) : false;
+			if (isTStock && vault.ordersAsInput?.length > 0) {
+				vault.ordersAsInput.forEach((order) => {
+					const hash = order.orderHash?.toLowerCase();
+					if (hash) {
+						orderHashHasTStockInput.set(hash, true);
+					}
+				});
+			}
+		});
+
+		allNetworkVaults.forEach((vault) => {
+			const address = normalizeAddress(vault.token.address);
+			if (!address) return;
+			const balance = vaultBalanceToNumber(vault);
+			if (balance <= 0) return;
+
+			const isTStock = tStockAddresses.has(address);
+			const isPaymentToken = paymentTokenAddress && address === paymentTokenAddress;
+			const hasOrdersAsOutput = vault.ordersAsOutput && vault.ordersAsOutput.length > 0;
+
+			if (!hasOrdersAsOutput) return;
+
+			if (isTStock) {
+				const tokenInfo = tokenLookup(address);
+				const symbol = tokenInfo?.symbol ?? vault.token.symbol;
+				let price = symbol ? findNetworkQuote(symbol, network.chainId)?.close ?? null : null;
+				if (price == null) {
+					price = getMidPrice(network.chainId, address);
+				}
+				if (price == null) {
+					price = 0;
+				}
+				networkDexLiquidity += balance * price;
+			} else if (isPaymentToken) {
+				const hasTStockInputOrder = vault.ordersAsOutput?.some((order) => {
+					const hash = order.orderHash?.toLowerCase();
+					return hash ? orderHashHasTStockInput.get(hash) === true : false;
+				});
+				if (hasTStockInputOrder) {
+					networkDexLiquidity += balance;
+				}
+			}
+		});
+
 		const trades = analyzedTradesByNetwork.get(network.chainId) ?? [];
 		let tradingVolume = 0;
 		const seenTx = new Set<string>();
@@ -378,9 +520,19 @@
 				}
 			});
 
+		// Calculate per-network TVL from admin token TVL data
+		// Sum up TVL for tokens that belong to this network
+		let networkTvl = 0;
+		TOKENS.filter((t) => t.chainId === network.chainId).forEach((token) => {
+			const tokenTvl = adminTokenTvl[token.symbol] ?? 0;
+			networkTvl += tokenTvl;
+		});
+
 		return {
 			network,
 			tvl,
+			networkTvl,
+			dexLiquidity: networkDexLiquidity,
 			tokenCount: uniqueTokens.size,
 			tradingVolume,
 			orderCount: orderHashes.size
@@ -489,7 +641,7 @@
 		return !query || ((query.isPending || query.isFetching) && count === 0);
 	});
 
-	$: metricsLoading = vaultsLoading || tradeLoading;
+	$: metricsLoading = vaultsLoading || tradeLoading || adminTvlLoading;
 </script>
 
 <div class="relative z-10 min-h-screen text-white">
@@ -511,11 +663,15 @@
 				<InfoBlock variant="warning" title="Vault data incomplete" description={vaultsError} />
 			{/if}
 
+			{#if adminTvlError}
+				<InfoBlock variant="warning" title="TVL data incomplete" description={adminTvlError} />
+			{/if}
+
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
 				<MetricCard
-					label="Total Orderbook Inventory"
-					value={formatQuoteDisplay(totalTVL)}
-					subtitle="Active orderbook tokens"
+					label="TVL"
+					value={adminTvl !== null ? `$${formatQuote(adminTvl)}` : 'N/A'}
+					subtitle="Total value locked"
 					paddingClass="p-4 sm:p-6"
 					showGradient={false}
 					valueClass="text-xl font-bold sm:text-3xl"
@@ -540,9 +696,9 @@
 				</div>
 				<div class="hidden sm:block">
 					<MetricCard
-						label="Deployed Orders"
-						value={`${totalDeployedOrders}`}
-						subtitle="Active across networks"
+						label="DEX Liquidity"
+						value={`$${formatQuote(dexLiquidity)}`}
+						subtitle="tStock order liquidity"
 						paddingClass="p-6"
 						showGradient={false}
 						valueClass="text-3xl font-bold"
@@ -575,17 +731,17 @@
 							<th
 								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 							>
-								Inventory
+								TVL
+							</th>
+							<th
+								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
+							>
+								DEX Liquidity
 							</th>
 							<th
 								class="p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:p-3"
 							>
 								Volume
-							</th>
-							<th
-								class="hidden p-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400 sm:table-cell sm:p-3"
-							>
-								Deployed Orders
 							</th>
 						</tr>
 					</thead>
@@ -610,14 +766,14 @@
 									</div></td
 								>
 								<td class="p-2 text-right text-xs font-medium text-green-400 sm:p-3 sm:text-sm">
-									{formatQuoteDisplayWithNetwork(stats.tvl, stats.network)}
+									{formatQuoteDisplayWithNetwork(stats.networkTvl, stats.network)}
+								</td>
+								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">
+									{formatQuoteDisplayWithNetwork(stats.dexLiquidity, stats.network)}
 								</td>
 								<td class="p-2 text-right text-xs sm:p-3 sm:text-sm">
 									{formatQuoteDisplayWithNetwork(stats.tradingVolume, stats.network)}
 								</td>
-								<td class="hidden p-2 text-right text-xs sm:table-cell sm:p-3 sm:text-sm"
-									>{stats.orderCount}</td
-								>
 							</tr>
 						{/each}
 					</tbody>

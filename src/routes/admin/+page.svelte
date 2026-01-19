@@ -2347,15 +2347,25 @@
 							<p class="text-4xl font-bold text-[#e8be89]">{formatUsd(tvlData.latest.totalTvl)}</p>
 							<p class="mt-1 text-sm text-gray-400">Total Value Locked (All ST0x Tokens)</p>
 							<div class="mt-3 border-t border-gray-700 pt-3">
-								<p class="text-2xl font-semibold text-white">{formatUsd(tvlData.latest.eligibleTvl)}</p>
+								<p class="text-2xl font-semibold text-white">
+									{formatUsd(tvlData.latest.eligibleTvl)}
+								</p>
 								<p class="text-xs text-gray-400">
-									Eligible TVL (excluding {tvlData.latest.excludedWalletCount} excluded wallet{tvlData.latest.excludedWalletCount !== 1 ? 's' : ''})
+									Eligible TVL (excluding {tvlData.latest.excludedWalletCount} excluded wallet{tvlData
+										.latest.excludedWalletCount !== 1
+										? 's'
+										: ''})
 								</p>
 							</div>
 							<div class="mt-3 border-t border-gray-700 pt-3">
-								<p class="text-2xl font-semibold text-green-400">{formatUsd(tvlData.latest.tvlExcludingTeam)}</p>
+								<p class="text-2xl font-semibold text-green-400">
+									{formatUsd(tvlData.latest.tvlExcludingTeam)}
+								</p>
 								<p class="text-xs text-gray-400">
-									TVL Excluding Team (excluding {tvlData.latest.excludedWalletCount} excluded + {tvlData.latest.teamWalletCount} team wallet{tvlData.latest.teamWalletCount !== 1 ? 's' : ''})
+									TVL Excluding Team (excluding {tvlData.latest.excludedWalletCount} excluded + {tvlData
+										.latest.teamWalletCount} team wallet{tvlData.latest.teamWalletCount !== 1
+										? 's'
+										: ''})
 								</p>
 							</div>
 						</div>
@@ -2364,7 +2374,8 @@
 								Snapshot: {new Date(tvlData.latest.timestamp * 1000).toLocaleString()}
 							</p>
 							<p class="text-xs text-gray-500">
-								Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} eligible wallets
+								Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} eligible
+								wallets
 							</p>
 							<p class="mt-1 text-xs italic text-gray-500">Approx. end of day balances</p>
 						</div>

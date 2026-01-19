@@ -25,7 +25,10 @@ function getMonthFromTimestamp(timestamp: number): string {
 }
 
 /** Type for wallet points from a single block calculation */
-export type WalletPointsMap = Map<string, { tokens: Map<string, { points: number; balance: bigint }>; totalPoints: number }>;
+export type WalletPointsMap = Map<
+	string,
+	{ tokens: Map<string, { points: number; balance: bigint }>; totalPoints: number }
+>;
 
 /**
  * Calculate points for each wallet from a set of snapshots for a single block
