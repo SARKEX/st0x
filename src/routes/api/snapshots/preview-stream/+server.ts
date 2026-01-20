@@ -84,7 +84,6 @@ export const GET: RequestHandler = async ({ url }) => {
 
 				const walletPointsMap = calculateWalletPointsFromSnapshotsWithProgress(
 					snapshots,
-					targetBlock,
 					(tokenIndex, tokenSymbol, holdersCount) => {
 						sendEvent('token-progress', {
 							tokenIndex,

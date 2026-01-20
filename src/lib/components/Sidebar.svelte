@@ -164,19 +164,8 @@
 									<div class="truncate text-xs text-gray-400">{asset.name}</div>
 								</div>
 							</div>
-							<div class="text-right">
-								<div class="text-sm font-medium text-white">
-									${asset.price > 0 ? asset.price.toFixed(2) : 'N/A'}
-								</div>
-								<div class="text-xs text-gray-400">
-									{#if asset.dollarVolume >= 1000000}
-										${(asset.dollarVolume / 1000000).toFixed(2)}M
-									{:else if asset.dollarVolume >= 1000}
-										${(asset.dollarVolume / 1000).toFixed(1)}K
-									{:else}
-										${asset.dollarVolume.toFixed(2)}
-									{/if}
-								</div>
+							<div class="text-sm font-medium text-white">
+								${asset.price > 0 ? asset.price.toFixed(2) : 'N/A'}
 							</div>
 						</div>
 					</a>

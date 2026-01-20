@@ -34,6 +34,9 @@
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import { createCostBasisQuery } from '$lib/queries/costBasis';
+	import { calculatePnL } from '$lib/utils/costBasis';
+	import { manualCostBasisStore, type ManualCostBasisEntry } from '$lib/stores/manualCostBasis';
 	import transactionStore from '$lib/stores/transaction';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
@@ -122,6 +125,71 @@
 	// Dust threshold for vaults (in token units)
 	const DUST_THRESHOLD = 0.0001;
 	let showDustVaults = false;
+
+	// Manual cost basis entry state
+	let showCostBasisModal = false;
+	let costBasisEditToken: {
+		address: string;
+		symbol: string;
+		untrackedBalance: number;
+		existingEntry?: ManualCostBasisEntry;
+	} | null = null;
+	let costBasisInputQuantity = '';
+	let costBasisInputPrice = '';
+	let costBasisInputNote = '';
+
+	function openCostBasisModal(holding: {
+		address: string;
+		symbol: string;
+		untrackedBalance: number;
+		manualEntry?: ManualCostBasisEntry;
+	}) {
+		costBasisEditToken = {
+			address: holding.address,
+			symbol: holding.symbol,
+			untrackedBalance: holding.untrackedBalance,
+			existingEntry: holding.manualEntry
+		};
+		// Pre-fill with existing values or defaults
+		costBasisInputQuantity = holding.manualEntry?.quantity?.toString() ?? holding.untrackedBalance.toFixed(4);
+		costBasisInputPrice = holding.manualEntry?.costPerUnit?.toString() ?? '';
+		costBasisInputNote = holding.manualEntry?.note ?? '';
+		showCostBasisModal = true;
+	}
+
+	function closeCostBasisModal() {
+		showCostBasisModal = false;
+		costBasisEditToken = null;
+		costBasisInputQuantity = '';
+		costBasisInputPrice = '';
+		costBasisInputNote = '';
+	}
+
+	function saveCostBasisEntry() {
+		if (!costBasisEditToken) return;
+
+		const quantity = parseFloat(costBasisInputQuantity);
+		const costPerUnit = parseFloat(costBasisInputPrice);
+
+		if (isNaN(quantity) || quantity <= 0) return;
+		if (isNaN(costPerUnit) || costPerUnit < 0) return;
+
+		manualCostBasisStore.setEntry({
+			tokenAddress: costBasisEditToken.address,
+			quantity,
+			costPerUnit,
+			totalCost: quantity * costPerUnit,
+			note: costBasisInputNote || undefined
+		});
+
+		closeCostBasisModal();
+	}
+
+	function removeCostBasisEntry() {
+		if (!costBasisEditToken) return;
+		manualCostBasisStore.removeEntry(costBasisEditToken.address);
+		closeCostBasisModal();
+	}
 
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
@@ -341,6 +409,9 @@
 		}
 
 		// Convert to array with prices, filtering to only valid tokens
+		const costBasisMap = $costBasisQuery?.data ?? new Map();
+		const manualEntries = $manualCostBasisStore;
+
 		const result = Array.from(holdingsMap.values())
 			.filter((h) => validTokenAddresses.has(h.address.toLowerCase()))
 			.map((h) => {
@@ -354,6 +425,47 @@
 				const walletBalanceNum = parseFloat(formatUnits(h.walletBalance, h.decimals));
 				const vaultBalanceNum = parseFloat(formatUnits(h.vaultBalance, h.decimals));
 
+				// Get trade-based cost basis
+				const costBasis = costBasisMap.get(h.address.toLowerCase());
+				const trackedBalance = Math.min(balanceNum, costBasis?.netPosition ?? 0);
+				const untrackedBalance = Math.max(0, balanceNum - trackedBalance);
+
+				// Get manual cost basis entry for untracked tokens
+				const manualEntry = manualEntries.get(h.address.toLowerCase());
+
+				// Calculate P&L from trade-based cost basis (for tracked portion)
+				const tradePnlData = calculatePnL(costBasis, balanceNum, price);
+
+				// Calculate combined P&L including manual entries
+				let combinedUnrealizedPnL: number | null = null;
+				let combinedUnrealizedPnLPercent: number | null = null;
+				let combinedAvgCostBasis: number | null = null;
+
+				if (tradePnlData || manualEntry) {
+					const tradeCost = tradePnlData?.totalCost ?? 0;
+					const tradePnL = tradePnlData?.unrealizedPnL ?? 0;
+
+					const manualQuantity = manualEntry?.quantity ?? 0;
+					const effectiveManualQuantity = Math.min(manualQuantity, untrackedBalance);
+					const manualCostPerUnit = manualEntry?.costPerUnit ?? 0;
+					const manualCost = effectiveManualQuantity * manualCostPerUnit;
+					const manualValue = effectiveManualQuantity * price;
+					const manualPnL = manualValue - manualCost;
+
+					const totalCost = tradeCost + manualCost;
+					const totalTracked = trackedBalance + effectiveManualQuantity;
+
+					if (totalTracked > 0 && totalCost > 0) {
+						combinedAvgCostBasis = totalCost / totalTracked;
+						combinedUnrealizedPnL = tradePnL + manualPnL;
+						combinedUnrealizedPnLPercent = (combinedUnrealizedPnL / totalCost) * 100;
+					} else if (tradePnlData) {
+						combinedAvgCostBasis = costBasis?.avgCostBasis ?? null;
+						combinedUnrealizedPnL = tradePnlData.unrealizedPnL;
+						combinedUnrealizedPnLPercent = tradePnlData.unrealizedPnLPercent;
+					}
+				}
+
 				return {
 					...h,
 					totalBalance: balanceNum,
@@ -362,7 +474,15 @@
 					price,
 					value: balanceNum * price,
 					priceChange,
-					priceChangePercent
+					priceChangePercent,
+					// Tracked vs untracked
+					trackedBalance,
+					untrackedBalance,
+					manualEntry,
+					// P&L fields (combined from trade + manual)
+					unrealizedPnL: combinedUnrealizedPnL,
+					unrealizedPnLPercent: combinedUnrealizedPnLPercent,
+					avgCostBasis: combinedAvgCostBasis
 				};
 			})
 			.filter((h) => h.totalBalance > 0)
@@ -372,6 +492,12 @@
 	})();
 
 	$: totalValue = portfolioHoldings.reduce((sum, h) => sum + h.value, 0);
+
+	// Calculate total unrealized P&L (only from holdings with cost basis data)
+	$: totalUnrealizedPnL = portfolioHoldings.reduce(
+		(sum, h) => sum + (h.unrealizedPnL ?? 0),
+		0
+	);
 
 	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
 	$: paymentTokenAddresses = (() => {
@@ -406,7 +532,10 @@
 					price: 1, // USDC is pegged to $1
 					value: 0,
 					priceChange: 0,
-					priceChangePercent: 0
+					priceChangePercent: 0,
+					unrealizedPnL: null,
+					unrealizedPnLPercent: null,
+					avgCostBasis: null
 				});
 			}
 		}
@@ -429,7 +558,10 @@
 				price: 0, // ETH price not tracked in our feeds
 				value: 0,
 				priceChange: 0,
-				priceChangePercent: 0
+				priceChangePercent: 0,
+				unrealizedPnL: null,
+				unrealizedPnLPercent: null,
+				avgCostBasis: null
 			});
 		}
 
@@ -444,6 +576,12 @@
 
 	// Trade activity for market orders - poll every 5 minutes, refetch on mount
 	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 300_000);
+
+	// Cost basis query for P&L calculation - uses all-time trade history
+	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress, 300_000);
+
+	// Load manual cost basis entries when wallet changes
+	$: manualCostBasisStore.loadForWallet($walletAddress);
 
 	// Filter user's market orders from trades
 	$: userMarketOrders = (() => {
@@ -684,12 +822,24 @@
 					/>
 					<div class="hidden sm:block">
 						<MetricCard
-							label="24h Change"
-							value="TBD"
+							label="Unrealized P&L"
+							value={$costBasisQuery?.isLoading
+								? 'Loading...'
+								: totalUnrealizedPnL === 0
+									? '$0.00'
+									: `${totalUnrealizedPnL >= 0 ? '+' : ''}$${totalUnrealizedPnL.toFixed(2)}`}
 							paddingClass="p-4"
 							showGradient={false}
 							change=""
-							valueClass="text-2xl font-bold text-gray-400"
+							valueClass={`text-2xl font-bold ${
+								$costBasisQuery?.isLoading
+									? 'animate-pulse text-gray-400'
+									: totalUnrealizedPnL > 0
+										? 'text-green-400'
+										: totalUnrealizedPnL < 0
+											? 'text-red-400'
+											: 'text-gray-400'
+							}`}
 						/>
 					</div>
 					<MetricCard
@@ -833,12 +983,16 @@
 												>Price</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>Value</th
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
+												>Cost Basis</th
 											>
 											<th
 												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>24h</th
+												>Value</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>P&L</th
 											>
 											<th
 												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
@@ -857,23 +1011,82 @@
 														name={holding.name}
 													/>
 												</td>
-												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.walletBalanceNum.toFixed(4)}</td
 												>
-												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.vaultBalanceNum.toFixed(4)}</td
 												>
-												<td class="hidden px-2 py-2 font-medium sm:table-cell sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
 													>{holding.totalBalance.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 text-xs sm:px-4 sm:py-3 sm:text-sm"
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
 													>${holding.price.toFixed(2)}</td
 												>
-												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
+												<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3">
+													{#if $costBasisQuery?.isLoading}
+														<span class="animate-pulse text-gray-400">Loading...</span>
+													{:else}
+														<div class="flex items-center gap-1">
+															{#if holding.avgCostBasis !== null}
+																<span>${holding.avgCostBasis.toFixed(2)}</span>
+															{:else}
+																<span class="text-gray-500">—</span>
+															{/if}
+															{#if holding.untrackedBalance > 0.0001}
+																<button
+																	type="button"
+																	on:click={() => openCostBasisModal(holding)}
+																	class="ml-1 rounded p-0.5 text-gray-400 transition hover:bg-white/10 hover:text-yellow-400"
+																	title={holding.manualEntry
+																		? `Edit cost basis for ${holding.untrackedBalance.toFixed(4)} untracked tokens`
+																		: `Add cost basis for ${holding.untrackedBalance.toFixed(4)} untracked tokens`}
+																>
+																	<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+																	</svg>
+																</button>
+															{/if}
+														</div>
+														{#if holding.untrackedBalance > 0.0001 && !holding.manualEntry}
+															<div class="mt-0.5 text-xs text-yellow-500/70">
+																{holding.untrackedBalance.toFixed(2)} untracked
+															</div>
+														{/if}
+													{/if}
+												</td>
+												<td class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
 													>${holding.value.toFixed(2)}</td
 												>
-												<td class="hidden px-2 py-2 text-gray-400 sm:table-cell sm:px-4 sm:py-3">
-													TBD
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">
+													{#if $costBasisQuery?.isLoading}
+														<span class="animate-pulse text-gray-400">Loading...</span>
+													{:else if holding.unrealizedPnL !== null}
+														<div
+															class={holding.unrealizedPnL >= 0
+																? 'text-green-400'
+																: 'text-red-400'}
+														>
+															<div class="font-medium">
+																{holding.unrealizedPnLPercent !== null
+																	? `${holding.unrealizedPnLPercent >= 0 ? '+' : ''}${holding.unrealizedPnLPercent.toFixed(1)}%`
+																	: '—'}
+															</div>
+															<div class="hidden text-xs opacity-75 sm:block">
+																{holding.unrealizedPnL >= 0 ? '+' : ''}${holding.unrealizedPnL.toFixed(2)}
+															</div>
+														</div>
+													{:else if holding.untrackedBalance > 0.0001}
+														<button
+															type="button"
+															on:click={() => openCostBasisModal(holding)}
+															class="text-yellow-500/70 underline decoration-dotted underline-offset-2 transition hover:text-yellow-400"
+														>
+															Add cost basis
+														</button>
+													{:else}
+														<span class="text-gray-500">—</span>
+													{/if}
 												</td>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">
 													<div class="flex justify-center gap-2">
@@ -1259,3 +1472,120 @@
 	<!-- Footer -->
 	<Footer />
 </div>
+
+<!-- Manual Cost Basis Entry Modal -->
+{#if showCostBasisModal && costBasisEditToken}
+	<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+		on:click={closeCostBasisModal}
+		on:keydown={(e) => e.key === 'Escape' && closeCostBasisModal()}
+		role="presentation"
+	>
+		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+		<div
+			class="mx-4 w-full max-w-md rounded-xl border border-white/10 bg-gray-900 p-6 shadow-2xl"
+			on:click|stopPropagation
+			on:keydown|stopPropagation
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="cost-basis-modal-title"
+		>
+			<h3 id="cost-basis-modal-title" class="mb-4 text-lg font-semibold text-white">
+				{costBasisEditToken.existingEntry ? 'Edit' : 'Add'} Cost Basis for {costBasisEditToken.symbol}
+			</h3>
+
+			<p class="mb-4 text-sm text-gray-400">
+				You have <span class="font-medium text-yellow-400">{costBasisEditToken.untrackedBalance.toFixed(4)}</span> tokens
+				without trade history. Enter the cost basis for these tokens.
+			</p>
+
+			<div class="space-y-4">
+				<div>
+					<label for="cb-quantity" class="mb-1 block text-sm font-medium text-gray-300">
+						Quantity
+					</label>
+					<input
+						id="cb-quantity"
+						type="number"
+						step="any"
+						min="0"
+						max={costBasisEditToken.untrackedBalance}
+						bind:value={costBasisInputQuantity}
+						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						placeholder="0.0000"
+					/>
+					<p class="mt-1 text-xs text-gray-500">
+						Max: {costBasisEditToken.untrackedBalance.toFixed(4)}
+					</p>
+				</div>
+
+				<div>
+					<label for="cb-price" class="mb-1 block text-sm font-medium text-gray-300">
+						Cost per Token (USD)
+					</label>
+					<input
+						id="cb-price"
+						type="number"
+						step="any"
+						min="0"
+						bind:value={costBasisInputPrice}
+						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						placeholder="0.00 (use 0 for gifts/airdrops)"
+					/>
+				</div>
+
+				<div>
+					<label for="cb-note" class="mb-1 block text-sm font-medium text-gray-300">
+						Note <span class="text-gray-500">(optional)</span>
+					</label>
+					<input
+						id="cb-note"
+						type="text"
+						bind:value={costBasisInputNote}
+						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						placeholder="e.g., Gift, Purchased on Coinbase"
+					/>
+				</div>
+
+				{#if costBasisInputQuantity && costBasisInputPrice}
+					<div class="rounded-lg bg-gray-800/50 p-3">
+						<div class="flex justify-between text-sm">
+							<span class="text-gray-400">Total Cost:</span>
+							<span class="font-medium text-white">
+								${(parseFloat(costBasisInputQuantity) * parseFloat(costBasisInputPrice)).toFixed(2)}
+							</span>
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			<div class="mt-6 flex gap-3">
+				{#if costBasisEditToken.existingEntry}
+					<button
+						type="button"
+						on:click={removeCostBasisEntry}
+						class="rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10"
+					>
+						Remove
+					</button>
+				{/if}
+				<div class="flex-1"></div>
+				<button
+					type="button"
+					on:click={closeCostBasisModal}
+					class="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:bg-white/5"
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					on:click={saveCostBasisEntry}
+					class="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-medium text-black transition hover:bg-yellow-400"
+				>
+					Save
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

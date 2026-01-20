@@ -1326,10 +1326,6 @@
 									<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
 								</div>
 								<div class="flex justify-between">
-									<span class="text-gray-400">On-Chain Market Cap</span>
-									<span>N/A</span>
-								</div>
-								<div class="flex justify-between">
 									<span class="text-gray-400">Holders</span>
 									<span>{currentToken.tokenHolders.length}</span>
 								</div>

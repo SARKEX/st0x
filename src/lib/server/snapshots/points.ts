@@ -34,10 +34,7 @@ export type WalletPointsMap = Map<
  * Calculate points for each wallet from a set of snapshots for a single block
  * Points = 100 per $1 USD of holdings
  */
-export function calculateWalletPointsFromSnapshots(
-	snapshots: BlockSnapshot[],
-	_blockNumber: number
-): WalletPointsMap {
+export function calculateWalletPointsFromSnapshots(snapshots: BlockSnapshot[]): WalletPointsMap {
 	const walletPoints: WalletPointsMap = new Map();
 	const totalTokens = snapshots.length;
 
@@ -88,7 +85,6 @@ export type ProgressCallback = (
  */
 export function calculateWalletPointsFromSnapshotsWithProgress(
 	snapshots: BlockSnapshot[],
-	_blockNumber: number,
 	onProgress?: ProgressCallback
 ): WalletPointsMap {
 	const walletPoints: WalletPointsMap = new Map();
@@ -223,7 +219,7 @@ export async function updateMonthlyPoints(
 	}
 
 	// Calculate points from this snapshot
-	const walletPoints = calculateWalletPointsFromSnapshots(snapshots, blockNumber);
+	const walletPoints = calculateWalletPointsFromSnapshots(snapshots);
 
 	// Merge into monthly data using shared function
 	mergeWalletPointsIntoMonthlyData(monthlyData, walletPoints, blockNumber);
