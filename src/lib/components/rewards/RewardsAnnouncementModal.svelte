@@ -359,7 +359,6 @@
 		text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
 	}
 
-	
 	/* APY value pulse */
 	.apy-value {
 		animation: pulse-glow 2s ease-in-out infinite;

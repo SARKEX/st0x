@@ -788,7 +788,9 @@ ${TRADE_FIELDS}
 		return uniqueTrades;
 	} catch (error) {
 		throw new Error(
-			`Failed to fetch trades by sender: ${error instanceof Error ? error.message : 'Unknown error'}`
+			`Failed to fetch trades by sender: ${
+				error instanceof Error ? error.message : 'Unknown error'
+			}`
 		);
 	}
 }

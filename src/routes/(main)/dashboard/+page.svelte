@@ -151,7 +151,8 @@
 			existingEntry: holding.manualEntry
 		};
 		// Pre-fill with existing values or defaults
-		costBasisInputQuantity = holding.manualEntry?.quantity?.toString() ?? holding.untrackedBalance.toFixed(4);
+		costBasisInputQuantity =
+			holding.manualEntry?.quantity?.toString() ?? holding.untrackedBalance.toFixed(4);
 		costBasisInputPrice = holding.manualEntry?.costPerUnit?.toString() ?? '';
 		costBasisInputNote = holding.manualEntry?.note ?? '';
 		showCostBasisModal = true;
@@ -494,10 +495,7 @@
 	$: totalValue = portfolioHoldings.reduce((sum, h) => sum + h.value, 0);
 
 	// Calculate total unrealized P&L (only from holdings with cost basis data)
-	$: totalUnrealizedPnL = portfolioHoldings.reduce(
-		(sum, h) => sum + (h.unrealizedPnL ?? 0),
-		0
-	);
+	$: totalUnrealizedPnL = portfolioHoldings.reduce((sum, h) => sum + (h.unrealizedPnL ?? 0), 0);
 
 	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
 	$: paymentTokenAddresses = (() => {
@@ -535,7 +533,10 @@
 					priceChangePercent: 0,
 					unrealizedPnL: null,
 					unrealizedPnLPercent: null,
-					avgCostBasis: null
+					avgCostBasis: null,
+					trackedBalance: 0,
+					untrackedBalance: 0,
+					manualEntry: undefined
 				});
 			}
 		}
@@ -561,7 +562,10 @@
 				priceChangePercent: 0,
 				unrealizedPnL: null,
 				unrealizedPnLPercent: null,
-				avgCostBasis: null
+				avgCostBasis: null,
+				trackedBalance: 0,
+				untrackedBalance: 0,
+				manualEntry: undefined
 			});
 		}
 
@@ -1011,13 +1015,16 @@
 														name={holding.name}
 													/>
 												</td>
-												<td class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
+												<td
+													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.walletBalanceNum.toFixed(4)}</td
 												>
-												<td class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
+												<td
+													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.vaultBalanceNum.toFixed(4)}</td
 												>
-												<td class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
+												<td
+													class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
 													>{holding.totalBalance.toFixed(4)}</td
 												>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
@@ -1039,11 +1046,25 @@
 																	on:click={() => openCostBasisModal(holding)}
 																	class="ml-1 rounded p-0.5 text-gray-400 transition hover:bg-white/10 hover:text-yellow-400"
 																	title={holding.manualEntry
-																		? `Edit cost basis for ${holding.untrackedBalance.toFixed(4)} untracked tokens`
-																		: `Add cost basis for ${holding.untrackedBalance.toFixed(4)} untracked tokens`}
+																		? `Edit cost basis for ${holding.untrackedBalance.toFixed(
+																				4
+																			)} untracked tokens`
+																		: `Add cost basis for ${holding.untrackedBalance.toFixed(
+																				4
+																			)} untracked tokens`}
 																>
-																	<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+																	<svg
+																		class="h-3.5 w-3.5"
+																		fill="none"
+																		stroke="currentColor"
+																		viewBox="0 0 24 24"
+																	>
+																		<path
+																			stroke-linecap="round"
+																			stroke-linejoin="round"
+																			stroke-width="2"
+																			d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+																		/>
 																	</svg>
 																</button>
 															{/if}
@@ -1055,7 +1076,8 @@
 														{/if}
 													{/if}
 												</td>
-												<td class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
+												<td
+													class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
 													>${holding.value.toFixed(2)}</td
 												>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">
@@ -1063,17 +1085,19 @@
 														<span class="animate-pulse text-gray-400">Loading...</span>
 													{:else if holding.unrealizedPnL !== null}
 														<div
-															class={holding.unrealizedPnL >= 0
-																? 'text-green-400'
-																: 'text-red-400'}
+															class={holding.unrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}
 														>
 															<div class="font-medium">
 																{holding.unrealizedPnLPercent !== null
-																	? `${holding.unrealizedPnLPercent >= 0 ? '+' : ''}${holding.unrealizedPnLPercent.toFixed(1)}%`
+																	? `${
+																			holding.unrealizedPnLPercent >= 0 ? '+' : ''
+																		}${holding.unrealizedPnLPercent.toFixed(1)}%`
 																	: '—'}
 															</div>
 															<div class="hidden text-xs opacity-75 sm:block">
-																{holding.unrealizedPnL >= 0 ? '+' : ''}${holding.unrealizedPnL.toFixed(2)}
+																{holding.unrealizedPnL >= 0
+																	? '+'
+																	: ''}${holding.unrealizedPnL.toFixed(2)}
 															</div>
 														</div>
 													{:else if holding.untrackedBalance > 0.0001}
@@ -1496,8 +1520,9 @@
 			</h3>
 
 			<p class="mb-4 text-sm text-gray-400">
-				You have <span class="font-medium text-yellow-400">{costBasisEditToken.untrackedBalance.toFixed(4)}</span> tokens
-				without trade history. Enter the cost basis for these tokens.
+				You have <span class="font-medium text-yellow-400"
+					>{costBasisEditToken.untrackedBalance.toFixed(4)}</span
+				> tokens without trade history. Enter the cost basis for these tokens.
 			</p>
 
 			<div class="space-y-4">
