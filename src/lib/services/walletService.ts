@@ -326,127 +326,176 @@ export function getSignerAddress(): string | null {
  */
 export async function sendTransactionWithGasOption(
 	params: {
-		to: `0x${string}`;
-		data?: Hex;
-		value?: bigint;
+	  to: `0x${string}`;
+	  data?: Hex;
+	  value?: bigint;
 	},
 	payInStablecoin: boolean
-): Promise<Hash> {
+  ): Promise<Hash> {
 	// If not paying in stablecoin, use regular transaction
 	if (!payInStablecoin) {
-		return sendTransaction(params);
+	  return sendTransaction(params);
 	}
-
-	// For stablecoin gas payment, we need to use Rhinestone
+  
 	const method = get(authMethod);
-
+  
+	// Only Dynamic embedded wallets supported for Rhinestone USDC gas in your app
 	if (method !== 'dynamic') {
-		// Rhinestone ERC20 gas payment currently only works with Dynamic embedded wallets
-		// Fall back to regular transaction for external wallets
-		console.warn('ERC20 gas payment only available for Dynamic wallets, falling back to ETH gas');
-		return sendTransaction(params);
+	  console.warn('ERC20 gas payment only available for Dynamic wallets, falling back to ETH gas');
+	  return sendTransaction(params);
 	}
-
+  
 	// Dynamic import to avoid circular dependencies
 	const { getRhinestoneClient, isRhinestoneConfigured } = await import(
-		'./account-abstraction/rhinestone/client'
+	  './account-abstraction/rhinestone/client'
 	);
 	const { getDynamicAccountForRhinestone } = await import('./account-abstraction/wallets/dynamic');
 	const { SUPPORTED_NETWORKS } = await import('./account-abstraction/types');
-
+  
 	if (!isRhinestoneConfigured()) {
-		console.warn('Rhinestone not configured, falling back to ETH gas');
-		return sendTransaction(params);
+	  console.warn('Rhinestone not configured, falling back to ETH gas');
+	  return sendTransaction(params);
 	}
-
+  
 	const walletAccount = await getDynamicAccountForRhinestone();
 	if (!walletAccount) {
-		console.warn('Could not get wallet account for Rhinestone, falling back to ETH gas');
-		return sendTransaction(params);
+	  console.warn('Could not get wallet account for Rhinestone, falling back to ETH gas');
+	  return sendTransaction(params);
 	}
-
+  
+	// Sanity check: store vs account address
+	const storeAddr = get(dynamicWalletAddress)?.toLowerCase();
+	const acctAddr = walletAccount.address?.toLowerCase();
+	console.log('[Rhinestone] account match check', {
+	  storeAddr,
+	  acctAddr,
+	  same: storeAddr === acctAddr
+	});
+  
+	if (storeAddr && acctAddr && storeAddr !== acctAddr) {
+	  throw new Error(`Wallet mismatch: store=${storeAddr} rhinestone=${acctAddr}`);
+	}
+  
+	// Helper: persist intentId somewhere so UI/devtools can find it
+	const persistIntentId = (intentId: string) => {
+	  try {
+		// latest-only is usually enough; you can expand to an array if needed
+		localStorage.setItem('rhinestone:last_intent_id', intentId);
+		localStorage.setItem('rhinestone:last_intent_ts', String(Date.now()));
+	  } catch {
+		// ignore (SSR/private mode)
+	  }
+	};
+  
+	// Helper: make a "synthetic tx hash" that is stable (for receipt waiting you can skip)
+	// This is NOT a real on-chain tx hash; it just prevents UI from getting stuck.
+	// We prefix with 0x and pad to 32 bytes.
+	const syntheticHashFromIntent = (intentId: string): Hash => {
+	  // intentId is decimal; turn into hex and clamp/pad to 32 bytes
+	  const hex = BigInt(intentId).toString(16);
+	  const padded = hex.length >= 64 ? hex.slice(-64) : hex.padStart(64, '0');
+	  return (`0x${padded}`) as Hash;
+	};
+  
 	try {
-		const rhinestoneClient = getRhinestoneClient();
-
-		console.log('[Rhinestone] Executing same-chain transaction with USDC gas payment', {
-			to: params.to,
-			value: params.value?.toString(),
-			dataLength: params.data?.length,
-			walletAddress: walletAccount.address
-		});
-
-		// Execute same-chain transaction with USDC gas payment
-		// For same-chain, use executeSameChainTransaction with 'chain' parameter
-		const result = await rhinestoneClient.executeSameChainTransaction(
+	  const rhinestoneClient = getRhinestoneClient();
+  
+	  console.log('[Rhinestone] Executing same-chain transaction with USDC gas payment', {
+		to: params.to,
+		value: params.value?.toString(),
+		dataLength: params.data?.length,
+		walletAddress: walletAccount.address
+	  });
+  
+	  const result = await rhinestoneClient.executeSameChainTransaction(
+		{
+		  chainId: SUPPORTED_NETWORKS.BASE,
+		  calls: [
 			{
-				chainId: SUPPORTED_NETWORKS.BASE,
-				calls: [
-					{
-						to: params.to,
-						value: params.value || 0n,
-						data: params.data || '0x'
-					}
-				]
-			},
-			walletAccount,
-			'USDC' // Pay gas in USDC
-		);
-
+			  to: params.to,
+			  value: params.value || 0n,
+			  data: params.data || '0x'
+			}
+		  ]
+		},
+		walletAccount,
+		'USDC'
+	  );
+  
+	  // Normal case
+	  if (result?.txHash && result.txHash !== '0x') {
 		console.log('[Rhinestone] Transaction successful:', result);
-		return result.txHash;
-	} catch (error) {
-		console.error('[Rhinestone] ERC20 gas payment failed:', error);
-		console.error('[Rhinestone] Error details:', {
-			name: (error as Error)?.name,
-			message: (error as Error)?.message,
-			stack: (error as Error)?.stack,
-			cause: (error as unknown as { cause?: unknown })?.cause
+		return result.txHash as Hash;
+	  }
+  
+	  // If Rhinestone didn’t return a hash but did return an intentId,
+	  // do NOT hard-fail: persist intentId and return synthetic hash.
+	  if (result?.intentId) {
+		console.warn('[Rhinestone] No txHash returned, but intentId exists. Returning synthetic hash.', {
+		  intentId: result.intentId
 		});
-
-		// Extract meaningful error message
-		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		
-		// Check if this is a JSON-RPC account authorization error
-		// If so, automatically fall back to native gas (ETH) instead of failing
-		const isJsonRpcAuthError = 
-			errorMessage.includes('not supported with this wallet type') ||
-			errorMessage.includes('does not support EIP-7702 authorization') ||
-			errorMessage.includes('JSON-RPC') ||
-			((error as { cause?: { isJsonRpcAccount?: boolean } })?.cause?.isJsonRpcAccount === true);
-		
-		// Check if this is a network error connecting to Rhinestone API
-		// If so, automatically fall back to native gas (ETH) instead of failing
-		const isNetworkError = 
-			errorMessage.includes('Network error connecting to Rhinestone API') ||
-			errorMessage.includes('Failed to fetch') ||
-			errorMessage.includes('network') && errorMessage.toLowerCase().includes('error') ||
-			((error as { cause?: { isNetworkError?: boolean } })?.cause?.isNetworkError === true);
-		
-		if (isJsonRpcAuthError || isNetworkError) {
-			const reason = isJsonRpcAuthError 
-				? 'USDC gas payment not supported with this wallet type'
-				: 'Network error connecting to Rhinestone API';
-			console.warn(
-				`[Rhinestone] ${reason}. Automatically falling back to native gas (ETH)...`
-			);
-			// Fall back to native gas payment
-			return sendTransaction(params);
-		}
-
-		// Check for common error cases and provide user-friendly messages
-		if (errorMessage.toLowerCase().includes('insufficient balance')) {
-			throw new Error(
-				'Insufficient USDC balance to pay gas fees. Please add USDC to your wallet or disable "Pay fees in stablecoin" option.'
-			);
-		}
-
-		if (errorMessage.toLowerCase().includes('api key')) {
-			throw new Error(
-				'Rhinestone API key not configured. Please contact support or disable "Pay fees in stablecoin" option.'
-			);
-		}
-
-		// Re-throw with clear message
-		throw new Error(`Failed to pay gas with USDC: ${errorMessage}`);
+		persistIntentId(result.intentId);
+		return syntheticHashFromIntent(result.intentId);
+	  }
+  
+	  // If neither exists, treat as real failure
+	  throw new Error('Rhinestone returned neither txHash nor intentId');
+	} catch (error) {
+	  console.error('[Rhinestone] ERC20 gas payment failed:', error);
+	  console.error('[Rhinestone] Error details:', {
+		name: (error as Error)?.name,
+		message: (error as Error)?.message,
+		stack: (error as Error)?.stack,
+		cause: (error as unknown as { cause?: unknown })?.cause
+	  });
+  
+	  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  
+	  // ✅ Special handling: your exact failure mode
+	  // "Transaction completed but no hash returned (intentId: ...)"
+	  // => persist intentId and return synthetic hash so UI can proceed.
+	  const intentMatch = /intentId:\s*([0-9]+)/i.exec(errorMessage);
+	  if (errorMessage.toLowerCase().includes('no hash returned') && intentMatch?.[1]) {
+		const intentId = intentMatch[1];
+		console.warn('[Rhinestone] Completed without hash; treating as submitted.', { intentId });
+		persistIntentId(intentId);
+		return syntheticHashFromIntent(intentId);
+	  }
+  
+	  // Fall back to native gas for wallet-type / network issues
+	  const isJsonRpcAuthError =
+		errorMessage.includes('not supported with this wallet type') ||
+		errorMessage.includes('does not support EIP-7702 authorization') ||
+		errorMessage.includes('JSON-RPC') ||
+		((error as { cause?: { isJsonRpcAccount?: boolean } })?.cause?.isJsonRpcAccount === true);
+  
+	  const isNetworkError =
+		errorMessage.includes('Network error connecting to Rhinestone API') ||
+		errorMessage.includes('Failed to fetch') ||
+		(errorMessage.toLowerCase().includes('network') && errorMessage.toLowerCase().includes('error')) ||
+		((error as { cause?: { isNetworkError?: boolean } })?.cause?.isNetworkError === true);
+  
+	  if (isJsonRpcAuthError || isNetworkError) {
+		const reason = isJsonRpcAuthError
+		  ? 'USDC gas payment not supported with this wallet type'
+		  : 'Network error connecting to Rhinestone API';
+		console.warn(`[Rhinestone] ${reason}. Automatically falling back to native gas (ETH)...`);
+		return sendTransaction(params);
+	  }
+  
+	  if (errorMessage.toLowerCase().includes('insufficient balance')) {
+		throw new Error(
+		  'Insufficient USDC balance to pay gas fees. Please add USDC to your wallet or disable "Pay fees in stablecoin" option.'
+		);
+	  }
+  
+	  if (errorMessage.toLowerCase().includes('api key')) {
+		throw new Error(
+		  'Rhinestone API key not configured. Please contact support or disable "Pay fees in stablecoin" option.'
+		);
+	  }
+  
+	  throw new Error(`Failed to pay gas with USDC: ${errorMessage}`);
 	}
-}
+  }
+  

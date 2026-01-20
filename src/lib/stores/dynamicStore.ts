@@ -30,6 +30,31 @@ export const dynamicTriggerSendTransaction = writable<{
 // Token management
 export const dynamicAccessToken = writable<string | null>(null);
 
+// Dynamic signer for EIP-7702 authorization signing
+// This is set by the React component and used by Svelte
+export interface DynamicSigner {
+	signMessage: (args: { message: string }) => Promise<string>;
+	signTransaction: (tx: unknown) => Promise<string>;
+	signTypedData: (args: {
+		domain: Record<string, unknown>;
+		types: Record<string, unknown>;
+		primaryType: string;
+		message: Record<string, unknown>;
+	}) => Promise<string>;
+	signAuthorization: (args: {
+		contractAddress: string;
+		chainId: number;
+		nonce?: number;
+	}) => Promise<{
+		r: `0x${string}`;
+		s: `0x${string}`;
+		v?: bigint;
+		yParity?: number;
+	}>;
+}
+
+export const dynamicSigner = writable<DynamicSigner | null>(null);
+
 // UI modal states
 export const showAuthModal = writable<boolean>(false);
 export const showSendFundsModal = writable<boolean>(false);

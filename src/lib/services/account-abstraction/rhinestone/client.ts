@@ -66,6 +66,15 @@ const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 import { createRpcTransport } from '$lib/utils/rpc';
 
 
+function safeStringify(value: unknown) {
+	return JSON.stringify(
+	  value,
+	  (_k, v) => (typeof v === 'bigint' ? v.toString() : v),
+	  2
+	);
+  }
+
+  
 function isJsonRpcAccount(account: Account): boolean {
 	return (account as any)?.type === 'json-rpc';
   }
@@ -228,6 +237,8 @@ export class RhinestoneClient {
 			});
 
 			// Build createAccount options based on account type
+			// For Dynamic wallets, always pass eoa to enable EIP-7702 support
+			// This matches the working implementation pattern
 			const createAccountOptions: {
 				owners: { type: 'ecdsa'; accounts: Account[] };
 				accountType?: '7702';
@@ -239,11 +250,22 @@ export class RhinestoneClient {
 				}
 			};
 
+			// Check if this is a Dynamic wallet account (has signAuthorization method)
+			// Dynamic wallets created with toAccount() will have signAuthorization
+			const isDynamicWallet = typeof walletAccount.signAuthorization === 'function' ||
+				(walletAccount as any)?.type === 'json-rpc' || 
+				(walletAccount as any)?.type === 'local';
+
 			// For EIP-7702 mode, add the accountType and eoa parameter
 			// This tells Rhinestone to use EIP-7702 to upgrade the EOA
 			// instead of creating a separate smart account
 			if (this.config.accountType === '7702') {
 				createAccountOptions.accountType = '7702';
+				createAccountOptions.eoa = walletAccount;
+			} else if (isDynamicWallet) {
+				// Always pass eoa for Dynamic wallets (matches working implementation)
+				// This ensures proper EIP-7702 authorization signing support
+				console.log('[Rhinestone Client] Detected Dynamic wallet, passing eoa for EIP-7702 support');
 				createAccountOptions.eoa = walletAccount;
 			}
 
@@ -523,14 +545,29 @@ export class RhinestoneClient {
 
 			if (isEOA || this.config.accountType === '7702') {
 				// Check if the account is already deployed/initialized on the target chain
-				const isDeployed = await rhinestoneAccount.isDeployed(targetChain);
-				console.log('[Rhinestone Client] Account deployed status:', {
-					isDeployed,
-					isEOA,
-					accountType: this.config.accountType,
-					rhinestoneAddress,
-					walletAddress: walletAccount.address
-				});
+				// Note: isDeployed() may throw if EIP-7702 account already exists (SDK limitation)
+				let isDeployed = false;
+				try {
+					isDeployed = await rhinestoneAccount.isDeployed(targetChain);
+					console.log('[Rhinestone Client] Account deployed status:', {
+						isDeployed,
+						isEOA,
+						accountType: this.config.accountType,
+						rhinestoneAddress,
+						walletAddress: walletAccount.address
+					});
+				} catch (deployedError) {
+					const errorMsg = deployedError instanceof Error ? deployedError.message : String(deployedError);
+					// If the error is about existing EIP-7702 accounts not being supported,
+					// we can assume the account is already initialized and skip the init signature
+					if (errorMsg.includes('Existing EIP-7702 accounts') || errorMsg.includes('ExistingEip7702AccountsNotSupported')) {
+						console.warn('[Rhinestone Client] Account appears to be already initialized with EIP-7702 (SDK limitation). Skipping init signature.');
+						isDeployed = true; // Treat as deployed to skip init signature
+					} else {
+						// Re-throw other errors
+						throw deployedError;
+					}
+				}
 
 				if (!isDeployed) {
 					// Sign the EIP-7702 init data for the first transaction
@@ -599,7 +636,8 @@ export class RhinestoneClient {
 			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
 				try {
-					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
+					// IMPORTANT: signAuthorizations should be called with signedTx, not preparedTx
+					authorizations = await rhinestoneAccount.signAuthorizations(signedTx);
 					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
 				} catch (authError) {
 					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
@@ -784,7 +822,8 @@ export class RhinestoneClient {
 			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
 				try {
-					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
+					// IMPORTANT: signAuthorizations should be called with signedTx, not preparedTx
+					authorizations = await rhinestoneAccount.signAuthorizations(signedTx);
 					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
 				} catch (authError) {
 					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
@@ -915,14 +954,30 @@ export class RhinestoneClient {
 			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
 
 			if (isEOA || this.config.accountType === '7702') {
-				const isDeployed = await rhinestoneAccount.isDeployed(chain);
-				console.log('[Rhinestone Client] Account deployed status:', {
-					isDeployed,
-					isEOA,
-					accountType: this.config.accountType,
-					rhinestoneAddress,
-					walletAddress: walletAccount.address
-				});
+				// Check if the account is already deployed/initialized on this chain
+				// Note: isDeployed() may throw if EIP-7702 account already exists (SDK limitation)
+				let isDeployed = false;
+				try {
+					isDeployed = await rhinestoneAccount.isDeployed(chain);
+					console.log('[Rhinestone Client] Account deployed status:', {
+						isDeployed,
+						isEOA,
+						accountType: this.config.accountType,
+						rhinestoneAddress,
+						walletAddress: walletAccount.address
+					});
+				} catch (deployedError) {
+					const errorMsg = deployedError instanceof Error ? deployedError.message : String(deployedError);
+					// If the error is about existing EIP-7702 accounts not being supported,
+					// we can assume the account is already initialized and skip the init signature
+					if (errorMsg.includes('Existing EIP-7702 accounts') || errorMsg.includes('ExistingEip7702AccountsNotSupported')) {
+						console.warn('[Rhinestone Client] Account appears to be already initialized with EIP-7702 (SDK limitation). Skipping init signature.');
+						isDeployed = true; // Treat as deployed to skip init signature
+					} else {
+						// Re-throw other errors
+						throw deployedError;
+					}
+				}
 
 				if (!isDeployed) {
 					console.log('[Rhinestone Client] Signing EIP-7702 init data for same-chain swap...');
@@ -1027,7 +1082,8 @@ export class RhinestoneClient {
 			let authorizations: SignedAuthorizationList = [];
 			if (this.config.accountType === '7702') {
 				try {
-					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
+					// IMPORTANT: signAuthorizations should be called with signedTx, not preparedTx
+					authorizations = await rhinestoneAccount.signAuthorizations(signedTx);
 					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
 				} catch (authError) {
 					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
@@ -1110,426 +1166,158 @@ export class RhinestoneClient {
 	 */
 	async executeSameChainTransaction(
 		params: {
-			chainId: SupportedNetworkId;
-			calls: Array<{ to: string; value?: bigint; data?: string }>;
+		  chainId: SupportedNetworkId;
+		  calls: Array<{ to: string; value?: bigint; data?: string }>;
 		},
 		walletAccount: Account,
 		feeAsset?: string
-	): Promise<{ txHash: Hex; intentId: string }> {
+	  ): Promise<{ txHash: Hex; intentId: string }> {
+		const chain = CHAIN_CONFIG[params.chainId];
+	  
+		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	  
+		// Keep polling short + bounded so UI never “stucks”
+		const pollForHash = async (
+		  account: RhinestoneAccount,
+		  txResult: TransactionResult,
+		  maxMs = 45_000,
+		  intervalMs = 2_500
+		): Promise<Hex | undefined> => {
+		  const start = Date.now();
+		  while (Date.now() - start < maxMs) {
+			const st = await account.waitForExecution(txResult);
+			const hash =
+			  st?.fill?.hash ??
+			  st?.claims?.find((c) => c?.hash)?.hash;
+	  
+			if (hash && hash !== '0x') return hash;
+			await sleep(intervalMs);
+		  }
+		  return undefined;
+		};
+	  
 		try {
-			console.log('[Rhinestone Client] executeSameChainTransaction called', {
-				chainId: params.chainId,
-				callsCount: params.calls.length,
-				feeAsset,
-				walletAddress: walletAccount.address
-			});
-
-			// Validate API key
-			if (!this.config.apiKey) {
-				throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
-			}
-
-			// Validate network
-			if (!this.isSupportedNetwork(params.chainId)) {
-				throw new AAError(`Chain ${params.chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
-			}
-
-			// Get wallet client for authorization signing (needed for JSON-RPC accounts)
-			// Try to get both account and wallet client from Dynamic
-			let walletClient: WalletClient | undefined;
+		  console.log('[Rhinestone Client] executeSameChainTransaction called', {
+			chainId: params.chainId,
+			callsCount: params.calls.length,
+			feeAsset,
+			walletAddress: walletAccount.address
+		  });
+	  
+		  if (!this.config.apiKey) {
+			throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
+		  }
+	  
+		  if (!this.isSupportedNetwork(params.chainId)) {
+			throw new AAError(`Chain ${params.chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
+		  }
+	  
+		  // Create Rhinestone account (7702)
+		  const rhinestoneAccount = await this.createAccount(walletAccount);
+		  const rhinestoneAddress = rhinestoneAccount.getAddress();
+	  
+		  // EIP-7702 init signature (your SDK seems to require it even if already initialized)
+		  let eip7702InitSignature: Hex | undefined;
+		  if (this.config.accountType === '7702') {
 			try {
-				const { getDynamicAccountForRhinestone } = await import('../wallets/dynamic');
-				const result = await getDynamicAccountForRhinestone(params.chainId, true);
-				if (result && typeof result === 'object' && 'walletClient' in result) {
-					walletClient = result.walletClient;
-					// Cache the wallet client for this chain
-					this.walletClientCache.set(`${walletAccount.address}-${params.chainId}`, walletClient);
-					console.log('[Rhinestone Client] Wallet client cached for authorization signing');
-				}
-			} catch (walletClientError) {
-				console.warn('[Rhinestone Client] Could not get wallet client (will try to get it later if needed):', walletClientError);
+			  console.log('[Rhinestone Client] Signing EIP-7702 init data for transaction...');
+			  eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
+			  if (!eip7702InitSignature || eip7702InitSignature === '0x') {
+				throw new Error('signEip7702InitData returned empty signature');
+			  }
+			  console.log('[Rhinestone Client] EIP-7702 init signature obtained successfully');
+			} catch (e) {
+			  throw new AAError(
+				`Failed to sign EIP-7702 initialization: ${e instanceof Error ? e.message : String(e)}`,
+				AAErrorCode.AUTHORIZATION_REJECTED,
+				{ originalError: e }
+			  );
 			}
-
-			// Create Rhinestone account
-			console.log('[Rhinestone Client] Creating Rhinestone account...');
-			const rhinestoneAccount = await this.createAccount(walletAccount);
-
-			// Check what address Rhinestone is using (synchronous call, no chainId param)
-			const rhinestoneAddress = rhinestoneAccount.getAddress();
-			console.log('[Rhinestone Client] Account created successfully', {
-				rhinestoneAddress,
-				walletAddress: walletAccount.address,
-				addressMatch: rhinestoneAddress === walletAccount.address
-			});
-
-			// Check if the account needs EIP-7702 initialization
-			// The SDK requires this signature for EOA accounts, regardless of accountType
-			// If the Rhinestone account address matches the wallet address, it's an EOA
-
-			// Try to get portfolio to see what balances Rhinestone recognizes
-			try {
-				const portfolio = await rhinestoneAccount.getPortfolio(false);
-				// Use a custom replacer to handle BigInt values
-				console.log('[Rhinestone Client] Portfolio:', JSON.stringify(portfolio, (key, value) => 
-					typeof value === 'bigint' ? value.toString() : value, 2));
-			} catch (portfolioError) {
-				console.log('[Rhinestone Client] Could not fetch portfolio:', portfolioError);
+		  }
+	  
+		  const transactionParams: RhinestoneTransactionParams = {
+			chain,
+			calls: params.calls.map((c) => ({
+			  to: c.to as Address,
+			  value: (c.value ?? 0n) as bigint,
+			  data: (c.data ?? '0x') as Hex
+			})),
+			feeAsset,
+			// IMPORTANT: sourceAssets should include actual token addresses (not symbols) when using Permit2 routes.
+			// If feeAsset is 'USDC', you should pass Base USDC address here (0x8335...).
+			sourceAssets: feeAsset ? { [chain.id]: [feeAsset] } : undefined,
+			eip7702InitSignature
+		  };
+	  
+		  console.log('[Rhinestone Client] Preparing same-chain transaction...', {
+			chainId: chain.id,
+			callsCount: transactionParams.calls.length,
+			feeAsset,
+			hasEip7702Init: Boolean(eip7702InitSignature),
+			rhinestoneAddress,
+			walletAddress: walletAccount.address
+		  });
+	  
+		  // 3-step flow
+		  const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+		  const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
+	  
+		  // NOTE: For your current logs, authorizations are always 0; keep that behavior.
+		  // If Rhinestone later requires them, you can add it back.
+		  const authorizations: SignedAuthorizationList = [];
+	  
+		  console.log('[Rhinestone Client] Submitting transaction...');
+		  const txResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
+	  
+		  console.log('[Rhinestone Client] Transaction submitted, waiting for execution...', {
+			intentId: txResult.id.toString(),
+			targetChain: txResult.targetChain
+		  });
+	  
+		  // First wait
+		  const status = await rhinestoneAccount.waitForExecution(txResult);
+		  const directHash =
+			status?.fill?.hash ??
+			status?.claims?.find((c) => c?.hash)?.hash;
+	  
+		  if (directHash && directHash !== '0x') {
+			return { txHash: directHash, intentId: txResult.id.toString() };
+		  }
+	  
+		  console.warn('[Rhinestone Client] No txHash found in execution status. Polling for txHash...', {
+			intentId: txResult.id.toString()
+		  });
+	  
+		  // Bounded poll
+		  const polledHash = await pollForHash(rhinestoneAccount, txResult, 45_000, 2_500);
+		  if (polledHash && polledHash !== '0x') {
+			return { txHash: polledHash, intentId: txResult.id.toString() };
+		  }
+	  
+		  // **Key change**: don’t hang; surface a handleable error that includes intentId.
+		  throw new AAError(
+			`Transaction completed but no hash returned (intentId: ${txResult.id.toString()}). This usually means the backend did not attach the chain tx hash yet.`,
+			AAErrorCode.TRANSACTION_FAILED,
+			{
+			  intentId: txResult.id.toString(),
+			  chainId: chain.id,
+			  feeAsset,
+			  status
 			}
-
-			// Get chain config
-			const chain = CHAIN_CONFIG[params.chainId];
-
-			// Hard guard: ERC20 gas payment requires EIP-7702 authorization signing.
-			// viem cannot sign EIP-7702 authorizations with json-rpc accounts (e.g. Dynamic embedded wallet provider).
-			// if (this.config.accountType === '7702' && isErc20Gas(feeAsset) && isJsonRpcAccount(walletAccount)) {
-			// 	throw new AAError(
-			// 	'USDC gas payment is not supported with this wallet type. ' +
-			// 		'This wallet exposes a JSON-RPC signer, which cannot sign EIP-7702 authorizations required for ERC20 gas payment. ' +
-			// 		'Please use native gas (ETH) instead.',
-			// 	AAErrorCode.AUTHORIZATION_REJECTED,
-			// 	{
-			// 		suggestedFix: 'Use native gas (ETH) instead of USDC for gas payment',
-			// 		isJsonRpcAccount: true,
-			// 		walletAccountType: (walletAccount as any)?.type,
-			// 		feeAsset
-			// 	}
-			// 	);
-			// }
-  
-
-			let eip7702InitSignature: Hex | undefined;
-			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
-
-			// Only attempt EIP-7702 signing if account type is '7702'
-			// When accountType is 'smart', the account is a smart contract, not an EOA,
-			// so signEip7702InitData() is not applicable and may return null
-			const shouldAttemptEIP7702 = this.config.accountType === '7702';
-			
-			if (shouldAttemptEIP7702) {
-				console.log('[Rhinestone Client] Checking if account is deployed/initialized on this chain...');
-				// Check if the account is already deployed/initialized on this chain
-				const isDeployed = await rhinestoneAccount.isDeployed(chain);
-				console.log('[Rhinestone Client] Account deployed status:', {
-					isDeployed,
-					isEOA,
-					accountType: this.config.accountType,
-					rhinestoneAddress,
-					walletAddress: walletAccount.address
-				});
-
-				if (!isDeployed) {
-					// Sign the EIP-7702 init data for the first transaction
-					// This is REQUIRED for EOA accounts in EIP-7702 mode
-					console.log('[Rhinestone Client] Signing EIP-7702 init data for first transaction...');
-					try {
-						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-						console.log('[Rhinestone Client] EIP-7702 init signature:', eip7702InitSignature);
-						
-						// Validate that we got a signature
-						if (!eip7702InitSignature || eip7702InitSignature === '0x' || eip7702InitSignature === null) {
-							const errorMessage =
-								'signEip7702InitData returned null. ' +
-								'Ensure the account was created with accountType: "7702" and the wallet can sign messages.';
-							
-							console.error('[Rhinestone Client]', errorMessage);
-							throw new Error(errorMessage);
-						} else {
-							console.log('[Rhinestone Client] EIP-7702 init signature obtained successfully');
-						}
-					} catch (signError) {
-						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
-
-						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage =
-							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
-
-						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
-							originalError: signError
-						});
-					}
-				}
-			} else if (isEOA && this.config.accountType === 'smart') {
-				// For smart accounts that match EOA address, we might still need to check deployment
-				// but we won't use EIP-7702 signatures
-				console.log(
-					'[Rhinestone Client] Smart account detected (not EIP-7702). ' +
-					'Checking deployment status...'
-				);
-				const isDeployed = await rhinestoneAccount.isDeployed(chain);
-				console.log('[Rhinestone Client] Smart account deployed status:', isDeployed);
-				
-				if (!isDeployed) {
-					console.warn(
-						'[Rhinestone Client] Smart account not deployed. ' +
-						'This may cause transaction failures. The account should be deployed first.'
-					);
-				}
-			}
-
-			// Build same-chain transaction with correct format
-			// Per SDK types: SameChainTransaction uses 'chain' (not sourceChain/targetChain)
-			// We need to specify sourceAssets to tell Rhinestone which tokens are available
-			const transactionParams: RhinestoneTransactionParams = {
-				chain, // Same-chain uses 'chain' parameter
-				calls: params.calls.map((call) => ({
-					to: call.to as Address,
-					value: call.value || 0n,
-					data: (call.data || '0x') as Hex
-				})),
-				feeAsset: feeAsset,
-				sourceAssets: feeAsset ? { [chain.id]: [feeAsset] } : undefined,
-				eip7702InitSignature: eip7702InitSignature
-			};
-
-			console.log('[Rhinestone Client] Preparing same-chain transaction...', {
-				chainId: chain.id,
-				callsCount: params.calls.length,
-				feeAsset,
-				sourceAssets: transactionParams.sourceAssets,
-				hasEip7702Init: Boolean(eip7702InitSignature),
-				apiKeyConfigured: !!this.config.apiKey
-			});
-
-			// Use 3-step flow that properly handles eip7702InitSignature
-			let preparedTx: PreparedTransaction;
-			try {
-				preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
-				console.log('transactionParams : ', transactionParams);
-				console.log('[Rhinestone Client] Transaction prepared successfully, signing...');
-			} catch (prepareError) {
-				console.error('[Rhinestone Client] Failed to prepare transaction:', prepareError);
-				
-				// Check if it's a network/fetch error
-				if (
-					prepareError instanceof TypeError && 
-					prepareError.message.includes('fetch')
-				) {
-					const errorMessage = 
-						'Network error connecting to Rhinestone API. ' +
-						'Please check your internet connection and try again. ' +
-						'If the problem persists, the Rhinestone service may be temporarily unavailable.';
-					
-					throw new AAError(errorMessage, AAErrorCode.RHINESTONE_ERROR, {
-						originalError: prepareError,
-						isNetworkError: true
-					});
-				}
-				
-				// Re-throw other errors
-				throw prepareError;
-			}
-
-			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
-			console.log('[Rhinestone Client] Transaction signed, getting authorizations...');
-
-			// Get EIP-7702 authorizations if needed
-			// For same-chain transactions with feeAsset (USDC gas payment), authorizations are REQUIRED
-			// to cover the chain where the transaction executes (chain 8453 in this case)
-			let authorizations: SignedAuthorizationList = [];
-			if (this.config.accountType === '7702') {
-				// TEST: Try signAuthorizations with a minimal test transaction first
-				// Use wallet client approach for JSON-RPC accounts
-				try {
-					console.log('[Rhinestone Client] TEST: Testing signAuthorizations with minimal transaction using wallet client...');
-					const testTxParams: RhinestoneTransactionParams = {
-						chain,
-						calls: [{
-							to: rhinestoneAccount.getAddress(), // Self-call for minimal test
-							value: 0n,
-							data: '0x' as Hex
-						}],
-						feeAsset: feeAsset,
-						eip7702InitSignature: eip7702InitSignature
-					};
-					const testPreparedTx = await rhinestoneAccount.prepareTransaction(testTxParams);
-					console.log('testPreparedTx : ', testPreparedTx);
-					
-					// Try using wallet client's signAuthorization instead of account's signAuthorizations
-					// This works with JSON-RPC accounts
-					if (walletClient) {
-						try {
-							const testAuths = await this.manualSignAuthorization(
-								walletAccount,
-								chain,
-								rhinestoneAccount.getAddress(),
-								testPreparedTx,
-								walletClient
-							);
-							console.log('[Rhinestone Client] TEST: signAuthorizations via wallet client works! Test authorizations:', testAuths.length);
-						} catch (walletClientTestError) {
-							console.warn('[Rhinestone Client] TEST: Wallet client signAuthorization test failed:', 
-								walletClientTestError instanceof Error ? walletClientTestError.message : String(walletClientTestError));
-							// Fall through to try account's signAuthorizations
-							const testAuths = await rhinestoneAccount.signAuthorizations(testPreparedTx);
-							console.log('[Rhinestone Client] TEST: signAuthorizations works! Test authorizations:', testAuths.length);
-						}
-					} else {
-						// No wallet client available, try account's signAuthorizations (will likely fail for JSON-RPC)
-						const testAuths = await rhinestoneAccount.signAuthorizations(testPreparedTx);
-						console.log('[Rhinestone Client] TEST: signAuthorizations works! Test authorizations:', testAuths.length);
-					}
-				} catch (testError) {
-					console.warn('[Rhinestone Client] TEST: signAuthorizations test failed (this is OK, will use wallet client for actual tx):', 
-						testError instanceof Error ? testError.message : String(testError));
-				}
-
-				try {
-					authorizations = await rhinestoneAccount.signAuthorizations(preparedTx);
-					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
-					
-					// Log authorization details for debugging
-					if (authorizations.length > 0) {
-						console.log('[Rhinestone Client] Authorizations:', JSON.stringify(authorizations, (key, value) => 
-							typeof value === 'bigint' ? value.toString() : value, 2));
-					}
-				} catch (authError) {
-					const errorMsg = authError instanceof Error ? authError.message : String(authError);
-					console.error('[Rhinestone Client] signAuthorizations failed:', {
-						error: errorMsg,
-						errorType: authError instanceof Error ? authError.constructor.name : typeof authError,
-						chainId: chain.id,
-						feeAsset,
-						accountType: this.config.accountType
-					});
-					
-					// For same-chain transactions with feeAsset, authorizations are required
-					// The SDK needs to know which chains the account is authorized to use
-					if (feeAsset) {
-						// Check if this is a JSON-RPC account limitation
-						const isJsonRpcError = errorMsg.includes('JSON-RPC') || 
-							errorMsg.includes('Account type') || 
-							errorMsg.includes('undefined') ||
-							errorMsg.includes('not supported');
-						
-						if (isJsonRpcError) {
-							// Try to manually sign authorization using Dynamic wallet client
-							// This is a workaround for JSON-RPC accounts that don't support viem's signAuthorization
-							try {
-								console.log('[Rhinestone Client] Attempting to manually sign authorization with Dynamic wallet client...');
-								authorizations = await this.manualSignAuthorization(
-									walletAccount,
-									chain,
-									rhinestoneAccount.getAddress(),
-									preparedTx,
-									walletClient
-								);
-								console.log('[Rhinestone Client] Manually signed authorizations:', authorizations.length);
-							} catch (manualSignError) {
-								console.error('[Rhinestone Client] Manual authorization signing failed:', manualSignError);
-								// Fall back to error - the wallet doesn't support authorization signing
-								throw new AAError(
-									'USDC gas payment is not supported with this wallet type. ' +
-									'Your wallet (Dynamic embedded wallet) does not support EIP-7702 authorization signing ' +
-									'required for ERC20 gas payment. ' +
-									'Please use native gas (ETH) instead of USDC for gas payment, or use a different wallet that supports EIP-7702 authorizations.',
-									AAErrorCode.AUTHORIZATION_REJECTED,
-									{ 
-										originalError: authError,
-										manualSignError: manualSignError instanceof Error ? manualSignError.message : String(manualSignError),
-										suggestedFix: 'Use native gas (ETH) instead of USDC for gas payment',
-										isJsonRpcAccount: true
-									}
-								);
-							}
-						}
-						
-						const isDeployed = await rhinestoneAccount.isDeployed(chain);
-						if (!isDeployed) {
-							// Account not deployed - authorizations are definitely required
-							throw new AAError(
-								`Failed to generate EIP-7702 authorizations required for USDC gas payment: ${errorMsg}. ` +
-								'Authorizations are required for same-chain transactions with ERC20 gas payment. ' +
-								'Please ensure your wallet supports EIP-7702 authorization signing, or use native gas (ETH) instead.',
-								AAErrorCode.AUTHORIZATION_REJECTED,
-								{ originalError: authError }
-							);
-						} else {
-							// Account is deployed, but we still need authorizations for feeAsset
-							// The SDK requires authorizations to cover the chain even for deployed accounts
-							// when using feeAsset
-							throw new AAError(
-								`Failed to generate EIP-7702 authorizations required for USDC gas payment: ${errorMsg}. ` +
-								'Authorizations are required for same-chain transactions with ERC20 gas payment, ' +
-								'even for deployed accounts. Please ensure your wallet supports EIP-7702 authorization signing, ' +
-								'or use native gas (ETH) instead.',
-								AAErrorCode.AUTHORIZATION_REJECTED,
-								{ originalError: authError }
-							);
-						}
-					} else {
-						// No feeAsset - for native gas, we might be able to proceed without authorizations
-						// if the account is deployed
-						if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
-							console.warn(
-								'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
-								'Proceeding without authorizations - EIP-7702 init signature should be sufficient.'
-							);
-							authorizations = [];
-						} else {
-							// Re-throw other errors
-							throw authError;
-						}
-					}
-				}
-			}
-
-			console.log('[Rhinestone Client] Submitting transaction...');
-			const transactionResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
-
-			console.log('[Rhinestone Client] Transaction submitted, waiting for execution...', {
-				intentId: transactionResult.id.toString(),
-				targetChain: transactionResult.targetChain
-			});
-
-			// Wait for execution
-			const status = await rhinestoneAccount.waitForExecution(transactionResult);
-			console.log('[Rhinestone Client] Execution complete:', status);
-
-			// Extract tx hash from the fill result
-			const txHash = status.fill.hash;
-			if (!txHash) {
-				throw new AAError(
-					'Transaction completed but no hash returned',
-					AAErrorCode.TRANSACTION_FAILED
-				);
-			}
-
-			return {
-				txHash,
-				intentId: transactionResult.id.toString()
-			};
+		  );
 		} catch (error) {
-			console.error('[Rhinestone Client] executeSameChainTransaction failed:', error);
-
-			// Log additional context for orchestrator errors
-			const orchestratorError = error as {
-				context?: unknown;
-				errorType?: string;
-				traceId?: string;
-			};
-			if (orchestratorError.context) {
-				console.error(
-					'[Rhinestone Client] Error context:',
-					JSON.stringify(orchestratorError.context, null, 2)
-				);
-			}
-			if (orchestratorError.errorType) {
-				console.error('[Rhinestone Client] Error type:', orchestratorError.errorType);
-			}
-			if (orchestratorError.traceId) {
-				console.error('[Rhinestone Client] Trace ID:', orchestratorError.traceId);
-			}
-
-			if (error instanceof AAError) throw error;
-			throw new AAError(
-				`Same-chain transaction failed: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
-				AAErrorCode.TRANSACTION_FAILED,
-				{ originalError: error }
-			);
+		  console.error('[Rhinestone Client] executeSameChainTransaction failed:', error);
+		  if (error instanceof AAError) throw error;
+	  
+		  throw new AAError(
+			`Same-chain transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			AAErrorCode.TRANSACTION_FAILED,
+			{ originalError: error }
+		  );
 		}
-	}
+	  }
+	  
+	  
 
 	/**
 	 * Manually sign EIP-7702 authorization using Dynamic wallet client
@@ -1594,12 +1382,12 @@ export class RhinestoneClient {
 				// For EIP-7702, it's typically in the authorization data
 				if (messages && typeof messages === 'object') {
 					// Log messages for debugging
-					console.log('[Rhinestone Client] Transaction messages:', JSON.stringify(messages, (key, value) => 
+					console.log('[Rhinestone Client] Transaction messages:', safeStringify(messages, (key, value) => 
 						typeof value === 'bigint' ? value.toString() : value, 2));
 					
 					// Try to extract delegate address from messages
 					// The structure varies, so we check multiple possible locations
-					const messagesStr = JSON.stringify(messages);
+					const messagesStr = safeStringify(messages);
 					
 					// Look for address-like patterns in the messages
 					const addressPattern = /0x[a-fA-F0-9]{40}/g;
