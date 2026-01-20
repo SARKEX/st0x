@@ -625,53 +625,8 @@ export const getTrades = async (
 	}
 };
 
-/**
- * Fetch trades where the specified address is the sender (taker).
- * These represent market orders executed by the user.
- * Fetches recent trades and filters by sender client-side to avoid GraphQL filter issues.
- */
-export const getTradesBySender = async (
-	senderAddress: string,
-	tokenAddress: string | null,
-	network?: Network
-): Promise<SgTrade[]> => {
-	if (!senderAddress) {
-		return [];
-	}
-
-	// Collect all orderbook subgraph URLs (active + inactive)
-	const allOrderbookUrls: string[] = [];
-
-	if (network?.orderbook_subgraph_url) {
-		allOrderbookUrls.push(network.orderbook_subgraph_url);
-	}
-
-	if (
-		network?.orderbook_subgraph_urls_inactive &&
-		network.orderbook_subgraph_urls_inactive.length > 0
-	) {
-		allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
-	}
-
-	if (allOrderbookUrls.length === 0) {
-		return [];
-	}
-
-	// Fetch recent trades (last 90 days) and filter by sender client-side
-	// This avoids issues with GraphQL filter syntax for nested entity references
-	const now = Math.floor(Date.now() / 1000);
-	const ninetyDaysAgo = now - 90 * 24 * 60 * 60;
-
-	const tradesQuery = `query TradesBySender($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!) {
-  trades(
-    skip: $skip
-    first: $first
-    orderBy: timestamp
-    orderDirection: desc
-    where: {
-      timestamp_gt: $timestampGt
-    }
-  ){
+// GraphQL fragment for trade fields - shared between queries
+const TRADE_FIELDS = `
     id
     tradeEvent{
       transaction{
@@ -691,6 +646,7 @@ export const getTradesBySender = async (
       vault {
         id
         vaultId
+        owner
         token {
           id
           address
@@ -723,6 +679,7 @@ export const getTradesBySender = async (
       vault {
         id
         vaultId
+        owner
         token {
           id
           address
@@ -745,20 +702,58 @@ export const getTradesBySender = async (
     timestamp
     orderbook{
       id
-    }
+    }`;
+
+/**
+ * Internal function to fetch trades by sender with optional timestamp filter.
+ */
+async function fetchTradesBySenderInternal(
+	senderAddress: string,
+	tokenAddress: string | null,
+	network: Network | undefined,
+	timestampGt: number | null
+): Promise<SgTrade[]> {
+	if (!senderAddress) {
+		return [];
+	}
+
+	const allOrderbookUrls: string[] = [];
+
+	if (network?.orderbook_subgraph_url) {
+		allOrderbookUrls.push(network.orderbook_subgraph_url);
+	}
+
+	if (
+		network?.orderbook_subgraph_urls_inactive &&
+		network.orderbook_subgraph_urls_inactive.length > 0
+	) {
+		allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
+	}
+
+	if (allOrderbookUrls.length === 0) {
+		return [];
+	}
+
+	// Build query with or without timestamp filter
+	const hasTimestampFilter = timestampGt !== null;
+	const tradesQuery = hasTimestampFilter
+		? `query TradesBySender($skip: Int = 0, $first: Int = 1000, $timestampGt: Int!) {
+  trades(skip: $skip, first: $first, orderBy: timestamp, orderDirection: desc, where: { timestamp_gt: $timestampGt }) {
+${TRADE_FIELDS}
+  }
+}`
+		: `query TradesBySenderAllTime($skip: Int = 0, $first: Int = 1000) {
+  trades(skip: $skip, first: $first, orderBy: timestamp, orderDirection: desc) {
+${TRADE_FIELDS}
   }
 }`;
 
 	try {
+		const variables = hasTimestampFilter ? { timestampGt } : {};
+
 		const allTradesPromises = allOrderbookUrls.map(async (url) => {
 			try {
-				const trades = await fetchAllPaginatedData(
-					url,
-					tradesQuery,
-					{ timestampGt: ninetyDaysAgo },
-					'trades'
-				);
-				return trades;
+				return await fetchAllPaginatedData(url, tradesQuery, variables, 'trades');
 			} catch {
 				return [];
 			}
@@ -772,14 +767,14 @@ export const getTradesBySender = async (
 			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
 		);
 
-		// Filter by sender (taker) address - client-side filtering
+		// Filter by sender (taker) address
 		const normalizedSender = senderAddress.toLowerCase();
 		uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
 			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
 			return tradeSender === normalizedSender;
 		});
 
-		// Filter by token address client-side if provided
+		// Filter by token address if provided
 		if (tokenAddress) {
 			const normalizedToken = tokenAddress.toLowerCase();
 			uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
@@ -796,6 +791,130 @@ export const getTradesBySender = async (
 			`Failed to fetch trades by sender: ${
 				error instanceof Error ? error.message : 'Unknown error'
 			}`
+		);
+	}
+}
+
+/**
+ * Fetch trades where the specified address is the sender (taker).
+ * Fetches recent trades (last 90 days) and filters by sender client-side.
+ */
+export const getTradesBySender = async (
+	senderAddress: string,
+	tokenAddress: string | null,
+	network?: Network
+): Promise<SgTrade[]> => {
+	const now = Math.floor(Date.now() / 1000);
+	const ninetyDaysAgo = now - 90 * 24 * 60 * 60;
+	return fetchTradesBySenderInternal(senderAddress, tokenAddress, network, ninetyDaysAgo);
+};
+
+/**
+ * Fetch ALL trades where the specified address is the sender (taker), with no time limit.
+ * Used for cost basis calculation which needs complete trade history.
+ */
+export const getTradesBySenderAllTime = async (
+	senderAddress: string,
+	tokenAddress: string | null,
+	network?: Network
+): Promise<SgTrade[]> => {
+	return fetchTradesBySenderInternal(senderAddress, tokenAddress, network, null);
+};
+
+/**
+ * Fetch ALL trades where the specified address is either:
+ * 1. The sender (taker) - market orders
+ * 2. The vault owner (maker) - limit order fills
+ * Used for cost basis calculation to capture both market and limit order trades.
+ */
+export const getTradesByUserAllTime = async (
+	userAddress: string,
+	tokenAddress: string | null,
+	network?: Network
+): Promise<SgTrade[]> => {
+	if (!userAddress) {
+		return [];
+	}
+
+	const allOrderbookUrls: string[] = [];
+
+	if (network?.orderbook_subgraph_url) {
+		allOrderbookUrls.push(network.orderbook_subgraph_url);
+	}
+
+	if (
+		network?.orderbook_subgraph_urls_inactive &&
+		network.orderbook_subgraph_urls_inactive.length > 0
+	) {
+		allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
+	}
+
+	if (allOrderbookUrls.length === 0) {
+		return [];
+	}
+
+	// Query all trades without timestamp filter
+	const tradesQuery = `query TradesByUserAllTime($skip: Int = 0, $first: Int = 1000) {
+  trades(skip: $skip, first: $first, orderBy: timestamp, orderDirection: desc) {
+${TRADE_FIELDS}
+  }
+}`;
+
+	try {
+		const allTradesPromises = allOrderbookUrls.map(async (url) => {
+			try {
+				return await fetchAllPaginatedData(url, tradesQuery, {}, 'trades');
+			} catch {
+				return [];
+			}
+		});
+
+		const allTradesResults = await Promise.all(allTradesPromises);
+		const allTrades = allTradesResults.flat();
+
+		// Remove duplicates
+		let uniqueTrades = allTrades.filter(
+			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
+		);
+
+		// Filter by user address - include trades where user is either:
+		// 1. The sender (taker) - they executed a market order via UI
+		// 2. The transaction initiator - they signed a tx (e.g., via aggregator)
+		// 3. The vault owner (maker) - their limit order/DCA was filled
+		const normalizedUser = userAddress.toLowerCase();
+		uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
+			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
+			const txFrom = trade.tradeEvent?.transaction?.from?.toLowerCase();
+			const inputVaultOwner = (
+				trade.inputVaultBalanceChange?.vault as { owner?: string }
+			)?.owner?.toLowerCase();
+			const outputVaultOwner = (
+				trade.outputVaultBalanceChange?.vault as { owner?: string }
+			)?.owner?.toLowerCase();
+
+			return (
+				tradeSender === normalizedUser ||
+				txFrom === normalizedUser ||
+				inputVaultOwner === normalizedUser ||
+				outputVaultOwner === normalizedUser
+			);
+		});
+
+		// Filter by token address if provided
+		if (tokenAddress) {
+			const normalizedToken = tokenAddress.toLowerCase();
+			uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
+				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+				const outputTokenAddr =
+					trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+				return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
+			});
+		}
+
+		return uniqueTrades;
+	} catch (error) {
+		throw new Error(
+			`Failed to fetch trades by user: ${error instanceof Error ? error.message : 'Unknown error'}`
 		);
 	}
 };

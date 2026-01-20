@@ -62,7 +62,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Use the same calculation function as points.ts
 		console.log(`[Preview] Step 5/6: Calculating wallet points...`);
 		stepStart = Date.now();
-		const walletPointsMap = calculateWalletPointsFromSnapshots(snapshots, targetBlock);
+		const walletPointsMap = calculateWalletPointsFromSnapshots(snapshots);
 		console.log(
 			`[Preview] Step 5/6: Done - ${walletPointsMap.size} wallets (${Date.now() - stepStart}ms)`
 		);

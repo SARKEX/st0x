@@ -267,13 +267,16 @@
 	let transactions: TransactionEntry[] = [];
 	let meanTxSize = 0;
 	let medianTxSize = 0;
-	let cumulativeNetVolume = 0; // LP net USDC flow (positive = LP received USDC from user buys)
 
 	// TVL data (from snapshots)
 	let tvlLoading = false;
 	let tvlError = '';
 	let tvlData: TvlData = { latest: null, daily: [] };
 	let tvlLastUpdated: Date | null = null;
+
+	// Leaderboard month filter
+	let leaderboardMonth: string = 'latest'; // 'latest' or 'YYYY-MM'
+	let leaderboardMonthDropdownOpen = false;
 
 	// Daily breakdown data for pivot tables
 	let dailyTokenStats: Map<string, Map<string, DailyStats>> = new Map(); // date -> token -> stats
@@ -331,6 +334,10 @@
 		}
 		if (!target.closest('.tvl-wallet-dropdown')) {
 			tvlWalletDropdownOpen = false;
+		}
+		// Leaderboard month dropdown
+		if (!target.closest('.leaderboard-month-dropdown')) {
+			leaderboardMonthDropdownOpen = false;
 		}
 	}
 
@@ -430,9 +437,6 @@
 		}
 	];
 
-	// Get available token symbols from TVL data (still needed for other parts)
-	$: tvlTokenSymbols = tvlData.latest ? Object.keys(tvlData.latest.tokenTvl).sort() : [];
-
 	// TVL chart data based on selected filter
 	$: tvlChartData = tvlData.daily.map((entry) => {
 		let value: number;
@@ -509,6 +513,60 @@
 		}
 		return { date: entry.date, total };
 	});
+
+	// Leaderboard month options: extract unique months from daily data
+	$: leaderboardMonthOptions = (() => {
+		const months = new Set<string>();
+		for (const entry of tvlData.daily) {
+			// entry.date is YYYY-MM-DD format
+			const month = entry.date.slice(0, 7); // YYYY-MM
+			months.add(month);
+		}
+		// Sort descending (most recent first)
+		return Array.from(months).sort((a, b) => b.localeCompare(a));
+	})();
+
+	// Leaderboard data filtered by selected month
+	$: leaderboardCodeTvl = (() => {
+		if (leaderboardMonth === 'latest' && tvlData.latest) {
+			return tvlData.latest.codeTvl;
+		}
+
+		// Find the last day of the selected month in daily data
+		const monthDays = tvlData.daily
+			.filter((entry) => entry.date.startsWith(leaderboardMonth))
+			.sort((a, b) => b.date.localeCompare(a.date)); // Sort descending
+
+		if (monthDays.length === 0) {
+			return [];
+		}
+
+		// Use the last day of the month as the snapshot
+		const lastDayEntry = monthDays[0];
+		const codeTvlRecord = lastDayEntry.codeTvl;
+
+		// Convert Record<string, number> to CodeTvlEntry[] format
+		// Note: we don't have walletCount in daily data, so we'll show 0 or N/A
+		const entries: CodeTvlEntry[] = Object.entries(codeTvlRecord)
+			.map(([code, tvl]) => ({
+				code,
+				tvl,
+				walletCount: 0 // Not available in daily snapshots
+			}))
+			.sort((a, b) => b.tvl - a.tvl);
+
+		return entries;
+	})();
+
+	// Total TVL for the selected month (for percentage calculation)
+	$: leaderboardTotalTvl = (() => {
+		if (leaderboardMonth === 'latest' && tvlData.latest) {
+			return tvlData.latest.totalTvl;
+		}
+
+		// Sum from leaderboard data
+		return leaderboardCodeTvl.reduce((sum, entry) => sum + entry.tvl, 0);
+	})();
 
 	// Script loading helper
 	const scriptPromises = new Map<string, Promise<void>>();
@@ -1092,8 +1150,6 @@
 	// Network config
 	const network = networks[0]; // Base mainnet
 	const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase();
-	// LP wallet that provides liquidity - used to calculate net platform inflow/outflow
-	const LP_WALLET = '0x71b94911fd1ce621fc40970450004c544e5287a8'.toLowerCase();
 
 	// Fetch TVL data from snapshots
 	async function fetchTvlData() {
@@ -1392,11 +1448,6 @@
 			});
 		}
 
-		// Track LP wallet net flow (buys vs sells from LP perspective)
-		// Positive = LP received USDC (users bought from LP)
-		// Negative = LP spent USDC (users sold to LP)
-		let lpNetUsdc = 0;
-
 		for (const trade of trades) {
 			const input = trade.inputVaultBalanceChange;
 			const output = trade.outputVaultBalanceChange;
@@ -1431,18 +1482,6 @@
 				totalUsdcVolume += usdcAmount;
 				if (usdcAmount > 0) {
 					usdcAmounts.push(usdcAmount);
-				}
-			}
-
-			// Track LP wallet net flow only (orders owned by LP)
-			// From vault owner's perspective: input = receive, output = give
-			if (vaultOwner === LP_WALLET) {
-				if (inputToken.address.toLowerCase() === USDC_ADDRESS) {
-					// LP received USDC (users bought from LP)
-					lpNetUsdc += inputAmount;
-				} else if (outputToken.address.toLowerCase() === USDC_ADDRESS) {
-					// LP gave USDC (users sold to LP)
-					lpNetUsdc -= outputAmount;
 				}
 			}
 
@@ -1582,8 +1621,6 @@
 			meanTxSize = 0;
 			medianTxSize = 0;
 		}
-
-		cumulativeNetVolume = lpNetUsdc;
 
 		// Sort transactions by timestamp descending (newest first)
 		transactions = txList.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -2603,39 +2640,125 @@
 				</Card>
 
 				<!-- Code TVL Leaderboard -->
-				{#if tvlData.latest && tvlData.latest.codeTvl.length > 0}
+				{#if leaderboardCodeTvl.length > 0 || (tvlData.latest && tvlData.latest.codeTvl.length > 0)}
 					<Card>
-						<h3 class="mb-4 text-lg font-medium text-white">Access Code TVL Leaderboard</h3>
-						<div class="overflow-x-auto">
-							<table class="w-full text-left text-sm">
-								<thead>
-									<tr class="border-b border-gray-700 text-gray-400">
-										<th class="pb-3 pr-4">Rank</th>
-										<th class="pb-3 pr-4">Access Code</th>
-										<th class="pb-3 pr-4 text-right">TVL</th>
-										<th class="pb-3 pr-4 text-right">Wallets</th>
-										<th class="pb-3 text-right">Share</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each tvlData.latest.codeTvl.slice(0, 20) as entry, i}
-										<tr class="border-b border-gray-800 hover:bg-gray-800/50">
-											<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
-											<td class="py-3 pr-4 font-mono text-white">{entry.code}</td>
-											<td class="py-3 pr-4 text-right font-medium text-[#e8be89]"
-												>{formatUsd(entry.tvl)}</td
+						<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+							<h3 class="text-lg font-medium text-white">Access Code TVL Leaderboard</h3>
+
+							<!-- Month Filter Dropdown -->
+							<div class="leaderboard-month-dropdown relative">
+								<button
+									on:click={() => (leaderboardMonthDropdownOpen = !leaderboardMonthDropdownOpen)}
+									class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-500"
+								>
+									<span>
+										{#if leaderboardMonth === 'latest'}
+											Latest
+										{:else}
+											{new Date(leaderboardMonth + '-01').toLocaleDateString('en-US', {
+												year: 'numeric',
+												month: 'short'
+											})}
+										{/if}
+									</span>
+									<svg
+										class="h-4 w-4 transition-transform {leaderboardMonthDropdownOpen
+											? 'rotate-180'
+											: ''}"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg>
+								</button>
+
+								{#if leaderboardMonthDropdownOpen}
+									<div
+										class="absolute right-0 top-full z-20 mt-1 max-h-64 w-40 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 py-1 shadow-xl"
+									>
+										<button
+											on:click={() => {
+												leaderboardMonth = 'latest';
+												leaderboardMonthDropdownOpen = false;
+											}}
+											class="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-gray-700 {leaderboardMonth ===
+											'latest'
+												? 'bg-gray-700 text-[#e8be89]'
+												: 'text-white'}"
+										>
+											Latest
+										</button>
+										{#each leaderboardMonthOptions as month}
+											<button
+												on:click={() => {
+													leaderboardMonth = month;
+													leaderboardMonthDropdownOpen = false;
+												}}
+												class="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-gray-700 {leaderboardMonth ===
+												month
+													? 'bg-gray-700 text-[#e8be89]'
+													: 'text-white'}"
 											>
-											<td class="py-3 pr-4 text-right text-gray-300">{entry.walletCount}</td>
-											<td class="py-3 text-right text-gray-400">
-												{tvlData.latest.totalTvl > 0
-													? ((entry.tvl / tvlData.latest.totalTvl) * 100).toFixed(1)
-													: 0}%
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
+												{new Date(month + '-01').toLocaleDateString('en-US', {
+													year: 'numeric',
+													month: 'short'
+												})}
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
 						</div>
+
+						{#if leaderboardCodeTvl.length > 0}
+							<div class="overflow-x-auto">
+								<table class="w-full text-left text-sm">
+									<thead>
+										<tr class="border-b border-gray-700 text-gray-400">
+											<th class="pb-3 pr-4">Rank</th>
+											<th class="pb-3 pr-4">Access Code</th>
+											<th class="pb-3 pr-4 text-right">TVL</th>
+											{#if leaderboardMonth === 'latest'}
+												<th class="pb-3 pr-4 text-right">Wallets</th>
+											{/if}
+											<th class="pb-3 text-right">Share</th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each leaderboardCodeTvl.slice(0, 20) as entry, i}
+											<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+												<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
+												<td class="py-3 pr-4 font-mono text-white">{entry.code}</td>
+												<td class="py-3 pr-4 text-right font-medium text-[#e8be89]"
+													>{formatUsd(entry.tvl)}</td
+												>
+												{#if leaderboardMonth === 'latest'}
+													<td class="py-3 pr-4 text-right text-gray-300">{entry.walletCount}</td>
+												{/if}
+												<td class="py-3 text-right text-gray-400">
+													{leaderboardTotalTvl > 0
+														? ((entry.tvl / leaderboardTotalTvl) * 100).toFixed(1)
+														: 0}%
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+							{#if leaderboardMonth !== 'latest'}
+								<p class="mt-3 text-xs text-gray-500">
+									Showing end-of-month snapshot. Wallet count not available for historical data.
+								</p>
+							{/if}
+						{:else}
+							<p class="py-4 text-center text-gray-400">No data available for this month</p>
+						{/if}
 					</Card>
 				{/if}
 			{:else if activeTvlTab === 'wallets'}

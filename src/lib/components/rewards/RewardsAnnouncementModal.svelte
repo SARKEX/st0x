@@ -359,13 +359,6 @@
 		text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
 	}
 
-	/* Green glow for APY badge */
-	.shadow-glow-green {
-		box-shadow:
-			0 0 20px rgba(52, 211, 153, 0.3),
-			0 0 40px rgba(52, 211, 153, 0.1);
-	}
-
 	/* APY value pulse */
 	.apy-value {
 		animation: pulse-glow 2s ease-in-out infinite;

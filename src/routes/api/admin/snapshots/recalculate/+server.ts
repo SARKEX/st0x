@@ -139,7 +139,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				if (snapshots.length === 0) continue;
 
 				// Use the same calculation function as updateMonthlyPoints (includes LP attribution)
-				const walletPoints = await calculateWalletPointsFromSnapshots(snapshots, blockNumber);
+				const walletPoints = calculateWalletPointsFromSnapshots(snapshots);
 
 				// Use shared merge function - same logic as updateMonthlyPoints
 				mergeWalletPointsIntoMonthlyData(monthlyData, walletPoints, blockNumber);

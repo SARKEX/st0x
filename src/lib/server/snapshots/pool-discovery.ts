@@ -115,7 +115,6 @@ function getPublicClient() {
  * Used for pool discovery (not rewards calculation)
  */
 export async function getPoolType(address: string, blockNumber?: bigint): Promise<PoolType> {
-	const addressLower = address.toLowerCase();
 	const client = getPublicClient();
 
 	try {
