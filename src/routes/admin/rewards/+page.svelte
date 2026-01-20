@@ -7,7 +7,7 @@
 	import autoTable from 'jspdf-autotable';
 
 	// Tab management
-	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'team' | 'pool' | 'referrals';
+	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'team' | 'pool' | 'referrals' | 'nansen';
 	let activeTab: Tab = 'points';
 
 	// Hide excluded wallets toggle (hidden by default)
@@ -236,6 +236,63 @@
 			referralsError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
 			referralsLoading = false;
+		}
+	}
+
+	// ===== Nansen Tab State =====
+	interface NansenWalletData {
+		address: string;
+		code: string;
+		lifetimePurchaseUsdc: number;
+		purchaseCount: number;
+	}
+
+	interface NansenCodeData {
+		code: string;
+		label: string | null;
+		wallets: NansenWalletData[];
+		totalLifetimePurchaseUsdc: number;
+		walletCount: number;
+	}
+
+	let nansenLoading = false;
+	let nansenError = '';
+	let nansenData: NansenCodeData[] = [];
+	let nansenTotalUsdc = 0;
+	let nansenTotalWallets = 0;
+	let nansenCodeFilter: string = 'all';
+	let nansenDataLoaded = false;
+
+	// Flatten all Nansen wallets, apply filter, and sort by purchase value
+	$: nansenAllWallets = nansenData.flatMap((code) => code.wallets);
+	$: nansenFilteredWallets = (
+		nansenCodeFilter === 'all'
+			? nansenAllWallets
+			: nansenAllWallets.filter((w) => w.code === nansenCodeFilter)
+	).toSorted((a, b) => b.lifetimePurchaseUsdc - a.lifetimePurchaseUsdc);
+	$: nansenAvailableCodes = nansenData.map((c) => c.code).toSorted();
+
+	async function loadNansenData() {
+		nansenLoading = true;
+		nansenError = '';
+
+		try {
+			const res = await fetch('/api/admin/nansen');
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to load Nansen data');
+			}
+
+			nansenData = data.codes || [];
+			nansenTotalUsdc = data.totalLifetimePurchaseUsdc || 0;
+			nansenTotalWallets = data.totalWallets || 0;
+			nansenDataLoaded = true;
+		} catch (err) {
+			nansenError = err instanceof Error ? err.message : 'Unknown error';
+			nansenDataLoaded = true;
+		} finally {
+			nansenLoading = false;
 		}
 	}
 
@@ -1958,6 +2015,19 @@
 					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
 			>
 				Referrals
+			</button>
+			<button
+				on:click={() => {
+					activeTab = 'nansen';
+					if (!nansenDataLoaded && !nansenLoading) {
+						loadNansenData();
+					}
+				}}
+				class="border-b-2 pb-3 text-sm font-medium transition-colors {activeTab === 'nansen'
+					? 'border-[#e8be89] text-[#e8be89]'
+					: 'border-transparent text-gray-400 hover:border-gray-500 hover:text-gray-300'}"
+			>
+				Nansen
 			</button>
 		</nav>
 	</div>
@@ -3858,6 +3928,134 @@
 						</Card>
 					{/if}
 				{/if}
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Nansen Tab -->
+	{#if activeTab === 'nansen'}
+		<div class="space-y-6">
+			{#if nansenError}
+				<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
+					{nansenError}
+				</div>
+			{/if}
+
+			{#if nansenLoading}
+				<div class="flex items-center gap-3 text-gray-400">
+					<div
+						class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
+					></div>
+					Loading Nansen data (this may take a moment as we fetch all historical trades)...
+				</div>
+			{:else if !nansenDataLoaded}
+				<Card>
+					<p class="py-8 text-center text-gray-400">Click to load Nansen data.</p>
+				</Card>
+			{:else if nansenData.length === 0}
+				<Card>
+					<p class="py-8 text-center text-gray-400">
+						No Nansen referral codes found (codes matching ST0X-****-NANSEN pattern).
+					</p>
+				</Card>
+			{:else}
+				<!-- Summary Card -->
+				<Card>
+					<div class="flex flex-wrap items-center justify-between gap-4">
+						<div>
+							<h2 class="text-lg font-semibold text-white">Nansen Referral Purchases</h2>
+							<p class="mt-1 text-sm text-gray-400">
+								Lifetime tStock purchases (buys only) for wallets using ST0X-****-NANSEN codes
+							</p>
+						</div>
+						<div class="flex gap-6 text-right">
+							<div>
+								<p class="text-2xl font-bold text-[#e8be89]">
+									{formatUsd(nansenTotalUsdc)}
+								</p>
+								<p class="text-sm text-gray-400">Total Purchase Value</p>
+							</div>
+							<div>
+								<p class="text-2xl font-bold text-white">
+									{nansenTotalWallets}
+								</p>
+								<p class="text-sm text-gray-400">Total Wallets</p>
+							</div>
+						</div>
+					</div>
+					<div class="mt-4 flex gap-2">
+						<button
+							on:click={() => loadNansenData()}
+							disabled={nansenLoading}
+							class="rounded-md bg-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-600 disabled:opacity-50"
+						>
+							{nansenLoading ? 'Refreshing...' : 'Refresh Data'}
+						</button>
+					</div>
+				</Card>
+
+				<!-- Wallet Table with Code Filter -->
+				<Card>
+					<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+						<h3 class="text-lg font-medium text-white">Nansen Wallets</h3>
+						<div class="flex items-center gap-3">
+							<span class="text-sm text-gray-400">Filter by code:</span>
+							<select
+								bind:value={nansenCodeFilter}
+								class="rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+							>
+								<option value="all">All Codes ({nansenAllWallets.length} wallets)</option>
+								{#each nansenAvailableCodes as code}
+									{@const codeData = nansenData.find((c) => c.code === code)}
+									<option value={code}>{code} ({codeData?.walletCount || 0} wallets)</option>
+								{/each}
+							</select>
+						</div>
+					</div>
+
+					{#if nansenFilteredWallets.length > 0}
+						<div class="overflow-x-auto">
+							<table class="w-full text-left text-sm">
+								<thead>
+									<tr class="border-b border-gray-700 text-gray-400">
+										<th class="pb-3 pr-4">#</th>
+										<th class="pb-3 pr-4">Wallet</th>
+										<th class="pb-3 pr-4">Code</th>
+										<th class="pb-3 pr-4 text-right">Purchases</th>
+										<th class="pb-3 text-right">Lifetime USDC</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each nansenFilteredWallets as wallet, i}
+										<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+											<td class="py-2 pr-4 text-gray-400">{i + 1}</td>
+											<td class="py-2 pr-4 font-mono text-xs text-white">
+												{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+											</td>
+											<td class="py-2 pr-4 font-mono text-xs text-gray-300">
+												{wallet.code}
+											</td>
+											<td class="py-2 pr-4 text-right text-gray-300">
+												{wallet.purchaseCount > 0 ? wallet.purchaseCount : '-'}
+											</td>
+											<td
+												class="py-2 text-right font-medium {wallet.lifetimePurchaseUsdc > 0
+													? 'text-[#e8be89]'
+													: 'text-gray-500'}"
+											>
+												{wallet.lifetimePurchaseUsdc > 0
+													? formatUsd(wallet.lifetimePurchaseUsdc)
+													: '-'}
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{:else}
+						<p class="py-4 text-center text-gray-400">No wallets found</p>
+					{/if}
+				</Card>
 			{/if}
 		</div>
 	{/if}
