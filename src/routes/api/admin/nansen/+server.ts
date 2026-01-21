@@ -237,7 +237,11 @@ export const GET: RequestHandler = async ({ cookies }) => {
 			return json({
 				success: true,
 				codes: nansenCodes.map((c) => ({
-					code: c.code, label: c.label, wallets: [], totalLifetimePurchaseUsdc: 0, walletCount: 0
+					code: c.code,
+					label: c.label,
+					wallets: [],
+					totalLifetimePurchaseUsdc: 0,
+					walletCount: 0
 				})),
 				totalLifetimePurchaseUsdc: 0,
 				totalWallets: 0
@@ -245,7 +249,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		}
 
 		// STEP 2: Get cached data (if any)
-		let cached = await cacheGet<CachedPurchaseData>(CACHE_KEY);
+		const cached = await cacheGet<CachedPurchaseData>(CACHE_KEY);
 		const now = Date.now();
 
 		// STEP 3: Fetch trades (incremental if we have cache)
@@ -271,9 +275,8 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		const walletPurchases = processTrades(trades, allWallets, existingPurchases);
 
 		// Update last timestamp
-		const newLastTimestamp = trades.length > 0
-			? Math.max(...trades.map((t) => parseInt(t.timestamp, 10)))
-			: lastTimestamp;
+		const newLastTimestamp =
+			trades.length > 0 ? Math.max(...trades.map((t) => parseInt(t.timestamp, 10))) : lastTimestamp;
 
 		// STEP 5: Save to cache
 		const newCache: CachedPurchaseData = {
@@ -333,6 +336,9 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		});
 	} catch (error) {
 		console.error('[Nansen API] Error:', error);
-		return json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+		return json(
+			{ success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+			{ status: 500 }
+		);
 	}
 };

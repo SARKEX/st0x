@@ -7,7 +7,15 @@
 	import autoTable from 'jspdf-autotable';
 
 	// Tab management
-	type Tab = 'points' | 'snapshots' | 'preview' | 'excluded' | 'team' | 'pool' | 'referrals' | 'nansen';
+	type Tab =
+		| 'points'
+		| 'snapshots'
+		| 'preview'
+		| 'excluded'
+		| 'team'
+		| 'pool'
+		| 'referrals'
+		| 'nansen';
 	let activeTab: Tab = 'points';
 
 	// Hide excluded wallets toggle (hidden by default)
@@ -2356,7 +2364,8 @@
 								{/if}
 								<!-- Current progress (solid foreground) -->
 								<div
-									class="relative h-full transition-all duration-500 {rocketBoostProgressPercent >= 100
+									class="relative h-full transition-all duration-500 {rocketBoostProgressPercent >=
+									100
 										? 'bg-green-500'
 										: 'bg-yellow-500'}"
 									style="width: {Math.min(100, rocketBoostProgressPercent)}%"
@@ -2378,16 +2387,32 @@
 									class="absolute top-0 flex h-4 flex-col items-center"
 									style="left: {pct}%; transform: translateX(-50%)"
 								>
-									<div class="h-4 w-0.5 {achieved ? 'bg-green-400' : projected ? 'bg-yellow-400/50' : 'bg-gray-500'}"></div>
+									<div
+										class="h-4 w-0.5 {achieved
+											? 'bg-green-400'
+											: projected
+												? 'bg-yellow-400/50'
+												: 'bg-gray-500'}"
+									></div>
 								</div>
 								<!-- Label below -->
 								<div
 									class="absolute top-5 flex flex-col items-center text-xs"
 									style="left: {pct}%; transform: translateX(-50%)"
 								>
-									<span class={achieved ? 'text-green-400' : projected ? 'text-yellow-400' : 'text-gray-500'}>{pct}%</span>
-									<span class={achieved ? 'text-green-300' : projected ? 'text-yellow-300/70' : 'text-gray-600'}
-										>+{formatUsd(amount)}</span
+									<span
+										class={achieved
+											? 'text-green-400'
+											: projected
+												? 'text-yellow-400'
+												: 'text-gray-500'}>{pct}%</span
+									>
+									<span
+										class={achieved
+											? 'text-green-300'
+											: projected
+												? 'text-yellow-300/70'
+												: 'text-gray-600'}>+{formatUsd(amount)}</span
 									>
 								</div>
 							{/each}
@@ -2397,12 +2422,22 @@
 							<div class="flex items-center gap-4">
 								<div class="flex items-center gap-1.5">
 									<span class="inline-block h-2 w-4 rounded bg-yellow-500"></span>
-									<span class="text-gray-400">Current: <span class="text-white">{rocketBoostProgressPercent.toFixed(0)}%</span></span>
+									<span class="text-gray-400"
+										>Current: <span class="text-white"
+											>{rocketBoostProgressPercent.toFixed(0)}%</span
+										></span
+									>
 								</div>
 								{#if projectedProgressPercent > rocketBoostProgressPercent}
 									<div class="flex items-center gap-1.5">
-										<span class="inline-block h-2 w-4 rounded bg-yellow-500/30 border border-dashed border-yellow-300/50"></span>
-										<span class="text-gray-400">Projected: <span class="text-yellow-300">{projectedProgressPercent.toFixed(0)}%</span></span>
+										<span
+											class="inline-block h-2 w-4 rounded border border-dashed border-yellow-300/50 bg-yellow-500/30"
+										></span>
+										<span class="text-gray-400"
+											>Projected: <span class="text-yellow-300"
+												>{projectedProgressPercent.toFixed(0)}%</span
+											></span
+										>
 									</div>
 								{/if}
 							</div>
@@ -3848,9 +3883,7 @@
 				<div class="flex flex-wrap items-center justify-between gap-4">
 					<div>
 						<h2 class="text-lg font-semibold text-white">Referral Rewards</h2>
-						<p class="mt-1 text-sm text-gray-400">
-							View referral code performance by month
-						</p>
+						<p class="mt-1 text-sm text-gray-400">View referral code performance by month</p>
 					</div>
 					<div class="flex items-center gap-3">
 						<label for="referral-month-select" class="text-sm text-gray-400">Month:</label>
