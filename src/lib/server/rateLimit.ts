@@ -103,11 +103,6 @@ export const rateLimiters = {
 	publicApi: (identifier: string) =>
 		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 60 }),
 
-	// Wallet API: Higher limit since users may query multiple wallets
-	// Data is pre-computed and cached, so lookups are cheap
-	walletApi: (identifier: string) =>
-		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 200 }),
-
 	// Stricter limit for expensive operations: 10 requests/minute
 	expensive: (identifier: string) =>
 		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 10 }),
