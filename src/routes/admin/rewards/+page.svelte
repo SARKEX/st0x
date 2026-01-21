@@ -240,11 +240,23 @@
 	}
 
 	// ===== Nansen Tab State =====
+	type NansenTier = 'green' | 'ice' | 'north' | 'star';
+
+	const NANSEN_TIER_INFO: Record<NansenTier, { name: string; level: number; color: string }> = {
+		green: { name: 'Green', level: 1, color: 'text-green-400' },
+		ice: { name: 'Ice', level: 2, color: 'text-cyan-400' },
+		north: { name: 'North', level: 3, color: 'text-blue-400' },
+		star: { name: 'Star', level: 4, color: 'text-yellow-400' }
+	};
+
 	interface NansenWalletData {
 		address: string;
 		code: string;
 		lifetimePurchaseUsdc: number;
 		purchaseCount: number;
+		nansenTier: NansenTier | null;
+		nansenPoints: number | null;
+		nansenRank: number | null;
 	}
 
 	interface NansenCodeData {
@@ -261,15 +273,19 @@
 	let nansenTotalUsdc = 0;
 	let nansenTotalWallets = 0;
 	let nansenCodeFilter: string = 'all';
+	let nansenTierFilter: NansenTier | 'all' | 'none' = 'all';
 	let nansenDataLoaded = false;
 
-	// Flatten all Nansen wallets, apply filter, and sort by purchase value
+	// Flatten all Nansen wallets, apply filters, and sort by purchase value
 	$: nansenAllWallets = nansenData.flatMap((code) => code.wallets);
-	$: nansenFilteredWallets = (
-		nansenCodeFilter === 'all'
-			? nansenAllWallets
-			: nansenAllWallets.filter((w) => w.code === nansenCodeFilter)
-	).toSorted((a, b) => b.lifetimePurchaseUsdc - a.lifetimePurchaseUsdc);
+	$: nansenFilteredWallets = nansenAllWallets
+		.filter((w) => nansenCodeFilter === 'all' || w.code === nansenCodeFilter)
+		.filter((w) => {
+			if (nansenTierFilter === 'all') return true;
+			if (nansenTierFilter === 'none') return w.nansenTier === null;
+			return w.nansenTier === nansenTierFilter;
+		})
+		.toSorted((a, b) => b.lifetimePurchaseUsdc - a.lifetimePurchaseUsdc);
 	$: nansenAvailableCodes = nansenData.map((c) => c.code).toSorted();
 
 	async function loadNansenData() {
@@ -1095,9 +1111,27 @@
 			(rocketBoostProgressPercent >= 100 ? currentMonthPool.rocketBoostAmounts.tier100 : 0)
 		: 0;
 
-	// Calculate effective pool amount
+	// Calculate effective pool amount (currently achieved)
 	$: effectivePoolAmount = currentMonthPool
 		? currentMonthPool.poolAmount + achievedRocketBoostAmount
+		: 0;
+
+	// Calculate PROJECTED pool (extrapolate current daily rate to end of month)
+	$: daysElapsedInMonth = monthlyData ? Math.max(1, Math.floor(monthlyData.snapshotCount / 2)) : 1;
+	$: daysInSelectedMonth = selectedMonth ? getDaysInMonth(selectedMonth) : 30;
+	$: daysRemainingInMonth = Math.max(0, daysInSelectedMonth - daysElapsedInMonth);
+	$: avgDailyPoints = totalPoints / daysElapsedInMonth;
+	$: projectedTotalPoints = totalPoints + avgDailyPoints * daysRemainingInMonth;
+	$: projectedProgressPercent =
+		rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
+	$: projectedRocketBoostAmount = currentMonthPool
+		? (projectedProgressPercent >= 25 ? currentMonthPool.rocketBoostAmounts.tier25 : 0) +
+			(projectedProgressPercent >= 50 ? currentMonthPool.rocketBoostAmounts.tier50 : 0) +
+			(projectedProgressPercent >= 75 ? currentMonthPool.rocketBoostAmounts.tier75 : 0) +
+			(projectedProgressPercent >= 100 ? currentMonthPool.rocketBoostAmounts.tier100 : 0)
+		: 0;
+	$: projectedPoolAmount = currentMonthPool
+		? currentMonthPool.poolAmount + projectedRocketBoostAmount
 		: 0;
 
 	// Calculate pool APY (compound): ((1 + monthlyReturn) ^ 12 - 1) * 100
@@ -2313,46 +2347,72 @@
 						<div class="relative">
 							<!-- Progress bar background -->
 							<div class="h-4 overflow-hidden rounded-full bg-gray-700">
+								<!-- Projected progress (lighter background) -->
+								{#if projectedProgressPercent > rocketBoostProgressPercent}
+									<div
+										class="absolute h-full bg-yellow-500/30 transition-all duration-500"
+										style="width: {Math.min(100, projectedProgressPercent)}%"
+									/>
+								{/if}
+								<!-- Current progress (solid foreground) -->
 								<div
-									class="h-full transition-all duration-500 {rocketBoostProgressPercent >= 100
+									class="relative h-full transition-all duration-500 {rocketBoostProgressPercent >= 100
 										? 'bg-green-500'
 										: 'bg-yellow-500'}"
 									style="width: {Math.min(100, rocketBoostProgressPercent)}%"
 								/>
 							</div>
+							<!-- Projected progress marker (dashed line) -->
+							{#if projectedProgressPercent > rocketBoostProgressPercent && projectedProgressPercent < 100}
+								<div
+									class="absolute top-0 h-4 w-0.5 border-l-2 border-dashed border-yellow-300/70"
+									style="left: {Math.min(100, projectedProgressPercent)}%"
+									title="Projected: {projectedProgressPercent.toFixed(0)}%"
+								/>
+							{/if}
 							<!-- Milestone markers -->
 							{#each [{ pct: 25, amount: currentMonthPool.rocketBoostAmounts?.tier25 ?? 0 }, { pct: 50, amount: currentMonthPool.rocketBoostAmounts?.tier50 ?? 0 }, { pct: 75, amount: currentMonthPool.rocketBoostAmounts?.tier75 ?? 0 }, { pct: 100, amount: currentMonthPool.rocketBoostAmounts?.tier100 ?? 0 }] as { pct, amount } (pct)}
 								{@const achieved = rocketBoostProgressPercent >= pct}
+								{@const projected = projectedProgressPercent >= pct}
 								<div
 									class="absolute top-0 flex h-4 flex-col items-center"
 									style="left: {pct}%; transform: translateX(-50%)"
 								>
-									<div class="h-4 w-0.5 {achieved ? 'bg-green-400' : 'bg-gray-500'}"></div>
+									<div class="h-4 w-0.5 {achieved ? 'bg-green-400' : projected ? 'bg-yellow-400/50' : 'bg-gray-500'}"></div>
 								</div>
 								<!-- Label below -->
 								<div
 									class="absolute top-5 flex flex-col items-center text-xs"
 									style="left: {pct}%; transform: translateX(-50%)"
 								>
-									<span class={achieved ? 'text-green-400' : 'text-gray-500'}>{pct}%</span>
-									<span class={achieved ? 'text-green-300' : 'text-gray-600'}
+									<span class={achieved ? 'text-green-400' : projected ? 'text-yellow-400' : 'text-gray-500'}>{pct}%</span>
+									<span class={achieved ? 'text-green-300' : projected ? 'text-yellow-300/70' : 'text-gray-600'}
 										>+{formatUsd(amount)}</span
 									>
 								</div>
 							{/each}
 						</div>
-						<!-- Points display -->
+						<!-- Progress legend and stats -->
 						<div class="mt-10 flex items-center justify-between text-sm">
-							<div class="text-gray-400">
-								<span class="font-mono text-white">{totalPoints.toLocaleString()}</span> /
-								<span class="font-mono text-gray-300"
-									>{rocketBoostTargetPoints.toLocaleString()}</span
-								> points
+							<div class="flex items-center gap-4">
+								<div class="flex items-center gap-1.5">
+									<span class="inline-block h-2 w-4 rounded bg-yellow-500"></span>
+									<span class="text-gray-400">Current: <span class="text-white">{rocketBoostProgressPercent.toFixed(0)}%</span></span>
+								</div>
+								{#if projectedProgressPercent > rocketBoostProgressPercent}
+									<div class="flex items-center gap-1.5">
+										<span class="inline-block h-2 w-4 rounded bg-yellow-500/30 border border-dashed border-yellow-300/50"></span>
+										<span class="text-gray-400">Projected: <span class="text-yellow-300">{projectedProgressPercent.toFixed(0)}%</span></span>
+									</div>
+								{/if}
 							</div>
 							<div class="text-gray-400">
 								Achieved: <span class="font-medium text-green-400"
 									>+{formatUsd(achievedRocketBoostAmount)}</span
 								>
+								{#if projectedRocketBoostAmount > achievedRocketBoostAmount}
+									<span class="text-yellow-300/70">→ +{formatUsd(projectedRocketBoostAmount)}</span>
+								{/if}
 								<span class="text-gray-500"
 									>/ {formatUsd(
 										(currentMonthPool.rocketBoostAmounts?.tier25 ?? 0) +
@@ -2393,7 +2453,7 @@
 				</Card>
 			{:else if monthlyData}
 				<!-- Points Summary -->
-				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
 					<Card>
 						<div class="text-center">
 							<p class="text-3xl font-bold text-[#e8be89]">{totalPoints.toLocaleString()}</p>
@@ -2414,6 +2474,15 @@
 						<div class="text-center">
 							<p class="text-3xl font-bold text-[#e8be89]">{monthlyData.snapshotCount}</p>
 							<p class="mt-1 text-sm text-gray-400">Snapshots this month</p>
+						</div>
+					</Card>
+					<Card>
+						<div class="text-center">
+							<p class="text-3xl font-bold text-green-400">{formatUsd(projectedPoolAmount)}</p>
+							<p class="mt-1 text-sm text-gray-400">
+								Projected Pool
+								<span class="text-xs text-gray-500">({projectedProgressPercent.toFixed(0)}%)</span>
+							</p>
 						</div>
 					</Card>
 					<Card>
@@ -4024,22 +4093,43 @@
 					</div>
 				</Card>
 
-				<!-- Wallet Table with Code Filter -->
+				<!-- Wallet Table with Code and Tier Filters -->
 				<Card>
 					<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
-						<h3 class="text-lg font-medium text-white">Nansen Wallets</h3>
-						<div class="flex items-center gap-3">
-							<span class="text-sm text-gray-400">Filter by code:</span>
-							<select
-								bind:value={nansenCodeFilter}
-								class="rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-[#e8be89] focus:outline-none"
-							>
-								<option value="all">All Codes ({nansenAllWallets.length} wallets)</option>
-								{#each nansenAvailableCodes as code}
-									{@const codeData = nansenData.find((c) => c.code === code)}
-									<option value={code}>{code} ({codeData?.walletCount || 0} wallets)</option>
-								{/each}
-							</select>
+						<h3 class="text-lg font-medium text-white">
+							Nansen Wallets
+							<span class="ml-2 text-sm font-normal text-gray-400">
+								({nansenFilteredWallets.length} shown)
+							</span>
+						</h3>
+						<div class="flex flex-wrap items-center gap-4">
+							<div class="flex items-center gap-2">
+								<span class="text-sm text-gray-400">Code:</span>
+								<select
+									bind:value={nansenCodeFilter}
+									class="rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+								>
+									<option value="all">All Codes ({nansenAllWallets.length})</option>
+									{#each nansenAvailableCodes as code}
+										{@const codeData = nansenData.find((c) => c.code === code)}
+										<option value={code}>{code} ({codeData?.walletCount || 0})</option>
+									{/each}
+								</select>
+							</div>
+							<div class="flex items-center gap-2">
+								<span class="text-sm text-gray-400">Tier:</span>
+								<select
+									bind:value={nansenTierFilter}
+									class="rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-[#e8be89] focus:outline-none"
+								>
+									<option value="all">All Tiers</option>
+									<option value="star" class="text-yellow-400">Star (Tier 4)</option>
+									<option value="north" class="text-blue-400">North (Tier 3)</option>
+									<option value="ice" class="text-cyan-400">Ice (Tier 2)</option>
+									<option value="green" class="text-green-400">Green (Tier 1)</option>
+									<option value="none">No Tier</option>
+								</select>
+							</div>
 						</div>
 					</div>
 
@@ -4051,6 +4141,7 @@
 										<th class="pb-3 pr-4">#</th>
 										<th class="pb-3 pr-4">Wallet</th>
 										<th class="pb-3 pr-4">Code</th>
+										<th class="pb-3 pr-4">Nansen Tier</th>
 										<th class="pb-3 pr-4 text-right">Purchases</th>
 										<th class="pb-3 text-right">Lifetime USDC</th>
 									</tr>
@@ -4064,6 +4155,24 @@
 											</td>
 											<td class="py-2 pr-4 font-mono text-xs text-gray-300">
 												{wallet.code}
+											</td>
+											<td class="py-2 pr-4">
+												{#if wallet.nansenTier}
+													<span
+														class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium {NANSEN_TIER_INFO[
+															wallet.nansenTier
+														].color} bg-gray-800"
+													>
+														{NANSEN_TIER_INFO[wallet.nansenTier].name}
+														{#if wallet.nansenPoints}
+															<span class="text-gray-500">
+																({wallet.nansenPoints.toLocaleString()} pts)
+															</span>
+														{/if}
+													</span>
+												{:else}
+													<span class="text-gray-500">-</span>
+												{/if}
 											</td>
 											<td class="py-2 pr-4 text-right text-gray-300">
 												{wallet.purchaseCount > 0 ? wallet.purchaseCount : '-'}

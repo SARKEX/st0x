@@ -128,7 +128,9 @@ export const CACHE_KEYS = {
 	rewardsApy: () => 'cache:public:rewards-apy',
 	rocketboost: () => 'cache:public:rocketboost',
 	// Single cache for all wallet data (pre-computed rankings)
-	allWalletData: () => 'cache:public:wallet-data'
+	allWalletData: () => 'cache:public:wallet-data',
+	// Nansen tier data (wallet -> tier mapping)
+	nansenTiers: () => 'cache:public:nansen-tiers'
 } as const;
 
 // TTL constants (in seconds)
