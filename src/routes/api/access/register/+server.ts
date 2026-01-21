@@ -1,8 +1,17 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { processRegistration } from '$lib/server/accessCodes';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { createAuditLogger } from '$lib/server/auditLog';
+import { cacheDelete } from '$lib/server/cache';
 
 export const POST: RequestHandler = async ({ request }) => {
+	// Rate limiting (strict for registration)
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.auth, 'register');
+	if (rateLimitResponse) return rateLimitResponse;
+
+	const audit = createAuditLogger(request);
+
 	try {
 		const { address, code, signature, message } = await request.json();
 
@@ -30,11 +39,20 @@ export const POST: RequestHandler = async ({ request }) => {
 		const result = await processRegistration(address, code, signature as `0x${string}`, message);
 
 		if (result.success) {
+			// Invalidate the access check cache for this wallet
+			await cacheDelete(`cache:access:check:${address.toLowerCase()}`);
+
+			// Audit log successful registration
+			await audit.logSuccess('WALLET_REGISTRATION', { code: code.toUpperCase() }, { walletAddress: address });
+
 			return json({
 				success: true,
 				registeredAt: result.wallet?.registeredAt
 			});
 		}
+
+		// Audit log failed registration
+		await audit.logFailure('WALLET_REGISTRATION', { code: code.toUpperCase() }, result.error || 'Unknown error', { walletAddress: address });
 
 		return json({ success: false, error: result.error }, { status: 400 });
 	} catch {

@@ -10,7 +10,7 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import QuickTrade from '$lib/components/QuickTrade.svelte';
-	import { globalPoolApy, fetchGlobalPoolApy } from '$lib/stores/rewardsStore';
+	import { globalPoolApy, fetchGlobalRewards } from '$lib/stores/rewardsStore';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
 
@@ -75,7 +75,7 @@
 	let animationComplete = false;
 
 	onMount(() => {
-		fetchGlobalPoolApy();
+		fetchGlobalRewards();
 		// Start typewriter animation
 		typewriterTick();
 	});

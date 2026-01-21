@@ -17,6 +17,7 @@ import {
 	type SnapshotBlockRecord,
 	type DailySnapshotRecord
 } from '$lib/server/kv';
+import { invalidateRewardsCaches } from '$lib/server/cache';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -130,6 +131,9 @@ export const GET: RequestHandler = async ({ request }) => {
 
 			console.log(`[Cron] Stored block records in KV`);
 		}
+
+		// Invalidate all rewards-related caches so fresh data is computed
+		await invalidateRewardsCaches();
 
 		return json({
 			success: true,

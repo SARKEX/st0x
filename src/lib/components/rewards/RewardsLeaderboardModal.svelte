@@ -3,8 +3,11 @@
 	import { walletAddress } from '$lib/stores/authStore';
 	import {
 		rewardsData,
+		globalRewardsData,
 		publicLeaderboardData,
+		publicLeaderboardLoading,
 		showLeaderboardModal,
+		fetchPublicLeaderboard,
 		formatPoints,
 		formatAddress
 	} from '$lib/stores/rewardsStore';
@@ -35,11 +38,15 @@
 		}
 	}
 
-	// Use rewardsData if available, otherwise use publicLeaderboardData
-	$: leaderboardRankings =
-		$rewardsData?.leaderboard?.allRankings ?? $publicLeaderboardData?.allRankings ?? [];
-	$: totalWallets = $rewardsData?.totalWallets ?? $publicLeaderboardData?.totalWallets ?? 0;
+	// Use publicLeaderboardData (fetched from cached /api/rewards/leaderboard)
+	$: leaderboardRankings = $publicLeaderboardData?.allRankings ?? [];
+	$: totalWallets = $globalRewardsData?.totalWallets ?? $publicLeaderboardData?.totalWallets ?? 0;
 	$: hasData = leaderboardRankings.length > 0;
+
+	// Fetch leaderboard when modal opens if not already loaded
+	$: if ($showLeaderboardModal && !$publicLeaderboardData && !$publicLeaderboardLoading) {
+		fetchPublicLeaderboard();
+	}
 
 	// Scroll to user's position when modal opens
 	async function scrollToUser() {

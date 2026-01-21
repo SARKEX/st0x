@@ -13,8 +13,9 @@
 		showDetailsModal,
 		showLeaderboardModal,
 		showRulesModal,
+		globalRewardsData,
 		globalPoolApy,
-		fetchGlobalPoolApy,
+		fetchGlobalRewards,
 		fetchPublicLeaderboard
 	} from '$lib/stores/rewardsStore';
 
@@ -23,9 +24,9 @@
 	let lastFetchedAddress: string | null = null;
 	let showTooltip = false;
 
-	// Fetch global pool APY on mount (doesn't require wallet)
+	// Fetch global rewards data on mount (doesn't require wallet, CDN cached)
 	onMount(() => {
-		fetchGlobalPoolApy();
+		fetchGlobalRewards();
 		if (browser) {
 			document.addEventListener('click', handleClickOutside);
 		}
@@ -142,13 +143,10 @@
 		</button>
 
 		<!-- Hover Tooltip -->
-		{#if showTooltip && $rewardsData && !showDropdown}
-			{@const rocketBoostProgress =
-				$rewardsData.rocketBoostTargetPoints > 0
-					? Math.min(100, ($rewardsData.totalPoints / $rewardsData.rocketBoostTargetPoints) * 100)
-					: 0}
-			{@const projectedProgress = $rewardsData.projection
-				? Math.min(100, $rewardsData.projection.projectedProgress)
+		{#if showTooltip && $rewardsData && $globalRewardsData && !showDropdown}
+			{@const rocketBoostProgress = $globalRewardsData.rocketBoostProgress}
+			{@const projectedProgress = $globalRewardsData.projection
+				? Math.min(100, $globalRewardsData.projection.projectedProgress)
 				: 0}
 			<div
 				class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
@@ -289,16 +287,57 @@
 		</button>
 
 		<!-- Hover Tooltip for non-connected users -->
-		{#if showTooltip && !showDropdown}
+		{#if showTooltip && !showDropdown && $globalRewardsData}
+			{@const rocketBoostProgress = $globalRewardsData.rocketBoostProgress}
+			{@const projectedProgress = $globalRewardsData.projection
+				? Math.min(100, $globalRewardsData.projection.projectedProgress)
+				: 0}
 			<div
 				class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
 			>
 				<div class="space-y-2 text-sm">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Current APY</span>
+						<span class="text-gray-400">Rewards APY</span>
 						<span class="font-medium text-green-400">{formatApy($globalPoolApy)}</span>
 					</div>
-					<p class="text-xs text-gray-500">Connect wallet to see your rewards</p>
+					<div class="flex justify-between">
+						<span class="text-gray-400">Pool Size</span>
+						<span class="font-medium text-white">{formatUsd($globalRewardsData.effectivePool)}</span>
+					</div>
+					<!-- RocketBoost Progress Bar -->
+					<div class="pt-1">
+						<div class="text-xs text-gray-400">
+							<span>RocketBoost</span>
+						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-400">Progress</span>
+							<span class="text-white">{rocketBoostProgress.toFixed(0)}%</span>
+						</div>
+						{#if projectedProgress > rocketBoostProgress}
+							<div class="flex items-center justify-between text-xs">
+								<span class="text-gray-400">Projected</span>
+								<span class="text-yellow-300">{projectedProgress.toFixed(0)}%</span>
+							</div>
+						{/if}
+						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
+							<!-- Projected progress (lighter) -->
+							{#if projectedProgress > rocketBoostProgress}
+								<div class="absolute h-full bg-yellow-500/30" style="width: {projectedProgress}%" />
+							{/if}
+							<!-- Current progress -->
+							<div
+								class="relative h-full transition-all {rocketBoostProgress >= 100
+									? 'bg-green-500'
+									: 'bg-yellow-500'}"
+								style="width: {rocketBoostProgress}%"
+							/>
+							<!-- Milestone markers -->
+							{#each [25, 50, 75] as milestone}
+								<div class="absolute top-0 h-full w-px bg-gray-600" style="left: {milestone}%" />
+							{/each}
+						</div>
+					</div>
+					<p class="pt-1 text-xs text-gray-500">Connect wallet to see your rewards</p>
 				</div>
 			</div>
 		{/if}

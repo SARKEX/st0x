@@ -57,6 +57,21 @@ export async function invalidatePublicApiCaches(): Promise<void> {
 	console.log('[Cache] Public API caches invalidated');
 }
 
+/**
+ * Invalidate all rewards-related caches (called after snapshot generation)
+ */
+export async function invalidateRewardsCaches(): Promise<void> {
+	await Promise.all([
+		cacheDelete(CACHE_KEYS.rewardsApy()),
+		cacheDelete(CACHE_KEYS.rocketboost()),
+		cacheDelete(CACHE_KEYS.allWalletData()),
+		cacheDelete(CACHE_KEYS.rewardsLeaderboard()),
+		cacheDelete(CACHE_KEYS.rewardsPoolApy()),
+		cacheDelete(CACHE_KEYS.rewardsSharedData())
+	]);
+	console.log('[Cache] All rewards caches invalidated');
+}
+
 // In-memory locks to prevent cache stampede
 const computeLocks = new Map<string, Promise<unknown>>();
 
@@ -130,7 +145,12 @@ export const CACHE_KEYS = {
 	// Single cache for all wallet data (pre-computed rankings)
 	allWalletData: () => 'cache:public:wallet-data',
 	// Nansen tier data (wallet -> tier mapping)
-	nansenTiers: () => 'cache:public:nansen-tiers'
+	nansenTiers: () => 'cache:public:nansen-tiers',
+	// Rewards endpoints
+	rewardsLeaderboard: () => 'cache:rewards:leaderboard',
+	rewardsPoolApy: () => 'cache:rewards:pool-apy',
+	// Pre-computed shared data for user rewards (rankings, global stats)
+	rewardsSharedData: () => 'cache:rewards:shared-data'
 } as const;
 
 // TTL constants (in seconds)
