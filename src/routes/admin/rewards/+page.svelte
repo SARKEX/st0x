@@ -3774,30 +3774,60 @@
 				</div>
 			{/if}
 
-			{#if referralsLoading}
+			<!-- Month Selector for Referrals -->
+			<Card>
+				<div class="flex flex-wrap items-center justify-between gap-4">
+					<div>
+						<h2 class="text-lg font-semibold text-white">Referral Rewards</h2>
+						<p class="mt-1 text-sm text-gray-400">
+							View referral code performance by month
+						</p>
+					</div>
+					<div class="flex items-center gap-3">
+						<label for="referral-month-select" class="text-sm text-gray-400">Month:</label>
+						<select
+							id="referral-month-select"
+							bind:value={selectedMonth}
+							on:change={() => loadMonthlyData()}
+							class="rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-[#e8be89] focus:outline-none focus:ring-1 focus:ring-[#e8be89]"
+						>
+							{#each availableMonths as month}
+								<option value={month}>{month}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+			</Card>
+
+			{#if referralsLoading || pointsLoading}
 				<div class="flex items-center gap-3 text-gray-400">
 					<div
 						class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-[#e8be89]"
 					></div>
 					Loading referrals data...
 				</div>
+			{:else if availableMonths.length === 0}
+				<Card>
+					<p class="py-8 text-center text-gray-400">
+						No months available. Snapshot data may not have been generated yet.
+					</p>
+				</Card>
 			{:else if referralRewardsData.length === 0}
 				<Card>
 					<p class="py-8 text-center text-gray-400">
 						{#if !monthlyData?.wallets}
-							Select a month in the Monthly Points tab to view referral rewards.
+							Loading data for {selectedMonth}...
 						{:else}
 							No referral codes found.
 						{/if}
 					</p>
 				</Card>
 			{:else}
-				<!-- Month selector info -->
+				<!-- Summary Card -->
 				<Card>
 					<div class="flex flex-wrap items-center justify-between gap-4">
 						<div>
-							<h2 class="text-lg font-semibold text-white">Referral Rewards</h2>
-							<p class="mt-1 text-sm text-gray-400">
+							<p class="text-sm text-gray-400">
 								Showing rewards for <strong class="text-[#e8be89]">{selectedMonth || 'N/A'}</strong>
 								{#if monthlyData}
 									&middot; {monthlyData.walletCount} wallets
