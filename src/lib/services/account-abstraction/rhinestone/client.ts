@@ -328,194 +328,267 @@ export class RhinestoneClient {
 	 * - gasPrices: current gas prices per chain
 	 * - tokenPrices: current token prices for conversion
 	 */
-	async getSwapQuote(params: CrossChainSwapParams): Promise<CrossChainSwapQuote> {
-		try {
-			// Validate networks are supported
-			if (!this.isSupportedNetwork(params.sourceChain)) {
-				throw new AAError(
-					`Source chain ${params.sourceChain} not supported`,
-					AAErrorCode.UNSUPPORTED_NETWORK
-				);
-			}
-			if (!this.isSupportedNetwork(params.targetChain)) {
-				throw new AAError(
-					`Target chain ${params.targetChain} not supported`,
-					AAErrorCode.UNSUPPORTED_NETWORK
-				);
-			}
-
-			const isSameChain = params.sourceChain === params.targetChain;
-
-			// Get the orchestrator instance
-			const orchestrator = getOrchestrator(this.config.apiKey);
-
-			try {
-				// Build the intent input for the orchestrator
-				// We're requesting the target token amount on the destination chain
-				const intentInput = {
-					account: {
-						address: params.recipient,
-						accountType: 'EOA' as const,
-						setupOps: []
-					},
-					destinationChainId: params.targetChain,
-					destinationExecutions: [], // Empty for pure token transfer
-					tokenRequests: [
-						{
-							tokenAddress: params.targetToken.address,
-							amount: params.amount
-						}
-					],
-					// Restrict source to specific chain/token if provided
-					accountAccessList: {
-						chainTokens: {
-							[params.sourceChain]: [params.sourceToken.address]
-						}
-					},
-					options: {
-						topupCompact: false
-						// Note: settlementLayers should only be specified for cross-chain operations
-						// For same-chain swaps, omit this option entirely
-					}
-				};
-
-				// Get the route from the orchestrator
-				const route: IntentRoute = await orchestrator.getIntentRoute(intentInput);
-				const intentCost: IntentCost = route.intentCost;
-
-				// Extract cost information from the response
-				// tokensReceived contains the actual costs per token
-				const tokenReceived = intentCost.tokensReceived?.[0];
-				const amountSpent = tokenReceived?.amountSpent
-					? BigInt(tokenReceived.amountSpent)
-					: params.amount;
-				const destinationAmount = tokenReceived?.destinationAmount
-					? BigInt(tokenReceived.destinationAmount)
-					: params.amount;
-				const _fee = tokenReceived?.fee ? BigInt(tokenReceived.fee) : 0n;
-
-				// Extract gas prices from signedMetadata if available
-				const gasPrices = route.intentOp?.signedMetadata?.gasPrices || {};
-				const sourceChainGasPrice = gasPrices[params.sourceChain.toString()]
-					? BigInt(gasPrices[params.sourceChain.toString()])
-					: 1000000000n; // Default 1 gwei
-
-				// Estimate gas based on operation complexity
-				const baseGasLimit = isSameChain ? 150000n : 500000n;
-				const estimatedGasCostWei = baseGasLimit * sourceChainGasPrice;
-
-				// Get USDC price for gas cost conversion (from tokenPrices in metadata)
-				const tokenPrices = route.intentOp?.signedMetadata?.tokenPrices || {};
-				const ethPrice = tokenPrices['ETH'] || 2500; // Default ETH price
-				const usdcDecimals = 6;
-
-				// Convert gas cost from ETH to USDC
-				// estimatedGasCostWei is in wei (18 decimals), convert to ETH then to USDC
-				const gasCostInEth = Number(estimatedGasCostWei) / 1e18;
-				const gasCostInUSDC = BigInt(Math.ceil(gasCostInEth * ethPrice * 10 ** usdcDecimals));
-
-				// Calculate price impact in basis points
-				// (inputAmount - outputAmount) / inputAmount * 10000
-				const priceImpactBps =
-					amountSpent > 0n
-						? Number(((amountSpent - destinationAmount) * 10000n) / amountSpent)
-						: 10;
-
-				const quote: CrossChainSwapQuote = {
-					inputAmount: amountSpent,
-					outputAmount: destinationAmount,
-					estimatedGas: {
-						gasLimit: baseGasLimit,
-						maxFeePerGas: sourceChainGasPrice,
-						maxPriorityFeePerGas: sourceChainGasPrice / 10n, // 10% of base fee
-						estimatedGasCostWei,
-						estimatedGasCostUSDC: gasCostInUSDC
-					},
-					route: {
-						steps: [
-							{
-								type: isSameChain ? 'swap' : 'bridge',
-								chainId: params.sourceChain,
-								protocol: 'rhinestone-solver',
-								tokenIn: params.sourceToken.address,
-								tokenOut: params.targetToken.address,
-								amountIn: amountSpent,
-								amountOut: destinationAmount
-							}
-						],
-						totalSteps: 1,
-						estimatedDuration: isSameChain ? 15 : 60
-					},
-					expiresAt: Date.now() + 60000, // 1 minute expiry
-					priceImpactBps: Math.max(priceImpactBps, 0)
-				};
-
-				return quote;
-			} catch (orchestratorError) {
-				// If the orchestrator call fails (e.g., no API key, network issues),
-				// fall back to gas oracle for gas prices but estimate swap amounts
-				console.warn(
-					'Orchestrator quote failed, using gas oracle fallback:',
-					orchestratorError instanceof Error ? orchestratorError.message : 'Unknown error'
-				);
-
-				// Use gas oracle for real-time gas prices
-				const gasOracle = getGasOracle();
-				const operationType = isSameChain ? 'swap' : 'bridge';
-				const gasLimit = gasOracle.getDefaultGasLimit(operationType);
-
-				// Fetch current gas prices from the source chain
-				const gasPrices = await gasOracle.getGasPrice(params.sourceChain);
-
-				// Estimate gas cost
-				const estimatedGasCostWei = gasLimit * gasPrices.maxFeePerGas;
-
-				// Convert to USDC (using default ETH price of $2500 as fallback)
-				const defaultEthPrice = 2500;
-				const estimatedGasCostUSDC = gasOracle.convertToUSDC(estimatedGasCostWei, defaultEthPrice);
-
-				const estimatedDuration = isSameChain ? 15 : 60;
-
-				const quote: CrossChainSwapQuote = {
-					inputAmount: params.amount,
-					outputAmount: params.amount, // Assume 1:1 for stablecoins in fallback
-					estimatedGas: {
-						gasLimit,
-						maxFeePerGas: gasPrices.maxFeePerGas,
-						maxPriorityFeePerGas: gasPrices.maxPriorityFeePerGas,
-						estimatedGasCostWei,
-						estimatedGasCostUSDC
-					},
-					route: {
-						steps: [
-							{
-								type: isSameChain ? 'swap' : 'bridge',
-								chainId: params.sourceChain,
-								protocol: 'rhinestone-solver',
-								tokenIn: params.sourceToken.address,
-								tokenOut: params.targetToken.address,
-								amountIn: params.amount,
-								amountOut: params.amount
-							}
-						],
-						totalSteps: 1,
-						estimatedDuration
-					},
-					expiresAt: Date.now() + 60000,
-					priceImpactBps: 10 // 0.1% estimated
-				};
-
-				return quote;
-			}
-		} catch (error) {
-			if (error instanceof AAError) throw error;
-			throw new AAError(
-				`Failed to get swap quote: ${error instanceof Error ? error.message : 'Unknown error'}`,
-				AAErrorCode.RHINESTONE_ERROR,
-				{ originalError: error }
-			);
+	// ✅ DROP-IN REPLACEMENT #1: getSwapQuote
+// Fixes: you were requesting the *target token* with params.amount (wrong) and you were using destination tokenRequests
+// For ETH->Base, tokenRequests MUST describe what you are paying on SOURCE chain (sourceToken + amount).
+async getSwapQuote(
+	params: CrossChainSwapParams,
+	feeAsset?: string
+  ): Promise<CrossChainSwapQuote> {
+	try {
+	  // Validate networks are supported
+	  if (!this.isSupportedNetwork(params.sourceChain)) {
+		throw new AAError(
+		  `Source chain ${params.sourceChain} not supported`,
+		  AAErrorCode.UNSUPPORTED_NETWORK
+		);
+	  }
+	  if (!this.isSupportedNetwork(params.targetChain)) {
+		throw new AAError(
+		  `Target chain ${params.targetChain} not supported`,
+		  AAErrorCode.UNSUPPORTED_NETWORK
+		);
+	  }
+  
+	  const isSameChain = params.sourceChain === params.targetChain;
+  
+	  // --- native ETH -> WETH normalization for quoting ---
+	  const MAINNET_WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const;
+	  const BASE_WETH = '0x4200000000000000000000000000000000000006' as const;
+  
+	  const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
+	  const isZeroAddr = (v?: string) =>
+		(v ?? '').toLowerCase() === '0x0000000000000000000000000000000000000000';
+  
+	  const normalizeEthToWeth = (token: { symbol?: string; address: string }, chainId: number) => {
+		const sym = (token.symbol ?? '').toUpperCase();
+		if ((sym === 'ETH' || sym === 'NATIVE' || isZeroAddr(token.address)) && chainId === 1) {
+		  return { ...token, symbol: 'WETH', address: MAINNET_WETH as `0x${string}` };
 		}
+		if ((sym === 'ETH' || sym === 'NATIVE' || isZeroAddr(token.address)) && chainId === 8453) {
+		  return { ...token, symbol: 'WETH', address: BASE_WETH as `0x${string}` };
+		}
+		return token;
+	  };
+  
+	  const normalizedSourceToken = normalizeEthToWeth(
+		{ symbol: params.sourceToken.symbol, address: params.sourceToken.address as string },
+		Number(params.sourceChain)
+	  );
+	  const normalizedTargetToken = normalizeEthToWeth(
+		{ symbol: params.targetToken.symbol, address: params.targetToken.address as string },
+		Number(params.targetChain)
+	  );
+  
+	  // Validate API key
+	  if (!this.config.apiKey) {
+		throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
+	  }
+	  
+	  // Get orchestrator instance
+	  const orchestrator = getOrchestrator(this.config.apiKey);
+  
+	  try {
+		// ✅ CRITICAL FIX:
+		// tokenRequests MUST be what you spend on SOURCE chain (sourceToken + amount).
+		// Your previous code incorrectly requested destination token.
+		// Include tokens from both chains in accountAccessList for better orchestrator context
+		const accountAccessList: { chainTokens: Record<number, string[]> } = {
+		  chainTokens: {
+			[params.sourceChain]: [normalizedSourceToken.address]
+		  }
+		};
+		
+		// Add target chain token if different from source
+		if (!isSameChain && normalizedTargetToken.address.toLowerCase() !== normalizedSourceToken.address.toLowerCase()) {
+		  if (!accountAccessList.chainTokens[params.targetChain]) {
+			accountAccessList.chainTokens[params.targetChain] = [];
+		  }
+		  accountAccessList.chainTokens[params.targetChain].push(normalizedTargetToken.address);
+		}
+		
+		// Validate amount is positive
+		if (params.amount <= 0n) {
+		  throw new AAError('Amount must be greater than zero', AAErrorCode.SWAP_FAILED);
+		}
+		
+		// Ensure token addresses are properly typed as 0x${string}
+		const sourceTokenAddr = normalizedSourceToken.address as `0x${string}`;
+		
+		// For quotes, we don't include destinationExecutions because:
+		// 1. The orchestrator calculates the output amount
+		// 2. We don't know the exact amount until we get the quote back
+		// 3. The SDK's prepareTransaction will add the destination execution with the correct amount
+		// Using 'EOA' account type is correct even for EIP-7702 because:
+		// - EIP-7702 accounts use the EOA address
+		// - The orchestrator treats them as EOAs for routing purposes
+		// - The SDK handles the EIP-7702 upgrade internally
+		const intentInput = {
+		  account: {
+			address: params.recipient,
+			accountType: 'EOA' as const,
+			setupOps: []
+		  },
+		  destinationChainId: params.targetChain,
+		  destinationExecutions: [], // Empty for quotes - SDK will add during prepareTransaction
+		  tokenRequests: [
+			{
+			  tokenAddress: sourceTokenAddr,
+			  amount: params.amount
+			}
+		  ],
+		  accountAccessList,
+		  options: {
+			topupCompact: false,
+			// If your orchestrator supports feeAsset, pass it here (safe if ignored)
+			...(feeAsset ? { feeAsset } : {})
+		  }
+		};
+		
+		console.log('[Rhinestone Client] Requesting quote from orchestrator:', {
+		  sourceChain: params.sourceChain,
+		  targetChain: params.targetChain,
+		  sourceToken: normalizedSourceToken.address,
+		  targetToken: normalizedTargetToken.address,
+		  amount: params.amount.toString(),
+		  feeAsset,
+		  accountAccessList
+		});
+  
+		const route: IntentRoute = await orchestrator.getIntentRoute(intentInput);
+		const intentCost: IntentCost = route.intentCost;
+  
+		// NOTE: naming here depends on orchestrator response shapes; keep your safe fallbacks.
+		const tokenReceived = intentCost.tokensReceived?.[0];
+  
+		const amountSpent = tokenReceived?.amountSpent
+		  ? BigInt(tokenReceived.amountSpent)
+		  : params.amount;
+  
+		const destinationAmount = tokenReceived?.destinationAmount
+		  ? BigInt(tokenReceived.destinationAmount)
+		  : params.amount;
+  
+		const gasPrices = route.intentOp?.signedMetadata?.gasPrices || {};
+		const sourceChainGasPrice = gasPrices[params.sourceChain.toString()]
+		  ? BigInt(gasPrices[params.sourceChain.toString()])
+		  : 1_000_000_000n;
+  
+		const baseGasLimit = isSameChain ? 150000n : 500000n;
+		const estimatedGasCostWei = baseGasLimit * sourceChainGasPrice;
+  
+		const tokenPrices = route.intentOp?.signedMetadata?.tokenPrices || {};
+		const ethPrice = tokenPrices['ETH'] || 2500;
+		const usdcDecimals = 6;
+  
+		const gasCostInEth = Number(estimatedGasCostWei) / 1e18;
+		const gasCostInUSDC = BigInt(Math.ceil(gasCostInEth * ethPrice * 10 ** usdcDecimals));
+  
+		const priceImpactBps =
+		  amountSpent > 0n
+			? Number(((amountSpent - destinationAmount) * 10000n) / amountSpent)
+			: 10;
+  
+		const quote: CrossChainSwapQuote = {
+		  inputAmount: amountSpent,
+		  outputAmount: destinationAmount,
+		  estimatedGas: {
+			gasLimit: baseGasLimit,
+			maxFeePerGas: sourceChainGasPrice,
+			maxPriorityFeePerGas: sourceChainGasPrice / 10n,
+			estimatedGasCostWei,
+			estimatedGasCostUSDC: gasCostInUSDC
+		  },
+		  route: {
+			steps: [
+			  {
+				type: isSameChain ? 'swap' : 'bridge',
+				chainId: params.sourceChain,
+				protocol: 'rhinestone-solver',
+				// use normalized addresses for ETH->WETH
+				tokenIn: normalizedSourceToken.address as `0x${string}`,
+				tokenOut: normalizedTargetToken.address as `0x${string}`,
+				amountIn: amountSpent,
+				amountOut: destinationAmount
+			  }
+			],
+			totalSteps: 1,
+			estimatedDuration: isSameChain ? 15 : 60
+		  },
+		  expiresAt: Date.now() + 60_000,
+		  priceImpactBps: Math.max(priceImpactBps, 0)
+		};
+  
+		return quote;
+	  } catch (orchestratorError) {
+		const errorMessage = orchestratorError instanceof Error ? orchestratorError.message : String(orchestratorError);
+		const errorStack = orchestratorError instanceof Error ? orchestratorError.stack : undefined;
+		
+		console.error(
+		  '[Rhinestone Client] Orchestrator quote failed, using gas oracle fallback:',
+		  {
+			error: errorMessage,
+			stack: errorStack,
+			sourceChain: params.sourceChain,
+			targetChain: params.targetChain,
+			sourceToken: normalizedSourceToken.address,
+			targetToken: normalizedTargetToken.address,
+			amount: params.amount.toString(),
+			feeAsset
+		  }
+		);
+  
+		const gasOracle = getGasOracle();
+		const operationType = isSameChain ? 'swap' : 'bridge';
+		const gasLimit = gasOracle.getDefaultGasLimit(operationType);
+  
+		const gasPrices = await gasOracle.getGasPrice(params.sourceChain);
+		const estimatedGasCostWei = gasLimit * gasPrices.maxFeePerGas;
+  
+		const defaultEthPrice = 2500;
+		const estimatedGasCostUSDC = gasOracle.convertToUSDC(estimatedGasCostWei, defaultEthPrice);
+  
+		const quote: CrossChainSwapQuote = {
+		  inputAmount: params.amount,
+		  outputAmount: params.amount,
+		  estimatedGas: {
+			gasLimit,
+			maxFeePerGas: gasPrices.maxFeePerGas,
+			maxPriorityFeePerGas: gasPrices.maxPriorityFeePerGas,
+			estimatedGasCostWei,
+			estimatedGasCostUSDC
+		  },
+		  route: {
+			steps: [
+			  {
+				type: isSameChain ? 'swap' : 'bridge',
+				chainId: params.sourceChain,
+				protocol: 'rhinestone-solver',
+				tokenIn: normalizedSourceToken.address as `0x${string}`,
+				tokenOut: normalizedTargetToken.address as `0x${string}`,
+				amountIn: params.amount,
+				amountOut: params.amount
+			  }
+			],
+			totalSteps: 1,
+			estimatedDuration: isSameChain ? 15 : 60
+		  },
+		  expiresAt: Date.now() + 60_000,
+		  priceImpactBps: 10
+		};
+  
+		return quote;
+	  }
+	} catch (error) {
+	  if (error instanceof AAError) throw error;
+	  throw new AAError(
+		`Failed to get swap quote: ${error instanceof Error ? error.message : 'Unknown error'}`,
+		AAErrorCode.RHINESTONE_ERROR,
+		{ originalError: error }
+	  );
 	}
+  }
+  
 
 	/**
 	 * Execute a cross-chain swap using Rhinestone's solver network
@@ -530,262 +603,428 @@ export class RhinestoneClient {
 	 * @param walletAccount - User's wallet account for signing
 	 * @param feeAsset - Optional asset for gas payment (e.g., 'USDC' for ERC20 gas)
 	 */
-	async executeCrossChainSwap(
-		params: CrossChainSwapParams,
-		walletAccount: Account,
-		feeAsset?: string
-	  ): Promise<{ txHash: Hex; intentId: string }> {
-		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	// ✅ DROP-IN REPLACEMENT #2: executeCrossChainSwap
+// Fixes:
+// - Uses new getSwapQuote(params, feeAsset) signature
+// - Normalizes ETH->WETH for quoting + tokenRequests + sourceAssets
+// - For mainnet source, defaults feeAsset to undefined (don’t force USDC)
+// - Keeps your bounded poll for txHash
+// ✅ DROP-IN REPLACEMENT #2: executeCrossChainSwap
+// Fixes:
+// - Uses new getSwapQuote(params, feeAsset) signature
+// - Normalizes ETH->WETH for quoting + tokenRequests + sourceAssets
+// - For mainnet source, defaults feeAsset to undefined (don’t force USDC)
+// - Keeps your bounded poll for txHash
+async executeCrossChainSwap(
+	params: CrossChainSwapParams,
+	walletAccount: Account,
+	feeAsset?: string
+  ): Promise<{ txHash: Hex; intentId: string }> {
+	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  
+	const pollForHash = async (
+	  account: RhinestoneAccount,
+	  txResult: TransactionResult,
+	  maxMs = 60_000,
+	  intervalMs = 2_500
+	): Promise<Hex | undefined> => {
+	  const start = Date.now();
+	  while (Date.now() - start < maxMs) {
+		const st = await account.waitForExecution(txResult);
+		const hash = st?.fill?.hash ?? st?.claims?.find((c) => c?.hash)?.hash;
+		if (hash && hash !== '0x') return hash;
+		await sleep(intervalMs);
+	  }
+	  return undefined;
+	};
+  
+	const uniqLower = (xs: Array<string | undefined>) => {
+	  const seen = new Set<string>();
+	  const out: string[] = [];
+	  for (const x of xs) {
+		if (!x) continue;
+		const k = x.toLowerCase();
+		if (seen.has(k)) continue;
+		seen.add(k);
+		out.push(x);
+	  }
+	  return out;
+	};
+  
+	const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
+  
+	const resolveFeeAssetAddress = (fa: string | undefined, chainId: number): `0x${string}` | undefined => {
+	  if (!fa) return undefined;
+	  if (isAddress(fa)) return fa as `0x${string}`;
+	  return resolveTokenAddress(fa, chainId);
+	};
+  
+	// --- native ETH -> WETH normalization for quoting/requests ---
+	const MAINNET_WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const;
+	const BASE_WETH = '0x4200000000000000000000000000000000000006' as const;
+  
+	const isZeroAddr = (v?: string) =>
+	  (v ?? '').toLowerCase() === '0x0000000000000000000000000000000000000000';
+  
+	const normalizeEthToWeth = (token: { symbol?: string; address: string }, chainId: number) => {
+	  const sym = (token.symbol ?? '').toUpperCase();
+	  if ((sym === 'ETH' || sym === 'NATIVE' || isZeroAddr(token.address)) && chainId === 1) {
+		return { ...token, symbol: 'WETH', address: MAINNET_WETH as `0x${string}` };
+	  }
+	  if ((sym === 'ETH' || sym === 'NATIVE' || isZeroAddr(token.address)) && chainId === 8453) {
+		return { ...token, symbol: 'WETH', address: BASE_WETH as `0x${string}` };
+	  }
+	  return token;
+	};
+  
+	// Quote wrapper with retries (important for ETH->Base)
+	const getQuoteWithRetries = async (p: CrossChainSwapParams, effectiveFeeAsset: string | undefined) => {
+	  // Try: effectiveFeeAsset (usually undefined for mainnet), then undefined.
+	  let lastError: Error | unknown;
 	  
-		const pollForHash = async (
-		  account: RhinestoneAccount,
-		  txResult: TransactionResult,
-		  maxMs = 60_000,
-		  intervalMs = 2_500
-		): Promise<Hex | undefined> => {
-		  const start = Date.now();
-		  while (Date.now() - start < maxMs) {
-			const st = await account.waitForExecution(txResult);
-			const hash = st?.fill?.hash ?? st?.claims?.find((c) => c?.hash)?.hash;
-			if (hash && hash !== '0x') return hash;
-			await sleep(intervalMs);
-		  }
-		  return undefined;
-		};
-	  
-		const uniqLower = (xs: Array<string | undefined>) => {
-		  const seen = new Set<string>();
-		  const out: string[] = [];
-		  for (const x of xs) {
-			if (!x) continue;
-			const k = x.toLowerCase();
-			if (seen.has(k)) continue;
-			seen.add(k);
-			out.push(x);
-		  }
-		  return out;
-		};
-	  
-		const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
-	  
-		// Resolve fee asset to an address for a specific chain (source or target).
-		const resolveFeeAssetAddress = (fa: string | undefined, chainId: number): `0x${string}` | undefined => {
-		  if (!fa) return undefined;
-		  if (isAddress(fa)) return fa as `0x${string}`;
-		  return resolveTokenAddress(fa, chainId); // your helper (USDC/USDT/etc per chain)
-		};
-	  
+	  try {
+		console.log('[Rhinestone Client] Attempting quote with feeAsset:', effectiveFeeAsset);
+		return await this.getSwapQuote(p, effectiveFeeAsset);
+	  } catch (e1) {
+		lastError = e1;
+		const m1 = e1 instanceof Error ? e1.message : String(e1);
+		console.warn('[Rhinestone Client] First quote attempt failed:', m1);
+		
 		try {
-		  if (!this.config.apiKey) {
-			throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
-		  }
-	  
-		  const srcId = Number(params.sourceChain);
-		  const dstId = Number(params.targetChain);
-	  
-		  const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
-		  const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
-	  
-		  // ---- Normalize token addresses to the correct chain ----
-		  const srcTokenAddr =
-			resolveTokenAddress(params.sourceToken.symbol ?? '', srcId) ??
-			(params.sourceToken.address as `0x${string}`);
-	  
-		  const dstTokenAddr =
-			resolveTokenAddress(params.targetToken.symbol ?? '', dstId) ??
-			(params.targetToken.address as `0x${string}`);
-	  
-		  const normalizedParams: CrossChainSwapParams = {
-			...params,
-			sourceToken: { ...params.sourceToken, address: srcTokenAddr },
-			targetToken: { ...params.targetToken, address: dstTokenAddr }
-		  };
-	  
-		  // Fee asset addresses (can differ per chain)
-		  const feeAssetSrcAddr = resolveFeeAssetAddress(feeAsset, srcId);
-		  const feeAssetDstAddr = resolveFeeAssetAddress(feeAsset, dstId);
-	  
-		  console.log('[Rhinestone Client] Cross-chain quote inputs', {
-			sourceChain: srcId,
-			targetChain: dstId,
-			sourceToken: { symbol: normalizedParams.sourceToken.symbol, address: normalizedParams.sourceToken.address },
-			targetToken: { symbol: normalizedParams.targetToken.symbol, address: normalizedParams.targetToken.address },
-			feeAsset,
-			feeAssetSrcAddr,
-			feeAssetDstAddr,
-			amount: normalizedParams.amount?.toString?.()
+		  console.log('[Rhinestone Client] Retrying quote without feeAsset');
+		  return await this.getSwapQuote(p, undefined);
+		} catch (e2) {
+		  lastError = e2;
+		  const m2 = e2 instanceof Error ? e2.message : String(e2);
+		  const m1Str = m1;
+		  
+		  console.error('[Rhinestone Client] Both quote attempts failed:', {
+			firstAttempt: m1Str,
+			secondAttempt: m2,
+			sourceChain: p.sourceChain,
+			targetChain: p.targetChain,
+			sourceToken: p.sourceToken.symbol,
+			targetToken: p.targetToken.symbol,
+			amount: p.amount.toString()
 		  });
-	  
-		  // ---- Quote (must use normalizedParams) ----
-		  const quote = await this.getSwapQuote(normalizedParams);
-	  
-		  if (Date.now() > quote.expiresAt) {
-			throw new AAError('Quote has expired', AAErrorCode.QUOTE_EXPIRED);
-		  }
-	  
-		  // ---- Create Rhinestone account ----
-		  const rhinestoneAccount = await this.createAccount(walletAccount);
-		  const rhinestoneAddress = rhinestoneAccount.getAddress();
-		  const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
-	  
-		  // ---- Always sign init for 7702/EOA (backend often requires it) ----
-		  let eip7702InitSignature: Hex | undefined;
-		  if (isEOA || this.config.accountType === '7702') {
-			try {
-			  console.log('[Rhinestone Client] Signing EIP-7702 init data for cross-chain transaction...');
-			  eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-			  if (!eip7702InitSignature || eip7702InitSignature === '0x') {
-				throw new Error('signEip7702InitData returned empty signature');
-			  }
-			  console.log('[Rhinestone Client] EIP-7702 init signature obtained');
-			} catch (signError) {
-			  const msg = signError instanceof Error ? signError.message : String(signError);
-			  throw new AAError(
-				`Failed to sign EIP-7702 initialization: ${msg}. Please try again.`,
-				AAErrorCode.AUTHORIZATION_REJECTED,
-				{ originalError: signError }
-			  );
-			}
-		  }
-	  
-		  // ---- Calls must use normalized target token address ----
-		  const transferCall = {
-			to: normalizedParams.targetToken.address as Address,
-			value: 0n,
-			data: encodeFunctionData({
-			  abi: erc20Abi,
-			  functionName: 'transfer',
-			  args: [normalizedParams.recipient, quote.outputAmount]
-			})
-		  };
-	  
-		  // ---- sourceAssets must be chain-correct (NO mixing) ----
-		  const sourceAssets = {
-			[sourceChain.id]: uniqLower([
-			  normalizedParams.sourceToken.address, // on source chain
-			  feeAssetSrcAddr // on source chain, if any
-			]),
-			[targetChain.id]: uniqLower([
-			  normalizedParams.targetToken.address, // on target chain
-			  feeAssetDstAddr // on target chain, if any
-			])
-		  };
-	  
-		  const transactionParams: RhinestoneTransactionParams = {
-			sourceChain,
-			targetChain,
-			calls: [transferCall],
-			tokenRequests: [
-			  {
-				address: normalizedParams.sourceToken.address as Address,
-				amount: normalizedParams.amount
-			  }
-			],
-			feeAsset, // keep the symbol if that’s what orchestrator expects
-			sourceAssets,
-			eip7702InitSignature
-		  };
-	  
-		  console.log('[Rhinestone Client] Preparing cross-chain transaction...', {
-			sourceChain: sourceChain.id,
-			targetChain: targetChain.id,
-			feeAsset,
-			feeAssetSrcAddr,
-			feeAssetDstAddr,
-			hasEip7702Init: Boolean(eip7702InitSignature),
-			sourceAssets: transactionParams.sourceAssets
-		  });
-	  
-		  const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
-		  const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
-	  
-		  const getAuthorizations = async (): Promise<SignedAuthorizationList> => {
-			if (this.config.accountType !== '7702') return [];
-			try {
-			  const auths = await rhinestoneAccount.signAuthorizations(signedTx);
-			  console.log('[Rhinestone Client] Authorizations signed:', auths?.length ?? 0);
-			  return auths ?? [];
-			} catch (authError) {
-			  const msg = authError instanceof Error ? authError.message : String(authError);
-	  
-			  // Only swallow for known JSON-RPC limitations
-			  if (
-				msg.includes('JSON-RPC') ||
-				msg.toLowerCase().includes('not supported') ||
-				msg.toLowerCase().includes('account type') ||
-				msg.toLowerCase().includes('undefined')
-			  ) {
-				console.warn(
-				  '[Rhinestone Client] signAuthorizations not supported for this wallet. Proceeding without authorizations.'
-				);
-				return [];
-			  }
-			  throw authError;
-			}
-		  };
-	  
-		  let authorizations: SignedAuthorizationList = await getAuthorizations();
-	  
-		  const submit = async (auths: SignedAuthorizationList) => {
-			console.log('[Rhinestone Client] Submitting cross-chain transaction...');
-			return rhinestoneAccount.submitTransaction(signedTx, auths);
-		  };
-	  
-		  let transactionResult: TransactionResult;
-		  try {
-			transactionResult = await submit(authorizations);
-		  } catch (submitErr) {
-			const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
-	  
-			if (msg.includes('authorization list') && msg.includes('cover chain')) {
-			  console.warn(
-				'[Rhinestone Client] Authorization list did not cover chain(s). Re-signing and retrying once...',
-				{ source: sourceChain.id, target: targetChain.id }
-			  );
-			  authorizations = await getAuthorizations();
-			  transactionResult = await submit(authorizations);
-			} else if (msg.toLowerCase().includes('initialization signature is required')) {
-			  throw new AAError(
-				'EIP-7702 initialization signature is required for EOA accounts',
-				AAErrorCode.AUTHORIZATION_REJECTED,
-				{ originalError: submitErr }
-			  );
-			} else {
-			  throw submitErr;
-			}
-		  }
-	  
-		  const status = await rhinestoneAccount.waitForExecution(transactionResult);
-		  const directHash = status?.fill?.hash ?? status?.claims?.find((c) => c?.hash)?.hash;
-	  
-		  if (directHash && directHash !== '0x') {
-			return { txHash: directHash, intentId: transactionResult.id.toString() };
-		  }
-	  
-		  console.warn('[Rhinestone Client] No txHash found after execution. Polling...', {
-			intentId: transactionResult.id.toString()
-		  });
-	  
-		  const polledHash = await pollForHash(rhinestoneAccount, transactionResult, 60_000, 2_500);
-		  if (polledHash && polledHash !== '0x') {
-			return { txHash: polledHash, intentId: transactionResult.id.toString() };
-		  }
-	  
+		  
 		  throw new AAError(
-			`Cross-chain transaction completed but no hash returned (intentId: ${transactionResult.id.toString()}). Backend may not have attached the chain tx hash yet.`,
-			AAErrorCode.TRANSACTION_FAILED,
-			{ intentId: transactionResult.id.toString(), status }
-		  );
-		} catch (error) {
-			console.log('error : ', error);
-		  if (error instanceof AAError) throw error;
-		  throw new AAError(
-			`Cross-chain swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			`Could not retrieve a valid quote from any quoter. First attempt: ${m1Str}. Second attempt: ${m2}`,
 			AAErrorCode.SWAP_FAILED,
-			{ originalError: error }
+			{ originalError: e2, firstError: e1 }
 		  );
 		}
 	  }
+	};
+  
+	try {
+	  if (!this.config.apiKey) {
+		throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
+	  }
+  
+	  const srcId = Number(params.sourceChain);
+	  const dstId = Number(params.targetChain);
+  
+	  const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
+	  const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
+  
+	  if (!sourceChain || !targetChain) {
+		throw new AAError(
+		  `Unsupported cross-chain route: ${srcId} -> ${dstId}`,
+		  AAErrorCode.UNSUPPORTED_NETWORK
+		);
+	  }
+  
+	  // ✅ For Ethereum mainnet source, do NOT force feeAsset (USDC gas etc.)
+	  const effectiveFeeAsset = srcId === 1 ? undefined : feeAsset;
+  
+	  // ---- Normalize token addresses to the correct chain ----
+	  const srcTokenAddr =
+		resolveTokenAddress(params.sourceToken.symbol ?? '', srcId) ??
+		(params.sourceToken.address as `0x${string}`);
+  
+	  const dstTokenAddr =
+		resolveTokenAddress(params.targetToken.symbol ?? '', dstId) ??
+		(params.targetToken.address as `0x${string}`);
+  
+	  // Build normalized params
+	  let normalizedParams: CrossChainSwapParams = {
+		...params,
+		sourceToken: { ...params.sourceToken, address: srcTokenAddr },
+		targetToken: { ...params.targetToken, address: dstTokenAddr }
+	  };
+  
+	  // 🔥 Critical: ETH -> WETH for quote + tokenRequests
+	  normalizedParams = {
+		...normalizedParams,
+		sourceToken: normalizeEthToWeth(
+		  { symbol: normalizedParams.sourceToken.symbol, address: normalizedParams.sourceToken.address as any },
+		  srcId
+		) as any,
+		targetToken: normalizeEthToWeth(
+		  { symbol: normalizedParams.targetToken.symbol, address: normalizedParams.targetToken.address as any },
+		  dstId
+		) as any
+	  };
+  
+	  // Fee asset addresses (chain-specific) — based on effectiveFeeAsset
+	  const feeAssetSrcAddr = resolveFeeAssetAddress(effectiveFeeAsset, srcId);
+	  const feeAssetDstAddr = resolveFeeAssetAddress(effectiveFeeAsset, dstId);
+  
+	  console.log('[Rhinestone Client] Cross-chain quote inputs', {
+		sourceChain: srcId,
+		targetChain: dstId,
+		sourceToken: { symbol: normalizedParams.sourceToken.symbol, address: normalizedParams.sourceToken.address },
+		targetToken: { symbol: normalizedParams.targetToken.symbol, address: normalizedParams.targetToken.address },
+		feeAssetRequested: feeAsset,
+		feeAssetEffective: effectiveFeeAsset,
+		feeAssetSrcAddr,
+		feeAssetDstAddr,
+		amount: normalizedParams.amount?.toString?.()
+	  });
+  
+	  // ---- Quote (must be compatible with ETH->Base) ----
+	  const quote = await getQuoteWithRetries(normalizedParams, effectiveFeeAsset);
+  
+	  if (Date.now() > quote.expiresAt) {
+		throw new AAError('Quote has expired', AAErrorCode.QUOTE_EXPIRED);
+	  }
+  
+	  // ---- Create Rhinestone account ----
+	  const rhinestoneAccount = await this.createAccount(walletAccount);
+	  const rhinestoneAddress = rhinestoneAccount.getAddress();
+	  const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
+  
+	  // ✅ ALWAYS sign init for 7702/EOA (don’t skip)
+	  let eip7702InitSignature: Hex | undefined;
+	  if (isEOA || this.config.accountType === '7702') {
+		try {
+		  console.log('[Rhinestone Client] Signing EIP-7702 init data for cross-chain transaction...');
+		  eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
+		  if (!eip7702InitSignature || eip7702InitSignature === '0x') {
+			throw new Error('signEip7702InitData returned empty signature');
+		  }
+		  console.log('[Rhinestone Client] EIP-7702 init signature obtained');
+		} catch (signError) {
+		  const msg = signError instanceof Error ? signError.message : String(signError);
+		  throw new AAError(
+			`Failed to sign EIP-7702 initialization: ${msg}. Please try again.`,
+			AAErrorCode.AUTHORIZATION_REJECTED,
+			{ originalError: signError }
+		  );
+		}
+	  }
+  
+	  // ---- Call on TARGET chain after solver completes swap/bridge ----
+	  const transferCall = {
+		to: normalizedParams.targetToken.address as Address,
+		value: 0n,
+		data: encodeFunctionData({
+		  abi: erc20Abi,
+		  functionName: 'transfer',
+		  args: [normalizedParams.recipient, quote.outputAmount]
+		})
+	  };
+  
+	  // ---- sourceAssets must be chain-correct ----
+	  const sourceAssets: Record<number, string[]> = {
+		[sourceChain.id]: uniqLower([
+		  normalizedParams.sourceToken.address as any,
+		  feeAssetSrcAddr
+		]),
+		[targetChain.id]: uniqLower([
+		  normalizedParams.targetToken.address as any,
+		  feeAssetDstAddr
+		])
+	  };
+  
+	  const transactionParams: RhinestoneTransactionParams = {
+		sourceChain,
+		targetChain,
+		calls: [transferCall],
+		tokenRequests: [
+		  {
+			// ✅ IMPORTANT: tokenRequests must be SOURCE token (after ETH->WETH normalization)
+			address: normalizedParams.sourceToken.address as Address,
+			amount: normalizedParams.amount
+		  }
+		],
+		feeAsset: effectiveFeeAsset,
+		sourceAssets,
+		eip7702InitSignature
+	  };
+  
+	  console.log('[Rhinestone Client] Preparing cross-chain transaction...', {
+		sourceChain: sourceChain.id,
+		targetChain: targetChain.id,
+		feeAssetRequested: feeAsset,
+		feeAssetEffective: effectiveFeeAsset,
+		feeAssetSrcAddr,
+		feeAssetDstAddr,
+		hasEip7702Init: Boolean(eip7702InitSignature),
+		sourceAssets,
+		rhinestoneAddress,
+		walletAddress: walletAccount.address,
+		transactionParams: {
+		  sourceChain: transactionParams.sourceChain?.id,
+		  targetChain: transactionParams.targetChain.id,
+		  callsCount: transactionParams.calls.length,
+		  tokenRequestsCount: transactionParams.tokenRequests?.length ?? 0,
+		  feeAsset: transactionParams.feeAsset
+		}
+	  });
+  
+	  let preparedTx: PreparedTransaction;
+	  try {
+		preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+	  } catch (prepareError) {
+		const errorMsg = prepareError instanceof Error ? prepareError.message : String(prepareError);
+		const errorStack = prepareError instanceof Error ? prepareError.stack : undefined;
+		
+		console.error('[Rhinestone Client] prepareTransaction failed:', {
+		  error: errorMsg,
+		  stack: errorStack,
+		  sourceChain: sourceChain.id,
+		  targetChain: targetChain.id,
+		  sourceToken: normalizedParams.sourceToken.address,
+		  targetToken: normalizedParams.targetToken.address,
+		  amount: normalizedParams.amount.toString(),
+		  rhinestoneAddress,
+		  walletAddress: walletAccount.address,
+		  accountType: this.config.accountType
+		});
+		
+		// Re-throw with more context
+		throw new AAError(
+		  `Failed to prepare cross-chain transaction: ${errorMsg}. ` +
+		  `This might be due to unsupported token pair, insufficient liquidity, or orchestrator configuration issue.`,
+		  AAErrorCode.SWAP_FAILED,
+		  { originalError: prepareError }
+		);
+	  }
+	  const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
+  
+	  // ---- Authorizations ----
+	  const signAuths = async (): Promise<SignedAuthorizationList> => {
+		if (this.config.accountType !== '7702') return [];
+		try {
+		  const auths = await rhinestoneAccount.signAuthorizations(signedTx);
+		  console.log('[Rhinestone Client] Authorizations signed:', auths?.length ?? 0);
+		  return auths ?? [];
+		} catch (authError) {
+		  const msg = authError instanceof Error ? authError.message : String(authError);
+		  if (
+			msg.includes('JSON-RPC') ||
+			msg.toLowerCase().includes('not supported') ||
+			msg.toLowerCase().includes('account type') ||
+			msg.toLowerCase().includes('undefined')
+		  ) {
+			console.warn('[Rhinestone Client] signAuthorizations not supported; proceeding with empty list.');
+			return [];
+		  }
+		  throw authError;
+		}
+	  };
+  
+	  let authorizations = await signAuths();
+  
+	  const submit = async (auths: SignedAuthorizationList) => {
+		console.log('[Rhinestone Client] Submitting cross-chain transaction...');
+		return rhinestoneAccount.submitTransaction(signedTx, auths);
+	  };
+  
+	  let txResult: TransactionResult;
+	  try {
+		txResult = await submit(authorizations);
+	  } catch (submitErr) {
+		const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+  
+		if (msg.toLowerCase().includes('authorization list') && msg.toLowerCase().includes('cover chain')) {
+		  console.warn('[Rhinestone Client] Authorization list did not cover chain(s). Re-signing and retrying once...', {
+			source: sourceChain.id,
+			target: targetChain.id
+		  });
+		  authorizations = await signAuths();
+		  txResult = await submit(authorizations);
+		} else if (msg.toLowerCase().includes('initialization signature is required')) {
+		  throw new AAError(
+			'EIP-7702 initialization signature is required for EOA accounts',
+			AAErrorCode.AUTHORIZATION_REJECTED,
+			{ originalError: submitErr }
+		  );
+		} else {
+		  throw submitErr;
+		}
+	  }
+  
+	  const status = await rhinestoneAccount.waitForExecution(txResult);
+	  const directHash = status?.fill?.hash ?? status?.claims?.find((c) => c?.hash)?.hash;
+  
+	  if (directHash && directHash !== '0x') {
+		return { txHash: directHash, intentId: txResult.id.toString() };
+	  }
+  
+	  const polledHash = await pollForHash(rhinestoneAccount, txResult, 60_000, 2_500);
+	  if (polledHash && polledHash !== '0x') {
+		return { txHash: polledHash, intentId: txResult.id.toString() };
+	  }
+  
+	  throw new AAError(
+		`Cross-chain transaction completed but no hash returned (intentId: ${txResult.id.toString()}). Backend may not have attached the chain tx hash yet.`,
+		AAErrorCode.TRANSACTION_FAILED,
+		{ intentId: txResult.id.toString(), status }
+	  );
+	  } catch (error) {
+	  console.error('[Rhinestone Client] executeCrossChainSwap error:', error);
+	  
+	  // Try to extract more details from the error
+	  let errorMessage = 'Unknown error';
+	  let errorDetails: any = {};
+	  
+	  if (error instanceof Error) {
+		errorMessage = error.message;
+		errorDetails = {
+		  name: error.name,
+		  stack: error.stack,
+		  // Check if error has additional properties
+		  ...(error as any).response && { response: (error as any).response },
+		  ...(error as any).data && { data: (error as any).data },
+		  ...(error as any).status && { status: (error as any).status }
+		};
+	  }
+	  
+	  // Check if it's an orchestrator error
+	  if (errorMessage.includes('Something went wrong') || errorMessage.includes('OrchestratorError')) {
+		console.error('[Rhinestone Client] Orchestrator error details:', {
+		  errorMessage,
+		  errorDetails,
+		  sourceChain: params.sourceChain,
+		  targetChain: params.targetChain,
+		  sourceToken: params.sourceToken.symbol,
+		  targetToken: params.targetToken.symbol
+		});
+		
+		throw new AAError(
+		  `Orchestrator error: ${errorMessage}. ` +
+		  `This might indicate the token pair (${params.sourceToken.symbol} -> ${params.targetToken.symbol}) ` +
+		  `is not supported, or there's insufficient liquidity. Please try a different token or contact support.`,
+		  AAErrorCode.SWAP_FAILED,
+		  { originalError: error, errorDetails }
+		);
+	  }
+	  
+	  if (error instanceof AAError) throw error;
+	  throw new AAError(
+		`Cross-chain swap failed: ${errorMessage}`,
+		AAErrorCode.SWAP_FAILED,
+		{ originalError: error, errorDetails }
+	  );
+	}
+  }
+  
+  
+	  
+	  
 	  
 	  
 
@@ -1536,8 +1775,7 @@ export class RhinestoneClient {
 				// For EIP-7702, it's typically in the authorization data
 				if (messages && typeof messages === 'object') {
 					// Log messages for debugging
-					console.log('[Rhinestone Client] Transaction messages:', safeStringify(messages, (key, value) => 
-						typeof value === 'bigint' ? value.toString() : value, 2));
+					console.log('[Rhinestone Client] Transaction messages:', safeStringify(messages));
 					
 					// Try to extract delegate address from messages
 					// The structure varies, so we check multiple possible locations
