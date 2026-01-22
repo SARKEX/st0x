@@ -9,6 +9,7 @@ interface RateLimitResult {
 	allowed: boolean;
 	remaining: number;
 	resetAt: number; // Unix timestamp when the window resets
+	failedClosed?: boolean; // Indicates if the request was blocked due to Redis unavailability
 }
 
 const DEFAULT_CONFIG: RateLimitConfig = {
@@ -17,7 +18,59 @@ const DEFAULT_CONFIG: RateLimitConfig = {
 };
 
 /**
+ * Simple in-memory rate limiter for fail-closed fallback
+ * Uses a simple counter with expiry - less accurate but works without Redis
+ */
+const inMemoryRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function checkInMemoryRateLimit(identifier: string, config: RateLimitConfig): RateLimitResult {
+	const now = Date.now();
+	const key = identifier;
+
+	const existing = inMemoryRateLimits.get(key);
+
+	// Clean up old entry if window has passed
+	if (existing && now > existing.resetAt) {
+		inMemoryRateLimits.delete(key);
+	}
+
+	const current = inMemoryRateLimits.get(key);
+	const resetAt = now + config.windowMs;
+
+	if (!current) {
+		// First request in window
+		inMemoryRateLimits.set(key, { count: 1, resetAt });
+		return { allowed: true, remaining: config.maxRequests - 1, resetAt };
+	}
+
+	if (current.count >= config.maxRequests) {
+		return { allowed: false, remaining: 0, resetAt: current.resetAt };
+	}
+
+	current.count++;
+	return { allowed: true, remaining: config.maxRequests - current.count, resetAt: current.resetAt };
+}
+
+// Periodic cleanup of expired in-memory entries (every 5 minutes)
+if (typeof setInterval !== 'undefined') {
+	setInterval(
+		() => {
+			const now = Date.now();
+			for (const [key, value] of inMemoryRateLimits.entries()) {
+				if (now > value.resetAt) {
+					inMemoryRateLimits.delete(key);
+				}
+			}
+		},
+		5 * 60 * 1000
+	);
+}
+
+/**
  * Simple Redis-based rate limiter using sliding window
+ * Fails OPEN on Redis errors (allows requests through)
+ * Use checkRateLimitStrict for critical endpoints that should fail closed
+ *
  * @param identifier - Unique identifier (IP address, API key, etc.)
  * @param config - Rate limit configuration
  */
@@ -70,6 +123,69 @@ export async function checkRateLimit(
 }
 
 /**
+ * Strict rate limiter that fails CLOSED on Redis errors.
+ * Uses in-memory fallback when Redis is unavailable.
+ *
+ * Use this for critical security endpoints like:
+ * - Admin login (prevent brute force)
+ * - Wallet registration (prevent abuse)
+ * - Password reset (prevent enumeration)
+ *
+ * @param identifier - Unique identifier (IP address, API key, etc.)
+ * @param config - Rate limit configuration
+ */
+export async function checkRateLimitStrict(
+	identifier: string,
+	config: RateLimitConfig = DEFAULT_CONFIG
+): Promise<RateLimitResult> {
+	const client = await getKv();
+
+	// If Redis is not available, use in-memory fallback (fail closed with degraded accuracy)
+	if (!client) {
+		console.warn('[Rate Limit] Redis unavailable, using in-memory fallback for strict rate limiting');
+		const result = checkInMemoryRateLimit(`strict:${identifier}`, config);
+		return { ...result, failedClosed: true };
+	}
+
+	const key = `ratelimit:strict:${identifier}`;
+	const now = Date.now();
+	const windowStart = now - config.windowMs;
+
+	try {
+		// Use a transaction for atomic operations
+		const multi = client.multi();
+
+		// Remove old entries outside the window
+		multi.zRemRangeByScore(key, 0, windowStart);
+
+		// Count current requests in window
+		multi.zCard(key);
+
+		// Add current request
+		multi.zAdd(key, { score: now, value: `${now}-${Math.random()}` });
+
+		// Set expiry on the key
+		multi.expire(key, Math.ceil(config.windowMs / 1000) + 1);
+
+		const results = await multi.exec();
+
+		// zCard result is at index 1
+		const currentCount = (results[1] as unknown as number) || 0;
+
+		const allowed = currentCount < config.maxRequests;
+		const remaining = Math.max(0, config.maxRequests - currentCount - 1);
+		const resetAt = now + config.windowMs;
+
+		return { allowed, remaining, resetAt };
+	} catch (error) {
+		console.error('[Rate Limit] Redis error, falling back to in-memory:', error);
+		// Fail closed with in-memory fallback
+		const result = checkInMemoryRateLimit(`strict:${identifier}`, config);
+		return { ...result, failedClosed: true };
+	}
+}
+
+/**
  * Get client IP from request headers (works with Vercel)
  *
  * IMPORTANT: We prioritize Vercel's headers which cannot be spoofed by clients.
@@ -112,8 +228,19 @@ export const rateLimiters = {
 		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 200 }),
 
 	// Authentication/registration: 5 requests/minute (prevent brute force)
+	// Uses FAIL-OPEN mode - consider using authStrict for critical endpoints
 	auth: (identifier: string) =>
 		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 5 }),
+
+	// STRICT Authentication: 5 requests/minute with fail-closed behavior
+	// Use this for critical security endpoints (admin login, wallet registration)
+	authStrict: (identifier: string) =>
+		checkRateLimitStrict(identifier, { windowMs: 60 * 1000, maxRequests: 5 }),
+
+	// STRICT Admin login: 3 requests/minute with fail-closed behavior
+	// Extra strict for admin endpoints to prevent brute force attacks
+	adminLoginStrict: (identifier: string) =>
+		checkRateLimitStrict(identifier, { windowMs: 60 * 1000, maxRequests: 3 }),
 
 	// Access check: Higher limit since it's called on every page load (read-only)
 	accessCheck: (identifier: string) =>

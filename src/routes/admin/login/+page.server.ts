@@ -32,8 +32,13 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
 export const actions: Actions = {
 	default: async ({ request, cookies }) => {
-		// Rate limiting for login attempts
-		const rateLimitResponse = await applyRateLimit(request, rateLimiters.auth, 'admin-login');
+		// Rate limiting for login attempts - uses STRICT mode (fail-closed)
+		// This prevents brute force attacks even if Redis is unavailable
+		const rateLimitResponse = await applyRateLimit(
+			request,
+			rateLimiters.adminLoginStrict,
+			'admin-login'
+		);
 		if (rateLimitResponse) {
 			return fail(429, { error: 'Too many login attempts. Please try again later.' });
 		}

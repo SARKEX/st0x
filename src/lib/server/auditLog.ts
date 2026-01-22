@@ -3,7 +3,7 @@
  * Logs are stored in Redis with a TTL for compliance and debugging.
  */
 
-import { getKv, kvGet, kvSet } from './kv';
+import { getKv } from './kv';
 import { getClientIp } from './rateLimit';
 
 // Audit event types

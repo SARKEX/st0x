@@ -35,9 +35,19 @@
 		}
 
 		try {
+			// Fetch CSRF token first
+			const csrfResponse = await fetch('/api/auth/csrf');
+			if (!csrfResponse.ok) {
+				throw new Error('Failed to get security token');
+			}
+			const { token: csrfToken } = await csrfResponse.json();
+
 			const response = await fetch('/api/onramper/sign-url', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					'X-CSRF-Token': csrfToken
+				},
 				body: JSON.stringify({ walletAddress: address })
 			});
 

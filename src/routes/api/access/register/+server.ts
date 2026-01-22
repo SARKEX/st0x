@@ -6,8 +6,9 @@ import { createAuditLogger } from '$lib/server/auditLog';
 import { cacheDelete } from '$lib/server/cache';
 
 export const POST: RequestHandler = async ({ request }) => {
-	// Rate limiting (strict for registration)
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.auth, 'register');
+	// Rate limiting - uses STRICT mode (fail-closed with in-memory fallback)
+	// This prevents registration abuse even if Redis is unavailable
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.authStrict, 'register');
 	if (rateLimitResponse) return rateLimitResponse;
 
 	const audit = createAuditLogger(request);

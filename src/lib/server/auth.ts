@@ -12,9 +12,22 @@ export function createSessionToken(timestamp: number): string {
 }
 
 export function verifySessionToken(token: string, timestamp: number): boolean {
-	const expected = createSessionToken(timestamp);
 	const now = Date.now();
-	return token === expected && now - timestamp < SESSION_DURATION_MS;
+
+	// Check timestamp validity first (non-sensitive check)
+	if (now - timestamp >= SESSION_DURATION_MS) {
+		return false;
+	}
+
+	const expected = createSessionToken(timestamp);
+
+	// Use constant-time comparison to prevent timing attacks
+	// Both tokens should be hex strings of the same length (SHA256 = 64 chars)
+	if (token.length !== expected.length) {
+		return false;
+	}
+
+	return crypto.timingSafeEqual(Buffer.from(token, 'utf8'), Buffer.from(expected, 'utf8'));
 }
 
 export function validateCredentials(username: string, password: string): boolean {
