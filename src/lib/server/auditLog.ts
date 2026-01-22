@@ -127,8 +127,11 @@ export function createAuditLogger(request: Request) {
 			}
 		) => logAuditEvent(request, eventType, details, options),
 
-		logSuccess: (eventType: AuditEventType, details: Record<string, unknown>, options?: { walletAddress?: string; adminUser?: string }) =>
-			logAuditEvent(request, eventType, details, { ...options, success: true }),
+		logSuccess: (
+			eventType: AuditEventType,
+			details: Record<string, unknown>,
+			options?: { walletAddress?: string; adminUser?: string }
+		) => logAuditEvent(request, eventType, details, { ...options, success: true }),
 
 		logFailure: (
 			eventType: AuditEventType,

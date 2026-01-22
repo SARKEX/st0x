@@ -83,12 +83,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		);
 
 		// Audit log
-		await audit.logSuccess('ACCESS_CODE_CREATED', {
-			code: accessCode.code,
-			maxUses: accessCode.maxUses,
-			expiresAt: accessCode.expiresAt,
-			label: accessCode.label
-		}, { adminUser: 'admin' });
+		await audit.logSuccess(
+			'ACCESS_CODE_CREATED',
+			{
+				code: accessCode.code,
+				maxUses: accessCode.maxUses,
+				expiresAt: accessCode.expiresAt,
+				label: accessCode.label
+			},
+			{ adminUser: 'admin' }
+		);
 
 		return json({ success: true, code: accessCode });
 	} catch {
@@ -119,7 +123,11 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 
 		if (deleted) {
 			// Audit log
-			await audit.logSuccess('ACCESS_CODE_DELETED', { code: code.toUpperCase() }, { adminUser: 'admin' });
+			await audit.logSuccess(
+				'ACCESS_CODE_DELETED',
+				{ code: code.toUpperCase() },
+				{ adminUser: 'admin' }
+			);
 			return json({ success: true });
 		}
 
@@ -132,7 +140,11 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 // PATCH - Generate a new code (utility endpoint)
 export const PATCH: RequestHandler = async ({ cookies, request }) => {
 	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-generate');
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-codes-generate'
+	);
 	if (rateLimitResponse) return rateLimitResponse;
 
 	if (!isAuthenticated(cookies)) {
@@ -175,10 +187,14 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 
 		if (updatedCode) {
 			// Audit log
-			await audit.logSuccess('ACCESS_CODE_UPDATED', {
-				code: code.toUpperCase(),
-				changes: { maxUses, expiresAt, label }
-			}, { adminUser: 'admin' });
+			await audit.logSuccess(
+				'ACCESS_CODE_UPDATED',
+				{
+					code: code.toUpperCase(),
+					changes: { maxUses, expiresAt, label }
+				},
+				{ adminUser: 'admin' }
+			);
 
 			return json({ success: true, code: updatedCode });
 		}

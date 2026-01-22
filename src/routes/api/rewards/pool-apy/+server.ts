@@ -25,12 +25,21 @@ async function computePoolApyData(): Promise<PoolApyData> {
 	const now = new Date();
 	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 
-	// Get current month's points data, pool config, and excluded wallets
-	const [monthlyData, poolConfig, excludedWalletsSet] = await Promise.all([
-		kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-		kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
-		getExcludedWalletsSet()
-	]);
+	// Fetch data with error handling for Redis unavailability
+	let monthlyData: MonthlyPointsData | null = null;
+	let poolConfig: RewardsPoolConfig | null = null;
+	let excludedWalletsSet: Set<string> = new Set();
+
+	try {
+		[monthlyData, poolConfig, excludedWalletsSet] = await Promise.all([
+			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
+			kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
+			getExcludedWalletsSet()
+		]);
+	} catch (error) {
+		console.warn('[Pool APY] Redis unavailable, returning empty data:', error);
+		// Continue with null/empty defaults
+	}
 
 	// Calculate total points (excluding excluded wallets)
 	let totalPoints = 0;
@@ -96,11 +105,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
 	try {
 		// Cache for 1 hour (invalidated on snapshot generation)
-		const result = await withCache(
-			CACHE_KEYS.rewardsPoolApy(),
-			computePoolApyData,
-			CACHE_TTL.LONG
-		);
+		const result = await withCache(CACHE_KEYS.rewardsPoolApy(), computePoolApyData, CACHE_TTL.LONG);
 
 		return json(result);
 	} catch (error) {

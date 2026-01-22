@@ -142,7 +142,9 @@ export async function checkRateLimitStrict(
 
 	// If Redis is not available, use in-memory fallback (fail closed with degraded accuracy)
 	if (!client) {
-		console.warn('[Rate Limit] Redis unavailable, using in-memory fallback for strict rate limiting');
+		console.warn(
+			'[Rate Limit] Redis unavailable, using in-memory fallback for strict rate limiting'
+		);
 		const result = checkInMemoryRateLimit(`strict:${identifier}`, config);
 		return { ...result, failedClosed: true };
 	}
@@ -229,8 +231,7 @@ export const rateLimiters = {
 
 	// Authentication/registration: 5 requests/minute (prevent brute force)
 	// Uses FAIL-OPEN mode - consider using authStrict for critical endpoints
-	auth: (identifier: string) =>
-		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 5 }),
+	auth: (identifier: string) => checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 5 }),
 
 	// STRICT Authentication: 5 requests/minute with fail-closed behavior
 	// Use this for critical security endpoints (admin login, wallet registration)
@@ -310,18 +311,18 @@ export interface TieredRateLimitConfig {
 export const tieredLimits: Record<string, TieredRateLimitConfig> = {
 	// Rewards endpoints
 	rewards: {
-		anonymous: { windowMs: 60 * 1000, maxRequests: 10 },      // 10/min for anon
-		authenticated: { windowMs: 60 * 1000, maxRequests: 60 }   // 60/min for wallet
+		anonymous: { windowMs: 60 * 1000, maxRequests: 10 }, // 10/min for anon
+		authenticated: { windowMs: 60 * 1000, maxRequests: 60 } // 60/min for wallet
 	},
 	// Access check (read-only, called on page load)
 	accessCheck: {
-		anonymous: { windowMs: 60 * 1000, maxRequests: 20 },      // 20/min for anon
-		authenticated: { windowMs: 60 * 1000, maxRequests: 120 }  // 120/min for wallet
+		anonymous: { windowMs: 60 * 1000, maxRequests: 20 }, // 20/min for anon
+		authenticated: { windowMs: 60 * 1000, maxRequests: 120 } // 120/min for wallet
 	},
 	// Onramper (requires wallet)
 	onramper: {
-		anonymous: { windowMs: 60 * 1000, maxRequests: 2 },       // 2/min for anon (shouldn't happen)
-		authenticated: { windowMs: 60 * 1000, maxRequests: 10 }   // 10/min for wallet
+		anonymous: { windowMs: 60 * 1000, maxRequests: 2 }, // 2/min for anon (shouldn't happen)
+		authenticated: { windowMs: 60 * 1000, maxRequests: 10 } // 10/min for wallet
 	}
 };
 

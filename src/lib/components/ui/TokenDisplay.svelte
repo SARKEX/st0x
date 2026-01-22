@@ -4,6 +4,7 @@
 	export let name: string = '';
 	export let size: 'sm' | 'md' | 'lg' = 'md';
 	export let showName: boolean = true;
+	export let hideNameOnMobile: boolean = false;
 	export let className: string = '';
 
 	const sizes = {
@@ -55,7 +56,11 @@
 			{symbol}
 		</div>
 		{#if showName && name}
-			<div class={'truncate text-gray-400 ' + sizeConfig.nameText}>
+			<div
+				class={'truncate text-gray-400 ' +
+					sizeConfig.nameText +
+					(hideNameOnMobile ? ' hidden sm:block' : '')}
+			>
 				{name}
 			</div>
 		{/if}

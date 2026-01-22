@@ -44,7 +44,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			await cacheDelete(`cache:access:check:${address.toLowerCase()}`);
 
 			// Audit log successful registration
-			await audit.logSuccess('WALLET_REGISTRATION', { code: code.toUpperCase() }, { walletAddress: address });
+			await audit.logSuccess(
+				'WALLET_REGISTRATION',
+				{ code: code.toUpperCase() },
+				{ walletAddress: address }
+			);
 
 			return json({
 				success: true,
@@ -53,7 +57,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Audit log failed registration
-		await audit.logFailure('WALLET_REGISTRATION', { code: code.toUpperCase() }, result.error || 'Unknown error', { walletAddress: address });
+		await audit.logFailure(
+			'WALLET_REGISTRATION',
+			{ code: code.toUpperCase() },
+			result.error || 'Unknown error',
+			{ walletAddress: address }
+		);
 
 		return json({ success: false, error: result.error }, { status: 400 });
 	} catch {

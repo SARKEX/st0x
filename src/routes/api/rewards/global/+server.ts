@@ -55,11 +55,21 @@ async function computeGlobalRewardsData(): Promise<GlobalRewardsData> {
 	const now = new Date();
 	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 
-	const [monthlyData, poolConfig, excludedSet] = await Promise.all([
-		kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-		kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
-		getExcludedWalletsSet()
-	]);
+	// Fetch data with error handling for Redis unavailability
+	let monthlyData: MonthlyPointsData | null = null;
+	let poolConfig: RewardsPoolConfig | null = null;
+	let excludedSet: Set<string> = new Set();
+
+	try {
+		[monthlyData, poolConfig, excludedSet] = await Promise.all([
+			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
+			kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
+			getExcludedWalletsSet()
+		]);
+	} catch (error) {
+		console.warn('[Global Rewards] Redis unavailable, returning empty data:', error);
+		// Continue with null/empty defaults - will return valid but empty response
+	}
 
 	// Calculate totals excluding excluded wallets
 	let totalPoints = 0;
@@ -168,7 +178,7 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
 	try {
 		// Redis cache (1 hour, invalidated on snapshot generation)
 		const result = await withCache(
-			CACHE_KEYS.rewardsSharedData(),
+			CACHE_KEYS.rewardsGlobalData(),
 			computeGlobalRewardsData,
 			CACHE_TTL.LONG
 		);

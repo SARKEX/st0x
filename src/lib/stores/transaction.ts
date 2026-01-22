@@ -94,9 +94,7 @@ import { getTrades } from '$lib/api/subgraph';
  */
 function isOrderbookTrusted(orderbookAddress: string, network: Network): boolean {
 	const normalizedAddress = orderbookAddress.toLowerCase();
-	return network.trustedOrderbooks.some(
-		(trusted) => trusted.toLowerCase() === normalizedAddress
-	);
+	return network.trustedOrderbooks.some((trusted) => trusted.toLowerCase() === normalizedAddress);
 }
 
 /**

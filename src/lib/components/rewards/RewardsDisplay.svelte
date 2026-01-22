@@ -302,7 +302,8 @@
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">Pool Size</span>
-						<span class="font-medium text-white">{formatUsd($globalRewardsData.effectivePool)}</span>
+						<span class="font-medium text-white">{formatUsd($globalRewardsData.effectivePool)}</span
+						>
 					</div>
 					<!-- RocketBoost Progress Bar -->
 					<div class="pt-1">

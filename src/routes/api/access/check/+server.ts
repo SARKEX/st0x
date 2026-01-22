@@ -22,10 +22,16 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 	// Get wallet address from cookie for tiered rate limiting
 	// Use the queried address if it matches the cookie, otherwise use cookie
 	const cookieWallet = cookies.get('wallet-address');
-	const walletForRateLimit = cookieWallet?.toLowerCase() === address.toLowerCase() ? address : cookieWallet;
+	const walletForRateLimit =
+		cookieWallet?.toLowerCase() === address.toLowerCase() ? address : cookieWallet;
 
 	// Tiered rate limiting
-	const rateLimitResponse = await applyTieredRateLimit(request, 'accessCheck', 'access-check', walletForRateLimit);
+	const rateLimitResponse = await applyTieredRateLimit(
+		request,
+		'accessCheck',
+		'access-check',
+		walletForRateLimit
+	);
 	if (rateLimitResponse) return rateLimitResponse;
 
 	// Cache the registration check per address

@@ -114,10 +114,7 @@ function getCorsHeaders(
 /**
  * Get CORS headers for preflight (OPTIONS) requests
  */
-function getPreflightHeaders(
-	origin: string | null,
-	isPublicApi: boolean
-): Record<string, string> {
+function getPreflightHeaders(origin: string | null, isPublicApi: boolean): Record<string, string> {
 	const headers = getCorsHeaders(origin, isPublicApi, !isPublicApi);
 
 	// Only add preflight headers if origin is allowed
@@ -157,14 +154,14 @@ const SECURITY_HEADERS: Record<string, string> = {
 		"default-src 'self'",
 		// Script sources - TradingView widgets require unsafe-inline (they use script.innerHTML for config)
 		// unsafe-eval may be needed by web3 libraries - monitor via report-uri before removing
-		"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://cdn.privy.io https://s3.tradingview.com https://tv-static-2.tradingview.com",
+		"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://cdn.privy.io https://s3.tradingview.com https://tv-static-2.tradingview.com https://va.vercel-scripts.com https://cdn.jsdelivr.net",
 		// Style sources - unsafe-inline needed for dynamic styles from libraries
 		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-		"font-src 'self' https://fonts.gstatic.com data:",
+		"font-src 'self' https://fonts.gstatic.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://cdn.jsdelivr.net data:",
 		"img-src 'self' data: blob: https:",
 		// Tightened connect-src - explicitly list allowed API endpoints
-		"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://rpc.ankr.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com wss://*.dynamic.xyz",
-		"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://auth.privy.io https://buy.onramper.com https://buy.onramper.dev https://*.tradingview.com",
+		"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com wss://*.dynamic.xyz https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com",
+		"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://auth.privy.io https://buy.onramper.com https://buy.onramper.dev https://*.tradingview.com https://*.tradingview-widget.com",
 		"frame-ancestors 'none'",
 		"base-uri 'self'",
 		"form-action 'self'",
@@ -172,7 +169,7 @@ const SECURITY_HEADERS: Record<string, string> = {
 		"object-src 'none'",
 		"worker-src 'self' blob:",
 		"manifest-src 'self'",
-		"upgrade-insecure-requests"
+		'upgrade-insecure-requests'
 	].join('; '),
 	// Report-Only CSP for testing stricter policies without breaking functionality
 	// Enable this to test removing unsafe-eval: uncomment and monitor console for violations
@@ -230,7 +227,8 @@ function isPublicPath(path: string): boolean {
 // Paths that require wallet registration (server-side enforcement)
 function requiresWalletRegistration(path: string): boolean {
 	// Protected API endpoints that need wallet registration
-	if (path.startsWith('/api/rewards/')) return true;
+	// Exception: /api/rewards/global is public (displays RocketBoost progress to all users)
+	if (path.startsWith('/api/rewards/') && path !== '/api/rewards/global') return true;
 	if (path.startsWith('/api/snapshots/')) return true;
 	if (path === '/api/onramper/sign-url') return true;
 
@@ -243,7 +241,9 @@ function requiresWalletRegistration(path: string): boolean {
 }
 
 // Extract wallet address from cookies or request
-function getWalletFromRequest(cookies: { get: (name: string) => string | undefined }): string | null {
+function getWalletFromRequest(cookies: {
+	get: (name: string) => string | undefined;
+}): string | null {
 	const walletAddress = cookies.get('wallet-address');
 
 	if (walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {

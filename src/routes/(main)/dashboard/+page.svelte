@@ -979,11 +979,11 @@
 												>Vaults</th
 											>
 											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>Total</th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Holdings</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
 												>Price</th
 											>
 											<th
@@ -991,7 +991,7 @@
 												>Cost Basis</th
 											>
 											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
 												>Value</th
 											>
 											<th
@@ -1013,6 +1013,7 @@
 														)?.logoUrl}
 														symbol={holding.symbol}
 														name={holding.name}
+														hideNameOnMobile={true}
 													/>
 												</td>
 												<td
@@ -1023,11 +1024,10 @@
 													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.vaultBalanceNum.toFixed(4)}</td
 												>
-												<td
-													class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
+												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
 													>{holding.totalBalance.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
+												<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3"
 													>${holding.price.toFixed(2)}</td
 												>
 												<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3">
@@ -1076,8 +1076,7 @@
 														{/if}
 													{/if}
 												</td>
-												<td
-													class="hidden px-2 py-2 text-sm font-medium sm:table-cell sm:px-4 sm:py-3"
+												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
 													>${holding.value.toFixed(2)}</td
 												>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">
@@ -1141,11 +1140,11 @@
 																				s.address.toLowerCase() === holding.address.toLowerCase()
 																		)?.logoUrl
 																	})}
-																class="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
+																class="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-1.5 text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
 																title="Track in Wallet"
 															>
 																<svg
-																	class="h-3 w-3"
+																	class="h-4 w-4"
 																	viewBox="0 0 24 24"
 																	fill="none"
 																	stroke="currentColor"
@@ -1157,7 +1156,6 @@
 																		stroke-linejoin="round"
 																	/>
 																</svg>
-																Track
 															</button>
 														{/if}
 													</div>

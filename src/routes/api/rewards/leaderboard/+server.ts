@@ -16,7 +16,12 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
 	const walletAddress = cookies.get('wallet-address');
 
 	// Tiered rate limiting
-	const rateLimitResponse = await applyTieredRateLimit(request, 'rewards', 'leaderboard', walletAddress);
+	const rateLimitResponse = await applyTieredRateLimit(
+		request,
+		'rewards',
+		'leaderboard',
+		walletAddress
+	);
 	if (rateLimitResponse) return rateLimitResponse;
 
 	try {
@@ -45,11 +50,19 @@ async function computeLeaderboard() {
 	const now = new Date();
 	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 
-	// Get current month's points data
-	const monthlyData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth));
+	// Fetch data with error handling for Redis unavailability
+	let monthlyData: MonthlyPointsData | null = null;
+	let excludedSet: Set<string> = new Set();
 
-	// Get excluded wallets to filter from leaderboard
-	const excludedSet = await getExcludedWalletsSet();
+	try {
+		[monthlyData, excludedSet] = await Promise.all([
+			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
+			getExcludedWalletsSet()
+		]);
+	} catch (error) {
+		console.warn('[Leaderboard] Redis unavailable, returning empty data:', error);
+		// Continue with null/empty defaults
+	}
 
 	const rankings: WalletRanking[] = [];
 	let totalWallets = 0;

@@ -54,11 +54,21 @@ async function computeSharedRewardsData(): Promise<RewardsSharedData> {
 	const now = new Date();
 	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 
-	const [monthlyData, poolConfig, excludedSet] = await Promise.all([
-		kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-		kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
-		getExcludedWalletsSet()
-	]);
+	// Fetch data with error handling for Redis unavailability
+	let monthlyData: MonthlyPointsData | null = null;
+	let poolConfig: RewardsPoolConfig | null = null;
+	let excludedSet: Set<string> = new Set();
+
+	try {
+		[monthlyData, poolConfig, excludedSet] = await Promise.all([
+			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
+			kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
+			getExcludedWalletsSet()
+		]);
+	} catch (error) {
+		console.warn('[User Rewards] Redis unavailable, returning empty data:', error);
+		// Continue with null/empty defaults - will return valid but empty response
+	}
 
 	// Build rankings from wallet data
 	let totalPoints = 0;
@@ -150,7 +160,7 @@ async function computeSharedRewardsData(): Promise<RewardsSharedData> {
 
 // Get cached shared data
 async function getSharedRewardsData(): Promise<RewardsSharedData> {
-	return withCache(CACHE_KEYS.rewardsSharedData(), computeSharedRewardsData, CACHE_TTL.LONG);
+	return withCache(CACHE_KEYS.rewardsUserSharedData(), computeSharedRewardsData, CACHE_TTL.LONG);
 }
 
 export const GET: RequestHandler = async ({ url, request }) => {

@@ -50,7 +50,8 @@
 			document.cookie = `wallet-address=${address.toLowerCase()}; path=/; expires=${expires}; SameSite=Strict`;
 		} else {
 			// Clear cookie by setting expired date
-			document.cookie = 'wallet-address=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
+			document.cookie =
+				'wallet-address=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
 		}
 	}
 

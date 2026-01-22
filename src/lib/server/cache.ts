@@ -67,7 +67,8 @@ export async function invalidateRewardsCaches(): Promise<void> {
 		cacheDelete(CACHE_KEYS.allWalletData()),
 		cacheDelete(CACHE_KEYS.rewardsLeaderboard()),
 		cacheDelete(CACHE_KEYS.rewardsPoolApy()),
-		cacheDelete(CACHE_KEYS.rewardsSharedData())
+		cacheDelete(CACHE_KEYS.rewardsUserSharedData()),
+		cacheDelete(CACHE_KEYS.rewardsGlobalData())
 	]);
 	console.log('[Cache] All rewards caches invalidated');
 }
@@ -78,16 +79,21 @@ const computeLocks = new Map<string, Promise<unknown>>();
 /**
  * Cache wrapper - returns cached value if available, otherwise calls fn and caches result
  * Includes stampede protection: only one computation runs at a time per key
+ * Cache failures are non-fatal - function result is still returned
  */
 export async function withCache<T>(
 	key: string,
 	fn: () => Promise<T>,
 	ttlSeconds = DEFAULT_TTL_SECONDS
 ): Promise<T> {
-	// Try to get from cache first
-	const cached = await cacheGet<T>(key);
-	if (cached !== null) {
-		return cached;
+	// Try to get from cache first (cache failures are non-fatal)
+	try {
+		const cached = await cacheGet<T>(key);
+		if (cached !== null) {
+			return cached;
+		}
+	} catch (error) {
+		console.warn('[Cache] Get failed, computing fresh:', error);
 	}
 
 	// Check if computation is already in progress (stampede protection)
@@ -100,7 +106,12 @@ export async function withCache<T>(
 	const computePromise = (async () => {
 		try {
 			const result = await fn();
-			await cacheSet(key, result, ttlSeconds);
+			// Cache set failure is non-fatal - just log and continue
+			try {
+				await cacheSet(key, result, ttlSeconds);
+			} catch (cacheError) {
+				console.warn('[Cache] Set failed:', cacheError);
+			}
 			return result;
 		} finally {
 			computeLocks.delete(key);
@@ -149,8 +160,10 @@ export const CACHE_KEYS = {
 	// Rewards endpoints
 	rewardsLeaderboard: () => 'cache:rewards:leaderboard',
 	rewardsPoolApy: () => 'cache:rewards:pool-apy',
-	// Pre-computed shared data for user rewards (rankings, global stats)
-	rewardsSharedData: () => 'cache:rewards:shared-data'
+	// Pre-computed shared data for user rewards (rankings with wallets lookup)
+	rewardsUserSharedData: () => 'cache:rewards:user-shared-data',
+	// Pre-computed global rewards data (no wallet lookup needed)
+	rewardsGlobalData: () => 'cache:rewards:global-data'
 } as const;
 
 // TTL constants (in seconds)

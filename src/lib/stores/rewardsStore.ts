@@ -119,7 +119,10 @@ export const approxApy = derived(rewardsData, ($data) => $data?.approxApy ?? nul
 // Global data derived stores
 export const globalPoolApy = derived(globalRewardsData, ($data) => $data?.poolApy ?? null);
 export const totalWallets = derived(globalRewardsData, ($data) => $data?.totalWallets ?? 0);
-export const rocketBoostProgress = derived(globalRewardsData, ($data) => $data?.rocketBoostProgress ?? 0);
+export const rocketBoostProgress = derived(
+	globalRewardsData,
+	($data) => $data?.rocketBoostProgress ?? 0
+);
 
 // Fetch user rewards data (user-specific only)
 export async function fetchUserRewards(walletAddress: string): Promise<void> {
