@@ -1176,7 +1176,6 @@ export class RhinestoneClient {
 	  
 		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 	  
-		// Keep polling short + bounded so UI never “stucks”
 		const pollForHash = async (
 		  account: RhinestoneAccount,
 		  txResult: TransactionResult,
@@ -1186,14 +1185,24 @@ export class RhinestoneClient {
 		  const start = Date.now();
 		  while (Date.now() - start < maxMs) {
 			const st = await account.waitForExecution(txResult);
-			const hash =
-			  st?.fill?.hash ??
-			  st?.claims?.find((c) => c?.hash)?.hash;
-	  
+			const hash = st?.fill?.hash ?? st?.claims?.find((c) => c?.hash)?.hash;
 			if (hash && hash !== '0x') return hash;
 			await sleep(intervalMs);
 		  }
 		  return undefined;
+		};
+	  
+		// Normalize fee asset to an address for sourceAssets when possible
+		// Base USDC (native) = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+		const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const;
+	  
+		const normalizeFeeAssetToAddress = (fa?: string): string | undefined => {
+		  if (!fa) return undefined;
+		  // already looks like an address
+		  if (/^0x[a-fA-F0-9]{40}$/.test(fa)) return fa;
+		  // map common symbols
+		  if (fa.toUpperCase() === 'USDC') return BASE_USDC;
+		  return undefined; // unknown symbol
 		};
 	  
 		try {
@@ -1212,11 +1221,10 @@ export class RhinestoneClient {
 			throw new AAError(`Chain ${params.chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
 		  }
 	  
-		  // Create Rhinestone account (7702)
 		  const rhinestoneAccount = await this.createAccount(walletAccount);
 		  const rhinestoneAddress = rhinestoneAccount.getAddress();
 	  
-		  // EIP-7702 init signature (your SDK seems to require it even if already initialized)
+		  // EIP-7702 init signature (required by backend flow)
 		  let eip7702InitSignature: Hex | undefined;
 		  if (this.config.accountType === '7702') {
 			try {
@@ -1235,6 +1243,10 @@ export class RhinestoneClient {
 			}
 		  }
 	  
+		  const feeAssetAddress = normalizeFeeAssetToAddress(feeAsset);
+		  const sourceAssets =
+			feeAssetAddress ? { [chain.id]: [feeAssetAddress] } : undefined;
+	  
 		  const transactionParams: RhinestoneTransactionParams = {
 			chain,
 			calls: params.calls.map((c) => ({
@@ -1242,10 +1254,8 @@ export class RhinestoneClient {
 			  value: (c.value ?? 0n) as bigint,
 			  data: (c.data ?? '0x') as Hex
 			})),
-			feeAsset,
-			// IMPORTANT: sourceAssets should include actual token addresses (not symbols) when using Permit2 routes.
-			// If feeAsset is 'USDC', you should pass Base USDC address here (0x8335...).
-			sourceAssets: feeAsset ? { [chain.id]: [feeAsset] } : undefined,
+			feeAsset, // keep original feeAsset for SDK (it might accept symbol)
+			sourceAssets, // MUST be addresses
 			eip7702InitSignature
 		  };
 	  
@@ -1253,32 +1263,74 @@ export class RhinestoneClient {
 			chainId: chain.id,
 			callsCount: transactionParams.calls.length,
 			feeAsset,
+			feeAssetAddress,
 			hasEip7702Init: Boolean(eip7702InitSignature),
 			rhinestoneAddress,
 			walletAddress: walletAccount.address
 		  });
 	  
-		  // 3-step flow
 		  const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
 		  const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
 	  
-		  // NOTE: For your current logs, authorizations are always 0; keep that behavior.
-		  // If Rhinestone later requires them, you can add it back.
-		  const authorizations: SignedAuthorizationList = [];
+		  // 🔑 Important: authorizations may be REQUIRED depending on route/wallet
+		  const getAuthorizations = async (): Promise<SignedAuthorizationList> => {
+			if (this.config.accountType !== '7702') return [];
+			try {
+			  const auths = await rhinestoneAccount.signAuthorizations(signedTx);
+			  console.log('[Rhinestone Client] Authorizations signed:', auths?.length ?? 0);
+			  return auths ?? [];
+			} catch (authError) {
+			  const msg = authError instanceof Error ? authError.message : String(authError);
 	  
-		  console.log('[Rhinestone Client] Submitting transaction...');
-		  const txResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
+			  // Only swallow for known Dynamic JSON-RPC limitations
+			  if (
+				msg.includes('JSON-RPC') ||
+				msg.includes('not supported') ||
+				msg.toLowerCase().includes('account type') ||
+				msg.toLowerCase().includes('undefined')
+			  ) {
+				console.warn(
+				  '[Rhinestone Client] signAuthorizations not supported for this wallet. Proceeding without authorizations.'
+				);
+				return [];
+			  }
+	  
+			  throw authError;
+			}
+		  };
+	  
+		  let authorizations: SignedAuthorizationList = await getAuthorizations();
+	  
+		  const submit = async (auths: SignedAuthorizationList) => {
+			console.log('[Rhinestone Client] Submitting transaction...');
+			return rhinestoneAccount.submitTransaction(signedTx, auths);
+		  };
+	  
+		  let txResult: TransactionResult;
+		  try {
+			txResult = await submit(authorizations);
+		  } catch (submitErr) {
+			const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+	  
+			if (msg.includes('authorization list') && msg.includes('cover chain')) {
+			  console.warn(
+				'[Rhinestone Client] Authorization did not cover chain. Re-signing authorizations and retrying once...',
+				{ chainId: chain.id }
+			  );
+			  authorizations = await getAuthorizations();
+			  txResult = await submit(authorizations);
+			} else {
+			  throw submitErr;
+			}
+		  }
 	  
 		  console.log('[Rhinestone Client] Transaction submitted, waiting for execution...', {
 			intentId: txResult.id.toString(),
 			targetChain: txResult.targetChain
 		  });
 	  
-		  // First wait
 		  const status = await rhinestoneAccount.waitForExecution(txResult);
-		  const directHash =
-			status?.fill?.hash ??
-			status?.claims?.find((c) => c?.hash)?.hash;
+		  const directHash = status?.fill?.hash ?? status?.claims?.find((c) => c?.hash)?.hash;
 	  
 		  if (directHash && directHash !== '0x') {
 			return { txHash: directHash, intentId: txResult.id.toString() };
@@ -1288,13 +1340,11 @@ export class RhinestoneClient {
 			intentId: txResult.id.toString()
 		  });
 	  
-		  // Bounded poll
 		  const polledHash = await pollForHash(rhinestoneAccount, txResult, 45_000, 2_500);
 		  if (polledHash && polledHash !== '0x') {
 			return { txHash: polledHash, intentId: txResult.id.toString() };
 		  }
 	  
-		  // **Key change**: don’t hang; surface a handleable error that includes intentId.
 		  throw new AAError(
 			`Transaction completed but no hash returned (intentId: ${txResult.id.toString()}). This usually means the backend did not attach the chain tx hash yet.`,
 			AAErrorCode.TRANSACTION_FAILED,
@@ -1316,6 +1366,7 @@ export class RhinestoneClient {
 		  );
 		}
 	  }
+	  
 	  
 	  
 
