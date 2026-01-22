@@ -3,7 +3,7 @@
 	import type { Hex } from 'viem';
 	import { formatUnits, parseUnits } from 'viem';
 	import { wagmiConfig } from 'svelte-wagmi';
-	import { readContract } from '@wagmi/core';
+	import { readContracts } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
 	import type { Token } from '$lib/types';
 	import type { ValidateFunction } from '$lib/utils/validation';
@@ -104,22 +104,35 @@
 		if (!token) return null;
 		if (!$walletAddress) return null;
 		if (!$wagmiConfig) return null;
+		if (typeof token.chainId !== 'number') return null;
 		const fingerprint = getTokenFingerprint(token);
-		const [tokenBalance, tokenDecimals] = await Promise.all([
-			readContract($wagmiConfig, {
-				abi: erc20Abi,
-				address: token.address as `0x${string}`,
-				functionName: 'balanceOf',
-				args: [$walletAddress as Hex]
-			}),
-			readContract($wagmiConfig, {
-				abi: erc20Abi,
-				address: token.address as `0x${string}`,
-				functionName: 'decimals',
-				args: []
-			})
-		]);
-		return { balance: tokenBalance, decimals: tokenDecimals, fingerprint };
+		const results = await readContracts($wagmiConfig, {
+			contracts: [
+				{
+					abi: erc20Abi,
+					address: token.address as `0x${string}`,
+					functionName: 'balanceOf',
+					args: [$walletAddress as Hex],
+					chainId: token.chainId
+				},
+				{
+					abi: erc20Abi,
+					address: token.address as `0x${string}`,
+					functionName: 'decimals',
+					args: [],
+					chainId: token.chainId
+				}
+			]
+		});
+		const [balanceResult, decimalsResult] = results;
+		if (balanceResult.status !== 'success' || decimalsResult.status !== 'success') {
+			return null;
+		}
+		return {
+			balance: balanceResult.result as bigint,
+			decimals: decimalsResult.result as number,
+			fingerprint
+		};
 	})();
 
 	$: balancePromise

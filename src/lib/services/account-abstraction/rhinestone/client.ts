@@ -66,6 +66,25 @@ const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
 import { createRpcTransport } from '$lib/utils/rpc';
 
 
+const USDC_BY_CHAIN: Record<number, `0x${string}`> = {
+	1:  "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // Ethereum USDC
+	8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" // Base USDC
+  };
+  
+  const USDT_BY_CHAIN: Record<number, `0x${string}`> = {
+	1:  "0xdAC17F958D2ee523a2206206994597C13D831ec7", // Ethereum USDT
+	8453: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2" // Base USDT (your logs show this)
+  };
+  
+  function resolveTokenAddress(symbol: string, chainId: number): `0x${string}` | undefined {
+	const s = symbol.toUpperCase();
+	if (s === "USDC") return USDC_BY_CHAIN[chainId];
+	if (s === "USDT") return USDT_BY_CHAIN[chainId];
+	return undefined;
+  }
+  
+
+
 function safeStringify(value: unknown) {
 	return JSON.stringify(
 	  value,
@@ -515,176 +534,260 @@ export class RhinestoneClient {
 		params: CrossChainSwapParams,
 		walletAccount: Account,
 		feeAsset?: string
-	): Promise<{ txHash: Hex; intentId: string }> {
+	  ): Promise<{ txHash: Hex; intentId: string }> {
+		const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	  
+		const pollForHash = async (
+		  account: RhinestoneAccount,
+		  txResult: TransactionResult,
+		  maxMs = 60_000,
+		  intervalMs = 2_500
+		): Promise<Hex | undefined> => {
+		  const start = Date.now();
+		  while (Date.now() - start < maxMs) {
+			const st = await account.waitForExecution(txResult);
+			const hash = st?.fill?.hash ?? st?.claims?.find((c) => c?.hash)?.hash;
+			if (hash && hash !== '0x') return hash;
+			await sleep(intervalMs);
+		  }
+		  return undefined;
+		};
+	  
+		const uniqLower = (xs: Array<string | undefined>) => {
+		  const seen = new Set<string>();
+		  const out: string[] = [];
+		  for (const x of xs) {
+			if (!x) continue;
+			const k = x.toLowerCase();
+			if (seen.has(k)) continue;
+			seen.add(k);
+			out.push(x);
+		  }
+		  return out;
+		};
+	  
+		const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
+	  
+		// Resolve fee asset to an address for a specific chain (source or target).
+		const resolveFeeAssetAddress = (fa: string | undefined, chainId: number): `0x${string}` | undefined => {
+		  if (!fa) return undefined;
+		  if (isAddress(fa)) return fa as `0x${string}`;
+		  return resolveTokenAddress(fa, chainId); // your helper (USDC/USDT/etc per chain)
+		};
+	  
 		try {
-			// Validate API key is configured
-			if (!this.config.apiKey) {
-				throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
+		  if (!this.config.apiKey) {
+			throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
+		  }
+	  
+		  const srcId = Number(params.sourceChain);
+		  const dstId = Number(params.targetChain);
+	  
+		  const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
+		  const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
+	  
+		  // ---- Normalize token addresses to the correct chain ----
+		  const srcTokenAddr =
+			resolveTokenAddress(params.sourceToken.symbol ?? '', srcId) ??
+			(params.sourceToken.address as `0x${string}`);
+	  
+		  const dstTokenAddr =
+			resolveTokenAddress(params.targetToken.symbol ?? '', dstId) ??
+			(params.targetToken.address as `0x${string}`);
+	  
+		  const normalizedParams: CrossChainSwapParams = {
+			...params,
+			sourceToken: { ...params.sourceToken, address: srcTokenAddr },
+			targetToken: { ...params.targetToken, address: dstTokenAddr }
+		  };
+	  
+		  // Fee asset addresses (can differ per chain)
+		  const feeAssetSrcAddr = resolveFeeAssetAddress(feeAsset, srcId);
+		  const feeAssetDstAddr = resolveFeeAssetAddress(feeAsset, dstId);
+	  
+		  console.log('[Rhinestone Client] Cross-chain quote inputs', {
+			sourceChain: srcId,
+			targetChain: dstId,
+			sourceToken: { symbol: normalizedParams.sourceToken.symbol, address: normalizedParams.sourceToken.address },
+			targetToken: { symbol: normalizedParams.targetToken.symbol, address: normalizedParams.targetToken.address },
+			feeAsset,
+			feeAssetSrcAddr,
+			feeAssetDstAddr,
+			amount: normalizedParams.amount?.toString?.()
+		  });
+	  
+		  // ---- Quote (must use normalizedParams) ----
+		  const quote = await this.getSwapQuote(normalizedParams);
+	  
+		  if (Date.now() > quote.expiresAt) {
+			throw new AAError('Quote has expired', AAErrorCode.QUOTE_EXPIRED);
+		  }
+	  
+		  // ---- Create Rhinestone account ----
+		  const rhinestoneAccount = await this.createAccount(walletAccount);
+		  const rhinestoneAddress = rhinestoneAccount.getAddress();
+		  const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
+	  
+		  // ---- Always sign init for 7702/EOA (backend often requires it) ----
+		  let eip7702InitSignature: Hex | undefined;
+		  if (isEOA || this.config.accountType === '7702') {
+			try {
+			  console.log('[Rhinestone Client] Signing EIP-7702 init data for cross-chain transaction...');
+			  eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
+			  if (!eip7702InitSignature || eip7702InitSignature === '0x') {
+				throw new Error('signEip7702InitData returned empty signature');
+			  }
+			  console.log('[Rhinestone Client] EIP-7702 init signature obtained');
+			} catch (signError) {
+			  const msg = signError instanceof Error ? signError.message : String(signError);
+			  throw new AAError(
+				`Failed to sign EIP-7702 initialization: ${msg}. Please try again.`,
+				AAErrorCode.AUTHORIZATION_REJECTED,
+				{ originalError: signError }
+			  );
 			}
-
-			// Get a fresh quote to ensure pricing is current
-			const quote = await this.getSwapQuote(params);
-
-			// Check if quote has expired
-			if (Date.now() > quote.expiresAt) {
-				throw new AAError('Quote has expired', AAErrorCode.QUOTE_EXPIRED);
-			}
-
-			// Create Rhinestone account linked to user's wallet
-			const rhinestoneAccount = await this.createAccount(walletAccount);
-
-			// Get chain configs
-			const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
-			const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
-
-			// Check if the account needs EIP-7702 initialization
-			// The SDK requires this signature for EOA accounts, regardless of accountType
-			let eip7702InitSignature: Hex | undefined;
-			const rhinestoneAddress = rhinestoneAccount.getAddress();
-			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
-
-			if (isEOA || this.config.accountType === '7702') {
-				// Check if the account is already deployed/initialized on the target chain
-				// Note: isDeployed() may throw if EIP-7702 account already exists (SDK limitation)
-				let isDeployed = false;
-				try {
-					isDeployed = await rhinestoneAccount.isDeployed(targetChain);
-					console.log('[Rhinestone Client] Account deployed status:', {
-						isDeployed,
-						isEOA,
-						accountType: this.config.accountType,
-						rhinestoneAddress,
-						walletAddress: walletAccount.address
-					});
-				} catch (deployedError) {
-					const errorMsg = deployedError instanceof Error ? deployedError.message : String(deployedError);
-					// If the error is about existing EIP-7702 accounts not being supported,
-					// we can assume the account is already initialized and skip the init signature
-					if (errorMsg.includes('Existing EIP-7702 accounts') || errorMsg.includes('ExistingEip7702AccountsNotSupported')) {
-						console.warn('[Rhinestone Client] Account appears to be already initialized with EIP-7702 (SDK limitation). Skipping init signature.');
-						isDeployed = true; // Treat as deployed to skip init signature
-					} else {
-						// Re-throw other errors
-						throw deployedError;
-					}
-				}
-
-				if (!isDeployed) {
-					// Sign the EIP-7702 init data for the first transaction
-					// This is REQUIRED for EOA accounts
-					console.log(
-						'[Rhinestone Client] Signing EIP-7702 init data for first cross-chain transaction...'
-					);
-					try {
-						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
-					} catch (signError) {
-						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
-
-						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage =
-							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
-
-						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
-							originalError: signError
-						});
-					}
-				}
-			}
-
-			// Build the swap call - transfer target token to recipient
-			const transferCall = {
-				to: params.targetToken.address as Address,
-				value: 0n,
-				data: encodeFunctionData({
-					abi: erc20Abi,
-					functionName: 'transfer',
-					args: [params.recipient, quote.outputAmount]
-				})
-			};
-
-			// Execute cross-chain transaction via Rhinestone
-			// tokenRequests tells the solver what tokens to pull from source chain
-			// feeAsset specifies which token to use for gas payment (e.g., 'USDC')
-			const transactionParams: RhinestoneTransactionParams = {
-				sourceChain,
-				targetChain,
-				calls: [transferCall],
-				tokenRequests: [
-					{
-						address: params.sourceToken.address as Address,
-						amount: params.amount
-					}
-				],
-				feeAsset: feeAsset,
-				eip7702InitSignature: eip7702InitSignature
-			};
-
-			console.log('[Rhinestone Client] Preparing cross-chain transaction...');
-
-			// Use 3-step flow that properly handles eip7702InitSignature
-			// (sendTransaction has a bug where it doesn't pass through the signature)
-			const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
-			console.log('[Rhinestone Client] Transaction prepared, signing...');
-
-			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
-			console.log('[Rhinestone Client] Transaction signed, getting authorizations...');
-
-			// Get EIP-7702 authorizations if needed
-			// Note: For JSON-RPC accounts (like Dynamic), signAuthorizations may not be supported
-			// The EIP-7702 init signature should be sufficient for the first transaction
-			let authorizations: SignedAuthorizationList = [];
-			if (this.config.accountType === '7702') {
-				try {
-					// IMPORTANT: signAuthorizations should be called with signedTx, not preparedTx
-					authorizations = await rhinestoneAccount.signAuthorizations(signedTx);
-					console.log('[Rhinestone Client] Authorizations signed:', authorizations.length);
-				} catch (authError) {
-					// If signAuthorizations fails (e.g., JSON-RPC account not supported),
-					// we can proceed without authorizations as the EIP-7702 init signature
-					// should be sufficient for the first transaction
-					const errorMsg = authError instanceof Error ? authError.message : String(authError);
-					if (errorMsg.includes('JSON-RPC') || errorMsg.includes('Account type') || errorMsg.includes('undefined')) {
-						console.warn(
-							'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
-							'Proceeding without authorizations - EIP-7702 init signature should be sufficient.'
-						);
-						authorizations = [];
-					} else {
-						// Re-throw other errors
-						throw authError;
-					}
-				}
-			}
-
-			console.log('[Rhinestone Client] Submitting transaction...');
-			const transactionResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
-
-			// Wait for execution to complete
-			const status = await rhinestoneAccount.waitForExecution(transactionResult);
-
-			// Extract tx hash from the fill result
-			const txHash = status.fill.hash;
-			if (!txHash) {
-				throw new AAError(
-					'Transaction completed but no hash returned',
-					AAErrorCode.TRANSACTION_FAILED
+		  }
+	  
+		  // ---- Calls must use normalized target token address ----
+		  const transferCall = {
+			to: normalizedParams.targetToken.address as Address,
+			value: 0n,
+			data: encodeFunctionData({
+			  abi: erc20Abi,
+			  functionName: 'transfer',
+			  args: [normalizedParams.recipient, quote.outputAmount]
+			})
+		  };
+	  
+		  // ---- sourceAssets must be chain-correct (NO mixing) ----
+		  const sourceAssets = {
+			[sourceChain.id]: uniqLower([
+			  normalizedParams.sourceToken.address, // on source chain
+			  feeAssetSrcAddr // on source chain, if any
+			]),
+			[targetChain.id]: uniqLower([
+			  normalizedParams.targetToken.address, // on target chain
+			  feeAssetDstAddr // on target chain, if any
+			])
+		  };
+	  
+		  const transactionParams: RhinestoneTransactionParams = {
+			sourceChain,
+			targetChain,
+			calls: [transferCall],
+			tokenRequests: [
+			  {
+				address: normalizedParams.sourceToken.address as Address,
+				amount: normalizedParams.amount
+			  }
+			],
+			feeAsset, // keep the symbol if that’s what orchestrator expects
+			sourceAssets,
+			eip7702InitSignature
+		  };
+	  
+		  console.log('[Rhinestone Client] Preparing cross-chain transaction...', {
+			sourceChain: sourceChain.id,
+			targetChain: targetChain.id,
+			feeAsset,
+			feeAssetSrcAddr,
+			feeAssetDstAddr,
+			hasEip7702Init: Boolean(eip7702InitSignature),
+			sourceAssets: transactionParams.sourceAssets
+		  });
+	  
+		  const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+		  const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
+	  
+		  const getAuthorizations = async (): Promise<SignedAuthorizationList> => {
+			if (this.config.accountType !== '7702') return [];
+			try {
+			  const auths = await rhinestoneAccount.signAuthorizations(signedTx);
+			  console.log('[Rhinestone Client] Authorizations signed:', auths?.length ?? 0);
+			  return auths ?? [];
+			} catch (authError) {
+			  const msg = authError instanceof Error ? authError.message : String(authError);
+	  
+			  // Only swallow for known JSON-RPC limitations
+			  if (
+				msg.includes('JSON-RPC') ||
+				msg.toLowerCase().includes('not supported') ||
+				msg.toLowerCase().includes('account type') ||
+				msg.toLowerCase().includes('undefined')
+			  ) {
+				console.warn(
+				  '[Rhinestone Client] signAuthorizations not supported for this wallet. Proceeding without authorizations.'
 				);
+				return [];
+			  }
+			  throw authError;
 			}
-
-			return {
-				txHash,
-				intentId: transactionResult.id.toString()
-			};
+		  };
+	  
+		  let authorizations: SignedAuthorizationList = await getAuthorizations();
+	  
+		  const submit = async (auths: SignedAuthorizationList) => {
+			console.log('[Rhinestone Client] Submitting cross-chain transaction...');
+			return rhinestoneAccount.submitTransaction(signedTx, auths);
+		  };
+	  
+		  let transactionResult: TransactionResult;
+		  try {
+			transactionResult = await submit(authorizations);
+		  } catch (submitErr) {
+			const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+	  
+			if (msg.includes('authorization list') && msg.includes('cover chain')) {
+			  console.warn(
+				'[Rhinestone Client] Authorization list did not cover chain(s). Re-signing and retrying once...',
+				{ source: sourceChain.id, target: targetChain.id }
+			  );
+			  authorizations = await getAuthorizations();
+			  transactionResult = await submit(authorizations);
+			} else if (msg.toLowerCase().includes('initialization signature is required')) {
+			  throw new AAError(
+				'EIP-7702 initialization signature is required for EOA accounts',
+				AAErrorCode.AUTHORIZATION_REJECTED,
+				{ originalError: submitErr }
+			  );
+			} else {
+			  throw submitErr;
+			}
+		  }
+	  
+		  const status = await rhinestoneAccount.waitForExecution(transactionResult);
+		  const directHash = status?.fill?.hash ?? status?.claims?.find((c) => c?.hash)?.hash;
+	  
+		  if (directHash && directHash !== '0x') {
+			return { txHash: directHash, intentId: transactionResult.id.toString() };
+		  }
+	  
+		  console.warn('[Rhinestone Client] No txHash found after execution. Polling...', {
+			intentId: transactionResult.id.toString()
+		  });
+	  
+		  const polledHash = await pollForHash(rhinestoneAccount, transactionResult, 60_000, 2_500);
+		  if (polledHash && polledHash !== '0x') {
+			return { txHash: polledHash, intentId: transactionResult.id.toString() };
+		  }
+	  
+		  throw new AAError(
+			`Cross-chain transaction completed but no hash returned (intentId: ${transactionResult.id.toString()}). Backend may not have attached the chain tx hash yet.`,
+			AAErrorCode.TRANSACTION_FAILED,
+			{ intentId: transactionResult.id.toString(), status }
+		  );
 		} catch (error) {
-			if (error instanceof AAError) throw error;
-			throw new AAError(
-				`Cross-chain swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-				AAErrorCode.SWAP_FAILED,
-				{ originalError: error }
-			);
+			console.log('error : ', error);
+		  if (error instanceof AAError) throw error;
+		  throw new AAError(
+			`Cross-chain swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			AAErrorCode.SWAP_FAILED,
+			{ originalError: error }
+		  );
 		}
-	}
+	  }
+	  
+	  
 
 	/**
 	 * Execute an omnichain transaction with arbitrary calls
