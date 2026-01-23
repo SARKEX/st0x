@@ -15,9 +15,20 @@
 	import AuthModal from '$lib/components/AuthModal.svelte';
 	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
 	import DepositModal from '$lib/components/DepositModal.svelte';
+	import CookieConsent from '$lib/components/CookieConsent.svelte';
 
 	// Auth store for wallet address tracking
 	import { walletAddress } from '$lib/stores/authStore';
+
+	let analyticsInjected = false;
+
+	function enableAnalytics() {
+		if (!analyticsInjected) {
+			injectAnalytics();
+			injectSpeedInsights();
+			analyticsInjected = true;
+		}
+	}
 
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
@@ -60,8 +71,6 @@
 
 	onMount(() => {
 		initWallet();
-		injectAnalytics();
-		injectSpeedInsights();
 
 		// Subscribe to wallet address changes and sync to cookie
 		const unsubscribe = walletAddress.subscribe((address) => {
@@ -83,6 +92,9 @@
 	<AuthModal />
 	<SendFundsModal />
 	<DepositModal />
+
+	<!-- Cookie consent banner -->
+	<CookieConsent onAnalyticsAccepted={enableAnalytics} />
 
 	<slot />
 </QueryClientProvider>
