@@ -328,11 +328,17 @@
 			let paymentToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
 			if (percent === 100) {
 				const paymentFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
-				paymentToSpend = BigInt(Math.floor(paymentFloat * MAX_SAFETY_BUFFER * 10 ** paymentDecimals));
+				paymentToSpend = BigInt(
+					Math.floor(paymentFloat * MAX_SAFETY_BUFFER * 10 ** paymentDecimals)
+				);
 			}
 
 			// Walk the orderbook in spend mode to get the exact asset amount at market prices
-			const assetAmount = calculateAssetAmountForSpend(paymentToSpend, assetDecimals, paymentDecimals);
+			const assetAmount = calculateAssetAmountForSpend(
+				paymentToSpend,
+				assetDecimals,
+				paymentDecimals
+			);
 
 			if (assetAmount && assetAmount > 0n) {
 				tradeAmountInputRef.setAmountValue(assetAmount);
@@ -362,7 +368,9 @@
 
 		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 		const assetAddressNormalized = normalizeAddress(assetToken.address);
-		const paymentTokenAddressNormalized = normalizeAddress(paymentToken.address?.toLowerCase() || '');
+		const paymentTokenAddressNormalized = normalizeAddress(
+			paymentToken.address?.toLowerCase() || ''
+		);
 
 		// Get oracle price for price guard filtering
 		const oracleAddr = assetToken?.address?.toLowerCase();

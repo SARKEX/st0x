@@ -566,7 +566,9 @@ const transactionStore = () => {
 			}
 			const err = error as { cause?: { details?: string }; message?: string };
 			return transactionError(
-				(err?.cause?.details || err?.message || TransactionErrorMessage.GENERIC) as TransactionErrorMessage
+				(err?.cause?.details ||
+					err?.message ||
+					TransactionErrorMessage.GENERIC) as TransactionErrorMessage
 			);
 		}
 	};
