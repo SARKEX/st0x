@@ -39,6 +39,7 @@
 		"@types/react-dom": "^18.2.0",
 		"@wagmi/cli": "2.1.8",
 		"autoprefixer": "10.4.19",
+		"baseline-browser-mapping": "^2.9.17",
 		"eslint": "9.0.0",
 		"eslint-config-prettier": "9.1.0",
 		"eslint-plugin-svelte": "2.36.0",
