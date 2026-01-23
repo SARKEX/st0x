@@ -301,6 +301,9 @@
 	let isSubmittingMarketOrder = false;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
+	// Small safety buffer (0.1%) for Max to handle rounding and minor price fluctuations
+	const MAX_SAFETY_BUFFER = 0.999;
+
 	const handlePercentageClick = (percent: number) => {
 		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
 		if (spendingTokenBalanceDecimals === null) return;
@@ -316,32 +319,97 @@
 			tradeAmountInputRef.setAmountValue(percentAmount);
 		} else {
 			// For BUY in amount mode: balance is in payment token (USDC), need to convert to asset amount
-			// We need the oracle price to estimate how much asset we can buy
-			const oracleAddress = assetToken?.address?.toLowerCase();
-			const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
-			const oraclePrice = oracleEntry?.price;
-
-			if (!oraclePrice || oraclePrice <= 0) {
-				// Fall back: can't convert without price - just don't set anything
-				return;
-			}
-
+			// Use actual market prices by walking the orderbook in spend mode
 			const paymentDecimals = spendingTokenBalanceDecimals;
 			const assetDecimals = assetToken?.decimals ?? 18;
 
 			// Calculate payment amount to spend (percent of balance)
-			const paymentToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
+			// Apply small safety buffer for Max to handle rounding edge cases
+			let paymentToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
+			if (percent === 100) {
+				const paymentFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
+				paymentToSpend = BigInt(Math.floor(paymentFloat * MAX_SAFETY_BUFFER * 10 ** paymentDecimals));
+			}
 
-			// Convert payment amount to asset amount using oracle price
-			// paymentAmount / price = assetAmount
-			// Use floor to ensure we don't exceed the balance when converting back
-			const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
-			const assetAmount = paymentInFloat / oraclePrice;
-			// Use floor to be conservative and prevent "not enough funds" errors
-			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
-			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
+			// Walk the orderbook in spend mode to get the exact asset amount at market prices
+			const assetAmount = calculateAssetAmountForSpend(paymentToSpend, assetDecimals, paymentDecimals);
+
+			if (assetAmount && assetAmount > 0n) {
+				tradeAmountInputRef.setAmountValue(assetAmount);
+			} else {
+				// Fall back to oracle price if orderbook walk fails
+				const oracleAddr = assetToken?.address?.toLowerCase();
+				const oracleEntryData = oracleAddr ? $oracleQuotesQuery?.data?.[oracleAddr] : null;
+				const oraclePrice = oracleEntryData?.price;
+
+				if (!oraclePrice || oraclePrice <= 0) return;
+
+				const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
+				const assetAmountFloat = paymentInFloat / oraclePrice;
+				const assetAmountScaled = Math.floor(assetAmountFloat * 10 ** assetDecimals);
+				tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
+			}
 		}
 	};
+
+	// Calculate how much asset can be bought for a given payment amount using actual orderbook prices
+	function calculateAssetAmountForSpend(
+		paymentAmount: bigint,
+		assetDecimals: number,
+		paymentDecimals: number
+	): bigint | null {
+		if (!assetToken || !paymentToken) return null;
+
+		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
+		const assetAddressNormalized = normalizeAddress(assetToken.address);
+		const paymentTokenAddressNormalized = normalizeAddress(paymentToken.address?.toLowerCase() || '');
+
+		// Get oracle price for price guard filtering
+		const oracleAddr = assetToken?.address?.toLowerCase();
+		const oracleEntryData = oracleAddr ? $oracleQuotesQuery?.data?.[oracleAddr] : null;
+		const oraclePrice = oracleEntryData?.price;
+
+		// Calculate price guard bounds
+		const maxAcceptablePrice =
+			oraclePrice && oraclePrice > 0 ? oraclePrice * PRICE_GUARD_MULTIPLIER : Infinity;
+
+		// Filter quotes for BUY side with price guard
+		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
+			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
+			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+			const quotePerAsset = quote.quotePerAsset;
+
+			return (
+				quoteOutputAddressNormalized === assetAddressNormalized &&
+				quoteInputAddressNormalized === paymentTokenAddressNormalized &&
+				quote.side === 'ask' &&
+				quotePerAsset !== undefined &&
+				Number.isFinite(quotePerAsset) &&
+				quotePerAsset > 0 &&
+				quotePerAsset <= maxAcceptablePrice
+			);
+		});
+
+		if (relevantQuotes.length === 0) return null;
+
+		// Sort by price (best first for BUY)
+		const sortedQuotes = [...relevantQuotes].sort(
+			(a, b) => (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0)
+		);
+
+		// Walk orderbook in spend mode to get asset amount for the payment
+		const walkResult = walkOrderbook({
+			quotes: sortedQuotes,
+			orderSide: 'Buy',
+			selectedAmount: paymentAmount,
+			assetDecimals,
+			paymentDecimals,
+			mode: 'spend'
+		});
+
+		// Return the asset amount that would be received
+		return walkResult.inputAmountFilled;
+	}
 
 	async function fetchMarketPrice() {
 		if (!assetToken || !orderSide) {
