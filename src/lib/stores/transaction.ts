@@ -60,7 +60,12 @@ import {
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
 import { Float } from '@rainlanguage/float';
-import { parseFloatHex, getRaindexOrderUrl, isPaymentToken } from '$lib/utils/tokenMath';
+import {
+	parseFloatHex,
+	getRaindexOrderUrl,
+	getRaindexVaultUrl,
+	isPaymentToken
+} from '$lib/utils/tokenMath';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import type { TakeOrdersParams } from '$lib/types/transactions';
@@ -543,7 +548,10 @@ const transactionStore = () => {
 			await waitForTransaction(hash);
 
 			const $signer = get(walletAddress);
-			const raindexLink = createRaindexLink(network.id, vault.orderbook, vault.id);
+			const raindexLink = {
+				url: getRaindexVaultUrl(network.id, vault.orderbook, vault.id),
+				text: 'Manage your vault on Raindex'
+			};
 
 			// Invalidate vault queries for this specific token
 			const tokenAddress = vault.token?.address ?? vault.token?.id;
@@ -556,8 +564,10 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
-			// @ts-expect-error Send transaction error
-			return transactionError(error?.cause?.details || TransactionErrorMessage.GENERIC);
+			const err = error as { cause?: { details?: string }; message?: string };
+			return transactionError(
+				(err?.cause?.details || err?.message || TransactionErrorMessage.GENERIC) as TransactionErrorMessage
+			);
 		}
 	};
 

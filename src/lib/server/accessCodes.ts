@@ -70,7 +70,8 @@ export async function verifyWalletSignature(
 		});
 		return valid;
 	} catch (error) {
-		console.error('[accessCodes] Signature verification failed:', error);
+		const message = error instanceof Error ? error.message : 'Unknown verification error';
+		console.error('[accessCodes] Signature verification failed:', { message });
 		return false;
 	}
 }

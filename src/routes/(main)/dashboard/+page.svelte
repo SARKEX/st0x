@@ -67,6 +67,18 @@
 		return addresses;
 	})();
 
+	// Set of tStock addresses for the current network (for filtering vaults)
+	$: tStockAddresses = (() => {
+		if (!$currentNetwork) return new Set<string>();
+		const addresses = new Set<string>();
+		for (const token of TOKENS) {
+			if (token.chainId === $currentNetwork.chainId && token.category === 'ST0x') {
+				addresses.add(token.address.toLowerCase());
+			}
+		}
+		return addresses;
+	})();
+
 	let isNetworkLoading = false;
 	const BASE_TABS = [
 		{ id: 'portfolio', label: 'Portfolio' },
@@ -687,9 +699,40 @@
 	$: defaultVaults = sortedVaults.filter(
 		(v) => v.vault.vaultId === DEFAULT_VAULT_ID && BigInt(v.vault.balance) > 0n
 	);
-	$: allNonDefaultVaults = sortedVaults.filter(
-		(v) => v.vault.vaultId !== DEFAULT_VAULT_ID && BigInt(v.vault.balance) > 0n
-	);
+
+	// Build set of order hashes that involve tStock vaults
+	// This includes orders where either input or output vault contains a tStock token
+	$: tStockOrderHashes = (() => {
+		const orderHashes = new Set<string>();
+		for (const { vault } of sortedVaults) {
+			const tokenAddress = vault.token?.address?.toLowerCase();
+			const isTStock = tokenAddress ? tStockAddresses.has(tokenAddress) : false;
+			if (isTStock) {
+				// Add all orders where this tStock vault is input or output
+				for (const order of vault.ordersAsInput ?? []) {
+					if (order.orderHash) orderHashes.add(order.orderHash.toLowerCase());
+				}
+				for (const order of vault.ordersAsOutput ?? []) {
+					if (order.orderHash) orderHashes.add(order.orderHash.toLowerCase());
+				}
+			}
+		}
+		return orderHashes;
+	})();
+
+	// Filter non-default vaults to only show those connected to tStock orders
+	$: allNonDefaultVaults = sortedVaults.filter((v) => {
+		if (v.vault.vaultId === DEFAULT_VAULT_ID) return false;
+		if (BigInt(v.vault.balance) <= 0n) return false;
+
+		// Check if vault is connected to any tStock order
+		const vaultOrders = [...(v.vault.ordersAsInput ?? []), ...(v.vault.ordersAsOutput ?? [])];
+		return vaultOrders.some((order) => {
+			const hash = order.orderHash?.toLowerCase();
+			return hash ? tStockOrderHashes.has(hash) : false;
+		});
+	});
+
 	$: nonDefaultVaults = showDustVaults
 		? allNonDefaultVaults
 		: allNonDefaultVaults.filter((v) => {
