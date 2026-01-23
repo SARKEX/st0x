@@ -844,9 +844,10 @@ async executeCrossChainSwap(
 		calls: [transferCall],
 		tokenRequests: [
 		  {
-			// ✅ IMPORTANT: tokenRequests must be SOURCE token (after ETH->WETH normalization)
-			address: normalizedParams.sourceToken.address as Address,
-			amount: normalizedParams.amount
+			// ✅ IMPORTANT: tokenRequests must be TARGET token (what you want to receive)
+			// Rhinestone will figure out how to source it from the source chain
+			address: normalizedParams.targetToken.address as Address,
+			amount: quote.outputAmount
 		  }
 		],
 		feeAsset: effectiveFeeAsset,
