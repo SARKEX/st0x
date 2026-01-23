@@ -10,6 +10,8 @@ import {
 	updateAccessCode
 } from '$lib/server/accessCodes';
 import { verifySessionToken } from '$lib/server/auth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { createAuditLogger } from '$lib/server/auditLog';
 
 // Helper to check admin auth from cookies
 function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
@@ -24,7 +26,11 @@ function isAuthenticated(cookies: { get: (name: string) => string | undefined })
 }
 
 // GET - List all access codes
-export const GET: RequestHandler = async ({ cookies }) => {
+export const GET: RequestHandler = async ({ cookies, request }) => {
+	// Rate limiting
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-list');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	if (!isAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
@@ -47,9 +53,15 @@ export const GET: RequestHandler = async ({ cookies }) => {
 
 // POST - Create new access code
 export const POST: RequestHandler = async ({ request, cookies }) => {
+	// Rate limiting
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-create');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	if (!isAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+
+	const audit = createAuditLogger(request);
 
 	try {
 		const { code, maxUses, expiresAt, label } = await request.json();
@@ -70,6 +82,18 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			'admin'
 		);
 
+		// Audit log
+		await audit.logSuccess(
+			'ACCESS_CODE_CREATED',
+			{
+				code: accessCode.code,
+				maxUses: accessCode.maxUses,
+				expiresAt: accessCode.expiresAt,
+				label: accessCode.label
+			},
+			{ adminUser: 'admin' }
+		);
+
 		return json({ success: true, code: accessCode });
 	} catch {
 		return json({ error: 'Invalid request body' }, { status: 400 });
@@ -78,9 +102,15 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 // DELETE - Delete access code
 export const DELETE: RequestHandler = async ({ request, cookies }) => {
+	// Rate limiting
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-delete');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	if (!isAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+
+	const audit = createAuditLogger(request);
 
 	try {
 		const { code } = await request.json();
@@ -92,6 +122,12 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 		const deleted = await deleteAccessCode(code);
 
 		if (deleted) {
+			// Audit log
+			await audit.logSuccess(
+				'ACCESS_CODE_DELETED',
+				{ code: code.toUpperCase() },
+				{ adminUser: 'admin' }
+			);
 			return json({ success: true });
 		}
 
@@ -102,7 +138,15 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 };
 
 // PATCH - Generate a new code (utility endpoint)
-export const PATCH: RequestHandler = async ({ cookies }) => {
+export const PATCH: RequestHandler = async ({ cookies, request }) => {
+	// Rate limiting
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-codes-generate'
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
 	if (!isAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
@@ -113,9 +157,15 @@ export const PATCH: RequestHandler = async ({ cookies }) => {
 
 // PUT - Update an existing access code
 export const PUT: RequestHandler = async ({ request, cookies }) => {
+	// Rate limiting
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-update');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	if (!isAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+
+	const audit = createAuditLogger(request);
 
 	try {
 		const { code, maxUses, expiresAt, label } = await request.json();
@@ -136,6 +186,16 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 		});
 
 		if (updatedCode) {
+			// Audit log
+			await audit.logSuccess(
+				'ACCESS_CODE_UPDATED',
+				{
+					code: code.toUpperCase(),
+					changes: { maxUses, expiresAt, label }
+				},
+				{ adminUser: 'admin' }
+			);
+
 			return json({ success: true, code: updatedCode });
 		}
 

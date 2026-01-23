@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import crypto from 'crypto';
 import { env } from '$env/dynamic/private';
+import { validateCsrfToken, getCsrfTokenFromRequest } from '$lib/server/csrf';
 
 const ONRAMPER_SECRET_KEY = env.ONRAMPER_SECRET_KEY;
 
@@ -36,11 +37,17 @@ function buildSignContent(params: { networkWallets?: string; wallets?: string })
 	return parts.join('&');
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
 	// Check if secret key is configured
 	if (!ONRAMPER_SECRET_KEY) {
 		console.error('[Onramper] ONRAMPER_SECRET_KEY not configured');
 		return json({ success: false, error: 'Onramper signing not configured' }, { status: 500 });
+	}
+
+	// CSRF protection - validate token from request header
+	const csrfToken = getCsrfTokenFromRequest(request);
+	if (!csrfToken || !validateCsrfToken(csrfToken)) {
+		return json({ success: false, error: 'Invalid or missing CSRF token' }, { status: 403 });
 	}
 
 	try {
@@ -54,6 +61,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Validate address format
 		if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
 			return json({ success: false, error: 'Invalid wallet address format' }, { status: 400 });
+		}
+
+		// Security: Verify the requested wallet matches the authenticated user's wallet
+		// This prevents attackers from generating signatures for arbitrary wallets
+		const authenticatedWallet = cookies.get('wallet-address');
+		if (!authenticatedWallet) {
+			return json({ success: false, error: 'Authentication required' }, { status: 401 });
+		}
+
+		if (authenticatedWallet.toLowerCase() !== walletAddress.toLowerCase()) {
+			console.warn('[Onramper] Wallet mismatch attempt', {
+				requested: walletAddress.toLowerCase(),
+				authenticated: authenticatedWallet.toLowerCase()
+			});
+			return json({ success: false, error: 'Wallet address mismatch' }, { status: 403 });
 		}
 
 		// Build the networkWallets value (must be lowercase network ID)

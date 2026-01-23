@@ -1,6 +1,14 @@
-import { verifyMessage } from 'viem';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
 import { getKv, kvGet, kvSet, kvDel, KV_KEYS } from './kv';
 import { env } from '$env/dynamic/private';
+
+// Create a public client for Base network for signature verification
+// Supports ECDSA (EOA), EIP-1271 (Smart Contracts), and EIP-6492 (Undeployed)
+const basePublicClient = createPublicClient({
+	chain: base,
+	transport: http('https://mainnet.base.org')
+});
 
 // Types
 export interface AccessCode {
@@ -44,19 +52,26 @@ Timestamp: ${Date.now()}`;
 }
 
 // Verify a wallet signature
+// Supports: ECDSA (EOA), EIP-1271 (Smart Contract Wallets), EIP-6492 (Undeployed Counterfactual)
 export async function verifyWalletSignature(
 	address: string,
 	message: string,
 	signature: `0x${string}`
 ): Promise<boolean> {
 	try {
-		const valid = await verifyMessage({
+		// viem's publicClient.verifyMessage handles all signature types:
+		// - ECDSA for EOA wallets
+		// - EIP-1271 for deployed smart contract wallets (Safe, AA wallets)
+		// - EIP-6492 for undeployed counterfactual wallets
+		const valid = await basePublicClient.verifyMessage({
 			address: address as `0x${string}`,
 			message,
 			signature
 		});
 		return valid;
-	} catch {
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Unknown verification error';
+		console.error('[accessCodes] Signature verification failed:', { message });
 		return false;
 	}
 }

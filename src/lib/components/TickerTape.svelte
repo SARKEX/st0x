@@ -43,16 +43,15 @@
 			script.type = 'text/javascript';
 			script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
 			script.async = true;
-			script.innerHTML = `{
-				"symbols": [
-					${symbols.map((s) => `{ "proName": "${s.proName}", "title": "${s.title}" }`).join(',\n')}
-				],
-				"showSymbolLogo": true,
-				"colorTheme": "dark",
-				"isTransparent": true,
-				"displayMode": "adaptive",
-				"locale": "en"
-			}`;
+			// Use JSON.stringify for safe serialization (prevents XSS via symbol injection)
+			script.innerHTML = JSON.stringify({
+				symbols: symbols.map((s) => ({ proName: s.proName, title: s.title })),
+				showSymbolLogo: true,
+				colorTheme: 'dark',
+				isTransparent: true,
+				displayMode: 'adaptive',
+				locale: 'en'
+			});
 			// Append the script to the widget container
 			const widgetContainer = container.querySelector('.tradingview-widget-container__widget');
 			if (widgetContainer) {

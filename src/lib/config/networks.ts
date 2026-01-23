@@ -25,6 +25,8 @@ export interface Network {
 	orderbook_subgraph_urls_inactive: string[];
 	paymentTokens: PythToken[];
 	defaultPaymentToken: PythToken;
+	/** Whitelist of trusted orderbook contract addresses for this network */
+	trustedOrderbooks: string[];
 }
 
 const basePaymentTokens = PAYMENT_TOKENS_BY_NETWORK[8453] ?? [];
@@ -59,7 +61,11 @@ export const networks: Network[] = [
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-10-11-a62b/gn',
 		orderbook_subgraph_urls_inactive: [],
 		paymentTokens: basePaymentTokens,
-		defaultPaymentToken: baseDefaultPaymentToken!
+		defaultPaymentToken: baseDefaultPaymentToken!,
+		// Trusted orderbook contract addresses - transactions to unknown orderbooks are blocked
+		trustedOrderbooks: [
+			'0x52CEB8eBEf648744fFDDE89F7Bc9C3aC35944775' // Rain Orderbook v4 on Base
+		]
 	}
 ];
 

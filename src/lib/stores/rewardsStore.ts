@@ -22,15 +22,6 @@ export interface RocketBoostTiersAchieved {
 	tier100: boolean;
 }
 
-export interface LastMonthData {
-	month: string;
-	userPoints: number;
-	totalPoints: number;
-	reward: number;
-	poolAmount: number;
-	rocketBoostAchievedAmount: number;
-}
-
 export interface ProjectionData {
 	daysElapsed: number;
 	daysRemaining: number;
@@ -39,32 +30,34 @@ export interface ProjectionData {
 	projectedProgress: number;
 }
 
+// User-specific rewards data (from /api/rewards/user)
 export interface UserRewardsData {
-	currentMonth: string;
 	userPoints: number;
-	totalPoints: number;
 	estimatedReward: number;
 	rank: number | null;
-	totalWallets: number;
-	// APY calculation fields
-	snapshotCount: number;
 	averageValue: number; // userPoints / snapshotCount / 100 (in USD)
 	approxApy: number | null; // annualized percentage, null if no holdings
+}
+
+// Global rewards data (from /api/rewards/global - CDN cached)
+export interface GlobalRewardsData {
+	currentMonth: string;
+	totalPoints: number;
+	totalWallets: number;
+	snapshotCount: number;
 	// Pool config
 	poolAmount: number;
+	effectivePool: number;
+	poolApy: number | null;
+	// RocketBoost
 	rocketBoostAmounts: RocketBoostTiers;
 	rocketBoostTvlTarget: number;
-	rocketBoostTargetPoints: number; // rocketBoostTvlTarget * 2 * daysInMonth * 100
+	rocketBoostTargetPoints: number;
+	rocketBoostProgress: number;
 	rocketBoostTiersAchieved: RocketBoostTiersAchieved;
 	rocketBoostAchievedAmount: number;
-	effectivePool: number;
+	// Projection
 	projection: ProjectionData;
-	lastMonth: LastMonthData | null;
-	leaderboard: {
-		top3: WalletRanking[];
-		aroundUser: WalletRanking[];
-		allRankings: WalletRanking[];
-	};
 }
 
 // Core stores
@@ -72,9 +65,9 @@ export const rewardsData = writable<UserRewardsData | null>(null);
 export const rewardsLoading = writable(false);
 export const rewardsError = writable<string | null>(null);
 
-// Global pool APY (same for all users, fetched once)
-export const globalPoolApy = writable<number | null>(null);
-export const globalPoolApyLoading = writable(false);
+// Global rewards data (CDN cached, same for all users)
+export const globalRewardsData = writable<GlobalRewardsData | null>(null);
+export const globalRewardsLoading = writable(false);
 
 // Public leaderboard data (for non-connected users)
 export interface PublicLeaderboardData {
@@ -83,6 +76,7 @@ export interface PublicLeaderboardData {
 }
 export const publicLeaderboardData = writable<PublicLeaderboardData | null>(null);
 export const publicLeaderboardLoading = writable(false);
+export const publicLeaderboardError = writable(false);
 
 // Modal visibility stores
 export const showDetailsModal = writable(false);
@@ -118,12 +112,20 @@ export function initRewardsAnnouncement(): void {
 
 // Derived stores for convenience
 export const hasRewardsData = derived(rewardsData, ($data) => $data !== null);
+export const hasGlobalRewardsData = derived(globalRewardsData, ($data) => $data !== null);
 export const userPoints = derived(rewardsData, ($data) => $data?.userPoints ?? 0);
 export const estimatedReward = derived(rewardsData, ($data) => $data?.estimatedReward ?? 0);
 export const userRank = derived(rewardsData, ($data) => $data?.rank);
 export const approxApy = derived(rewardsData, ($data) => $data?.approxApy ?? null);
+// Global data derived stores
+export const globalPoolApy = derived(globalRewardsData, ($data) => $data?.poolApy ?? null);
+export const totalWallets = derived(globalRewardsData, ($data) => $data?.totalWallets ?? 0);
+export const rocketBoostProgress = derived(
+	globalRewardsData,
+	($data) => $data?.rocketBoostProgress ?? 0
+);
 
-// Fetch user rewards data
+// Fetch user rewards data (user-specific only)
 export async function fetchUserRewards(walletAddress: string): Promise<void> {
 	if (!browser || !walletAddress) return;
 
@@ -139,25 +141,11 @@ export async function fetchUserRewards(walletAddress: string): Promise<void> {
 		}
 
 		rewardsData.set({
-			currentMonth: data.currentMonth,
 			userPoints: data.userPoints,
-			totalPoints: data.totalPoints,
 			estimatedReward: data.estimatedReward,
 			rank: data.rank,
-			totalWallets: data.totalWallets,
-			snapshotCount: data.snapshotCount,
 			averageValue: data.averageValue,
-			approxApy: data.approxApy,
-			poolAmount: data.poolAmount,
-			rocketBoostAmounts: data.rocketBoostAmounts,
-			rocketBoostTvlTarget: data.rocketBoostTvlTarget,
-			rocketBoostTargetPoints: data.rocketBoostTargetPoints,
-			rocketBoostTiersAchieved: data.rocketBoostTiersAchieved,
-			rocketBoostAchievedAmount: data.rocketBoostAchievedAmount,
-			effectivePool: data.effectivePool,
-			projection: data.projection,
-			lastMonth: data.lastMonth,
-			leaderboard: data.leaderboard
+			approxApy: data.approxApy
 		});
 	} catch (err) {
 		rewardsError.set(err instanceof Error ? err.message : 'Unknown error');
@@ -167,23 +155,38 @@ export async function fetchUserRewards(walletAddress: string): Promise<void> {
 	}
 }
 
-// Fetch global pool APY (can be called without wallet connection)
-export async function fetchGlobalPoolApy(): Promise<void> {
+// Fetch global rewards data (CDN cached, can be called without wallet connection)
+export async function fetchGlobalRewards(): Promise<void> {
 	if (!browser) return;
 
-	globalPoolApyLoading.set(true);
+	globalRewardsLoading.set(true);
 
 	try {
-		const response = await fetch('/api/rewards/pool-apy');
+		const response = await fetch('/api/rewards/global');
 		const data = await response.json();
 
 		if (response.ok && data.success) {
-			globalPoolApy.set(data.poolApy);
+			globalRewardsData.set({
+				currentMonth: data.currentMonth,
+				totalPoints: data.totalPoints,
+				totalWallets: data.totalWallets,
+				snapshotCount: data.snapshotCount,
+				poolAmount: data.poolAmount,
+				effectivePool: data.effectivePool,
+				poolApy: data.poolApy,
+				rocketBoostAmounts: data.rocketBoostAmounts,
+				rocketBoostTvlTarget: data.rocketBoostTvlTarget,
+				rocketBoostTargetPoints: data.rocketBoostTargetPoints,
+				rocketBoostProgress: data.rocketBoostProgress,
+				rocketBoostTiersAchieved: data.rocketBoostTiersAchieved,
+				rocketBoostAchievedAmount: data.rocketBoostAchievedAmount,
+				projection: data.projection
+			});
 		}
 	} catch {
-		// Silently fail - APY is not critical
+		// Silently fail - global data is not critical for individual user experience
 	} finally {
-		globalPoolApyLoading.set(false);
+		globalRewardsLoading.set(false);
 	}
 }
 
@@ -192,6 +195,7 @@ export async function fetchPublicLeaderboard(): Promise<void> {
 	if (!browser) return;
 
 	publicLeaderboardLoading.set(true);
+	publicLeaderboardError.set(false);
 
 	try {
 		const response = await fetch('/api/rewards/leaderboard');
@@ -202,9 +206,13 @@ export async function fetchPublicLeaderboard(): Promise<void> {
 				allRankings: data.leaderboard,
 				totalWallets: data.totalWallets
 			});
+		} else {
+			// Mark as error to prevent infinite retry loop
+			publicLeaderboardError.set(true);
 		}
 	} catch {
-		// Silently fail
+		// Mark as error to prevent infinite retry loop
+		publicLeaderboardError.set(true);
 	} finally {
 		publicLeaderboardLoading.set(false);
 	}

@@ -15,6 +15,20 @@
 	import AuthModal from '$lib/components/AuthModal.svelte';
 	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
 	import DepositModal from '$lib/components/DepositModal.svelte';
+	import CookieConsent from '$lib/components/CookieConsent.svelte';
+
+	// Auth store for wallet address tracking
+	import { walletAddress } from '$lib/stores/authStore';
+
+	let analyticsInjected = false;
+
+	function enableAnalytics() {
+		if (!analyticsInjected) {
+			injectAnalytics();
+			injectSpeedInsights();
+			analyticsInjected = true;
+		}
+	}
 
 	const initWallet = async () => {
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
@@ -36,11 +50,35 @@
 		await erckit.init();
 	};
 
+	// Set wallet-address cookie for server-side rate limiting
+	// This allows the server to use wallet-based rate limits instead of IP-based
+	function setWalletCookie(address: string | null) {
+		if (typeof document === 'undefined') return;
+
+		// Add Secure flag in production (HTTPS only)
+		const isSecure = window.location.protocol === 'https:';
+		const secureFlag = isSecure ? '; Secure' : '';
+
+		if (address) {
+			// Set cookie with 7-day expiry, SameSite=Strict for security
+			const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
+			document.cookie = `wallet-address=${address.toLowerCase()}; path=/; expires=${expires}; SameSite=Strict${secureFlag}`;
+		} else {
+			// Clear cookie by setting expired date
+			document.cookie = `wallet-address=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureFlag}`;
+		}
+	}
+
 	onMount(() => {
 		initWallet();
-		injectAnalytics();
-		injectSpeedInsights();
+
+		// Subscribe to wallet address changes and sync to cookie
+		const unsubscribe = walletAddress.subscribe((address) => {
+			setWalletCookie(address);
+		});
+
 		return () => {
+			unsubscribe();
 			document.body.style.overflow = '';
 		};
 	});
@@ -54,6 +92,9 @@
 	<AuthModal />
 	<SendFundsModal />
 	<DepositModal />
+
+	<!-- Cookie consent banner -->
+	<CookieConsent onAnalyticsAccepted={enableAnalytics} />
 
 	<slot />
 </QueryClientProvider>

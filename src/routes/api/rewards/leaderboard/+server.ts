@@ -2,6 +2,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { kvGet, KV_KEYS, getExcludedWalletsSet, type MonthlyPointsData } from '$lib/server/kv';
+import { applyTieredRateLimit } from '$lib/server/rateLimit';
+import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 
 interface WalletRanking {
 	address: string;
@@ -9,56 +11,28 @@ interface WalletRanking {
 	rank: number;
 }
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ request, cookies }) => {
+	// Get wallet address from cookie for tiered rate limiting
+	const walletAddress = cookies.get('wallet-address');
+
+	// Tiered rate limiting
+	const rateLimitResponse = await applyTieredRateLimit(
+		request,
+		'rewards',
+		'leaderboard',
+		walletAddress
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
 	try {
-		// Get current month
-		const now = new Date();
-		const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
-			2,
-			'0'
-		)}`;
+		// Cache the entire leaderboard computation (1 hour, invalidated on snapshot generation)
+		const result = await withCache(
+			CACHE_KEYS.rewardsLeaderboard(),
+			computeLeaderboard,
+			CACHE_TTL.LONG
+		);
 
-		// Get current month's points data
-		const monthlyData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth));
-
-		// Get excluded wallets to filter from leaderboard
-		const excludedSet = await getExcludedWalletsSet();
-
-		const rankings: WalletRanking[] = [];
-		let totalWallets = 0;
-
-		if (monthlyData) {
-			// Build rankings from wallet data, excluding excluded wallets
-			const walletEntries = Object.entries(monthlyData.wallets);
-
-			for (const [address, data] of walletEntries) {
-				// Skip excluded wallets
-				if (excludedSet.has(address.toLowerCase())) {
-					continue;
-				}
-
-				totalWallets++;
-				rankings.push({
-					address,
-					points: data.totalPoints,
-					rank: 0 // Will be set after sorting
-				});
-			}
-
-			// Sort by points descending
-			rankings.sort((a, b) => b.points - a.points);
-
-			// Assign ranks
-			rankings.forEach((r, i) => {
-				r.rank = i + 1;
-			});
-		}
-
-		return json({
-			success: true,
-			leaderboard: rankings,
-			totalWallets
-		});
+		return json(result);
 	} catch (error) {
 		console.error('[Leaderboard] Error:', error);
 		return json(
@@ -70,3 +44,59 @@ export const GET: RequestHandler = async () => {
 		);
 	}
 };
+
+async function computeLeaderboard() {
+	// Get current month
+	const now = new Date();
+	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+	// Fetch data with error handling for Redis unavailability
+	let monthlyData: MonthlyPointsData | null = null;
+	let excludedSet: Set<string> = new Set();
+
+	try {
+		[monthlyData, excludedSet] = await Promise.all([
+			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
+			getExcludedWalletsSet()
+		]);
+	} catch (error) {
+		console.warn('[Leaderboard] Redis unavailable, returning empty data:', error);
+		// Continue with null/empty defaults
+	}
+
+	const rankings: WalletRanking[] = [];
+	let totalWallets = 0;
+
+	if (monthlyData) {
+		// Build rankings from wallet data, excluding excluded wallets
+		const walletEntries = Object.entries(monthlyData.wallets);
+
+		for (const [address, data] of walletEntries) {
+			// Skip excluded wallets
+			if (excludedSet.has(address.toLowerCase())) {
+				continue;
+			}
+
+			totalWallets++;
+			rankings.push({
+				address,
+				points: data.totalPoints,
+				rank: 0 // Will be set after sorting
+			});
+		}
+
+		// Sort by points descending, then by address for deterministic ordering on ties
+		rankings.sort((a, b) => b.points - a.points || a.address.localeCompare(b.address));
+
+		// Assign ranks
+		rankings.forEach((r, i) => {
+			r.rank = i + 1;
+		});
+	}
+
+	return {
+		success: true,
+		leaderboard: rankings,
+		totalWallets
+	};
+}

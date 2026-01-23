@@ -7,6 +7,8 @@ import {
 } from '$lib/server/auth';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { createAuditLogger } from '$lib/server/auditLog';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 export const prerender = false;
 
@@ -30,11 +32,25 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
 export const actions: Actions = {
 	default: async ({ request, cookies }) => {
+		// Rate limiting for login attempts - uses STRICT mode (fail-closed)
+		// This prevents brute force attacks even if Redis is unavailable
+		const rateLimitResponse = await applyRateLimit(
+			request,
+			rateLimiters.adminLoginStrict,
+			'admin-login'
+		);
+		if (rateLimitResponse) {
+			return fail(429, { error: 'Too many login attempts. Please try again later.' });
+		}
+
+		const audit = createAuditLogger(request);
 		const formData = (await request.formData()) as unknown as globalThis.FormData;
 		const username = formData.get('username')?.toString() || '';
 		const password = formData.get('password')?.toString() || '';
 
 		if (!validateCredentials(username, password)) {
+			// Audit log failed login attempt
+			await audit.logFailure('ADMIN_LOGIN_FAILED', { username }, 'Invalid credentials');
 			return fail(401, { error: 'Invalid credentials' });
 		}
 
@@ -55,6 +71,9 @@ export const actions: Actions = {
 			secure: !dev,
 			maxAge: SESSION_DURATION_MS / 1000
 		});
+
+		// Audit log successful login
+		await audit.logSuccess('ADMIN_LOGIN', { username }, { adminUser: username });
 
 		throw redirect(303, '/admin');
 	}

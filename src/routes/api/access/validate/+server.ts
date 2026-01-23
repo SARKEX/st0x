@@ -1,8 +1,14 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { validateAccessCode } from '$lib/server/accessCodes';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 export const POST: RequestHandler = async ({ request }) => {
+	// Rate limiting (prevent code enumeration)
+	// Use fail-closed (authStrict) to ensure enumeration protection even if Redis is unavailable
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.authStrict, 'validate');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	try {
 		const { code } = await request.json();
 

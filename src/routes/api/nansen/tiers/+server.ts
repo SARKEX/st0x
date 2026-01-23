@@ -4,8 +4,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getNansenTierData, getWalletTiers, type NansenTier } from '$lib/server/nansenTiers';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, request }) => {
+	// Rate limiting
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.publicApi, 'nansen-tiers');
+	if (rateLimitResponse) return rateLimitResponse;
 	try {
 		// Check if specific addresses are requested
 		const addressesParam = url.searchParams.get('addresses');

@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { MAILERLITE_SUBSCRIBE_ENDPOINT } from '$lib/config/constants';
 import type { RequestHandler } from './$types';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 interface MailerLiteResponse {
 	readonly success?: boolean;
@@ -13,6 +14,10 @@ interface MailerLiteResponse {
 }
 
 export const POST: RequestHandler = async ({ request, fetch }) => {
+	// Rate limiting
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.newsletter, 'newsletter');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	let body: unknown;
 
 	try {

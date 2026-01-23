@@ -34,6 +34,9 @@
 	// Multi-transaction progress
 	$: multiTxProgress = $transactionStore.data?.multiTxProgress;
 
+	// Raindex link (safe, no @html needed)
+	$: raindexLink = $transactionStore.data?.raindexLink;
+
 	// Helper function to format quantity with max 2 decimals
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
 		const formatted = parseFloat(formatUnits(quantity, decimals));
@@ -173,10 +176,28 @@
 						{$transactionStore.status}
 					</p>
 					{#if $transactionStore.message}
-						<div class="text-base text-gray-300" data-testid="success-message">
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-							{@html $transactionStore.message}
-						</div>
+						<p class="text-base text-gray-300" data-testid="success-message">
+							{$transactionStore.message}
+						</p>
+					{/if}
+					{#if raindexLink}
+						<a
+							href={raindexLink.url}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center justify-center gap-1 text-sm text-yellow-500 transition-colors hover:text-yellow-400 hover:underline"
+							data-testid="raindex-link"
+						>
+							{raindexLink.text}
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+								/>
+							</svg>
+						</a>
 					{/if}
 
 					<!-- Market order summary or no-fill message -->

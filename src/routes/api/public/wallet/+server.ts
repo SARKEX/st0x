@@ -114,9 +114,9 @@ async function getAllWalletData(): Promise<AllWalletData> {
 }
 
 export const GET: RequestHandler = async ({ url, request }) => {
-	// Rate limiting (higher limit since lookups are now O(1))
+	// Rate limiting
 	const clientIp = getClientIp(request);
-	const rateLimit = await rateLimiters.walletApi(`wallet-api:${clientIp}`);
+	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 
 	if (!rateLimit.allowed) {
 		return json(
