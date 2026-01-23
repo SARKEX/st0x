@@ -5,7 +5,8 @@ import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 export const POST: RequestHandler = async ({ request }) => {
 	// Rate limiting (prevent code enumeration)
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.auth, 'validate');
+	// Use fail-closed (authStrict) to ensure enumeration protection even if Redis is unavailable
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.authStrict, 'validate');
 	if (rateLimitResponse) return rateLimitResponse;
 
 	try {

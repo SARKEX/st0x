@@ -33,5 +33,17 @@ export function verifySessionToken(token: string, timestamp: number): boolean {
 export function validateCredentials(username: string, password: string): boolean {
 	const user = env.BASIC_AUTH_USER || '';
 	const pass = env.BASIC_AUTH_PASS || '';
-	return Boolean(user) && Boolean(pass) && username === user && password === pass;
+
+	if (!user || !pass) return false;
+
+	// Use constant-time comparison to prevent timing attacks
+	// Both strings must be same length for timingSafeEqual
+	const userMatch =
+		username.length === user.length &&
+		crypto.timingSafeEqual(Buffer.from(username, 'utf8'), Buffer.from(user, 'utf8'));
+	const passMatch =
+		password.length === pass.length &&
+		crypto.timingSafeEqual(Buffer.from(password, 'utf8'), Buffer.from(pass, 'utf8'));
+
+	return userMatch && passMatch;
 }

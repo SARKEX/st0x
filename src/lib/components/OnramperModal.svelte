@@ -41,6 +41,9 @@
 				throw new Error('Failed to get security token');
 			}
 			const { token: csrfToken } = await csrfResponse.json();
+			if (!csrfToken) {
+				throw new Error('Failed to get security token');
+			}
 
 			const response = await fetch('/api/onramper/sign-url', {
 				method: 'POST',

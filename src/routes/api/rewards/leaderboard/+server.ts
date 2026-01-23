@@ -85,8 +85,8 @@ async function computeLeaderboard() {
 			});
 		}
 
-		// Sort by points descending
-		rankings.sort((a, b) => b.points - a.points);
+		// Sort by points descending, then by address for deterministic ordering on ties
+		rankings.sort((a, b) => b.points - a.points || a.address.localeCompare(b.address));
 
 		// Assign ranks
 		rankings.forEach((r, i) => {

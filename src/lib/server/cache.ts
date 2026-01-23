@@ -132,10 +132,14 @@ export async function withConditionalCache<T>(
 	shouldCache: (result: T) => boolean,
 	ttlSeconds = DEFAULT_TTL_SECONDS
 ): Promise<T> {
-	// Try to get from cache first
-	const cached = await cacheGet<T>(key);
-	if (cached !== null) {
-		return cached;
+	// Try to get from cache first (cache failures are non-fatal)
+	try {
+		const cached = await cacheGet<T>(key);
+		if (cached !== null) {
+			return cached;
+		}
+	} catch (error) {
+		console.warn('[Cache] Get failed, computing fresh:', error);
 	}
 
 	// Call the function
@@ -143,7 +147,11 @@ export async function withConditionalCache<T>(
 
 	// Only cache if condition is met
 	if (shouldCache(result)) {
-		await cacheSet(key, result, ttlSeconds);
+		try {
+			await cacheSet(key, result, ttlSeconds);
+		} catch (cacheError) {
+			console.warn('[Cache] Set failed:', cacheError);
+		}
 	}
 
 	return result;

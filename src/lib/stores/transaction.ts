@@ -113,27 +113,15 @@ function validateOrderbookAddress(orderbookAddress: string, network: Network): v
 	}
 }
 
-// Helper function to create Raindex v5 link HTML
+// Helper function to create Raindex v5 link data (safe, no HTML)
 function createRaindexLink(
 	chainId: number,
 	orderbookId: string,
 	orderHashOrVaultId: string,
 	linkText = 'Manage your order on Raindex'
-): string {
+): RaindexLink {
 	const url = getRaindexOrderUrl(chainId, orderbookId, orderHashOrVaultId);
-	return `
-		<a
-			target="_blank"
-			rel="noopener noreferrer"
-			class="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
-			href="${url}"
-			data-testid="raindex-link">
-			${linkText}
-			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-			</svg>
-		</a>
-	`;
+	return { url, text: linkText };
 }
 
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
@@ -182,10 +170,16 @@ export interface MultiTxProgress {
 	totalBatches: number;
 }
 
+export interface RaindexLink {
+	url: string;
+	text: string;
+}
+
 export interface TransactionMetadata {
 	marketOrderSummary?: MarketOrderSummary;
 	assetTokenInfo?: AssetTokenInfo; // For limit/DCA order deployments
 	multiTxProgress?: MultiTxProgress; // For split order transactions
+	raindexLink?: RaindexLink; // Safe link data (replaces @html)
 }
 
 const initialState = {
@@ -259,6 +253,17 @@ const transactionStore = () => {
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(walletAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
+
+		// Get network early - used for validation and later for subgraph queries
+		const network = get(currentNetwork);
+
+		// Security: Validate orderbook address BEFORE any approvals are granted
+		// This prevents a compromised orderbook from receiving token approvals
+		try {
+			validateOrderbookAddress(deploymentArgs.orderbookAddress, network);
+		} catch (error) {
+			return transactionError((error as Error).message as TransactionErrorMessage);
+		}
 
 		// Filter approvals: check balance + allowance in parallel, skip if already approved
 		const approvalsNeeded: typeof deploymentArgs.approvals = [];
@@ -341,10 +346,6 @@ const transactionStore = () => {
 		}
 		let hash: Hash;
 		try {
-			// Security: Validate orderbook address is trusted before sending transaction
-			const network = get(currentNetwork);
-			validateOrderbookAddress(deploymentArgs.orderbookAddress, network);
-
 			awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
 			hash = await sendTransaction({
@@ -365,8 +366,6 @@ const transactionStore = () => {
 					: TransactionErrorMessage.GENERIC;
 			return transactionError(message);
 		}
-
-		const network = get(currentNetwork);
 
 		const tryFetchOrderLink = async () => {
 			const client = await createRaindexClient();
@@ -389,16 +388,17 @@ const transactionStore = () => {
 		const maxAttempts = 30; // 1 minute max (30 * 2 seconds)
 
 		// Build metadata with asset token info if provided
-		const metadata: TransactionMetadata | undefined = assetTokenInfo
-			? { assetTokenInfo }
-			: undefined;
+		const buildMetadata = (raindexLink?: RaindexLink): TransactionMetadata => ({
+			...(assetTokenInfo ? { assetTokenInfo } : {}),
+			...(raindexLink ? { raindexLink } : {})
+		});
 
 		// Immediate attempt before scheduling interval
 		const immediateLink = await tryFetchOrderLink();
 		if (immediateLink) {
 			invalidateOrderQueries();
 			invalidateDashboardBalances();
-			return transactionSuccess(hash, immediateLink, metadata);
+			return transactionSuccess(hash, undefined, buildMetadata(immediateLink));
 		}
 
 		const interval = setInterval(async () => {
@@ -409,7 +409,7 @@ const transactionStore = () => {
 				clearInterval(interval);
 				invalidateOrderQueries();
 				invalidateDashboardBalances();
-				return transactionSuccess(hash, 'Order deployed successfully!', metadata);
+				return transactionSuccess(hash, 'Order deployed successfully!', buildMetadata());
 			}
 
 			try {
@@ -418,7 +418,7 @@ const transactionStore = () => {
 					clearInterval(interval);
 					invalidateOrderQueries();
 					invalidateDashboardBalances();
-					return transactionSuccess(hash, link, metadata);
+					return transactionSuccess(hash, undefined, buildMetadata(link));
 				}
 			} catch (error) {
 				// Continue polling
@@ -543,14 +543,14 @@ const transactionStore = () => {
 			await waitForTransaction(hash);
 
 			const $signer = get(walletAddress);
-			const link = createRaindexLink(network.id, vault.orderbook, vault.id);
+			const raindexLink = createRaindexLink(network.id, vault.orderbook, vault.id);
 
 			// Invalidate vault queries for this specific token
 			const tokenAddress = vault.token?.address ?? vault.token?.id;
 			invalidateUserVaultQueries(network.id, $signer ?? undefined, tokenAddress);
 			invalidateDashboardBalances();
 
-			return transactionSuccess(hash, link);
+			return transactionSuccess(hash, undefined, { raindexLink });
 		} catch (error) {
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
@@ -759,7 +759,7 @@ const transactionStore = () => {
 
 			await waitForTransaction(hash);
 
-			const link = createRaindexLink(network.id, order.orderbook, quote.orderHash);
+			const raindexLink = createRaindexLink(network.id, order.orderbook, quote.orderHash);
 
 			// Invalidate queries for the tokens involved in this order
 			const tokenAddresses = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
@@ -770,7 +770,7 @@ const transactionStore = () => {
 				}
 			}
 
-			return transactionSuccess(hash, link);
+			return transactionSuccess(hash, undefined, { raindexLink });
 		} catch (error: unknown) {
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
@@ -964,7 +964,7 @@ const transactionStore = () => {
 			if (vaultsWithBalance.length === 0) {
 				// No vaults have balance - nothing to withdraw
 				const chainId = network.id;
-				const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+				const raindexLink = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 				// Still invalidate queries in case order was deactivated
 				const tokenAddrs = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
 				for (const tokenAddr of tokenAddrs) {
@@ -973,7 +973,7 @@ const transactionStore = () => {
 						invalidateUserVaultQueries(network.id, $signerAddress, tokenAddr);
 					}
 				}
-				return transactionSuccess('0x' as Hash, `No balance to withdraw. ${link}`);
+				return transactionSuccess('0x' as Hash, 'No balance to withdraw.', { raindexLink });
 			}
 
 			// Withdraw from each vault with balance
@@ -1004,7 +1004,7 @@ const transactionStore = () => {
 			}
 
 			const chainId = network.id;
-			const link = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+			const raindexLink = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 
 			// Invalidate queries for the tokens involved in this order
 			const tokenAddrs = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
@@ -1015,7 +1015,7 @@ const transactionStore = () => {
 				}
 			}
 
-			return transactionSuccess(lastHash, link);
+			return transactionSuccess(lastHash, undefined, { raindexLink });
 		} catch (error: unknown) {
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
@@ -1219,6 +1219,18 @@ const transactionStore = () => {
 		if (!config) throw new Error('Wagmi config not found');
 		const $signerAddress = get(walletAddress);
 		if (!$signerAddress) throw new Error('Signer address not found');
+
+		// Get network early - used for validation and later for subgraph queries
+		const network = get(currentNetwork) as Network;
+
+		// Security: Validate orderbook address BEFORE any approvals are granted
+		// This prevents a compromised orderbook from receiving token approvals
+		try {
+			validateOrderbookAddress(raindexOrder.orderbook.id, network);
+		} catch (error) {
+			return transactionError((error as Error).message as TransactionErrorMessage);
+		}
+
 		const inputIndex = params.ioIndexes.input;
 		const outputIndex = params.ioIndexes.output;
 
@@ -1402,10 +1414,6 @@ const transactionStore = () => {
 				targetOrderbook: raindexOrder.orderbook.id
 			});
 
-			// Security: Validate orderbook address is trusted before sending transaction
-			const network = get(currentNetwork);
-			validateOrderbookAddress(raindexOrder.orderbook.id, network);
-
 			let hash: Hash;
 			try {
 				const progressData: TransactionMetadata = isMultiBatch
@@ -1489,7 +1497,6 @@ const transactionStore = () => {
 		// Use the last transaction hash for the success display
 		const hash = allTransactionHashes[allTransactionHashes.length - 1];
 
-		const network = get(currentNetwork) as Network;
 		// Poll subgraph for all transactions to appear in trades (5 minute timeout)
 		const pollPendingTrades = async () => {
 			const MAX_ATTEMPTS = 60; // 5 minutes at 5s interval
@@ -1644,7 +1651,7 @@ const transactionStore = () => {
 			isNoFill
 		};
 
-		const orderLink = createRaindexLink(
+		const raindexLink = createRaindexLink(
 			network.id,
 			raindexOrder.orderbook.id,
 			raindexOrder.orderHash,
@@ -1654,7 +1661,7 @@ const transactionStore = () => {
 		// Invalidate dashboard balances after successful market order
 		invalidateDashboardBalances();
 
-		return transactionSuccess(hash, orderLink, { marketOrderSummary: summary });
+		return transactionSuccess(hash, undefined, { marketOrderSummary: summary, raindexLink });
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {

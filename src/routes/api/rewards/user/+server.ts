@@ -84,8 +84,8 @@ async function computeSharedRewardsData(): Promise<RewardsSharedData> {
 		}
 	}
 
-	// Sort by points descending (expensive - done once)
-	rankings.sort((a, b) => b.points - a.points);
+	// Sort by points descending, then by address for deterministic ordering on ties
+	rankings.sort((a, b) => b.points - a.points || a.address.localeCompare(b.address));
 
 	// Build wallet lookup map with ranks
 	const wallets: Record<string, { points: number; rank: number }> = {};

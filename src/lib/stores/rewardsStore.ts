@@ -76,6 +76,7 @@ export interface PublicLeaderboardData {
 }
 export const publicLeaderboardData = writable<PublicLeaderboardData | null>(null);
 export const publicLeaderboardLoading = writable(false);
+export const publicLeaderboardError = writable(false);
 
 // Modal visibility stores
 export const showDetailsModal = writable(false);
@@ -194,6 +195,7 @@ export async function fetchPublicLeaderboard(): Promise<void> {
 	if (!browser) return;
 
 	publicLeaderboardLoading.set(true);
+	publicLeaderboardError.set(false);
 
 	try {
 		const response = await fetch('/api/rewards/leaderboard');
@@ -204,9 +206,13 @@ export async function fetchPublicLeaderboard(): Promise<void> {
 				allRankings: data.leaderboard,
 				totalWallets: data.totalWallets
 			});
+		} else {
+			// Mark as error to prevent infinite retry loop
+			publicLeaderboardError.set(true);
 		}
 	} catch {
-		// Silently fail
+		// Mark as error to prevent infinite retry loop
+		publicLeaderboardError.set(true);
 	} finally {
 		publicLeaderboardLoading.set(false);
 	}

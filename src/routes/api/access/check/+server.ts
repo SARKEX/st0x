@@ -20,12 +20,13 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 	}
 
 	// Get wallet address from cookie for tiered rate limiting
-	// Use the queried address if it matches the cookie, otherwise use cookie
+	// Only grant authenticated (higher) rate limits when checking your OWN address
+	// This prevents using someone else's authenticated quota to enumerate wallets
 	const cookieWallet = cookies.get('wallet-address');
-	const walletForRateLimit =
-		cookieWallet?.toLowerCase() === address.toLowerCase() ? address : cookieWallet;
+	const isOwnAddress = cookieWallet?.toLowerCase() === address.toLowerCase();
+	const walletForRateLimit = isOwnAddress ? address : null;
 
-	// Tiered rate limiting
+	// Tiered rate limiting - only authenticated users checking their own address get higher limits
 	const rateLimitResponse = await applyTieredRateLimit(
 		request,
 		'accessCheck',

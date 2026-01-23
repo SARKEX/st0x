@@ -6,6 +6,7 @@
 		globalRewardsData,
 		publicLeaderboardData,
 		publicLeaderboardLoading,
+		publicLeaderboardError,
 		showLeaderboardModal,
 		fetchPublicLeaderboard,
 		formatPoints,
@@ -44,7 +45,13 @@
 	$: hasData = leaderboardRankings.length > 0;
 
 	// Fetch leaderboard when modal opens if not already loaded
-	$: if ($showLeaderboardModal && !$publicLeaderboardData && !$publicLeaderboardLoading) {
+	// Check for error state to prevent infinite retry loop on API failure
+	$: if (
+		$showLeaderboardModal &&
+		!$publicLeaderboardData &&
+		!$publicLeaderboardLoading &&
+		!$publicLeaderboardError
+	) {
 		fetchPublicLeaderboard();
 	}
 

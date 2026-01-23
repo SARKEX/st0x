@@ -1142,6 +1142,7 @@
 																	})}
 																class="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-1.5 text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
 																title="Track in Wallet"
+																aria-label="Track in Wallet"
 															>
 																<svg
 																	class="h-4 w-4"
