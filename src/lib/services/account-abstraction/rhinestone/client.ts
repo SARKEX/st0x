@@ -795,16 +795,78 @@ async executeCrossChainSwap(
 	  const rhinestoneAddress = rhinestoneAccount.getAddress();
 	  const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
   
-	  // ✅ ALWAYS sign init for 7702/EOA (don’t skip)
-	  let eip7702InitSignature: Hex | undefined;
+	  // ---- Check deployment status on BOTH chains for cross-chain transactions ----
+	  // EIP-7702 requires the account to be initialized on each chain it operates on
+	  // IMPORTANT: For cross-chain to work, authorizations MUST cover BOTH chains
+	  let isDeployedOnSource = false;
+	  let isDeployedOnTarget = false;
+	  // Track if SDK threw the limitation error - we still need authorization even if it seems "deployed"
+	  let sourceHadSdkLimitation = false;
+	  let targetHadSdkLimitation = false;
+	  
 	  if (isEOA || this.config.accountType === '7702') {
+		// Check source chain deployment
 		try {
-		  console.log('[Rhinestone Client] Signing EIP-7702 init data for cross-chain transaction...');
+		  isDeployedOnSource = await rhinestoneAccount.isDeployed(sourceChain);
+		  console.log('[Rhinestone Client] Source chain deployment status:', {
+			chainId: srcId,
+			chainName: sourceChain.name,
+			isDeployed: isDeployedOnSource
+		  });
+		} catch (deployedError) {
+		  const errorMsg = deployedError instanceof Error ? deployedError.message : String(deployedError);
+		  if (errorMsg.includes('Existing EIP-7702 accounts') || errorMsg.includes('ExistingEip7702AccountsNotSupported')) {
+			console.warn('[Rhinestone Client] Source chain: SDK limitation error - account may exist but still needs authorization for cross-chain');
+			// IMPORTANT: Don't assume deployed - the SDK limitation means we CAN'T reliably check
+			// For cross-chain transactions, we MUST include this chain in authorization list
+			isDeployedOnSource = false;
+			sourceHadSdkLimitation = true;
+		  } else {
+			console.warn('[Rhinestone Client] Could not check source chain deployment:', errorMsg);
+			// Proceed with init signature to be safe
+		  }
+		}
+		
+		// Check target chain deployment
+		try {
+		  isDeployedOnTarget = await rhinestoneAccount.isDeployed(targetChain);
+		  console.log('[Rhinestone Client] Target chain deployment status:', {
+			chainId: dstId,
+			chainName: targetChain.name,
+			isDeployed: isDeployedOnTarget
+		  });
+		} catch (deployedError) {
+		  const errorMsg = deployedError instanceof Error ? deployedError.message : String(deployedError);
+		  if (errorMsg.includes('Existing EIP-7702 accounts') || errorMsg.includes('ExistingEip7702AccountsNotSupported')) {
+			console.warn('[Rhinestone Client] Target chain: SDK limitation error - account may exist but still needs authorization for cross-chain');
+			// IMPORTANT: Don't assume deployed - for cross-chain we need to be conservative
+			// The simulation will fail if we don't include proper authorizations
+			isDeployedOnTarget = false;
+			targetHadSdkLimitation = true;
+		  } else {
+			console.warn('[Rhinestone Client] Could not check target chain deployment:', errorMsg);
+			// Proceed with init signature to be safe
+		  }
+		}
+	  }
+  
+	  // ---- Sign EIP-7702 init data if needed on EITHER chain ----
+	  // The init signature is valid cross-chain (cacheable), so we only sign once
+	  // but we need it if the account isn't deployed on at least one chain
+	  let eip7702InitSignature: Hex | undefined;
+	  const needsInit = (isEOA || this.config.accountType === '7702') && (!isDeployedOnSource || !isDeployedOnTarget);
+	  
+	  if (needsInit) {
+		try {
+		  console.log('[Rhinestone Client] Signing EIP-7702 init data for cross-chain transaction...', {
+			needsInitOnSource: !isDeployedOnSource,
+			needsInitOnTarget: !isDeployedOnTarget
+		  });
 		  eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
 		  if (!eip7702InitSignature || eip7702InitSignature === '0x') {
 			throw new Error('signEip7702InitData returned empty signature');
 		  }
-		  console.log('[Rhinestone Client] EIP-7702 init signature obtained');
+		  console.log('[Rhinestone Client] EIP-7702 init signature obtained (valid for both chains)');
 		} catch (signError) {
 		  const msg = signError instanceof Error ? signError.message : String(signError);
 		  throw new AAError(
@@ -813,6 +875,8 @@ async executeCrossChainSwap(
 			{ originalError: signError }
 		  );
 		}
+	  } else {
+		console.log('[Rhinestone Client] Account already deployed on both chains, skipping init signature');
 	  }
   
 	  // ---- Call on TARGET chain after solver completes swap/bridge ----
@@ -838,16 +902,40 @@ async executeCrossChainSwap(
 		])
 	  };
   
+	  // Determine which chains need to be included in sourceChains for authorization coverage
+	  // For cross-chain transactions, BOTH chains may need EIP-7702 authorization
+	  // sourceChains tells the SDK which chains need authorization, not just where funds come from
+	  const chainsNeedingAuth: typeof sourceChain[] = [sourceChain];
+	  
+	  // CRITICAL: If target chain isn't deployed or had SDK limitation, include it for authorization
+	  // This ensures the authorization list covers both chains for cross-chain transactions
+	  if (!isDeployedOnTarget || targetHadSdkLimitation) {
+		// Only add target if it's different from source
+		if (targetChain.id !== sourceChain.id) {
+		  chainsNeedingAuth.push(targetChain);
+		  console.log('[Rhinestone Client] Including target chain in sourceChains for authorization coverage:', {
+			targetChainId: targetChain.id,
+			targetChainName: targetChain.name,
+			isDeployedOnTarget,
+			targetHadSdkLimitation
+		  });
+		}
+	  }
+
 	  const transactionParams: RhinestoneTransactionParams = {
+		// Use sourceChain (singular) for standard cross-chain swaps
+		// This tells the SDK where the funds are coming from for quote/route calculation
+		// Authorization coverage for multiple chains is handled separately in signAuths()
 		sourceChain,
 		targetChain,
 		calls: [transferCall],
 		tokenRequests: [
 		  {
-			// ✅ IMPORTANT: tokenRequests must be TARGET token (what you want to receive)
-			// Rhinestone will figure out how to source it from the source chain
+			// ✅ IMPORTANT: tokenRequests specifies what tokens to PULL from the SOURCE chain
+			// This tells the solver what input tokens the user is providing
+			// The solver will then swap/bridge these to the target chain and execute the calls
 			address: normalizedParams.targetToken.address as Address,
-			amount: quote.outputAmount
+			amount: normalizedParams.amount
 		  }
 		],
 		feeAsset: effectiveFeeAsset,
@@ -855,6 +943,38 @@ async executeCrossChainSwap(
 		eip7702InitSignature
 	  };
   
+	  // Check user's source token balance before proceeding
+	  let sourceTokenBalance: bigint | undefined;
+	  try {
+		const sourceClient = createPublicClient({
+		  chain: sourceChain,
+		  transport: createRpcTransport(sourceChain.id as SupportedNetworkId)
+		});
+		sourceTokenBalance = await sourceClient.readContract({
+		  address: normalizedParams.sourceToken.address as Address,
+		  abi: erc20Abi,
+		  functionName: 'balanceOf',
+		  args: [walletAccount.address]
+		});
+		console.log('[Rhinestone Client] Source token balance check:', {
+		  token: normalizedParams.sourceToken.symbol,
+		  address: normalizedParams.sourceToken.address,
+		  balance: sourceTokenBalance.toString(),
+		  requiredAmount: normalizedParams.amount.toString(),
+		  hasSufficientBalance: sourceTokenBalance >= normalizedParams.amount
+		});
+		
+		if (sourceTokenBalance < normalizedParams.amount) {
+		  console.warn('[Rhinestone Client] INSUFFICIENT BALANCE: User does not have enough source tokens!', {
+			balance: sourceTokenBalance.toString(),
+			required: normalizedParams.amount.toString(),
+			deficit: (normalizedParams.amount - sourceTokenBalance).toString()
+		  });
+		}
+	  } catch (balanceError) {
+		console.warn('[Rhinestone Client] Could not check source token balance:', balanceError);
+	  }
+	  
 	  console.log('[Rhinestone Client] Preparing cross-chain transaction...', {
 		sourceChain: sourceChain.id,
 		targetChain: targetChain.id,
@@ -863,55 +983,149 @@ async executeCrossChainSwap(
 		feeAssetSrcAddr,
 		feeAssetDstAddr,
 		hasEip7702Init: Boolean(eip7702InitSignature),
+		isDeployedOnSource,
+		isDeployedOnTarget,
+		sourceHadSdkLimitation,
+		targetHadSdkLimitation,
+		chainsNeedingAuth: chainsNeedingAuth.map(c => ({ id: c.id, name: c.name })),
 		sourceAssets,
 		rhinestoneAddress,
 		walletAddress: walletAccount.address,
+		sourceTokenBalance: sourceTokenBalance?.toString(),
 		transactionParams: {
 		  sourceChain: transactionParams.sourceChain?.id,
 		  targetChain: transactionParams.targetChain.id,
 		  callsCount: transactionParams.calls.length,
 		  tokenRequestsCount: transactionParams.tokenRequests?.length ?? 0,
+		  tokenRequests: transactionParams.tokenRequests?.map(t => ({
+			address: t.address,
+			amount: t.amount.toString()
+		  })),
 		  feeAsset: transactionParams.feeAsset
 		}
 	  });
   
+	  // prepareTransaction with retry logic - the orchestrator quoters can be flaky
 	  let preparedTx: PreparedTransaction;
-	  try {
-		preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
-	  } catch (prepareError) {
-		const errorMsg = prepareError instanceof Error ? prepareError.message : String(prepareError);
-		const errorStack = prepareError instanceof Error ? prepareError.stack : undefined;
-		
-		console.error('[Rhinestone Client] prepareTransaction failed:', {
-		  error: errorMsg,
-		  stack: errorStack,
-		  sourceChain: sourceChain.id,
-		  targetChain: targetChain.id,
-		  sourceToken: normalizedParams.sourceToken.address,
-		  targetToken: normalizedParams.targetToken.address,
-		  amount: normalizedParams.amount.toString(),
-		  rhinestoneAddress,
-		  walletAddress: walletAccount.address,
-		  accountType: this.config.accountType
-		});
-		
-		// Re-throw with more context
+	  const MAX_PREPARE_RETRIES = 3;
+	  const PREPARE_RETRY_DELAY = 2000; // 2 seconds
+	  
+	  // Log full transaction params for debugging
+	  console.log('[Rhinestone Client] Full transaction params for prepareTransaction:', {
+		sourceChain: { id: transactionParams.sourceChain?.id, name: transactionParams.sourceChain?.name },
+		targetChain: { id: transactionParams.targetChain?.id, name: transactionParams.targetChain?.name },
+		calls: transactionParams.calls?.map(c => ({ to: c.to, value: String(c.value), dataLength: c.data?.length })),
+		tokenRequests: transactionParams.tokenRequests?.map(t => ({ address: t.address, amount: String(t.amount) })),
+		feeAsset: transactionParams.feeAsset,
+		sourceAssets: transactionParams.sourceAssets,
+		hasEip7702InitSignature: Boolean(transactionParams.eip7702InitSignature)
+	  });
+	  
+	  for (let attempt = 1; attempt <= MAX_PREPARE_RETRIES; attempt++) {
+		try {
+		  console.log(`[Rhinestone Client] prepareTransaction attempt ${attempt}/${MAX_PREPARE_RETRIES}...`);
+		  preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+		  console.log('[Rhinestone Client] prepareTransaction succeeded');
+		  break; // Success, exit retry loop
+		} catch (prepareError) {
+		  const errorMsg = prepareError instanceof Error ? prepareError.message : String(prepareError);
+		  const errorStack = prepareError instanceof Error ? prepareError.stack : undefined;
+		  
+		  console.error(`[Rhinestone Client] prepareTransaction attempt ${attempt} failed:`, {
+			error: errorMsg,
+			stack: errorStack,
+			sourceChain: sourceChain.id,
+			targetChain: targetChain.id,
+			sourceToken: normalizedParams.sourceToken.address,
+			targetToken: normalizedParams.targetToken.address,
+			amount: normalizedParams.amount.toString(),
+			rhinestoneAddress,
+			walletAddress: walletAccount.address,
+			accountType: this.config.accountType
+		  });
+		  
+		  // Check if this is a quoter error that might be transient
+		  const isQuoterError = errorMsg.toLowerCase().includes('quote') || 
+							   errorMsg.toLowerCase().includes('quoter') ||
+							   errorMsg.toLowerCase().includes('could not retrieve');
+		  
+		  // If we have more retries and it's a quoter error, wait and retry
+		  if (attempt < MAX_PREPARE_RETRIES && isQuoterError) {
+			console.log(`[Rhinestone Client] Quoter error detected, waiting ${PREPARE_RETRY_DELAY}ms before retry...`);
+			await sleep(PREPARE_RETRY_DELAY);
+			continue;
+		  }
+		  
+		  // No more retries or non-transient error - throw with helpful message
+		  const isQuoteError = errorMsg.includes('Could not retrieve a valid quote');
+		  
+		  if (isQuoteError) {
+			throw new AAError(
+			  `The Rhinestone orchestrator could not find a valid route for this swap after ${attempt} attempts. ` +
+			  `This typically happens when:\n` +
+			  `1) The cross-chain route (${sourceChain.name} → ${targetChain.name}) is temporarily unavailable\n` +
+			  `2) The amount (${(Number(normalizedParams.amount) / 1e6).toFixed(2)} USDC) is below the minimum\n` +
+			  `3) Quoters are experiencing high load or maintenance\n\n` +
+			  `Please try again in a few minutes, or try with a larger amount.`,
+			  AAErrorCode.SWAP_FAILED,
+			  { 
+				originalError: prepareError,
+				sourceChain: sourceChain.id,
+				targetChain: targetChain.id,
+				amount: normalizedParams.amount.toString(),
+				attempts: attempt
+			  }
+			);
+		  }
+		  
+		  // Generic error
+		  throw new AAError(
+			`Failed to prepare cross-chain transaction: ${errorMsg}. ` +
+			`This might be due to unsupported token pair, insufficient liquidity, or orchestrator configuration issue.`,
+			AAErrorCode.SWAP_FAILED,
+			{ originalError: prepareError }
+		  );
+		}
+	  }
+	  
+	  // TypeScript needs this check since preparedTx might not be assigned if loop exits unexpectedly
+	  if (!preparedTx!) {
 		throw new AAError(
-		  `Failed to prepare cross-chain transaction: ${errorMsg}. ` +
-		  `This might be due to unsupported token pair, insufficient liquidity, or orchestrator configuration issue.`,
-		  AAErrorCode.SWAP_FAILED,
-		  { originalError: prepareError }
+		  'Failed to prepare transaction after all retries',
+		  AAErrorCode.SWAP_FAILED
 		);
 	  }
 	  const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
   
 	  // ---- Authorizations ----
+	  // For cross-chain transactions, we need authorizations for BOTH source and target chains
+	  // The EIP-7702 delegate contract address used by Rhinestone
+	  const EIP7702_DELEGATE_CONTRACT = '0x000000000032ddc454c3bdcba80484ad5a798705' as Address;
+	  
 	  const signAuths = async (): Promise<SignedAuthorizationList> => {
 		if (this.config.accountType !== '7702') return [];
+		
+		// Use a mutable array to collect authorizations, then cast at the end
+		const authsList: Array<{
+		  chainId: number;
+		  address: Address;
+		  nonce: number;
+		  r: Hex;
+		  s: Hex;
+		  yParity: number;
+		}> = [];
+		
 		try {
-		  const auths = await rhinestoneAccount.signAuthorizations(signedTx);
-		  console.log('[Rhinestone Client] Authorizations signed:', auths?.length ?? 0);
-		  return auths ?? [];
+		  // First, try the SDK's signAuthorizations
+		  const sdkAuths = await rhinestoneAccount.signAuthorizations(signedTx) ?? [];
+		  authsList.push(...(sdkAuths as any[]));
+		  const authCount = sdkAuths?.length ?? 0;
+		  const authChainIds = sdkAuths?.map((a: any) => a.chainId ?? 'unknown') ?? [];
+		  console.log('[Rhinestone Client] SDK signAuthorizations result:', {
+			count: authCount,
+			chainIds: authChainIds,
+			expectedChains: chainsNeedingAuth.map(c => c.id)
+		  });
 		} catch (authError) {
 		  const msg = authError instanceof Error ? authError.message : String(authError);
 		  if (
@@ -920,13 +1134,88 @@ async executeCrossChainSwap(
 			msg.toLowerCase().includes('account type') ||
 			msg.toLowerCase().includes('undefined')
 		  ) {
-			console.warn('[Rhinestone Client] signAuthorizations not supported; proceeding with empty list.');
-			return [];
+			console.warn('[Rhinestone Client] SDK signAuthorizations not supported; will sign manually.');
+		  } else {
+			throw authError;
 		  }
-		  throw authError;
 		}
+		
+		// Check which chains are missing and manually sign for them
+		const gotChainIds = new Set(authsList.map((a: any) => Number(a.chainId)).filter(id => !isNaN(id)));
+		const missingChainIds = chainsNeedingAuth
+		  .map(c => c.id)
+		  .filter(chainId => !gotChainIds.has(chainId));
+		
+		if (missingChainIds.length > 0) {
+		  console.log('[Rhinestone Client] Manually signing authorizations for missing chains:', {
+			missingChainIds,
+			hasSignAuthorization: typeof (walletAccount as any).signAuthorization === 'function'
+		  });
+		  
+		  // Check if wallet supports signAuthorization
+		  if (typeof (walletAccount as any).signAuthorization === 'function') {
+			for (const chainId of missingChainIds) {
+			  try {
+				console.log('[Rhinestone Client] Signing authorization for chain:', chainId);
+				const auth = await (walletAccount as any).signAuthorization({
+				  contractAddress: EIP7702_DELEGATE_CONTRACT,
+				  chainId: chainId,
+				  nonce: 0 // Nonce 0 for new authorizations
+				});
+				
+				console.log('[Rhinestone Client] Authorization signed for chain:', {
+				  chainId,
+				  hasR: Boolean(auth.r),
+				  hasS: Boolean(auth.s),
+				  yParity: auth.yParity
+				});
+				
+				authsList.push({
+				  chainId: chainId,
+				  address: EIP7702_DELEGATE_CONTRACT,
+				  nonce: auth.nonce ?? 0,
+				  r: auth.r,
+				  s: auth.s,
+				  yParity: auth.yParity ?? 0
+				});
+			  } catch (signError) {
+				const errorMsg = signError instanceof Error ? signError.message : String(signError);
+				console.error('[Rhinestone Client] Failed to sign authorization for chain:', {
+				  chainId,
+				  error: errorMsg
+				});
+				
+				// Check if user rejected
+				if (
+				  errorMsg.toLowerCase().includes('reject') ||
+				  errorMsg.toLowerCase().includes('denied') ||
+				  errorMsg.toLowerCase().includes('user rejected')
+				) {
+				  throw new AAError(
+					'Authorization signing was rejected by user',
+					AAErrorCode.AUTHORIZATION_REJECTED,
+					{ originalError: signError, chainId }
+				  );
+				}
+				// For other errors, log but continue - maybe the chain doesn't need authorization after all
+				console.warn('[Rhinestone Client] Could not sign authorization for chain, continuing:', chainId);
+			  }
+			}
+		  } else {
+			console.warn('[Rhinestone Client] Wallet does not support signAuthorization method. Missing chains:', missingChainIds);
+		  }
+		}
+		
+		// Final log of all authorizations
+		console.log('[Rhinestone Client] Final authorization list:', {
+		  count: authsList.length,
+		  chainIds: authsList.map((a: any) => a.chainId),
+		  expectedChains: chainsNeedingAuth.map(c => c.id)
+		});
+		
+		return authsList as unknown as SignedAuthorizationList;
 	  };
-  
+
 	  let authorizations = await signAuths();
   
 	  const submit = async (auths: SignedAuthorizationList) => {
@@ -939,6 +1228,68 @@ async executeCrossChainSwap(
 		txResult = await submit(authorizations);
 	  } catch (submitErr) {
 		const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+		
+		// Extract detailed error information including Tenderly trace
+		const errorObj = submitErr as any;
+		
+		// Extract traceId from SimulationFailedError structure
+		// SimulationFailedError has traceId in constructor params, which may be stored in various places
+		const tenderlyTraceId = 
+		  errorObj?.traceId ||                    // Direct property
+		  errorObj?.trace_id ||                   // Snake case variant
+		  errorObj?.tenderlyTraceId ||            // Alternative property name
+		  errorObj?.context?.traceId ||           // In context object
+		  errorObj?.params?.traceId ||            // In params object
+		  errorObj?.error?.traceId ||            // Nested in error property
+		  (errorObj?.name === 'SimulationFailedError' && errorObj?.traceId); // Explicit check for SimulationFailedError
+		
+		const tenderlyUrl = errorObj?.tenderlyUrl || errorObj?.tenderly_url || errorObj?.simulationUrl;
+		const errorData = errorObj?.data || errorObj?.response?.data;
+		const errorCause = errorObj?.cause;
+		
+		// Try to extract trace ID from error message if not in properties
+		let extractedTraceId = tenderlyTraceId;
+		if (!extractedTraceId && msg) {
+		  // Look for UUID-like patterns that might be trace IDs
+		  const traceMatch = msg.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+		  if (traceMatch) {
+			extractedTraceId = traceMatch[1];
+		  }
+		}
+		
+		// Enhanced logging for SimulationFailedError
+		const isSimulationFailedError = errorObj?.name === 'SimulationFailedError' || 
+									   msg.toLowerCase().includes('simulation') && msg.toLowerCase().includes('failed');
+		
+		console.error('[Rhinestone Client] Submit transaction error details:', {
+		  message: msg,
+		  errorName: errorObj?.name,
+		  isSimulationFailedError,
+		  tenderlyTraceId: extractedTraceId,
+		  tenderlyUrl,
+		  errorData,
+		  errorCause: errorCause instanceof Error ? errorCause.message : errorCause,
+		  // For SimulationFailedError, log the full structure to help debug traceId location
+		  ...(isSimulationFailedError && {
+			simulationErrorStructure: {
+			  traceId: errorObj?.traceId,
+			  context: errorObj?.context,
+			  params: errorObj?.params,
+			  error: errorObj?.error,
+			  simulations: errorObj?.simulations
+			}
+		  }),
+		  // Log all enumerable properties of the error
+		  allErrorProps: Object.keys(errorObj || {}).reduce((acc, key) => {
+			try {
+			  const val = errorObj[key];
+			  if (typeof val !== 'function') {
+				acc[key] = typeof val === 'object' ? JSON.stringify(val).slice(0, 500) : val;
+			  }
+			} catch { /* ignore */ }
+			return acc;
+		  }, {} as Record<string, any>)
+		});
   
 		if (msg.toLowerCase().includes('authorization list') && msg.toLowerCase().includes('cover chain')) {
 		  console.warn('[Rhinestone Client] Authorization list did not cover chain(s). Re-signing and retrying once...', {
@@ -952,6 +1303,28 @@ async executeCrossChainSwap(
 			'EIP-7702 initialization signature is required for EOA accounts',
 			AAErrorCode.AUTHORIZATION_REJECTED,
 			{ originalError: submitErr }
+		  );
+		} else if (msg.toLowerCase().includes('simulation') && msg.toLowerCase().includes('failed')) {
+		  // Handle SimulationFailedError with more details
+		  const tenderlyInfo = extractedTraceId 
+			? `Tenderly trace ID: ${extractedTraceId}. View at: https://dashboard.tenderly.co/tx/mainnet/${extractedTraceId}` 
+			: 'No Tenderly trace ID available.';
+		  
+		  throw new AAError(
+			`Bundle simulation failed. ${tenderlyInfo}\n` +
+			`This usually means: 1) Insufficient token balance, 2) Token not approved, or 3) Invalid transaction parameters.\n` +
+			`Source: ${sourceChain.name} (${sourceChain.id}), Target: ${targetChain.name} (${targetChain.id})`,
+			AAErrorCode.TRANSACTION_FAILED, // Use TRANSACTION_FAILED until SIMULATION_FAILED is recognized
+			{ 
+			  originalError: submitErr, 
+			  tenderlyTraceId: extractedTraceId,
+			  tenderlyUrl,
+			  errorData,
+			  sourceChain: sourceChain.id,
+			  targetChain: targetChain.id,
+			  authorizationsCount: authorizations.length,
+			  simulationFailed: true
+			}
 		  );
 		} else {
 		  throw submitErr;
@@ -1300,6 +1673,7 @@ async executeCrossChainSwap(
 				// Check if the account is already deployed/initialized on this chain
 				// Note: isDeployed() may throw if EIP-7702 account already exists (SDK limitation)
 				let isDeployed = false;
+				let needsInitSignatureAnyway = false;
 				try {
 					isDeployed = await rhinestoneAccount.isDeployed(chain);
 					console.log('[Rhinestone Client] Account deployed status:', {
@@ -1312,17 +1686,19 @@ async executeCrossChainSwap(
 				} catch (deployedError) {
 					const errorMsg = deployedError instanceof Error ? deployedError.message : String(deployedError);
 					// If the error is about existing EIP-7702 accounts not being supported,
-					// we can assume the account is already initialized and skip the init signature
+					// the SDK still requires the init signature for prepareTransaction
+					// even though the account technically exists
 					if (errorMsg.includes('Existing EIP-7702 accounts') || errorMsg.includes('ExistingEip7702AccountsNotSupported')) {
-						console.warn('[Rhinestone Client] Account appears to be already initialized with EIP-7702 (SDK limitation). Skipping init signature.');
-						isDeployed = true; // Treat as deployed to skip init signature
+						console.warn('[Rhinestone Client] Account appears to be already initialized with EIP-7702 (SDK limitation). Will still get init signature as SDK requires it.');
+						needsInitSignatureAnyway = true;
 					} else {
 						// Re-throw other errors
 						throw deployedError;
 					}
 				}
 
-				if (!isDeployed) {
+				// Get init signature if not deployed OR if SDK requires it despite existing account
+				if (!isDeployed || needsInitSignatureAnyway) {
 					console.log('[Rhinestone Client] Signing EIP-7702 init data for same-chain swap...');
 					try {
 						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
