@@ -1908,16 +1908,16 @@ async executeCrossChainSwap(
 		};
 	  
 		// Normalize fee asset to an address for sourceAssets when possible
-		// Base USDC (native) = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-		const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const;
-	  
-		const normalizeFeeAssetToAddress = (fa?: string): string | undefined => {
+		// Uses resolveTokenAddress to support any fee token (USDC, USDT, etc.) on any network
+		const normalizeFeeAssetToAddress = (fa?: string, chainId?: number): string | undefined => {
 		  if (!fa) return undefined;
 		  // already looks like an address
 		  if (/^0x[a-fA-F0-9]{40}$/.test(fa)) return fa;
-		  // map common symbols
-		  if (fa.toUpperCase() === 'USDC') return BASE_USDC;
-		  return undefined; // unknown symbol
+		  // resolve token symbol to address using PAYMENT_TOKENS_BY_NETWORK
+		  if (chainId) {
+			return resolveTokenAddress(fa, chainId);
+		  }
+		  return undefined; // unknown symbol or no chainId
 		};
 	  
 		try {
@@ -1958,7 +1958,7 @@ async executeCrossChainSwap(
 			}
 		  }
 	  
-		  const feeAssetAddress = normalizeFeeAssetToAddress(feeAsset);
+		  const feeAssetAddress = normalizeFeeAssetToAddress(feeAsset, chain.id);
 		  const sourceAssets =
 			feeAssetAddress ? { [chain.id]: [feeAssetAddress] } : undefined;
 	  
