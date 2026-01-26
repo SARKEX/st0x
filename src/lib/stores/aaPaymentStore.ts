@@ -193,8 +193,8 @@ function createAAPaymentStore() {
 			}
 
 			// Get wallet account for Rhinestone
-			const walletAccount = await getDynamicAccountForRhinestone();
-			if (!walletAccount) {
+			const walletAccountOrResult = await getDynamicAccountForRhinestone();
+			if (!walletAccountOrResult) {
 				update((s) => ({
 					...s,
 					status: 'error',
@@ -202,6 +202,10 @@ function createAAPaymentStore() {
 				}));
 				return null;
 			}
+
+			// Normalize: extract account if it's a DynamicAccountResult, otherwise use as-is
+			const walletAccount =
+				'account' in walletAccountOrResult ? walletAccountOrResult.account : walletAccountOrResult;
 
 			// Execute the swap
 			update((s) => ({ ...s, status: 'swapping', error: null }));
@@ -474,8 +478,8 @@ function createAAPaymentStore() {
 			}
 
 			// Get wallet account for Rhinestone
-			const walletAccount = await getDynamicAccountForRhinestone();
-			if (!walletAccount) {
+			const walletAccountOrResult = await getDynamicAccountForRhinestone();
+			if (!walletAccountOrResult) {
 				update((s) => ({
 					...s,
 					status: 'error',
@@ -483,6 +487,10 @@ function createAAPaymentStore() {
 				}));
 				return null;
 			}
+
+			// Normalize: extract account if it's a DynamicAccountResult, otherwise use as-is
+			const walletAccount =
+				'account' in walletAccountOrResult ? walletAccountOrResult.account : walletAccountOrResult;
 
 			// Execute the swap
 			update((s) => ({ ...s, status: 'swapping', error: null }));
