@@ -294,7 +294,7 @@ function DynamicBridge({
 						if (!dynamicSigner.signTypedData) throw new Error('signTypedData not available');
 
 						// 1) Strip EIP712Domain if present
-						const { EIP712Domain, ...typesWithoutDomain } = (args.types || {}) as any;
+						const { _EIP712Domain, ...typesWithoutDomain } = (args.types || {}) as any;
 
 						// 2) BigInt normalize
 						const domain = convertBigIntsToString(args.domain || {});
@@ -302,9 +302,7 @@ function DynamicBridge({
 
 						// 3) Normalize chainId (number is safest for WaaS)
 						if ((domain as any)?.chainId != null) {
-							try {
-								(domain as any).chainId = Number((domain as any).chainId);
-							} catch {}
+							(domain as any).chainId = Number((domain as any).chainId);
 						}
 
 						const payload = {
@@ -322,7 +320,8 @@ function DynamicBridge({
 
 					async signAuthorization(args) {
 						console.log('[dynamic] ⚡ signAuthorization called (should prompt)', args);
-						if (!dynamicSigner.signAuthorization) throw new Error('signAuthorization not available');
+						if (!dynamicSigner.signAuthorization)
+							throw new Error('signAuthorization not available');
 						return await dynamicSigner.signAuthorization(args);
 					}
 				};
@@ -368,7 +367,10 @@ function DynamicBridge({
 			if (!authToken) throw new Error('Authentication required. Please log in again.');
 
 			const now = Date.now();
-			if (!cachedWalletClient && (now - lastWalletClientAttempt > 5000 || lastWalletClientAttempt === 0)) {
+			if (
+				!cachedWalletClient &&
+				(now - lastWalletClientAttempt > 5000 || lastWalletClientAttempt === 0)
+			) {
 				lastWalletClientAttempt = now;
 				cachedWalletClient = await activeWallet.getWalletClient(BASE_CHAIN_ID);
 			}
@@ -435,15 +437,14 @@ function DynamicBridge({
 					if (!dyn?.signTypedData) throw new Error('Dynamic signer missing signTypedData');
 
 					const typedDataRaw = args.params[1] as any;
-					const typedData = typeof typedDataRaw === 'string' ? JSON.parse(typedDataRaw) : typedDataRaw;
+					const typedData =
+						typeof typedDataRaw === 'string' ? JSON.parse(typedDataRaw) : typedDataRaw;
 
-					const { EIP712Domain, ...typesWithoutDomain } = (typedData.types || {}) as any;
+					const { _EIP712Domain, ...typesWithoutDomain } = (typedData.types || {}) as any;
 					const domain = convertBigIntsToString(typedData.domain || {});
 					const message = convertBigIntsToString(typedData.message || {});
 					if (domain?.chainId != null) {
-						try {
-							domain.chainId = Number(domain.chainId);
-						} catch {}
+						domain.chainId = Number(domain.chainId);
 					}
 
 					const payload = {
