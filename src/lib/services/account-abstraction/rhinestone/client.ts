@@ -251,10 +251,11 @@ export class RhinestoneClient {
 
 			// Check if this is a Dynamic wallet account (has signAuthorization method)
 			// Dynamic wallets created with toAccount() will have signAuthorization
+			const walletAccountWithType = walletAccount as Account & { type?: string };
 			const isDynamicWallet =
 				typeof walletAccount.signAuthorization === 'function' ||
-				(walletAccount as any)?.type === 'json-rpc' ||
-				(walletAccount as any)?.type === 'local';
+				walletAccountWithType?.type === 'json-rpc' ||
+				walletAccountWithType?.type === 'local';
 
 			// For EIP-7702 mode, add the accountType and eoa parameter
 			// This tells Rhinestone to use EIP-7702 to upgrade the EOA
@@ -794,22 +795,32 @@ export class RhinestoneClient {
 			};
 
 			// 🔥 Critical: ETH -> WETH for quote + tokenRequests
+			const normalizedSourceToken = normalizeEthToWeth(
+				{
+					symbol: normalizedParams.sourceToken.symbol,
+					address: normalizedParams.sourceToken.address as string
+				},
+				srcId
+			);
+			const normalizedTargetToken = normalizeEthToWeth(
+				{
+					symbol: normalizedParams.targetToken.symbol,
+					address: normalizedParams.targetToken.address as string
+				},
+				dstId
+			);
 			normalizedParams = {
 				...normalizedParams,
-				sourceToken: normalizeEthToWeth(
-					{
-						symbol: normalizedParams.sourceToken.symbol,
-						address: normalizedParams.sourceToken.address as any
-					},
-					srcId
-				) as any,
-				targetToken: normalizeEthToWeth(
-					{
-						symbol: normalizedParams.targetToken.symbol,
-						address: normalizedParams.targetToken.address as any
-					},
-					dstId
-				) as any
+				sourceToken: {
+					...normalizedParams.sourceToken,
+					symbol: normalizedSourceToken.symbol ?? normalizedParams.sourceToken.symbol,
+					address: normalizedSourceToken.address as `0x${string}`
+				},
+				targetToken: {
+					...normalizedParams.targetToken,
+					symbol: normalizedTargetToken.symbol ?? normalizedParams.targetToken.symbol,
+					address: normalizedTargetToken.address as `0x${string}`
+				}
 			};
 
 			// Fee asset addresses (chain-specific) — based on effectiveFeeAsset
@@ -954,8 +965,16 @@ export class RhinestoneClient {
 
 			// ---- sourceAssets must be chain-correct ----
 			const sourceAssets: Record<number, string[]> = {
-				[sourceChain.id]: uniqLower([normalizedParams.sourceToken.address as any, feeAssetSrcAddr]),
-				[targetChain.id]: uniqLower([normalizedParams.targetToken.address as any, feeAssetDstAddr])
+				[sourceChain.id]: uniqLower(
+					[normalizedParams.sourceToken.address as string, feeAssetSrcAddr].filter(
+						(addr): addr is string => addr !== undefined
+					)
+				),
+				[targetChain.id]: uniqLower(
+					[normalizedParams.targetToken.address as string, feeAssetDstAddr].filter(
+						(addr): addr is string => addr !== undefined
+					)
+				)
 			};
 
 			// Determine which chains need to be included in sourceChains for authorization coverage
@@ -1201,9 +1220,26 @@ export class RhinestoneClient {
 				try {
 					// First, try the SDK's signAuthorizations
 					const sdkAuths = (await rhinestoneAccount.signAuthorizations(signedTx)) ?? [];
-					authsList.push(...(sdkAuths as any[]));
+					const typedSdkAuths = sdkAuths as Array<{
+						chainId?: number | string;
+						address?: Address;
+						nonce?: number;
+						r?: Hex;
+						s?: Hex;
+						yParity?: number;
+					}>;
+					authsList.push(
+						...typedSdkAuths.map((a) => ({
+							chainId: Number(a.chainId ?? 0),
+							address: a.address ?? ('0x' as Address),
+							nonce: a.nonce ?? 0,
+							r: a.r ?? ('0x' as Hex),
+							s: a.s ?? ('0x' as Hex),
+							yParity: a.yParity ?? 0
+						}))
+					);
 					const authCount = sdkAuths?.length ?? 0;
-					const authChainIds = sdkAuths?.map((a: any) => a.chainId ?? 'unknown') ?? [];
+					const authChainIds = typedSdkAuths.map((a) => a.chainId ?? 'unknown');
 					console.log('[Rhinestone Client] SDK signAuthorizations result:', {
 						count: authCount,
 						chainIds: authChainIds,
@@ -1227,24 +1263,37 @@ export class RhinestoneClient {
 
 				// Check which chains are missing and manually sign for them
 				const gotChainIds = new Set(
-					authsList.map((a: any) => Number(a.chainId)).filter((id) => !isNaN(id))
+					authsList.map((a) => Number(a.chainId)).filter((id) => !isNaN(id))
 				);
 				const missingChainIds = chainsNeedingAuth
 					.map((c) => c.id)
 					.filter((chainId) => !gotChainIds.has(chainId));
 
 				if (missingChainIds.length > 0) {
+					const walletAccountWithSignAuth = walletAccount as Account & {
+						signAuthorization?: (args: {
+							contractAddress: Address;
+							chainId: number;
+							nonce?: number;
+						}) => Promise<{
+							r: Hex;
+							s: Hex;
+							v?: bigint;
+							yParity?: number;
+							nonce?: number;
+						}>;
+					};
 					console.log('[Rhinestone Client] Manually signing authorizations for missing chains:', {
 						missingChainIds,
-						hasSignAuthorization: typeof (walletAccount as any).signAuthorization === 'function'
+						hasSignAuthorization: typeof walletAccountWithSignAuth.signAuthorization === 'function'
 					});
 
 					// Check if wallet supports signAuthorization
-					if (typeof (walletAccount as any).signAuthorization === 'function') {
+					if (typeof walletAccountWithSignAuth.signAuthorization === 'function') {
 						for (const chainId of missingChainIds) {
 							try {
 								console.log('[Rhinestone Client] Signing authorization for chain:', chainId);
-								const auth = await (walletAccount as any).signAuthorization({
+								const auth = await walletAccountWithSignAuth.signAuthorization({
 									contractAddress: EIP7702_DELEGATE_CONTRACT,
 									chainId: chainId,
 									nonce: 0 // Nonce 0 for new authorizations
@@ -1302,7 +1351,7 @@ export class RhinestoneClient {
 				// Final log of all authorizations
 				console.log('[Rhinestone Client] Final authorization list:', {
 					count: authsList.length,
-					chainIds: authsList.map((a: any) => a.chainId),
+					chainIds: authsList.map((a) => a.chainId),
 					expectedChains: chainsNeedingAuth.map((c) => c.id)
 				});
 
@@ -1323,7 +1372,22 @@ export class RhinestoneClient {
 				const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
 
 				// Extract detailed error information including Tenderly trace
-				const errorObj = submitErr as any;
+				const errorObj = submitErr as Error & {
+					traceId?: string;
+					trace_id?: string;
+					tenderlyTraceId?: string;
+					tenderlyUrl?: string;
+					tenderly_url?: string;
+					simulationUrl?: string;
+					data?: unknown;
+					response?: { data?: unknown };
+					cause?: unknown;
+					context?: { traceId?: string };
+					params?: { traceId?: string };
+					error?: { traceId?: string };
+					name?: string;
+					simulations?: unknown;
+				};
 
 				// Extract traceId from SimulationFailedError structure
 				// SimulationFailedError has traceId in constructor params, which may be stored in various places
@@ -1380,7 +1444,8 @@ export class RhinestoneClient {
 					allErrorProps: Object.keys(errorObj || {}).reduce(
 						(acc, key) => {
 							try {
-								const val = errorObj[key];
+								const errorObjRecord = errorObj as unknown as Record<string, unknown>;
+								const val = errorObjRecord[key];
 								if (typeof val !== 'function') {
 									acc[key] = typeof val === 'object' ? JSON.stringify(val).slice(0, 500) : val;
 								}
@@ -1389,7 +1454,7 @@ export class RhinestoneClient {
 							}
 							return acc;
 						},
-						{} as Record<string, any>
+						{} as Record<string, unknown>
 					)
 				});
 
@@ -1464,18 +1529,27 @@ export class RhinestoneClient {
 
 			// Try to extract more details from the error
 			let errorMessage = 'Unknown error';
-			let errorDetails: any = {};
+			const errorDetails: Record<string, unknown> = {};
 
 			if (error instanceof Error) {
 				errorMessage = error.message;
-				errorDetails = {
-					name: error.name,
-					stack: error.stack,
-					// Check if error has additional properties
-					...((error as any).response && { response: (error as any).response }),
-					...((error as any).data && { data: (error as any).data }),
-					...((error as any).status && { status: (error as any).status })
+				const errorWithExtras = error as Error & {
+					response?: unknown;
+					data?: unknown;
+					status?: unknown;
 				};
+				errorDetails.name = error.name;
+				errorDetails.stack = error.stack;
+				// Check if error has additional properties
+				if (errorWithExtras.response) {
+					errorDetails.response = errorWithExtras.response;
+				}
+				if (errorWithExtras.data) {
+					errorDetails.data = errorWithExtras.data;
+				}
+				if (errorWithExtras.status) {
+					errorDetails.status = errorWithExtras.status;
+				}
 			}
 
 			// Check if it's an orchestrator error
@@ -2321,8 +2395,11 @@ export class RhinestoneClient {
 
 				// If we still don't have it, try to get it from the SDK's account
 				// The SDK might expose the implementation address
-				if (!delegateContractAddress && (tempRhinestoneAccount as any).implementation) {
-					delegateContractAddress = (tempRhinestoneAccount as any).implementation as Address;
+				const accountWithImpl = tempRhinestoneAccount as RhinestoneAccount & {
+					implementation?: Address;
+				};
+				if (!delegateContractAddress && accountWithImpl.implementation) {
+					delegateContractAddress = accountWithImpl.implementation;
 					console.log(
 						'[Rhinestone Client] Got delegate address from account implementation:',
 						delegateContractAddress

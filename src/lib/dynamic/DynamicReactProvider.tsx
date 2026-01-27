@@ -13,13 +13,14 @@ import type { Address } from 'viem';
 export const ST0X_LOGO_URL = '/logo.svg';
 
 /** Convert BigInts -> strings recursively (Dynamic WaaS typed-data compat) */
-const convertBigIntsToString = (obj: any): any => {
+const convertBigIntsToString = (obj: unknown): unknown => {
 	if (obj == null) return obj;
 	if (typeof obj === 'bigint') return obj.toString();
 	if (Array.isArray(obj)) return obj.map(convertBigIntsToString);
 	if (typeof obj === 'object') {
-		const out: any = {};
-		for (const k of Object.keys(obj)) out[k] = convertBigIntsToString(obj[k]);
+		const out: Record<string, unknown> = {};
+		for (const k of Object.keys(obj))
+			out[k] = convertBigIntsToString((obj as Record<string, unknown>)[k]);
 		return out;
 	}
 	return obj;
@@ -27,14 +28,14 @@ const convertBigIntsToString = (obj: any): any => {
 
 /** Avoid infinite "Awaiting confirmation" hangs */
 const withTimeout = async <T,>(p: Promise<T>, ms = 30000): Promise<T> => {
-	let t: any;
+	let t: ReturnType<typeof setTimeout> | undefined;
 	const timeout = new Promise<T>((_, rej) => {
 		t = setTimeout(() => rej(new Error(`Timed out after ${ms}ms`)), ms);
 	});
 	try {
 		return await Promise.race([p, timeout]);
 	} finally {
-		clearTimeout(t);
+		if (t) clearTimeout(t);
 	}
 };
 
@@ -294,20 +295,24 @@ function DynamicBridge({
 						if (!dynamicSigner.signTypedData) throw new Error('signTypedData not available');
 
 						// 1) Strip EIP712Domain if present
-						const { _EIP712Domain, ...typesWithoutDomain } = (args.types || {}) as any;
+						const typesRecord = (args.types || {}) as Record<
+							string,
+							Array<{ name: string; type: string }>
+						>;
+						const { _EIP712Domain, ...typesWithoutDomain } = typesRecord;
 
 						// 2) BigInt normalize
-						const domain = convertBigIntsToString(args.domain || {});
-						const message = convertBigIntsToString(args.message || {});
+						const domain = convertBigIntsToString(args.domain || {}) as Record<string, unknown>;
+						const message = convertBigIntsToString(args.message || {}) as Record<string, unknown>;
 
 						// 3) Normalize chainId (number is safest for WaaS)
-						if ((domain as any)?.chainId != null) {
-							(domain as any).chainId = Number((domain as any).chainId);
+						if (domain.chainId != null) {
+							domain.chainId = Number(domain.chainId);
 						}
 
 						const payload = {
 							domain,
-							types: typesWithoutDomain,
+							types: typesWithoutDomain as Record<string, Array<{ name: string; type: string }>>,
 							primaryType: args.primaryType,
 							message
 						};
@@ -425,7 +430,14 @@ function DynamicBridge({
 
 					const connector = activeWallet.connector as {
 						setActiveAccount?: (address: Address) => void;
-						getSigner?: () => Promise<any>;
+						getSigner?: () => Promise<{
+							signTypedData?: (args: {
+								domain: Record<string, unknown>;
+								types: Record<string, unknown>;
+								primaryType: string;
+								message: Record<string, unknown>;
+							}) => Promise<string>;
+						}>;
 					};
 					if (!connector?.setActiveAccount || !connector?.getSigner) {
 						throw new Error('Not a WaaS wallet (no signer)');
@@ -436,14 +448,22 @@ function DynamicBridge({
 					const dyn = await connector.getSigner();
 					if (!dyn?.signTypedData) throw new Error('Dynamic signer missing signTypedData');
 
-					const typedDataRaw = args.params[1] as any;
+					const typedDataRaw = args.params[1] as string | Record<string, unknown>;
 					const typedData =
 						typeof typedDataRaw === 'string' ? JSON.parse(typedDataRaw) : typedDataRaw;
 
-					const { _EIP712Domain, ...typesWithoutDomain } = (typedData.types || {}) as any;
-					const domain = convertBigIntsToString(typedData.domain || {});
-					const message = convertBigIntsToString(typedData.message || {});
-					if (domain?.chainId != null) {
+					const typedDataTypes = (typedData as Record<string, unknown>).types as
+						| Record<string, unknown>
+						| undefined;
+					const { _EIP712Domain, ...typesWithoutDomain } = typedDataTypes || {};
+
+					const domain = convertBigIntsToString(
+						(typedData as Record<string, unknown>).domain || {}
+					) as Record<string, unknown>;
+					const message = convertBigIntsToString(
+						(typedData as Record<string, unknown>).message || {}
+					) as Record<string, unknown>;
+					if (domain.chainId != null) {
 						domain.chainId = Number(domain.chainId);
 					}
 

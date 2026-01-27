@@ -199,29 +199,36 @@ export async function getDynamicAccountForRhinestone(
 
 	// --- helpers local to this function (safe drop-in) ---
 	const withTimeout = async <T>(p: Promise<T>, ms = 30_000): Promise<T> => {
-		let t: any;
+		let t: ReturnType<typeof setTimeout> | undefined;
 		const timeout = new Promise<T>((_, rej) => {
 			t = setTimeout(() => rej(new Error(`signTypedData timed out after ${ms}ms`)), ms);
 		});
 		try {
 			return await Promise.race([p, timeout]);
 		} finally {
-			clearTimeout(t);
+			if (t) clearTimeout(t);
 		}
 	};
 
-	const normalizeTypedDataForDynamic = (typedDataAny: any) => {
+	const normalizeTypedDataForDynamic = (typedDataAny: unknown) => {
+		const typedData = typedDataAny as {
+			types?: Record<string, unknown>;
+			domain?: Record<string, unknown>;
+			message?: Record<string, unknown>;
+			primaryType?: string;
+		};
 		// 1) Remove EIP712Domain if present (common Dynamic/WaaS edge case)
-		const { _EIP712Domain, ...typesWithoutDomain } = (typedDataAny?.types || {}) as any;
+		const typesRecord = (typedData?.types || {}) as Record<string, unknown>;
+		const { _EIP712Domain, ...typesWithoutDomain } = typesRecord;
 
 		// 2) Convert bigint -> string deeply in domain/message
-		const domain = convertBigIntsToString(typedDataAny?.domain || {}) as Record<string, unknown>;
-		const message = convertBigIntsToString(typedDataAny?.message || {}) as Record<string, unknown>;
+		const domain = convertBigIntsToString(typedData?.domain || {}) as Record<string, unknown>;
+		const message = convertBigIntsToString(typedData?.message || {}) as Record<string, unknown>;
 
 		// 3) Normalize chainId (Dynamic often wants number/string, not bigint)
-		if ((domain as any)?.chainId != null) {
+		if (domain.chainId != null) {
 			try {
-				(domain as any).chainId = Number((domain as any).chainId);
+				domain.chainId = Number(domain.chainId);
 			} catch {
 				// ignore, keep as-is
 			}
@@ -230,7 +237,7 @@ export async function getDynamicAccountForRhinestone(
 		return {
 			domain,
 			types: typesWithoutDomain,
-			primaryType: typedDataAny?.primaryType as string,
+			primaryType: (typedData?.primaryType ?? '') as string,
 			message
 		};
 	};
@@ -305,8 +312,7 @@ export async function getDynamicAccountForRhinestone(
 						throw new Error('signTypedData not available on Dynamic signer');
 					}
 
-					const typedDataAny = typedData as any;
-					const payload = normalizeTypedDataForDynamic(typedDataAny);
+					const payload = normalizeTypedDataForDynamic(typedData);
 
 					console.log('[Dynamic Wallet] signTypedData payload (normalized):', {
 						primaryType: payload.primaryType,
@@ -315,7 +321,17 @@ export async function getDynamicAccountForRhinestone(
 					});
 
 					try {
-						const sig = await withTimeout(signer!.signTypedData(payload as any), 30_000);
+						const sig = await withTimeout(
+							signer!.signTypedData(
+								payload as {
+									domain: Record<string, unknown>;
+									types: Record<string, unknown>;
+									primaryType: string;
+									message: Record<string, unknown>;
+								}
+							),
+							30_000
+						);
 						return sig as Hex;
 					} catch (error) {
 						console.error('[Dynamic Wallet] signTypedData failed:', error, { payload });
@@ -382,6 +398,9 @@ export async function getDynamicAccountForRhinestone(
 				}
 			});
 
+			const accountWithSignAuth = account as Account & {
+				signAuthorization?: unknown;
+			};
 			console.log('[Dynamic Wallet] Created custom account using Dynamic signer:', {
 				address: account.address,
 				chainId,
@@ -389,7 +408,7 @@ export async function getDynamicAccountForRhinestone(
 				hasSignMessage: typeof account.signMessage === 'function',
 				hasSignTransaction: typeof account.signTransaction === 'function',
 				hasSignTypedData: typeof account.signTypedData === 'function',
-				hasSignAuthorization: typeof (account as any).signAuthorization === 'function'
+				hasSignAuthorization: typeof accountWithSignAuth.signAuthorization === 'function'
 			});
 
 			// (Optional) keep your tests as-is; they’ll now use normalized typed data
@@ -466,10 +485,8 @@ export async function getDynamicAccountForRhinestone(
 			async signTypedData<const T extends TypedDataDefinition | Record<string, unknown>>(
 				typedData: T
 			) {
-				const typedDataAny = typedData as any;
-
 				// Also normalize here to avoid Dynamic JSON-RPC hanging on EIP712Domain/bigint
-				const payload = normalizeTypedDataForDynamic(typedDataAny);
+				const payload = normalizeTypedDataForDynamic(typedData);
 
 				return (await provider.request({
 					method: 'eth_signTypedData_v4',
