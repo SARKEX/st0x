@@ -139,7 +139,7 @@
 						>
 					</div>
 					<div class="border-t border-gray-700 pt-2 text-xs text-gray-500">
-						Earn 50% of referred users' rewards
+						Earn rewards when your friends invest
 					</div>
 				</div>
 			</div>
