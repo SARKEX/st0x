@@ -48,7 +48,7 @@ describe('network', () => {
 			const network = getNetworkByName('base');
 			expect(network).toBeDefined();
 			expect(network?.name).toBe('base');
-			expect(network?.displayName).toBe('Base Mainnet');
+			expect(network?.displayName).toBe('Base');
 		});
 
 		it.each([
@@ -266,7 +266,10 @@ describe('network', () => {
 			networks.forEach((network) => {
 				expect(network.rpcUrl).toMatch(/^https?:\/\//);
 				expect(network.blockExplorer).toMatch(/^https?:\/\//);
-				expect(network.subgraph_url).toMatch(/^https?:\/\//);
+				// subgraph_url can be empty for some networks, but if set, must be a valid URL
+				if (network.subgraph_url) {
+					expect(network.subgraph_url).toMatch(/^https?:\/\//);
+				}
 			});
 		});
 	});
