@@ -7,6 +7,9 @@
 	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
 	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
 	import RewardsAnnouncementModal from '$lib/components/rewards/RewardsAnnouncementModal.svelte';
+	import ReferralJoinModal from '$lib/components/referrals/ReferralJoinModal.svelte';
+	import ReferralDashboardModal from '$lib/components/referrals/ReferralDashboardModal.svelte';
+	import ReferralLeaderboardModal from '$lib/components/referrals/ReferralLeaderboardModal.svelte';
 	import { initRewardsAnnouncement } from '$lib/stores/rewardsStore';
 	import AccessCodeModal from '$lib/components/AccessCodeModal.svelte';
 	import WalletConnectionModal from '$lib/components/WalletConnectionModal.svelte';
@@ -171,6 +174,11 @@
 	<RewardsLeaderboardModal />
 	<RewardsRulesModal />
 	<RewardsAnnouncementModal />
+
+	<!-- Referral Modals -->
+	<ReferralJoinModal />
+	<ReferralDashboardModal />
+	<ReferralLeaderboardModal />
 
 	<!-- Access/Connection Modals -->
 	<AccessCodeModal />

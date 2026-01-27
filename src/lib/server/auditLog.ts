@@ -23,7 +23,10 @@ export type AuditEventType =
 	| 'ONRAMPER_URL_SIGNED'
 	| 'CRON_JOB_EXECUTED'
 	| 'RATE_LIMIT_EXCEEDED'
-	| 'ACCESS_DENIED';
+	| 'ACCESS_DENIED'
+	| 'REFERRAL_JOIN'
+	| 'REFERRAL_LINK'
+	| 'REFERRAL_CACHE_REFRESH';
 
 export interface AuditLogEntry {
 	id: string;

@@ -10,6 +10,12 @@
 		rewardsModalTab,
 		type RewardsModalTab
 	} from '$lib/stores/rewardsStore';
+	import ModalTabs from '$lib/components/ui/ModalTabs.svelte';
+
+	const tabs = [
+		{ id: 'details', label: 'Dashboard' },
+		{ id: 'rules', label: 'About' }
+	];
 
 	function closeModal() {
 		showDetailsModal.set(false);
@@ -32,6 +38,10 @@
 
 	function setTab(tab: RewardsModalTab) {
 		rewardsModalTab.set(tab);
+	}
+
+	function handleTabChange(e: CustomEvent<string>) {
+		setTab(e.detail as RewardsModalTab);
 	}
 
 	// Calculate RocketBoost progress percentage (capped at 100%) - from global data
@@ -92,26 +102,7 @@
 			</div>
 
 			<!-- Tabs -->
-			<div class="px-6 pt-4">
-				<div class="flex gap-2">
-					<button
-						class="rounded-lg px-3 py-2 text-sm font-semibold transition {activeTab === 'details'
-							? 'bg-yellow-500/20 text-yellow-300'
-							: 'text-gray-300 hover:bg-white/5 hover:text-white'}"
-						on:click={() => setTab('details')}
-					>
-						Details
-					</button>
-					<button
-						class="rounded-lg px-3 py-2 text-sm font-semibold transition {activeTab === 'rules'
-							? 'bg-yellow-500/20 text-yellow-300'
-							: 'text-gray-300 hover:bg-white/5 hover:text-white'}"
-						on:click={() => setTab('rules')}
-					>
-						Rules
-					</button>
-				</div>
-			</div>
+			<ModalTabs {tabs} {activeTab} on:change={handleTabChange} />
 
 			<!-- Content -->
 			<div class="max-h-[calc(90vh-140px)] overflow-y-auto px-6 pb-6">
@@ -305,13 +296,59 @@
 					<div class="space-y-6 pt-2 text-sm leading-relaxed text-gray-300">
 						<div>
 							<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-yellow-400">
-								About
+								Boost Rewards Overview
 							</h3>
+							<p class="mb-4">
+								ST0x Boost Rewards launched on 1 December and will run for at least three months.
+								During this period, all tStocks held in your wallet or deposited in the ST0x.io DEX
+								earn points based on their US$ value, increasing your share of the reward pool.
+							</p>
+							<p class="mb-4">
+								The reward pool for the first three months is defined in the table below, with
+								future months to be announced. Each month includes a guaranteed Base Boost pool,
+								plus a RocketBoost bonus that depends on the community's total points. Every point
+								earned not only increases your individual share, but also helps grow the overall
+								reward pool for all participants.
+							</p>
+
+							<!-- Rewards Schedule Table -->
+							<div class="mb-4 overflow-hidden rounded-lg border border-gray-700">
+								<table class="w-full text-left text-sm">
+									<thead class="bg-gray-700/50">
+										<tr>
+											<th class="px-3 py-2 font-medium text-gray-300">Month</th>
+											<th class="px-3 py-2 font-medium text-gray-300">Base</th>
+											<th class="px-3 py-2 font-medium text-gray-300">RocketBoost</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-gray-700/50">
+										<tr>
+											<td class="px-3 py-2 text-white">December</td>
+											<td class="px-3 py-2 text-white">US$1,000</td>
+											<td class="px-3 py-2 text-green-400">+US$1,000</td>
+										</tr>
+										<tr>
+											<td class="px-3 py-2 text-white">January</td>
+											<td class="px-3 py-2 text-white">US$2,000</td>
+											<td class="px-3 py-2 text-green-400">+US$2,000</td>
+										</tr>
+										<tr>
+											<td class="px-3 py-2 text-white">February</td>
+											<td class="px-3 py-2 text-white">US$3,000</td>
+											<td class="px-3 py-2 text-green-400">+US$3,000</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
+							<p class="mb-4 text-xs italic text-gray-400">
+								*St0x does market making to improve liquidity. St0x market making accounts are
+								ineligible for rewards nor count towards TVL targets.
+							</p>
+
 							<p>
-								Boost Rewards is St0x's on-chain incentive programme that gives you extra yield
-								simply for keeping capital invested in tStocks across the St0x ecosystem. Each
-								month, your portfolio earns a share of a reward pool on top of any price performance
-								or dividends from the underlying equities.
+								Points will be earned daily, with rewards distributed monthly in tSPLG - our
+								tokenised S&P 500.
 							</p>
 						</div>
 
@@ -324,7 +361,7 @@
 									<span class="flex-shrink-0 font-medium text-yellow-400">1.</span>
 									<span>
 										All tStocks listed on St0x.io are eligible. You can find tStocks at St0x.io and
-										partner venues.
+										Aerodrome. From time to time additional partners may be added.
 									</span>
 								</li>
 								<li class="flex gap-3">

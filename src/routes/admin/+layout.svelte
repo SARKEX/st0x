@@ -8,6 +8,7 @@
 	const navItems = [
 		{ href: '/admin', label: 'On-chain Market' },
 		{ href: '/admin/rewards', label: 'Rewards' },
+		{ href: '/admin/referrals', label: 'Referrals' },
 		{ href: '/admin/codes', label: 'Access Codes' }
 	];
 </script>

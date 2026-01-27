@@ -13,19 +13,32 @@
 		showAccessCodeModal,
 		walletRegistered
 	} from '$lib/stores/accessStore';
-	import { getStoredAccessCode, clearStoredAccessCode } from '$lib/utils/accessCodeStorage';
+	import {
+		getStoredAccessCode,
+		clearStoredAccessCode,
+		getStoredReferralCode,
+		clearStoredReferralCode,
+		isValidReferralCodeFormat
+	} from '$lib/utils/accessCodeStorage';
 	import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 
 	// Form state
 	let accessCode = '';
+	let referralCode = '';
 	let error = '';
 	let submitting = false;
+	let showReferralField = false;
 
 	// Pre-fill from localStorage on mount
 	onMount(() => {
 		const storedCode = getStoredAccessCode();
 		if (storedCode) {
 			accessCode = storedCode;
+		}
+		const storedRefCode = getStoredReferralCode();
+		if (storedRefCode) {
+			referralCode = storedRefCode;
+			showReferralField = true;
 		}
 	});
 
@@ -35,7 +48,15 @@
 		if (storedCode) {
 			accessCode = storedCode;
 		}
+		const storedRefCode = getStoredReferralCode();
+		if (storedRefCode && !referralCode) {
+			referralCode = storedRefCode;
+			showReferralField = true;
+		}
 	}
+
+	// Validate referral code format
+	$: referralCodeValid = !referralCode || isValidReferralCodeFormat(referralCode);
 
 	async function handleClose() {
 		showAccessCodeModal.set(false);
@@ -80,12 +101,23 @@
 			// Request signature from wallet (works with both Dynamic and wagmi)
 			const signature = await signMessage(message);
 
-			// Register with backend
-			const result = await registerWallet($walletAddress, accessCode.trim(), signature, message);
+			// Register with backend (pass referral code if valid)
+			const refCode =
+				referralCode.trim() && isValidReferralCodeFormat(referralCode.trim())
+					? referralCode.trim().toLowerCase()
+					: undefined;
+			const result = await registerWallet(
+				$walletAddress,
+				accessCode.trim(),
+				signature,
+				message,
+				refCode
+			);
 
 			if (result.success) {
-				// Clear stored code after successful registration
+				// Clear stored codes after successful registration
 				clearStoredAccessCode();
+				clearStoredReferralCode();
 				handleClose();
 			} else {
 				error = result.error || 'Registration failed';
@@ -163,6 +195,36 @@
 					class="text-yellow-500 hover:underline">toby@st0x.io</a
 				>
 			</p>
+		</div>
+
+		<!-- Referral code input (collapsible) -->
+		<div class="space-y-2">
+			{#if showReferralField}
+				<label for="referral-code-modal" class="text-sm font-medium text-gray-300">
+					Referral Code <span class="text-gray-500">(optional)</span>
+				</label>
+				<input
+					id="referral-code-modal"
+					type="text"
+					bind:value={referralCode}
+					disabled={submitting}
+					placeholder="st0x-ref-xxxxxx"
+					class="w-full rounded-lg border px-3 py-2 lowercase text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {referralCodeValid
+						? 'border-gray-700 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
+						: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
+				/>
+				{#if !referralCodeValid}
+					<p class="text-xs text-red-400">Invalid referral code format</p>
+				{/if}
+			{:else}
+				<button
+					type="button"
+					on:click={() => (showReferralField = true)}
+					class="text-sm text-gray-400 hover:text-yellow-500"
+				>
+					+ Add referral code
+				</button>
+			{/if}
 		</div>
 
 		<Button
