@@ -213,6 +213,8 @@ export class RhinestoneClient {
 	private config: RhinestoneConfig;
 	// Store wallet client for authorization signing (needed for JSON-RPC accounts)
 	private walletClientCache: Map<string, WalletClient> = new Map();
+	// Cache EIP-7702 init signatures by account address (signature is valid across all chains)
+	private eip7702InitSignatureCache: Map<Address, Hex> = new Map();
 
 	constructor(config: RhinestoneConfig) {
 		this.config = config;
@@ -313,6 +315,53 @@ export class RhinestoneClient {
 	 */
 	isEIP7702Mode(): boolean {
 		return this.config.accountType === '7702';
+	}
+
+	/**
+	 * Get or sign EIP-7702 init signature for an account
+	 * 
+	 * The init signature is cached per account address since it's valid across all chains.
+	 * This prevents users from having to sign the init signature multiple times.
+	 * 
+	 * @param rhinestoneAccount - The Rhinestone account
+	 * @param walletAddress - The wallet address (used as cache key)
+	 * @returns The EIP-7702 init signature (cached or newly signed)
+	 */
+	private async getOrSignEip7702InitSignature(
+		rhinestoneAccount: RhinestoneAccount,
+		walletAddress: Address
+	): Promise<Hex> {
+		// Check cache first
+		const cached = this.eip7702InitSignatureCache.get(walletAddress);
+		if (cached && cached !== '0x') {
+			console.log('[Rhinestone Client] Using cached EIP-7702 init signature for account:', walletAddress);
+			return cached;
+		}
+
+		// Not cached, sign it
+		console.log('[Rhinestone Client] Signing EIP-7702 init data (not cached)...', {
+			accountAddress: walletAddress
+		});
+		
+		try {
+			const signature = await rhinestoneAccount.signEip7702InitData();
+			if (!signature || signature === '0x') {
+				throw new Error('signEip7702InitData returned empty signature');
+			}
+
+			// Cache the signature for future use
+			this.eip7702InitSignatureCache.set(walletAddress, signature);
+			console.log('[Rhinestone Client] EIP-7702 init signature signed and cached for account:', walletAddress);
+			
+			return signature;
+		} catch (signError) {
+			const msg = signError instanceof Error ? signError.message : String(signError);
+			throw new AAError(
+				`Failed to sign EIP-7702 initialization: ${msg}. Please try again.`,
+				AAErrorCode.AUTHORIZATION_REJECTED,
+				{ originalError: signError }
+			);
+		}
 	}
 
 	/**
@@ -853,24 +902,13 @@ async executeCrossChainSwap(
 	  const needsInit = (isEOA || this.config.accountType === '7702') && (!isDeployedOnSource || !isDeployedOnTarget);
 	  
 	  if (needsInit) {
-		try {
-		  console.log('[Rhinestone Client] Signing EIP-7702 init data for cross-chain transaction...', {
-			needsInitOnSource: !isDeployedOnSource,
-			needsInitOnTarget: !isDeployedOnTarget
-		  });
-		  eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-		  if (!eip7702InitSignature || eip7702InitSignature === '0x') {
-			throw new Error('signEip7702InitData returned empty signature');
-		  }
-		  console.log('[Rhinestone Client] EIP-7702 init signature obtained (valid for both chains)');
-		} catch (signError) {
-		  const msg = signError instanceof Error ? signError.message : String(signError);
-		  throw new AAError(
-			`Failed to sign EIP-7702 initialization: ${msg}. Please try again.`,
-			AAErrorCode.AUTHORIZATION_REJECTED,
-			{ originalError: signError }
-		  );
-		}
+		console.log('[Rhinestone Client] Getting EIP-7702 init signature for cross-chain transaction...', {
+		  needsInitOnSource: !isDeployedOnSource,
+		  needsInitOnTarget: !isDeployedOnTarget
+		});
+		// Use cached version - will sign only if not already cached
+		eip7702InitSignature = await this.getOrSignEip7702InitSignature(rhinestoneAccount, walletAccount.address);
+		console.log('[Rhinestone Client] EIP-7702 init signature obtained (valid for both chains)');
 	  } else {
 		console.log('[Rhinestone Client] Account already deployed on both chains, skipping init signature');
 	  }
@@ -1468,25 +1506,14 @@ async executeCrossChainSwap(
 				});
 
 				if (!isDeployed) {
-					// Sign the EIP-7702 init data for the first transaction
-					// This is REQUIRED for EOA accounts
+					// Get or sign the EIP-7702 init data (will use cache if available)
+					// This is REQUIRED for EOA accounts on first transaction per chain
 					console.log(
-						'[Rhinestone Client] Signing EIP-7702 init data for first omnichain transaction...'
+						'[Rhinestone Client] Getting EIP-7702 init signature for omnichain transaction...'
 					);
-					try {
-						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
-					} catch (signError) {
-						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
-
-						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage =
-							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
-
-						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
-							originalError: signError
-						});
-					}
+					// Use cached version - will sign only if not already cached
+					eip7702InitSignature = await this.getOrSignEip7702InitSignature(rhinestoneAccount, walletAccount.address);
+					console.log('[Rhinestone Client] EIP-7702 init signature obtained');
 				}
 			}
 
@@ -1695,21 +1722,10 @@ async executeCrossChainSwap(
 
 				// Get init signature if not deployed OR if SDK requires it despite existing account
 				if (!isDeployed || needsInitSignatureAnyway) {
-					console.log('[Rhinestone Client] Signing EIP-7702 init data for same-chain swap...');
-					try {
-						eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-						console.log('[Rhinestone Client] EIP-7702 init signature obtained');
-					} catch (signError) {
-						console.error('[Rhinestone Client] Failed to sign EIP-7702 init data:', signError);
-
-						const actualError = signError instanceof Error ? signError.message : String(signError);
-						const errorMessage =
-							`Failed to sign EIP-7702 initialization: ${actualError}. ` + 'Please try again.';
-
-						throw new AAError(errorMessage, AAErrorCode.AUTHORIZATION_REJECTED, {
-							originalError: signError
-						});
-					}
+					console.log('[Rhinestone Client] Getting EIP-7702 init signature for same-chain swap...');
+					// Use cached version - will sign only if not already cached
+					eip7702InitSignature = await this.getOrSignEip7702InitSignature(rhinestoneAccount, walletAccount.address);
+					console.log('[Rhinestone Client] EIP-7702 init signature obtained');
 				}
 			}
 
@@ -1941,20 +1957,41 @@ async executeCrossChainSwap(
 	  
 		  // EIP-7702 init signature (required by backend flow)
 		  let eip7702InitSignature: Hex | undefined;
-		  if (this.config.accountType === '7702') {
+		  const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
+		  
+		  if (isEOA || this.config.accountType === '7702') {
+			// Check if the account is already deployed/initialized on this chain
+			let isDeployed = false;
+			let needsInitSignatureAnyway = false;
 			try {
-			  console.log('[Rhinestone Client] Signing EIP-7702 init data for transaction...');
-			  eip7702InitSignature = await rhinestoneAccount.signEip7702InitData();
-			  if (!eip7702InitSignature || eip7702InitSignature === '0x') {
-				throw new Error('signEip7702InitData returned empty signature');
+			  isDeployed = await rhinestoneAccount.isDeployed(chain);
+			  console.log('[Rhinestone Client] Account deployed status:', {
+				isDeployed,
+				isEOA,
+				accountType: this.config.accountType,
+				rhinestoneAddress,
+				walletAddress: walletAccount.address
+			  });
+			} catch (deployedError) {
+			  const errorMsg = deployedError instanceof Error ? deployedError.message : String(deployedError);
+			  // If the error is about existing EIP-7702 accounts not being supported,
+			  // the SDK still requires the init signature for prepareTransaction
+			  // even though the account technically exists
+			  if (errorMsg.includes('Existing EIP-7702 accounts') || errorMsg.includes('ExistingEip7702AccountsNotSupported')) {
+				console.warn('[Rhinestone Client] Account appears to be already initialized with EIP-7702 (SDK limitation). Will still get init signature as SDK requires it.');
+				needsInitSignatureAnyway = true;
+			  } else {
+				// Re-throw other errors
+				throw deployedError;
 			  }
+			}
+			
+			// Get init signature if not deployed OR if SDK requires it despite existing account
+			if (!isDeployed || needsInitSignatureAnyway) {
+			  console.log('[Rhinestone Client] Getting EIP-7702 init signature for transaction...');
+			  // Use cached version - will sign only if not already cached
+			  eip7702InitSignature = await this.getOrSignEip7702InitSignature(rhinestoneAccount, walletAccount.address);
 			  console.log('[Rhinestone Client] EIP-7702 init signature obtained successfully');
-			} catch (e) {
-			  throw new AAError(
-				`Failed to sign EIP-7702 initialization: ${e instanceof Error ? e.message : String(e)}`,
-				AAErrorCode.AUTHORIZATION_REJECTED,
-				{ originalError: e }
-			  );
 			}
 		  }
 	  
