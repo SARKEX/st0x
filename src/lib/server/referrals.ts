@@ -252,7 +252,9 @@ export async function listAllReferralProfiles(): Promise<ReferralProfile[]> {
  * Kept for backwards compatibility but does nothing.
  */
 export async function linkReferredWallet(
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	_walletAddress: string,
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	_referralCode: string
 ): Promise<{ success: boolean; error?: string }> {
 	// No-op: referral linking now happens automatically via the access code system
@@ -525,6 +527,7 @@ export async function createReferralProfileForMigration(
 	referralCode: string,
 	nickname: string,
 	telegramHandle: string,
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	_migrateFromAccessCode?: string // Deprecated: no longer needed
 ): Promise<{
 	success: boolean;
