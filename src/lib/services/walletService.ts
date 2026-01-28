@@ -108,42 +108,41 @@ export async function sendTransaction(params: {
 				gasWithBuffer.toString()
 			);
 		} catch (gasError) {
-			// Log detailed error information
 			const errorMessage = (gasError as Error)?.message || String(gasError);
-			const errorCode = (gasError as { code?: number | string })?.code;
 			const errorDetails = (gasError as { details?: string })?.details;
-			const errorCause = (gasError as { cause?: unknown })?.cause;
+			const errorStr = (errorDetails || errorMessage).toLowerCase();
 
-			console.error('[walletService] Gas estimation failed:', {
-				error: gasError,
-				message: errorMessage,
-				code: errorCode,
-				details: errorDetails,
-				cause: errorCause,
-				to: params.to,
-				dataLength: params.data?.length,
-				fromAddress
-			});
+			// Check if it's an expected revert (e.g., allowance check before approval)
+			// These are normal during the transaction flow and not actual errors
+			const isExpectedRevert =
+				errorStr.includes('allowance') ||
+				errorStr.includes('exceeds balance') ||
+				errorStr.includes('insufficient');
 
-			// Check if it's a specific error type that suggests the transaction would revert
-			const errorStr = errorMessage.toLowerCase();
-			if (
+			const isSimulationRevert =
 				errorStr.includes('execution reverted') ||
 				errorStr.includes('revert') ||
-				errorStr.includes('invalid') ||
-				errorStr.includes('out of gas')
-			) {
-				console.warn(
-					'[walletService] Gas estimation failed due to transaction revert - this might indicate the transaction will fail. Using fallback gas limit anyway.'
-				);
+				errorStr.includes('out of gas');
+
+			if (isExpectedRevert) {
+				// Expected scenario - gas estimation runs before approval is confirmed
+				// This is normal, just use fallback gas limit
+				console.log('[walletService] Gas estimation skipped (pending approval), using fallback');
+			} else if (isSimulationRevert) {
+				// Simulation reverted for other reasons - log details but don't alarm
+				console.log('[walletService] Gas estimation reverted, using fallback:', errorDetails || errorMessage);
+			} else {
+				// Unexpected error - log more details for debugging
+				console.warn('[walletService] Gas estimation failed unexpectedly:', {
+					message: errorMessage,
+					details: errorDetails,
+					to: params.to
+				});
 			}
 
 			// Use fallback gas limit for complex transactions
 			// This is especially important for takeOrders which can fail estimation but need significant gas
 			gasWithBuffer = FALLBACK_GAS_LIMIT;
-			console.warn(
-				`[walletService] Using fallback gas limit: ${gasWithBuffer.toString()} (${FALLBACK_GAS_LIMIT.toString()} wei)`
-			);
 		}
 	} else {
 		// If we don't have config or address, use fallback
