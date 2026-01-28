@@ -69,11 +69,14 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000
 
 /**
  * Send a transaction using the appropriate wallet
+ * @param params.skipGasEstimation - Skip gas estimation and use fallback gas limit.
+ *   Useful for transactions where estimation may fail (e.g., takeOrders after approval)
  */
 export async function sendTransaction(params: {
 	to: `0x${string}`;
 	data?: Hex;
 	value?: bigint;
+	skipGasEstimation?: boolean;
 }): Promise<Hash> {
 	const method = get(authMethod);
 	const config = get(wagmiConfig);
@@ -86,7 +89,12 @@ export async function sendTransaction(params: {
 
 	// Estimate gas with buffer using wagmi (works for both wallet types)
 	let gasWithBuffer: bigint | undefined;
-	if (config && fromAddress) {
+
+	// Skip gas estimation if explicitly requested (e.g., for takeOrders after approval)
+	if (params.skipGasEstimation) {
+		gasWithBuffer = FALLBACK_GAS_LIMIT;
+		console.log('[walletService] Skipping gas estimation, using fallback:', gasWithBuffer.toString());
+	} else if (config && fromAddress) {
 		try {
 			console.log('[walletService] Attempting gas estimation', {
 				to: params.to,

@@ -1439,7 +1439,10 @@ const transactionStore = () => {
 
 				hash = await sendTransaction({
 					to: raindexOrder.orderbook.id as `0x${string}`,
-					data: calldata as Hex
+					data: calldata as Hex,
+					// Skip gas estimation - it may fail due to RPC lag after approval
+					// and shows confusing errors in the wallet. Use fallback gas limit instead.
+					skipGasEstimation: true
 				});
 
 				console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} transaction submitted`, {
