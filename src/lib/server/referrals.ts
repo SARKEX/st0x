@@ -2,6 +2,7 @@ import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { getKv, kvGet, kvSet, KV_KEYS, type MonthlyPointsData, type RewardsPoolConfig } from './kv';
 import { getExcludedWalletsSet } from './kv';
+import { getWalletInfo, type RegisteredWallet } from './accessCodes';
 
 // Create a public client for Base network for signature verification
 const basePublicClient = createPublicClient({
@@ -19,11 +20,8 @@ export interface ReferralProfile {
 	isActive: boolean; // Can be deactivated by admin
 }
 
-export interface ReferredWallet {
-	address: string; // The referred wallet
-	referralCode: string; // Code used during registration
-	referredAt: string; // When they were referred
-}
+// Note: ReferredWallet is no longer needed - we use RegisteredWallet from accessCodes.ts
+// which already tracks accessCode (= referralCode) for each wallet
 
 export interface ReferralPerformance {
 	walletsReferred: number;
@@ -51,8 +49,7 @@ export interface AdminReferralLeaderboardEntry extends ReferralLeaderboardEntry 
 const devStore = {
 	profiles: new Map<string, ReferralProfile>(),
 	codeToWallet: new Map<string, string>(),
-	codeWallets: new Map<string, string[]>(),
-	referredWallets: new Map<string, ReferredWallet>()
+	codeWallets: new Map<string, string[]>() // Shared with accessCodes system
 };
 
 // Generate a random referral code in format st0x-ref-xxxxxx
@@ -249,66 +246,27 @@ export async function listAllReferralProfiles(): Promise<ReferralProfile[]> {
 
 // === Referred Wallet Management ===
 
+/**
+ * @deprecated No longer needed - the access code used to register IS the referral link.
+ * Wallets are automatically linked to referrers via code_wallets in accessCodes system.
+ * Kept for backwards compatibility but does nothing.
+ */
 export async function linkReferredWallet(
-	walletAddress: string,
-	referralCode: string
+	_walletAddress: string,
+	_referralCode: string
 ): Promise<{ success: boolean; error?: string }> {
-	const normalizedWallet = walletAddress.toLowerCase();
-	const normalizedCode = referralCode.toLowerCase();
-
-	// Check if referral code exists
-	const referrerProfile = await getReferralProfileByCode(normalizedCode);
-	if (!referrerProfile) {
-		return { success: false, error: 'Invalid referral code' };
-	}
-
-	// Check if wallet is already referred
-	const existingReferral = await getReferredWallet(normalizedWallet);
-	if (existingReferral) {
-		return { success: false, error: 'Wallet already has a referrer' };
-	}
-
-	// Prevent self-referral
-	if (referrerProfile.walletAddress === normalizedWallet) {
-		return { success: false, error: 'Cannot refer yourself' };
-	}
-
-	const referredWallet: ReferredWallet = {
-		address: normalizedWallet,
-		referralCode: referrerProfile.referralCode, // Use the normalized code from profile
-		referredAt: new Date().toISOString()
-	};
-
-	const kv = await getKv();
-	if (kv) {
-		await kvSet(KV_KEYS.referredWallet(normalizedWallet), referredWallet);
-		// Add to the referrer's wallet list
-		const codeWallets =
-			(await kvGet<string[]>(KV_KEYS.referralCodeWallets(referrerProfile.referralCode))) || [];
-		if (!codeWallets.includes(normalizedWallet)) {
-			codeWallets.push(normalizedWallet);
-			await kvSet(KV_KEYS.referralCodeWallets(referrerProfile.referralCode), codeWallets);
-		}
-	} else {
-		devStore.referredWallets.set(normalizedWallet, referredWallet);
-		const existing = devStore.codeWallets.get(referrerProfile.referralCode.toLowerCase()) || [];
-		if (!existing.includes(normalizedWallet)) {
-			existing.push(normalizedWallet);
-			devStore.codeWallets.set(referrerProfile.referralCode.toLowerCase(), existing);
-		}
-	}
-
+	// No-op: referral linking now happens automatically via the access code system
+	// When a wallet registers with code X, they appear in code_wallets:{X}
+	// If someone has a ReferralProfile with that code, they get credit automatically
 	return { success: true };
 }
 
-export async function getReferredWallet(walletAddress: string): Promise<ReferredWallet | null> {
-	const normalizedWallet = walletAddress.toLowerCase();
-
-	const kv = await getKv();
-	if (kv) {
-		return await kvGet<ReferredWallet>(KV_KEYS.referredWallet(normalizedWallet));
-	}
-	return devStore.referredWallets.get(normalizedWallet) || null;
+/**
+ * Get wallet registration info - uses the single source of truth from accessCodes system.
+ * Returns RegisteredWallet which contains the accessCode (= referralCode) used to register.
+ */
+export async function getReferredWallet(walletAddress: string): Promise<RegisteredWallet | null> {
+	return await getWalletInfo(walletAddress);
 }
 
 export async function getWalletsReferredByCode(code: string): Promise<string[]> {
@@ -317,9 +275,15 @@ export async function getWalletsReferredByCode(code: string): Promise<string[]> 
 
 	const kv = await getKv();
 	if (kv) {
-		return (await kvGet<string[]>(KV_KEYS.referralCodeWallets(profile.referralCode))) || [];
+		// Use the single source of truth: code_wallets from accessCodes system
+		// Try both the exact code format and uppercase (for legacy ST0X-XXXX-XXXX codes)
+		const wallets =
+			(await kvGet<string[]>(KV_KEYS.codeWallets(profile.referralCode.toUpperCase()))) || [];
+
+		// Normalize to lowercase and deduplicate
+		return [...new Set(wallets.map((w) => w.toLowerCase()))];
 	}
-	return devStore.codeWallets.get(profile.referralCode.toLowerCase()) || [];
+	return devStore.codeWallets.get(profile.referralCode.toUpperCase()) || [];
 }
 
 // === Performance Calculation ===
@@ -549,12 +513,19 @@ export async function updateReferralNickname(
 
 // === Admin Migration ===
 
+/**
+ * Create a referral profile for a user (admin migration).
+ * The referralCode should match an existing access code - wallets registered with that
+ * code are automatically attributed to this referrer via the shared code_wallets system.
+ *
+ * @param migrateFromAccessCode - @deprecated No longer used, kept for API compatibility
+ */
 export async function createReferralProfileForMigration(
 	walletAddress: string,
 	referralCode: string,
 	nickname: string,
 	telegramHandle: string,
-	migrateFromAccessCode?: string
+	_migrateFromAccessCode?: string // Deprecated: no longer needed
 ): Promise<{ success: boolean; profile?: ReferralProfile; error?: string; migratedWallets?: number }> {
 	const normalizedWallet = walletAddress.toLowerCase();
 	const normalizedNickname = nickname.trim();
@@ -602,7 +573,6 @@ export async function createReferralProfileForMigration(
 	};
 
 	const kv = await getKv();
-	let migratedWallets = 0;
 
 	if (kv) {
 		await kvSet(KV_KEYS.referralProfile(normalizedWallet), profile);
@@ -614,42 +584,17 @@ export async function createReferralProfileForMigration(
 			allProfiles.push(normalizedWallet);
 			await kvSet(KV_KEYS.allReferralProfiles(), allProfiles);
 		}
-
-		// Migrate wallets from old access code system if specified
-		if (migrateFromAccessCode) {
-			const oldCodeWallets = (await kvGet<string[]>(KV_KEYS.codeWallets(migrateFromAccessCode.toUpperCase()))) || [];
-
-			for (const walletAddr of oldCodeWallets) {
-				const normalizedAddr = walletAddr.toLowerCase();
-
-				// Skip if wallet is already referred or is the referrer themselves
-				const existingReferral = await getReferredWallet(normalizedAddr);
-				if (existingReferral || normalizedAddr === normalizedWallet) continue;
-
-				// Create referred wallet record
-				const referredWallet: ReferredWallet = {
-					address: normalizedAddr,
-					referralCode: normalizedCode,
-					referredAt: new Date().toISOString()
-				};
-				await kvSet(KV_KEYS.referredWallet(normalizedAddr), referredWallet);
-				migratedWallets++;
-			}
-
-			// Copy the wallet list to new referral code wallets
-			if (oldCodeWallets.length > 0) {
-				const filteredWallets = oldCodeWallets
-					.map(w => w.toLowerCase())
-					.filter(w => w !== normalizedWallet);
-				await kvSet(KV_KEYS.referralCodeWallets(normalizedCode), filteredWallets);
-			}
-		}
 	} else {
 		devStore.profiles.set(normalizedWallet, profile);
 		devStore.codeToWallet.set(normalizedCode.toLowerCase(), normalizedWallet);
 	}
 
-	return { success: true, profile, migratedWallets };
+	// Count existing wallets for this code (from the single source of truth: code_wallets)
+	// No migration needed - wallets are already tracked in the access code system
+	const existingWallets = await kvGet<string[]>(KV_KEYS.codeWallets(normalizedCode.toUpperCase())) || [];
+	const walletCount = existingWallets.filter(w => w.toLowerCase() !== normalizedWallet).length;
+
+	return { success: true, profile, migratedWallets: walletCount };
 }
 
 // === Validation ===
