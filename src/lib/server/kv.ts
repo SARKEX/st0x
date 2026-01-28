@@ -84,7 +84,18 @@ export const KV_KEYS = {
 	teamWallets: () => 'rewards:team_wallets', // List of team wallet addresses
 	// Rewards pool configuration
 	rewardsPool: (month: string) => `rewards:pool:${month}`, // Rewards pool config (YYYY-MM)
-	rewardsPoolList: () => 'rewards:pool:__all__' // List of all months with pool config
+	rewardsPoolList: () => 'rewards:pool:__all__', // List of all months with pool config
+	// Referral programme keys
+	referralProfile: (wallet: string) => `referral_profiles:${wallet.toLowerCase()}`,
+	referralCodeToWallet: (code: string) => `referral_codes:${code.toLowerCase()}`,
+	allReferralProfiles: () => 'referral_profiles:__all__',
+	// DEPRECATED: These keys are no longer used - we use the access code system's keys instead:
+	// - referralCodeWallets -> use codeWallets (wallets are tracked per access code)
+	// - referredWallet -> use wallet (RegisteredWallet already stores accessCode)
+	/** @deprecated Use codeWallets instead */
+	referralCodeWallets: (code: string) => `referral_code_wallets:${code.toLowerCase()}`,
+	/** @deprecated Use wallet instead - RegisteredWallet.accessCode tracks the referrer */
+	referredWallet: (address: string) => `referred_wallets:${address.toLowerCase()}`
 } as const;
 
 // Types for snapshot block records

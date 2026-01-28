@@ -4,6 +4,7 @@ import { processRegistration } from '$lib/server/accessCodes';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
 import { cacheDelete } from '$lib/server/cache';
+import { linkReferredWallet, isValidReferralCode } from '$lib/server/referrals';
 
 export const POST: RequestHandler = async ({ request }) => {
 	// Rate limiting - uses STRICT mode (fail-closed with in-memory fallback)
@@ -14,7 +15,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const audit = createAuditLogger(request);
 
 	try {
-		const { address, code, signature, message } = await request.json();
+		const { address, code, signature, message, referralCode } = await request.json();
 
 		// Validate required fields
 		if (!address || typeof address !== 'string') {
@@ -43,16 +44,37 @@ export const POST: RequestHandler = async ({ request }) => {
 			// Invalidate the access check cache for this wallet
 			await cacheDelete(`cache:access:check:${address.toLowerCase()}`);
 
+			// Link referral code if provided (isolated try/catch to not break registration)
+			let referralLinked = false;
+			if (referralCode && typeof referralCode === 'string' && isValidReferralCode(referralCode)) {
+				try {
+					const linkResult = await linkReferredWallet(address, referralCode);
+					if (linkResult.success) {
+						referralLinked = true;
+						await audit.logSuccess(
+							'REFERRAL_LINK',
+							{ referralCode: referralCode.toLowerCase() },
+							{ walletAddress: address }
+						);
+					} else {
+						console.warn('[Register] Failed to link referral:', linkResult.error);
+					}
+				} catch (err) {
+					console.warn('[Register] Referral linking error:', err, { referralCode, address });
+				}
+			}
+
 			// Audit log successful registration
 			await audit.logSuccess(
 				'WALLET_REGISTRATION',
-				{ code: code.toUpperCase() },
+				{ code: code.toUpperCase(), referralCode: referralCode || null },
 				{ walletAddress: address }
 			);
 
 			return json({
 				success: true,
-				registeredAt: result.wallet?.registeredAt
+				registeredAt: result.wallet?.registeredAt,
+				referralLinked
 			});
 		}
 

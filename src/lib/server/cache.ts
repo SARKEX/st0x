@@ -171,7 +171,10 @@ export const CACHE_KEYS = {
 	// Pre-computed shared data for user rewards (rankings with wallets lookup)
 	rewardsUserSharedData: () => 'cache:rewards:user-shared-data',
 	// Pre-computed global rewards data (no wallet lookup needed)
-	rewardsGlobalData: () => 'cache:rewards:global-data'
+	rewardsGlobalData: () => 'cache:rewards:global-data',
+	// Referral programme cache keys
+	referralAdminLeaderboard: (month: string) => `cache:referral:admin-leaderboard:${month}`,
+	referralPublicLeaderboard: () => 'cache:referral:public-leaderboard'
 } as const;
 
 // TTL constants (in seconds)

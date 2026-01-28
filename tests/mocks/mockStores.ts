@@ -15,4 +15,4 @@ export const mockWagmiConfigStore = writable<Config>(mockWeb3Config);
 export const mockWalletAddressStore = writable<string | null>(null);
 
 // Mock for authStore's authMethod
-export const mockAuthMethodStore = writable<'wallet' | 'privy' | null>('wallet');
+export const mockAuthMethodStore = writable<'wallet' | 'dynamic' | 'none'>('wallet');

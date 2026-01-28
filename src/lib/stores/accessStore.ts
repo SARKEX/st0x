@@ -100,13 +100,14 @@ Access Code: ${code}
 Timestamp: ${Date.now()}`;
 }
 
-// Register wallet with access code
+// Register wallet with access code (and optional referral code)
 export async function registerWallet(
 	address: string,
 	code: string,
 	signature: string,
-	message: string
-): Promise<{ success: boolean; error?: string }> {
+	message: string,
+	referralCode?: string
+): Promise<{ success: boolean; error?: string; referralLinked?: boolean }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
 
 	try {
@@ -117,14 +118,15 @@ export async function registerWallet(
 				address,
 				code,
 				signature,
-				message
+				message,
+				referralCode: referralCode || undefined
 			})
 		});
 		const data = await res.json();
 
 		if (data.success) {
 			walletRegistered.set(true);
-			return { success: true };
+			return { success: true, referralLinked: data.referralLinked };
 		}
 
 		return { success: false, error: data.error || 'Registration failed' };
