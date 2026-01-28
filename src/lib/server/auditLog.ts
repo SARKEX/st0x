@@ -26,7 +26,11 @@ export type AuditEventType =
 	| 'ACCESS_DENIED'
 	| 'REFERRAL_JOIN'
 	| 'REFERRAL_LINK'
-	| 'REFERRAL_CACHE_REFRESH';
+	| 'REFERRAL_CACHE_REFRESH'
+	| 'REFERRAL_UPDATE'
+	| 'REFERRAL_UPDATE_FAILED'
+	| 'REFERRAL_MIGRATION'
+	| 'REFERRAL_MIGRATION_FAILED';
 
 export interface AuditLogEntry {
 	id: string;

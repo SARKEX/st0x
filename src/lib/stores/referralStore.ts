@@ -156,6 +156,58 @@ export function resetReferralState(): void {
 	referralUserPosition.set(null);
 }
 
+// Update referral nickname
+export async function updateReferralNickname(
+	walletAddress: string,
+	newNickname: string,
+	signature: string,
+	message: string
+): Promise<{ success: boolean; error?: string }> {
+	if (!browser) return { success: false, error: 'Not in browser' };
+
+	try {
+		const response = await fetch('/api/referrals/profile/update', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				walletAddress,
+				nickname: newNickname,
+				signature,
+				message
+			})
+		});
+
+		const data = await response.json();
+
+		if (data.success) {
+			// Update the local profile store
+			referralProfile.update((profile) => {
+				if (profile) {
+					return { ...profile, nickname: newNickname };
+				}
+				return profile;
+			});
+			return { success: true };
+		}
+
+		return { success: false, error: data.error || 'Failed to update nickname' };
+	} catch (err) {
+		return {
+			success: false,
+			error: err instanceof Error ? err.message : 'Network error'
+		};
+	}
+}
+
+// Create message for signing nickname update
+export function createNicknameUpdateSignMessage(address: string, newNickname: string): string {
+	return `Sign to update your st0x referral nickname.
+
+Wallet: ${address}
+New Nickname: ${newNickname}
+Timestamp: ${Date.now()}`;
+}
+
 // Create the message for signing to join the programme
 export function createReferralSignMessage(address: string): string {
 	return `Sign to join the st0x referral programme.

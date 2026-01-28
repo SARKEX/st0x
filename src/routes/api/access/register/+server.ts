@@ -44,20 +44,23 @@ export const POST: RequestHandler = async ({ request }) => {
 			// Invalidate the access check cache for this wallet
 			await cacheDelete(`cache:access:check:${address.toLowerCase()}`);
 
-			// Link referral code if provided
+			// Link referral code if provided (isolated try/catch to not break registration)
 			let referralLinked = false;
 			if (referralCode && typeof referralCode === 'string' && isValidReferralCode(referralCode)) {
-				const linkResult = await linkReferredWallet(address, referralCode);
-				if (linkResult.success) {
-					referralLinked = true;
-					await audit.logSuccess(
-						'REFERRAL_LINK',
-						{ referralCode: referralCode.toLowerCase() },
-						{ walletAddress: address }
-					);
-				} else {
-					// Log failure but don't fail the registration
-					console.warn('[Register] Failed to link referral:', linkResult.error);
+				try {
+					const linkResult = await linkReferredWallet(address, referralCode);
+					if (linkResult.success) {
+						referralLinked = true;
+						await audit.logSuccess(
+							'REFERRAL_LINK',
+							{ referralCode: referralCode.toLowerCase() },
+							{ walletAddress: address }
+						);
+					} else {
+						console.warn('[Register] Failed to link referral:', linkResult.error);
+					}
+				} catch (err) {
+					console.warn('[Register] Referral linking error:', err, { referralCode, address });
 				}
 			}
 

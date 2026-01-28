@@ -6,9 +6,15 @@
 		showReferralDashboardModal,
 		showReferralLeaderboardModal,
 		getShareUrl,
-		copyToClipboard
+		copyToClipboard,
+		updateReferralNickname,
+		createNicknameUpdateSignMessage
 	} from '$lib/stores/referralStore';
+	import { walletAddress } from '$lib/stores/authStore';
+	import { signMessage } from '$lib/services/walletService';
 	import { formatPoints, formatUsd } from '$lib/stores/rewardsStore';
+	import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
+	import { wagmiConfig } from 'svelte-wagmi';
 	import ModalTabs from '$lib/components/ui/ModalTabs.svelte';
 
 	const tabs = [
@@ -26,9 +32,76 @@
 	let codeCopied = false;
 	let linkCopied = false;
 
+	// Nickname editing state
+	let isEditingNickname = false;
+	let newNickname = '';
+	let nicknameError = '';
+	let nicknameSaving = false;
+
+	function validateNickname(name: string): boolean {
+		const pattern = /^[a-zA-Z0-9_]{3,20}$/;
+		return pattern.test(name);
+	}
+
+	$: nicknameValid = !newNickname || validateNickname(newNickname);
+
+	function startEditingNickname() {
+		newNickname = $referralProfile?.nickname || '';
+		nicknameError = '';
+		isEditingNickname = true;
+	}
+
+	function cancelEditingNickname() {
+		isEditingNickname = false;
+		newNickname = '';
+		nicknameError = '';
+	}
+
+	function getErrorMessage(err: unknown): string {
+		if (isStaleWalletSessionError(err)) {
+			return 'Wallet session expired. Please reconnect.';
+		}
+		if (err instanceof Error) {
+			if (err.message.includes('rejected') || err.message.includes('denied')) {
+				return 'Signature request was rejected';
+			}
+			return err.message;
+		}
+		return 'An unexpected error occurred';
+	}
+
+	async function saveNickname() {
+		const trimmedNickname = newNickname.trim();
+		if (!$walletAddress || !trimmedNickname || !validateNickname(trimmedNickname)) return;
+
+		nicknameSaving = true;
+		nicknameError = '';
+
+		try {
+			const message = createNicknameUpdateSignMessage($walletAddress, trimmedNickname);
+			const signature = await signMessage(message);
+			const result = await updateReferralNickname($walletAddress, trimmedNickname, signature, message);
+
+			if (result.success) {
+				isEditingNickname = false;
+				newNickname = '';
+			} else {
+				nicknameError = result.error || 'Failed to update nickname';
+			}
+		} catch (err) {
+			nicknameError = getErrorMessage(err);
+			if (isStaleWalletSessionError(err)) {
+				await handleStaleWalletSession($wagmiConfig);
+			}
+		} finally {
+			nicknameSaving = false;
+		}
+	}
+
 	function closeModal() {
 		showReferralDashboardModal.set(false);
 		activeTab = 'dashboard'; // Reset to dashboard tab on close
+		cancelEditingNickname(); // Reset editing state
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -164,9 +237,70 @@
 					<div class="space-y-6">
 						<!-- Profile Info -->
 						<div class="rounded-lg bg-gray-700/50 p-4">
-							<div class="mb-3 flex items-center justify-between">
-								<span class="text-sm text-gray-400">Welcome,</span>
-								<span class="font-medium text-white">{$referralProfile.nickname}</span>
+							<div class="mb-3">
+								{#if isEditingNickname}
+									<!-- Editing nickname -->
+									<div class="space-y-2">
+										<div class="flex items-center gap-2">
+											<input
+												type="text"
+												bind:value={newNickname}
+												disabled={nicknameSaving}
+												placeholder="New nickname"
+												class="flex-1 rounded-lg border px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {nicknameValid
+													? 'border-gray-600 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
+													: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
+											/>
+											<button
+												on:click={saveNickname}
+												disabled={nicknameSaving || !nicknameValid || !newNickname.trim()}
+												class="rounded-lg bg-yellow-500 p-1.5 text-black transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50"
+												title="Save"
+											>
+												{#if nicknameSaving}
+													<span class="block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"></span>
+												{:else}
+													<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+													</svg>
+												{/if}
+											</button>
+											<button
+												on:click={cancelEditingNickname}
+												disabled={nicknameSaving}
+												class="rounded-lg bg-gray-600 p-1.5 text-gray-300 transition-colors hover:bg-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
+												title="Cancel"
+											>
+												<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+												</svg>
+											</button>
+										</div>
+										{#if !nicknameValid && newNickname}
+											<p class="text-xs text-red-400">3-20 characters, letters, numbers, and underscores only</p>
+										{/if}
+										{#if nicknameError}
+											<p class="text-xs text-red-400">{nicknameError}</p>
+										{/if}
+									</div>
+								{:else}
+									<!-- Display nickname -->
+									<div class="flex items-center justify-between">
+										<span class="text-sm text-gray-400">Welcome,</span>
+										<div class="flex items-center gap-2">
+											<span class="font-medium text-white">{$referralProfile.nickname}</span>
+											<button
+												on:click={startEditingNickname}
+												class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-600 hover:text-white"
+												title="Edit nickname"
+											>
+												<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+												</svg>
+											</button>
+										</div>
+									</div>
+								{/if}
 							</div>
 
 							<!-- Referral Code -->

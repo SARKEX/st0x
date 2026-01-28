@@ -151,6 +151,11 @@ export async function createReferralProfile(
 		attempts++;
 	}
 
+	// Verify the final code is unique
+	if (await getReferralProfileByCode(referralCode)) {
+		return { success: false, error: 'Failed to generate unique referral code. Please try again.' };
+	}
+
 	const profile: ReferralProfile = {
 		walletAddress: normalizedWallet,
 		referralCode,
@@ -361,10 +366,19 @@ export async function calculateReferralPerformance(
 	}
 
 	// Sum points from referred wallets
+	// Note: referredWallets are lowercase, but monthlyData.wallets keys may be mixed case
 	let referralTotalPoints = 0;
 	for (const wallet of referredWallets) {
-		const walletData = monthlyData.wallets[wallet];
-		if (walletData && !excludedSet.has(wallet)) {
+		const normalizedWallet = wallet.toLowerCase();
+		// Try exact match first, then case-insensitive lookup
+		const walletData =
+			monthlyData.wallets[wallet] ||
+			monthlyData.wallets[normalizedWallet] ||
+			Object.entries(monthlyData.wallets).find(
+				([addr]) => addr.toLowerCase() === normalizedWallet
+			)?.[1];
+
+		if (walletData && !excludedSet.has(normalizedWallet)) {
 			referralTotalPoints += walletData.totalPoints;
 		}
 	}
@@ -484,6 +498,158 @@ export async function buildAdminReferralLeaderboard(
 	});
 
 	return entries;
+}
+
+// === Profile Updates ===
+
+export async function updateReferralNickname(
+	walletAddress: string,
+	newNickname: string
+): Promise<{ success: boolean; profile?: ReferralProfile; error?: string }> {
+	const normalizedWallet = walletAddress.toLowerCase();
+	const normalizedNickname = newNickname.trim();
+
+	// Validate nickname format
+	if (!isValidNickname(normalizedNickname)) {
+		return {
+			success: false,
+			error: 'Nickname must be 3-20 characters (letters, numbers, underscores)'
+		};
+	}
+
+	// Get existing profile
+	const profile = await getReferralProfile(normalizedWallet);
+	if (!profile) {
+		return { success: false, error: 'No referral profile found' };
+	}
+
+	// If nickname unchanged, return success
+	if (profile.nickname.toLowerCase() === normalizedNickname.toLowerCase()) {
+		return { success: true, profile };
+	}
+
+	// Check if new nickname is already taken by someone else
+	const nicknameTaken = await isNicknameTaken(normalizedNickname);
+	if (nicknameTaken) {
+		return { success: false, error: 'This nickname is already taken' };
+	}
+
+	// Update the profile
+	profile.nickname = normalizedNickname;
+
+	const kv = await getKv();
+	if (kv) {
+		await kvSet(KV_KEYS.referralProfile(normalizedWallet), profile);
+	} else {
+		devStore.profiles.set(normalizedWallet, profile);
+	}
+
+	return { success: true, profile };
+}
+
+// === Admin Migration ===
+
+export async function createReferralProfileForMigration(
+	walletAddress: string,
+	referralCode: string,
+	nickname: string,
+	telegramHandle: string,
+	migrateFromAccessCode?: string
+): Promise<{ success: boolean; profile?: ReferralProfile; error?: string; migratedWallets?: number }> {
+	const normalizedWallet = walletAddress.toLowerCase();
+	const normalizedNickname = nickname.trim();
+	const normalizedTelegram = telegramHandle.trim();
+	// Preserve original code format (don't force lowercase for legacy codes)
+	const normalizedCode = referralCode.trim();
+
+	// Validate inputs (but NOT code format - allow legacy formats)
+	if (!isValidNickname(normalizedNickname)) {
+		return {
+			success: false,
+			error: 'Nickname must be 3-20 characters (letters, numbers, underscores)'
+		};
+	}
+
+	if (!isValidTelegramHandle(normalizedTelegram)) {
+		return { success: false, error: 'Invalid Telegram handle format (e.g., @username)' };
+	}
+
+	// Check if wallet already has a referral profile
+	const existingProfile = await getReferralProfile(normalizedWallet);
+	if (existingProfile) {
+		return { success: false, error: 'Wallet already has a referral profile' };
+	}
+
+	// Check if referral code is already in use
+	const existingCodeProfile = await getReferralProfileByCode(normalizedCode);
+	if (existingCodeProfile) {
+		return { success: false, error: 'Referral code is already in use' };
+	}
+
+	// Check if nickname is already taken
+	const nicknameTaken = await isNicknameTaken(normalizedNickname);
+	if (nicknameTaken) {
+		return { success: false, error: 'This nickname is already taken' };
+	}
+
+	const profile: ReferralProfile = {
+		walletAddress: normalizedWallet,
+		referralCode: normalizedCode,
+		nickname: normalizedNickname,
+		telegramHandle: normalizedTelegram,
+		createdAt: new Date().toISOString(),
+		isActive: true
+	};
+
+	const kv = await getKv();
+	let migratedWallets = 0;
+
+	if (kv) {
+		await kvSet(KV_KEYS.referralProfile(normalizedWallet), profile);
+		await kvSet(KV_KEYS.referralCodeToWallet(normalizedCode.toLowerCase()), normalizedWallet);
+
+		// Add to list of all profiles
+		const allProfiles = (await kvGet<string[]>(KV_KEYS.allReferralProfiles())) || [];
+		if (!allProfiles.includes(normalizedWallet)) {
+			allProfiles.push(normalizedWallet);
+			await kvSet(KV_KEYS.allReferralProfiles(), allProfiles);
+		}
+
+		// Migrate wallets from old access code system if specified
+		if (migrateFromAccessCode) {
+			const oldCodeWallets = (await kvGet<string[]>(KV_KEYS.codeWallets(migrateFromAccessCode.toUpperCase()))) || [];
+
+			for (const walletAddr of oldCodeWallets) {
+				const normalizedAddr = walletAddr.toLowerCase();
+
+				// Skip if wallet is already referred or is the referrer themselves
+				const existingReferral = await getReferredWallet(normalizedAddr);
+				if (existingReferral || normalizedAddr === normalizedWallet) continue;
+
+				// Create referred wallet record
+				const referredWallet: ReferredWallet = {
+					address: normalizedAddr,
+					referralCode: normalizedCode,
+					referredAt: new Date().toISOString()
+				};
+				await kvSet(KV_KEYS.referredWallet(normalizedAddr), referredWallet);
+				migratedWallets++;
+			}
+
+			// Copy the wallet list to new referral code wallets
+			if (oldCodeWallets.length > 0) {
+				const filteredWallets = oldCodeWallets
+					.map(w => w.toLowerCase())
+					.filter(w => w !== normalizedWallet);
+				await kvSet(KV_KEYS.referralCodeWallets(normalizedCode), filteredWallets);
+			}
+		}
+	} else {
+		devStore.profiles.set(normalizedWallet, profile);
+		devStore.codeToWallet.set(normalizedCode.toLowerCase(), normalizedWallet);
+	}
+
+	return { success: true, profile, migratedWallets };
 }
 
 // === Validation ===

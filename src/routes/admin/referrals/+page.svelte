@@ -27,6 +27,17 @@
 	let lastGenerated = '';
 	let copiedAddress = '';
 
+	// Add referrer form state
+	let showAddForm = false;
+	let addFormLoading = false;
+	let addFormError = '';
+	let addFormSuccess = '';
+	let formWalletAddress = '';
+	let formReferralCode = '';
+	let formNickname = '';
+	let formTelegramHandle = '';
+	let formMigrateFromCode = '';
+
 	async function copyAddress(address: string) {
 		try {
 			await navigator.clipboard.writeText(address);
@@ -58,13 +69,13 @@
 		);
 	});
 
-	// Generate month options (last 12 months)
+	// Generate month options (last 12 months) - use UTC to match server
 	function generateMonthOptions(): string[] {
 		const months: string[] = [];
 		const now = new Date();
 		for (let i = 0; i < 12; i++) {
-			const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-			const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+			const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+			const month = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 			months.push(month);
 		}
 		return months;
@@ -72,7 +83,7 @@
 
 	function getCurrentMonth(): string {
 		const now = new Date();
-		return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+		return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 	}
 
 	function formatMonth(monthStr: string): string {
@@ -152,6 +163,74 @@
 		}
 	}
 
+	function resetAddForm() {
+		formWalletAddress = '';
+		formReferralCode = '';
+		formNickname = '';
+		formTelegramHandle = '';
+		formMigrateFromCode = '';
+		addFormError = '';
+		addFormSuccess = '';
+	}
+
+	async function handleAddReferrer() {
+		addFormLoading = true;
+		addFormError = '';
+		addFormSuccess = '';
+
+		try {
+			const res = await fetch('/api/admin/referral-programme/migrate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					walletAddress: formWalletAddress.trim(),
+					referralCode: formReferralCode.trim(),
+					nickname: formNickname.trim(),
+					telegramHandle: formTelegramHandle.trim(),
+					migrateFromAccessCode: formMigrateFromCode.trim() || undefined
+				})
+			});
+
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to add referrer');
+			}
+
+			const migratedMsg = data.migratedWallets
+				? ` Migrated ${data.migratedWallets} wallet(s).`
+				: '';
+			const successMsg = `Referrer added successfully!${migratedMsg}`;
+			resetAddForm();
+			addFormSuccess = successMsg;
+
+			// Refresh the leaderboard
+			await refreshCache();
+		} catch (err) {
+			addFormError = err instanceof Error ? err.message : 'Unknown error';
+		} finally {
+			addFormLoading = false;
+		}
+	}
+
+	$: isAddFormValid =
+		formWalletAddress.trim() &&
+		/^0x[a-fA-F0-9]{40}$/.test(formWalletAddress.trim()) &&
+		formReferralCode.trim() &&
+		formNickname.trim() &&
+		/^[a-zA-Z0-9_]{3,20}$/.test(formNickname.trim()) &&
+		formTelegramHandle.trim() &&
+		/^@[a-zA-Z][a-zA-Z0-9_]{3,30}$/.test(formTelegramHandle.trim());
+
+	function escapeCsvField(value: unknown): string {
+		const str = value == null ? '' : String(value);
+		// Escape fields containing commas, quotes, or newlines
+		if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+			return '"' + str.replace(/"/g, '""') + '"';
+		}
+		return str;
+	}
+
 	function exportCsv() {
 		if (leaderboard.length === 0) return;
 
@@ -169,19 +248,21 @@
 			'Joined'
 		];
 
-		const rows = leaderboard.map((entry) => [
-			entry.rank,
-			entry.nickname,
-			entry.referralCode,
-			entry.telegramHandle,
-			entry.walletAddress,
-			entry.walletsReferred,
-			entry.totalPoints.toFixed(0),
-			calcTvlBoost(entry.totalPoints, snapshotCount).toFixed(2),
-			(entry.projectedRewards * 2).toFixed(2),
-			entry.projectedRewards.toFixed(2),
-			new Date(entry.createdAt).toLocaleDateString()
-		]);
+		const rows = leaderboard.map((entry) =>
+			[
+				entry.rank,
+				entry.nickname,
+				entry.referralCode,
+				entry.telegramHandle,
+				entry.walletAddress,
+				entry.walletsReferred,
+				entry.totalPoints.toFixed(0),
+				calcTvlBoost(entry.totalPoints, snapshotCount).toFixed(2),
+				(entry.projectedRewards * 2).toFixed(2),
+				entry.projectedRewards.toFixed(2),
+				new Date(entry.createdAt).toLocaleDateString()
+			].map(escapeCsvField)
+		);
 
 		const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
@@ -212,10 +293,9 @@
 
 	onMount(() => {
 		availableMonths = generateMonthOptions();
-		fetchLeaderboard();
 	});
 
-	// Refetch when month changes
+	// Fetch when month changes (also triggers on initial mount since selectedMonth is initialized)
 	$: if (selectedMonth) {
 		fetchLeaderboard();
 	}
@@ -228,7 +308,113 @@
 			<h1 class="text-2xl font-bold text-white">Referral Programme</h1>
 			<p class="mt-1 text-sm text-gray-400">Manage and view referral programme statistics</p>
 		</div>
+		<Button on:click={() => (showAddForm = !showAddForm)} variant="primary">
+			{#if showAddForm}
+				Cancel
+			{:else}
+				<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+				</svg>
+				Add Referrer
+			{/if}
+		</Button>
 	</div>
+
+	<!-- Add Referrer Form -->
+	{#if showAddForm}
+		<Card>
+			<h3 class="mb-4 text-lg font-semibold text-white">Add / Migrate Referrer</h3>
+
+			{#if addFormError}
+				<div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+					{addFormError}
+				</div>
+			{/if}
+
+			{#if addFormSuccess}
+				<div class="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-400">
+					{addFormSuccess}
+				</div>
+			{/if}
+
+			<div class="grid gap-4 md:grid-cols-2">
+				<div>
+					<label for="wallet-address" class="mb-1 block text-sm text-gray-400">Wallet Address *</label>
+					<input
+						id="wallet-address"
+						type="text"
+						bind:value={formWalletAddress}
+						placeholder="0x..."
+						disabled={addFormLoading}
+						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none disabled:opacity-50"
+					/>
+				</div>
+
+				<div>
+					<label for="referral-code" class="mb-1 block text-sm text-gray-400">Referral Code *</label>
+					<input
+						id="referral-code"
+						type="text"
+						bind:value={formReferralCode}
+						placeholder="ST0X-XXXX-XXXX or st0x-ref-xxxxxx"
+						disabled={addFormLoading}
+						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none disabled:opacity-50"
+					/>
+				</div>
+
+				<div>
+					<label for="nickname" class="mb-1 block text-sm text-gray-400">Nickname * <span class="text-gray-500">(3-20 chars, alphanumeric)</span></label>
+					<input
+						id="nickname"
+						type="text"
+						bind:value={formNickname}
+						placeholder="LeaderboardName"
+						disabled={addFormLoading}
+						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none disabled:opacity-50"
+					/>
+				</div>
+
+				<div>
+					<label for="telegram" class="mb-1 block text-sm text-gray-400">Telegram Handle *</label>
+					<input
+						id="telegram"
+						type="text"
+						bind:value={formTelegramHandle}
+						placeholder="@username"
+						disabled={addFormLoading}
+						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none disabled:opacity-50"
+					/>
+				</div>
+
+				<div class="md:col-span-2">
+					<label for="migrate-code" class="mb-1 block text-sm text-gray-400">
+						Migrate from Access Code <span class="text-gray-500">(optional - copies existing referred wallets)</span>
+					</label>
+					<input
+						id="migrate-code"
+						type="text"
+						bind:value={formMigrateFromCode}
+						placeholder="ST0X-XXXX-XXXX"
+						disabled={addFormLoading}
+						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none disabled:opacity-50"
+					/>
+				</div>
+			</div>
+
+			<div class="mt-4 flex justify-end">
+				<Button on:click={handleAddReferrer} variant="primary" disabled={!isAddFormValid || addFormLoading}>
+					{#if addFormLoading}
+						<span class="flex items-center gap-2">
+							<span class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+							Adding...
+						</span>
+					{:else}
+						Add Referrer
+					{/if}
+				</Button>
+			</div>
+		</Card>
+	{/if}
 
 	<!-- Controls -->
 	<Card>
