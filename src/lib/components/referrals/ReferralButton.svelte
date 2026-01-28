@@ -59,7 +59,10 @@
 			on:click={handleClick}
 			on:mouseenter={() => (showTooltip = true)}
 			on:mouseleave={() => (showTooltip = false)}
+			on:focus={() => (showTooltip = true)}
+			on:blur={() => (showTooltip = false)}
 			class="referral-button group relative flex h-10 min-w-[200px] items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-all"
+			aria-label={$referralProfile ? 'Open referral dashboard' : 'Join referral programme'}
 		>
 			<!-- Animated gradient border -->
 			<span class="referral-border pointer-events-none"></span>
@@ -284,6 +287,17 @@
 		50% {
 			opacity: 1;
 			transform: scale(1.4);
+		}
+	}
+
+	/* Respect reduced motion preferences */
+	@media (prefers-reduced-motion: reduce) {
+		.referral-border,
+		.referral-shimmer,
+		.join-badge,
+		.icon-glow,
+		.referral-button::before {
+			animation: none;
 		}
 	}
 </style>

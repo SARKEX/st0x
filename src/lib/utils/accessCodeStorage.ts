@@ -69,17 +69,20 @@ export function checkAndStoreAccessCodeFromUrl(): string | null {
 		// Check both utm_campaign and ref params for access codes
 		const code = urlParams.get('utm_campaign') || urlParams.get('ref');
 
+		let normalizedAccessCode: string | null = null;
 		if (code && isValidAccessCodeFormat(code)) {
 			const normalized = code.trim().toUpperCase();
 			storeAccessCode(normalized);
-			return normalized;
+			normalizedAccessCode = normalized;
 		}
 
-		// Also check for referral code in ref param
+		// Also check for referral code in ref param (check even if access code was found)
 		const refCode = urlParams.get('ref');
 		if (refCode && isValidReferralCodeFormat(refCode)) {
 			storeReferralCode(refCode.toLowerCase());
 		}
+
+		return normalizedAccessCode;
 	} catch {
 		// Ignore errors
 	}

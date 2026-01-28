@@ -80,7 +80,12 @@
 		try {
 			const message = createNicknameUpdateSignMessage($walletAddress, trimmedNickname);
 			const signature = await signMessage(message);
-			const result = await updateReferralNickname($walletAddress, trimmedNickname, signature, message);
+			const result = await updateReferralNickname(
+				$walletAddress,
+				trimmedNickname,
+				signature,
+				message
+			);
 
 			if (result.success) {
 				isEditingNickname = false;
@@ -146,9 +151,15 @@
 	<div
 		class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
 		on:click={closeModal}
-		on:keydown={(e) => e.key === 'Enter' && closeModal()}
+		on:keydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				closeModal();
+			}
+		}}
 		role="button"
 		tabindex="0"
+		aria-label="Close modal"
 	/>
 
 	<!-- Modal -->
@@ -170,6 +181,7 @@
 				<button
 					on:click={closeModal}
 					class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+					aria-label="Close"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -258,10 +270,22 @@
 												title="Save"
 											>
 												{#if nicknameSaving}
-													<span class="block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"></span>
+													<span
+														class="block h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"
+													></span>
 												{:else}
-													<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+													<svg
+														class="h-4 w-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M5 13l4 4L19 7"
+														/>
 													</svg>
 												{/if}
 											</button>
@@ -272,12 +296,19 @@
 												title="Cancel"
 											>
 												<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M6 18L18 6M6 6l12 12"
+													/>
 												</svg>
 											</button>
 										</div>
 										{#if !nicknameValid && newNickname}
-											<p class="text-xs text-red-400">3-20 characters, letters, numbers, and underscores only</p>
+											<p class="text-xs text-red-400">
+												3-20 characters, letters, numbers, and underscores only
+											</p>
 										{/if}
 										{#if nicknameError}
 											<p class="text-xs text-red-400">{nicknameError}</p>
@@ -294,8 +325,18 @@
 												class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-600 hover:text-white"
 												title="Edit nickname"
 											>
-												<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+												<svg
+													class="h-3.5 w-3.5"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+													/>
 												</svg>
 											</button>
 										</div>
@@ -314,6 +355,7 @@
 										on:click={copyCode}
 										class="rounded-lg bg-gray-800 p-2 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 										title="Copy code"
+										aria-label="Copy referral code"
 									>
 										{#if codeCopied}
 											<svg
@@ -357,6 +399,7 @@
 										on:click={copyShareLink}
 										class="rounded-lg bg-gray-800 p-2 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 										title="Copy link"
+										aria-label="Copy share link"
 									>
 										{#if linkCopied}
 											<svg

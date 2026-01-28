@@ -68,9 +68,15 @@
 	<div
 		class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
 		on:click={closeModal}
-		on:keydown={(e) => e.key === 'Enter' && closeModal()}
+		on:keydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				closeModal();
+			}
+		}}
 		role="button"
 		tabindex="0"
+		aria-label="Close modal"
 	/>
 
 	<!-- Modal -->
@@ -92,6 +98,7 @@
 				<button
 					on:click={closeModal}
 					class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+					aria-label="Close"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -125,7 +132,9 @@
 					<!-- Leaderboard with scroll -->
 					<div bind:this={scrollContainer} class="max-h-[400px] space-y-2 overflow-y-auto pr-2">
 						{#each $referralLeaderboard as entry}
-							{@const isUser = $referralProfile && entry.nickname === $referralProfile.nickname}
+							{@const isUser = $referralUserPosition
+								? $referralUserPosition.rank === entry.rank
+								: $referralProfile && entry.nickname === $referralProfile.nickname}
 							<div
 								class="grid grid-cols-12 items-center gap-2 rounded-lg px-4 py-3 {isUser
 									? 'border border-yellow-500/50 bg-yellow-500/10'

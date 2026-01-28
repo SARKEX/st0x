@@ -526,7 +526,12 @@ export async function createReferralProfileForMigration(
 	nickname: string,
 	telegramHandle: string,
 	_migrateFromAccessCode?: string // Deprecated: no longer needed
-): Promise<{ success: boolean; profile?: ReferralProfile; error?: string; migratedWallets?: number }> {
+): Promise<{
+	success: boolean;
+	profile?: ReferralProfile;
+	error?: string;
+	migratedWallets?: number;
+}> {
 	const normalizedWallet = walletAddress.toLowerCase();
 	const normalizedNickname = nickname.trim();
 	const normalizedTelegram = telegramHandle.trim();
@@ -591,8 +596,9 @@ export async function createReferralProfileForMigration(
 
 	// Count existing wallets for this code (from the single source of truth: code_wallets)
 	// No migration needed - wallets are already tracked in the access code system
-	const existingWallets = await kvGet<string[]>(KV_KEYS.codeWallets(normalizedCode.toUpperCase())) || [];
-	const walletCount = existingWallets.filter(w => w.toLowerCase() !== normalizedWallet).length;
+	const existingWallets =
+		(await kvGet<string[]>(KV_KEYS.codeWallets(normalizedCode.toUpperCase()))) || [];
+	const walletCount = existingWallets.filter((w) => w.toLowerCase() !== normalizedWallet).length;
 
 	return { success: true, profile, migratedWallets: walletCount };
 }
