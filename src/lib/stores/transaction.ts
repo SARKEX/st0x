@@ -1287,6 +1287,9 @@ const transactionStore = () => {
 
 				awaitApprovalTx(approvalHash);
 				await waitForTransaction(approvalHash);
+				// Wait for RPC state to propagate after approval
+				// This prevents "allowance exceeded" errors when wallet simulates the next tx
+				await new Promise((resolve) => setTimeout(resolve, 2000));
 			} catch (approvalError) {
 				console.error('[handleTakeOrders] Approval error:', approvalError);
 				if (isStaleWalletSessionError(approvalError)) {
