@@ -1287,9 +1287,6 @@ const transactionStore = () => {
 
 				awaitApprovalTx(approvalHash);
 				await waitForTransaction(approvalHash);
-				// Wait for RPC state to propagate after approval
-				// This prevents "allowance exceeded" errors when wallet simulates the next tx
-				await new Promise((resolve) => setTimeout(resolve, 2000));
 			} catch (approvalError) {
 				console.error('[handleTakeOrders] Approval error:', approvalError);
 				if (isStaleWalletSessionError(approvalError)) {
@@ -1442,10 +1439,7 @@ const transactionStore = () => {
 
 				hash = await sendTransaction({
 					to: raindexOrder.orderbook.id as `0x${string}`,
-					data: calldata as Hex,
-					// Skip gas estimation - it may fail due to RPC lag after approval
-					// and shows confusing errors in the wallet. Use fallback gas limit instead.
-					skipGasEstimation: true
+					data: calldata as Hex
 				});
 
 				console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} transaction submitted`, {
