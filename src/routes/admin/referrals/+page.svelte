@@ -313,7 +313,12 @@
 				Cancel
 			{:else}
 				<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M12 4v16m8-8H4"
+					/>
 				</svg>
 				Add Referrer
 			{/if}
@@ -326,20 +331,26 @@
 			<h3 class="mb-4 text-lg font-semibold text-white">Add / Migrate Referrer</h3>
 
 			{#if addFormError}
-				<div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+				<div
+					class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400"
+				>
 					{addFormError}
 				</div>
 			{/if}
 
 			{#if addFormSuccess}
-				<div class="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-400">
+				<div
+					class="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-400"
+				>
 					{addFormSuccess}
 				</div>
 			{/if}
 
 			<div class="grid gap-4 md:grid-cols-2">
 				<div>
-					<label for="wallet-address" class="mb-1 block text-sm text-gray-400">Wallet Address *</label>
+					<label for="wallet-address" class="mb-1 block text-sm text-gray-400"
+						>Wallet Address *</label
+					>
 					<input
 						id="wallet-address"
 						type="text"
@@ -351,7 +362,8 @@
 				</div>
 
 				<div>
-					<label for="referral-code" class="mb-1 block text-sm text-gray-400">Referral Code *</label>
+					<label for="referral-code" class="mb-1 block text-sm text-gray-400">Referral Code *</label
+					>
 					<input
 						id="referral-code"
 						type="text"
@@ -363,7 +375,9 @@
 				</div>
 
 				<div>
-					<label for="nickname" class="mb-1 block text-sm text-gray-400">Nickname * <span class="text-gray-500">(3-20 chars, alphanumeric)</span></label>
+					<label for="nickname" class="mb-1 block text-sm text-gray-400"
+						>Nickname * <span class="text-gray-500">(3-20 chars, alphanumeric)</span></label
+					>
 					<input
 						id="nickname"
 						type="text"
@@ -388,7 +402,9 @@
 
 				<div class="md:col-span-2">
 					<label for="migrate-code" class="mb-1 block text-sm text-gray-400">
-						Migrate from Access Code <span class="text-gray-500">(optional - copies existing referred wallets)</span>
+						Migrate from Access Code <span class="text-gray-500"
+							>(optional - copies existing referred wallets)</span
+						>
 					</label>
 					<input
 						id="migrate-code"
@@ -402,10 +418,16 @@
 			</div>
 
 			<div class="mt-4 flex justify-end">
-				<Button on:click={handleAddReferrer} variant="primary" disabled={!isAddFormValid || addFormLoading}>
+				<Button
+					on:click={handleAddReferrer}
+					variant="primary"
+					disabled={!isAddFormValid || addFormLoading}
+				>
 					{#if addFormLoading}
 						<span class="flex items-center gap-2">
-							<span class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+							<span
+								class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+							></span>
 							Adding...
 						</span>
 					{:else}
