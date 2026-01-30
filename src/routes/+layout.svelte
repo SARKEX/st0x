@@ -15,6 +15,7 @@
 	import AuthModal from '$lib/components/AuthModal.svelte';
 	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
 	import DepositModal from '$lib/components/DepositModal.svelte';
+	import CoinbaseOfframpModal from '$lib/components/CoinbaseOfframpModal.svelte';
 	import CookieConsent from '$lib/components/CookieConsent.svelte';
 
 	// Auth store for wallet address tracking
@@ -92,6 +93,7 @@
 	<AuthModal />
 	<SendFundsModal />
 	<DepositModal />
+	<CoinbaseOfframpModal />
 
 	<!-- Cookie consent banner -->
 	<CookieConsent onAnalyticsAccepted={enableAnalytics} />

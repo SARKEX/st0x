@@ -2,7 +2,7 @@
 	import { browser } from '$app/environment';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import OnramperModal from '$lib/components/OnramperModal.svelte';
+	import CoinbaseOnrampModal from '$lib/components/CoinbaseOnrampModal.svelte';
 	import {
 		showDepositModal,
 		closeDepositModal,
@@ -14,7 +14,7 @@
 	type ModalView = 'options' | 'buy' | 'deposit';
 	let currentView: ModalView = 'options';
 	let copied = false;
-	let showOnramper = false;
+	let showCoinbase = false;
 
 	// QR code generation
 	let qrCodeDataUrl: string = '';
@@ -66,7 +66,7 @@
 	function handleClose() {
 		closeDepositModal();
 		copied = false;
-		showOnramper = false;
+		showCoinbase = false;
 		currentView = 'options';
 	}
 
@@ -75,12 +75,11 @@
 	}
 
 	function handleBuyCrypto() {
-		// Open Onramper modal
-		showOnramper = true;
+		showCoinbase = true;
 	}
 
-	function handleOnramperClose() {
-		showOnramper = false;
+	function handleCoinbaseClose() {
+		showCoinbase = false;
 		handleClose();
 	}
 
@@ -119,11 +118,11 @@
 				: 'Deposit from Wallet';
 </script>
 
-<!-- Onramper Modal (separate from main modal) -->
-<OnramperModal show={showOnramper} walletAddress={$walletAddress} onClose={handleOnramperClose} />
+<!-- Coinbase Onramp Modal (separate from main modal) -->
+<CoinbaseOnrampModal show={showCoinbase} walletAddress={$walletAddress} onClose={handleCoinbaseClose} />
 
 <Modal
-	show={$showDepositModal && !showOnramper}
+	show={$showDepositModal && !showCoinbase}
 	title={modalTitle}
 	maxWidthClass="max-w-md"
 	onClose={handleClose}
@@ -160,7 +159,7 @@
 					<div class="flex-1">
 						<h3 class="font-medium text-white">Buy with Card or Bank Transfer</h3>
 						<p class="mt-1 text-sm text-gray-400">
-							Purchase crypto using a debit card, credit card, or bank transfer
+							Purchase USDC using a debit card, bank transfer, or Coinbase balance
 						</p>
 					</div>
 					<svg
@@ -248,7 +247,7 @@
 			{/if}
 
 			<p class="text-sm text-gray-400">
-				Purchase ETH or USDC on Base network using your preferred payment method.
+				Purchase USDC on Base network using your preferred payment method.
 			</p>
 
 			<!-- Info -->
@@ -269,7 +268,7 @@
 					</svg>
 					<div class="text-xs text-gray-400">
 						<p class="mb-1">
-							Powered by Onramper, supporting multiple payment providers for the best rates.
+							Powered by Coinbase. Supports debit cards, bank transfers, Apple Pay, and Coinbase balance.
 						</p>
 						<p>Funds will be sent directly to your wallet on Base.</p>
 					</div>

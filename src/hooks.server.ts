@@ -159,8 +159,8 @@ const CSP_DIRECTIVES = [
 	"font-src 'self' https://fonts.gstatic.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://cdn.jsdelivr.net data:",
 	"img-src 'self' data: blob: https:",
 	// Tightened connect-src - explicitly list allowed API endpoints
-	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net",
-	"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://buy.onramper.com https://buy.onramper.dev https://*.tradingview.com https://*.tradingview-widget.com https://app.dynamicauth.com https://*.dynamicauth.com",
+	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://pay.coinbase.com https://api.developer.coinbase.com",
+	"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://pay.coinbase.com https://*.tradingview.com https://*.tradingview-widget.com https://app.dynamicauth.com https://*.dynamicauth.com",
 	"frame-ancestors 'none'",
 	"base-uri 'self'",
 	"form-action 'self'",
@@ -234,7 +234,7 @@ function requiresWalletRegistration(path: string): boolean {
 	// Exception: /api/rewards/global is public (displays RocketBoost progress to all users)
 	if (path.startsWith('/api/rewards/') && path !== '/api/rewards/global') return true;
 	if (path.startsWith('/api/snapshots/')) return true;
-	if (path === '/api/onramper/sign-url') return true;
+	if (path.startsWith('/api/coinbase/')) return true;
 
 	// Protected pages
 	if (path === '/' || path === '/rewards' || path === '/trade' || path === '/portfolio') {

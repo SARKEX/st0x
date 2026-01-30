@@ -34,6 +34,7 @@ export const dynamicAccessToken = writable<string | null>(null);
 export const showAuthModal = writable<boolean>(false);
 export const showSendFundsModal = writable<boolean>(false);
 export const showDepositModal = writable<boolean>(false);
+export const showWithdrawModal = writable<boolean>(false);
 
 // Pre-selected token for send modal
 export interface SendModalToken {
@@ -137,6 +138,20 @@ export function openDepositModal(initialView: 'options' | 'buy' | 'deposit' = 'o
  */
 export function closeDepositModal(): void {
 	showDepositModal.set(false);
+}
+
+/**
+ * Open the withdraw (offramp) modal
+ */
+export function openWithdrawModal(): void {
+	showWithdrawModal.set(true);
+}
+
+/**
+ * Close the withdraw (offramp) modal
+ */
+export function closeWithdrawModal(): void {
+	showWithdrawModal.set(false);
 }
 
 /**
