@@ -43,6 +43,32 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000
 	throw lastError;
 }
 
+/**
+ * Find a vault by vaultId + token address and add it to the results array (deduped).
+ */
+function collectVault(
+	vaults: RaindexVault[],
+	vaultId: string | undefined,
+	tokenAddress: string | undefined,
+	results: RaindexVault[],
+	seen: Set<string>
+): void {
+	if (!vaultId) return;
+	const vault = vaults.find((v) => {
+		const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
+		const vaultIdMatches =
+			v.vaultId.toString() === vaultId || vaultIdHex === vaultId.toLowerCase();
+		const tokenMatches = v.token?.address?.toLowerCase() === tokenAddress?.toLowerCase();
+		return vaultIdMatches && tokenMatches;
+	});
+	if (!vault) return;
+	const key = `${vault.vaultId.toString()}-${vault.token?.address?.toLowerCase()}`;
+	if (!seen.has(key)) {
+		results.push(vault);
+		seen.add(key);
+	}
+}
+
 // Wrapped wagmi functions with retry logic
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
 	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
@@ -88,6 +114,7 @@ import {
 } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
+import { invalidateDashboardBalances } from '$lib/queries/balances';
 import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
@@ -675,44 +702,8 @@ const transactionStore = () => {
 				const vaultsToWithdraw: RaindexVault[] = [];
 				const addedVaultKeys = new Set<string>(); // Track by vaultId + token
 
-				if (quote.outputVaultId) {
-					// Find vault matching vaultId AND output token
-					const outputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.outputVaultId ||
-							vaultIdHex === quote.outputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.outputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
-					if (outputVault) {
-						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
-						if (!addedVaultKeys.has(key)) {
-							vaultsToWithdraw.push(outputVault);
-							addedVaultKeys.add(key);
-						}
-					}
-				}
-				if (quote.inputVaultId) {
-					// Find vault matching vaultId AND input token
-					const inputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.inputVaultId ||
-							vaultIdHex === quote.inputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
-					if (inputVault) {
-						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
-						if (!addedVaultKeys.has(key)) {
-							vaultsToWithdraw.push(inputVault);
-							addedVaultKeys.add(key);
-						}
-					}
-				}
+				collectVault(vaults, quote.outputVaultId, quote.outputTokenAddress, vaultsToWithdraw, addedVaultKeys);
+				collectVault(vaults, quote.inputVaultId, quote.inputTokenAddress, vaultsToWithdraw, addedVaultKeys);
 
 				console.log('[handleRemoveOrder] Found vaults to withdraw:', vaultsToWithdraw.length);
 				console.log(
@@ -927,65 +918,11 @@ const transactionStore = () => {
 
 			if (isFilled) {
 				// Filled order: only withdraw from input vault (output is empty)
-				if (quote.inputVaultId) {
-					// Find vault matching vaultId AND input token
-					const inputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.inputVaultId ||
-							vaultIdHex === quote.inputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
-					if (inputVault) {
-						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
-						if (!addedVaultKeys.has(key)) {
-							vaultsToWithdraw.push(inputVault);
-							addedVaultKeys.add(key);
-						}
-					}
-				}
+				collectVault(vaults, quote.inputVaultId, quote.inputTokenAddress, vaultsToWithdraw, addedVaultKeys);
 			} else {
 				// Not filled: withdraw from both vaults
-				if (quote.outputVaultId) {
-					// Find vault matching vaultId AND output token
-					const outputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.outputVaultId ||
-							vaultIdHex === quote.outputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.outputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
-					if (outputVault) {
-						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
-						if (!addedVaultKeys.has(key)) {
-							vaultsToWithdraw.push(outputVault);
-							addedVaultKeys.add(key);
-						}
-					}
-				}
-				if (quote.inputVaultId) {
-					// Find vault matching vaultId AND input token
-					const inputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.inputVaultId ||
-							vaultIdHex === quote.inputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
-					if (inputVault) {
-						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
-						if (!addedVaultKeys.has(key)) {
-							vaultsToWithdraw.push(inputVault);
-							addedVaultKeys.add(key);
-						}
-					}
-				}
+				collectVault(vaults, quote.outputVaultId, quote.outputTokenAddress, vaultsToWithdraw, addedVaultKeys);
+				collectVault(vaults, quote.inputVaultId, quote.inputTokenAddress, vaultsToWithdraw, addedVaultKeys);
 			}
 
 			if (vaultsToWithdraw.length === 0) {
