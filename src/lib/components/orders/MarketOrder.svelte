@@ -383,67 +383,6 @@
 		}
 	};
 
-	// Calculate how much asset can be bought for a given payment amount using actual orderbook prices
-	function calculateAssetAmountForSpend(
-		paymentAmount: bigint,
-		assetDecimals: number,
-		paymentDecimals: number
-	): bigint | null {
-		if (!assetToken || !paymentToken) return null;
-
-		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-		const assetAddressNormalized = normalizeAddress(assetToken.address);
-		const paymentTokenAddressNormalized = normalizeAddress(
-			paymentToken.address?.toLowerCase() || ''
-		);
-
-		// Get oracle price for price guard filtering
-		const oracleAddr = assetToken?.address?.toLowerCase();
-		const oracleEntryData = oracleAddr ? $oracleQuotesQuery?.data?.[oracleAddr] : null;
-		const oraclePrice = oracleEntryData?.price;
-
-		// Calculate price guard bounds
-		const maxAcceptablePrice =
-			oraclePrice && oraclePrice > 0 ? oraclePrice * PRICE_GUARD_MULTIPLIER : Infinity;
-
-		// Filter quotes for BUY side with price guard
-		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
-			const quotePerAsset = quote.quotePerAsset;
-
-			return (
-				quoteOutputAddressNormalized === assetAddressNormalized &&
-				quoteInputAddressNormalized === paymentTokenAddressNormalized &&
-				quote.side === 'ask' &&
-				quotePerAsset !== undefined &&
-				Number.isFinite(quotePerAsset) &&
-				quotePerAsset > 0 &&
-				quotePerAsset <= maxAcceptablePrice
-			);
-		});
-
-		if (relevantQuotes.length === 0) return null;
-
-		// Sort by price (best first for BUY)
-		const sortedQuotes = [...relevantQuotes].sort(
-			(a, b) => (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0)
-		);
-
-		// Walk orderbook in spend mode to get asset amount for the payment
-		const walkResult = walkOrderbook({
-			quotes: sortedQuotes,
-			orderSide: 'Buy',
-			selectedAmount: paymentAmount,
-			assetDecimals,
-			paymentDecimals,
-			mode: 'spend'
-		});
-
-		// Return the asset amount that would be received
-		return walkResult.inputAmountFilled;
-	}
-
 	async function fetchMarketPrice() {
 		if (!assetToken || !orderSide) {
 			isLoadingPrice = false;

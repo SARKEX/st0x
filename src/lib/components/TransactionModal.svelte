@@ -27,9 +27,6 @@
 	// Asset token info for limit/DCA order deployments
 	$: assetTokenInfo = $transactionStore.data?.assetTokenInfo;
 
-	// Multi-transaction progress
-	$: multiTxProgress = $transactionStore.data?.multiTxProgress;
-
 	// Raindex link (safe, no @html needed)
 	$: raindexLink = $transactionStore.data?.raindexLink;
 

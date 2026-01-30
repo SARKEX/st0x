@@ -47,7 +47,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
 	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
 
-// Unified send transaction (works with both Privy and wagmi wallets)
+// Unified send transaction (works with both Dynamic and wagmi wallets)
 const _sendTransaction = walletServiceSendTransaction;
 
 // Unified wait for transaction
@@ -60,7 +60,6 @@ import {
 	type RaindexVault,
 	type RaindexOrder
 } from '@rainlanguage/orderbook';
-import { Float } from '@rainlanguage/float';
 import {
 	parseFloatHex,
 	getRaindexOrderUrl,
