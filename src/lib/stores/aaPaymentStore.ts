@@ -6,7 +6,7 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import type { Address, Hex } from 'viem';
+import type { Account, Address, Hex } from 'viem';
 import {
 	type PaymentToken,
 	type CrossChainSwapQuote,
@@ -21,6 +21,44 @@ import { walletAddress } from '$lib/stores/authStore';
 
 // Quote refresh interval (45 seconds - quotes expire at 60s)
 const QUOTE_REFRESH_INTERVAL_MS = 45000;
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+function isUSDCOnBase(token: PaymentToken): boolean {
+	return token.chainId === SETTLEMENT_CHAIN_ID && token.symbol === 'USDC';
+}
+
+type StoreUpdater = (fn: (s: AAPaymentState) => AAPaymentState) => void;
+
+function setStoreError(update: StoreUpdater, error: string): null {
+	update((s) => ({ ...s, status: 'error' as const, error }));
+	return null;
+}
+
+async function checkSwapPrerequisites(
+	state: AAPaymentState,
+	$walletAddress: string | null,
+	update: StoreUpdater
+): Promise<{ walletAccount: Account; walletAddr: string } | null> {
+	if (!state.isAAEnabled) {
+		return setStoreError(update, 'Cross-chain swaps require Rhinestone configuration');
+	}
+	if (!$walletAddress) {
+		return setStoreError(update, 'Wallet not connected');
+	}
+
+	const walletAccountOrResult = await getDynamicAccountForRhinestone();
+	if (!walletAccountOrResult) {
+		return setStoreError(update, 'Unable to get wallet account for cross-chain swap');
+	}
+
+	const walletAccount =
+		'account' in walletAccountOrResult ? walletAccountOrResult.account : walletAccountOrResult;
+
+	return { walletAccount, walletAddr: $walletAddress };
+}
 
 // =============================================================================
 // Types
@@ -138,11 +176,7 @@ function createAAPaymentStore() {
 		needsSwap: (): boolean => {
 			const state = get({ subscribe });
 			if (!state.sourceToken) return false;
-
-			// No swap needed if already USDC on Base
-			return !(
-				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC'
-			);
+			return !isUSDCOnBase(state.sourceToken);
 		},
 
 		/**
@@ -160,54 +194,16 @@ function createAAPaymentStore() {
 			const state = get({ subscribe });
 			const $walletAddress = get(walletAddress);
 
-			// If no source token selected or already USDC on Base, return amount as-is
-			if (!state.sourceToken) {
-				return amount;
-			}
-
-			const isAlreadyUSDCOnBase =
-				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC';
-
-			if (isAlreadyUSDCOnBase) {
+			if (!state.sourceToken) return amount;
+			if (isUSDCOnBase(state.sourceToken)) {
 				update((s) => ({ ...s, status: 'idle', swapResult: null }));
 				return amount;
 			}
 
-			// Need to swap - check prerequisites
-			if (!state.isAAEnabled) {
-				update((s) => ({
-					...s,
-					status: 'error',
-					error: 'Cross-chain swaps require Rhinestone configuration'
-				}));
-				return null;
-			}
+			const prerequisites = await checkSwapPrerequisites(state, $walletAddress, update);
+			if (!prerequisites) return null;
+			const { walletAccount, walletAddr } = prerequisites;
 
-			if (!$walletAddress) {
-				update((s) => ({
-					...s,
-					status: 'error',
-					error: 'Wallet not connected'
-				}));
-				return null;
-			}
-
-			// Get wallet account for Rhinestone
-			const walletAccountOrResult = await getDynamicAccountForRhinestone();
-			if (!walletAccountOrResult) {
-				update((s) => ({
-					...s,
-					status: 'error',
-					error: 'Unable to get wallet account for cross-chain swap'
-				}));
-				return null;
-			}
-
-			// Normalize: extract account if it's a DynamicAccountResult, otherwise use as-is
-			const walletAccount =
-				'account' in walletAccountOrResult ? walletAccountOrResult.account : walletAccountOrResult;
-
-			// Execute the swap
 			update((s) => ({ ...s, status: 'swapping', error: null }));
 
 			try {
@@ -216,7 +212,7 @@ function createAAPaymentStore() {
 				const result = await orchestrator.executePreTradeSwap(
 					state.sourceToken,
 					amount,
-					$walletAddress as Address,
+					walletAddr as Address,
 					walletAccount,
 					undefined, // onStatusChange
 					feeAsset
@@ -293,10 +289,7 @@ function createAAPaymentStore() {
 
 			if (!state.sourceToken || !$walletAddress) return null;
 
-			const isAlreadyUSDCOnBase =
-				state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC';
-
-			if (isAlreadyUSDCOnBase) {
+			if (isUSDCOnBase(state.sourceToken)) {
 				return {
 					inputAmount: amount,
 					outputAmount: amount,
@@ -344,11 +337,7 @@ function createAAPaymentStore() {
 				const $walletAddress = get(walletAddress);
 
 				if (!state.sourceToken || !$walletAddress) return;
-
-				const isAlreadyUSDCOnBase =
-					state.sourceToken.chainId === SETTLEMENT_CHAIN_ID && state.sourceToken.symbol === 'USDC';
-
-				if (isAlreadyUSDCOnBase) return;
+				if (isUSDCOnBase(state.sourceToken)) return;
 
 				try {
 					const orchestrator = getAAOrchestrator();
@@ -401,12 +390,7 @@ function createAAPaymentStore() {
 		needsPostTradeSwap: (): boolean => {
 			const state = get({ subscribe });
 			if (!state.destinationToken) return false;
-
-			// No swap needed if destination is USDC on Base
-			return !(
-				state.destinationToken.chainId === SETTLEMENT_CHAIN_ID &&
-				state.destinationToken.symbol === 'USDC'
-			);
+			return !isUSDCOnBase(state.destinationToken);
 		},
 
 		/**
@@ -417,12 +401,7 @@ function createAAPaymentStore() {
 			const state = get({ subscribe });
 			if (!state.destinationToken) return;
 
-			const needsSwap = !(
-				state.destinationToken.chainId === SETTLEMENT_CHAIN_ID &&
-				state.destinationToken.symbol === 'USDC'
-			);
-
-			if (needsSwap) {
+			if (!isUSDCOnBase(state.destinationToken)) {
 				update((s) => ({
 					...s,
 					pendingPostTradeSwap: {
@@ -444,55 +423,16 @@ function createAAPaymentStore() {
 			const state = get({ subscribe });
 			const $walletAddress = get(walletAddress);
 
-			// If no destination token or already USDC on Base, no swap needed
-			if (!state.destinationToken) {
-				return usdcAmount;
-			}
-
-			const isAlreadyUSDCOnBase =
-				state.destinationToken.chainId === SETTLEMENT_CHAIN_ID &&
-				state.destinationToken.symbol === 'USDC';
-
-			if (isAlreadyUSDCOnBase) {
+			if (!state.destinationToken) return usdcAmount;
+			if (isUSDCOnBase(state.destinationToken)) {
 				update((s) => ({ ...s, status: 'idle', pendingPostTradeSwap: null }));
 				return usdcAmount;
 			}
 
-			// Need to swap - check prerequisites
-			if (!state.isAAEnabled) {
-				update((s) => ({
-					...s,
-					status: 'error',
-					error: 'Cross-chain swaps require Rhinestone configuration'
-				}));
-				return null;
-			}
+			const prerequisites = await checkSwapPrerequisites(state, $walletAddress, update);
+			if (!prerequisites) return null;
+			const { walletAccount, walletAddr } = prerequisites;
 
-			if (!$walletAddress) {
-				update((s) => ({
-					...s,
-					status: 'error',
-					error: 'Wallet not connected'
-				}));
-				return null;
-			}
-
-			// Get wallet account for Rhinestone
-			const walletAccountOrResult = await getDynamicAccountForRhinestone();
-			if (!walletAccountOrResult) {
-				update((s) => ({
-					...s,
-					status: 'error',
-					error: 'Unable to get wallet account for cross-chain swap'
-				}));
-				return null;
-			}
-
-			// Normalize: extract account if it's a DynamicAccountResult, otherwise use as-is
-			const walletAccount =
-				'account' in walletAccountOrResult ? walletAccountOrResult.account : walletAccountOrResult;
-
-			// Execute the swap
 			update((s) => ({ ...s, status: 'swapping', error: null }));
 
 			try {
@@ -500,7 +440,7 @@ function createAAPaymentStore() {
 				const result = await orchestrator.executePostTradeSwap(
 					state.destinationToken,
 					usdcAmount,
-					$walletAddress as Address,
+					walletAddr as Address,
 					walletAccount
 				);
 
