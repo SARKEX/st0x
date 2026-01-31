@@ -20,6 +20,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
+	import { addressesEqual } from '$lib/utils/tokenMath';
 
 	// Account Abstraction imports
 	import TokenNetworkSelector from '$lib/components/aa/TokenNetworkSelector.svelte';
@@ -64,7 +65,7 @@
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
 			const match = ALL_TOKENS.find(
-				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
+				(token) => addressesEqual(token.address, settlementTokenConfig.address)
 			);
 			selectedOutputToken =
 				match ||
@@ -92,7 +93,7 @@
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
 	$: isInputTokenSameAsOutputToken =
-		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
+		addressesEqual(selectedOutputToken?.address, selectedInputToken?.address);
 
 	// errors
 	let selectedAmountError: boolean = false;

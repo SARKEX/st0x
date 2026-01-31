@@ -62,6 +62,17 @@ export function addressesEqual(
 	return left !== null && right !== null && left === right;
 }
 
+/**
+ * Find a token by address in a list, using case-insensitive comparison.
+ */
+export function findTokenByAddress<T extends { address: string }>(
+	tokens: T[],
+	address: string | null | undefined
+): T | undefined {
+	if (!address) return undefined;
+	return tokens.find((t) => addressesEqual(t.address, address));
+}
+
 export function toBigInt(value: AmountLike): bigint | null {
 	if (value === null || value === undefined) return null;
 	if (typeof value === 'bigint') return value;

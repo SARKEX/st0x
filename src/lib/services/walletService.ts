@@ -172,8 +172,13 @@ export async function sendTransaction(params: {
 				method: 'wallet_switchEthereumChain',
 				params: [{ chainId: '0x2105' }] // 8453 in hex
 			});
-		} catch {
-			// Chain might already be correct, or not supported - continue anyway
+		} catch (switchError) {
+			const code = (switchError as { code?: number })?.code;
+			if (code === 4902) {
+				console.warn('[walletService] Base chain not added to wallet, continuing anyway');
+			} else {
+				console.warn('[walletService] Chain switch failed (may already be correct):', code);
+			}
 		}
 
 		// Build transaction params with gas buffer

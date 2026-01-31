@@ -4,7 +4,8 @@
 
 import type { Network } from '$lib/config/network';
 import type { CategorizedToken } from '$lib/config/network';
-import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
+import type { TakeOrdersParams } from '$lib/types/transactions';
+import type { MinimalToken } from '$lib/types/orderPerspective';
 import type { OrderV4 } from '@rainlanguage/orderbook';
 
 /**
@@ -50,9 +51,9 @@ export function createMockToken(overrides?: Partial<CategorizedToken>): Categori
 }
 
 /**
- * Creates a mock TokenInfo object for testing
+ * Creates a mock MinimalToken object for testing
  */
-export function createMockTokenInfo(overrides?: Partial<TokenInfo>): TokenInfo {
+export function createMockTokenInfo(overrides?: Partial<MinimalToken>): MinimalToken {
 	return {
 		address: '0xMockToken',
 		symbol: 'MOCK',

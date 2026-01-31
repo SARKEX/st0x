@@ -12,7 +12,8 @@ import {
 } from '$lib/api/orders';
 import { createRaindexClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
-import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
+import type { TakeOrdersParams } from '$lib/types/transactions';
+import type { MinimalToken } from '$lib/types/orderPerspective';
 import {
 	type OrderV4,
 	type RaindexOrderQuote,
@@ -37,8 +38,8 @@ export interface MarketOrderInput {
 	inputMode?: 'amount' | 'spend';
 
 	// Tokens
-	assetToken: TokenInfo;
-	paymentToken: TokenInfo;
+	assetToken: MinimalToken;
+	paymentToken: MinimalToken;
 
 	// Quotes
 	quotes: ProcessedQuote[];
@@ -159,6 +160,17 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			})
 		);
 
+		// 3b. Check hydration results
+		const hydrationFailures = orderInfos.filter((info) => !info.orderData?.owner).length;
+		if (hydrationFailures > 0) {
+			console.warn(
+				`[marketOrderExecution] ${hydrationFailures}/${orderInfos.length} orders failed hydration`
+			);
+		}
+		if (hydrationFailures === orderInfos.length) {
+			return { success: false, error: 'Unable to load order data. Please try again.' };
+		}
+
 		// 4. Filter to only executable orders (exclude user's own orders)
 		const userAddress = getSignerAddress()?.toLowerCase();
 		const executableOrders = orderInfos.filter((info) => {
@@ -270,7 +282,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		};
 
 		// 11. Determine taker perspective tokens
-		const takerWantsInfo: TokenInfo =
+		const takerWantsInfo: MinimalToken =
 			orderSide === 'Buy'
 				? { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol }
 				: {
@@ -279,7 +291,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 						symbol: paymentToken.symbol
 					};
 
-		const takerPaysInfo: TokenInfo =
+		const takerPaysInfo: MinimalToken =
 			orderSide === 'Buy'
 				? {
 						address: paymentToken.address,

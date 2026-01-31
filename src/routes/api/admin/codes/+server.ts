@@ -63,8 +63,15 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	const audit = createAuditLogger(request);
 
+	let body: { code?: string; maxUses?: number; expiresAt?: string; label?: string };
 	try {
-		const { code, maxUses, expiresAt, label } = await request.json();
+		body = await request.json();
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
+	}
+
+	try {
+		const { code, maxUses, expiresAt, label } = body;
 
 		// If code provided, validate format
 		if (code && typeof code === 'string') {
@@ -95,8 +102,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		);
 
 		return json({ success: true, code: accessCode });
-	} catch {
-		return json({ error: 'Invalid request body' }, { status: 400 });
+	} catch (error) {
+		console.error('[admin/codes POST] Error creating access code:', error);
+		return json({ error: 'Internal server error' }, { status: 500 });
 	}
 };
 
@@ -112,8 +120,15 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 
 	const audit = createAuditLogger(request);
 
+	let body: { code?: string };
 	try {
-		const { code } = await request.json();
+		body = await request.json();
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
+	}
+
+	try {
+		const { code } = body;
 
 		if (!code || typeof code !== 'string') {
 			return json({ error: 'Access code required' }, { status: 400 });
@@ -132,8 +147,9 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		return json({ error: 'Access code not found' }, { status: 404 });
-	} catch {
-		return json({ error: 'Invalid request body' }, { status: 400 });
+	} catch (error) {
+		console.error('[admin/codes DELETE] Error deleting access code:', error);
+		return json({ error: 'Internal server error' }, { status: 500 });
 	}
 };
 
@@ -167,8 +183,15 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 
 	const audit = createAuditLogger(request);
 
+	let body: { code?: string; maxUses?: number; expiresAt?: string; label?: string };
 	try {
-		const { code, maxUses, expiresAt, label } = await request.json();
+		body = await request.json();
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
+	}
+
+	try {
+		const { code, maxUses, expiresAt, label } = body;
 
 		if (!code || typeof code !== 'string') {
 			return json({ error: 'Access code required' }, { status: 400 });
@@ -200,7 +223,8 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		return json({ error: 'Failed to update code' }, { status: 500 });
-	} catch {
-		return json({ error: 'Invalid request body' }, { status: 400 });
+	} catch (error) {
+		console.error('[admin/codes PUT] Error updating access code:', error);
+		return json({ error: 'Internal server error' }, { status: 500 });
 	}
 };

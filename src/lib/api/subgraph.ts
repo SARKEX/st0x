@@ -1,6 +1,7 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { TOKENS } from '$lib/config/network';
 import type { Network } from '$lib/config/network';
+import { addressesEqual } from '$lib/utils/tokenMath';
 import type { OffchainAssetReceiptVault, MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 
 // Shared GraphQL field selection for offchainAssetReceiptVaults queries
@@ -142,7 +143,7 @@ export const getSftById = async (
 
 	// Validate that the token exists in our config
 	const token = TOKENS.find(
-		(t) => t.chainId === network.chainId && t.address.toLowerCase() === tokenId.toLowerCase()
+		(t) => t.chainId === network.chainId && addressesEqual(t.address, tokenId)
 	);
 	if (!token) {
 		return null;
@@ -487,20 +488,16 @@ ${TRADE_FIELDS}
 		);
 
 		// Filter by sender (taker) address
-		const normalizedSender = senderAddress.toLowerCase();
 		uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
-			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
-			return tradeSender === normalizedSender;
+			return addressesEqual(trade.tradeEvent?.sender, senderAddress);
 		});
 
 		// Filter by token address if provided
 		if (tokenAddress) {
-			const normalizedToken = tokenAddress.toLowerCase();
 			uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
-				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				const outputTokenAddr =
-					trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
+				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address;
+				const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address;
+				return addressesEqual(inputTokenAddr, tokenAddress) || addressesEqual(outputTokenAddr, tokenAddress);
 			});
 		}
 
@@ -600,33 +597,30 @@ ${TRADE_FIELDS}
 		// 1. The sender (taker) - they executed a market order via UI
 		// 2. The transaction initiator - they signed a tx (e.g., via aggregator)
 		// 3. The vault owner (maker) - their limit order/DCA was filled
-		const normalizedUser = userAddress.toLowerCase();
 		uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
-			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
-			const txFrom = trade.tradeEvent?.transaction?.from?.toLowerCase();
+			const tradeSender = trade.tradeEvent?.sender;
+			const txFrom = trade.tradeEvent?.transaction?.from;
 			const inputVaultOwner = (
 				trade.inputVaultBalanceChange?.vault as { owner?: string }
-			)?.owner?.toLowerCase();
+			)?.owner;
 			const outputVaultOwner = (
 				trade.outputVaultBalanceChange?.vault as { owner?: string }
-			)?.owner?.toLowerCase();
+			)?.owner;
 
 			return (
-				tradeSender === normalizedUser ||
-				txFrom === normalizedUser ||
-				inputVaultOwner === normalizedUser ||
-				outputVaultOwner === normalizedUser
+				addressesEqual(tradeSender, userAddress) ||
+				addressesEqual(txFrom, userAddress) ||
+				addressesEqual(inputVaultOwner, userAddress) ||
+				addressesEqual(outputVaultOwner, userAddress)
 			);
 		});
 
 		// Filter by token address if provided
 		if (tokenAddress) {
-			const normalizedToken = tokenAddress.toLowerCase();
 			uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
-				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				const outputTokenAddr =
-					trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
+				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address;
+				const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address;
+				return addressesEqual(inputTokenAddr, tokenAddress) || addressesEqual(outputTokenAddr, tokenAddress);
 			});
 		}
 

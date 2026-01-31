@@ -17,7 +17,7 @@ import {
 	getDefaultPaymentTokenForNetwork
 } from '$lib/config/network';
 import { AbiCoder } from 'ethers';
-import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
+import { describeQuote, normalizeAddress, findTokenByAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
 import { createRaindexClient, getLoadBalancedClient } from '$lib/clients/raindex';
 import { Float } from '@rainlanguage/float';
@@ -44,7 +44,7 @@ export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: st
 
 // Helper function to get token metadata by address
 function getTokenMetadata(address: string, tokens: PythToken[]) {
-	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
+	const token = findTokenByAddress(tokens, address);
 	return {
 		symbol: token?.symbol ?? 'UNKNOWN',
 		decimals: token?.decimals

@@ -509,7 +509,9 @@ const transactionStore = () => {
 		if (!config) throw new Error('Wagmi config not found');
 		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(network, args);
+		const $walletAddress = get(walletAddress);
+		if (!$walletAddress) throw new Error('Wallet not connected');
+		const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(network, args, $walletAddress);
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};
@@ -519,7 +521,9 @@ const transactionStore = () => {
 		if (!config) throw new Error('Wagmi config not found');
 		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(network, args);
+		const $walletAddress = get(walletAddress);
+		if (!$walletAddress) throw new Error('Wallet not connected');
+		const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(network, args, $walletAddress);
 
 		// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
 		// Buy DCA: outputToken is payment token (e.g., USDC), inputToken is the asset
@@ -541,7 +545,9 @@ const transactionStore = () => {
 		if (!config) throw new Error('Wagmi config not found');
 		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(network, args);
+		const $walletAddress = get(walletAddress);
+		if (!$walletAddress) throw new Error('Wallet not connected');
+		const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(network, args, $walletAddress);
 
 		// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
 		// Buy Limit: outputToken is payment token (e.g., USDC), inputToken is the asset
@@ -1309,7 +1315,9 @@ const transactionStore = () => {
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
 		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
-		const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args);
+		const $walletAddress = get(walletAddress);
+		if (!$walletAddress) throw new Error('Wallet not connected');
+		const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args, $walletAddress);
 
 		showRainlangConfirmation(composedRainlang, deploymentArgs);
 	};

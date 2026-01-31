@@ -22,6 +22,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+	import { addressesEqual } from '$lib/utils/tokenMath';
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = getAllTokensByNetwork($currentNetwork.id);
@@ -75,7 +76,7 @@
 	let initialIoError: boolean = false;
 
 	$: isToken1SameAsToken2 =
-		selectedToken1.address.toLowerCase() === selectedToken2.address.toLowerCase();
+		addressesEqual(selectedToken1.address, selectedToken2.address);
 
 	$: disableDeploy =
 		!selectedToken1 ||

@@ -5,3 +5,34 @@ export enum TransactionErrorMessage {
 	BALANCE_REFRESH_FAILED = 'There was an error refreshing your balances. This does not mean that the transaction was unsuccessful. Please see the block explorer link for more information.',
 	GENERIC = 'Something went wrong. See the telegram group for support.'
 }
+
+export class Web3Error extends Error {
+	constructor(
+		message: string,
+		public code?: string | number
+	) {
+		super(message);
+		this.name = 'Web3Error';
+	}
+}
+
+export class RPCError extends Web3Error {
+	constructor(message: string, code?: string | number) {
+		super(message, code);
+		this.name = 'RPCError';
+	}
+}
+
+export class GasEstimationError extends Web3Error {
+	constructor(message: string, code?: string | number) {
+		super(message, code);
+		this.name = 'GasEstimationError';
+	}
+}
+
+export class WalletRejectedError extends Web3Error {
+	constructor(message: string = 'Transaction rejected by user') {
+		super(message, 4001);
+		this.name = 'WalletRejectedError';
+	}
+}
