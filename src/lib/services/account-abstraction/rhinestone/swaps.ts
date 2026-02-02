@@ -465,12 +465,14 @@ export async function getUSDCEquivalent(
 		return amount - amount / 1000n;
 	}
 
-	// For ETH/WETH, would need price oracle
-	// For now, estimate based on typical market prices
+	// For ETH/WETH, use price oracle
 	if (token.symbol === 'ETH' || token.symbol === 'WETH') {
-		// This should use a price oracle in production
-		// Placeholder: 1 ETH = ~$3000 (scaled to 6 decimals from 18)
-		const ethPriceUSDC = 3000n * 10n ** 6n;
+		const { getPriceOracle } = await import('../index');
+		const priceOracle = getPriceOracle();
+		const prices = await priceOracle.getTokenPrices(['ETH']);
+		const ethPriceUsd = prices.get('ETH')?.priceUsd ?? 3000;
+		// Convert: amount (18 decimals) * ethPrice -> USDC (6 decimals)
+		const ethPriceUSDC = BigInt(Math.round(ethPriceUsd * 1e6));
 		return (amount * ethPriceUSDC) / 10n ** 18n;
 	}
 

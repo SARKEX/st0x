@@ -493,6 +493,10 @@ function createAAPaymentStore() {
 		 * Reset the store completely
 		 */
 		reset: () => {
+			if (quoteRefreshTimer) {
+				clearInterval(quoteRefreshTimer);
+				quoteRefreshTimer = null;
+			}
 			set(initialState);
 		}
 	};

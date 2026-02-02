@@ -1163,7 +1163,7 @@ const transactionStore = () => {
 				const now = Math.floor(Date.now() / 1000);
 				const trades = await getTrades(now - 600, now, network);
 				const allTrades = trades.filter(
-					(t) => t.tradeEvent?.transaction?.id.toLowerCase() === hash.toLowerCase()
+					(t) => t.tradeEvent?.transaction?.id?.toLowerCase() === hash.toLowerCase()
 				) as unknown as Array<{
 					tradeEvent?: { transaction?: { id?: string } };
 					order?: { orderHash?: string };

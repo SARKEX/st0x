@@ -183,7 +183,7 @@ interface RhinestoneAccount {
 // Module-level utilities (shared across methods)
 // =============================================================================
 
-const DEBUG = true;
+const DEBUG = import.meta.env.DEV;
 
 function debugLog(message: string, ...args: unknown[]): void {
 	if (DEBUG) console.log(`[Rhinestone Client] ${message}`, ...args.map((a) => typeof a === 'object' ? safeStringify(a) : a));
@@ -1121,7 +1121,7 @@ export class RhinestoneClient {
 						// ✅ IMPORTANT: tokenRequests specifies what tokens to PULL from the SOURCE chain
 						// This tells the solver what input tokens the user is providing
 						// The solver will then swap/bridge these to the target chain and execute the calls
-						address: normalizedParams.targetToken.address as Address,
+						address: normalizedParams.sourceToken.address as Address,
 						amount: normalizedParams.amount
 					}
 				],
@@ -1754,7 +1754,7 @@ export class RhinestoneClient {
 			const transactionResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
 
 			const status = await rhinestoneAccount.waitForExecution(transactionResult);
-			const txHash = status.fill.hash;
+			const txHash = status.fill?.hash;
 			if (!txHash) {
 				throw new AAError('Transaction completed but no hash returned', AAErrorCode.TRANSACTION_FAILED);
 			}
@@ -1941,7 +1941,7 @@ export class RhinestoneClient {
 			const status = await rhinestoneAccount.waitForExecution(transactionResult);
 			debugLog('Swap execution complete:', status);
 
-			const txHash = status.fill.hash;
+			const txHash = status.fill?.hash;
 			if (!txHash) {
 				throw new AAError('Swap completed but no hash returned', AAErrorCode.TRANSACTION_FAILED);
 			}
