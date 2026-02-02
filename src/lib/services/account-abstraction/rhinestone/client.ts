@@ -456,11 +456,12 @@ export class RhinestoneClient {
 		rhinestoneAccount: RhinestoneAccount,
 		signedTx: SignedTransaction,
 		walletAccount?: Account,
-		chainId?: number
+		chainId?: number,
+		skipSdkAuth = false
 	): Promise<SignedAuthorizationList> {
 		if (this.config.accountType !== '7702') return [];
 
-		try {
+		if (!skipSdkAuth) try {
 			const authorizations = await rhinestoneAccount.signAuthorizations(signedTx);
 			debugLog('Authorizations signed', { count: authorizations?.length ?? 0 });
 			if (authorizations && authorizations.length > 0) {
@@ -2133,7 +2134,7 @@ export class RhinestoneClient {
 						'[Rhinestone Client] Authorization did not cover chain. Re-signing and retrying...',
 						{ chainId: chain.id }
 					);
-					authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx, walletAccount, chain.id);
+					authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx, walletAccount, chain.id, true);
 					txResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
 				} else {
 					throw submitErr;
