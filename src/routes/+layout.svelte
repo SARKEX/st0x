@@ -3,15 +3,12 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/clients/queryClient';
 	import { env as publicEnv } from '$env/dynamic/public';
-	import { createConfig } from '@wagmi/core';
-	import { defaultConfig, wagmiConfig } from 'svelte-wagmi';
+	import { defaultConfig } from 'svelte-wagmi';
 	import { base, arbitrum, optimism, mainnet } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
-	import { createRpcTransport } from '$lib/utils/rpc';
-	import { SUPPORTED_NETWORKS } from '$lib/services/account-abstraction/types';
 
 	// Dynamic integration
 	import DynamicSvelteWrapper from '$lib/dynamic/DynamicSvelteWrapper.svelte';
@@ -41,7 +38,6 @@
 			connectorsList.push(walletConnect({ projectId }));
 		}
 
-		// Initialize default config first
 		const cfgOptions = {
 			autoConnect: true,
 			appName: 'st0x-liquidity',
@@ -57,26 +53,6 @@
 
 		const erckit = defaultConfig(cfgOptions);
 		await erckit.init();
-
-		// Now create a custom config with our RPC fallbacks for all chains
-		const customConfig = createConfig({
-			chains: [base, arbitrum, optimism, mainnet] as [
-				typeof base,
-				typeof arbitrum,
-				typeof optimism,
-				typeof mainnet
-			],
-			connectors: connectorsList,
-			transports: {
-				[base.id]: createRpcTransport(SUPPORTED_NETWORKS.BASE),
-				[arbitrum.id]: createRpcTransport(SUPPORTED_NETWORKS.ARBITRUM),
-				[optimism.id]: createRpcTransport(SUPPORTED_NETWORKS.OPTIMISM),
-				[mainnet.id]: createRpcTransport(SUPPORTED_NETWORKS.ETHEREUM)
-			}
-		});
-
-		// Override the wagmi config store with our custom config that has RPC fallbacks
-		wagmiConfig.set(customConfig);
 	};
 
 	// Set wallet-address cookie for server-side rate limiting

@@ -16,7 +16,6 @@ export function createTradeActivityQuery(network: Network | null, pollInterval: 
 	return createQuery<TradeActivityPayload>({
 		queryKey: ['tradeActivity', network?.id],
 		enabled: Boolean(network),
-		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
 			const now = Math.floor(Date.now() / 1000);
