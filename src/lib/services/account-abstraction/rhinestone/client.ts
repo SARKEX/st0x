@@ -463,7 +463,35 @@ export class RhinestoneClient {
 		try {
 			const authorizations = await rhinestoneAccount.signAuthorizations(signedTx);
 			debugLog('Authorizations signed', { count: authorizations?.length ?? 0 });
-			if (authorizations && authorizations.length > 0) return authorizations;
+			if (authorizations && authorizations.length > 0) {
+				// Validate that authorizations cover the required chain
+				// SDK may return chainId: 0 (wildcard) which Rhinestone backend rejects
+				if (chainId) {
+					const coversChain = (authorizations as unknown as ReadonlyArray<{ chainId?: number }>).some(
+						(a) => Number(a.chainId) === chainId || Number(a.chainId) === 0
+					);
+					if (!coversChain) {
+						debugLog('SDK authorizations do not cover required chain, falling through to manual signing', {
+							requiredChainId: chainId,
+							authChainIds: (authorizations as unknown as ReadonlyArray<{ chainId?: number }>).map((a) => a.chainId)
+						});
+					} else {
+						// Check if any auth uses chainId: 0 — backend may reject wildcard
+						const hasWildcard = (authorizations as unknown as ReadonlyArray<{ chainId?: number }>).some(
+							(a) => Number(a.chainId) === 0 || a.chainId === undefined
+						);
+						if (hasWildcard) {
+							debugLog('SDK authorizations use wildcard chainId (0), falling through to manual signing for explicit chain', {
+								requiredChainId: chainId
+							});
+						} else {
+							return authorizations;
+						}
+					}
+				} else {
+					return authorizations;
+				}
+			}
 		} catch (authError) {
 			const errorMsg = authError instanceof Error ? authError.message : String(authError);
 			if (
