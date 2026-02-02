@@ -119,6 +119,19 @@ import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
+/**
+ * Throws if the orderbook address is not in the trusted whitelist for the network.
+ * Prevents transactions to malicious contracts if the API or subgraph is compromised.
+ */
+function validateOrderbookAddress(orderbookAddress: string, network: Network): void {
+	const normalized = orderbookAddress.toLowerCase();
+	const trusted = network.trustedOrderbooks ?? [];
+	if (trusted.length > 0 && !trusted.some((t) => t.toLowerCase() === normalized)) {
+		console.error('[Security] Untrusted orderbook address blocked:', orderbookAddress);
+		throw new Error('Transaction blocked: Untrusted orderbook contract.');
+	}
+}
+
 // Helper function to create Raindex v5 link data (safe, no HTML)
 function createRaindexLink(
 	chainId: number,
@@ -247,6 +260,7 @@ const transactionStore = () => {
 		// Get network early - used for validation and later for subgraph queries
 		const network = get(currentNetwork);
 
+		validateOrderbookAddress(deploymentArgs.orderbookAddress, network);
 
 		// Filter approvals: check balance + allowance in parallel, skip if already approved
 		const approvalsNeeded: typeof deploymentArgs.approvals = [];
@@ -542,6 +556,7 @@ const transactionStore = () => {
 		try {
 			// Security: Validate orderbook address is trusted before sending transaction
 			const network = get(currentNetwork);
+			validateOrderbookAddress(vault.orderbook, network);
 
 			awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
 
@@ -706,6 +721,7 @@ const transactionStore = () => {
 					const vault = vaultsWithBalance[i];
 
 					// Security: Validate orderbook address is trusted
+					validateOrderbookAddress(vault.orderbook, network);
 
 					const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
 					if (vaultWithdrawCalldata.error) {
@@ -730,6 +746,7 @@ const transactionStore = () => {
 
 			// Step 2: Deactivate/remove the order
 			// Security: Validate orderbook address is trusted
+			validateOrderbookAddress(order.orderbook, network);
 
 			const removeCalldata = order.getRemoveCalldata();
 			if (removeCalldata.error) {
@@ -838,6 +855,7 @@ const transactionStore = () => {
 				const sgOrderResult = order.convertToSgOrder();
 				if (!sgOrderResult.error && sgOrderResult.value?.active) {
 					// Security: Validate orderbook address is trusted
+					validateOrderbookAddress(order.orderbook, network);
 
 					const removeCalldata = order.getRemoveCalldata();
 					if (removeCalldata.error) {
@@ -924,6 +942,7 @@ const transactionStore = () => {
 				const vault = vaultsWithBalance[i];
 
 				// Security: Validate orderbook address is trusted
+				validateOrderbookAddress(vault.orderbook, network);
 
 				const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
 				if (vaultWithdrawCalldata.error) {
@@ -997,6 +1016,7 @@ const transactionStore = () => {
 		// Get network early - used for validation and later for subgraph queries
 		const network = get(currentNetwork) as Network;
 
+		validateOrderbookAddress(raindexOrder.orderbook.id, network);
 
 		const inputIndex = params.ioIndexes.input;
 		const outputIndex = params.ioIndexes.output;

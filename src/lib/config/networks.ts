@@ -25,6 +25,8 @@ export interface Network {
 	orderbook_subgraph_urls_inactive: string[];
 	paymentTokens: PythToken[];
 	defaultPaymentToken: PythToken;
+	/** Whitelist of trusted orderbook contract addresses for this network */
+	trustedOrderbooks: string[];
 }
 
 const basePaymentTokens = PAYMENT_TOKENS_BY_NETWORK[8453] ?? [];
@@ -68,7 +70,10 @@ export const networks: Network[] = [
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-10-11-a62b/gn',
 		orderbook_subgraph_urls_inactive: [],
 		paymentTokens: basePaymentTokens,
-		defaultPaymentToken: baseDefaultPaymentToken!
+		defaultPaymentToken: baseDefaultPaymentToken!,
+		trustedOrderbooks: [
+			'0x52CEB8eBEf648744fFDDE89F7Bc9C3aC35944775' // Rain Orderbook v4 on Base
+		]
 	},
 	{
 		id: 42161,
@@ -93,7 +98,8 @@ export const networks: Network[] = [
 		orderbook_subgraph_url: '',
 		orderbook_subgraph_urls_inactive: [],
 		paymentTokens: arbitrumPaymentTokens,
-		defaultPaymentToken: arbitrumDefaultPaymentToken!
+		defaultPaymentToken: arbitrumDefaultPaymentToken!,
+		trustedOrderbooks: [] // Payment-only network (swaps to Base via AA)
 	},
 	{
 		id: 10,
@@ -119,7 +125,8 @@ export const networks: Network[] = [
 		orderbook_subgraph_url: '',
 		orderbook_subgraph_urls_inactive: [],
 		paymentTokens: optimismPaymentTokens,
-		defaultPaymentToken: optimismDefaultPaymentToken!
+		defaultPaymentToken: optimismDefaultPaymentToken!,
+		trustedOrderbooks: [] // Payment-only network (swaps to Base via AA)
 	},
 	{
 		id: 1,
@@ -144,7 +151,8 @@ export const networks: Network[] = [
 		orderbook_subgraph_url: '',
 		orderbook_subgraph_urls_inactive: [],
 		paymentTokens: ethereumPaymentTokens,
-		defaultPaymentToken: ethereumDefaultPaymentToken!
+		defaultPaymentToken: ethereumDefaultPaymentToken!,
+		trustedOrderbooks: [] // Payment-only network (swaps to Base via AA)
 	}
 ];
 
