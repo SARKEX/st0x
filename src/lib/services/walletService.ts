@@ -484,6 +484,7 @@ export async function sendTransactionWithGasOption(
 		const isNetworkError =
 			errorMessage.includes('Network error connecting to Rhinestone API') ||
 			errorMessage.includes('Failed to fetch') ||
+			errorMessage.includes('Load failed') ||
 			(errorMessage.toLowerCase().includes('network') &&
 				errorMessage.toLowerCase().includes('error')) ||
 			(error as { cause?: { isNetworkError?: boolean } })?.cause?.isNetworkError === true;
