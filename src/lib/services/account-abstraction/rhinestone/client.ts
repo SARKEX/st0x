@@ -1866,6 +1866,9 @@ export class RhinestoneClient {
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
 			debugLog('Transaction signed, getting authorizations...');
 
+			// Brief delay to let Dynamic wallet UI settle between signing requests
+			await sleep(500);
+
 			const authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx);
 
 			debugLog('Submitting transaction...');
@@ -2004,6 +2007,9 @@ export class RhinestoneClient {
 
 			const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
+
+			// Brief delay to let Dynamic wallet UI settle between signing requests
+			await sleep(500);
 
 			let authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx);
 
