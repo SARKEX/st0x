@@ -153,7 +153,7 @@ const CSP_DIRECTIVES = [
 	"default-src 'self'",
 	// Script sources - TradingView widgets require unsafe-inline (they use script.innerHTML for config)
 	// unsafe-eval may be needed by web3 libraries - monitor via report-uri before removing
-	"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://s3.tradingview.com https://tv-static-2.tradingview.com https://va.vercel-scripts.com https://cdn.jsdelivr.net",
+	"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://s3.tradingview.com https://tv-static-2.tradingview.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
 	// Style sources - unsafe-inline needed for dynamic styles from libraries
 	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
 	"font-src 'self' https://fonts.gstatic.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://cdn.jsdelivr.net data:",
