@@ -4,6 +4,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	kvGet,
+	getKv,
 	KV_KEYS,
 	getExcludedWalletsSet,
 	getTeamWalletsSet,
@@ -71,9 +72,14 @@ async function fetchWalletToCodeMapping(): Promise<Map<string, string>> {
 		// Fetch all access codes
 		const allCodes = (await kvGet<string[]>(KV_KEYS.allCodes())) || [];
 
-		// Fetch wallets for each code
-		for (const code of allCodes) {
-			const walletAddresses = (await kvGet<string[]>(KV_KEYS.codeWallets(code))) || [];
+		// Fetch wallets for all codes in parallel
+		const walletArrays = await Promise.all(
+			allCodes.map(async (code) => {
+				const walletAddresses = (await kvGet<string[]>(KV_KEYS.codeWallets(code))) || [];
+				return { code, walletAddresses };
+			})
+		);
+		for (const { code, walletAddresses } of walletArrays) {
 			for (const address of walletAddresses) {
 				walletToCode.set(address.toLowerCase(), code);
 			}
@@ -363,6 +369,17 @@ export const GET: RequestHandler = async ({ url }) => {
 		const limitParam = url.searchParams.get('limit');
 		const limit = limitParam ? parseInt(limitParam) : 90; // Default to 90 days
 
+		// Check KV cache first
+		const cacheKey = `tvl:cache:${limit}`;
+		const cached = await kvGet<TvlResponse>(cacheKey);
+		if (cached) {
+			return json(cached, {
+				headers: {
+					'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=7200'
+				}
+			});
+		}
+
 		// Get wallet-to-code mapping, excluded wallets, and team wallets
 		const [walletToCode, excludedWallets, teamWallets] = await Promise.all([
 			fetchWalletToCodeMapping(),
@@ -409,8 +426,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Calculate TVL for each day (in parallel, but limit concurrency)
 		const dailyTvl: DailyTvlEntry[] = [];
 
-		// Process in batches of 5 to avoid overwhelming the blob storage
-		const batchSize = 5;
+		// Process in batches of 15 to avoid overwhelming the blob storage
+		const batchSize = 15;
 		for (let i = 0; i < limitedDates.length; i += batchSize) {
 			const batch = limitedDates.slice(i, i + batchSize);
 			const batchResults = await Promise.all(
@@ -450,7 +467,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Sort daily TVL by date ascending for charts
 		dailyTvl.sort((a, b) => a.date.localeCompare(b.date));
 
-		return json({
+		const response: TvlResponse = {
 			success: true,
 			latest: latestTvl
 				? {
@@ -468,7 +485,19 @@ export const GET: RequestHandler = async ({ url }) => {
 					}
 				: null,
 			daily: dailyTvl
-		} as TvlResponse);
+		};
+
+		// Cache in KV with 1-hour TTL
+		const client = await getKv();
+		if (client) {
+			await client.set(cacheKey, JSON.stringify(response), { EX: 3600 });
+		}
+
+		return json(response, {
+			headers: {
+				'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=7200'
+			}
+		});
 	} catch (error) {
 		console.error('[TVL API] Error:', error);
 		return json(

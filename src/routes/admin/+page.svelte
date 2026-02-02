@@ -1274,15 +1274,18 @@
 		if (!res.ok) throw new Error('Failed to fetch wallet data');
 		const data = await res.json();
 
-		// Fetch wallets for each code
-		const wallets: RegisteredWallet[] = [];
-		for (const code of data.codes || []) {
-			const walletsRes = await fetch(`/api/admin/wallets?code=${code.code}`);
-			if (walletsRes.ok) {
-				const walletsData = await walletsRes.json();
-				wallets.push(...(walletsData.wallets || []));
-			}
-		}
+		// Fetch wallets for all codes in parallel
+		const walletResults = await Promise.all(
+			(data.codes || []).map(async (code: { code: string }) => {
+				const walletsRes = await fetch(`/api/admin/wallets?code=${code.code}`);
+				if (walletsRes.ok) {
+					const walletsData = await walletsRes.json();
+					return walletsData.wallets || [];
+				}
+				return [];
+			})
+		);
+		const wallets: RegisteredWallet[] = walletResults.flat();
 		return wallets;
 	}
 
