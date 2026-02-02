@@ -110,13 +110,15 @@
 				abi: erc20Abi,
 				address: token.address as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$walletAddress as Hex]
+				args: [$walletAddress as Hex],
+				chainId: token.chainId
 			}),
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: token.address as `0x${string}`,
 				functionName: 'decimals',
-				args: []
+				args: [],
+				chainId: token.chainId
 			})
 		]);
 		return { balance: tokenBalance, decimals: tokenDecimals, fingerprint };
