@@ -552,7 +552,42 @@ export class RhinestoneClient {
 					console.warn('[Rhinestone Client] Manual auth signing failed, proceeding without:', msg);
 				}
 			} else {
-				console.warn('[Rhinestone Client] Wallet does not support signAuthorization method');
+				debugLog('Wallet does not support signAuthorization, trying Dynamic wallet client fallback');
+
+				// Final fallback: use Dynamic wallet client which handles JSON-RPC signing
+				try {
+					const { createDynamicWalletClient } = await import('../wallets/dynamic');
+					const dynamicClient = await createDynamicWalletClient(chainId as SupportedNetworkId);
+
+					if (dynamicClient && typeof dynamicClient.signAuthorization === 'function') {
+						const authorization = await dynamicClient.signAuthorization({
+							account: walletAccount,
+							contractAddress: EIP7702_DELEGATE_CONTRACT
+						});
+
+						debugLog('Dynamic wallet client signed authorization for chain:', chainId);
+						return [{
+							chainId,
+							address: EIP7702_DELEGATE_CONTRACT,
+							nonce: authorization.nonce ?? 0,
+							r: authorization.r,
+							s: authorization.s,
+							yParity: authorization.yParity ?? (authorization.v !== undefined ? (authorization.v === 0n ? 0 : 1) : 0)
+						}] as unknown as SignedAuthorizationList;
+					} else {
+						console.warn('[Rhinestone Client] Dynamic wallet client not available or does not support signAuthorization');
+					}
+				} catch (dynamicError) {
+					const msg = dynamicError instanceof Error ? dynamicError.message : String(dynamicError);
+					if (msg.toLowerCase().includes('reject') || msg.toLowerCase().includes('denied')) {
+						throw new AAError(
+							'Authorization signing was rejected by user',
+							AAErrorCode.AUTHORIZATION_REJECTED,
+							{ originalError: dynamicError, chainId }
+						);
+					}
+					console.warn('[Rhinestone Client] Dynamic wallet client fallback failed:', msg);
+				}
 			}
 		}
 
