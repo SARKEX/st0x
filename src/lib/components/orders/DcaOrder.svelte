@@ -222,7 +222,7 @@
 				);
 
 				// Execute the cross-chain swap
-				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount);
+				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount, $payFeesInStablecoin);
 				if (swapResult === null) {
 					// Swap failed
 					deployError = $swapError || 'Cross-chain swap failed';
