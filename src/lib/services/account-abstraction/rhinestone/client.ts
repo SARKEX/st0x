@@ -454,14 +454,20 @@ export class RhinestoneClient {
 	 */
 	private async getSimpleAuthorizations(
 		rhinestoneAccount: RhinestoneAccount,
-		signedTx: SignedTransaction
+		signedTx: SignedTransaction,
+		walletAccount?: Account,
+		chainId?: number
 	): Promise<SignedAuthorizationList> {
 		if (this.config.accountType !== '7702') return [];
 
+		let authorizations: SignedAuthorizationList = [];
+
 		try {
-			const authorizations = await rhinestoneAccount.signAuthorizations(signedTx);
-			debugLog('Authorizations signed', { count: authorizations?.length ?? 0 });
-			return authorizations ?? [];
+			authorizations = (await rhinestoneAccount.signAuthorizations(signedTx)) ?? [];
+			debugLog('Authorizations signed', {
+				count: authorizations.length,
+				chainIds: (authorizations as unknown as ReadonlyArray<{ chainId?: number }>).map(a => a.chainId)
+			});
 		} catch (authError) {
 			const errorMsg = authError instanceof Error ? authError.message : String(authError);
 			if (
@@ -471,13 +477,66 @@ export class RhinestoneClient {
 				errorMsg.toLowerCase().includes('undefined')
 			) {
 				console.warn(
-					'[Rhinestone Client] signAuthorizations not supported for this account type. ' +
-						'Proceeding without authorizations.'
+					'[Rhinestone Client] signAuthorizations not supported for this account type.',
+					errorMsg
 				);
-				return [];
+			} else {
+				throw authError;
 			}
-			throw authError;
 		}
+
+		// If SDK returned empty authorizations and we have a wallet + chainId,
+		// sign manually — the SDK may not trigger wallet signing for some account types
+		if (authorizations.length === 0 && walletAccount && chainId) {
+			debugLog('SDK returned empty authorizations, attempting manual signing for chain', chainId);
+			try {
+				const walletWithSignAuth = walletAccount as Account & {
+					signAuthorization?: (args: {
+						contractAddress: Address;
+						chainId: number;
+						nonce?: number;
+					}) => Promise<{
+						r: Hex;
+						s: Hex;
+						v?: bigint;
+						yParity?: number;
+						nonce?: number;
+					}>;
+				};
+
+				if (typeof walletWithSignAuth.signAuthorization === 'function') {
+					debugLog('Wallet has signAuthorization, signing manually...');
+					const auth = await walletWithSignAuth.signAuthorization({
+						contractAddress: EIP7702_DELEGATE_CONTRACT,
+						chainId,
+						nonce: 0
+					});
+					authorizations = [{
+						chainId,
+						address: EIP7702_DELEGATE_CONTRACT,
+						nonce: auth.nonce ?? 0,
+						r: auth.r,
+						s: auth.s,
+						yParity: auth.yParity ?? 0
+					}] as unknown as SignedAuthorizationList;
+					debugLog('Manual authorization signed successfully', { chainId });
+				} else {
+					console.warn('[Rhinestone Client] Wallet does not have signAuthorization method');
+				}
+			} catch (manualError) {
+				const msg = manualError instanceof Error ? manualError.message : String(manualError);
+				if (msg.toLowerCase().includes('reject') || msg.toLowerCase().includes('denied')) {
+					throw new AAError(
+						'Authorization signing was rejected by user',
+						AAErrorCode.AUTHORIZATION_REJECTED,
+						{ originalError: manualError, chainId }
+					);
+				}
+				console.warn('[Rhinestone Client] Manual authorization signing failed:', msg);
+			}
+		}
+
+		return authorizations;
 	}
 
 	/**
@@ -1689,7 +1748,7 @@ export class RhinestoneClient {
 
 			const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
-			const authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx);
+			const authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx, walletAccount, targetChain.id);
 
 			debugLog('Submitting omnichain transaction...');
 			const transactionResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
@@ -1869,7 +1928,7 @@ export class RhinestoneClient {
 			// Brief delay to let Dynamic wallet UI settle between signing requests
 			await sleep(500);
 
-			const authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx);
+			const authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx, walletAccount, chain.id);
 
 			debugLog('Submitting transaction...');
 			const transactionResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
@@ -2011,7 +2070,7 @@ export class RhinestoneClient {
 			// Brief delay to let Dynamic wallet UI settle between signing requests
 			await sleep(500);
 
-			let authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx);
+			let authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx, walletAccount, chain.id);
 
 			debugLog('Submitting transaction...');
 			let txResult: TransactionResult;
@@ -2025,7 +2084,7 @@ export class RhinestoneClient {
 						'[Rhinestone Client] Authorization did not cover chain. Re-signing and retrying...',
 						{ chainId: chain.id }
 					);
-					authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx);
+					authorizations = await this.getSimpleAuthorizations(rhinestoneAccount, signedTx, walletAccount, chain.id);
 					txResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
 				} else {
 					throw submitErr;
