@@ -24,7 +24,8 @@
 		type PaymentToken,
 		SUPPORTED_NETWORKS,
 		USDC_BASE,
-		isRhinestoneConfigured
+		isRhinestoneConfigured,
+		getPriceOracle
 	} from '$lib/services/account-abstraction';
 	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
 
@@ -228,16 +229,27 @@
 				// For Buy orders: Check if cross-chain swap is needed
 				// If user selected a non-USDC token or different chain, swap first
 				if (needsSwap && selectedSourceToken) {
-					// Calculate amount in source token (accounting for different decimals)
+					// Calculate amount in source token (accounting for different decimals and pricing)
 					const sourceDecimals = selectedSourceToken.decimals;
-					// Add 1% buffer for price movement during swap
-					const swapAmount = BigInt(
-						Math.ceil(
-							parseFloat(formatUnits(settlementAmount, settlementToken.decimals)) *
-								1.01 *
-								10 ** sourceDecimals
-						)
-					);
+					const settlementInUSD = parseFloat(formatUnits(settlementAmount, settlementToken.decimals));
+					const isStablecoin =
+						selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
+
+					let swapAmount: bigint;
+					if (isStablecoin) {
+						// Stablecoins: 1:1 with USD, add 1% buffer
+						swapAmount = BigInt(Math.ceil(settlementInUSD * 1.01 * 10 ** sourceDecimals));
+					} else {
+						// Non-stablecoins (WETH): convert via price oracle
+						const priceOracle = getPriceOracle();
+						const tokenSymbol =
+							selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+						const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
+						const sourceTokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
+						const sourceTokenAmount = settlementInUSD / sourceTokenPriceUSD;
+						// Add 2% buffer for non-stablecoins
+						swapAmount = BigInt(Math.ceil(sourceTokenAmount * 1.02 * 10 ** sourceDecimals));
+					}
 
 					// Execute the cross-chain swap
 					const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount, $payFeesInStablecoin);

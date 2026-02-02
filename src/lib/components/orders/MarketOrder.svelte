@@ -33,6 +33,11 @@
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
+	// Swap quote for cross-chain fee adjustment
+	let swapQuote: { inputAmount: bigint; outputAmount: bigint; requiresSwap: boolean } | null =
+		null;
+	let isLoadingSwapQuote = false;
+
 	// AA state for Buy orders (source token)
 	let selectedSourceToken: PaymentToken | null = USDC_BASE;
 
@@ -42,6 +47,53 @@
 		selectedSourceToken &&
 		(selectedSourceToken.chainId !== SUPPORTED_NETWORKS.BASE ||
 			selectedSourceToken.symbol !== 'USDC');
+
+	// Fetch swap quote when cross-chain swap is needed
+	$: if (needsSwap && selectedAmount && selectedAmount > 0n && marketPrice > 0 && assetToken) {
+		fetchSwapQuote();
+	} else if (!needsSwap || !selectedAmount || selectedAmount === 0n) {
+		swapQuote = null;
+	}
+
+	async function fetchSwapQuote() {
+		if (!needsSwap || !selectedSourceToken || !selectedAmount || selectedAmount === 0n) {
+			swapQuote = null;
+			return;
+		}
+
+		isLoadingSwapQuote = true;
+		try {
+			let swapAmount: bigint;
+			if (inputMode === 'spend') {
+				swapAmount = selectedAmount;
+			} else {
+				const assetDecimals = assetToken?.decimals ?? 18;
+				const sourceDecimals = selectedSourceToken.decimals;
+				const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
+				const estimatedCostUSD = outputInTokens * marketPrice;
+				const isStablecoin =
+					selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
+				if (isStablecoin) {
+					swapAmount = BigInt(Math.ceil(estimatedCostUSD * 1.01 * 10 ** sourceDecimals));
+				} else {
+					const priceOracle = getPriceOracle();
+					const tokenSymbol =
+						selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+					const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
+					const sourceTokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
+					const sourceTokenAmount = estimatedCostUSD / sourceTokenPriceUSD;
+					swapAmount = BigInt(Math.ceil(sourceTokenAmount * 1.02 * 10 ** sourceDecimals));
+				}
+			}
+
+			const quote = await aaPaymentStore.getSwapQuote(swapAmount);
+			swapQuote = quote;
+		} catch {
+			swapQuote = null;
+		} finally {
+			isLoadingSwapQuote = false;
+		}
+	}
 
 	// Input mode: 'amount' = specify asset quantity, 'spend' = specify payment amount
 	let inputMode: 'amount' | 'spend' = 'amount';
@@ -154,18 +206,24 @@
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else if (inputMode === 'spend') {
 			// For BUY in spend mode: selectedAmount is the exact payment amount
+			// When cross-chain swap is active, compare against source chain balance directly
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else {
 			// For BUY in amount mode: user is spending the payment token (USDC)
-			// Calculate the estimated cost using floor to avoid false "insufficient balance" errors
-			// when clicking MAX button (precision errors from float conversion)
-			const assetDecimals = assetToken?.decimals ?? 18;
-			const paymentDecimals = paymentToken?.decimals ?? 6;
-			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
-			const estimatedCost = outputInTokens * marketPrice;
-			// Use floor instead of ceil to prevent rounding up beyond actual balance
-			const estimatedCostBigInt = BigInt(Math.floor(estimatedCost * 10 ** paymentDecimals));
-			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
+			// When cross-chain swap is active and we have a quote, use the swap inputAmount
+			if (needsSwap && swapQuote && swapQuote.requiresSwap) {
+				insufficientBalanceError = swapQuote.inputAmount > spendingTokenBalance;
+			} else {
+				// Calculate the estimated cost using floor to avoid false "insufficient balance" errors
+				// when clicking MAX button (precision errors from float conversion)
+				const assetDecimals = assetToken?.decimals ?? 18;
+				const paymentDecimals = paymentToken?.decimals ?? 6;
+				const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
+				const estimatedCost = outputInTokens * marketPrice;
+				// Use floor instead of ceil to prevent rounding up beyond actual balance
+				const estimatedCostBigInt = BigInt(Math.floor(estimatedCost * 10 ** paymentDecimals));
+				insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
+			}
 		}
 	}
 
@@ -303,6 +361,15 @@
 		if (!selectedAmount || !marketPrice) return { value: '0.00', label: '' };
 		if (inputMode === 'spend') {
 			// Spend mode: show estimated tokens received
+			// When cross-chain swap is active, use outputAmount (USDC arriving on Base after fees)
+			if (needsSwap && swapQuote && swapQuote.requiresSwap) {
+				const effectiveUSDC = parseFloat(formatUnits(swapQuote.outputAmount, 6));
+				const tokensReceived = effectiveUSDC / marketPrice;
+				return {
+					value: `~${tokensReceived.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`,
+					label: 'Est. tokens (after swap fees)'
+				};
+			}
 			const spendInTokens = parseFloat(formatUnits(selectedAmount, paymentToken?.decimals || 6));
 			const tokensReceived = spendInTokens / marketPrice;
 			return {
@@ -311,6 +378,16 @@
 			};
 		} else {
 			// Amount mode: show estimated cost
+			// When cross-chain swap is active, show the source token amount (inputAmount) the user pays
+			if (needsSwap && swapQuote && swapQuote.requiresSwap && selectedSourceToken) {
+				const sourceAmount = parseFloat(
+					formatUnits(swapQuote.inputAmount, selectedSourceToken.decimals)
+				);
+				return {
+					value: `~${sourceAmount.toFixed(2)} ${selectedSourceToken.symbol}`,
+					label: 'Est. cost (incl. swap fees)'
+				};
+			}
 			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
 			const total = outputInTokens * marketPrice;
 			return {
@@ -923,9 +1000,21 @@
 					<div class="flex justify-between">
 						<span class="text-gray-400">{estimatedTradeResult.label || 'Estimated'}</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{isLoadingPrice || priceError ? 'N/A' : estimatedTradeResult.value}
+							{isLoadingPrice || priceError
+								? 'N/A'
+								: isLoadingSwapQuote
+									? 'Loading...'
+									: estimatedTradeResult.value}
 						</span>
 					</div>
+					{#if needsSwap && swapQuote && swapQuote.requiresSwap && !isLoadingPrice && !priceError}
+						<div class="mt-1 flex justify-between text-xs text-gray-500">
+							<span>USDC after swap</span>
+							<span>
+								~{parseFloat(formatUnits(swapQuote.outputAmount, 6)).toFixed(2)} USDC
+							</span>
+						</div>
+					{/if}
 					{#if insufficientBalanceError}
 						<div class="mt-2 text-sm text-red-400">
 							Insufficient {spendingToken?.symbol ?? 'token'} balance
