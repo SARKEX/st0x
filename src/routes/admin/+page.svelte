@@ -1149,7 +1149,7 @@
 
 	// Network config
 	const network = networks[0]; // Base mainnet
-	const USDC_ADDRESS = '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58'.toLowerCase();
+	const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'.toLowerCase();
 
 	// Fetch TVL data from snapshots
 	async function fetchTvlData() {
