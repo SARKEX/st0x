@@ -19,6 +19,8 @@
 		sortQuotesByPrice
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
+	import { track } from '$lib/services/analytics';
+	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -67,10 +69,86 @@
 		quoteFreshnessInterval = setInterval(updateQuoteFreshness, 1000);
 	}
 
+	// Analytics tracking
+	let panelOpenTime = Date.now();
+	let lastTrackedError: string | null = null;
+	let tradeSubmittedSuccessfully = false;
+
+	onMount(() => {
+		panelOpenTime = Date.now();
+		track('trade_panel_opened', {
+			order_type: 'market',
+			token_symbol: assetToken?.symbol
+		});
+	});
+
+	// Track errors when they appear
+	$: if (insufficientBalanceError && selectedAmount > 0n && lastTrackedError !== 'insufficient_balance') {
+		lastTrackedError = 'insufficient_balance';
+		track('trade_error_shown', {
+			error_type: 'insufficient_balance',
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			entered_amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+			balance_available: spendingTokenBalanceDecimals !== null ? formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals) : '0'
+		});
+	}
+
+	$: if (insufficientLiquidityWarning && selectedAmount > 0n && lastTrackedError !== 'insufficient_liquidity') {
+		lastTrackedError = 'insufficient_liquidity';
+		track('trade_error_shown', {
+			error_type: 'insufficient_liquidity',
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			entered_amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+			available_liquidity: availableLiquidityFormatted
+		});
+	}
+
+	$: if (priceError && selectedAmount > 0n && lastTrackedError !== `price_${priceErrorReason}`) {
+		lastTrackedError = `price_${priceErrorReason}`;
+		track('trade_error_shown', {
+			error_type: `price_${priceErrorReason}`,
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			entered_amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0'
+		});
+	}
+
+	// Reset error tracking when amount changes significantly
+	$: if (selectedAmount === 0n) {
+		lastTrackedError = null;
+	}
+
 	// Cleanup interval on component destroy
 	import { onDestroy } from 'svelte';
 	onDestroy(() => {
 		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
+
+		// Track abandonment if user had entered values but didn't complete trade
+		if (!tradeSubmittedSuccessfully && selectedAmount > 0n) {
+			const currentError = insufficientBalanceError ? 'insufficient_balance'
+				: insufficientLiquidityWarning ? 'insufficient_liquidity'
+				: priceError ? `price_${priceErrorReason}`
+				: orderPreparationError ? 'preparation_error'
+				: null;
+
+			track('trade_panel_abandoned', {
+				order_type: 'market',
+				token_symbol: assetToken?.symbol,
+				order_side: orderSide.toLowerCase(),
+				stage: isSubmittingMarketOrder ? 'submitting' : 'ready_to_submit',
+				values_entered: {
+					amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+					side: orderSide.toLowerCase()
+				},
+				intended_trade_size_usd: marketPrice && assetToken
+					? parseFloat(formatUnits(selectedAmount, assetToken.decimals)) * marketPrice
+					: null,
+				time_spent_ms: Date.now() - panelOpenTime,
+				last_error: currentError
+			});
+		}
 	});
 
 	$: isQuoteStale = quoteFreshnessSeconds > ORDERBOOK_MAX_STALENESS_MS / 1000;
@@ -613,6 +691,15 @@
 	}
 
 	const handleMarketOrder = async () => {
+		// Track button click
+		track('trade_button_clicked', {
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			order_side: orderSide.toLowerCase(),
+			amount: assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+			is_authenticated: $isAuthenticated
+		});
+
 		// Check if user is connected
 		if (!$isAuthenticated) {
 			promptWalletConnection();
@@ -689,10 +776,31 @@
 
 			if (!result.success && result.error) {
 				orderPreparationError = result.error;
+				track('trade_failed', {
+					order_type: 'market',
+					token_symbol: assetToken?.symbol,
+					order_side: orderSide.toLowerCase(),
+					error_message: result.error
+				});
+			} else if (result.success) {
+				tradeSubmittedSuccessfully = true;
+				track('trade_initiated', {
+					order_type: 'market',
+					token_symbol: assetToken?.symbol,
+					order_side: orderSide.toLowerCase(),
+					amount: formatUnits(selectedAmount, assetToken.decimals),
+					avg_price: marketPrice
+				});
 			}
 		} catch (error) {
 			console.error('Market order error:', error);
 			orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
+			track('trade_failed', {
+				order_type: 'market',
+				token_symbol: assetToken?.symbol,
+				order_side: orderSide.toLowerCase(),
+				error_message: orderPreparationError
+			});
 		} finally {
 			isSubmittingMarketOrder = false;
 		}

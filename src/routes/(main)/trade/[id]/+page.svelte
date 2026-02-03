@@ -13,7 +13,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import type { SgTrade } from '@rainlanguage/orderbook';
@@ -36,6 +36,8 @@
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
+	import { trackPageView } from '$lib/services/analytics';
+	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
@@ -503,8 +505,23 @@
 		}
 		return null;
 	})();
+	let cleanupScrollTracking: (() => void) | null = null;
+
 	onMount(() => {
-		return () => {};
+		// Track page view with token info
+		trackPageView('trade_page', {
+			token_symbol: currentPythToken?.symbol,
+			token_id: $page.params.id
+		});
+
+		// Initialize scroll tracking
+		cleanupScrollTracking = initScrollTracking('trade_page');
+
+		return () => {
+			if (cleanupScrollTracking) {
+				cleanupScrollTracking();
+			}
+		};
 	});
 	const handleAssetTabChange = (event: CustomEvent<{ id: string }>) => {
 		const nextId = event.detail.id;

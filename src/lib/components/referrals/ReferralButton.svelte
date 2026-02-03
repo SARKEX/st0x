@@ -9,6 +9,7 @@
 		showReferralDashboardModal,
 		resetReferralState
 	} from '$lib/stores/referralStore';
+	import { track } from '$lib/services/analytics';
 
 	let showTooltip = false;
 
@@ -28,8 +29,13 @@
 
 	function handleClick() {
 		if ($referralProfile) {
+			track('referral_dashboard_opened', {
+				total_points: $referralPerformance?.totalPoints,
+				wallets_referred: $referralPerformance?.walletsReferred
+			});
 			showReferralDashboardModal.set(true);
 		} else {
+			track('referral_join_modal_opened');
 			showReferralJoinModal.set(true);
 		}
 	}
