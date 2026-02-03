@@ -732,15 +732,31 @@ export class RhinestoneClient {
 						: String(orchestratorError);
 				const errorStack = orchestratorError instanceof Error ? orchestratorError.stack : undefined;
 
+				// Extract traceId if available in orchestrator error
+				const errorObj = orchestratorError as Error & {
+					traceId?: string;
+					trace_id?: string;
+					context?: { traceId?: string };
+					response?: { traceId?: string; data?: { traceId?: string } };
+				};
+				const traceId =
+					errorObj?.traceId ||
+					errorObj?.trace_id ||
+					errorObj?.context?.traceId ||
+					errorObj?.response?.traceId ||
+					errorObj?.response?.data?.traceId;
+
 				console.error('[Rhinestone Client] Orchestrator quote failed, using gas oracle fallback:', {
 					error: errorMessage,
 					stack: errorStack,
+					traceId,
 					sourceChain: params.sourceChain,
 					targetChain: params.targetChain,
 					sourceToken: normalizedSourceToken.address,
 					targetToken: normalizedTargetToken.address,
 					amount: params.amount.toString(),
-					feeAsset
+					feeAsset,
+					fullError: orchestratorError // Log full error object for Rhinestone debugging
 				});
 
 				const gasOracle = getGasOracle();
