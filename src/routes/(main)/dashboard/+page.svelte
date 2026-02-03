@@ -42,6 +42,9 @@
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
+	import { isOldToken, getMigrationMappingByAddress } from '$lib/config/tokenMigration';
+	import { openTokenSwapModal, type SwapModalToken } from '$lib/stores/dynamicStore';
+	import TokenSwapModal from '$lib/components/TokenSwapModal.svelte';
 
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
@@ -116,6 +119,24 @@
 			balanceRaw: holding.walletBalance
 		};
 		openSendFundsModal(token);
+	}
+
+	// Helper to open swap modal for old tokens
+	function handleSwapOldToken(holding: {
+		symbol: string;
+		address: string;
+		decimals: number;
+		walletBalance: bigint;
+		totalBalance: number;
+	}) {
+		const token: SwapModalToken = {
+			symbol: holding.symbol,
+			address: holding.address,
+			decimals: holding.decimals,
+			balance: holding.totalBalance.toFixed(4),
+			balanceRaw: holding.walletBalance
+		};
+		openTokenSwapModal(token);
 	}
 
 	// Copy address to clipboard
@@ -1000,6 +1021,7 @@
 
 					<!-- Holdings Section (Asset Tokens) -->
 					<Section>
+						<div id="holdings"></div>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Holdings</h2>
 						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
 							Asset tokens combined across wallet and vaults
@@ -1050,14 +1072,36 @@
 										{#each assetHoldings as holding}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<TokenDisplay
-														logoUrl={ALL_TOKENS.find(
-															(s) => s.address.toLowerCase() === holding.address.toLowerCase()
-														)?.logoUrl}
-														symbol={holding.symbol}
-														name={holding.name}
-														hideNameOnMobile={true}
-													/>
+													<div class="flex items-center gap-1.5">
+														<TokenDisplay
+															logoUrl={ALL_TOKENS.find(
+																(s) => s.address.toLowerCase() === holding.address.toLowerCase()
+															)?.logoUrl}
+															symbol={holding.symbol}
+															name={holding.name}
+															hideNameOnMobile={true}
+														/>
+														{#if isOldToken(holding.address)}
+															<span
+																class="text-yellow-500"
+																title="Legacy token - needs to be swapped to wrapped version"
+															>
+																<svg
+																	class="h-4 w-4"
+																	fill="none"
+																	stroke="currentColor"
+																	viewBox="0 0 24 24"
+																>
+																	<path
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		stroke-width="2"
+																		d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+																	/>
+																</svg>
+															</span>
+														{/if}
+													</div>
 												</td>
 												<td
 													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
@@ -1156,11 +1200,22 @@
 												</td>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">
 													<div class="flex justify-center gap-2">
-														<Button
-															size="sm"
-															variant="primary"
-															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
-														>
+														{#if isOldToken(holding.address)}
+															<Button
+																size="sm"
+																variant="primary"
+																className="bg-yellow-500 hover:bg-yellow-400"
+																on:click={() => handleSwapOldToken(holding)}
+															>
+																Swap
+															</Button>
+														{:else}
+															<Button
+																size="sm"
+																variant="primary"
+																on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
+															>
+														{/if}
 														{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
 															<Button
 																size="sm"
@@ -1656,3 +1711,6 @@
 		</div>
 	</div>
 {/if}
+
+<!-- Token Swap Modal for migrating old tokens -->
+<TokenSwapModal />
