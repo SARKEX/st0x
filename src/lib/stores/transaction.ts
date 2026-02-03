@@ -1119,19 +1119,19 @@ const transactionStore = () => {
 						// Calculate per-batch maximumIO if fill amounts provided
 						let batchMaximumInput = config.maximumIO;
 						let batchFillTotal = 0n;
-					if (orderFillAmounts && inputDecimals !== undefined) {
-						batchFillTotal = currentBatchIndices.reduce(
-							(sum, idx) => sum + (orderFillAmounts[idx] ?? 0n),
-							0n
-						);
-						if (batchFillTotal > 0n) {
-							const batchMaxInputFloat = Float.fromFixedDecimalLossy(
-								batchFillTotal,
-								inputDecimals
+						if (orderFillAmounts && inputDecimals !== undefined) {
+							batchFillTotal = currentBatchIndices.reduce(
+								(sum, idx) => sum + (orderFillAmounts[idx] ?? 0n),
+								0n
 							);
-							batchMaximumInput = batchMaxInputFloat.float.asHex();
+							if (batchFillTotal > 0n) {
+								const batchMaxInputFloat = Float.fromFixedDecimalLossy(
+									batchFillTotal,
+									inputDecimals
+								);
+								batchMaximumInput = batchMaxInputFloat.float.asHex();
+							}
 						}
-					}
 
 						console.log(`${LOG_PREFIX} Batch ${batches.length + 1} finalized`, {
 							orderCount: currentBatchOrders.length,

@@ -45,5 +45,7 @@ export const mockCurrentNetwork = {
 
 Object.assign(mockCurrentNetwork, {
 	settlementTokens: mockCurrentNetwork.paymentTokens,
-	defaultSettlementToken: mockCurrentNetwork.defaultPaymentToken
+	defaultSettlementToken: mockCurrentNetwork.defaultPaymentToken,
+	// Trusted orderbook used in transactionStore tests (0x1234)
+	trustedOrderbooks: ['0x1234']
 });

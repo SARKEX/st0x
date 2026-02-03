@@ -88,7 +88,7 @@ function processOrdersWithQuotes(
 					}
 
 					const { maxOutput, ratio } = quote.data;
-					
+
 					// Validate that we have valid hex-encoded Float values (0x + 64 hex chars = 66 chars total)
 					if (
 						typeof ratio !== 'string' ||
@@ -198,9 +198,6 @@ function processOrdersWithQuotes(
 					console.error('Error processing quote:', error);
 				}
 			});
-			
-
-			
 		} catch (error) {
 			// Skip orders that fail to process
 			console.error('Error processing order:', error);

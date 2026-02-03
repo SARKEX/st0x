@@ -80,7 +80,6 @@ export function parseSequentialVaultNumber(vaultId: bigint | string): number | u
 	return undefined;
 }
 
-
 export type DcaDeploymentArgs = {
 	outputToken: Token;
 	inputToken: Token;

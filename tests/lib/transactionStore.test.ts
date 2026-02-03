@@ -152,6 +152,7 @@ function createMockDeploymentArgs(overrides = {}) {
 				}
 			],
 			chainId: 8453,
+			emitMetaCall: undefined,
 			...overrides
 		}
 	};
@@ -181,7 +182,8 @@ describe('transactionStore tests', () => {
 						token: approvalCount === 2 ? `0xtoken${i}` : `0xtoken${i}`,
 						symbol: approvalCount === 2 ? `TEST${i}` : `TEST${i}`
 					})),
-					chainId: 8453
+					chainId: 8453,
+					emitMetaCall: undefined
 				}
 			})
 		});
