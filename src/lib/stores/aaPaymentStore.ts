@@ -18,6 +18,7 @@ import {
 } from '$lib/services/account-abstraction';
 import { getDynamicAccountForRhinestone } from '$lib/services/account-abstraction/wallets/dynamic';
 import { walletAddress } from '$lib/stores/authStore';
+import { payFeesInStablecoin } from '$lib/stores';
 
 // Quote refresh interval (45 seconds - quotes expire at 60s)
 const QUOTE_REFRESH_INTERVAL_MS = 45000;
@@ -286,6 +287,7 @@ function createAAPaymentStore() {
 		getSwapQuote: async (amount: bigint) => {
 			const state = get({ subscribe });
 			const $walletAddress = get(walletAddress);
+			const $payFeesInStablecoin = get(payFeesInStablecoin);
 
 			if (!state.sourceToken || !$walletAddress) return null;
 
@@ -300,12 +302,16 @@ function createAAPaymentStore() {
 			try {
 				const orchestrator = getAAOrchestrator();
 
+				// Determine feeAsset based on user preference
+				const feeAsset = $payFeesInStablecoin ? 'USDC' : undefined;
+
 				// Use cached quote if valid and for the same amount
 				const quote = await orchestrator.getOrRefreshQuote(
 					state.sourceToken,
 					amount,
 					$walletAddress as Address,
-					state.quoteAmount === amount ? state.cachedQuote : null
+					state.quoteAmount === amount ? state.cachedQuote : null,
+					feeAsset
 				);
 
 				// Cache the quote

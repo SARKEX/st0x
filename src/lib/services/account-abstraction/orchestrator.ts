@@ -238,7 +238,8 @@ export class AccountAbstractionOrchestrator {
 	async getPreTradeQuote(
 		sourceToken: PaymentToken,
 		amount: bigint,
-		recipient: Address
+		recipient: Address,
+		feeAsset?: string
 	): Promise<CrossChainSwapQuote | null> {
 		try {
 			if (!this.needsCrossChainSwap(sourceToken, SETTLEMENT_CHAIN_ID)) {
@@ -259,7 +260,7 @@ export class AccountAbstractionOrchestrator {
 				};
 			}
 
-			return await getSwapToSettlementQuote(sourceToken, amount, recipient);
+			return await getSwapToSettlementQuote(sourceToken, amount, recipient, feeAsset);
 		} catch {
 			return null;
 		}
@@ -280,7 +281,8 @@ export class AccountAbstractionOrchestrator {
 		sourceToken: PaymentToken,
 		amount: bigint,
 		recipient: Address,
-		currentQuote?: CrossChainSwapQuote | null
+		currentQuote?: CrossChainSwapQuote | null,
+		feeAsset?: string
 	): Promise<CrossChainSwapQuote | null> {
 		// If we have a valid quote, return it
 		if (currentQuote && this.isQuoteValid(currentQuote)) {
@@ -288,7 +290,7 @@ export class AccountAbstractionOrchestrator {
 		}
 
 		// Otherwise fetch a fresh quote
-		return this.getPreTradeQuote(sourceToken, amount, recipient);
+		return this.getPreTradeQuote(sourceToken, amount, recipient, feeAsset);
 	}
 
 	/**

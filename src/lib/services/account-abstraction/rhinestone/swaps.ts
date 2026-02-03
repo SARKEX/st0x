@@ -45,7 +45,8 @@ const ERC20_ABI = parseAbi([
 export async function getSwapToSettlementQuote(
 	sourceToken: PaymentToken,
 	amount: bigint,
-	recipient: Address
+	recipient: Address,
+	feeAsset?: string
 ): Promise<CrossChainSwapQuote> {
 	const client = getRhinestoneClient();
 
@@ -81,7 +82,7 @@ export async function getSwapToSettlementQuote(
 		slippageBps: 50 // 0.5% default slippage
 	};
 
-	return client.getSwapQuote(swapParams);
+	return client.getSwapQuote(swapParams, feeAsset);
 }
 
 /**
