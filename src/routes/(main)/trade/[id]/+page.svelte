@@ -506,14 +506,18 @@
 		return null;
 	})();
 	let cleanupScrollTracking: (() => void) | null = null;
+	let pageViewTracked = false;
 
-	onMount(() => {
-		// Track page view with token info
+	// Track page view reactively when token data is available
+	$: if (currentPythToken?.symbol && !pageViewTracked) {
+		pageViewTracked = true;
 		trackPageView('trade_page', {
-			token_symbol: currentPythToken?.symbol,
+			token_symbol: currentPythToken.symbol,
 			token_id: $page.params.id
 		});
+	}
 
+	onMount(() => {
 		// Initialize scroll tracking
 		cleanupScrollTracking = initScrollTracking('trade_page');
 
