@@ -506,11 +506,12 @@
 		return null;
 	})();
 	let cleanupScrollTracking: (() => void) | null = null;
-	let pageViewTracked = false;
+	let lastTrackedTokenId: string | null = null;
 
 	// Track page view reactively when token data is available
-	$: if (currentPythToken?.symbol && !pageViewTracked) {
-		pageViewTracked = true;
+	// Uses lastTrackedTokenId to ensure tracking fires for each new token during client-side navigation
+	$: if (currentPythToken?.symbol && $page.params.id !== lastTrackedTokenId) {
+		lastTrackedTokenId = $page.params.id;
 		trackPageView('trade_page', {
 			token_symbol: currentPythToken.symbol,
 			token_id: $page.params.id
