@@ -19,7 +19,7 @@ export function initAnalytics(apiKey: string): void {
 
 	posthog.init(apiKey, {
 		api_host: 'https://us.i.posthog.com',
-		capture_pageview: true,
+		capture_pageview: false, // Manual tracking via trackPageView() to avoid duplicates
 		capture_pageleave: true,
 		persistence: 'localStorage+cookie',
 		autocapture: false, // We'll do manual tracking for more control
