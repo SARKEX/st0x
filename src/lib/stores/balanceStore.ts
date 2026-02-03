@@ -120,10 +120,16 @@ export async function fetchAllTokenBalances(
 	}
 
 	// Execute single batched multicall for all tokens across all chains
+	// Add timeout to prevent hanging if an RPC is slow
 	try {
-		const results = await readContracts(wagmiConfig, {
+		const timeoutMs = 15_000; // 15 second timeout
+		const resultsPromise = readContracts(wagmiConfig, {
 			contracts: allContracts
 		});
+		const timeoutPromise = new Promise<never>((_, reject) =>
+			setTimeout(() => reject(new Error('Balance fetch timeout')), timeoutMs)
+		);
+		const results = await Promise.race([resultsPromise, timeoutPromise]);
 
 		// Process results
 		for (let i = 0; i < allContracts.length; i++) {
