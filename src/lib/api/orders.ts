@@ -256,9 +256,9 @@ export async function fetchAndQuotePaymentTokenOrders(
 
 			// Filter only by stock tokens - payment token filtering is too restrictive
 			// Orders should be visible regardless of which payment token is configured
-			const tokenAddresses: string[] = stockTokens.map((t) => t.address) as `0x${string}`[];
+			const tokenAddresses = stockTokens.map((t) => t.address as `0x${string}`);
 
-			filters.tokens = tokenAddresses as `0x${string}`[];
+			filters.tokens = { inputs: tokenAddresses, outputs: tokenAddresses };
 
 			const ordersResult = await client.getOrders([networkId], filters, page);
 
@@ -354,10 +354,11 @@ export async function fetchAndQuoteTokenOrders(
 	const client = await getLoadBalancedClient(network);
 
 	// Fetch orders for this specific token only
+	const tokenAddr = tokenAddress as `0x${string}`;
 	const filters: GetOrdersFilters = {
 		active: true,
 		owners: [],
-		tokens: [tokenAddress as `0x${string}`]
+		tokens: { inputs: [tokenAddr], outputs: [tokenAddr] }
 	};
 
 	const ordersResult = await client.getOrders([networkId], filters, 1);

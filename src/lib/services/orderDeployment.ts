@@ -12,7 +12,6 @@
  */
 
 import { get } from 'svelte/store';
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
 import type { Token } from '$lib/types';
 import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';

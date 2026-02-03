@@ -68,13 +68,18 @@
 					return [];
 				}
 				const client = await createRaindexClient();
-				const filters: { owners: `0x${string}`[]; active: boolean; tokens?: `0x${string}`[] } = {
+				const filters: {
+					owners: `0x${string}`[];
+					active: boolean;
+					tokens?: { inputs?: `0x${string}`[]; outputs?: `0x${string}`[] };
+				} = {
 					owners: [signer as `0x${string}`],
 					active: false
 				};
 				// Only filter by token if provided
 				if (token) {
-					filters.tokens = [token as `0x${string}`];
+					const tokenAddr = token as `0x${string}`;
+					filters.tokens = { inputs: [tokenAddr], outputs: [tokenAddr] };
 				}
 				const result = await client.getOrders([network.id], filters, 1);
 				if (result.error) {
