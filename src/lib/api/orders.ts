@@ -79,7 +79,6 @@ function processOrdersWithQuotes(
 			const abiCoder = AbiCoder.defaultAbiCoder();
 			const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
 			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
-
 			// Process each quote for this order
 			quotes.forEach((quote) => {
 				try {
@@ -89,7 +88,7 @@ function processOrdersWithQuotes(
 					}
 
 					const { maxOutput, ratio } = quote.data;
-
+					
 					// Validate that we have valid hex-encoded Float values (0x + 64 hex chars = 66 chars total)
 					if (
 						typeof ratio !== 'string' ||
@@ -102,14 +101,12 @@ function processOrdersWithQuotes(
 						console.warn('Invalid Float hex format for ratio or maxOutput:', { ratio, maxOutput });
 						return;
 					}
-
 					// Verify maxOutput is not zero by converting to Float and checking
 					const maxOutputFloat = Float.fromHex(maxOutput as `0x${string}`);
 					if (maxOutputFloat.error || !maxOutputFloat.value) {
 						console.warn('Failed to parse maxOutput Float:', maxOutputFloat.error);
 						return;
 					}
-
 					// Check if maxOutput is zero
 					const zeroFloat = Float.fromHex(
 						'0x0000000000000000000000000000000000000000000000000000000000000000'
@@ -120,7 +117,6 @@ function processOrdersWithQuotes(
 							return;
 						}
 					}
-
 					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
 					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
 					if (!inputDefinition || !outputDefinition) {
@@ -135,11 +131,9 @@ function processOrdersWithQuotes(
 					const normalizedInput = normalizeAddress(inputTokenAddress);
 					const normalizedOutput = normalizeAddress(outputTokenAddress);
 					const normalizedQuote = normalizeAddress(quoteToken.address);
-
 					if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
 						return;
 					}
-
 					const allTokens = [quoteToken, ...stockTokens];
 					const inputTokenMeta = getTokenMetadata(inputTokenAddress, allTokens);
 					const outputTokenMeta = getTokenMetadata(outputTokenAddress, allTokens);
@@ -204,6 +198,9 @@ function processOrdersWithQuotes(
 					console.error('Error processing quote:', error);
 				}
 			});
+			
+
+			
 		} catch (error) {
 			// Skip orders that fail to process
 			console.error('Error processing order:', error);
@@ -275,6 +272,8 @@ export async function fetchAndQuotePaymentTokenOrders(
 			const pageOrders = ordersResult.value;
 			allOrders.push(...pageOrders);
 
+			console.log('allOrders : ', allOrders);
+
 			// If we got fewer orders than the page size, we've reached the end
 			hasMore = pageOrders.length === pageSize;
 			page++;
@@ -315,6 +314,8 @@ export async function fetchAndQuotePaymentTokenOrders(
 		defaultPaymentToken,
 		stockTokens
 	);
+
+	console.log('processedQuotes : ', processedQuotes);
 
 	return processedQuotes;
 }
@@ -387,6 +388,8 @@ export async function fetchAndQuoteTokenOrders(
 		defaultPaymentToken,
 		stockTokens
 	);
+
+	console.log('processedQuotes : ', processedQuotes);
 
 	return processedQuotes;
 }

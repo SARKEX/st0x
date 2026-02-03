@@ -18,7 +18,7 @@ import {
 	type RaindexOrderQuote,
 	type SgOrder,
 	type TakeOrderConfigV4,
-	type TakeOrdersConfigV4
+	type TakeOrdersConfigV5
 } from '@rainlanguage/orderbook';
 import { AbiCoder } from 'ethers';
 import { Float } from '@rainlanguage/float';
@@ -261,10 +261,11 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		}
 
 		// 10. Build TakeOrdersConfig
-		const takeOrdersConfig: TakeOrdersConfigV4 = {
-			minimumInput: Float.fromBigint(0n).asHex(),
-			maximumInput: maximumInputFloat.float.asHex(),
+		const takeOrdersConfig: TakeOrdersConfigV5 = {
+			minimumIO: Float.fromBigint(0n).asHex(),
+			maximumIO: maximumInputFloat.float.asHex(),
 			maximumIORatio: bufferedRatioResult.value.asHex(),
+			IOIsInput: true as unknown as string, // Runtime expects boolean; package types incorrectly declare string
 			orders: takeOrderConfigs,
 			data: '0x'
 		};
@@ -300,7 +301,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const shouldRecalculate = orderSide === 'Sell' || inputMode === 'spend';
 		const recalculateConfig =
 			shouldRecalculate && refreshQuotes
-				? async (): Promise<TakeOrdersConfigV4 | null> => {
+				? async (): Promise<TakeOrdersConfigV5 | null> => {
 						try {
 							const freshQuotes = await refreshQuotes();
 
@@ -343,9 +344,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 							}
 
 							return {
-								minimumInput: Float.fromBigint(0n).asHex(),
-								maximumInput: freshMaximumInputFloat.float.asHex(),
+								minimumIO: Float.fromBigint(0n).asHex(),
+								maximumIO: freshMaximumInputFloat.float.asHex(),
 								maximumIORatio: freshBufferedRatioResult.value.asHex(),
+								IOIsInput: true as unknown as string, // Runtime expects boolean; package types incorrectly declare string
 								orders: takeOrderConfigs,
 								data: '0x'
 							};

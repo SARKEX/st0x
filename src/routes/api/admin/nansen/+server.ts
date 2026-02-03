@@ -18,7 +18,7 @@ function isAuthenticated(cookies: { get: (name: string) => string | undefined })
 	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
 }
 
-const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase();
+const USDC_ADDRESS = '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58'.toLowerCase();
 const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
 
 interface Trade {
