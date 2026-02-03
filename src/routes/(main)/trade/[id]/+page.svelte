@@ -13,7 +13,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import type { SgTrade } from '@rainlanguage/orderbook';

@@ -74,6 +74,30 @@
 	let lastTrackedError: string | null = null;
 	let tradeSubmittedSuccessfully = false;
 
+	// Store current tracking state for onDestroy (to avoid stale closure values)
+	let trackingState = {
+		tokenSymbol: assetToken?.symbol,
+		orderSide: orderSide.toLowerCase(),
+		amount: '0',
+		marketPrice: 0,
+		isSubmitting: false,
+		currentError: null as string | null
+	};
+
+	// Keep tracking state up to date reactively
+	$: trackingState = {
+		tokenSymbol: assetToken?.symbol,
+		orderSide: orderSide.toLowerCase(),
+		amount: assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+		marketPrice,
+		isSubmitting: isSubmittingMarketOrder,
+		currentError: insufficientBalanceError ? 'insufficient_balance'
+			: insufficientLiquidityWarning ? 'insufficient_liquidity'
+			: priceError ? `price_${priceErrorReason}`
+			: orderPreparationError ? 'preparation_error'
+			: null
+	};
+
 	onMount(() => {
 		panelOpenTime = Date.now();
 		track('trade_panel_opened', {
@@ -126,27 +150,22 @@
 		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
 
 		// Track abandonment if user had entered values but didn't complete trade
-		if (!tradeSubmittedSuccessfully && selectedAmount > 0n) {
-			const currentError = insufficientBalanceError ? 'insufficient_balance'
-				: insufficientLiquidityWarning ? 'insufficient_liquidity'
-				: priceError ? `price_${priceErrorReason}`
-				: orderPreparationError ? 'preparation_error'
-				: null;
-
+		// Use trackingState to get current values (avoids stale closure)
+		if (!tradeSubmittedSuccessfully && trackingState.amount !== '0') {
 			track('trade_panel_abandoned', {
 				order_type: 'market',
-				token_symbol: assetToken?.symbol,
-				order_side: orderSide.toLowerCase(),
-				stage: isSubmittingMarketOrder ? 'submitting' : 'ready_to_submit',
+				token_symbol: trackingState.tokenSymbol,
+				order_side: trackingState.orderSide,
+				stage: trackingState.isSubmitting ? 'submitting' : 'ready_to_submit',
 				values_entered: {
-					amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
-					side: orderSide.toLowerCase()
+					amount: trackingState.amount,
+					side: trackingState.orderSide
 				},
-				intended_trade_size_usd: marketPrice && assetToken
-					? parseFloat(formatUnits(selectedAmount, assetToken.decimals)) * marketPrice
+				intended_trade_size_usd: trackingState.marketPrice
+					? parseFloat(trackingState.amount) * trackingState.marketPrice
 					: null,
 				time_spent_ms: Date.now() - panelOpenTime,
-				last_error: currentError
+				last_error: trackingState.currentError
 			});
 		}
 	});

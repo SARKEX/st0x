@@ -7,6 +7,8 @@ import { currentNetwork } from '$lib/stores';
 
 let initialized = false;
 let previousWalletAddress: string | null = null;
+let previousAuthMethod: string | null = null;
+let walletUnsubscribe: (() => void) | null = null;
 
 /**
  * Initialize PostHog analytics
@@ -22,7 +24,7 @@ export function initAnalytics(apiKey: string): void {
 		persistence: 'localStorage+cookie',
 		autocapture: false, // We'll do manual tracking for more control
 		session_recording: {
-			maskAllInputs: false,
+			maskAllInputs: true,
 			maskInputOptions: {
 				password: true
 			}
@@ -39,12 +41,20 @@ export function initAnalytics(apiKey: string): void {
  * Subscribe to wallet address changes for user identification
  */
 function setupWalletTracking(): void {
-	walletAddress.subscribe((address) => {
+	// Clean up existing subscription if any
+	if (walletUnsubscribe) {
+		walletUnsubscribe();
+	}
+
+	walletUnsubscribe = walletAddress.subscribe((address) => {
 		if (address && address !== previousWalletAddress) {
 			// User connected
 			const method = get(authMethod);
 			const session = get(dynamicSession);
 			const network = get(currentNetwork);
+
+			// Store current auth method for disconnect tracking
+			previousAuthMethod = method;
 
 			// Identify user by wallet address (normalized to lowercase)
 			posthog.identify(address.toLowerCase(), {
@@ -54,24 +64,22 @@ function setupWalletTracking(): void {
 				chain_id: network?.chainId
 			});
 
-			// Track connection event
+			// Track connection event (without email domain for privacy)
 			track('wallet_connected', {
 				method,
-				wallet_type: session?.walletType,
-				email_domain: session?.email ? session.email.split('@')[1] : undefined
+				wallet_type: session?.walletType
 			});
 
 			previousWalletAddress = address;
 		} else if (!address && previousWalletAddress) {
-			// User disconnected
-			const method = get(authMethod);
-
+			// User disconnected - use stored auth method (current may already be reset)
 			track('wallet_disconnected', {
-				previous_method: method
+				previous_method: previousAuthMethod
 			});
 
 			posthog.reset();
 			previousWalletAddress = null;
+			previousAuthMethod = null;
 		}
 	});
 }
