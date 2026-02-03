@@ -25,7 +25,7 @@
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
-	import { track, trackPageView } from '$lib/services/analytics';
+	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	import { walletAddress } from '$lib/stores/authStore';
 

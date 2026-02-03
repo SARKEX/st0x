@@ -46,8 +46,6 @@ export function initScrollTracking(pageName: string): () => void {
 
 		ticking = true;
 		requestAnimationFrame(() => {
-			state.scrollCount++;
-
 			const scrollTop = window.scrollY;
 			const docHeight = document.documentElement.scrollHeight - window.innerHeight;
 
@@ -56,6 +54,9 @@ export function initScrollTracking(pageName: string): () => void {
 				ticking = false;
 				return;
 			}
+
+			// Only count valid scroll events (after docHeight validation)
+			state.scrollCount++;
 
 			const depth = Math.round((scrollTop / docHeight) * 100);
 
