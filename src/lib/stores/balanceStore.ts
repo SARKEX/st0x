@@ -94,11 +94,12 @@ export async function fetchAllTokenBalances(
 	}> = [];
 
 	// Networks to fetch balances for
+	// Skip Ethereum mainnet - public RPCs are slow/congested and cause timeouts
 	const networks: SupportedNetworkId[] = [
 		SUPPORTED_NETWORKS.BASE,
 		SUPPORTED_NETWORKS.ARBITRUM,
-		SUPPORTED_NETWORKS.OPTIMISM,
-		SUPPORTED_NETWORKS.ETHEREUM
+		SUPPORTED_NETWORKS.OPTIMISM
+		// SUPPORTED_NETWORKS.ETHEREUM - disabled due to slow public RPCs
 	];
 
 	// Collect all tokens from all networks (skip native tokens)
