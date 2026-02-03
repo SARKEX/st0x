@@ -82,31 +82,31 @@ export const publicLeaderboardError = writable(false);
 export const showDetailsModal = writable(false);
 export const showLeaderboardModal = writable(false);
 export const showRulesModal = writable(false);
-export const showRewardsAnnouncementModal = writable(false);
+export const showTokenSwapAnnouncementModal = writable(false);
 export type RewardsModalTab = 'details' | 'rules';
 export const rewardsModalTab = writable<RewardsModalTab>('details');
 
-// Local storage key for rewards announcement
-const REWARDS_ANNOUNCEMENT_SEEN_KEY = 'st0x_rewards_announcement_month1_seen';
+// Local storage key for token swap announcement
+const TOKEN_SWAP_ANNOUNCEMENT_SEEN_KEY = 'st0x_token_swap_announcement_seen';
 
-// Check if user has seen the rewards announcement
-export function hasSeenRewardsAnnouncement(): boolean {
+// Check if user has seen the token swap announcement
+export function hasSeenTokenSwapAnnouncement(): boolean {
 	if (!browser) return true;
-	return localStorage.getItem(REWARDS_ANNOUNCEMENT_SEEN_KEY) === 'true';
+	return localStorage.getItem(TOKEN_SWAP_ANNOUNCEMENT_SEEN_KEY) === 'true';
 }
 
-// Mark rewards announcement as seen
-export function markRewardsAnnouncementSeen(): void {
+// Mark token swap announcement as seen
+export function markTokenSwapAnnouncementSeen(): void {
 	if (!browser) return;
-	localStorage.setItem(REWARDS_ANNOUNCEMENT_SEEN_KEY, 'true');
-	showRewardsAnnouncementModal.set(false);
+	localStorage.setItem(TOKEN_SWAP_ANNOUNCEMENT_SEEN_KEY, 'true');
+	showTokenSwapAnnouncementModal.set(false);
 }
 
-// Initialize announcement modal on first visit
-export function initRewardsAnnouncement(): void {
+// Initialize token swap announcement modal on first visit
+export function initTokenSwapAnnouncement(): void {
 	if (!browser) return;
-	if (!hasSeenRewardsAnnouncement()) {
-		showRewardsAnnouncementModal.set(true);
+	if (!hasSeenTokenSwapAnnouncement()) {
+		showTokenSwapAnnouncementModal.set(true);
 	}
 }
 
