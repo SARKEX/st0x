@@ -4,6 +4,7 @@
 	import { switchChain } from '@wagmi/core';
 	import { wagmiConfig, chainId, connected } from 'svelte-wagmi';
 	import { get } from 'svelte/store';
+	import { track } from '$lib/services/analytics';
 
 	let isOpen = false;
 
@@ -20,12 +21,28 @@
 	}
 
 	async function selectNetwork(network: (typeof networks)[0]) {
+		const previousNetwork = $currentNetwork;
+		track('network_switched', {
+			from_network: previousNetwork?.displayName,
+			to_network: network.displayName,
+			from_chain_id: previousNetwork?.chainId,
+			to_chain_id: network.chainId
+		});
+
 		$currentNetwork = network;
 		isOpen = false;
 
 		// If wallet is connected and on a different network, prompt to switch
 		if ($connected && $chainId && $chainId !== network.id) {
-			await switchChain(get(wagmiConfig), { chainId: network.id });
+			try {
+				await switchChain(get(wagmiConfig), { chainId: network.id });
+			} catch (error) {
+				track('network_switch_failed', {
+					from_network: previousNetwork?.displayName,
+					to_network: network.displayName,
+					error: error instanceof Error ? error.message : 'Unknown error'
+				});
+			}
 		}
 	}
 
@@ -39,6 +56,11 @@
 
 	function toggleDropdown() {
 		isOpen = !isOpen;
+		if (isOpen) {
+			track('network_selector_opened', {
+				current_network: $currentNetwork?.displayName
+			});
+		}
 	}
 
 	// Close dropdown when clicking outside

@@ -16,6 +16,42 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
+	import { track } from '$lib/services/analytics';
+	import { onMount, onDestroy } from 'svelte';
+
+	// Analytics tracking
+	let panelOpenTime = Date.now();
+	let tradeSubmittedSuccessfully = false;
+
+	onMount(() => {
+		panelOpenTime = Date.now();
+		track('trade_panel_opened', {
+			order_type: 'limit',
+			token_symbol: assetToken?.symbol
+		});
+	});
+
+	onDestroy(() => {
+		// Track abandonment if user had entered values but didn't complete trade
+		if (!tradeSubmittedSuccessfully && selectedAmount > 0n) {
+			track('trade_panel_abandoned', {
+				order_type: 'limit',
+				token_symbol: assetToken?.symbol,
+				order_side: orderSide.toLowerCase(),
+				stage: selectedInitialRatio ? 'price_entered' : 'amount_entered',
+				values_entered: {
+					amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+					price: selectedInitialRatio || null,
+					side: orderSide.toLowerCase()
+				},
+				intended_trade_size_usd: selectedInitialRatio && assetToken
+					? parseFloat(formatUnits(selectedAmount, assetToken.decimals)) * parseFloat(selectedInitialRatio)
+					: null,
+				time_spent_ms: Date.now() - panelOpenTime,
+				last_error: belowMinTradeError ? 'below_minimum' : null
+			});
+		}
+	});
 
 	/**
 	 * assetToken: The non-settlement token being traded (from prop)
@@ -165,6 +201,16 @@
 	};
 
 	const handleDeploy = async () => {
+		// Track button click
+		track('trade_button_clicked', {
+			order_type: 'limit',
+			token_symbol: assetToken?.symbol,
+			order_side: orderSide.toLowerCase(),
+			amount: assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+			limit_price: selectedInitialRatio || null,
+			is_authenticated: $isAuthenticated
+		});
+
 		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
 		// Check if user is connected
 		if (!$isAuthenticated) {
@@ -237,6 +283,13 @@
 			pendingDeployData = deployData;
 			showPriceWarning = true;
 		} else {
+			tradeSubmittedSuccessfully = true;
+			track('limit_order_deployed', {
+				token_symbol: assetToken?.symbol,
+				order_side: orderSide.toLowerCase(),
+				price: selectedInitialRatio,
+				amount: formatUnits(selectedAmount, assetToken.decimals)
+			});
 			transactionStore.handleLimitDeploy(deployData);
 		}
 	};
