@@ -18,7 +18,7 @@ export function initAnalytics(apiKey: string): void {
 	if (!browser || initialized || !apiKey) return;
 
 	posthog.init(apiKey, {
-		api_host: '/ingest', // Reverse proxy to avoid MIME type and ad blocker issues
+		api_host: '/api/ingest', // Edge function proxy to fix MIME type issues
 		ui_host: 'https://us.i.posthog.com', // Required for toolbar functionality
 		capture_pageview: false, // Manual tracking via trackPageView() to avoid duplicates
 		capture_pageleave: true,
