@@ -1435,7 +1435,9 @@
 					<!-- Unwrapped Tokens Section -->
 					{#if unwrappedHoldings.length > 0}
 						<Section>
-							<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Unwrapped Tokens</h2>
+							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+								Unwrapped Tokens
+							</h2>
 							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
 								These tokens can be wrapped for trading
 							</p>
