@@ -198,9 +198,11 @@
 		},
 		enabled: Boolean(currentToken?.address && $walletAddress && $wagmiConfig)
 	});
+	// Use tokenId from URL params (wrapped token address) to find the token config
+	// Note: currentToken.address from subgraph may differ from the wrapped token address
 	$: currentPythToken = TOKENS.find(
 		(token) =>
-			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
+			token.address.toLowerCase() === tokenId.toLowerCase() &&
 			token.chainId === $currentNetwork?.chainId
 	);
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
