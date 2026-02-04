@@ -23,12 +23,8 @@ export function initAnalytics(apiKey: string): void {
 		capture_pageleave: true,
 		persistence: 'localStorage+cookie',
 		autocapture: false, // We'll do manual tracking for more control
-		session_recording: {
-			maskAllInputs: true,
-			maskInputOptions: {
-				password: true
-			}
-		}
+		disable_session_recording: true, // Disable to avoid MIME type issues with config.js
+		advanced_disable_decide: true // Prevents loading config.js which has MIME type issues
 	});
 
 	initialized = true;
