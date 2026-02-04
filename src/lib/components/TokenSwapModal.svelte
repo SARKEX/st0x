@@ -1,12 +1,12 @@
 <script lang="ts">
+	import { get } from 'svelte/store';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 	import {
 		showTokenSwapModal,
 		swapModalToken,
-		closeTokenSwapModal,
-		type SwapModalToken
+		closeTokenSwapModal
 	} from '$lib/stores/dynamicStore';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { readContracts } from '@wagmi/core';
@@ -17,6 +17,13 @@
 	} from '$lib/config/tokenMigration';
 	import { TOKENS } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
+	import { createRaindexClient } from '$lib/clients/raindex';
+	import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
+	import { OrderV4_ABI, normalizeOrderData } from '$lib/utils/orderbook';
+	import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
+	import { AbiCoder } from 'ethers';
+	import { Float } from '@rainlanguage/float';
+	import type { TakeOrdersConfigV5, TakeOrderConfigV4, OrderV4 } from '@rainlanguage/orderbook';
 
 	const queryClient = useQueryClient();
 
@@ -152,39 +159,130 @@
 		}
 	}
 
-	// Execute the swap
+	// Execute the swap by taking the migration order (same flow as market order)
 	async function handleSwap() {
 		if (!selectedTokenData || !currentMapping || !$wagmiConfig || !$walletAddress) return;
 		if (parsedSwapAmount <= 0) return;
+
+		const network = get(currentNetwork);
+		if (!network?.id) {
+			swapError = 'Network not available';
+			return;
+		}
 
 		isExecuting = true;
 		swapError = null;
 
 		try {
-			// This would normally call the actual swap contract
-			// For now, we simulate a successful swap
 			const swapAmountWei = parseUnits(swapAmount, currentMapping.oldToken.decimals);
+			const requestedTakerWantsAmount = parseUnits(swapAmount, currentMapping.newToken.decimals);
 
-			// TODO: Implement actual swap logic using the hardcoded swap order
-			// This would involve:
-			// 1. Approving the old token for the swap contract
-			// 2. Calling the swap function with the order hash
-			// 3. Waiting for the transaction to complete
-
-			// Simulate success for now
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-
-			// Log success (the actual implementation would use the transaction modal)
-			console.log(
-				`Successfully swapped ${swapAmount} ${currentMapping.oldToken.symbol} to ${currentMapping.newToken.symbol}`
+			// 1. Fetch the migration swap order by order hash
+			const client = await createRaindexClient();
+			const ordersResult = await client.getOrders(
+				[network.id],
+				{
+					active: true,
+					owners: [],
+					orderHash: currentMapping.swapOrderHash as `0x${string}`
+				},
+				1
 			);
 
-			// Invalidate balance queries
-			queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
-			queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
+			if (ordersResult.error || !ordersResult.value?.length) {
+				swapError = 'Migration order not available. Please try again later.';
+				return;
+			}
 
-			// Close modal
-			closeTokenSwapModal();
+			const raindexOrderObj = ordersResult.value[0];
+			const sgOrderResult = raindexOrderObj.convertToSgOrder();
+			if (sgOrderResult.error || !sgOrderResult.value) {
+				swapError = 'Failed to prepare migration order.';
+				return;
+			}
+
+			const sgOrder = sgOrderResult.value;
+			const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
+			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
+
+			// 2. Resolve IO indexes: order input = old token (taker pays), order output = new token (taker wants)
+			const oldAddr = currentMapping.oldToken.address.toLowerCase();
+			const newAddr = currentMapping.newToken.address.toLowerCase();
+			const inputIndex = orderData.validInputs.findIndex(
+				(i) => (i.token as string)?.toLowerCase() === oldAddr
+			);
+			const outputIndex = orderData.validOutputs.findIndex(
+				(o) => (o.token as string)?.toLowerCase() === newAddr
+			);
+
+			if (inputIndex === -1 || outputIndex === -1) {
+				swapError = 'Order token mismatch for this migration.';
+				return;
+			}
+
+			// 3. Build take-order config (single order, 1:1 migration)
+			const takeOrderConfig: TakeOrderConfigV4 = {
+				order: orderData,
+				inputIOIndex: String(inputIndex),
+				outputIOIndex: String(outputIndex),
+				signedContext: []
+			};
+
+			const maximumInputFloat = Float.fromFixedDecimalLossy(
+				requestedTakerWantsAmount,
+				currentMapping.newToken.decimals
+			);
+			const ratioOne = Float.parse('1');
+			if (ratioOne.error || !ratioOne.value) {
+				swapError = 'Failed to build order parameters.';
+				return;
+			}
+
+			const takeOrdersConfig: TakeOrdersConfigV5 = {
+				minimumIO: Float.fromBigint(0n).asHex(),
+				maximumIO: maximumInputFloat.float.asHex(),
+				maximumIORatio: ratioOne.value.asHex(),
+				IOIsInput: true as unknown as string,
+				orders: [takeOrderConfig],
+				data: '0x'
+			};
+
+			const takerWantsToken: TokenInfo = {
+				address: currentMapping.newToken.address,
+				decimals: currentMapping.newToken.decimals,
+				symbol: currentMapping.newToken.symbol
+			};
+			const takerPaysToken: TokenInfo = {
+				address: currentMapping.oldToken.address,
+				decimals: currentMapping.oldToken.decimals,
+				symbol: currentMapping.oldToken.symbol
+			};
+
+			const params: TakeOrdersParams = {
+				orderData,
+				ioIndexes: { input: inputIndex, output: outputIndex },
+				takerWantsToken,
+				takerPaysToken,
+				requestedTakerWantsAmount,
+				orderFillAmounts: [requestedTakerWantsAmount]
+			};
+
+			await transactionStore.handleTakeOrders(
+				takeOrdersConfig,
+				sgOrder,
+				swapAmountWei,
+				params,
+				undefined
+			);
+
+			const state = get(transactionStore);
+			if (state.status === TransactionStatus.SUCCESS) {
+				queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
+				queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
+				closeTokenSwapModal();
+			} else if (state.status === TransactionStatus.ERROR) {
+				swapError = state.error || 'Swap failed';
+			}
 		} catch (error) {
 			console.error('Swap failed:', error);
 			swapError = error instanceof Error ? error.message : 'Swap failed';
