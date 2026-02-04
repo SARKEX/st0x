@@ -35,6 +35,20 @@ export const showAuthModal = writable<boolean>(false);
 export const showSendFundsModal = writable<boolean>(false);
 export const showDepositModal = writable<boolean>(false);
 export const showTokenSwapModal = writable<boolean>(false);
+export const showWrapUnwrapModal = writable<boolean>(false);
+
+// Wrap/Unwrap mode and pre-selected token
+export type WrapUnwrapMode = 'wrap' | 'unwrap';
+export const wrapUnwrapMode = writable<WrapUnwrapMode>('wrap');
+
+export interface WrapUnwrapModalToken {
+	address: string;
+	symbol: string;
+	decimals: number;
+	balance: string; // formatted balance string
+	balanceRaw: bigint; // raw balance for calculations
+}
+export const wrapUnwrapModalToken = writable<WrapUnwrapModalToken | null>(null);
 
 // Pre-selected token for swap modal (old token to swap)
 export interface SwapModalToken {
@@ -164,6 +178,32 @@ export function openTokenSwapModal(token?: SwapModalToken): void {
 export function closeTokenSwapModal(): void {
 	showTokenSwapModal.set(false);
 	swapModalToken.set(null);
+}
+
+/**
+ * Open the wrap modal, optionally with a pre-selected unwrapped token
+ */
+export function openWrapModal(token?: WrapUnwrapModalToken): void {
+	wrapUnwrapMode.set('wrap');
+	wrapUnwrapModalToken.set(token ?? null);
+	showWrapUnwrapModal.set(true);
+}
+
+/**
+ * Open the unwrap modal, optionally with a pre-selected wrapped token
+ */
+export function openUnwrapModal(token?: WrapUnwrapModalToken): void {
+	wrapUnwrapMode.set('unwrap');
+	wrapUnwrapModalToken.set(token ?? null);
+	showWrapUnwrapModal.set(true);
+}
+
+/**
+ * Close the wrap/unwrap modal
+ */
+export function closeWrapUnwrapModal(): void {
+	showWrapUnwrapModal.set(false);
+	wrapUnwrapModalToken.set(null);
 }
 
 /**

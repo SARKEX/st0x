@@ -42,9 +42,24 @@
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
-	import { isOldToken } from '$lib/config/tokenMigration';
-	import { openTokenSwapModal, type SwapModalToken } from '$lib/stores/dynamicStore';
+	import {
+		getAllOldTokenAddresses,
+		getMigrationMappingByAddress
+	} from '$lib/config/tokenMigration';
+	import {
+		getAllUnwrappedTokenAddresses,
+		getWrappingMappingByUnwrappedAddress,
+		getWrappingMappingByWrappedAddress
+	} from '$lib/config/tokenWrapping';
+	import {
+		openTokenSwapModal,
+		openWrapModal,
+		openUnwrapModal,
+		type SwapModalToken,
+		type WrapUnwrapModalToken
+	} from '$lib/stores/dynamicStore';
 	import TokenSwapModal from '$lib/components/TokenSwapModal.svelte';
+	import WrapUnwrapModal from '$lib/components/WrapUnwrapModal.svelte';
 
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
@@ -121,22 +136,58 @@
 		openSendFundsModal(token);
 	}
 
-	// Helper to open swap modal for old tokens
-	function handleSwapOldToken(holding: {
+	// Helper to open swap modal for legacy tokens
+	function handleSwapLegacyToken(legacyToken: {
 		symbol: string;
 		address: string;
 		decimals: number;
 		walletBalance: bigint;
-		totalBalance: number;
+		balanceNum: number;
 	}) {
 		const token: SwapModalToken = {
+			symbol: legacyToken.symbol,
+			address: legacyToken.address,
+			decimals: legacyToken.decimals,
+			balance: legacyToken.balanceNum.toFixed(4),
+			balanceRaw: legacyToken.walletBalance
+		};
+		openTokenSwapModal(token);
+	}
+
+	// Helper to open unwrap modal for wrapped tokens
+	function handleUnwrapToken(holding: {
+		symbol: string;
+		address: string;
+		decimals: number;
+		walletBalance: bigint;
+		walletBalanceNum: number;
+	}) {
+		const token: WrapUnwrapModalToken = {
 			symbol: holding.symbol,
 			address: holding.address,
 			decimals: holding.decimals,
-			balance: holding.totalBalance.toFixed(4),
+			balance: holding.walletBalanceNum.toFixed(4),
 			balanceRaw: holding.walletBalance
 		};
-		openTokenSwapModal(token);
+		openUnwrapModal(token);
+	}
+
+	// Helper to open wrap modal for unwrapped tokens
+	function handleWrapToken(token: {
+		symbol: string;
+		address: string;
+		decimals: number;
+		walletBalance: bigint;
+		balanceNum: number;
+	}) {
+		const modalToken: WrapUnwrapModalToken = {
+			symbol: token.symbol,
+			address: token.address,
+			decimals: token.decimals,
+			balance: token.balanceNum.toFixed(4),
+			balanceRaw: token.walletBalance
+		};
+		openWrapModal(modalToken);
 	}
 
 	// Copy address to clipboard
@@ -379,7 +430,102 @@
 		}
 	});
 
-	// Combined portfolio: wallet + vaults
+	// Query old (legacy) token wallet balances for aggregation in dashboard holdings
+	$: oldTokenBalancesQuery = createQuery({
+		queryKey: ['dashboardOldTokenBalances', $walletAddress, $currentNetwork?.chainId],
+		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+		refetchOnMount: 'always',
+		refetchInterval: 300_000,
+		staleTime: 30_000,
+		queryFn: async () => {
+			if (!$walletAddress || !$wagmiConfig) return [];
+
+			const oldTokenAddresses = getAllOldTokenAddresses();
+
+			// Build multicall contracts for all old tokens
+			const contracts = oldTokenAddresses.map((address) => ({
+				abi: erc20Abi,
+				address: address as `0x${string}`,
+				functionName: 'balanceOf' as const,
+				args: [$walletAddress as `0x${string}`]
+			}));
+
+			try {
+				const results = await readContracts($wagmiConfig, { contracts });
+
+				return oldTokenAddresses
+					.map((address, index) => {
+						const result = results[index];
+						if (result.status === 'success') {
+							const mapping = getMigrationMappingByAddress(address);
+							return {
+								address,
+								walletBalance: result.result as bigint,
+								symbol: mapping?.oldToken.symbol ?? 'Unknown',
+								name: mapping?.oldToken.name ?? 'Unknown',
+								decimals: mapping?.oldToken.decimals ?? 18,
+								newTokenAddress: mapping?.newToken.address ?? null
+							};
+						}
+						return null;
+					})
+					.filter((b): b is NonNullable<typeof b> => b !== null && b.walletBalance > 0n);
+			} catch (e) {
+				console.error('Multicall failed for old token balances:', e);
+				return [];
+			}
+		}
+	});
+
+	// Query unwrapped token balances (underlying tokens of ERC4626 vaults)
+	$: unwrappedTokenBalancesQuery = createQuery({
+		queryKey: ['dashboardUnwrappedTokenBalances', $walletAddress, $currentNetwork?.chainId],
+		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+		refetchOnMount: 'always',
+		refetchInterval: 300_000,
+		staleTime: 30_000,
+		queryFn: async () => {
+			if (!$walletAddress || !$wagmiConfig) return [];
+
+			const unwrappedAddresses = getAllUnwrappedTokenAddresses();
+
+			// Build multicall contracts for all unwrapped tokens
+			const contracts = unwrappedAddresses.map((address) => ({
+				abi: erc20Abi,
+				address: address as `0x${string}`,
+				functionName: 'balanceOf' as const,
+				args: [$walletAddress as `0x${string}`]
+			}));
+
+			try {
+				const results = await readContracts($wagmiConfig, { contracts });
+
+				return unwrappedAddresses
+					.map((address, index) => {
+						const result = results[index];
+						if (result.status === 'success') {
+							const mapping = getWrappingMappingByUnwrappedAddress(address);
+							return {
+								address,
+								walletBalance: result.result as bigint,
+								symbol: mapping?.unwrappedToken.symbol ?? 'Unknown',
+								name: mapping?.unwrappedToken.name ?? 'Unknown',
+								decimals: mapping?.unwrappedToken.decimals ?? 18,
+								wrappedTokenAddress: mapping?.wrappedToken.address ?? null,
+								wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? null
+							};
+						}
+						return null;
+					})
+					.filter((b): b is NonNullable<typeof b> => b !== null && b.walletBalance > 0n);
+			} catch (e) {
+				console.error('Multicall failed for unwrapped token balances:', e);
+				return [];
+			}
+		}
+	});
+
+	// Combined portfolio: wallet + vaults (new wrapped tokens only)
 	$: portfolioHoldings = (() => {
 		const walletHoldings = $walletHoldingsQuery?.data ?? [];
 		const usdcHoldings = $usdcBalanceQuery?.data ?? [];
@@ -607,6 +753,47 @@
 	$: assetHoldings = portfolioHoldings.filter(
 		(h) => !paymentTokenAddresses.has(h.address.toLowerCase())
 	);
+
+	// Legacy token holdings (old tokens that need to be swapped)
+	$: legacyHoldings = (() => {
+		const oldTokens = $oldTokenBalancesQuery?.data ?? [];
+		return oldTokens.map((token) => {
+			const mapping = getMigrationMappingByAddress(token.address);
+			const quote = mapping
+				? findQuoteForSymbol(mapping.newToken.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS)
+				: null;
+			const price = quote?.close ?? 0;
+			const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
+			return {
+				...token,
+				balanceNum,
+				price,
+				value: balanceNum * price,
+				newTokenDisplay: mapping ? `Wrapped ${mapping.oldToken.symbol}` : token.symbol
+			};
+		});
+	})();
+
+	// Unwrapped token holdings (underlying tokens that can be wrapped)
+	$: unwrappedHoldings = (() => {
+		const tokens = $unwrappedTokenBalancesQuery?.data ?? [];
+		return tokens.map((token) => {
+			const mapping = getWrappingMappingByUnwrappedAddress(token.address);
+			// Use the wrapped token's price since they're 1:1
+			const quote = mapping
+				? findQuoteForSymbol(mapping.wrappedToken.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS)
+				: null;
+			const price = quote?.close ?? 0;
+			const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
+			return {
+				...token,
+				balanceNum,
+				price,
+				value: balanceNum * price,
+				wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? token.symbol
+			};
+		});
+	})();
 
 	// Orders: Fetch orderbook quotes for all tokens
 	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, true);
@@ -1072,36 +1259,14 @@
 										{#each assetHoldings as holding}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<div class="flex items-center gap-1.5">
-														<TokenDisplay
-															logoUrl={ALL_TOKENS.find(
-																(s) => s.address.toLowerCase() === holding.address.toLowerCase()
-															)?.logoUrl}
-															symbol={holding.symbol}
-															name={holding.name}
-															hideNameOnMobile={true}
-														/>
-														{#if isOldToken(holding.address)}
-															<span
-																class="text-yellow-500"
-																title="Legacy token - needs to be swapped to wrapped version"
-															>
-																<svg
-																	class="h-4 w-4"
-																	fill="none"
-																	stroke="currentColor"
-																	viewBox="0 0 24 24"
-																>
-																	<path
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		stroke-width="2"
-																		d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-																	/>
-																</svg>
-															</span>
-														{/if}
-													</div>
+													<TokenDisplay
+														logoUrl={ALL_TOKENS.find(
+															(s) => s.address.toLowerCase() === holding.address.toLowerCase()
+														)?.logoUrl}
+														symbol={holding.symbol}
+														name={holding.name}
+														hideNameOnMobile={true}
+													/>
 												</td>
 												<td
 													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
@@ -1200,21 +1365,19 @@
 												</td>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">
 													<div class="flex justify-center gap-2">
-														{#if isOldToken(holding.address)}
+														<Button
+															size="sm"
+															variant="primary"
+															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
+														>
+														{#if getWrappingMappingByWrappedAddress(holding.address) && holding.walletBalanceNum > 0}
 															<Button
 																size="sm"
-																variant="primary"
-																className="bg-yellow-500 hover:bg-yellow-400"
-																on:click={() => handleSwapOldToken(holding)}
+																variant="secondary"
+																on:click={() => handleUnwrapToken(holding)}
 															>
-																Swap
+																Unwrap
 															</Button>
-														{:else}
-															<Button
-																size="sm"
-																variant="primary"
-																on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
-															>
 														{/if}
 														{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
 															<Button
@@ -1222,7 +1385,7 @@
 																variant="secondary"
 																on:click={() => handleWithdraw(holding)}
 															>
-																Withdraw
+																Transfer
 															</Button>
 														{/if}
 														{#if !isEmbeddedWallet}
@@ -1268,6 +1431,151 @@
 							<EmptyState description="No asset holdings found in your wallet or vaults." />
 						{/if}
 					</Section>
+
+					<!-- Unwrapped Tokens Section -->
+					{#if unwrappedHoldings.length > 0}
+						<Section>
+							<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Unwrapped Tokens</h2>
+							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+								These tokens can be wrapped for trading
+							</p>
+							<div class="overflow-x-auto">
+								<Table>
+									<thead>
+										<tr>
+											<th
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Token</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Balance</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Value</th
+											>
+											<th
+												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											></th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each unwrappedHoldings as token}
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
+													<div class="flex items-center gap-2">
+														<span class="font-medium">{token.symbol}</span>
+														<span class="text-xs text-gray-500">
+															&#8594; {token.wrappedTokenSymbol}
+														</span>
+													</div>
+												</td>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
+													>{token.balanceNum.toFixed(4)}</td
+												>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
+													>${token.value.toFixed(2)}</td
+												>
+												<td class="px-2 py-2 sm:px-4 sm:py-3">
+													<div class="flex justify-center gap-2">
+														<Button
+															size="sm"
+															variant="primary"
+															on:click={() => handleWrapToken(token)}
+														>
+															Wrap
+														</Button>
+														{#if $authMethod === 'dynamic'}
+															<Button
+																size="sm"
+																variant="secondary"
+																on:click={() =>
+																	handleWithdraw({
+																		symbol: token.symbol,
+																		address: token.address,
+																		decimals: token.decimals,
+																		walletBalance: token.walletBalance,
+																		walletBalanceNum: token.balanceNum
+																	})}
+															>
+																Transfer
+															</Button>
+														{/if}
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</Table>
+							</div>
+						</Section>
+					{/if}
+
+					<!-- Legacy Tokens Section -->
+					{#if legacyHoldings.length > 0}
+						<Section>
+							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+								Legacy Tokens
+							</h2>
+							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+								These tokens need to be swapped to the new wrapped version
+							</p>
+							<div class="overflow-x-auto">
+								<Table>
+									<thead>
+										<tr>
+											<th
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Token</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Balance</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Value</th
+											>
+											<th
+												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											></th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each legacyHoldings as token}
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
+													<div class="flex items-center gap-2">
+														<span class="font-medium">{token.symbol}</span>
+														<span class="text-xs text-gray-500">→ {token.newTokenDisplay}</span>
+													</div>
+												</td>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
+													>{token.balanceNum.toFixed(4)}</td
+												>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
+													>${token.value.toFixed(2)}</td
+												>
+												<td class="px-2 py-2 sm:px-4 sm:py-3">
+													<div class="flex justify-center">
+														<Button
+															size="sm"
+															variant="primary"
+															className="bg-yellow-500 hover:bg-yellow-400"
+															on:click={() => handleSwapLegacyToken(token)}
+														>
+															Swap
+														</Button>
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</Table>
+							</div>
+						</Section>
+					{/if}
 				{/if}
 
 				<!-- Orders Tab -->
@@ -1714,3 +2022,6 @@
 
 <!-- Token Swap Modal for migrating old tokens -->
 <TokenSwapModal />
+
+<!-- Wrap/Unwrap Modal for ERC4626 token wrapping -->
+<WrapUnwrapModal />
