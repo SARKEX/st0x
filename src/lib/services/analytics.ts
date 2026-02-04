@@ -18,13 +18,18 @@ export function initAnalytics(apiKey: string): void {
 	if (!browser || initialized || !apiKey) return;
 
 	posthog.init(apiKey, {
-		api_host: 'https://us.i.posthog.com',
+		api_host: '/ingest', // Reverse proxy to avoid MIME type and ad blocker issues
+		ui_host: 'https://us.i.posthog.com', // Required for toolbar functionality
 		capture_pageview: false, // Manual tracking via trackPageView() to avoid duplicates
 		capture_pageleave: true,
 		persistence: 'localStorage+cookie',
 		autocapture: false, // We'll do manual tracking for more control
-		disable_session_recording: true, // Disable to avoid MIME type issues with config.js
-		advanced_disable_decide: true // Prevents loading config.js which has MIME type issues
+		session_recording: {
+			maskAllInputs: true,
+			maskInputOptions: {
+				password: true
+			}
+		}
 	});
 
 	initialized = true;
