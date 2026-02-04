@@ -19,7 +19,7 @@
 		getAllUnwrappedTokenAddresses
 	} from '$lib/config/tokenWrapping';
 	import { wrapToken, unwrapToken, previewWrap, previewUnwrap } from '$lib/services/wrapService';
-	import { TOKENS } from '$lib/config/tokens';
+	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
 
 	const queryClient = useQueryClient();
@@ -236,9 +236,9 @@
 		closeWrapUnwrapModal();
 	}
 
-	// Get logo URL for token
-	function getTokenLogo(symbol: string): string | undefined {
-		return TOKENS.find((t) => t.symbol === symbol)?.logoUrl;
+	// Get logo URL for token (supports wrapped and unwrapped addresses)
+	function getTokenLogo(address: string): string | undefined {
+		return getTokenByAnyAddress(address)?.logoUrl;
 	}
 </script>
 
@@ -314,9 +314,9 @@
 							<div class="flex items-center gap-3">
 								{#if selectedTokenData}
 									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
-										{#if getTokenLogo(selectedTokenData.symbol)}
+										{#if getTokenLogo(selectedTokenData.address)}
 											<img
-												src={getTokenLogo(selectedTokenData.symbol)}
+												src={getTokenLogo(selectedTokenData.address)}
 												alt={selectedTokenData.symbol}
 												class="h-6 w-6 rounded-full"
 											/>
@@ -389,9 +389,9 @@
 										? currentMapping.wrappedToken
 										: currentMapping.unwrappedToken}
 									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
-										{#if getTokenLogo(targetToken.symbol)}
+										{#if getTokenLogo(targetToken.address)}
 											<img
-												src={getTokenLogo(targetToken.symbol)}
+												src={getTokenLogo(targetToken.address)}
 												alt={targetToken.symbol}
 												class="h-6 w-6 rounded-full"
 											/>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { currentNetwork, sfts } from '$lib/stores';
 	import { page } from '$app/stores';
-	import { getAllTokensByNetwork } from '$lib/config/network';
+	import { getAllTokensByNetwork, getTokenByAnyAddress } from '$lib/config/tokens';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -131,16 +131,14 @@
 			</div>
 			<div class="space-y-0.5">
 				{#each sortedAssets as asset}
-					{@const tokenInfo = ALL_TOKENS.find(
-						(t) => t.address.toLowerCase() === asset.address.toLowerCase()
-					)}
+					{@const tokenInfo = getTokenByAnyAddress(asset.address)}
 					<a
-						href={`/trade/${asset.id}`}
+						href={`/trade/${tokenInfo?.address ?? asset.id}`}
 						on:click={() => {
 							if (!desktop) dispatch('close');
 						}}
 						class="block rounded-md px-2 py-2 transition-colors hover:bg-white/5 {activePath ===
-						`/trade/${asset.id}`
+						`/trade/${tokenInfo?.address ?? asset.id}`
 							? 'border-l-2 border-yellow-500 bg-yellow-500/10'
 							: ''}"
 					>

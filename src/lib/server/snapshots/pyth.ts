@@ -7,7 +7,7 @@
 // If the requested timestamp is outside market hours, we adjust to the
 // last market close to get valid price data.
 
-import { TOKENS } from '$lib/config/tokens';
+import { getTokenByAnyAddress } from '$lib/config/tokens';
 import { getPriceTimestamp } from './marketHours';
 
 const HERMES_URL = 'https://hermes.pyth.network/v2/updates/price';
@@ -91,7 +91,7 @@ export async function fetchPythPricesAtTimestamp(
 	const tokenFeedMap = new Map<string, { address: string; symbol: string; feedId: string }>();
 
 	for (const tokenAddress of tokenAddresses) {
-		const token = TOKENS.find((t) => t.address.toLowerCase() === tokenAddress.toLowerCase());
+		const token = getTokenByAnyAddress(tokenAddress);
 		if (token?.priceFeedId) {
 			tokenFeedMap.set(normalizeFeedId(token.priceFeedId), {
 				address: tokenAddress.toLowerCase(),

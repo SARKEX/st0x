@@ -15,7 +15,7 @@
 		TOKEN_MIGRATION_MAPPINGS,
 		getMigrationMappingByAddress
 	} from '$lib/config/tokenMigration';
-	import { TOKENS } from '$lib/config/tokens';
+	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
@@ -292,9 +292,9 @@
 		closeTokenSwapModal();
 	}
 
-	// Get logo URL for token
+	// Get logo URL for token (supports wrapped, unwrapped, and legacy addresses)
 	function getTokenLogo(address: string): string | undefined {
-		return TOKENS.find((t) => t.address.toLowerCase() === address.toLowerCase())?.logoUrl;
+		return getTokenByAnyAddress(address)?.logoUrl;
 	}
 </script>
 
