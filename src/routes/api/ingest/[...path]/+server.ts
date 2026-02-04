@@ -8,47 +8,70 @@ export const POST: RequestHandler = async ({ params, url, request }) => {
 	return handleRequest(params.path, url.search, request);
 };
 
+export const OPTIONS: RequestHandler = async () => {
+	return new Response(null, {
+		status: 204,
+		headers: {
+			'Access-Control-Allow-Origin': '*',
+			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+			'Access-Control-Allow-Headers': 'Content-Type'
+		}
+	});
+};
+
 async function handleRequest(path: string, search: string, request: Request): Promise<Response> {
-	// Determine if this is a static asset request (array/ contains config.js, recorder.js, etc.)
-	const isStatic = path.startsWith('static/') || path.startsWith('array/');
+	// Only /static/* goes to assets CDN, everything else (including array/) to main API
+	const isStatic = path.startsWith('static/');
 	const targetHost = isStatic ? 'us-assets.i.posthog.com' : 'us.i.posthog.com';
 
 	const targetUrl = `https://${targetHost}/${path}${search}`;
 
-	// Forward the request with proper Host header
+	// Get request body for POST requests
+	let requestBody: string | undefined;
+	if (request.method === 'POST') {
+		requestBody = await request.text();
+	}
+
+	// Forward the request with proper headers
 	const response = await fetch(targetUrl, {
 		method: request.method,
 		headers: {
-			'Host': targetHost,
+			Host: targetHost,
 			'Content-Type': request.headers.get('Content-Type') || 'application/json',
-			'User-Agent': request.headers.get('User-Agent') || '',
-			'Accept': request.headers.get('Accept') || '*/*',
-			'Accept-Language': request.headers.get('Accept-Language') || 'en-US,en;q=0.9',
-			'Origin': request.headers.get('Origin') || ''
+			'User-Agent': request.headers.get('User-Agent') || 'Mozilla/5.0'
 		},
-		body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : undefined
+		body: requestBody
 	});
 
-	// Clone headers and fix Content-Type for JS files
+	// Handle 204 No Content - Response can't have a body
+	if (response.status === 204) {
+		return new Response(null, {
+			status: 204,
+			headers: {
+				'Access-Control-Allow-Origin': '*'
+			}
+		});
+	}
+
+	// Clone response headers
 	const headers = new Headers();
 	response.headers.forEach((value, key) => {
-		// Skip headers that shouldn't be forwarded
-		if (!['content-encoding', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) {
+		const lower = key.toLowerCase();
+		if (!['content-encoding', 'transfer-encoding', 'connection'].includes(lower)) {
 			headers.set(key, value);
 		}
 	});
 
-	// Fix Content-Type for JS files - this is the main fix for the MIME type issue
-	if (path.endsWith('.js') || path.endsWith('/config') || path.endsWith('/flags')) {
+	// Fix Content-Type for JS files
+	if (path.endsWith('.js')) {
 		headers.set('Content-Type', 'application/javascript; charset=utf-8');
 	}
 
-	// Allow CORS
 	headers.set('Access-Control-Allow-Origin', '*');
 
-	const body = await response.arrayBuffer();
+	const responseBody = await response.arrayBuffer();
 
-	return new Response(body, {
+	return new Response(responseBody, {
 		status: response.status,
 		statusText: response.statusText,
 		headers
