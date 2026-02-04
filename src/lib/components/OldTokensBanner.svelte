@@ -3,7 +3,7 @@
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { erc20Abi, formatUnits } from 'viem';
+	import { erc20Abi } from 'viem';
 	import { readContracts } from '@wagmi/core';
 	import { TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
 	import { goto } from '$app/navigation';
@@ -72,7 +72,10 @@
 				/>
 			</svg>
 			<span>
-				You have {oldTokenCount} legacy token{oldTokenCount === 1 ? '' : 's'} that need{oldTokenCount === 1 ? 's' : ''} to be swapped to the new wrapped version.
+				You have {oldTokenCount} legacy token{oldTokenCount === 1 ? '' : 's'} that need{oldTokenCount ===
+				1
+					? 's'
+					: ''} to be swapped to the new wrapped version.
 			</span>
 			<button
 				type="button"

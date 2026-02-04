@@ -42,7 +42,7 @@
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
-	import { isOldToken, getMigrationMappingByAddress } from '$lib/config/tokenMigration';
+	import { isOldToken } from '$lib/config/tokenMigration';
 	import { openTokenSwapModal, type SwapModalToken } from '$lib/stores/dynamicStore';
 	import TokenSwapModal from '$lib/components/TokenSwapModal.svelte';
 

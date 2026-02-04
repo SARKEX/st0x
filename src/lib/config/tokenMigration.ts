@@ -1,6 +1,3 @@
-import { base } from '@wagmi/core/chains';
-import type { CategorizedToken } from './tokens';
-
 /**
  * Token Migration Configuration
  *

@@ -115,14 +115,6 @@
 		? parsedSwapAmount > selectedTokenData.balanceFormatted
 		: false;
 
-	// Check if amount exceeds liquidity
-	$: exceedsLiquidity = parsedSwapAmount > availableLiquidity;
-
-	// Capped amount (limited by both balance and liquidity)
-	$: maxSwappable = selectedTokenData
-		? Math.min(selectedTokenData.balanceFormatted, availableLiquidity)
-		: 0;
-
 	// Handle token selection change
 	function handleTokenSelect(address: string) {
 		selectedOldTokenAddress = address;
@@ -322,9 +314,7 @@
 		aria-modal="true"
 		aria-labelledby="swap-modal-title"
 	>
-		<div
-			class="relative overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl"
-		>
+		<div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl">
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-white/10 px-6 py-4">
 				<h3 id="swap-modal-title" class="text-lg font-semibold text-white">Swap Legacy Tokens</h3>
@@ -350,13 +340,14 @@
 				<div class="space-y-4">
 					<!-- What I Have (Old Token) -->
 					<div class="space-y-2">
-						<label class="text-sm font-medium text-gray-400">What I have</label>
-						<div
-							class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
+						<label for="swap-from-token" class="text-sm font-medium text-gray-400"
+							>What I have</label
 						>
+						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
 							<!-- Token Dropdown -->
 							<div class="mb-3">
 								<select
+									id="swap-from-token"
 									class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-3 py-2 text-white focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
 									bind:value={selectedOldTokenAddress}
 									on:change={(e) => handleTokenSelect(e.currentTarget.value)}
@@ -432,7 +423,12 @@
 					<!-- Arrow -->
 					<div class="flex justify-center">
 						<div class="rounded-full border border-white/10 bg-gray-800 p-2">
-							<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg
+								class="h-4 w-4 text-gray-400"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
@@ -445,10 +441,8 @@
 
 					<!-- What I Get (New Wrapped Token) -->
 					<div class="space-y-2">
-						<label class="text-sm font-medium text-gray-400">What I get</label>
-						<div
-							class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
-						>
+						<span class="text-sm font-medium text-gray-400">What I get</span>
+						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
 							<div class="flex items-center gap-3">
 								{#if currentMapping}
 									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
@@ -527,7 +521,9 @@
 						{#if currentMapping}
 							<div class="mt-1 flex justify-between">
 								<span>Available liquidity</span>
-								<span class="text-white">{availableLiquidity.toFixed(2)} {currentMapping.oldToken.symbol}</span>
+								<span class="text-white"
+									>{availableLiquidity.toFixed(2)} {currentMapping.oldToken.symbol}</span
+								>
 							</div>
 						{/if}
 					</div>
