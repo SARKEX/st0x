@@ -1280,32 +1280,54 @@
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex items-center justify-between gap-2">
-									<span class="text-gray-400">Address</span>
+									<span class="text-gray-400">Wrapped Token</span>
 									<div>
 										<div class="sm:hidden">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-												label={currentToken.address}
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ?? tokenId}"
+												label={currentPythToken?.address ?? tokenId}
 												truncate={{ start: 0, end: 6 }}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 											/>
 										</div>
 										<div class="hidden sm:block">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-												label={truncateAddress(currentToken.address)}
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ?? tokenId}"
+												label={truncateAddress(currentPythToken?.address ?? tokenId)}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 											/>
 										</div>
 									</div>
 								</div>
+								{#if currentPythToken?.unwrappedAddress}
+									<div class="flex items-center justify-between gap-2">
+										<span class="text-gray-400">Underlying Token</span>
+										<div>
+											<div class="sm:hidden">
+												<ExternalLink
+													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
+													label={currentPythToken.unwrappedAddress}
+													truncate={{ start: 0, end: 6 }}
+													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												/>
+											</div>
+											<div class="hidden sm:block">
+												<ExternalLink
+													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
+													label={truncateAddress(currentPythToken.unwrappedAddress)}
+													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												/>
+											</div>
+										</div>
+									</div>
+								{/if}
 								<div class="flex justify-between">
 									<span class="text-gray-400">Network</span>
 									<span>{$currentNetwork.displayName}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Symbol</span>
-									<span>{currentToken.symbol}</span>
+									<span>{currentPythToken?.symbol ?? currentToken.symbol}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Decimals</span>
