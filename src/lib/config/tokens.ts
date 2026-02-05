@@ -222,6 +222,21 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
+		address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
+		unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
+		legacyAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
+		symbol: 'wtSt0x',
+		decimals: 18,
+		name: 'Wrapped Test Token ST0x',
+		logoUrl: '/images/SIVR.png',
+		priceFeedId: '0x782410278b6c8aa2d437812281526012808404aa14c243f73fb9939eeb88d430',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:PPLT',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
 		address: '0xF4f8c66085910d583c01f3b4e44Bf731D4e2c565',
 		unwrappedAddress: '0xf6744fd94e27c2f58f6110aa9fdc77a87e41766b',
 		// No legacy address - wtRKLB is a new token
