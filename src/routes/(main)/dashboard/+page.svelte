@@ -468,7 +468,7 @@
 			try {
 				const results = await readContracts($wagmiConfig, { contracts });
 
-				return oldTokenAddresses
+				const tokens = oldTokenAddresses
 					.map((address, index) => {
 						const result = results[index];
 						if (result.status === 'success') {
@@ -485,6 +485,15 @@
 						return null;
 					})
 					.filter((b): b is NonNullable<typeof b> => b !== null && b.walletBalance > 0n);
+
+				// Deduplicate by address (defensive - prevents duplicate entries)
+				const seen = new Set<string>();
+				return tokens.filter((token) => {
+					const key = token.address.toLowerCase();
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
 			} catch (e) {
 				console.error('Multicall failed for old token balances:', e);
 				return [];
@@ -515,7 +524,7 @@
 			try {
 				const results = await readContracts($wagmiConfig, { contracts });
 
-				return unwrappedAddresses
+				const tokens = unwrappedAddresses
 					.map((address, index) => {
 						const result = results[index];
 						if (result.status === 'success') {
@@ -533,6 +542,15 @@
 						return null;
 					})
 					.filter((b): b is NonNullable<typeof b> => b !== null && b.walletBalance > 0n);
+
+				// Deduplicate by address (defensive - prevents duplicate entries)
+				const seen = new Set<string>();
+				return tokens.filter((token) => {
+					const key = token.address.toLowerCase();
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
 			} catch (e) {
 				console.error('Multicall failed for unwrapped token balances:', e);
 				return [];
@@ -770,23 +788,29 @@
 	);
 
 	// Legacy token holdings (old tokens that need to be swapped)
+	// Exclude addresses that are already in the unwrapped token list (handles case where unwrappedAddress === legacyAddress)
 	$: legacyHoldings = (() => {
 		const oldTokens = $oldTokenBalancesQuery?.data ?? [];
-		return oldTokens.map((token) => {
-			const mapping = getMigrationMappingByAddress(token.address);
-			const quote = mapping
-				? findQuoteForSymbol(mapping.newToken.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS)
-				: null;
-			const price = quote?.close ?? 0;
-			const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
-			return {
-				...token,
-				balanceNum,
-				price,
-				value: balanceNum * price,
-				newTokenDisplay: mapping ? `Wrapped ${mapping.oldToken.symbol}` : token.symbol
-			};
-		});
+		const unwrappedAddresses = new Set(
+			($unwrappedTokenBalancesQuery?.data ?? []).map((t) => t.address.toLowerCase())
+		);
+		return oldTokens
+			.filter((token) => !unwrappedAddresses.has(token.address.toLowerCase()))
+			.map((token) => {
+				const mapping = getMigrationMappingByAddress(token.address);
+				const quote = mapping
+					? findQuoteForSymbol(mapping.newToken.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS)
+					: null;
+				const price = quote?.close ?? 0;
+				const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
+				return {
+					...token,
+					balanceNum,
+					price,
+					value: balanceNum * price,
+					newTokenDisplay: mapping ? `Wrapped ${mapping.oldToken.symbol}` : token.symbol
+				};
+			});
 	})();
 
 	// Unwrapped token holdings (underlying tokens that can be wrapped)
@@ -1478,7 +1502,7 @@
 										</tr>
 									</thead>
 									<tbody>
-										{#each unwrappedHoldings as token}
+										{#each unwrappedHoldings as token (token.address)}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<span class="font-medium">{token.symbol}</span>
@@ -1555,7 +1579,7 @@
 										</tr>
 									</thead>
 									<tbody>
-										{#each legacyHoldings as token}
+										{#each legacyHoldings as token (token.address)}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<span class="font-medium">{token.symbol}</span>

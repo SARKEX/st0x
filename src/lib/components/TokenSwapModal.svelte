@@ -33,21 +33,55 @@
 	let swapAmount = '';
 	let liquidityWarning = false;
 
-	// Hardcoded liquidity amounts (these would normally come from checking the swap order)
-	// For now we simulate inventory availability
-	const SIMULATED_LIQUIDITY: Record<string, number> = {
-		tNVDA: 100,
-		tAMZN: 150,
-		tTSLA: 200,
-		tMSTR: 50,
-		tIAU: 500,
-		tCOIN: 300,
-		tSPLG: 400,
-		tSIVR: 250,
-		tCRCL: 100,
-		tBMNR: 75,
-		tPPLT: 150
-	};
+	/** Fetch liquidity for a specific token migration order */
+	async function fetchLiquidityForToken(
+		mapping: (typeof TOKEN_MIGRATION_MAPPINGS)[0],
+		networkId: number
+	): Promise<number> {
+		if (!mapping.swapOrderHash) return 0;
+
+		try {
+			const client = await createRaindexClient();
+			const ordersResult = await client.getOrders(
+				[networkId],
+				{ active: true, owners: [], orderHash: mapping.swapOrderHash as `0x${string}` },
+				1
+			);
+
+			if (ordersResult.error || !ordersResult.value?.length) return 0;
+
+			const quotesResult = await ordersResult.value[0].getQuotes();
+			if (quotesResult.error || !quotesResult.value?.length) return 0;
+
+			const quote = quotesResult.value[0];
+			if (!quote?.success || !quote?.data?.maxOutput) return 0;
+
+			const maxOutputFloat = Float.fromHex(quote.data.maxOutput as `0x${string}`);
+			if (maxOutputFloat.error || !maxOutputFloat.value) return 0;
+
+			const fixedResult = maxOutputFloat.value.toFixedDecimalLossy(mapping.newToken.decimals);
+			if (fixedResult.error || !fixedResult.value) return 0;
+
+			const fdValue = fixedResult.value as unknown as Record<string, unknown>;
+			if (typeof fdValue?.value !== 'string') return 0;
+
+			return parseFloat(formatUnits(BigInt(fdValue.value), mapping.newToken.decimals));
+		} catch {
+			return 0;
+		}
+	}
+
+	// Query to fetch liquidity for the currently selected token only
+	$: swapLiquidityQuery = createQuery({
+		queryKey: ['swapOrderLiquidity', $currentNetwork?.chainId, currentMapping?.swapOrderHash],
+		enabled: !!($currentNetwork && $showTokenSwapModal && currentMapping?.swapOrderHash),
+		staleTime: 30_000, // Cache for 30 seconds
+		queryFn: async () => {
+			const network = $currentNetwork;
+			if (!network || !currentMapping) return 0;
+			return fetchLiquidityForToken(currentMapping, network.id);
+		}
+	});
 
 	// When modal opens with a pre-selected token, set it
 	$: if ($showTokenSwapModal && $swapModalToken && !selectedOldTokenAddress) {
@@ -96,15 +130,39 @@
 	// Tokens with balance that user can swap
 	$: oldTokensWithBalance = $oldTokenBalancesQuery.data ?? [];
 
-	// Selected token data
-	$: selectedTokenData = oldTokensWithBalance.find(
-		(t) => t.oldToken.address.toLowerCase() === selectedOldTokenAddress?.toLowerCase()
-	);
+	// Pre-selected token data (from swapModalToken when modal is opened for a specific token)
+	$: preSelectedTokenData = $swapModalToken && currentMapping
+		? {
+				...currentMapping,
+				balance: $swapModalToken.balanceRaw ?? 0n,
+				balanceFormatted: parseFloat($swapModalToken.balance ?? '0')
+			}
+		: null;
 
-	// Available liquidity for selected token
-	$: availableLiquidity = currentMapping
-		? SIMULATED_LIQUIDITY[currentMapping.oldToken.symbol] ?? 0
-		: 0;
+	// Combined list: include pre-selected token if not already in balance list
+	$: tokensToShow = (() => {
+		const balanceTokens = oldTokensWithBalance;
+		if (!preSelectedTokenData) return balanceTokens;
+
+		// Check if pre-selected token is already in balance list
+		const alreadyInList = balanceTokens.some(
+			(t) => t.oldToken.address.toLowerCase() === preSelectedTokenData.oldToken.address.toLowerCase()
+		);
+		if (alreadyInList) return balanceTokens;
+
+		// Add pre-selected token to the list
+		return [preSelectedTokenData, ...balanceTokens];
+	})();
+
+	// Selected token data - check tokensToShow first, then fall back to preSelectedTokenData
+	$: selectedTokenData = tokensToShow.find(
+		(t) => t.oldToken.address.toLowerCase() === selectedOldTokenAddress?.toLowerCase()
+	) ?? (selectedOldTokenAddress && preSelectedTokenData?.oldToken.address.toLowerCase() === selectedOldTokenAddress.toLowerCase()
+		? preSelectedTokenData
+		: undefined);
+
+	// Available liquidity for selected token (from real order data)
+	$: availableLiquidity = $swapLiquidityQuery.data ?? 0;
 
 	// Parse swap amount
 	$: parsedSwapAmount = parseFloat(swapAmount) || 0;
@@ -358,12 +416,12 @@
 									on:change={(e) => handleTokenSelect(e.currentTarget.value)}
 								>
 									<option value="" disabled>Select token to swap</option>
-									{#if $oldTokenBalancesQuery.isLoading}
+									{#if $oldTokenBalancesQuery.isLoading && tokensToShow.length === 0}
 										<option value="" disabled>Loading...</option>
-									{:else if oldTokensWithBalance.length === 0}
+									{:else if tokensToShow.length === 0}
 										<option value="" disabled>No legacy tokens to swap</option>
 									{:else}
-										{#each oldTokensWithBalance as tokenData}
+										{#each tokensToShow as tokenData}
 											<option value={tokenData.oldToken.address}>
 												{tokenData.oldToken.symbol} - Balance: {tokenData.balanceFormatted.toFixed(
 													4
@@ -519,9 +577,15 @@
 						{#if currentMapping}
 							<div class="mt-1 flex justify-between">
 								<span>Available liquidity</span>
-								<span class="text-white"
-									>{availableLiquidity.toFixed(2)} {currentMapping.oldToken.symbol}</span
-								>
+								{#if $swapLiquidityQuery.isLoading}
+									<span class="animate-pulse text-gray-500">Loading...</span>
+								{:else if availableLiquidity > 0}
+									<span class="text-white"
+										>{availableLiquidity.toFixed(2)} {currentMapping.oldToken.symbol}</span
+									>
+								{:else}
+									<span class="text-yellow-500">No liquidity available</span>
+								{/if}
 							</div>
 						{/if}
 					</div>
@@ -534,13 +598,19 @@
 						disabled={!selectedTokenData ||
 							parsedSwapAmount <= 0 ||
 							exceedsBalance ||
-							oldTokensWithBalance.length === 0}
+							tokensToShow.length === 0 ||
+							$swapLiquidityQuery.isLoading ||
+							(availableLiquidity <= 0 && !$swapLiquidityQuery.isLoading)}
 						on:click={handleSwap}
 					>
-						{#if oldTokensWithBalance.length === 0}
+						{#if tokensToShow.length === 0}
 							No legacy tokens to swap
 						{:else if !selectedTokenData}
 							Select a token
+						{:else if $swapLiquidityQuery.isLoading}
+							Loading liquidity...
+						{:else if availableLiquidity <= 0}
+							No liquidity available
 						{:else if parsedSwapAmount <= 0}
 							Enter amount
 						{:else if exceedsBalance}

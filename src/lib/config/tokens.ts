@@ -149,7 +149,7 @@ export const TOKENS: CategorizedToken[] = [
 		address: '0x31C2C14134e6E3B7ef9478297F199331133Fc2d8',
 		unwrappedAddress: '0x8fdf41116f755771bfe0747d5f8c3711d5debfbb',
 		legacyAddress: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
-		legacySymbol: 'tSPLG', // Symbol changed from SPLG to SPYM
+		legacySymbol: 'tSPYM', // Symbol changed from SPLG to SPYM
 		symbol: 'wtSPYM',
 		decimals: 18,
 		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
@@ -160,22 +160,23 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
-	{
-		chainId: base.id,
-		address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
-		unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
-		legacyAddress: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
-		// legacySymbol: 'tSTOX',
-		symbol: 'wtSTOX',
-		decimals: 18,
-		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
-		logoUrl: '/images/SPLG.png',
-		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
-		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:SPLG',
-		tradingViewMarket: 'america',
-		limitOrders: []
-	  },
+	// wtSTOX token temporarily disabled
+	// {
+	// 	chainId: base.id,
+	// 	address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
+	// 	unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
+	// 	legacyAddress: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+	// 	// legacySymbol: 'tSTOX',
+	// 	symbol: 'wtSTOX',
+	// 	decimals: 18,
+	// 	name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
+	// 	logoUrl: '/images/SPLG.png',
+	// 	priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
+	// 	category: 'ST0x',
+	// 	tradingViewSymbol: 'AMEX:SPLG',
+	// 	tradingViewMarket: 'america',
+	// 	limitOrders: []
+	// },
 	{
 		chainId: base.id,
 		address: '0xEB7F3E4093C9d68253b6104FbbfF561F3eC0442F',
@@ -229,21 +230,6 @@ export const TOKENS: CategorizedToken[] = [
 		symbol: 'wtPPLT',
 		decimals: 18,
 		name: 'Wrapped abrdn Physical Platinum Shares ETF ST0x',
-		logoUrl: '/images/SIVR.png',
-		priceFeedId: '0x782410278b6c8aa2d437812281526012808404aa14c243f73fb9939eeb88d430',
-		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:PPLT',
-		tradingViewMarket: 'america',
-		limitOrders: []
-	},
-	{
-		chainId: base.id,
-		address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
-		unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
-		legacyAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
-		symbol: 'wtSt0x',
-		decimals: 18,
-		name: 'Wrapped Test Token ST0x',
 		logoUrl: '/images/SIVR.png',
 		priceFeedId: '0x782410278b6c8aa2d437812281526012808404aa14c243f73fb9939eeb88d430',
 		category: 'ST0x',
