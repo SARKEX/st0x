@@ -14,6 +14,7 @@
 		globalPoolApy,
 		fetchGlobalRewards
 	} from '$lib/stores/rewardsStore';
+	import { track } from '$lib/services/analytics';
 
 	let lastFetchedAddress: string | null = null;
 	let showTooltip = false;
@@ -36,6 +37,11 @@
 	}
 
 	function openModal() {
+		track('boost_rewards_clicked', {
+			user_points: $rewardsData?.userPoints ?? 0,
+			estimated_reward: $rewardsData?.estimatedReward ?? 0,
+			apy: $globalPoolApy
+		});
 		showDetailsModal.set(true);
 	}
 </script>

@@ -10,7 +10,7 @@
 	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { derived } from 'svelte/store';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
@@ -25,6 +25,9 @@
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import { trackPageView } from '$lib/services/analytics';
+	import { initScrollTracking } from '$lib/utils/scrollTracking';
+	import { walletAddress } from '$lib/stores/authStore';
 
 	interface TvlApiResponse {
 		success: boolean;
@@ -59,9 +62,22 @@
 	const allTradeQueries = derived(tradeActivityQueries, (queries) => queries);
 	const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
 
+	let cleanupScrollTracking: (() => void) | null = null;
+
 	onMount(() => {
+		trackPageView('platform_metrics_page', {
+			wallet_connected: Boolean($walletAddress)
+		});
+		cleanupScrollTracking = initScrollTracking('platform_metrics_page');
+
 		void loadVaults();
 		void loadAdminTvl();
+	});
+
+	onDestroy(() => {
+		if (cleanupScrollTracking) {
+			cleanupScrollTracking();
+		}
 	});
 
 	$: priceFeedStates = networks.map((network, index) => ({

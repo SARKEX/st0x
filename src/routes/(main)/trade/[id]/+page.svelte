@@ -36,6 +36,8 @@
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
+	import { trackPageView } from '$lib/services/analytics';
+	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
@@ -503,8 +505,28 @@
 		}
 		return null;
 	})();
+	let cleanupScrollTracking: (() => void) | null = null;
+	let lastTrackedTokenId: string | null = null;
+
+	// Track page view reactively when token data is available
+	// Uses lastTrackedTokenId to ensure tracking fires for each new token during client-side navigation
+	$: if (currentPythToken?.symbol && $page.params.id !== lastTrackedTokenId) {
+		lastTrackedTokenId = $page.params.id;
+		trackPageView('trade_page', {
+			token_symbol: currentPythToken.symbol,
+			token_id: $page.params.id
+		});
+	}
+
 	onMount(() => {
-		return () => {};
+		// Initialize scroll tracking
+		cleanupScrollTracking = initScrollTracking('trade_page');
+
+		return () => {
+			if (cleanupScrollTracking) {
+				cleanupScrollTracking();
+			}
+		};
 	});
 	const handleAssetTabChange = (event: CustomEvent<{ id: string }>) => {
 		const nextId = event.detail.id;
