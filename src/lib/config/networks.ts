@@ -58,13 +58,13 @@ export const networks: Network[] = [
 		metadata_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 		orderbook_subgraph_url:
-			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2026-01-22-c13a/gn',
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2026-02-05-c4ef/gn',
 		orderbook_subgraph_urls_inactive: [],
 		paymentTokens: basePaymentTokens,
 		defaultPaymentToken: baseDefaultPaymentToken!,
 		// Trusted orderbook contract addresses - transactions to unknown orderbooks are blocked
 		trustedOrderbooks: [
-			'0x498Ff70C5f67e63e53b74551DE31387cf2813986' // Rain Orderbook v4 on Base
+			'0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D' // Rain Orderbook v4 on Base
 		]
 	}
 ];
