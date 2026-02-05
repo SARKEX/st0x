@@ -23,7 +23,7 @@
 	import { formatUnits, erc20Abi } from 'viem';
 	import { readContracts, getBalance } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
-	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
+	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK, getTokenByAnyAddress } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -291,6 +291,7 @@
 	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 60_000);
 
 	// Query user's wallet holdings from SFTs - fetches balances via multicall (single RPC request)
+	// We query balances on WRAPPED token addresses (from TOKENS config) since that's what users trade
 	$: walletHoldingsQuery = createQuery({
 		queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
 		enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork && $wagmiConfig),
@@ -300,10 +301,20 @@
 		queryFn: async () => {
 			if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
 
-			// Build multicall contracts array for all SFT balances
-			const contracts = $sfts.map((sft) => ({
+			// Map subgraph SFTs to their wrapped token addresses from TOKENS config
+			// The subgraph returns unwrapped addresses, but we need to query wrapped token balances
+			const sftsWithWrappedAddresses = $sfts.map((sft) => {
+				const tokenConfig = getTokenByAnyAddress(sft.address);
+				return {
+					...sft,
+					wrappedAddress: tokenConfig?.address ?? sft.address // Use wrapped address if found
+				};
+			});
+
+			// Build multicall contracts array for all wrapped token balances
+			const contracts = sftsWithWrappedAddresses.map((sft) => ({
 				abi: erc20Abi,
-				address: sft.address as `0x${string}`,
+				address: sft.wrappedAddress as `0x${string}`,
 				functionName: 'balanceOf' as const,
 				args: [$walletAddress as `0x${string}`]
 			}));
@@ -312,7 +323,7 @@
 				// Single multicall for all token balances
 				const results = await readContracts($wagmiConfig, { contracts });
 
-				return $sfts.map((sft, index) => {
+				return sftsWithWrappedAddresses.map((sft, index) => {
 					const result = results[index];
 					let walletBalance = 0n;
 
@@ -327,11 +338,14 @@
 						walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
 					}
 
+					// Use wrapped token info from config
+					const tokenConfig = getTokenByAnyAddress(sft.address);
+
 					return {
 						id: sft.id,
-						address: sft.address,
-						name: sft.name,
-						symbol: sft.symbol,
+						address: sft.wrappedAddress, // Use wrapped address
+						name: tokenConfig?.name ?? sft.name,
+						symbol: tokenConfig?.symbol ?? sft.symbol,
 						walletBalance,
 						decimals: 18
 					};
@@ -344,11 +358,12 @@
 						(holder: { address: string }) =>
 							holder.address.toLowerCase() === $walletAddress!.toLowerCase()
 					);
+					const tokenConfig = getTokenByAnyAddress(sft.address);
 					return {
 						id: sft.id,
-						address: sft.address,
-						name: sft.name,
-						symbol: sft.symbol,
+						address: tokenConfig?.address ?? sft.address,
+						name: tokenConfig?.name ?? sft.name,
+						symbol: tokenConfig?.symbol ?? sft.symbol,
 						walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
 						decimals: 18
 					};
@@ -1211,7 +1226,7 @@
 						<div id="holdings"></div>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Holdings</h2>
 						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
-							Asset tokens combined across wallet and vaults
+							Wrapped tokens combined across wallet and vaults. We recommend only using wrapped tokens for DEX/DeFi usage.
 						</p>
 						{#if assetHoldings.length > 0}
 							<div class="overflow-x-auto">
@@ -1439,7 +1454,7 @@
 								Unwrapped Tokens
 							</h2>
 							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
-								These tokens can be wrapped for trading
+								Unwrapped tokens are always redeemable for 1 unit of off-chain equity. We recommend wrapping them for safe use with DEX/DeFi protocols.
 							</p>
 							<div class="overflow-x-auto">
 								<Table>
@@ -1516,7 +1531,7 @@
 								Legacy Tokens
 							</h2>
 							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
-								These tokens need to be swapped to the new wrapped version
+								Legacy tokens maintain full equity backing and right of redemption, but should be swapped ASAP to receive dividends, stock splits, and be compatible with DeFi protocols.
 							</p>
 							<div class="overflow-x-auto">
 								<Table>
