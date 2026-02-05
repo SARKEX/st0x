@@ -10,7 +10,7 @@
 		closeWrapUnwrapModal
 	} from '$lib/stores/dynamicStore';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { readContracts, waitForTransactionReceipt } from '@wagmi/core';
+	import { readContracts } from '@wagmi/core';
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import {
 		TOKEN_WRAPPING_MAPPINGS,
@@ -21,14 +21,15 @@
 	import { wrapToken, unwrapToken, previewWrap, previewUnwrap } from '$lib/services/wrapService';
 	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
+	import transactionStore from '$lib/stores/transaction';
+	import { TransactionErrorMessage } from '$lib/types/errors';
+	import { waitForTransaction } from '$lib/services/walletService';
 
 	const queryClient = useQueryClient();
 
 	// State
 	let selectedTokenAddress: string | null = null;
 	let amount = '';
-	let isExecuting = false;
-	let error: string | null = null;
 	let previewAmount: string | null = null;
 
 	// When modal opens with a pre-selected token, set it
@@ -161,7 +162,6 @@
 	function handleTokenSelect(address: string) {
 		selectedTokenAddress = address;
 		amount = '';
-		error = null;
 		previewAmount = null;
 	}
 
@@ -169,7 +169,6 @@
 	function handleAmountInput(e: Event) {
 		const target = e.target as HTMLInputElement;
 		amount = target.value;
-		error = null;
 	}
 
 	// Set max amount
@@ -183,12 +182,17 @@
 		if (!selectedTokenData || !currentMapping || !$walletAddress) return;
 		if (parsedAmount <= 0) return;
 
-		isExecuting = true;
-		error = null;
+		// Close the form modal - TransactionModal will show progress
+		handleClose();
+
+		const actionName = isWrapMode ? 'Wrap' : 'Unwrap';
 
 		try {
 			const amountWei = parseUnits(amount, selectedTokenData.decimals);
-			const config = get(wagmiConfig);
+
+			transactionStore.awaitWalletConfirmation(
+				`Awaiting wallet confirmation to ${actionName.toLowerCase()} ${selectedTokenData.symbol}...`
+			);
 
 			let hash: `0x${string}`;
 
@@ -207,23 +211,29 @@
 				);
 			}
 
+			transactionStore.awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+
 			// Wait for transaction confirmation
-			if (config) {
-				await waitForTransactionReceipt(config, { hash });
-			}
+			await waitForTransaction(hash);
 
 			// Invalidate queries to refresh balances
 			queryClient.invalidateQueries({ queryKey: ['wrapUnwrapBalances'] });
 			queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
 			queryClient.invalidateQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] });
 
-			// Close modal on success
-			handleClose();
+			// Show success via TransactionModal
+			const targetToken = isWrapMode
+				? currentMapping.wrappedToken
+				: currentMapping.unwrappedToken;
+			transactionStore.transactionSuccess(
+				hash,
+				`Successfully ${actionName.toLowerCase()}ped ${parsedAmount.toFixed(4)} ${selectedTokenData.symbol} to ${targetToken.symbol}`
+			);
 		} catch (e) {
 			console.error('Wrap/unwrap failed:', e);
-			error = e instanceof Error ? e.message : 'Transaction failed';
-		} finally {
-			isExecuting = false;
+			const errorMessage =
+				e instanceof Error ? e.message : 'Transaction failed';
+			transactionStore.transactionError(errorMessage as TransactionErrorMessage);
 		}
 	}
 
@@ -231,7 +241,6 @@
 	function handleClose() {
 		selectedTokenAddress = null;
 		amount = '';
-		error = null;
 		previewAmount = null;
 		closeWrapUnwrapModal();
 	}
@@ -425,13 +434,6 @@
 						</div>
 					</div>
 
-					<!-- Error -->
-					{#if error}
-						<div class="rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-400">
-							{error}
-						</div>
-					{/if}
-
 					<!-- Info -->
 					<div class="rounded-lg bg-gray-800/40 px-4 py-3 text-xs text-gray-400">
 						<div class="flex justify-between">
@@ -453,30 +455,10 @@
 						disabled={!selectedTokenData ||
 							parsedAmount <= 0 ||
 							exceedsBalance ||
-							isExecuting ||
 							tokensWithBalance.length === 0}
 						on:click={handleExecute}
 					>
-						{#if isExecuting}
-							<span class="flex items-center justify-center gap-2">
-								<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-									<circle
-										class="opacity-25"
-										cx="12"
-										cy="12"
-										r="10"
-										stroke="currentColor"
-										stroke-width="4"
-									></circle>
-									<path
-										class="opacity-75"
-										fill="currentColor"
-										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-									></path>
-								</svg>
-								Processing...
-							</span>
-						{:else if tokensWithBalance.length === 0}
+						{#if tokensWithBalance.length === 0}
 							No tokens available
 						{:else if !selectedTokenData}
 							Select a token

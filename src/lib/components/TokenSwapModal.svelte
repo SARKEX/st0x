@@ -18,7 +18,8 @@
 	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
 	import { createRaindexClient } from '$lib/clients/raindex';
-	import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
+	import transactionStore from '$lib/stores/transaction';
+	import { TransactionErrorMessage } from '$lib/types/errors';
 	import { OrderV4_ABI, normalizeOrderData } from '$lib/utils/orderbook';
 	import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 	import { AbiCoder } from 'ethers';
@@ -30,8 +31,6 @@
 	// Selected old token address
 	let selectedOldTokenAddress: string | null = null;
 	let swapAmount = '';
-	let isExecuting = false;
-	let swapError: string | null = null;
 	let liquidityWarning = false;
 
 	// Hardcoded liquidity amounts (these would normally come from checking the swap order)
@@ -119,7 +118,6 @@
 	function handleTokenSelect(address: string) {
 		selectedOldTokenAddress = address;
 		swapAmount = '';
-		swapError = null;
 		liquidityWarning = false;
 	}
 
@@ -127,7 +125,6 @@
 	function handleAmountInput(e: Event) {
 		const target = e.target as HTMLInputElement;
 		swapAmount = target.value;
-		swapError = null;
 
 		// Check if we need to show liquidity warning
 		const amount = parseFloat(swapAmount) || 0;
@@ -158,14 +155,16 @@
 
 		const network = get(currentNetwork);
 		if (!network?.id) {
-			swapError = 'Network not available';
+			transactionStore.transactionError('Network not available' as TransactionErrorMessage);
 			return;
 		}
 
-		isExecuting = true;
-		swapError = null;
+		// Close the form modal - TransactionModal will show progress
+		handleClose();
 
 		try {
+			transactionStore.awaitWalletConfirmation('Preparing swap...');
+
 			const swapAmountWei = parseUnits(swapAmount, currentMapping.oldToken.decimals);
 			const requestedTakerWantsAmount = parseUnits(swapAmount, currentMapping.newToken.decimals);
 
@@ -182,14 +181,18 @@
 			);
 
 			if (ordersResult.error || !ordersResult.value?.length) {
-				swapError = 'Migration order not available. Please try again later.';
+				transactionStore.transactionError(
+					'Migration order not available. Please try again later.' as TransactionErrorMessage
+				);
 				return;
 			}
 
 			const raindexOrderObj = ordersResult.value[0];
 			const sgOrderResult = raindexOrderObj.convertToSgOrder();
 			if (sgOrderResult.error || !sgOrderResult.value) {
-				swapError = 'Failed to prepare migration order.';
+				transactionStore.transactionError(
+					'Failed to prepare migration order.' as TransactionErrorMessage
+				);
 				return;
 			}
 
@@ -208,7 +211,9 @@
 			);
 
 			if (inputIndex === -1 || outputIndex === -1) {
-				swapError = 'Order token mismatch for this migration.';
+				transactionStore.transactionError(
+					'Order token mismatch for this migration.' as TransactionErrorMessage
+				);
 				return;
 			}
 
@@ -226,7 +231,9 @@
 			);
 			const ratioOne = Float.parse('1');
 			if (ratioOne.error || !ratioOne.value) {
-				swapError = 'Failed to build order parameters.';
+				transactionStore.transactionError(
+					'Failed to build order parameters.' as TransactionErrorMessage
+				);
 				return;
 			}
 
@@ -259,6 +266,7 @@
 				orderFillAmounts: [requestedTakerWantsAmount]
 			};
 
+			// handleTakeOrders manages the transaction flow and calls transactionSuccess/Error
 			await transactionStore.handleTakeOrders(
 				takeOrdersConfig,
 				sgOrder,
@@ -267,19 +275,14 @@
 				undefined
 			);
 
-			const state = get(transactionStore);
-			if (state.status === TransactionStatus.SUCCESS) {
-				queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
-				queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
-				closeTokenSwapModal();
-			} else if (state.status === TransactionStatus.ERROR) {
-				swapError = state.error || 'Swap failed';
-			}
+			// Invalidate queries after successful swap
+			queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
+			queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
 		} catch (error) {
 			console.error('Swap failed:', error);
-			swapError = error instanceof Error ? error.message : 'Swap failed';
-		} finally {
-			isExecuting = false;
+			transactionStore.transactionError(
+				(error instanceof Error ? error.message : 'Swap failed') as TransactionErrorMessage
+			);
 		}
 	}
 
@@ -287,7 +290,6 @@
 	function handleClose() {
 		selectedOldTokenAddress = null;
 		swapAmount = '';
-		swapError = null;
 		liquidityWarning = false;
 		closeTokenSwapModal();
 	}
@@ -505,13 +507,6 @@
 						</div>
 					{/if}
 
-					<!-- Error -->
-					{#if swapError}
-						<div class="rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-400">
-							{swapError}
-						</div>
-					{/if}
-
 					<!-- Swap Info -->
 					<div class="rounded-lg bg-gray-800/40 px-4 py-3 text-xs text-gray-400">
 						<div class="flex justify-between">
@@ -536,30 +531,10 @@
 						disabled={!selectedTokenData ||
 							parsedSwapAmount <= 0 ||
 							exceedsBalance ||
-							isExecuting ||
 							oldTokensWithBalance.length === 0}
 						on:click={handleSwap}
 					>
-						{#if isExecuting}
-							<span class="flex items-center justify-center gap-2">
-								<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-									<circle
-										class="opacity-25"
-										cx="12"
-										cy="12"
-										r="10"
-										stroke="currentColor"
-										stroke-width="4"
-									></circle>
-									<path
-										class="opacity-75"
-										fill="currentColor"
-										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-									></path>
-								</svg>
-								Processing...
-							</span>
-						{:else if oldTokensWithBalance.length === 0}
+						{#if oldTokensWithBalance.length === 0}
 							No legacy tokens to swap
 						{:else if !selectedTokenData}
 							Select a token
