@@ -226,12 +226,13 @@
 
 			transactionStore.awaitWalletConfirmation(`Updating balances...`);
 
-			// Refetch queries and wait for balances to update
-			await Promise.all([
-				queryClient.refetchQueries({ queryKey: ['wrapUnwrapBalances'] }),
-				queryClient.refetchQueries({ queryKey: ['walletHoldings'] }),
-				queryClient.refetchQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] })
-			]);
+			// Small delay to ensure RPC state is propagated
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			// Invalidate and refetch dashboard balance queries
+			queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
+			queryClient.invalidateQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] });
+			queryClient.invalidateQueries({ queryKey: ['wrapUnwrapBalances'] });
 
 			// Show success via TransactionModal
 			transactionStore.transactionSuccess(
