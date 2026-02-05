@@ -1466,12 +1466,7 @@
 										{#each unwrappedHoldings as token}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<div class="flex items-center gap-2">
-														<span class="font-medium">{token.symbol}</span>
-														<span class="text-xs text-gray-500">
-															&#8594; {token.wrappedTokenSymbol}
-														</span>
-													</div>
+													<span class="font-medium">{token.symbol}</span>
 												</td>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
 													>{token.balanceNum.toFixed(4)}</td
@@ -1548,10 +1543,7 @@
 										{#each legacyHoldings as token}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<div class="flex items-center gap-2">
-														<span class="font-medium">{token.symbol}</span>
-														<span class="text-xs text-gray-500">→ {token.newTokenDisplay}</span>
-													</div>
+													<span class="font-medium">{token.symbol}</span>
 												</td>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
 													>{token.balanceNum.toFixed(4)}</td
