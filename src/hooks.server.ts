@@ -35,6 +35,108 @@ const EXPOSED_HEADERS = [
 // Preflight cache duration (24 hours)
 const PREFLIGHT_MAX_AGE = 86400;
 
+// =============================================================================
+// PostHog Proxy Configuration
+// =============================================================================
+// Using /ingest as the proxy path (generic name to avoid ad blocker detection)
+// US region PostHog endpoints
+const POSTHOG_API_HOST = 'us.i.posthog.com';
+const POSTHOG_ASSETS_HOST = 'us-assets.i.posthog.com';
+const INGEST_PATH_PREFIX = '/ingest';
+
+/**
+ * Handle PostHog proxy requests
+ * Forwards requests from /ingest/* to PostHog's servers
+ */
+async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promise<Response | null> {
+	const { url, request } = event;
+	const path = url.pathname;
+
+	// Only handle requests starting with /ingest
+	if (!path.startsWith(INGEST_PATH_PREFIX)) {
+		return null;
+	}
+
+	// Remove the /ingest prefix to get the actual PostHog path
+	const posthogPath = path.slice(INGEST_PATH_PREFIX.length) || '/';
+	const searchParams = url.search;
+
+	// Determine the target host based on the path
+	// Static assets go to the assets host, everything else to the API host
+	const isStaticAsset = posthogPath.startsWith('/static/');
+	const targetHost = isStaticAsset ? POSTHOG_ASSETS_HOST : POSTHOG_API_HOST;
+	const targetUrl = `https://${targetHost}${posthogPath}${searchParams}`;
+
+	// Build headers for the proxy request
+	const headers = new Headers();
+
+	// Forward relevant headers from the original request
+	const forwardHeaders = ['content-type', 'accept', 'accept-encoding', 'user-agent'];
+	for (const header of forwardHeaders) {
+		const value = request.headers.get(header);
+		if (value) {
+			headers.set(header, value);
+		}
+	}
+
+	// Set the host header to the target
+	headers.set('host', targetHost);
+
+	// Forward client IP for accurate geolocation/analytics
+	// Check x-forwarded-for first (from Vercel/Cloudflare), then use getClientAddress
+	const forwardedFor = request.headers.get('x-forwarded-for');
+	const clientIp = forwardedFor?.split(',')[0]?.trim() || event.getClientAddress();
+	if (clientIp) {
+		headers.set('x-forwarded-for', clientIp);
+	}
+
+	try {
+		// Forward the request to PostHog
+		const fetchOptions: RequestInit = {
+			method: request.method,
+			headers,
+			// @ts-expect-error - duplex is required for streaming body but not in all TS versions
+			duplex: 'half'
+		};
+
+		// Only include body for methods that support it
+		if (request.method !== 'GET' && request.method !== 'HEAD') {
+			fetchOptions.body = request.body;
+		}
+
+		const response = await fetch(targetUrl, fetchOptions);
+
+		// Build response headers
+		const responseHeaders = new Headers();
+
+		// Forward relevant response headers
+		const proxyResponseHeaders = ['content-type', 'content-encoding', 'cache-control'];
+		for (const header of proxyResponseHeaders) {
+			const value = response.headers.get(header);
+			if (value) {
+				responseHeaders.set(header, value);
+			}
+		}
+
+		// Add CORS headers for browser requests
+		responseHeaders.set('access-control-allow-origin', '*');
+		responseHeaders.set('access-control-allow-methods', 'GET, POST, OPTIONS');
+		responseHeaders.set('access-control-allow-headers', 'Content-Type');
+
+		return new Response(response.body, {
+			status: response.status,
+			statusText: response.statusText,
+			headers: responseHeaders
+		});
+	} catch (error) {
+		console.error('[posthog-proxy] Error forwarding request:', error);
+		return new Response(JSON.stringify({ error: 'Proxy error' }), {
+			status: 502,
+			headers: { 'content-type': 'application/json' }
+		});
+	}
+}
+
 /**
  * Check if a localhost origin is allowed (dev mode only)
  * Allows ports 5173-5180 and 3000-3005
@@ -324,6 +426,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const method = request.method;
 
 	const debug = env.DEBUG_LOGIN === 'true';
+
+	// Handle PostHog proxy requests (must be before other path checks)
+	// This proxies /ingest/* to PostHog's servers to bypass ad blockers
+	const posthogResponse = await handlePostHogProxy(event);
+	if (posthogResponse) {
+		return posthogResponse;
+	}
 
 	// Handle CORS preflight (OPTIONS) requests for API endpoints
 	if (method === 'OPTIONS' && isApiPath(path)) {
