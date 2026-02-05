@@ -1250,7 +1250,8 @@
 						<div id="holdings"></div>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Holdings</h2>
 						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
-							Wrapped tokens combined across wallet and vaults. We recommend only using wrapped tokens for DEX/DeFi usage.
+							Wrapped tokens combined across wallet and vaults. We recommend only using wrapped
+							tokens for DEX/DeFi usage.
 						</p>
 						{#if assetHoldings.length > 0}
 							<div class="overflow-x-auto">
@@ -1478,7 +1479,8 @@
 								Unwrapped Tokens
 							</h2>
 							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
-								Unwrapped tokens are always redeemable for 1 unit of off-chain equity. We recommend wrapping them for safe use with DEX/DeFi protocols.
+								Unwrapped tokens are always redeemable for 1 unit of off-chain equity. We recommend
+								wrapping them for safe use with DEX/DeFi protocols.
 							</p>
 							<div class="overflow-x-auto">
 								<Table>
@@ -1510,9 +1512,7 @@
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
 													>{token.balanceNum.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
-													>${token.value.toFixed(2)}</td
-												>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">${token.value.toFixed(2)}</td>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">
 													<div class="flex justify-center gap-2">
 														<Button
@@ -1555,7 +1555,9 @@
 								Legacy Tokens
 							</h2>
 							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
-								Legacy tokens maintain full equity backing and right of redemption, but should be swapped ASAP to receive dividends, stock splits, and be compatible with DeFi protocols.
+								Legacy tokens maintain full equity backing and right of redemption, but should be
+								swapped ASAP to receive dividends, stock splits, and be compatible with DeFi
+								protocols.
 							</p>
 							<div class="overflow-x-auto">
 								<Table>
@@ -1587,9 +1589,7 @@
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
 													>{token.balanceNum.toFixed(4)}</td
 												>
-												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
-													>${token.value.toFixed(2)}</td
-												>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">${token.value.toFixed(2)}</td>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">
 													<div class="flex justify-center">
 														<Button

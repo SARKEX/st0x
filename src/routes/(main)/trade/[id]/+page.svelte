@@ -1290,7 +1290,8 @@
 									<div>
 										<div class="sm:hidden">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ?? tokenId}"
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+													tokenId}"
 												label={currentPythToken?.address ?? tokenId}
 												truncate={{ start: 0, end: 6 }}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
@@ -1298,7 +1299,8 @@
 										</div>
 										<div class="hidden sm:block">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ?? tokenId}"
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+													tokenId}"
 												label={truncateAddress(currentPythToken?.address ?? tokenId)}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 											/>

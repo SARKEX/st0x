@@ -137,16 +137,10 @@
 			const amountWei = parseUnits(amount, selectedTokenData.decimals);
 
 			if (isWrapMode) {
-				const shares = await previewWrap(
-					selectedTokenData.address as `0x${string}`,
-					amountWei
-				);
+				const shares = await previewWrap(selectedTokenData.address as `0x${string}`, amountWei);
 				previewAmount = formatUnits(shares, currentMapping.wrappedToken.decimals);
 			} else {
-				const assets = await previewUnwrap(
-					selectedTokenData.address as `0x${string}`,
-					amountWei
-				);
+				const assets = await previewUnwrap(selectedTokenData.address as `0x${string}`, amountWei);
 				previewAmount = formatUnits(assets, currentMapping.unwrappedToken.decimals);
 			}
 		} catch {
@@ -262,7 +256,8 @@
 				<div class="space-y-4">
 					<!-- From Section -->
 					<div class="space-y-2">
-						<label for="wrap-from-token" class="text-sm font-medium text-gray-400">{fromLabel}</label
+						<label for="wrap-from-token" class="text-sm font-medium text-gray-400"
+							>{fromLabel}</label
 						>
 						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
 							<!-- Token Dropdown -->

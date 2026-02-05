@@ -179,12 +179,7 @@ export async function wrapToken(
 	const vaultAddress = mapping.wrappedToken.address as Address;
 
 	// 1. Check if approval is needed
-	const hasAllowance = await checkAllowance(
-		unwrappedTokenAddress,
-		receiver,
-		vaultAddress,
-		amount
-	);
+	const hasAllowance = await checkAllowance(unwrappedTokenAddress, receiver, vaultAddress, amount);
 
 	// 2. Request approval if needed
 	if (!hasAllowance) {
@@ -240,10 +235,7 @@ export async function unwrapToken(
 /**
  * Convert asset amount to share amount for a given vault
  */
-export async function convertToShares(
-	vaultAddress: Address,
-	assetAmount: bigint
-): Promise<bigint> {
+export async function convertToShares(vaultAddress: Address, assetAmount: bigint): Promise<bigint> {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
 
@@ -258,10 +250,7 @@ export async function convertToShares(
 /**
  * Convert share amount to asset amount for a given vault
  */
-export async function convertToAssets(
-	vaultAddress: Address,
-	shareAmount: bigint
-): Promise<bigint> {
+export async function convertToAssets(vaultAddress: Address, shareAmount: bigint): Promise<bigint> {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
 

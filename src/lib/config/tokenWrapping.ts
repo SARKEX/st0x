@@ -75,7 +75,10 @@ export const TOKEN_WRAPPING_MAPPINGS: TokenWrappingMapping[] = TOKENS.filter(
  * These are the underlying assets of the ERC4626 vaults
  */
 export const UNDERLYING_TOKEN_ADDRESSES: Record<string, string> = Object.fromEntries(
-	TOKENS.filter((t) => t.unwrappedAddress).map((t) => [getUnwrappedSymbol(t.symbol), t.unwrappedAddress!])
+	TOKENS.filter((t) => t.unwrappedAddress).map((t) => [
+		getUnwrappedSymbol(t.symbol),
+		t.unwrappedAddress!
+	])
 );
 
 /**
@@ -102,18 +105,14 @@ const unwrappedAddressSet = new Set(
 /**
  * Get the wrapping mapping for a wrapped token by its address (vault address)
  */
-export function getWrappingMappingByWrappedAddress(
-	address: string
-): TokenWrappingMapping | null {
+export function getWrappingMappingByWrappedAddress(address: string): TokenWrappingMapping | null {
 	return mappingByWrappedAddress.get(address.toLowerCase()) ?? null;
 }
 
 /**
  * Get the wrapping mapping for an unwrapped token by its address (underlying asset)
  */
-export function getWrappingMappingByUnwrappedAddress(
-	address: string
-): TokenWrappingMapping | null {
+export function getWrappingMappingByUnwrappedAddress(address: string): TokenWrappingMapping | null {
 	return mappingByUnwrappedAddress.get(address.toLowerCase()) ?? null;
 }
 

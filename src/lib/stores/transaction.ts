@@ -607,10 +607,7 @@ const transactionStore = () => {
 			// Invalidate balance queries (same pattern as handleWithdraw)
 			invalidateDashboardBalances();
 
-			return transactionSuccess(
-				hash,
-				`Successfully ${mode}ped ${tokenSymbol} to ${targetSymbol}`
-			);
+			return transactionSuccess(hash, `Successfully ${mode}ped ${tokenSymbol} to ${targetSymbol}`);
 		} catch (error) {
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);

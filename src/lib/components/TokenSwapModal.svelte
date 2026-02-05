@@ -131,13 +131,14 @@
 	$: oldTokensWithBalance = $oldTokenBalancesQuery.data ?? [];
 
 	// Pre-selected token data (from swapModalToken when modal is opened for a specific token)
-	$: preSelectedTokenData = $swapModalToken && currentMapping
-		? {
-				...currentMapping,
-				balance: $swapModalToken.balanceRaw ?? 0n,
-				balanceFormatted: parseFloat($swapModalToken.balance ?? '0')
-			}
-		: null;
+	$: preSelectedTokenData =
+		$swapModalToken && currentMapping
+			? {
+					...currentMapping,
+					balance: $swapModalToken.balanceRaw ?? 0n,
+					balanceFormatted: parseFloat($swapModalToken.balance ?? '0')
+				}
+			: null;
 
 	// Combined list: include pre-selected token if not already in balance list
 	$: tokensToShow = (() => {
@@ -146,7 +147,8 @@
 
 		// Check if pre-selected token is already in balance list
 		const alreadyInList = balanceTokens.some(
-			(t) => t.oldToken.address.toLowerCase() === preSelectedTokenData.oldToken.address.toLowerCase()
+			(t) =>
+				t.oldToken.address.toLowerCase() === preSelectedTokenData.oldToken.address.toLowerCase()
 		);
 		if (alreadyInList) return balanceTokens;
 
@@ -155,11 +157,14 @@
 	})();
 
 	// Selected token data - check tokensToShow first, then fall back to preSelectedTokenData
-	$: selectedTokenData = tokensToShow.find(
-		(t) => t.oldToken.address.toLowerCase() === selectedOldTokenAddress?.toLowerCase()
-	) ?? (selectedOldTokenAddress && preSelectedTokenData?.oldToken.address.toLowerCase() === selectedOldTokenAddress.toLowerCase()
-		? preSelectedTokenData
-		: undefined);
+	$: selectedTokenData =
+		tokensToShow.find(
+			(t) => t.oldToken.address.toLowerCase() === selectedOldTokenAddress?.toLowerCase()
+		) ??
+		(selectedOldTokenAddress &&
+		preSelectedTokenData?.oldToken.address.toLowerCase() === selectedOldTokenAddress.toLowerCase()
+			? preSelectedTokenData
+			: undefined);
 
 	// Available liquidity for selected token (from real order data)
 	$: availableLiquidity = $swapLiquidityQuery.data ?? 0;
