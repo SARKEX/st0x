@@ -159,14 +159,18 @@
 			return;
 		}
 
+		// Capture values before closing modal (handleClose resets state)
+		const mapping = currentMapping;
+		const swapAmountStr = swapAmount;
+
 		// Close the form modal - TransactionModal will show progress
 		handleClose();
 
 		try {
 			transactionStore.awaitWalletConfirmation('Preparing swap...');
 
-			const swapAmountWei = parseUnits(swapAmount, currentMapping.oldToken.decimals);
-			const requestedTakerWantsAmount = parseUnits(swapAmount, currentMapping.newToken.decimals);
+			const swapAmountWei = parseUnits(swapAmountStr, mapping.oldToken.decimals);
+			const requestedTakerWantsAmount = parseUnits(swapAmountStr, mapping.newToken.decimals);
 
 			// 1. Fetch the migration swap order by order hash
 			const client = await createRaindexClient();
@@ -175,7 +179,7 @@
 				{
 					active: true,
 					owners: [],
-					orderHash: currentMapping.swapOrderHash as `0x${string}`
+					orderHash: mapping.swapOrderHash as `0x${string}`
 				},
 				1
 			);
@@ -201,8 +205,8 @@
 			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
 
 			// 2. Resolve IO indexes: order input = old token (taker pays), order output = new token (taker wants)
-			const oldAddr = currentMapping.oldToken.address.toLowerCase();
-			const newAddr = currentMapping.newToken.address.toLowerCase();
+			const oldAddr = mapping.oldToken.address.toLowerCase();
+			const newAddr = mapping.newToken.address.toLowerCase();
 			const inputIndex = orderData.validInputs.findIndex(
 				(i) => (i.token as string)?.toLowerCase() === oldAddr
 			);
@@ -227,7 +231,7 @@
 
 			const maximumInputFloat = Float.fromFixedDecimalLossy(
 				requestedTakerWantsAmount,
-				currentMapping.newToken.decimals
+				mapping.newToken.decimals
 			);
 			const ratioOne = Float.parse('1');
 			if (ratioOne.error || !ratioOne.value) {
@@ -247,14 +251,14 @@
 			};
 
 			const takerWantsToken: TokenInfo = {
-				address: currentMapping.newToken.address,
-				decimals: currentMapping.newToken.decimals,
-				symbol: currentMapping.newToken.symbol
+				address: mapping.newToken.address,
+				decimals: mapping.newToken.decimals,
+				symbol: mapping.newToken.symbol
 			};
 			const takerPaysToken: TokenInfo = {
-				address: currentMapping.oldToken.address,
-				decimals: currentMapping.oldToken.decimals,
-				symbol: currentMapping.oldToken.symbol
+				address: mapping.oldToken.address,
+				decimals: mapping.oldToken.decimals,
+				symbol: mapping.oldToken.symbol
 			};
 
 			const params: TakeOrdersParams = {

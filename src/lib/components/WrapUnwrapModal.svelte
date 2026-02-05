@@ -182,32 +182,40 @@
 		if (!selectedTokenData || !currentMapping || !$walletAddress) return;
 		if (parsedAmount <= 0) return;
 
+		// Capture values before closing modal (handleClose resets state)
+		const tokenData = selectedTokenData;
+		const mapping = currentMapping;
+		const amountStr = amount;
+		const amountNum = parsedAmount;
+		const wrapMode = isWrapMode;
+		const actionName = wrapMode ? 'Wrap' : 'Unwrap';
+		const targetToken = wrapMode ? mapping.wrappedToken : mapping.unwrappedToken;
+		const walletAddr = $walletAddress;
+
 		// Close the form modal - TransactionModal will show progress
 		handleClose();
 
-		const actionName = isWrapMode ? 'Wrap' : 'Unwrap';
-
 		try {
-			const amountWei = parseUnits(amount, selectedTokenData.decimals);
+			const amountWei = parseUnits(amountStr, tokenData.decimals);
 
 			transactionStore.awaitWalletConfirmation(
-				`Awaiting wallet confirmation to ${actionName.toLowerCase()} ${selectedTokenData.symbol}...`
+				`Awaiting wallet confirmation to ${actionName.toLowerCase()} ${tokenData.symbol}...`
 			);
 
 			let hash: `0x${string}`;
 
-			if (isWrapMode) {
+			if (wrapMode) {
 				hash = await wrapToken(
-					selectedTokenData.address as `0x${string}`,
+					tokenData.address as `0x${string}`,
 					amountWei,
-					$walletAddress as `0x${string}`
+					walletAddr as `0x${string}`
 				);
 			} else {
 				hash = await unwrapToken(
-					selectedTokenData.address as `0x${string}`,
+					tokenData.address as `0x${string}`,
 					amountWei,
-					$walletAddress as `0x${string}`,
-					$walletAddress as `0x${string}`
+					walletAddr as `0x${string}`,
+					walletAddr as `0x${string}`
 				);
 			}
 
@@ -222,12 +230,9 @@
 			queryClient.invalidateQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] });
 
 			// Show success via TransactionModal
-			const targetToken = isWrapMode
-				? currentMapping.wrappedToken
-				: currentMapping.unwrappedToken;
 			transactionStore.transactionSuccess(
 				hash,
-				`Successfully ${actionName.toLowerCase()}ped ${parsedAmount.toFixed(4)} ${selectedTokenData.symbol} to ${targetToken.symbol}`
+				`Successfully ${actionName.toLowerCase()}ped ${amountNum.toFixed(4)} ${tokenData.symbol} to ${targetToken.symbol}`
 			);
 		} catch (e) {
 			console.error('Wrap/unwrap failed:', e);
