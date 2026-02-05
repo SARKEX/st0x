@@ -18,12 +18,9 @@ export function initAnalytics(apiKey: string): void {
 	if (!browser || initialized || !apiKey) return;
 
 	posthog.init(apiKey, {
-		// Use reverse proxy to bypass ad blockers
-		// Requests go to /ingest/* which are proxied to PostHog via hooks.server.ts
-		api_host: '/ingest',
-		// ui_host is needed for toolbar and feature flag UI to link correctly
-		ui_host: 'https://us.posthog.com',
-		capture_pageview: false, // Manual tracking via trackPageView() to avoid duplicates
+		api_host: 'https://eu.i.posthog.com',
+		defaults: '2025-11-30',
+		capture_pageview: false, // Manual tracking via trackPageView() with semantic page names
 		capture_pageleave: true,
 		persistence: 'localStorage+cookie',
 		autocapture: false, // We'll do manual tracking for more control
