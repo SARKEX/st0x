@@ -6,7 +6,7 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
 		{
 			chainId: 8453,
-			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+			address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
 			symbol: 'USDC',
 			decimals: 6,
 			name: 'USD Coin',
@@ -162,6 +162,22 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
+		address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
+		unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
+		legacyAddress: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+		// legacySymbol: 'tSTOX',
+		symbol: 'wtSTOX',
+		decimals: 18,
+		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
+		logoUrl: '/images/SPLG.png',
+		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:SPLG',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	  },
+	{
+		chainId: base.id,
 		address: '0xEB7F3E4093C9d68253b6104FbbfF561F3eC0442F',
 		unwrappedAddress: '0x58ce5024b89b4f73c27814c0f0abbea331c99be8',
 		legacyAddress: '0x826a85de1f7b70f4c7450c0f882a6db06000ed80',
@@ -303,7 +319,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+		address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
 		symbol: 'USDC',
 		decimals: 6,
 		name: 'USD Coin',

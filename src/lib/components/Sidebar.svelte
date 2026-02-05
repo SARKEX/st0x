@@ -42,7 +42,10 @@
 						BigInt(0)
 					);
 					const totalVolume = depositVolume + withdrawVolume;
-					const quote = findQuoteForSymbol(sft.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
+					// Use token config symbol for price lookup so legacy symbols (e.g. tSTOX) resolve to the wrapped token's price feed (wtSTOX / AMEX:SPLG)
+					const tokenInfo = getTokenByAnyAddress(sft.address);
+					const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;
+					const quote = findQuoteForSymbol(symbolForPrice, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
 					const price = quote?.close ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;

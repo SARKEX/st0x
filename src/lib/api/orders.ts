@@ -75,6 +75,16 @@ function processOrdersWithQuotes(
 			}
 			const sgOrder = sgOrderResult.value;
 
+			// console.log('sgOrder : ', sgOrder);
+			// console.log('sgOrder.orderBytes : ', sgOrder.orderBytes);
+			console.log('sgOrder.orderHash : ', sgOrder.orderHash);
+			// console.log('sgOrder.owner : ', sgOrder.owner);
+			// console.log('sgOrder.outputs : ', sgOrder.outputs);
+			// console.log('sgOrder.inputs : ', sgOrder.inputs);
+			// console.log('sgOrder.orderbook : ', sgOrder.orderbook);
+			// console.log('sgOrder.active : ', sgOrder.active);
+			// console.log('sgOrder.timestampAdded : ', sgOrder.timestampAdded);
+
 			// Decode order to get token addresses
 			const abiCoder = AbiCoder.defaultAbiCoder();
 			const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
@@ -98,12 +108,15 @@ function processOrdersWithQuotes(
 						!maxOutput.startsWith('0x') ||
 						maxOutput.length !== 66
 					) {
+						console.log('here 1');
 						console.warn('Invalid Float hex format for ratio or maxOutput:', { ratio, maxOutput });
 						return;
 					}
 					// Verify maxOutput is not zero by converting to Float and checking
 					const maxOutputFloat = Float.fromHex(maxOutput as `0x${string}`);
 					if (maxOutputFloat.error || !maxOutputFloat.value) {
+						console.log('here 2');
+
 						console.warn('Failed to parse maxOutput Float:', maxOutputFloat.error);
 						return;
 					}
@@ -132,6 +145,11 @@ function processOrdersWithQuotes(
 					const normalizedOutput = normalizeAddress(outputTokenAddress);
 					const normalizedQuote = normalizeAddress(quoteToken.address);
 					if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
+						console.log('here 3');
+						console.log('normalizedInput : ', normalizedInput);
+						console.log('normalizedOutput : ', normalizedOutput);
+						console.log('normalizedQuote : ', normalizedQuote);
+
 						return;
 					}
 					const allTokens = [quoteToken, ...stockTokens];
@@ -387,7 +405,7 @@ export async function fetchAndQuoteTokenOrders(
 		stockTokens
 	);
 
-	console.log('processedQuotes : ', processedQuotes);
+	// console.log('processedQuotes : ', processedQuotes);
 
 	return processedQuotes;
 }

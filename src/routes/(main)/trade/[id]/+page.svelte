@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
 	import { formatUnits } from 'viem';
-	import { TOKENS } from '$lib/config/network';
+	import { TOKENS, getTokenByAnyAddress } from '$lib/config/network';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
@@ -198,13 +198,19 @@
 		},
 		enabled: Boolean(currentToken?.address && $walletAddress && $wagmiConfig)
 	});
-	// Use tokenId from URL params (wrapped token address) to find the token config
+	// Use tokenId from URL params to find the token config (supports wrapped, legacy, or unwrapped address)
 	// Note: currentToken.address from subgraph may differ from the wrapped token address
-	$: currentPythToken = TOKENS.find(
-		(token) =>
-			token.address.toLowerCase() === tokenId.toLowerCase() &&
-			token.chainId === $currentNetwork?.chainId
-	);
+	$: currentPythToken = (() => {
+		if (!tokenId || !$currentNetwork?.chainId) return undefined;
+		const byAddress = TOKENS.find(
+			(token) =>
+				token.address.toLowerCase() === tokenId.toLowerCase() &&
+				token.chainId === $currentNetwork.chainId
+		);
+		if (byAddress) return byAddress;
+		const byAnyAddress = getTokenByAnyAddress(tokenId);
+		return byAnyAddress?.chainId === $currentNetwork.chainId ? byAnyAddress : undefined;
+	})();
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
 	const ASSET_TABS = [
