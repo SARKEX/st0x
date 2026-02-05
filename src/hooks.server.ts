@@ -40,8 +40,9 @@ const PREFLIGHT_MAX_AGE = 86400;
 // =============================================================================
 // Using /ingest as the proxy path (generic name to avoid ad blocker detection)
 // US region PostHog endpoints
-const POSTHOG_API_HOST = 'us.i.posthog.com';
-const POSTHOG_ASSETS_HOST = 'us-assets.i.posthog.com';
+const POSTHOG_INGEST_HOST = 'us.i.posthog.com'; // For event capture, flags, decide
+const POSTHOG_APP_HOST = 'us.posthog.com'; // For array config, session recordings
+const POSTHOG_ASSETS_HOST = 'us-assets.i.posthog.com'; // For static JS files
 const INGEST_PATH_PREFIX = '/ingest';
 
 /**
@@ -75,11 +76,21 @@ async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promis
 	const searchParams = url.search;
 
 	// Determine the target host based on the path
-	// Static assets (/static/, /array/) go to the assets host
-	// Everything else (API calls) goes to the API host
-	const isStaticAsset = posthogPath.startsWith('/static/') || posthogPath.startsWith('/array/');
-	const targetHost = isStaticAsset ? POSTHOG_ASSETS_HOST : POSTHOG_API_HOST;
+	// - /static/ → assets host (static JS SDK files)
+	// - /array/ → app host (session recording, autocapture config)
+	// - Everything else → ingest host (events, flags, decide)
+	let targetHost: string;
+	if (posthogPath.startsWith('/static/')) {
+		targetHost = POSTHOG_ASSETS_HOST;
+	} else if (posthogPath.startsWith('/array/')) {
+		targetHost = POSTHOG_APP_HOST;
+	} else {
+		targetHost = POSTHOG_INGEST_HOST;
+	}
 	const targetUrl = `https://${targetHost}${posthogPath}${searchParams}`;
+
+	// Log for debugging (remove in production)
+	console.log(`[posthog-proxy] ${request.method} ${posthogPath} -> ${targetHost}`);
 
 	// Build headers for the proxy request
 	const headers = new Headers();
@@ -88,12 +99,10 @@ async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promis
 	// Including content-encoding which PostHog uses for compressed payloads
 	const forwardHeaders = [
 		'content-type',
-		'content-encoding',
 		'content-length',
 		'accept',
 		'accept-encoding',
-		'user-agent',
-		'origin'
+		'user-agent'
 	];
 	for (const header of forwardHeaders) {
 		const value = request.headers.get(header);
@@ -114,20 +123,20 @@ async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promis
 	}
 
 	try {
-		// Forward the request to PostHog
-		const fetchOptions: RequestInit = {
-			method: request.method,
-			headers,
-			// @ts-expect-error - duplex is required for streaming body but not in all TS versions
-			duplex: 'half'
-		};
-
-		// Only include body for methods that support it
+		// Read the request body into a buffer first
+		// This is necessary because ReadableStream can only be read once,
+		// and SvelteKit may have already accessed it
+		let body: ArrayBuffer | undefined;
 		if (request.method !== 'GET' && request.method !== 'HEAD') {
-			fetchOptions.body = request.body;
+			body = await request.arrayBuffer();
 		}
 
-		const response = await fetch(targetUrl, fetchOptions);
+		// Forward the request to PostHog
+		const response = await fetch(targetUrl, {
+			method: request.method,
+			headers,
+			body
+		});
 
 		// Build response headers
 		const responseHeaders = new Headers();
