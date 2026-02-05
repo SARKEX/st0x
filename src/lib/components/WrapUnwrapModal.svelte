@@ -224,10 +224,14 @@
 			// Wait for transaction confirmation
 			await waitForTransaction(hash);
 
-			// Invalidate queries to refresh balances
-			queryClient.invalidateQueries({ queryKey: ['wrapUnwrapBalances'] });
-			queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
-			queryClient.invalidateQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] });
+			transactionStore.awaitWalletConfirmation(`Updating balances...`);
+
+			// Refetch queries and wait for balances to update
+			await Promise.all([
+				queryClient.refetchQueries({ queryKey: ['wrapUnwrapBalances'] }),
+				queryClient.refetchQueries({ queryKey: ['walletHoldings'] }),
+				queryClient.refetchQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] })
+			]);
 
 			// Show success via TransactionModal
 			transactionStore.transactionSuccess(
