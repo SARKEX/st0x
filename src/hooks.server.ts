@@ -57,13 +57,27 @@ async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promis
 		return null;
 	}
 
+	// Handle OPTIONS preflight requests
+	if (request.method === 'OPTIONS') {
+		return new Response(null, {
+			status: 204,
+			headers: {
+				'access-control-allow-origin': '*',
+				'access-control-allow-methods': 'GET, POST, OPTIONS',
+				'access-control-allow-headers': 'Content-Type, Content-Encoding',
+				'access-control-max-age': '86400'
+			}
+		});
+	}
+
 	// Remove the /ingest prefix to get the actual PostHog path
 	const posthogPath = path.slice(INGEST_PATH_PREFIX.length) || '/';
 	const searchParams = url.search;
 
 	// Determine the target host based on the path
-	// Static assets go to the assets host, everything else to the API host
-	const isStaticAsset = posthogPath.startsWith('/static/');
+	// Static assets (/static/, /array/) go to the assets host
+	// Everything else (API calls) goes to the API host
+	const isStaticAsset = posthogPath.startsWith('/static/') || posthogPath.startsWith('/array/');
 	const targetHost = isStaticAsset ? POSTHOG_ASSETS_HOST : POSTHOG_API_HOST;
 	const targetUrl = `https://${targetHost}${posthogPath}${searchParams}`;
 
@@ -71,7 +85,16 @@ async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promis
 	const headers = new Headers();
 
 	// Forward relevant headers from the original request
-	const forwardHeaders = ['content-type', 'accept', 'accept-encoding', 'user-agent'];
+	// Including content-encoding which PostHog uses for compressed payloads
+	const forwardHeaders = [
+		'content-type',
+		'content-encoding',
+		'content-length',
+		'accept',
+		'accept-encoding',
+		'user-agent',
+		'origin'
+	];
 	for (const header of forwardHeaders) {
 		const value = request.headers.get(header);
 		if (value) {
@@ -109,8 +132,10 @@ async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promis
 		// Build response headers
 		const responseHeaders = new Headers();
 
-		// Forward relevant response headers
-		const proxyResponseHeaders = ['content-type', 'content-encoding', 'cache-control'];
+		// Forward relevant response headers, but NOT content-encoding or content-length
+		// Removing these is critical: the original content-length reflects compressed size,
+		// which causes browsers to stop reading early when content is decompressed
+		const proxyResponseHeaders = ['content-type', 'cache-control', 'etag', 'last-modified'];
 		for (const header of proxyResponseHeaders) {
 			const value = response.headers.get(header);
 			if (value) {
@@ -121,7 +146,7 @@ async function handlePostHogProxy(event: Parameters<Handle>[0]['event']): Promis
 		// Add CORS headers for browser requests
 		responseHeaders.set('access-control-allow-origin', '*');
 		responseHeaders.set('access-control-allow-methods', 'GET, POST, OPTIONS');
-		responseHeaders.set('access-control-allow-headers', 'Content-Type');
+		responseHeaders.set('access-control-allow-headers', 'Content-Type, Content-Encoding');
 
 		return new Response(response.body, {
 			status: response.status,
