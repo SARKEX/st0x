@@ -325,9 +325,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const debug = env.DEBUG_LOGIN === 'true';
 
-	// Note: PostHog proxy is handled by Vercel rewrites in vercel.json
-	// This is more reliable than hooks.server.ts for SvelteKit on Vercel
-
 	// Handle CORS preflight (OPTIONS) requests for API endpoints
 	if (method === 'OPTIONS' && isApiPath(path)) {
 		const isPublicApi = isPublicApiPath(path);

@@ -9,46 +9,13 @@
 	} from '$lib/components/charts/token-chart-types';
 	import { track } from '$lib/services/analytics';
 
-	// Chart hover tracking
-	let depthHoverStart: number | null = null;
-	let depthInteractions = 0;
-	let historyHoverStart: number | null = null;
-	let historyInteractions = 0;
+	// Track when user inspects the depth chart (first hover only)
+	let depthChartInspected = false;
 
-	function handleChartHoverStart(chartType: 'depth' | 'history') {
-		if (chartType === 'depth') {
-			depthHoverStart = Date.now();
-			depthInteractions = 0;
-		} else {
-			historyHoverStart = Date.now();
-			historyInteractions = 0;
-		}
-		track('chart_hover_started', { chart_type: chartType });
-	}
-
-	function handleChartHoverEnd(chartType: 'depth' | 'history') {
-		if (chartType === 'depth' && depthHoverStart) {
-			track('chart_hover_ended', {
-				chart_type: 'depth',
-				duration_ms: Date.now() - depthHoverStart,
-				interactions_count: depthInteractions
-			});
-			depthHoverStart = null;
-		} else if (chartType === 'history' && historyHoverStart) {
-			track('chart_hover_ended', {
-				chart_type: 'history',
-				duration_ms: Date.now() - historyHoverStart,
-				interactions_count: historyInteractions
-			});
-			historyHoverStart = null;
-		}
-	}
-
-	function handleChartMouseMove(chartType: 'depth' | 'history') {
-		if (chartType === 'depth' && depthHoverStart) {
-			depthInteractions++;
-		} else if (chartType === 'history' && historyHoverStart) {
-			historyInteractions++;
+	function handleDepthChartInspected() {
+		if (!depthChartInspected) {
+			depthChartInspected = true;
+			track('depth_chart_inspected');
 		}
 	}
 
@@ -765,12 +732,12 @@
 									}`}
 									aria-pressed={historyRange === option.key}
 									on:click={() => {
-									track('chart_range_changed', {
-										new_range: option.key,
-										previous_range: historyRange
-									});
-									dispatch('rangeChange', { key: option.key });
-								}}
+										track('chart_range_changed', {
+											new_range: option.key,
+											previous_range: historyRange
+										});
+										dispatch('rangeChange', { key: option.key });
+									}}
 								>
 									{option.label}
 								</button>
@@ -788,13 +755,7 @@
 					</div>
 				{:else}
 					<div class="relative h-96 lg:h-80">
-						<canvas
-							bind:this={historyCanvas}
-							class="absolute inset-0 h-full w-full"
-							on:mouseenter={() => handleChartHoverStart('history')}
-							on:mouseleave={() => handleChartHoverEnd('history')}
-							on:mousemove={() => handleChartMouseMove('history')}
-						></canvas>
+						<canvas bind:this={historyCanvas} class="absolute inset-0 h-full w-full"></canvas>
 						{#if !chartsReady}
 							<div class="absolute inset-0 flex items-center justify-center bg-gray-900/60">
 								<LoadingSpinner variant="inline" size="md" text="Loading chart data..." />
@@ -832,9 +793,7 @@
 						<canvas
 							bind:this={depthCanvas}
 							class="absolute inset-0 h-full w-full"
-							on:mouseenter={() => handleChartHoverStart('depth')}
-							on:mouseleave={() => handleChartHoverEnd('depth')}
-							on:mousemove={() => handleChartMouseMove('depth')}
+							on:mouseenter={handleDepthChartInspected}
 						></canvas>
 						{#if !chartsReady}
 							<div class="absolute inset-0 flex items-center justify-center bg-gray-900/60">
