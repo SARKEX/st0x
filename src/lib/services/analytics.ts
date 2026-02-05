@@ -18,13 +18,12 @@ export function initAnalytics(apiKey: string): void {
 	if (!browser || initialized || !apiKey) return;
 
 	posthog.init(apiKey, {
-		api_host: '/ph', // Vercel rewrite proxy
-		ui_host: 'https://us.i.posthog.com', // Required for toolbar functionality
+		api_host: 'https://us.i.posthog.com',
+		ui_host: 'https://us.i.posthog.com',
 		capture_pageview: false, // Manual tracking via trackPageView() to avoid duplicates
 		capture_pageleave: true,
 		persistence: 'localStorage+cookie',
 		autocapture: false, // We'll do manual tracking for more control
-		opt_in_site_apps: false, // Disable site apps to avoid config.js MIME type issues
 		session_recording: {
 			maskAllInputs: true,
 			maskInputOptions: {
