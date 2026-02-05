@@ -4,5 +4,15 @@
 			"path": "/api/cron/snapshots",
 			"schedule": "1 0 * * *"
 		}
+	],
+	"rewrites": [
+		{
+			"source": "/ph/static/:path*",
+			"destination": "https://us-assets.i.posthog.com/static/:path*"
+		},
+		{
+			"source": "/ph/:path*",
+			"destination": "https://us.i.posthog.com/:path*"
+		}
 	]
 }
