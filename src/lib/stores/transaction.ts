@@ -81,6 +81,7 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from '$lib/services/orderDeployment';
+import { wrapToken, unwrapToken } from '$lib/services/wrapService';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
@@ -569,6 +570,55 @@ const transactionStore = () => {
 				(err?.cause?.details ||
 					err?.message ||
 					TransactionErrorMessage.GENERIC) as TransactionErrorMessage
+			);
+		}
+	};
+
+	/**
+	 * Wrap or unwrap tokens using ERC4626 vaults.
+	 * Follows the same pattern as handleWithdraw.
+	 */
+	const handleWrapUnwrap = async (
+		mode: 'wrap' | 'unwrap',
+		tokenAddress: `0x${string}`,
+		amount: bigint,
+		userAddress: `0x${string}`,
+		tokenSymbol: string,
+		targetSymbol: string
+	) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+
+		let hash: Hash;
+		const actionName = mode === 'wrap' ? 'Wrap' : 'Unwrap';
+
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation to ${mode} ${tokenSymbol}...`);
+
+			if (mode === 'wrap') {
+				hash = await wrapToken(tokenAddress, amount, userAddress);
+			} else {
+				hash = await unwrapToken(tokenAddress, amount, userAddress, userAddress);
+			}
+
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+			await waitForTransaction(hash);
+
+			// Invalidate balance queries (same pattern as handleWithdraw)
+			invalidateDashboardBalances();
+
+			return transactionSuccess(
+				hash,
+				`Successfully ${mode}ped ${tokenSymbol} to ${targetSymbol}`
+			);
+		} catch (error) {
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
+			const err = error as { cause?: { details?: string }; message?: string };
+			return transactionError(
+				(err?.cause?.details || err?.message || `${actionName} failed`) as TransactionErrorMessage
 			);
 		}
 	};
@@ -1699,6 +1749,7 @@ const transactionStore = () => {
 		handleFolioDeploy,
 		handleTakeOrders,
 		handleWithdraw,
+		handleWrapUnwrap,
 		handleRemoveOrder,
 		handleWithdrawFromOrder
 	};

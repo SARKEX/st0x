@@ -279,9 +279,8 @@
 				undefined
 			);
 
-			// Invalidate queries after successful swap
+			// Invalidate modal-specific query (dashboard queries handled by handleTakeOrders)
 			queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
-			queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
 		} catch (error) {
 			console.error('Swap failed:', error);
 			transactionStore.transactionError(

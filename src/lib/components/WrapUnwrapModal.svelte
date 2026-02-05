@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { get } from 'svelte/store';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
@@ -18,12 +17,10 @@
 		getWrappingMappingByUnwrappedAddress,
 		getAllUnwrappedTokenAddresses
 	} from '$lib/config/tokenWrapping';
-	import { wrapToken, unwrapToken, previewWrap, previewUnwrap } from '$lib/services/wrapService';
+	import { previewWrap, previewUnwrap } from '$lib/services/wrapService';
 	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
 	import transactionStore from '$lib/stores/transaction';
-	import { TransactionErrorMessage } from '$lib/types/errors';
-	import { waitForTransaction } from '$lib/services/walletService';
 
 	const queryClient = useQueryClient();
 
@@ -186,65 +183,27 @@
 		const tokenData = selectedTokenData;
 		const mapping = currentMapping;
 		const amountStr = amount;
-		const amountNum = parsedAmount;
 		const wrapMode = isWrapMode;
-		const actionName = wrapMode ? 'Wrap' : 'Unwrap';
 		const targetToken = wrapMode ? mapping.wrappedToken : mapping.unwrappedToken;
 		const walletAddr = $walletAddress;
 
 		// Close the form modal - TransactionModal will show progress
 		handleClose();
 
-		try {
-			const amountWei = parseUnits(amountStr, tokenData.decimals);
+		const amountWei = parseUnits(amountStr, tokenData.decimals);
 
-			transactionStore.awaitWalletConfirmation(
-				`Awaiting wallet confirmation to ${actionName.toLowerCase()} ${tokenData.symbol}...`
-			);
+		// Delegate to transactionStore (follows same pattern as handleWithdraw)
+		await transactionStore.handleWrapUnwrap(
+			wrapMode ? 'wrap' : 'unwrap',
+			tokenData.address as `0x${string}`,
+			amountWei,
+			walletAddr as `0x${string}`,
+			tokenData.symbol,
+			targetToken.symbol
+		);
 
-			let hash: `0x${string}`;
-
-			if (wrapMode) {
-				hash = await wrapToken(
-					tokenData.address as `0x${string}`,
-					amountWei,
-					walletAddr as `0x${string}`
-				);
-			} else {
-				hash = await unwrapToken(
-					tokenData.address as `0x${string}`,
-					amountWei,
-					walletAddr as `0x${string}`,
-					walletAddr as `0x${string}`
-				);
-			}
-
-			transactionStore.awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-
-			// Wait for transaction confirmation
-			await waitForTransaction(hash);
-
-			transactionStore.awaitWalletConfirmation(`Updating balances...`);
-
-			// Small delay to ensure RPC state is propagated
-			await new Promise((resolve) => setTimeout(resolve, 1500));
-
-			// Invalidate and refetch dashboard balance queries
-			queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
-			queryClient.invalidateQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] });
-			queryClient.invalidateQueries({ queryKey: ['wrapUnwrapBalances'] });
-
-			// Show success via TransactionModal
-			transactionStore.transactionSuccess(
-				hash,
-				`Successfully ${actionName.toLowerCase()}ped ${amountNum.toFixed(4)} ${tokenData.symbol} to ${targetToken.symbol}`
-			);
-		} catch (e) {
-			console.error('Wrap/unwrap failed:', e);
-			const errorMessage =
-				e instanceof Error ? e.message : 'Transaction failed';
-			transactionStore.transactionError(errorMessage as TransactionErrorMessage);
-		}
+		// Invalidate modal-specific query (dashboard queries handled by transactionStore)
+		queryClient.invalidateQueries({ queryKey: ['wrapUnwrapBalances'] });
 	}
 
 	// Close and reset
