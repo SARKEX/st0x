@@ -6,11 +6,11 @@
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
 	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
 	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
-	import RewardsAnnouncementModal from '$lib/components/rewards/RewardsAnnouncementModal.svelte';
+	import TokenSwapAnnouncementModal from '$lib/components/rewards/TokenSwapAnnouncementModal.svelte';
 	import ReferralJoinModal from '$lib/components/referrals/ReferralJoinModal.svelte';
 	import ReferralDashboardModal from '$lib/components/referrals/ReferralDashboardModal.svelte';
 	import ReferralLeaderboardModal from '$lib/components/referrals/ReferralLeaderboardModal.svelte';
-	import { initRewardsAnnouncement } from '$lib/stores/rewardsStore';
+	import { initTokenSwapAnnouncement } from '$lib/stores/rewardsStore';
 	import AccessCodeModal from '$lib/components/AccessCodeModal.svelte';
 	import WalletConnectionModal from '$lib/components/WalletConnectionModal.svelte';
 	import Tutorial from '$lib/components/Tutorial.svelte';
@@ -28,7 +28,7 @@
 	// Check for access code in URL params on mount
 	onMount(() => {
 		checkAndStoreAccessCodeFromUrl();
-		initRewardsAnnouncement();
+		initTokenSwapAnnouncement();
 	});
 
 	let sidebarExpanded = true;
@@ -177,7 +177,7 @@
 	<RewardsDetailsModal />
 	<RewardsLeaderboardModal />
 	<RewardsRulesModal />
-	<RewardsAnnouncementModal />
+	<TokenSwapAnnouncementModal />
 
 	<!-- Referral Modals -->
 	<ReferralJoinModal />

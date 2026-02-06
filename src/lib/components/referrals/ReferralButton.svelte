@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
+	import { isAuthenticated, walletAddress, promptAuth } from '$lib/stores/authStore';
 	import {
 		referralProfile,
 		referralPerformance,
@@ -27,6 +27,12 @@
 	}
 
 	function handleClick() {
+		// If not authenticated, prompt for connection first
+		if (!$isAuthenticated) {
+			promptAuth();
+			return;
+		}
+
 		if ($referralProfile) {
 			showReferralDashboardModal.set(true);
 		} else {
@@ -52,103 +58,100 @@
 	}
 </script>
 
-<!-- Only show when authenticated -->
-{#if $isAuthenticated && $walletAddress}
-	<div class="relative">
-		<button
-			on:click={handleClick}
-			on:mouseenter={() => (showTooltip = true)}
-			on:mouseleave={() => (showTooltip = false)}
-			on:focus={() => (showTooltip = true)}
-			on:blur={() => (showTooltip = false)}
-			class="referral-button group relative flex h-10 min-w-[200px] items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-all"
-			aria-label={$referralProfile ? 'Open referral dashboard' : 'Join referral programme'}
-		>
-			<!-- Animated gradient border -->
-			<span class="referral-border pointer-events-none"></span>
+<div class="relative">
+	<button
+		on:click={handleClick}
+		on:mouseenter={() => (showTooltip = true)}
+		on:mouseleave={() => (showTooltip = false)}
+		on:focus={() => (showTooltip = true)}
+		on:blur={() => (showTooltip = false)}
+		class="referral-button group relative flex h-10 min-w-[200px] items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-all"
+		aria-label={$referralProfile ? 'Open referral dashboard' : 'Join referral programme'}
+	>
+		<!-- Animated gradient border -->
+		<span class="referral-border pointer-events-none"></span>
 
-			<!-- Shimmer effect -->
-			<span class="referral-shimmer pointer-events-none"></span>
+		<!-- Shimmer effect -->
+		<span class="referral-shimmer pointer-events-none"></span>
 
-			<!-- Inner background -->
-			<span
-				class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/60 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/70 group-hover:to-gray-800"
-			></span>
+		<!-- Inner background -->
+		<span
+			class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/60 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/70 group-hover:to-gray-800"
+		></span>
 
-			<!-- Animated users icon -->
-			<div class="relative z-10 flex items-center justify-center">
-				<!-- Glow behind icon -->
-				<span class="icon-glow absolute"></span>
-				<svg
-					class="relative h-4 w-4 text-purple-300 transition-all group-hover:scale-110 group-hover:text-purple-200"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-					/>
-				</svg>
-			</div>
-
-			{#if $referralLoading}
-				<div
-					class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-purple-400"
-				></div>
-				<span class="relative z-10 text-gray-400">Loading...</span>
-			{:else if $referralProfile && $referralPerformance}
-				<div class="relative z-10 flex items-center gap-2">
-					<span class="font-semibold text-white">Referral</span>
-					<span class="text-xs font-medium text-yellow-300">
-						{formatPoints($referralPerformance.totalPoints)} pts
-					</span>
-				</div>
-			{:else}
-				<!-- Join CTA - more prominent -->
-				<div class="relative z-10 flex items-center gap-2">
-					<span class="font-semibold text-white">Referral</span>
-					<span
-						class="join-badge rounded-md bg-purple-500/30 px-2 py-0.5 text-xs font-bold text-purple-200"
-					>
-						Join Now
-					</span>
-				</div>
-			{/if}
-		</button>
-
-		<!-- Hover Tooltip -->
-		{#if showTooltip && $referralProfile && $referralPerformance}
-			<div
-				class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+		<!-- Animated users icon -->
+		<div class="relative z-10 flex items-center justify-center">
+			<!-- Glow behind icon -->
+			<span class="icon-glow absolute"></span>
+			<svg
+				class="relative h-4 w-4 text-purple-300 transition-all group-hover:scale-110 group-hover:text-purple-200"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
 			>
-				<div class="space-y-2 text-sm">
-					<div class="flex justify-between">
-						<span class="text-gray-400">Wallets Referred</span>
-						<span class="font-medium text-white">{$referralPerformance.walletsReferred}</span>
-					</div>
-					<div class="flex justify-between">
-						<span class="text-gray-400">Points</span>
-						<span class="font-medium text-yellow-300"
-							>{formatPoints($referralPerformance.totalPoints)}</span
-						>
-					</div>
-					<div class="flex justify-between">
-						<span class="text-gray-400">Est. Reward</span>
-						<span class="font-medium text-green-400"
-							>{formatUsd($referralPerformance.projectedRewards)}</span
-						>
-					</div>
-					<div class="border-t border-gray-700 pt-2 text-xs text-gray-500">
-						Earn rewards when your friends invest
-					</div>
-				</div>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+				/>
+			</svg>
+		</div>
+
+		{#if $referralLoading}
+			<div
+				class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-purple-400"
+			></div>
+			<span class="relative z-10 text-gray-400">Loading...</span>
+		{:else if $referralProfile && $referralPerformance}
+			<div class="relative z-10 flex items-center gap-2">
+				<span class="font-semibold text-white">Referral</span>
+				<span class="text-xs font-medium text-yellow-300">
+					{formatPoints($referralPerformance.totalPoints)} pts
+				</span>
+			</div>
+		{:else}
+			<!-- Join CTA - more prominent -->
+			<div class="relative z-10 flex items-center gap-2">
+				<span class="font-semibold text-white">Referral</span>
+				<span
+					class="join-badge rounded-md bg-purple-500/30 px-2 py-0.5 text-xs font-bold text-purple-200"
+				>
+					Join Now
+				</span>
 			</div>
 		{/if}
-	</div>
-{/if}
+	</button>
+
+	<!-- Hover Tooltip -->
+	{#if showTooltip && $referralProfile && $referralPerformance}
+		<div
+			class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+		>
+			<div class="space-y-2 text-sm">
+				<div class="flex justify-between">
+					<span class="text-gray-400">Wallets Referred</span>
+					<span class="font-medium text-white">{$referralPerformance.walletsReferred}</span>
+				</div>
+				<div class="flex justify-between">
+					<span class="text-gray-400">Points</span>
+					<span class="font-medium text-yellow-300"
+						>{formatPoints($referralPerformance.totalPoints)}</span
+					>
+				</div>
+				<div class="flex justify-between">
+					<span class="text-gray-400">Est. Reward</span>
+					<span class="font-medium text-green-400"
+						>{formatUsd($referralPerformance.projectedRewards)}</span
+					>
+				</div>
+				<div class="border-t border-gray-700 pt-2 text-xs text-gray-500">
+					Earn rewards when your friends invest
+				</div>
+			</div>
+		</div>
+	{/if}
+</div>
 
 <style>
 	.referral-button {
