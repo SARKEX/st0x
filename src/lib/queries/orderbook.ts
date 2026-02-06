@@ -7,8 +7,24 @@ import {
 	type TokenPriceSummary,
 	type ProcessedQuote
 } from '$lib/api/orders';
-import { getDefaultPaymentTokenForNetwork, DEFAULT_PAYMENT_TOKENS } from '$lib/config/network';
+import {
+	getDefaultPaymentTokenForNetwork,
+	DEFAULT_PAYMENT_TOKENS,
+	getTokenByAnyAddress
+} from '$lib/config/network';
 import { queryClient } from '$lib/clients/queryClient';
+
+/**
+ * Get the set of addresses that represent a token (wrapped + legacy) for matching quotes.
+ */
+function getTokenAddressSet(tokenAddress: string): Set<string> {
+	const normalized = tokenAddress.toLowerCase();
+	const token = getTokenByAnyAddress(tokenAddress);
+	const addresses = [normalized];
+	if (token?.address) addresses.push(token.address.toLowerCase());
+	if (token?.legacyAddress) addresses.push(token.legacyAddress.toLowerCase());
+	return new Set(addresses);
+}
 
 export type OrderbookQuoteCache = {
 	summary: Record<string, TokenPriceSummary>;
@@ -72,6 +88,7 @@ export function createOrderbookQuotesQuery(network: Network | null, poll: boolea
 
 /**
  * Get quotes for a specific token from the global cache.
+ * Matches both wrapped and legacy addresses so tokens like tSTOX/wtSTOX show bid/ask.
  * Returns undefined if cache is empty.
  */
 export function getQuotesForToken(
@@ -81,11 +98,11 @@ export function getQuotesForToken(
 	const globalCache = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
 	if (!globalCache?.quotes?.length) return undefined;
 
-	const normalizedToken = tokenAddress.toLowerCase();
+	const addressSet = getTokenAddressSet(tokenAddress);
 	const filteredQuotes = globalCache.quotes.filter(
 		(q) =>
-			q.inputTokenAddress?.toLowerCase() === normalizedToken ||
-			q.outputTokenAddress?.toLowerCase() === normalizedToken
+			addressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
+			addressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
 	);
 
 	if (filteredQuotes.length === 0) return undefined;
@@ -96,27 +113,45 @@ export function getQuotesForToken(
 
 /**
  * Fetch fresh quotes for a specific token and merge into global cache.
- * Use this on trade/:id pages to get fresh data for the current token.
+ * For tokens with legacyAddress (e.g. tSTOX/wtSTOX), fetches for both addresses and merges.
  */
 export async function refreshTokenQuotes(
 	networkId: number,
 	tokenAddress: string
 ): Promise<OrderbookQuoteCache> {
-	console.log('[refreshTokenQuotes] Fetching fresh quotes for token:', tokenAddress);
+	const token = getTokenByAnyAddress(tokenAddress);
+	const addressesToFetch = [
+		token?.address ?? tokenAddress,
+		...(token?.legacyAddress ? [token.legacyAddress] : [])
+	].filter(Boolean) as string[];
+	const uniqueAddresses = [...new Set(addressesToFetch.map((a) => a.toLowerCase()))];
 
-	const quotes = await fetchAndQuoteTokenOrders(networkId, tokenAddress);
+	console.log('[refreshTokenQuotes] Fetching fresh quotes for token:', tokenAddress, uniqueAddresses);
+
+	let quotes: ProcessedQuote[] = [];
+	const seenOrderHash = new Set<string>();
+	for (const addr of uniqueAddresses) {
+		const batch = await fetchAndQuoteTokenOrders(networkId, addr);
+		for (const q of batch) {
+			if (q.orderHash && !seenOrderHash.has(q.orderHash)) {
+				seenOrderHash.add(q.orderHash);
+				quotes.push(q);
+			} else if (!q.orderHash) {
+				quotes.push(q);
+			}
+		}
+	}
 	const summary = buildSummaryFromQuotes(quotes, networkId);
 
 	// Merge into global cache
 	const globalCache = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
+	const addressSet = getTokenAddressSet(tokenAddress);
 	if (globalCache) {
-		const normalizedToken = tokenAddress.toLowerCase();
-
-		// Remove old quotes for this token
+		// Remove old quotes for this token (wrapped or legacy)
 		const otherQuotes = globalCache.quotes.filter(
 			(q) =>
-				q.inputTokenAddress?.toLowerCase() !== normalizedToken &&
-				q.outputTokenAddress?.toLowerCase() !== normalizedToken
+				!addressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') &&
+				!addressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
 		);
 
 		// Merge new quotes

@@ -120,15 +120,15 @@
 		const displayOrders: DisplayOrder[] = [];
 		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
 
-		// Add limit orders from quotes (for current token only)
+		// Add limit orders from quotes (for current token only; match wrapped or legacy address)
 		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
 			const quotes = $orderbookQuotesQuery.data.quotes;
 
-			// Filter by token (input or output matches current token)
+			// Filter by token (input or output matches current token's wrapped or legacy address)
 			const filtered = quotes.filter(
 				(q) =>
-					q.inputTokenAddress.toLowerCase() === tokenAddress ||
-					q.outputTokenAddress.toLowerCase() === tokenAddress
+					assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
+					assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
 			);
 
 			// Transform to DisplayOrder
@@ -492,6 +492,15 @@
 		};
 	})();
 	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
+	// Include legacy address so bid/ask and depth match quotes for tokens like tSTOX/wtSTOX
+	$: assetAddressSet = (() => {
+		const set = new Set<string>();
+		if (currentPythToken?.address) set.add(currentPythToken.address.toLowerCase());
+		if (currentPythToken?.legacyAddress) set.add(currentPythToken.legacyAddress.toLowerCase());
+		// Also add currentToken.address in case subgraph uses a different id
+		if (currentToken?.address) set.add(currentToken.address.toLowerCase());
+		return set;
+	})();
 	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
 	$: oraclePriceData = oracleEntry
 		? {
@@ -591,7 +600,6 @@
 				resetOnChainPrices();
 			} else {
 				const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-				const assetAddress = currentToken.address?.toLowerCase();
 				const quoteAddress = settlementToken.address?.toLowerCase();
 				let bestBid: number | null = null;
 				let bestAsk: number | null = null;
@@ -601,8 +609,10 @@
 					if (!Number.isFinite(ratio) || ratio <= 0) return;
 					const inputAddress = quote.inputTokenAddress.toLowerCase();
 					const outputAddress = quote.outputTokenAddress.toLowerCase();
+					const inputIsAsset = assetAddressSet.has(inputAddress);
+					const outputIsAsset = assetAddressSet.has(outputAddress);
 					// ASK: quote token -> asset (what you pay when buying)
-					if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+					if (inputAddress === quoteAddress && outputIsAsset) {
 						const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = ratio;
 						if (tokenAmount !== null && Number.isFinite(price) && tokenAmount > 0 && price > 0) {
@@ -610,7 +620,7 @@
 						}
 					}
 					// BID: asset -> quote token (what you get when selling)
-					if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+					if (inputIsAsset && outputAddress === quoteAddress) {
 						const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = 1 / ratio;
 						if (quoteAmount !== null && quoteAmount > 0 && Number.isFinite(price) && price > 0) {
@@ -686,9 +696,8 @@
 		}
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return { bids: [], asks: [] };
-		const assetAddress = currentToken.address?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
-		if (!assetAddress || !quoteAddress) {
+		if (!quoteAddress) {
 			return { bids: [], asks: [] };
 		}
 
@@ -705,9 +714,11 @@
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
+			const inputIsAsset = assetAddressSet.has(inputAddress);
+			const outputIsAsset = assetAddressSet.has(outputAddress);
 
 			// ASK: quote token -> asset (buying the asset)
-			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+			if (inputAddress === quoteAddress && outputIsAsset) {
 				const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				const price = ratio;
 				if (tokenAmount === null || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
@@ -718,7 +729,7 @@
 			}
 
 			// BID: asset -> quote token (selling the asset)
-			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+			if (inputIsAsset && outputAddress === quoteAddress) {
 				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				if (quoteAmount === null || quoteAmount <= 0) {
 					return;
