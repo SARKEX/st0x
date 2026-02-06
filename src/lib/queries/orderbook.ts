@@ -126,9 +126,13 @@ export async function refreshTokenQuotes(
 	].filter(Boolean) as string[];
 	const uniqueAddresses = [...new Set(addressesToFetch.map((a) => a.toLowerCase()))];
 
-	console.log('[refreshTokenQuotes] Fetching fresh quotes for token:', tokenAddress, uniqueAddresses);
+	console.log(
+		'[refreshTokenQuotes] Fetching fresh quotes for token:',
+		tokenAddress,
+		uniqueAddresses
+	);
 
-	let quotes: ProcessedQuote[] = [];
+	const quotes: ProcessedQuote[] = [];
 	const seenOrderHash = new Set<string>();
 	for (const addr of uniqueAddresses) {
 		const batch = await fetchAndQuoteTokenOrders(networkId, addr);
