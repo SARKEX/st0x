@@ -514,9 +514,9 @@
 							<div class="flex items-center gap-3">
 								{#if currentMapping}
 									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
-										{#if getTokenLogo(currentMapping.oldToken.address)}
+										{#if getTokenLogo(currentMapping.newToken.address)}
 											<img
-												src={getTokenLogo(currentMapping.oldToken.address)}
+												src={getTokenLogo(currentMapping.newToken.address)}
 												alt={currentMapping.newToken.symbol}
 												class="h-6 w-6 rounded-full"
 											/>

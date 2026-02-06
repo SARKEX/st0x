@@ -111,9 +111,8 @@ async function requestApproval(
 
 	// Wait for approval transaction to be confirmed
 	const config = get(wagmiConfig);
-	if (config) {
-		await waitForTransactionReceipt(config, { hash });
-	}
+	if (!config) throw new Error('Wagmi config not available');
+	await waitForTransactionReceipt(config, { hash });
 
 	return hash;
 }

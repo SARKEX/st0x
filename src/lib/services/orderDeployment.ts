@@ -5,7 +5,7 @@
  * Transforms user inputs into Rain strategy deployment parameters.
  *
  * This service layer:
- * - Fetches Rain strategies from GitHub (with caching)
+ * - Loads order GUIs from the rain.strategies registry
  * - Configures DotrainOrderGui with user inputs
  * - Generates deployment transaction arguments
  * - Does NOT import from stores (accepts parameters instead)
@@ -19,10 +19,10 @@ import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { DotrainRegistry } from '@rainlanguage/orderbook';
 import { walletAddress } from '$lib/stores/authStore';
+import { RAIN_STRATEGIES_COMMIT } from '$lib/clients/raindex';
 
 /** Registry URL for rain.strategies (order definitions + shared settings). */
-const REGISTRY_URL =
-	'https://raw.githubusercontent.com/rainlanguage/rain.strategies/2c8192e9137736507041ebff820b0e7b5b29f0d2/registry';
+const REGISTRY_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/registry`;
 
 /** Maps app network slug to the deployment key in rain.strategies registry. */
 function getDeploymentKey(raindexNetworkSlug: string): string {
@@ -38,15 +38,31 @@ function getDeploymentKey(raindexNetworkSlug: string): string {
 	}
 }
 
+/** Cached registry instance to avoid repeated network fetches. */
+let registryPromise: Promise<DotrainRegistry> | null = null;
+
+async function getRegistry(): Promise<DotrainRegistry> {
+	if (!registryPromise) {
+		registryPromise = (async () => {
+			const result = await DotrainRegistry.new(REGISTRY_URL);
+			if (result.error) {
+				registryPromise = null;
+				throw new Error(result.error.readableMsg);
+			}
+			return result.value;
+		})();
+	}
+	return registryPromise;
+}
+
 /**
  * Loads the registry and returns a DotrainOrderGui for the given order and network.
  * Use this for all order types so strategy and settings stay in sync with the registry.
  */
 async function getGuiFromRegistry(orderKey: string, raindexNetworkSlug: string) {
-	const registryResult = await DotrainRegistry.new(REGISTRY_URL);
-	if (registryResult.error) throw new Error(registryResult.error.readableMsg);
+	const registry = await getRegistry();
 	const deploymentKey = getDeploymentKey(raindexNetworkSlug);
-	const guiResult = await registryResult.value.getGui(orderKey, deploymentKey);
+	const guiResult = await registry.getGui(orderKey, deploymentKey);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	return guiResult.value;
 }

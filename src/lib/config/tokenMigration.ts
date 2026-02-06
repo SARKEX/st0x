@@ -211,22 +211,3 @@ export function getBaseEquitySymbol(symbol: string): string {
 	return symbol;
 }
 
-/**
- * Get old token symbol from wrapped symbol (wtNVDA -> tNVDA)
- */
-export function getOldSymbolFromWrapped(wrappedSymbol: string): string | null {
-	if (wrappedSymbol.startsWith('wt')) {
-		return 't' + wrappedSymbol.slice(2);
-	}
-	return null;
-}
-
-/**
- * Get wrapped symbol from old symbol (tNVDA -> wtNVDA)
- */
-export function getWrappedSymbolFromOld(oldSymbol: string): string | null {
-	if (oldSymbol.startsWith('t')) {
-		return 'w' + oldSymbol;
-	}
-	return null;
-}

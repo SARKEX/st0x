@@ -1382,7 +1382,7 @@ const transactionStore = () => {
 			hasOrderFillAmounts: !!params.orderFillAmounts,
 			orderFillAmounts: params.orderFillAmounts?.map((a) => a.toString()),
 			takerWantsDecimals: params.takerWantsToken.decimals,
-			originalMaximumInput: finalConfig.maximumIO,
+			originalMaximumIO: finalConfig.maximumIO,
 			originalMaximumIORatio: finalConfig.maximumIORatio
 		});
 
