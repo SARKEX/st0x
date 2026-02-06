@@ -2,8 +2,12 @@
  * Token Migration Configuration
  *
  * This file contains the mapping of old (legacy) tokens to their new wrapped equivalents.
- * The site now trades wrapped tStock tokens, so all tokens are named "Wrapped [tStock name]".
+ * The site now trades wrapped tStock tokens (wt[ticker]), so all tokens are named "Wrapped [tStock name]".
+ *
+ * NOTE: All address data is derived from TOKENS in tokens.ts (single source of truth)
  */
+
+import { TOKENS, getTokenByLegacyAddress } from './tokens';
 
 export interface TokenMigrationMapping {
 	oldToken: {
@@ -23,233 +27,94 @@ export interface TokenMigrationMapping {
 }
 
 /**
- * Old token addresses (legacy tokens that need to be migrated)
- * These are the original tStock tokens before the wrapped migration
- */
-export const OLD_TOKEN_ADDRESSES: Record<string, string> = {
-	tNVDA: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
-	tAMZN: '0x8d8c315db61f60dcc3c66cdb48ca87fc643e35ea',
-	tTSLA: '0x470b06815a2e286df8c38c9c73280e0760088623',
-	tMSTR: '0xff647ad8c4b065bd746911bb9ea1a33c38c63604',
-	tIAU: '0xd0a90b7c9ae5facbe09ca4c576a3795eda53b397',
-	tCOIN: '0xb616f8b391d1adc118fd7e4063526d5530d49b10',
-	tSPLG: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
-	tSIVR: '0x826a85de1f7b70f4c7450c0f882a6db06000ed80',
-	tCRCL: '0x43422a9d11a6640ef0d5f65292ef8adf87cf8522',
-	tBMNR: '0xf8fdfd6a686346d34b3143fc23072aa45c9e8386',
-	tPPLT: '0x6192539a2036c786aba3ca6a2222ff7a0f9c287e'
-};
-
-/**
- * New wrapped token addresses
- * These are the new wrapped tStock tokens that the site now trades
- */
-export const WRAPPED_TOKEN_ADDRESSES: Record<string, string> = {
-	wtNVDA: '0x1111111111111111111111111111111111111001',
-	wtAMZN: '0x1111111111111111111111111111111111111002',
-	wtTSLA: '0x1111111111111111111111111111111111111003',
-	wtMSTR: '0x1111111111111111111111111111111111111004',
-	wtIAU: '0x1111111111111111111111111111111111111005',
-	wtCOIN: '0x1111111111111111111111111111111111111006',
-	wtSPLG: '0x1111111111111111111111111111111111111007',
-	wtSIVR: '0x1111111111111111111111111111111111111008',
-	wtCRCL: '0x1111111111111111111111111111111111111009',
-	wtBMNR: '0x111111111111111111111111111111111111100a',
-	wtPPLT: '0x111111111111111111111111111111111111100b'
-};
-
-/**
  * Hardcoded swap order hashes for each token pair
  * These orders are specifically set up to handle the old -> new token migration
+ * Keyed by legacy symbol (e.g., tNVDA, tSPLG)
  */
 export const SWAP_ORDER_HASHES: Record<string, string> = {
-	tNVDA: '0x2222222222222222222222222222222222222222222222222222222222222001',
-	tAMZN: '0x2222222222222222222222222222222222222222222222222222222222222002',
-	tTSLA: '0x2222222222222222222222222222222222222222222222222222222222222003',
-	tMSTR: '0x2222222222222222222222222222222222222222222222222222222222222004',
-	tIAU: '0x2222222222222222222222222222222222222222222222222222222222222005',
-	tCOIN: '0x2222222222222222222222222222222222222222222222222222222222222006',
-	tSPLG: '0x2222222222222222222222222222222222222222222222222222222222222007',
-	tSIVR: '0x2222222222222222222222222222222222222222222222222222222222222008',
-	tCRCL: '0x2222222222222222222222222222222222222222222222222222222222222009',
-	tBMNR: '0x222222222222222222222222222222222222222222222222222222222222200a',
-	tPPLT: '0x222222222222222222222222222222222222222222222222222222222222200b'
+	tNVDA: '0x99b120277ae746f29901248a00a990ce76b13cc625b75444cb1e2095ae4d8648',
+	tAMZN: '0x4c164005f67658b92e4e55d3cb7bc94c36f1393928b0bc09616123a2d06aa2c6',
+	tTSLA: '0x0151693acd169a63fba0671ccf2210458fc60dbfb60db8a6b2f470e36c7c6f8e',
+	tMSTR: '0x6c55508a3d24cc6f902a35c54751262f891c7cd2ecfd75bb56c0ece503f06161',
+	tIAU: '0x765a02ffd3405cfc166d27623cf98ba79cef59b23959e203c64d69e5f751daec',
+	tCOIN: '0x5dd1b6de832633bebdc388d8d4c91396672ab50d3e5ff51aad207b56e6130cab',
+	tSPLG: '0x38c50b0299491b0734fae38fa4af69a5e60ec565876a5572b6d7e13f8871f468',
+	tSIVR: '0xc29c3e14aa8d6a79822c783959d410af127df4029b65c328ca1e28b358c02435',
+	tCRCL: '0xf2308291dfd0089ad977666e18c6ad99f2b5618de174365c691be5bdb9a2c91d',
+	tBMNR: '0xc21ac58aba7af81f245c62b4e5b9f93065b5be6e99edde350a1dca2eb24656ac',
+	tPPLT: '0x4bb0499dd2234aa3e37be6add9b79c94db49cd5659da2f618e4d00788143dfea'
+	// tSTOX temporarily disabled
+	// tSTOX: '0x9cb21c2dbdd39fbd45c863cead8bccd205014f57fbafafb2c93e519229a6ab48'
 };
 
 /**
- * Complete token migration mappings
+ * Derive old/legacy symbol from token
+ * Uses legacySymbol if explicitly set (e.g., tSPLG -> wtSPYM), otherwise derives from wrapped symbol
  */
-export const TOKEN_MIGRATION_MAPPINGS: TokenMigrationMapping[] = [
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tNVDA,
-			symbol: 'tNVDA',
-			name: 'NVIDIA Corporation ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtNVDA,
-			symbol: 'wtNVDA',
-			name: 'Wrapped NVIDIA Corporation ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tNVDA
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tAMZN,
-			symbol: 'tAMZN',
-			name: 'Amazon.com Inc ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtAMZN,
-			symbol: 'wtAMZN',
-			name: 'Wrapped Amazon.com Inc ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tAMZN
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tTSLA,
-			symbol: 'tTSLA',
-			name: 'Tesla Inc ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtTSLA,
-			symbol: 'wtTSLA',
-			name: 'Wrapped Tesla Inc ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tTSLA
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tMSTR,
-			symbol: 'tMSTR',
-			name: 'MicroStrategy Incorporated ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtMSTR,
-			symbol: 'wtMSTR',
-			name: 'Wrapped MicroStrategy Incorporated ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tMSTR
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tIAU,
-			symbol: 'tIAU',
-			name: 'iShares Gold Trust ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtIAU,
-			symbol: 'wtIAU',
-			name: 'Wrapped iShares Gold Trust ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tIAU
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tCOIN,
-			symbol: 'tCOIN',
-			name: 'Coinbase Global Inc ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtCOIN,
-			symbol: 'wtCOIN',
-			name: 'Wrapped Coinbase Global Inc ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tCOIN
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tSPLG,
-			symbol: 'tSPLG',
-			name: 'SPDR Portfolio S&P 500 ETF ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtSPLG,
-			symbol: 'wtSPLG',
-			name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tSPLG
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tSIVR,
-			symbol: 'tSIVR',
-			name: 'abrdn Physical Silver Shares ETF ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtSIVR,
-			symbol: 'wtSIVR',
-			name: 'Wrapped abrdn Physical Silver Shares ETF ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tSIVR
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tCRCL,
-			symbol: 'tCRCL',
-			name: 'Circle Internet Group Inc ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtCRCL,
-			symbol: 'wtCRCL',
-			name: 'Wrapped Circle Internet Group Inc ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tCRCL
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tBMNR,
-			symbol: 'tBMNR',
-			name: 'Bitmine Immersion Technologies, Inc ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtBMNR,
-			symbol: 'wtBMNR',
-			name: 'Wrapped Bitmine Immersion Technologies, Inc ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tBMNR
-	},
-	{
-		oldToken: {
-			address: OLD_TOKEN_ADDRESSES.tPPLT,
-			symbol: 'tPPLT',
-			name: 'abrdn Physical Platinum Shares ETF ST0x',
-			decimals: 18
-		},
-		newToken: {
-			address: WRAPPED_TOKEN_ADDRESSES.wtPPLT,
-			symbol: 'wtPPLT',
-			name: 'Wrapped abrdn Physical Platinum Shares ETF ST0x',
-			decimals: 18
-		},
-		swapOrderHash: SWAP_ORDER_HASHES.tPPLT
+function getLegacySymbol(token: (typeof TOKENS)[0]): string {
+	if (token.legacySymbol) {
+		return token.legacySymbol;
 	}
-];
+	// Default: wtNVDA -> tNVDA
+	if (token.symbol.startsWith('wt')) {
+		return 't' + token.symbol.slice(2);
+	}
+	return token.symbol;
+}
+
+/**
+ * Derive old/legacy name from wrapped name (remove "Wrapped " prefix)
+ */
+function getLegacyName(wrappedName: string): string {
+	if (wrappedName.startsWith('Wrapped ')) {
+		return wrappedName.slice(8);
+	}
+	return wrappedName;
+}
+
+/**
+ * Complete token migration mappings - derived from TOKENS (single source of truth)
+ */
+export const TOKEN_MIGRATION_MAPPINGS: TokenMigrationMapping[] = TOKENS.filter(
+	(t) => t.legacyAddress && t.category === 'ST0x'
+).map((t) => {
+	const legacySymbol = getLegacySymbol(t);
+	return {
+		oldToken: {
+			address: t.legacyAddress!,
+			symbol: legacySymbol,
+			name: getLegacyName(t.name),
+			decimals: t.decimals
+		},
+		newToken: {
+			address: t.address,
+			symbol: t.symbol,
+			name: t.name,
+			decimals: t.decimals
+		},
+		swapOrderHash: SWAP_ORDER_HASHES[legacySymbol] ?? ''
+	};
+});
+
+/**
+ * Old token addresses (legacy tokens that need to be migrated) - derived from TOKENS
+ * These are the original tStock tokens before the wrapped migration
+ */
+export const OLD_TOKEN_ADDRESSES: Record<string, string> = Object.fromEntries(
+	TOKENS.filter((t) => t.legacyAddress).map((t) => [getLegacySymbol(t), t.legacyAddress!])
+);
+
+/**
+ * New wrapped token addresses - derived from TOKENS
+ * These are the new wrapped tStock tokens that the site now trades
+ */
+export const WRAPPED_TOKEN_ADDRESSES: Record<string, string> = Object.fromEntries(
+	TOKENS.filter((t) => t.category === 'ST0x').map((t) => [t.symbol, t.address])
+);
 
 // Create lookup maps for efficient access
 const oldTokenAddressSet = new Set(
-	Object.values(OLD_TOKEN_ADDRESSES).map((addr) => addr.toLowerCase())
+	TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.address.toLowerCase())
 );
 
 const mappingByOldAddress = new Map(
@@ -259,7 +124,11 @@ const mappingByOldAddress = new Map(
 const mappingByOldSymbol = new Map(TOKEN_MIGRATION_MAPPINGS.map((m) => [m.oldToken.symbol, m]));
 
 const newTokenAddressSet = new Set(
-	Object.values(WRAPPED_TOKEN_ADDRESSES).map((addr) => addr.toLowerCase())
+	TOKEN_MIGRATION_MAPPINGS.map((m) => m.newToken.address.toLowerCase())
+);
+
+const mappingByNewAddress = new Map(
+	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.newToken.address.toLowerCase(), m])
 );
 
 /**
@@ -284,6 +153,13 @@ export function getMigrationMappingByAddress(oldAddress: string): TokenMigration
 }
 
 /**
+ * Get the migration mapping by new (wrapped) token address
+ */
+export function getMigrationMappingByNewAddress(newAddress: string): TokenMigrationMapping | null {
+	return mappingByNewAddress.get(newAddress.toLowerCase()) ?? null;
+}
+
+/**
  * Get the migration mapping for an old token by its symbol
  */
 export function getMigrationMappingBySymbol(oldSymbol: string): TokenMigrationMapping | null {
@@ -294,8 +170,8 @@ export function getMigrationMappingBySymbol(oldSymbol: string): TokenMigrationMa
  * Get the new wrapped token address for an old token
  */
 export function getWrappedTokenAddress(oldAddress: string): string | null {
-	const mapping = getMigrationMappingByAddress(oldAddress);
-	return mapping?.newToken.address ?? null;
+	const token = getTokenByLegacyAddress(oldAddress);
+	return token?.address ?? null;
 }
 
 /**
@@ -310,7 +186,7 @@ export function getSwapOrderHash(oldAddress: string): string | null {
  * Get all old token addresses as an array
  */
 export function getAllOldTokenAddresses(): string[] {
-	return Object.values(OLD_TOKEN_ADDRESSES);
+	return TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.address);
 }
 
 /**
@@ -321,7 +197,7 @@ export function getAllMigrationMappings(): TokenMigrationMapping[] {
 }
 
 /**
- * Given a token address, get the "base" equity symbol (e.g., tNVDA -> NVDA, wtNVDA -> NVDA)
+ * Given a token symbol, get the "base" equity symbol (e.g., tNVDA -> NVDA, wtNVDA -> NVDA)
  * This is useful for aggregating old and new token holdings
  */
 export function getBaseEquitySymbol(symbol: string): string {
@@ -349,7 +225,7 @@ export function getOldSymbolFromWrapped(wrappedSymbol: string): string | null {
  * Get wrapped symbol from old symbol (tNVDA -> wtNVDA)
  */
 export function getWrappedSymbolFromOld(oldSymbol: string): string | null {
-	if (oldSymbol.startsWith('t') && !oldSymbol.startsWith('wt')) {
+	if (oldSymbol.startsWith('t')) {
 		return 'w' + oldSymbol;
 	}
 	return null;

@@ -22,7 +22,7 @@ import { walletAddress } from '$lib/stores/authStore';
 
 /** Registry URL for rain.strategies (order definitions + shared settings). */
 const REGISTRY_URL =
-	'https://raw.githubusercontent.com/rainlanguage/rain.strategies/54af971b68ec7685eb19aff3d6e9dd174b199a58/registry';
+	'https://raw.githubusercontent.com/rainlanguage/rain.strategies/2c8192e9137736507041ebff820b0e7b5b29f0d2/registry';
 
 /** Maps app network slug to the deployment key in rain.strategies registry. */
 function getDeploymentKey(raindexNetworkSlug: string): string {

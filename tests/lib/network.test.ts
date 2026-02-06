@@ -107,10 +107,10 @@ describe('network', () => {
 			expect(tokens.every((t) => t.chainId === 8453)).toBe(true);
 		});
 
-		it('should include tIAU for Base', () => {
+		it('should include wtIAU for Base', () => {
 			const tokens = getTokensByNetwork(8453);
-			const tIAU = tokens.find((t) => t.symbol === 'tIAU');
-			expect(tIAU).toBeDefined();
+			const wtIAU = tokens.find((t) => t.symbol === 'wtIAU');
+			expect(wtIAU).toBeDefined();
 		});
 
 		it('should return empty array for unknown network', () => {
