@@ -145,9 +145,14 @@ export function calculateCostBasisForToken(
 			const sellAmount = userPaysAmount;
 			totalSold += sellAmount;
 
-			if (avgCostBasis > 0) {
-				const costOfSoldUnits = sellAmount * avgCostBasis;
-				realizedPnL += userReceivesAmount - costOfSoldUnits;
+			if (avgCostBasis > 0 && currentPosition > 0) {
+				// Only compute P&L on units that have a tracked cost basis
+				const trackedSellAmount = Math.min(sellAmount, currentPosition);
+				const costOfSoldUnits = trackedSellAmount * avgCostBasis;
+				// Prorate received amount if sell exceeds tracked position
+				const trackedReceived =
+					sellAmount > 0 ? userReceivesAmount * (trackedSellAmount / sellAmount) : 0;
+				realizedPnL += trackedReceived - costOfSoldUnits;
 			}
 
 			currentPosition = Math.max(0, currentPosition - sellAmount);
