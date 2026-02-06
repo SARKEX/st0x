@@ -237,21 +237,21 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
-	{
-		chainId: base.id,
-		address: '0xF4f8c66085910d583c01f3b4e44Bf731D4e2c565',
-		unwrappedAddress: '0xf6744fd94e27c2f58f6110aa9fdc77a87e41766b',
-		// No legacy address - wtRKLB is a new token
-		symbol: 'wtRKLB',
-		decimals: 18,
-		name: 'Wrapped Rocket Lab USA Inc ST0x',
-		logoUrl: '/images/RKLB.png',
-		priceFeedId: '0x40589e289317e4fbd997b1a267606e20a1cc7c3e4689f9e5a5992957917816c8',
-		category: 'ST0x',
-		tradingViewSymbol: 'NASDAQ:RKLB',
-		tradingViewMarket: 'america',
-		limitOrders: []
-	}
+	// {
+	// 	chainId: base.id,
+	// 	address: '0xF4f8c66085910d583c01f3b4e44Bf731D4e2c565',
+	// 	unwrappedAddress: '0xf6744fd94e27c2f58f6110aa9fdc77a87e41766b',
+	// 	// No legacy address - wtRKLB is a new token
+	// 	symbol: 'wtRKLB',
+	// 	decimals: 18,
+	// 	name: 'Wrapped Rocket Lab USA Inc ST0x',
+	// 	logoUrl: '/images/RKLB.png',
+	// 	priceFeedId: '0x40589e289317e4fbd997b1a267606e20a1cc7c3e4689f9e5a5992957917816c8',
+	// 	category: 'ST0x',
+	// 	tradingViewSymbol: 'NASDAQ:RKLB',
+	// 	tradingViewMarket: 'america',
+	// 	limitOrders: []
+	// }
 ];
 
 export const CRYPTO_TOKENS: CategorizedToken[] = [
