@@ -8,7 +8,7 @@
  * - Loads order GUIs from the rain.strategies registry
  * - Configures DotrainOrderGui with user inputs
  * - Generates deployment transaction arguments
- * - Does NOT import from stores (accepts parameters instead)
+ * - Accepts most parameters directly (wallet address read from authStore)
  */
 
 import { get } from 'svelte/store';

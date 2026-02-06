@@ -96,22 +96,6 @@ export const TOKEN_MIGRATION_MAPPINGS: TokenMigrationMapping[] = TOKENS.filter(
 	};
 });
 
-/**
- * Old token addresses (legacy tokens that need to be migrated) - derived from TOKENS
- * These are the original tStock tokens before the wrapped migration
- */
-export const OLD_TOKEN_ADDRESSES: Record<string, string> = Object.fromEntries(
-	TOKENS.filter((t) => t.legacyAddress).map((t) => [getLegacySymbol(t), t.legacyAddress!])
-);
-
-/**
- * New wrapped token addresses - derived from TOKENS
- * These are the new wrapped tStock tokens that the site now trades
- */
-export const WRAPPED_TOKEN_ADDRESSES: Record<string, string> = Object.fromEntries(
-	TOKENS.filter((t) => t.category === 'ST0x').map((t) => [t.symbol, t.address])
-);
-
 // Create lookup maps for efficient access
 const oldTokenAddressSet = new Set(
 	TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.address.toLowerCase())
@@ -210,4 +194,3 @@ export function getBaseEquitySymbol(symbol: string): string {
 	}
 	return symbol;
 }
-

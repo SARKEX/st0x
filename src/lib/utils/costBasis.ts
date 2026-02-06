@@ -150,8 +150,7 @@ export function calculateCostBasisForToken(
 				realizedPnL += userReceivesAmount - costOfSoldUnits;
 			}
 
-			currentPosition -= sellAmount;
-			// When position goes to zero, the cost pool will reset on next buy
+			currentPosition = Math.max(0, currentPosition - sellAmount);
 		}
 	}
 
@@ -231,7 +230,7 @@ export function calculateAllCostBases(
 				totalCost: combinedTotalCost,
 				totalAcquired: combinedTotalAcquired,
 				totalSold: combinedTotalSold,
-				netPosition: combinedTotalAcquired - combinedTotalSold,
+				netPosition: costBasis.netPosition + oldCostBasis.netPosition,
 				realizedPnL: combinedRealizedPnL
 			});
 

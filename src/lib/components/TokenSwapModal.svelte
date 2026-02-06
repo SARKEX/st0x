@@ -215,6 +215,12 @@
 	async function handleSwap() {
 		if (!selectedTokenData || !currentMapping || !$wagmiConfig || !$walletAddress) return;
 		if (parsedSwapAmount <= 0) return;
+		if (!currentMapping.swapOrderHash) {
+			transactionStore.transactionError(
+				'This token is not yet available for migration.' as TransactionErrorMessage
+			);
+			return;
+		}
 
 		const network = get(currentNetwork);
 		if (!network?.id) {
