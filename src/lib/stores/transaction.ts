@@ -54,7 +54,7 @@ const waitForTransaction = walletServiceWaitForTransaction;
 import {
 	getTakeOrders3Calldata,
 	type SgOrder,
-	type TakeOrdersConfigV4,
+	type TakeOrdersConfigV5,
 	type DeploymentTransactionArgs,
 	type RaindexVault,
 	type RaindexOrder
@@ -81,6 +81,7 @@ import {
 	type LimitOrderDeploymentArgs,
 	type MarketMakingDeploymentArgs
 } from '$lib/services/orderDeployment';
+import { wrapToken, unwrapToken } from '$lib/services/wrapService';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
@@ -574,6 +575,52 @@ const transactionStore = () => {
 	};
 
 	/**
+	 * Wrap or unwrap tokens using ERC4626 vaults.
+	 * Follows the same pattern as handleWithdraw.
+	 */
+	const handleWrapUnwrap = async (
+		mode: 'wrap' | 'unwrap',
+		tokenAddress: `0x${string}`,
+		amount: bigint,
+		userAddress: `0x${string}`,
+		tokenSymbol: string,
+		targetSymbol: string
+	) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+
+		let hash: Hash;
+		const actionName = mode === 'wrap' ? 'Wrap' : 'Unwrap';
+
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation to ${mode} ${tokenSymbol}...`);
+
+			if (mode === 'wrap') {
+				hash = await wrapToken(tokenAddress, amount, userAddress);
+			} else {
+				hash = await unwrapToken(tokenAddress, amount, userAddress, userAddress);
+			}
+
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+			await waitForTransaction(hash);
+
+			// Invalidate balance queries (same pattern as handleWithdraw)
+			invalidateDashboardBalances();
+
+			return transactionSuccess(hash, `Successfully ${mode}ped ${tokenSymbol} to ${targetSymbol}`);
+		} catch (error) {
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
+			const err = error as { cause?: { details?: string }; message?: string };
+			return transactionError(
+				(err?.cause?.details || err?.message || `${actionName} failed`) as TransactionErrorMessage
+			);
+		}
+	};
+
+	/**
 	 * Cancel an order: withdraw from vaults first, then deactivate the order.
 	 * This combines both operations into a single user flow.
 	 */
@@ -1046,16 +1093,16 @@ const transactionStore = () => {
 	 * Split orders into batches that fit within the payload size limit.
 	 * Uses greedy approach to pack as many orders as possible in each batch.
 	 *
-	 * @param config - The full TakeOrdersConfigV4 to split
+	 * @param config - The full TakeOrdersConfigV5 to split
 	 * @param orderFillAmounts - Optional array of fill amounts parallel to config.orders
-	 *                           Used to calculate per-batch maximumInput
+	 *                           Used to calculate per-batch maximumIO
 	 * @param inputDecimals - Decimal places of the input token (required if orderFillAmounts provided)
 	 */
 	const splitOrdersIntoBatches = (
-		config: TakeOrdersConfigV4,
+		config: TakeOrdersConfigV5,
 		orderFillAmounts?: bigint[],
 		inputDecimals?: number
-	): { batches: TakeOrdersConfigV4[]; needsSplit: boolean } => {
+	): { batches: TakeOrdersConfigV5[]; needsSplit: boolean } => {
 		const LOG_PREFIX = '[splitOrdersIntoBatches]';
 
 		console.log(`${LOG_PREFIX} Starting batch split analysis`, {
@@ -1088,7 +1135,7 @@ const transactionStore = () => {
 
 		// Need to split - use greedy approach to pack orders
 		const orders = config.orders;
-		const batches: TakeOrdersConfigV4[] = [];
+		const batches: TakeOrdersConfigV5[] = [];
 		const batchPayloadSizes: number[] = [];
 		let currentBatchOrders: typeof orders = [];
 		let currentBatchIndices: number[] = [];
@@ -1098,7 +1145,7 @@ const transactionStore = () => {
 			const order = orders[i];
 			// Try adding this order to current batch
 			const testOrders = [...currentBatchOrders, order];
-			const testConfig: TakeOrdersConfigV4 = {
+			const testConfig: TakeOrdersConfigV5 = {
 				...config,
 				orders: testOrders
 			};
@@ -1116,8 +1163,8 @@ const transactionStore = () => {
 				} else {
 					// Order doesn't fit, start a new batch
 					if (currentBatchOrders.length > 0) {
-						// Calculate per-batch maximumInput if fill amounts provided
-						let batchMaximumInput = config.maximumInput;
+						// Calculate per-batch maximumIO if fill amounts provided
+						let batchMaximumInput = config.maximumIO;
 						let batchFillTotal = 0n;
 						if (orderFillAmounts && inputDecimals !== undefined) {
 							batchFillTotal = currentBatchIndices.reduce(
@@ -1138,13 +1185,13 @@ const transactionStore = () => {
 							orderIndices: currentBatchIndices,
 							payloadSize: currentBatchPayloadSize,
 							batchFillTotal: batchFillTotal.toString(),
-							maximumInput: batchMaximumInput
+							maximumIO: batchMaximumInput
 						});
 
 						batches.push({
 							...config,
 							orders: currentBatchOrders,
-							maximumInput: batchMaximumInput
+							maximumIO: batchMaximumInput
 						});
 						batchPayloadSizes.push(currentBatchPayloadSize);
 					}
@@ -1167,8 +1214,8 @@ const transactionStore = () => {
 
 		// Don't forget the last batch
 		if (currentBatchOrders.length > 0) {
-			// Calculate per-batch maximumInput if fill amounts provided
-			let batchMaximumInput = config.maximumInput;
+			// Calculate per-batch maximumIO if fill amounts provided
+			let batchMaximumInput = config.maximumIO;
 			let batchFillTotal = 0n;
 			if (orderFillAmounts && inputDecimals !== undefined) {
 				batchFillTotal = currentBatchIndices.reduce(
@@ -1186,13 +1233,13 @@ const transactionStore = () => {
 				orderIndices: currentBatchIndices,
 				payloadSize: currentBatchPayloadSize,
 				batchFillTotal: batchFillTotal.toString(),
-				maximumInput: batchMaximumInput
+				maximumIO: batchMaximumInput
 			});
 
 			batches.push({
 				...config,
 				orders: currentBatchOrders,
-				maximumInput: batchMaximumInput
+				maximumIO: batchMaximumInput
 			});
 			batchPayloadSizes.push(currentBatchPayloadSize);
 		}
@@ -1205,7 +1252,7 @@ const transactionStore = () => {
 				batch: i + 1,
 				orders: b.orders.length,
 				payloadSize: batchPayloadSizes[i],
-				maximumInput: b.maximumInput
+				maximumIO: b.maximumIO
 			}))
 		});
 
@@ -1221,11 +1268,11 @@ const transactionStore = () => {
 	 * - requestedTakerWantsAmount: Amount taker wants to receive
 	 */
 	const handleTakeOrders = async (
-		args: TakeOrdersConfigV4,
+		args: TakeOrdersConfigV5,
 		raindexOrder: SgOrder,
 		requiredApprovalAmount: bigint,
 		params: TakeOrdersParams,
-		recalculateConfig?: () => Promise<TakeOrdersConfigV4 | null>
+		recalculateConfig?: () => Promise<TakeOrdersConfigV5 | null>
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -1335,7 +1382,7 @@ const transactionStore = () => {
 			hasOrderFillAmounts: !!params.orderFillAmounts,
 			orderFillAmounts: params.orderFillAmounts?.map((a) => a.toString()),
 			takerWantsDecimals: params.takerWantsToken.decimals,
-			originalMaximumInput: finalConfig.maximumInput,
+			originalMaximumIO: finalConfig.maximumIO,
 			originalMaximumIORatio: finalConfig.maximumIORatio
 		});
 
@@ -1390,9 +1437,9 @@ const transactionStore = () => {
 
 			console.log(`${TX_LOG_PREFIX} Preparing batch ${batchIndex + 1}/${batches.length}`, {
 				orderCount: batchConfig.orders.length,
-				maximumInput: batchConfig.maximumInput,
+				maximumIO: batchConfig.maximumIO,
 				maximumIORatio: batchConfig.maximumIORatio,
-				minimumInput: batchConfig.minimumInput
+				minimumIO: batchConfig.minimumIO
 			});
 
 			let result;
@@ -1467,7 +1514,7 @@ const transactionStore = () => {
 					batchIndex,
 					totalBatches: batches.length,
 					orderCount: batchConfig.orders.length,
-					maximumInput: batchConfig.maximumInput,
+					maximumIO: batchConfig.maximumIO,
 					maximumIORatio: batchConfig.maximumIORatio,
 					error
 				});
@@ -1699,6 +1746,7 @@ const transactionStore = () => {
 		handleFolioDeploy,
 		handleTakeOrders,
 		handleWithdraw,
+		handleWrapUnwrap,
 		handleRemoveOrder,
 		handleWithdrawFromOrder
 	};

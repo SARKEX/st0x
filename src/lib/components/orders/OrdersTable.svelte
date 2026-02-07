@@ -9,6 +9,7 @@
 	import { type ProcessedQuote, classifyOrderType } from '$lib/utils/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { createRaindexClient } from '$lib/clients/raindex';
+	import type { GetOrdersFilters } from '@rainlanguage/orderbook';
 	import type { DisplayOrder } from '$lib/types/orders';
 
 	// Props
@@ -68,15 +69,21 @@
 					return [];
 				}
 				const client = await createRaindexClient();
-				const filters: { owners: `0x${string}`[]; active: boolean; tokens?: `0x${string}`[] } = {
+				// Note: SDK types expect tokens as object with inputs/outputs but runtime expects array
+				const filters: {
+					owners: `0x${string}`[];
+					active: boolean;
+					tokens?: `0x${string}`[];
+				} = {
 					owners: [signer as `0x${string}`],
 					active: false
 				};
 				// Only filter by token if provided
 				if (token) {
-					filters.tokens = [token as `0x${string}`];
+					const tokenAddr = token as `0x${string}`;
+					filters.tokens = [tokenAddr];
 				}
-				const result = await client.getOrders([network.id], filters, 1);
+				const result = await client.getOrders([network.id], filters as GetOrdersFilters, 1);
 				if (result.error) {
 					console.error('[closedOrdersQuery] Error:', result.error);
 					return [];

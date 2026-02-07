@@ -18,6 +18,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import TickerTape from '$lib/components/TickerTape.svelte';
 	import LowFundsBanner from '$lib/components/LowFundsBanner.svelte';
+	import OldTokensBanner from '$lib/components/OldTokensBanner.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { rainlangConfirmationModal, tradePanelOpen } from '$lib/stores';
@@ -153,6 +154,9 @@
 
 		<!-- Low funds banner (shown when wallet has no USDC) -->
 		<LowFundsBanner />
+
+		<!-- Old tokens banner (shown when user has legacy tokens that need to be swapped) -->
+		<OldTokensBanner />
 
 		<!-- Ticker tape underneath header (trade pages only) -->
 		{#if isTradePage}

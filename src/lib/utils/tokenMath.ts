@@ -497,7 +497,7 @@ export function analyzeTrade(
 // RAINDEX URL UTILITIES
 // ============================================================================
 
-const RAINDEX_BASE_URL = 'https://v5.raindex.finance';
+const RAINDEX_BASE_URL = 'https://v6.raindex.finance';
 
 /**
  * Generate a Raindex URL for an order

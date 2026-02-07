@@ -24,7 +24,7 @@ export const getSftById = async (
 	const query = `
     {
  offchainAssetReceiptVaults(where: {
- id: "${tokenId.toLowerCase()}"
+ wrappedTokenContractAddress: "${tokenId.toLowerCase()}"
  }) {
 
     withdraws {
@@ -250,7 +250,9 @@ export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVau
 	const query = `
     {
  offchainAssetReceiptVaults(where: {
- id_in: [${networkTokens.map((s) => `"${s.address.toLowerCase()}"`).join(',')}]
+ wrappedTokenContractAddress_in: [${networkTokens
+		.map((s) => `"${s.address.toLowerCase()}"`)
+		.join(',')}]
  }) {
 
     withdraws {
