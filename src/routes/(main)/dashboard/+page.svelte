@@ -60,6 +60,7 @@
 	} from '$lib/stores/dynamicStore';
 	import TokenSwapModal from '$lib/components/TokenSwapModal.svelte';
 	import WrapUnwrapModal from '$lib/components/WrapUnwrapModal.svelte';
+	import { track } from '$lib/services/analytics';
 
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
@@ -144,6 +145,10 @@
 		walletBalance: bigint;
 		balanceNum: number;
 	}) {
+		track('dashboard_swap_legacy_clicked', {
+			token_symbol: legacyToken.symbol,
+			balance: legacyToken.balanceNum
+		});
 		const token: SwapModalToken = {
 			symbol: legacyToken.symbol,
 			address: legacyToken.address,
@@ -162,6 +167,10 @@
 		walletBalance: bigint;
 		walletBalanceNum: number;
 	}) {
+		track('dashboard_unwrap_clicked', {
+			token_symbol: holding.symbol,
+			balance: holding.walletBalanceNum
+		});
 		const token: WrapUnwrapModalToken = {
 			symbol: holding.symbol,
 			address: holding.address,
@@ -180,6 +189,10 @@
 		walletBalance: bigint;
 		balanceNum: number;
 	}) {
+		track('dashboard_wrap_clicked', {
+			token_symbol: token.symbol,
+			balance: token.balanceNum
+		});
 		const modalToken: WrapUnwrapModalToken = {
 			symbol: token.symbol,
 			address: token.address,

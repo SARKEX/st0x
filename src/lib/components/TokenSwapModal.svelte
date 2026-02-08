@@ -25,6 +25,7 @@
 	import { AbiCoder } from 'ethers';
 	import { Float } from '@rainlanguage/float';
 	import type { TakeOrdersConfigV5, TakeOrderConfigV4, OrderV4 } from '@rainlanguage/orderbook';
+	import { track } from '$lib/services/analytics';
 
 	const queryClient = useQueryClient();
 
@@ -86,6 +87,13 @@
 	// When modal opens with a pre-selected token, set it
 	$: if ($showTokenSwapModal && $swapModalToken && !selectedOldTokenAddress) {
 		selectedOldTokenAddress = $swapModalToken.address;
+	}
+
+	// Track modal open
+	$: if ($showTokenSwapModal) {
+		track('legacy_swap_modal_opened', {
+			pre_selected_token: $swapModalToken?.symbol
+		});
 	}
 
 	// Get current mapping based on selection
@@ -182,6 +190,11 @@
 		selectedOldTokenAddress = address;
 		swapAmount = '';
 		liquidityWarning = false;
+		const mapping = getMigrationMappingByAddress(address);
+		track('legacy_swap_token_selected', {
+			old_token_symbol: mapping?.oldToken.symbol,
+			new_token_symbol: mapping?.newToken.symbol
+		});
 	}
 
 	// Handle amount input
@@ -231,6 +244,13 @@
 		// Capture values before closing modal (handleClose resets state)
 		const mapping = currentMapping;
 		const swapAmountStr = swapAmount;
+
+		track('legacy_swap_initiated', {
+			old_token_symbol: mapping.oldToken.symbol,
+			new_token_symbol: mapping.newToken.symbol,
+			amount: parsedSwapAmount,
+			had_liquidity_warning: liquidityWarning
+		});
 
 		// Close the form modal - TransactionModal will show progress
 		handleClose();

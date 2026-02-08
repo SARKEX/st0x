@@ -7,8 +7,10 @@
 	import { readContracts } from '@wagmi/core';
 	import { TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
 	import { goto } from '$app/navigation';
+	import { track } from '$lib/services/analytics';
 
 	let dismissed = false;
+	let bannerTracked = false;
 
 	// Query to check if user has any old tokens
 	$: oldTokensQuery = createQuery({
@@ -50,12 +52,19 @@
 	$: oldTokenCount = $oldTokensQuery.data?.count ?? 0;
 	$: showBanner = $isAuthenticated && hasOldTokens && !dismissed;
 
+	$: if (showBanner && !bannerTracked) {
+		bannerTracked = true;
+		track('legacy_tokens_banner_shown', { token_count: oldTokenCount });
+	}
+
 	function handleSwapClick() {
+		track('legacy_tokens_banner_swap_clicked', { token_count: oldTokenCount });
 		// Navigate to portfolio page with hash to focus on holdings
 		goto('/dashboard#holdings');
 	}
 
 	function handleDismiss() {
+		track('legacy_tokens_banner_dismissed', { token_count: oldTokenCount });
 		dismissed = true;
 	}
 </script>

@@ -71,6 +71,7 @@ import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import { wagmiConfig } from 'svelte-wagmi';
 import { walletAddress, authMethod } from '$lib/stores/authStore';
+import { track } from '$lib/services/analytics';
 import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
@@ -607,8 +608,20 @@ const transactionStore = () => {
 			// Invalidate balance queries (same pattern as handleWithdraw)
 			invalidateDashboardBalances();
 
+			track(`${mode}_success`, {
+				token_symbol: tokenSymbol,
+				target_symbol: targetSymbol,
+				transaction_hash: hash
+			});
+
 			return transactionSuccess(hash, `Successfully ${mode}ped ${tokenSymbol} to ${targetSymbol}`);
 		} catch (error) {
+			track(`${mode}_failed`, {
+				token_symbol: tokenSymbol,
+				target_symbol: targetSymbol,
+				error: (error as Error)?.message
+			});
+
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
@@ -640,6 +653,10 @@ const transactionStore = () => {
 		if (!$signerAddress) {
 			throw new Error('Wallet not connected');
 		}
+
+		track('order_removal_initiated', {
+			order_hash: quote.orderHash
+		});
 
 		try {
 			// Fetch the RaindexOrder from the SDK
@@ -829,8 +846,18 @@ const transactionStore = () => {
 				}
 			}
 
+			track('order_removal_success', {
+				order_hash: quote.orderHash,
+				transaction_hash: hash
+			});
+
 			return transactionSuccess(hash, undefined, { raindexLink });
 		} catch (error: unknown) {
+			track('order_removal_failed', {
+				order_hash: quote.orderHash,
+				error: (error as Error)?.message
+			});
+
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
@@ -870,6 +897,11 @@ const transactionStore = () => {
 		}
 
 		const isFilled = quote.isFilled ?? false;
+
+		track('order_withdrawal_initiated', {
+			order_hash: quote.orderHash,
+			is_filled: isFilled
+		});
 
 		try {
 			const client = await createRaindexClient();
@@ -1074,8 +1106,20 @@ const transactionStore = () => {
 				}
 			}
 
+			track('order_withdrawal_success', {
+				order_hash: quote.orderHash,
+				is_filled: isFilled,
+				transaction_hash: lastHash
+			});
+
 			return transactionSuccess(lastHash, undefined, { raindexLink });
 		} catch (error: unknown) {
+			track('order_withdrawal_failed', {
+				order_hash: quote.orderHash,
+				is_filled: isFilled,
+				error: (error as Error)?.message
+			});
+
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
