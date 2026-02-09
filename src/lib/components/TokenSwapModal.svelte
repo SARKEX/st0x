@@ -184,31 +184,78 @@
 		liquidityWarning = false;
 	}
 
-	// Handle amount input
+	// Handle amount input (respect token decimals)
 	function handleAmountInput(e: Event) {
 		const target = e.target as HTMLInputElement;
-		swapAmount = target.value;
+		const decimals = currentMapping?.oldToken.decimals ?? 18;
+		// Strip to digits and at most one decimal point
+		const raw = target.value.replace(/[^\d.]/g, '');
+		const firstDot = raw.indexOf('.');
+		const value =
+			firstDot === -1
+				? raw
+				: raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
+
+		if (value === '' || value === '.') {
+			swapAmount = value;
+		} else {
+			const parts = value.split('.');
+			swapAmount =
+				parts.length === 1 || parts[1].length <= decimals
+					? value
+					: `${parts[0]}.${parts[1].slice(0, decimals)}`;
+		}
 
 		// Check if we need to show liquidity warning
 		const amount = parseFloat(swapAmount) || 0;
 		liquidityWarning = amount > availableLiquidity && availableLiquidity > 0;
 	}
 
+	/** Format balance/amount for display using viem (bigint → string with token decimals) */
+	function formatBalance(value: bigint, decimals: number): string {
+		return formatUnits(value, decimals);
+	}
+
+	/** Format a decimal string amount for display (normalizes to token decimals via viem) */
+	function formatAmountDisplay(amountStr: string, decimals: number): string {
+		try {
+			const wei = parseUnits(amountStr === '' || amountStr === '.' ? '0' : amountStr, decimals);
+			return formatUnits(wei, decimals);
+		} catch {
+			return '0';
+		}
+	}
+
+	/** Format a number for display (e.g. liquidity) using viem to avoid float noise */
+	function formatNumberWithDecimals(value: number, decimals: number): string {
+		try {
+			const wei = parseUnits(value.toFixed(decimals), decimals);
+			return formatUnits(wei, decimals);
+		} catch {
+			return '0';
+		}
+	}
+
 	// Set max amount (capped by liquidity)
 	function handleMaxClick() {
-		if (!selectedTokenData) return;
+		if (!selectedTokenData || !currentMapping) return;
 
-		const maxAmount = Math.min(selectedTokenData.balanceFormatted, availableLiquidity);
-		swapAmount = maxAmount.toFixed(6);
+		const decimals = selectedTokenData.oldToken.decimals;
+		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
+		const maxWei =
+			selectedTokenData.balance < liquidityWei ? selectedTokenData.balance : liquidityWei;
+		swapAmount = formatUnits(maxWei, decimals);
 		liquidityWarning = selectedTokenData.balanceFormatted > availableLiquidity;
 	}
 
 	// Cap to available liquidity
 	function capToLiquidity() {
-		if (parsedSwapAmount > availableLiquidity && availableLiquidity > 0) {
-			swapAmount = availableLiquidity.toFixed(6);
-			liquidityWarning = true;
-		}
+		if (!currentMapping || parsedSwapAmount <= availableLiquidity || availableLiquidity <= 0)
+			return;
+		const decimals = currentMapping.oldToken.decimals;
+		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
+		swapAmount = formatUnits(liquidityWei, decimals);
+		liquidityWarning = true;
 	}
 
 	// Execute the swap by taking the migration order (same flow as market order)
@@ -434,8 +481,9 @@
 									{:else}
 										{#each tokensToShow as tokenData}
 											<option value={tokenData.oldToken.address}>
-												{tokenData.oldToken.symbol} - Balance: {tokenData.balanceFormatted.toFixed(
-													4
+												{tokenData.oldToken.symbol} - Balance: {formatBalance(
+													tokenData.balance,
+													tokenData.oldToken.decimals
 												)}
 											</option>
 										{/each}
@@ -479,7 +527,10 @@
 							{#if selectedTokenData}
 								<div class="mt-2 flex items-center justify-between text-xs">
 									<span class="text-gray-500">
-										Balance: {selectedTokenData.balanceFormatted.toFixed(4)}
+										Balance: {formatBalance(
+											selectedTokenData.balance,
+											selectedTokenData.oldToken.decimals
+										)}
 										{selectedTokenData.oldToken.symbol}
 									</span>
 									<button
@@ -536,7 +587,12 @@
 								{/if}
 								<div class="flex-1 text-right">
 									<span class="text-xl font-medium text-white">
-										{parsedSwapAmount > 0 ? parsedSwapAmount.toFixed(6) : '0'}
+										{parsedSwapAmount > 0
+											? formatAmountDisplay(
+													swapAmount,
+													currentMapping?.newToken.decimals ?? 6
+												)
+											: '0'}
 									</span>
 								</div>
 							</div>
@@ -592,7 +648,11 @@
 									<span class="animate-pulse text-gray-500">Loading...</span>
 								{:else if availableLiquidity > 0}
 									<span class="text-white"
-										>{availableLiquidity.toFixed(2)} {currentMapping.oldToken.symbol}</span
+										>{formatNumberWithDecimals(
+											availableLiquidity,
+											currentMapping.oldToken.decimals
+										)}
+										{currentMapping.oldToken.symbol}</span
 									>
 								{:else}
 									<span class="text-yellow-500">No liquidity available</span>

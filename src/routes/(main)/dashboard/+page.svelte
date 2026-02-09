@@ -1587,7 +1587,7 @@
 													<span class="font-medium">{token.symbol}</span>
 												</td>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
-													>{token.balanceNum.toFixed(4)}</td
+													>{token.balanceNum.toFixed(18)}</td
 												>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">${token.value.toFixed(2)}</td>
 												<td class="px-2 py-2 sm:px-4 sm:py-3">
