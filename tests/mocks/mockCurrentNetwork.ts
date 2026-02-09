@@ -24,7 +24,7 @@ export const mockCurrentNetwork = {
 	paymentTokens: [
 		{
 			chainId: 8453,
-			address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
+			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 			symbol: 'USDC',
 			decimals: 6,
 			name: 'USD Coin',
@@ -34,7 +34,7 @@ export const mockCurrentNetwork = {
 	],
 	defaultPaymentToken: {
 		chainId: 8453,
-		address: '0xe1d3ece2425f8f350b8d2b8cb179d5a36aee1c58',
+		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 		symbol: 'USDC',
 		decimals: 6,
 		name: 'USD Coin',
@@ -45,5 +45,7 @@ export const mockCurrentNetwork = {
 
 Object.assign(mockCurrentNetwork, {
 	settlementTokens: mockCurrentNetwork.paymentTokens,
-	defaultSettlementToken: mockCurrentNetwork.defaultPaymentToken
+	defaultSettlementToken: mockCurrentNetwork.defaultPaymentToken,
+	// Trusted orderbook used in transactionStore tests (0x1234)
+	trustedOrderbooks: ['0x1234']
 });

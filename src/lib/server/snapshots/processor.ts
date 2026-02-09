@@ -4,7 +4,7 @@
 import type { Transfer, BlockSnapshot, TokenBalances, SnapshotPrice } from './types';
 import type { TokenPrice } from './pyth';
 import type { VaultHolding } from './vaults';
-import { TOKENS } from '$lib/config/tokens';
+import { getTokenByAnyAddress } from '$lib/config/tokens';
 import {
 	EXCLUDED_WALLETS,
 	ORDERBOOK_ADDRESS,
@@ -161,7 +161,7 @@ export function generateSnapshot(
 	dynamicExcluded?: string[],
 	priceTimestamp?: number
 ): BlockSnapshot {
-	const token = TOKENS.find((t) => t.address.toLowerCase() === tokenAddress);
+	const token = getTokenByAnyAddress(tokenAddress);
 	const result = calculateBalancesAtBlock(transfers, blockNumber, tokenAddress);
 	const totalSupply = result.totalSupply;
 	let balances = result.balances;

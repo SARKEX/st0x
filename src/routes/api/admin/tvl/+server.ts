@@ -367,7 +367,8 @@ async function calculateSimpleTvlAtBlock(
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const limitParam = url.searchParams.get('limit');
-		const limit = limitParam ? parseInt(limitParam) : 90; // Default to 90 days
+		const parsedLimit = limitParam ? parseInt(limitParam) : 90;
+		const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 365) : 90;
 
 		// Check KV cache first
 		const cacheKey = `tvl:cache:${limit}`;
@@ -487,10 +488,14 @@ export const GET: RequestHandler = async ({ url }) => {
 			daily: dailyTvl
 		};
 
-		// Cache in KV with 1-hour TTL
-		const client = await getKv();
-		if (client) {
-			await client.set(cacheKey, JSON.stringify(response), { EX: 3600 });
+		// Cache in KV with 1-hour TTL (don't fail the response on cache errors)
+		try {
+			const client = await getKv();
+			if (client) {
+				await client.set(cacheKey, JSON.stringify(response), { EX: 3600 });
+			}
+		} catch (cacheError) {
+			console.error('[TVL API] Cache write failed:', cacheError);
 		}
 
 		return json(response, {

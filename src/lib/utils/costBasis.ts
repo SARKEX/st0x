@@ -1,5 +1,6 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { toDecimal } from '$lib/utils/tokenMath';
+import { getMigrationMappingByNewAddress } from '$lib/config/tokenMigration';
 
 export interface CostBasisData {
 	tokenAddress: string;
@@ -46,6 +47,9 @@ export function calculateCostBasisForToken(
 	let totalSold = 0;
 	let realizedPnL = 0;
 	let avgCostBasis = 0;
+
+	// Track current position to detect when it goes to zero
+	let currentPosition = 0;
 
 	// Filter trades involving this asset token
 	const relevantTrades = trades.filter((trade) => {
@@ -124,23 +128,39 @@ export function calculateCostBasisForToken(
 			userPaysToken === normalizedAsset && paymentTokenAddresses.has(userReceivesToken ?? '');
 
 		if (isAssetBuy) {
+			// If position was zero, we're starting a fresh cost basis pool
+			if (currentPosition === 0) {
+				totalCost = 0;
+				totalAcquired = 0;
+			}
+
 			totalAcquired += userReceivesAmount;
 			totalCost += userPaysAmount;
+			currentPosition += userReceivesAmount;
 
 			if (totalAcquired > 0) {
 				avgCostBasis = totalCost / totalAcquired;
 			}
 		} else if (isAssetSell) {
-			totalSold += userPaysAmount;
+			const sellAmount = userPaysAmount;
+			totalSold += sellAmount;
 
-			if (avgCostBasis > 0) {
-				const costOfSoldUnits = userPaysAmount * avgCostBasis;
-				realizedPnL += userReceivesAmount - costOfSoldUnits;
+			if (avgCostBasis > 0 && currentPosition > 0) {
+				// Only compute P&L on units that have a tracked cost basis
+				const trackedSellAmount = Math.min(sellAmount, currentPosition);
+				const costOfSoldUnits = trackedSellAmount * avgCostBasis;
+				// Prorate received amount if sell exceeds tracked position
+				const trackedReceived =
+					sellAmount > 0 ? userReceivesAmount * (trackedSellAmount / sellAmount) : 0;
+				realizedPnL += trackedReceived - costOfSoldUnits;
 			}
+
+			currentPosition = Math.max(0, currentPosition - sellAmount);
 		}
 	}
 
-	const netPosition = totalAcquired - totalSold;
+	// Use currentPosition for accuracy
+	const netPosition = currentPosition;
 
 	return {
 		tokenAddress: normalizedAsset,
@@ -190,6 +210,37 @@ export function calculateAllCostBases(
 		);
 		if (costBasis) {
 			costBasisMap.set(tokenAddress, costBasis);
+		}
+	}
+
+	// Merge old token cost basis into new wrapped token for token migrations
+	for (const [tokenAddress, costBasis] of costBasisMap) {
+		// Check if this is a new wrapped token with a corresponding old token
+		const migrationMapping = getMigrationMappingByNewAddress(tokenAddress);
+		if (!migrationMapping) continue;
+
+		const oldTokenAddress = migrationMapping.oldToken.address.toLowerCase();
+		const oldCostBasis = costBasisMap.get(oldTokenAddress);
+
+		if (oldCostBasis && oldCostBasis.totalAcquired > 0) {
+			// Merge old token's acquisition history into new token
+			const combinedTotalAcquired = costBasis.totalAcquired + oldCostBasis.totalAcquired;
+			const combinedTotalCost = costBasis.totalCost + oldCostBasis.totalCost;
+			const combinedTotalSold = costBasis.totalSold + oldCostBasis.totalSold;
+			const combinedRealizedPnL = costBasis.realizedPnL + oldCostBasis.realizedPnL;
+
+			costBasisMap.set(tokenAddress, {
+				tokenAddress,
+				avgCostBasis: combinedTotalAcquired > 0 ? combinedTotalCost / combinedTotalAcquired : 0,
+				totalCost: combinedTotalCost,
+				totalAcquired: combinedTotalAcquired,
+				totalSold: combinedTotalSold,
+				netPosition: costBasis.netPosition + oldCostBasis.netPosition,
+				realizedPnL: combinedRealizedPnL
+			});
+
+			// Remove old token's cost basis entry (it's now merged)
+			costBasisMap.delete(oldTokenAddress);
 		}
 	}
 

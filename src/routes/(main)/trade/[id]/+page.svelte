@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
 	import { formatUnits } from 'viem';
-	import { TOKENS } from '$lib/config/network';
+	import { TOKENS, getTokenByAnyAddress } from '$lib/config/network';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
@@ -122,15 +122,15 @@
 		const displayOrders: DisplayOrder[] = [];
 		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
 
-		// Add limit orders from quotes (for current token only)
+		// Add limit orders from quotes (for current token only; match wrapped or legacy address)
 		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
 			const quotes = $orderbookQuotesQuery.data.quotes;
 
-			// Filter by token (input or output matches current token)
+			// Filter by token (input or output matches current token's wrapped or legacy address)
 			const filtered = quotes.filter(
 				(q) =>
-					q.inputTokenAddress.toLowerCase() === tokenAddress ||
-					q.outputTokenAddress.toLowerCase() === tokenAddress
+					assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
+					assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
 			);
 
 			// Transform to DisplayOrder
@@ -200,11 +200,19 @@
 		},
 		enabled: Boolean(currentToken?.address && $walletAddress && $wagmiConfig)
 	});
-	$: currentPythToken = TOKENS.find(
-		(token) =>
-			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
-			token.chainId === $currentNetwork?.chainId
-	);
+	// Use tokenId from URL params to find the token config (supports wrapped, legacy, or unwrapped address)
+	// Note: currentToken.address from subgraph may differ from the wrapped token address
+	$: currentPythToken = (() => {
+		if (!tokenId || !$currentNetwork?.chainId) return undefined;
+		const byAddress = TOKENS.find(
+			(token) =>
+				token.address.toLowerCase() === tokenId.toLowerCase() &&
+				token.chainId === $currentNetwork.chainId
+		);
+		if (byAddress) return byAddress;
+		const byAnyAddress = getTokenByAnyAddress(tokenId);
+		return byAnyAddress?.chainId === $currentNetwork.chainId ? byAnyAddress : undefined;
+	})();
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
 	const ASSET_TABS = [
@@ -486,6 +494,15 @@
 		};
 	})();
 	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
+	// Include legacy address so bid/ask and depth match quotes for tokens like tSTOX/wtSTOX
+	$: assetAddressSet = (() => {
+		const set = new Set<string>();
+		if (currentPythToken?.address) set.add(currentPythToken.address.toLowerCase());
+		if (currentPythToken?.legacyAddress) set.add(currentPythToken.legacyAddress.toLowerCase());
+		// Also add currentToken.address in case subgraph uses a different id
+		if (currentToken?.address) set.add(currentToken.address.toLowerCase());
+		return set;
+	})();
 	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
 	$: oraclePriceData = oracleEntry
 		? {
@@ -605,7 +622,6 @@
 				resetOnChainPrices();
 			} else {
 				const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-				const assetAddress = currentToken.address?.toLowerCase();
 				const quoteAddress = settlementToken.address?.toLowerCase();
 				let bestBid: number | null = null;
 				let bestAsk: number | null = null;
@@ -615,8 +631,10 @@
 					if (!Number.isFinite(ratio) || ratio <= 0) return;
 					const inputAddress = quote.inputTokenAddress.toLowerCase();
 					const outputAddress = quote.outputTokenAddress.toLowerCase();
+					const inputIsAsset = assetAddressSet.has(inputAddress);
+					const outputIsAsset = assetAddressSet.has(outputAddress);
 					// ASK: quote token -> asset (what you pay when buying)
-					if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+					if (inputAddress === quoteAddress && outputIsAsset) {
 						const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = ratio;
 						if (tokenAmount !== null && Number.isFinite(price) && tokenAmount > 0 && price > 0) {
@@ -624,7 +642,7 @@
 						}
 					}
 					// BID: asset -> quote token (what you get when selling)
-					if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+					if (inputIsAsset && outputAddress === quoteAddress) {
 						const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = 1 / ratio;
 						if (quoteAmount !== null && quoteAmount > 0 && Number.isFinite(price) && price > 0) {
@@ -700,9 +718,8 @@
 		}
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return { bids: [], asks: [] };
-		const assetAddress = currentToken.address?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
-		if (!assetAddress || !quoteAddress) {
+		if (!quoteAddress) {
 			return { bids: [], asks: [] };
 		}
 
@@ -719,9 +736,11 @@
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
+			const inputIsAsset = assetAddressSet.has(inputAddress);
+			const outputIsAsset = assetAddressSet.has(outputAddress);
 
 			// ASK: quote token -> asset (buying the asset)
-			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+			if (inputAddress === quoteAddress && outputIsAsset) {
 				const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				const price = ratio;
 				if (tokenAmount === null || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
@@ -732,7 +751,7 @@
 			}
 
 			// BID: asset -> quote token (selling the asset)
-			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+			if (inputIsAsset && outputAddress === quoteAddress) {
 				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				if (quoteAmount === null || quoteAmount <= 0) {
 					return;
@@ -1300,32 +1319,56 @@
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex items-center justify-between gap-2">
-									<span class="text-gray-400">Address</span>
+									<span class="text-gray-400">Wrapped Token</span>
 									<div>
 										<div class="sm:hidden">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-												label={currentToken.address}
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+													tokenId}"
+												label={currentPythToken?.address ?? tokenId}
 												truncate={{ start: 0, end: 6 }}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 											/>
 										</div>
 										<div class="hidden sm:block">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-												label={truncateAddress(currentToken.address)}
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+													tokenId}"
+												label={truncateAddress(currentPythToken?.address ?? tokenId)}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 											/>
 										</div>
 									</div>
 								</div>
+								{#if currentPythToken?.unwrappedAddress}
+									<div class="flex items-center justify-between gap-2">
+										<span class="text-gray-400">Underlying Token</span>
+										<div>
+											<div class="sm:hidden">
+												<ExternalLink
+													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
+													label={currentPythToken.unwrappedAddress}
+													truncate={{ start: 0, end: 6 }}
+													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												/>
+											</div>
+											<div class="hidden sm:block">
+												<ExternalLink
+													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
+													label={truncateAddress(currentPythToken.unwrappedAddress)}
+													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												/>
+											</div>
+										</div>
+									</div>
+								{/if}
 								<div class="flex justify-between">
 									<span class="text-gray-400">Network</span>
 									<span>{$currentNetwork.displayName}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Symbol</span>
-									<span>{currentToken.symbol}</span>
+									<span>{currentPythToken?.symbol ?? currentToken.symbol}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Decimals</span>

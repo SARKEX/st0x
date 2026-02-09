@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { currentNetwork, sfts } from '$lib/stores';
 	import { page } from '$app/stores';
-	import { getAllTokensByNetwork } from '$lib/config/network';
+	import { getAllTokensByNetwork, getTokenByAnyAddress } from '$lib/config/tokens';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -42,7 +42,14 @@
 						BigInt(0)
 					);
 					const totalVolume = depositVolume + withdrawVolume;
-					const quote = findQuoteForSymbol(sft.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
+					// Use token config symbol for price lookup so legacy symbols (e.g. tSTOX) resolve to the wrapped token's price feed (wtSTOX / AMEX:SPLG)
+					const tokenInfo = getTokenByAnyAddress(sft.address);
+					const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;
+					const quote = findQuoteForSymbol(
+						symbolForPrice,
+						$priceFeedsQuery?.data ?? [],
+						ALL_TOKENS
+					);
 					const price = quote?.close ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;
@@ -131,16 +138,14 @@
 			</div>
 			<div class="space-y-0.5">
 				{#each sortedAssets as asset}
-					{@const tokenInfo = ALL_TOKENS.find(
-						(t) => t.address.toLowerCase() === asset.address.toLowerCase()
-					)}
+					{@const tokenInfo = getTokenByAnyAddress(asset.address)}
 					<a
-						href={`/trade/${asset.id}`}
+						href={`/trade/${tokenInfo?.address ?? asset.id}`}
 						on:click={() => {
 							if (!desktop) dispatch('close');
 						}}
 						class="block rounded-md px-2 py-2 transition-colors hover:bg-white/5 {activePath ===
-						`/trade/${asset.id}`
+						`/trade/${tokenInfo?.address ?? asset.id}`
 							? 'border-l-2 border-yellow-500 bg-yellow-500/10'
 							: ''}"
 					>

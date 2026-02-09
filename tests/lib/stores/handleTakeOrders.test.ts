@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockTakeOrdersParams, createMockTokenInfo } from '../../utils/mockStores';
 import type { TakeOrdersParams } from '$lib/types/transactions';
-import type { SgOrder, TakeOrdersConfigV4 } from '@rainlanguage/orderbook';
 
 /**
  * Tests for handleTakeOrders demonstrating the value of TakeOrdersParams interface
