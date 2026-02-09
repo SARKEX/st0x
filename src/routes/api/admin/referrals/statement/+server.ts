@@ -1,28 +1,17 @@
 // API endpoint to generate detailed statement for a referral code
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verifySessionToken } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { getWalletsByCode } from '$lib/server/accessCodes';
 import { list } from '@vercel/blob';
 import { TOKENS } from '$lib/config/tokens';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { env } from '$env/dynamic/private';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 const POINTS_PER_DOLLAR = 100;
 const tokenSymbols = TOKENS.map((t) => t.symbol);
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
 
 async function fetchSnapshot(
 	tokenSymbol: string,
@@ -77,8 +66,15 @@ interface SnapshotData {
 	totalPoints: number;
 }
 
-export const GET: RequestHandler = async ({ url, cookies }) => {
-	if (!isAuthenticated(cookies)) {
+export const GET: RequestHandler = async ({ url, cookies, request }) => {
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-referrals-statement'
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

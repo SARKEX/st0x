@@ -9,21 +9,9 @@ import {
 	generateAccessCode,
 	updateAccessCode
 } from '$lib/server/accessCodes';
-import { verifySessionToken } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
 
 // GET - List all access codes
 export const GET: RequestHandler = async ({ cookies, request }) => {
@@ -31,7 +19,7 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-list');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -57,7 +45,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-create');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -106,7 +94,7 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-delete');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -147,7 +135,7 @@ export const PATCH: RequestHandler = async ({ cookies, request }) => {
 	);
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -161,7 +149,7 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-update');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

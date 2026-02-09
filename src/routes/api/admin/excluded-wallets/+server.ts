@@ -1,23 +1,19 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verifySessionToken } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { getKv, kvGet, kvSet, KV_KEYS } from '$lib/server/kv';
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 // GET - List all excluded wallets
-export const GET: RequestHandler = async ({ cookies }) => {
-	if (!isAuthenticated(cookies)) {
+export const GET: RequestHandler = async ({ cookies, request }) => {
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-excluded-wallets-list'
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -34,7 +30,14 @@ export const GET: RequestHandler = async ({ cookies }) => {
 
 // POST - Add or remove excluded wallet
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	if (!isAuthenticated(cookies)) {
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-excluded-wallets-update'
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

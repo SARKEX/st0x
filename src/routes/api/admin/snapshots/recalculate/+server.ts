@@ -79,12 +79,28 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const targetBlocks = new Set(monthBlocks.map((b) => b.blockNumber));
 		console.log(`[Recalculate] Target block numbers: ${Array.from(targetBlocks).join(', ')}`);
 
-		// List ALL blobs from blob storage
-		const { blobs: allBlobs } = await list({
-			prefix: 'snapshots/',
-			limit: 1000,
-			token: env.BLOB_READ_WRITE_TOKEN
-		});
+		// List ALL blobs from blob storage (paginated)
+		const allBlobs: Array<{ pathname: string; url: string }> = [];
+		let cursor: string | undefined;
+		let hasMore = true;
+		let pages = 0;
+		while (hasMore) {
+			const page = await list({
+				prefix: 'snapshots/',
+				limit: 1000,
+				cursor,
+				token: env.BLOB_READ_WRITE_TOKEN
+			});
+
+			allBlobs.push(...page.blobs.map((blob) => ({ pathname: blob.pathname, url: blob.url })));
+			cursor = page.cursor;
+			hasMore = page.hasMore;
+			pages++;
+
+			if (pages > 1000) {
+				throw new Error('Blob pagination exceeded safe limit while recalculating snapshots');
+			}
+		}
 		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
 
 		// Debug: extract all block numbers from blobs

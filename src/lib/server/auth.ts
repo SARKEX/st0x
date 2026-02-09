@@ -47,16 +47,3 @@ export function validateCredentials(username: string, password: string): boolean
 
 	return userMatch && passMatch;
 }
-
-export function isAdminAuthenticated(cookies: {
-	get: (name: string) => string | undefined;
-}): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
