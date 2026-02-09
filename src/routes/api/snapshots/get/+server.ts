@@ -4,6 +4,7 @@ import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
 import { env } from '$env/dynamic/private';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { TOKENS } from '$lib/config/tokens';
 
 export const GET: RequestHandler = async ({ url, request }) => {
 	// Rate limiting
@@ -59,18 +60,34 @@ export const GET: RequestHandler = async ({ url, request }) => {
 		}
 
 		// If no token specified, get all token snapshots for this block
-		const prefix = `snapshots/`;
+		// Query each token's specific blob path in parallel to avoid pagination issues
+		const tokenSymbols = TOKENS.map((t) => t.symbol);
 
-		const { blobs } = await list({ prefix, token: env.BLOB_READ_WRITE_TOKEN });
+		const snapshots = (
+			await Promise.all(
+				tokenSymbols.map(async (symbol) => {
+					const prefix = `snapshots/${symbol}/${blockNumber}.json`;
+					try {
+						const { blobs } = await list({
+							prefix,
+							limit: 1,
+							token: env.BLOB_READ_WRITE_TOKEN
+						});
+						if (blobs.length === 0) return null;
 
-		// Filter blobs for this block number
-		const blockSnapshots = blobs.filter((blob) => {
-			const pathParts = blob.pathname.split('/');
-			const fileName = pathParts[pathParts.length - 1];
-			return fileName === `${blockNumber}.json`;
-		});
+						const response = await fetch(blobs[0].url);
+						if (!response.ok) return { token: symbol, url: blobs[0].url, snapshot: null };
 
-		if (blockSnapshots.length === 0) {
+						const data = await response.json();
+						return { token: symbol, url: blobs[0].url, snapshot: data };
+					} catch {
+						return null;
+					}
+				})
+			)
+		).filter((s) => s !== null);
+
+		if (snapshots.length === 0) {
 			return json(
 				{
 					success: false,
@@ -79,34 +96,6 @@ export const GET: RequestHandler = async ({ url, request }) => {
 				{ status: 404 }
 			);
 		}
-
-		// Fetch all snapshot data
-		const snapshots = await Promise.all(
-			blockSnapshots.map(async (blob) => {
-				const pathParts = blob.pathname.split('/');
-				const token = pathParts[pathParts.length - 2];
-
-				try {
-					const response = await fetch(blob.url);
-					if (response.ok) {
-						const data = await response.json();
-						return {
-							token,
-							url: blob.url,
-							snapshot: data
-						};
-					}
-				} catch {
-					// Skip failed fetches
-				}
-
-				return {
-					token,
-					url: blob.url,
-					snapshot: null
-				};
-			})
-		);
 
 		return json({
 			success: true,

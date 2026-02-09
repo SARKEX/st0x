@@ -23,6 +23,8 @@ export interface Network {
 	metadata_subgraph_url: string;
 	orderbook_subgraph_url: string;
 	orderbook_subgraph_urls_inactive: string[];
+	/** Previous SFT subgraph URLs for historical data (legacy tokens, old vaults) */
+	subgraph_urls_legacy: string[];
 	paymentTokens: PythToken[];
 	defaultPaymentToken: PythToken;
 	/** Whitelist of trusted orderbook contract addresses for this network */
@@ -59,7 +61,12 @@ export const networks: Network[] = [
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn',
 		orderbook_subgraph_url:
 			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2026-02-05-c4ef/gn',
-		orderbook_subgraph_urls_inactive: [],
+		orderbook_subgraph_urls_inactive: [
+			'https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2025-10-11-a62b/gn'
+		],
+		subgraph_urls_legacy: [
+			'https://api.goldsky.com/api/public/project_cm153vmqi5gke01vy66p4ftzf/subgraphs/sft-offchainassetvaulttest-base/1.0.5/gn'
+		],
 		paymentTokens: basePaymentTokens,
 		defaultPaymentToken: baseDefaultPaymentToken!,
 		// Trusted orderbook contract addresses - transactions to unknown orderbooks are blocked

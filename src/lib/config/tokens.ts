@@ -1,7 +1,6 @@
 import { arbitrum, base } from '@wagmi/core/chains';
 import type { PythToken } from '$lib/types';
 
-// Payment tokens mapped by chain
 export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
 		{
@@ -32,7 +31,6 @@ export function getDefaultPaymentTokenForNetwork(chainId: number): PythToken | u
 	return first;
 }
 
-// Token categories
 export type TokenCategory = 'ST0x' | 'CRYPTO';
 
 export interface LimitOrder {
@@ -40,7 +38,6 @@ export interface LimitOrder {
 	type: 'Buy' | 'Sell';
 }
 
-// Extended token interface with category
 export interface CategorizedToken extends PythToken {
 	category: TokenCategory;
 	logoUrl?: string;
@@ -236,7 +233,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:PPLT',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	},
+	}
 	// {
 	// 	chainId: base.id,
 	// 	address: '0xF4f8c66085910d583c01f3b4e44Bf731D4e2c565',
@@ -334,10 +331,7 @@ export function getAllTokensByNetwork(chainId: number): CategorizedToken[] {
 	return [...getTokensByNetwork(chainId), ...getCryptoTokensByNetwork(chainId)];
 }
 
-// ============================================================================
-// Address Lookup Maps (built once at module load)
-// ============================================================================
-
+// Address lookup maps (built once at module load)
 const tokenByWrappedAddress = new Map(TOKENS.map((t) => [t.address.toLowerCase(), t]));
 
 const tokenByUnwrappedAddress = new Map(
@@ -348,34 +342,21 @@ const tokenByLegacyAddress = new Map(
 	TOKENS.filter((t) => t.legacyAddress).map((t) => [t.legacyAddress!.toLowerCase(), t])
 );
 
-// ============================================================================
-// Token Lookup Functions
-// ============================================================================
-
-/**
- * Get a token by its wrapped (primary) address
- */
 export function getTokenByWrappedAddress(address: string): CategorizedToken | null {
 	return tokenByWrappedAddress.get(address.toLowerCase()) ?? null;
 }
 
-/**
- * Get a token by its unwrapped (underlying ERC4626 asset) address
- */
 export function getTokenByUnwrappedAddress(address: string): CategorizedToken | null {
 	return tokenByUnwrappedAddress.get(address.toLowerCase()) ?? null;
 }
 
-/**
- * Get a token by its legacy (old migration) address
- */
 export function getTokenByLegacyAddress(address: string): CategorizedToken | null {
 	return tokenByLegacyAddress.get(address.toLowerCase()) ?? null;
 }
 
 /**
- * Get a token by any of its addresses (wrapped, unwrapped, or legacy)
- * Useful for URL redirects and lookups where address type is unknown
+ * Get a token by any of its addresses (wrapped, unwrapped, or legacy).
+ * Useful for URL redirects and lookups where address type is unknown.
  */
 export function getTokenByAnyAddress(address: string): CategorizedToken | null {
 	const lowerAddress = address.toLowerCase();
@@ -387,45 +368,36 @@ export function getTokenByAnyAddress(address: string): CategorizedToken | null {
 	);
 }
 
-// ============================================================================
-// Address Type Checking Functions
-// ============================================================================
-
-/**
- * Check if an address is a wrapped (primary tradeable) token address
- */
 export function isWrappedTokenAddress(address: string): boolean {
 	return tokenByWrappedAddress.has(address.toLowerCase());
 }
 
-/**
- * Check if an address is an unwrapped (underlying) token address
- */
 export function isUnwrappedTokenAddress(address: string): boolean {
 	return tokenByUnwrappedAddress.has(address.toLowerCase());
 }
 
-/**
- * Check if an address is a legacy (old migration) token address
- */
 export function isLegacyTokenAddress(address: string): boolean {
 	return tokenByLegacyAddress.has(address.toLowerCase());
 }
 
-// ============================================================================
-// Bulk Address Getters
-// ============================================================================
-
-/**
- * Get all unwrapped token addresses as an array
- */
 export function getAllUnwrappedTokenAddresses(): string[] {
 	return TOKENS.filter((t) => t.unwrappedAddress).map((t) => t.unwrappedAddress!);
 }
 
-/**
- * Get all legacy token addresses as an array
- */
 export function getAllLegacyTokenAddresses(): string[] {
 	return TOKENS.filter((t) => t.legacyAddress).map((t) => t.legacyAddress!);
+}
+
+/** Get all address variants (wrapped, unwrapped, legacy) for a single token, lowercased. */
+export function getTokenAddressVariants(token: CategorizedToken): string[] {
+	return [
+		token.address,
+		...(token.unwrappedAddress ? [token.unwrappedAddress] : []),
+		...(token.legacyAddress ? [token.legacyAddress] : [])
+	].map((a) => a.toLowerCase());
+}
+
+/** Get all token addresses across all tokens (wrapped + unwrapped + legacy), lowercased. */
+export function getAllTokenAddressesFlat(): string[] {
+	return TOKENS.flatMap((t) => getTokenAddressVariants(t));
 }

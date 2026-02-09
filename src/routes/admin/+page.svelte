@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { networks } from '$lib/config/networks';
-	import { TOKENS } from '$lib/config/tokens';
+	import { TOKENS, getTokenByAnyAddress } from '$lib/config/tokens';
 	import { toDecimal } from '$lib/utils/tokenMath';
 
 	// Chart.js types
@@ -47,8 +47,27 @@
 	let tvlWalletChartCanvas: HTMLCanvasElement | null = null;
 	let tvlWalletChart: ChartInstance = null;
 
-	// Build set of valid token addresses (lowercase) from the token list (asset tokens only, not USDC)
-	const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
+	// Build set of valid token addresses (lowercase) from all address variants (wrapped, unwrapped, legacy)
+	const validTokenAddresses = new Set(
+		TOKENS.flatMap((t) => [
+			t.address.toLowerCase(),
+			...(t.unwrappedAddress ? [t.unwrappedAddress.toLowerCase()] : []),
+			...(t.legacyAddress ? [t.legacyAddress.toLowerCase()] : [])
+		])
+	);
+
+	// Map any address variant → canonical wrapped symbol (for grouping trades under one token)
+	const addressToCanonicalSymbol = new Map<string, string>(
+		TOKENS.flatMap((t): [string, string][] => [
+			[t.address.toLowerCase(), t.symbol],
+			...(t.unwrappedAddress
+				? ([[t.unwrappedAddress.toLowerCase(), t.symbol]] as [string, string][])
+				: []),
+			...(t.legacyAddress
+				? ([[t.legacyAddress.toLowerCase(), t.symbol]] as [string, string][])
+				: [])
+		])
+	);
 
 	// Section types (top-level navigation)
 	type Section = 'activity' | 'tvl';
@@ -1340,33 +1359,65 @@
 			}
 		}`;
 
-		const allTrades: Trade[] = [];
-		let skip = 0;
-		const first = 1000;
-		let hasMore = true;
+		// Fetch paginated trades from a single subgraph URL
+		async function fetchFromSubgraph(url: string): Promise<Trade[]> {
+			const trades: Trade[] = [];
+			let skip = 0;
+			const first = 1000;
+			let hasMore = true;
 
-		while (hasMore) {
-			const response = await fetch(network.orderbook_subgraph_url, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					query,
-					variables: { skip, first, timestampGt, timestampLt }
-				})
-			});
+			while (hasMore) {
+				try {
+					const response = await fetch(url, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							query,
+							variables: { skip, first, timestampGt, timestampLt }
+						})
+					});
 
-			if (!response.ok) throw new Error('Failed to fetch trades from subgraph');
+					if (!response.ok) {
+						console.warn(`[Trades] Subgraph returned ${response.status}: ${url}`);
+						break;
+					}
 
-			const data = await response.json();
-			if (data.errors) throw new Error(data.errors[0]?.message || 'GraphQL error');
+					const data = await response.json();
+					if (data.errors) {
+						console.warn(`[Trades] GraphQL error from ${url}:`, data.errors[0]?.message);
+						break;
+					}
 
-			const trades = data.data?.trades || [];
-			allTrades.push(...trades);
+					const batch = data.data?.trades || [];
+					trades.push(...batch);
 
-			if (trades.length < first) {
-				hasMore = false;
+					hasMore = batch.length >= first;
+					skip += first;
+				} catch (err) {
+					console.warn(`[Trades] Failed to fetch from ${url}:`, err);
+					break;
+				}
 			}
-			skip += first;
+			return trades;
+		}
+
+		// Query current + legacy orderbook subgraphs in parallel
+		const subgraphUrls = [
+			network.orderbook_subgraph_url,
+			...network.orderbook_subgraph_urls_inactive
+		];
+		const results = await Promise.all(subgraphUrls.map(fetchFromSubgraph));
+
+		// Merge and deduplicate by trade ID
+		const seenIds = new Set<string>();
+		const allTrades: Trade[] = [];
+		for (const batch of results) {
+			for (const trade of batch) {
+				if (!seenIds.has(trade.id)) {
+					seenIds.add(trade.id);
+					allTrades.push(trade);
+				}
+			}
 		}
 
 		// Filter to only trades involving our asset tokens paired with USDC
@@ -1496,11 +1547,16 @@
 			const ownerIsBuying = outputToken.address.toLowerCase() === USDC_ADDRESS;
 			const assetAddress = assetToken.address.toLowerCase();
 
+			// Resolve canonical symbol (groups unwrapped/legacy trades under wrapped symbol)
+			const canonicalSymbol = addressToCanonicalSymbol.get(assetAddress) ?? assetToken.symbol;
+
 			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
-				if (!tokenMap.has(assetAddress)) {
-					tokenMap.set(assetAddress, {
-						symbol: assetToken.symbol,
-						address: assetToken.address,
+				if (!tokenMap.has(canonicalSymbol)) {
+					// Look up the parent token config for the canonical address
+					const parentToken = getTokenByAnyAddress(assetAddress);
+					tokenMap.set(canonicalSymbol, {
+						symbol: canonicalSymbol,
+						address: parentToken?.address ?? assetToken.address,
 						bought: 0,
 						sold: 0,
 						net: 0,
@@ -1509,7 +1565,7 @@
 						usdcVolume: 0
 					});
 				}
-				const stats = tokenMap.get(assetAddress)!;
+				const stats = tokenMap.get(canonicalSymbol)!;
 				if (ownerIsBuying) {
 					stats.bought += assetAmount;
 				} else {
@@ -1576,7 +1632,7 @@
 				txHash,
 				wallet: primaryWallet,
 				accessCode: walletToCode.get(primaryWallet) || null,
-				tokenSymbol: assetToken.symbol,
+				tokenSymbol: canonicalSymbol,
 				direction: isBuying ? 'buy' : 'sell',
 				tokenAmount: assetAmount,
 				usdcAmount
@@ -1586,10 +1642,10 @@
 			const dateKey = timestamp.toISOString().split('T')[0];
 			dateSet.add(dateKey);
 
-			// Daily breakdown by token (deduped by txHash)
+			// Daily breakdown by token (deduped by txHash, grouped by canonical symbol)
 			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
-				tokenSymbolSet.add(assetToken.symbol);
-				addDailyStats(dailyTokenMap, seenTokenTx, dateKey, assetToken.symbol, txHash, usdcAmount);
+				tokenSymbolSet.add(canonicalSymbol);
+				addDailyStats(dailyTokenMap, seenTokenTx, dateKey, canonicalSymbol, txHash, usdcAmount);
 			}
 
 			// Daily breakdown by wallet and code (for registered users only, deduped by txHash)

@@ -375,6 +375,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Protected paths - require wallet registration (server-side enforcement)
 	if (requiresWalletRegistration(path)) {
+		// Allow admin session to bypass wallet registration for API routes
+		// (admin panel pages make fetch calls to these endpoints)
+		if (path.startsWith('/api/')) {
+			const token = cookies.get('auth-session');
+			const tsStr = cookies.get('auth-timestamp');
+			const timestamp = tsStr ? Number(tsStr) : NaN;
+			if (token && Number.isFinite(timestamp) && verifySessionToken(token, timestamp)) {
+				if (debug) console.log('[auth] admin session bypass for API', path);
+				const response = await resolve(event);
+				return addSecurityAndCorsHeaders(response, origin, path);
+			}
+		}
+
 		const walletAddress = getWalletFromRequest(cookies);
 
 		if (debug) {

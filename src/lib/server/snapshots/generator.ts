@@ -2,12 +2,13 @@
 // Single source of truth for generating snapshots - used by both preview and cron
 
 import type { BlockSnapshot } from './types';
-import { fetchAllTransfers, TOKEN_ADDRESSES } from './scraper';
-import { generateSnapshot, generateAllTokenSnapshots } from './processor';
+import { fetchAllTransfers, ALL_TOKEN_ADDRESSES } from './scraper';
+import { generateSnapshot } from './processor';
 import { fetchPythPricesAtTimestamp } from './pyth';
 import { fetchAllVaultHoldings } from './vaults';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { networks } from '$lib/config/networks';
+import { TOKENS, getTokenAddressVariants } from '$lib/config/tokens';
 
 /**
  * Get block timestamp from RPC
@@ -146,8 +147,8 @@ export async function getBlockNumberForTimestamp(targetTimestamp: number): Promi
 }
 
 /**
- * Generate a snapshot for a single token at a specific block
- * This is the core function - takes token address and block number, returns BlockSnapshot
+ * Generate a snapshot for a single token at a specific block.
+ * Combines holdings across wrapped, unwrapped, and legacy addresses into one snapshot.
  */
 export async function generateTokenSnapshot(
 	tokenAddress: string,
@@ -155,65 +156,88 @@ export async function generateTokenSnapshot(
 ): Promise<BlockSnapshot> {
 	const normalizedToken = tokenAddress.toLowerCase();
 
+	// Find the parent token config to get all address variants
+	const parentToken = TOKENS.find(
+		(t) =>
+			t.address.toLowerCase() === normalizedToken ||
+			t.unwrappedAddress?.toLowerCase() === normalizedToken ||
+			t.legacyAddress?.toLowerCase() === normalizedToken
+	);
+	const allAddresses = parentToken ? getTokenAddressVariants(parentToken) : [normalizedToken];
+	const wrappedAddress = parentToken?.address.toLowerCase() ?? normalizedToken;
+
 	// Get block timestamp
 	const timestamp = await getBlockTimestamp(blockNumber);
 
-	// Fetch transfers for this token up to target block
-	const transfers = await fetchAllTransfers(blockNumber, [normalizedToken]);
+	// Fetch transfers for all address variants up to target block
+	const transfers = await fetchAllTransfers(blockNumber, allAddresses);
 
-	// Fetch Pyth price at block timestamp (may be adjusted for market hours)
-	const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, [normalizedToken]);
-	const price = prices.get(normalizedToken);
+	// Fetch Pyth price at block timestamp (only need the wrapped address price)
+	const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, [wrappedAddress]);
+	const price = prices.get(wrappedAddress);
 
-	// Fetch vault holdings for this token at the specific block
-	const vaultHoldings = await fetchAllVaultHoldings([normalizedToken], blockNumber);
+	// Fetch vault holdings for all address variants at the specific block
+	const vaultHoldings = await fetchAllVaultHoldings(allAddresses, blockNumber);
 
 	// Fetch excluded wallets from KV
 	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 
-	// Generate the snapshot
+	// Generate snapshot combining all address variants into one
 	return generateSnapshot(
 		transfers,
 		blockNumber,
 		timestamp,
-		normalizedToken,
+		wrappedAddress,
 		price,
 		vaultHoldings,
 		excludedWallets,
-		priceTimestamp
+		priceTimestamp,
+		allAddresses
 	);
 }
 
 /**
- * Generate snapshots for all configured tokens at a specific block
+ * Generate snapshots for all configured tokens at a specific block.
  * More efficient than calling generateTokenSnapshot for each token
- * because it batches the transfer fetch and price fetch
+ * because it batches the transfer fetch and price fetch.
+ *
+ * Each token produces ONE snapshot combining holdings across
+ * wrapped, unwrapped, and legacy addresses.
  */
 export async function generateAllTokenSnapshots_v2(blockNumber: number): Promise<BlockSnapshot[]> {
 	// Get block timestamp
 	const timestamp = await getBlockTimestamp(blockNumber);
 
-	// Fetch all transfers up to target block (for all tokens)
-	const transfers = await fetchAllTransfers(blockNumber, TOKEN_ADDRESSES);
+	// Fetch all transfers for every address variant (wrapped + unwrapped + legacy)
+	const transfers = await fetchAllTransfers(blockNumber, ALL_TOKEN_ADDRESSES);
 
-	// Fetch Pyth prices for all tokens at block timestamp (may be adjusted for market hours)
-	const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, TOKEN_ADDRESSES);
+	// Fetch Pyth prices — pass all addresses so the fan-out logic maps each to its feed
+	const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(
+		timestamp,
+		ALL_TOKEN_ADDRESSES
+	);
 
-	// Fetch vault holdings for all tokens at the specific block
-	const vaultHoldings = await fetchAllVaultHoldings(TOKEN_ADDRESSES, blockNumber);
+	// Fetch vault holdings for all address variants
+	const vaultHoldings = await fetchAllVaultHoldings(ALL_TOKEN_ADDRESSES, blockNumber);
 
 	// Fetch excluded wallets from KV
 	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 
-	// Generate snapshots for all tokens
-	return generateAllTokenSnapshots(
-		transfers,
-		blockNumber,
-		timestamp,
-		TOKEN_ADDRESSES,
-		prices,
-		vaultHoldings,
-		excludedWallets,
-		priceTimestamp
-	);
+	// Generate ONE snapshot per canonical token, combining all address variants
+	return TOKENS.map((token) => {
+		const wrappedAddr = token.address.toLowerCase();
+		const allAddrs = getTokenAddressVariants(token);
+
+		return generateSnapshot(
+			transfers,
+			blockNumber,
+			timestamp,
+			wrappedAddr,
+			prices.get(wrappedAddr),
+			vaultHoldings,
+			excludedWallets,
+			priceTimestamp,
+			allAddrs
+		);
+	});
 }
