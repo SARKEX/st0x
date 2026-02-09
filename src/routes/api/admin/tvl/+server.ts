@@ -14,6 +14,8 @@ import { list } from '@vercel/blob';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { TOKENS } from '$lib/config/tokens';
 import { env } from '$env/dynamic/private';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 // Build token symbol map
 const tokenSymbols = TOKENS.map((t) => t.symbol);
@@ -364,7 +366,14 @@ async function calculateSimpleTvlAtBlock(
 	};
 }
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, cookies, request }) => {
+	if (!isAdminAuthenticated(cookies)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-tvl');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	try {
 		const limitParam = url.searchParams.get('limit');
 		const parsedLimit = limitParam ? parseInt(limitParam) : 90;

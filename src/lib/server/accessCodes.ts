@@ -27,6 +27,12 @@ export interface RegisteredWallet {
 	registeredAt: string;
 }
 
+interface AccessCodeValidation {
+	valid: boolean;
+	reason?: string;
+	remaining?: number;
+}
+
 // In-memory fallback for development
 const devStore = {
 	codes: new Map<string, AccessCode>(),
@@ -156,20 +162,7 @@ export async function validateAccessCode(
 		return { valid: false, reason: 'Invalid access code' };
 	}
 
-	// Check expiration
-	if (accessCode.expiresAt && new Date(accessCode.expiresAt) < new Date()) {
-		return { valid: false, reason: 'Access code has expired' };
-	}
-
-	// Check usage limit
-	if (accessCode.maxUses !== null && accessCode.currentUses >= accessCode.maxUses) {
-		return { valid: false, reason: 'Access code has reached maximum uses' };
-	}
-
-	const remaining =
-		accessCode.maxUses !== null ? accessCode.maxUses - accessCode.currentUses : undefined;
-
-	return { valid: true, remaining };
+	return getAccessCodeValidation(accessCode);
 }
 
 export async function incrementCodeUsage(code: string): Promise<void> {
@@ -341,20 +334,158 @@ export async function processRegistration(
 		return { success: false, error: 'Signature verification failed' };
 	}
 
-	// 2. Check if wallet already registered
-	const alreadyRegistered = await isWalletRegistered(address);
-	if (alreadyRegistered) {
+	const kv = await getKv();
+	if (!kv) {
+		return processRegistrationInMemory(address, code);
+	}
+
+	return processRegistrationWithRedis(address, code);
+}
+
+function getAccessCodeValidation(accessCode: AccessCode): AccessCodeValidation {
+	// Check expiration
+	if (accessCode.expiresAt && new Date(accessCode.expiresAt) < new Date()) {
+		return { valid: false, reason: 'Access code has expired' };
+	}
+
+	// Check usage limit
+	if (accessCode.maxUses !== null && accessCode.currentUses >= accessCode.maxUses) {
+		return { valid: false, reason: 'Access code has reached maximum uses' };
+	}
+
+	const remaining =
+		accessCode.maxUses !== null ? accessCode.maxUses - accessCode.currentUses : undefined;
+
+	return { valid: true, remaining };
+}
+
+function parseAccessCodeJson(raw: string): AccessCode | null {
+	try {
+		return JSON.parse(raw) as AccessCode;
+	} catch {
+		return null;
+	}
+}
+
+function parseCodeWalletsJson(raw: string | null): string[] {
+	if (!raw) return [];
+	try {
+		const parsed = JSON.parse(raw) as unknown;
+		return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
+	} catch {
+		return [];
+	}
+}
+
+async function processRegistrationWithRedis(
+	address: string,
+	code: string
+): Promise<RegistrationResult> {
+	const normalizedAddress = address.toLowerCase();
+	const normalizedCode = code.trim().toUpperCase();
+	const walletKey = KV_KEYS.wallet(normalizedAddress);
+	const codeKey = KV_KEYS.accessCode(normalizedCode);
+	const codeWalletsKey = KV_KEYS.codeWallets(normalizedCode);
+	const kv = await getKv();
+
+	if (!kv) {
+		return processRegistrationInMemory(address, code);
+	}
+
+	for (let attempt = 0; attempt < 5; attempt++) {
+		await kv.watch([walletKey, codeKey, codeWalletsKey]);
+
+		const [existingWalletRaw, accessCodeRaw, codeWalletsRaw] = await Promise.all([
+			kv.get(walletKey),
+			kv.get(codeKey),
+			kv.get(codeWalletsKey)
+		]);
+
+		if (existingWalletRaw) {
+			await kv.unwatch();
+			return { success: false, error: 'Wallet is already registered' };
+		}
+
+		if (!accessCodeRaw) {
+			await kv.unwatch();
+			return { success: false, error: 'Invalid access code' };
+		}
+
+		const accessCode = parseAccessCodeJson(accessCodeRaw);
+		if (!accessCode) {
+			await kv.unwatch();
+			return { success: false, error: 'Invalid access code data' };
+		}
+
+		const validation = getAccessCodeValidation(accessCode);
+		if (!validation.valid) {
+			await kv.unwatch();
+			return { success: false, error: validation.reason };
+		}
+
+		const wallet: RegisteredWallet = {
+			address: normalizedAddress,
+			accessCode: normalizedCode,
+			registeredAt: new Date().toISOString()
+		};
+
+		const codeWallets = parseCodeWalletsJson(codeWalletsRaw);
+		if (!codeWallets.includes(normalizedAddress)) {
+			codeWallets.push(normalizedAddress);
+		}
+
+		accessCode.currentUses += 1;
+
+		const tx = kv.multi();
+		tx.set(walletKey, JSON.stringify(wallet));
+		tx.set(codeKey, JSON.stringify(accessCode));
+		tx.set(codeWalletsKey, JSON.stringify(codeWallets));
+
+		const result = await tx.exec();
+		if (result) {
+			return { success: true, wallet };
+		}
+	}
+
+	return {
+		success: false,
+		error: 'Registration conflicted with another request. Please retry.'
+	};
+}
+
+function processRegistrationInMemory(address: string, code: string): RegistrationResult {
+	const normalizedAddress = address.toLowerCase();
+	const normalizedCode = code.trim().toUpperCase();
+
+	if (devStore.wallets.has(normalizedAddress)) {
 		return { success: false, error: 'Wallet is already registered' };
 	}
 
-	// 3. Validate access code
-	const codeValidation = await validateAccessCode(code);
-	if (!codeValidation.valid) {
-		return { success: false, error: codeValidation.reason };
+	const accessCode = devStore.codes.get(normalizedCode);
+	if (!accessCode) {
+		return { success: false, error: 'Invalid access code' };
 	}
 
-	// 4. Register wallet
-	const wallet = await registerWallet(address, code);
+	const validation = getAccessCodeValidation(accessCode);
+	if (!validation.valid) {
+		return { success: false, error: validation.reason };
+	}
+
+	const wallet: RegisteredWallet = {
+		address: normalizedAddress,
+		accessCode: normalizedCode,
+		registeredAt: new Date().toISOString()
+	};
+
+	devStore.wallets.set(normalizedAddress, wallet);
+	const existing = devStore.codeWallets.get(normalizedCode) || [];
+	if (!existing.includes(normalizedAddress)) {
+		existing.push(normalizedAddress);
+		devStore.codeWallets.set(normalizedCode, existing);
+	}
+
+	accessCode.currentUses += 1;
+	devStore.codes.set(normalizedCode, accessCode);
 
 	return { success: true, wallet };
 }

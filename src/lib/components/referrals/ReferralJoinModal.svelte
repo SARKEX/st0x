@@ -6,7 +6,7 @@
 		showReferralJoinModal,
 		showReferralDashboardModal,
 		joinReferralProgramme,
-		createReferralSignMessage,
+		requestReferralJoinChallenge,
 		fetchReferralProfile
 	} from '$lib/stores/referralStore';
 	import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
@@ -62,11 +62,14 @@
 		error = '';
 
 		try {
-			// Create message to sign
-			const message = createReferralSignMessage($walletAddress);
+			const challenge = await requestReferralJoinChallenge($walletAddress);
+			if (!challenge.success || !challenge.message || !challenge.nonce) {
+				error = challenge.error || 'Failed to issue referral challenge';
+				return;
+			}
 
 			// Request signature from wallet
-			const signature = await signMessage(message);
+			const signature = await signMessage(challenge.message);
 
 			// Join the referral programme
 			const result = await joinReferralProgramme(
@@ -74,7 +77,7 @@
 				telegramHandle.trim(),
 				nickname.trim(),
 				signature,
-				message
+				challenge.nonce
 			);
 
 			if (result.success) {

@@ -91,13 +91,28 @@ export async function validateCode(code: string): Promise<{ valid: boolean; reas
 	}
 }
 
-// Create the message for signing
-export function createSignMessage(address: string, code: string): string {
-	return `Sign to verify wallet ownership for st0x rewards.
+export async function requestAccessRegistrationChallenge(
+	address: string,
+	code: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	if (!browser) return { success: false, error: 'Not in browser' };
 
-Wallet: ${address}
-Access Code: ${code}
-Timestamp: ${Date.now()}`;
+	try {
+		const res = await fetch('/api/access/challenge', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ address, code })
+		});
+		const data = await res.json();
+
+		if (data.success && data.nonce && data.message) {
+			return { success: true, nonce: data.nonce, message: data.message };
+		}
+
+		return { success: false, error: data.error || 'Failed to issue registration challenge' };
+	} catch {
+		return { success: false, error: 'Network error' };
+	}
 }
 
 // Register wallet with access code (and optional referral code)
@@ -105,7 +120,7 @@ export async function registerWallet(
 	address: string,
 	code: string,
 	signature: string,
-	message: string,
+	challengeNonce: string,
 	referralCode?: string
 ): Promise<{ success: boolean; error?: string; referralLinked?: boolean }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
@@ -118,7 +133,7 @@ export async function registerWallet(
 				address,
 				code,
 				signature,
-				message,
+				challengeNonce,
 				referralCode: referralCode || undefined
 			})
 		});

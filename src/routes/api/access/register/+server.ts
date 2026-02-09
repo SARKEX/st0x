@@ -5,6 +5,7 @@ import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
 import { cacheDelete } from '$lib/server/cache';
 import { linkReferredWallet, isValidReferralCode } from '$lib/server/referrals';
+import { verifyAccessRegistrationChallenge } from '$lib/server/signatureChallenge';
 
 export const POST: RequestHandler = async ({ request }) => {
 	// Rate limiting - uses STRICT mode (fail-closed with in-memory fallback)
@@ -15,7 +16,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const audit = createAuditLogger(request);
 
 	try {
-		const { address, code, signature, message, referralCode } = await request.json();
+		const { address, code, signature, challengeNonce, referralCode } = await request.json();
 
 		// Validate required fields
 		if (!address || typeof address !== 'string') {
@@ -34,11 +35,30 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Signature required' }, { status: 400 });
 		}
 
-		if (!message || typeof message !== 'string') {
-			return json({ error: 'Message required' }, { status: 400 });
+		if (!challengeNonce || typeof challengeNonce !== 'string') {
+			return json({ error: 'Challenge nonce required' }, { status: 400 });
 		}
 
-		const result = await processRegistration(address, code, signature as `0x${string}`, message);
+		const challenge = await verifyAccessRegistrationChallenge(address, challengeNonce, code);
+		if (!challenge.valid || !challenge.message) {
+			await audit.logFailure(
+				'WALLET_REGISTRATION',
+				{ code: code.toUpperCase() },
+				challenge.error || 'Invalid registration challenge',
+				{ walletAddress: address }
+			);
+			return json(
+				{ success: false, error: challenge.error || 'Invalid registration challenge' },
+				{ status: 400 }
+			);
+		}
+
+		const result = await processRegistration(
+			address,
+			code,
+			signature as `0x${string}`,
+			challenge.message
+		);
 
 		if (result.success) {
 			// Invalidate the access check cache for this wallet

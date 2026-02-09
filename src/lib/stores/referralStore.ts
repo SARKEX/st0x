@@ -46,6 +46,50 @@ export const showReferralLeaderboardModal = writable(false);
 // Derived stores
 export const hasReferralProfile = derived(referralProfile, ($profile) => $profile !== null);
 
+type ReferralChallengeAction = 'join' | 'update_nickname';
+
+async function requestReferralChallenge(
+	address: string,
+	action: ReferralChallengeAction,
+	nickname?: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	if (!browser) return { success: false, error: 'Not in browser' };
+
+	try {
+		const response = await fetch('/api/referrals/challenge', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				address,
+				action,
+				nickname: nickname || undefined
+			})
+		});
+		const data = await response.json();
+
+		if (data.success && data.nonce && data.message) {
+			return { success: true, nonce: data.nonce, message: data.message };
+		}
+
+		return { success: false, error: data.error || 'Failed to issue referral challenge' };
+	} catch (err) {
+		return { success: false, error: err instanceof Error ? err.message : 'Network error' };
+	}
+}
+
+export async function requestReferralJoinChallenge(
+	address: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	return requestReferralChallenge(address, 'join');
+}
+
+export async function requestReferralNicknameUpdateChallenge(
+	address: string,
+	nickname: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	return requestReferralChallenge(address, 'update_nickname', nickname);
+}
+
 // Fetch referral profile and performance
 export async function fetchReferralProfile(walletAddress: string): Promise<void> {
 	if (!browser || !walletAddress) return;
@@ -83,7 +127,7 @@ export async function joinReferralProgramme(
 	telegramHandle: string,
 	nickname: string,
 	signature: string,
-	message: string
+	challengeNonce: string
 ): Promise<{ success: boolean; referralCode?: string; error?: string }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
 
@@ -96,7 +140,7 @@ export async function joinReferralProgramme(
 				telegramHandle,
 				nickname,
 				signature,
-				message
+				challengeNonce
 			})
 		});
 
@@ -161,7 +205,7 @@ export async function updateReferralNickname(
 	walletAddress: string,
 	newNickname: string,
 	signature: string,
-	message: string
+	challengeNonce: string
 ): Promise<{ success: boolean; error?: string }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
 
@@ -173,7 +217,7 @@ export async function updateReferralNickname(
 				walletAddress,
 				nickname: newNickname,
 				signature,
-				message
+				challengeNonce
 			})
 		});
 
@@ -197,23 +241,6 @@ export async function updateReferralNickname(
 			error: err instanceof Error ? err.message : 'Network error'
 		};
 	}
-}
-
-// Create message for signing nickname update
-export function createNicknameUpdateSignMessage(address: string, newNickname: string): string {
-	return `Sign to update your st0x referral nickname.
-
-Wallet: ${address}
-New Nickname: ${newNickname}
-Timestamp: ${Date.now()}`;
-}
-
-// Create the message for signing to join the programme
-export function createReferralSignMessage(address: string): string {
-	return `Sign to join the st0x referral programme.
-
-Wallet: ${address}
-Timestamp: ${Date.now()}`;
 }
 
 // Format referral code for display
