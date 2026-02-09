@@ -86,9 +86,7 @@ export function mergeVaultHoldings(
 	vaultHoldings: VaultHolding[],
 	tokenAddresses: string | string[]
 ): Map<string, bigint> {
-	const addressSet = new Set(
-		(Array.isArray(tokenAddresses) ? tokenAddresses : [tokenAddresses]).map((a) => a.toLowerCase())
-	);
+	const addressSet = new Set(Array.isArray(tokenAddresses) ? tokenAddresses : [tokenAddresses]);
 
 	// Filter vault holdings for these token addresses
 	const tokenVaults = vaultHoldings.filter((v) => addressSet.has(v.tokenAddress));

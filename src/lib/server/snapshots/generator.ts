@@ -8,7 +8,7 @@ import { fetchPythPricesAtTimestamp } from './pyth';
 import { fetchAllVaultHoldings } from './vaults';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { networks } from '$lib/config/networks';
-import { TOKENS, getTokenAddressVariants } from '$lib/config/tokens';
+import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
 
 /**
  * Get block timestamp from RPC
@@ -157,12 +157,7 @@ export async function generateTokenSnapshot(
 	const normalizedToken = tokenAddress.toLowerCase();
 
 	// Find the parent token config to get all address variants
-	const parentToken = TOKENS.find(
-		(t) =>
-			t.address.toLowerCase() === normalizedToken ||
-			t.unwrappedAddress?.toLowerCase() === normalizedToken ||
-			t.legacyAddress?.toLowerCase() === normalizedToken
-	);
+	const parentToken = getTokenByAnyAddress(normalizedToken);
 	const allAddresses = parentToken ? getTokenAddressVariants(parentToken) : [normalizedToken];
 	const wrappedAddress = parentToken?.address.toLowerCase() ?? normalizedToken;
 

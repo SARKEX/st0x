@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { networks } from '$lib/config/networks';
-	import { TOKENS, getTokenByAnyAddress } from '$lib/config/tokens';
+	import { TOKENS, getTokenByAnyAddress, getTokenAddressVariants } from '$lib/config/tokens';
 	import { toDecimal } from '$lib/utils/tokenMath';
 
 	// Chart.js types
@@ -48,25 +48,13 @@
 	let tvlWalletChart: ChartInstance = null;
 
 	// Build set of valid token addresses (lowercase) from all address variants (wrapped, unwrapped, legacy)
-	const validTokenAddresses = new Set(
-		TOKENS.flatMap((t) => [
-			t.address.toLowerCase(),
-			...(t.unwrappedAddress ? [t.unwrappedAddress.toLowerCase()] : []),
-			...(t.legacyAddress ? [t.legacyAddress.toLowerCase()] : [])
-		])
-	);
+	const validTokenAddresses = new Set(TOKENS.flatMap(getTokenAddressVariants));
 
 	// Map any address variant → canonical wrapped symbol (for grouping trades under one token)
 	const addressToCanonicalSymbol = new Map<string, string>(
-		TOKENS.flatMap((t): [string, string][] => [
-			[t.address.toLowerCase(), t.symbol],
-			...(t.unwrappedAddress
-				? ([[t.unwrappedAddress.toLowerCase(), t.symbol]] as [string, string][])
-				: []),
-			...(t.legacyAddress
-				? ([[t.legacyAddress.toLowerCase(), t.symbol]] as [string, string][])
-				: [])
-		])
+		TOKENS.flatMap((t): [string, string][] =>
+			getTokenAddressVariants(t).map((addr) => [addr, t.symbol])
+		)
 	);
 
 	// Section types (top-level navigation)
