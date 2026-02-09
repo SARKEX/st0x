@@ -1,7 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
-import { issueAccessRegistrationChallenge } from '$lib/server/signatureChallenge';
+import {
+	issueAccessRegistrationChallenge,
+	ChallengeStorageUnavailableError
+} from '$lib/server/signatureChallenge';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const rateLimitResponse = await applyRateLimit(
@@ -30,7 +33,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			message: challenge.message,
 			expiresAt: challenge.expiresAt
 		});
-	} catch {
+	} catch (error) {
+		if (error instanceof ChallengeStorageUnavailableError) {
+			return json({ error: error.message }, { status: 503 });
+		}
+
 		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };

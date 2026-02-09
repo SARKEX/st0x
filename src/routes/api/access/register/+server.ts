@@ -1,11 +1,17 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { processRegistration } from '$lib/server/accessCodes';
+import {
+	processRegistration,
+	REGISTRATION_SERVICE_UNAVAILABLE_ERROR
+} from '$lib/server/accessCodes';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
 import { cacheDelete } from '$lib/server/cache';
 import { linkReferredWallet, isValidReferralCode } from '$lib/server/referrals';
-import { verifyAccessRegistrationChallenge } from '$lib/server/signatureChallenge';
+import {
+	verifyAccessRegistrationChallenge,
+	ChallengeStorageUnavailableError
+} from '$lib/server/signatureChallenge';
 
 export const POST: RequestHandler = async ({ request }) => {
 	// Rate limiting - uses STRICT mode (fail-closed with in-memory fallback)
@@ -106,8 +112,16 @@ export const POST: RequestHandler = async ({ request }) => {
 			{ walletAddress: address }
 		);
 
+		if (result.error === REGISTRATION_SERVICE_UNAVAILABLE_ERROR) {
+			return json({ success: false, error: result.error }, { status: 503 });
+		}
+
 		return json({ success: false, error: result.error }, { status: 400 });
-	} catch {
+	} catch (error) {
+		if (error instanceof ChallengeStorageUnavailableError) {
+			return json({ error: error.message }, { status: 503 });
+		}
+
 		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };

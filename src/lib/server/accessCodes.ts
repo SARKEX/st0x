@@ -33,6 +33,8 @@ interface AccessCodeValidation {
 	remaining?: number;
 }
 
+export const REGISTRATION_SERVICE_UNAVAILABLE_ERROR = 'Registration service unavailable';
+
 // In-memory fallback for development
 const devStore = {
 	codes: new Map<string, AccessCode>(),
@@ -336,6 +338,9 @@ export async function processRegistration(
 
 	const kv = await getKv();
 	if (!kv) {
+		if (process.env.NODE_ENV === 'production') {
+			return { success: false, error: REGISTRATION_SERVICE_UNAVAILABLE_ERROR };
+		}
 		return processRegistrationInMemory(address, code);
 	}
 
@@ -389,6 +394,9 @@ async function processRegistrationWithRedis(
 	const kv = await getKv();
 
 	if (!kv) {
+		if (process.env.NODE_ENV === 'production') {
+			return { success: false, error: REGISTRATION_SERVICE_UNAVAILABLE_ERROR };
+		}
 		return processRegistrationInMemory(address, code);
 	}
 

@@ -10,7 +10,10 @@ import {
 import { isWalletRegistered } from '$lib/server/accessCodes';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
-import { verifyReferralJoinChallenge } from '$lib/server/signatureChallenge';
+import {
+	verifyReferralJoinChallenge,
+	ChallengeStorageUnavailableError
+} from '$lib/server/signatureChallenge';
 
 export const POST: RequestHandler = async ({ request }) => {
 	// Rate limiting - use strict mode for registration-like endpoints
@@ -145,6 +148,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			nickname: result.profile!.nickname
 		});
 	} catch (error) {
+		if (error instanceof ChallengeStorageUnavailableError) {
+			return json({ success: false, error: error.message }, { status: 503 });
+		}
+
 		console.error('[Referral Join] Error:', error);
 		return json({ success: false, error: 'Invalid request body' }, { status: 400 });
 	}

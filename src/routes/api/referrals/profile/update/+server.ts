@@ -7,7 +7,10 @@ import {
 } from '$lib/server/referrals';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
-import { verifyReferralNicknameUpdateChallenge } from '$lib/server/signatureChallenge';
+import {
+	verifyReferralNicknameUpdateChallenge,
+	ChallengeStorageUnavailableError
+} from '$lib/server/signatureChallenge';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const rateLimitResponse = await applyRateLimit(
@@ -78,6 +81,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return json({ success: true, profile: result.profile });
 	} catch (error) {
+		if (error instanceof ChallengeStorageUnavailableError) {
+			return json({ success: false, error: error.message }, { status: 503 });
+		}
+
 		console.error('[Referral Update API] Error:', error);
 		return json(
 			{ success: false, error: error instanceof Error ? error.message : 'Unknown error' },

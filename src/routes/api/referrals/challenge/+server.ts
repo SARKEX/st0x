@@ -3,7 +3,8 @@ import type { RequestHandler } from './$types';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import {
 	issueReferralJoinChallenge,
-	issueReferralNicknameUpdateChallenge
+	issueReferralNicknameUpdateChallenge,
+	ChallengeStorageUnavailableError
 } from '$lib/server/signatureChallenge';
 import { isValidNickname } from '$lib/server/referrals';
 
@@ -47,7 +48,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		return json({ success: false, error: 'Invalid challenge action' }, { status: 400 });
-	} catch {
+	} catch (error) {
+		if (error instanceof ChallengeStorageUnavailableError) {
+			return json({ success: false, error: error.message }, { status: 503 });
+		}
+
 		return json({ success: false, error: 'Invalid request body' }, { status: 400 });
 	}
 };

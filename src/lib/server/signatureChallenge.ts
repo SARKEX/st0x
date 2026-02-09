@@ -2,6 +2,14 @@ import crypto from 'crypto';
 import { getKv } from './kv';
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const MAX_IN_MEMORY_CHALLENGES = 5000;
+const ATOMIC_GET_DEL_SCRIPT = `
+	local value = redis.call('GET', KEYS[1])
+	if value then
+		redis.call('DEL', KEYS[1])
+	end
+	return value
+`;
 
 export type SignatureChallengePurpose =
 	| 'access_register'
@@ -32,6 +40,13 @@ interface ChallengeValidationResult {
 
 const inMemoryChallenges = new Map<string, SignatureChallengeRecord>();
 
+export class ChallengeStorageUnavailableError extends Error {
+	constructor(message: string = 'Challenge storage unavailable') {
+		super(message);
+		this.name = 'ChallengeStorageUnavailableError';
+	}
+}
+
 function normalizeAddress(address: string): string {
 	return address.toLowerCase();
 }
@@ -42,6 +57,24 @@ function nowMs(): number {
 
 function generateNonce(): string {
 	return crypto.randomBytes(16).toString('hex');
+}
+
+function isProductionRuntime(): boolean {
+	return process.env.NODE_ENV === 'production';
+}
+
+function pruneInMemoryChallenges(now: number = nowMs()): void {
+	for (const [key, record] of inMemoryChallenges.entries()) {
+		if (record.expiresAt <= now) {
+			inMemoryChallenges.delete(key);
+		}
+	}
+
+	while (inMemoryChallenges.size > MAX_IN_MEMORY_CHALLENGES) {
+		const oldestKey = inMemoryChallenges.keys().next().value;
+		if (!oldestKey) break;
+		inMemoryChallenges.delete(oldestKey);
+	}
 }
 
 function keyForChallenge(
@@ -97,6 +130,11 @@ async function storeChallenge(record: SignatureChallengeRecord): Promise<void> {
 		return;
 	}
 
+	if (isProductionRuntime()) {
+		throw new ChallengeStorageUnavailableError();
+	}
+
+	pruneInMemoryChallenges(record.issuedAt);
 	inMemoryChallenges.set(key, record);
 }
 
@@ -114,11 +152,13 @@ async function consumeChallenge(
 		// Prefer GETDEL for atomic one-time challenge consumption.
 		if ('getDel' in client && typeof client.getDel === 'function') {
 			raw = await client.getDel(key);
+		} else if ('eval' in client && typeof client.eval === 'function') {
+			const result = await client.eval(ATOMIC_GET_DEL_SCRIPT, { keys: [key] });
+			raw = typeof result === 'string' ? result : null;
 		} else {
-			raw = await client.get(key);
-			if (raw) {
-				await client.del(key);
-			}
+			throw new ChallengeStorageUnavailableError(
+				'Challenge storage client does not support atomic challenge consumption'
+			);
 		}
 
 		if (!raw) return null;
@@ -130,6 +170,11 @@ async function consumeChallenge(
 		}
 	}
 
+	if (isProductionRuntime()) {
+		throw new ChallengeStorageUnavailableError();
+	}
+
+	pruneInMemoryChallenges();
 	const record = inMemoryChallenges.get(key);
 	if (!record) return null;
 	inMemoryChallenges.delete(key);
