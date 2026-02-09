@@ -236,7 +236,7 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:PPLT',
 		tradingViewMarket: 'america',
 		limitOrders: []
-	},
+	}
 	// {
 	// 	chainId: base.id,
 	// 	address: '0xF4f8c66085910d583c01f3b4e44Bf731D4e2c565',

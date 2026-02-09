@@ -588,10 +588,7 @@
 								<div class="flex-1 text-right">
 									<span class="text-xl font-medium text-white">
 										{parsedSwapAmount > 0
-											? formatAmountDisplay(
-													swapAmount,
-													currentMapping?.newToken.decimals ?? 6
-												)
+											? formatAmountDisplay(swapAmount, currentMapping?.newToken.decimals ?? 6)
 											: '0'}
 									</span>
 								</div>
