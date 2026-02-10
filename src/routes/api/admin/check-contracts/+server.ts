@@ -3,8 +3,21 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getPoolType, type PoolType } from '$lib/server/snapshots/pool-discovery';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
+	if (!isAdminAuthenticated(cookies)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-check-contracts'
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
 	try {
 		const { addresses } = await request.json();
 

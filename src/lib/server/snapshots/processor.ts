@@ -178,10 +178,20 @@ export function generateSnapshot(
 	const totalSupply = result.totalSupply;
 	let balances = result.balances;
 
-	// Always remove the orderbook contract balance - it's not a real holder
-	// Tokens in the orderbook are held in vaults owned by users
-	const orderbookAddr = ORDERBOOK_ADDRESS.toLowerCase();
-	balances.delete(orderbookAddr);
+	// Always remove orderbook contract balances - they're not real holders.
+	// Token balances in orderbooks are re-attributed to vault owners via vaultHoldings below.
+	const orderbookAddresses = new Set<string>([ORDERBOOK_ADDRESS.toLowerCase()]);
+	if (vaultHoldings && vaultHoldings.length > 0) {
+		const tokenAddressSet = new Set(addresses.map((a) => a.toLowerCase()));
+		for (const vault of vaultHoldings) {
+			if (tokenAddressSet.has(vault.tokenAddress.toLowerCase())) {
+				orderbookAddresses.add(vault.orderbookAddress.toLowerCase());
+			}
+		}
+	}
+	for (const orderbookAddress of orderbookAddresses) {
+		balances.delete(orderbookAddress);
+	}
 
 	// Remove token contract addresses from balances.
 	// When combining wrapped + unwrapped + legacy, the wrapped contract holds

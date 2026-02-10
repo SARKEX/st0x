@@ -1,20 +1,9 @@
 // API endpoint to get referral code data with associated wallets
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verifySessionToken } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { listAccessCodes, getWalletsByCode } from '$lib/server/accessCodes';
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 interface ReferralCodeData {
 	code: string;
@@ -23,8 +12,11 @@ interface ReferralCodeData {
 	createdAt: string;
 }
 
-export const GET: RequestHandler = async ({ cookies }) => {
-	if (!isAuthenticated(cookies)) {
+export const GET: RequestHandler = async ({ cookies, request }) => {
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-referrals');
+	if (rateLimitResponse) return rateLimitResponse;
+
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

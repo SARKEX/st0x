@@ -153,7 +153,7 @@
 					<!-- Dynamic authenticated user -->
 					<div class="account-menu-container relative">
 						<button
-							class="flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black whitespace-nowrap hover:bg-yellow-400 transition-colors"
+							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-yellow-400"
 							on:click={toggleAccountMenu}
 						>
 							<span>My Dashboard</span>
@@ -162,28 +162,54 @@
 									? truncateEmail($dynamicSession.email)
 									: `...${$dynamicSession.walletAddress.slice(-4)}`}
 							</span>
-							<svg class="h-4 w-4 transition-transform" class:rotate-180={accountMenuOpen} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+							<svg
+								class="h-4 w-4 transition-transform"
+								class:rotate-180={accountMenuOpen}
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M19 9l-7 7-7-7"
+								/>
 							</svg>
 						</button>
 						{#if accountMenuOpen}
-							<div class="absolute right-0 top-full mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl z-[110]">
+							<div
+								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl"
+							>
 								<a
 									href="/dashboard"
-									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 hover:bg-white/10 transition-colors"
+									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
 									on:click={closeAccountMenu}
 								>
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+										/>
 									</svg>
 									Dashboard
 								</a>
 								<button
-									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-white/10 transition-colors"
-									on:click={() => { closeAccountMenu(); handleDisconnect(); }}
+									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+									on:click={() => {
+										closeAccountMenu();
+										handleDisconnect();
+									}}
 								>
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+										/>
 									</svg>
 									Log out
 								</button>
@@ -194,35 +220,61 @@
 					<!-- Wallet user (fully registered) -->
 					<div class="account-menu-container relative">
 						<button
-							class="flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black whitespace-nowrap hover:bg-yellow-400 transition-colors"
+							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-yellow-400"
 							on:click={toggleAccountMenu}
 						>
 							<span>My Dashboard</span>
 							<span class="text-[11px] font-normal text-yellow-800/70">
 								...{$walletAddress?.slice(-4)}
 							</span>
-							<svg class="h-4 w-4 transition-transform" class:rotate-180={accountMenuOpen} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+							<svg
+								class="h-4 w-4 transition-transform"
+								class:rotate-180={accountMenuOpen}
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M19 9l-7 7-7-7"
+								/>
 							</svg>
 						</button>
 						{#if accountMenuOpen}
-							<div class="absolute right-0 top-full mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl z-[110]">
+							<div
+								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl"
+							>
 								<a
 									href="/dashboard"
-									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 hover:bg-white/10 transition-colors"
+									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
 									on:click={closeAccountMenu}
 								>
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+										/>
 									</svg>
 									Dashboard
 								</a>
 								<button
-									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-white/10 transition-colors"
-									on:click={() => { closeAccountMenu(); handleDisconnect(); }}
+									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+									on:click={() => {
+										closeAccountMenu();
+										handleDisconnect();
+									}}
 								>
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+										/>
 									</svg>
 									Disconnect
 								</button>

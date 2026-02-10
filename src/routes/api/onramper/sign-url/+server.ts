@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import crypto from 'crypto';
 import { env } from '$env/dynamic/private';
 import { validateCsrfToken, getCsrfTokenFromRequest } from '$lib/server/csrf';
+import { applyTieredRateLimit } from '$lib/server/rateLimit';
 
 const ONRAMPER_SECRET_KEY = env.ONRAMPER_SECRET_KEY;
 
@@ -70,16 +71,28 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			return json({ success: false, error: 'Authentication required' }, { status: 401 });
 		}
 
-		if (authenticatedWallet.toLowerCase() !== walletAddress.toLowerCase()) {
+		const normalizedRequestedWallet = walletAddress.toLowerCase();
+		const normalizedAuthenticatedWallet = authenticatedWallet.toLowerCase();
+
+		if (normalizedAuthenticatedWallet !== normalizedRequestedWallet) {
 			console.warn('[Onramper] Wallet mismatch attempt', {
-				requested: walletAddress.toLowerCase(),
-				authenticated: authenticatedWallet.toLowerCase()
+				requested: normalizedRequestedWallet,
+				authenticated: normalizedAuthenticatedWallet
 			});
 			return json({ success: false, error: 'Wallet address mismatch' }, { status: 403 });
 		}
 
+		// Apply tiered rate limiting for signing requests
+		const rateLimitResponse = await applyTieredRateLimit(
+			request,
+			'onramper',
+			'onramper-sign-url',
+			normalizedAuthenticatedWallet
+		);
+		if (rateLimitResponse) return rateLimitResponse;
+
 		// Build the networkWallets value (must be lowercase network ID)
-		const networkWallets = `base:${walletAddress}`;
+		const networkWallets = `base:${normalizedRequestedWallet}`;
 
 		// Build the content to sign (only sensitive params, alphabetically sorted)
 		const signContent = buildSignContent({ networkWallets });

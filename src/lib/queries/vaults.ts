@@ -38,7 +38,15 @@ export function createSingleSftQuery(
 		const client = qc ?? queryClient;
 		if (!tokenId || !network) return undefined;
 		const allSfts = client.getQueryData<OffchainAssetReceiptVault[]>(['sfts', network.id]);
-		return allSfts?.find((v) => v.id.toLowerCase() === tokenId.toLowerCase());
+		const normalized = tokenId.toLowerCase();
+		// Match by id, address, or wrappedTokenContractAddress since the new subgraph
+		// uses the unwrapped address as the entity id
+		return allSfts?.find(
+			(v) =>
+				v.id.toLowerCase() === normalized ||
+				v.address?.toLowerCase() === normalized ||
+				(v as { wrappedTokenContractAddress?: string }).wrappedTokenContractAddress?.toLowerCase() === normalized
+		);
 	};
 
 	const getCachedTimestamp = (): number | undefined => {

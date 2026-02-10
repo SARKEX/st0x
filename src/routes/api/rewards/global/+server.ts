@@ -13,6 +13,7 @@ import {
 } from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
+import { computeProjectedDailyPoints } from '$lib/server/snapshots/points';
 
 interface RocketBoostTiersAchieved {
 	tier25: boolean;
@@ -128,11 +129,15 @@ async function computeGlobalRewardsData(): Promise<GlobalRewardsData> {
 		}
 	}
 
-	// Projection calculations
+	// Projection calculations — use last 3 days' rate if available
 	const daysElapsed = Math.max(1, Math.floor(snapshotCount / 2));
 	const currentDayOfMonth = now.getUTCDate();
 	const daysRemaining = daysInMonth - currentDayOfMonth + 1;
-	const avgDailyPoints = totalPoints / daysElapsed;
+	const avgDailyPoints = computeProjectedDailyPoints(
+		totalPoints,
+		daysElapsed,
+		monthlyData?.snapshotTotals ?? []
+	);
 	const projectedTotalPoints = totalPoints + avgDailyPoints * daysRemaining;
 	const projectedProgress =
 		rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;

@@ -223,7 +223,7 @@ async function fetchFromSubgraph(
  */
 export async function fetchAllTransfers(
 	untilBlock: number,
-	tokenAddresses: string[] = TOKEN_ADDRESSES
+	tokenAddresses: string[] = ALL_TOKEN_ADDRESSES
 ): Promise<Transfer[]> {
 	const subgraphUrls = [SFT_SUBGRAPH_URL, ...SFT_SUBGRAPH_URLS_LEGACY];
 

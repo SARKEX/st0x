@@ -258,8 +258,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 			// Orders should be visible regardless of which payment token is configured
 			const tokenAddresses = stockTokens.map((t) => t.address as `0x${string}`);
 
-			// Note: SDK types expect object with inputs/outputs but runtime expects array
-			(filters as unknown as { tokens: `0x${string}`[] }).tokens = tokenAddresses;
+			filters.tokens = { inputs: tokenAddresses, outputs: tokenAddresses };
 
 			const ordersResult = await client.getOrders([networkId], filters, page);
 
@@ -352,12 +351,11 @@ export async function fetchAndQuoteTokenOrders(
 
 	// Fetch orders for this specific token only
 	const tokenAddr = tokenAddress as `0x${string}`;
-	// Note: SDK types expect object with inputs/outputs but runtime expects array
-	const filters = {
+	const filters: GetOrdersFilters = {
 		active: true,
 		owners: [],
-		tokens: [tokenAddr]
-	} as GetOrdersFilters;
+		tokens: { inputs: [tokenAddr], outputs: [tokenAddr] }
+	};
 
 	const ordersResult = await client.getOrders([networkId], filters, 1);
 

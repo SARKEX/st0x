@@ -1,10 +1,18 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAdminAuthenticated } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { createReferralProfileForMigration } from '$lib/server/referrals';
 import { createAuditLogger } from '$lib/server/auditLog';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-referral-migrate'
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
 	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}

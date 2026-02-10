@@ -140,12 +140,19 @@ export function createEmptyMonthlyData(month: string): MonthlyPointsData {
 /**
  * Merge wallet points from a single block into monthly data
  * This is the single source of truth for accumulating points
+ *
+ * @param excludedWallets - Wallet addresses to exclude from the filtered snapshot total
+ * @returns The filtered snapshot total (excluding excluded wallets), for reuse in callers
  */
 export function mergeWalletPointsIntoMonthlyData(
 	monthlyData: MonthlyPointsData,
 	walletPoints: WalletPointsMap,
-	blockNumber: number
-): void {
+	blockNumber: number,
+	excludedWallets: Set<string> = new Set()
+): number {
+	let totalPointsAll = 0;
+	let totalPointsFiltered = 0;
+
 	for (const [walletAddress, walletData] of walletPoints) {
 		if (!monthlyData.wallets[walletAddress]) {
 			monthlyData.wallets[walletAddress] = {
@@ -172,12 +179,29 @@ export function mergeWalletPointsIntoMonthlyData(
 
 		// Update total points
 		walletMonthly.totalPoints += walletData.totalPoints;
+
+		// Accumulate snapshot totals: all wallets, and filtered (non-excluded) wallets
+		totalPointsAll += walletData.totalPoints;
+		if (!excludedWallets.has(walletAddress)) {
+			totalPointsFiltered += walletData.totalPoints;
+		}
 	}
+
+	// Record per-snapshot totals for projection calculations.
+	// totalPoints includes all wallets; totalPointsFiltered excludes excluded wallets.
+	if (!monthlyData.snapshotTotals) monthlyData.snapshotTotals = [];
+	monthlyData.snapshotTotals.push({
+		blockNumber,
+		totalPoints: totalPointsAll,
+		totalPointsFiltered
+	});
 
 	// Update metadata
 	monthlyData.snapshotCount += 1;
 	monthlyData.blockNumbers.push(blockNumber);
 	monthlyData.updatedAt = new Date().toISOString();
+
+	return totalPointsFiltered;
 }
 
 /**
@@ -221,8 +245,21 @@ export async function updateMonthlyPoints(
 	// Calculate points from this snapshot
 	const walletPoints = calculateWalletPointsFromSnapshots(snapshots);
 
-	// Merge into monthly data using shared function
-	mergeWalletPointsIntoMonthlyData(monthlyData, walletPoints, blockNumber);
+	// Collect excluded wallets across all token snapshots for this block
+	const excludedWallets = new Set<string>();
+	for (const snapshot of snapshots) {
+		for (const addr of snapshot.excludedWallets) {
+			excludedWallets.add(addr.toLowerCase());
+		}
+	}
+
+	// Merge into monthly data using shared function; returns filtered total (excluding excluded wallets)
+	const totalPointsAwarded = mergeWalletPointsIntoMonthlyData(
+		monthlyData,
+		walletPoints,
+		blockNumber,
+		excludedWallets
+	);
 
 	// Save updated data
 	await kvSet(KV_KEYS.monthlyPoints(month), monthlyData);
@@ -234,11 +271,6 @@ export async function updateMonthlyPoints(
 		monthsList.sort(); // Keep sorted
 		await kvSet(KV_KEYS.monthlyPointsList(), monthsList);
 	}
-
-	const totalPointsAwarded = Array.from(walletPoints.values()).reduce(
-		(sum, w) => sum + w.totalPoints,
-		0
-	);
 
 	console.log(
 		`[Points] Updated ${month}${isNewMonth ? ' (new month)' : ''}: ${
@@ -291,3 +323,6 @@ export function getWalletTokenPoints(
 ): number {
 	return walletData.tokens[tokenAddress.toLowerCase()]?.points ?? 0;
 }
+
+// Re-export shared projection helper so existing server-side imports keep working
+export { computeProjectedDailyPoints } from '$lib/utils/points';

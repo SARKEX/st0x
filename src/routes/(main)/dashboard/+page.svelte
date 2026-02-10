@@ -37,6 +37,8 @@
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
 	import { calculatePnL } from '$lib/utils/costBasis';
 	import { manualCostBasisStore, type ManualCostBasisEntry } from '$lib/stores/manualCostBasis';
+	import { derived } from 'svelte/store';
+	import { onDestroy } from 'svelte';
 	import transactionStore from '$lib/stores/transaction';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
@@ -276,287 +278,335 @@
 		closeCostBasisModal();
 	}
 
+	const QUERY_POLL_INTERVAL_MS = 300_000;
+	const QUERY_STALE_TIME_MS = 30_000;
+	const NETWORK_LOADING_DELAY_MS = 300;
+
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
+	let networkLoadingTimer: ReturnType<typeof setTimeout> | null = null;
+
 	// Watch for network changes and show loading state
-	$: if ($currentNetwork) {
-		isNetworkLoading = true;
-		setTimeout(() => {
+	$: {
+		if (networkLoadingTimer) {
+			clearTimeout(networkLoadingTimer);
+			networkLoadingTimer = null;
+		}
+
+		if ($currentNetwork) {
+			isNetworkLoading = true;
+			networkLoadingTimer = setTimeout(() => {
+				isNetworkLoading = false;
+				networkLoadingTimer = null;
+			}, NETWORK_LOADING_DELAY_MS);
+		} else {
 			isNetworkLoading = false;
-		}, 300);
+		}
 	}
+
+	onDestroy(() => {
+		if (networkLoadingTimer) {
+			clearTimeout(networkLoadingTimer);
+			networkLoadingTimer = null;
+		}
+	});
 
 	// User Vaults Query - centralized with 60s polling on dashboard
 	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 60_000);
 
 	// Query user's wallet holdings from SFTs - fetches balances via multicall (single RPC request)
 	// We query balances on WRAPPED token addresses (from TOKENS config) since that's what users trade
-	$: walletHoldingsQuery = createQuery({
-		queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
-		enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork && $wagmiConfig),
-		refetchOnMount: 'always', // Refetch when navigating to dashboard
-		refetchInterval: 300_000, // Poll every 5 minutes as backup
-		staleTime: 30_000, // Consider data fresh for 30 seconds
-		queryFn: async () => {
-			if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
+	const walletHoldingsQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, sfts, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $sfts, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
+				enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
+					const normalizedWalletAddress = $walletAddress.toLowerCase();
 
-			// Map subgraph SFTs to their wrapped token addresses from TOKENS config
-			// The subgraph returns unwrapped addresses, but we need to query wrapped token balances
-			const sftsWithWrappedAddresses = $sfts.map((sft) => {
-				const tokenConfig = getTokenByAnyAddress(sft.address);
-				return {
-					...sft,
-					wrappedAddress: tokenConfig?.address ?? sft.address // Use wrapped address if found
-				};
-			});
+					// Map subgraph SFTs to their wrapped token addresses from TOKENS config
+					// The subgraph returns unwrapped addresses, but we need to query wrapped token balances
+					const sftsWithWrappedAddresses = $sfts.map((sft) => {
+						const tokenConfig = getTokenByAnyAddress(sft.address);
+						return {
+							...sft,
+							wrappedAddress: tokenConfig?.address ?? sft.address // Use wrapped address if found
+						};
+					});
 
-			// Build multicall contracts array for all wrapped token balances
-			const contracts = sftsWithWrappedAddresses.map((sft) => ({
-				abi: erc20Abi,
-				address: sft.wrappedAddress as `0x${string}`,
-				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
-			}));
+					// Build multicall contracts array for all wrapped token balances
+					const contracts = sftsWithWrappedAddresses.map((sft) => ({
+						abi: erc20Abi,
+						address: sft.wrappedAddress as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
 
-			try {
-				// Single multicall for all token balances
-				const results = await readContracts($wagmiConfig, { contracts });
+					try {
+						// Single multicall for all token balances
+						const results = await readContracts($wagmiConfig, { contracts });
 
-				return sftsWithWrappedAddresses.map((sft, index) => {
-					const result = results[index];
-					let walletBalance = 0n;
+						return sftsWithWrappedAddresses.map((sft, index) => {
+							const result = results[index];
+							let walletBalance = 0n;
 
-					if (result.status === 'success') {
-						walletBalance = result.result as bigint;
-					} else {
-						// Fall back to subgraph data if multicall fails for this token
-						const userHolder = sft.tokenHolders.find(
-							(holder: { address: string }) =>
-								holder.address.toLowerCase() === $walletAddress!.toLowerCase()
-						);
-						walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
+							if (result.status === 'success') {
+								walletBalance = result.result as bigint;
+							} else {
+								// Fall back to subgraph data if multicall fails for this token
+								const userHolder = sft.tokenHolders.find(
+									(holder: { address: string }) =>
+										holder.address.toLowerCase() === normalizedWalletAddress
+								);
+								walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
+							}
+
+							// Use wrapped token info from config
+							const tokenConfig = getTokenByAnyAddress(sft.address);
+
+							return {
+								id: sft.id,
+								address: sft.wrappedAddress, // Use wrapped address
+								name: tokenConfig?.name ?? sft.name,
+								symbol: tokenConfig?.symbol ?? sft.symbol,
+								walletBalance,
+								decimals: 18
+							};
+						});
+					} catch (error) {
+						console.error('Multicall failed for wallet holdings:', error);
+						// Fall back to subgraph data for all tokens
+						return $sfts.map((sft) => {
+							const userHolder = sft.tokenHolders.find(
+								(holder: { address: string }) =>
+									holder.address.toLowerCase() === normalizedWalletAddress
+							);
+							const tokenConfig = getTokenByAnyAddress(sft.address);
+							return {
+								id: sft.id,
+								address: tokenConfig?.address ?? sft.address,
+								name: tokenConfig?.name ?? sft.name,
+								symbol: tokenConfig?.symbol ?? sft.symbol,
+								walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
+								decimals: 18
+							};
+						});
 					}
-
-					// Use wrapped token info from config
-					const tokenConfig = getTokenByAnyAddress(sft.address);
-
-					return {
-						id: sft.id,
-						address: sft.wrappedAddress, // Use wrapped address
-						name: tokenConfig?.name ?? sft.name,
-						symbol: tokenConfig?.symbol ?? sft.symbol,
-						walletBalance,
-						decimals: 18
-					};
-				});
-			} catch (e) {
-				console.error('Multicall failed for wallet holdings:', e);
-				// Fall back to subgraph data for all tokens
-				return $sfts.map((sft) => {
-					const userHolder = sft.tokenHolders.find(
-						(holder: { address: string }) =>
-							holder.address.toLowerCase() === $walletAddress!.toLowerCase()
-					);
-					const tokenConfig = getTokenByAnyAddress(sft.address);
-					return {
-						id: sft.id,
-						address: tokenConfig?.address ?? sft.address,
-						name: tokenConfig?.name ?? sft.name,
-						symbol: tokenConfig?.symbol ?? sft.symbol,
-						walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
-						decimals: 18
-					};
-				});
-			}
-		}
-	});
+				}
+			})
+		)
+	);
 
 	// Query USDC wallet balance via multicall
-	$: usdcBalanceQuery = createQuery({
-		queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
-		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
-		refetchOnMount: 'always', // Refetch when navigating to dashboard
-		refetchInterval: 300_000, // Poll every 5 minutes as backup
-		staleTime: 30_000, // Consider data fresh for 30 seconds
-		queryFn: async () => {
-			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-			if (paymentTokens.length === 0 || !$walletAddress) return [];
+	const usdcBalanceQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$currentNetwork || !$walletAddress || !$wagmiConfig) return [];
+					const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
+					if (paymentTokens.length === 0) return [];
 
-			// Build multicall contracts array
-			const contracts = paymentTokens.map((token) => ({
-				abi: erc20Abi,
-				address: token.address as `0x${string}`,
-				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
-			}));
+					const contracts = paymentTokens.map((token) => ({
+						abi: erc20Abi,
+						address: token.address as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
 
-			try {
-				const results = await readContracts($wagmiConfig, { contracts });
-
-				return paymentTokens
-					.map((token, index) => {
-						const result = results[index];
-						if (result.status === 'success') {
-							return {
-								id: token.address,
-								address: token.address,
-								name: token.name,
-								symbol: token.symbol,
-								walletBalance: result.result as bigint,
-								decimals: token.decimals
-							};
-						}
-						return null;
-					})
-					.filter((b): b is NonNullable<typeof b> => b !== null);
-			} catch (e) {
-				console.error('Multicall failed for USDC balance:', e);
-				return [];
-			}
-		}
-	});
+					try {
+						const results = await readContracts($wagmiConfig, { contracts });
+						return paymentTokens
+							.map((token, index) => {
+								const result = results[index];
+								if (result.status === 'success') {
+									return {
+										id: token.address,
+										address: token.address,
+										name: token.name,
+										symbol: token.symbol,
+										walletBalance: result.result as bigint,
+										decimals: token.decimals
+									};
+								}
+								return null;
+							})
+							.filter((balance): balance is NonNullable<typeof balance> => balance !== null);
+					} catch (error) {
+						console.error('Multicall failed for USDC balance:', error);
+						return [];
+					}
+				}
+			})
+		)
+	);
 
 	// Query native ETH balance
-	$: ethBalanceQuery = createQuery({
-		queryKey: ['ethWalletBalance', $walletAddress, $currentNetwork?.chainId],
-		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig),
-		refetchOnMount: 'always', // Refetch when navigating to dashboard
-		refetchInterval: 300_000, // Poll every 5 minutes as backup
-		staleTime: 30_000, // Consider data fresh for 30 seconds
-		queryFn: async () => {
-			if (!$walletAddress) return null;
-			try {
-				const balance = await getBalance($wagmiConfig, {
-					address: $walletAddress as `0x${string}`
-				});
-				return {
-					id: 'eth',
-					address: 'native',
-					name: 'Ethereum',
-					symbol: 'ETH',
-					walletBalance: balance.value,
-					decimals: 18
-				};
-			} catch (e) {
-				console.error('Failed to fetch ETH balance:', e);
-				return null;
-			}
-		}
-	});
+	const ethBalanceQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['ethWalletBalance', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$walletAddress || !$wagmiConfig) return null;
+					try {
+						const balance = await getBalance($wagmiConfig, {
+							address: $walletAddress as `0x${string}`
+						});
+						return {
+							id: 'eth',
+							address: 'native',
+							name: 'Ethereum',
+							symbol: 'ETH',
+							walletBalance: balance.value,
+							decimals: 18
+						};
+					} catch (error) {
+						console.error('Failed to fetch ETH balance:', error);
+						return null;
+					}
+				}
+			})
+		)
+	);
 
 	// Query old (legacy) token wallet balances for aggregation in dashboard holdings
-	$: oldTokenBalancesQuery = createQuery({
-		queryKey: ['dashboardOldTokenBalances', $walletAddress, $currentNetwork?.chainId],
-		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
-		refetchOnMount: 'always',
-		refetchInterval: 300_000,
-		staleTime: 30_000,
-		queryFn: async () => {
-			if (!$walletAddress || !$wagmiConfig) return [];
+	const oldTokenBalancesQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['dashboardOldTokenBalances', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$walletAddress || !$wagmiConfig) return [];
+					const oldTokenAddresses = getAllOldTokenAddresses();
 
-			const oldTokenAddresses = getAllOldTokenAddresses();
+					const contracts = oldTokenAddresses.map((address) => ({
+						abi: erc20Abi,
+						address: address as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
 
-			// Build multicall contracts for all old tokens
-			const contracts = oldTokenAddresses.map((address) => ({
-				abi: erc20Abi,
-				address: address as `0x${string}`,
-				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
-			}));
+					try {
+						const results = await readContracts($wagmiConfig, { contracts });
+						const tokens = oldTokenAddresses
+							.map((address, index) => {
+								const result = results[index];
+								if (result.status === 'success') {
+									const mapping = getMigrationMappingByAddress(address);
+									return {
+										address,
+										walletBalance: result.result as bigint,
+										symbol: mapping?.oldToken.symbol ?? 'Unknown',
+										name: mapping?.oldToken.name ?? 'Unknown',
+										decimals: mapping?.oldToken.decimals ?? 18,
+										newTokenAddress: mapping?.newToken.address ?? null
+									};
+								}
+								return null;
+							})
+							.filter(
+								(token): token is NonNullable<typeof token> =>
+									token !== null && token.walletBalance > 0n
+							);
 
-			try {
-				const results = await readContracts($wagmiConfig, { contracts });
-
-				const tokens = oldTokenAddresses
-					.map((address, index) => {
-						const result = results[index];
-						if (result.status === 'success') {
-							const mapping = getMigrationMappingByAddress(address);
-							return {
-								address,
-								walletBalance: result.result as bigint,
-								symbol: mapping?.oldToken.symbol ?? 'Unknown',
-								name: mapping?.oldToken.name ?? 'Unknown',
-								decimals: mapping?.oldToken.decimals ?? 18,
-								newTokenAddress: mapping?.newToken.address ?? null
-							};
-						}
-						return null;
-					})
-					.filter((b): b is NonNullable<typeof b> => b !== null && b.walletBalance > 0n);
-
-				// Deduplicate by address (defensive - prevents duplicate entries)
-				const seen = new Set<string>();
-				return tokens.filter((token) => {
-					const key = token.address.toLowerCase();
-					if (seen.has(key)) return false;
-					seen.add(key);
-					return true;
-				});
-			} catch (e) {
-				console.error('Multicall failed for old token balances:', e);
-				return [];
-			}
-		}
-	});
+						// Deduplicate by address (defensive - prevents duplicate entries)
+						const seen = new Set<string>();
+						return tokens.filter((token) => {
+							const key = token.address.toLowerCase();
+							if (seen.has(key)) return false;
+							seen.add(key);
+							return true;
+						});
+					} catch (error) {
+						console.error('Multicall failed for old token balances:', error);
+						return [];
+					}
+				}
+			})
+		)
+	);
 
 	// Query unwrapped token balances (underlying tokens of ERC4626 vaults)
-	$: unwrappedTokenBalancesQuery = createQuery({
-		queryKey: ['dashboardUnwrappedTokenBalances', $walletAddress, $currentNetwork?.chainId],
-		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
-		refetchOnMount: 'always',
-		refetchInterval: 300_000,
-		staleTime: 30_000,
-		queryFn: async () => {
-			if (!$walletAddress || !$wagmiConfig) return [];
+	const unwrappedTokenBalancesQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['dashboardUnwrappedTokenBalances', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$walletAddress || !$wagmiConfig) return [];
+					const unwrappedAddresses = getAllUnwrappedTokenAddresses();
 
-			const unwrappedAddresses = getAllUnwrappedTokenAddresses();
+					const contracts = unwrappedAddresses.map((address) => ({
+						abi: erc20Abi,
+						address: address as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
 
-			// Build multicall contracts for all unwrapped tokens
-			const contracts = unwrappedAddresses.map((address) => ({
-				abi: erc20Abi,
-				address: address as `0x${string}`,
-				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
-			}));
+					try {
+						const results = await readContracts($wagmiConfig, { contracts });
+						const tokens = unwrappedAddresses
+							.map((address, index) => {
+								const result = results[index];
+								if (result.status === 'success') {
+									const mapping = getWrappingMappingByUnwrappedAddress(address);
+									return {
+										address,
+										walletBalance: result.result as bigint,
+										symbol: mapping?.unwrappedToken.symbol ?? 'Unknown',
+										name: mapping?.unwrappedToken.name ?? 'Unknown',
+										decimals: mapping?.unwrappedToken.decimals ?? 18,
+										wrappedTokenAddress: mapping?.wrappedToken.address ?? null,
+										wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? null
+									};
+								}
+								return null;
+							})
+							.filter(
+								(token): token is NonNullable<typeof token> =>
+									token !== null && token.walletBalance > 0n
+							);
 
-			try {
-				const results = await readContracts($wagmiConfig, { contracts });
-
-				const tokens = unwrappedAddresses
-					.map((address, index) => {
-						const result = results[index];
-						if (result.status === 'success') {
-							const mapping = getWrappingMappingByUnwrappedAddress(address);
-							return {
-								address,
-								walletBalance: result.result as bigint,
-								symbol: mapping?.unwrappedToken.symbol ?? 'Unknown',
-								name: mapping?.unwrappedToken.name ?? 'Unknown',
-								decimals: mapping?.unwrappedToken.decimals ?? 18,
-								wrappedTokenAddress: mapping?.wrappedToken.address ?? null,
-								wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? null
-							};
-						}
-						return null;
-					})
-					.filter((b): b is NonNullable<typeof b> => b !== null && b.walletBalance > 0n);
-
-				// Deduplicate by address (defensive - prevents duplicate entries)
-				const seen = new Set<string>();
-				return tokens.filter((token) => {
-					const key = token.address.toLowerCase();
-					if (seen.has(key)) return false;
-					seen.add(key);
-					return true;
-				});
-			} catch (e) {
-				console.error('Multicall failed for unwrapped token balances:', e);
-				return [];
-			}
-		}
-	});
+						// Deduplicate by address (defensive - prevents duplicate entries)
+						const seen = new Set<string>();
+						return tokens.filter((token) => {
+							const key = token.address.toLowerCase();
+							if (seen.has(key)) return false;
+							seen.add(key);
+							return true;
+						});
+					} catch (error) {
+						console.error('Multicall failed for unwrapped token balances:', error);
+						return [];
+					}
+				}
+			})
+		)
+	);
 
 	// Combined portfolio: wallet + vaults (new wrapped tokens only)
 	$: portfolioHoldings = (() => {
@@ -835,13 +885,13 @@
 	})();
 
 	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, true);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 120_000);
 
-	// Trade activity for market orders - poll every 5 minutes, refetch on mount
-	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 300_000);
+	// Trade activity for market orders - poll every 10 minutes, refetch on mount
+	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 600_000);
 
-	// Cost basis query for P&L calculation - uses all-time trade history
-	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress, 300_000);
+	// Cost basis query for P&L calculation - one-shot (no polling, refreshes on window focus)
+	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
 
 	// Load manual cost basis entries when wallet changes
 	$: manualCostBasisStore.loadForWallet($walletAddress);

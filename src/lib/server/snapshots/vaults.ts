@@ -7,8 +7,11 @@ import { parseFloatHex } from '$lib/utils/tokenMath';
 
 const BATCH_SIZE = 1000;
 
-// Get orderbook subgraph URL from network config
-const ORDERBOOK_SUBGRAPH_URL = networks[0].orderbook_subgraph_url;
+// Get orderbook subgraph URLs from network config (current + inactive/legacy)
+const ORDERBOOK_SUBGRAPH_URLS = [
+	networks[0].orderbook_subgraph_url,
+	...(networks[0].orderbook_subgraph_urls_inactive ?? [])
+].filter(Boolean);
 
 // Get token addresses for filtering
 const TOKEN_ADDRESSES = TOKENS.map((t) => t.address.toLowerCase());
@@ -44,6 +47,7 @@ export interface VaultHolding {
  * @param blockNumber - If provided, queries vault state at this specific block
  */
 async function fetchVaults(
+	subgraphUrl: string,
 	skip: number,
 	tokenAddresses: string[],
 	blockNumber?: number
@@ -106,7 +110,7 @@ async function fetchVaults(
 		variables.blockNumber = blockNumber;
 	}
 
-	const response = await fetch(ORDERBOOK_SUBGRAPH_URL, {
+	const response = await fetch(subgraphUrl, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
@@ -141,6 +145,43 @@ async function fetchVaults(
 }
 
 /**
+ * Fetch all vault holdings from a single orderbook subgraph URL.
+ */
+async function fetchAllVaultHoldingsFromSubgraph(
+	subgraphUrl: string,
+	tokenAddresses: string[],
+	blockNumber?: number
+): Promise<VaultHolding[]> {
+	let skip = 0;
+	let hasMore = true;
+	const holdings: VaultHolding[] = [];
+
+	while (hasMore) {
+		const batch = await fetchVaults(subgraphUrl, skip, tokenAddresses, blockNumber);
+		const mapped: VaultHolding[] = batch.map((v) => {
+			// Decode Rain Float hex balance to bigint
+			const decimals = parseInt(v.token.decimals) || 18;
+			const decodedBalance = parseFloatHex(v.balance, decimals);
+
+			return {
+				vaultId: v.vaultId,
+				owner: v.owner.toLowerCase(),
+				tokenAddress: (v.token.address || v.token.id).toLowerCase(),
+				tokenSymbol: v.token.symbol,
+				balance: decodedBalance.toString(),
+				orderbookAddress: v.orderbook.id.toLowerCase()
+			};
+		});
+
+		holdings.push(...mapped);
+		hasMore = batch.length === BATCH_SIZE;
+		if (hasMore) skip += batch.length;
+	}
+
+	return holdings;
+}
+
+/**
  * Fetch all vault holdings for our tokens
  * Groups holdings by owner address
  * @param blockNumber - If provided, queries vault state at this specific block
@@ -149,48 +190,51 @@ export async function fetchAllVaultHoldings(
 	tokenAddresses: string[] = TOKEN_ADDRESSES,
 	blockNumber?: number
 ): Promise<VaultHolding[]> {
-	let skip = 0;
-	let hasMore = true;
-	const allVaults: VaultHolding[] = [];
+	const deduped = new Map<string, VaultHolding>();
 
 	console.log(
 		`[Vaults] Fetching vault holdings for ${tokenAddresses.length} tokens${
 			blockNumber ? ` at block ${blockNumber}` : ''
-		}`
+		} from ${ORDERBOOK_SUBGRAPH_URLS.length} orderbook subgraph(s)`
 	);
 	console.log(`[Vaults] Token addresses: ${tokenAddresses.join(', ')}`);
-	console.log(`[Vaults] Subgraph URL: ${ORDERBOOK_SUBGRAPH_URL}`);
+	console.log(`[Vaults] Subgraph URLs: ${ORDERBOOK_SUBGRAPH_URLS.join(', ')}`);
 
 	try {
-		while (hasMore) {
-			const batch = await fetchVaults(skip, tokenAddresses, blockNumber);
+		const results = await Promise.all(
+			ORDERBOOK_SUBGRAPH_URLS.map(async (url, i) => {
+				try {
+					const holdings = await fetchAllVaultHoldingsFromSubgraph(
+						url,
+						tokenAddresses,
+						blockNumber
+					);
+					console.log(
+						`[Vaults] Subgraph ${i + 1}/${ORDERBOOK_SUBGRAPH_URLS.length}: ${
+							holdings.length
+						} vault holdings`
+					);
+					return holdings;
+				} catch (error) {
+					console.warn(`[Vaults] Subgraph ${i + 1} failed (${url}):`, error);
+					return [];
+				}
+			})
+		);
 
-			console.log(`[Vaults] Raw batch response:`, JSON.stringify(batch.slice(0, 2), null, 2));
-
-			const holdings: VaultHolding[] = batch.map((v) => {
-				// Decode Rain Float hex balance to bigint
-				const decimals = parseInt(v.token.decimals) || 18;
-				const decodedBalance = parseFloatHex(v.balance, decimals);
-
-				return {
-					vaultId: v.vaultId,
-					owner: v.owner.toLowerCase(),
-					tokenAddress: (v.token.address || v.token.id).toLowerCase(),
-					tokenSymbol: v.token.symbol,
-					balance: decodedBalance.toString(), // Store as string representation of bigint
-					orderbookAddress: v.orderbook.id.toLowerCase()
-				};
-			});
-
-			allVaults.push(...holdings);
-
-			console.log(`[Vaults] Batch: ${batch.length} vaults`);
-
-			hasMore = batch.length === BATCH_SIZE;
-			if (hasMore) skip += batch.length;
+		// Deduplicate across subgraphs.
+		// If both current and inactive subgraphs contain the same vault, keep the first (current URL order).
+		for (const holdings of results) {
+			for (const holding of holdings) {
+				const key = `${holding.orderbookAddress}:${holding.vaultId}:${holding.tokenAddress}:${holding.owner}`;
+				if (!deduped.has(key)) {
+					deduped.set(key, holding);
+				}
+			}
 		}
 
-		console.log(`[Vaults] Total vault holdings fetched: ${allVaults.length}`);
+		const allVaults = Array.from(deduped.values());
+		console.log(`[Vaults] Total vault holdings fetched (deduped): ${allVaults.length}`);
 		if (allVaults.length > 0) {
 			console.log(`[Vaults] Sample holding:`, JSON.stringify(allVaults[0], null, 2));
 		}

@@ -1,6 +1,7 @@
 // Store for referral programme data
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
+import { fetchJson } from '$lib/utils/fetchJson';
 
 // Types
 export interface ReferralProfile {
@@ -43,37 +44,100 @@ export const showReferralJoinModal = writable(false);
 export const showReferralDashboardModal = writable(false);
 export const showReferralLeaderboardModal = writable(false);
 
+let referralProfileRequestId = 0;
+let referralLeaderboardRequestId = 0;
+
 // Derived stores
 export const hasReferralProfile = derived(referralProfile, ($profile) => $profile !== null);
+
+type ReferralChallengeAction = 'join' | 'update_nickname';
+
+async function requestReferralChallenge(
+	address: string,
+	action: ReferralChallengeAction,
+	nickname?: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	if (!browser) return { success: false, error: 'Not in browser' };
+
+	try {
+		const response = await fetchJson<{
+			success?: boolean;
+			nonce?: string;
+			message?: string;
+			error?: string;
+		}>('/api/referrals/challenge', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				address,
+				action,
+				nickname: nickname || undefined
+			})
+		});
+
+		if (response.ok && response.data?.success && response.data.nonce && response.data.message) {
+			return { success: true, nonce: response.data.nonce, message: response.data.message };
+		}
+
+		return { success: false, error: response.error || 'Failed to issue referral challenge' };
+	} catch (err) {
+		return { success: false, error: err instanceof Error ? err.message : 'Network error' };
+	}
+}
+
+export async function requestReferralJoinChallenge(
+	address: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	return requestReferralChallenge(address, 'join');
+}
+
+export async function requestReferralNicknameUpdateChallenge(
+	address: string,
+	nickname: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	return requestReferralChallenge(address, 'update_nickname', nickname);
+}
 
 // Fetch referral profile and performance
 export async function fetchReferralProfile(walletAddress: string): Promise<void> {
 	if (!browser || !walletAddress) return;
 
+	const requestId = ++referralProfileRequestId;
 	referralLoading.set(true);
 	referralError.set(null);
 
 	try {
-		const response = await fetch(`/api/referrals/profile?wallet=${walletAddress}`);
-		const data = await response.json();
+		const response = await fetchJson<{
+			success?: boolean;
+			error?: string;
+			hasProfile?: boolean;
+			profile?: ReferralProfile;
+			performance?: ReferralPerformance;
+		}>(`/api/referrals/profile?wallet=${walletAddress}`);
 
-		if (!response.ok || !data.success) {
-			throw new Error(data.error || 'Failed to fetch referral profile');
+		if (!response.ok || !response.data?.success) {
+			throw new Error(response.error || 'Failed to fetch referral profile');
 		}
 
-		if (data.hasProfile) {
-			referralProfile.set(data.profile);
-			referralPerformance.set(data.performance);
+		if (requestId !== referralProfileRequestId) return;
+
+		if (response.data.hasProfile) {
+			referralProfile.set(response.data.profile || null);
+			referralPerformance.set(response.data.performance || null);
 		} else {
 			referralProfile.set(null);
 			referralPerformance.set(null);
 		}
 	} catch (err) {
+		if (requestId !== referralProfileRequestId) return;
+
 		referralError.set(err instanceof Error ? err.message : 'Unknown error');
 		referralProfile.set(null);
 		referralPerformance.set(null);
 	} finally {
-		referralLoading.set(false);
+		if (requestId === referralProfileRequestId) {
+			referralLoading.set(false);
+		}
 	}
 }
 
@@ -83,12 +147,16 @@ export async function joinReferralProgramme(
 	telegramHandle: string,
 	nickname: string,
 	signature: string,
-	message: string
+	challengeNonce: string
 ): Promise<{ success: boolean; referralCode?: string; error?: string }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
 
 	try {
-		const response = await fetch('/api/referrals/join', {
+		const response = await fetchJson<{
+			success?: boolean;
+			referralCode?: string;
+			error?: string;
+		}>('/api/referrals/join', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -96,19 +164,17 @@ export async function joinReferralProgramme(
 				telegramHandle,
 				nickname,
 				signature,
-				message
+				challengeNonce
 			})
 		});
 
-		const data = await response.json();
-
-		if (data.success) {
+		if (response.ok && response.data?.success) {
 			// Refresh profile after joining
 			await fetchReferralProfile(address);
-			return { success: true, referralCode: data.referralCode };
+			return { success: true, referralCode: response.data.referralCode };
 		}
 
-		return { success: false, error: data.error || 'Failed to join' };
+		return { success: false, error: response.error || 'Failed to join' };
 	} catch (err) {
 		return {
 			success: false,
@@ -121,6 +187,7 @@ export async function joinReferralProgramme(
 export async function fetchReferralLeaderboard(walletAddress?: string): Promise<void> {
 	if (!browser) return;
 
+	const requestId = ++referralLeaderboardRequestId;
 	referralLeaderboardLoading.set(true);
 	referralLeaderboardError.set(null);
 
@@ -129,26 +196,39 @@ export async function fetchReferralLeaderboard(walletAddress?: string): Promise<
 			? `/api/referrals/leaderboard?wallet=${walletAddress}`
 			: '/api/referrals/leaderboard';
 
-		const response = await fetch(url);
-		const data = await response.json();
+		const response = await fetchJson<{
+			success?: boolean;
+			error?: string;
+			leaderboard?: ReferralLeaderboardEntry[];
+			totalParticipants?: number;
+			userPosition?: ReferralLeaderboardEntry | null;
+		}>(url);
 
-		if (!response.ok || !data.success) {
-			throw new Error(data.error || 'Failed to fetch leaderboard');
+		if (!response.ok || !response.data?.success) {
+			throw new Error(response.error || 'Failed to fetch leaderboard');
 		}
 
-		referralLeaderboard.set(data.leaderboard);
-		referralTotalParticipants.set(data.totalParticipants);
-		referralUserPosition.set(data.userPosition || null);
+		if (requestId !== referralLeaderboardRequestId) return;
+
+		referralLeaderboard.set(response.data.leaderboard || []);
+		referralTotalParticipants.set(response.data.totalParticipants || 0);
+		referralUserPosition.set(response.data.userPosition || null);
 	} catch (err) {
+		if (requestId !== referralLeaderboardRequestId) return;
+
 		referralLeaderboardError.set(err instanceof Error ? err.message : 'Unknown error');
 		referralLeaderboard.set([]);
 	} finally {
-		referralLeaderboardLoading.set(false);
+		if (requestId === referralLeaderboardRequestId) {
+			referralLeaderboardLoading.set(false);
+		}
 	}
 }
 
 // Reset referral state (e.g., when wallet disconnects)
 export function resetReferralState(): void {
+	referralProfileRequestId++;
+	referralLeaderboardRequestId++;
 	referralProfile.set(null);
 	referralPerformance.set(null);
 	referralLoading.set(false);
@@ -161,25 +241,26 @@ export async function updateReferralNickname(
 	walletAddress: string,
 	newNickname: string,
 	signature: string,
-	message: string
+	challengeNonce: string
 ): Promise<{ success: boolean; error?: string }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
 
 	try {
-		const response = await fetch('/api/referrals/profile/update', {
+		const response = await fetchJson<{
+			success?: boolean;
+			error?: string;
+		}>('/api/referrals/profile/update', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				walletAddress,
 				nickname: newNickname,
 				signature,
-				message
+				challengeNonce
 			})
 		});
 
-		const data = await response.json();
-
-		if (data.success) {
+		if (response.ok && response.data?.success) {
 			// Update the local profile store
 			referralProfile.update((profile) => {
 				if (profile) {
@@ -190,30 +271,13 @@ export async function updateReferralNickname(
 			return { success: true };
 		}
 
-		return { success: false, error: data.error || 'Failed to update nickname' };
+		return { success: false, error: response.error || 'Failed to update nickname' };
 	} catch (err) {
 		return {
 			success: false,
 			error: err instanceof Error ? err.message : 'Network error'
 		};
 	}
-}
-
-// Create message for signing nickname update
-export function createNicknameUpdateSignMessage(address: string, newNickname: string): string {
-	return `Sign to update your st0x referral nickname.
-
-Wallet: ${address}
-New Nickname: ${newNickname}
-Timestamp: ${Date.now()}`;
-}
-
-// Create the message for signing to join the programme
-export function createReferralSignMessage(address: string): string {
-	return `Sign to join the st0x referral programme.
-
-Wallet: ${address}
-Timestamp: ${Date.now()}`;
 }
 
 // Format referral code for display

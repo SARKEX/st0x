@@ -14,9 +14,14 @@ import { list } from '@vercel/blob';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { TOKENS } from '$lib/config/tokens';
 import { env } from '$env/dynamic/private';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
-// Build token symbol map
+// Build token symbol map with fallback names for renamed tokens
 const tokenSymbols = TOKENS.map((t) => t.symbol);
+const previousSymbolsByToken = new Map<string, string[]>(
+	TOKENS.filter((t) => t.previousSymbols?.length).map((t) => [t.symbol, t.previousSymbols!])
+);
 
 interface WalletTvlEntry {
 	address: string;
@@ -103,24 +108,26 @@ async function fetchSnapshot(
 		return null;
 	}
 
-	try {
-		const prefix = `snapshots/${tokenSymbol}/${blockNumber}.json`;
-		const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
+	// Try the current symbol first, then fall back to previous symbol names
+	const candidates = [tokenSymbol, ...(previousSymbolsByToken.get(tokenSymbol) ?? [])];
 
-		if (blobs.length === 0) {
-			return null;
+	for (const symbol of candidates) {
+		try {
+			const prefix = `snapshots/${symbol}/${blockNumber}.json`;
+			const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
+
+			if (blobs.length === 0) continue;
+
+			const response = await fetch(blobs[0].url);
+			if (!response.ok) continue;
+
+			return await response.json();
+		} catch (error) {
+			console.error(`[TVL] Error fetching snapshot ${symbol}/${blockNumber}:`, error);
 		}
-
-		const response = await fetch(blobs[0].url);
-		if (!response.ok) {
-			return null;
-		}
-
-		return await response.json();
-	} catch (error) {
-		console.error(`[TVL] Error fetching snapshot ${tokenSymbol}/${blockNumber}:`, error);
-		return null;
 	}
+
+	return null;
 }
 
 /**
@@ -364,7 +371,14 @@ async function calculateSimpleTvlAtBlock(
 	};
 }
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, cookies, request }) => {
+	if (!isAdminAuthenticated(cookies)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-tvl');
+	if (rateLimitResponse) return rateLimitResponse;
+
 	try {
 		const limitParam = url.searchParams.get('limit');
 		const parsedLimit = limitParam ? parseInt(limitParam) : 90;

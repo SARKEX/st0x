@@ -1,56 +1,49 @@
 // API endpoint to generate detailed statement for a referral code
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verifySessionToken } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { getWalletsByCode } from '$lib/server/accessCodes';
 import { list } from '@vercel/blob';
 import { TOKENS } from '$lib/config/tokens';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { env } from '$env/dynamic/private';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 const POINTS_PER_DOLLAR = 100;
 const tokenSymbols = TOKENS.map((t) => t.symbol);
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
+const previousSymbolsByToken = new Map<string, string[]>(
+	TOKENS.filter((t) => t.previousSymbols?.length).map((t) => [t.symbol, t.previousSymbols!])
+);
 
 async function fetchSnapshot(
 	tokenSymbol: string,
 	blockNumber: number
 ): Promise<BlockSnapshot | null> {
-	// Check if Blob token is available (required for Vercel Blob storage)
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return null;
 	}
 
-	try {
-		const prefix = `snapshots/${tokenSymbol}/${blockNumber}.json`;
-		const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
+	// Try current symbol first, then fall back to previous symbol names
+	const candidates = [tokenSymbol, ...(previousSymbolsByToken.get(tokenSymbol) ?? [])];
 
-		if (blobs.length === 0) {
-			return null;
+	for (const symbol of candidates) {
+		try {
+			const prefix = `snapshots/${symbol}/${blockNumber}.json`;
+			const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
+
+			if (blobs.length === 0) continue;
+
+			const response = await fetch(blobs[0].url);
+			if (!response.ok) continue;
+
+			return await response.json();
+		} catch (error) {
+			console.error(`[Statement] Error fetching snapshot ${symbol}/${blockNumber}:`, error);
 		}
-
-		const response = await fetch(blobs[0].url);
-		if (!response.ok) {
-			return null;
-		}
-
-		return await response.json();
-	} catch (error) {
-		console.error(`[Statement] Error fetching snapshot ${tokenSymbol}/${blockNumber}:`, error);
-		return null;
 	}
+
+	return null;
 }
 
 interface WalletTokenHolding {
@@ -77,8 +70,15 @@ interface SnapshotData {
 	totalPoints: number;
 }
 
-export const GET: RequestHandler = async ({ url, cookies }) => {
-	if (!isAuthenticated(cookies)) {
+export const GET: RequestHandler = async ({ url, cookies, request }) => {
+	const rateLimitResponse = await applyRateLimit(
+		request,
+		rateLimiters.admin,
+		'admin-referrals-statement'
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

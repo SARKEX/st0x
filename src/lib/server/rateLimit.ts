@@ -247,9 +247,9 @@ export const rateLimiters = {
 	accessCheck: (identifier: string) =>
 		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 60 }),
 
-	// Admin API: 30 requests/minute (authenticated users)
+	// Admin API: 30 requests/minute, strict fail-closed behavior
 	admin: (identifier: string) =>
-		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 30 }),
+		checkRateLimitStrict(identifier, { windowMs: 60 * 1000, maxRequests: 30 }),
 
 	// Leaderboard/rewards: 30 requests/minute
 	rewards: (identifier: string) =>
