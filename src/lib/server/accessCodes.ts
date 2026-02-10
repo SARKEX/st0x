@@ -406,57 +406,59 @@ async function processRegistrationWithRedis(
 	}
 
 	for (let attempt = 0; attempt < 5; attempt++) {
-		await kv.watch([walletKey, codeKey, codeWalletsKey]);
+		const isolated = kv.duplicate();
+		await isolated.connect();
+		try {
+			await isolated.watch([walletKey, codeKey, codeWalletsKey]);
 
-		const [existingWalletRaw, accessCodeRaw, codeWalletsRaw] = await Promise.all([
-			kv.get(walletKey),
-			kv.get(codeKey),
-			kv.get(codeWalletsKey)
-		]);
+			const [existingWalletRaw, accessCodeRaw, codeWalletsRaw] = await Promise.all([
+				isolated.get(walletKey),
+				isolated.get(codeKey),
+				isolated.get(codeWalletsKey)
+			]);
 
-		if (existingWalletRaw) {
-			await kv.unwatch();
-			return { success: false, error: 'Wallet is already registered' };
-		}
+			if (existingWalletRaw) {
+				return { success: false, error: 'Wallet is already registered' };
+			}
 
-		if (!accessCodeRaw) {
-			await kv.unwatch();
-			return { success: false, error: 'Invalid access code' };
-		}
+			if (!accessCodeRaw) {
+				return { success: false, error: 'Invalid access code' };
+			}
 
-		const accessCode = parseAccessCodeJson(accessCodeRaw);
-		if (!accessCode) {
-			await kv.unwatch();
-			return { success: false, error: 'Invalid access code data' };
-		}
+			const accessCode = parseAccessCodeJson(accessCodeRaw);
+			if (!accessCode) {
+				return { success: false, error: 'Invalid access code data' };
+			}
 
-		const validation = getAccessCodeValidation(accessCode);
-		if (!validation.valid) {
-			await kv.unwatch();
-			return { success: false, error: validation.reason };
-		}
+			const validation = getAccessCodeValidation(accessCode);
+			if (!validation.valid) {
+				return { success: false, error: validation.reason };
+			}
 
-		const wallet: RegisteredWallet = {
-			address: normalizedAddress,
-			accessCode: normalizedCode,
-			registeredAt: new Date().toISOString()
-		};
+			const wallet: RegisteredWallet = {
+				address: normalizedAddress,
+				accessCode: normalizedCode,
+				registeredAt: new Date().toISOString()
+			};
 
-		const codeWallets = parseCodeWalletsJson(codeWalletsRaw);
-		if (!codeWallets.includes(normalizedAddress)) {
-			codeWallets.push(normalizedAddress);
-		}
+			const codeWallets = parseCodeWalletsJson(codeWalletsRaw);
+			if (!codeWallets.includes(normalizedAddress)) {
+				codeWallets.push(normalizedAddress);
+			}
 
-		accessCode.currentUses += 1;
+			accessCode.currentUses += 1;
 
-		const tx = kv.multi();
-		tx.set(walletKey, JSON.stringify(wallet));
-		tx.set(codeKey, JSON.stringify(accessCode));
-		tx.set(codeWalletsKey, JSON.stringify(codeWallets));
+			const tx = isolated.multi();
+			tx.set(walletKey, JSON.stringify(wallet));
+			tx.set(codeKey, JSON.stringify(accessCode));
+			tx.set(codeWalletsKey, JSON.stringify(codeWallets));
 
-		const result = await tx.exec();
-		if (result) {
-			return { success: true, wallet };
+			const txResult = await tx.exec();
+			if (txResult) {
+				return { success: true, wallet };
+			}
+		} finally {
+			await isolated.disconnect();
 		}
 	}
 

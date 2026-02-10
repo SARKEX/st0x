@@ -207,7 +207,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				canonicalMap.set(entry.canonicalToken, entry);
 				continue;
 			}
-			if (existing.isLegacy && !entry.isLegacy) {
+			if (existing.isLegacy && !entry.isLegacy && entry.snapshot != null) {
 				canonicalMap.set(entry.canonicalToken, entry);
 			}
 		}

@@ -82,7 +82,7 @@ export async function buildSnapshotBlobIndex({
 		hasMore = page.hasMore;
 		pages++;
 
-		if (pages > maxPages) {
+		if (pages >= maxPages) {
 			throw new Error('Blob pagination exceeded safe limit while indexing snapshots');
 		}
 	}

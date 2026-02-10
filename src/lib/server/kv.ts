@@ -132,7 +132,7 @@ export interface MonthlyPointsData {
 	month: string; // YYYY-MM format
 	snapshotCount: number; // Total snapshots in this month
 	blockNumbers: number[]; // List of block numbers included
-	snapshotTotals?: { blockNumber: number; totalPoints: number }[]; // Per-snapshot total points (for projection)
+	snapshotTotals?: { blockNumber: number; totalPoints: number; totalPointsFiltered: number }[]; // Per-snapshot total points (for projection); totalPoints includes all wallets, totalPointsFiltered excludes excluded wallets
 	wallets: {
 		[address: string]: WalletMonthlyPoints;
 	};
