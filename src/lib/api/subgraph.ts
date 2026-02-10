@@ -472,7 +472,8 @@ export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVau
 export const getTrades = async (
 	timestampGt: number,
 	timestampLt: number,
-	network?: Network
+	network?: Network,
+	includeInactive: boolean = false
 ): Promise<SgTrade[]> => {
 	// Validate input parameters
 	if (typeof timestampGt !== 'number' || typeof timestampLt !== 'number') {
@@ -483,7 +484,7 @@ export const getTrades = async (
 		throw new Error('Invalid timestamp range: timestampGt must be less than timestampLt');
 	}
 
-	// Collect all orderbook subgraph URLs (active + inactive)
+	// Collect orderbook subgraph URLs (active only by default, + inactive when requested)
 	const allOrderbookUrls: string[] = [];
 
 	// Add active URL if it exists
@@ -491,8 +492,9 @@ export const getTrades = async (
 		allOrderbookUrls.push(network.orderbook_subgraph_url);
 	}
 
-	// Add inactive URLs if they exist
+	// Add inactive URLs only when explicitly requested
 	if (
+		includeInactive &&
 		network?.orderbook_subgraph_urls_inactive &&
 		network.orderbook_subgraph_urls_inactive.length > 0
 	) {
@@ -713,7 +715,8 @@ async function fetchTradesBySenderInternal(
 	senderAddress: string,
 	tokenAddress: string | null,
 	network: Network | undefined,
-	timestampGt: number | null
+	timestampGt: number | null,
+	includeInactive: boolean = false
 ): Promise<SgTrade[]> {
 	if (!senderAddress) {
 		return [];
@@ -726,6 +729,7 @@ async function fetchTradesBySenderInternal(
 	}
 
 	if (
+		includeInactive &&
 		network?.orderbook_subgraph_urls_inactive &&
 		network.orderbook_subgraph_urls_inactive.length > 0
 	) {
@@ -832,7 +836,8 @@ export const getTradesBySenderAllTime = async (
 export const getTradesByUserAllTime = async (
 	userAddress: string,
 	tokenAddress: string | null,
-	network?: Network
+	network?: Network,
+	includeInactive: boolean = true
 ): Promise<SgTrade[]> => {
 	if (!userAddress) {
 		return [];
@@ -845,6 +850,7 @@ export const getTradesByUserAllTime = async (
 	}
 
 	if (
+		includeInactive &&
 		network?.orderbook_subgraph_urls_inactive &&
 		network.orderbook_subgraph_urls_inactive.length > 0
 	) {

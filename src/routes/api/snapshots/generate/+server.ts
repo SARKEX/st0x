@@ -2,7 +2,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
-import { fetchAllTransfers, TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
+import { fetchAllTransfers, TOKEN_ADDRESSES, ALL_TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
 import { generateAllTokenSnapshots } from '$lib/server/snapshots/processor';
 import { fetchPythPricesAtTimestamp } from '$lib/server/snapshots/pyth';
 import { networks } from '$lib/config/networks';
@@ -83,8 +83,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Get block timestamp
 		const timestamp = await getBlockTimestamp(targetBlock);
 
-		// Fetch all transfers up to target block
-		const transfers = await fetchAllTransfers(targetBlock, TOKEN_ADDRESSES);
+		// Fetch all transfers up to target block (use all address variants so both
+		// the new subgraph (vault id = unwrapped) and legacy subgraph are queried correctly)
+		const transfers = await fetchAllTransfers(targetBlock, ALL_TOKEN_ADDRESSES);
 
 		console.log(`[Snapshot] Fetched ${transfers.length} transfers`);
 

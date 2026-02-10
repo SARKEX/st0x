@@ -885,13 +885,13 @@
 	})();
 
 	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, true);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 120_000);
 
-	// Trade activity for market orders - poll every 5 minutes, refetch on mount
-	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 300_000);
+	// Trade activity for market orders - poll every 10 minutes, refetch on mount
+	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 600_000);
 
-	// Cost basis query for P&L calculation - uses all-time trade history
-	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress, 300_000);
+	// Cost basis query for P&L calculation - one-shot (no polling, refreshes on window focus)
+	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
 
 	// Load manual cost basis entries when wallet changes
 	$: manualCostBasisStore.loadForWallet($walletAddress);

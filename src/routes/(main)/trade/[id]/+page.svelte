@@ -40,8 +40,10 @@
 	import {
 		createTokenOrderbookQuotesQuery,
 		prefetchGlobalOrders,
+		refreshLegacyTokenQuotes,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
+	import { getTrades } from '$lib/api/subgraph';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
@@ -92,6 +94,32 @@
 		);
 		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	}
+
+	// One-shot: fetch trades from inactive subgraph(s) once for trade history
+	let inactiveTrades: SgTrade[] = [];
+	let inactiveTradesFetchedForNetwork: number | null = null;
+	$: if (browser && $currentNetwork && inactiveTradesFetchedForNetwork !== $currentNetwork.id) {
+		const net = $currentNetwork;
+		if (net.orderbook_subgraph_urls_inactive?.length) {
+			inactiveTradesFetchedForNetwork = net.id;
+			const now = Math.floor(Date.now() / 1000);
+			const from = now - TRADE_HISTORY_LOOKBACK_SECONDS;
+			getTrades(from, now, net, true)
+				.then((trades) => {
+					inactiveTrades = trades;
+				})
+				.catch(() => {
+					inactiveTrades = [];
+				});
+		}
+	}
+
+	// One-shot: fetch legacy address quotes once per token
+	let legacyQuotesFetchedFor: string | null = null;
+	$: if (browser && $currentNetwork && currentToken?.address && legacyQuotesFetchedFor !== currentToken.address) {
+		legacyQuotesFetchedFor = currentToken.address;
+		refreshLegacyTokenQuotes($currentNetwork.id, currentToken.address).catch(() => {});
 	}
 
 	// Filter trades from tradeActivityQuery to get user's market orders
@@ -640,7 +668,10 @@
 		if (!browser || !currentToken || !$currentNetwork) return [];
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return [];
-		const assetAddress = currentToken.address?.toLowerCase();
+		// Use wrapped address as the primary asset address for trade matching
+		// (currentToken.address from subgraph is the unwrapped address, but
+		// orderbook trades use the wrapped token address)
+		const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
 		const quoteAddress = settlementToken.address;
 		if (!assetAddress || !quoteAddress) return [];
 		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
@@ -651,19 +682,40 @@
 		const rangeEnd = range ? range.to * 1000 : now;
 		// TODO: Display range label in UI if needed
 		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
-		const trades = ($tradeActivityQuery?.data?.trades ?? []) as SgTrade[];
-		return trades
-			.map((trade) =>
-				tradeToPoint(trade, assetAddress, assetDecimals, {
+		const activeTrades = ($tradeActivityQuery?.data?.trades ?? []) as SgTrade[];
+		// Merge active + inactive trades, dedup by trade ID
+		const tradeIdSet = new Set<string>();
+		const trades: SgTrade[] = [];
+		for (const trade of [...activeTrades, ...inactiveTrades]) {
+			const id = trade.id;
+			if (id && !tradeIdSet.has(id)) {
+				tradeIdSet.add(id);
+				trades.push(trade);
+			}
+		}
+		// Collect points for all address variants (wrapped from new orderbook + legacy from old)
+		const points: TradeHistoryPoint[] = [];
+		for (const addr of assetAddressSet) {
+			for (const trade of trades) {
+				const point = tradeToPoint(trade, addr, assetDecimals, {
 					address: quoteAddress,
 					decimals: quoteDecimals,
 					symbol: settlementToken.symbol || ''
-				})
-			)
-			.filter(
-				(point): point is TradeHistoryPoint =>
-					point !== null && point.timestamp >= cutoff && point.timestamp <= rangeEnd
-			)
+				});
+				if (point && point.timestamp >= cutoff && point.timestamp <= rangeEnd) {
+					points.push(point);
+				}
+			}
+		}
+		// Deduplicate by timestamp (same trade matched via different address variants)
+		const seen = new Set<string>();
+		return points
+			.filter((p) => {
+				const key = `${p.timestamp}-${p.price}-${p.tokens}`;
+				if (seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			})
 			.sort((a, b) => a.timestamp - b.timestamp);
 	})();
 	$: {
