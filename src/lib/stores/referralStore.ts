@@ -44,6 +44,9 @@ export const showReferralJoinModal = writable(false);
 export const showReferralDashboardModal = writable(false);
 export const showReferralLeaderboardModal = writable(false);
 
+let referralProfileRequestId = 0;
+let referralLeaderboardRequestId = 0;
+
 // Derived stores
 export const hasReferralProfile = derived(referralProfile, ($profile) => $profile !== null);
 
@@ -99,6 +102,7 @@ export async function requestReferralNicknameUpdateChallenge(
 export async function fetchReferralProfile(walletAddress: string): Promise<void> {
 	if (!browser || !walletAddress) return;
 
+	const requestId = ++referralProfileRequestId;
 	referralLoading.set(true);
 	referralError.set(null);
 
@@ -115,6 +119,8 @@ export async function fetchReferralProfile(walletAddress: string): Promise<void>
 			throw new Error(response.error || 'Failed to fetch referral profile');
 		}
 
+		if (requestId !== referralProfileRequestId) return;
+
 		if (response.data.hasProfile) {
 			referralProfile.set(response.data.profile || null);
 			referralPerformance.set(response.data.performance || null);
@@ -123,11 +129,15 @@ export async function fetchReferralProfile(walletAddress: string): Promise<void>
 			referralPerformance.set(null);
 		}
 	} catch (err) {
+		if (requestId !== referralProfileRequestId) return;
+
 		referralError.set(err instanceof Error ? err.message : 'Unknown error');
 		referralProfile.set(null);
 		referralPerformance.set(null);
 	} finally {
-		referralLoading.set(false);
+		if (requestId === referralProfileRequestId) {
+			referralLoading.set(false);
+		}
 	}
 }
 
@@ -177,6 +187,7 @@ export async function joinReferralProgramme(
 export async function fetchReferralLeaderboard(walletAddress?: string): Promise<void> {
 	if (!browser) return;
 
+	const requestId = ++referralLeaderboardRequestId;
 	referralLeaderboardLoading.set(true);
 	referralLeaderboardError.set(null);
 
@@ -197,19 +208,27 @@ export async function fetchReferralLeaderboard(walletAddress?: string): Promise<
 			throw new Error(response.error || 'Failed to fetch leaderboard');
 		}
 
+		if (requestId !== referralLeaderboardRequestId) return;
+
 		referralLeaderboard.set(response.data.leaderboard || []);
 		referralTotalParticipants.set(response.data.totalParticipants || 0);
 		referralUserPosition.set(response.data.userPosition || null);
 	} catch (err) {
+		if (requestId !== referralLeaderboardRequestId) return;
+
 		referralLeaderboardError.set(err instanceof Error ? err.message : 'Unknown error');
 		referralLeaderboard.set([]);
 	} finally {
-		referralLeaderboardLoading.set(false);
+		if (requestId === referralLeaderboardRequestId) {
+			referralLeaderboardLoading.set(false);
+		}
 	}
 }
 
 // Reset referral state (e.g., when wallet disconnects)
 export function resetReferralState(): void {
+	referralProfileRequestId++;
+	referralLeaderboardRequestId++;
 	referralProfile.set(null);
 	referralPerformance.set(null);
 	referralLoading.set(false);

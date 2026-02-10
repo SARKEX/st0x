@@ -84,4 +84,28 @@ describe('processRegistration', () => {
 		expect(result.success).toBe(false);
 		expect(result.error).toBe('Invalid access code');
 	});
+
+	it('fails closed for captcha when secret is missing in production', async () => {
+		process.env.NODE_ENV = 'production';
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { verifyCaptcha } = await import('./accessCodes');
+
+		const valid = await verifyCaptcha('captcha-token');
+		expect(valid).toBe(false);
+		expect(errorSpy).toHaveBeenCalledWith('HCAPTCHA_SECRET not configured in production');
+		errorSpy.mockRestore();
+	});
+
+	it('allows captcha bypass when secret is missing in non-production', async () => {
+		process.env.NODE_ENV = 'test';
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const { verifyCaptcha } = await import('./accessCodes');
+
+		const valid = await verifyCaptcha('captcha-token');
+		expect(valid).toBe(true);
+		expect(warnSpy).toHaveBeenCalledWith(
+			'HCAPTCHA_SECRET not configured, skipping captcha verification'
+		);
+		warnSpy.mockRestore();
+	});
 });

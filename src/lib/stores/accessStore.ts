@@ -12,6 +12,8 @@ export const accessError = writable<string | null>(null);
 export const showAccessCodeModal = writable<boolean>(false);
 export const showWalletConnectionModal = writable<boolean>(false);
 
+let checkWalletAccessRequestId = 0;
+
 // Function to prompt wallet connection (shows modal if not connected)
 export function promptWalletConnection() {
 	showWalletConnectionModal.set(true);
@@ -47,6 +49,7 @@ export async function checkWalletAccess(
 ): Promise<boolean> {
 	if (!browser) return false;
 
+	const requestId = ++checkWalletAccessRequestId;
 	checkingAccess.set(true);
 	accessError.set(null);
 
@@ -54,6 +57,10 @@ export async function checkWalletAccess(
 		const response = await fetchJson<{ registered: boolean; error?: string }>(
 			`/api/access/check?address=${encodeURIComponent(address)}`
 		);
+
+		if (requestId !== checkWalletAccessRequestId) {
+			return false;
+		}
 
 		if (response.ok && response.data) {
 			walletRegistered.set(response.data.registered);
@@ -69,10 +76,14 @@ export async function checkWalletAccess(
 			return false;
 		}
 	} catch {
-		accessError.set('Network error checking access');
+		if (requestId === checkWalletAccessRequestId) {
+			accessError.set('Network error checking access');
+		}
 		return false;
 	} finally {
-		checkingAccess.set(false);
+		if (requestId === checkWalletAccessRequestId) {
+			checkingAccess.set(false);
+		}
 	}
 }
 
@@ -84,9 +95,9 @@ export async function validateCode(code: string): Promise<{ valid: boolean; reas
 		const response = await fetchJson<{ valid: boolean; reason?: string; error?: string }>(
 			'/api/access/validate',
 			{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ code })
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ code })
 			}
 		);
 
@@ -170,6 +181,7 @@ export async function registerWallet(
 
 // Reset access state (e.g., when wallet disconnects)
 export function resetAccessState() {
+	checkWalletAccessRequestId++;
 	walletRegistered.set(null);
 	checkingAccess.set(false);
 	accessError.set(null);
@@ -183,7 +195,7 @@ if (browser) {
 		if (address && address !== currentAddress) {
 			currentAddress = address;
 			// Check registration and show modal if not registered
-			checkWalletAccess(address, true);
+			void checkWalletAccess(address, true);
 		} else if (!address && currentAddress) {
 			currentAddress = null;
 			resetAccessState();

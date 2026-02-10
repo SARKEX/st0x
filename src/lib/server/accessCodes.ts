@@ -88,8 +88,13 @@ export async function verifyWalletSignature(
 export async function verifyCaptcha(token: string): Promise<boolean> {
 	const secret = env.HCAPTCHA_SECRET;
 	if (!secret) {
+		if (process.env.NODE_ENV === 'production') {
+			console.error('HCAPTCHA_SECRET not configured in production');
+			return false;
+		}
+
 		console.warn('HCAPTCHA_SECRET not configured, skipping captcha verification');
-		return true; // Allow in dev without captcha
+		return true; // Allow in non-production without captcha
 	}
 
 	try {
