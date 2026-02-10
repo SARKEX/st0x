@@ -524,7 +524,10 @@
 								}
 								return null;
 							})
-							.filter((token): token is NonNullable<typeof token> => token !== null && token.walletBalance > 0n);
+							.filter(
+								(token): token is NonNullable<typeof token> =>
+									token !== null && token.walletBalance > 0n
+							);
 
 						// Deduplicate by address (defensive - prevents duplicate entries)
 						const seen = new Set<string>();
@@ -583,7 +586,10 @@
 								}
 								return null;
 							})
-							.filter((token): token is NonNullable<typeof token> => token !== null && token.walletBalance > 0n);
+							.filter(
+								(token): token is NonNullable<typeof token> =>
+									token !== null && token.walletBalance > 0n
+							);
 
 						// Deduplicate by address (defensive - prevents duplicate entries)
 						const seen = new Set<string>();

@@ -153,42 +153,42 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Query each token's specific blob path in parallel to avoid pagination issues
 		const tokenSymbols = getAllSnapshotTokenSymbols();
 
-			const snapshotsRaw = (
-				await Promise.all(
-					tokenSymbols.map(async (symbol) => {
-						const prefix = `snapshots/${symbol}/${blockNumber}.json`;
-						try {
+		const snapshotsRaw = (
+			await Promise.all(
+				tokenSymbols.map(async (symbol) => {
+					const prefix = `snapshots/${symbol}/${blockNumber}.json`;
+					try {
 						const { blobs } = await list({
 							prefix,
-								limit: 1,
-								token: env.BLOB_READ_WRITE_TOKEN
-							});
-							if (blobs.length === 0) return null;
+							limit: 1,
+							token: env.BLOB_READ_WRITE_TOKEN
+						});
+						if (blobs.length === 0) return null;
 
-							const response = await fetch(blobs[0].url);
-							if (!response.ok)
-								return {
-									token: symbol,
-									canonicalToken: getCanonicalSymbol(symbol),
-									isLegacy: LEGACY_SYMBOLS.has(symbol.toLowerCase()),
-									url: blobs[0].url,
-									snapshot: null
-								};
-
-							const data = await response.json();
+						const response = await fetch(blobs[0].url);
+						if (!response.ok)
 							return {
 								token: symbol,
 								canonicalToken: getCanonicalSymbol(symbol),
 								isLegacy: LEGACY_SYMBOLS.has(symbol.toLowerCase()),
 								url: blobs[0].url,
-								snapshot: data
+								snapshot: null
 							};
-						} catch {
-							return null;
-						}
-					})
-				)
-			).filter((s) => s !== null);
+
+						const data = await response.json();
+						return {
+							token: symbol,
+							canonicalToken: getCanonicalSymbol(symbol),
+							isLegacy: LEGACY_SYMBOLS.has(symbol.toLowerCase()),
+							url: blobs[0].url,
+							snapshot: data
+						};
+					} catch {
+						return null;
+					}
+				})
+			)
+		).filter((s) => s !== null);
 
 		// If both wrapped and legacy snapshots exist for the same token/block, prefer wrapped.
 		const canonicalMap = new Map<

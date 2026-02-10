@@ -210,7 +210,9 @@ export async function fetchAllVaultHoldings(
 						blockNumber
 					);
 					console.log(
-						`[Vaults] Subgraph ${i + 1}/${ORDERBOOK_SUBGRAPH_URLS.length}: ${holdings.length} vault holdings`
+						`[Vaults] Subgraph ${i + 1}/${ORDERBOOK_SUBGRAPH_URLS.length}: ${
+							holdings.length
+						} vault holdings`
 					);
 					return holdings;
 				} catch (error) {

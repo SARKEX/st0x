@@ -15,10 +15,7 @@ export function computeProjectedDailyPoints(
 ): number {
 	if (snapshotTotals.length >= 6) {
 		const recent = snapshotTotals.slice(-6);
-		const recentSum = recent.reduce(
-			(s, t) => s + (t.totalPointsFiltered ?? t.totalPoints),
-			0
-		);
+		const recentSum = recent.reduce((s, t) => s + (t.totalPointsFiltered ?? t.totalPoints), 0);
 		const overallSum = snapshotTotals.reduce(
 			(s, t) => s + (t.totalPointsFiltered ?? t.totalPoints),
 			0

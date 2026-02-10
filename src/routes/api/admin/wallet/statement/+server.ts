@@ -38,10 +38,7 @@ async function fetchSnapshot(
 
 			return await response.json();
 		} catch (error) {
-			console.error(
-				`[Wallet Statement] Error fetching snapshot ${symbol}/${blockNumber}:`,
-				error
-			);
+			console.error(`[Wallet Statement] Error fetching snapshot ${symbol}/${blockNumber}:`, error);
 		}
 	}
 

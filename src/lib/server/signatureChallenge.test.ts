@@ -94,10 +94,8 @@ describe('signatureChallenge', () => {
 		expect(secondVerification.error).toBe('Missing or already used challenge');
 
 		const expectedKey = `signature_challenge:access_register:${normalizedAddress}:${nonce}`;
-		expect(mockEval).toHaveBeenNthCalledWith(
-			1,
-			expect.stringContaining("redis.call('GET'"),
-			{ keys: [expectedKey] }
-		);
+		expect(mockEval).toHaveBeenNthCalledWith(1, expect.stringContaining("redis.call('GET'"), {
+			keys: [expectedKey]
+		});
 	});
 });

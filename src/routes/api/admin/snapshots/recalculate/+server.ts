@@ -79,15 +79,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const targetBlocks = new Set(monthBlocks.map((b) => b.blockNumber));
 		console.log(`[Recalculate] Target block numbers: ${Array.from(targetBlocks).join(', ')}`);
 
-		const {
-			totalBlobsInStorage,
-			sampleBlobPaths,
-			allBlobBlockNumbers,
-			blobsByBlock
-		} = await buildSnapshotBlobIndex({
-			targetBlocks,
-			blobToken: env.BLOB_READ_WRITE_TOKEN
-		});
+		const { totalBlobsInStorage, sampleBlobPaths, allBlobBlockNumbers, blobsByBlock } =
+			await buildSnapshotBlobIndex({
+				targetBlocks,
+				blobToken: env.BLOB_READ_WRITE_TOKEN
+			});
 		console.log(`[Recalculate] Found ${totalBlobsInStorage} total blobs in storage`);
 
 		console.log(`[Recalculate] Found blobs for ${blobsByBlock.size} blocks`);

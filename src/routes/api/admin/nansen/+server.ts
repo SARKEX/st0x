@@ -202,11 +202,7 @@ function processTrades(
 
 export const GET: RequestHandler = async ({ cookies, request }) => {
 	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-nansen'
-	);
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-nansen');
 	if (rateLimitResponse) return rateLimitResponse;
 
 	if (!isAdminAuthenticated(cookies)) {
