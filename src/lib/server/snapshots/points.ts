@@ -174,6 +174,14 @@ export function mergeWalletPointsIntoMonthlyData(
 		walletMonthly.totalPoints += walletData.totalPoints;
 	}
 
+	// Record per-snapshot total points (for projection calculations)
+	const snapshotTotalPoints = Array.from(walletPoints.values()).reduce(
+		(sum, w) => sum + w.totalPoints,
+		0
+	);
+	if (!monthlyData.snapshotTotals) monthlyData.snapshotTotals = [];
+	monthlyData.snapshotTotals.push({ blockNumber, totalPoints: snapshotTotalPoints });
+
 	// Update metadata
 	monthlyData.snapshotCount += 1;
 	monthlyData.blockNumbers.push(blockNumber);

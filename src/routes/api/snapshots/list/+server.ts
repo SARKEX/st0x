@@ -3,12 +3,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
 import { env } from '$env/dynamic/private';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
-export const GET: RequestHandler = async ({ url, request }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.snapshots, 'snapshots-list');
-	if (rateLimitResponse) return rateLimitResponse;
+export const GET: RequestHandler = async ({ url }) => {
 	// Check if Blob token is available (required for Vercel Blob storage)
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return json(

@@ -128,11 +128,25 @@ async function computeGlobalRewardsData(): Promise<GlobalRewardsData> {
 		}
 	}
 
-	// Projection calculations
+	// Projection calculations — use last 3 days' rate if available
 	const daysElapsed = Math.max(1, Math.floor(snapshotCount / 2));
 	const currentDayOfMonth = now.getUTCDate();
 	const daysRemaining = daysInMonth - currentDayOfMonth + 1;
-	const avgDailyPoints = totalPoints / daysElapsed;
+	const totals = monthlyData?.snapshotTotals ?? [];
+	let avgDailyPoints: number;
+	if (totals.length >= 6) {
+		// Use last 6 snapshots (~3 days) to get recent trend
+		const recent = totals.slice(-6);
+		const recentSum = recent.reduce((s, t) => s + t.totalPoints, 0);
+		const overallSum = totals.reduce((s, t) => s + t.totalPoints, 0);
+		const recentAvg = recentSum / recent.length;
+		const overallAvg = overallSum / totals.length;
+		// Scale eligible daily rate by how recent snapshots compare to overall
+		const scaleFactor = overallAvg > 0 ? recentAvg / overallAvg : 1;
+		avgDailyPoints = (totalPoints / daysElapsed) * scaleFactor;
+	} else {
+		avgDailyPoints = totalPoints / daysElapsed;
+	}
 	const projectedTotalPoints = totalPoints + avgDailyPoints * daysRemaining;
 	const projectedProgress =
 		rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;

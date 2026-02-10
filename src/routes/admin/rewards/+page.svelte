@@ -30,6 +30,7 @@
 		month: string;
 		snapshotCount: number;
 		blockNumbers: number[];
+		snapshotTotals: { blockNumber: number; totalPoints: number }[];
 		walletCount: number;
 		wallets: Array<{
 			address: string;
@@ -1124,11 +1125,26 @@
 		? currentMonthPool.poolAmount + achievedRocketBoostAmount
 		: 0;
 
-	// Calculate PROJECTED pool (extrapolate current daily rate to end of month)
+	// Calculate PROJECTED pool (extrapolate last 3 days' rate to end of month)
 	$: daysElapsedInMonth = monthlyData ? Math.max(1, Math.floor(monthlyData.snapshotCount / 2)) : 1;
 	$: daysInSelectedMonth = selectedMonth ? getDaysInMonth(selectedMonth) : 30;
 	$: daysRemainingInMonth = Math.max(0, daysInSelectedMonth - daysElapsedInMonth);
-	$: avgDailyPoints = totalPoints / daysElapsedInMonth;
+	$: avgDailyPoints = (() => {
+		const totals = monthlyData?.snapshotTotals ?? [];
+		if (totals.length >= 6) {
+			// Use last 6 snapshots (~3 days) to get recent trend
+			const recent = totals.slice(-6);
+			const recentSum = recent.reduce((s, t) => s + t.totalPoints, 0);
+			const overallSum = totals.reduce((s, t) => s + t.totalPoints, 0);
+			const recentAvg = recentSum / recent.length;
+			const overallAvg = overallSum / totals.length;
+			// Scale eligible daily rate by how recent snapshots compare to overall
+			const scaleFactor = overallAvg > 0 ? recentAvg / overallAvg : 1;
+			return (totalPoints / daysElapsedInMonth) * scaleFactor;
+		}
+		// Not enough data yet, fall back to blended average
+		return totalPoints / daysElapsedInMonth;
+	})();
 	$: projectedTotalPoints = totalPoints + avgDailyPoints * daysRemainingInMonth;
 	$: projectedProgressPercent =
 		rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;

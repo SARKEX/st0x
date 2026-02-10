@@ -48,6 +48,7 @@ export interface CategorizedToken extends PythToken {
 	unwrappedAddress?: string; // Underlying ERC4626 asset (tNVDA)
 	legacyAddress?: string; // Old token for migration (optional)
 	legacySymbol?: string; // Old symbol if different (e.g., tSPLG -> wtSPYM)
+	previousSymbols?: string[]; // Historical symbol names for blob storage lookups
 }
 
 export const TOKENS: CategorizedToken[] = [
@@ -147,6 +148,7 @@ export const TOKENS: CategorizedToken[] = [
 		unwrappedAddress: '0x8fdf41116f755771bfe0747d5f8c3711d5debfbb',
 		legacyAddress: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
 		legacySymbol: 'tSPYM', // Symbol changed from SPLG to SPYM
+		previousSymbols: ['wtSPLG', 'tSPLG'], // Historical blob storage names
 		symbol: 'wtSPYM',
 		decimals: 18,
 		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',

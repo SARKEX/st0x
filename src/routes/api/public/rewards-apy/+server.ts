@@ -1,7 +1,13 @@
 // Public API endpoint to get the current rewards APY
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, type MonthlyPointsData, type RewardsPoolConfig } from '$lib/server/kv';
+import {
+	kvGet,
+	KV_KEYS,
+	getExcludedWalletsSet,
+	type MonthlyPointsData,
+	type RewardsPoolConfig
+} from '$lib/server/kv';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 
@@ -43,9 +49,10 @@ export const GET: RequestHandler = async ({ request }) => {
 					'0'
 				)}`;
 
-				const [monthlyData, poolConfig] = await Promise.all([
+				const [monthlyData, poolConfig, excludedSet] = await Promise.all([
 					kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-					kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth))
+					kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
+					getExcludedWalletsSet()
 				]);
 
 				let totalPoints = 0;
@@ -53,7 +60,8 @@ export const GET: RequestHandler = async ({ request }) => {
 
 				if (monthlyData) {
 					snapshotCount = monthlyData.snapshotCount ?? 0;
-					for (const data of Object.values(monthlyData.wallets)) {
+					for (const [address, data] of Object.entries(monthlyData.wallets)) {
+						if (excludedSet.has(address.toLowerCase())) continue;
 						totalPoints += data.totalPoints;
 					}
 				}
@@ -63,11 +71,23 @@ export const GET: RequestHandler = async ({ request }) => {
 				const daysInMonth = getDaysInMonth(currentMonth);
 				const rocketBoostTargetPoints = rocketBoostTvlTarget * 2 * daysInMonth * 100;
 
-				// Project to end of month based on current pace
+				// Project to end of month based on last 3 days' rate
 				const daysElapsed = Math.max(1, Math.floor(snapshotCount / 2));
 				const currentDayOfMonth = now.getUTCDate();
 				const daysRemaining = daysInMonth - currentDayOfMonth + 1;
-				const avgDailyPoints = totalPoints / daysElapsed;
+				const totals = monthlyData?.snapshotTotals ?? [];
+				let avgDailyPoints: number;
+				if (totals.length >= 6) {
+					const recent = totals.slice(-6);
+					const recentSum = recent.reduce((s, t) => s + t.totalPoints, 0);
+					const overallSum = totals.reduce((s, t) => s + t.totalPoints, 0);
+					const recentAvg = recentSum / recent.length;
+					const overallAvg = overallSum / totals.length;
+					const scaleFactor = overallAvg > 0 ? recentAvg / overallAvg : 1;
+					avgDailyPoints = (totalPoints / daysElapsed) * scaleFactor;
+				} else {
+					avgDailyPoints = totalPoints / daysElapsed;
+				}
 				const projectedTotalPoints = totalPoints + avgDailyPoints * daysRemaining;
 				const projectedProgressPercent =
 					rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
