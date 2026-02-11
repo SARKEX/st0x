@@ -30,6 +30,10 @@ export function initScrollTracking(pageName: string): () => void {
 
 		ticking = true;
 		requestAnimationFrame(() => {
+			if (cleaned) {
+				ticking = false;
+				return;
+			}
 			const scrollTop = window.scrollY;
 			const docHeight = document.documentElement.scrollHeight - window.innerHeight;
 

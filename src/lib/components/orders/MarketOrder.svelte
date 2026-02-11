@@ -88,7 +88,12 @@
 	$: trackingState = {
 		tokenSymbol: assetToken?.symbol,
 		orderSide: orderSide.toLowerCase(),
-		amount: assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+		amount: selectedAmount
+			? formatUnits(
+					selectedAmount,
+					inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+				)
+			: '0',
 		marketPrice,
 		isSubmitting: isSubmittingMarketOrder,
 		currentError: insufficientBalanceError
@@ -121,7 +126,12 @@
 			error_type: 'insufficient_balance',
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
-			entered_amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+			entered_amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0',
 			balance_available:
 				spendingTokenBalanceDecimals !== null
 					? formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
@@ -139,7 +149,12 @@
 			error_type: 'insufficient_liquidity',
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
-			entered_amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+			entered_amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0',
 			available_liquidity: availableLiquidityFormatted
 		});
 	}
@@ -730,7 +745,12 @@
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
 			order_side: orderSide.toLowerCase(),
-			amount: assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+			amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0',
 			is_authenticated: $isAuthenticated
 		});
 
@@ -822,7 +842,10 @@
 					order_type: 'market',
 					token_symbol: assetToken?.symbol,
 					order_side: orderSide.toLowerCase(),
-					amount: formatUnits(selectedAmount, assetToken.decimals),
+					amount: formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					),
 					avg_price: marketPrice
 				});
 			}
