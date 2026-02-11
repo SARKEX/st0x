@@ -150,8 +150,10 @@
 		}
 	}
 
-	// Track modal open
-	$: if ($showWrapUnwrapModal) {
+	// Track modal open (guard to fire only once per open)
+	let hasTrackedModalOpen = false;
+	$: if ($showWrapUnwrapModal && !hasTrackedModalOpen) {
+		hasTrackedModalOpen = true;
 		track('wrap_unwrap_modal_opened', {
 			mode: $wrapUnwrapMode,
 			pre_selected_token: $wrapUnwrapModalToken?.symbol
@@ -229,6 +231,7 @@
 		selectedTokenAddress = null;
 		amount = '';
 		previewAmount = null;
+		hasTrackedModalOpen = false;
 		closeWrapUnwrapModal();
 	}
 

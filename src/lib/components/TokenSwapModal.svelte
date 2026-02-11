@@ -89,8 +89,10 @@
 		selectedOldTokenAddress = $swapModalToken.address;
 	}
 
-	// Track modal open
-	$: if ($showTokenSwapModal) {
+	// Track modal open (guard to fire only once per open)
+	let hasTrackedModalOpen = false;
+	$: if ($showTokenSwapModal && !hasTrackedModalOpen) {
+		hasTrackedModalOpen = true;
 		track('legacy_swap_modal_opened', {
 			pre_selected_token: $swapModalToken?.symbol
 		});
@@ -383,6 +385,7 @@
 		selectedOldTokenAddress = null;
 		swapAmount = '';
 		liquidityWarning = false;
+		hasTrackedModalOpen = false;
 		closeTokenSwapModal();
 	}
 

@@ -6,7 +6,9 @@
 	import { goto } from '$app/navigation';
 	import { track } from '$lib/services/analytics';
 
-	$: if ($showTokenSwapAnnouncementModal) {
+	let hasTrackedView = false;
+	$: if ($showTokenSwapAnnouncementModal && !hasTrackedView) {
+		hasTrackedView = true;
 		track('migration_announcement_viewed');
 	}
 
@@ -62,15 +64,27 @@
 				aria-label="Close modal"
 			>
 				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M6 18L18 6M6 6l12 12"
+					/>
 				</svg>
 			</button>
 
 			<!-- Content -->
 			<div class="px-6 pb-6 pt-6 text-center">
-				<div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-500/20">
+				<div
+					class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-500/20"
+				>
 					<svg class="h-7 w-7 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M5 13l4 4L19 7"
+						/>
 					</svg>
 				</div>
 
@@ -79,7 +93,8 @@
 				</h2>
 
 				<p class="mb-6 text-sm text-gray-400">
-					The token migration has been completed. If you haven't already, remember to swap your old tokens to the new wrapped versions on the site.
+					The token migration has been completed. If you haven't already, remember to swap your old
+					tokens to the new wrapped versions on the site.
 				</p>
 
 				<div class="flex gap-3">

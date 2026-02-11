@@ -25,7 +25,7 @@
 	onMount(() => {
 		trackPageView('strategies_page', {
 			auth_status: $isAuthenticated ? 'authenticated' : 'anonymous',
-			wallet_address: $walletAddress
+			wallet_connected: Boolean($walletAddress)
 		});
 		cleanupScrollTracking = initScrollTracking('strategies_page');
 	});

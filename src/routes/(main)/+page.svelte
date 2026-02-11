@@ -479,13 +479,13 @@
 									<tr
 										class="cursor-pointer transition-all hover:bg-yellow-500/5"
 										on:click={() => {
-										track('token_clicked', {
-											token_symbol: token.symbol,
-											token_id: token.id,
-											source: 'landing_page_table'
-										});
-										goto(`/trade/${token.id}`);
-									}}
+											track('token_clicked', {
+												token_symbol: token.symbol,
+												token_id: token.id,
+												source: 'landing_page_table'
+											});
+											goto(`/trade/${token.id}`);
+										}}
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<TokenDisplay

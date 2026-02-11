@@ -92,6 +92,26 @@ import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
 /**
+ * Classify error messages into safe, non-sensitive categories for analytics.
+ * Avoids sending raw error messages that may contain addresses, keys, or internal details.
+ */
+function classifyError(error: unknown): string {
+	const msg = ((error as Error)?.message ?? '').toLowerCase();
+	if (msg.includes('user rejected') || msg.includes('user denied')) return 'user_rejected';
+	if (msg.includes('insufficient funds') || msg.includes('exceeds balance'))
+		return 'insufficient_funds';
+	if (msg.includes('allowance') || msg.includes('exceeds allowance'))
+		return 'insufficient_allowance';
+	if (msg.includes('nonce')) return 'nonce_error';
+	if (msg.includes('timeout') || msg.includes('timed out')) return 'timeout';
+	if (msg.includes('network') || msg.includes('disconnected')) return 'network_error';
+	if (msg.includes('header not found') || msg.includes('block not found')) return 'rpc_error';
+	if (msg.includes('gas')) return 'gas_error';
+	if (msg.includes('reverted') || msg.includes('revert')) return 'transaction_reverted';
+	return 'unknown';
+}
+
+/**
  * Validates that an orderbook address is in the trusted whitelist for the current network.
  * This prevents transactions to malicious contracts if the API or subgraph is compromised.
  *
@@ -619,7 +639,7 @@ const transactionStore = () => {
 			track(`${mode}_failed`, {
 				token_symbol: tokenSymbol,
 				target_symbol: targetSymbol,
-				error: (error as Error)?.message
+				error: classifyError(error)
 			});
 
 			if (isStaleWalletSessionError(error)) {
@@ -855,7 +875,7 @@ const transactionStore = () => {
 		} catch (error: unknown) {
 			track('order_removal_failed', {
 				order_hash: quote.orderHash,
-				error: (error as Error)?.message
+				error: classifyError(error)
 			});
 
 			if (isStaleWalletSessionError(error)) {
@@ -1117,7 +1137,7 @@ const transactionStore = () => {
 			track('order_withdrawal_failed', {
 				order_hash: quote.orderHash,
 				is_filled: isFilled,
-				error: (error as Error)?.message
+				error: classifyError(error)
 			});
 
 			if (isStaleWalletSessionError(error)) {

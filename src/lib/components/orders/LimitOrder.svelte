@@ -44,9 +44,11 @@
 					price: selectedInitialRatio || null,
 					side: orderSide.toLowerCase()
 				},
-				intended_trade_size_usd: selectedInitialRatio && assetToken
-					? parseFloat(formatUnits(selectedAmount, assetToken.decimals)) * parseFloat(selectedInitialRatio)
-					: null,
+				intended_trade_size_usd:
+					selectedInitialRatio && assetToken
+						? parseFloat(formatUnits(selectedAmount, assetToken.decimals)) *
+							parseFloat(selectedInitialRatio)
+						: null,
 				time_spent_ms: Date.now() - panelOpenTime,
 				last_error: belowMinTradeError ? 'below_minimum' : null
 			});
@@ -333,6 +335,13 @@
 
 	const proceedWithDeploy = () => {
 		if (!pendingDeployData) return;
+		tradeSubmittedSuccessfully = true;
+		track('limit_order_deployed', {
+			token_symbol: assetToken?.symbol,
+			order_side: orderSide.toLowerCase(),
+			price: selectedInitialRatio,
+			amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0'
+		});
 		transactionStore.handleLimitDeploy(pendingDeployData);
 		showPriceWarning = false;
 		userAcknowledgesWarning = false;

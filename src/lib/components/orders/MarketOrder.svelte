@@ -91,11 +91,15 @@
 		amount: assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
 		marketPrice,
 		isSubmitting: isSubmittingMarketOrder,
-		currentError: insufficientBalanceError ? 'insufficient_balance'
-			: insufficientLiquidityWarning ? 'insufficient_liquidity'
-			: priceError ? `price_${priceErrorReason}`
-			: orderPreparationError ? 'preparation_error'
-			: null
+		currentError: insufficientBalanceError
+			? 'insufficient_balance'
+			: insufficientLiquidityWarning
+				? 'insufficient_liquidity'
+				: priceError
+					? `price_${priceErrorReason}`
+					: orderPreparationError
+						? 'preparation_error'
+						: null
 	};
 
 	onMount(() => {
@@ -107,18 +111,29 @@
 	});
 
 	// Track errors when they appear
-	$: if (insufficientBalanceError && selectedAmount > 0n && lastTrackedError !== 'insufficient_balance') {
+	$: if (
+		insufficientBalanceError &&
+		selectedAmount > 0n &&
+		lastTrackedError !== 'insufficient_balance'
+	) {
 		lastTrackedError = 'insufficient_balance';
 		track('trade_error_shown', {
 			error_type: 'insufficient_balance',
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
 			entered_amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
-			balance_available: spendingTokenBalanceDecimals !== null ? formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals) : '0'
+			balance_available:
+				spendingTokenBalanceDecimals !== null
+					? formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
+					: '0'
 		});
 	}
 
-	$: if (insufficientLiquidityWarning && selectedAmount > 0n && lastTrackedError !== 'insufficient_liquidity') {
+	$: if (
+		insufficientLiquidityWarning &&
+		selectedAmount > 0n &&
+		lastTrackedError !== 'insufficient_liquidity'
+	) {
 		lastTrackedError = 'insufficient_liquidity';
 		track('trade_error_shown', {
 			error_type: 'insufficient_liquidity',

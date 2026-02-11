@@ -1,23 +1,7 @@
 import { browser } from '$app/environment';
 import { track } from '$lib/services/analytics';
 
-interface ScrollTrackingState {
-	pageName: string;
-	maxScrollDepth: number;
-	scrollCount: number;
-	startTime: number;
-	reachedBottom: boolean;
-	cleanup: (() => void) | null;
-}
-
-const state: ScrollTrackingState = {
-	pageName: '',
-	maxScrollDepth: 0,
-	scrollCount: 0,
-	startTime: 0,
-	reachedBottom: false,
-	cleanup: null
-};
+let activeCleanup: (() => void) | null = null;
 
 /**
  * Initialize scroll tracking for a page
@@ -27,16 +11,16 @@ export function initScrollTracking(pageName: string): () => void {
 	if (!browser) return () => {};
 
 	// Clean up any existing tracking
-	if (state.cleanup) {
-		state.cleanup();
+	if (activeCleanup) {
+		activeCleanup();
 	}
 
-	// Reset state
-	state.pageName = pageName;
-	state.maxScrollDepth = 0;
-	state.scrollCount = 0;
-	state.startTime = Date.now();
-	state.reachedBottom = false;
+	// Per-session state captured in closure to avoid race conditions
+	let maxScrollDepth = 0;
+	let scrollCount = 0;
+	const startTime = Date.now();
+	let reachedBottom = false;
+	let cleaned = false;
 
 	// Throttle scroll handler for performance
 	let ticking = false;
@@ -56,20 +40,20 @@ export function initScrollTracking(pageName: string): () => void {
 			}
 
 			// Only count valid scroll events (after docHeight validation)
-			state.scrollCount++;
+			scrollCount++;
 
 			const depth = Math.round((scrollTop / docHeight) * 100);
 
-			if (depth > state.maxScrollDepth) {
-				state.maxScrollDepth = depth;
+			if (depth > maxScrollDepth) {
+				maxScrollDepth = depth;
 			}
 
 			// Track when user reaches bottom (95%+)
-			if (depth >= 95 && !state.reachedBottom) {
-				state.reachedBottom = true;
+			if (depth >= 95 && !reachedBottom) {
+				reachedBottom = true;
 				track('page_scrolled_to_bottom', {
-					page: state.pageName,
-					time_to_bottom_ms: Date.now() - state.startTime
+					page: pageName,
+					time_to_bottom_ms: Date.now() - startTime
 				});
 			}
 
@@ -81,34 +65,26 @@ export function initScrollTracking(pageName: string): () => void {
 
 	// Cleanup function
 	const cleanup = () => {
+		if (cleaned) return;
+		cleaned = true;
+
 		window.removeEventListener('scroll', handleScroll);
 
 		// Track final scroll depth on page leave
-		if (state.scrollCount > 0) {
+		if (scrollCount > 0) {
 			track('page_scroll_depth', {
-				page: state.pageName,
-				max_depth_percent: state.maxScrollDepth,
-				total_scrolls: state.scrollCount,
-				time_on_page_ms: Date.now() - state.startTime
+				page: pageName,
+				max_depth_percent: maxScrollDepth,
+				total_scrolls: scrollCount,
+				time_on_page_ms: Date.now() - startTime
 			});
 		}
 
-		state.cleanup = null;
+		if (activeCleanup === cleanup) {
+			activeCleanup = null;
+		}
 	};
 
-	state.cleanup = cleanup;
+	activeCleanup = cleanup;
 	return cleanup;
-}
-
-/**
- * Get current scroll tracking state (useful for debugging)
- */
-export function getScrollTrackingState(): Readonly<Omit<ScrollTrackingState, 'cleanup'>> {
-	return {
-		pageName: state.pageName,
-		maxScrollDepth: state.maxScrollDepth,
-		scrollCount: state.scrollCount,
-		startTime: state.startTime,
-		reachedBottom: state.reachedBottom
-	};
 }
