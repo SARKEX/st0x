@@ -46,7 +46,8 @@
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	import {
 		getAllOldTokenAddresses,
-		getMigrationMappingByAddress
+		getMigrationMappingByAddress,
+		getMigrationMappingByNewAddress
 	} from '$lib/config/tokenMigration';
 	import {
 		getAllUnwrappedTokenAddresses,
@@ -723,7 +724,23 @@
 				const untrackedBalance = Math.max(0, balanceNum - trackedBalance);
 
 				// Get manual cost basis entry for untracked tokens
-				const manualEntry = manualEntries.get(h.address.toLowerCase());
+				// Also check legacy token address as fallback (entries may not have been
+				// migrated yet if the user swapped before this fix was deployed)
+				let manualEntry = manualEntries.get(h.address.toLowerCase());
+				if (!manualEntry) {
+					const migration = getMigrationMappingByNewAddress(h.address);
+					if (migration) {
+						const legacyEntry = manualEntries.get(migration.oldToken.address.toLowerCase());
+						if (legacyEntry) {
+							// Auto-migrate the orphaned entry to the wrapped address
+							manualCostBasisStore.migrateEntry(
+								migration.oldToken.address,
+								h.address
+							);
+							manualEntry = { ...legacyEntry, tokenAddress: h.address.toLowerCase() };
+						}
+					}
+				}
 
 				// Calculate P&L from trade-based cost basis (for tracked portion)
 				const tradePnlData = calculatePnL(costBasis, balanceNum, price);

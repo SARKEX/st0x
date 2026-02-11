@@ -100,6 +100,30 @@ function createManualCostBasisStore() {
 			saveToStorage(currentWallet, entries);
 		},
 
+		/** Migrate an entry from one token address to another (e.g., legacy → wrapped) */
+		migrateEntry(fromAddress: string, toAddress: string): void {
+			if (!currentWallet) return;
+
+			const entries = get(store);
+			const normalizedFrom = fromAddress.toLowerCase();
+			const normalizedTo = toAddress.toLowerCase();
+
+			const existing = entries.get(normalizedFrom);
+			if (!existing) return;
+
+			// Move entry to the new address
+			const migrated: ManualCostBasisEntry = {
+				...existing,
+				tokenAddress: normalizedTo,
+				updatedAt: Date.now()
+			};
+
+			entries.set(normalizedTo, migrated);
+			entries.delete(normalizedFrom);
+			store.set(new Map(entries));
+			saveToStorage(currentWallet, entries);
+		},
+
 		clearAll(): void {
 			if (!currentWallet) return;
 

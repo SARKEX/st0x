@@ -26,6 +26,7 @@
 	import { Float } from '@rainlanguage/float';
 	import type { TakeOrdersConfigV5, TakeOrderConfigV4, OrderV4 } from '@rainlanguage/orderbook';
 	import { track } from '$lib/services/analytics';
+	import { manualCostBasisStore } from '$lib/stores/manualCostBasis';
 
 	const queryClient = useQueryClient();
 
@@ -369,6 +370,9 @@
 				params,
 				undefined
 			);
+
+			// Migrate manual cost basis entry from legacy to wrapped token address
+			manualCostBasisStore.migrateEntry(mapping.oldToken.address, mapping.newToken.address);
 
 			// Invalidate modal-specific + dashboard queries (balance queries handled by handleTakeOrders)
 			queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
