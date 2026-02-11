@@ -83,16 +83,6 @@ export async function fetchAllTokenBalances(
 ): Promise<TokenBalance[]> {
 	const balanceResults: TokenBalance[] = [];
 
-	// Prepare all contracts for a single multicall batch
-	const allContracts: Array<{
-		abi: typeof erc20Abi;
-		address: Address;
-		functionName: 'balanceOf';
-		args: [Address];
-		chainId: number;
-		token: PaymentToken;
-	}> = [];
-
 	// Networks to fetch balances for
 	const networks: SupportedNetworkId[] = [
 		SUPPORTED_NETWORKS.BASE,
@@ -101,59 +91,40 @@ export async function fetchAllTokenBalances(
 		SUPPORTED_NETWORKS.ETHEREUM
 	];
 
-	// Collect all tokens from all networks (skip native tokens)
-	for (const chainId of networks) {
-		const tokens = getPaymentTokensForNetwork(chainId);
-		for (const token of tokens) {
-			// Skip native tokens (can't call balanceOf on them)
-			if (token.isNative) continue;
+	// Build contracts with per-contract chainId so wagmi routes each call
+	// to the correct chain's RPC.
+	const allTokens: PaymentToken[] = [];
+	const contracts = networks.flatMap((chainId) => {
+		const tokens = getPaymentTokensForNetwork(chainId).filter((t) => !t.isNative);
+		allTokens.push(...tokens);
+		return tokens.map((token) => ({
+			abi: erc20Abi,
+			address: token.address as Address,
+			functionName: 'balanceOf' as const,
+			args: [walletAddress] as [Address],
+			chainId
+		}));
+	});
 
-			allContracts.push({
-				abi: erc20Abi,
-				address: token.address as Address,
-				functionName: 'balanceOf',
-				args: [walletAddress],
-				chainId,
-				token
-			});
-		}
-	}
-
-	// Execute single batched multicall for all tokens across all chains
-	// Add timeout to prevent hanging if an RPC is slow
 	try {
-		const timeoutMs = 15_000; // 15 second timeout
-		const resultsPromise = readContracts(wagmiConfig, {
-			contracts: allContracts
-		});
+		const timeoutMs = 15_000;
+		const resultsPromise = readContracts(wagmiConfig, { contracts });
 		const timeoutPromise = new Promise<never>((_, reject) =>
 			setTimeout(() => reject(new Error('Balance fetch timeout')), timeoutMs)
 		);
 		const results = await Promise.race([resultsPromise, timeoutPromise]);
 
-		// Process results
-		for (let i = 0; i < allContracts.length; i++) {
-			const { token } = allContracts[i];
+		for (let i = 0; i < allTokens.length; i++) {
+			const token = allTokens[i];
 			const result = results[i];
-
-			if (result.status === 'success' && result.result) {
+			if (result.status === 'success') {
 				const balance = result.result as bigint;
 				const balanceFormatted = parseFloat(formatUnits(balance, token.decimals));
-
-				// Estimate USD value (stablecoins = $1, ignore others for now)
 				let balanceUSD = 0;
 				if (token.symbol === 'USDC' || token.symbol === 'USDT') {
 					balanceUSD = balanceFormatted;
 				}
-
-				balanceResults.push({
-					token,
-					balance,
-					balanceFormatted,
-					balanceUSD
-				});
-
-				// Cache token metadata for future use
+				balanceResults.push({ token, balance, balanceFormatted, balanceUSD });
 				setCachedTokenMetadata(token.address, token.chainId, {
 					decimals: token.decimals,
 					symbol: token.symbol,
@@ -163,7 +134,6 @@ export async function fetchAllTokenBalances(
 		}
 	} catch (error) {
 		console.error('[BalanceStore] Failed to fetch balances:', error);
-		// Return partial results instead of failing completely
 	}
 
 	return balanceResults;
