@@ -165,7 +165,12 @@
 			error_type: `price_${priceErrorReason}`,
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
-			entered_amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0'
+			entered_amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0'
 		});
 	}
 
