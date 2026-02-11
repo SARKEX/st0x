@@ -1,6 +1,6 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { toDecimal } from '$lib/utils/tokenMath';
-import { getMigrationMappingByNewAddress } from '$lib/config/tokenMigration';
+import { getMigrationMappingByAddress } from '$lib/config/tokenMigration';
 
 export interface CostBasisData {
 	tokenAddress: string;
@@ -214,34 +214,48 @@ export function calculateAllCostBases(
 	}
 
 	// Merge old token cost basis into new wrapped token for token migrations
-	for (const [tokenAddress, costBasis] of costBasisMap) {
-		// Check if this is a new wrapped token with a corresponding old token
-		const migrationMapping = getMigrationMappingByNewAddress(tokenAddress);
+	// Iterate from old token perspective so merging works even when the new
+	// wrapped token has no trades yet (i.e. is not already in the map).
+	for (const [tokenAddress, costBasis] of Array.from(costBasisMap.entries())) {
+		// Check if this is an old (legacy) token with a migration to a new wrapped token
+		const migrationMapping = getMigrationMappingByAddress(tokenAddress);
 		if (!migrationMapping) continue;
+		if (costBasis.totalAcquired <= 0) continue;
 
-		const oldTokenAddress = migrationMapping.oldToken.address.toLowerCase();
-		const oldCostBasis = costBasisMap.get(oldTokenAddress);
+		const newTokenAddress = migrationMapping.newToken.address.toLowerCase();
+		const existingNew = costBasisMap.get(newTokenAddress);
 
-		if (oldCostBasis && oldCostBasis.totalAcquired > 0) {
-			// Merge old token's acquisition history into new token
-			const combinedTotalAcquired = costBasis.totalAcquired + oldCostBasis.totalAcquired;
-			const combinedTotalCost = costBasis.totalCost + oldCostBasis.totalCost;
-			const combinedTotalSold = costBasis.totalSold + oldCostBasis.totalSold;
-			const combinedRealizedPnL = costBasis.realizedPnL + oldCostBasis.realizedPnL;
+		if (existingNew) {
+			// Merge old token's acquisition history into existing new token entry
+			const combinedTotalAcquired = existingNew.totalAcquired + costBasis.totalAcquired;
+			const combinedTotalCost = existingNew.totalCost + costBasis.totalCost;
+			const combinedTotalSold = existingNew.totalSold + costBasis.totalSold;
+			const combinedRealizedPnL = existingNew.realizedPnL + costBasis.realizedPnL;
 
-			costBasisMap.set(tokenAddress, {
-				tokenAddress,
+			costBasisMap.set(newTokenAddress, {
+				tokenAddress: newTokenAddress,
 				avgCostBasis: combinedTotalAcquired > 0 ? combinedTotalCost / combinedTotalAcquired : 0,
 				totalCost: combinedTotalCost,
 				totalAcquired: combinedTotalAcquired,
 				totalSold: combinedTotalSold,
-				netPosition: costBasis.netPosition + oldCostBasis.netPosition,
+				netPosition: existingNew.netPosition + costBasis.netPosition,
 				realizedPnL: combinedRealizedPnL
 			});
-
-			// Remove old token's cost basis entry (it's now merged)
-			costBasisMap.delete(oldTokenAddress);
+		} else {
+			// New wrapped token has no trades yet — carry over old token's cost basis directly
+			costBasisMap.set(newTokenAddress, {
+				tokenAddress: newTokenAddress,
+				avgCostBasis: costBasis.avgCostBasis,
+				totalCost: costBasis.totalCost,
+				totalAcquired: costBasis.totalAcquired,
+				totalSold: costBasis.totalSold,
+				netPosition: costBasis.netPosition,
+				realizedPnL: costBasis.realizedPnL
+			});
 		}
+
+		// Remove old token's cost basis entry (it's now merged)
+		costBasisMap.delete(tokenAddress);
 	}
 
 	return costBasisMap;
