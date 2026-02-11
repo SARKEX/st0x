@@ -221,9 +221,10 @@
 	// Basescan URL for wallet
 	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
 
-	// Dust threshold for vaults (in token units)
+	// Dust threshold for vaults and token balances (in token units)
 	const DUST_THRESHOLD = 0.0001;
 	let showDustVaults = false;
+	let hideDust = true;
 
 	// Manual cost basis entry state
 	let showCostBasisModal = false;
@@ -862,7 +863,9 @@
 		return funds;
 	})();
 	$: assetHoldings = portfolioHoldings.filter(
-		(h) => !paymentTokenAddresses.has(h.address.toLowerCase())
+		(h) =>
+			!paymentTokenAddresses.has(h.address.toLowerCase()) &&
+			(!hideDust || h.totalBalance >= DUST_THRESHOLD)
 	);
 
 	// Legacy token holdings (old tokens that need to be swapped)
@@ -888,28 +891,35 @@
 					value: balanceNum * price,
 					newTokenDisplay: mapping ? `Wrapped ${mapping.oldToken.symbol}` : token.symbol
 				};
-			});
+			})
+			.filter((token) => !hideDust || token.balanceNum >= DUST_THRESHOLD);
 	})();
 
 	// Unwrapped token holdings (underlying tokens that can be wrapped)
 	$: unwrappedHoldings = (() => {
 		const tokens = $unwrappedTokenBalancesQuery?.data ?? [];
-		return tokens.map((token) => {
-			const mapping = getWrappingMappingByUnwrappedAddress(token.address);
-			// Use the wrapped token's price since they're 1:1
-			const quote = mapping
-				? findQuoteForSymbol(mapping.wrappedToken.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS)
-				: null;
-			const price = quote?.close ?? 0;
-			const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
-			return {
-				...token,
-				balanceNum,
-				price,
-				value: balanceNum * price,
-				wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? token.symbol
-			};
-		});
+		return tokens
+			.map((token) => {
+				const mapping = getWrappingMappingByUnwrappedAddress(token.address);
+				// Use the wrapped token's price since they're 1:1
+				const quote = mapping
+					? findQuoteForSymbol(
+							mapping.wrappedToken.symbol,
+							$priceFeedsQuery?.data ?? [],
+							ALL_TOKENS
+						)
+					: null;
+				const price = quote?.close ?? 0;
+				const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
+				return {
+					...token,
+					balanceNum,
+					price,
+					value: balanceNum * price,
+					wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? token.symbol
+				};
+			})
+			.filter((token) => !hideDust || token.balanceNum >= DUST_THRESHOLD);
 	})();
 
 	// Orders: Fetch orderbook quotes for all tokens
@@ -1236,6 +1246,19 @@
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}
+				<!-- Hide Dust Checkbox -->
+				<div class="flex justify-end px-1 pb-2 pt-1">
+					<label
+						class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm"
+					>
+						<input
+							type="checkbox"
+							bind:checked={hideDust}
+							class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 sm:h-4 sm:w-4"
+						/>
+						Hide dust
+					</label>
+				</div>
 				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
 					<Section>
 						<LoadingSpinner variant="inline" size="md" text="Loading portfolio..." />
