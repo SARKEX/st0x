@@ -8,7 +8,7 @@
 		getShareUrl,
 		copyToClipboard,
 		updateReferralNickname,
-		createNicknameUpdateSignMessage
+		requestReferralNicknameUpdateChallenge
 	} from '$lib/stores/referralStore';
 	import { walletAddress } from '$lib/stores/authStore';
 	import { signMessage } from '$lib/services/walletService';
@@ -78,13 +78,21 @@
 		nicknameError = '';
 
 		try {
-			const message = createNicknameUpdateSignMessage($walletAddress, trimmedNickname);
-			const signature = await signMessage(message);
+			const challenge = await requestReferralNicknameUpdateChallenge(
+				$walletAddress,
+				trimmedNickname
+			);
+			if (!challenge.success || !challenge.message || !challenge.nonce) {
+				nicknameError = challenge.error || 'Failed to issue nickname update challenge';
+				return;
+			}
+
+			const signature = await signMessage(challenge.message);
 			const result = await updateReferralNickname(
 				$walletAddress,
 				trimmedNickname,
 				signature,
-				message
+				challenge.nonce
 			);
 
 			if (result.success) {

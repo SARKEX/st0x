@@ -7,7 +7,7 @@
 // If the requested timestamp is outside market hours, we adjust to the
 // last market close to get valid price data.
 
-import { TOKENS } from '$lib/config/tokens';
+import { getTokenByAnyAddress } from '$lib/config/tokens';
 import { getPriceTimestamp } from './marketHours';
 
 const HERMES_URL = 'https://hermes.pyth.network/v2/updates/price';
@@ -88,15 +88,25 @@ export async function fetchPythPricesAtTimestamp(
 	const adjustedTimestamp = getPriceTimestamp(timestamp);
 
 	// Get feed IDs for the requested tokens
-	const tokenFeedMap = new Map<string, { address: string; symbol: string; feedId: string }>();
+	// Multiple addresses can share the same feed ID (wrapped, unwrapped, legacy all use the same price)
+	const tokenFeedMap = new Map<
+		string,
+		{ addresses: { address: string; symbol: string }[]; feedId: string }
+	>();
 
 	for (const tokenAddress of tokenAddresses) {
-		const token = TOKENS.find((t) => t.address.toLowerCase() === tokenAddress.toLowerCase());
+		const token = getTokenByAnyAddress(tokenAddress);
 		if (token?.priceFeedId) {
-			tokenFeedMap.set(normalizeFeedId(token.priceFeedId), {
+			const normalizedId = normalizeFeedId(token.priceFeedId);
+			if (!tokenFeedMap.has(normalizedId)) {
+				tokenFeedMap.set(normalizedId, {
+					addresses: [],
+					feedId: token.priceFeedId
+				});
+			}
+			tokenFeedMap.get(normalizedId)!.addresses.push({
 				address: tokenAddress.toLowerCase(),
-				symbol: token.symbol,
-				feedId: token.priceFeedId
+				symbol: token.symbol
 			});
 		}
 	}
@@ -105,6 +115,27 @@ export async function fetchPythPricesAtTimestamp(
 		console.log('[Pyth] No tokens with price feed IDs found');
 		return { prices: results, priceTimestamp: adjustedTimestamp };
 	}
+
+	// Helper to set results for all addresses sharing a feed
+	const setResultsForFeed = (
+		feedInfo: { addresses: { address: string; symbol: string }[]; feedId: string },
+		price: number | null,
+		confidence: number | null,
+		expo: number | null,
+		publishTime: number | null
+	) => {
+		for (const addr of feedInfo.addresses) {
+			results.set(addr.address, {
+				tokenAddress: addr.address,
+				tokenSymbol: addr.symbol,
+				priceFeedId: feedInfo.feedId,
+				price,
+				confidence,
+				expo,
+				publishTime
+			});
+		}
+	};
 
 	// Build the query with all feed IDs
 	// Hermes API uses ids[]= format for multiple feeds
@@ -122,52 +153,44 @@ export async function fetchPythPricesAtTimestamp(
 		if (!response.ok) {
 			console.error(`[Pyth] Hermes API error: ${response.status} ${response.statusText}`);
 			// Return empty prices for all tokens
-			for (const [, tokenInfo] of tokenFeedMap) {
-				results.set(tokenInfo.address, {
-					tokenAddress: tokenInfo.address,
-					tokenSymbol: tokenInfo.symbol,
-					priceFeedId: tokenInfo.feedId,
-					price: null,
-					confidence: null,
-					expo: null,
-					publishTime: null
-				});
+			for (const [, feedInfo] of tokenFeedMap) {
+				setResultsForFeed(feedInfo, null, null, null, null);
 			}
 			return { prices: results, priceTimestamp: adjustedTimestamp };
 		}
 
 		const data: PythHistoricalResponse = await response.json();
 
-		// Process parsed entries
+		// Process parsed entries — fan out to all addresses sharing each feed ID
 		for (const entry of data.parsed || []) {
 			const normalizedId = normalizeFeedId(entry.id);
-			const tokenInfo = tokenFeedMap.get(normalizedId);
+			const feedInfo = tokenFeedMap.get(normalizedId);
 
-			if (tokenInfo) {
-				results.set(tokenInfo.address, {
-					tokenAddress: tokenInfo.address,
-					tokenSymbol: tokenInfo.symbol,
-					priceFeedId: tokenInfo.feedId,
-					price: normalizePrice(entry.price),
-					confidence: normalizeConfidence(entry.price),
-					expo: entry.price?.expo ?? null,
-					publishTime: entry.price?.publish_time ?? null
-				});
+			if (feedInfo) {
+				setResultsForFeed(
+					feedInfo,
+					normalizePrice(entry.price),
+					normalizeConfidence(entry.price),
+					entry.price?.expo ?? null,
+					entry.price?.publish_time ?? null
+				);
 			}
 		}
 
 		// Fill in missing tokens with null prices
-		for (const [, tokenInfo] of tokenFeedMap) {
-			if (!results.has(tokenInfo.address)) {
-				results.set(tokenInfo.address, {
-					tokenAddress: tokenInfo.address,
-					tokenSymbol: tokenInfo.symbol,
-					priceFeedId: tokenInfo.feedId,
-					price: null,
-					confidence: null,
-					expo: null,
-					publishTime: null
-				});
+		for (const [, feedInfo] of tokenFeedMap) {
+			for (const addr of feedInfo.addresses) {
+				if (!results.has(addr.address)) {
+					results.set(addr.address, {
+						tokenAddress: addr.address,
+						tokenSymbol: addr.symbol,
+						priceFeedId: feedInfo.feedId,
+						price: null,
+						confidence: null,
+						expo: null,
+						publishTime: null
+					});
+				}
 			}
 		}
 
@@ -176,16 +199,8 @@ export async function fetchPythPricesAtTimestamp(
 	} catch (error) {
 		console.error('[Pyth] Error fetching prices:', error);
 		// Return empty prices for all tokens
-		for (const [, tokenInfo] of tokenFeedMap) {
-			results.set(tokenInfo.address, {
-				tokenAddress: tokenInfo.address,
-				tokenSymbol: tokenInfo.symbol,
-				priceFeedId: tokenInfo.feedId,
-				price: null,
-				confidence: null,
-				expo: null,
-				publishTime: null
-			});
+		for (const [, feedInfo] of tokenFeedMap) {
+			setResultsForFeed(feedInfo, null, null, null, null);
 		}
 	}
 

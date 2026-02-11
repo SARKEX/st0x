@@ -1,23 +1,15 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getWalletsByCode, getWalletInfo } from '$lib/server/accessCodes';
-import { verifySessionToken } from '$lib/server/auth';
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 // GET - List wallets for a given access code
-export const GET: RequestHandler = async ({ cookies, url }) => {
-	if (!isAuthenticated(cookies)) {
+export const GET: RequestHandler = async ({ cookies, url, request }) => {
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-wallets-list');
+	if (rateLimitResponse) return rateLimitResponse;
+
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

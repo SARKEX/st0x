@@ -9,21 +9,9 @@ import {
 	generateAccessCode,
 	updateAccessCode
 } from '$lib/server/accessCodes';
-import { verifySessionToken } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
 
 // GET - List all access codes
 export const GET: RequestHandler = async ({ cookies, request }) => {
@@ -31,7 +19,7 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-list');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -57,21 +45,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-create');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	const audit = createAuditLogger(request);
 
-	let body: { code?: string; maxUses?: number; expiresAt?: string; label?: string };
 	try {
-		body = await request.json();
-	} catch {
-		return json({ error: 'Invalid request body' }, { status: 400 });
-	}
-
-	try {
-		const { code, maxUses, expiresAt, label } = body;
+		const { code, maxUses, expiresAt, label } = await request.json();
 
 		// If code provided, validate format
 		if (code && typeof code === 'string') {
@@ -102,9 +83,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		);
 
 		return json({ success: true, code: accessCode });
-	} catch (error) {
-		console.error('[admin/codes POST] Error creating access code:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };
 
@@ -114,21 +94,14 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-delete');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	const audit = createAuditLogger(request);
 
-	let body: { code?: string };
 	try {
-		body = await request.json();
-	} catch {
-		return json({ error: 'Invalid request body' }, { status: 400 });
-	}
-
-	try {
-		const { code } = body;
+		const { code } = await request.json();
 
 		if (!code || typeof code !== 'string') {
 			return json({ error: 'Access code required' }, { status: 400 });
@@ -147,9 +120,8 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		return json({ error: 'Access code not found' }, { status: 404 });
-	} catch (error) {
-		console.error('[admin/codes DELETE] Error deleting access code:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };
 
@@ -163,7 +135,7 @@ export const PATCH: RequestHandler = async ({ cookies, request }) => {
 	);
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
@@ -177,21 +149,14 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-update');
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	const audit = createAuditLogger(request);
 
-	let body: { code?: string; maxUses?: number; expiresAt?: string; label?: string };
 	try {
-		body = await request.json();
-	} catch {
-		return json({ error: 'Invalid request body' }, { status: 400 });
-	}
-
-	try {
-		const { code, maxUses, expiresAt, label } = body;
+		const { code, maxUses, expiresAt, label } = await request.json();
 
 		if (!code || typeof code !== 'string') {
 			return json({ error: 'Access code required' }, { status: 400 });
@@ -223,8 +188,7 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		return json({ error: 'Failed to update code' }, { status: 500 });
-	} catch (error) {
-		console.error('[admin/codes PUT] Error updating access code:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };

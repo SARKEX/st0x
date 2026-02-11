@@ -23,10 +23,8 @@
 	import { formatUnits, erc20Abi } from 'viem';
 	import { readContracts, getBalance } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
-	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
-	import type { SupportedNetworkId } from '$lib/services/account-abstraction';
+	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK, getTokenByAnyAddress } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
-	import { browser } from '$app/environment';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -39,16 +37,32 @@
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
 	import { calculatePnL } from '$lib/utils/costBasis';
 	import { manualCostBasisStore, type ManualCostBasisEntry } from '$lib/stores/manualCostBasis';
+	import { derived } from 'svelte/store';
+	import { onDestroy } from 'svelte';
 	import transactionStore from '$lib/stores/transaction';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
-	import {
-		fetchAllTokenBalances,
-		getBalanceQueryKey,
-		BALANCE_QUERY_OPTIONS
-	} from '$lib/stores/balanceStore';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
+	import {
+		getAllOldTokenAddresses,
+		getMigrationMappingByAddress
+	} from '$lib/config/tokenMigration';
+	import {
+		getAllUnwrappedTokenAddresses,
+		getWrappingMappingByUnwrappedAddress,
+		getWrappingMappingByWrappedAddress
+	} from '$lib/config/tokenWrapping';
+	import {
+		openTokenSwapModal,
+		openWrapModal,
+		openUnwrapModal,
+		type SwapModalToken,
+		type WrapUnwrapModalToken
+	} from '$lib/stores/dynamicStore';
+	import TokenSwapModal from '$lib/components/TokenSwapModal.svelte';
+	import WrapUnwrapModal from '$lib/components/WrapUnwrapModal.svelte';
+	import { track } from '$lib/services/analytics';
 
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
@@ -57,26 +71,20 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Set of valid token addresses (asset tokens + payment tokens) for filtering
-	// Include tokens from ALL networks for cross-chain balance display
 	$: validTokenAddresses = (() => {
+		if (!$currentNetwork) return new Set<string>();
 		const addresses = new Set<string>();
-
-		// Add all asset tokens (from current network)
-		if ($currentNetwork) {
-			for (const token of TOKENS) {
-				if (token.chainId === $currentNetwork.chainId) {
-					addresses.add(token.address.toLowerCase());
-				}
-			}
-		}
-
-		// Add payment tokens from ALL networks (for cross-chain display)
-		for (const paymentTokens of Object.values(PAYMENT_TOKENS_BY_NETWORK)) {
-			for (const token of paymentTokens) {
+		// Add asset tokens for current network
+		for (const token of TOKENS) {
+			if (token.chainId === $currentNetwork.chainId) {
 				addresses.add(token.address.toLowerCase());
 			}
 		}
-
+		// Add payment tokens for current network
+		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
+		for (const token of paymentTokens) {
+			addresses.add(token.address.toLowerCase());
+		}
 		return addresses;
 	})();
 
@@ -129,6 +137,72 @@
 			balanceRaw: holding.walletBalance
 		};
 		openSendFundsModal(token);
+	}
+
+	// Helper to open swap modal for legacy tokens
+	function handleSwapLegacyToken(legacyToken: {
+		symbol: string;
+		address: string;
+		decimals: number;
+		walletBalance: bigint;
+		balanceNum: number;
+	}) {
+		track('dashboard_swap_legacy_clicked', {
+			token_symbol: legacyToken.symbol,
+			balance: legacyToken.balanceNum
+		});
+		const token: SwapModalToken = {
+			symbol: legacyToken.symbol,
+			address: legacyToken.address,
+			decimals: legacyToken.decimals,
+			balance: legacyToken.balanceNum.toFixed(4),
+			balanceRaw: legacyToken.walletBalance
+		};
+		openTokenSwapModal(token);
+	}
+
+	// Helper to open unwrap modal for wrapped tokens
+	function handleUnwrapToken(holding: {
+		symbol: string;
+		address: string;
+		decimals: number;
+		walletBalance: bigint;
+		walletBalanceNum: number;
+	}) {
+		track('dashboard_unwrap_clicked', {
+			token_symbol: holding.symbol,
+			balance: holding.walletBalanceNum
+		});
+		const token: WrapUnwrapModalToken = {
+			symbol: holding.symbol,
+			address: holding.address,
+			decimals: holding.decimals,
+			balance: holding.walletBalanceNum.toFixed(4),
+			balanceRaw: holding.walletBalance
+		};
+		openUnwrapModal(token);
+	}
+
+	// Helper to open wrap modal for unwrapped tokens
+	function handleWrapToken(token: {
+		symbol: string;
+		address: string;
+		decimals: number;
+		walletBalance: bigint;
+		balanceNum: number;
+	}) {
+		track('dashboard_wrap_clicked', {
+			token_symbol: token.symbol,
+			balance: token.balanceNum
+		});
+		const modalToken: WrapUnwrapModalToken = {
+			symbol: token.symbol,
+			address: token.address,
+			decimals: token.decimals,
+			balance: token.balanceNum.toFixed(4),
+			balanceRaw: token.walletBalance
+		};
+		openWrapModal(modalToken);
 	}
 
 	// Copy address to clipboard
@@ -217,199 +291,359 @@
 		closeCostBasisModal();
 	}
 
+	const QUERY_POLL_INTERVAL_MS = 300_000;
+	const QUERY_STALE_TIME_MS = 30_000;
+	const NETWORK_LOADING_DELAY_MS = 300;
+
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
-	// Watch for network changes and show loading state
-	$: if ($currentNetwork) {
-		isNetworkLoading = true;
-		setTimeout(() => {
+	let networkLoadingTimer: ReturnType<typeof setTimeout> | null = null;
+	let previousChainId: number | undefined = undefined;
+
+	// Show "Switching..." only when the network identity (chainId) actually changes.
+	// This prevents the loading state from sticking when the reactive block re-runs
+	// repeatedly with the same network (e.g. store re-emits or parent re-renders).
+	$: {
+		const chainId = $currentNetwork?.chainId;
+
+		if (networkLoadingTimer) {
+			clearTimeout(networkLoadingTimer);
+			networkLoadingTimer = null;
+		}
+
+		if (!$currentNetwork) {
 			isNetworkLoading = false;
-		}, 300);
+			previousChainId = undefined;
+		} else {
+			const sameNetwork = previousChainId === chainId;
+			previousChainId = chainId;
+
+			if (sameNetwork) {
+				// Same network as last run — not switching, so clear loading
+				isNetworkLoading = false;
+			} else {
+				// Network changed (or first time we have a network)
+				isNetworkLoading = true;
+				networkLoadingTimer = setTimeout(() => {
+					isNetworkLoading = false;
+					networkLoadingTimer = null;
+				}, NETWORK_LOADING_DELAY_MS);
+			}
+		}
 	}
 
-	// User Vaults Query - centralized with 60s polling on dashboard
-	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 60_000);
+	onDestroy(() => {
+		if (networkLoadingTimer) {
+			clearTimeout(networkLoadingTimer);
+			networkLoadingTimer = null;
+		}
+	});
+
+	// User Vaults Query - no polling, invalidated after order deployment
+	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
 	// Query user's wallet holdings from SFTs - fetches balances via multicall (single RPC request)
-	$: walletHoldingsQuery = createQuery({
-		queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
-		enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork && $wagmiConfig),
-		refetchOnMount: 'always', // Refetch when navigating to dashboard
-		refetchInterval: 300_000, // Poll every 5 minutes as backup
-		staleTime: 30_000, // Consider data fresh for 30 seconds
-		queryFn: async () => {
-			if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
+	// We query balances on WRAPPED token addresses (from TOKENS config) since that's what users trade
+	const walletHoldingsQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, sfts, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $sfts, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
+				enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
+					const normalizedWalletAddress = $walletAddress.toLowerCase();
 
-			// Build multicall contracts array for all SFT balances
-			const contracts = $sfts.map((sft) => ({
-				abi: erc20Abi,
-				address: sft.address as `0x${string}`,
-				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
-			}));
-
-			try {
-				// Single multicall for all token balances
-				const results = await readContracts($wagmiConfig, { contracts });
-
-				return $sfts.map((sft, index) => {
-					const result = results[index];
-					let walletBalance = 0n;
-
-					if (result.status === 'success') {
-						walletBalance = result.result as bigint;
-					} else {
-						// Fall back to subgraph data if multicall fails for this token
-						const userHolder = sft.tokenHolders.find(
-							(holder: { address: string }) =>
-								holder.address.toLowerCase() === $walletAddress!.toLowerCase()
-						);
-						walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
-					}
-
-					return {
-						id: sft.id,
-						address: sft.address,
-						name: sft.name,
-						symbol: sft.symbol,
-						walletBalance,
-						decimals: 18
-					};
-				});
-			} catch (e) {
-				console.error('Multicall failed for wallet holdings:', e);
-				// Fall back to subgraph data for all tokens
-				return $sfts.map((sft) => {
-					const userHolder = sft.tokenHolders.find(
-						(holder: { address: string }) =>
-							holder.address.toLowerCase() === $walletAddress!.toLowerCase()
-					);
-					return {
-						id: sft.id,
-						address: sft.address,
-						name: sft.name,
-						symbol: sft.symbol,
-						walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
-						decimals: 18
-					};
-				});
-			}
-		}
-	});
-
-	// Use centralized balance store for optimized RPC calls
-	// This query is shared across NetworkSelector, TokenNetworkSelector, and Dashboard
-	// Query payment token balances across ALL chains (Base, Arbitrum, Ethereum, Optimism)
-	// Uses shared cache to minimize RPC calls
-	$: multiChainBalanceQuery = createQuery({
-		queryKey: getBalanceQueryKey($walletAddress),
-		enabled: browser && !!($isAuthenticated && $walletAddress && $wagmiConfig),
-		...BALANCE_QUERY_OPTIONS,
-		queryFn: async () => {
-			if (!$walletAddress || !$wagmiConfig) return [];
-
-			// Map chain IDs to display names
-			const chainNames: Record<number, string> = {
-				8453: 'Base',
-				42161: 'Arbitrum',
-				10: 'Optimism',
-				1: 'Ethereum'
-			};
-
-			// Use centralized balance fetcher (single optimized batch call)
-			const tokenBalances = await fetchAllTokenBalances(
-				$walletAddress as `0x${string}`,
-				$wagmiConfig
-			);
-
-			// Transform to dashboard format
-			const dashboardBalances = tokenBalances.map((tb) => ({
-				id: `${tb.token.address}-${tb.token.chainId}`,
-				address: tb.token.address,
-				name: tb.token.name,
-				symbol: tb.token.symbol,
-				chainId: tb.token.chainId,
-				chainName: chainNames[tb.token.chainId] || `Chain ${tb.token.chainId}`,
-				walletBalance: tb.balance,
-				decimals: tb.token.decimals
-			}));
-
-			// Debug log for non-zero balances
-			for (const balance of dashboardBalances) {
-				if (balance.walletBalance > 0n) {
-					console.log(
-						`[Dashboard] ${balance.symbol} on ${balance.chainName}: ${formatUnits(
-							balance.walletBalance,
-							balance.decimals
-						)}`
-					);
-				}
-			}
-
-			// Include USDC on current network even if balance is 0
-			const hasCurrentNetworkUSDC = dashboardBalances.some(
-				(b) => b.symbol === 'USDC' && b.chainId === $currentNetwork?.chainId
-			);
-
-			if (!hasCurrentNetworkUSDC && $currentNetwork) {
-				const usdcToken = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId]?.find(
-					(t) => t.symbol === 'USDC'
-				);
-				if (usdcToken) {
-					dashboardBalances.push({
-						id: `${usdcToken.address}-${usdcToken.chainId}`,
-						address: usdcToken.address as `0x${string}`,
-						name: usdcToken.name,
-						symbol: usdcToken.symbol,
-						chainId: usdcToken.chainId as SupportedNetworkId,
-						chainName: chainNames[usdcToken.chainId] || `Chain ${usdcToken.chainId}`,
-						walletBalance: 0n,
-						decimals: usdcToken.decimals
+					// Map subgraph SFTs to their wrapped token addresses from TOKENS config
+					// The subgraph returns unwrapped addresses, but we need to query wrapped token balances
+					const sftsWithWrappedAddresses = $sfts.map((sft) => {
+						const tokenConfig = getTokenByAnyAddress(sft.address);
+						return {
+							...sft,
+							wrappedAddress: tokenConfig?.address ?? sft.address // Use wrapped address if found
+						};
 					});
-				}
-			}
 
-			return dashboardBalances;
-		}
-	});
+					// Build multicall contracts array for all wrapped token balances
+					const contracts = sftsWithWrappedAddresses.map((sft) => ({
+						abi: erc20Abi,
+						address: sft.wrappedAddress as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
+
+					try {
+						// Single multicall for all token balances
+						const results = await readContracts($wagmiConfig, { contracts });
+
+						return sftsWithWrappedAddresses.map((sft, index) => {
+							const result = results[index];
+							let walletBalance = 0n;
+
+							if (result.status === 'success') {
+								walletBalance = result.result as bigint;
+							} else {
+								// Fall back to subgraph data if multicall fails for this token
+								const userHolder = sft.tokenHolders.find(
+									(holder: { address: string }) =>
+										holder.address.toLowerCase() === normalizedWalletAddress
+								);
+								walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
+							}
+
+							// Use wrapped token info from config
+							const tokenConfig = getTokenByAnyAddress(sft.address);
+
+							return {
+								id: sft.id,
+								address: sft.wrappedAddress, // Use wrapped address
+								name: tokenConfig?.name ?? sft.name,
+								symbol: tokenConfig?.symbol ?? sft.symbol,
+								walletBalance,
+								decimals: 18
+							};
+						});
+					} catch (error) {
+						console.error('Multicall failed for wallet holdings:', error);
+						// Fall back to subgraph data for all tokens
+						return $sfts.map((sft) => {
+							const userHolder = sft.tokenHolders.find(
+								(holder: { address: string }) =>
+									holder.address.toLowerCase() === normalizedWalletAddress
+							);
+							const tokenConfig = getTokenByAnyAddress(sft.address);
+							return {
+								id: sft.id,
+								address: tokenConfig?.address ?? sft.address,
+								name: tokenConfig?.name ?? sft.name,
+								symbol: tokenConfig?.symbol ?? sft.symbol,
+								walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
+								decimals: 18
+							};
+						});
+					}
+				}
+			})
+		)
+	);
+
+	// Query USDC wallet balance via multicall
+	const usdcBalanceQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$currentNetwork || !$walletAddress || !$wagmiConfig) return [];
+					const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
+					if (paymentTokens.length === 0) return [];
+
+					const contracts = paymentTokens.map((token) => ({
+						abi: erc20Abi,
+						address: token.address as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
+
+					try {
+						const results = await readContracts($wagmiConfig, { contracts });
+						return paymentTokens
+							.map((token, index) => {
+								const result = results[index];
+								if (result.status === 'success') {
+									return {
+										id: token.address,
+										address: token.address,
+										name: token.name,
+										symbol: token.symbol,
+										walletBalance: result.result as bigint,
+										decimals: token.decimals
+									};
+								}
+								return null;
+							})
+							.filter((balance): balance is NonNullable<typeof balance> => balance !== null);
+					} catch (error) {
+						console.error('Multicall failed for USDC balance:', error);
+						return [];
+					}
+				}
+			})
+		)
+	);
 
 	// Query native ETH balance
-	$: ethBalanceQuery = createQuery({
-		queryKey: ['ethWalletBalance', $walletAddress, $currentNetwork?.chainId],
-		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig),
-		refetchOnMount: 'always', // Refetch when navigating to dashboard
-		refetchInterval: 300_000, // Poll every 5 minutes as backup
-		staleTime: 30_000, // Consider data fresh for 30 seconds
-		queryFn: async () => {
-			if (!$walletAddress) return null;
-			try {
-				const balance = await getBalance($wagmiConfig, {
-					address: $walletAddress as `0x${string}`
-				});
-				return {
-					id: 'eth',
-					address: 'native',
-					name: 'Ethereum',
-					symbol: 'ETH',
-					walletBalance: balance.value,
-					decimals: 18
-				};
-			} catch (e) {
-				console.error('Failed to fetch ETH balance:', e);
-				return null;
-			}
-		}
-	});
+	const ethBalanceQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['ethWalletBalance', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$walletAddress || !$wagmiConfig) return null;
+					try {
+						const balance = await getBalance($wagmiConfig, {
+							address: $walletAddress as `0x${string}`
+						});
+						return {
+							id: 'eth',
+							address: 'native',
+							name: 'Ethereum',
+							symbol: 'ETH',
+							walletBalance: balance.value,
+							decimals: 18
+						};
+					} catch (error) {
+						console.error('Failed to fetch ETH balance:', error);
+						return null;
+					}
+				}
+			})
+		)
+	);
 
-	// Combined portfolio: wallet + vaults
+	// Query old (legacy) token wallet balances for aggregation in dashboard holdings
+	const oldTokenBalancesQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['dashboardOldTokenBalances', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$walletAddress || !$wagmiConfig) return [];
+					const oldTokenAddresses = getAllOldTokenAddresses();
+
+					const contracts = oldTokenAddresses.map((address) => ({
+						abi: erc20Abi,
+						address: address as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
+
+					try {
+						const results = await readContracts($wagmiConfig, { contracts });
+						const tokens = oldTokenAddresses
+							.map((address, index) => {
+								const result = results[index];
+								if (result.status === 'success') {
+									const mapping = getMigrationMappingByAddress(address);
+									return {
+										address,
+										walletBalance: result.result as bigint,
+										symbol: mapping?.oldToken.symbol ?? 'Unknown',
+										name: mapping?.oldToken.name ?? 'Unknown',
+										decimals: mapping?.oldToken.decimals ?? 18,
+										newTokenAddress: mapping?.newToken.address ?? null
+									};
+								}
+								return null;
+							})
+							.filter(
+								(token): token is NonNullable<typeof token> =>
+									token !== null && token.walletBalance > 0n
+							);
+
+						// Deduplicate by address (defensive - prevents duplicate entries)
+						const seen = new Set<string>();
+						return tokens.filter((token) => {
+							const key = token.address.toLowerCase();
+							if (seen.has(key)) return false;
+							seen.add(key);
+							return true;
+						});
+					} catch (error) {
+						console.error('Multicall failed for old token balances:', error);
+						return [];
+					}
+				}
+			})
+		)
+	);
+
+	// Query unwrapped token balances (underlying tokens of ERC4626 vaults)
+	const unwrappedTokenBalancesQuery = createQuery(
+		derived(
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
+				queryKey: ['dashboardUnwrappedTokenBalances', $walletAddress, $currentNetwork?.chainId],
+				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+				refetchOnMount: 'always' as const,
+				refetchInterval: QUERY_POLL_INTERVAL_MS,
+				staleTime: QUERY_STALE_TIME_MS,
+				queryFn: async () => {
+					if (!$walletAddress || !$wagmiConfig) return [];
+					const unwrappedAddresses = getAllUnwrappedTokenAddresses();
+
+					const contracts = unwrappedAddresses.map((address) => ({
+						abi: erc20Abi,
+						address: address as `0x${string}`,
+						functionName: 'balanceOf' as const,
+						args: [$walletAddress as `0x${string}`]
+					}));
+
+					try {
+						const results = await readContracts($wagmiConfig, { contracts });
+						const tokens = unwrappedAddresses
+							.map((address, index) => {
+								const result = results[index];
+								if (result.status === 'success') {
+									const mapping = getWrappingMappingByUnwrappedAddress(address);
+									return {
+										address,
+										walletBalance: result.result as bigint,
+										symbol: mapping?.unwrappedToken.symbol ?? 'Unknown',
+										name: mapping?.unwrappedToken.name ?? 'Unknown',
+										decimals: mapping?.unwrappedToken.decimals ?? 18,
+										wrappedTokenAddress: mapping?.wrappedToken.address ?? null,
+										wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? null
+									};
+								}
+								return null;
+							})
+							.filter(
+								(token): token is NonNullable<typeof token> =>
+									token !== null && token.walletBalance > 0n
+							);
+
+						// Deduplicate by address (defensive - prevents duplicate entries)
+						const seen = new Set<string>();
+						return tokens.filter((token) => {
+							const key = token.address.toLowerCase();
+							if (seen.has(key)) return false;
+							seen.add(key);
+							return true;
+						});
+					} catch (error) {
+						console.error('Multicall failed for unwrapped token balances:', error);
+						return [];
+					}
+				}
+			})
+		)
+	);
+
+	// Combined portfolio: wallet + vaults (new wrapped tokens only)
 	$: portfolioHoldings = (() => {
 		const walletHoldings = $walletHoldingsQuery?.data ?? [];
-		const multiChainHoldings = $multiChainBalanceQuery?.data ?? [];
+		const usdcHoldings = $usdcBalanceQuery?.data ?? [];
 		const vaultPages = $vaultsListQuery?.data?.pages ?? [];
 		const allVaults = vaultPages.flatMap((p) => p.vaults ?? []);
 
-		// Build map by token address + chain
+		// Build map by token address
 		const holdingsMap = new Map<
 			string,
 			{
@@ -417,8 +651,6 @@
 				address: string;
 				name: string;
 				symbol: string;
-				chainId?: number;
-				chainName?: string;
 				walletBalance: bigint;
 				vaultBalance: bigint;
 				decimals: number;
@@ -427,20 +659,15 @@
 
 		// Add wallet holdings (SFT tokens)
 		for (const h of walletHoldings) {
-			if (!h?.address) continue;
 			holdingsMap.set(h.address.toLowerCase(), {
 				...h,
 				vaultBalance: 0n
 			});
 		}
 
-		// Add multi-chain payment token wallet holdings
-		for (const h of multiChainHoldings) {
-			// Skip entries with undefined address
-			if (!h?.address) continue;
-			// Use unique key that includes chain ID
-			const key = `${h.address.toLowerCase()}-${h.chainId}`;
-			holdingsMap.set(key, {
+		// Add USDC/payment token wallet holdings
+		for (const h of usdcHoldings) {
+			holdingsMap.set(h.address.toLowerCase(), {
 				...h,
 				vaultBalance: 0n
 			});
@@ -560,51 +787,30 @@
 	// Calculate total unrealized P&L (only from holdings with cost basis data)
 	$: totalUnrealizedPnL = portfolioHoldings.reduce((sum, h) => sum + (h.unrealizedPnL ?? 0), 0);
 
-	// Build a set of all payment token addresses across all chains
-	$: allPaymentTokenAddresses = (() => {
-		const addresses = new Set<string>();
-		for (const paymentTokens of Object.values(PAYMENT_TOKENS_BY_NETWORK)) {
-			for (const token of paymentTokens) {
-				addresses.add(token.address.toLowerCase());
-			}
-		}
-		return addresses;
+	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
+	$: paymentTokenAddresses = (() => {
+		if (!$currentNetwork) return new Set<string>();
+		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
+		return new Set(paymentTokens.map((t) => t.address.toLowerCase()));
 	})();
 
-	// Build funds holdings (payment tokens + ETH from all chains)
-	// Always show USDC on current network even if balance is 0, show others only if balance > 0
+	// Build funds holdings (payment tokens + ETH)
+	// Always show USDC even if balance is 0
 	$: fundsHoldings = (() => {
 		const funds = portfolioHoldings.filter((h) =>
-			allPaymentTokenAddresses.has(h.address.toLowerCase())
+			paymentTokenAddresses.has(h.address.toLowerCase())
 		);
 
-		// Ensure USDC on current network is always shown (even with 0 balance)
-		const currentChainPaymentTokens =
-			PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
-		for (const token of currentChainPaymentTokens) {
-			if (token.symbol !== 'USDC') continue;
-
-			const exists = funds.some(
-				(f) =>
-					f.address.toLowerCase() === token.address.toLowerCase() && f.chainId === token.chainId
-			);
-
-			// Only add zero-balance entry for USDC on current network
+		// Ensure USDC is always shown (even with 0 balance)
+		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
+		for (const token of paymentTokens) {
+			const exists = funds.some((f) => f.address.toLowerCase() === token.address.toLowerCase());
 			if (!exists) {
 				funds.push({
-					id: `${token.address}-${token.chainId}`,
+					id: token.address,
 					address: token.address,
 					name: token.name,
 					symbol: token.symbol,
-					chainId: token.chainId,
-					chainName:
-						token.chainId === 8453
-							? 'Base'
-							: token.chainId === 42161
-								? 'Arbitrum'
-								: token.chainId === 10
-									? 'Optimism'
-									: 'Ethereum',
 					walletBalance: 0n,
 					vaultBalance: 0n,
 					decimals: token.decimals,
@@ -656,17 +862,64 @@
 		return funds;
 	})();
 	$: assetHoldings = portfolioHoldings.filter(
-		(h) => !allPaymentTokenAddresses.has(h.address.toLowerCase())
+		(h) => !paymentTokenAddresses.has(h.address.toLowerCase())
 	);
 
+	// Legacy token holdings (old tokens that need to be swapped)
+	// Exclude addresses that are already in the unwrapped token list (handles case where unwrappedAddress === legacyAddress)
+	$: legacyHoldings = (() => {
+		const oldTokens = $oldTokenBalancesQuery?.data ?? [];
+		const unwrappedAddresses = new Set(
+			($unwrappedTokenBalancesQuery?.data ?? []).map((t) => t.address.toLowerCase())
+		);
+		return oldTokens
+			.filter((token) => !unwrappedAddresses.has(token.address.toLowerCase()))
+			.map((token) => {
+				const mapping = getMigrationMappingByAddress(token.address);
+				const quote = mapping
+					? findQuoteForSymbol(mapping.newToken.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS)
+					: null;
+				const price = quote?.close ?? 0;
+				const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
+				return {
+					...token,
+					balanceNum,
+					price,
+					value: balanceNum * price,
+					newTokenDisplay: mapping ? `Wrapped ${mapping.oldToken.symbol}` : token.symbol
+				};
+			});
+	})();
+
+	// Unwrapped token holdings (underlying tokens that can be wrapped)
+	$: unwrappedHoldings = (() => {
+		const tokens = $unwrappedTokenBalancesQuery?.data ?? [];
+		return tokens.map((token) => {
+			const mapping = getWrappingMappingByUnwrappedAddress(token.address);
+			// Use the wrapped token's price since they're 1:1
+			const quote = mapping
+				? findQuoteForSymbol(mapping.wrappedToken.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS)
+				: null;
+			const price = quote?.close ?? 0;
+			const balanceNum = parseFloat(formatUnits(token.walletBalance, token.decimals));
+			return {
+				...token,
+				balanceNum,
+				price,
+				value: balanceNum * price,
+				wrappedTokenSymbol: mapping?.wrappedToken.symbol ?? token.symbol
+			};
+		});
+	})();
+
 	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, true);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 60_000);
 
-	// Trade activity for market orders - poll every 5 minutes, refetch on mount
-	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 300_000);
+	// Trade activity for market orders - poll every 10 minutes, refetch on mount
+	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 600_000);
 
-	// Cost basis query for P&L calculation - uses all-time trade history
-	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress, 300_000);
+	// Cost basis query for P&L calculation - one-shot (no polling, refreshes on window focus)
+	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
 
 	// Load manual cost basis entries when wallet changes
 	$: manualCostBasisStore.loadForWallet($walletAddress);
@@ -983,7 +1236,7 @@
 
 			<!-- Portfolio Tab -->
 			{#if activeTab === 'portfolio'}
-				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $multiChainBalanceQuery.isLoading}
+				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
 					<Section>
 						<LoadingSpinner variant="inline" size="md" text="Loading portfolio..." />
 					</Section>
@@ -1027,20 +1280,14 @@
 											{@const isEth = holding.address === 'native'}
 											{@const paymentToken = isEth
 												? null
-												: (
-														PAYMENT_TOKENS_BY_NETWORK[
-															holding.chainId ?? $currentNetwork?.chainId ?? 0
-														] ?? []
-													).find((t) => t.address.toLowerCase() === holding.address.toLowerCase())}
+												: (PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []).find(
+														(t) => t.address.toLowerCase() === holding.address.toLowerCase()
+													)}
 											{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
 											{@const decimalsForDisplay = holding.decimals === 6 ? 2 : 4}
-											{@const displaySymbol =
-												holding.chainId && holding.chainId !== $currentNetwork?.chainId
-													? `${holding.symbol} (${holding.chainName || holding.chainId})`
-													: holding.symbol}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<TokenDisplay {logoUrl} symbol={displaySymbol} name={holding.name} />
+													<TokenDisplay {logoUrl} symbol={holding.symbol} name={holding.name} />
 												</td>
 												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
 													>{holding.walletBalanceNum.toFixed(decimalsForDisplay)}</td
@@ -1078,9 +1325,11 @@
 
 					<!-- Holdings Section (Asset Tokens) -->
 					<Section>
+						<div id="holdings"></div>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Holdings</h2>
 						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
-							Asset tokens combined across wallet and vaults
+							Wrapped tokens combined across wallet and vaults. We recommend only using wrapped
+							tokens for DEX/DeFi usage.
 						</p>
 						{#if assetHoldings.length > 0}
 							<div class="overflow-x-auto">
@@ -1239,13 +1488,22 @@
 															variant="primary"
 															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
 														>
+														{#if getWrappingMappingByWrappedAddress(holding.address) && holding.walletBalanceNum > 0}
+															<Button
+																size="sm"
+																variant="secondary"
+																on:click={() => handleUnwrapToken(holding)}
+															>
+																Unwrap
+															</Button>
+														{/if}
 														{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
 															<Button
 																size="sm"
 																variant="secondary"
 																on:click={() => handleWithdraw(holding)}
 															>
-																Withdraw
+																Transfer
 															</Button>
 														{/if}
 														{#if !isEmbeddedWallet}
@@ -1291,6 +1549,144 @@
 							<EmptyState description="No asset holdings found in your wallet or vaults." />
 						{/if}
 					</Section>
+
+					<!-- Unwrapped Tokens Section -->
+					{#if unwrappedHoldings.length > 0}
+						<Section>
+							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+								Unwrapped Tokens
+							</h2>
+							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+								Unwrapped tokens are always redeemable for 1 unit of off-chain equity. We recommend
+								wrapping them for safe use with DEX/DeFi protocols.
+							</p>
+							<div class="overflow-x-auto">
+								<Table>
+									<thead>
+										<tr>
+											<th
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Token</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Balance</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Value</th
+											>
+											<th
+												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											></th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each unwrappedHoldings as token (token.address)}
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
+													<span class="font-medium">{token.symbol}</span>
+												</td>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
+													>{token.balanceNum.toFixed(4)}</td
+												>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">${token.value.toFixed(2)}</td>
+												<td class="px-2 py-2 sm:px-4 sm:py-3">
+													<div class="flex justify-center gap-2">
+														<Button
+															size="sm"
+															variant="primary"
+															on:click={() => handleWrapToken(token)}
+														>
+															Wrap
+														</Button>
+														{#if $authMethod === 'dynamic'}
+															<Button
+																size="sm"
+																variant="secondary"
+																on:click={() =>
+																	handleWithdraw({
+																		symbol: token.symbol,
+																		address: token.address,
+																		decimals: token.decimals,
+																		walletBalance: token.walletBalance,
+																		walletBalanceNum: token.balanceNum
+																	})}
+															>
+																Transfer
+															</Button>
+														{/if}
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</Table>
+							</div>
+						</Section>
+					{/if}
+
+					<!-- Legacy Tokens Section -->
+					{#if legacyHoldings.length > 0}
+						<Section>
+							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+								Legacy Tokens
+							</h2>
+							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+								Legacy tokens maintain full equity backing and right of redemption, but should be
+								swapped ASAP to receive dividends, stock splits, and be compatible with DeFi
+								protocols.
+							</p>
+							<div class="overflow-x-auto">
+								<Table>
+									<thead>
+										<tr>
+											<th
+												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Token</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Balance</th
+											>
+											<th
+												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												>Value</th
+											>
+											<th
+												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+											></th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each legacyHoldings as token (token.address)}
+											<tr class="hover:bg-white/5">
+												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
+													<span class="font-medium">{token.symbol}</span>
+												</td>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
+													>{token.balanceNum.toFixed(4)}</td
+												>
+												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">${token.value.toFixed(2)}</td>
+												<td class="px-2 py-2 sm:px-4 sm:py-3">
+													<div class="flex justify-center">
+														<Button
+															size="sm"
+															variant="primary"
+															className="bg-yellow-500 hover:bg-yellow-400"
+															on:click={() => handleSwapLegacyToken(token)}
+														>
+															Swap
+														</Button>
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</Table>
+							</div>
+						</Section>
+					{/if}
 				{/if}
 
 				<!-- Orders Tab -->
@@ -1734,3 +2130,9 @@
 		</div>
 	</div>
 {/if}
+
+<!-- Token Swap Modal for migrating old tokens -->
+<TokenSwapModal />
+
+<!-- Wrap/Unwrap Modal for ERC4626 token wrapping -->
+<WrapUnwrapModal />

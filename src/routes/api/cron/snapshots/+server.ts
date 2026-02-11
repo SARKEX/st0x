@@ -3,6 +3,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
+import { dev } from '$app/environment';
 import {
 	generateAllTokenSnapshots_v2,
 	getBlockTimestamp,
@@ -38,6 +39,12 @@ export const GET: RequestHandler = async ({ request }) => {
 		// Verify cron secret if configured (for Vercel cron protection)
 		const authHeader = request.headers.get('authorization');
 		const cronSecret = process.env.CRON_SECRET;
+
+		// Fail closed in production if CRON_SECRET is missing
+		if (!cronSecret && !dev) {
+			console.error('[Cron] CRON_SECRET is not configured');
+			return json({ error: 'Cron endpoint not configured' }, { status: 503 });
+		}
 
 		if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
 			return json({ error: 'Unauthorized' }, { status: 401 });

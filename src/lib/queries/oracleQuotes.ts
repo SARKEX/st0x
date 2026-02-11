@@ -1,7 +1,7 @@
 import { createQuery } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
+import { TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
 import { getNetworkOracleSnapshots, type OracleSnapshot } from '$lib/api/pyth';
-import { tokensWithPriceFeed } from './shared';
 
 export interface OracleQuote {
 	feedId: string;
@@ -9,6 +9,12 @@ export interface OracleQuote {
 	price: number | null;
 	confidence: number | null;
 	publishTime: number | null;
+}
+
+function tokensWithPriceFeed(network: Network | null) {
+	if (!network) return [];
+	const all = [...TOKENS, ...CRYPTO_TOKENS];
+	return all.filter((token) => token.chainId === network.chainId && token.priceFeedId);
 }
 
 export function createOracleQuotesQuery(network: Network | null) {

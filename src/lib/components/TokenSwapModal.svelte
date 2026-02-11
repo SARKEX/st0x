@@ -1,0 +1,660 @@
+<script lang="ts">
+	import { get } from 'svelte/store';
+	import { wagmiConfig } from 'svelte-wagmi';
+	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
+	import { currentNetwork } from '$lib/stores';
+	import {
+		showTokenSwapModal,
+		swapModalToken,
+		closeTokenSwapModal
+	} from '$lib/stores/dynamicStore';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { readContracts } from '@wagmi/core';
+	import { erc20Abi, formatUnits, parseUnits } from 'viem';
+	import {
+		TOKEN_MIGRATION_MAPPINGS,
+		getMigrationMappingByAddress
+	} from '$lib/config/tokenMigration';
+	import { getTokenByAnyAddress } from '$lib/config/tokens';
+	import Button from './ui/Button.svelte';
+	import { createRaindexClient } from '$lib/clients/raindex';
+	import transactionStore from '$lib/stores/transaction';
+	import { TransactionErrorMessage } from '$lib/types/errors';
+	import { OrderV4_ABI, normalizeOrderData } from '$lib/utils/orderbook';
+	import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
+	import { AbiCoder } from 'ethers';
+	import { Float } from '@rainlanguage/float';
+	import type { TakeOrdersConfigV5, TakeOrderConfigV4, OrderV4 } from '@rainlanguage/orderbook';
+	import { track } from '$lib/services/analytics';
+
+	const queryClient = useQueryClient();
+
+	// Selected old token address
+	let selectedOldTokenAddress: string | null = null;
+	let swapAmount = '';
+	let liquidityWarning = false;
+
+	/** Fetch liquidity for a specific token migration order */
+	async function fetchLiquidityForToken(
+		mapping: (typeof TOKEN_MIGRATION_MAPPINGS)[0],
+		networkId: number
+	): Promise<number> {
+		if (!mapping.swapOrderHash) return 0;
+
+		try {
+			const client = await createRaindexClient();
+			const ordersResult = await client.getOrders(
+				[networkId],
+				{ active: true, owners: [], orderHash: mapping.swapOrderHash as `0x${string}` },
+				1
+			);
+
+			if (ordersResult.error || !ordersResult.value?.length) return 0;
+
+			const quotesResult = await ordersResult.value[0].getQuotes();
+			if (quotesResult.error || !quotesResult.value?.length) return 0;
+
+			const quote = quotesResult.value[0];
+			if (!quote?.success || !quote?.data?.maxOutput) return 0;
+
+			const maxOutputFloat = Float.fromHex(quote.data.maxOutput as `0x${string}`);
+			if (maxOutputFloat.error || !maxOutputFloat.value) return 0;
+
+			const fixedResult = maxOutputFloat.value.toFixedDecimalLossy(mapping.newToken.decimals);
+			if (fixedResult.error || !fixedResult.value) return 0;
+
+			const fdValue = fixedResult.value as unknown as Record<string, unknown>;
+			if (typeof fdValue?.value !== 'string') return 0;
+
+			return parseFloat(formatUnits(BigInt(fdValue.value), mapping.newToken.decimals));
+		} catch {
+			return 0;
+		}
+	}
+
+	// Query to fetch liquidity for the currently selected token only
+	$: swapLiquidityQuery = createQuery({
+		queryKey: ['swapOrderLiquidity', $currentNetwork?.chainId, currentMapping?.swapOrderHash],
+		enabled: !!($currentNetwork && $showTokenSwapModal && currentMapping?.swapOrderHash),
+		staleTime: 30_000, // Cache for 30 seconds
+		queryFn: async () => {
+			const network = $currentNetwork;
+			if (!network || !currentMapping) return 0;
+			return fetchLiquidityForToken(currentMapping, network.id);
+		}
+	});
+
+	// When modal opens with a pre-selected token, set it
+	$: if ($showTokenSwapModal && $swapModalToken && !selectedOldTokenAddress) {
+		selectedOldTokenAddress = $swapModalToken.address;
+	}
+
+	// Track modal open (guard to fire only once per open)
+	let hasTrackedModalOpen = false;
+	$: if ($showTokenSwapModal && !hasTrackedModalOpen) {
+		hasTrackedModalOpen = true;
+		track('legacy_swap_modal_opened', {
+			pre_selected_token: $swapModalToken?.symbol
+		});
+	}
+
+	// Get current mapping based on selection
+	$: currentMapping = selectedOldTokenAddress
+		? getMigrationMappingByAddress(selectedOldTokenAddress)
+		: null;
+
+	// Query to fetch all old token balances for the user
+	$: oldTokenBalancesQuery = createQuery({
+		queryKey: ['oldTokenBalances', $walletAddress, $currentNetwork?.chainId],
+		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig && $showTokenSwapModal),
+		staleTime: 30_000,
+		queryFn: async () => {
+			if (!$walletAddress || !$wagmiConfig) return [];
+
+			const contracts = TOKEN_MIGRATION_MAPPINGS.map((mapping) => ({
+				abi: erc20Abi,
+				address: mapping.oldToken.address as `0x${string}`,
+				functionName: 'balanceOf' as const,
+				args: [$walletAddress as `0x${string}`]
+			}));
+
+			try {
+				const results = await readContracts($wagmiConfig, { contracts });
+
+				return TOKEN_MIGRATION_MAPPINGS.map((mapping, index) => {
+					const result = results[index];
+					const balance = result.status === 'success' ? (result.result as bigint) : 0n;
+					return {
+						...mapping,
+						balance,
+						balanceFormatted: parseFloat(formatUnits(balance, mapping.oldToken.decimals))
+					};
+				}).filter((item) => item.balance > 0n);
+			} catch (e) {
+				console.error('Failed to fetch old token balances:', e);
+				return [];
+			}
+		}
+	});
+
+	// Tokens with balance that user can swap
+	$: oldTokensWithBalance = $oldTokenBalancesQuery.data ?? [];
+
+	// Pre-selected token data (from swapModalToken when modal is opened for a specific token)
+	$: preSelectedTokenData =
+		$swapModalToken && currentMapping
+			? {
+					...currentMapping,
+					balance: $swapModalToken.balanceRaw ?? 0n,
+					balanceFormatted: parseFloat($swapModalToken.balance ?? '0')
+				}
+			: null;
+
+	// Combined list: include pre-selected token if not already in balance list
+	$: tokensToShow = (() => {
+		const balanceTokens = oldTokensWithBalance;
+		if (!preSelectedTokenData) return balanceTokens;
+
+		// Check if pre-selected token is already in balance list
+		const alreadyInList = balanceTokens.some(
+			(t) =>
+				t.oldToken.address.toLowerCase() === preSelectedTokenData.oldToken.address.toLowerCase()
+		);
+		if (alreadyInList) return balanceTokens;
+
+		// Add pre-selected token to the list
+		return [preSelectedTokenData, ...balanceTokens];
+	})();
+
+	// Selected token data - check tokensToShow first, then fall back to preSelectedTokenData
+	$: selectedTokenData =
+		tokensToShow.find(
+			(t) => t.oldToken.address.toLowerCase() === selectedOldTokenAddress?.toLowerCase()
+		) ??
+		(selectedOldTokenAddress &&
+		preSelectedTokenData?.oldToken.address.toLowerCase() === selectedOldTokenAddress.toLowerCase()
+			? preSelectedTokenData
+			: undefined);
+
+	// Available liquidity for selected token (from real order data)
+	$: availableLiquidity = $swapLiquidityQuery.data ?? 0;
+
+	// Parse swap amount
+	$: parsedSwapAmount = parseFloat(swapAmount) || 0;
+
+	// Check if amount exceeds balance
+	$: exceedsBalance = selectedTokenData
+		? parsedSwapAmount > selectedTokenData.balanceFormatted
+		: false;
+
+	// Handle token selection change
+	function handleTokenSelect(address: string) {
+		selectedOldTokenAddress = address;
+		swapAmount = '';
+		liquidityWarning = false;
+		const mapping = getMigrationMappingByAddress(address);
+		track('legacy_swap_token_selected', {
+			old_token_symbol: mapping?.oldToken.symbol,
+			new_token_symbol: mapping?.newToken.symbol
+		});
+	}
+
+	// Handle amount input
+	function handleAmountInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		swapAmount = target.value;
+
+		// Check if we need to show liquidity warning
+		const amount = parseFloat(swapAmount) || 0;
+		liquidityWarning = amount > availableLiquidity && availableLiquidity > 0;
+	}
+
+	// Set max amount (capped by liquidity)
+	function handleMaxClick() {
+		if (!selectedTokenData) return;
+
+		const maxAmount = Math.min(selectedTokenData.balanceFormatted, availableLiquidity);
+		swapAmount = maxAmount.toFixed(6);
+		liquidityWarning = selectedTokenData.balanceFormatted > availableLiquidity;
+	}
+
+	// Cap to available liquidity
+	function capToLiquidity() {
+		if (parsedSwapAmount > availableLiquidity && availableLiquidity > 0) {
+			swapAmount = availableLiquidity.toFixed(6);
+			liquidityWarning = true;
+		}
+	}
+
+	// Execute the swap by taking the migration order (same flow as market order)
+	async function handleSwap() {
+		if (!selectedTokenData || !currentMapping || !$wagmiConfig || !$walletAddress) return;
+		if (parsedSwapAmount <= 0) return;
+		if (!currentMapping.swapOrderHash) {
+			transactionStore.transactionError(
+				'This token is not yet available for migration.' as TransactionErrorMessage
+			);
+			return;
+		}
+
+		const network = get(currentNetwork);
+		if (!network?.id) {
+			transactionStore.transactionError('Network not available' as TransactionErrorMessage);
+			return;
+		}
+
+		// Capture values before closing modal (handleClose resets state)
+		const mapping = currentMapping;
+		const swapAmountStr = swapAmount;
+
+		track('legacy_swap_initiated', {
+			old_token_symbol: mapping.oldToken.symbol,
+			new_token_symbol: mapping.newToken.symbol,
+			amount: parsedSwapAmount,
+			had_liquidity_warning: liquidityWarning
+		});
+
+		// Close the form modal - TransactionModal will show progress
+		handleClose();
+
+		try {
+			transactionStore.awaitWalletConfirmation('Preparing swap...');
+
+			const swapAmountWei = parseUnits(swapAmountStr, mapping.oldToken.decimals);
+			const requestedTakerWantsAmount = parseUnits(swapAmountStr, mapping.newToken.decimals);
+
+			// 1. Fetch the migration swap order by order hash
+			const client = await createRaindexClient();
+			const ordersResult = await client.getOrders(
+				[network.id],
+				{
+					active: true,
+					owners: [],
+					orderHash: mapping.swapOrderHash as `0x${string}`
+				},
+				1
+			);
+
+			if (ordersResult.error || !ordersResult.value?.length) {
+				transactionStore.transactionError(
+					'Migration order not available. Please try again later.' as TransactionErrorMessage
+				);
+				return;
+			}
+
+			const raindexOrderObj = ordersResult.value[0];
+			const sgOrderResult = raindexOrderObj.convertToSgOrder();
+			if (sgOrderResult.error || !sgOrderResult.value) {
+				transactionStore.transactionError(
+					'Failed to prepare migration order.' as TransactionErrorMessage
+				);
+				return;
+			}
+
+			const sgOrder = sgOrderResult.value;
+			const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
+			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
+
+			// 2. Resolve IO indexes: order input = old token (taker pays), order output = new token (taker wants)
+			const oldAddr = mapping.oldToken.address.toLowerCase();
+			const newAddr = mapping.newToken.address.toLowerCase();
+			const inputIndex = orderData.validInputs.findIndex(
+				(i) => (i.token as string)?.toLowerCase() === oldAddr
+			);
+			const outputIndex = orderData.validOutputs.findIndex(
+				(o) => (o.token as string)?.toLowerCase() === newAddr
+			);
+
+			if (inputIndex === -1 || outputIndex === -1) {
+				transactionStore.transactionError(
+					'Order token mismatch for this migration.' as TransactionErrorMessage
+				);
+				return;
+			}
+
+			// 3. Build take-order config (single order, 1:1 migration)
+			const takeOrderConfig: TakeOrderConfigV4 = {
+				order: orderData,
+				inputIOIndex: String(inputIndex),
+				outputIOIndex: String(outputIndex),
+				signedContext: []
+			};
+
+			const maximumInputFloat = Float.fromFixedDecimalLossy(
+				requestedTakerWantsAmount,
+				mapping.newToken.decimals
+			);
+			const ratioOne = Float.parse('1');
+			if (ratioOne.error || !ratioOne.value) {
+				transactionStore.transactionError(
+					'Failed to build order parameters.' as TransactionErrorMessage
+				);
+				return;
+			}
+
+			const takeOrdersConfig: TakeOrdersConfigV5 = {
+				minimumIO: Float.fromBigint(0n).asHex(),
+				maximumIO: maximumInputFloat.float.asHex(),
+				maximumIORatio: ratioOne.value.asHex(),
+				IOIsInput: true as unknown as string,
+				orders: [takeOrderConfig],
+				data: '0x'
+			};
+
+			const takerWantsToken: TokenInfo = {
+				address: mapping.newToken.address,
+				decimals: mapping.newToken.decimals,
+				symbol: mapping.newToken.symbol
+			};
+			const takerPaysToken: TokenInfo = {
+				address: mapping.oldToken.address,
+				decimals: mapping.oldToken.decimals,
+				symbol: mapping.oldToken.symbol
+			};
+
+			const params: TakeOrdersParams = {
+				orderData,
+				ioIndexes: { input: inputIndex, output: outputIndex },
+				takerWantsToken,
+				takerPaysToken,
+				requestedTakerWantsAmount,
+				orderFillAmounts: [requestedTakerWantsAmount]
+			};
+
+			// handleTakeOrders manages the transaction flow and calls transactionSuccess/Error
+			await transactionStore.handleTakeOrders(
+				takeOrdersConfig,
+				sgOrder,
+				swapAmountWei,
+				params,
+				undefined
+			);
+
+			// Invalidate modal-specific query (dashboard queries handled by handleTakeOrders)
+			queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
+		} catch (error) {
+			console.error('Swap failed:', error);
+			transactionStore.transactionError(
+				(error instanceof Error ? error.message : 'Swap failed') as TransactionErrorMessage
+			);
+		}
+	}
+
+	// Close and reset
+	function handleClose() {
+		selectedOldTokenAddress = null;
+		swapAmount = '';
+		liquidityWarning = false;
+		hasTrackedModalOpen = false;
+		closeTokenSwapModal();
+	}
+
+	// Get logo URL for token (supports wrapped, unwrapped, and legacy addresses)
+	function getTokenLogo(address: string): string | undefined {
+		return getTokenByAnyAddress(address)?.logoUrl;
+	}
+</script>
+
+{#if $showTokenSwapModal}
+	<!-- Backdrop -->
+	<button
+		type="button"
+		class="fixed inset-0 z-[10040] h-full w-full bg-black/60 backdrop-blur-sm"
+		on:click={handleClose}
+		aria-label="Close modal overlay"
+	/>
+
+	<!-- Modal -->
+	<div
+		class="fixed left-1/2 top-1/2 z-[10050] mx-4 w-full max-w-md -translate-x-1/2 -translate-y-1/2"
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="swap-modal-title"
+	>
+		<div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl">
+			<!-- Header -->
+			<div class="flex items-center justify-between border-b border-white/10 px-6 py-4">
+				<h3 id="swap-modal-title" class="text-lg font-semibold text-white">Swap Legacy Tokens</h3>
+				<button
+					type="button"
+					on:click={handleClose}
+					class="rounded-full p-1 text-gray-400 transition hover:bg-white/10 hover:text-white"
+					aria-label="Close"
+				>
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Body -->
+			<div class="p-6">
+				<div class="space-y-4">
+					<!-- What I Have (Old Token) -->
+					<div class="space-y-2">
+						<label for="swap-from-token" class="text-sm font-medium text-gray-400"
+							>What I have</label
+						>
+						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+							<!-- Token Dropdown -->
+							<div class="mb-3">
+								<select
+									id="swap-from-token"
+									class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-3 py-2 text-white focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+									bind:value={selectedOldTokenAddress}
+									on:change={(e) => handleTokenSelect(e.currentTarget.value)}
+								>
+									<option value="" disabled>Select token to swap</option>
+									{#if $oldTokenBalancesQuery.isLoading && tokensToShow.length === 0}
+										<option value="" disabled>Loading...</option>
+									{:else if tokensToShow.length === 0}
+										<option value="" disabled>No legacy tokens to swap</option>
+									{:else}
+										{#each tokensToShow as tokenData}
+											<option value={tokenData.oldToken.address}>
+												{tokenData.oldToken.symbol} - Balance: {tokenData.balanceFormatted.toFixed(
+													4
+												)}
+											</option>
+										{/each}
+									{/if}
+								</select>
+							</div>
+
+							<!-- Amount Input -->
+							<div class="flex items-center gap-3">
+								{#if selectedTokenData}
+									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+										{#if getTokenLogo(selectedTokenData.oldToken.address)}
+											<img
+												src={getTokenLogo(selectedTokenData.oldToken.address)}
+												alt={selectedTokenData.oldToken.symbol}
+												class="h-6 w-6 rounded-full"
+											/>
+										{/if}
+										<span class="font-medium text-white">{selectedTokenData.oldToken.symbol}</span>
+									</div>
+								{:else}
+									<div class="rounded-lg bg-gray-700/50 px-3 py-1.5">
+										<span class="text-gray-400">Select token</span>
+									</div>
+								{/if}
+								<div class="flex-1 text-right">
+									<input
+										type="text"
+										inputmode="decimal"
+										placeholder="0"
+										value={swapAmount}
+										on:input={handleAmountInput}
+										on:blur={capToLiquidity}
+										disabled={!selectedTokenData}
+										class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+									/>
+								</div>
+							</div>
+
+							<!-- Balance & Max -->
+							{#if selectedTokenData}
+								<div class="mt-2 flex items-center justify-between text-xs">
+									<span class="text-gray-500">
+										Balance: {selectedTokenData.balanceFormatted.toFixed(4)}
+										{selectedTokenData.oldToken.symbol}
+									</span>
+									<button
+										type="button"
+										on:click={handleMaxClick}
+										class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+									>
+										MAX
+									</button>
+								</div>
+							{/if}
+						</div>
+					</div>
+
+					<!-- Arrow -->
+					<div class="flex justify-center">
+						<div class="rounded-full border border-white/10 bg-gray-800 p-2">
+							<svg
+								class="h-4 w-4 text-gray-400"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M19 14l-7 7m0 0l-7-7m7 7V3"
+								/>
+							</svg>
+						</div>
+					</div>
+
+					<!-- What I Get (New Wrapped Token) -->
+					<div class="space-y-2">
+						<span class="text-sm font-medium text-gray-400">What I get</span>
+						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+							<div class="flex items-center gap-3">
+								{#if currentMapping}
+									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+										{#if getTokenLogo(currentMapping.newToken.address)}
+											<img
+												src={getTokenLogo(currentMapping.newToken.address)}
+												alt={currentMapping.newToken.symbol}
+												class="h-6 w-6 rounded-full"
+											/>
+										{/if}
+										<span class="font-medium text-white">{currentMapping.newToken.symbol}</span>
+									</div>
+								{:else}
+									<div class="rounded-lg bg-gray-700/50 px-3 py-1.5">
+										<span class="text-gray-400">—</span>
+									</div>
+								{/if}
+								<div class="flex-1 text-right">
+									<span class="text-xl font-medium text-white">
+										{parsedSwapAmount > 0 ? parsedSwapAmount.toFixed(6) : '0'}
+									</span>
+								</div>
+							</div>
+
+							{#if currentMapping}
+								<div class="mt-2 text-xs text-gray-500">
+									{currentMapping.newToken.name}
+								</div>
+							{/if}
+						</div>
+					</div>
+
+					<!-- Liquidity Warning -->
+					{#if liquidityWarning}
+						<div
+							class="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2.5 text-xs text-blue-300"
+						>
+							<div class="flex items-start gap-2">
+								<svg
+									class="mt-0.5 h-4 w-4 flex-shrink-0"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+									/>
+								</svg>
+								<div>
+									<p class="font-medium">Not enough inventory to fully swap right now.</p>
+									<p class="mt-0.5 text-blue-300/80">
+										Inventory will be periodically topped up. Please swap now and come back again
+										later.
+									</p>
+								</div>
+							</div>
+						</div>
+					{/if}
+
+					<!-- Swap Info -->
+					<div class="rounded-lg bg-gray-800/40 px-4 py-3 text-xs text-gray-400">
+						<div class="flex justify-between">
+							<span>Rate</span>
+							<span class="text-white">1:1</span>
+						</div>
+						{#if currentMapping}
+							<div class="mt-1 flex justify-between">
+								<span>Available liquidity</span>
+								{#if $swapLiquidityQuery.isLoading}
+									<span class="animate-pulse text-gray-500">Loading...</span>
+								{:else if availableLiquidity > 0}
+									<span class="text-white"
+										>{availableLiquidity.toFixed(2)} {currentMapping.oldToken.symbol}</span
+									>
+								{:else}
+									<span class="text-yellow-500">No liquidity available</span>
+								{/if}
+							</div>
+						{/if}
+					</div>
+
+					<!-- Action Button -->
+					<Button
+						variant="primary"
+						size="lg"
+						className="w-full rounded-xl py-4 text-base font-semibold"
+						disabled={!selectedTokenData ||
+							parsedSwapAmount <= 0 ||
+							exceedsBalance ||
+							tokensToShow.length === 0 ||
+							$swapLiquidityQuery.isLoading ||
+							(availableLiquidity <= 0 && !$swapLiquidityQuery.isLoading)}
+						on:click={handleSwap}
+					>
+						{#if tokensToShow.length === 0}
+							No legacy tokens to swap
+						{:else if !selectedTokenData}
+							Select a token
+						{:else if $swapLiquidityQuery.isLoading}
+							Loading liquidity...
+						{:else if availableLiquidity <= 0}
+							No liquidity available
+						{:else if parsedSwapAmount <= 0}
+							Enter amount
+						{:else if exceedsBalance}
+							Insufficient balance
+						{:else}
+							Swap to {currentMapping?.newToken.symbol ?? 'Wrapped'}
+						{/if}
+					</Button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}

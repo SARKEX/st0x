@@ -8,7 +8,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import {
-		createSignMessage,
+		requestAccessRegistrationChallenge,
 		registerWallet,
 		showAccessCodeModal,
 		walletRegistered
@@ -95,11 +95,15 @@
 		error = '';
 
 		try {
-			// Create message to sign
-			const message = createSignMessage($walletAddress, accessCode.trim().toUpperCase());
+			const normalizedCode = accessCode.trim().toUpperCase();
+			const challenge = await requestAccessRegistrationChallenge($walletAddress, normalizedCode);
+			if (!challenge.success || !challenge.message || !challenge.nonce) {
+				error = challenge.error || 'Failed to issue registration challenge';
+				return;
+			}
 
 			// Request signature from wallet (works with both Dynamic and wagmi)
-			const signature = await signMessage(message);
+			const signature = await signMessage(challenge.message);
 
 			// Register with backend (pass referral code if valid)
 			const refCode =
@@ -108,9 +112,9 @@
 					: undefined;
 			const result = await registerWallet(
 				$walletAddress,
-				accessCode.trim(),
+				normalizedCode,
 				signature,
-				message,
+				challenge.nonce,
 				refCode
 			);
 

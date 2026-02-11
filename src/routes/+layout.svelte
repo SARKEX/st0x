@@ -4,7 +4,7 @@
 	import { queryClient } from '$lib/clients/queryClient';
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { defaultConfig } from 'svelte-wagmi';
-	import { base, arbitrum, optimism, mainnet } from '@wagmi/core/chains';
+	import { base } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
@@ -20,12 +20,22 @@
 	// Auth store for wallet address tracking
 	import { walletAddress } from '$lib/stores/authStore';
 
+	// PostHog analytics
+	import { initAnalytics } from '$lib/services/analytics';
+
 	let analyticsInjected = false;
 
 	function enableAnalytics() {
 		if (!analyticsInjected) {
 			injectAnalytics();
 			injectSpeedInsights();
+
+			// Initialize PostHog analytics
+			const posthogKey = publicEnv?.PUBLIC_POSTHOG_KEY;
+			if (posthogKey) {
+				initAnalytics(posthogKey);
+			}
+
 			analyticsInjected = true;
 		}
 	}
@@ -41,12 +51,7 @@
 		const cfgOptions = {
 			autoConnect: true,
 			appName: 'st0x-liquidity',
-			chains: [base, arbitrum, optimism, mainnet] as [
-				typeof base,
-				typeof arbitrum,
-				typeof optimism,
-				typeof mainnet
-			],
+			chains: [base] as [typeof base],
 			connectors: connectorsList,
 			walletConnectProjectId: projectId || 'dummy-project-id'
 		};

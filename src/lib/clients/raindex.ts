@@ -2,7 +2,7 @@ import { RaindexClient } from '@rainlanguage/orderbook';
 import { fetchText } from '$lib/clients/http';
 import { type Network } from '$lib/config/network';
 
-export const RAIN_STRATEGIES_COMMIT = '99517d58e332dbf17f106d98fdf01e536ef2c9e6';
+export const RAIN_STRATEGIES_COMMIT = '2c8192e9137736507041ebff820b0e7b5b29f0d2';
 export const RAIN_STRATEGIES_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/settings.yaml`;
 
 // Cache the strategies YAML so we don't refetch on every client creation.
@@ -28,7 +28,6 @@ const poolInitPromise: Map<number, Promise<ClientPool>> = new Map();
  * Initialize the client pool for a network.
  * Creates 2 clients for load balancing (both use the same strategies YAML config).
  */
-
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function initializePool(_network: Network): Promise<ClientPool> {
 	const strategiesYaml = await getStrategiesYaml();

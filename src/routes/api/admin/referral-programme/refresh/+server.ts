@@ -1,21 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { verifySessionToken } from '$lib/server/auth';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
 import { cacheDelete, CACHE_KEYS } from '$lib/server/cache';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
-
-// Helper to check admin auth from cookies
-function isAuthenticated(cookies: { get: (name: string) => string | undefined }): boolean {
-	const sessionToken = cookies.get('auth-session');
-	const timestamp = cookies.get('auth-timestamp');
-
-	if (!sessionToken || !timestamp) {
-		return false;
-	}
-
-	return verifySessionToken(sessionToken, parseInt(timestamp, 10));
-}
 
 export const POST: RequestHandler = async ({ url, cookies, request }) => {
 	// Rate limiting
@@ -26,7 +14,7 @@ export const POST: RequestHandler = async ({ url, cookies, request }) => {
 	);
 	if (rateLimitResponse) return rateLimitResponse;
 
-	if (!isAuthenticated(cookies)) {
+	if (!isAdminAuthenticated(cookies)) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

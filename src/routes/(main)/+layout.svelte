@@ -6,11 +6,11 @@
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
 	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
 	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
-	import RewardsAnnouncementModal from '$lib/components/rewards/RewardsAnnouncementModal.svelte';
+	import TokenSwapAnnouncementModal from '$lib/components/rewards/TokenSwapAnnouncementModal.svelte';
 	import ReferralJoinModal from '$lib/components/referrals/ReferralJoinModal.svelte';
 	import ReferralDashboardModal from '$lib/components/referrals/ReferralDashboardModal.svelte';
 	import ReferralLeaderboardModal from '$lib/components/referrals/ReferralLeaderboardModal.svelte';
-	import { initRewardsAnnouncement } from '$lib/stores/rewardsStore';
+	import { initTokenSwapAnnouncement } from '$lib/stores/rewardsStore';
 	import AccessCodeModal from '$lib/components/AccessCodeModal.svelte';
 	import WalletConnectionModal from '$lib/components/WalletConnectionModal.svelte';
 	import Tutorial from '$lib/components/Tutorial.svelte';
@@ -18,6 +18,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import TickerTape from '$lib/components/TickerTape.svelte';
 	import LowFundsBanner from '$lib/components/LowFundsBanner.svelte';
+	import OldTokensBanner from '$lib/components/OldTokensBanner.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { rainlangConfirmationModal, tradePanelOpen } from '$lib/stores';
@@ -27,7 +28,7 @@
 	// Check for access code in URL params on mount
 	onMount(() => {
 		checkAndStoreAccessCodeFromUrl();
-		initRewardsAnnouncement();
+		initTokenSwapAnnouncement();
 	});
 
 	let sidebarExpanded = true;
@@ -154,6 +155,9 @@
 		<!-- Low funds banner (shown when wallet has no USDC) -->
 		<LowFundsBanner />
 
+		<!-- Old tokens banner (shown when user has legacy tokens that need to be swapped) -->
+		<OldTokensBanner />
+
 		<!-- Ticker tape underneath header (trade pages only) -->
 		{#if isTradePage}
 			<div class="hidden sm:block"><TickerTape /></div>
@@ -173,7 +177,7 @@
 	<RewardsDetailsModal />
 	<RewardsLeaderboardModal />
 	<RewardsRulesModal />
-	<RewardsAnnouncementModal />
+	<TokenSwapAnnouncementModal />
 
 	<!-- Referral Modals -->
 	<ReferralJoinModal />

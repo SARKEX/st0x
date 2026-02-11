@@ -7,6 +7,10 @@ import {
 } from '$lib/server/referrals';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
+import {
+	verifyReferralNicknameUpdateChallenge,
+	ChallengeStorageUnavailableError
+} from '$lib/server/signatureChallenge';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const rateLimitResponse = await applyRateLimit(
@@ -19,15 +23,32 @@ export const POST: RequestHandler = async ({ request }) => {
 	const audit = createAuditLogger(request);
 
 	try {
-		const { walletAddress, nickname, signature, message } = await request.json();
+		const { walletAddress, nickname, signature, challengeNonce } = await request.json();
 
-		if (!walletAddress || !nickname || !signature || !message) {
+		if (!walletAddress || !nickname || !signature || !challengeNonce) {
 			return json({ success: false, error: 'Missing required fields' }, { status: 400 });
+		}
+
+		const challenge = await verifyReferralNicknameUpdateChallenge(
+			walletAddress,
+			challengeNonce,
+			nickname
+		);
+		if (!challenge.valid || !challenge.message) {
+			await audit.logFailure(
+				'REFERRAL_UPDATE_FAILED',
+				{ walletAddress, nickname },
+				challenge.error || 'Invalid nickname update challenge'
+			);
+			return json(
+				{ success: false, error: challenge.error || 'Invalid nickname update challenge' },
+				{ status: 400 }
+			);
 		}
 
 		const signatureValid = await verifyWalletSignature(
 			walletAddress,
-			message,
+			challenge.message,
 			signature as `0x${string}`
 		);
 
@@ -60,6 +81,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return json({ success: true, profile: result.profile });
 	} catch (error) {
+		if (error instanceof ChallengeStorageUnavailableError) {
+			return json({ success: false, error: error.message }, { status: 503 });
+		}
+
 		console.error('[Referral Update API] Error:', error);
 		return json(
 			{ success: false, error: error instanceof Error ? error.message : 'Unknown error' },

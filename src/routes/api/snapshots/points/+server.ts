@@ -83,6 +83,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			month: monthlyData.month,
 			snapshotCount: monthlyData.snapshotCount,
 			blockNumbers: monthlyData.blockNumbers,
+			snapshotTotals: monthlyData.snapshotTotals ?? [],
 			walletCount: walletSummaries.length,
 			updatedAt: monthlyData.updatedAt,
 			wallets: walletSummaries

@@ -3,6 +3,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import type { BlockSnapshot } from '$lib/server/snapshots/types';
 	import { TOKENS } from '$lib/config/tokens';
+	import { computeProjectedDailyPoints } from '$lib/utils/points';
 	import { jsPDF } from 'jspdf';
 	import autoTable from 'jspdf-autotable';
 
@@ -30,6 +31,7 @@
 		month: string;
 		snapshotCount: number;
 		blockNumbers: number[];
+		snapshotTotals: { blockNumber: number; totalPoints: number; totalPointsFiltered?: number }[];
 		walletCount: number;
 		wallets: Array<{
 			address: string;
@@ -1027,6 +1029,7 @@
 		}
 	}
 
+	/* eslint-disable @typescript-eslint/no-unused-vars */
 	// Parameters are used to force Svelte to track dependencies
 	function getWalletRows(
 		_monthlyData: typeof monthlyData,
@@ -1034,6 +1037,7 @@
 		_excludedWalletsInData: Set<string>,
 		_currentMonthPool: typeof currentMonthPool
 	) {
+		/* eslint-enable @typescript-eslint/no-unused-vars */
 		if (!monthlyData?.wallets) {
 			return [];
 		}
@@ -1122,11 +1126,15 @@
 		? currentMonthPool.poolAmount + achievedRocketBoostAmount
 		: 0;
 
-	// Calculate PROJECTED pool (extrapolate current daily rate to end of month)
+	// Calculate PROJECTED pool (extrapolate last 3 days' rate to end of month)
 	$: daysElapsedInMonth = monthlyData ? Math.max(1, Math.floor(monthlyData.snapshotCount / 2)) : 1;
 	$: daysInSelectedMonth = selectedMonth ? getDaysInMonth(selectedMonth) : 30;
 	$: daysRemainingInMonth = Math.max(0, daysInSelectedMonth - daysElapsedInMonth);
-	$: avgDailyPoints = totalPoints / daysElapsedInMonth;
+	$: avgDailyPoints = computeProjectedDailyPoints(
+		totalPoints,
+		daysElapsedInMonth,
+		monthlyData?.snapshotTotals ?? []
+	);
 	$: projectedTotalPoints = totalPoints + avgDailyPoints * daysRemainingInMonth;
 	$: projectedProgressPercent =
 		rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;

@@ -86,19 +86,6 @@
 		inputAmount = formatUnits(newAmount, amountDecimals);
 	}
 
-	// Reset balance when balanceToken changes to prevent stale balance from previous token
-	let balanceTokenFingerprint: string | undefined;
-	$: {
-		const token = balanceToken ?? amountToken;
-		const newFingerprint = getTokenFingerprint(token);
-		if (balanceTokenFingerprint !== undefined && newFingerprint !== balanceTokenFingerprint) {
-			// Token changed, reset balance immediately
-			balance = 0n;
-			balanceDecimals = null;
-		}
-		balanceTokenFingerprint = newFingerprint;
-	}
-
 	$: balancePromise = (async () => {
 		const token = balanceToken ?? amountToken;
 		if (!token) return null;
@@ -110,15 +97,13 @@
 				abi: erc20Abi,
 				address: token.address as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$walletAddress as Hex],
-				chainId: token.chainId
+				args: [$walletAddress as Hex]
 			}),
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: token.address as `0x${string}`,
 				functionName: 'decimals',
-				args: [],
-				chainId: token.chainId
+				args: []
 			})
 		]);
 		return { balance: tokenBalance, decimals: tokenDecimals, fingerprint };

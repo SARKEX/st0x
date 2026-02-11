@@ -38,7 +38,17 @@ export function createSingleSftQuery(
 		const client = qc ?? queryClient;
 		if (!tokenId || !network) return undefined;
 		const allSfts = client.getQueryData<OffchainAssetReceiptVault[]>(['sfts', network.id]);
-		return allSfts?.find((v) => v.id.toLowerCase() === tokenId.toLowerCase());
+		const normalized = tokenId.toLowerCase();
+		// Match by id, address, or wrappedTokenContractAddress since the new subgraph
+		// uses the unwrapped address as the entity id
+		return allSfts?.find(
+			(v) =>
+				v.id.toLowerCase() === normalized ||
+				v.address?.toLowerCase() === normalized ||
+				(
+					v as { wrappedTokenContractAddress?: string }
+				).wrappedTokenContractAddress?.toLowerCase() === normalized
+		);
 	};
 
 	const getCachedTimestamp = (): number | undefined => {
@@ -52,7 +62,7 @@ export function createSingleSftQuery(
 		enabled: Boolean(network?.subgraph_url && tokenId),
 		staleTime: 30_000,
 		refetchInterval: false,
-		refetchOnWindowFocus: 'always',
+		refetchOnWindowFocus: true, // Only refetch on focus if stale
 		initialData: getCachedToken() ?? undefined,
 		initialDataUpdatedAt: getCachedTimestamp(),
 		queryFn: async () => {
@@ -87,13 +97,10 @@ export type UserVaultsPage = {
  *
  * @param network - Current network
  * @param signerAddress - User's wallet address
- * @param pollInterval - Polling interval in ms, or false to disable (default: false)
- *                       Dashboard: 60_000 (60s), Trade pages: 15_000 (15s)
  */
 export function createUserVaultsQuery(
 	network: Network | null,
-	signerAddress: string | null,
-	pollInterval: number | false = false
+	signerAddress: string | null
 ) {
 	return createInfiniteQuery<
 		UserVaultsPage,
@@ -104,10 +111,10 @@ export function createUserVaultsQuery(
 	>({
 		queryKey: ['userVaults', network?.id, signerAddress],
 		initialPageParam: 0,
-		staleTime: pollInterval ? 10_000 : Infinity, // Allow refetch if polling enabled
+		staleTime: Infinity, // Only invalidated manually after order deployment
 		refetchOnMount: true,
-		refetchInterval: pollInterval,
-		refetchOnWindowFocus: pollInterval ? 'always' : false,
+		refetchInterval: false,
+		refetchOnWindowFocus: false,
 		refetchIntervalInBackground: false,
 		queryFn: async ({ pageParam }) => {
 			if (!network || !signerAddress) {

@@ -2,7 +2,6 @@
 // Uses the same calculation logic as the daily cron for consistency
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { list } from '@vercel/blob';
 import {
 	kvGet,
 	kvSet,
@@ -19,6 +18,9 @@ import {
 	createEmptyMonthlyData,
 	mergeWalletPointsIntoMonthlyData
 } from '$lib/server/snapshots/points';
+import { buildSnapshotBlobIndex } from '$lib/server/snapshots/blobIndex';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	// Check if Blob token is available (required for Vercel Blob storage)
@@ -30,11 +32,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	}
 
 	try {
-		// Verify admin session
-		const token = cookies.get('auth-session');
-		const tsStr = cookies.get('auth-timestamp');
+		const rateLimitResponse = await applyRateLimit(
+			request,
+			rateLimiters.admin,
+			'admin-snapshots-recalculate'
+		);
+		if (rateLimitResponse) return rateLimitResponse;
 
-		if (!token || !tsStr) {
+		if (!isAdminAuthenticated(cookies)) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -74,44 +79,12 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const targetBlocks = new Set(monthBlocks.map((b) => b.blockNumber));
 		console.log(`[Recalculate] Target block numbers: ${Array.from(targetBlocks).join(', ')}`);
 
-		// List ALL blobs from blob storage
-		const { blobs: allBlobs } = await list({
-			prefix: 'snapshots/',
-			limit: 1000,
-			token: env.BLOB_READ_WRITE_TOKEN
-		});
-		console.log(`[Recalculate] Found ${allBlobs.length} total blobs in storage`);
-
-		// Debug: extract all block numbers from blobs
-		const allBlobBlocks = new Set<number>();
-		for (const blob of allBlobs) {
-			const pathParts = blob.pathname.split('/');
-			const fileName = pathParts[pathParts.length - 1];
-			const blockNumber = parseInt(fileName.replace('.json', ''));
-			if (!isNaN(blockNumber)) {
-				allBlobBlocks.add(blockNumber);
-			}
-		}
-
-		// Group blobs by block number
-		const blobsByBlock = new Map<number, Array<{ token: string; url: string }>>();
-
-		for (const blob of allBlobs) {
-			const pathParts = blob.pathname.split('/');
-			const fileName = pathParts[pathParts.length - 1];
-			const tokenSymbol = pathParts[pathParts.length - 2];
-			const blockNumber = parseInt(fileName.replace('.json', ''));
-
-			if (targetBlocks.has(blockNumber)) {
-				if (!blobsByBlock.has(blockNumber)) {
-					blobsByBlock.set(blockNumber, []);
-				}
-				blobsByBlock.get(blockNumber)!.push({
-					token: tokenSymbol,
-					url: blob.url
-				});
-			}
-		}
+		const { totalBlobsInStorage, sampleBlobPaths, allBlobBlockNumbers, blobsByBlock } =
+			await buildSnapshotBlobIndex({
+				targetBlocks,
+				blobToken: env.BLOB_READ_WRITE_TOKEN
+			});
+		console.log(`[Recalculate] Found ${totalBlobsInStorage} total blobs in storage`);
 
 		console.log(`[Recalculate] Found blobs for ${blobsByBlock.size} blocks`);
 
@@ -221,12 +194,12 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			},
 			debug: {
 				blocksFound: monthBlocks.length,
-				totalBlobsInStorage: allBlobs.length,
+				totalBlobsInStorage,
 				blobsMatchingMonth: blobsByBlock.size,
 				excludedWalletsCount: excludedSet.size,
 				targetBlockNumbers: Array.from(targetBlocks),
-				sampleBlobPaths: allBlobs.slice(0, 3).map((b) => b.pathname),
-				allBlobBlockNumbers: Array.from(allBlobBlocks).slice(0, 10)
+				sampleBlobPaths,
+				allBlobBlockNumbers: allBlobBlockNumbers.slice(0, 10)
 			}
 		});
 	} catch (error) {

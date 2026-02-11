@@ -5,19 +5,67 @@
  * Transforms user inputs into Rain strategy deployment parameters.
  *
  * This service layer:
- * - Fetches Rain strategies from GitHub (with caching)
+ * - Loads order GUIs from the rain.strategies registry
  * - Configures DotrainOrderGui with user inputs
  * - Generates deployment transaction arguments
- * - Does NOT import from stores (accepts parameters instead)
+ * - Accepts most parameters directly (wallet address read from authStore)
  */
 
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { get } from 'svelte/store';
 import type { Token } from '$lib/types';
 import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
+import { DotrainRegistry } from '@rainlanguage/orderbook';
+import { walletAddress } from '$lib/stores/authStore';
 import { RAIN_STRATEGIES_COMMIT } from '$lib/clients/raindex';
+
+/** Registry URL for rain.strategies (order definitions + shared settings). */
+const REGISTRY_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/registry`;
+
+/** Maps app network slug to the deployment key in rain.strategies registry. */
+function getDeploymentKey(raindexNetworkSlug: string): string {
+	switch (raindexNetworkSlug) {
+		case 'base':
+			return 'base';
+		case 'polygon':
+			return 'polygon';
+		case 'arbitrum':
+			return 'fixed-limit-arbitrum';
+		default:
+			return raindexNetworkSlug;
+	}
+}
+
+/** Cached registry instance to avoid repeated network fetches. */
+let registryPromise: Promise<DotrainRegistry> | null = null;
+
+async function getRegistry(): Promise<DotrainRegistry> {
+	if (!registryPromise) {
+		registryPromise = (async () => {
+			const result = await DotrainRegistry.new(REGISTRY_URL);
+			if (result.error) {
+				registryPromise = null;
+				throw new Error(result.error.readableMsg);
+			}
+			return result.value;
+		})();
+	}
+	return registryPromise;
+}
+
+/**
+ * Loads the registry and returns a DotrainOrderGui for the given order and network.
+ * Use this for all order types so strategy and settings stay in sync with the registry.
+ */
+async function getGuiFromRegistry(orderKey: string, raindexNetworkSlug: string) {
+	const registry = await getRegistry();
+	const deploymentKey = getDeploymentKey(raindexNetworkSlug);
+	const guiResult = await registry.getGui(orderKey, deploymentKey);
+	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
+	return guiResult.value;
+}
 
 // Default input vault ID for DCA and limit orders (32 bytes, padded)
 // Using a simple constant allows multiple orders to share the same input vault
@@ -47,38 +95,6 @@ export function parseSequentialVaultNumber(vaultId: bigint | string): number | u
 	return undefined;
 }
 
-// Strategy cache - keyed by commit hash + filename
-// Since strategies are from a pinned commit, they never change
-const strategyCache = new Map<string, string>();
-
-/**
- * Fetches a Rain strategy file from GitHub with caching
- * @param strategyFileName - The strategy file name (e.g., 'auction-dca.rain')
- * @returns The strategy file content
- */
-async function fetchStrategy(strategyFileName: string): Promise<string> {
-	const cacheKey = `${RAIN_STRATEGIES_COMMIT}/${strategyFileName}`;
-
-	// Check cache first
-	const cached = strategyCache.get(cacheKey);
-	if (cached) {
-		return cached;
-	}
-
-	// Fetch from GitHub
-	const url = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/src/${strategyFileName}`;
-	const response = await fetch(url);
-	if (!response.ok) {
-		throw new Error(`Failed to fetch strategy ${strategyFileName}: ${response.statusText}`);
-	}
-	const content = await response.text();
-
-	// Cache for future use
-	strategyCache.set(cacheKey, content);
-
-	return content;
-}
-
 export type DcaDeploymentArgs = {
 	outputToken: Token;
 	inputToken: Token;
@@ -93,11 +109,8 @@ export type DcaDeploymentArgs = {
 	inputVaultId?: Hex; // Optional override for input vault (defaults to DEFAULT_INPUT_VAULT_ID)
 };
 
-export const getDcaDeploymentArgs = async (network: Network, args: DcaDeploymentArgs, walletAddr: string) => {
-	const dcaOrder = await fetchStrategy('auction-dca.rain');
-
-	const gui = (await DotrainOrderGui.newWithDeployment(dcaOrder, network.raindexNetworkSlug))
-		.value as DotrainOrderGui;
+export const getDcaDeploymentArgs = async (network: Network, args: DcaDeploymentArgs) => {
+	const gui = await getGuiFromRegistry('auction-dca', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('output', args.outputToken.address);
 	await gui.setSelectToken('input', args.inputToken.address);
@@ -126,7 +139,8 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 
 	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-	if (!walletAddr) throw new Error('Wallet address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	// DCA vault management:
 	// - Input vault: Use provided vault ID if specified, otherwise let system generate random
@@ -139,7 +153,7 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs(walletAddr);
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
 
@@ -159,14 +173,9 @@ export type LimitOrderDeploymentArgs = {
 
 export const getLimitOrderDeploymentArgs = async (
 	network: Network,
-	args: LimitOrderDeploymentArgs,
-	walletAddr: string
+	args: LimitOrderDeploymentArgs
 ) => {
-	const limitOrder = await fetchStrategy('fixed-limit.rain');
-
-	const guiResult = await DotrainOrderGui.newWithDeployment(limitOrder, network.raindexNetworkSlug);
-	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
-	const gui = guiResult.value;
+	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.inputToken.address);
 	await gui.setSelectToken('token2', args.outputToken.address);
@@ -176,7 +185,8 @@ export const getLimitOrderDeploymentArgs = async (
 
 	gui.setDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
 
-	if (!walletAddr) throw new Error('Wallet address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	// Limit order vault management:
 	// - Input vault: Use provided vault ID if specified, otherwise let system generate random
@@ -189,7 +199,7 @@ export const getLimitOrderDeploymentArgs = async (
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs(walletAddr);
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
 
@@ -217,17 +227,9 @@ export type MarketMakingDeploymentArgs = {
 
 export const getMarketMakingDeploymentArgs = async (
 	network: Network,
-	args: MarketMakingDeploymentArgs,
-	walletAddr: string
+	args: MarketMakingDeploymentArgs
 ) => {
-	const dsfStrategy = await fetchStrategy('dynamic-spread.rain');
-
-	const guiResult = await DotrainOrderGui.newWithDeployment(
-		dsfStrategy,
-		network.raindexNetworkSlug
-	);
-	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
-	const gui = guiResult.value;
+	const gui = await getGuiFromRegistry('dynamic-spread', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.token1.address);
 	await gui.setSelectToken('token2', args.token2.address);
@@ -251,7 +253,8 @@ export const getMarketMakingDeploymentArgs = async (
 	gui.setDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
 	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
 
-	if (!walletAddr) throw new Error('Wallet address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	if (args.inputVaultIdToken1) {
 		gui.setVaultId('input', 'token1', args.inputVaultIdToken1);
@@ -270,10 +273,8 @@ export const getMarketMakingDeploymentArgs = async (
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs(walletAddr);
-	if (deploymentArgsResult.error) {
-		throw new Error(deploymentArgsResult.error.readableMsg);
-	}
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
+	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
 
 	return {
@@ -315,16 +316,8 @@ export type FolioDeploymentArgs = {
 	outputVaultId7: Hex | undefined;
 };
 
-export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploymentArgs, walletAddr: string) => {
-	console.log('getFolioDeploymentArgs');
-	const folioStrategy = await fetchStrategy('folio.rain');
-
-	const guiResult = await DotrainOrderGui.newWithDeployment(
-		folioStrategy,
-		network.raindexNetworkSlug
-	);
-	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
-	const gui = guiResult.value;
+export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploymentArgs) => {
+	const gui = await getGuiFromRegistry('folio', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.selectedToken1.address);
 	await gui.setSelectToken('token2', args.selectedToken2.address);
@@ -354,7 +347,8 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 	gui.setDeposit('token6', formatUnits(args.depositAmount6, args.selectedToken6.decimals));
 	gui.setDeposit('token7', formatUnits(args.depositAmount7, args.selectedToken7.decimals));
 
-	if (!walletAddr) throw new Error('Wallet address not found');
+	const $walletAddress = get(walletAddress);
+	if (!$walletAddress) throw new Error('Wallet address not found');
 
 	if (args.inputVaultId1) {
 		gui.setVaultId('input', 'token1', args.inputVaultId1);
@@ -416,10 +410,9 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 	if (composedRainlangResult.error) throw new Error(composedRainlangResult.error.readableMsg);
 	const composedRainlang = composedRainlangResult.value;
 
-	const deploymentArgsResult = await gui.getDeploymentTransactionArgs(walletAddr);
+	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value;
-	console.log('deploymentArgs', deploymentArgs);
 
 	return {
 		composedRainlang,

@@ -47,7 +47,7 @@ describe('network', () => {
 			const network = getNetworkByName('base');
 			expect(network).toBeDefined();
 			expect(network?.name).toBe('base');
-			expect(network?.displayName).toBe('Base');
+			expect(network?.displayName).toBe('Base Mainnet');
 		});
 
 		it.each([
@@ -107,10 +107,10 @@ describe('network', () => {
 			expect(tokens.every((t) => t.chainId === 8453)).toBe(true);
 		});
 
-		it('should include tIAU for Base', () => {
+		it('should include wtIAU for Base', () => {
 			const tokens = getTokensByNetwork(8453);
-			const tIAU = tokens.find((t) => t.symbol === 'tIAU');
-			expect(tIAU).toBeDefined();
+			const wtIAU = tokens.find((t) => t.symbol === 'wtIAU');
+			expect(wtIAU).toBeDefined();
 		});
 
 		it('should return empty array for unknown network', () => {
@@ -241,10 +241,7 @@ describe('network', () => {
 			networks.forEach((network) => {
 				expect(network.rpcUrl).toMatch(/^https?:\/\//);
 				expect(network.blockExplorer).toMatch(/^https?:\/\//);
-				// subgraph_url can be empty for some networks, but if set, must be a valid URL
-				if (network.subgraph_url) {
-					expect(network.subgraph_url).toMatch(/^https?:\/\//);
-				}
+				expect(network.subgraph_url).toMatch(/^https?:\/\//);
 			});
 		});
 	});

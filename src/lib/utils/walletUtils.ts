@@ -13,10 +13,8 @@ export function isStaleWalletSessionError(error: unknown): boolean {
 	if (error instanceof Error) {
 		const message = error.message.toLowerCase();
 		return (
-			((message.includes('personal_sign') || message.includes('eth_sendtransaction')) &&
-				(message.includes('not available') || message.includes('does not exist'))) ||
-			message.includes('getchainid is not a function') ||
-			message.includes('connector.getchainid')
+			(message.includes('personal_sign') || message.includes('eth_sendtransaction')) &&
+			(message.includes('not available') || message.includes('does not exist'))
 		);
 	}
 	return false;

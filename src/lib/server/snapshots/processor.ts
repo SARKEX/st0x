@@ -4,7 +4,7 @@
 import type { Transfer, BlockSnapshot, TokenBalances, SnapshotPrice } from './types';
 import type { TokenPrice } from './pyth';
 import type { VaultHolding } from './vaults';
-import { TOKENS } from '$lib/config/tokens';
+import { getTokenByAnyAddress } from '$lib/config/tokens';
 import {
 	EXCLUDED_WALLETS,
 	ORDERBOOK_ADDRESS,
@@ -25,20 +25,24 @@ function getExcludedAddresses(dynamicExcluded: string[] = []): Set<string> {
 }
 
 /**
- * Calculate balances at a specific block by replaying transfers
- * Does NOT filter excluded addresses - that happens in generateSnapshot
+ * Calculate balances at a specific block by replaying transfers.
+ * Accepts a single address or multiple addresses (e.g. wrapped + unwrapped + legacy).
+ * When multiple addresses are provided, balances from all variants are summed per wallet.
+ * Does NOT filter excluded addresses - that happens in generateSnapshot.
  */
 export function calculateBalancesAtBlock(
 	transfers: Transfer[],
 	targetBlock: number,
-	tokenAddress: string
+	tokenAddresses: string | string[]
 ): { balances: Map<string, bigint>; totalSupply: bigint } {
 	const balances = new Map<string, bigint>();
 	let totalSupply = 0n;
 
-	// Filter transfers for this token up to the target block
+	const addressSet = new Set(Array.isArray(tokenAddresses) ? tokenAddresses : [tokenAddresses]);
+
+	// Filter transfers for these token addresses up to the target block
 	const relevantTransfers = transfers.filter(
-		(t) => t.tokenAddress === tokenAddress && t.blockNumber <= targetBlock
+		(t) => addressSet.has(t.tokenAddress) && t.blockNumber <= targetBlock
 	);
 
 	// Replay transfers to calculate balances
@@ -73,21 +77,24 @@ export function calculateBalancesAtBlock(
 }
 
 /**
- * Merge vault holdings into balances, attributing to vault owners
- * Note: Orderbook contract balance should already be removed before calling this
+ * Merge vault holdings into balances, attributing to vault owners.
+ * Accepts a single address or multiple addresses (e.g. wrapped + unwrapped + legacy).
+ * Note: Orderbook contract balance should already be removed before calling this.
  */
 export function mergeVaultHoldings(
 	balances: Map<string, bigint>,
 	vaultHoldings: VaultHolding[],
-	tokenAddress: string
+	tokenAddresses: string | string[]
 ): Map<string, bigint> {
-	const normalizedToken = tokenAddress.toLowerCase();
+	const addressSet = new Set(Array.isArray(tokenAddresses) ? tokenAddresses : [tokenAddresses]);
 
-	// Filter vault holdings for this token
-	const tokenVaults = vaultHoldings.filter((v) => v.tokenAddress === normalizedToken);
+	// Filter vault holdings for these token addresses
+	const tokenVaults = vaultHoldings.filter((v) => addressSet.has(v.tokenAddress));
 
 	console.log(
-		`[MergeVaults] Token ${normalizedToken}: found ${tokenVaults.length} vaults from ${vaultHoldings.length} total`
+		`[MergeVaults] Tokens ${[...addressSet].join(',')}: found ${tokenVaults.length} vaults from ${
+			vaultHoldings.length
+		} total`
 	);
 	if (tokenVaults.length > 0) {
 		console.log(`[MergeVaults] Sample vault:`, JSON.stringify(tokenVaults[0], null, 2));
@@ -146,7 +153,10 @@ function toSnapshotPrice(tokenPrice: TokenPrice | undefined): SnapshotPrice | nu
 }
 
 /**
- * Generate a snapshot for a specific token at a specific block
+ * Generate a snapshot for a specific token at a specific block.
+ * @param tokenAddress - The primary (wrapped) token address used for identification
+ * @param allTokenAddresses - All address variants (wrapped + unwrapped + legacy) to include in balance calculation.
+ *   If not provided, only tokenAddress is used.
  * @param vaultHoldings - Optional vault holdings to attribute to owners instead of orderbook
  * @param dynamicExcluded - Optional list of wallet addresses from KV store to mark as excluded
  * @param priceTimestamp - Optional timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
@@ -159,21 +169,41 @@ export function generateSnapshot(
 	tokenPrice?: TokenPrice,
 	vaultHoldings?: VaultHolding[],
 	dynamicExcluded?: string[],
-	priceTimestamp?: number
+	priceTimestamp?: number,
+	allTokenAddresses?: string[]
 ): BlockSnapshot {
-	const token = TOKENS.find((t) => t.address.toLowerCase() === tokenAddress);
-	const result = calculateBalancesAtBlock(transfers, blockNumber, tokenAddress);
+	const token = getTokenByAnyAddress(tokenAddress);
+	const addresses = allTokenAddresses ?? [tokenAddress];
+	const result = calculateBalancesAtBlock(transfers, blockNumber, addresses);
 	const totalSupply = result.totalSupply;
 	let balances = result.balances;
 
-	// Always remove the orderbook contract balance - it's not a real holder
-	// Tokens in the orderbook are held in vaults owned by users
-	const orderbookAddr = ORDERBOOK_ADDRESS.toLowerCase();
-	balances.delete(orderbookAddr);
+	// Always remove orderbook contract balances - they're not real holders.
+	// Token balances in orderbooks are re-attributed to vault owners via vaultHoldings below.
+	const orderbookAddresses = new Set<string>([ORDERBOOK_ADDRESS.toLowerCase()]);
+	if (vaultHoldings && vaultHoldings.length > 0) {
+		const tokenAddressSet = new Set(addresses.map((a) => a.toLowerCase()));
+		for (const vault of vaultHoldings) {
+			if (tokenAddressSet.has(vault.tokenAddress.toLowerCase())) {
+				orderbookAddresses.add(vault.orderbookAddress.toLowerCase());
+			}
+		}
+	}
+	for (const orderbookAddress of orderbookAddresses) {
+		balances.delete(orderbookAddress);
+	}
+
+	// Remove token contract addresses from balances.
+	// When combining wrapped + unwrapped + legacy, the wrapped contract holds
+	// the underlying unwrapped tokens as backing (ERC4626). Including it would
+	// double-count — those tokens already belong to the wrapped token holders.
+	for (const addr of addresses) {
+		balances.delete(addr);
+	}
 
 	// Attribute vault holdings to their owners (if vault data was fetched successfully)
 	if (vaultHoldings && vaultHoldings.length > 0) {
-		balances = mergeVaultHoldings(balances, vaultHoldings, tokenAddress);
+		balances = mergeVaultHoldings(balances, vaultHoldings, addresses);
 	}
 
 	// Process balances: remove zeros and identify excluded wallets

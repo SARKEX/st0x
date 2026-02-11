@@ -7,18 +7,16 @@ import { PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 /**
  * Query for calculating cost basis from all-time trade history.
  * Includes both market orders (where user is taker) and limit order fills (where user is maker).
- * Uses a long staleTime since trade history is historical and doesn't change frequently.
+ * One-shot query: fetches once on mount, refreshes on window focus only.
+ * This is the most expensive query (all-time paginated), so we avoid polling.
  */
-export function createCostBasisQuery(
-	network: Network | null,
-	userAddress: string | null,
-	pollInterval: number = 300_000
-) {
+export function createCostBasisQuery(network: Network | null, userAddress: string | null) {
 	return createQuery<Map<string, CostBasisData>>({
 		queryKey: ['costBasis', network?.id, userAddress],
 		enabled: Boolean(network && userAddress),
-		staleTime: 300_000, // 5 minutes - trade history doesn't change often
-		refetchInterval: pollInterval,
+		staleTime: 600_000, // 10 minutes - only refetch when stale
+		refetchInterval: false, // No polling - fetch once on mount
+		refetchOnWindowFocus: true, // Refresh when user returns to tab (only if stale)
 		queryFn: async () => {
 			if (!network || !userAddress) {
 				return new Map();

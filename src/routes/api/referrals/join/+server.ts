@@ -10,6 +10,10 @@ import {
 import { isWalletRegistered } from '$lib/server/accessCodes';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { createAuditLogger } from '$lib/server/auditLog';
+import {
+	verifyReferralJoinChallenge,
+	ChallengeStorageUnavailableError
+} from '$lib/server/signatureChallenge';
 
 export const POST: RequestHandler = async ({ request }) => {
 	// Rate limiting - use strict mode for registration-like endpoints
@@ -19,7 +23,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const audit = createAuditLogger(request);
 
 	try {
-		const { address, telegramHandle, nickname, signature, message } = await request.json();
+		const { address, telegramHandle, nickname, signature, challengeNonce } = await request.json();
 
 		// Validate required fields
 		if (!address || typeof address !== 'string') {
@@ -59,8 +63,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ success: false, error: 'Signature required' }, { status: 400 });
 		}
 
-		if (!message || typeof message !== 'string') {
-			return json({ success: false, error: 'Message required' }, { status: 400 });
+		if (!challengeNonce || typeof challengeNonce !== 'string') {
+			return json({ success: false, error: 'Challenge nonce required' }, { status: 400 });
 		}
 
 		// Check if wallet is registered on the platform
@@ -84,10 +88,24 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
+		const challenge = await verifyReferralJoinChallenge(address, challengeNonce);
+		if (!challenge.valid || !challenge.message) {
+			await audit.logFailure(
+				'REFERRAL_JOIN',
+				{ telegramHandle, nickname },
+				challenge.error || 'Invalid referral challenge',
+				{ walletAddress: address }
+			);
+			return json(
+				{ success: false, error: challenge.error || 'Invalid referral challenge' },
+				{ status: 400 }
+			);
+		}
+
 		// Verify signature
 		const signatureValid = await verifyWalletSignature(
 			address,
-			message,
+			challenge.message,
 			signature as `0x${string}`
 		);
 		if (!signatureValid) {
@@ -130,6 +148,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			nickname: result.profile!.nickname
 		});
 	} catch (error) {
+		if (error instanceof ChallengeStorageUnavailableError) {
+			return json({ success: false, error: error.message }, { status: 503 });
+		}
+
 		console.error('[Referral Join] Error:', error);
 		return json({ success: false, error: 'Invalid request body' }, { status: 400 });
 	}

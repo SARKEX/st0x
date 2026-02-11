@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import transactionStore from '$lib/stores/transaction';
 import { readContract, sendTransaction, waitForTransactionReceipt, estimateGas } from '@wagmi/core';
-import { TOKENS, DEFAULT_PAYMENT_TOKENS, getDefaultPaymentTokenForNetwork } from '$lib/config/network';
+import {
+	TOKENS,
+	DEFAULT_PAYMENT_TOKENS,
+	getDefaultPaymentTokenForNetwork
+} from '$lib/config/network';
 import { rainlangConfirmationModal, currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
 
 const STOXs = TOKENS;
@@ -37,7 +41,8 @@ vi.mock('$lib/services/orderDeployment', async (importOriginal) => {
 });
 
 vi.mock('$lib/clients/raindex', () => ({
-	createRaindexClient: vi.fn()
+	createRaindexClient: vi.fn(),
+	RAIN_STRATEGIES_COMMIT: 'mock-commit-hash'
 }));
 
 vi.mock('@wagmi/core', () => ({
@@ -75,7 +80,9 @@ vi.mock('svelte-wagmi', async () => {
 });
 
 vi.mock('$lib/stores/authStore', async () => {
-	const { mockWalletAddressStore, mockAuthMethodStore, mockWrongNetworkStore } = await import('../mocks/mockStores');
+	const { mockWalletAddressStore, mockAuthMethodStore, mockWrongNetworkStore } = await import(
+		'../mocks/mockStores'
+	);
 	return {
 		walletAddress: mockWalletAddressStore,
 		authMethod: mockAuthMethodStore,
@@ -152,6 +159,7 @@ function createMockDeploymentArgs(overrides = {}) {
 				}
 			],
 			chainId: 8453,
+			emitMetaCall: undefined,
 			...overrides
 		}
 	};
@@ -181,7 +189,8 @@ describe('transactionStore tests', () => {
 						token: approvalCount === 2 ? `0xtoken${i}` : `0xtoken${i}`,
 						symbol: approvalCount === 2 ? `TEST${i}` : `TEST${i}`
 					})),
-					chainId: 8453
+					chainId: 8453,
+					emitMetaCall: undefined
 				}
 			})
 		});

@@ -14,9 +14,7 @@
 		dynamicTriggerExportWallet,
 		dynamicTriggerSendTransaction,
 		dynamicAccessToken,
-		dynamicSigner,
-		type DynamicSession,
-		type DynamicSigner
+		type DynamicSession
 	} from '$lib/stores/dynamicStore';
 	import { setDynamicWalletProvider } from '$lib/services/walletService';
 
@@ -31,11 +29,6 @@
 		provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null
 	) {
 		setDynamicWalletProvider(provider);
-	}
-
-	// Handle Dynamic signer from React (for EIP-7702 authorization signing)
-	function handleSignerReady(signer: DynamicSigner | null) {
-		dynamicSigner.set(signer);
 	}
 
 	// Handle events from React
@@ -94,7 +87,6 @@
 		{environmentId}
 		onEvent={handleDynamicEvent}
 		onWalletProviderReady={handleWalletProviderReady}
-		onSignerReady={handleSignerReady}
 		triggerLogin={$dynamicTriggerLogin}
 		triggerLogout={$dynamicTriggerLogout}
 		triggerExportWallet={$dynamicTriggerExportWallet}

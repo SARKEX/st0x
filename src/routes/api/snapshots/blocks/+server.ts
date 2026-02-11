@@ -11,8 +11,19 @@ import {
 
 export const GET: RequestHandler = async ({ url }) => {
 	try {
+		const DEFAULT_LIMIT = 100;
+		const MAX_LIMIT = 1000;
 		const date = url.searchParams.get('date'); // YYYY-MM-DD format
-		const limit = parseInt(url.searchParams.get('limit') || '100');
+		const rawLimit = url.searchParams.get('limit');
+
+		let limit = DEFAULT_LIMIT;
+		if (rawLimit !== null) {
+			if (!/^\d+$/.test(rawLimit)) {
+				return json({ error: 'Invalid limit parameter' }, { status: 400 });
+			}
+			const parsedLimit = Number.parseInt(rawLimit, 10);
+			limit = Math.min(Math.max(parsedLimit, 1), MAX_LIMIT);
+		}
 
 		const kv = await getKv();
 		if (!kv) {

@@ -1,6 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { isAuthenticated, walletAddress } from './authStore';
+import { fetchJson } from '$lib/utils/fetchJson';
 
 // Access state
 export const walletRegistered = writable<boolean | null>(null); // null = not checked yet
@@ -10,6 +11,8 @@ export const accessError = writable<string | null>(null);
 // Modal states
 export const showAccessCodeModal = writable<boolean>(false);
 export const showWalletConnectionModal = writable<boolean>(false);
+
+let checkWalletAccessRequestId = 0;
 
 // Function to prompt wallet connection (shows modal if not connected)
 export function promptWalletConnection() {
@@ -46,31 +49,41 @@ export async function checkWalletAccess(
 ): Promise<boolean> {
 	if (!browser) return false;
 
+	const requestId = ++checkWalletAccessRequestId;
 	checkingAccess.set(true);
 	accessError.set(null);
 
 	try {
-		const res = await fetch(`/api/access/check?address=${encodeURIComponent(address)}`);
-		const data = await res.json();
+		const response = await fetchJson<{ registered: boolean; error?: string }>(
+			`/api/access/check?address=${encodeURIComponent(address)}`
+		);
 
-		if (res.ok) {
-			walletRegistered.set(data.registered);
+		if (requestId !== checkWalletAccessRequestId) {
+			return false;
+		}
+
+		if (response.ok && response.data) {
+			walletRegistered.set(response.data.registered);
 
 			// Show access code modal for unregistered wallets
-			if (!data.registered && showModalIfUnregistered) {
+			if (!response.data.registered && showModalIfUnregistered) {
 				showAccessCodeModal.set(true);
 			}
 
-			return data.registered;
+			return response.data.registered;
 		} else {
-			accessError.set(data.error || 'Failed to check access');
+			accessError.set(response.error || 'Failed to check access');
 			return false;
 		}
 	} catch {
-		accessError.set('Network error checking access');
+		if (requestId === checkWalletAccessRequestId) {
+			accessError.set('Network error checking access');
+		}
 		return false;
 	} finally {
-		checkingAccess.set(false);
+		if (requestId === checkWalletAccessRequestId) {
+			checkingAccess.set(false);
+		}
 	}
 }
 
@@ -79,25 +92,53 @@ export async function validateCode(code: string): Promise<{ valid: boolean; reas
 	if (!browser) return { valid: false, reason: 'Not in browser' };
 
 	try {
-		const res = await fetch('/api/access/validate', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ code })
-		});
-		const data = await res.json();
-		return { valid: data.valid, reason: data.reason };
+		const response = await fetchJson<{ valid: boolean; reason?: string; error?: string }>(
+			'/api/access/validate',
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ code })
+			}
+		);
+
+		return {
+			valid: Boolean(response.data?.valid),
+			reason: response.data?.reason || response.error
+		};
 	} catch {
 		return { valid: false, reason: 'Network error' };
 	}
 }
 
-// Create the message for signing
-export function createSignMessage(address: string, code: string): string {
-	return `Sign to verify wallet ownership for st0x rewards.
+export async function requestAccessRegistrationChallenge(
+	address: string,
+	code: string
+): Promise<{ success: boolean; nonce?: string; message?: string; error?: string }> {
+	if (!browser) return { success: false, error: 'Not in browser' };
 
-Wallet: ${address}
-Access Code: ${code}
-Timestamp: ${Date.now()}`;
+	try {
+		const response = await fetchJson<{
+			success?: boolean;
+			nonce?: string;
+			message?: string;
+			error?: string;
+		}>('/api/access/challenge', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ address, code })
+		});
+
+		if (response.ok && response.data?.success && response.data.nonce && response.data.message) {
+			return { success: true, nonce: response.data.nonce, message: response.data.message };
+		}
+
+		return {
+			success: false,
+			error: response.error || 'Failed to issue registration challenge'
+		};
+	} catch {
+		return { success: false, error: 'Network error' };
+	}
 }
 
 // Register wallet with access code (and optional referral code)
@@ -105,31 +146,34 @@ export async function registerWallet(
 	address: string,
 	code: string,
 	signature: string,
-	message: string,
+	challengeNonce: string,
 	referralCode?: string
 ): Promise<{ success: boolean; error?: string; referralLinked?: boolean }> {
 	if (!browser) return { success: false, error: 'Not in browser' };
 
 	try {
-		const res = await fetch('/api/access/register', {
+		const response = await fetchJson<{
+			success?: boolean;
+			error?: string;
+			referralLinked?: boolean;
+		}>('/api/access/register', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				address,
 				code,
 				signature,
-				message,
+				challengeNonce,
 				referralCode: referralCode || undefined
 			})
 		});
-		const data = await res.json();
 
-		if (data.success) {
+		if (response.ok && response.data?.success) {
 			walletRegistered.set(true);
-			return { success: true, referralLinked: data.referralLinked };
+			return { success: true, referralLinked: response.data.referralLinked };
 		}
 
-		return { success: false, error: data.error || 'Registration failed' };
+		return { success: false, error: response.error || 'Registration failed' };
 	} catch {
 		return { success: false, error: 'Network error' };
 	}
@@ -137,6 +181,7 @@ export async function registerWallet(
 
 // Reset access state (e.g., when wallet disconnects)
 export function resetAccessState() {
+	checkWalletAccessRequestId++;
 	walletRegistered.set(null);
 	checkingAccess.set(false);
 	accessError.set(null);
@@ -150,7 +195,7 @@ if (browser) {
 		if (address && address !== currentAddress) {
 			currentAddress = address;
 			// Check registration and show modal if not registered
-			checkWalletAccess(address, true);
+			void checkWalletAccess(address, true);
 		} else if (!address && currentAddress) {
 			currentAddress = null;
 			resetAccessState();

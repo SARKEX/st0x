@@ -153,13 +153,13 @@ const CSP_DIRECTIVES = [
 	"default-src 'self'",
 	// Script sources - TradingView widgets require unsafe-inline (they use script.innerHTML for config)
 	// unsafe-eval may be needed by web3 libraries - monitor via report-uri before removing
-	"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://s3.tradingview.com https://tv-static-2.tradingview.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
+	"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://s3.tradingview.com https://tv-static-2.tradingview.com https://va.vercel-scripts.com https://cdn.jsdelivr.net https://*.posthog.com https://*.i.posthog.com",
 	// Style sources - unsafe-inline needed for dynamic styles from libraries
 	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
 	"font-src 'self' https://fonts.gstatic.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://cdn.jsdelivr.net data:",
 	"img-src 'self' data: blob: https:",
 	// Tightened connect-src - explicitly list allowed API endpoints
-	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.alchemy.com https://*.arbitrum.io https://mainnet.optimism.io https://*.rhinestone.dev https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://*.metamask.io wss://*.metamask.io https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://eth.merkle.io",
+	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://*.posthog.com https://*.i.posthog.com",
 	"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://buy.onramper.com https://buy.onramper.dev https://*.tradingview.com https://*.tradingview-widget.com https://app.dynamicauth.com https://*.dynamicauth.com",
 	"frame-ancestors 'none'",
 	"base-uri 'self'",
@@ -375,6 +375,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Protected paths - require wallet registration (server-side enforcement)
 	if (requiresWalletRegistration(path)) {
+		// Allow admin session to bypass wallet registration for API routes
+		// (admin panel pages make fetch calls to these endpoints)
+		if (path.startsWith('/api/')) {
+			const token = cookies.get('auth-session');
+			const tsStr = cookies.get('auth-timestamp');
+			const timestamp = tsStr ? Number(tsStr) : NaN;
+			if (token && Number.isFinite(timestamp) && verifySessionToken(token, timestamp)) {
+				if (debug) console.log('[auth] admin session bypass for API', path);
+				const response = await resolve(event);
+				return addSecurityAndCorsHeaders(response, origin, path);
+			}
+		}
+
 		const walletAddress = getWalletFromRequest(cookies);
 
 		if (debug) {

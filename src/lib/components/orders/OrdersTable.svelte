@@ -4,11 +4,12 @@
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { parseFloatHex, getRaindexOrderUrl, addressesEqual, normalizeAddress } from '$lib/utils/tokenMath';
+	import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 	import transactionStore from '$lib/stores/transaction';
 	import { type ProcessedQuote, classifyOrderType } from '$lib/utils/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { createRaindexClient } from '$lib/clients/raindex';
+	import type { GetOrdersFilters } from '@rainlanguage/orderbook';
 	import type { DisplayOrder } from '$lib/types/orders';
 
 	// Props
@@ -68,13 +69,14 @@
 					return [];
 				}
 				const client = await createRaindexClient();
-				const filters: { owners: `0x${string}`[]; active: boolean; tokens?: `0x${string}`[] } = {
+				const filters: GetOrdersFilters = {
 					owners: [signer as `0x${string}`],
 					active: false
 				};
 				// Only filter by token if provided
 				if (token) {
-					filters.tokens = [token as `0x${string}`];
+					const tokenAddr = token as `0x${string}`;
+					filters.tokens = { inputs: [tokenAddr], outputs: [tokenAddr] };
 				}
 				const result = await client.getOrders([network.id], filters, 1);
 				if (result.error) {
@@ -101,10 +103,11 @@
 
 		// Filter by owner if "My Orders" is selected
 		if (selectedOrdersFilter === 'my' && $walletAddress) {
+			const myAddress = $walletAddress.toLowerCase();
 			result = result.filter((o) => {
 				// For limit orders, check quote owner
 				if (o.quote?.sgOrder?.owner) {
-					return addressesEqual(o.quote.sgOrder.owner, $walletAddress);
+					return o.quote.sgOrder.owner.toLowerCase() === myAddress;
 				}
 				// Market orders are already filtered by sender in the parent
 				return o.type === 'market';
@@ -113,9 +116,9 @@
 
 		// Add closed orders if checkbox is checked
 		if (showClosedOrders && selectedOrdersFilter === 'my' && $closedOrdersQuery.data) {
-			const existingHashes = new Set(result.map((o) => normalizeAddress(o.orderHash)));
+			const existingHashes = new Set(result.map((o) => o.orderHash.toLowerCase()));
 			for (const order of $closedOrdersQuery.data) {
-				if (existingHashes.has(normalizeAddress(order.orderHash))) {
+				if (existingHashes.has(order.orderHash.toLowerCase())) {
 					continue;
 				}
 
@@ -138,7 +141,7 @@
 				// If order INPUT is the asset, this is a BUY order (order receives the asset)
 				// If order OUTPUT is the asset, this is a SELL order (order gives the asset)
 				const isBuy = tokenAddress
-					? addressesEqual(inputVault?.token?.address, tokenAddress)
+					? inputVault?.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
 					: false;
 
 				const displayTokenSymbol = isBuy ? inputTokenSymbol : outputTokenSymbol;
@@ -421,7 +424,7 @@
 								order.price !== undefined && order.price !== null && Number.isFinite(order.price)
 									? order.price.toFixed(3)
 									: '—'}
-							{@const isMyOrder = addressesEqual(orderOwner, $walletAddress)}
+							{@const isMyOrder = orderOwner.toLowerCase() === $walletAddress?.toLowerCase()}
 							{@const typeLabel =
 								order.type === 'dca' ? 'DCA' : order.type === 'custom' ? 'Custom' : 'Limit'}
 							{@const typeClass =

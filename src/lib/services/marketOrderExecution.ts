@@ -12,14 +12,13 @@ import {
 } from '$lib/api/orders';
 import { createRaindexClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
-import type { TakeOrdersParams } from '$lib/types/transactions';
-import type { MinimalToken } from '$lib/types/orderPerspective';
+import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 import {
 	type OrderV4,
 	type RaindexOrderQuote,
 	type SgOrder,
 	type TakeOrderConfigV4,
-	type TakeOrdersConfigV4
+	type TakeOrdersConfigV5
 } from '@rainlanguage/orderbook';
 import { AbiCoder } from 'ethers';
 import { Float } from '@rainlanguage/float';
@@ -38,8 +37,8 @@ export interface MarketOrderInput {
 	inputMode?: 'amount' | 'spend';
 
 	// Tokens
-	assetToken: MinimalToken;
-	paymentToken: MinimalToken;
+	assetToken: TokenInfo;
+	paymentToken: TokenInfo;
 
 	// Quotes
 	quotes: ProcessedQuote[];
@@ -160,17 +159,6 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			})
 		);
 
-		// 3b. Check hydration results
-		const hydrationFailures = orderInfos.filter((info) => !info.orderData?.owner).length;
-		if (hydrationFailures > 0) {
-			console.warn(
-				`[marketOrderExecution] ${hydrationFailures}/${orderInfos.length} orders failed hydration`
-			);
-		}
-		if (hydrationFailures === orderInfos.length) {
-			return { success: false, error: 'Unable to load order data. Please try again.' };
-		}
-
 		// 4. Filter to only executable orders (exclude user's own orders)
 		const userAddress = getSignerAddress()?.toLowerCase();
 		const executableOrders = orderInfos.filter((info) => {
@@ -273,16 +261,17 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		}
 
 		// 10. Build TakeOrdersConfig
-		const takeOrdersConfig: TakeOrdersConfigV4 = {
-			minimumInput: Float.fromBigint(0n).asHex(),
-			maximumInput: maximumInputFloat.float.asHex(),
+		const takeOrdersConfig: TakeOrdersConfigV5 = {
+			minimumIO: Float.fromBigint(0n).asHex(),
+			maximumIO: maximumInputFloat.float.asHex(),
 			maximumIORatio: bufferedRatioResult.value.asHex(),
+			IOIsInput: true as unknown as string, // Runtime expects boolean; package types incorrectly declare string
 			orders: takeOrderConfigs,
 			data: '0x'
 		};
 
 		// 11. Determine taker perspective tokens
-		const takerWantsInfo: MinimalToken =
+		const takerWantsInfo: TokenInfo =
 			orderSide === 'Buy'
 				? { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol }
 				: {
@@ -291,7 +280,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 						symbol: paymentToken.symbol
 					};
 
-		const takerPaysInfo: MinimalToken =
+		const takerPaysInfo: TokenInfo =
 			orderSide === 'Buy'
 				? {
 						address: paymentToken.address,
@@ -312,7 +301,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const shouldRecalculate = orderSide === 'Sell' || inputMode === 'spend';
 		const recalculateConfig =
 			shouldRecalculate && refreshQuotes
-				? async (): Promise<TakeOrdersConfigV4 | null> => {
+				? async (): Promise<TakeOrdersConfigV5 | null> => {
 						try {
 							const freshQuotes = await refreshQuotes();
 
@@ -355,9 +344,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 							}
 
 							return {
-								minimumInput: Float.fromBigint(0n).asHex(),
-								maximumInput: freshMaximumInputFloat.float.asHex(),
+								minimumIO: Float.fromBigint(0n).asHex(),
+								maximumIO: freshMaximumInputFloat.float.asHex(),
 								maximumIORatio: freshBufferedRatioResult.value.asHex(),
+								IOIsInput: true as unknown as string, // Runtime expects boolean; package types incorrectly declare string
 								orders: takeOrderConfigs,
 								data: '0x'
 							};

@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
 	import { formatUnits } from 'viem';
-	import { TOKENS } from '$lib/config/network';
+	import { TOKENS, getTokenByAnyAddress } from '$lib/config/network';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
 	import { truncateAddress } from '$lib/utils/format';
@@ -36,12 +36,16 @@
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
+	import { trackPageView } from '$lib/services/analytics';
+	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
 		prefetchGlobalOrders,
+		refreshLegacyTokenQuotes,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
+	import { getTrades } from '$lib/api/subgraph';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
@@ -94,6 +98,37 @@
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
 
+	// One-shot: fetch trades from inactive subgraph(s) once for trade history
+	let inactiveTrades: SgTrade[] = [];
+	let inactiveTradesFetchedForNetwork: number | null = null;
+	$: if (browser && $currentNetwork && inactiveTradesFetchedForNetwork !== $currentNetwork.id) {
+		const net = $currentNetwork;
+		if (net.orderbook_subgraph_urls_inactive?.length) {
+			inactiveTradesFetchedForNetwork = net.id;
+			const now = Math.floor(Date.now() / 1000);
+			const from = now - TRADE_HISTORY_LOOKBACK_SECONDS;
+			getTrades(from, now, net, true)
+				.then((trades) => {
+					inactiveTrades = trades;
+				})
+				.catch(() => {
+					inactiveTrades = [];
+				});
+		}
+	}
+
+	// One-shot: fetch legacy address quotes once per token
+	let legacyQuotesFetchedFor: string | null = null;
+	$: if (
+		browser &&
+		$currentNetwork &&
+		currentToken?.address &&
+		legacyQuotesFetchedFor !== currentToken.address
+	) {
+		legacyQuotesFetchedFor = currentToken.address;
+		refreshLegacyTokenQuotes($currentNetwork.id, currentToken.address).catch(() => {});
+	}
+
 	// Filter trades from tradeActivityQuery to get user's market orders
 	$: userMarketOrders = (() => {
 		if (!$walletAddress || !currentToken?.address || !$tradeActivityQuery.data?.trades) {
@@ -120,15 +155,15 @@
 		const displayOrders: DisplayOrder[] = [];
 		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
 
-		// Add limit orders from quotes (for current token only)
+		// Add limit orders from quotes (for current token only; match wrapped or legacy address)
 		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
 			const quotes = $orderbookQuotesQuery.data.quotes;
 
-			// Filter by token (input or output matches current token)
+			// Filter by token (input or output matches current token's wrapped or legacy address)
 			const filtered = quotes.filter(
 				(q) =>
-					q.inputTokenAddress.toLowerCase() === tokenAddress ||
-					q.outputTokenAddress.toLowerCase() === tokenAddress
+					assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
+					assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
 			);
 
 			// Transform to DisplayOrder
@@ -171,8 +206,8 @@
 		return displayOrders;
 	})();
 
-	// User vaults query - uses centralized query with 15s polling (trade page)
-	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 15_000);
+	// User vaults query - no polling, invalidated after order deployment
+	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
 	// Background prefetch of global caches when page loads
 	$: if (browser && $currentNetwork && $walletAddress) {
@@ -198,11 +233,19 @@
 		},
 		enabled: Boolean(currentToken?.address && $walletAddress && $wagmiConfig)
 	});
-	$: currentPythToken = TOKENS.find(
-		(token) =>
-			token.address.toLowerCase() === currentToken?.address.toLowerCase() &&
-			token.chainId === $currentNetwork?.chainId
-	);
+	// Use tokenId from URL params to find the token config (supports wrapped, legacy, or unwrapped address)
+	// Note: currentToken.address from subgraph may differ from the wrapped token address
+	$: currentPythToken = (() => {
+		if (!tokenId || !$currentNetwork?.chainId) return undefined;
+		const byAddress = TOKENS.find(
+			(token) =>
+				token.address.toLowerCase() === tokenId.toLowerCase() &&
+				token.chainId === $currentNetwork.chainId
+		);
+		if (byAddress) return byAddress;
+		const byAnyAddress = getTokenByAnyAddress(tokenId);
+		return byAnyAddress?.chainId === $currentNetwork.chainId ? byAnyAddress : undefined;
+	})();
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
 	const ASSET_TABS = [
@@ -484,6 +527,15 @@
 		};
 	})();
 	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
+	// Include legacy address so bid/ask and depth match quotes for tokens like tSTOX/wtSTOX
+	$: assetAddressSet = (() => {
+		const set = new Set<string>();
+		if (currentPythToken?.address) set.add(currentPythToken.address.toLowerCase());
+		if (currentPythToken?.legacyAddress) set.add(currentPythToken.legacyAddress.toLowerCase());
+		// Also add currentToken.address in case subgraph uses a different id
+		if (currentToken?.address) set.add(currentToken.address.toLowerCase());
+		return set;
+	})();
 	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
 	$: oraclePriceData = oracleEntry
 		? {
@@ -503,8 +555,28 @@
 		}
 		return null;
 	})();
+	let cleanupScrollTracking: (() => void) | null = null;
+	let lastTrackedTokenId: string | null = null;
+
+	// Track page view reactively when token data is available
+	// Uses lastTrackedTokenId to ensure tracking fires for each new token during client-side navigation
+	$: if (currentPythToken?.symbol && $page.params.id !== lastTrackedTokenId) {
+		lastTrackedTokenId = $page.params.id;
+		trackPageView('trade_page', {
+			token_symbol: currentPythToken.symbol,
+			token_id: $page.params.id
+		});
+	}
+
 	onMount(() => {
-		return () => {};
+		// Initialize scroll tracking
+		cleanupScrollTracking = initScrollTracking('trade_page');
+
+		return () => {
+			if (cleanupScrollTracking) {
+				cleanupScrollTracking();
+			}
+		};
 	});
 	const handleAssetTabChange = (event: CustomEvent<{ id: string }>) => {
 		const nextId = event.detail.id;
@@ -583,7 +655,6 @@
 				resetOnChainPrices();
 			} else {
 				const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-				const assetAddress = currentToken.address?.toLowerCase();
 				const quoteAddress = settlementToken.address?.toLowerCase();
 				let bestBid: number | null = null;
 				let bestAsk: number | null = null;
@@ -593,8 +664,10 @@
 					if (!Number.isFinite(ratio) || ratio <= 0) return;
 					const inputAddress = quote.inputTokenAddress.toLowerCase();
 					const outputAddress = quote.outputTokenAddress.toLowerCase();
+					const inputIsAsset = assetAddressSet.has(inputAddress);
+					const outputIsAsset = assetAddressSet.has(outputAddress);
 					// ASK: quote token -> asset (what you pay when buying)
-					if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+					if (inputAddress === quoteAddress && outputIsAsset) {
 						const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = ratio;
 						if (tokenAmount !== null && Number.isFinite(price) && tokenAmount > 0 && price > 0) {
@@ -602,7 +675,7 @@
 						}
 					}
 					// BID: asset -> quote token (what you get when selling)
-					if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+					if (inputIsAsset && outputAddress === quoteAddress) {
 						const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 						const price = 1 / ratio;
 						if (quoteAmount !== null && quoteAmount > 0 && Number.isFinite(price) && price > 0) {
@@ -622,7 +695,10 @@
 		if (!browser || !currentToken || !$currentNetwork) return [];
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return [];
-		const assetAddress = currentToken.address?.toLowerCase();
+		// Use wrapped address as the primary asset address for trade matching
+		// (currentToken.address from subgraph is the unwrapped address, but
+		// orderbook trades use the wrapped token address)
+		const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
 		const quoteAddress = settlementToken.address;
 		if (!assetAddress || !quoteAddress) return [];
 		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
@@ -633,19 +709,40 @@
 		const rangeEnd = range ? range.to * 1000 : now;
 		// TODO: Display range label in UI if needed
 		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
-		const trades = ($tradeActivityQuery?.data?.trades ?? []) as SgTrade[];
-		return trades
-			.map((trade) =>
-				tradeToPoint(trade, assetAddress, assetDecimals, {
+		const activeTrades = ($tradeActivityQuery?.data?.trades ?? []) as SgTrade[];
+		// Merge active + inactive trades, dedup by trade ID
+		const tradeIdSet = new Set<string>();
+		const trades: SgTrade[] = [];
+		for (const trade of [...activeTrades, ...inactiveTrades]) {
+			const id = trade.id;
+			if (id && !tradeIdSet.has(id)) {
+				tradeIdSet.add(id);
+				trades.push(trade);
+			}
+		}
+		// Collect points for all address variants (wrapped from new orderbook + legacy from old)
+		const points: TradeHistoryPoint[] = [];
+		for (const addr of assetAddressSet) {
+			for (const trade of trades) {
+				const point = tradeToPoint(trade, addr, assetDecimals, {
 					address: quoteAddress,
 					decimals: quoteDecimals,
 					symbol: settlementToken.symbol || ''
-				})
-			)
-			.filter(
-				(point): point is TradeHistoryPoint =>
-					point !== null && point.timestamp >= cutoff && point.timestamp <= rangeEnd
-			)
+				});
+				if (point && point.timestamp >= cutoff && point.timestamp <= rangeEnd) {
+					points.push(point);
+				}
+			}
+		}
+		// Deduplicate by timestamp (same trade matched via different address variants)
+		const seen = new Set<string>();
+		return points
+			.filter((p) => {
+				const key = `${p.timestamp}-${p.price}-${p.tokens}`;
+				if (seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			})
 			.sort((a, b) => a.timestamp - b.timestamp);
 	})();
 	$: {
@@ -678,9 +775,8 @@
 		}
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return { bids: [], asks: [] };
-		const assetAddress = currentToken.address?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
-		if (!assetAddress || !quoteAddress) {
+		if (!quoteAddress) {
 			return { bids: [], asks: [] };
 		}
 
@@ -697,9 +793,11 @@
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
+			const inputIsAsset = assetAddressSet.has(inputAddress);
+			const outputIsAsset = assetAddressSet.has(outputAddress);
 
 			// ASK: quote token -> asset (buying the asset)
-			if (inputAddress === quoteAddress && outputAddress === assetAddress) {
+			if (inputAddress === quoteAddress && outputIsAsset) {
 				const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				const price = ratio;
 				if (tokenAmount === null || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
@@ -710,7 +808,7 @@
 			}
 
 			// BID: asset -> quote token (selling the asset)
-			if (inputAddress === assetAddress && outputAddress === quoteAddress) {
+			if (inputIsAsset && outputAddress === quoteAddress) {
 				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
 				if (quoteAmount === null || quoteAmount <= 0) {
 					return;
@@ -1278,32 +1376,56 @@
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex items-center justify-between gap-2">
-									<span class="text-gray-400">Address</span>
+									<span class="text-gray-400">Wrapped Token</span>
 									<div>
 										<div class="sm:hidden">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-												label={currentToken.address}
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+													tokenId}"
+												label={currentPythToken?.address ?? tokenId}
 												truncate={{ start: 0, end: 6 }}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 											/>
 										</div>
 										<div class="hidden sm:block">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentToken.address}"
-												label={truncateAddress(currentToken.address)}
+												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+													tokenId}"
+												label={truncateAddress(currentPythToken?.address ?? tokenId)}
 												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
 											/>
 										</div>
 									</div>
 								</div>
+								{#if currentPythToken?.unwrappedAddress}
+									<div class="flex items-center justify-between gap-2">
+										<span class="text-gray-400">Underlying Token</span>
+										<div>
+											<div class="sm:hidden">
+												<ExternalLink
+													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
+													label={currentPythToken.unwrappedAddress}
+													truncate={{ start: 0, end: 6 }}
+													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												/>
+											</div>
+											<div class="hidden sm:block">
+												<ExternalLink
+													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
+													label={truncateAddress(currentPythToken.unwrappedAddress)}
+													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												/>
+											</div>
+										</div>
+									</div>
+								{/if}
 								<div class="flex justify-between">
 									<span class="text-gray-400">Network</span>
 									<span>{$currentNetwork.displayName}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Symbol</span>
-									<span>{currentToken.symbol}</span>
+									<span>{currentPythToken?.symbol ?? currentToken.symbol}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Decimals</span>

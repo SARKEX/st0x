@@ -23,53 +23,13 @@ export type OffchainAssetReceiptVault = {
 	symbol: string;
 	deployTimestamp: string;
 	receiptContractAddress: string;
-	shareHolders: ShareHolder[];
 	tokenHolders: TokenHolder[];
-	activeAuthorizer: Authorizer;
-	authorizers: Authorizer[];
 	receiptVaultInformations: ReceiptVaultInformation[];
-	certifications: Certification[];
 	withdraws: Withdraw[];
 	deposits: Deposit[];
 	shareTransfers: ShareTransfer[];
-	receiptBalances: ReceiptBalance[];
 	chainId?: number;
 };
-
-export type Authorizer = {
-	id: string;
-	address: Hex;
-	offchainAssetReceiptVault?: OffchainAssetReceiptVault;
-	isActive: boolean;
-	roleHolders: RoleHolder[];
-	roles: Role[];
-	roleRevokes: RoleRevoke[];
-	rolesGranted: RoleGranted[];
-};
-
-export type AssetClass = {
-	id: string;
-	information: string;
-	timestamp: string;
-	schema: string;
-	offchainAssetReceiptVault: OffchainAssetReceiptVault;
-};
-
-export interface RoleRevoke {
-	role: {
-		roleName: string;
-	};
-	sender: {
-		address: string;
-	};
-	account: {
-		address: string;
-	};
-	timestamp: string;
-	transaction: {
-		id: string;
-	};
-}
 
 export interface ShareTransfer {
 	id: string;
@@ -146,82 +106,12 @@ export interface Deposit {
 	};
 	timestamp: string;
 }
-export interface RoleGranted {
-	role: {
-		roleName: string;
-	};
-	sender: {
-		address: string;
-	};
-	account: {
-		address: string;
-	};
-	timestamp: string;
-	transaction: {
-		id: string;
-	};
-}
-
-export interface Certification {
-	timestamp: string;
-	id: string;
-	certifier: {
-		address: string;
-	};
-	certifiedUntil: string;
-	totalShares: string;
-	transaction: {
-		blockNumber: string;
-	};
-	data?: string;
-	information?: string;
-}
-
-/**
- * Represents a shareholder of the vault.
- */
-export interface ShareHolder {
-	address: string;
-}
-
-/**
- * Represents a role holder in the vault.
- */
-export interface RoleHolder {
-	role?: RoleData;
-	account: Account;
-}
-
 /**
  * Represents a token holder in the vault.
  */
 export interface TokenHolder {
 	address: string;
 	balance: string;
-}
-
-/**
- * Represents a role in the vault.
- */
-export interface Role {
-	roleName: string;
-	roleHolders: RoleHolder[];
-	roleHash: string;
-}
-
-/**
- * Represents detailed data about a role.
- */
-export interface RoleData {
-	roleName: string;
-	roleHash: string;
-}
-
-/**
- * Represents an account, typically a user or entity with an address.
- */
-export interface Account {
-	address: string;
 }
 
 /**
@@ -254,10 +144,6 @@ export type AssetSchema = {
 	hash: string;
 };
 
-export type ExtendedReceiptBalance = ReceiptBalance & {
-	information: Array<Record<string, unknown>>;
-	schema: AssetSchema | null;
-};
 export type ExtendedDeposit = Deposit & {
 	information: Array<Record<string, unknown>>;
 	schema: AssetSchema | null;
@@ -324,73 +210,3 @@ export interface WithdrawWithReceipt extends Withdraw {
 	timestamp: string;
 }
 
-export type ReceiptBalance = {
-	receipt: {
-		id: string;
-		receiptId: string;
-		shares: string;
-		balances: {
-			valueExact: string;
-			value: string;
-			account: {
-				address: string;
-			};
-		}[];
-		deposits: {
-			timestamp: string;
-			amount: string;
-			receipt: {
-				receiptId: string;
-			};
-		}[];
-		receiptInformations: {
-			information: string;
-			id: string;
-			transaction: {
-				blockNumber: string;
-				id: string;
-			};
-			timestamp: string;
-			emitter: {
-				address: string;
-			};
-		}[];
-	};
-};
-
-export type Receipt = {
-	shares: string;
-	id: string;
-	receiptId: string;
-	balances: {
-		valueExact: string;
-		value: string;
-		account: {
-			address: string;
-		};
-	}[];
-	deposits: {
-		amount: string;
-		receipt: {
-			receiptId: string;
-		};
-		timestamp: string;
-	}[];
-	receiptInformations: {
-		information: string;
-		id: string;
-		transaction: {
-			blockNumber: string;
-			id: string;
-		};
-		timestamp: string;
-		emitter: {
-			address: string;
-		};
-		receipt: {
-			deposits: {
-				amount: string;
-			}[];
-		};
-	}[];
-};

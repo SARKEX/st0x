@@ -4,12 +4,14 @@ import type { RequestHandler } from './$types';
 import {
 	kvGet,
 	KV_KEYS,
+	getExcludedWalletsSet,
 	type MonthlyPointsData,
 	type RewardsPoolConfig,
 	type RocketBoostTiers
 } from '$lib/server/kv';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
+import { computeProjectedDailyPoints } from '$lib/server/snapshots/points';
 
 interface TierStatus {
 	target: number;
@@ -63,9 +65,10 @@ export const GET: RequestHandler = async ({ request }) => {
 					'0'
 				)}`;
 
-				const [monthlyData, poolConfig] = await Promise.all([
+				const [monthlyData, poolConfig, excludedSet] = await Promise.all([
 					kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-					kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth))
+					kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
+					getExcludedWalletsSet()
 				]);
 
 				let totalPoints = 0;
@@ -73,7 +76,8 @@ export const GET: RequestHandler = async ({ request }) => {
 
 				if (monthlyData) {
 					snapshotCount = monthlyData.snapshotCount ?? 0;
-					for (const data of Object.values(monthlyData.wallets)) {
+					for (const [address, data] of Object.entries(monthlyData.wallets)) {
+						if (excludedSet.has(address.toLowerCase())) continue;
 						totalPoints += data.totalPoints;
 					}
 				}
@@ -86,11 +90,15 @@ export const GET: RequestHandler = async ({ request }) => {
 				const currentProgressPercent =
 					rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
-				// Projection calculation
+				// Projection calculation — use last 3 days' rate if available
 				const daysElapsed = Math.max(1, Math.floor(snapshotCount / 2));
 				const currentDayOfMonth = now.getUTCDate();
 				const daysRemaining = daysInMonth - currentDayOfMonth + 1;
-				const avgDailyPoints = totalPoints / daysElapsed;
+				const avgDailyPoints = computeProjectedDailyPoints(
+					totalPoints,
+					daysElapsed,
+					monthlyData?.snapshotTotals ?? []
+				);
 				const projectedTotalPoints = totalPoints + avgDailyPoints * daysRemaining;
 				const projectedProgressPercent =
 					rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;

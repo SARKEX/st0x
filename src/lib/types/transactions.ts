@@ -7,6 +7,12 @@ import type { WalkQuotesResult } from '$lib/utils/orderbook';
 import type { MinimalToken } from '$lib/types/orderPerspective';
 
 /**
+ * Token information for transaction display and processing
+ * Alias for MinimalToken to maintain backward compatibility
+ */
+export type TokenInfo = MinimalToken;
+
+/**
  * Simulation result from orderbook walk
  * This is essentially the same as WalkQuotesResult
  */
@@ -29,8 +35,8 @@ export interface TakeOrdersParams {
 	};
 
 	// Taker perspective - what user wants vs what they pay
-	takerWantsToken: MinimalToken; // What user RECEIVES (input from order perspective)
-	takerPaysToken: MinimalToken; // What user GIVES (output from order perspective)
+	takerWantsToken: TokenInfo; // What user RECEIVES (input from order perspective)
+	takerPaysToken: TokenInfo; // What user GIVES (output from order perspective)
 
 	// Requested amount
 	requestedTakerWantsAmount: bigint; // Amount user wants to receive
@@ -38,7 +44,7 @@ export interface TakeOrdersParams {
 	// Optional: pre-calculated simulation for validation
 	simulation?: OrderSimulation;
 
-	// Optional: per-order fill amounts (parallel to orders array in TakeOrdersConfigV4)
+	// Optional: per-order fill amounts (parallel to orders array in TakeOrdersConfigV5)
 	// Used for calculating per-batch maximumInput when splitting large orders
 	orderFillAmounts?: bigint[];
 }

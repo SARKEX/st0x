@@ -17,6 +17,8 @@ import {
 	type SnapshotBlockRecord,
 	type DailySnapshotRecord
 } from '$lib/server/kv';
+import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -34,11 +36,14 @@ function pickRandomBlocksFromHalves(startBlock: number, endBlock: number): [numb
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	try {
-		// Verify admin session
-		const token = cookies.get('auth-session');
-		const tsStr = cookies.get('auth-timestamp');
+		const rateLimitResponse = await applyRateLimit(
+			request,
+			rateLimiters.admin,
+			'admin-snapshots-trigger'
+		);
+		if (rateLimitResponse) return rateLimitResponse;
 
-		if (!token || !tsStr) {
+		if (!isAdminAuthenticated(cookies)) {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 

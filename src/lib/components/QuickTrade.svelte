@@ -6,7 +6,7 @@
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { refreshTokenQuotes, prefetchGlobalOrders } from '$lib/queries/orderbook';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
@@ -19,6 +19,12 @@
 		sortQuotesByPrice
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
+	import { track } from '$lib/services/analytics';
+
+	// Analytics tracking
+	let panelOpenTime = Date.now();
+	let tradeSubmittedSuccessfully = false;
+	let previousTokenSymbol: string | null = null;
 
 	// ============ TOKEN SELECTION (completely independent) ============
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -37,6 +43,13 @@
 	);
 
 	function handleTokenSelect(address: string) {
+		const newToken = tradableTokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
+		track('quick_trade_token_selected', {
+			token_symbol: newToken?.symbol,
+			previous_token: previousTokenSymbol
+		});
+		previousTokenSymbol = newToken?.symbol ?? null;
+
 		selectedTokenAddress = address;
 		isDropdownOpen = false;
 		// Reset form when changing tokens
@@ -53,6 +66,9 @@
 		if (isDropdownOpen) {
 			canScrollUp = false;
 			canScrollDown = true;
+			track('quick_trade_dropdown_opened', {
+				current_token: selectedToken?.symbol
+			});
 		}
 	}
 
@@ -89,6 +105,12 @@
 
 	// On mount: fetch orders for selected token, then prefetch others in background
 	onMount(() => {
+		panelOpenTime = Date.now();
+		track('quick_trade_panel_viewed', {
+			has_wallet: Boolean($walletAddress),
+			token_selected: selectedToken?.symbol
+		});
+
 		const loadInitialData = async () => {
 			if (!$currentNetwork || !selectedTokenAddress) return;
 
@@ -109,6 +131,22 @@
 		};
 
 		loadInitialData();
+	});
+
+	// Track abandonment on unmount
+	onDestroy(() => {
+		if (!tradeSubmittedSuccessfully && (topAmount || bottomAmount)) {
+			track('quick_trade_abandoned', {
+				token_symbol: selectedToken?.symbol,
+				direction: isBuying ? 'buy' : 'sell',
+				values_entered: {
+					usdc_amount: topAmount || null,
+					token_amount: bottomAmount || null
+				},
+				time_spent_ms: Date.now() - panelOpenTime,
+				last_error: tradeError || (showLiquidityWarning ? 'insufficient_liquidity' : null)
+			});
+		}
 	});
 
 	// When user enters an amount, refresh quotes for that token
@@ -629,6 +667,10 @@
 
 	function handleSwapDirection() {
 		isBuying = !isBuying;
+		track('quick_trade_direction_changed', {
+			direction: isBuying ? 'buy' : 'sell',
+			token_symbol: selectedToken?.symbol
+		});
 	}
 
 	function handleUsdcPercentClick(percent: number) {
@@ -655,6 +697,16 @@
 
 	// ============ TRADE EXECUTION ============
 	async function handleTrade() {
+		// Track button click
+		track('quick_trade_button_clicked', {
+			token_symbol: selectedToken?.symbol,
+			direction: isBuying ? 'buy' : 'sell',
+			usdc_amount: topAmount,
+			token_amount: bottomAmount,
+			avg_price: quote?.avgPrice,
+			is_authenticated: $isAuthenticated
+		});
+
 		if (!$isAuthenticated) {
 			openAuthModal();
 			return;
@@ -722,7 +774,20 @@
 
 			if (!result.success) {
 				tradeError = result.error || 'Trade failed';
+				track('quick_trade_failed', {
+					token_symbol: selectedToken?.symbol,
+					direction: isBuying ? 'buy' : 'sell',
+					error: tradeError
+				});
 			} else {
+				tradeSubmittedSuccessfully = true;
+				track('quick_trade_completed', {
+					token_symbol: selectedToken?.symbol,
+					direction: isBuying ? 'buy' : 'sell',
+					usdc_amount: topAmount,
+					token_amount: bottomAmount,
+					avg_price: quote?.avgPrice
+				});
 				topAmount = '';
 				bottomAmount = '';
 				lastEditedField = null;
@@ -730,6 +795,11 @@
 		} catch (error) {
 			console.error('Trade error:', error);
 			tradeError = error instanceof Error ? error.message : 'Trade failed';
+			track('quick_trade_failed', {
+				token_symbol: selectedToken?.symbol,
+				direction: isBuying ? 'buy' : 'sell',
+				error: tradeError
+			});
 		} finally {
 			isExecutingTrade = false;
 		}

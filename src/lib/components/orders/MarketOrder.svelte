@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { CategorizedToken } from '$lib/config/network';
-	import { currentNetwork, payFeesInStablecoin } from '$lib/stores';
+	import { currentNetwork } from '$lib/stores';
 	import { type ProcessedQuote, walkOrderbook } from '$lib/api/orders';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
@@ -19,81 +19,10 @@
 		sortQuotesByPrice
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
-
-	// Account Abstraction imports
-	import TokenNetworkSelector from '$lib/components/aa/TokenNetworkSelector.svelte';
-	import {
-		type PaymentToken,
-		SUPPORTED_NETWORKS,
-		USDC_BASE,
-		isRhinestoneConfigured,
-		getPriceOracle
-	} from '$lib/services/account-abstraction';
-	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
+	import { track } from '$lib/services/analytics';
+	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
-
-	// Swap quote for cross-chain fee adjustment
-	let swapQuote: { inputAmount: bigint; outputAmount: bigint; requiresSwap: boolean } | null =
-		null;
-	let isLoadingSwapQuote = false;
-
-	// AA state for Buy orders (source token)
-	let selectedSourceToken: PaymentToken | null = USDC_BASE;
-
-	$: isAAEnabled = isRhinestoneConfigured();
-	$: needsSwap =
-		orderSide === 'Buy' &&
-		selectedSourceToken &&
-		(selectedSourceToken.chainId !== SUPPORTED_NETWORKS.BASE ||
-			selectedSourceToken.symbol !== 'USDC');
-
-	// Fetch swap quote when cross-chain swap is needed
-	$: if (needsSwap && selectedAmount && selectedAmount > 0n && marketPrice > 0 && assetToken) {
-		fetchSwapQuote();
-	} else if (!needsSwap || !selectedAmount || selectedAmount === 0n) {
-		swapQuote = null;
-	}
-
-	async function fetchSwapQuote() {
-		if (!needsSwap || !selectedSourceToken || !selectedAmount || selectedAmount === 0n) {
-			swapQuote = null;
-			return;
-		}
-
-		isLoadingSwapQuote = true;
-		try {
-			let swapAmount: bigint;
-			if (inputMode === 'spend') {
-				swapAmount = selectedAmount;
-			} else {
-				const assetDecimals = assetToken?.decimals ?? 18;
-				const sourceDecimals = selectedSourceToken.decimals;
-				const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
-				const estimatedCostUSD = outputInTokens * marketPrice;
-				const isStablecoin =
-					selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
-				if (isStablecoin) {
-					swapAmount = BigInt(Math.ceil(estimatedCostUSD * 1.01 * 10 ** sourceDecimals));
-				} else {
-					const priceOracle = getPriceOracle();
-					const tokenSymbol =
-						selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
-					const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
-					const sourceTokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
-					const sourceTokenAmount = estimatedCostUSD / sourceTokenPriceUSD;
-					swapAmount = BigInt(Math.ceil(sourceTokenAmount * 1.02 * 10 ** sourceDecimals));
-				}
-			}
-
-			const quote = await aaPaymentStore.getSwapQuote(swapAmount);
-			swapQuote = quote;
-		} catch {
-			swapQuote = null;
-		} finally {
-			isLoadingSwapQuote = false;
-		}
-	}
 
 	// Input mode: 'amount' = specify asset quantity, 'spend' = specify payment amount
 	let inputMode: 'amount' | 'spend' = 'amount';
@@ -140,10 +69,140 @@
 		quoteFreshnessInterval = setInterval(updateQuoteFreshness, 1000);
 	}
 
+	// Analytics tracking
+	let panelOpenTime = Date.now();
+	let lastTrackedError: string | null = null;
+	let tradeSubmittedSuccessfully = false;
+
+	// Store current tracking state for onDestroy (to avoid stale closure values)
+	let trackingState = {
+		tokenSymbol: assetToken?.symbol,
+		orderSide: orderSide.toLowerCase(),
+		amount: '0',
+		marketPrice: 0,
+		isSubmitting: false,
+		currentError: null as string | null
+	};
+
+	// Keep tracking state up to date reactively
+	$: trackingState = {
+		tokenSymbol: assetToken?.symbol,
+		orderSide: orderSide.toLowerCase(),
+		amount: selectedAmount
+			? formatUnits(
+					selectedAmount,
+					inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+				)
+			: '0',
+		marketPrice,
+		isSubmitting: isSubmittingMarketOrder,
+		currentError: insufficientBalanceError
+			? 'insufficient_balance'
+			: insufficientLiquidityWarning
+				? 'insufficient_liquidity'
+				: priceError
+					? `price_${priceErrorReason}`
+					: orderPreparationError
+						? 'preparation_error'
+						: null
+	};
+
+	onMount(() => {
+		panelOpenTime = Date.now();
+		track('trade_panel_opened', {
+			order_type: 'market',
+			token_symbol: assetToken?.symbol
+		});
+	});
+
+	// Track errors when they appear
+	$: if (
+		insufficientBalanceError &&
+		selectedAmount > 0n &&
+		lastTrackedError !== 'insufficient_balance'
+	) {
+		lastTrackedError = 'insufficient_balance';
+		track('trade_error_shown', {
+			error_type: 'insufficient_balance',
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			entered_amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0',
+			balance_available:
+				spendingTokenBalanceDecimals !== null
+					? formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
+					: '0'
+		});
+	}
+
+	$: if (
+		insufficientLiquidityWarning &&
+		selectedAmount > 0n &&
+		lastTrackedError !== 'insufficient_liquidity'
+	) {
+		lastTrackedError = 'insufficient_liquidity';
+		track('trade_error_shown', {
+			error_type: 'insufficient_liquidity',
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			entered_amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0',
+			available_liquidity: availableLiquidityFormatted
+		});
+	}
+
+	$: if (priceError && selectedAmount > 0n && lastTrackedError !== `price_${priceErrorReason}`) {
+		lastTrackedError = `price_${priceErrorReason}`;
+		track('trade_error_shown', {
+			error_type: `price_${priceErrorReason}`,
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			entered_amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0'
+		});
+	}
+
+	// Reset error tracking when amount changes significantly
+	$: if (selectedAmount === 0n) {
+		lastTrackedError = null;
+	}
+
 	// Cleanup interval on component destroy
 	import { onDestroy } from 'svelte';
 	onDestroy(() => {
 		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
+
+		// Track abandonment if user had entered values but didn't complete trade
+		// Use trackingState to get current values (avoids stale closure)
+		if (!tradeSubmittedSuccessfully && trackingState.amount !== '0') {
+			track('trade_panel_abandoned', {
+				order_type: 'market',
+				token_symbol: trackingState.tokenSymbol,
+				order_side: trackingState.orderSide,
+				stage: trackingState.isSubmitting ? 'submitting' : 'ready_to_submit',
+				values_entered: {
+					amount: trackingState.amount,
+					side: trackingState.orderSide
+				},
+				intended_trade_size_usd: trackingState.marketPrice
+					? parseFloat(trackingState.amount) * trackingState.marketPrice
+					: null,
+				time_spent_ms: Date.now() - panelOpenTime,
+				last_error: trackingState.currentError
+			});
+		}
 	});
 
 	$: isQuoteStale = quoteFreshnessSeconds > ORDERBOOK_MAX_STALENESS_MS / 1000;
@@ -182,19 +241,18 @@
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
 	// Token being spent
-	// For Buy orders, use selectedSourceToken if available (USDT/WETH), otherwise default to paymentToken
-	$: spendingToken = orderSide === 'Buy' ? selectedSourceToken || paymentToken : assetToken;
+	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
 
-	// Check if oracle price is available (used for price guards)
+	// Check if oracle price is available (needed for BUY percentage calculations)
 	$: oracleAddress = assetToken?.address?.toLowerCase();
 	$: oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
-	$: _oraclePriceAvailable = oracleEntry?.price && oracleEntry.price > 0;
-	// Percentage buttons need market price for BUY in 'amount' mode (to convert payment to asset amount)
+	$: oraclePriceAvailable = oracleEntry?.price && oracleEntry.price > 0;
+	// Percentage buttons need oracle price for BUY in 'amount' mode (to convert payment to asset amount)
 	// In 'spend' mode, no conversion needed - direct percentage of balance
 	$: percentageButtonsDisabled =
 		orderSide === 'Buy' &&
 		inputMode === 'amount' &&
-		(!marketPrice || marketPrice <= 0) &&
+		!oraclePriceAvailable &&
 		spendingTokenBalance > 0n;
 
 	// Calculate the amount being spent and check against balance
@@ -206,24 +264,18 @@
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else if (inputMode === 'spend') {
 			// For BUY in spend mode: selectedAmount is the exact payment amount
-			// When cross-chain swap is active, compare against source chain balance directly
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else {
 			// For BUY in amount mode: user is spending the payment token (USDC)
-			// When cross-chain swap is active and we have a quote, use the swap inputAmount
-			if (needsSwap && swapQuote && swapQuote.requiresSwap) {
-				insufficientBalanceError = swapQuote.inputAmount > spendingTokenBalance;
-			} else {
-				// Calculate the estimated cost using floor to avoid false "insufficient balance" errors
-				// when clicking MAX button (precision errors from float conversion)
-				const assetDecimals = assetToken?.decimals ?? 18;
-				const paymentDecimals = paymentToken?.decimals ?? 6;
-				const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
-				const estimatedCost = outputInTokens * marketPrice;
-				// Use floor instead of ceil to prevent rounding up beyond actual balance
-				const estimatedCostBigInt = BigInt(Math.floor(estimatedCost * 10 ** paymentDecimals));
-				insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
-			}
+			// Calculate the estimated cost using floor to avoid false "insufficient balance" errors
+			// when clicking MAX button (precision errors from float conversion)
+			const assetDecimals = assetToken?.decimals ?? 18;
+			const paymentDecimals = paymentToken?.decimals ?? 6;
+			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
+			const estimatedCost = outputInTokens * marketPrice;
+			// Use floor instead of ceil to prevent rounding up beyond actual balance
+			const estimatedCostBigInt = BigInt(Math.floor(estimatedCost * 10 ** paymentDecimals));
+			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
 		}
 	}
 
@@ -361,15 +413,6 @@
 		if (!selectedAmount || !marketPrice) return { value: '0.00', label: '' };
 		if (inputMode === 'spend') {
 			// Spend mode: show estimated tokens received
-			// When cross-chain swap is active, use outputAmount (USDC arriving on Base after fees)
-			if (needsSwap && swapQuote && swapQuote.requiresSwap) {
-				const effectiveUSDC = parseFloat(formatUnits(swapQuote.outputAmount, 6));
-				const tokensReceived = effectiveUSDC / marketPrice;
-				return {
-					value: `~${tokensReceived.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`,
-					label: 'Est. tokens (after swap fees)'
-				};
-			}
 			const spendInTokens = parseFloat(formatUnits(selectedAmount, paymentToken?.decimals || 6));
 			const tokensReceived = spendInTokens / marketPrice;
 			return {
@@ -378,16 +421,6 @@
 			};
 		} else {
 			// Amount mode: show estimated cost
-			// When cross-chain swap is active, show the source token amount (inputAmount) the user pays
-			if (needsSwap && swapQuote && swapQuote.requiresSwap && selectedSourceToken) {
-				const sourceAmount = parseFloat(
-					formatUnits(swapQuote.inputAmount, selectedSourceToken.decimals)
-				);
-				return {
-					value: `~${sourceAmount.toFixed(2)} ${selectedSourceToken.symbol}`,
-					label: 'Est. cost (incl. swap fees)'
-				};
-			}
 			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
 			const total = outputInTokens * marketPrice;
 			return {
@@ -403,7 +436,7 @@
 	// Small safety buffer (0.1%) for Max to handle rounding and minor price fluctuations
 	const MAX_SAFETY_BUFFER = 0.999;
 
-	const handlePercentageClick = async (percent: number) => {
+	const handlePercentageClick = (percent: number) => {
 		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
 		if (spendingTokenBalanceDecimals === null) return;
 		if (!tradeAmountInputRef) return;
@@ -417,13 +450,8 @@
 			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
 			tradeAmountInputRef.setAmountValue(percentAmount);
 		} else {
-			// For BUY in amount mode: balance is in payment token, need to convert to asset amount
-			// Use marketPrice (from orderbook) since that's what execution uses
-			if (!marketPrice || marketPrice <= 0) {
-				// Fall back: can't convert without price - just don't set anything
-				return;
-			}
-
+			// For BUY in amount mode: balance is in payment token (USDC), need to convert to asset amount
+			// Use actual market prices by walking the orderbook in spend mode
 			const paymentDecimals = spendingTokenBalanceDecimals;
 			const assetDecimals = assetToken?.decimals ?? 18;
 
@@ -436,29 +464,92 @@
 					Math.floor(paymentFloat * MAX_SAFETY_BUFFER * 10 ** paymentDecimals)
 				);
 			}
-			const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
 
-			// For non-stablecoin spending tokens (WETH), convert to USD value first
-			let paymentValueInUSD = paymentInFloat;
-			const isNonStablecoin =
-				selectedSourceToken &&
-				selectedSourceToken.symbol !== 'USDC' &&
-				selectedSourceToken.symbol !== 'USDT';
-			if (isNonStablecoin) {
-				const priceOracle = getPriceOracle();
-				const tokenSymbol =
-					selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
-				const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
-				const tokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
-				paymentValueInUSD = paymentInFloat * tokenPriceUSD;
+			// Walk the orderbook in spend mode to get the exact asset amount at market prices
+			const assetAmount = calculateAssetAmountForSpend(
+				paymentToSpend,
+				assetDecimals,
+				paymentDecimals
+			);
+
+			if (assetAmount && assetAmount > 0n) {
+				tradeAmountInputRef.setAmountValue(assetAmount);
+			} else {
+				// Fall back to oracle price if orderbook walk fails
+				const oracleAddr = assetToken?.address?.toLowerCase();
+				const oracleEntryData = oracleAddr ? $oracleQuotesQuery?.data?.[oracleAddr] : null;
+				const oraclePrice = oracleEntryData?.price;
+
+				if (!oraclePrice || oraclePrice <= 0) return;
+
+				const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
+				const assetAmountFloat = paymentInFloat / oraclePrice;
+				const assetAmountScaled = Math.floor(assetAmountFloat * 10 ** assetDecimals);
+				tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
 			}
-
-			// Convert USD value to asset amount using market price (same price source as execution)
-			const assetAmount = paymentValueInUSD / marketPrice;
-			const assetAmountScaled = Math.floor(assetAmount * 10 ** assetDecimals);
-			tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
 		}
 	};
+
+	// Calculate how much asset can be bought for a given payment amount using actual orderbook prices
+	function calculateAssetAmountForSpend(
+		paymentAmount: bigint,
+		assetDecimals: number,
+		paymentDecimals: number
+	): bigint | null {
+		if (!assetToken || !paymentToken) return null;
+
+		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
+		const assetAddressNormalized = normalizeAddress(assetToken.address);
+		const paymentTokenAddressNormalized = normalizeAddress(
+			paymentToken.address?.toLowerCase() || ''
+		);
+
+		// Get oracle price for price guard filtering
+		const oracleAddr = assetToken?.address?.toLowerCase();
+		const oracleEntryData = oracleAddr ? $oracleQuotesQuery?.data?.[oracleAddr] : null;
+		const oraclePrice = oracleEntryData?.price;
+
+		// Calculate price guard bounds
+		const maxAcceptablePrice =
+			oraclePrice && oraclePrice > 0 ? oraclePrice * PRICE_GUARD_MULTIPLIER : Infinity;
+
+		// Filter quotes for BUY side with price guard
+		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
+			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
+			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+			const quotePerAsset = quote.quotePerAsset;
+
+			return (
+				quoteOutputAddressNormalized === assetAddressNormalized &&
+				quoteInputAddressNormalized === paymentTokenAddressNormalized &&
+				quote.side === 'ask' &&
+				quotePerAsset !== undefined &&
+				Number.isFinite(quotePerAsset) &&
+				quotePerAsset > 0 &&
+				quotePerAsset <= maxAcceptablePrice
+			);
+		});
+
+		if (relevantQuotes.length === 0) return null;
+
+		// Sort by price (best first for BUY)
+		const sortedQuotes = [...relevantQuotes].sort(
+			(a, b) => (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0)
+		);
+
+		// Walk orderbook in spend mode to get asset amount for the payment
+		const walkResult = walkOrderbook({
+			quotes: sortedQuotes,
+			orderSide: 'Buy',
+			selectedAmount: paymentAmount,
+			assetDecimals,
+			paymentDecimals,
+			mode: 'spend'
+		});
+
+		// Return the asset amount that would be received
+		return walkResult.inputAmountFilled;
+	}
 
 	async function fetchMarketPrice() {
 		if (!assetToken || !orderSide) {
@@ -654,6 +745,20 @@
 	}
 
 	const handleMarketOrder = async () => {
+		// Track button click
+		track('trade_button_clicked', {
+			order_type: 'market',
+			token_symbol: assetToken?.symbol,
+			order_side: orderSide.toLowerCase(),
+			amount: selectedAmount
+				? formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					)
+				: '0',
+			is_authenticated: $isAuthenticated
+		});
+
 		// Check if user is connected
 		if (!$isAuthenticated) {
 			promptWalletConnection();
@@ -686,66 +791,6 @@
 				return;
 			}
 
-			// For BUY orders: Check if cross-chain swap is needed
-			// If user selected a non-USDC token or different chain, swap to USDC on Base first
-			let effectiveAmount = selectedAmount;
-			if (orderSide === 'Buy' && needsSwap && selectedSourceToken) {
-				// Calculate the amount to swap based on input mode
-				let swapAmount: bigint;
-				if (inputMode === 'spend') {
-					// In spend mode, selectedAmount is already the payment amount in source token units
-					swapAmount = selectedAmount;
-				} else {
-					// In amount mode, calculate the payment amount from market price
-					const assetDecimals = assetToken.decimals;
-					const sourceDecimals = selectedSourceToken.decimals;
-					const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
-					// estimatedCostUSD is the cost in USD terms
-					const estimatedCostUSD = outputInTokens * marketPrice;
-
-					// For stablecoins (USDC, USDT), 1 token ≈ $1
-					// For non-stablecoins (WETH), we need to convert using the token's price
-					const isStablecoin =
-						selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
-
-					if (isStablecoin) {
-						// Add 1% buffer for price movement during swap
-						swapAmount = BigInt(Math.ceil(estimatedCostUSD * 1.01 * 10 ** sourceDecimals));
-					} else {
-						// Get the source token's price in USD (e.g., ETH price)
-						const priceOracle = getPriceOracle();
-						const tokenSymbol =
-							selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
-						const tokenPrice = await priceOracle.getTokenPrices([tokenSymbol]);
-						const sourceTokenPriceUSD = tokenPrice.get(tokenSymbol)?.priceUsd ?? 2500; // Default ETH price
-
-						// Convert USD cost to source token amount
-						// sourceTokenAmount = estimatedCostUSD / sourceTokenPriceUSD
-						const sourceTokenAmount = estimatedCostUSD / sourceTokenPriceUSD;
-						// Add 2% buffer for price movement and precision during swap
-						swapAmount = BigInt(Math.ceil(sourceTokenAmount * 1.02 * 10 ** sourceDecimals));
-					}
-				}
-
-				// Execute the cross-chain swap
-				const swapResult = await aaPaymentStore.executeSwapIfNeeded(
-					swapAmount,
-					$payFeesInStablecoin
-				);
-				if (swapResult === null) {
-					// Swap failed - error is already set in store
-					orderPreparationError = $swapError || 'Cross-chain swap failed';
-					return;
-				}
-
-				// Use the USDC amount received from the swap
-				// For amount mode, keep selectedAmount (asset quantity) unchanged
-				// For spend mode, update to the USDC amount received
-				if (inputMode === 'spend') {
-					effectiveAmount = swapResult;
-				}
-			}
-
 			// Refresh orderbook quotes if stale
 			const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
 			const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
@@ -766,10 +811,9 @@
 			}
 
 			// Execute market order using shared service
-			// After swap (if any), we now have USDC on Base, so use the network's payment token
 			const result = await executeMarketOrder({
 				orderSide,
-				amount: inputMode === 'spend' ? effectiveAmount : selectedAmount,
+				amount: selectedAmount,
 				inputMode,
 				assetToken: {
 					address: assetToken.address,
@@ -791,36 +835,42 @@
 
 			if (!result.success && result.error) {
 				orderPreparationError = result.error;
+				track('trade_failed', {
+					order_type: 'market',
+					token_symbol: assetToken?.symbol,
+					order_side: orderSide.toLowerCase(),
+					error_message: result.error
+				});
+			} else if (result.success) {
+				tradeSubmittedSuccessfully = true;
+				track('trade_initiated', {
+					order_type: 'market',
+					token_symbol: assetToken?.symbol,
+					order_side: orderSide.toLowerCase(),
+					amount: formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					),
+					avg_price: marketPrice
+				});
 			}
 		} catch (error) {
 			console.error('Market order error:', error);
 			orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
+			track('trade_failed', {
+				order_type: 'market',
+				token_symbol: assetToken?.symbol,
+				order_side: orderSide.toLowerCase(),
+				error_message: orderPreparationError
+			});
 		} finally {
 			isSubmittingMarketOrder = false;
-			aaPaymentStore.clearError();
 		}
 	};
 </script>
 
 {#if $currentNetwork && assetToken}
 	<div class="space-y-4">
-		<!-- Cross-chain payment selector (Buy orders only) -->
-		{#if orderSide === 'Buy' && isAAEnabled}
-			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">Pay with</div>
-				<TokenNetworkSelector
-					bind:selectedToken={selectedSourceToken}
-					disabled={isSubmittingMarketOrder || $isSwapping}
-				/>
-				{#if $isSwapping}
-					<div class="mt-2 flex items-center gap-2 text-sm text-yellow-400">
-						<LoadingSpinner size="sm" />
-						Swapping to USDC on Base...
-					</div>
-				{/if}
-			</div>
-		{/if}
-
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
@@ -857,8 +907,8 @@
 						<TradeAmountInput
 							bind:this={tradeAmountInputRef}
 							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
-							amountToken={inputMode === 'spend' ? selectedSourceToken || paymentToken : assetToken}
-							balanceToken={orderSide === 'Buy' ? selectedSourceToken || paymentToken : assetToken}
+							amountToken={inputMode === 'spend' ? paymentToken : assetToken}
+							balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
 							bind:amount={selectedAmount}
 							bind:balance={spendingTokenBalance}
 							bind:balanceDecimals={spendingTokenBalanceDecimals}
@@ -1000,21 +1050,9 @@
 					<div class="flex justify-between">
 						<span class="text-gray-400">{estimatedTradeResult.label || 'Estimated'}</span>
 						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{isLoadingPrice || priceError
-								? 'N/A'
-								: isLoadingSwapQuote
-									? 'Loading...'
-									: estimatedTradeResult.value}
+							{isLoadingPrice || priceError ? 'N/A' : estimatedTradeResult.value}
 						</span>
 					</div>
-					{#if needsSwap && swapQuote && swapQuote.requiresSwap && !isLoadingPrice && !priceError}
-						<div class="mt-1 flex justify-between text-xs text-gray-500">
-							<span>USDC after swap</span>
-							<span>
-								~{parseFloat(formatUnits(swapQuote.outputAmount, 6)).toFixed(2)} USDC
-							</span>
-						</div>
-					{/if}
 					{#if insufficientBalanceError}
 						<div class="mt-2 text-sm text-red-400">
 							Insufficient {spendingToken?.symbol ?? 'token'} balance
@@ -1056,42 +1094,6 @@
 				</div>
 			</div>
 		</div>
-
-		<!-- Pay fees in stablecoin option -->
-		<label
-			class="flex cursor-pointer items-center gap-2 py-2"
-			title={orderSide === 'Buy'
-				? 'Pay gas fees using the stablecoin you selected above instead of ETH'
-				: 'Pay gas fees using USDC on Base instead of ETH'}
-		>
-			<input
-				type="checkbox"
-				checked={$payFeesInStablecoin}
-				on:change={() => payFeesInStablecoin.toggle()}
-				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
-			/>
-			<span class="text-sm text-gray-300">Pay fees in stablecoin</span>
-			<span class="group relative">
-				<svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-					/>
-				</svg>
-				<span
-					class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-xs text-gray-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
-				>
-					{#if orderSide === 'Buy'}
-						Pay gas fees using the stablecoin/network you selected to buy with (e.g., USDC or USDT
-						on various networks). No ETH required.
-					{:else}
-						Pay gas fees using USDC on Base (your settlement token). No ETH required.
-					{/if}
-				</span>
-			</span>
-		</label>
 
 		<!-- Market Order Button -->
 		<button

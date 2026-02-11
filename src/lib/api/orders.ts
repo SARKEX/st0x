@@ -17,7 +17,7 @@ import {
 	getDefaultPaymentTokenForNetwork
 } from '$lib/config/network';
 import { AbiCoder } from 'ethers';
-import { describeQuote, normalizeAddress, findTokenByAddress } from '$lib/utils/tokenMath';
+import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
 import { createRaindexClient, getLoadBalancedClient } from '$lib/clients/raindex';
 import { Float } from '@rainlanguage/float';
@@ -44,7 +44,7 @@ export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: st
 
 // Helper function to get token metadata by address
 function getTokenMetadata(address: string, tokens: PythToken[]) {
-	const token = findTokenByAddress(tokens, address);
+	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
 	return {
 		symbol: token?.symbol ?? 'UNKNOWN',
 		decimals: token?.decimals
@@ -99,17 +99,14 @@ function processOrdersWithQuotes(
 						!maxOutput.startsWith('0x') ||
 						maxOutput.length !== 66
 					) {
-						console.warn('Invalid Float hex format for ratio or maxOutput:', { ratio, maxOutput });
 						return;
 					}
 
 					// Verify maxOutput is not zero by converting to Float and checking
 					const maxOutputFloat = Float.fromHex(maxOutput as `0x${string}`);
 					if (maxOutputFloat.error || !maxOutputFloat.value) {
-						console.warn('Failed to parse maxOutput Float:', maxOutputFloat.error);
 						return;
 					}
-
 					// Check if maxOutput is zero
 					const zeroFloat = Float.fromHex(
 						'0x0000000000000000000000000000000000000000000000000000000000000000'
@@ -120,7 +117,6 @@ function processOrdersWithQuotes(
 							return;
 						}
 					}
-
 					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
 					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
 					if (!inputDefinition || !outputDefinition) {
@@ -135,11 +131,9 @@ function processOrdersWithQuotes(
 					const normalizedInput = normalizeAddress(inputTokenAddress);
 					const normalizedOutput = normalizeAddress(outputTokenAddress);
 					const normalizedQuote = normalizeAddress(quoteToken.address);
-
 					if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
 						return;
 					}
-
 					const allTokens = [quoteToken, ...stockTokens];
 					const inputTokenMeta = getTokenMetadata(inputTokenAddress, allTokens);
 					const outputTokenMeta = getTokenMetadata(outputTokenAddress, allTokens);
@@ -262,9 +256,9 @@ export async function fetchAndQuotePaymentTokenOrders(
 
 			// Filter only by stock tokens - payment token filtering is too restrictive
 			// Orders should be visible regardless of which payment token is configured
-			const tokenAddresses: string[] = stockTokens.map((t) => t.address) as `0x${string}`[];
+			const tokenAddresses = stockTokens.map((t) => t.address as `0x${string}`);
 
-			filters.tokens = tokenAddresses as `0x${string}`[];
+			filters.tokens = { inputs: tokenAddresses, outputs: tokenAddresses };
 
 			const ordersResult = await client.getOrders([networkId], filters, page);
 
@@ -356,10 +350,11 @@ export async function fetchAndQuoteTokenOrders(
 	const client = await getLoadBalancedClient(network);
 
 	// Fetch orders for this specific token only
+	const tokenAddr = tokenAddress as `0x${string}`;
 	const filters: GetOrdersFilters = {
 		active: true,
 		owners: [],
-		tokens: [tokenAddress as `0x${string}`]
+		tokens: { inputs: [tokenAddr], outputs: [tokenAddr] }
 	};
 
 	const ordersResult = await client.getOrders([networkId], filters, 1);

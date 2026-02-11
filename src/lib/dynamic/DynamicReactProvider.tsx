@@ -7,37 +7,9 @@ import {
 	useEmbeddedReveal
 } from '@dynamic-labs/sdk-react-core';
 import { EthereumWalletConnectors, isEthereumWallet } from '@dynamic-labs/ethereum';
-import type { Address } from 'viem';
 
 // Static logo URL for Dynamic branding - served from /static/logo.svg
 export const ST0X_LOGO_URL = '/logo.svg';
-
-/** Convert BigInts -> strings recursively (Dynamic WaaS typed-data compat) */
-const convertBigIntsToString = (obj: unknown): unknown => {
-	if (obj == null) return obj;
-	if (typeof obj === 'bigint') return obj.toString();
-	if (Array.isArray(obj)) return obj.map(convertBigIntsToString);
-	if (typeof obj === 'object') {
-		const out: Record<string, unknown> = {};
-		for (const k of Object.keys(obj))
-			out[k] = convertBigIntsToString((obj as Record<string, unknown>)[k]);
-		return out;
-	}
-	return obj;
-};
-
-/** Avoid infinite "Awaiting confirmation" hangs */
-const withTimeout = async <T,>(p: Promise<T>, ms = 30000): Promise<T> => {
-	let t: ReturnType<typeof setTimeout> | undefined;
-	const timeout = new Promise<T>((_, rej) => {
-		t = setTimeout(() => rej(new Error(`Timed out after ${ms}ms`)), ms);
-	});
-	try {
-		return await Promise.race([p, timeout]);
-	} finally {
-		if (t) clearTimeout(t);
-	}
-};
 
 // Event types for Svelte-React communication
 export interface DynamicEventData {
@@ -55,30 +27,6 @@ export interface DynamicEventData {
 	};
 }
 
-// Export DynamicSigner type for use in Svelte
-export type { DynamicSigner };
-
-interface DynamicSigner {
-	signMessage: (args: { message: string }) => Promise<string>;
-	signTransaction: (tx: unknown) => Promise<string>;
-	signTypedData: (args: {
-		domain: Record<string, unknown>;
-		types: Record<string, Array<{ name: string; type: string }>>;
-		primaryType: string;
-		message: Record<string, unknown>;
-	}) => Promise<string>;
-	signAuthorization: (args: {
-		contractAddress: string;
-		chainId: number;
-		nonce?: number;
-	}) => Promise<{
-		r: `0x${string}`;
-		s: `0x${string}`;
-		v?: bigint;
-		yParity?: number;
-	}>;
-}
-
 interface DynamicBridgeProps {
 	environmentId: string;
 	onEvent: (event: DynamicEventData) => void;
@@ -87,7 +35,6 @@ interface DynamicBridgeProps {
 			request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 		} | null
 	) => void;
-	onSignerReady?: (signer: DynamicSigner | null) => void;
 	triggerLogin?: boolean;
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
@@ -105,7 +52,6 @@ const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000;
 function DynamicBridge({
 	onEvent,
 	onWalletProviderReady,
-	onSignerReady,
 	triggerLogin,
 	triggerLogout,
 	triggerExportWallet,
@@ -119,12 +65,8 @@ function DynamicBridge({
 	// Find embedded wallet
 	const embeddedWallet = userWallets.find((wallet) => wallet.connector?.isEmbeddedWallet);
 
-	console.log('embeddedWallet : ', embeddedWallet);
-	console.log('primaryWallet : ', primaryWallet);
-
-	// Prefer a WaaS-capable wallet instance
-	const candidateWallet = embeddedWallet || primaryWallet;
-	const activeWallet = candidateWallet;
+	// Get the active wallet (embedded preferred, then primary)
+	const activeWallet = embeddedWallet || primaryWallet;
 
 	// Refs to prevent multiple triggers
 	const isExportingRef = useRef(false);
@@ -135,7 +77,6 @@ function DynamicBridge({
 	// Use refs for callbacks to avoid infinite loops from dependency changes
 	const onEventRef = useRef(onEvent);
 	const onWalletProviderReadyRef = useRef(onWalletProviderReady);
-	const onSignerReadyRef = useRef(onSignerReady);
 
 	// Keep refs up to date
 	useEffect(() => {
@@ -145,10 +86,6 @@ function DynamicBridge({
 	useEffect(() => {
 		onWalletProviderReadyRef.current = onWalletProviderReady;
 	}, [onWalletProviderReady]);
-
-	useEffect(() => {
-		onSignerReadyRef.current = onSignerReady;
-	}, [onSignerReady]);
 
 	// Notify when ready (only once)
 	useEffect(() => {
@@ -165,9 +102,13 @@ function DynamicBridge({
 		const isAuthenticated = !!user;
 
 		if (isAuthenticated && user && activeWallet) {
+			// Track that user became authenticated
 			wasAuthenticatedRef.current = true;
 
+			// Get email from user object
 			const email = user.email;
+
+			// Determine wallet type
 			const walletType: 'embedded' | 'external' = embeddedWallet ? 'embedded' : 'external';
 
 			onEventRef.current({
@@ -181,6 +122,7 @@ function DynamicBridge({
 				}
 			});
 		} else if (!isAuthenticated && wasAuthenticatedRef.current) {
+			// Only emit logout if user was previously authenticated (actual logout, not initial load)
 			wasAuthenticatedRef.current = false;
 			onEventRef.current({
 				type: 'logout',
@@ -189,7 +131,7 @@ function DynamicBridge({
 		}
 	}, [sdkHasLoaded, user, activeWallet?.address, embeddedWallet]);
 
-	// Notify wallet changes
+	// Notify wallet changes (only when address actually changes)
 	useEffect(() => {
 		if (activeWallet?.address && activeWallet.address !== lastEmittedWalletRef.current) {
 			lastEmittedWalletRef.current = activeWallet.address;
@@ -200,316 +142,160 @@ function DynamicBridge({
 		}
 	}, [activeWallet?.address]);
 
-	/**
-	 * Build and expose a hardened signer wrapper for:
-	 * - EIP-712 permits (signTypedData)
-	 * - EIP-7702 authorizations (signAuthorization)
-	 */
+	// Expose wallet provider to Svelte when available
 	useEffect(() => {
-		if (!activeWallet || !isEthereumWallet(activeWallet)) {
-			onSignerReadyRef.current?.(null);
-			return;
-		}
-		if (!onSignerReadyRef.current) {
-			console.warn('[dynamic] onSignerReady callback not available');
-			return;
-		}
-
-		const setupSigner = async () => {
-			try {
-				if (!activeWallet.connector) {
-					console.warn('[dynamic] No connector available on wallet');
-					onSignerReadyRef.current?.(null);
-					return;
-				}
-
-				// WaaS connector shape
-				const connector = activeWallet.connector as {
-					setActiveAccount?: (address: Address) => void;
-					getSigner?: () => Promise<{
-						signMessage?: (args: { message: string }) => Promise<string>;
-						signTransaction?: (tx: unknown) => Promise<string>;
-						signTypedData?: (args: {
-							domain: Record<string, unknown>;
-							types: Record<string, Array<{ name: string; type: string }>>;
-							primaryType: string;
-							message: Record<string, unknown>;
-						}) => Promise<string>;
-						signAuthorization?: (args: {
-							contractAddress: string;
-							chainId: number;
-							nonce?: number;
-						}) => Promise<{
-							r: `0x${string}`;
-							s: `0x${string}`;
-							v?: bigint;
-							yParity?: number;
-						}>;
-					}>;
-				};
-
-				if (!connector?.setActiveAccount || !connector?.getSigner) {
-					console.warn('[dynamic] Wallet connector does not support WaaS signer');
-					onSignerReadyRef.current?.(null);
-					return;
-				}
-
-				const address = activeWallet.address as Address;
-
-				console.log('[dynamic] Calling setActiveAccount', address);
-				connector.setActiveAccount(address);
-
-				const dynamicSigner = await connector.getSigner();
-				console.log('[dynamic] Got Dynamic signer:', {
-					hasSignMessage: !!dynamicSigner?.signMessage,
-					hasSignTransaction: !!dynamicSigner?.signTransaction,
-					hasSignTypedData: !!dynamicSigner?.signTypedData,
-					hasSignAuthorization: !!dynamicSigner?.signAuthorization
-				});
-
-				if (!dynamicSigner?.signAuthorization) {
-					console.warn('[dynamic] Dynamic signer missing signAuthorization');
-					onSignerReadyRef.current?.(null);
-					return;
-				}
-
-				const signer: DynamicSigner = {
-					async signMessage({ message }) {
-						console.log('[dynamic] signMessage called');
-						if (!dynamicSigner.signMessage) throw new Error('signMessage not available');
-						return await dynamicSigner.signMessage({ message });
-					},
-
-					async signTransaction(tx) {
-						console.log('[dynamic] ⚡ signTransaction called (should prompt)');
-						if (!dynamicSigner.signTransaction) throw new Error('signTransaction not available');
-						return await dynamicSigner.signTransaction(tx);
-					},
-
-					async signTypedData(args) {
-						console.log('[dynamic] ⚡ signTypedData called (should prompt)', {
-							primaryType: args.primaryType,
-							typesKeys: Object.keys(args.types || {})
-						});
-
-						if (!dynamicSigner.signTypedData) throw new Error('signTypedData not available');
-
-						// 1) Strip EIP712Domain if present
-						const typesRecord = (args.types || {}) as Record<
-							string,
-							Array<{ name: string; type: string }>
-						>;
-						const { _EIP712Domain, ...typesWithoutDomain } = typesRecord;
-
-						// 2) BigInt normalize
-						const domain = convertBigIntsToString(args.domain || {}) as Record<string, unknown>;
-						const message = convertBigIntsToString(args.message || {}) as Record<string, unknown>;
-
-						// 3) Normalize chainId (number is safest for WaaS)
-						if (domain.chainId != null) {
-							domain.chainId = Number(domain.chainId);
-						}
-
-						const payload = {
-							domain,
-							types: typesWithoutDomain as Record<string, Array<{ name: string; type: string }>>,
-							primaryType: args.primaryType,
-							message
-						};
-
-						// Helpful debug when stuck
-						console.log('[dynamic] TypedData payload', payload);
-
-						return await withTimeout(dynamicSigner.signTypedData(payload), 30000);
-					},
-
-					async signAuthorization(args) {
-						console.log('[dynamic] ⚡ signAuthorization called (should prompt)', args);
-						if (!dynamicSigner.signAuthorization)
-							throw new Error('signAuthorization not available');
-						return await dynamicSigner.signAuthorization(args);
-					}
-				};
-
-				onSignerReadyRef.current?.(signer);
-				console.log('[dynamic] Signer exposed to Svelte');
-			} catch (e) {
-				console.error('[dynamic] Failed to setup signer:', e);
-				onSignerReadyRef.current?.(null);
-			}
-		};
-
-		setupSigner().catch((e) => {
-			console.error('[dynamic] Unhandled setupSigner error:', e);
-			onSignerReadyRef.current?.(null);
-		});
-	}, [activeWallet]);
-
-	/**
-	 * Expose an EIP-1193 provider wrapper.
-	 * IMPORTANT: route eth_signTypedData_v4 through Dynamic signer (NOT walletClient.signTypedData)
-	 */
-	useEffect(() => {
-		if (!activeWallet || !onWalletProviderReadyRef.current) {
-			onWalletProviderReadyRef.current?.(null);
-			return;
-		}
-
-		if (!isEthereumWallet(activeWallet)) {
-			console.warn('[dynamic] Active wallet is not an Ethereum wallet');
-			onWalletProviderReadyRef.current(null);
-			return;
-		}
-
-		const BASE_CHAIN_ID = '8453';
-
-		let cachedWalletClient: Awaited<ReturnType<typeof activeWallet.getWalletClient>> | null = null;
-		let cachedPublicClient: Awaited<ReturnType<typeof activeWallet.getPublicClient>> | null = null;
-		let lastWalletClientAttempt = 0;
-
-		const getClients = async () => {
-			const authToken = getAuthToken();
-			if (!authToken) throw new Error('Authentication required. Please log in again.');
-
-			const now = Date.now();
-			if (
-				!cachedWalletClient &&
-				(now - lastWalletClientAttempt > 5000 || lastWalletClientAttempt === 0)
-			) {
-				lastWalletClientAttempt = now;
-				cachedWalletClient = await activeWallet.getWalletClient(BASE_CHAIN_ID);
-			}
-			if (!cachedPublicClient) {
-				try {
-					cachedPublicClient = await activeWallet.getPublicClient();
-				} catch {
-					// optional
-				}
+		if (activeWallet && onWalletProviderReadyRef.current) {
+			// Verify it's an Ethereum wallet
+			if (!isEthereumWallet(activeWallet)) {
+				console.warn('[dynamic] Active wallet is not an Ethereum wallet');
+				onWalletProviderReadyRef.current(null);
+				return;
 			}
 
-			return { walletClient: cachedWalletClient, publicClient: cachedPublicClient };
-		};
+			// Base chain ID
+			const BASE_CHAIN_ID = '8453';
 
-		const provider = {
-			request: async (args: { method: string; params?: unknown[] }) => {
-				// personal_sign
-				if (args.method === 'personal_sign' && args.params) {
-					const authToken = getAuthToken();
-					if (!authToken) throw new Error('Authentication required. Please log in again.');
+			// Cache wallet and public clients for reuse (reset on each activeWallet change)
+			let cachedWalletClient: Awaited<ReturnType<typeof activeWallet.getWalletClient>> | null =
+				null;
+			let cachedPublicClient: Awaited<ReturnType<typeof activeWallet.getPublicClient>> | null =
+				null;
+			let lastWalletClientAttempt = 0;
 
-					const [message] = args.params as [string, string];
-					return await activeWallet.signMessage(message);
+			const getClients = async () => {
+				// Check if we have a valid auth token before attempting wallet operations
+				const authToken = getAuthToken();
+				if (!authToken) {
+					console.warn('[dynamic] No auth token available for wallet operations');
+					throw new Error('Authentication required. Please log in again.');
 				}
 
-				// Dynamic manages switching internally
-				if (args.method === 'wallet_switchEthereumChain') return null;
-
-				// eth_sendTransaction
-				if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
-					const { walletClient } = await getClients();
-					if (!walletClient) throw new Error('Wallet client not available for transaction');
-
-					const tx = args.params[0] as { to: string; value?: string; data?: string; gas?: string };
-
-					return await walletClient.sendTransaction({
-						to: tx.to as `0x${string}`,
-						value: tx.value ? BigInt(tx.value) : undefined,
-						data: tx.data as `0x${string}` | undefined,
-						gas: tx.gas ? BigInt(tx.gas) : undefined
-					});
-				}
-
-				/**
-				 * eth_signTypedData_v4
-				 * Route via Dynamic WaaS signer (this fixes permit hangs)
-				 */
-				if (args.method === 'eth_signTypedData_v4' && args.params?.[1]) {
-					console.log('[dynamic] Handling eth_signTypedData_v4 via Dynamic signer');
-
-					if (!activeWallet.connector) throw new Error('No connector available on wallet');
-
-					const connector = activeWallet.connector as {
-						setActiveAccount?: (address: Address) => void;
-						getSigner?: () => Promise<{
-							signTypedData?: (args: {
-								domain: Record<string, unknown>;
-								types: Record<string, unknown>;
-								primaryType: string;
-								message: Record<string, unknown>;
-							}) => Promise<string>;
-						}>;
-					};
-					if (!connector?.setActiveAccount || !connector?.getSigner) {
-						throw new Error('Not a WaaS wallet (no signer)');
-					}
-
-					// Ensure correct active account
-					connector.setActiveAccount(activeWallet.address as Address);
-					const dyn = await connector.getSigner();
-					if (!dyn?.signTypedData) throw new Error('Dynamic signer missing signTypedData');
-
-					const typedDataRaw = args.params[1] as string | Record<string, unknown>;
-					const typedData =
-						typeof typedDataRaw === 'string' ? JSON.parse(typedDataRaw) : typedDataRaw;
-
-					const typedDataTypes = (typedData as Record<string, unknown>).types as
-						| Record<string, unknown>
-						| undefined;
-					const { _EIP712Domain, ...typesWithoutDomain } = typedDataTypes || {};
-
-					const domain = convertBigIntsToString(
-						(typedData as Record<string, unknown>).domain || {}
-					) as Record<string, unknown>;
-					const message = convertBigIntsToString(
-						(typedData as Record<string, unknown>).message || {}
-					) as Record<string, unknown>;
-					if (domain.chainId != null) {
-						domain.chainId = Number(domain.chainId);
-					}
-
-					const payload = {
-						domain,
-						types: typesWithoutDomain,
-						primaryType: typedData.primaryType,
-						message
-					};
-
-					console.log('[dynamic] TypedData_v4 payload', payload);
-					return await withTimeout(dyn.signTypedData(payload), 30000);
-				}
-
-				// Read methods -> public client transport if available
-				const readMethods = [
-					'eth_chainId',
-					'eth_blockNumber',
-					'eth_getBalance',
-					'eth_getTransactionCount',
-					'eth_call',
-					'eth_estimateGas',
-					'eth_gasPrice',
-					'eth_getTransactionReceipt'
-				];
-
-				if (readMethods.includes(args.method)) {
+				// Only retry wallet client if we don't have one or if it's been more than 5 seconds since last attempt
+				const now = Date.now();
+				if (
+					!cachedWalletClient &&
+					(now - lastWalletClientAttempt > 5000 || lastWalletClientAttempt === 0)
+				) {
+					lastWalletClientAttempt = now;
 					try {
-						const { publicClient } = await getClients();
-						if (publicClient?.transport?.request) {
-							return await publicClient.transport.request(args);
-						}
-					} catch {
-						// ignore
+						console.log(
+							'[dynamic] Getting wallet client for chain',
+							BASE_CHAIN_ID,
+							'auth token present:',
+							!!authToken
+						);
+						cachedWalletClient = await activeWallet.getWalletClient(BASE_CHAIN_ID);
+						console.log('[dynamic] Got wallet client:', cachedWalletClient ? 'success' : 'null');
+					} catch (error) {
+						console.error('[dynamic] Error getting wallet client:', error);
+						// Clear the cached client so we can retry
+						cachedWalletClient = null;
+						throw error;
 					}
 				}
+				if (!cachedPublicClient) {
+					try {
+						cachedPublicClient = await activeWallet.getPublicClient();
+					} catch (error) {
+						console.error('[dynamic] Error getting public client:', error);
+						// Don't throw - public client is optional for transactions
+					}
+				}
+				return { walletClient: cachedWalletClient, publicClient: cachedPublicClient };
+			};
 
-				return null;
-			}
-		};
+			// Create an EIP-1193 compatible provider wrapper using the wallet directly
+			const provider = {
+				request: async (args: { method: string; params?: unknown[] }) => {
+					// For signing messages, use the wallet's signMessage method directly
+					if (args.method === 'personal_sign' && args.params) {
+						// Check auth token before signing
+						const authToken = getAuthToken();
+						if (!authToken) {
+							console.warn('[dynamic] No auth token available for message signing');
+							throw new Error('Authentication required. Please log in again.');
+						}
+						const [message] = args.params as [string, string];
+						console.log('[dynamic] Signing message with embedded wallet');
+						try {
+							const result = await activeWallet.signMessage(message);
+							console.log('[dynamic] Message signed successfully');
+							return result;
+						} catch (signError) {
+							console.error('[dynamic] Error signing message:', signError);
+							throw signError;
+						}
+					}
 
-		onWalletProviderReadyRef.current(provider);
+					// Handle chain switching - Dynamic manages this internally
+					if (args.method === 'wallet_switchEthereumChain') {
+						return null;
+					}
 
-		return () => {
-			onWalletProviderReadyRef.current?.(null);
-		};
+					// For transactions, use the wallet client
+					if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
+						console.log('[dynamic] Handling eth_sendTransaction');
+						const { walletClient } = await getClients();
+						if (!walletClient) {
+							console.error('[dynamic] Wallet client is null after getClients()');
+							throw new Error('Wallet client not available for transaction');
+						}
+						const tx = args.params[0] as {
+							to: string;
+							value?: string;
+							data?: string;
+							gas?: string;
+						};
+						console.log('[dynamic] Sending transaction to:', tx.to, 'gas:', tx.gas);
+						try {
+							const result = await walletClient.sendTransaction({
+								to: tx.to as `0x${string}`,
+								value: tx.value ? BigInt(tx.value) : undefined,
+								data: tx.data as `0x${string}` | undefined,
+								gas: tx.gas ? BigInt(tx.gas) : undefined
+							});
+							console.log('[dynamic] Transaction sent successfully:', result);
+							return result;
+						} catch (txError) {
+							console.error('[dynamic] Transaction failed:', txError);
+							throw txError;
+						}
+					}
+
+					// For read methods, try the public client first (better RPC support)
+					const readMethods = [
+						'eth_chainId',
+						'eth_blockNumber',
+						'eth_getBalance',
+						'eth_getTransactionCount',
+						'eth_call',
+						'eth_estimateGas',
+						'eth_gasPrice',
+						'eth_getTransactionReceipt'
+					];
+					if (readMethods.includes(args.method)) {
+						try {
+							const { publicClient } = await getClients();
+							if (publicClient?.transport) {
+								return await (
+									publicClient.transport as { request?: (args: unknown) => Promise<unknown> }
+								)?.request?.(args);
+							}
+						} catch {
+							// Fall through to return null
+						}
+					}
+
+					// For unsupported methods, return null silently
+					// This prevents noisy errors for methods Dynamic doesn't support
+					return null;
+				}
+			};
+			onWalletProviderReadyRef.current?.(provider);
+		} else if (!activeWallet && onWalletProviderReadyRef.current) {
+			// Clear provider when wallet is not available
+			onWalletProviderReadyRef.current(null);
+		}
 	}, [activeWallet]);
 
 	// Handle login trigger
@@ -523,6 +309,7 @@ function DynamicBridge({
 	useEffect(() => {
 		if (!sdkHasLoaded || !user) return;
 
+		// Helper to emit token
 		const emitToken = async () => {
 			const token = getAuthToken();
 			if (token) {
@@ -533,8 +320,12 @@ function DynamicBridge({
 			}
 		};
 
+		// Emit initial token
 		emitToken();
+
+		// Set up periodic refresh check
 		const intervalId = setInterval(emitToken, TOKEN_REFRESH_INTERVAL);
+
 		return () => clearInterval(intervalId);
 	}, [sdkHasLoaded, user]);
 
@@ -545,10 +336,11 @@ function DynamicBridge({
 		}
 	}, [triggerLogout, sdkHasLoaded, user, handleLogOut]);
 
-	// Handle export wallet trigger
+	// Handle export wallet trigger using Dynamic's useEmbeddedReveal hook
 	useEffect(() => {
 		if (triggerExportWallet && sdkHasLoaded && user && !isExportingRef.current) {
 			if (!embeddedWallet) {
+				console.warn('[dynamic] Export wallet triggered but no embedded wallet found.');
 				onEventRef.current({
 					type: 'error',
 					payload: {
@@ -561,8 +353,13 @@ function DynamicBridge({
 
 			isExportingRef.current = true;
 
+			// Use Dynamic's initExportProcess to open the export UI
 			initExportProcess()
+				.then(() => {
+					console.log('[dynamic] Wallet export process completed');
+				})
 				.catch((error) => {
+					console.error('[dynamic] Wallet export failed:', error);
 					onEventRef.current({
 						type: 'error',
 						payload: { error: (error as Error).message || 'Failed to export wallet' }
@@ -579,8 +376,11 @@ function DynamicBridge({
 		if (triggerSendTransaction && activeWallet && isEthereumWallet(activeWallet)) {
 			(async () => {
 				try {
+					// Get wallet client for Base chain
 					const walletClient = await activeWallet.getWalletClient('8453');
-					if (!walletClient) throw new Error('Wallet client not available');
+					if (!walletClient) {
+						throw new Error('Wallet client not available');
+					}
 
 					const txHash = await walletClient.sendTransaction({
 						to: triggerSendTransaction.to as `0x${string}`,
@@ -603,6 +403,7 @@ function DynamicBridge({
 		}
 	}, [triggerSendTransaction, activeWallet]);
 
+	// This component doesn't render anything visible
 	return null;
 }
 
@@ -617,13 +418,6 @@ export function DynamicReactProvider(props: DynamicBridgeProps) {
 		[props.onEvent]
 	);
 
-	const stableOnSignerReady = useCallback(
-		(signer: DynamicSigner | null) => {
-			props.onSignerReady?.(signer);
-		},
-		[props.onSignerReady]
-	);
-
 	if (!environmentId) {
 		console.warn('[dynamic] No environment ID provided');
 		return null;
@@ -634,10 +428,11 @@ export function DynamicReactProvider(props: DynamicBridgeProps) {
 			settings={{
 				environmentId,
 				walletConnectors: [EthereumWalletConnectors],
+				// Log level for debugging (can be set to 'DEBUG' for troubleshooting)
 				logLevel: 'WARN'
 			}}
 		>
-			<DynamicBridge {...bridgeProps} onEvent={stableOnEvent} onSignerReady={stableOnSignerReady} />
+			<DynamicBridge {...bridgeProps} onEvent={stableOnEvent} />
 		</DynamicContextProvider>
 	);
 }

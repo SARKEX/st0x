@@ -1,10 +1,8 @@
 import { arbitrum, base } from '@wagmi/core/chains';
 import type { PythToken } from '$lib/types';
 
-// Payment tokens mapped by chain
 export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 	8453: [
-		// Base - USDC
 		{
 			chainId: 8453,
 			address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -13,134 +11,16 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 			name: 'USD Coin',
 			logoUrl: '/images/USDC.png',
 			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		},
-		// Base - USDT
-		{
-			chainId: 8453,
-			address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
-			symbol: 'USDT',
-			decimals: 6,
-			name: 'Tether USD',
-			logoUrl: '/images/USDT.png',
-			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
-		},
-		// Base - WETH
-		{
-			chainId: 8453,
-			address: '0x4200000000000000000000000000000000000006',
-			symbol: 'WETH',
-			decimals: 18,
-			name: 'Wrapped Ether',
-			logoUrl: '/images/ETH.svg',
-			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
-		}
-	],
-	42161: [
-		// Arbitrum - USDC
-		{
-			chainId: 42161,
-			address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-			symbol: 'USDC',
-			decimals: 6,
-			name: 'USD Coin',
-			logoUrl: '/images/USDC.png',
-			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		},
-		// Arbitrum - USDT
-		{
-			chainId: 42161,
-			address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
-			symbol: 'USDT',
-			decimals: 6,
-			name: 'Tether USD',
-			logoUrl: '/images/USDT.png',
-			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
-		},
-		// Arbitrum - WETH
-		{
-			chainId: 42161,
-			address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
-			symbol: 'WETH',
-			decimals: 18,
-			name: 'Wrapped Ether',
-			logoUrl: '/images/ETH.svg',
-			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
-		}
-	],
-	10: [
-		// Optimism - USDC
-		{
-			chainId: 10,
-			address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
-			symbol: 'USDC',
-			decimals: 6,
-			name: 'USD Coin',
-			logoUrl: '/images/USDC.png',
-			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		},
-		// Optimism - USDT
-		{
-			chainId: 10,
-			address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
-			symbol: 'USDT',
-			decimals: 6,
-			name: 'Tether USD',
-			logoUrl: '/images/USDT.png',
-			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
-		},
-		// Optimism - WETH
-		{
-			chainId: 10,
-			address: '0x4200000000000000000000000000000000000006',
-			symbol: 'WETH',
-			decimals: 18,
-			name: 'Wrapped Ether',
-			logoUrl: '/images/ETH.svg',
-			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
-		}
-	],
-	1: [
-		// Ethereum - USDC
-		{
-			chainId: 1,
-			address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-			symbol: 'USDC',
-			decimals: 6,
-			name: 'USD Coin',
-			logoUrl: '/images/USDC.png',
-			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		},
-		// Ethereum - USDT
-		{
-			chainId: 1,
-			address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-			symbol: 'USDT',
-			decimals: 6,
-			name: 'Tether USD',
-			logoUrl: '/images/USDT.png',
-			priceFeedId: '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b'
-		},
-		// Ethereum - WETH
-		{
-			chainId: 1,
-			address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-			symbol: 'WETH',
-			decimals: 18,
-			name: 'Wrapped Ether',
-			logoUrl: '/images/ETH.svg',
-			priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
-		}
+		} as PythToken
 	]
 };
 
 export const DEFAULT_PAYMENT_TOKENS: Record<number, PythToken> = Object.fromEntries(
 	Object.entries(PAYMENT_TOKENS_BY_NETWORK).map(([chainId, tokens]) => [
 		Number(chainId),
-		tokens[0]
+		tokens[0] as PythToken
 	])
 );
-
-export const USDC_TOKENS = PAYMENT_TOKENS_BY_NETWORK;
 
 export function getPaymentTokensForNetwork(chainId: number): PythToken[] {
 	return PAYMENT_TOKENS_BY_NETWORK[chainId] ?? [];
@@ -151,46 +31,35 @@ export function getDefaultPaymentTokenForNetwork(chainId: number): PythToken | u
 	return first;
 }
 
-// Back-compat exports for legacy settlement naming and USDC helpers
-export const SETTLEMENT_TOKENS_BY_NETWORK = PAYMENT_TOKENS_BY_NETWORK;
-export const DEFAULT_SETTLEMENT_TOKENS = DEFAULT_PAYMENT_TOKENS;
-
-export function getSettlementTokensForNetwork(chainId: number): PythToken[] {
-	return getPaymentTokensForNetwork(chainId);
-}
-
-export function getDefaultSettlementTokenForNetwork(chainId: number): PythToken | undefined {
-	return getDefaultPaymentTokenForNetwork(chainId);
-}
-
-export function getUsdcTokenForNetwork(chainId: number): PythToken | undefined {
-	return getDefaultPaymentTokenForNetwork(chainId);
-}
-
-// Define token categories
-export type TokenCategory = 'ST0x' | 'ETFs' | 'ST0NX' | 'CRYPTO';
+export type TokenCategory = 'ST0x' | 'CRYPTO';
 
 export interface LimitOrder {
 	orderHash: string;
 	type: 'Buy' | 'Sell';
 }
 
-// Extended token interface with category
 export interface CategorizedToken extends PythToken {
 	category: TokenCategory;
 	logoUrl?: string;
 	tradingViewSymbol?: string;
 	tradingViewMarket?: string;
 	limitOrders?: LimitOrder[];
+	// Token address variants for ST0x tokens
+	unwrappedAddress?: string; // Underlying ERC4626 asset (tNVDA)
+	legacyAddress?: string; // Old token for migration (optional)
+	legacySymbol?: string; // Old symbol if different (e.g., tSPLG -> wtSPYM)
+	previousSymbols?: string[]; // Historical symbol names for blob storage lookups
 }
 
 export const TOKENS: CategorizedToken[] = [
 	{
 		chainId: base.id,
-		address: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
-		symbol: 'tNVDA',
+		address: '0xFb5B41acdbA20a3230F84BE995173CFb98b8D6E7',
+		unwrappedAddress: '0x7271a3c91bb6070ed09333b84a815949d4f16d14',
+		legacyAddress: '0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b',
+		symbol: 'wtNVDA',
 		decimals: 18,
-		name: 'NVIDIA Corporation ST0x',
+		name: 'Wrapped NVIDIA Corporation ST0x',
 		logoUrl: '/images/NVDA.png',
 		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
 		category: 'ST0x',
@@ -200,10 +69,12 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0x8d8c315db61f60dcc3c66cdb48ca87fc643e35ea',
-		symbol: 'tAMZN',
+		address: '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53',
+		unwrappedAddress: '0x466cb2e46fa1afc0ab5e22274b34d0391db18efd',
+		legacyAddress: '0x8d8c315db61f60dcc3c66cdb48ca87fc643e35ea',
+		symbol: 'wtAMZN',
 		decimals: 18,
-		name: 'Amazon.com Inc ST0x',
+		name: 'Wrapped Amazon.com Inc ST0x',
 		logoUrl: '/images/AMZN.png',
 		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
 		category: 'ST0x',
@@ -213,10 +84,12 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0x470b06815a2e286df8c38c9c73280e0760088623',
-		symbol: 'tTSLA',
+		address: '0x219A8d384a10BF19b9f24cB5cC53F79Dd0e5A03D',
+		unwrappedAddress: '0x4e169cd2ab4f82640a8c65c68fed55863866fdb0',
+		legacyAddress: '0x470b06815a2e286df8c38c9c73280e0760088623',
+		symbol: 'wtTSLA',
 		decimals: 18,
-		name: 'Tesla Inc ST0x',
+		name: 'Wrapped Tesla Inc ST0x',
 		logoUrl: '/images/TSLA.png',
 		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
 		category: 'ST0x',
@@ -226,10 +99,12 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0xff647ad8c4b065bd746911bb9ea1a33c38c63604',
-		symbol: 'tMSTR',
+		address: '0xFF05E1bD696900dc6A52CA35Ca61Bb1024eDa8e2',
+		unwrappedAddress: '0x013b782f402d61aa1004cca95b9f5bb402c9d5fe',
+		legacyAddress: '0xff647ad8c4b065bd746911bb9ea1a33c38c63604',
+		symbol: 'wtMSTR',
 		decimals: 18,
-		name: 'MicroStrategy Incorporated ST0x',
+		name: 'Wrapped MicroStrategy Incorporated ST0x',
 		logoUrl: '/images/MSTR.png',
 		priceFeedId: '0xe1e80251e5f5184f2195008382538e847fafc36f751896889dd3d1b1f6111f09',
 		category: 'ST0x',
@@ -239,10 +114,12 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0xd0a90b7c9ae5facbe09ca4c576a3795eda53b397',
-		symbol: 'tIAU',
+		address: '0x1E46d7eFef64A833AFB1CD49299a7AD5B439f4d8',
+		unwrappedAddress: '0x9a507314ea2a6c5686c0d07bfecb764dcf324dff',
+		legacyAddress: '0xd0a90b7c9ae5facbe09ca4c576a3795eda53b397',
+		symbol: 'wtIAU',
 		decimals: 18,
-		name: 'iShares Gold Trust ST0x',
+		name: 'Wrapped iShares Gold Trust ST0x',
 		logoUrl: '/images/IAU.png',
 		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
 		category: 'ST0x',
@@ -250,26 +127,14 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
-	// Test token (comment out for production):
-	// {
-	// 	chainId: base.id,
-	// 	address: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
-	// 	symbol: 'tSTOX',
-	// 	decimals: 18,
-	// 	name: 'tSTOX',
-	// 	logoUrl: '/images/IAU.png',
-	// 	priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
-	// 	category: 'ST0x',
-	// 	tradingViewSymbol: 'AMEX:IAU',
-	// 	tradingViewMarket: 'america',
-	// 	limitOrders: []
-	// } as unknown as CategorizedToken,
 	{
 		chainId: base.id,
-		address: '0xb616f8b391d1adc118fd7e4063526d5530d49b10',
-		symbol: 'tCOIN',
+		address: '0x5cDa0E1CA4ce2af96315f7F8963C85399c172204',
+		unwrappedAddress: '0x626757e6f50675d17fcad312e82f989ae7a23d38',
+		legacyAddress: '0xb616f8b391d1adc118fd7e4063526d5530d49b10',
+		symbol: 'wtCOIN',
 		decimals: 18,
-		name: 'Coinbase Global Inc ST0x',
+		name: 'Wrapped Coinbase Global Inc ST0x',
 		logoUrl: '/images/COIN.png',
 		priceFeedId: '0xfee33f2a978bf32dd6b662b65ba8083c6773b494f8401194ec1870c640860245',
 		category: 'ST0x',
@@ -279,10 +144,14 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
-		symbol: 'tSPLG',
+		address: '0x31C2C14134e6E3B7ef9478297F199331133Fc2d8',
+		unwrappedAddress: '0x8fdf41116f755771bfe0747d5f8c3711d5debfbb',
+		legacyAddress: '0x2289249984f1fa2ce86c4e8867e7eb819ea7df95',
+		legacySymbol: 'tSPYM', // Symbol changed from SPLG to SPYM
+		previousSymbols: ['wtSPLG', 'tSPLG'], // Historical blob storage names
+		symbol: 'wtSPYM',
 		decimals: 18,
-		name: 'SPDR Portfolio S&P 500 ETF ST0x',
+		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
 		logoUrl: '/images/SPLG.png',
 		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
 		category: 'ST0x',
@@ -290,12 +159,31 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
+	// wtSTOX token temporarily disabled
+	// {
+	// 	chainId: base.id,
+	// 	address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
+	// 	unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
+	// 	legacyAddress: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+	// 	// legacySymbol: 'tSTOX',
+	// 	symbol: 'wtSTOX',
+	// 	decimals: 18,
+	// 	name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
+	// 	logoUrl: '/images/SPLG.png',
+	// 	priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
+	// 	category: 'ST0x',
+	// 	tradingViewSymbol: 'AMEX:SPLG',
+	// 	tradingViewMarket: 'america',
+	// 	limitOrders: []
+	// },
 	{
 		chainId: base.id,
-		address: '0x826a85de1f7b70f4c7450c0f882a6db06000ed80',
-		symbol: 'tSIVR',
+		address: '0xEB7F3E4093C9d68253b6104FbbfF561F3eC0442F',
+		unwrappedAddress: '0x58ce5024b89b4f73c27814c0f0abbea331c99be8',
+		legacyAddress: '0x826a85de1f7b70f4c7450c0f882a6db06000ed80',
+		symbol: 'wtSIVR',
 		decimals: 18,
-		name: 'abrdn Physical Silver Shares ETF ST0x',
+		name: 'Wrapped abrdn Physical Silver Shares ETF ST0x',
 		logoUrl: '/images/SIVR.png',
 		priceFeedId: '0x0a5ee42b0f7287a777926d08bc185a6a60f42f40a9b63d78d85d4a03ee2e3737',
 		category: 'ST0x',
@@ -305,10 +193,12 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0x43422a9d11a6640ef0d5f65292ef8adf87cf8522',
-		symbol: 'tCRCL',
+		address: '0x8AFba81DEc38DE0A18E2Df5E1967a7493651eebf',
+		unwrappedAddress: '0x38eb797892ed71da69bdc27a456a7c83ff813b52',
+		legacyAddress: '0x43422a9d11a6640ef0d5f65292ef8adf87cf8522',
+		symbol: 'wtCRCL',
 		decimals: 18,
-		name: 'Circle Internet Group Inc ST0x',
+		name: 'Wrapped Circle Internet Group Inc ST0x',
 		logoUrl: '/images/CRCL.png',
 		priceFeedId: '0x92b8527aabe59ea2b12230f7b532769b133ffb118dfbd48ff676f14b273f1365',
 		category: 'ST0x',
@@ -318,10 +208,12 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0xf8fdfd6a686346d34b3143fc23072aa45c9e8386',
-		symbol: 'tBMNR',
+		address: '0x2512EC661f0bA089c275EA105E31bAD6FcFcf319',
+		unwrappedAddress: '0xfbde45df60249203b12148452fc77c3b5f811eb2',
+		legacyAddress: '0xf8fdfd6a686346d34b3143fc23072aa45c9e8386',
+		symbol: 'wtBMNR',
 		decimals: 18,
-		name: 'Bitmine Immersion Technologies, Inc ST0x',
+		name: 'Wrapped Bitmine Immersion Technologies, Inc ST0x',
 		logoUrl: '/images/BMNR.png',
 		priceFeedId: '0x54e2e127c93950de5a710100fd1cd387aba1ec8920850efdb05da5fee57d2e32',
 		category: 'ST0x',
@@ -331,10 +223,12 @@ export const TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0x6192539a2036c786aba3ca6a2222ff7a0f9c287e',
-		symbol: 'tPPLT',
+		address: '0x82f5BAEE1076334357a34A19E04f7c282D51cE47',
+		unwrappedAddress: '0x1f17523b147ccc2a2328c0f014f6d49c479ea063',
+		legacyAddress: '0x6192539a2036c786aba3ca6a2222ff7a0f9c287e',
+		symbol: 'wtPPLT',
 		decimals: 18,
-		name: 'abrdn Physical Platinum Shares ETF ST0x',
+		name: 'Wrapped abrdn Physical Platinum Shares ETF ST0x',
 		logoUrl: '/images/SIVR.png',
 		priceFeedId: '0x782410278b6c8aa2d437812281526012808404aa14c243f73fb9939eeb88d430',
 		category: 'ST0x',
@@ -342,6 +236,21 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewMarket: 'america',
 		limitOrders: []
 	}
+	// {
+	// 	chainId: base.id,
+	// 	address: '0xF4f8c66085910d583c01f3b4e44Bf731D4e2c565',
+	// 	unwrappedAddress: '0xf6744fd94e27c2f58f6110aa9fdc77a87e41766b',
+	// 	// No legacy address - wtRKLB is a new token
+	// 	symbol: 'wtRKLB',
+	// 	decimals: 18,
+	// 	name: 'Wrapped Rocket Lab USA Inc ST0x',
+	// 	logoUrl: '/images/RKLB.png',
+	// 	priceFeedId: '0x40589e289317e4fbd997b1a267606e20a1cc7c3e4689f9e5a5992957917816c8',
+	// 	category: 'ST0x',
+	// 	tradingViewSymbol: 'NASDAQ:RKLB',
+	// 	tradingViewMarket: 'america',
+	// 	limitOrders: []
+	// }
 ];
 
 export const CRYPTO_TOKENS: CategorizedToken[] = [
@@ -395,7 +304,7 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 	},
 	{
 		chainId: base.id,
-		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Real Base USDC
+		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 		symbol: 'USDC',
 		decimals: 6,
 		name: 'USD Coin',
@@ -406,11 +315,6 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		tradingViewMarket: 'crypto'
 	}
 ];
-
-// Helper functions to get tokens by category
-export function getTokensByCategory(category: TokenCategory): CategorizedToken[] {
-	return TOKENS.filter((token) => token.category === category);
-}
 
 export function getAllTokens(): CategorizedToken[] {
 	return TOKENS;
@@ -427,4 +331,75 @@ export function getCryptoTokensByNetwork(chainId: number): CategorizedToken[] {
 
 export function getAllTokensByNetwork(chainId: number): CategorizedToken[] {
 	return [...getTokensByNetwork(chainId), ...getCryptoTokensByNetwork(chainId)];
+}
+
+// Address lookup maps (built once at module load)
+const tokenByWrappedAddress = new Map(TOKENS.map((t) => [t.address.toLowerCase(), t]));
+
+const tokenByUnwrappedAddress = new Map(
+	TOKENS.filter((t) => t.unwrappedAddress).map((t) => [t.unwrappedAddress!.toLowerCase(), t])
+);
+
+const tokenByLegacyAddress = new Map(
+	TOKENS.filter((t) => t.legacyAddress).map((t) => [t.legacyAddress!.toLowerCase(), t])
+);
+
+export function getTokenByWrappedAddress(address: string): CategorizedToken | null {
+	return tokenByWrappedAddress.get(address.toLowerCase()) ?? null;
+}
+
+export function getTokenByUnwrappedAddress(address: string): CategorizedToken | null {
+	return tokenByUnwrappedAddress.get(address.toLowerCase()) ?? null;
+}
+
+export function getTokenByLegacyAddress(address: string): CategorizedToken | null {
+	return tokenByLegacyAddress.get(address.toLowerCase()) ?? null;
+}
+
+/**
+ * Get a token by any of its addresses (wrapped, unwrapped, or legacy).
+ * Useful for URL redirects and lookups where address type is unknown.
+ */
+export function getTokenByAnyAddress(address: string): CategorizedToken | null {
+	const lowerAddress = address.toLowerCase();
+	return (
+		tokenByWrappedAddress.get(lowerAddress) ??
+		tokenByUnwrappedAddress.get(lowerAddress) ??
+		tokenByLegacyAddress.get(lowerAddress) ??
+		null
+	);
+}
+
+export function isWrappedTokenAddress(address: string): boolean {
+	return tokenByWrappedAddress.has(address.toLowerCase());
+}
+
+export function isUnwrappedTokenAddress(address: string): boolean {
+	return tokenByUnwrappedAddress.has(address.toLowerCase());
+}
+
+export function isLegacyTokenAddress(address: string): boolean {
+	return tokenByLegacyAddress.has(address.toLowerCase());
+}
+
+export function getAllUnwrappedTokenAddresses(): string[] {
+	return TOKENS.filter((t) => t.unwrappedAddress).map((t) => t.unwrappedAddress!);
+}
+
+export function getAllLegacyTokenAddresses(): string[] {
+	return TOKENS.filter((t) => t.legacyAddress).map((t) => t.legacyAddress!);
+}
+
+/** Get all address variants (wrapped, unwrapped, legacy) for a single token, lowercased. */
+export function getTokenAddressVariants(token: CategorizedToken): string[] {
+	return [
+		token.address,
+		...(token.unwrappedAddress ? [token.unwrappedAddress] : []),
+		...(token.legacyAddress ? [token.legacyAddress] : [])
+	].map((a) => a.toLowerCase());
+}
+
+/** Get all token addresses across all tokens (wrapped + unwrapped + legacy), lowercased. */
+export function getAllTokenAddressesFlat(): string[] {
+	return TOKENS.flatMap((t) => getTokenAddressVariants(t));
 }

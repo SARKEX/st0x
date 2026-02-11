@@ -196,9 +196,19 @@ export async function fetchQuotesWithBatching(
 		}
 	}
 
-	// Retry logic
+	// Check if any failures are rate-limit errors — if so, skip retries entirely
+	// to avoid amplifying load during rate-limited periods
+	const hasRateLimitErrors = Array.from(allFailed.values()).some(isRateLimitError);
+
+	// Retry logic (only for non-rate-limit failures)
 	let retryAttempt = 0;
-	let toRetry = Array.from(allFailed.keys());
+	let toRetry = hasRateLimitErrors ? [] : Array.from(allFailed.keys());
+
+	if (hasRateLimitErrors && allFailed.size > 0) {
+		console.warn(
+			`[QuoteBatcher] Rate limit detected, skipping retries. Returning ${allSuccessful.size}/${orders.length} successful quotes.`
+		);
+	}
 
 	while (toRetry.length > 0 && retryAttempt < cfg.maxRetries) {
 		retryAttempt++;
@@ -230,6 +240,14 @@ export async function fetchQuotesWithBatching(
 			});
 			failed.forEach((error, order) => stillFailed.set(order, error));
 
+			// If we hit rate limits during retries, stop immediately
+			if (Array.from(failed.values()).some(isRateLimitError)) {
+				console.warn('[QuoteBatcher] Rate limit hit during retry, aborting retries.');
+				stillFailed.forEach((error, order) => allFailed.set(order, error));
+				toRetry = [];
+				break;
+			}
+
 			// Add delay between retry batches
 			if (i < retryBatches.length - 1) {
 				const delay = addJitter(cfg.baseBatchDelayMs * 2, cfg.jitterMaxMs); // Longer delay on retries
@@ -237,6 +255,7 @@ export async function fetchQuotesWithBatching(
 			}
 		}
 
+		if (toRetry.length === 0) break; // Broke out due to rate limit
 		toRetry = Array.from(stillFailed.keys());
 		stillFailed.forEach((error, order) => allFailed.set(order, error));
 	}
@@ -267,9 +286,12 @@ export async function fetchQuotesWithBatching(
 		console.warn('[QuoteBatcher] Error breakdown:', Object.fromEntries(errorTypes));
 	}
 
-	// All-or-nothing check: Only return if we have high success rate
-	// Allow up to 10% failure to be pragmatic (e.g., 1 order out of 10 can fail)
-	if (successRate < 90) {
+	// If rate-limited, accept whatever we got (even 0%) — throwing would discard
+	// partial results and the caller would show nothing instead of stale-but-ok data
+	const wasRateLimited =
+		hasRateLimitErrors || Array.from(allFailed.values()).some(isRateLimitError);
+
+	if (!wasRateLimited && successRate < 90) {
 		throw new Error(
 			`Quote fetch failed: only ${successRate.toFixed(1)}% successful (${allSuccessful.size}/${
 				orders.length

@@ -1,22 +1,27 @@
 // Scraper for fetching SFT transfers from the subgraph
-// Modeled after albion.rewards/src/scraper.ts
+// Modeled after albion.rewards/src/processor.ts
 
 import { networks } from '$lib/config/networks';
-import { TOKENS } from '$lib/config/tokens';
+import { TOKENS, getAllTokenAddressesFlat } from '$lib/config/tokens';
 import type { Transfer, SubgraphTransfer, SubgraphDeposit } from './types';
 
 const BATCH_SIZE = 1000;
 
-// Get SFT subgraph URL from network config
+// Get SFT subgraph URLs from network config (current + legacy)
 const SFT_SUBGRAPH_URL = networks[0].subgraph_url;
+const SFT_SUBGRAPH_URLS_LEGACY = networks[0].subgraph_urls_legacy ?? [];
 
 // Get all token addresses from config (lowercase)
 export const TOKEN_ADDRESSES = TOKENS.map((t) => t.address.toLowerCase());
 
+// All token addresses including unwrapped and legacy (for expanded snapshots)
+export const ALL_TOKEN_ADDRESSES = getAllTokenAddressesFlat();
+
 /**
- * Fetch transfers from the SFT subgraph up to a specific block
+ * Fetch transfers from a specific SFT subgraph up to a specific block
  */
 async function fetchTransfers(
+	subgraphUrl: string,
 	skip: number,
 	untilBlock: number,
 	tokenAddresses: string[]
@@ -60,7 +65,7 @@ async function fetchTransfers(
 		}
 	`;
 
-	const response = await fetch(SFT_SUBGRAPH_URL, {
+	const response = await fetch(subgraphUrl, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
@@ -87,9 +92,10 @@ async function fetchTransfers(
 }
 
 /**
- * Fetch deposits (mints) from the SFT subgraph up to a specific block
+ * Fetch deposits (mints) from a specific SFT subgraph up to a specific block
  */
 async function fetchDeposits(
+	subgraphUrl: string,
 	skip: number,
 	untilBlock: number,
 	tokenAddresses: string[]
@@ -123,7 +129,7 @@ async function fetchDeposits(
 		}
 	`;
 
-	const response = await fetch(SFT_SUBGRAPH_URL, {
+	const response = await fetch(subgraphUrl, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
@@ -150,12 +156,12 @@ async function fetchDeposits(
 }
 
 /**
- * Fetch all transfers and deposits up to a specific block number
- * Returns combined and sorted transfers
+ * Fetch all transfers and deposits from a single subgraph URL
  */
-export async function fetchAllTransfers(
+async function fetchFromSubgraph(
+	subgraphUrl: string,
 	untilBlock: number,
-	tokenAddresses: string[] = TOKEN_ADDRESSES
+	tokenAddresses: string[]
 ): Promise<Transfer[]> {
 	let transfersSkip = 0;
 	let depositsSkip = 0;
@@ -163,18 +169,14 @@ export async function fetchAllTransfers(
 	let depositsHasMore = true;
 	const allTransfers: Transfer[] = [];
 
-	console.log(
-		`[Scraper] Fetching transfers up to block ${untilBlock} for ${tokenAddresses.length} tokens`
-	);
-
 	while (transfersHasMore || depositsHasMore) {
 		const [transfersBatch, depositsBatch]: [SubgraphTransfer[], SubgraphDeposit[]] =
 			await Promise.all([
 				transfersHasMore
-					? fetchTransfers(transfersSkip, untilBlock, tokenAddresses)
+					? fetchTransfers(subgraphUrl, transfersSkip, untilBlock, tokenAddresses)
 					: Promise.resolve([]),
 				depositsHasMore
-					? fetchDeposits(depositsSkip, untilBlock, tokenAddresses)
+					? fetchDeposits(subgraphUrl, depositsSkip, untilBlock, tokenAddresses)
 					: Promise.resolve([])
 			]);
 
@@ -198,15 +200,7 @@ export async function fetchAllTransfers(
 			timestamp: parseInt(d.transaction.timestamp)
 		}));
 
-		// Combine and sort by block number
-		const combinedBatch = [...processedTransfers, ...processedDeposits].sort((a, b) => {
-			if (a.blockNumber !== b.blockNumber) {
-				return a.blockNumber - b.blockNumber;
-			}
-			return a.timestamp - b.timestamp;
-		});
-
-		allTransfers.push(...combinedBatch);
+		allTransfers.push(...processedTransfers, ...processedDeposits);
 
 		console.log(
 			`[Scraper] Batch: ${transfersBatch.length} transfers, ${depositsBatch.length} deposits`
@@ -220,7 +214,44 @@ export async function fetchAllTransfers(
 		if (depositsHasMore) depositsSkip += depositsBatch.length;
 	}
 
-	// Sort all transfers by block number
+	return allTransfers;
+}
+
+/**
+ * Fetch all transfers and deposits up to a specific block number.
+ * Queries both current and legacy SFT subgraphs, merges and deduplicates results.
+ */
+export async function fetchAllTransfers(
+	untilBlock: number,
+	tokenAddresses: string[] = ALL_TOKEN_ADDRESSES
+): Promise<Transfer[]> {
+	const subgraphUrls = [SFT_SUBGRAPH_URL, ...SFT_SUBGRAPH_URLS_LEGACY];
+
+	console.log(
+		`[Scraper] Fetching transfers up to block ${untilBlock} for ${tokenAddresses.length} tokens from ${subgraphUrls.length} subgraph(s)`
+	);
+
+	// Query all subgraphs in parallel
+	const results = await Promise.all(
+		subgraphUrls.map(async (url, i) => {
+			try {
+				const transfers = await fetchFromSubgraph(url, untilBlock, tokenAddresses);
+				console.log(
+					`[Scraper] Subgraph ${i + 1}/${subgraphUrls.length}: ${transfers.length} transfers`
+				);
+				return transfers;
+			} catch (error) {
+				// Legacy subgraphs may fail — log and continue
+				console.warn(`[Scraper] Subgraph ${i + 1} failed (${url}):`, error);
+				return [];
+			}
+		})
+	);
+
+	// Merge all transfers
+	const allTransfers = results.flat();
+
+	// Sort by block number, then timestamp
 	allTransfers.sort((a, b) => {
 		if (a.blockNumber !== b.blockNumber) {
 			return a.blockNumber - b.blockNumber;

@@ -13,10 +13,10 @@ async function delay(ms: number) {
 }
 
 /**
- * Fetch JSON with basic retry/backoff for transient failures.
+ * Fetch JSON with exponential backoff for transient failures.
  */
 export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promise<T> {
-	const { retries = 2, retryDelayMs = 250, fetchFn = fetch, ...requestInit } = init ?? {};
+	const { retries = 2, retryDelayMs = 500, fetchFn = fetch, ...requestInit } = init ?? {};
 
 	let attempt = 0;
 	let lastError: unknown;
@@ -29,7 +29,7 @@ export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promis
 				// Only retry on selected status codes
 				if (defaultRetryableStatuses.has(response.status) && attempt < retries) {
 					attempt += 1;
-					await delay(retryDelayMs * attempt);
+					await delay(retryDelayMs * Math.pow(2, attempt - 1));
 					continue;
 				}
 				const message = text || `${response.status} ${response.statusText}`;
@@ -44,7 +44,7 @@ export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promis
 				break;
 			}
 			attempt += 1;
-			await delay(retryDelayMs * attempt);
+			await delay(retryDelayMs * Math.pow(2, attempt - 1));
 		}
 	}
 
@@ -52,10 +52,10 @@ export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promis
 }
 
 /**
- * Fetch text (for YAML, plain text, etc.) with retry/backoff
+ * Fetch text (for YAML, plain text, etc.) with exponential backoff
  */
 export async function fetchText(url: string, init?: FetchJsonOptions): Promise<string> {
-	const { retries = 2, retryDelayMs = 250, fetchFn = fetch, ...requestInit } = init ?? {};
+	const { retries = 2, retryDelayMs = 500, fetchFn = fetch, ...requestInit } = init ?? {};
 
 	let attempt = 0;
 	let lastError: unknown;
@@ -68,7 +68,7 @@ export async function fetchText(url: string, init?: FetchJsonOptions): Promise<s
 				// Only retry on selected status codes
 				if (defaultRetryableStatuses.has(response.status) && attempt < retries) {
 					attempt += 1;
-					await delay(retryDelayMs * attempt);
+					await delay(retryDelayMs * Math.pow(2, attempt - 1));
 					continue;
 				}
 				const message = text || `${response.status} ${response.statusText}`;
@@ -82,7 +82,7 @@ export async function fetchText(url: string, init?: FetchJsonOptions): Promise<s
 				break;
 			}
 			attempt += 1;
-			await delay(retryDelayMs * attempt);
+			await delay(retryDelayMs * Math.pow(2, attempt - 1));
 		}
 	}
 

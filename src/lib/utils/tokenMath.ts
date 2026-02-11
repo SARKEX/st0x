@@ -62,17 +62,6 @@ export function addressesEqual(
 	return left !== null && right !== null && left === right;
 }
 
-/**
- * Find a token by address in a list, using case-insensitive comparison.
- */
-export function findTokenByAddress<T extends { address: string }>(
-	tokens: T[],
-	address: string | null | undefined
-): T | undefined {
-	if (!address) return undefined;
-	return tokens.find((t) => addressesEqual(t.address, address));
-}
-
 export function toBigInt(value: AmountLike): bigint | null {
 	if (value === null || value === undefined) return null;
 	if (typeof value === 'bigint') return value;
@@ -508,7 +497,7 @@ export function analyzeTrade(
 // RAINDEX URL UTILITIES
 // ============================================================================
 
-const RAINDEX_BASE_URL = 'https://v5.raindex.finance';
+const RAINDEX_BASE_URL = 'https://v6.raindex.finance';
 
 /**
  * Generate a Raindex URL for an order

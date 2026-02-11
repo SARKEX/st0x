@@ -7,6 +7,17 @@
 		VolumeBucket,
 		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
+	import { track } from '$lib/services/analytics';
+
+	// Track when user inspects the depth chart (first hover only)
+	let depthChartInspected = false;
+
+	function handleDepthChartInspected() {
+		if (!depthChartInspected) {
+			depthChartInspected = true;
+			track('depth_chart_inspected');
+		}
+	}
 
 	type ChartInstance = {
 		destroy: () => void;
@@ -720,7 +731,13 @@
 											: 'border-white/10 text-gray-400 hover:border-white/25 hover:text-white'
 									}`}
 									aria-pressed={historyRange === option.key}
-									on:click={() => dispatch('rangeChange', { key: option.key })}
+									on:click={() => {
+										track('chart_range_changed', {
+											new_range: option.key,
+											previous_range: historyRange
+										});
+										dispatch('rangeChange', { key: option.key });
+									}}
 								>
 									{option.label}
 								</button>
@@ -773,7 +790,11 @@
 					</div>
 				{:else}
 					<div class="relative h-full w-full">
-						<canvas bind:this={depthCanvas} class="absolute inset-0 h-full w-full"></canvas>
+						<canvas
+							bind:this={depthCanvas}
+							class="absolute inset-0 h-full w-full"
+							on:mouseenter={handleDepthChartInspected}
+						></canvas>
 						{#if !chartsReady}
 							<div class="absolute inset-0 flex items-center justify-center bg-gray-900/60">
 								<LoadingSpinner variant="inline" size="md" text="Loading orderbook data..." />
