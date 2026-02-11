@@ -19,7 +19,11 @@
  */
 
 import { RhinestoneSDK } from '@rhinestone/sdk';
-import type { IntentRoute, IntentCost } from '@rhinestone/sdk/dist/src/orchestrator';
+import type {
+	IntentRoute,
+	IntentCost,
+	AccountAccessList
+} from '@rhinestone/sdk/dist/src/orchestrator/types';
 import { getOrchestrator } from '@rhinestone/sdk/dist/src/orchestrator';
 import {
 	createPublicClient,
@@ -590,40 +594,21 @@ export class RhinestoneClient {
 			const orchestrator = getOrchestrator(this.config.apiKey);
 
 			try {
-				// ✅ CRITICAL FIX:
-				// tokenRequests MUST be what you spend on SOURCE chain (sourceToken + amount).
-				// Your previous code incorrectly requested destination token.
-				// Include tokens from both chains in accountAccessList for better orchestrator context
-				const accountAccessList: { chainTokens: Record<number, string[]> } = {
+				// tokenRequests describes what you want on the DESTINATION chain.
+				// accountAccessList tells the orchestrator which source chain tokens are available to spend.
+				const accountAccessList: AccountAccessList & { chainTokens: Record<number, `0x${string}`[]> } = {
 					chainTokens: {
-						[params.sourceChain]: [normalizedSourceToken.address]
+						[params.sourceChain]: [normalizedSourceToken.address as `0x${string}`]
 					}
 				};
-
-				// Add target chain token if different from source
-				if (
-					!isSameChain &&
-					normalizedTargetToken.address.toLowerCase() !==
-						normalizedSourceToken.address.toLowerCase()
-				) {
-					if (!accountAccessList.chainTokens[params.targetChain]) {
-						accountAccessList.chainTokens[params.targetChain] = [];
-					}
-					accountAccessList.chainTokens[params.targetChain].push(normalizedTargetToken.address);
-				}
 
 				// Validate amount is positive
 				if (params.amount <= 0n) {
 					throw new AAError('Amount must be greater than zero', AAErrorCode.SWAP_FAILED);
 				}
 
-				// Ensure token addresses are properly typed as 0x${string}
-				const sourceTokenAddr = normalizedSourceToken.address as `0x${string}`;
+				const targetTokenAddr = normalizedTargetToken.address as `0x${string}`;
 
-				// For quotes, we don't include destinationExecutions because:
-				// 1. The orchestrator calculates the output amount
-				// 2. We don't know the exact amount until we get the quote back
-				// 3. The SDK's prepareTransaction will add the destination execution with the correct amount
 				// Using 'EOA' account type is correct even for EIP-7702 because:
 				// - EIP-7702 accounts use the EOA address
 				// - The orchestrator treats them as EOAs for routing purposes
@@ -635,17 +620,16 @@ export class RhinestoneClient {
 						setupOps: []
 					},
 					destinationChainId: params.targetChain,
-					destinationExecutions: [], // Empty for quotes - SDK will add during prepareTransaction
+					destinationExecutions: [],
 					tokenRequests: [
 						{
-							tokenAddress: sourceTokenAddr,
+							tokenAddress: targetTokenAddr,
 							amount: params.amount
 						}
 					],
 					accountAccessList,
 					options: {
 						topupCompact: false,
-						// If your orchestrator supports feeAsset, pass it here (safe if ignored)
 						...(feeAsset ? { feeAsset } : {})
 					}
 				};
