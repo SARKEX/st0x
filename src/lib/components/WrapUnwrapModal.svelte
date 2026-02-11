@@ -21,6 +21,7 @@
 	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
 	import transactionStore from '$lib/stores/transaction';
+	import { track } from '$lib/services/analytics';
 
 	const queryClient = useQueryClient();
 
@@ -149,11 +150,29 @@
 		}
 	}
 
+	// Track modal open (guard to fire only once per open)
+	let hasTrackedModalOpen = false;
+	$: if ($showWrapUnwrapModal && !hasTrackedModalOpen) {
+		hasTrackedModalOpen = true;
+		track('wrap_unwrap_modal_opened', {
+			mode: $wrapUnwrapMode,
+			pre_selected_token: $wrapUnwrapModalToken?.symbol
+		});
+	}
+
 	// Handle token selection
 	function handleTokenSelect(address: string) {
 		selectedTokenAddress = address;
 		amount = '';
 		previewAmount = null;
+		const tokenData = tokensWithBalance.find(
+			(t) => t.address.toLowerCase() === address.toLowerCase()
+		);
+		track('wrap_unwrap_token_selected', {
+			mode: $wrapUnwrapMode,
+			token_symbol: tokenData?.symbol,
+			target_symbol: tokenData?.targetSymbol
+		});
 	}
 
 	// Handle amount input
@@ -181,6 +200,13 @@
 		const targetToken = wrapMode ? mapping.wrappedToken : mapping.unwrappedToken;
 		const walletAddr = $walletAddress;
 
+		track('wrap_unwrap_initiated', {
+			mode: wrapMode ? 'wrap' : 'unwrap',
+			token_symbol: tokenData.symbol,
+			target_symbol: targetToken.symbol,
+			amount: parsedAmount
+		});
+
 		// Close the form modal - TransactionModal will show progress
 		handleClose();
 
@@ -205,6 +231,7 @@
 		selectedTokenAddress = null;
 		amount = '';
 		previewAmount = null;
+		hasTrackedModalOpen = false;
 		closeWrapUnwrapModal();
 	}
 

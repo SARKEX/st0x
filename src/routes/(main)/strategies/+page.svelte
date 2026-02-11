@@ -6,9 +6,12 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { isAuthenticated } from '$lib/stores/authStore';
+	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
+	import { onMount, onDestroy } from 'svelte';
+	import { track, trackPageView } from '$lib/services/analytics';
+	import { initScrollTracking } from '$lib/utils/scrollTracking';
 
 	const STRATEGY_TYPES = [
 		{ id: 'portfolio', name: 'Portfolio Strategy' },
@@ -17,8 +20,27 @@
 
 	let activeStrategyType = 'portfolio';
 	let isNetworkLoading = false;
+	let cleanupScrollTracking: (() => void) | null = null;
+
+	onMount(() => {
+		trackPageView('strategies_page', {
+			auth_status: $isAuthenticated ? 'authenticated' : 'anonymous',
+			wallet_connected: Boolean($walletAddress)
+		});
+		cleanupScrollTracking = initScrollTracking('strategies_page');
+	});
+
+	onDestroy(() => {
+		if (cleanupScrollTracking) {
+			cleanupScrollTracking();
+		}
+	});
 
 	function handleStrategyTypeChange(newType: string) {
+		track('strategy_type_selected', {
+			strategy_type: newType,
+			previous_type: activeStrategyType
+		});
 		activeStrategyType = newType;
 		window.location.hash = newType;
 	}

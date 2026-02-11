@@ -71,6 +71,7 @@ import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import { wagmiConfig } from 'svelte-wagmi';
 import { walletAddress, authMethod } from '$lib/stores/authStore';
+import { track } from '$lib/services/analytics';
 import {
 	getDcaDeploymentArgs,
 	getLimitOrderDeploymentArgs,
@@ -89,6 +90,26 @@ import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
+
+/**
+ * Classify error messages into safe, non-sensitive categories for analytics.
+ * Avoids sending raw error messages that may contain addresses, keys, or internal details.
+ */
+function classifyError(error: unknown): string {
+	const msg = ((error as Error)?.message ?? '').toLowerCase();
+	if (msg.includes('user rejected') || msg.includes('user denied')) return 'user_rejected';
+	if (msg.includes('insufficient funds') || msg.includes('exceeds balance'))
+		return 'insufficient_funds';
+	if (msg.includes('allowance') || msg.includes('exceeds allowance'))
+		return 'insufficient_allowance';
+	if (msg.includes('nonce')) return 'nonce_error';
+	if (msg.includes('timeout') || msg.includes('timed out')) return 'timeout';
+	if (msg.includes('network') || msg.includes('disconnected')) return 'network_error';
+	if (msg.includes('header not found') || msg.includes('block not found')) return 'rpc_error';
+	if (msg.includes('gas')) return 'gas_error';
+	if (msg.includes('reverted') || msg.includes('revert')) return 'transaction_reverted';
+	return 'unknown';
+}
 
 /**
  * Validates that an orderbook address is in the trusted whitelist for the current network.
@@ -607,8 +628,20 @@ const transactionStore = () => {
 			// Invalidate balance queries (same pattern as handleWithdraw)
 			invalidateDashboardBalances();
 
+			track(`${mode}_success`, {
+				token_symbol: tokenSymbol,
+				target_symbol: targetSymbol,
+				transaction_hash: hash
+			});
+
 			return transactionSuccess(hash, `Successfully ${mode}ped ${tokenSymbol} to ${targetSymbol}`);
 		} catch (error) {
+			track(`${mode}_failed`, {
+				token_symbol: tokenSymbol,
+				target_symbol: targetSymbol,
+				error: classifyError(error)
+			});
+
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
@@ -640,6 +673,10 @@ const transactionStore = () => {
 		if (!$signerAddress) {
 			throw new Error('Wallet not connected');
 		}
+
+		track('order_removal_initiated', {
+			order_hash: quote.orderHash
+		});
 
 		try {
 			// Fetch the RaindexOrder from the SDK
@@ -829,8 +866,18 @@ const transactionStore = () => {
 				}
 			}
 
+			track('order_removal_success', {
+				order_hash: quote.orderHash,
+				transaction_hash: hash
+			});
+
 			return transactionSuccess(hash, undefined, { raindexLink });
 		} catch (error: unknown) {
+			track('order_removal_failed', {
+				order_hash: quote.orderHash,
+				error: classifyError(error)
+			});
+
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
@@ -870,6 +917,11 @@ const transactionStore = () => {
 		}
 
 		const isFilled = quote.isFilled ?? false;
+
+		track('order_withdrawal_initiated', {
+			order_hash: quote.orderHash,
+			is_filled: isFilled
+		});
 
 		try {
 			const client = await createRaindexClient();
@@ -1074,8 +1126,20 @@ const transactionStore = () => {
 				}
 			}
 
+			track('order_withdrawal_success', {
+				order_hash: quote.orderHash,
+				is_filled: isFilled,
+				transaction_hash: lastHash
+			});
+
 			return transactionSuccess(lastHash, undefined, { raindexLink });
 		} catch (error: unknown) {
+			track('order_withdrawal_failed', {
+				order_hash: quote.orderHash,
+				is_filled: isFilled,
+				error: classifyError(error)
+			});
+
 			if (isStaleWalletSessionError(error)) {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);

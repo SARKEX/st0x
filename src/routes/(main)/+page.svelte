@@ -13,6 +13,8 @@
 	import { globalPoolApy, fetchGlobalRewards } from '$lib/stores/rewardsStore';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
+	import { track, trackPageView } from '$lib/services/analytics';
+	import { initScrollTracking } from '$lib/utils/scrollTracking';
 
 	function startTour() {
 		tutorialActive.set(true);
@@ -60,12 +62,6 @@
 		}
 	}
 
-	onDestroy(() => {
-		if (typewriterTimeout) {
-			clearTimeout(typewriterTimeout);
-		}
-	});
-
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
@@ -74,10 +70,27 @@
 	let isAnimating = false;
 	let animationComplete = false;
 
+	let cleanupScrollTracking: (() => void) | null = null;
+
 	onMount(() => {
 		fetchGlobalRewards();
 		// Start typewriter animation
 		typewriterTick();
+
+		// Track page view
+		trackPageView('landing_page');
+
+		// Initialize scroll tracking
+		cleanupScrollTracking = initScrollTracking('landing_page');
+	});
+
+	onDestroy(() => {
+		if (typewriterTimeout) {
+			clearTimeout(typewriterTimeout);
+		}
+		if (cleanupScrollTracking) {
+			cleanupScrollTracking();
+		}
 	});
 
 	// Animate APY when it becomes available
@@ -465,7 +478,14 @@
 											: null}
 									<tr
 										class="cursor-pointer transition-all hover:bg-yellow-500/5"
-										on:click={() => goto(`/trade/${token.id}`)}
+										on:click={() => {
+											track('token_clicked', {
+												token_symbol: token.symbol,
+												token_id: token.id,
+												source: 'landing_page_table'
+											});
+											goto(`/trade/${token.id}`);
+										}}
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<TokenDisplay

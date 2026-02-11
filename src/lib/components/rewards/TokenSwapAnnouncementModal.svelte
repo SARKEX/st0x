@@ -4,12 +4,21 @@
 		markTokenSwapAnnouncementSeen
 	} from '$lib/stores/rewardsStore';
 	import { goto } from '$app/navigation';
+	import { track } from '$lib/services/analytics';
+
+	let hasTrackedView = false;
+	$: if ($showTokenSwapAnnouncementModal && !hasTrackedView) {
+		hasTrackedView = true;
+		track('migration_announcement_viewed');
+	}
 
 	function handleClose() {
+		track('migration_announcement_dismissed');
 		markTokenSwapAnnouncementSeen();
 	}
 
 	function handleSwap() {
+		track('migration_announcement_swap_clicked');
 		markTokenSwapAnnouncementSeen();
 		goto('/dashboard#holdings');
 	}

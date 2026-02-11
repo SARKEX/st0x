@@ -20,12 +20,22 @@
 	// Auth store for wallet address tracking
 	import { walletAddress } from '$lib/stores/authStore';
 
+	// PostHog analytics
+	import { initAnalytics } from '$lib/services/analytics';
+
 	let analyticsInjected = false;
 
 	function enableAnalytics() {
 		if (!analyticsInjected) {
 			injectAnalytics();
 			injectSpeedInsights();
+
+			// Initialize PostHog analytics
+			const posthogKey = publicEnv?.PUBLIC_POSTHOG_KEY;
+			if (posthogKey) {
+				initAnalytics(posthogKey);
+			}
+
 			analyticsInjected = true;
 		}
 	}
