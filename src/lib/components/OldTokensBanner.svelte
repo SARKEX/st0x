@@ -3,11 +3,13 @@
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { erc20Abi } from 'viem';
+	import { erc20Abi, formatUnits } from 'viem';
 	import { readContracts } from '@wagmi/core';
 	import { TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
 	import { goto } from '$app/navigation';
 	import { track } from '$lib/services/analytics';
+
+	const DUST_THRESHOLD = 0.0001;
 
 	let dismissed = false;
 	let bannerTracked = false;
@@ -31,10 +33,13 @@
 				const results = await readContracts($wagmiConfig, { contracts });
 
 				let count = 0;
-				for (const result of results) {
+				for (let i = 0; i < results.length; i++) {
+					const result = results[i];
 					if (result.status === 'success') {
 						const balance = result.result as bigint;
-						if (balance > 0n) {
+						const decimals = TOKEN_MIGRATION_MAPPINGS[i]?.oldToken.decimals ?? 18;
+						const balanceNum = parseFloat(formatUnits(balance, decimals));
+						if (balanceNum >= DUST_THRESHOLD) {
 							count++;
 						}
 					}

@@ -370,8 +370,12 @@
 				undefined
 			);
 
-			// Invalidate modal-specific query (dashboard queries handled by handleTakeOrders)
+			// Invalidate modal-specific + dashboard queries (balance queries handled by handleTakeOrders)
 			queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
+			queryClient.invalidateQueries({ queryKey: ['dashboardOldTokenBalances'] });
+			queryClient.invalidateQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] });
+			queryClient.invalidateQueries({ queryKey: ['costBasis'] });
+			queryClient.invalidateQueries({ queryKey: ['hasOldTokens'] });
 		} catch (error) {
 			console.error('Swap failed:', error);
 			transactionStore.transactionError(
