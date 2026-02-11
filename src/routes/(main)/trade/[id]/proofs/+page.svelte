@@ -8,7 +8,7 @@
 
 	let schemas: Schema[] = [];
 	$: if ($currentToken) {
-		// @ts-expect-error - schemas is not defined
+		// @ts-expect-error - addSchemaToReceipts return shape is compatible with Schema[] for ViewMetadata
 		schemas = addSchemaToReceipts($currentToken);
 	}
 </script>
