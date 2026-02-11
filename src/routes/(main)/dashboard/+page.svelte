@@ -24,6 +24,17 @@
 	import { readContracts, getBalance } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK, getTokenByAnyAddress } from '$lib/config/tokens';
+	import {
+		fetchAllTokenBalances,
+		getBalanceQueryKey,
+		BALANCE_QUERY_OPTIONS
+	} from '$lib/stores/balanceStore';
+	import {
+		NETWORK_NAMES,
+		type SupportedNetworkId,
+		getPaymentTokensForNetwork,
+		SUPPORTED_NETWORKS
+	} from '$lib/services/account-abstraction';
 	import { goto } from '$app/navigation';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -71,6 +82,7 @@
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
 	// Set of valid token addresses (asset tokens + payment tokens) for filtering
+	// Include payment tokens from ALL networks for cross-chain balance display
 	$: validTokenAddresses = (() => {
 		if (!$currentNetwork) return new Set<string>();
 		const addresses = new Set<string>();
@@ -80,10 +92,19 @@
 				addresses.add(token.address.toLowerCase());
 			}
 		}
-		// Add payment tokens for current network
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-		for (const token of paymentTokens) {
-			addresses.add(token.address.toLowerCase());
+		// Add payment tokens from ALL networks (for cross-chain display)
+		const allChains = [
+			SUPPORTED_NETWORKS.BASE,
+			SUPPORTED_NETWORKS.ARBITRUM,
+			SUPPORTED_NETWORKS.OPTIMISM,
+			SUPPORTED_NETWORKS.ETHEREUM
+		];
+		for (const chainId of allChains) {
+			for (const token of getPaymentTokensForNetwork(chainId)) {
+				if (!token.isNative) {
+					addresses.add(token.address.toLowerCase());
+				}
+			}
 		}
 		return addresses;
 	})();
@@ -431,50 +452,39 @@
 		)
 	);
 
-	// Query USDC wallet balance via multicall
+	// Query payment token balances across ALL chains (USDC, USDT, WETH on Base, Arbitrum, Optimism, Ethereum)
 	const usdcBalanceQuery = createQuery(
 		derived(
-			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
-			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
-				queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
-				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
-				refetchOnMount: 'always' as const,
-				refetchInterval: QUERY_POLL_INTERVAL_MS,
-				staleTime: QUERY_STALE_TIME_MS,
+			[isAuthenticated, walletAddress, wagmiConfig, currentNetwork],
+			([$isAuthenticated, $walletAddress, $wagmiConfig, $currentNetwork]) => ({
+				queryKey: getBalanceQueryKey($walletAddress),
+				enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig),
+				...BALANCE_QUERY_OPTIONS,
 				queryFn: async () => {
-					if (!$currentNetwork || !$walletAddress || !$wagmiConfig) return [];
-					const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-					if (paymentTokens.length === 0) return [];
-
-					const contracts = paymentTokens.map((token) => ({
-						abi: erc20Abi,
-						address: token.address as `0x${string}`,
-						functionName: 'balanceOf' as const,
-						args: [$walletAddress as `0x${string}`]
-					}));
-
-					try {
-						const results = await readContracts($wagmiConfig, { contracts });
-						return paymentTokens
-							.map((token, index) => {
-								const result = results[index];
-								if (result.status === 'success') {
-									return {
-										id: token.address,
-										address: token.address,
-										name: token.name,
-										symbol: token.symbol,
-										walletBalance: result.result as bigint,
-										decimals: token.decimals
-									};
-								}
-								return null;
-							})
-							.filter((balance): balance is NonNullable<typeof balance> => balance !== null);
-					} catch (error) {
-						console.error('Multicall failed for USDC balance:', error);
-						return [];
-					}
+					if (!$walletAddress || !$wagmiConfig) return [];
+					const balances = await fetchAllTokenBalances(
+						$walletAddress as `0x${string}`,
+						$wagmiConfig
+					);
+					// Map to the shape expected by portfolioHoldings
+					return balances
+						.filter((b) => b.balance > 0n)
+						.map((b) => {
+							const networkName =
+								NETWORK_NAMES[b.token.chainId as SupportedNetworkId] ?? '';
+							const isCurrentChain = b.token.chainId === $currentNetwork?.chainId;
+							return {
+								id: `${b.token.address}-${b.token.chainId}`,
+								address: b.token.address,
+								name: isCurrentChain ? b.token.name : `${b.token.name} (${networkName})`,
+								symbol: isCurrentChain
+									? b.token.symbol
+									: `${b.token.symbol} (${networkName})`,
+								walletBalance: b.balance,
+								decimals: b.token.decimals,
+								chainId: b.token.chainId
+							};
+						});
 				}
 			})
 		)
