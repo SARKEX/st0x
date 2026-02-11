@@ -10,14 +10,18 @@ export const handleError: HandleClientError = ({ error }) => {
 		message.includes('Failed to fetch dynamically imported module') ||
 		message.includes('error loading dynamically imported module')
 	) {
-		const reloadKey = '__st0x_chunk_reload';
-		if (!sessionStorage.getItem(reloadKey)) {
-			sessionStorage.setItem(reloadKey, '1');
-			window.location.reload();
-			return;
+		try {
+			const reloadKey = '__st0x_chunk_reload';
+			if (!sessionStorage.getItem(reloadKey)) {
+				sessionStorage.setItem(reloadKey, '1');
+				window.location.reload();
+				return;
+			}
+			// Already reloaded once this session — clear flag and surface the error
+			sessionStorage.removeItem(reloadKey);
+		} catch {
+			// sessionStorage may be unavailable (e.g. Safari private browsing)
 		}
-		// Already reloaded once this session — clear flag and surface the error
-		sessionStorage.removeItem(reloadKey);
 	}
 
 	return {

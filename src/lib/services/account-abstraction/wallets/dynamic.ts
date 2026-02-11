@@ -269,7 +269,7 @@ export async function getDynamicAccountForRhinestone(
 							: 'raw' in message
 								? typeof message.raw === 'string'
 									? message.raw
-									: Buffer.from(message.raw).toString('utf-8')
+									: new TextDecoder().decode(message.raw)
 								: String(message);
 
 					return signer!.signMessage({ message: messageStr }) as Promise<Hex>;
@@ -469,7 +469,7 @@ export async function getDynamicAccountForRhinestone(
 						: 'raw' in message
 							? typeof message.raw === 'string'
 								? message.raw
-								: Buffer.from(message.raw).toString('utf-8')
+								: new TextDecoder().decode(message.raw)
 							: String(message);
 
 				return (await provider.request({
