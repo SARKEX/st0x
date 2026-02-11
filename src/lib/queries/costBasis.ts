@@ -10,10 +10,7 @@ import { PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
  * One-shot query: fetches once on mount, refreshes on window focus only.
  * This is the most expensive query (all-time paginated), so we avoid polling.
  */
-export function createCostBasisQuery(
-	network: Network | null,
-	userAddress: string | null
-) {
+export function createCostBasisQuery(network: Network | null, userAddress: string | null) {
 	return createQuery<Map<string, CostBasisData>>({
 		queryKey: ['costBasis', network?.id, userAddress],
 		enabled: Boolean(network && userAddress),

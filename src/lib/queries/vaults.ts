@@ -45,7 +45,9 @@ export function createSingleSftQuery(
 			(v) =>
 				v.id.toLowerCase() === normalized ||
 				v.address?.toLowerCase() === normalized ||
-				(v as { wrappedTokenContractAddress?: string }).wrappedTokenContractAddress?.toLowerCase() === normalized
+				(
+					v as { wrappedTokenContractAddress?: string }
+				).wrappedTokenContractAddress?.toLowerCase() === normalized
 		);
 	};
 

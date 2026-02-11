@@ -288,7 +288,8 @@ export async function fetchQuotesWithBatching(
 
 	// If rate-limited, accept whatever we got (even 0%) — throwing would discard
 	// partial results and the caller would show nothing instead of stale-but-ok data
-	const wasRateLimited = hasRateLimitErrors || Array.from(allFailed.values()).some(isRateLimitError);
+	const wasRateLimited =
+		hasRateLimitErrors || Array.from(allFailed.values()).some(isRateLimitError);
 
 	if (!wasRateLimited && successRate < 90) {
 		throw new Error(

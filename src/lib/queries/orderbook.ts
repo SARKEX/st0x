@@ -62,7 +62,10 @@ function buildSummaryFromQuotes(
  * @param pollInterval - Polling interval in ms, or false to disable (default: false).
  *                       Dashboard: 120_000 (120s). Trade pages: false (uses token-specific query).
  */
-export function createOrderbookQuotesQuery(network: Network | null, pollInterval: number | false = false) {
+export function createOrderbookQuotesQuery(
+	network: Network | null,
+	pollInterval: number | false = false
+) {
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(network),
@@ -128,12 +131,11 @@ export async function refreshTokenQuotes(
 	tokenAddress: string
 ): Promise<OrderbookQuoteCache> {
 	// Skip re-fetch if cached data is still fresh
-	const cacheState = queryClient.getQueryState([
-		'tokenOrderbookQuotes',
-		networkId,
-		tokenAddress
-	]);
-	if (cacheState?.dataUpdatedAt && Date.now() - cacheState.dataUpdatedAt < TOKEN_QUOTE_FRESHNESS_MS) {
+	const cacheState = queryClient.getQueryState(['tokenOrderbookQuotes', networkId, tokenAddress]);
+	if (
+		cacheState?.dataUpdatedAt &&
+		Date.now() - cacheState.dataUpdatedAt < TOKEN_QUOTE_FRESHNESS_MS
+	) {
 		const cached = queryClient.getQueryData<OrderbookQuoteCache>([
 			'tokenOrderbookQuotes',
 			networkId,
@@ -217,7 +219,6 @@ export async function refreshLegacyTokenQuotes(
 
 	// Merge into global cache
 	const globalCache = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
-	const addressSet = getTokenAddressSet(tokenAddress);
 
 	// Deduplicate against existing quotes
 	const existingHashes = new Set<string>();

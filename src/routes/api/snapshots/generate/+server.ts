@@ -2,7 +2,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
-import { fetchAllTransfers, TOKEN_ADDRESSES, ALL_TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
+import {
+	fetchAllTransfers,
+	TOKEN_ADDRESSES,
+	ALL_TOKEN_ADDRESSES
+} from '$lib/server/snapshots/scraper';
 import { generateAllTokenSnapshots } from '$lib/server/snapshots/processor';
 import { fetchPythPricesAtTimestamp } from '$lib/server/snapshots/pyth';
 import { networks } from '$lib/config/networks';

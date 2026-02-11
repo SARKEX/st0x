@@ -286,22 +286,37 @@
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
 	let networkLoadingTimer: ReturnType<typeof setTimeout> | null = null;
+	let previousChainId: number | undefined = undefined;
 
-	// Watch for network changes and show loading state
+	// Show "Switching..." only when the network identity (chainId) actually changes.
+	// This prevents the loading state from sticking when the reactive block re-runs
+	// repeatedly with the same network (e.g. store re-emits or parent re-renders).
 	$: {
+		const chainId = $currentNetwork?.chainId;
+
 		if (networkLoadingTimer) {
 			clearTimeout(networkLoadingTimer);
 			networkLoadingTimer = null;
 		}
 
-		if ($currentNetwork) {
-			isNetworkLoading = true;
-			networkLoadingTimer = setTimeout(() => {
-				isNetworkLoading = false;
-				networkLoadingTimer = null;
-			}, NETWORK_LOADING_DELAY_MS);
-		} else {
+		if (!$currentNetwork) {
 			isNetworkLoading = false;
+			previousChainId = undefined;
+		} else {
+			const sameNetwork = previousChainId === chainId;
+			previousChainId = chainId;
+
+			if (sameNetwork) {
+				// Same network as last run — not switching, so clear loading
+				isNetworkLoading = false;
+			} else {
+				// Network changed (or first time we have a network)
+				isNetworkLoading = true;
+				networkLoadingTimer = setTimeout(() => {
+					isNetworkLoading = false;
+					networkLoadingTimer = null;
+				}, NETWORK_LOADING_DELAY_MS);
+			}
 		}
 	}
 

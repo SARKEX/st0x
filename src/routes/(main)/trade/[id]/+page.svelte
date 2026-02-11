@@ -117,7 +117,12 @@
 
 	// One-shot: fetch legacy address quotes once per token
 	let legacyQuotesFetchedFor: string | null = null;
-	$: if (browser && $currentNetwork && currentToken?.address && legacyQuotesFetchedFor !== currentToken.address) {
+	$: if (
+		browser &&
+		$currentNetwork &&
+		currentToken?.address &&
+		legacyQuotesFetchedFor !== currentToken.address
+	) {
 		legacyQuotesFetchedFor = currentToken.address;
 		refreshLegacyTokenQuotes($currentNetwork.id, currentToken.address).catch(() => {});
 	}
