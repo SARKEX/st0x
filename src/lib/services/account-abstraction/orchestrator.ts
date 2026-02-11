@@ -29,7 +29,8 @@ import {
 	getSwapToSettlementQuote,
 	validateSwap,
 	executeSwapToSettlement,
-	executeSwapFromSettlement
+	executeSwapFromSettlement,
+	noSwapQuote
 } from './rhinestone/swaps';
 import { supportsEIP7702 } from './wallets/dynamic';
 import { USDC_BASE } from './tokens';
@@ -243,21 +244,7 @@ export class AccountAbstractionOrchestrator {
 	): Promise<CrossChainSwapQuote | null> {
 		try {
 			if (!this.needsCrossChainSwap(sourceToken, SETTLEMENT_CHAIN_ID)) {
-				// No swap needed - return passthrough quote
-				return {
-					inputAmount: amount,
-					outputAmount: amount,
-					estimatedGas: {
-						gasLimit: 0n,
-						maxFeePerGas: 0n,
-						maxPriorityFeePerGas: 0n,
-						estimatedGasCostWei: 0n,
-						estimatedGasCostUSDC: 0n
-					},
-					route: { steps: [], totalSteps: 0, estimatedDuration: 0 },
-					expiresAt: Date.now() + 300000,
-					priceImpactBps: 0
-				};
+				return noSwapQuote(amount);
 			}
 
 			return await getSwapToSettlementQuote(sourceToken, amount, recipient, feeAsset);
@@ -469,17 +456,7 @@ export class AccountAbstractionOrchestrator {
 	 * Check if a cross-chain swap is needed
 	 */
 	needsCrossChainSwap(sourceToken: PaymentToken, targetChainId: SupportedNetworkId): boolean {
-		// If different chain, definitely needs swap
-		if (sourceToken.chainId !== targetChainId) {
-			return true;
-		}
-
-		// If same chain but different token than settlement (USDC)
-		if (sourceToken.symbol !== 'USDC') {
-			return true;
-		}
-
-		return false;
+		return sourceToken.chainId !== targetChainId || sourceToken.symbol !== 'USDC';
 	}
 
 	/**

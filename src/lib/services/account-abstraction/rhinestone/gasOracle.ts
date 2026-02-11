@@ -5,9 +5,8 @@
  * Includes caching to minimize RPC calls and provide consistent quotes.
  */
 
-import { createPublicClient, type PublicClient, type Chain } from 'viem';
-import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
-import { SUPPORTED_NETWORKS, type SupportedNetworkId } from '../types';
+import { createPublicClient, type PublicClient } from 'viem';
+import { CHAIN_CONFIG, SUPPORTED_NETWORKS, type SupportedNetworkId } from '../types';
 import { createRpcTransport } from '$lib/utils/rpc';
 
 // =============================================================================
@@ -25,19 +24,6 @@ export interface GasOracleConfig {
 	cacheDurationMs: number; // How long to cache gas prices
 	defaultGasPrice: bigint; // Fallback if RPC fails
 }
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
-	[SUPPORTED_NETWORKS.BASE]: base,
-	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
-	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
-	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
-	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
-	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia
-};
 
 // Default configuration
 const DEFAULT_CONFIG: GasOracleConfig = {

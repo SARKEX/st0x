@@ -5,25 +5,9 @@
  * Supports both native ETH and ERC20 tokens.
  */
 
-import { createPublicClient, erc20Abi, type Address, type PublicClient, type Chain } from 'viem';
-import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
-import { SUPPORTED_NETWORKS, type SupportedNetworkId, type PaymentToken } from '../types';
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-// Import RPC utilities for fallbacks and load balancing
+import { createPublicClient, erc20Abi, type Address, type PublicClient } from 'viem';
+import { CHAIN_CONFIG, type SupportedNetworkId, type PaymentToken } from '../types';
 import { createRpcTransport } from '$lib/utils/rpc';
-
-const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
-	[SUPPORTED_NETWORKS.BASE]: base,
-	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
-	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
-	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
-	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
-	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia
-};
 
 // Cache duration for balance checks (10 seconds)
 const BALANCE_CACHE_DURATION_MS = 10000;
@@ -157,8 +141,7 @@ export class BalanceChecker {
 	 */
 	async checkAllowance(token: PaymentToken, owner: Address, spender: Address): Promise<bigint> {
 		if (token.isNative) {
-			// Native tokens don't need approval
-			return BigInt(2) ** BigInt(256) - BigInt(1); // Max uint256
+			return 2n ** 256n - 1n; // Max uint256 — native tokens don't need approval
 		}
 
 		const client = this.getClient(token.chainId);

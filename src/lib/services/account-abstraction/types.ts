@@ -5,6 +5,8 @@
  */
 
 import type { Address, Hash, Hex } from 'viem';
+import type { Chain } from 'viem';
+import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 
 // =============================================================================
 // Supported Networks & Tokens
@@ -20,6 +22,16 @@ export const SUPPORTED_NETWORKS = {
 } as const;
 
 export type SupportedNetworkId = (typeof SUPPORTED_NETWORKS)[keyof typeof SUPPORTED_NETWORKS];
+
+/** Shared chain config — avoids duplicating this record in every module. */
+export const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
+	[SUPPORTED_NETWORKS.BASE]: base,
+	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
+	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
+	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
+	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
+	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia
+};
 
 export interface PaymentToken {
 	address: Address;

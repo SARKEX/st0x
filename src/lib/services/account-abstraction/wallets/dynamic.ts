@@ -23,23 +23,12 @@ import type {
 	SignableMessage,
 	TypedDataDefinition
 } from 'viem';
-import { createPublicClient, createWalletClient, custom, type Chain } from 'viem';
+import { createPublicClient, createWalletClient, custom } from 'viem';
 import { toAccount } from 'viem/accounts';
-import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import { get } from 'svelte/store';
-import { type SupportedNetworkId, SUPPORTED_NETWORKS, AAError, AAErrorCode } from '../types';
+import { type SupportedNetworkId, SUPPORTED_NETWORKS, CHAIN_CONFIG, AAError, AAErrorCode } from '../types';
 import { dynamicSession, dynamicSigner, type DynamicSigner } from '$lib/stores/dynamicStore';
 import { getDynamicWalletProvider } from '$lib/services/walletService';
-
-// Chain configurations
-const CHAIN_CONFIGS: Record<SupportedNetworkId, Chain> = {
-	[SUPPORTED_NETWORKS.BASE]: base,
-	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
-	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
-	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
-	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
-	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia
-};
 
 // =============================================================================
 // Helper Functions
@@ -88,7 +77,7 @@ export async function createDynamicWalletClient(
 
 	return createWalletClient({
 		account: session.walletAddress as Address,
-		chain: CHAIN_CONFIGS[chainId],
+		chain: CHAIN_CONFIG[chainId],
 		transport: custom(provider)
 	});
 }
@@ -219,7 +208,7 @@ export async function getDynamicAccountForRhinestone(
 		};
 		// 1) Remove EIP712Domain if present (common Dynamic/WaaS edge case)
 		const typesRecord = (typedData?.types || {}) as Record<string, unknown>;
-		const { _EIP712Domain, ...typesWithoutDomain } = typesRecord;
+		const { EIP712Domain: _, ...typesWithoutDomain } = typesRecord;
 
 		// 2) Convert bigint -> string deeply in domain/message
 		const domain = convertBigIntsToString(typedData?.domain || {}) as Record<string, unknown>;
@@ -516,7 +505,7 @@ export async function createDynamicPublicClient(chainId: SupportedNetworkId) {
 	// Use createRpcTransport for automatic fallbacks and load balancing
 	const { createRpcTransport } = await import('$lib/utils/rpc');
 	return createPublicClient({
-		chain: CHAIN_CONFIGS[chainId],
+		chain: CHAIN_CONFIG[chainId],
 		transport: createRpcTransport(chainId)
 	});
 }

@@ -36,7 +36,6 @@ import {
 	type SignedAuthorizationList,
 	type WalletClient
 } from 'viem';
-import { base, arbitrum, optimism, mainnet, baseSepolia, arbitrumSepolia } from 'viem/chains';
 import {
 	type RhinestoneConfig,
 	type CrossChainSwapParams,
@@ -46,6 +45,7 @@ import {
 	type SponsorshipConfig,
 	type PaymentToken,
 	SUPPORTED_NETWORKS,
+	CHAIN_CONFIG,
 	AAError,
 	AAErrorCode
 } from '../types';
@@ -54,18 +54,6 @@ import { env } from '$env/dynamic/public';
 import { isDynamicEmbeddedWallet } from '../wallets/dynamic';
 import { PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 
-// Chain configurations
-const CHAIN_CONFIG: Record<SupportedNetworkId, Chain> = {
-	[SUPPORTED_NETWORKS.BASE]: base,
-	[SUPPORTED_NETWORKS.ARBITRUM]: arbitrum,
-	[SUPPORTED_NETWORKS.OPTIMISM]: optimism,
-	[SUPPORTED_NETWORKS.ETHEREUM]: mainnet,
-	[SUPPORTED_NETWORKS.BASE_SEPOLIA]: baseSepolia,
-	[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: arbitrumSepolia
-};
-
-// RPC URLs by network
-// Import RPC utilities for fallbacks and load balancing
 import { createRpcTransport } from '$lib/utils/rpc';
 
 /**
@@ -197,8 +185,12 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-const MAINNET_WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const;
-const BASE_WETH = '0x4200000000000000000000000000000000000006' as const;
+const WETH_BY_CHAIN: Record<number, `0x${string}`> = {
+	1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',       // Ethereum
+	8453: '0x4200000000000000000000000000000000000006',       // Base
+	42161: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',     // Arbitrum
+	10: '0x4200000000000000000000000000000000000006'          // Optimism
+};
 const EIP7702_DELEGATE_CONTRACT = '0x000000000032ddc454c3bdcba80484ad5a798705' as Address;
 
 function isZeroAddr(v?: string): boolean {
@@ -211,9 +203,8 @@ function normalizeEthToWeth(
 ): { symbol?: string; address: string } {
 	const sym = (token.symbol ?? '').toUpperCase();
 	if (sym === 'ETH' || sym === 'NATIVE' || isZeroAddr(token.address)) {
-		if (chainId === 1) return { ...token, symbol: 'WETH', address: MAINNET_WETH as `0x${string}` };
-		if (chainId === 8453)
-			return { ...token, symbol: 'WETH', address: BASE_WETH as `0x${string}` };
+		const weth = WETH_BY_CHAIN[chainId];
+		if (weth) return { ...token, symbol: 'WETH', address: weth };
 	}
 	return token;
 }
@@ -232,6 +223,54 @@ async function pollForHash(
 		await sleep(intervalMs);
 	}
 	return undefined;
+}
+
+/** Account type with optional EIP-7702 signAuthorization support */
+type WalletAccountWithSignAuth = Account & {
+	signAuthorization?: (args: {
+		contractAddress: Address;
+		chainId: number;
+		nonce?: number;
+	}) => Promise<{
+		r: Hex;
+		s: Hex;
+		v?: bigint;
+		yParity?: number;
+		nonce?: number;
+	}>;
+};
+
+function isUserRejection(msg: string): boolean {
+	const lower = msg.toLowerCase();
+	return lower.includes('reject') || lower.includes('denied') || lower.includes('user rejected');
+}
+
+function isHexAddress(v: string): boolean {
+	return /^0x[a-fA-F0-9]{40}$/.test(v);
+}
+
+/**
+ * Resolve a fee asset (symbol or address) to a chain-specific address.
+ * Returns undefined if the symbol can't be resolved.
+ */
+function resolveFeeAssetAddress(fa: string | undefined, chainId: number): `0x${string}` | undefined {
+	if (!fa) return undefined;
+	if (isHexAddress(fa)) return fa as `0x${string}`;
+	return resolveTokenAddress(fa, chainId);
+}
+
+/** Deduplicate strings by lowercase, preserving original casing of first occurrence */
+function uniqLower(xs: Array<string | undefined>): string[] {
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const x of xs) {
+		if (!x) continue;
+		const k = x.toLowerCase();
+		if (seen.has(k)) continue;
+		seen.add(k);
+		out.push(x);
+	}
+	return out;
 }
 
 let rhinestoneInstance: RhinestoneClient | null = null;
@@ -494,19 +533,7 @@ export class RhinestoneClient {
 		if (authorizations.length === 0 && walletAccount && chainId) {
 			debugLog('SDK returned empty authorizations, attempting manual signing for chain', chainId);
 			try {
-				const walletWithSignAuth = walletAccount as Account & {
-					signAuthorization?: (args: {
-						contractAddress: Address;
-						chainId: number;
-						nonce?: number;
-					}) => Promise<{
-						r: Hex;
-						s: Hex;
-						v?: bigint;
-						yParity?: number;
-						nonce?: number;
-					}>;
-				};
+				const walletWithSignAuth = walletAccount as WalletAccountWithSignAuth;
 
 				if (typeof walletWithSignAuth.signAuthorization === 'function') {
 					debugLog('Wallet has signAuthorization, signing manually...');
@@ -529,7 +556,7 @@ export class RhinestoneClient {
 				}
 			} catch (manualError) {
 				const msg = manualError instanceof Error ? manualError.message : String(manualError);
-				if (msg.toLowerCase().includes('reject') || msg.toLowerCase().includes('denied')) {
+				if (isUserRejection(msg)) {
 					throw new AAError(
 						'Authorization signing was rejected by user',
 						AAErrorCode.AUTHORIZATION_REJECTED,
@@ -552,9 +579,6 @@ export class RhinestoneClient {
 	 * - gasPrices: current gas prices per chain
 	 * - tokenPrices: current token prices for conversion
 	 */
-	// ✅ DROP-IN REPLACEMENT #1: getSwapQuote
-	// Fixes: you were requesting the *target token* with params.amount (wrong) and you were using destination tokenRequests
-	// For ETH->Base, tokenRequests MUST describe what you are paying on SOURCE chain (sourceToken + amount).
 	async getSwapQuote(
 		params: CrossChainSwapParams,
 		feeAsset?: string
@@ -812,30 +836,6 @@ export class RhinestoneClient {
 		walletAccount: Account,
 		feeAsset?: string
 	): Promise<{ txHash: Hex; intentId: string }> {
-		const uniqLower = (xs: Array<string | undefined>) => {
-			const seen = new Set<string>();
-			const out: string[] = [];
-			for (const x of xs) {
-				if (!x) continue;
-				const k = x.toLowerCase();
-				if (seen.has(k)) continue;
-				seen.add(k);
-				out.push(x);
-			}
-			return out;
-		};
-
-		const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
-
-		const resolveFeeAssetAddress = (
-			fa: string | undefined,
-			chainId: number
-		): `0x${string}` | undefined => {
-			if (!fa) return undefined;
-			if (isAddress(fa)) return fa as `0x${string}`;
-			return resolveTokenAddress(fa, chainId);
-		};
-
 		// Quote wrapper with retries (important for ETH->Base)
 		const getQuoteWithRetries = async (
 			p: CrossChainSwapParams,
@@ -892,7 +892,7 @@ export class RhinestoneClient {
 				);
 			}
 
-			// ✅ For Ethereum mainnet source, do NOT force feeAsset (USDC gas etc.)
+			// Ethereum mainnet doesn't support ERC20 fee payment
 			const effectiveFeeAsset = srcId === 1 ? undefined : feeAsset;
 
 			// ---- Normalize token addresses to the correct chain ----
@@ -911,7 +911,7 @@ export class RhinestoneClient {
 				targetToken: { ...params.targetToken, address: dstTokenAddr }
 			};
 
-			// 🔥 Critical: ETH -> WETH for quote + tokenRequests
+			// Normalize ETH -> WETH for quote + tokenRequests
 			const normalizedSourceToken = normalizeEthToWeth(
 				{
 					symbol: normalizedParams.sourceToken.symbol,
@@ -972,97 +972,16 @@ export class RhinestoneClient {
 			// ---- Create Rhinestone account ----
 			const rhinestoneAccount = await this.createAccount(walletAccount);
 			const rhinestoneAddress = rhinestoneAccount.getAddress();
-			const isEOA = rhinestoneAddress.toLowerCase() === walletAccount.address.toLowerCase();
 
-			// ---- Check deployment status on BOTH chains for cross-chain transactions ----
-			// EIP-7702 requires the account to be initialized on each chain it operates on
-			// IMPORTANT: For cross-chain to work, authorizations MUST cover BOTH chains
-			let isDeployedOnSource = false;
-			let isDeployedOnTarget = false;
-			// Track if SDK threw the limitation error - we still need authorization even if it seems "deployed"
-			let sourceHadSdkLimitation = false;
-			let targetHadSdkLimitation = false;
-
-			if (isEOA || this.config.accountType === '7702') {
-				// Check source chain deployment
-				try {
-					isDeployedOnSource = await rhinestoneAccount.isDeployed(sourceChain);
-					debugLog('Source chain deployment status:', {
-						chainId: srcId,
-						chainName: sourceChain.name,
-						isDeployed: isDeployedOnSource
-					});
-				} catch (deployedError) {
-					const errorMsg =
-						deployedError instanceof Error ? deployedError.message : String(deployedError);
-					if (
-						errorMsg.includes('Existing EIP-7702 accounts') ||
-						errorMsg.includes('ExistingEip7702AccountsNotSupported')
-					) {
-						console.warn(
-							'[Rhinestone Client] Source chain: SDK limitation error - account may exist but still needs authorization for cross-chain'
-						);
-						// IMPORTANT: Don't assume deployed - the SDK limitation means we CAN'T reliably check
-						// For cross-chain transactions, we MUST include this chain in authorization list
-						isDeployedOnSource = false;
-						sourceHadSdkLimitation = true;
-					} else {
-						console.warn('[Rhinestone Client] Could not check source chain deployment:', errorMsg);
-						// Proceed with init signature to be safe
-					}
-				}
-
-				// Check target chain deployment
-				try {
-					isDeployedOnTarget = await rhinestoneAccount.isDeployed(targetChain);
-					debugLog('Target chain deployment status:', {
-						chainId: dstId,
-						chainName: targetChain.name,
-						isDeployed: isDeployedOnTarget
-					});
-				} catch (deployedError) {
-					const errorMsg =
-						deployedError instanceof Error ? deployedError.message : String(deployedError);
-					if (
-						errorMsg.includes('Existing EIP-7702 accounts') ||
-						errorMsg.includes('ExistingEip7702AccountsNotSupported')
-					) {
-						console.warn(
-							'[Rhinestone Client] Target chain: SDK limitation error - account may exist but still needs authorization for cross-chain'
-						);
-						// IMPORTANT: Don't assume deployed - for cross-chain we need to be conservative
-						// The simulation will fail if we don't include proper authorizations
-						isDeployedOnTarget = false;
-						targetHadSdkLimitation = true;
-					} else {
-						console.warn('[Rhinestone Client] Could not check target chain deployment:', errorMsg);
-						// Proceed with init signature to be safe
-					}
-				}
-			}
-
-			// ---- Sign EIP-7702 init data if needed on EITHER chain ----
-			// The init signature is valid cross-chain (cacheable), so we only sign once
-			// but we need it if the account isn't deployed on at least one chain
-			let eip7702InitSignature: Hex | undefined;
-			const needsInit =
-				(isEOA || this.config.accountType === '7702') &&
-				(!isDeployedOnSource || !isDeployedOnTarget);
-
-			if (needsInit) {
-				debugLog('Getting EIP-7702 init signature for cross-chain transaction...', {
-						needsInitOnSource: !isDeployedOnSource,
-						needsInitOnTarget: !isDeployedOnTarget
-					});
-				// Use cached version - will sign only if not already cached
-				eip7702InitSignature = await this.getOrSignEip7702InitSignature(
-					rhinestoneAccount,
-					walletAccount.address
-				);
-				debugLog('EIP-7702 init signature obtained (valid for both chains)');
-			} else {
-				debugLog('Account already deployed on both chains, skipping init signature');
-			}
+			// ---- Check deployment on BOTH chains and get EIP-7702 init signature if needed ----
+			const srcDeploy = await this.checkDeploymentAndGetInitSignature(
+				rhinestoneAccount, walletAccount, sourceChain
+			);
+			const dstDeploy = await this.checkDeploymentAndGetInitSignature(
+				rhinestoneAccount, walletAccount, targetChain
+			);
+			// Use whichever init signature was obtained (they're interchangeable — valid cross-chain)
+			const eip7702InitSignature = srcDeploy.eip7702InitSignature ?? dstDeploy.eip7702InitSignature;
 
 			// ---- Call on TARGET chain after solver completes swap/bridge ----
 			const transferCall = {
@@ -1089,24 +1008,15 @@ export class RhinestoneClient {
 				)
 			};
 
-			// Determine which chains need to be included in sourceChains for authorization coverage
-			// For cross-chain transactions, BOTH chains may need EIP-7702 authorization
-			// sourceChains tells the SDK which chains need authorization, not just where funds come from
+			// For cross-chain, authorization may be needed on both chains
 			const chainsNeedingAuth: (typeof sourceChain)[] = [sourceChain];
-
-			// CRITICAL: If target chain isn't deployed or had SDK limitation, include it for authorization
-			// This ensures the authorization list covers both chains for cross-chain transactions
-			if (!isDeployedOnTarget || targetHadSdkLimitation) {
-				// Only add target if it's different from source
-				if (targetChain.id !== sourceChain.id) {
-					chainsNeedingAuth.push(targetChain);
-					debugLog('Including target chain in sourceChains for authorization coverage:', {
-							targetChainId: targetChain.id,
-							targetChainName: targetChain.name,
-							isDeployedOnTarget,
-							targetHadSdkLimitation
-						});
-				}
+			if ((!dstDeploy.isDeployed || dstDeploy.hadSdkLimitation) && targetChain.id !== sourceChain.id) {
+				chainsNeedingAuth.push(targetChain);
+				debugLog('Including target chain in authorization coverage:', {
+					targetChainId: targetChain.id,
+					isDeployed: dstDeploy.isDeployed,
+					hadSdkLimitation: dstDeploy.hadSdkLimitation
+				});
 			}
 
 			const transactionParams: RhinestoneTransactionParams = {
@@ -1118,9 +1028,7 @@ export class RhinestoneClient {
 				calls: [transferCall],
 				tokenRequests: [
 					{
-						// ✅ IMPORTANT: tokenRequests specifies what tokens to PULL from the SOURCE chain
-						// This tells the solver what input tokens the user is providing
-						// The solver will then swap/bridge these to the target chain and execute the calls
+						// tokenRequests: what tokens to pull from the SOURCE chain
 						address: normalizedParams.sourceToken.address as Address,
 						amount: normalizedParams.amount
 					}
@@ -1173,10 +1081,8 @@ export class RhinestoneClient {
 				feeAssetSrcAddr,
 				feeAssetDstAddr,
 				hasEip7702Init: Boolean(eip7702InitSignature),
-				isDeployedOnSource,
-				isDeployedOnTarget,
-				sourceHadSdkLimitation,
-				targetHadSdkLimitation,
+				srcDeploy: { isDeployed: srcDeploy.isDeployed, hadSdkLimitation: srcDeploy.hadSdkLimitation },
+				dstDeploy: { isDeployed: dstDeploy.isDeployed, hadSdkLimitation: dstDeploy.hadSdkLimitation },
 				chainsNeedingAuth: chainsNeedingAuth.map((c) => ({ id: c.id, name: c.name })),
 				sourceAssets,
 				rhinestoneAddress,
@@ -1372,19 +1278,7 @@ export class RhinestoneClient {
 					.filter((chainId) => !gotChainIds.has(chainId));
 
 				if (missingChainIds.length > 0) {
-					const walletAccountWithSignAuth = walletAccount as Account & {
-						signAuthorization?: (args: {
-							contractAddress: Address;
-							chainId: number;
-							nonce?: number;
-						}) => Promise<{
-							r: Hex;
-							s: Hex;
-							v?: bigint;
-							yParity?: number;
-							nonce?: number;
-						}>;
-					};
+					const walletAccountWithSignAuth = walletAccount as WalletAccountWithSignAuth;
 					debugLog('Manually signing authorizations for missing chains:', {
 						missingChainIds,
 						hasSignAuthorization: typeof walletAccountWithSignAuth.signAuthorization === 'function'
@@ -1423,12 +1317,7 @@ export class RhinestoneClient {
 									error: errorMsg
 								});
 
-								// Check if user rejected
-								if (
-									errorMsg.toLowerCase().includes('reject') ||
-									errorMsg.toLowerCase().includes('denied') ||
-									errorMsg.toLowerCase().includes('user rejected')
-								) {
+								if (isUserRejection(errorMsg)) {
 									throw new AAError(
 										'Authorization signing was rejected by user',
 										AAErrorCode.AUTHORIZATION_REJECTED,
@@ -1859,33 +1748,10 @@ export class RhinestoneClient {
 				})
 			};
 
-			// Build same-chain transaction with tokenRequests
-			// This tells Rhinestone to:
-			// 1. Pull sourceToken from user
-			// 2. Swap it to targetToken via solver network
-			// 3. Execute the transfer call
-			//
-			// For same-chain swaps, we need to provide sourceAssets to help the orchestrator
-			// understand which tokens are available and their configurations
-			// Try both symbols and addresses - the orchestrator might need addresses for lookup
-			const sourceAssetsTokens: string[] = [];
-
-			// Add token addresses (more reliable for orchestrator lookup)
-			sourceAssetsTokens.push(params.sourceToken.address);
+			// Build sourceAssets: token addresses the orchestrator can use for routing/pricing
+			const sourceAssetsTokens = [params.sourceToken.address];
 			if (params.targetToken.address.toLowerCase() !== params.sourceToken.address.toLowerCase()) {
 				sourceAssetsTokens.push(params.targetToken.address);
-			}
-
-			// Also add symbols as fallback (some orchestrator configs might use symbols)
-			if (params.sourceToken.symbol) {
-				sourceAssetsTokens.push(params.sourceToken.symbol);
-			}
-			if (params.targetToken.symbol && params.targetToken.symbol !== params.sourceToken.symbol) {
-				sourceAssetsTokens.push(params.targetToken.symbol);
-			}
-			// Also include feeAsset if specified and not already in the list
-			if (feeAsset && !sourceAssetsTokens.includes(feeAsset)) {
-				sourceAssetsTokens.push(feeAsset);
 			}
 
 			const transactionParams: RhinestoneTransactionParams = {
@@ -1897,12 +1763,9 @@ export class RhinestoneClient {
 						amount: params.amount
 					}
 				],
-				// Provide sourceAssets to help orchestrator with token configuration
-				// Include both source and target tokens so orchestrator has price/config data
-				sourceAssets:
-					sourceAssetsTokens.length > 0 ? { [chain.id]: sourceAssetsTokens } : undefined,
-				feeAsset: feeAsset,
-				eip7702InitSignature: eip7702InitSignature
+				sourceAssets: { [chain.id]: sourceAssetsTokens },
+				feeAsset,
+				eip7702InitSignature
 			};
 
 			debugLog('Preparing same-chain swap transaction...', {
@@ -2002,19 +1865,6 @@ export class RhinestoneClient {
 	): Promise<{ txHash: Hex; intentId: string }> {
 		const chain = CHAIN_CONFIG[params.chainId];
 
-		// Normalize fee asset to an address for sourceAssets when possible
-		// Uses resolveTokenAddress to support any fee token (USDC, USDT, etc.) on any network
-		const normalizeFeeAssetToAddress = (fa?: string, chainId?: number): string | undefined => {
-			if (!fa) return undefined;
-			// already looks like an address
-			if (/^0x[a-fA-F0-9]{40}$/.test(fa)) return fa;
-			// resolve token symbol to address using PAYMENT_TOKENS_BY_NETWORK
-			if (chainId) {
-				return resolveTokenAddress(fa, chainId);
-			}
-			return undefined; // unknown symbol or no chainId
-		};
-
 		try {
 			debugLog('executeSameChainTransaction called', {
 				chainId: params.chainId,
@@ -2040,7 +1890,7 @@ export class RhinestoneClient {
 				chain
 			);
 
-			const feeAssetAddress = normalizeFeeAssetToAddress(feeAsset, chain.id);
+			const feeAssetAddress = resolveFeeAssetAddress(feeAsset, chain.id);
 			const sourceAssets = feeAssetAddress ? { [chain.id]: [feeAssetAddress] } : undefined;
 
 			const transactionParams: RhinestoneTransactionParams = {

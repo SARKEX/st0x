@@ -27,6 +27,24 @@ import {
 } from '../types';
 import { USDC_BASE } from '../tokens';
 
+/** Returns a passthrough quote when no swap is needed (already correct token/chain). */
+export function noSwapQuote(amount: bigint): CrossChainSwapQuote {
+	return {
+		inputAmount: amount,
+		outputAmount: amount,
+		estimatedGas: {
+			gasLimit: 0n,
+			maxFeePerGas: 0n,
+			maxPriorityFeePerGas: 0n,
+			estimatedGasCostWei: 0n,
+			estimatedGasCostUSDC: 0n
+		},
+		route: { steps: [], totalSteps: 0, estimatedDuration: 0 },
+		expiresAt: Date.now() + 300_000,
+		priceImpactBps: 0
+	};
+}
+
 // ERC20 ABI for approvals and transfers
 const ERC20_ABI = parseAbi([
 	'function approve(address spender, uint256 amount) returns (bool)',
@@ -52,24 +70,7 @@ export async function getSwapToSettlementQuote(
 
 	// If source token is already USDC on Base, no swap needed
 	if (sourceToken.chainId === SETTLEMENT_CHAIN_ID && sourceToken.symbol === 'USDC') {
-		return {
-			inputAmount: amount,
-			outputAmount: amount,
-			estimatedGas: {
-				gasLimit: 0n,
-				maxFeePerGas: 0n,
-				maxPriorityFeePerGas: 0n,
-				estimatedGasCostWei: 0n,
-				estimatedGasCostUSDC: 0n
-			},
-			route: {
-				steps: [],
-				totalSteps: 0,
-				estimatedDuration: 0
-			},
-			expiresAt: Date.now() + 300000, // 5 minutes
-			priceImpactBps: 0
-		};
+		return noSwapQuote(amount);
 	}
 
 	const swapParams: CrossChainSwapParams = {
@@ -102,24 +103,7 @@ export async function getSwapFromSettlementQuote(
 
 	// If target token is already USDC on Base, no swap needed
 	if (targetToken.chainId === SETTLEMENT_CHAIN_ID && targetToken.symbol === 'USDC') {
-		return {
-			inputAmount: usdcAmount,
-			outputAmount: usdcAmount,
-			estimatedGas: {
-				gasLimit: 0n,
-				maxFeePerGas: 0n,
-				maxPriorityFeePerGas: 0n,
-				estimatedGasCostWei: 0n,
-				estimatedGasCostUSDC: 0n
-			},
-			route: {
-				steps: [],
-				totalSteps: 0,
-				estimatedDuration: 0
-			},
-			expiresAt: Date.now() + 300000, // 5 minutes
-			priceImpactBps: 0
-		};
+		return noSwapQuote(usdcAmount);
 	}
 
 	const swapParams: CrossChainSwapParams = {
