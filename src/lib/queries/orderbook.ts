@@ -60,7 +60,7 @@ function buildSummaryFromQuotes(
  *
  * @param network - Current network
  * @param pollInterval - Polling interval in ms, or false to disable (default: false).
- *                       Dashboard: 120_000 (120s). Trade pages: false (uses token-specific query).
+ *                       Dashboard: 60_000 (60s). Trade pages: false (uses token-specific query).
  */
 export function createOrderbookQuotesQuery(
 	network: Network | null,
@@ -69,9 +69,9 @@ export function createOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(network),
-		staleTime: Infinity, // Data is always considered fresh until manually invalidated
+		staleTime: 60_000, // Stale after 60s
 		refetchInterval: pollInterval,
-		refetchOnWindowFocus: pollInterval ? 'always' : false,
+		refetchOnWindowFocus: pollInterval ? true : false, // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
 		queryFn: async () => {
 			try {
@@ -263,20 +263,20 @@ export async function refreshLegacyTokenQuotes(
  *
  * @param network - Current network
  * @param tokenAddress - Token address to fetch quotes for
- * @param pollInterval - Polling interval in ms (default: 30000 for trade pages)
+ * @param pollInterval - Polling interval in ms (default: 60000 for trade pages)
  */
 export function createTokenOrderbookQuotesQuery(
 	network: Network | null,
 	tokenAddress: string | null,
-	pollInterval: number | false = 30_000
+	pollInterval: number | false = 60_000
 ) {
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(network && tokenAddress),
-		staleTime: 20_000, // Consider stale after 20s to allow refetch
+		staleTime: 60_000, // Stale after 60s
 		refetchOnMount: 'always', // Always refresh when component mounts
-		refetchInterval: pollInterval, // Poll every 30s by default on trade pages
-		refetchOnWindowFocus: 'always',
+		refetchInterval: pollInterval, // Poll every 60s by default on trade pages
+		refetchOnWindowFocus: true, // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
 		// Use global cache as initial data for instant display
 		initialData: () => {

@@ -327,8 +327,8 @@
 		}
 	});
 
-	// User Vaults Query - centralized with 60s polling on dashboard
-	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 60_000);
+	// User Vaults Query - no polling, invalidated after order deployment
+	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
 	// Query user's wallet holdings from SFTs - fetches balances via multicall (single RPC request)
 	// We query balances on WRAPPED token addresses (from TOKENS config) since that's what users trade
@@ -900,7 +900,7 @@
 	})();
 
 	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 120_000);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 60_000);
 
 	// Trade activity for market orders - poll every 10 minutes, refetch on mount
 	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 600_000);

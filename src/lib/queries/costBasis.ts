@@ -14,9 +14,9 @@ export function createCostBasisQuery(network: Network | null, userAddress: strin
 	return createQuery<Map<string, CostBasisData>>({
 		queryKey: ['costBasis', network?.id, userAddress],
 		enabled: Boolean(network && userAddress),
-		staleTime: 300_000, // 5 minutes - trade history doesn't change often
+		staleTime: 600_000, // 10 minutes - only refetch when stale
 		refetchInterval: false, // No polling - fetch once on mount
-		refetchOnWindowFocus: true, // Refresh when user returns to tab
+		refetchOnWindowFocus: true, // Refresh when user returns to tab (only if stale)
 		queryFn: async () => {
 			if (!network || !userAddress) {
 				return new Map();

@@ -204,8 +204,8 @@
 		return displayOrders;
 	})();
 
-	// User vaults query - uses centralized query with 15s polling (trade page)
-	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress, 15_000);
+	// User vaults query - no polling, invalidated after order deployment
+	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
 	// Background prefetch of global caches when page loads
 	$: if (browser && $currentNetwork && $walletAddress) {
