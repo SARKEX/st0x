@@ -1,38 +1,29 @@
 <script lang="ts">
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { env } from '$env/dynamic/public';
 
 	export let show: boolean = false;
 	export let walletAddress: string | null = null;
 	export let onClose: () => void;
 
-	let onramperUrl: string = '';
+	let coinbaseUrl: string = '';
 	let isLoading: boolean = false;
 	let error: string | null = null;
 
-	// Fetch signed URL when modal opens with a wallet address
+	// Fetch session token when modal opens with a wallet address
 	$: if (show && walletAddress) {
-		fetchSignedUrl(walletAddress);
+		fetchSessionToken(walletAddress);
 	}
 
 	// Reset state when modal closes
 	$: if (!show) {
-		onramperUrl = '';
+		coinbaseUrl = '';
 		error = null;
 	}
 
-	async function fetchSignedUrl(address: string) {
+	async function fetchSessionToken(address: string) {
 		isLoading = true;
 		error = null;
-
-		// Validate API key is configured
-		const apiKey = env.PUBLIC_ONRAMPER_API_KEY;
-		if (!apiKey) {
-			error = 'Onramper is not configured. Please contact support.';
-			isLoading = false;
-			return;
-		}
 
 		try {
 			// Fetch CSRF token first
@@ -45,54 +36,46 @@
 				throw new Error('Failed to get security token');
 			}
 
-			const response = await fetch('/api/onramper/sign-url', {
+			const response = await fetch('/api/coinbase/session', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'X-CSRF-Token': csrfToken
 				},
-				body: JSON.stringify({ walletAddress: address })
+				body: JSON.stringify({ walletAddress: address, mode: 'offramp' })
 			});
 
 			const data = await response.json();
 
 			if (!response.ok || !data.success) {
-				throw new Error(data.error || 'Failed to initialize payment');
+				throw new Error(data.error || 'Failed to initialize Coinbase');
 			}
 
-			// Build the full URL with signature
+			// Build the Coinbase off-ramp URL with session token
 			const params = new URLSearchParams({
-				apiKey,
-				mode: 'buy',
-				networkWallets: data.networkWallets,
-				defaultCrypto: 'usdc_base',
-				onlyCryptos: 'usdc_base,eth_base',
-				isAddressEditable: 'false',
-				darkMode: 'true',
-				color: '4c77ba',
-				fontFamily: "'DM Sans', sans-serif",
-				gFontPath: 'css2?family=DM+Sans:wght@400;500;600;700&display=swap',
-				signature: data.signature
+				sessionToken: data.token,
+				defaultAsset: 'USDC',
+				defaultNetwork: 'base'
 			});
 
-			// Use environment variable to determine Onramper domain
-			// PUBLIC_ONRAMPER_ENV should be 'production' for live, anything else for sandbox
-			const isProduction = env.PUBLIC_ONRAMPER_ENV === 'production';
-			const baseUrl = isProduction ? 'https://buy.onramper.com' : 'https://buy.onramper.dev';
-			onramperUrl = `${baseUrl}?${params.toString()}`;
+			if (data.redirectUrl) {
+				params.set('redirectUrl', data.redirectUrl);
+			}
+
+			coinbaseUrl = `https://pay.coinbase.com/v3/sell/input?${params.toString()}`;
 		} catch (err) {
-			console.error('[Onramper] Failed to get signed URL:', err);
-			error = err instanceof Error ? err.message : 'Failed to initialize payment';
+			console.error('[Coinbase Offramp] Failed to get session token:', err);
+			error = err instanceof Error ? err.message : 'Failed to initialize Coinbase';
 		} finally {
 			isLoading = false;
 		}
 	}
 </script>
 
-<Modal {show} title="Buy Crypto" maxWidthClass="max-w-lg" maxHeightVh={90} {onClose}>
+<Modal {show} title="Withdraw Funds" maxWidthClass="max-w-lg" maxHeightVh={90} {onClose}>
 	{#if isLoading}
 		<div class="flex items-center justify-center py-16">
-			<LoadingSpinner variant="inline" size="md" text="Initializing payment..." />
+			<LoadingSpinner variant="inline" size="md" text="Connecting to Coinbase..." />
 		</div>
 	{:else if error}
 		<div class="py-8 text-center">
@@ -111,32 +94,40 @@
 			<p class="text-gray-400">{error}</p>
 			<button
 				type="button"
-				on:click={() => walletAddress && fetchSignedUrl(walletAddress)}
+				on:click={() => walletAddress && fetchSessionToken(walletAddress)}
 				class="mt-4 text-sm text-blue-400 hover:text-blue-300"
 			>
 				Try again
 			</button>
 		</div>
-	{:else if walletAddress && onramperUrl}
+	{:else if walletAddress && coinbaseUrl}
 		<div class="flex flex-col items-center">
 			<p class="mb-4 text-sm text-gray-400">
-				Purchase crypto using your card or bank account. Funds will be sent directly to your wallet
-				on Base.
+				Cash out your USDC to your bank account via Coinbase. A Coinbase account with linked bank
+				details is required.
 			</p>
+			<div
+				class="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-left"
+			>
+				<p class="text-xs text-yellow-400">
+					Off-ramp transactions must be completed within 30 minutes. You will need to approve an
+					onchain transaction to send funds to Coinbase.
+				</p>
+			</div>
 			<div class="w-full overflow-hidden rounded-lg">
 				<iframe
-					src={onramperUrl}
-					title="Onramper Widget"
+					src={coinbaseUrl}
+					title="Coinbase Offramp"
 					height="630"
 					width="100%"
-					allow="accelerometer; autoplay; camera; gyroscope; payment; microphone"
+					allow="payment"
 					class="border-0"
 				/>
 			</div>
 		</div>
 	{:else}
 		<div class="py-8 text-center">
-			<p class="text-gray-400">Please connect your wallet to purchase crypto.</p>
+			<p class="text-gray-400">Please connect your wallet to withdraw funds.</p>
 		</div>
 	{/if}
 </Modal>
