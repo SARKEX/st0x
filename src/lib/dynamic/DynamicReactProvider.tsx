@@ -7,8 +7,6 @@ import {
 	useEmbeddedReveal
 } from '@dynamic-labs/sdk-react-core';
 import { EthereumWalletConnectors, isEthereumWallet } from '@dynamic-labs/ethereum';
-import { hashAuthorization } from 'viem/experimental';
-import { parseSignature } from 'viem';
 
 // Static logo URL for Dynamic branding - served from /static/logo.svg
 export const ST0X_LOGO_URL = '/logo.svg';
@@ -353,34 +351,16 @@ function DynamicBridge({
 					signTypedData: async (args) => {
 						return walletClient.signTypedData(args as Parameters<typeof walletClient.signTypedData>[0]) as unknown as Promise<string>;
 					},
-					signAuthorization: async (args) => {
-						// Compute the EIP-7702 authorization hash and sign it via eth_sign.
-						// We can't use walletClient.signAuthorization because viem rejects
-						// json-rpc accounts (Dynamic WaaS/MPC wallets use json-rpc type).
-						const hash = hashAuthorization({
-							contractAddress: args.contractAddress as `0x${string}`,
-							chainId: args.chainId,
-							nonce: args.nonce ?? 0
-						});
-
-						const address = walletClient.account?.address;
-						if (!address) {
-							throw new Error('No account address on wallet client');
-						}
-
-						// eth_sign does raw ECDSA signing (no message prefix)
-						const signature = await walletClient.request({
-							method: 'eth_sign',
-							params: [address, hash]
-						});
-
-						const { r, s, v } = parseSignature(signature as `0x${string}`);
-						return {
-							r,
-							s,
-							v,
-							yParity: v === 27n ? 0 : 1
-						};
+					signAuthorization: async () => {
+						// Dynamic MPC wallets cannot perform raw ECDSA signing required
+						// for EIP-7702 authorizations. The Rhinestone SDK's
+						// signAuthorizations handles this when possible; if it returns 0
+						// authorizations it means none are needed (account already
+						// authorized). This fallback should not be reached in normal flow.
+						throw new Error(
+							'signAuthorization is not supported for Dynamic MPC wallets. ' +
+							'The Rhinestone SDK handles authorizations automatically.'
+						);
 					}
 				};
 

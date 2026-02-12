@@ -504,9 +504,11 @@ export class RhinestoneClient {
 		if (this.config.accountType !== '7702') return [];
 
 		let authorizations: SignedAuthorizationList = [];
+		let sdkSucceeded = false;
 
 		try {
 			authorizations = (await rhinestoneAccount.signAuthorizations(signedTx)) ?? [];
+			sdkSucceeded = true;
 			debugLog('Authorizations signed', {
 				count: authorizations.length,
 				chainIds: (authorizations as unknown as ReadonlyArray<{ chainId?: number }>).map(a => a.chainId)
@@ -528,9 +530,9 @@ export class RhinestoneClient {
 			}
 		}
 
-		// If SDK returned empty authorizations and we have a wallet + chainId,
-		// sign manually — the SDK may not trigger wallet signing for some account types
-		if (authorizations.length === 0 && walletAccount && chainId) {
+		// Only try manual signing if the SDK failed (threw an error).
+		// If the SDK succeeded with 0 authorizations, it means none are needed.
+		if (!sdkSucceeded && authorizations.length === 0 && walletAccount && chainId) {
 			debugLog('SDK returned empty authorizations, attempting manual signing for chain', chainId);
 			try {
 				const walletWithSignAuth = walletAccount as WalletAccountWithSignAuth;
@@ -1226,9 +1228,11 @@ export class RhinestoneClient {
 					yParity: number;
 				}> = [];
 
+				let sdkSucceeded = false;
 				try {
 					// First, try the SDK's signAuthorizations
 					const sdkAuths = (await rhinestoneAccount.signAuthorizations(signedTx)) ?? [];
+					sdkSucceeded = true;
 					const typedSdkAuths = sdkAuths as Array<{
 						chainId?: number | string;
 						address?: Address;
@@ -1270,7 +1274,9 @@ export class RhinestoneClient {
 					}
 				}
 
-				// Check which chains are missing and manually sign for them
+				// Only try manual signing if the SDK failed (threw an error).
+				// If the SDK succeeded with 0 authorizations, it means none are needed —
+				// the account is already authorized on those chains.
 				const gotChainIds = new Set(
 					authsList.map((a) => Number(a.chainId)).filter((id) => !isNaN(id))
 				);
@@ -1278,7 +1284,7 @@ export class RhinestoneClient {
 					.map((c) => c.id)
 					.filter((chainId) => !gotChainIds.has(chainId));
 
-				if (missingChainIds.length > 0) {
+				if (!sdkSucceeded && missingChainIds.length > 0) {
 					const walletAccountWithSignAuth = walletAccount as WalletAccountWithSignAuth;
 					debugLog('Manually signing authorizations for missing chains:', {
 						missingChainIds,
