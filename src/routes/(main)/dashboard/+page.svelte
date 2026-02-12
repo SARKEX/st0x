@@ -718,7 +718,10 @@
 			.map((h) => {
 				const totalBalance = h.walletBalance + h.vaultBalance;
 				const quote = findQuoteForSymbol(h.symbol, $priceFeedsQuery?.data ?? [], ALL_TOKENS);
-				const price = quote?.close ?? 0;
+				// Stablecoins are pegged to $1; cross-chain symbols like "USDC (Arbitrum One)"
+				// won't match price feeds, so fall back to $1 for known stablecoins.
+				const isStablecoin = h.symbol.startsWith('USDC') || h.symbol.startsWith('USDT');
+				const price = quote?.close ?? (isStablecoin ? 1 : 0);
 				const priceChange = quote?.change ?? 0;
 				const priceChangePercent = quote?.changePercent ?? 0;
 
@@ -798,10 +801,23 @@
 	$: totalUnrealizedPnL = portfolioHoldings.reduce((sum, h) => sum + (h.unrealizedPnL ?? 0), 0);
 
 	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
+	// Include payment tokens from ALL chains so cross-chain balances show in Funds
 	$: paymentTokenAddresses = (() => {
-		if (!$currentNetwork) return new Set<string>();
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
-		return new Set(paymentTokens.map((t) => t.address.toLowerCase()));
+		const addresses = new Set<string>();
+		const allChains = [
+			SUPPORTED_NETWORKS.BASE,
+			SUPPORTED_NETWORKS.ARBITRUM,
+			SUPPORTED_NETWORKS.OPTIMISM,
+			SUPPORTED_NETWORKS.ETHEREUM
+		];
+		for (const chainId of allChains) {
+			for (const token of getPaymentTokensForNetwork(chainId)) {
+				if (!token.isNative) {
+					addresses.add(token.address.toLowerCase());
+				}
+			}
+		}
+		return addresses;
 	})();
 
 	// Build funds holdings (payment tokens + ETH)
