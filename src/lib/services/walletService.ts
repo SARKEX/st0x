@@ -8,9 +8,10 @@ import {
 	signMessage as wagmiSignMessage,
 	waitForTransactionReceipt as wagmiWaitForTransactionReceipt
 } from '@wagmi/core';
-import type { Hash, Hex } from 'viem';
+import type { Account, Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
 import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
+import { payFeesInStablecoin } from '$lib/stores';
 
 // Store for Dynamic wallet provider (set by React component)
 let dynamicWalletProvider: {
@@ -79,6 +80,49 @@ export async function sendTransaction(params: {
 		const fromAddress = get(dynamicWalletAddress);
 		if (!fromAddress) {
 			throw new Error('Dynamic wallet address not available');
+		}
+
+		// Check if user wants to pay gas with stablecoins via Rhinestone
+		const useStablecoinGas = get(payFeesInStablecoin);
+		if (useStablecoinGas) {
+			const { isRhinestoneConfigured, getRhinestoneClient } = await import(
+				'./account-abstraction/rhinestone/client'
+			);
+
+			if (isRhinestoneConfigured()) {
+				const { getDynamicAccountForRhinestone } = await import(
+					'./account-abstraction/wallets/dynamic'
+				);
+				const { SUPPORTED_NETWORKS } = await import('./account-abstraction/types');
+
+				const walletAccount = await getDynamicAccountForRhinestone();
+				if (!walletAccount) {
+					throw new Error('Failed to get wallet account for Rhinestone gas payment');
+				}
+
+				const account: Account =
+					'account' in (walletAccount as object)
+						? (walletAccount as { account: Account }).account
+						: (walletAccount as Account);
+
+				const rhinestoneClient = getRhinestoneClient();
+				const result = await rhinestoneClient.executeSameChainTransaction(
+					{
+						chainId: SUPPORTED_NETWORKS.BASE,
+						calls: [
+							{
+								to: params.to,
+								value: params.value ?? 0n,
+								data: params.data ?? '0x'
+							}
+						]
+					},
+					account,
+					'USDC'
+				);
+
+				return result.txHash;
+			}
 		}
 
 		// Ensure we're on Base network (chain ID 8453)

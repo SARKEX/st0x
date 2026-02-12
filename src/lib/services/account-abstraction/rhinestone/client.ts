@@ -479,14 +479,13 @@ export class RhinestoneClient {
 			}
 		}
 
-		let eip7702InitSignature: Hex | undefined;
-		if (!isDeployed || hadSdkLimitation) {
-			debugLog('Getting EIP-7702 init signature', { chainId: chain.id, isDeployed, hadSdkLimitation });
-			eip7702InitSignature = await this.getOrSignEip7702InitSignature(
-				rhinestoneAccount,
-				walletAccount.address
-			);
-		}
+		// SDK v1.2+ requires the init signature for all 7702 accounts,
+		// even when already deployed on all chains.
+		debugLog('Getting EIP-7702 init signature', { chainId: chain.id, isDeployed, hadSdkLimitation });
+		const eip7702InitSignature = await this.getOrSignEip7702InitSignature(
+			rhinestoneAccount,
+			walletAccount.address
+		);
 
 		return { eip7702InitSignature, isDeployed, hadSdkLimitation };
 	}
