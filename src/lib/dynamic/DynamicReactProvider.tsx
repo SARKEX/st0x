@@ -27,6 +27,28 @@ export interface DynamicEventData {
 	};
 }
 
+// Signer interface matching DynamicSigner in dynamicStore.ts
+export interface DynamicSignerBridge {
+	signMessage: (args: { message: string }) => Promise<string>;
+	signTransaction: (tx: unknown) => Promise<string>;
+	signTypedData: (args: {
+		domain: Record<string, unknown>;
+		types: Record<string, unknown>;
+		primaryType: string;
+		message: Record<string, unknown>;
+	}) => Promise<string>;
+	signAuthorization: (args: {
+		contractAddress: string;
+		chainId: number;
+		nonce?: number;
+	}) => Promise<{
+		r: `0x${string}`;
+		s: `0x${string}`;
+		v?: bigint;
+		yParity?: number;
+	}>;
+}
+
 interface DynamicBridgeProps {
 	environmentId: string;
 	onEvent: (event: DynamicEventData) => void;
@@ -35,6 +57,7 @@ interface DynamicBridgeProps {
 			request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 		} | null
 	) => void;
+	onSignerReady?: (signer: DynamicSignerBridge | null) => void;
 	triggerLogin?: boolean;
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
@@ -52,6 +75,7 @@ const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000;
 function DynamicBridge({
 	onEvent,
 	onWalletProviderReady,
+	onSignerReady,
 	triggerLogin,
 	triggerLogout,
 	triggerExportWallet,
@@ -77,6 +101,7 @@ function DynamicBridge({
 	// Use refs for callbacks to avoid infinite loops from dependency changes
 	const onEventRef = useRef(onEvent);
 	const onWalletProviderReadyRef = useRef(onWalletProviderReady);
+	const onSignerReadyRef = useRef(onSignerReady);
 
 	// Keep refs up to date
 	useEffect(() => {
@@ -86,6 +111,10 @@ function DynamicBridge({
 	useEffect(() => {
 		onWalletProviderReadyRef.current = onWalletProviderReady;
 	}, [onWalletProviderReady]);
+
+	useEffect(() => {
+		onSignerReadyRef.current = onSignerReady;
+	}, [onSignerReady]);
 
 	// Notify when ready (only once)
 	useEffect(() => {
@@ -296,6 +325,63 @@ function DynamicBridge({
 			// Clear provider when wallet is not available
 			onWalletProviderReadyRef.current(null);
 		}
+	}, [activeWallet]);
+
+	// Expose Dynamic signer for EIP-7702 authorization signing
+	useEffect(() => {
+		if (!activeWallet || !isEthereumWallet(activeWallet) || !onSignerReadyRef.current) {
+			onSignerReadyRef.current?.(null);
+			return;
+		}
+
+		let cancelled = false;
+
+		(async () => {
+			try {
+				const walletClient = await activeWallet.getWalletClient('8453');
+				if (cancelled || !walletClient) return;
+
+				const signer: DynamicSignerBridge = {
+					signMessage: async ({ message }) => {
+						return activeWallet.signMessage(message) as Promise<string>;
+					},
+					signTransaction: async (tx) => {
+						return walletClient.signTransaction(tx as Parameters<typeof walletClient.signTransaction>[0]) as unknown as Promise<string>;
+					},
+					signTypedData: async (args) => {
+						return walletClient.signTypedData(args as Parameters<typeof walletClient.signTypedData>[0]) as unknown as Promise<string>;
+					},
+					signAuthorization: async (args) => {
+						if (!walletClient.signAuthorization) {
+							throw new Error('signAuthorization not supported by this wallet');
+						}
+						const result = await walletClient.signAuthorization({
+							contractAddress: args.contractAddress as `0x${string}`,
+							chainId: args.chainId,
+							nonce: args.nonce
+						} as Parameters<typeof walletClient.signAuthorization>[0]);
+						return {
+							r: (result as { r: `0x${string}` }).r,
+							s: (result as { s: `0x${string}` }).s,
+							v: (result as { v?: bigint }).v,
+							yParity: (result as { yParity?: number }).yParity
+						};
+					}
+				};
+
+				if (!cancelled) {
+					console.log('[dynamic] Signer bridge created for EIP-7702 support');
+					onSignerReadyRef.current?.(signer);
+				}
+			} catch (error) {
+				console.error('[dynamic] Failed to create signer bridge:', error);
+				if (!cancelled) onSignerReadyRef.current?.(null);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
 	}, [activeWallet]);
 
 	// Handle login trigger
