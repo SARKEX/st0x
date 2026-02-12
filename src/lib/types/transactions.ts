@@ -45,6 +45,11 @@ export interface TakeOrdersParams {
 	simulation?: OrderSimulation;
 
 	// Optional: per-order fill amounts (parallel to orders array in TakeOrdersConfigV5)
-	// Used for calculating per-batch maximumInput when splitting large orders
+	// Used for calculating per-batch maximumIO when splitting large orders
 	orderFillAmounts?: bigint[];
+
+	// Decimal precision of orderFillAmounts values.
+	// When IOIsInput=true (Buy+amount): input token decimals (takerWantsToken)
+	// When IOIsInput=false (Buy+spend, Sell): output token decimals (takerPaysToken)
+	orderFillDecimals?: number;
 }

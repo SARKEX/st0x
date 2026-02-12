@@ -26,6 +26,7 @@ import transactionStore from '$lib/stores/transaction';
 import { getSignerAddress } from '$lib/services/walletService';
 
 // Constants
+// Buffer for Buy+amount mode where maximumIO is an estimated receive amount
 const IO_RATIO_BUFFER = 1.0025; // 0.25% buffer for execution-time price variance
 
 export interface MarketOrderInput {
@@ -174,14 +175,25 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'Orders temporarily unavailable. Please try again.' };
 		}
 
+		// Determine if we can use an exact output cap (IOIsInput=false) instead of
+		// estimating the receive amount. This applies when the user specifies exactly
+		// how much they want to spend: Buy+spend (USD budget) or Sell (asset amount).
+		const useOutputCap = orderSide === 'Sell' || inputMode === 'spend';
+
 		// 5. Compute per-order fill amounts from walkResult
-		// Group fills by orderHash to get total fill amount per order
-		// For Buy: takerWantsToken is asset, so sum assetAmount
-		// For Sell: takerWantsToken is payment, so sum paymentAmount
+		// When useOutputCap: fill amounts are OUTPUT amounts (what taker pays), used with IOIsInput=false
+		// Otherwise: fill amounts are INPUT amounts (what taker receives), used with IOIsInput=true
 		const fillAmountsByOrderHash = new Map<string, bigint>();
 		for (const fill of walkResult.fills) {
 			const orderHash = fill.quote.orderHash;
-			const fillAmount = orderSide === 'Buy' ? fill.assetAmount : fill.paymentAmount;
+			let fillAmount: bigint;
+			if (useOutputCap) {
+				// Output fills: what taker pays per order
+				fillAmount = orderSide === 'Buy' ? fill.paymentAmount : fill.assetAmount;
+			} else {
+				// Input fills: what taker receives per order
+				fillAmount = orderSide === 'Buy' ? fill.assetAmount : fill.paymentAmount;
+			}
 			const current = fillAmountsByOrderHash.get(orderHash) ?? 0n;
 			fillAmountsByOrderHash.set(orderHash, current + fillAmount);
 		}
@@ -222,7 +234,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const primaryOrder = executableOrders[0];
 
 		// 7. Calculate approval amount
-		const { inputAmountFilled, outputAmountGiven, inputDecimals } = walkResult;
+		const { inputAmountFilled, outputAmountGiven, inputDecimals, outputDecimals } = walkResult;
 
 		let requiredApprovalAmount: bigint;
 		if (orderSide === 'Buy') {
@@ -236,10 +248,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			requiredApprovalAmount = amount;
 		}
 
-		// 8. Calculate maximumInput
-		const maximumInputFloat = Float.fromFixedDecimalLossy(inputAmountFilled, inputDecimals);
-
-		// 9. Get worst fill ratio and apply buffer
+		// 8. Get worst fill ratio
 		const worstFill = walkResult.fills[walkResult.fills.length - 1];
 		if (!worstFill?.quote?.ratio) {
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
@@ -250,27 +259,49 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
 
-		const bufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
-		if (bufferFloat.error || !bufferFloat.value) {
-			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+		// 9. Build TakeOrdersConfig
+		let takeOrdersConfig: TakeOrdersConfigV5;
+
+		if (useOutputCap) {
+			// Output-cap mode: IOIsInput=false, maximumIO is the exact spend amount.
+			// The user specifies exactly how much to spend (Buy+spend: USD budget, Sell: asset amount),
+			// so we pass that directly as the output cap. No buffer needed since the contract
+			// enforces the exact spend limit rather than an estimated receive amount.
+			const maximumOutputFloat = Float.fromFixedDecimalLossy(amount, outputDecimals);
+
+			takeOrdersConfig = {
+				minimumIO: Float.fromBigint(0n).asHex(),
+				maximumIO: maximumOutputFloat.float.asHex(),
+				maximumIORatio: originalRatioResult.value.asHex(),
+				IOIsInput: false as unknown as string,
+				orders: takeOrderConfigs,
+				data: '0x'
+			};
+		} else {
+			// Input-cap mode (Buy+amount): IOIsInput=true, maximumIO is estimated receive amount.
+			// Apply buffer to ratio since the receive estimate may drift with price movement.
+			const maximumInputFloat = Float.fromFixedDecimalLossy(inputAmountFilled, inputDecimals);
+
+			const bufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
+			if (bufferFloat.error || !bufferFloat.value) {
+				return { success: false, error: 'Unable to calculate order price. Please try again.' };
+			}
+			const bufferedRatioResult = originalRatioResult.value.mul(bufferFloat.value);
+			if (bufferedRatioResult.error || !bufferedRatioResult.value) {
+				return { success: false, error: 'Unable to calculate order price. Please try again.' };
+			}
+
+			takeOrdersConfig = {
+				minimumIO: Float.fromBigint(0n).asHex(),
+				maximumIO: maximumInputFloat.float.asHex(),
+				maximumIORatio: bufferedRatioResult.value.asHex(),
+				IOIsInput: true as unknown as string,
+				orders: takeOrderConfigs,
+				data: '0x'
+			};
 		}
 
-		const bufferedRatioResult = originalRatioResult.value.mul(bufferFloat.value);
-		if (bufferedRatioResult.error || !bufferedRatioResult.value) {
-			return { success: false, error: 'Unable to calculate order price. Please try again.' };
-		}
-
-		// 10. Build TakeOrdersConfig
-		const takeOrdersConfig: TakeOrdersConfigV5 = {
-			minimumIO: Float.fromBigint(0n).asHex(),
-			maximumIO: maximumInputFloat.float.asHex(),
-			maximumIORatio: bufferedRatioResult.value.asHex(),
-			IOIsInput: true as unknown as string, // Runtime expects boolean; package types incorrectly declare string
-			orders: takeOrderConfigs,
-			data: '0x'
-		};
-
-		// 11. Determine taker perspective tokens
+		// 10. Determine taker perspective tokens
 		const takerWantsInfo: TokenInfo =
 			orderSide === 'Buy'
 				? { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol }
@@ -289,7 +320,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					}
 				: { address: assetToken.address, decimals: assetToken.decimals, symbol: assetToken.symbol };
 
-		// 12. Calculate requested amount
+		// 11. Calculate requested amount
 		const requestedTakerWantsAmount =
 			orderSide === 'Buy'
 				? inputMode === 'spend'
@@ -297,8 +328,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					: amount
 				: inputAmountFilled;
 
-		// 13. Build recalculate callback if needed
-		const shouldRecalculate = orderSide === 'Sell' || inputMode === 'spend';
+		// 12. Build recalculate callback if needed
+		// Output-cap mode always recalculates (to get fresh ratio after approval wait).
+		// The spend amount stays fixed; only the ratio is refreshed from current quotes.
+		const shouldRecalculate = useOutputCap;
 		const recalculateConfig =
 			shouldRecalculate && refreshQuotes
 				? async (): Promise<TakeOrdersConfigV5 | null> => {
@@ -318,11 +351,6 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 								return null;
 							}
 
-							const freshMaximumInputFloat = Float.fromFixedDecimalLossy(
-								freshWalkResult.inputAmountFilled,
-								freshWalkResult.inputDecimals
-							);
-
 							const freshWorstFill = freshWalkResult.fills[freshWalkResult.fills.length - 1];
 							if (!freshWorstFill?.quote?.ratio) {
 								return null;
@@ -333,21 +361,17 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 								return null;
 							}
 
-							const freshBufferFloat = Float.parse(IO_RATIO_BUFFER.toString());
-							if (freshBufferFloat.error || !freshBufferFloat.value) {
-								return null;
-							}
-
-							const freshBufferedRatioResult = freshRatioResult.value.mul(freshBufferFloat.value);
-							if (freshBufferedRatioResult.error || !freshBufferedRatioResult.value) {
-								return null;
-							}
+							// Output-cap: use exact spend amount (unchanged), fresh ratio (no buffer)
+							const freshMaximumOutputFloat = Float.fromFixedDecimalLossy(
+								amount,
+								freshWalkResult.outputDecimals
+							);
 
 							return {
 								minimumIO: Float.fromBigint(0n).asHex(),
-								maximumIO: freshMaximumInputFloat.float.asHex(),
-								maximumIORatio: freshBufferedRatioResult.value.asHex(),
-								IOIsInput: true as unknown as string, // Runtime expects boolean; package types incorrectly declare string
+								maximumIO: freshMaximumOutputFloat.float.asHex(),
+								maximumIORatio: freshRatioResult.value.asHex(),
+								IOIsInput: false as unknown as string,
 								orders: takeOrderConfigs,
 								data: '0x'
 							};
@@ -357,7 +381,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					}
 				: undefined;
 
-		// 14. Execute transaction
+		// 13. Execute transaction
 		const params: TakeOrdersParams = {
 			orderData: primaryOrder.orderData,
 			ioIndexes: { input: primaryOrder.inputIOIndex, output: primaryOrder.outputIOIndex },
@@ -365,7 +389,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			takerPaysToken: takerPaysInfo,
 			requestedTakerWantsAmount,
 			simulation: walkResult,
-			orderFillAmounts
+			orderFillAmounts,
+			orderFillDecimals: useOutputCap ? outputDecimals : inputDecimals
 		};
 
 		await transactionStore.handleTakeOrders(

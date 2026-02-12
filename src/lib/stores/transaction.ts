@@ -1450,12 +1450,9 @@ const transactionStore = () => {
 			originalMaximumIORatio: finalConfig.maximumIORatio
 		});
 
+		const fillDecimals = params.orderFillDecimals ?? params.takerWantsToken.decimals;
 		const { batches, needsSplit } = isDynamicWallet
-			? splitOrdersIntoBatches(
-					finalConfig,
-					params.orderFillAmounts,
-					params.takerWantsToken.decimals
-				)
+			? splitOrdersIntoBatches(finalConfig, params.orderFillAmounts, fillDecimals)
 			: { batches: [finalConfig], needsSplit: false };
 
 		if (!isDynamicWallet) {
