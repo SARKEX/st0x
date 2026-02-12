@@ -1028,8 +1028,9 @@ export class RhinestoneClient {
 				calls: [transferCall],
 				tokenRequests: [
 					{
-						// tokenRequests: what tokens to pull from the SOURCE chain
-						address: normalizedParams.sourceToken.address as Address,
+						// tokenRequests: what tokens you want on the DESTINATION chain
+						// The SDK resolves this address against targetChain, so use the target token
+						address: normalizedParams.targetToken.address as Address,
 						amount: normalizedParams.amount
 					}
 				],
