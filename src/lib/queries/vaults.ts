@@ -98,10 +98,7 @@ export type UserVaultsPage = {
  * @param network - Current network
  * @param signerAddress - User's wallet address
  */
-export function createUserVaultsQuery(
-	network: Network | null,
-	signerAddress: string | null
-) {
+export function createUserVaultsQuery(network: Network | null, signerAddress: string | null) {
 	return createInfiniteQuery<
 		UserVaultsPage,
 		Error,

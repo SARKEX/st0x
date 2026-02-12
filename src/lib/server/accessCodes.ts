@@ -269,7 +269,10 @@ export async function isWalletRegistered(address: string): Promise<boolean> {
 	// all wallets as unregistered (devStore is always empty on Vercel).
 	// This prevents redirect loops when Redis has connection issues.
 	if (process.env.NODE_ENV === 'production') {
-		console.warn('[accessCodes] Redis unavailable, failing open for wallet check:', normalizedAddress);
+		console.warn(
+			'[accessCodes] Redis unavailable, failing open for wallet check:',
+			normalizedAddress
+		);
 		return true;
 	}
 

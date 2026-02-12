@@ -209,4 +209,3 @@ export interface WithdrawWithReceipt extends Withdraw {
 	};
 	timestamp: string;
 }
-
