@@ -92,6 +92,8 @@ export interface SendModalToken {
 	decimals: number;
 	balance: string; // formatted balance string
 	balanceRaw: bigint; // raw balance for max calculation
+	/** Chain ID for the token (e.g. 8453 Base, 42161 Arbitrum). Used for send + pay-gas-in-USDC on that chain. */
+	chainId?: number;
 }
 export const sendModalToken = writable<SendModalToken | null>(null);
 
