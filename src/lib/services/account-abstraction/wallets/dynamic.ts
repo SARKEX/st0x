@@ -214,6 +214,7 @@ export async function getDynamicAccountForRhinestone(
 		};
 		// 1) Remove EIP712Domain if present (common Dynamic/WaaS edge case)
 		const typesRecord = (typedData?.types || {}) as Record<string, unknown>;
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const { EIP712Domain: _, ...typesWithoutDomain } = typesRecord;
 
 		// 2) Convert bigint -> string deeply in domain/message

@@ -1418,7 +1418,7 @@ export class RhinestoneClient {
 				return authsList as unknown as SignedAuthorizationList;
 			};
 
-			let authorizations = await signAuths();
+			const authorizations = await signAuths();
 
 			const submit = async (auths: SignedAuthorizationList) => {
 				debugLog('Submitting cross-chain transaction...');
@@ -1437,6 +1437,10 @@ export class RhinestoneClient {
 				);
 			} catch (submitErr) {
 				const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+				console.error('[Rhinestone Client] Failed to submit cross-chain transaction:', {
+					error: msg,
+					stack: submitErr instanceof Error ? submitErr.stack : undefined
+				});
 
 				// keep your existing submitErr handling exactly as-is
 				throw submitErr;

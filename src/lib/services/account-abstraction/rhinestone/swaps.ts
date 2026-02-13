@@ -267,6 +267,7 @@ export async function estimateSwapCost(
 export async function validateSwap(
 	sourceToken: PaymentToken,
 	amount: bigint,
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	_userAddress: Address
 ): Promise<{ valid: boolean; error?: string }> {
 	const client = getRhinestoneClient();

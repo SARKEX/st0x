@@ -316,10 +316,6 @@
 	// For Buy orders, use selectedSourceToken if available (USDT/WETH), otherwise default to paymentToken
 	$: spendingToken = orderSide === 'Buy' ? selectedSourceToken || paymentToken : assetToken;
 
-	// Check if oracle price is available (used for price guards)
-	$: oracleAddress = assetToken?.address?.toLowerCase();
-	$: oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
-	$: _oraclePriceAvailable = oracleEntry?.price && oracleEntry.price > 0;
 	// Percentage buttons need market price for BUY in 'amount' mode (to convert payment to asset amount)
 	// In 'spend' mode, no conversion needed - direct percentage of balance
 	$: percentageButtonsDisabled =

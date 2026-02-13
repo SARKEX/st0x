@@ -203,7 +203,7 @@
 			{/if}
 
 			<!-- Payment Options -->
-			{#each allNetworkTokens as { network: _network, networkName, tokens }}
+			{#each allNetworkTokens as { networkName, tokens }}
 				<div class="network-group">
 					<div class="network-label">{networkName}</div>
 					{#each tokens as token}
