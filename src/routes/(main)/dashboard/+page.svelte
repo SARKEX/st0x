@@ -470,16 +470,13 @@
 					return balances
 						.filter((b) => b.balance > 0n)
 						.map((b) => {
-							const networkName =
-								NETWORK_NAMES[b.token.chainId as SupportedNetworkId] ?? '';
+							const networkName = NETWORK_NAMES[b.token.chainId as SupportedNetworkId] ?? '';
 							const isCurrentChain = b.token.chainId === $currentNetwork?.chainId;
 							return {
 								id: `${b.token.address}-${b.token.chainId}`,
 								address: b.token.address,
 								name: isCurrentChain ? b.token.name : `${b.token.name} (${networkName})`,
-								symbol: isCurrentChain
-									? b.token.symbol
-									: `${b.token.symbol} (${networkName})`,
+								symbol: isCurrentChain ? b.token.symbol : `${b.token.symbol} (${networkName})`,
 								walletBalance: b.balance,
 								decimals: b.token.decimals,
 								chainId: b.token.chainId

@@ -346,10 +346,14 @@ function DynamicBridge({
 						return activeWallet.signMessage(message) as Promise<string>;
 					},
 					signTransaction: async (tx) => {
-						return walletClient.signTransaction(tx as Parameters<typeof walletClient.signTransaction>[0]) as unknown as Promise<string>;
+						return walletClient.signTransaction(
+							tx as Parameters<typeof walletClient.signTransaction>[0]
+						) as unknown as Promise<string>;
 					},
 					signTypedData: async (args) => {
-						return walletClient.signTypedData(args as Parameters<typeof walletClient.signTypedData>[0]) as unknown as Promise<string>;
+						return walletClient.signTypedData(
+							args as Parameters<typeof walletClient.signTypedData>[0]
+						) as unknown as Promise<string>;
 					},
 					signAuthorization: async () => {
 						// Dynamic MPC wallets cannot perform raw ECDSA signing required
@@ -359,7 +363,7 @@ function DynamicBridge({
 						// authorized). This fallback should not be reached in normal flow.
 						throw new Error(
 							'signAuthorization is not supported for Dynamic MPC wallets. ' +
-							'The Rhinestone SDK handles authorizations automatically.'
+								'The Rhinestone SDK handles authorizations automatically.'
 						);
 					}
 				};

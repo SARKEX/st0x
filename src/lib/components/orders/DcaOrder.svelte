@@ -66,8 +66,8 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
-			const match = ALL_TOKENS.find(
-				(token) => addressesEqual(token.address, settlementTokenConfig.address)
+			const match = ALL_TOKENS.find((token) =>
+				addressesEqual(token.address, settlementTokenConfig.address)
 			);
 			selectedOutputToken =
 				match ||
@@ -94,8 +94,10 @@
 	// Reference to TradeAmountInput for programmatic updates
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
-	$: isInputTokenSameAsOutputToken =
-		addressesEqual(selectedOutputToken?.address, selectedInputToken?.address);
+	$: isInputTokenSameAsOutputToken = addressesEqual(
+		selectedOutputToken?.address,
+		selectedInputToken?.address
+	);
 
 	// errors
 	let selectedAmountError: boolean = false;
@@ -237,7 +239,10 @@
 				}
 
 				// Execute the cross-chain swap
-				const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount, $payFeesInStablecoin);
+				const swapResult = await aaPaymentStore.executeSwapIfNeeded(
+					swapAmount,
+					$payFeesInStablecoin
+				);
 				if (swapResult === null) {
 					track('cross_chain_swap_failed', {
 						source_token: selectedSourceToken.symbol,

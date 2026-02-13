@@ -36,8 +36,7 @@
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
 	// Swap quote for cross-chain fee adjustment
-	let swapQuote: { inputAmount: bigint; outputAmount: bigint; requiresSwap: boolean } | null =
-		null;
+	let swapQuote: { inputAmount: bigint; outputAmount: bigint; requiresSwap: boolean } | null = null;
 	let isLoadingSwapQuote = false;
 
 	// AA state for Buy orders (source token)

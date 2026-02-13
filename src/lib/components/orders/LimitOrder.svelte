@@ -100,8 +100,8 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
-			const match = ALL_TOKENS.find(
-				(token) => addressesEqual(token.address, settlementTokenConfig.address)
+			const match = ALL_TOKENS.find((token) =>
+				addressesEqual(token.address, settlementTokenConfig.address)
 			);
 			settlementToken = match || (settlementTokenConfig as unknown as CategorizedToken);
 		} else {
@@ -151,8 +151,10 @@
 	// Reference to TradeAmountInput for programmatic updates
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
-	$: isInputTokenSameAsOutputToken =
-		addressesEqual(orderInputToken?.address, orderOutputToken?.address);
+	$: isInputTokenSameAsOutputToken = addressesEqual(
+		orderInputToken?.address,
+		orderOutputToken?.address
+	);
 
 	// Check if selected amount is below minimum trade size ($1)
 	// Uses same logic as DCA for consistency
@@ -279,7 +281,9 @@
 				if (needsSwap && selectedSourceToken) {
 					// Calculate amount in source token (accounting for different decimals and pricing)
 					const sourceDecimals = selectedSourceToken.decimals;
-					const settlementInUSD = parseFloat(formatUnits(settlementAmount, settlementToken.decimals));
+					const settlementInUSD = parseFloat(
+						formatUnits(settlementAmount, settlementToken.decimals)
+					);
 					const isStablecoin =
 						selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
 
@@ -300,7 +304,10 @@
 					}
 
 					// Execute the cross-chain swap
-					const swapResult = await aaPaymentStore.executeSwapIfNeeded(swapAmount, $payFeesInStablecoin);
+					const swapResult = await aaPaymentStore.executeSwapIfNeeded(
+						swapAmount,
+						$payFeesInStablecoin
+					);
 					if (swapResult === null) {
 						track('cross_chain_swap_failed', {
 							order_type: 'limit',
