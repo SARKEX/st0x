@@ -44,7 +44,8 @@
 	
 	const BLOCK_EXPLORER_BY_CHAIN: Record<number, string> = {
 		8453: 'https://basescan.org',
-		42161: 'https://arbiscan.io'
+		42161: 'https://arbiscan.io',
+		1: 'https://etherscan.io'
 	};
 
 	// Token type for the selector
@@ -130,6 +131,9 @@
 			$sendModalToken.address === 'native' ? 'native' : $sendModalToken.address.toLowerCase();
 		didPreselectThisOpen = true;
 	}
+
+	// Reset preselect flag when modal closes so next open can preselect again
+	$: if (!$showSendFundsModal) didPreselectThisOpen = false;
 
 	// Get the selected token object by address
 	$: selectedToken = (() => {
@@ -506,7 +510,9 @@
 							aria-label="Token"
 						>
 							{#each availableTokens as token}
-								<option value={token.address === 'native' ? 'native' : token.address}>
+								<option
+									value={token.address === 'native' ? 'native' : token.address.toLowerCase()}
+								>
 									{token.symbol}{#if token.name && token.name !== token.symbol} ({token.name}){/if}
 								</option>
 							{/each}
