@@ -5,27 +5,34 @@ import { env } from '$env/dynamic/private';
 import { validateCsrfToken, getCsrfTokenFromRequest } from '$lib/server/csrf';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 
-const CDP_API_KEY_ID = env.CDP_API_KEY_ID;
-const CDP_API_KEY_SECRET = env.CDP_API_KEY_SECRET;
-
-const COINBASE_TOKEN_API = 'https://api.developer.coinbase.com/onramp/v1/token';
 const COINBASE_API_HOST = 'api.developer.coinbase.com';
 const COINBASE_TOKEN_PATH = '/onramp/v1/token';
+const COINBASE_TOKEN_API = `https://${COINBASE_API_HOST}${COINBASE_TOKEN_PATH}`;
 
 /**
  * Generate a JWT for Coinbase CDP API authentication using Ed25519
  * Uses Node.js built-in crypto — no external dependencies needed
  */
 function generateCdpJwt(apiKeyId: string, apiKeySecret: string): string {
-	// Normalize PEM key (env vars often store \n as literal characters)
-	const normalizedKey = apiKeySecret.includes('-----BEGIN')
-		? apiKeySecret.replace(/\\n/g, '\n')
-		: apiKeySecret;
+	let privateKey: crypto.KeyObject;
 
-	const privateKey = crypto.createPrivateKey({
-		key: normalizedKey,
-		format: 'pem'
-	});
+	if (apiKeySecret.includes('-----BEGIN')) {
+		// PEM format — normalize escaped newlines from env vars
+		privateKey = crypto.createPrivateKey({
+			key: apiKeySecret.replace(/\\n/g, '\n'),
+			format: 'pem'
+		});
+	} else {
+		// Raw Ed25519 seed (base64-encoded, 32 bytes) — wrap in PKCS#8 DER
+		const seed = Buffer.from(apiKeySecret, 'base64');
+		// Ed25519 PKCS#8 prefix: 16 bytes of ASN.1 header for a 32-byte Ed25519 key
+		const pkcs8Prefix = Buffer.from('302e020100300506032b657004220420', 'hex');
+		privateKey = crypto.createPrivateKey({
+			key: Buffer.concat([pkcs8Prefix, seed]),
+			format: 'der',
+			type: 'pkcs8'
+		});
+	}
 
 	const header = {
 		alg: 'EdDSA',
@@ -55,7 +62,9 @@ function generateCdpJwt(apiKeyId: string, apiKeySecret: string): string {
 }
 
 export const POST: RequestHandler = async ({ request, cookies, url }) => {
-	// Check if CDP keys are configured
+	const CDP_API_KEY_ID = env.CDP_API_KEY_ID;
+	const CDP_API_KEY_SECRET = env.CDP_API_KEY_SECRET;
+
 	if (!CDP_API_KEY_ID || !CDP_API_KEY_SECRET) {
 		console.error('[Coinbase] CDP API keys not configured');
 		return json(
@@ -146,14 +155,10 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
 
 		const tokenData = await tokenResponse.json();
 
-		// Build the redirect URL for off-ramp (uses the app's origin)
-		const appOrigin = url.origin;
-		const redirectUrl = `${appOrigin}/dashboard`;
-
 		return json({
 			success: true,
 			token: tokenData.token,
-			redirectUrl
+			redirectUrl: `${url.origin}/dashboard`
 		});
 	} catch (error) {
 		console.error('[Coinbase] Error generating session:', error);

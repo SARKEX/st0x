@@ -2,8 +2,7 @@
 	import { browser } from '$app/environment';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import CoinbaseOnrampModal from '$lib/components/CoinbaseOnrampModal.svelte';
-	import CoinbaseOfframpModal from '$lib/components/CoinbaseOfframpModal.svelte';
+	import CoinbaseModal from '$lib/components/CoinbaseModal.svelte';
 	import {
 		showDepositModal,
 		closeDepositModal,
@@ -15,8 +14,7 @@
 	type ModalView = 'options' | 'buy' | 'withdraw' | 'deposit';
 	let currentView: ModalView = 'options';
 	let copied = false;
-	let showCoinbaseOnramp = false;
-	let showCoinbaseOfframp = false;
+	let coinbaseMode: 'onramp' | 'offramp' | null = null;
 
 	// QR code generation
 	let qrCodeDataUrl: string = '';
@@ -50,19 +48,12 @@
 
 	// For external EOA users, go directly to buy view
 	// For Dynamic users, show options (buy, withdraw, or deposit)
+	const VALID_VIEWS = new Set<ModalView>(['buy', 'withdraw', 'deposit']);
+
 	$: if ($showDepositModal) {
 		if ($authMethod === 'dynamic') {
-			// Dynamic users see options menu
-			currentView =
-				$depositModalInitialView === 'deposit'
-					? 'deposit'
-					: $depositModalInitialView === 'buy'
-						? 'buy'
-						: $depositModalInitialView === 'withdraw'
-							? 'withdraw'
-							: 'options';
+			currentView = VALID_VIEWS.has($depositModalInitialView) ? $depositModalInitialView : 'options';
 		} else {
-			// External EOA users go directly to buy
 			currentView = 'buy';
 		}
 	}
@@ -70,39 +61,13 @@
 	function handleClose() {
 		closeDepositModal();
 		copied = false;
-		showCoinbaseOnramp = false;
-		showCoinbaseOfframp = false;
+		coinbaseMode = null;
 		currentView = 'options';
 	}
 
-	function showBuyView() {
-		currentView = 'buy';
-	}
-
-	function showWithdrawView() {
-		currentView = 'withdraw';
-	}
-
-	function handleBuyCrypto() {
-		showCoinbaseOnramp = true;
-	}
-
-	function handleWithdrawFunds() {
-		showCoinbaseOfframp = true;
-	}
-
-	function handleCoinbaseOnrampClose() {
-		showCoinbaseOnramp = false;
+	function handleCoinbaseClose() {
+		coinbaseMode = null;
 		handleClose();
-	}
-
-	function handleCoinbaseOfframpClose() {
-		showCoinbaseOfframp = false;
-		handleClose();
-	}
-
-	function showDepositView() {
-		currentView = 'deposit';
 	}
 
 	function goBack() {
@@ -128,32 +93,27 @@
 
 	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
 
-	$: modalTitle =
-		currentView === 'options'
-			? 'Manage Funds'
-			: currentView === 'buy'
-				? 'Buy USDC'
-				: currentView === 'withdraw'
-					? 'Withdraw Funds'
-					: 'Deposit from Wallet';
+	const VIEW_TITLES: Record<ModalView, string> = {
+		options: 'Manage Funds',
+		buy: 'Buy USDC',
+		withdraw: 'Withdraw Funds',
+		deposit: 'Deposit from Wallet'
+	};
+
+	$: modalTitle = VIEW_TITLES[currentView];
 </script>
 
-<!-- Coinbase On-ramp Modal (separate from main modal) -->
-<CoinbaseOnrampModal
-	show={showCoinbaseOnramp}
-	walletAddress={$walletAddress}
-	onClose={handleCoinbaseOnrampClose}
-/>
-
-<!-- Coinbase Off-ramp Modal (separate from main modal) -->
-<CoinbaseOfframpModal
-	show={showCoinbaseOfframp}
-	walletAddress={$walletAddress}
-	onClose={handleCoinbaseOfframpClose}
-/>
+{#if coinbaseMode}
+	<CoinbaseModal
+		show={true}
+		mode={coinbaseMode}
+		walletAddress={$walletAddress}
+		onClose={handleCoinbaseClose}
+	/>
+{/if}
 
 <Modal
-	show={$showDepositModal && !showCoinbaseOnramp && !showCoinbaseOfframp}
+	show={$showDepositModal && !coinbaseMode}
 	title={modalTitle}
 	maxWidthClass="max-w-md"
 	onClose={handleClose}
@@ -166,7 +126,7 @@
 			<!-- Buy Crypto Option -->
 			<button
 				type="button"
-				on:click={showBuyView}
+				on:click={() => (currentView = 'buy')}
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
 			>
 				<div class="flex items-start gap-4">
@@ -212,7 +172,7 @@
 			<!-- Withdraw Funds Option -->
 			<button
 				type="button"
-				on:click={showWithdrawView}
+				on:click={() => (currentView = 'withdraw')}
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
 			>
 				<div class="flex items-start gap-4">
@@ -258,7 +218,7 @@
 			<!-- Deposit from Wallet Option -->
 			<button
 				type="button"
-				on:click={showDepositView}
+				on:click={() => (currentView = 'deposit')}
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
 			>
 				<div class="flex items-start gap-4">
@@ -366,7 +326,7 @@
 			<!-- Actions -->
 			<div class="flex gap-3">
 				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
-				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>Continue to Purchase</Button>
+				<Button on:click={() => (coinbaseMode = 'onramp')} variant="primary" fullWidth>Continue to Purchase</Button>
 			</div>
 		</div>
 	{:else if currentView === 'withdraw'}
@@ -440,7 +400,7 @@
 			<!-- Actions -->
 			<div class="flex gap-3">
 				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
-				<Button on:click={handleWithdrawFunds} variant="primary" fullWidth>Continue to Withdraw</Button>
+				<Button on:click={() => (coinbaseMode = 'offramp')} variant="primary" fullWidth>Continue to Withdraw</Button>
 			</div>
 		</div>
 	{:else}

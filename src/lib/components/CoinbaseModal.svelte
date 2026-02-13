@@ -4,29 +4,29 @@
 
 	export let show: boolean = false;
 	export let walletAddress: string | null = null;
+	export let mode: 'onramp' | 'offramp' = 'onramp';
 	export let onClose: () => void;
 
-	let coinbaseUrl: string = '';
+	const isOnramp = mode === 'onramp';
+
 	let isLoading: boolean = false;
 	let error: string | null = null;
+	let opened: boolean = false;
 
-	// Fetch session token when modal opens with a wallet address
 	$: if (show && walletAddress) {
-		fetchSessionToken(walletAddress);
+		fetchAndOpen(walletAddress);
 	}
 
-	// Reset state when modal closes
 	$: if (!show) {
-		coinbaseUrl = '';
 		error = null;
+		opened = false;
 	}
 
-	async function fetchSessionToken(address: string) {
+	async function fetchAndOpen(address: string) {
 		isLoading = true;
 		error = null;
 
 		try {
-			// Fetch CSRF token first
 			const csrfResponse = await fetch('/api/auth/csrf');
 			if (!csrfResponse.ok) {
 				throw new Error('Failed to get security token');
@@ -42,7 +42,7 @@
 					'Content-Type': 'application/json',
 					'X-CSRF-Token': csrfToken
 				},
-				body: JSON.stringify({ walletAddress: address, mode: 'offramp' })
+				body: JSON.stringify({ walletAddress: address, mode })
 			});
 
 			const data = await response.json();
@@ -51,20 +51,24 @@
 				throw new Error(data.error || 'Failed to initialize Coinbase');
 			}
 
-			// Build the Coinbase off-ramp URL with session token
 			const params = new URLSearchParams({
 				sessionToken: data.token,
 				defaultAsset: 'USDC',
 				defaultNetwork: 'base'
 			});
 
-			if (data.redirectUrl) {
+			if (!isOnramp && data.redirectUrl) {
 				params.set('redirectUrl', data.redirectUrl);
 			}
 
-			coinbaseUrl = `https://pay.coinbase.com/v3/sell/input?${params.toString()}`;
+			const basePath = isOnramp ? '/buy/select-asset' : '/v3/sell/input';
+			const coinbaseUrl = `https://pay.coinbase.com${basePath}?${params.toString()}`;
+
+			window.open(coinbaseUrl, '_blank', 'noopener,noreferrer');
+			opened = true;
 		} catch (err) {
-			console.error('[Coinbase Offramp] Failed to get session token:', err);
+			const label = isOnramp ? 'Onramp' : 'Offramp';
+			console.error(`[Coinbase ${label}] Failed to get session token:`, err);
 			error = err instanceof Error ? err.message : 'Failed to initialize Coinbase';
 		} finally {
 			isLoading = false;
@@ -72,7 +76,12 @@
 	}
 </script>
 
-<Modal {show} title="Withdraw Funds" maxWidthClass="max-w-lg" maxHeightVh={90} {onClose}>
+<Modal
+	{show}
+	title={isOnramp ? 'Buy USDC' : 'Withdraw Funds'}
+	maxWidthClass="max-w-md"
+	{onClose}
+>
 	{#if isLoading}
 		<div class="flex items-center justify-center py-16">
 			<LoadingSpinner variant="inline" size="md" text="Connecting to Coinbase..." />
@@ -94,40 +103,59 @@
 			<p class="text-gray-400">{error}</p>
 			<button
 				type="button"
-				on:click={() => walletAddress && fetchSessionToken(walletAddress)}
+				on:click={() => walletAddress && fetchAndOpen(walletAddress)}
 				class="mt-4 text-sm text-blue-400 hover:text-blue-300"
 			>
 				Try again
 			</button>
 		</div>
-	{:else if walletAddress && coinbaseUrl}
-		<div class="flex flex-col items-center">
-			<p class="mb-4 text-sm text-gray-400">
-				Cash out your USDC to your bank account via Coinbase. A Coinbase account with linked bank
-				details is required.
-			</p>
+	{:else if opened}
+		<div class="py-8 text-center">
 			<div
-				class="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-left"
+				class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/20"
 			>
-				<p class="text-xs text-yellow-400">
-					Off-ramp transactions must be completed within 30 minutes. You will need to approve an
-					onchain transaction to send funds to Coinbase.
-				</p>
+				<svg class="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+					/>
+				</svg>
 			</div>
-			<div class="w-full overflow-hidden rounded-lg">
-				<iframe
-					src={coinbaseUrl}
-					title="Coinbase Offramp"
-					height="630"
-					width="100%"
-					allow="payment"
-					class="border-0"
-				/>
-			</div>
+			<p class="mb-2 text-white">Coinbase opened in a new tab</p>
+			<p class="text-sm text-gray-400">
+				{#if isOnramp}
+					Complete your purchase in the Coinbase tab. Funds will arrive in your wallet on Base.
+				{:else}
+					Complete your withdrawal in the Coinbase tab. You will need to approve an onchain
+					transaction to send funds.
+				{/if}
+			</p>
+			{#if !isOnramp}
+				<div
+					class="mx-auto mt-4 max-w-sm rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2"
+				>
+					<p class="text-xs text-yellow-400">
+						Off-ramp transactions must be completed within 30 minutes.
+					</p>
+				</div>
+			{/if}
+			<button
+				type="button"
+				on:click={onClose}
+				class="mt-6 rounded-lg bg-gray-700 px-6 py-2 text-sm text-white hover:bg-gray-600"
+			>
+				Close
+			</button>
 		</div>
 	{:else}
 		<div class="py-8 text-center">
-			<p class="text-gray-400">Please connect your wallet to withdraw funds.</p>
+			<p class="text-gray-400">
+				{isOnramp
+					? 'Please connect your wallet to purchase crypto.'
+					: 'Please connect your wallet to withdraw funds.'}
+			</p>
 		</div>
 	{/if}
 </Modal>
