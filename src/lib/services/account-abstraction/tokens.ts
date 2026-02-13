@@ -233,6 +233,14 @@ export function getDefaultPaymentToken(chainId: SupportedNetworkId): PaymentToke
 }
 
 /**
+ * Get USDC contract address for a chain (single source of truth for Send funds, swaps, gas reserve checks).
+ * Returns undefined if the chain has no USDC config.
+ */
+export function getUSDCAddressForChain(chainId: number): Address | undefined {
+	return getDefaultPaymentToken(chainId as SupportedNetworkId)?.address;
+}
+
+/**
  * Get a specific token by symbol and network
  */
 export function getPaymentToken(

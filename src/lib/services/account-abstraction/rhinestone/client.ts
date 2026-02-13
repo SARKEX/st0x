@@ -52,17 +52,16 @@ import {
 import { getGasOracle } from './gasOracle';
 import { env } from '$env/dynamic/public';
 import { isDynamicEmbeddedWallet } from '../wallets/dynamic';
-import { PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
+import { getPaymentTokensForNetwork } from '../tokens';
 
 import { createRpcTransport } from '$lib/utils/rpc';
 
 /**
- * Get token address by symbol and chain from PAYMENT_TOKENS_BY_NETWORK
- * This uses the single source of truth for token addresses.
+ * Get token address by symbol and chain. Uses account-abstraction tokens so USDC (and other fee assets) resolve on Base, Arbitrum, etc.
  */
 function resolveTokenAddress(symbol: string, chainId: number): `0x${string}` | undefined {
-	const tokens = PAYMENT_TOKENS_BY_NETWORK[chainId];
-	if (!tokens) return undefined;
+	const tokens = getPaymentTokensForNetwork(chainId as SupportedNetworkId);
+	if (!tokens?.length) return undefined;
 
 	const s = symbol.toUpperCase();
 	const token = tokens.find((t) => t.symbol?.toUpperCase() === s);
@@ -547,10 +546,14 @@ export class RhinestoneClient {
 			}
 		}
 
-		// Only try manual signing if the SDK failed (threw an error).
-		// If the SDK succeeded with 0 authorizations, it means none are needed.
-		if (!sdkSucceeded && authorizations.length === 0 && walletAccount && chainId) {
-			debugLog('SDK returned empty authorizations, attempting manual signing for chain', chainId);
+		// When we have no authorizations but have a chainId (e.g. same-chain Arbitrum with ERC20 gas),
+		// the backend may still require an EIP-7702 delegate authorization for that chain. Try manual
+		// signing so the intent can execute (SDK sometimes returns [] for same-chain).
+		if (authorizations.length === 0 && walletAccount && chainId) {
+			debugLog('No authorizations for chain; attempting manual EIP-7702 signing', {
+				chainId,
+				sdkSucceeded
+			});
 			try {
 				const walletWithSignAuth = walletAccount as WalletAccountWithSignAuth;
 
@@ -584,7 +587,14 @@ export class RhinestoneClient {
 						{ originalError: manualError, chainId }
 					);
 				}
-				console.warn('[Rhinestone Client] Manual authorization signing failed:', msg);
+				// Dynamic MPC wallets don't support manual signAuthorization; SDK handles it. Expected.
+				if (msg.includes('Dynamic MPC') || msg.includes('Rhinestone SDK handles authorizations')) {
+					debugLog('Skipping manual auth (wallet uses SDK-managed authorizations)', {
+						chainId
+					});
+				} else {
+					console.warn('[Rhinestone Client] Manual authorization signing failed:', msg);
+				}
 			}
 		}
 
@@ -1879,27 +1889,67 @@ export class RhinestoneClient {
 				targetChain: txResult.targetChain
 			});
 
-			const status = await rhinestoneAccount.waitForExecution(txResult);
-			const directHash = status?.fill?.hash ?? status?.claims?.find((c) => c?.hash)?.hash;
+			function extractHash(st: TransactionStatus | null | undefined): Hex | undefined {
+				if (!st) return undefined;
+				// Standard paths
+				const fromFill = (st as TransactionStatus).fill?.hash;
+				const fromClaims = (st as TransactionStatus).claims?.find((c) => c?.hash)?.hash;
+				const h = fromFill ?? fromClaims;
+				if (h && h !== '0x') return h;
+				// SDK may return different shapes per chain (e.g. Arbitrum)
+				const anySt = st as unknown as Record<string, unknown>;
+				const alt = (anySt?.transactionHash ?? anySt?.hash ?? anySt?.txHash) as string | undefined;
+				if (alt && typeof alt === 'string' && alt.startsWith('0x') && alt.length === 66)
+					return alt as Hex;
+				// fill or claims might be arrays
+				const fillArr = anySt?.fill as Array<{ hash?: string }> | undefined;
+				if (Array.isArray(fillArr) && fillArr[0]?.hash) return fillArr[0].hash as Hex;
+				const claimsArr = anySt?.claims as Array<{ hash?: string }> | undefined;
+				if (Array.isArray(claimsArr)) {
+					const claimHash = claimsArr.find((c) => c?.hash && c.hash !== '0x')?.hash;
+					if (claimHash) return claimHash as Hex;
+				}
+				return undefined;
+			}
 
-			if (directHash && directHash !== '0x') {
+			let status: TransactionStatus | null | undefined =
+				await rhinestoneAccount.waitForExecution(txResult);
+			let directHash = extractHash(status);
+			if (!directHash && status != null) {
+				debugLog('Execution status keys (hash missing)', {
+					keys: Object.keys(status as object),
+					intentId: txResult.id.toString(),
+					chainId: chain.id
+				});
+			}
+
+			if (directHash) {
 				return { txHash: directHash, intentId: txResult.id.toString() };
 			}
 
+			// Backend may attach the chain tx hash a few seconds later (e.g. on Arbitrum)
 			console.warn(
-				'[Rhinestone Client] No txHash found in execution status. Polling for txHash...',
-				{
-					intentId: txResult.id.toString()
-				}
+				'[Rhinestone Client] No txHash in first execution status. Waiting 5s then re-checking...',
+				{ intentId: txResult.id.toString(), chainId: chain.id }
 			);
+			await sleep(5000);
+			status = await rhinestoneAccount.waitForExecution(txResult);
+			directHash = extractHash(status);
+			if (directHash) {
+				return { txHash: directHash, intentId: txResult.id.toString() };
+			}
 
-			const polledHash = await pollForHash(rhinestoneAccount, txResult, 45_000, 2_500);
+			// Poll longer; use 75s for non-Base chains where backend can be slower to attach hash
+			const pollMs = chain.id === 42161 ? 75_000 : 60_000;
+			const polledHash = await pollForHash(rhinestoneAccount, txResult, pollMs, 2_500);
 			if (polledHash && polledHash !== '0x') {
 				return { txHash: polledHash, intentId: txResult.id.toString() };
 			}
 
+			const chainName =
+				chain.id === 8453 ? 'Base' : chain.id === 42161 ? 'Arbitrum' : `chain ${chain.id}`;
 			throw new AAError(
-				`Transaction completed but no hash returned (intentId: ${txResult.id.toString()}). This usually means the backend did not attach the chain tx hash yet.`,
+				`Transaction completed but the transaction hash was not returned yet. Your transfer may have succeeded—check your wallet or the ${chainName} block explorer. If it did not go through, try again in a few minutes. (intentId: ${txResult.id.toString()})`,
 				AAErrorCode.TRANSACTION_FAILED,
 				{
 					intentId: txResult.id.toString(),

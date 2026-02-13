@@ -149,13 +149,15 @@
 		decimals: number;
 		walletBalance: bigint;
 		walletBalanceNum: number;
+		chainId?: number;
 	}) {
 		const token: SendModalToken = {
 			symbol: holding.symbol,
 			address: holding.address,
 			decimals: holding.decimals,
 			balance: holding.walletBalanceNum.toFixed(holding.decimals === 6 ? 2 : 4),
-			balanceRaw: holding.walletBalance
+			balanceRaw: holding.walletBalance,
+			...(holding.chainId != null && { chainId: holding.chainId })
 		};
 		openSendFundsModal(token);
 	}

@@ -20,12 +20,11 @@ import {
 	type CrossChainSwapQuote,
 	type SwapRoute,
 	type SupportedNetworkId,
-	SUPPORTED_NETWORKS,
 	SETTLEMENT_CHAIN_ID,
 	AAError,
 	AAErrorCode
 } from '../types';
-import { USDC_BASE } from '../tokens';
+import { USDC_BASE, getUSDCAddressForChain } from '../tokens';
 
 /** Returns a passthrough quote when no swap is needed (already correct token/chain). */
 export function noSwapQuote(amount: bigint): CrossChainSwapQuote {
@@ -193,19 +192,12 @@ export function calculateOptimalRoute(
 	};
 }
 
-/**
- * Get USDC address for a specific chain
- */
+/** Get USDC address for a supported chain; throws if not configured. */
 function getUSDCAddress(chainId: SupportedNetworkId): Address {
-	const addresses: Record<SupportedNetworkId, Address> = {
-		[SUPPORTED_NETWORKS.BASE]: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-		[SUPPORTED_NETWORKS.ARBITRUM]: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-		[SUPPORTED_NETWORKS.OPTIMISM]: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
-		[SUPPORTED_NETWORKS.ETHEREUM]: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-		[SUPPORTED_NETWORKS.BASE_SEPOLIA]: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-		[SUPPORTED_NETWORKS.ARBITRUM_SEPOLIA]: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'
-	};
-	return addresses[chainId];
+	const addr = getUSDCAddressForChain(chainId);
+	if (!addr)
+		throw new AAError(`USDC not configured for chain ${chainId}`, AAErrorCode.UNSUPPORTED_NETWORK);
+	return addr;
 }
 
 /**
