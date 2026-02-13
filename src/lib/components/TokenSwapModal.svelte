@@ -214,14 +214,9 @@
 		if (!selectedTokenData) return;
 
 		const decimals = selectedTokenData.oldToken.decimals;
-		const liquidityWei = parseUnits(
-			availableLiquidity.toFixed(decimals),
-			decimals
-		);
+		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
 		const maxWei =
-			selectedTokenData.balance < liquidityWei
-				? selectedTokenData.balance
-				: liquidityWei;
+			selectedTokenData.balance < liquidityWei ? selectedTokenData.balance : liquidityWei;
 		swapAmount = formatUnits(maxWei, decimals);
 		liquidityWarning = selectedTokenData.balance > liquidityWei;
 	}
@@ -231,10 +226,7 @@
 		if (!currentMapping || parsedSwapAmount <= availableLiquidity || availableLiquidity <= 0)
 			return;
 		const decimals = currentMapping.oldToken.decimals;
-		swapAmount = formatUnits(
-			parseUnits(availableLiquidity.toFixed(decimals), decimals),
-			decimals
-		);
+		swapAmount = formatUnits(parseUnits(availableLiquidity.toFixed(decimals), decimals), decimals);
 		liquidityWarning = true;
 	}
 

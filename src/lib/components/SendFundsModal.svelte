@@ -33,15 +33,14 @@
 			name: 'withdraw',
 			stateMutability: 'nonpayable',
 			inputs: [
-			{ name: 'assets', type: 'uint256' },
-			{ name: 'receiver', type: 'address' },
-			{ name: 'owner', type: 'address' }
+				{ name: 'assets', type: 'uint256' },
+				{ name: 'receiver', type: 'address' },
+				{ name: 'owner', type: 'address' }
 			],
 			outputs: [{ name: 'shares', type: 'uint256' }]
 		}
-		] as const;
+	] as const;
 
-	
 	const BLOCK_EXPLORER_BY_CHAIN: Record<number, string> = {
 		8453: 'https://basescan.org',
 		42161: 'https://arbiscan.io',
@@ -142,21 +141,24 @@
 			return availableTokens.find((t) => t.address === 'native') ?? availableTokens[0];
 		}
 		return (
-			availableTokens.find(
-				(t) => t.address !== 'native' && t.address.toLowerCase() === key
-			) ?? availableTokens[0]
+			availableTokens.find((t) => t.address !== 'native' && t.address.toLowerCase() === key) ??
+			availableTokens[0]
 		);
 	})();
 
 	// Balance display when the selected token matches the token we opened with (e.g. Withdraw USDT)
 	$: preSelectedBalance =
-		$sendModalToken && selectedToken && $sendModalToken.address !== 'native' &&
+		$sendModalToken &&
+		selectedToken &&
+		$sendModalToken.address !== 'native' &&
 		selectedToken.address !== 'native' &&
 		$sendModalToken.address.toLowerCase() === selectedToken.address.toLowerCase()
 			? $sendModalToken.balance
 			: null;
 	$: preSelectedBalanceRaw =
-		$sendModalToken && selectedToken && $sendModalToken.address !== 'native' &&
+		$sendModalToken &&
+		selectedToken &&
+		$sendModalToken.address !== 'native' &&
 		selectedToken.address !== 'native' &&
 		$sendModalToken.address.toLowerCase() === selectedToken.address.toLowerCase()
 			? $sendModalToken.balanceRaw
@@ -164,27 +166,35 @@
 
 	// Chain to send on: selected token's chain (e.g. Arbitrum) or current network
 	$: sendChainId = selectedToken?.chainId ?? $currentNetwork?.chainId;
-	$: feeChainName = sendChainId === 42161 ? 'Arbitrum' : sendChainId === 8453 ? 'Base' : 'this network';
+	$: feeChainName =
+		sendChainId === 42161 ? 'Arbitrum' : sendChainId === 8453 ? 'Base' : 'this network';
 
 	// When paying gas in USDC and sending USDC on the same chain (Base or Arbitrum), reserve some for the fee
 	$: isPayingGasWithSameToken = (() => {
-		if (!$payFeesInStablecoin || !selectedToken || selectedToken.address === 'native' || selectedToken.symbol !== 'USDC') return false;
+		if (
+			!$payFeesInStablecoin ||
+			!selectedToken ||
+			selectedToken.address === 'native' ||
+			selectedToken.symbol !== 'USDC'
+		)
+			return false;
 		const usdcAddr = sendChainId != null ? getUSDCAddressForChain(sendChainId) : undefined;
 		return usdcAddr != null && selectedToken.address.toLowerCase() === usdcAddr.toLowerCase();
 	})();
 
 	$: effectiveMaxBalanceRaw =
 		preSelectedBalanceRaw != null && isPayingGasWithSameToken && selectedToken?.decimals === 6
-			? (preSelectedBalanceRaw > GAS_RESERVE_USDC_RAW
+			? preSelectedBalanceRaw > GAS_RESERVE_USDC_RAW
 				? preSelectedBalanceRaw - GAS_RESERVE_USDC_RAW
-				: 0n)
+				: 0n
 			: preSelectedBalanceRaw;
 
 	// Validation
 	$: isValidAddress = recipientAddress && isAddress(recipientAddress);
 	$: isValidAmount = amount && parseFloat(amount) > 0;
 	$: amountExceedsMaxWithGasReserve = (() => {
-		if (!isPayingGasWithSameToken || effectiveMaxBalanceRaw == null || !selectedToken || !amount) return false;
+		if (!isPayingGasWithSameToken || effectiveMaxBalanceRaw == null || !selectedToken || !amount)
+			return false;
 		try {
 			const amountRaw = parseUnits(amount, selectedToken.decimals);
 			return amountRaw > effectiveMaxBalanceRaw;
@@ -192,8 +202,7 @@
 			return false;
 		}
 	})();
-	$: canSend =
-		isValidAddress && isValidAmount && !sending && !amountExceedsMaxWithGasReserve;
+	$: canSend = isValidAddress && isValidAmount && !sending && !amountExceedsMaxWithGasReserve;
 
 	function handleClose() {
 		resetForm();
@@ -237,92 +246,73 @@
 					...(sendChainId != null && { chainId: sendChainId })
 				});
 			} else {
-  const amountInUnits = parseUnits(amount, selectedToken.decimals);
+				const amountInUnits = parseUnits(amount, selectedToken.decimals);
 
-  // If sending USDC, decide whether to transfer from wallet or withdraw from vault
-  const isUSDC = selectedToken.symbol === 'USDC' && selectedToken.decimals === 6;
-  const chainId = sendChainId ?? $currentNetwork?.chainId;
+				// If sending USDC, decide whether to transfer from wallet or withdraw from vault
+				const isUSDC = selectedToken.symbol === 'USDC' && selectedToken.decimals === 6;
+				const chainId = sendChainId ?? $currentNetwork?.chainId;
 
-  if (!chainId) throw new Error('No chain selected');
+				if (!chainId) throw new Error('No chain selected');
 
-  if (isUSDC) {
-    const usdcAddr = getUSDCAddressForChain(chainId);
-    if (!usdcAddr) throw new Error('USDC not configured for this chain');
+				if (isUSDC) {
+					const usdcAddr = getUSDCAddressForChain(chainId);
+					if (!usdcAddr) throw new Error('USDC not configured for this chain');
 
-    // 1) Check if the Rhinestone wallet actually holds USDC
-    let walletUsdcBal = 0n;
-    try {
-      const dataBal = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'balanceOf',
-        args: [$dynamicSession.walletAddress as `0x${string}`]
-      });
+					// 1) Check if the Rhinestone wallet actually holds USDC
+					let walletUsdcBal = 0n;
 
-      // NOTE: sendTransaction() probably doesn't support eth_call.
-      // If you have a publicClient in your app, use it here instead.
-      // For now, skip the read if you can't do eth_call.
+					// Heuristic: if modal was opened from vault screen, you likely want vault withdraw.
+					// If you have a flag in sendModalToken like `source: 'vault'`, use that instead.
+					const vault = getUSDCAddressForChain(chainId);
 
-      // If you DO have a public client available, prefer:
-      // walletUsdcBal = await publicClient.readContract({ address: usdcAddr, abi: erc20Abi, functionName:'balanceOf', args:[...] });
+					// 2) If wallet has USDC (or you are not in vault context) → normal transfer
+					const shouldTryDirectTransfer = !vault || walletUsdcBal >= amountInUnits;
 
-    } catch {
-      // If you can't read here, we fall back to vault withdraw if you’re on “vault withdraw” flow.
-    }
+					if (shouldTryDirectTransfer) {
+						const data = encodeFunctionData({
+							abi: erc20Abi,
+							functionName: 'transfer',
+							args: [recipientAddress as `0x${string}`, amountInUnits]
+						});
 
-    // Heuristic: if modal was opened from vault screen, you likely want vault withdraw.
-    // If you have a flag in sendModalToken like `source: 'vault'`, use that instead.
-    const vault = getUSDCAddressForChain(chainId);
+						hash = await sendTransaction({
+							to: usdcAddr as `0x${string}`,
+							data,
+							...(chainId != null && { chainId })
+						});
+					} else {
+						// 3) Otherwise withdraw from vault directly to recipient (best UX: 1 tx)
+						const data = encodeFunctionData({
+							abi: erc4626Abi,
+							functionName: 'withdraw',
+							args: [
+								amountInUnits, // assets (USDC)
+								recipientAddress as `0x${string}`, // receiver
+								$dynamicSession.walletAddress as `0x${string}` // owner
+							]
+						});
 
-    // 2) If wallet has USDC (or you are not in vault context) → normal transfer
-    const shouldTryDirectTransfer =
-      !vault || walletUsdcBal >= amountInUnits;
+						hash = await sendTransaction({
+							to: vault as `0x${string}`,
+							data,
+							...(chainId != null && { chainId })
+						});
+					}
+				} else {
+					// Normal ERC20 transfer (tStocks, USDT, etc.)
+					const data = encodeFunctionData({
+						abi: erc20Abi,
+						functionName: 'transfer',
+						args: [recipientAddress as `0x${string}`, amountInUnits]
+					});
 
-    if (shouldTryDirectTransfer) {
-      const data = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [recipientAddress as `0x${string}`, amountInUnits]
-      });
-
-      hash = await sendTransaction({
-        to: usdcAddr as `0x${string}`,
-        data,
-        ...(chainId != null && { chainId })
-      });
-    } else {
-      // 3) Otherwise withdraw from vault directly to recipient (best UX: 1 tx)
-      const data = encodeFunctionData({
-        abi: erc4626Abi,
-        functionName: 'withdraw',
-        args: [
-          amountInUnits, // assets (USDC)
-          recipientAddress as `0x${string}`, // receiver
-          $dynamicSession.walletAddress as `0x${string}` // owner
-        ]
-      });
-
-      hash = await sendTransaction({
-        to: vault as `0x${string}`,
-        data,
-        ...(chainId != null && { chainId })
-      });
-    }
-  } else {
-    // Normal ERC20 transfer (tStocks, USDT, etc.)
-    const data = encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'transfer',
-      args: [recipientAddress as `0x${string}`, amountInUnits]
-    });
-
-    hash = await sendTransaction({
-      to: selectedToken.address,
-      data,
-      ...(chainId != null && { chainId })
-    });
-  }
-}
-
+					hash = await sendTransaction({
+						to: selectedToken.address,
+						data,
+						...(chainId != null && { chainId })
+					});
+				}
+			}
 
 			txHash = hash;
 			sentChainId = sendChainId ?? null;
@@ -397,7 +387,9 @@
 						{recipientAddress.slice(0, 10)}...{recipientAddress.slice(-8)}
 					</p>
 					<a
-						href="{(sentChainId != null ? BLOCK_EXPLORER_BY_CHAIN[sentChainId] : $currentNetwork?.blockExplorer) ?? 'https://basescan.org'}/tx/{txHash}"
+						href="{(sentChainId != null
+							? BLOCK_EXPLORER_BY_CHAIN[sentChainId]
+							: $currentNetwork?.blockExplorer) ?? 'https://basescan.org'}/tx/{txHash}"
 						target="_blank"
 						rel="noopener noreferrer"
 						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
@@ -434,15 +426,24 @@
 						It may have succeeded—check your wallet and the block explorer.
 					</p>
 					<p class="mt-1 text-sm text-gray-400">
-						{amount} {selectedToken?.symbol} to {recipientAddress.slice(0, 10)}...{recipientAddress.slice(-8)}
+						{amount}
+						{selectedToken?.symbol} to {recipientAddress.slice(0, 10)}...{recipientAddress.slice(
+							-8
+						)}
 					</p>
 					<a
-						href="{(sentChainId != null ? BLOCK_EXPLORER_BY_CHAIN[sentChainId] : $currentNetwork?.blockExplorer) ?? 'https://basescan.org'}"
+						href={(sentChainId != null
+							? BLOCK_EXPLORER_BY_CHAIN[sentChainId]
+							: $currentNetwork?.blockExplorer) ?? 'https://basescan.org'}
 						target="_blank"
 						rel="noopener noreferrer"
 						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
 					>
-						Open {sentChainId === 42161 ? 'Arbiscan' : sentChainId === 8453 ? 'Basescan' : 'block explorer'}
+						Open {sentChainId === 42161
+							? 'Arbiscan'
+							: sentChainId === 8453
+								? 'Basescan'
+								: 'block explorer'}
 						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
 								stroke-linecap="round"
@@ -463,10 +464,16 @@
 					<label class="mb-1.5 block shrink-0 text-sm font-medium text-gray-300" for="from-address">
 						From
 					</label>
-					<div id="from-address" class="min-w-0 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
+					<div
+						id="from-address"
+						class="min-w-0 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5"
+					>
 						<span class="truncate font-mono text-sm text-gray-400">
 							{$dynamicSession?.walletAddress
-								? `${$dynamicSession.walletAddress.slice(0, 10)}...${$dynamicSession.walletAddress.slice(-8)}`
+								? `${$dynamicSession.walletAddress.slice(
+										0,
+										10
+									)}...${$dynamicSession.walletAddress.slice(-8)}`
 								: 'Not connected'}
 						</span>
 					</div>
@@ -483,7 +490,7 @@
 						placeholder="0x..."
 						value={recipientAddress}
 						on:input={handleAddressInput}
-						class="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 font-mono text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+						class="w-full min-w-0 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 font-mono text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 					/>
 					{#if recipientAddress && !isValidAddress}
 						<p class="mt-1 text-xs text-red-400">Invalid Ethereum address</p>
@@ -510,10 +517,9 @@
 							aria-label="Token"
 						>
 							{#each availableTokens as token}
-								<option
-									value={token.address === 'native' ? 'native' : token.address.toLowerCase()}
-								>
-									{token.symbol}{#if token.name && token.name !== token.symbol} ({token.name}){/if}
+								<option value={token.address === 'native' ? 'native' : token.address.toLowerCase()}>
+									{token.symbol}{#if token.name && token.name !== token.symbol}
+										({token.name}){/if}
 								</option>
 							{/each}
 						</select>
@@ -553,7 +559,12 @@
 					/>
 					<span class="text-sm text-gray-300">Pay fees in stablecoin (USDC)</span>
 					<span class="group relative">
-						<svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg
+							class="h-4 w-4 text-gray-500"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -564,7 +575,8 @@
 						<span
 							class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-xs text-gray-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
 						>
-							Pay gas fees using USDC on {feeChainName} instead of ETH. You need a small USDC balance on {feeChainName}
+							Pay gas fees using USDC on {feeChainName} instead of ETH. You need a small USDC balance
+							on {feeChainName}
 							to cover the fee—if you only have USDT and no USDC, the transaction may fail.
 						</span>
 					</span>
@@ -595,8 +607,15 @@
 
 				<!-- Actions -->
 				<div class="flex shrink-0 gap-3 pt-2">
-					<Button on:click={handleClose} variant="secondary" className="min-w-0 flex-1">Cancel</Button>
-					<Button on:click={handleSend} variant="primary" className="min-w-0 flex-1" disabled={!canSend}>
+					<Button on:click={handleClose} variant="secondary" className="min-w-0 flex-1"
+						>Cancel</Button
+					>
+					<Button
+						on:click={handleSend}
+						variant="primary"
+						className="min-w-0 flex-1"
+						disabled={!canSend}
+					>
 						{#if sending}
 							<span class="flex items-center gap-2">
 								<svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">

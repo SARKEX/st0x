@@ -20,7 +20,6 @@ import {
 	type CrossChainSwapQuote,
 	type SwapRoute,
 	type SupportedNetworkId,
-	SUPPORTED_NETWORKS,
 	SETTLEMENT_CHAIN_ID,
 	AAError,
 	AAErrorCode
@@ -196,7 +195,8 @@ export function calculateOptimalRoute(
 /** Get USDC address for a supported chain; throws if not configured. */
 function getUSDCAddress(chainId: SupportedNetworkId): Address {
 	const addr = getUSDCAddressForChain(chainId);
-	if (!addr) throw new AAError(`USDC not configured for chain ${chainId}`, AAErrorCode.UNSUPPORTED_NETWORK);
+	if (!addr)
+		throw new AAError(`USDC not configured for chain ${chainId}`, AAErrorCode.UNSUPPORTED_NETWORK);
 	return addr;
 }
 

@@ -550,7 +550,10 @@ export class RhinestoneClient {
 		// the backend may still require an EIP-7702 delegate authorization for that chain. Try manual
 		// signing so the intent can execute (SDK sometimes returns [] for same-chain).
 		if (authorizations.length === 0 && walletAccount && chainId) {
-			debugLog('No authorizations for chain; attempting manual EIP-7702 signing', { chainId, sdkSucceeded });
+			debugLog('No authorizations for chain; attempting manual EIP-7702 signing', {
+				chainId,
+				sdkSucceeded
+			});
 			try {
 				const walletWithSignAuth = walletAccount as WalletAccountWithSignAuth;
 
@@ -585,10 +588,7 @@ export class RhinestoneClient {
 					);
 				}
 				// Dynamic MPC wallets don't support manual signAuthorization; SDK handles it. Expected.
-				if (
-					msg.includes('Dynamic MPC') ||
-					msg.includes('Rhinestone SDK handles authorizations')
-				) {
+				if (msg.includes('Dynamic MPC') || msg.includes('Rhinestone SDK handles authorizations')) {
 					debugLog('Skipping manual auth (wallet uses SDK-managed authorizations)', {
 						chainId
 					});
@@ -1894,12 +1894,13 @@ export class RhinestoneClient {
 				// Standard paths
 				const fromFill = (st as TransactionStatus).fill?.hash;
 				const fromClaims = (st as TransactionStatus).claims?.find((c) => c?.hash)?.hash;
-				let h = fromFill ?? fromClaims;
+				const h = fromFill ?? fromClaims;
 				if (h && h !== '0x') return h;
 				// SDK may return different shapes per chain (e.g. Arbitrum)
 				const anySt = st as unknown as Record<string, unknown>;
 				const alt = (anySt?.transactionHash ?? anySt?.hash ?? anySt?.txHash) as string | undefined;
-				if (alt && typeof alt === 'string' && alt.startsWith('0x') && alt.length === 66) return alt as Hex;
+				if (alt && typeof alt === 'string' && alt.startsWith('0x') && alt.length === 66)
+					return alt as Hex;
 				// fill or claims might be arrays
 				const fillArr = anySt?.fill as Array<{ hash?: string }> | undefined;
 				if (Array.isArray(fillArr) && fillArr[0]?.hash) return fillArr[0].hash as Hex;
@@ -1911,7 +1912,8 @@ export class RhinestoneClient {
 				return undefined;
 			}
 
-			let status: TransactionStatus | null | undefined = await rhinestoneAccount.waitForExecution(txResult);
+			let status: TransactionStatus | null | undefined =
+				await rhinestoneAccount.waitForExecution(txResult);
 			let directHash = extractHash(status);
 			if (!directHash && status != null) {
 				debugLog('Execution status keys (hash missing)', {
@@ -1944,7 +1946,8 @@ export class RhinestoneClient {
 				return { txHash: polledHash, intentId: txResult.id.toString() };
 			}
 
-			const chainName = chain.id === 8453 ? 'Base' : chain.id === 42161 ? 'Arbitrum' : `chain ${chain.id}`;
+			const chainName =
+				chain.id === 8453 ? 'Base' : chain.id === 42161 ? 'Arbitrum' : `chain ${chain.id}`;
 			throw new AAError(
 				`Transaction completed but the transaction hash was not returned yet. Your transfer may have succeeded—check your wallet or the ${chainName} block explorer. If it did not go through, try again in a few minutes. (intentId: ${txResult.id.toString()})`,
 				AAErrorCode.TRANSACTION_FAILED,
