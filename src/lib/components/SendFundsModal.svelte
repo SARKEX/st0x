@@ -11,6 +11,7 @@
 	import { sendTransaction } from '$lib/services/walletService';
 	import { currentNetwork, payFeesInStablecoin } from '$lib/stores';
 	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
+	import { getUSDCAddressForChain } from '$lib/services/account-abstraction/tokens';
 	import {
 		parseEther,
 		parseUnits,
@@ -24,11 +25,7 @@
 	const dispatch = createEventDispatcher();
 
 	// When paying gas in USDC and sending USDC on same chain, reserve this much for gas (6 decimals)
-	const GAS_RESERVE_USDC_RAW = 50_000n; // 0.05 USDC
-	const USDC_VAULT_BY_CHAIN: Record<number, string> = {
-		8453: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // Base
-		42161: '0xaf88d065e77c8cc2239327c5edb3a432268e5831' // Arbitrum One
-	};
+	const GAS_RESERVE_USDC_RAW = 100_000n; // 0.1 USDC
 
 	const erc4626Abi = [
 		{
@@ -49,9 +46,6 @@
 		8453: 'https://basescan.org',
 		42161: 'https://arbiscan.io'
 	};
-	function getUSDCAddressForChain(chainId: number): string | undefined {
-		return USDC_VAULT_BY_CHAIN[chainId];
-	}
 
 	// Token type for the selector
 	interface TokenOption {
@@ -273,7 +267,7 @@
 
     // Heuristic: if modal was opened from vault screen, you likely want vault withdraw.
     // If you have a flag in sendModalToken like `source: 'vault'`, use that instead.
-    const vault = USDC_VAULT_BY_CHAIN[chainId];
+    const vault = getUSDCAddressForChain(chainId);
 
     // 2) If wallet has USDC (or you are not in vault context) → normal transfer
     const shouldTryDirectTransfer =
