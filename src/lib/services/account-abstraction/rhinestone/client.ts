@@ -1300,6 +1300,9 @@ export class RhinestoneClient {
 					yParity: number;
 				}> = [];
 
+				// Track if wallet explicitly requires SDK-managed auth (e.g. Dynamic MPC)
+				let walletRequiresSdkAuth = false;
+
 				let sdkSucceeded = false;
 				try {
 					const sdkAuths = (await rhinestoneAccount.signAuthorizations(signedTx)) ?? [];
@@ -1405,6 +1408,14 @@ export class RhinestoneClient {
 									);
 								}
 
+								// Dynamic MPC and similar wallets require the Rhinestone SDK to provide authorizations
+								if (
+									errorMsg.includes('Dynamic MPC') ||
+									errorMsg.includes('Rhinestone SDK handles authorizations')
+								) {
+									walletRequiresSdkAuth = true;
+								}
+
 								console.warn(
 									'[Rhinestone Client] Could not sign authorization for chain, continuing:',
 									chainId
@@ -1417,6 +1428,38 @@ export class RhinestoneClient {
 							missingChainIds
 						);
 					}
+				}
+
+				// Ensure we don't submit with incomplete authorizations (orchestrator will reject)
+				// Exception: when SDK succeeded and returned [] or partial list, trust it - the account may
+				// already be delegated on those chains (e.g. second swap after first succeeded on Arbitrum)
+				const gotChainIdsFinal = new Set(
+					authsList.map((a) => Number(a.chainId)).filter((id) => !isNaN(id))
+				);
+				const stillMissingChainIds = chainsNeedingAuth
+					.map((c) => c.id)
+					.filter((chainId) => !gotChainIdsFinal.has(chainId));
+
+				if (stillMissingChainIds.length > 0 && !sdkSucceeded) {
+					// Only enforce when we fell back to manual and still have gaps
+					if (walletRequiresSdkAuth) {
+						throw new AAError(
+							'This cross-chain swap requires EIP-7702 authorizations. The Rhinestone SDK did not provide them, and your wallet (Dynamic MPC) does not support manual authorization signing. Please try again in a few minutes, or use a different wallet that supports EIP-7702 authorization signing.',
+							AAErrorCode.SWAP_FAILED,
+							{
+								missingChains: stillMissingChainIds,
+								chainsNeedingAuth: chainsNeedingAuth.map((c) => c.id)
+							}
+						);
+					}
+					throw new AAError(
+						`EIP-7702 authorizations could not be obtained for chain(s): ${stillMissingChainIds.join(', ')}. The transaction cannot be submitted without them.`,
+						AAErrorCode.SWAP_FAILED,
+						{
+							missingChains: stillMissingChainIds,
+							chainsNeedingAuth: chainsNeedingAuth.map((c) => c.id)
+						}
+					);
 				}
 
 				debugLog('Final authorization list:', {
