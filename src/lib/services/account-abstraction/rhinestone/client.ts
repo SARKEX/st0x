@@ -53,6 +53,9 @@ import { getGasOracle } from './gasOracle';
 import { env } from '$env/dynamic/public';
 import { isDynamicEmbeddedWallet } from '../wallets/dynamic';
 import { getPaymentTokensForNetwork } from '../tokens';
+import { type Session } from '@rhinestone/sdk';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+
 
 import { createRpcTransport } from '$lib/utils/rpc';
 
@@ -83,6 +86,7 @@ type RhinestoneTransactionParams =
 			feeAsset?: string;
 			sourceAssets?: { [chainId: number]: string[] };
 			eip7702InitSignature?: Hex;
+			signers?: unknown;
 	  }
 	| {
 			// Cross-chain transaction format
@@ -94,6 +98,7 @@ type RhinestoneTransactionParams =
 			feeAsset?: string;
 			sourceAssets?: { [chainId: number]: string[] };
 			eip7702InitSignature?: Hex;
+			signers?: unknown;
 	  };
 
 // Type for Rhinestone account (matching SDK types)
@@ -153,6 +158,14 @@ interface RhinestoneAccount {
 		origin: unknown[];
 		destination: unknown;
 	};
+	experimental_getSessionDetails?: (sessions: Session[]) => Promise<{
+		hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
+	}>;
+	
+	experimental_signEnableSession?: (sessionDetails: {
+		hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
+	}) => Promise<Hex>;
+	
 	signTransaction: (preparedTx: PreparedTransaction) => Promise<SignedTransaction>;
 	signAuthorizations: (preparedTx: PreparedTransaction) => Promise<SignedAuthorizationList>;
 	submitTransaction: (
@@ -297,6 +310,11 @@ export class RhinestoneClient {
 	private walletClientCache: Map<string, WalletClient> = new Map();
 	// Cache EIP-7702 init signatures by account address (signature is valid across all chains)
 	private eip7702InitSignatureCache: Map<Address, Hex> = new Map();
+
+	// Sessions cache: wallet+sessionOwner+chains → enable bundle
+	private sessionEnableCache: Map<string, { sessions: Session[]; enableSignature: Hex; hashesAndChainIds: any[] }> =
+	new Map();
+
 
 	constructor(config: RhinestoneConfig) {
 		this.config = config;
@@ -447,6 +465,133 @@ export class RhinestoneClient {
 			);
 		}
 	}
+
+	private sessionsEnabled(): boolean {
+		return env.PUBLIC_RHINESTONE_SESSIONS_ENABLED === 'true';
+	}
+	
+	// ⚠️ Minimal storage: localStorage.
+	// For production you probably want encrypted storage / secure enclave.
+	private getSessionOwnerAccount(walletAddress: Address): Account {
+		const key = `rhinestone:sessionOwnerPk:${walletAddress.toLowerCase()}`;
+		let pk = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+	
+		if (!pk) {
+			pk = generatePrivateKey(); // "0x..." hex
+			if (typeof window !== 'undefined') window.localStorage.setItem(key, pk);
+		}
+	
+		return privateKeyToAccount(pk as Hex);
+	}
+	
+	private sessionBundleCacheKey(walletAddress: Address, sessionOwner: Address, chainIds: number[]): string {
+		const chains = [...chainIds].sort((a, b) => a - b).join(',');
+		return `rhinestone:sessions:${walletAddress.toLowerCase()}:${sessionOwner.toLowerCase()}:${chains}`;
+	}
+	
+	private async getOrCreateSessionEnableBundle(
+		rhinestoneAccount: RhinestoneAccount,
+		walletAddress: Address,
+		chainIds: number[]
+	): Promise<{ sessions: Session[]; enableSignature: Hex; hashesAndChainIds: any[] }> {
+		if (!this.sessionsEnabled()) throw new Error('Sessions not enabled');
+	
+		if (!rhinestoneAccount.experimental_getSessionDetails || !rhinestoneAccount.experimental_signEnableSession) {
+			throw new Error('Rhinestone SDK account does not support experimental session APIs');
+		}
+	
+		const sessionOwner = this.getSessionOwnerAccount(walletAddress);
+		const cacheKey = this.sessionBundleCacheKey(walletAddress, sessionOwner.address, chainIds);
+	
+		// 1) memory cache
+		const mem = this.sessionEnableCache.get(cacheKey);
+		if (mem) return mem;
+	
+		// 2) localStorage cache
+		if (typeof window !== 'undefined') {
+			const raw = window.localStorage.getItem(cacheKey);
+			if (raw) {
+				try {
+					const parsed = JSON.parse(raw) as { sessions: any[]; enableSignature: Hex; hashesAndChainIds: any[] };
+					// revive sessions.chain from CHAIN_CONFIG by chainId
+					const sessions: Session[] = parsed.sessions.map((s) => ({
+						...s,
+						chain: CHAIN_CONFIG[(s.chainId ?? s.chain?.id) as SupportedNetworkId]
+					}));
+					const bundle = { sessions, enableSignature: parsed.enableSignature, hashesAndChainIds: parsed.hashesAndChainIds };
+					this.sessionEnableCache.set(cacheKey, bundle);
+					return bundle;
+				} catch {
+					// ignore broken cache
+				}
+			}
+		}
+	
+		// 3) create sessions for requested chains (multi-chain enable-mode)
+		const sessions: Session[] = chainIds.map((id) => ({
+			chain: CHAIN_CONFIG[id as SupportedNetworkId],
+			owners: { type: 'ecdsa', accounts: [sessionOwner] }
+		}));
+	
+		// Rhinestone “enable mode” flow (sign once)
+		const sessionDetails = await rhinestoneAccount.experimental_getSessionDetails(sessions);
+		const enableSignature = await rhinestoneAccount.experimental_signEnableSession(sessionDetails);
+	
+		const bundle = {
+			sessions,
+			enableSignature,
+			hashesAndChainIds: sessionDetails.hashesAndChainIds
+		};
+	
+		// persist
+		if (typeof window !== 'undefined') {
+			window.localStorage.setItem(
+				cacheKey,
+				JSON.stringify(
+					{
+						// store minimal serializable version
+						sessions: sessions.map((s) => ({ chainId: s.chain.id, owners: { type: 'ecdsa', accounts: [{ address: sessionOwner.address }] } })),
+						enableSignature,
+						hashesAndChainIds: bundle.hashesAndChainIds
+					},
+					(_k, v) => (typeof v === 'bigint' ? v.toString() : v)
+				)
+			);
+		}
+		this.sessionEnableCache.set(cacheKey, bundle);
+	
+		return bundle;
+	}
+	
+	private async maybeAttachSessionSigner(
+		rhinestoneAccount: RhinestoneAccount,
+		walletAddress: Address,
+		chainId: number,
+		tx: RhinestoneTransactionParams
+	): Promise<RhinestoneTransactionParams> {
+		if (!this.sessionsEnabled()) return tx;
+	
+		// build (or load) enable bundle for *this chain* (and optionally more later)
+		const { sessions, enableSignature, hashesAndChainIds } = await this.getOrCreateSessionEnableBundle(
+			rhinestoneAccount,
+			walletAddress,
+			[chainId]
+		);
+	
+		const sessionIndex = 0; // only one chain in bundle above
+		const signers = {
+			type: 'experimental_session',
+			session: sessions[sessionIndex],
+			enableData: {
+				userSignature: enableSignature,
+				hashesAndChainIds,
+				sessionIndex
+			}
+		};
+	
+		return { ...tx, signers };
+	}
+	
 
 	/**
 	 * Check if account is deployed on a chain, and get EIP-7702 init signature if needed.
@@ -1708,9 +1853,17 @@ export class RhinestoneClient {
 				hasEip7702Init: Boolean(eip7702InitSignature)
 			});
 
+			// ✅ Sessions signer injection (right before prepareTransaction)
+			const txWithSigner = await this.maybeAttachSessionSigner(
+				rhinestoneAccount,
+				walletAccount.address as Address,
+				chain.id,
+				transactionParams
+			);
+
 			// Use 3-step flow that properly handles eip7702InitSignature
 			// (sendTransaction has a bug where it doesn't pass through the signature)
-			const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+			const preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
 			debugLog('Transaction prepared, signing...');
 
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
@@ -1847,7 +2000,15 @@ export class RhinestoneClient {
 				walletAddress: walletAccount.address
 			});
 
-			const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+			// ✅ Sessions signer injection (right before prepareTransaction)
+			const txWithSigner = await this.maybeAttachSessionSigner(
+				rhinestoneAccount,
+				walletAccount.address as Address,
+				chain.id,
+				transactionParams
+			);
+
+			const preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
 
 			// Brief delay to let Dynamic wallet UI settle between signing requests
@@ -1971,6 +2132,7 @@ export class RhinestoneClient {
 			);
 		}
 	}
+
 
 	/**
 	 * Manually sign EIP-7702 authorization using Dynamic wallet client
