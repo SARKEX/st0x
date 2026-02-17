@@ -7,7 +7,7 @@
 	import { formatUnits, parseUnits } from 'viem';
 	import type { Hex } from 'viem';
 	import transactionStore from '$lib/stores/transaction';
-	import { currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
+	import { currentNetwork, reviewStrategyOnDeploy, payFeesInStablecoin } from '$lib/stores';
 	import { priceToIoratioString } from '$lib/utils/derivations';
 	import type { PythToken } from '$lib/types';
 	import { containerStyles } from '$lib/styles/utils';
@@ -16,8 +16,20 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
+	import { addressesEqual } from '$lib/utils/tokenMath';
 	import { track } from '$lib/services/analytics';
 	import { onMount, onDestroy } from 'svelte';
+
+	// Account Abstraction imports
+	import TokenNetworkSelector from '$lib/components/aa/TokenNetworkSelector.svelte';
+	import {
+		type PaymentToken,
+		SUPPORTED_NETWORKS,
+		USDC_BASE,
+		isRhinestoneConfigured,
+		getPriceOracle
+	} from '$lib/services/account-abstraction';
+	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
 
 	// Analytics tracking
 	let panelOpenTime = Date.now();
@@ -64,6 +76,16 @@
 	export let buyPrice: number | null = null; // Best bid price (what you get when selling)
 	export let sellPrice: number | null = null; // Best ask price (what you pay when buying)
 
+	// AA state
+	let selectedSourceToken: PaymentToken | null = USDC_BASE;
+	let isDeploying = false;
+	let deployError: string | null = null;
+	$: isAAEnabled = isRhinestoneConfigured();
+	$: needsSwap =
+		selectedSourceToken &&
+		(selectedSourceToken.chainId !== SUPPORTED_NETWORKS.BASE ||
+			selectedSourceToken.symbol !== 'USDC');
+
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
 
@@ -78,8 +100,8 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
-			const match = ALL_TOKENS.find(
-				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
+			const match = ALL_TOKENS.find((token) =>
+				addressesEqual(token.address, settlementTokenConfig.address)
 			);
 			settlementToken = match || (settlementTokenConfig as unknown as CategorizedToken);
 		} else {
@@ -129,8 +151,10 @@
 	// Reference to TradeAmountInput for programmatic updates
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
-	$: isInputTokenSameAsOutputToken =
-		orderInputToken?.address.toLowerCase() === orderOutputToken?.address.toLowerCase();
+	$: isInputTokenSameAsOutputToken = addressesEqual(
+		orderInputToken?.address,
+		orderOutputToken?.address
+	);
 
 	// Check if selected amount is below minimum trade size ($1)
 	// Uses same logic as DCA for consistency
@@ -166,7 +190,9 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		selectedAmountError ||
-		belowMinTradeError;
+		belowMinTradeError ||
+		isDeploying ||
+		$isSwapping;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
 	const handlePercentageClick = (percent: number) => {
@@ -235,64 +261,130 @@
 			return;
 		}
 
-		// Prepare deploy data
-		let deployData: {
-			inputToken: CategorizedToken;
-			outputToken: CategorizedToken;
-			ioRatio: string;
-			depositAmount: bigint;
-			inputVaultId: Hex | undefined;
-		};
+		isDeploying = true;
+		deployError = null;
 
-		// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
-		const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+		try {
+			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
+			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 
-		if (orderType === 'Bid') {
-			// Bid order (user buying): Places order to buy asset with the settlement token
-			// User specifies quantity to acquire and price willing to pay
-			// Price interpretation: "I pay X quote tokens per 1 asset"
-			// The deployed order uses inverted ratio: 1/X
-			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
-			const price = parseFloat(selectedInitialRatio || '0');
-			const settlementNeeded = parseFloat(assetQuantity) * price;
-			const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
+			// Calculate the settlement amount needed for Buy orders
+			let settlementAmount: bigint;
+			if (orderType === 'Bid') {
+				const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
+				const price = parseFloat(selectedInitialRatio || '0');
+				const settlementNeeded = parseFloat(assetQuantity) * price;
+				settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
 
-			deployData = {
-				inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
-				outputToken: orderOutputToken, // payment token (token to be deposited as payment)
-				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
-				ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
-				depositAmount: settlementAmount, // Payment amount in settlement token
-				inputVaultId: selectedInputVaultId
+				// For Buy orders: Check if cross-chain swap is needed
+				// If user selected a non-USDC token or different chain, swap first
+				if (needsSwap && selectedSourceToken) {
+					// Calculate amount in source token (accounting for different decimals and pricing)
+					const sourceDecimals = selectedSourceToken.decimals;
+					const settlementInUSD = parseFloat(
+						formatUnits(settlementAmount, settlementToken.decimals)
+					);
+					const isStablecoin =
+						selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
+
+					let swapAmount: bigint;
+					if (isStablecoin) {
+						// Stablecoins: 1:1 with USD, add 1% buffer
+						swapAmount = BigInt(Math.ceil(settlementInUSD * 1.01 * 10 ** sourceDecimals));
+					} else {
+						// Non-stablecoins (WETH): convert via price oracle
+						const priceOracle = getPriceOracle();
+						const tokenSymbol =
+							selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+						const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
+						const sourceTokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
+						const sourceTokenAmount = settlementInUSD / sourceTokenPriceUSD;
+						// Add 2% buffer for non-stablecoins
+						swapAmount = BigInt(Math.ceil(sourceTokenAmount * 1.02 * 10 ** sourceDecimals));
+					}
+
+					// Execute the cross-chain swap
+					const swapResult = await aaPaymentStore.executeSwapIfNeeded(
+						swapAmount,
+						$payFeesInStablecoin
+					);
+					if (swapResult === null) {
+						track('cross_chain_swap_failed', {
+							order_type: 'limit',
+							token_symbol: assetToken?.symbol,
+							source_token: selectedSourceToken.symbol,
+							source_chain_id: selectedSourceToken.chainId,
+							pay_with_stables: $payFeesInStablecoin
+						});
+						deployError = $swapError || 'Cross-chain swap failed';
+						return;
+					}
+					track('cross_chain_swap_executed', {
+						order_type: 'limit',
+						token_symbol: assetToken?.symbol,
+						source_token: selectedSourceToken.symbol,
+						source_chain_id: selectedSourceToken.chainId,
+						pay_with_stables: $payFeesInStablecoin
+					});
+
+					// Update settlement amount to use the USDC received
+					settlementAmount = swapResult;
+				}
+			}
+
+			// Prepare deploy data
+			let deployData: {
+				inputToken: CategorizedToken;
+				outputToken: CategorizedToken;
+				ioRatio: string;
+				depositAmount: bigint;
+				inputVaultId: Hex | undefined;
 			};
-		} else {
-			// Ask order (user selling): Places order to sell asset for the settlement token
-			// User specifies quantity to offer and price willing to receive
-			// Price interpretation: "I receive X quote tokens per 1 asset"
-			// The deployed order uses direct ratio: X
-			deployData = {
-				inputToken: orderInputToken, // payment token (token expected in return)
-				outputToken: orderOutputToken, // Asset (token being offered for sale)
-				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
-				ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
-				depositAmount: selectedAmount, // Asset amount being offered
-				inputVaultId: selectedInputVaultId
-			};
-		}
 
-		// Check if price warning is needed
-		if (checkPriceWarning()) {
-			pendingDeployData = deployData;
-			showPriceWarning = true;
-		} else {
-			tradeSubmittedSuccessfully = true;
-			track('limit_order_deployed', {
-				token_symbol: assetToken?.symbol,
-				order_side: orderSide.toLowerCase(),
-				price: selectedInitialRatio,
-				amount: formatUnits(selectedAmount, assetToken.decimals)
-			});
-			transactionStore.handleLimitDeploy(deployData);
+			if (orderType === 'Bid') {
+				// Bid order (user buying): Places order to buy asset with the settlement token
+				deployData = {
+					inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
+					outputToken: orderOutputToken, // payment token (token to be deposited as payment)
+					ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
+					depositAmount: settlementAmount!, // Payment amount in settlement token
+					inputVaultId: selectedInputVaultId
+				};
+			} else {
+				// Ask order (user selling): Places order to sell asset for the settlement token
+				deployData = {
+					inputToken: orderInputToken, // payment token (token expected in return)
+					outputToken: orderOutputToken, // Asset (token being offered for sale)
+					ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
+					depositAmount: selectedAmount, // Asset amount being offered
+					inputVaultId: selectedInputVaultId
+				};
+			}
+
+			// Check if price warning is needed
+			if (checkPriceWarning()) {
+				pendingDeployData = deployData;
+				showPriceWarning = true;
+			} else {
+				tradeSubmittedSuccessfully = true;
+				track('limit_order_deployed', {
+					token_symbol: assetToken?.symbol,
+					order_side: orderSide.toLowerCase(),
+					price: selectedInitialRatio,
+					amount: formatUnits(selectedAmount, assetToken.decimals),
+					pay_with_stables: $payFeesInStablecoin,
+					cross_chain_swap: needsSwap,
+					source_token: selectedSourceToken?.symbol,
+					source_chain_id: selectedSourceToken?.chainId
+				});
+				transactionStore.handleLimitDeploy(deployData);
+			}
+		} catch (error) {
+			console.error('Limit order deployment error:', error);
+			deployError = error instanceof Error ? error.message : 'Unknown error occurred';
+		} finally {
+			isDeploying = false;
+			aaPaymentStore.clearError();
 		}
 	};
 
@@ -366,6 +458,26 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0 && orderInputToken && orderOutputToken && assetToken}
 	<div class="space-y-4">
+		<!-- Cross-chain payment selector (Buy orders only) -->
+		{#if orderSide === 'Buy' && isAAEnabled}
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Pay with</div>
+				<TokenNetworkSelector
+					bind:selectedToken={selectedSourceToken}
+					disabled={isDeploying || $isSwapping}
+				/>
+				{#if $isSwapping}
+					<div class="mt-2 flex items-center gap-2 text-sm text-yellow-400">
+						<LoadingSpinner size="sm" />
+						Swapping to USDC on Base...
+					</div>
+				{/if}
+				{#if deployError}
+					<div class="mt-2 text-sm text-red-400">{deployError}</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
@@ -503,6 +615,42 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- Pay fees in stablecoin option -->
+		<label
+			class="flex cursor-pointer items-center gap-2 py-2"
+			title={orderSide === 'Buy'
+				? 'Pay gas fees using the stablecoin you selected above instead of ETH'
+				: 'Pay gas fees using USDC on Base instead of ETH'}
+		>
+			<input
+				type="checkbox"
+				checked={$payFeesInStablecoin}
+				on:change={() => payFeesInStablecoin.toggle()}
+				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+			/>
+			<span class="text-sm text-gray-300">Pay fees in stablecoin</span>
+			<span class="group relative">
+				<svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+					/>
+				</svg>
+				<span
+					class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-xs text-gray-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+				>
+					{#if orderSide === 'Buy'}
+						Pay gas fees using the stablecoin/network you selected to buy with (e.g., USDC or USDT
+						on various networks). No ETH required.
+					{:else}
+						Pay gas fees using USDC on Base (your settlement token). No ETH required.
+					{/if}
+				</span>
+			</span>
+		</label>
 
 		<!-- Deploy Button -->
 		<button

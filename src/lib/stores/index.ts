@@ -85,5 +85,35 @@ function createReviewStrategyStore() {
 
 export const reviewStrategyOnDeploy = createReviewStrategyStore();
 
+// Store for pay fees in stablecoin preference (persisted to localStorage)
+const PAY_FEES_STABLECOIN_KEY = 'st0x_pay_fees_in_stablecoin';
+
+function createPayFeesInStablecoinStore() {
+	// Initialize from localStorage if available, default to true (pay with USDC)
+	// This provides a better UX since users don't need to hold ETH on Base to trade
+	const storedValue = browser ? localStorage.getItem(PAY_FEES_STABLECOIN_KEY) : null;
+	const initialValue = storedValue !== null ? storedValue === 'true' : true;
+	const { subscribe, set } = writable<boolean>(initialValue);
+
+	return {
+		subscribe,
+		set: (value: boolean) => {
+			if (browser) {
+				localStorage.setItem(PAY_FEES_STABLECOIN_KEY, String(value));
+			}
+			set(value);
+		},
+		toggle: () => {
+			const newValue = browser ? localStorage.getItem(PAY_FEES_STABLECOIN_KEY) !== 'true' : false;
+			if (browser) {
+				localStorage.setItem(PAY_FEES_STABLECOIN_KEY, String(newValue));
+			}
+			set(newValue);
+		}
+	};
+}
+
+export const payFeesInStablecoin = createPayFeesInStablecoinStore();
+
 // Store for trade panel visibility (used to squish layout on large screens)
 export const tradePanelOpen = writable<boolean>(false);

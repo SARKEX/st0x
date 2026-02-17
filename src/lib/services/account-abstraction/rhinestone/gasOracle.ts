@@ -1,0 +1,250 @@
+/**
+ * Gas Oracle for Dynamic Gas Price Estimation
+ *
+ * Fetches real-time gas prices from RPC endpoints for supported chains.
+ * Includes caching to minimize RPC calls and provide consistent quotes.
+ */
+
+import { createPublicClient, type PublicClient } from 'viem';
+import { CHAIN_CONFIG, SUPPORTED_NETWORKS, type SupportedNetworkId } from '../types';
+import { createRpcTransport } from '$lib/utils/rpc';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface GasPriceData {
+	maxFeePerGas: bigint;
+	maxPriorityFeePerGas: bigint;
+	baseFee: bigint;
+	timestamp: number;
+}
+
+export interface GasOracleConfig {
+	cacheDurationMs: number; // How long to cache gas prices
+	defaultGasPrice: bigint; // Fallback if RPC fails
+}
+
+// Default configuration
+const DEFAULT_CONFIG: GasOracleConfig = {
+	cacheDurationMs: 15000, // 15 seconds cache
+	defaultGasPrice: 1000000000n // 1 gwei fallback
+};
+
+// =============================================================================
+// Gas Oracle Class
+// =============================================================================
+
+export class GasOracle {
+	private cache: Map<SupportedNetworkId, GasPriceData> = new Map();
+	private clients: Map<SupportedNetworkId, PublicClient> = new Map();
+	private config: GasOracleConfig;
+
+	constructor(config: Partial<GasOracleConfig> = {}) {
+		this.config = { ...DEFAULT_CONFIG, ...config };
+	}
+
+	/**
+	 * Get the public client for a chain (creates one if not exists)
+	 */
+	private getClient(chainId: SupportedNetworkId): PublicClient {
+		if (!this.clients.has(chainId)) {
+			const chain = CHAIN_CONFIG[chainId];
+
+			const client = createPublicClient({
+				chain,
+				transport: createRpcTransport(chainId)
+			}) as PublicClient;
+
+			this.clients.set(chainId, client);
+		}
+
+		return this.clients.get(chainId)!;
+	}
+
+	/**
+	 * Check if cached data is still valid
+	 */
+	private isCacheValid(chainId: SupportedNetworkId): boolean {
+		const cached = this.cache.get(chainId);
+		if (!cached) return false;
+
+		const age = Date.now() - cached.timestamp;
+		return age < this.config.cacheDurationMs;
+	}
+
+	/**
+	 * Fetch fresh gas prices from the RPC
+	 */
+	private async fetchGasPrice(chainId: SupportedNetworkId): Promise<GasPriceData> {
+		const client = this.getClient(chainId);
+
+		try {
+			// Use estimateFeesPerGas for EIP-1559 compatible chains
+			const feeData = await client.estimateFeesPerGas();
+
+			const data: GasPriceData = {
+				maxFeePerGas: feeData.maxFeePerGas ?? this.config.defaultGasPrice,
+				maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ?? this.config.defaultGasPrice / 10n,
+				baseFee: feeData.maxFeePerGas
+					? feeData.maxFeePerGas - (feeData.maxPriorityFeePerGas ?? 0n)
+					: this.config.defaultGasPrice,
+				timestamp: Date.now()
+			};
+
+			// Cache the result
+			this.cache.set(chainId, data);
+
+			return data;
+		} catch (error) {
+			console.warn(
+				`Failed to fetch gas price for chain ${chainId}:`,
+				error instanceof Error ? error.message : 'Unknown error'
+			);
+
+			// Return default values on failure
+			return {
+				maxFeePerGas: this.config.defaultGasPrice,
+				maxPriorityFeePerGas: this.config.defaultGasPrice / 10n,
+				baseFee: this.config.defaultGasPrice,
+				timestamp: Date.now()
+			};
+		}
+	}
+
+	/**
+	 * Get gas prices for a specific chain
+	 *
+	 * Uses cache if available and valid, otherwise fetches fresh data.
+	 */
+	async getGasPrice(chainId: SupportedNetworkId): Promise<GasPriceData> {
+		// Check cache first
+		if (this.isCacheValid(chainId)) {
+			return this.cache.get(chainId)!;
+		}
+
+		// Fetch fresh data
+		return this.fetchGasPrice(chainId);
+	}
+
+	/**
+	 * Get gas prices for multiple chains in parallel
+	 */
+	async getGasPrices(
+		chainIds: SupportedNetworkId[]
+	): Promise<Map<SupportedNetworkId, GasPriceData>> {
+		const results = new Map<SupportedNetworkId, GasPriceData>();
+
+		// Fetch all in parallel
+		const promises = chainIds.map(async (chainId) => {
+			const data = await this.getGasPrice(chainId);
+			results.set(chainId, data);
+		});
+
+		await Promise.all(promises);
+
+		return results;
+	}
+
+	/**
+	 * Estimate transaction cost in wei
+	 */
+	async estimateTransactionCost(
+		chainId: SupportedNetworkId,
+		gasLimit: bigint
+	): Promise<{
+		estimatedCostWei: bigint;
+		maxCostWei: bigint;
+		gasPrices: GasPriceData;
+	}> {
+		const gasPrices = await this.getGasPrice(chainId);
+
+		// Estimated cost uses base fee + priority fee
+		const estimatedCostWei = gasLimit * (gasPrices.baseFee + gasPrices.maxPriorityFeePerGas);
+
+		// Max cost uses maxFeePerGas
+		const maxCostWei = gasLimit * gasPrices.maxFeePerGas;
+
+		return {
+			estimatedCostWei,
+			maxCostWei,
+			gasPrices
+		};
+	}
+
+	/**
+	 * Convert gas cost to USDC equivalent
+	 *
+	 * @param gasCostWei - Gas cost in wei
+	 * @param ethPriceUsd - Current ETH price in USD
+	 * @returns Cost in USDC (6 decimals)
+	 */
+	convertToUSDC(gasCostWei: bigint, ethPriceUsd: number): bigint {
+		// Convert wei to ETH (18 decimals -> 0 decimals)
+		const gasCostInEth = Number(gasCostWei) / 1e18;
+
+		// Convert ETH to USD, then to USDC decimals (6)
+		const costInUsd = gasCostInEth * ethPriceUsd;
+		const costInUsdc = BigInt(Math.ceil(costInUsd * 1e6));
+
+		return costInUsdc;
+	}
+
+	/**
+	 * Get estimated gas limit for common operations
+	 */
+	getDefaultGasLimit(operationType: 'swap' | 'bridge' | 'approve' | 'transfer'): bigint {
+		switch (operationType) {
+			case 'approve':
+				return 50000n;
+			case 'transfer':
+				return 65000n;
+			case 'swap':
+				return 200000n;
+			case 'bridge':
+				return 500000n;
+			default:
+				return 100000n;
+		}
+	}
+
+	/**
+	 * Clear the cache (useful for testing or force refresh)
+	 */
+	clearCache(): void {
+		this.cache.clear();
+	}
+
+	/**
+	 * Prefetch gas prices for all supported chains
+	 *
+	 * Useful to warm up the cache before user interactions.
+	 */
+	async prefetchAll(): Promise<void> {
+		const allChains = Object.values(SUPPORTED_NETWORKS) as SupportedNetworkId[];
+		await this.getGasPrices(allChains);
+	}
+}
+
+// =============================================================================
+// Singleton Instance
+// =============================================================================
+
+let gasOracleInstance: GasOracle | null = null;
+
+/**
+ * Get the gas oracle singleton instance
+ */
+export function getGasOracle(): GasOracle {
+	if (!gasOracleInstance) {
+		gasOracleInstance = new GasOracle();
+	}
+	return gasOracleInstance;
+}
+
+/**
+ * Create a new gas oracle with custom config
+ */
+export function createGasOracle(config: Partial<GasOracleConfig>): GasOracle {
+	return new GasOracle(config);
+}

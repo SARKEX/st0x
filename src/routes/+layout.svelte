@@ -4,7 +4,7 @@
 	import { queryClient } from '$lib/clients/queryClient';
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { defaultConfig } from 'svelte-wagmi';
-	import { base } from '@wagmi/core/chains';
+	import { base, arbitrum, optimism, mainnet } from '@wagmi/core/chains';
 	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
@@ -51,7 +51,7 @@
 		const cfgOptions = {
 			autoConnect: true,
 			appName: 'st0x-liquidity',
-			chains: [base] as [typeof base],
+			chains: [base, arbitrum, optimism, mainnet],
 			connectors: connectorsList,
 			walletConnectProjectId: projectId || 'dummy-project-id'
 		};

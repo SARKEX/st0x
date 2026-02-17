@@ -10,13 +10,41 @@
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
-	import { currentNetwork, oracleQuotes, reviewStrategyOnDeploy } from '$lib/stores';
+	import {
+		currentNetwork,
+		oracleQuotes,
+		reviewStrategyOnDeploy,
+		payFeesInStablecoin
+	} from '$lib/stores';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
+	import { addressesEqual } from '$lib/utils/tokenMath';
+	import { track } from '$lib/services/analytics';
+
+	// Account Abstraction imports
+	import TokenNetworkSelector from '$lib/components/aa/TokenNetworkSelector.svelte';
+	import {
+		type PaymentToken,
+		SUPPORTED_NETWORKS,
+		USDC_BASE,
+		isRhinestoneConfigured,
+		getPriceOracle
+	} from '$lib/services/account-abstraction';
+	import { aaPaymentStore, isSwapping, swapError } from '$lib/stores/aaPaymentStore';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
+
+	// AA state
+	let selectedSourceToken: PaymentToken | null = USDC_BASE;
+	let isDeploying = false;
+	let deployError: string | null = null;
+	$: isAAEnabled = isRhinestoneConfigured();
+	$: needsSwap =
+		selectedSourceToken &&
+		(selectedSourceToken.chainId !== SUPPORTED_NETWORKS.BASE ||
+			selectedSourceToken.symbol !== 'USDC');
 
 	$: actionButtonClass =
 		orderSide === 'Buy'
@@ -38,8 +66,8 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
-			const match = ALL_TOKENS.find(
-				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
+			const match = ALL_TOKENS.find((token) =>
+				addressesEqual(token.address, settlementTokenConfig.address)
 			);
 			selectedOutputToken =
 				match ||
@@ -66,8 +94,10 @@
 	// Reference to TradeAmountInput for programmatic updates
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
 
-	$: isInputTokenSameAsOutputToken =
-		selectedOutputToken?.address.toLowerCase() === selectedInputToken?.address.toLowerCase();
+	$: isInputTokenSameAsOutputToken = addressesEqual(
+		selectedOutputToken?.address,
+		selectedInputToken?.address
+	);
 
 	// errors
 	let selectedAmountError: boolean = false;
@@ -150,7 +180,9 @@
 		isInputTokenSameAsOutputToken ||
 		selectedInitialRatioError ||
 		priceGuardrailError ||
-		belowMinTradeError;
+		belowMinTradeError ||
+		isDeploying ||
+		$isSwapping;
 
 	// Handle percentage button clicks for setting amount based on wallet balance
 	// For DCA, amount token and balance token are always the same (both are the spending token)
@@ -161,7 +193,7 @@
 		tradeAmountInputRef.setAmountValue(percentAmount);
 	};
 
-	const handleDcaDeploy = () => {
+	const handleDcaDeploy = async () => {
 		// Check if user is connected
 		if (!$isAuthenticated) {
 			promptWalletConnection();
@@ -172,9 +204,63 @@
 			promptLogin();
 			return;
 		}
-		if ($isAuthenticated && $walletRegistered) {
+
+		isDeploying = true;
+		deployError = null;
+
+		try {
 			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
 			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+
+			// For Buy orders: Check if cross-chain swap is needed
+			let effectiveDepositAmount = depositAmount;
+			if (orderType === 'Bid' && needsSwap && selectedSourceToken) {
+				// Calculate amount in source token (accounting for different decimals and pricing)
+				const sourceDecimals = selectedSourceToken.decimals;
+				const settlementDecimals = selectedOutputToken?.decimals ?? 6;
+				const depositInUSD = parseFloat(formatUnits(depositAmount, settlementDecimals));
+				const isStablecoin =
+					selectedSourceToken.symbol === 'USDC' || selectedSourceToken.symbol === 'USDT';
+
+				let swapAmount: bigint;
+				if (isStablecoin) {
+					// Stablecoins: 1:1 with USD, add 1% buffer
+					swapAmount = BigInt(Math.ceil(depositInUSD * 1.01 * 10 ** sourceDecimals));
+				} else {
+					// Non-stablecoins (WETH): convert via price oracle
+					const priceOracle = getPriceOracle();
+					const tokenSymbol =
+						selectedSourceToken.symbol === 'WETH' ? 'ETH' : selectedSourceToken.symbol;
+					const tokenPrices = await priceOracle.getTokenPrices([tokenSymbol]);
+					const sourceTokenPriceUSD = tokenPrices.get(tokenSymbol)?.priceUsd ?? 2500;
+					const sourceTokenAmount = depositInUSD / sourceTokenPriceUSD;
+					// Add 2% buffer for non-stablecoins
+					swapAmount = BigInt(Math.ceil(sourceTokenAmount * 1.02 * 10 ** sourceDecimals));
+				}
+
+				// Execute the cross-chain swap
+				const swapResult = await aaPaymentStore.executeSwapIfNeeded(
+					swapAmount,
+					$payFeesInStablecoin
+				);
+				if (swapResult === null) {
+					track('cross_chain_swap_failed', {
+						source_token: selectedSourceToken.symbol,
+						source_chain_id: selectedSourceToken.chainId,
+						error: $swapError || 'Cross-chain swap failed'
+					});
+					deployError = $swapError || 'Cross-chain swap failed';
+					return;
+				}
+				track('cross_chain_swap_executed', {
+					source_token: selectedSourceToken.symbol,
+					source_chain_id: selectedSourceToken.chainId,
+					swap_amount: swapAmount.toString()
+				});
+
+				// Update deposit amount to use the USDC received
+				effectiveDepositAmount = swapResult;
+			}
 
 			// Bid (buying): Accumulate asset over time using the settlement token
 			// Ask (selling): Accumulate the settlement token over time by selling the asset
@@ -183,7 +269,7 @@
 			transactionStore.handleDcaDeploy({
 				outputToken: outputTok,
 				inputToken: inputTok,
-				budgetAmount: selectedAmount,
+				budgetAmount: orderType === 'Bid' ? effectiveDepositAmount : selectedAmount,
 				selectedPeriod: selectedPeriod,
 				selectedPeriodUnit: selectedPeriodUnit,
 				// DCA price inversion logic:
@@ -193,9 +279,15 @@
 				kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
 				minTradeAmount: minTradeAmount,
 				maxTradeAmount: maxTradeAmount,
-				depositAmount: depositAmount,
+				depositAmount: effectiveDepositAmount,
 				inputVaultId: selectedInputVaultId
 			});
+		} catch (error) {
+			console.error('DCA order deployment error:', error);
+			deployError = error instanceof Error ? error.message : 'Unknown error occurred';
+		} finally {
+			isDeploying = false;
+			aaPaymentStore.clearError();
 		}
 	};
 
@@ -239,6 +331,26 @@
 
 {#if $currentNetwork && ALL_TOKENS.length > 0}
 	<div class="space-y-4">
+		<!-- Cross-chain payment selector (Buy orders only) -->
+		{#if orderSide === 'Buy' && isAAEnabled}
+			<div>
+				<div class="mb-2 block text-sm font-medium text-gray-300">Pay with</div>
+				<TokenNetworkSelector
+					bind:selectedToken={selectedSourceToken}
+					disabled={isDeploying || $isSwapping}
+				/>
+				{#if $isSwapping}
+					<div class="mt-2 flex items-center gap-2 text-sm text-yellow-400">
+						<LoadingSpinner size="sm" />
+						Swapping to USDC on Base...
+					</div>
+				{/if}
+				{#if deployError}
+					<div class="mt-2 text-sm text-red-400">{deployError}</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Target Amount and Period -->
 		<div class="space-y-4">
 			<div>
@@ -445,6 +557,42 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- Pay fees in stablecoin option -->
+		<label
+			class="flex cursor-pointer items-center gap-2 py-2"
+			title={orderSide === 'Buy'
+				? 'Pay gas fees using the stablecoin you selected above instead of ETH'
+				: 'Pay gas fees using USDC on Base instead of ETH'}
+		>
+			<input
+				type="checkbox"
+				checked={$payFeesInStablecoin}
+				on:change={() => payFeesInStablecoin.toggle()}
+				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+			/>
+			<span class="text-sm text-gray-300">Pay fees in stablecoin</span>
+			<span class="group relative">
+				<svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+					/>
+				</svg>
+				<span
+					class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-xs text-gray-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+				>
+					{#if orderSide === 'Buy'}
+						Pay gas fees using the stablecoin/network you selected to buy with (e.g., USDC or USDT
+						on various networks). No ETH required.
+					{:else}
+						Pay gas fees using USDC on Base (your settlement token). No ETH required.
+					{/if}
+				</span>
+			</span>
+		</label>
 
 		<!-- Deploy Button -->
 		<button

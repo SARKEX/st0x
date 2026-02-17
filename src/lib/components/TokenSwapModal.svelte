@@ -209,21 +209,25 @@
 		liquidityWarning = amount > availableLiquidity && availableLiquidity > 0;
 	}
 
-	// Set max amount (capped by liquidity)
+	// Set max amount (capped by liquidity) using token decimals
 	function handleMaxClick() {
 		if (!selectedTokenData) return;
 
-		const maxAmount = Math.min(selectedTokenData.balanceFormatted, availableLiquidity);
-		swapAmount = maxAmount.toFixed(6);
-		liquidityWarning = selectedTokenData.balanceFormatted > availableLiquidity;
+		const decimals = selectedTokenData.oldToken.decimals;
+		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
+		const maxWei =
+			selectedTokenData.balance < liquidityWei ? selectedTokenData.balance : liquidityWei;
+		swapAmount = formatUnits(maxWei, decimals);
+		liquidityWarning = selectedTokenData.balance > liquidityWei;
 	}
 
-	// Cap to available liquidity
+	// Cap to available liquidity using token decimals
 	function capToLiquidity() {
-		if (parsedSwapAmount > availableLiquidity && availableLiquidity > 0) {
-			swapAmount = availableLiquidity.toFixed(6);
-			liquidityWarning = true;
-		}
+		if (!currentMapping || parsedSwapAmount <= availableLiquidity || availableLiquidity <= 0)
+			return;
+		const decimals = currentMapping.oldToken.decimals;
+		swapAmount = formatUnits(parseUnits(availableLiquidity.toFixed(decimals), decimals), decimals);
+		liquidityWarning = true;
 	}
 
 	// Execute the swap by taking the migration order (same flow as market order)
@@ -461,8 +465,9 @@
 									{:else}
 										{#each tokensToShow as tokenData}
 											<option value={tokenData.oldToken.address}>
-												{tokenData.oldToken.symbol} - Balance: {tokenData.balanceFormatted.toFixed(
-													4
+												{tokenData.oldToken.symbol} - Balance: {formatUnits(
+													tokenData.balance,
+													tokenData.oldToken.decimals
 												)}
 											</option>
 										{/each}
@@ -506,7 +511,10 @@
 							{#if selectedTokenData}
 								<div class="mt-2 flex items-center justify-between text-xs">
 									<span class="text-gray-500">
-										Balance: {selectedTokenData.balanceFormatted.toFixed(4)}
+										Balance: {formatUnits(
+											selectedTokenData.balance,
+											selectedTokenData.oldToken.decimals
+										)}
 										{selectedTokenData.oldToken.symbol}
 									</span>
 									<button
@@ -563,7 +571,9 @@
 								{/if}
 								<div class="flex-1 text-right">
 									<span class="text-xl font-medium text-white">
-										{parsedSwapAmount > 0 ? parsedSwapAmount.toFixed(6) : '0'}
+										{parsedSwapAmount > 0
+											? parsedSwapAmount.toFixed(currentMapping?.oldToken.decimals ?? 6)
+											: '0'}
 									</span>
 								</div>
 							</div>
@@ -619,7 +629,8 @@
 									<span class="animate-pulse text-gray-500">Loading...</span>
 								{:else if availableLiquidity > 0}
 									<span class="text-white"
-										>{availableLiquidity.toFixed(2)} {currentMapping.oldToken.symbol}</span
+										>{availableLiquidity.toFixed(currentMapping.oldToken.decimals)}
+										{currentMapping.oldToken.symbol}</span
 									>
 								{:else}
 									<span class="text-yellow-500">No liquidity available</span>

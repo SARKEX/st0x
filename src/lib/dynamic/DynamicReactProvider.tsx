@@ -27,6 +27,28 @@ export interface DynamicEventData {
 	};
 }
 
+// Signer interface matching DynamicSigner in dynamicStore.ts
+export interface DynamicSignerBridge {
+	signMessage: (args: { message: string }) => Promise<string>;
+	signTransaction: (tx: unknown) => Promise<string>;
+	signTypedData: (args: {
+		domain: Record<string, unknown>;
+		types: Record<string, unknown>;
+		primaryType: string;
+		message: Record<string, unknown>;
+	}) => Promise<string>;
+	signAuthorization: (args: {
+		contractAddress: string;
+		chainId: number;
+		nonce?: number;
+	}) => Promise<{
+		r: `0x${string}`;
+		s: `0x${string}`;
+		v?: bigint;
+		yParity?: number;
+	}>;
+}
+
 interface DynamicBridgeProps {
 	environmentId: string;
 	onEvent: (event: DynamicEventData) => void;
@@ -35,6 +57,7 @@ interface DynamicBridgeProps {
 			request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 		} | null
 	) => void;
+	onSignerReady?: (signer: DynamicSignerBridge | null) => void;
 	triggerLogin?: boolean;
 	triggerLogout?: boolean;
 	triggerExportWallet?: boolean;
@@ -52,6 +75,7 @@ const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000;
 function DynamicBridge({
 	onEvent,
 	onWalletProviderReady,
+	onSignerReady,
 	triggerLogin,
 	triggerLogout,
 	triggerExportWallet,
@@ -77,6 +101,7 @@ function DynamicBridge({
 	// Use refs for callbacks to avoid infinite loops from dependency changes
 	const onEventRef = useRef(onEvent);
 	const onWalletProviderReadyRef = useRef(onWalletProviderReady);
+	const onSignerReadyRef = useRef(onSignerReady);
 
 	// Keep refs up to date
 	useEffect(() => {
@@ -86,6 +111,10 @@ function DynamicBridge({
 	useEffect(() => {
 		onWalletProviderReadyRef.current = onWalletProviderReady;
 	}, [onWalletProviderReady]);
+
+	useEffect(() => {
+		onSignerReadyRef.current = onSignerReady;
+	}, [onSignerReady]);
 
 	// Notify when ready (only once)
 	useEffect(() => {
@@ -296,6 +325,122 @@ function DynamicBridge({
 			// Clear provider when wallet is not available
 			onWalletProviderReadyRef.current(null);
 		}
+	}, [activeWallet]);
+
+	// Expose Dynamic signer for EIP-7702 authorization signing
+	useEffect(() => {
+		if (!activeWallet || !isEthereumWallet(activeWallet) || !onSignerReadyRef.current) {
+			onSignerReadyRef.current?.(null);
+			return;
+		}
+
+		let cancelled = false;
+
+		(async () => {
+			try {
+				const walletClient = await activeWallet.getWalletClient('8453');
+				if (cancelled || !walletClient) return;
+
+				// Try connector signAuthorization first (bypasses viem; avoids "json-rpc not supported" error).
+				// walletClient.signAuthorization uses viem which rejects JSON-RPC accounts.
+				const signAuthorizationImpl = async (
+					authorization: Parameters<DynamicSignerBridge['signAuthorization']>[0]
+				): Promise<
+					ReturnType<DynamicSignerBridge['signAuthorization']> extends Promise<infer R> ? R : never
+				> => {
+					const params = {
+						contractAddress: authorization.contractAddress as `0x${string}`,
+						chainId: authorization.chainId,
+						nonce: authorization.nonce
+					};
+
+					const normalizeResult = (result: {
+						r?: `0x${string}`;
+						s?: `0x${string}`;
+						v?: bigint;
+						yParity?: number;
+					}) => ({
+						r: result.r!,
+						s: result.s!,
+						yParity: result.yParity ?? (result.v !== undefined ? (result.v === 0n ? 0 : 1) : 0)
+					});
+
+					// 1) Try connector.signAuthorization (e.g. DynamicWaasEVMConnector) - bypasses viem, no json-rpc restriction
+					const connector = (
+						activeWallet as {
+							connector?: {
+								signAuthorization?: (p: unknown) => Promise<unknown>;
+								isSignAuthorizationSupported?: () => boolean;
+							};
+						}
+					).connector;
+					if (
+						connector &&
+						(typeof connector.isSignAuthorizationSupported !== 'function' ||
+							connector.isSignAuthorizationSupported()) &&
+						typeof connector.signAuthorization === 'function'
+					) {
+						const result = await connector.signAuthorization({
+							address: params.contractAddress,
+							contractAddress: params.contractAddress,
+							chainId: params.chainId,
+							nonce: params.nonce
+						});
+						return normalizeResult(
+							result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number }
+						);
+					}
+
+					// 2) Try account.signAuthorization (local account only; skips walletClient to avoid viem json-rpc check)
+					const account = (
+						walletClient as {
+							account?: { signAuthorization?: (p: unknown) => Promise<unknown>; type?: string };
+						}
+					).account;
+					if (account?.signAuthorization && account.type === 'local') {
+						const result = await account.signAuthorization(params);
+						return normalizeResult(
+							result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number }
+						);
+					}
+
+					// No supported path - walletClient.signAuthorization fails for json-rpc accounts in viem
+					throw new Error(
+						'signAuthorization is not supported for Dynamic MPC wallets. ' +
+							'The Rhinestone SDK handles authorizations automatically.'
+					);
+				};
+
+				const signer: DynamicSignerBridge = {
+					signMessage: async ({ message }) => {
+						return activeWallet.signMessage(message) as Promise<string>;
+					},
+					signTransaction: async (tx) => {
+						return walletClient.signTransaction(
+							tx as Parameters<typeof walletClient.signTransaction>[0]
+						) as unknown as Promise<string>;
+					},
+					signTypedData: async (args) => {
+						return walletClient.signTypedData(
+							args as Parameters<typeof walletClient.signTypedData>[0]
+						) as unknown as Promise<string>;
+					},
+					signAuthorization: signAuthorizationImpl
+				};
+
+				if (!cancelled) {
+					console.log('[dynamic] Signer bridge created for EIP-7702 support');
+					onSignerReadyRef.current?.(signer);
+				}
+			} catch (error) {
+				console.error('[dynamic] Failed to create signer bridge:', error);
+				if (!cancelled) onSignerReadyRef.current?.(null);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
 	}, [activeWallet]);
 
 	// Handle login trigger
