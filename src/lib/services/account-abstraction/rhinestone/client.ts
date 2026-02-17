@@ -1453,7 +1453,9 @@ export class RhinestoneClient {
 						);
 					}
 					throw new AAError(
-						`EIP-7702 authorizations could not be obtained for chain(s): ${stillMissingChainIds.join(', ')}. The transaction cannot be submitted without them.`,
+						`EIP-7702 authorizations could not be obtained for chain(s): ${stillMissingChainIds.join(
+							', '
+						)}. The transaction cannot be submitted without them.`,
 						AAErrorCode.SWAP_FAILED,
 						{
 							missingChains: stillMissingChainIds,

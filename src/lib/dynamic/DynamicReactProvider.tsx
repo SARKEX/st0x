@@ -345,7 +345,9 @@ function DynamicBridge({
 				// walletClient.signAuthorization uses viem which rejects JSON-RPC accounts.
 				const signAuthorizationImpl = async (
 					authorization: Parameters<DynamicSignerBridge['signAuthorization']>[0]
-				): Promise<ReturnType<DynamicSignerBridge['signAuthorization']> extends Promise<infer R> ? R : never> => {
+				): Promise<
+					ReturnType<DynamicSignerBridge['signAuthorization']> extends Promise<infer R> ? R : never
+				> => {
 					const params = {
 						contractAddress: authorization.contractAddress as `0x${string}`,
 						chainId: authorization.chainId,
@@ -360,17 +362,18 @@ function DynamicBridge({
 					}) => ({
 						r: result.r!,
 						s: result.s!,
-						yParity:
-							result.yParity ?? (result.v !== undefined ? (result.v === 0n ? 0 : 1) : 0)
+						yParity: result.yParity ?? (result.v !== undefined ? (result.v === 0n ? 0 : 1) : 0)
 					});
 
 					// 1) Try connector.signAuthorization (e.g. DynamicWaasEVMConnector) - bypasses viem, no json-rpc restriction
-					const connector = (activeWallet as {
-						connector?: {
-							signAuthorization?: (p: unknown) => Promise<unknown>;
-							isSignAuthorizationSupported?: () => boolean;
-						};
-					}).connector;
+					const connector = (
+						activeWallet as {
+							connector?: {
+								signAuthorization?: (p: unknown) => Promise<unknown>;
+								isSignAuthorizationSupported?: () => boolean;
+							};
+						}
+					).connector;
 					if (
 						connector &&
 						(typeof connector.isSignAuthorizationSupported !== 'function' ||
@@ -383,14 +386,22 @@ function DynamicBridge({
 							chainId: params.chainId,
 							nonce: params.nonce
 						});
-						return normalizeResult(result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number });
+						return normalizeResult(
+							result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number }
+						);
 					}
 
 					// 2) Try account.signAuthorization (local account only; skips walletClient to avoid viem json-rpc check)
-					const account = (walletClient as { account?: { signAuthorization?: (p: unknown) => Promise<unknown>; type?: string } }).account;
+					const account = (
+						walletClient as {
+							account?: { signAuthorization?: (p: unknown) => Promise<unknown>; type?: string };
+						}
+					).account;
 					if (account?.signAuthorization && account.type === 'local') {
 						const result = await account.signAuthorization(params);
-						return normalizeResult(result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number });
+						return normalizeResult(
+							result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number }
+						);
 					}
 
 					// No supported path - walletClient.signAuthorization fails for json-rpc accounts in viem
