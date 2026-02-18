@@ -1390,10 +1390,19 @@ export class RhinestoneClient {
 				hasEip7702InitSignature: Boolean(transactionParams.eip7702InitSignature)
 			});
 
+			// Sessions signer injection (right before prepareTransaction)
+			// For cross-chain, attach session signer on SOURCE chain (origin signing context)
+			const txWithSigner = await this.maybeAttachSessionSigner(
+				rhinestoneAccount,
+				walletAccount.address as Address,
+				sourceChain.id,
+				transactionParams
+			);
+
 			for (let attempt = 1; attempt <= MAX_PREPARE_RETRIES; attempt++) {
 				try {
 					debugLog(`prepareTransaction attempt ${attempt}/${MAX_PREPARE_RETRIES}...`);
-					preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+					preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
 					debugLog('prepareTransaction succeeded');
 					break; // Success, exit retry loop
 				} catch (prepareError) {
