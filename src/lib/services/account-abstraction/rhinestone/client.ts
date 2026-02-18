@@ -698,6 +698,14 @@ export class RhinestoneClient {
 		return { eip7702InitSignature, isDeployed, hadSdkLimitation };
 	}
 
+	private async getAuthorizationNonce(walletAddress: Address, chainId: number): Promise<number> {
+		if (!this.isSupportedNetwork(chainId)) {
+			throw new AAError(`Chain ${chainId} not supported`, AAErrorCode.UNSUPPORTED_NETWORK);
+		}
+		const publicClient = this.createPublicClient(chainId as SupportedNetworkId);
+		return publicClient.getTransactionCount({ address: walletAddress });
+	}
+
 	/**
 	 * Sign authorizations for EIP-7702 transactions.
 	 * Handles JSON-RPC wallet limitations gracefully.
@@ -751,17 +759,18 @@ export class RhinestoneClient {
 				const walletWithSignAuth = walletAccount as WalletAccountWithSignAuth;
 
 				if (typeof walletWithSignAuth.signAuthorization === 'function') {
+					const nonce = await this.getAuthorizationNonce(walletAccount.address as Address, chainId);
 					debugLog('Wallet has signAuthorization, signing manually...');
 					const auth = await walletWithSignAuth.signAuthorization({
 						contractAddress: EIP7702_DELEGATE_CONTRACT,
 						chainId,
-						nonce: 0
+						nonce
 					});
 					authorizations = [
 						{
 							chainId,
 							address: EIP7702_DELEGATE_CONTRACT,
-							nonce: auth.nonce ?? 0,
+							nonce: auth.nonce ?? nonce,
 							r: auth.r,
 							s: auth.s,
 							yParity: auth.yParity ?? 0
@@ -1566,11 +1575,15 @@ export class RhinestoneClient {
 					if (typeof walletAccountWithSignAuth.signAuthorization === 'function') {
 						for (const chainId of missingChainIds) {
 							try {
+								const nonce = await this.getAuthorizationNonce(
+									walletAccount.address as Address,
+									chainId
+								);
 								debugLog('Signing authorization for chain:', chainId);
 								const auth = await walletAccountWithSignAuth.signAuthorization({
 									contractAddress: EIP7702_DELEGATE_CONTRACT,
 									chainId,
-									nonce: 0
+									nonce
 								});
 
 								debugLog('Authorization signed for chain:', {
@@ -1583,7 +1596,7 @@ export class RhinestoneClient {
 								authsList.push({
 									chainId,
 									address: EIP7702_DELEGATE_CONTRACT,
-									nonce: auth.nonce ?? 0,
+									nonce: auth.nonce ?? nonce,
 									r: auth.r,
 									s: auth.s,
 									yParity: auth.yParity ?? 0
