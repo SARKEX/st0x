@@ -28,7 +28,6 @@ import { toAccount } from 'viem/accounts';
 import { get } from 'svelte/store';
 import {
 	type SupportedNetworkId,
-	SUPPORTED_NETWORKS,
 	CHAIN_CONFIG,
 	AAError,
 	AAErrorCode
@@ -160,14 +159,14 @@ async function waitForDynamicSigner(timeoutMs: number = 5000): Promise<DynamicSi
  * - The signer's signAuthorization method is used directly
  * - This works around viem's limitation with JSON-RPC accounts
  *
- * @param chainId - Optional chain ID (defaults to Base)
+ * @param chainId - Chain ID to create signer/account bindings for
  * @param returnWalletClient - If true, returns both account and wallet client
  * @param waitForSigner - If true, wait for signer to be available (default: true)
  * @returns Account object (or DynamicAccountResult if returnWalletClient is true)
  *
  * @example
  * ```ts
- * const account = await getDynamicAccountForRhinestone();
+ * const account = await getDynamicAccountForRhinestone(chainId);
  * const rhinestoneAccount = await sdk.createAccount({
  *   owners: { type: 'ecdsa', accounts: [account] },
  *   accountType: '7702' // For EIP-7702 mode
@@ -181,7 +180,7 @@ async function waitForDynamicSigner(timeoutMs: number = 5000): Promise<DynamicSi
  * ```
  */
 export async function getDynamicAccountForRhinestone(
-	chainId: SupportedNetworkId = SUPPORTED_NETWORKS.BASE,
+	chainId: SupportedNetworkId,
 	returnWalletClient: boolean = false,
 	waitForSigner: boolean = true
 ): Promise<Account | DynamicAccountResult | null> {

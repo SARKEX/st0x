@@ -338,19 +338,43 @@ function DynamicBridge({
 
 		(async () => {
 			try {
-				const walletClient = await activeWallet.getWalletClient('8453');
-				if (cancelled || !walletClient) return;
+				const resolveChainId = (value: unknown): string => {
+					if (typeof value === 'number' && Number.isFinite(value)) {
+						return String(value);
+					}
+					if (typeof value === 'bigint') {
+						return value.toString();
+					}
+					if (typeof value === 'string' && value.length > 0) {
+						if (value.startsWith('0x')) {
+							try {
+								return String(parseInt(value, 16));
+							} catch {
+								return value;
+							}
+						}
+						return value;
+					}
+					return '8453';
+				};
 
 				const signer: DynamicSignerBridge = {
 					signMessage: async ({ message }) => {
 						return activeWallet.signMessage(message) as Promise<string>;
 					},
 					signTransaction: async (tx) => {
+						const txParams = tx as { chainId?: unknown; chain?: { id?: unknown } };
+						const walletClient = await activeWallet.getWalletClient(
+							resolveChainId(txParams.chainId ?? txParams.chain?.id)
+						);
 						return walletClient.signTransaction(
 							tx as Parameters<typeof walletClient.signTransaction>[0]
 						) as unknown as Promise<string>;
 					},
 					signTypedData: async (args) => {
+						const walletClient = await activeWallet.getWalletClient(
+							resolveChainId(args?.domain?.chainId)
+						);
 						return walletClient.signTypedData(
 							args as Parameters<typeof walletClient.signTypedData>[0]
 						) as unknown as Promise<string>;

@@ -104,7 +104,9 @@ export async function sendTransaction(params: {
 					'./account-abstraction/wallets/dynamic'
 				);
 
-				const walletAccount = await getDynamicAccountForRhinestone();
+				const walletAccount = await getDynamicAccountForRhinestone(
+					targetChainId as import('./account-abstraction/types').SupportedNetworkId
+				);
 				if (!walletAccount) {
 					throw new Error('Failed to get wallet account for Rhinestone gas payment');
 				}

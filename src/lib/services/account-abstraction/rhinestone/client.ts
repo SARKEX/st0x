@@ -55,7 +55,6 @@ import { isDynamicEmbeddedWallet } from '../wallets/dynamic';
 import { getPaymentTokensForNetwork } from '../tokens';
 import { type Session } from '@rhinestone/sdk';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import type { SessionDetails } from '@rhinestone/sdk/dist/src/modules/validators/smart-sessions';
 
 
 import { createRpcTransport } from '$lib/utils/rpc';
@@ -149,6 +148,12 @@ interface SignedTransaction {
 	originSignatures: Hex[];
 	destinationSignature: Hex;
 	transaction: RhinestoneTransactionParams;
+}
+
+interface SessionDetails {
+	nonces: bigint[];
+	hashesAndChainIds: Array<{ chainId: bigint; sessionDigest: Hex }>;
+	data: unknown;
 }
 
 interface RhinestoneAccount {
