@@ -156,6 +156,13 @@ interface SessionDetails {
 	data: unknown;
 }
 
+interface SessionEnableBundle {
+	sessions: Session[];
+	enableSignature: Hex;
+	hashesAndChainIds: Array<{ chainId: bigint; sessionDigest: Hex }>;
+	createdAt: number;
+}
+
 interface RhinestoneAccount {
 	sendTransaction: (params: RhinestoneTransactionParams) => Promise<TransactionResult>;
 	// 3-step transaction flow that properly handles eip7702InitSignature
@@ -209,6 +216,7 @@ const WETH_BY_CHAIN: Record<number, `0x${string}`> = {
 	10: '0x4200000000000000000000000000000000000006' // Optimism
 };
 const EIP7702_DELEGATE_CONTRACT = '0x000000000032ddc454c3bdcba80484ad5a798705' as Address;
+const SESSION_BUNDLE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function isZeroAddr(v?: string): boolean {
 	return (v ?? '').toLowerCase() === '0x0000000000000000000000000000000000000000';
@@ -313,8 +321,7 @@ export class RhinestoneClient {
 	private eip7702InitSignatureCache: Map<Address, Hex> = new Map();
 
 	// Sessions cache: wallet+sessionOwner+chains → enable bundle
-	private sessionEnableCache: Map<string, { sessions: Session[]; enableSignature: Hex; hashesAndChainIds: any[] }> =
-	new Map();
+	private sessionEnableCache: Map<string, SessionEnableBundle> = new Map();
 
 
 	constructor(config: RhinestoneConfig) {
@@ -499,7 +506,7 @@ export class RhinestoneClient {
 		rhinestoneAccount: RhinestoneAccount,
 		walletAddress: Address,
 		chainIds: number[]
-	): Promise<{ sessions: Session[]; enableSignature: Hex; hashesAndChainIds: any[] }> {
+	): Promise<SessionEnableBundle> {
 		if (!this.sessionsEnabled()) throw new Error('Sessions not enabled');
 	
 		const sessionOwner = this.getSessionOwnerAccount(walletAddress);
@@ -507,7 +514,15 @@ export class RhinestoneClient {
 	
 		// 1) memory cache
 		const mem = this.sessionEnableCache.get(cacheKey);
-		if (mem) return mem;
+		if (mem) {
+			if (
+				this.isSessionBundleFresh(mem.createdAt) &&
+				(await this.areSessionsEnabled(rhinestoneAccount, mem.sessions))
+			) {
+				return mem;
+			}
+			this.sessionEnableCache.delete(cacheKey);
+		}
 	
 		// 2) localStorage cache
 		if (typeof window !== 'undefined') {
@@ -517,8 +532,13 @@ export class RhinestoneClient {
 					const parsed = JSON.parse(raw) as {
 						sessions: Array<{ chainId: number; validAfter: number; validUntil: number }>;
 						enableSignature: Hex;
-						hashesAndChainIds: any[];
+						hashesAndChainIds: Array<{ chainId: bigint | string | number; sessionDigest: Hex }>;
+						createdAt: number;
 					};
+					if (!this.isSessionBundleFresh(parsed.createdAt)) {
+						window.localStorage.removeItem(cacheKey);
+						throw new Error('Session cache expired');
+					}
 					const restoredSessionOwner = this.getSessionOwnerAccount(walletAddress);
 					const sessions: Session[] = parsed.sessions.map((s) => {
 						if (typeof s.validAfter !== 'number' || typeof s.validUntil !== 'number') {
@@ -547,8 +567,13 @@ export class RhinestoneClient {
 					const bundle = {
 						sessions,
 						enableSignature: parsed.enableSignature,
-						hashesAndChainIds
+						hashesAndChainIds,
+						createdAt: parsed.createdAt
 					};
+					if (!(await this.areSessionsEnabled(rhinestoneAccount, sessions))) {
+						window.localStorage.removeItem(cacheKey);
+						throw new Error('Session cache not enabled on-chain');
+					}
 					this.sessionEnableCache.set(cacheKey, bundle);
 					return bundle;
 				} catch {
@@ -583,7 +608,8 @@ export class RhinestoneClient {
 		const bundle = {
 			sessions,
 			enableSignature,
-			hashesAndChainIds: sessionDetails.hashesAndChainIds
+			hashesAndChainIds: sessionDetails.hashesAndChainIds,
+			createdAt: sessionValidAfter
 		};
 	
 		// persist
@@ -599,7 +625,8 @@ export class RhinestoneClient {
 							validUntil: sessionValidUntil
 						})),
 						enableSignature,
-						hashesAndChainIds: bundle.hashesAndChainIds
+						hashesAndChainIds: bundle.hashesAndChainIds,
+						createdAt: bundle.createdAt
 					},
 					(_k, v) => (typeof v === 'bigint' ? v.toString() : v)
 				)
@@ -608,6 +635,21 @@ export class RhinestoneClient {
 		this.sessionEnableCache.set(cacheKey, bundle);
 	
 		return bundle;
+	}
+
+	private isSessionBundleFresh(createdAt: number): boolean {
+		return Date.now() - createdAt <= SESSION_BUNDLE_TTL_MS;
+	}
+
+	private async areSessionsEnabled(
+		rhinestoneAccount: RhinestoneAccount,
+		sessions: Session[]
+	): Promise<boolean> {
+		for (const session of sessions) {
+			const isEnabled = await rhinestoneAccount.experimental_isSessionEnabled(session);
+			if (!isEnabled) return false;
+		}
+		return true;
 	}
 	
 	private async maybeAttachSessionSigner(
@@ -2387,6 +2429,54 @@ export class RhinestoneClient {
 			chain: CHAIN_CONFIG[chainId],
 			transport: createRpcTransport(chainId)
 		});
+	}
+
+	/**
+	 * Clear cached session/eip7702 data (memory + localStorage).
+	 * When walletAddress is provided, only that wallet's cache entries are removed.
+	 */
+	clearSessionCaches(walletAddress?: Address): void {
+		const normalizedAddress = walletAddress?.toLowerCase();
+
+		for (const cachedAddress of this.eip7702InitSignatureCache.keys()) {
+			if (!normalizedAddress || cachedAddress.toLowerCase() === normalizedAddress) {
+				this.eip7702InitSignatureCache.delete(cachedAddress);
+			}
+		}
+
+		for (const cacheKey of this.sessionEnableCache.keys()) {
+			if (!normalizedAddress || cacheKey.startsWith(`rhinestone:sessions:${normalizedAddress}:`)) {
+				this.sessionEnableCache.delete(cacheKey);
+			}
+		}
+
+		if (typeof window === 'undefined') return;
+
+		const keysToRemove: string[] = [];
+		const sessionPrefix = normalizedAddress
+			? `rhinestone:sessions:${normalizedAddress}:`
+			: 'rhinestone:sessions:';
+		const ownerPkKey = normalizedAddress
+			? `rhinestone:sessionOwnerPk:${normalizedAddress}`
+			: undefined;
+
+		for (let i = 0; i < window.localStorage.length; i++) {
+			const key = window.localStorage.key(i);
+			if (!key) continue;
+
+			if (key.startsWith(sessionPrefix) || (ownerPkKey && key === ownerPkKey)) {
+				keysToRemove.push(key);
+				continue;
+			}
+
+			if (!normalizedAddress && key.startsWith('rhinestone:sessionOwnerPk:')) {
+				keysToRemove.push(key);
+			}
+		}
+
+		for (const key of keysToRemove) {
+			window.localStorage.removeItem(key);
+		}
 	}
 
 	/**
