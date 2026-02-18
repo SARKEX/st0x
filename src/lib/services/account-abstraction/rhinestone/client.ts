@@ -29,6 +29,7 @@ import {
 	createPublicClient,
 	encodeFunctionData,
 	erc20Abi,
+	parseUnits,
 	type Address,
 	type Chain,
 	type Hex,
@@ -53,7 +54,7 @@ import { getGasOracle } from './gasOracle';
 import { env } from '$env/dynamic/public';
 import { isDynamicEmbeddedWallet } from '../wallets/dynamic';
 import { getPaymentTokensForNetwork } from '../tokens';
-import { type Session } from '@rhinestone/sdk';
+import { type Policy, type Session } from '@rhinestone/sdk';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 
@@ -220,6 +221,9 @@ const WETH_BY_CHAIN: Record<number, `0x${string}`> = {
 const EIP7702_DELEGATE_CONTRACT = '0x000000000032ddc454c3bdcba80484ad5a798705' as Address;
 const SESSION_BUNDLE_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_CONSENT_STORAGE_KEY = 'rhinestone:sessions:consent:v1';
+const ERC20_TRANSFER_SELECTOR = '0xa9059cbb' as Hex;
+const ERC20_APPROVE_SELECTOR = '0x095ea7b3' as Hex;
+const ZERO_ADDRESS_REFERENCE = '0x0000000000000000000000000000000000000000' as Hex;
 
 function isZeroAddr(v?: string): boolean {
 	return (v ?? '').toLowerCase() === '0x0000000000000000000000000000000000000000';
@@ -533,6 +537,97 @@ export class RhinestoneClient {
 		const chains = [...chainIds].sort((a, b) => a - b).join(',');
 		return `rhinestone:sessions:${walletAddress.toLowerCase()}:${sessionOwner.toLowerCase()}:${chains}`;
 	}
+
+	private getSessionSpendingLimits(chainId: number): Array<{ token: Address; amount: bigint }> {
+		if (!this.isSupportedNetwork(chainId)) return [];
+
+		const tokens = getPaymentTokensForNetwork(chainId as SupportedNetworkId);
+		const limitMap = new Map<string, { token: Address; amount: bigint }>();
+
+		for (const token of tokens) {
+			if (token.isNative || isZeroAddr(token.address)) continue;
+
+			const key = token.address.toLowerCase();
+			if (limitMap.has(key)) continue;
+
+			const amount =
+				token.symbol === 'USDC' || token.symbol === 'USDT'
+					? parseUnits('50000', token.decimals)
+					: token.symbol === 'WETH'
+						? parseUnits('25', token.decimals)
+						: parseUnits('10000', token.decimals);
+
+			limitMap.set(key, { token: token.address as Address, amount });
+		}
+
+		return Array.from(limitMap.values());
+	}
+
+	private buildSessionActions(
+		chainId: number,
+		validAfter: number,
+		validUntil: number
+	): NonNullable<Session['actions']> {
+		// Calldata offsets for universal-action are measured from the encoded args (selector excluded).
+		const basePolicies: Policy[] = [
+			{
+				type: 'time-frame',
+				validAfter,
+				validUntil
+			},
+			{
+				type: 'universal-action',
+				rules: [
+					{
+						condition: 'notEqual',
+						calldataOffset: 0n,
+						referenceValue: ZERO_ADDRESS_REFERENCE
+					}
+				]
+			}
+		];
+
+		const limits = this.getSessionSpendingLimits(chainId);
+		if (limits.length > 0) {
+			basePolicies.push({
+				type: 'spending-limits',
+				limits
+			});
+		}
+
+		const policies = basePolicies as [Policy, ...Policy[]];
+
+		return [
+			{ selector: ERC20_TRANSFER_SELECTOR, policies },
+			{ selector: ERC20_APPROVE_SELECTOR, policies: [...policies] as [Policy, ...Policy[]] }
+		];
+	}
+
+	private extractSelector(data: Hex): Hex | null {
+		if (!data || data === '0x' || data.length < 10) return null;
+		return data.slice(0, 10) as Hex;
+	}
+
+	private canUseSessionForTransaction(tx: RhinestoneTransactionParams, chainId: number): boolean {
+		const supportedTokenSet = new Set(
+			this.getSessionSpendingLimits(chainId).map((limit) => limit.token.toLowerCase())
+		);
+
+		if (supportedTokenSet.size === 0) return false;
+
+		for (const call of tx.calls) {
+			const selector = this.extractSelector(call.data);
+			if (!selector) return false;
+			if (selector !== ERC20_TRANSFER_SELECTOR && selector !== ERC20_APPROVE_SELECTOR) {
+				return false;
+			}
+			if (!supportedTokenSet.has(call.to.toLowerCase())) {
+				return false;
+			}
+		}
+
+		return true;
+	}
 	
 	private async getOrCreateSessionEnableBundle(
 		rhinestoneAccount: RhinestoneAccount,
@@ -579,17 +674,7 @@ export class RhinestoneClient {
 						return {
 							chain: CHAIN_CONFIG[s.chainId as SupportedNetworkId],
 							owners: { type: 'ecdsa', accounts: [restoredSessionOwner] },
-							actions: [
-								{
-									policies: [
-										{
-											type: 'time-frame',
-											validAfter: s.validAfter,
-											validUntil: s.validUntil
-										}
-									]
-								}
-							]
+							actions: this.buildSessionActions(s.chainId, s.validAfter, s.validUntil)
 						};
 					});
 					const hashesAndChainIds = parsed.hashesAndChainIds.map((h) => ({
@@ -620,17 +705,7 @@ export class RhinestoneClient {
 		const sessions: Session[] = chainIds.map((id) => ({
 			chain: CHAIN_CONFIG[id as SupportedNetworkId],
 			owners: { type: 'ecdsa', accounts: [sessionOwner] },
-			actions: [
-				{
-					policies: [
-						{
-							type: 'time-frame',
-							validAfter: sessionValidAfter,
-							validUntil: sessionValidUntil
-						}
-					]
-				}
-			]
+			actions: this.buildSessionActions(id, sessionValidAfter, sessionValidUntil)
 		}));
 	
 		// Rhinestone “enable mode” flow (sign once)
@@ -691,6 +766,7 @@ export class RhinestoneClient {
 		tx: RhinestoneTransactionParams
 	): Promise<RhinestoneTransactionParams> {
 		if (!this.sessionsEnabled()) return tx;
+		if (!this.canUseSessionForTransaction(tx, chainId)) return tx;
 	
 		// Build (or load) a single multi-chain session bundle and reuse it across transactions.
 		const allSupportedChainIds = Object.values(SUPPORTED_NETWORKS) as number[];
