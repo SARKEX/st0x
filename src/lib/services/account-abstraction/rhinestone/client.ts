@@ -1399,10 +1399,17 @@ export class RhinestoneClient {
 				hasEip7702InitSignature: Boolean(transactionParams.eip7702InitSignature)
 			});
 
+			const txWithSigner = await this.maybeAttachSessionSigner(
+				rhinestoneAccount,
+				walletAccount.address as Address,
+				sourceChain.id,
+				transactionParams
+			);
+
 			for (let attempt = 1; attempt <= MAX_PREPARE_RETRIES; attempt++) {
 				try {
 					debugLog(`prepareTransaction attempt ${attempt}/${MAX_PREPARE_RETRIES}...`);
-					preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+					preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
 					debugLog('prepareTransaction succeeded');
 					break; // Success, exit retry loop
 				} catch (prepareError) {
@@ -1749,7 +1756,13 @@ export class RhinestoneClient {
 				eip7702InitSignature
 			};
 
-			const preparedTx = await rhinestoneAccount.prepareTransaction(transactionParams);
+			const txWithSigner = await this.maybeAttachSessionSigner(
+				rhinestoneAccount,
+				walletAccount.address as Address,
+				sourceChain.id,
+				transactionParams
+			);
+			const preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
 			const authorizations = await this.getSimpleAuthorizations(
 				rhinestoneAccount,
