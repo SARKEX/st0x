@@ -672,17 +672,31 @@ export class RhinestoneClient {
 		if (sessionIndex < 0) {
 			throw new Error(`No session found for chain ${chainId}`);
 		}
-		const signers = {
+		const session = sessions[sessionIndex];
+		const isEnabled = await rhinestoneAccount.experimental_isSessionEnabled(session);
+
+		const signers: {
+			type: 'experimental_session';
+			session: Session;
+			verifyExecutions: true;
+			enableData?: {
+				userSignature: Hex;
+				hashesAndChainIds: Array<{ chainId: bigint; sessionDigest: Hex }>;
+				sessionToEnableIndex: number;
+			};
+		} = {
 			type: 'experimental_session',
-			session: sessions[sessionIndex],
-			verifyExecutions: true,
-			enableData: {
+			session,
+			verifyExecutions: true
+		};
+		if (!isEnabled) {
+			signers.enableData = {
 				userSignature: enableSignature,
 				hashesAndChainIds,
 				sessionToEnableIndex: sessionIndex
-			}
-		};
-	
+			};
+		}
+
 		return { ...tx, signers };
 	}
 	
