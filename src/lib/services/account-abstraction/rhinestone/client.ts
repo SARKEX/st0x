@@ -518,12 +518,20 @@ export class RhinestoneClient {
 			if (raw) {
 				try {
 					const parsed = JSON.parse(raw) as { sessions: any[]; enableSignature: Hex; hashesAndChainIds: any[] };
-					// revive sessions.chain from CHAIN_CONFIG by chainId
+					const restoredSessionOwner = this.getSessionOwnerAccount(walletAddress);
 					const sessions: Session[] = parsed.sessions.map((s) => ({
-						...s,
-						chain: CHAIN_CONFIG[(s.chainId ?? s.chain?.id) as SupportedNetworkId]
+						chain: CHAIN_CONFIG[(s.chainId ?? s.chain?.id) as SupportedNetworkId],
+						owners: { type: 'ecdsa', accounts: [restoredSessionOwner] }
 					}));
-					const bundle = { sessions, enableSignature: parsed.enableSignature, hashesAndChainIds: parsed.hashesAndChainIds };
+					const hashesAndChainIds = parsed.hashesAndChainIds.map((h) => ({
+						...h,
+						chainId: BigInt(h.chainId)
+					}));
+					const bundle = {
+						sessions,
+						enableSignature: parsed.enableSignature,
+						hashesAndChainIds
+					};
 					this.sessionEnableCache.set(cacheKey, bundle);
 					return bundle;
 				} catch {
