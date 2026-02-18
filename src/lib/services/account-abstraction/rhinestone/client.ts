@@ -587,10 +587,11 @@ export class RhinestoneClient {
 		const signers = {
 			type: 'experimental_session',
 			session: sessions[sessionIndex],
+			verifyExecutions: true,
 			enableData: {
 				userSignature: enableSignature,
 				hashesAndChainIds,
-				sessionIndex
+				sessionToEnableIndex: sessionIndex
 			}
 		};
 	
