@@ -341,6 +341,76 @@ function DynamicBridge({
 				const walletClient = await activeWallet.getWalletClient('8453');
 				if (cancelled || !walletClient) return;
 
+				// Try connector signAuthorization first (bypasses viem; avoids "json-rpc not supported" error).
+				// walletClient.signAuthorization uses viem which rejects JSON-RPC accounts.
+				const signAuthorizationImpl = async (
+					authorization: Parameters<DynamicSignerBridge['signAuthorization']>[0]
+				): Promise<
+					ReturnType<DynamicSignerBridge['signAuthorization']> extends Promise<infer R> ? R : never
+				> => {
+					const params = {
+						contractAddress: authorization.contractAddress as `0x${string}`,
+						chainId: authorization.chainId,
+						nonce: authorization.nonce
+					};
+
+					const normalizeResult = (result: {
+						r?: `0x${string}`;
+						s?: `0x${string}`;
+						v?: bigint;
+						yParity?: number;
+					}) => ({
+						r: result.r!,
+						s: result.s!,
+						yParity: result.yParity ?? (result.v !== undefined ? (result.v === 0n ? 0 : 1) : 0)
+					});
+
+					// 1) Try connector.signAuthorization (e.g. DynamicWaasEVMConnector) - bypasses viem, no json-rpc restriction
+					const connector = (
+						activeWallet as {
+							connector?: {
+								signAuthorization?: (p: unknown) => Promise<unknown>;
+								isSignAuthorizationSupported?: () => boolean;
+							};
+						}
+					).connector;
+					if (
+						connector &&
+						(typeof connector.isSignAuthorizationSupported !== 'function' ||
+							connector.isSignAuthorizationSupported()) &&
+						typeof connector.signAuthorization === 'function'
+					) {
+						const result = await connector.signAuthorization({
+							address: params.contractAddress,
+							contractAddress: params.contractAddress,
+							chainId: params.chainId,
+							nonce: params.nonce
+						});
+						return normalizeResult(
+							result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number }
+						);
+					}
+
+					// 2) Try account.signAuthorization (local account only; skips walletClient to avoid viem json-rpc check)
+					const account = (
+						walletClient as {
+							account?: { signAuthorization?: (p: unknown) => Promise<unknown>; type?: string };
+						}
+					).account;
+					if (account?.signAuthorization && account.type === 'local') {
+						const result = await account.signAuthorization(params);
+						return normalizeResult(
+							result as { r: `0x${string}`; s: `0x${string}`; v?: bigint; yParity?: number }
+						);
+					}
+
+					// No supported path - walletClient.signAuthorization fails for json-rpc accounts in viem
+					throw new Error(
+						'signAuthorization is not supported for Dynamic MPC wallets. ' +
+							'The Rhinestone SDK handles authorizations automatically.'
+					);
+				};
+
 				const signer: DynamicSignerBridge = {
 					signMessage: async ({ message }) => {
 						return activeWallet.signMessage(message) as Promise<string>;
@@ -355,17 +425,7 @@ function DynamicBridge({
 							args as Parameters<typeof walletClient.signTypedData>[0]
 						) as unknown as Promise<string>;
 					},
-					signAuthorization: async () => {
-						// Dynamic MPC wallets cannot perform raw ECDSA signing required
-						// for EIP-7702 authorizations. The Rhinestone SDK's
-						// signAuthorizations handles this when possible; if it returns 0
-						// authorizations it means none are needed (account already
-						// authorized). This fallback should not be reached in normal flow.
-						throw new Error(
-							'signAuthorization is not supported for Dynamic MPC wallets. ' +
-								'The Rhinestone SDK handles authorizations automatically.'
-						);
-					}
+					signAuthorization: signAuthorizationImpl
 				};
 
 				if (!cancelled) {
