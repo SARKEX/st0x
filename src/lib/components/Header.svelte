@@ -26,6 +26,7 @@
 	let accountMenuOpen = false;
 	let windowWidth = 0;
 	let sessionConsent: SessionConsentState = 'unset';
+	let sessionFeatureAvailable = false;
 	let sessionMessage: string | null = null;
 
 	function toggleMobileNav() {
@@ -110,9 +111,12 @@
 	function refreshSessionConsent(): void {
 		if (!browser || !isRhinestoneConfigured()) {
 			sessionConsent = 'unset';
+			sessionFeatureAvailable = false;
 			return;
 		}
-		sessionConsent = getRhinestoneClient().getSessionConsent();
+		const client = getRhinestoneClient();
+		sessionFeatureAvailable = client.isSessionFeatureAvailable();
+		sessionConsent = client.getSessionConsent();
 	}
 
 	function getActiveAddress(): `0x${string}` | undefined {
@@ -122,21 +126,21 @@
 	}
 
 	function enableSmartSessions(): void {
-		if (!isRhinestoneConfigured()) return;
+		if (!isRhinestoneConfigured() || !sessionFeatureAvailable) return;
 		getRhinestoneClient().setSessionConsent(true);
 		refreshSessionConsent();
 		sessionMessage = 'Smart sessions enabled.';
 	}
 
 	function disableSmartSessions(): void {
-		if (!isRhinestoneConfigured()) return;
+		if (!isRhinestoneConfigured() || !sessionFeatureAvailable) return;
 		getRhinestoneClient().setSessionConsent(false);
 		refreshSessionConsent();
 		sessionMessage = 'Smart sessions disabled and cleared.';
 	}
 
 	function clearSessionCache(): void {
-		if (!isRhinestoneConfigured()) return;
+		if (!isRhinestoneConfigured() || !sessionFeatureAvailable) return;
 		getRhinestoneClient().clearSessionCaches(getActiveAddress());
 		sessionMessage = 'Local session cache cleared.';
 	}
@@ -242,37 +246,41 @@
 										</svg>
 										Dashboard
 									</a>
-									<div class="border-t border-white/10 px-4 py-2">
-										<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
-										<p class="mt-1 text-xs text-gray-300">
-											{sessionConsent === 'granted'
-												? 'Enabled'
-												: sessionConsent === 'denied'
-													? 'Disabled'
-													: 'Consent required'}
-										</p>
-									</div>
-									{#if sessionConsent !== 'granted'}
-										<button
-											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-											on:click={enableSmartSessions}
-										>
-											Enable Smart Sessions
-										</button>
-									{:else}
-										<button
-											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-											on:click={disableSmartSessions}
-										>
-											Disable Smart Sessions
-										</button>
-									{/if}
-									<button
-										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
-										on:click={clearSessionCache}
-									>
-										Clear Session Cache
-									</button>
+										<div class="border-t border-white/10 px-4 py-2">
+											<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+											<p class="mt-1 text-xs text-gray-300">
+												{!sessionFeatureAvailable
+													? 'Unavailable for this wallet'
+													: sessionConsent === 'granted'
+														? 'Enabled'
+														: sessionConsent === 'denied'
+															? 'Disabled'
+															: 'Consent required'}
+											</p>
+										</div>
+										{#if sessionFeatureAvailable}
+											{#if sessionConsent !== 'granted'}
+												<button
+													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+													on:click={enableSmartSessions}
+												>
+													Enable Smart Sessions
+												</button>
+											{:else}
+												<button
+													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+													on:click={disableSmartSessions}
+												>
+													Disable Smart Sessions
+												</button>
+											{/if}
+											<button
+												class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+												on:click={clearSessionCache}
+											>
+												Clear Session Cache
+											</button>
+										{/if}
 									{#if sessionMessage}
 										<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
 									{/if}
@@ -341,37 +349,41 @@
 										</svg>
 										Dashboard
 									</a>
-									<div class="border-t border-white/10 px-4 py-2">
-										<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
-										<p class="mt-1 text-xs text-gray-300">
-											{sessionConsent === 'granted'
-												? 'Enabled'
-												: sessionConsent === 'denied'
-													? 'Disabled'
-													: 'Consent required'}
-										</p>
-									</div>
-									{#if sessionConsent !== 'granted'}
-										<button
-											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-											on:click={enableSmartSessions}
-										>
-											Enable Smart Sessions
-										</button>
-									{:else}
-										<button
-											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-											on:click={disableSmartSessions}
-										>
-											Disable Smart Sessions
-										</button>
-									{/if}
-									<button
-										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
-										on:click={clearSessionCache}
-									>
-										Clear Session Cache
-									</button>
+										<div class="border-t border-white/10 px-4 py-2">
+											<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+											<p class="mt-1 text-xs text-gray-300">
+												{!sessionFeatureAvailable
+													? 'Unavailable for this wallet'
+													: sessionConsent === 'granted'
+														? 'Enabled'
+														: sessionConsent === 'denied'
+															? 'Disabled'
+															: 'Consent required'}
+											</p>
+										</div>
+										{#if sessionFeatureAvailable}
+											{#if sessionConsent !== 'granted'}
+												<button
+													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+													on:click={enableSmartSessions}
+												>
+													Enable Smart Sessions
+												</button>
+											{:else}
+												<button
+													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+													on:click={disableSmartSessions}
+												>
+													Disable Smart Sessions
+												</button>
+											{/if}
+											<button
+												class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+												on:click={clearSessionCache}
+											>
+												Clear Session Cache
+											</button>
+										{/if}
 									{#if sessionMessage}
 										<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
 									{/if}

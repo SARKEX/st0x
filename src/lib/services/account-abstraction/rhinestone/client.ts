@@ -484,8 +484,17 @@ export class RhinestoneClient {
 
 	private sessionsEnabled(): boolean {
 		return (
-			env.PUBLIC_RHINESTONE_SESSIONS_ENABLED === 'true' && this.getSessionConsent() === 'granted'
+			this.isSessionFeatureAvailable() && this.getSessionConsent() === 'granted'
 		);
+	}
+
+	isSessionFeatureAvailable(): boolean {
+		return env.PUBLIC_RHINESTONE_SESSIONS_ENABLED === 'true' && this.isSessionWalletEligible();
+	}
+
+	isSessionWalletEligible(): boolean {
+		// Sessions are intentionally scoped to Dynamic embedded wallets for now.
+		return isDynamicEmbeddedWallet();
 	}
 
 	getSessionConsent(): SessionConsentState {
