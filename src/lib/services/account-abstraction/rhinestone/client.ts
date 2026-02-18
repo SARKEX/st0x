@@ -360,6 +360,7 @@ export class RhinestoneClient {
 				owners: { type: 'ecdsa'; accounts: Account[] };
 				accountType?: '7702';
 				eoa?: Account;
+				experimental_sessions?: { enabled: boolean };
 			} = {
 				owners: {
 					type: 'ecdsa',
@@ -386,6 +387,10 @@ export class RhinestoneClient {
 				// This ensures proper EIP-7702 authorization signing support
 				debugLog('Detected Dynamic wallet, passing eoa for EIP-7702 support');
 				createAccountOptions.eoa = walletAccount;
+			}
+
+			if (this.sessionsEnabled()) {
+				createAccountOptions.experimental_sessions = { enabled: true };
 			}
 
 			debugLog('Calling SDK createAccount with options:', {
