@@ -660,14 +660,18 @@ export class RhinestoneClient {
 	): Promise<RhinestoneTransactionParams> {
 		if (!this.sessionsEnabled()) return tx;
 	
-		// build (or load) enable bundle for *this chain* (and optionally more later)
+		// Build (or load) a single multi-chain session bundle and reuse it across transactions.
+		const allSupportedChainIds = Object.values(SUPPORTED_NETWORKS) as number[];
 		const { sessions, enableSignature, hashesAndChainIds } = await this.getOrCreateSessionEnableBundle(
 			rhinestoneAccount,
 			walletAddress,
-			[chainId]
+			allSupportedChainIds
 		);
 	
-		const sessionIndex = 0; // only one chain in bundle above
+		const sessionIndex = sessions.findIndex((session) => session.chain.id === chainId);
+		if (sessionIndex < 0) {
+			throw new Error(`No session found for chain ${chainId}`);
+		}
 		const signers = {
 			type: 'experimental_session',
 			session: sessions[sessionIndex],
