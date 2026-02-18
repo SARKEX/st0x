@@ -68,7 +68,12 @@ export {
 // Rhinestone (Cross-Chain Swaps & Gas Sponsorship)
 // =============================================================================
 
-export { RhinestoneClient, getRhinestoneClient, isRhinestoneConfigured } from './rhinestone/client';
+export {
+	RhinestoneClient,
+	getRhinestoneClient,
+	isRhinestoneConfigured,
+	type SessionConsentState
+} from './rhinestone/client';
 
 export {
 	GasOracle,

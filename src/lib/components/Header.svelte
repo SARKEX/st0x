@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
 	import ReferralButton from './referrals/ReferralButton.svelte';
@@ -11,6 +12,11 @@
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
+	import {
+		getRhinestoneClient,
+		isRhinestoneConfigured,
+		type SessionConsentState
+	} from '$lib/services/account-abstraction';
 
 	export let title: string;
 	export let isSidebarCollapsed = false;
@@ -19,6 +25,8 @@
 	let mobileNavOpen = false;
 	let accountMenuOpen = false;
 	let windowWidth = 0;
+	let sessionConsent: SessionConsentState = 'unset';
+	let sessionMessage: string | null = null;
 
 	function toggleMobileNav() {
 		mobileNavOpen = !mobileNavOpen;
@@ -34,6 +42,7 @@
 
 	function closeAccountMenu() {
 		accountMenuOpen = false;
+		sessionMessage = null;
 	}
 
 	function handleClickOutsideAccountMenu(event: MouseEvent) {
@@ -67,6 +76,7 @@
 	$: if (!isHamburgerMode) mobileNavOpen = false;
 
 	onMount(() => {
+		refreshSessionConsent();
 		windowWidth = window.innerWidth;
 		const handleResize = () => (windowWidth = window.innerWidth);
 		window.addEventListener('resize', handleResize);
@@ -76,6 +86,8 @@
 			document.removeEventListener('click', handleClickOutsideAccountMenu);
 		};
 	});
+
+	$: if (accountMenuOpen) refreshSessionConsent();
 
 	function handleConnectWallet() {
 		// For wallet users who are already connected, open wallet modal to manage/disconnect
@@ -93,6 +105,40 @@
 		} else {
 			$web3Modal.open();
 		}
+	}
+
+	function refreshSessionConsent(): void {
+		if (!browser || !isRhinestoneConfigured()) {
+			sessionConsent = 'unset';
+			return;
+		}
+		sessionConsent = getRhinestoneClient().getSessionConsent();
+	}
+
+	function getActiveAddress(): `0x${string}` | undefined {
+		const value = ($walletAddress || $dynamicSession?.walletAddress) as string | undefined;
+		if (!value || !value.startsWith('0x') || value.length !== 42) return undefined;
+		return value as `0x${string}`;
+	}
+
+	function enableSmartSessions(): void {
+		if (!isRhinestoneConfigured()) return;
+		getRhinestoneClient().setSessionConsent(true);
+		refreshSessionConsent();
+		sessionMessage = 'Smart sessions enabled.';
+	}
+
+	function disableSmartSessions(): void {
+		if (!isRhinestoneConfigured()) return;
+		getRhinestoneClient().setSessionConsent(false);
+		refreshSessionConsent();
+		sessionMessage = 'Smart sessions disabled and cleared.';
+	}
+
+	function clearSessionCache(): void {
+		if (!isRhinestoneConfigured()) return;
+		getRhinestoneClient().clearSessionCaches(getActiveAddress());
+		sessionMessage = 'Local session cache cleared.';
 	}
 
 	// Truncate email to show first 3 chars + @domain (e.g., "ala...@gmail.com")
@@ -181,11 +227,11 @@
 							<div
 								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl"
 							>
-								<a
-									href="/dashboard"
-									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
-									on:click={closeAccountMenu}
-								>
+									<a
+										href="/dashboard"
+										class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
+										on:click={closeAccountMenu}
+									>
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path
 											stroke-linecap="round"
@@ -193,13 +239,47 @@
 											stroke-width="2"
 											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
 										/>
-									</svg>
-									Dashboard
-								</a>
-								<button
-									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
-									on:click={() => {
-										closeAccountMenu();
+										</svg>
+										Dashboard
+									</a>
+									<div class="border-t border-white/10 px-4 py-2">
+										<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+										<p class="mt-1 text-xs text-gray-300">
+											{sessionConsent === 'granted'
+												? 'Enabled'
+												: sessionConsent === 'denied'
+													? 'Disabled'
+													: 'Consent required'}
+										</p>
+									</div>
+									{#if sessionConsent !== 'granted'}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={enableSmartSessions}
+										>
+											Enable Smart Sessions
+										</button>
+									{:else}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={disableSmartSessions}
+										>
+											Disable Smart Sessions
+										</button>
+									{/if}
+									<button
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+										on:click={clearSessionCache}
+									>
+										Clear Session Cache
+									</button>
+									{#if sessionMessage}
+										<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+									{/if}
+									<button
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+										on:click={() => {
+											closeAccountMenu();
 										handleDisconnect();
 									}}
 								>
@@ -258,13 +338,47 @@
 											stroke-width="2"
 											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
 										/>
-									</svg>
-									Dashboard
-								</a>
-								<button
-									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
-									on:click={() => {
-										closeAccountMenu();
+										</svg>
+										Dashboard
+									</a>
+									<div class="border-t border-white/10 px-4 py-2">
+										<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+										<p class="mt-1 text-xs text-gray-300">
+											{sessionConsent === 'granted'
+												? 'Enabled'
+												: sessionConsent === 'denied'
+													? 'Disabled'
+													: 'Consent required'}
+										</p>
+									</div>
+									{#if sessionConsent !== 'granted'}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={enableSmartSessions}
+										>
+											Enable Smart Sessions
+										</button>
+									{:else}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={disableSmartSessions}
+										>
+											Disable Smart Sessions
+										</button>
+									{/if}
+									<button
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+										on:click={clearSessionCache}
+									>
+										Clear Session Cache
+									</button>
+									{#if sessionMessage}
+										<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+									{/if}
+									<button
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+										on:click={() => {
+											closeAccountMenu();
 										handleDisconnect();
 									}}
 								>

@@ -163,6 +163,8 @@ interface SessionEnableBundle {
 	createdAt: number;
 }
 
+export type SessionConsentState = 'granted' | 'denied' | 'unset';
+
 interface RhinestoneAccount {
 	sendTransaction: (params: RhinestoneTransactionParams) => Promise<TransactionResult>;
 	// 3-step transaction flow that properly handles eip7702InitSignature
@@ -217,6 +219,7 @@ const WETH_BY_CHAIN: Record<number, `0x${string}`> = {
 };
 const EIP7702_DELEGATE_CONTRACT = '0x000000000032ddc454c3bdcba80484ad5a798705' as Address;
 const SESSION_BUNDLE_TTL_MS = 24 * 60 * 60 * 1000;
+const SESSION_CONSENT_STORAGE_KEY = 'rhinestone:sessions:consent:v1';
 
 function isZeroAddr(v?: string): boolean {
 	return (v ?? '').toLowerCase() === '0x0000000000000000000000000000000000000000';
@@ -480,7 +483,27 @@ export class RhinestoneClient {
 	}
 
 	private sessionsEnabled(): boolean {
-		return env.PUBLIC_RHINESTONE_SESSIONS_ENABLED === 'true';
+		return (
+			env.PUBLIC_RHINESTONE_SESSIONS_ENABLED === 'true' && this.getSessionConsent() === 'granted'
+		);
+	}
+
+	getSessionConsent(): SessionConsentState {
+		if (typeof window === 'undefined') return 'unset';
+		const value = window.localStorage.getItem(SESSION_CONSENT_STORAGE_KEY);
+		if (value === 'granted' || value === 'denied') return value;
+		return 'unset';
+	}
+
+	setSessionConsent(consentGranted: boolean): void {
+		if (typeof window === 'undefined') return;
+		window.localStorage.setItem(
+			SESSION_CONSENT_STORAGE_KEY,
+			consentGranted ? 'granted' : 'denied'
+		);
+		if (!consentGranted) {
+			this.clearSessionCaches();
+		}
 	}
 	
 	// ⚠️ Minimal storage: localStorage.
