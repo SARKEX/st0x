@@ -517,12 +517,32 @@ export class RhinestoneClient {
 			const raw = window.localStorage.getItem(cacheKey);
 			if (raw) {
 				try {
-					const parsed = JSON.parse(raw) as { sessions: any[]; enableSignature: Hex; hashesAndChainIds: any[] };
+					const parsed = JSON.parse(raw) as {
+						sessions: Array<{ chainId: number; validAfter: number; validUntil: number }>;
+						enableSignature: Hex;
+						hashesAndChainIds: any[];
+					};
 					const restoredSessionOwner = this.getSessionOwnerAccount(walletAddress);
-					const sessions: Session[] = parsed.sessions.map((s) => ({
-						chain: CHAIN_CONFIG[(s.chainId ?? s.chain?.id) as SupportedNetworkId],
-						owners: { type: 'ecdsa', accounts: [restoredSessionOwner] }
-					}));
+					const sessions: Session[] = parsed.sessions.map((s) => {
+						if (typeof s.validAfter !== 'number' || typeof s.validUntil !== 'number') {
+							throw new Error('Invalid session cache payload');
+						}
+						return {
+							chain: CHAIN_CONFIG[s.chainId as SupportedNetworkId],
+							owners: { type: 'ecdsa', accounts: [restoredSessionOwner] },
+							actions: [
+								{
+									policies: [
+										{
+											type: 'time-frame',
+											validAfter: s.validAfter,
+											validUntil: s.validUntil
+										}
+									]
+								}
+							]
+						};
+					});
 					const hashesAndChainIds = parsed.hashesAndChainIds.map((h) => ({
 						...h,
 						chainId: BigInt(h.chainId)
@@ -541,9 +561,22 @@ export class RhinestoneClient {
 		}
 	
 		// 3) create sessions for requested chains (multi-chain enable-mode)
+		const sessionValidAfter = Date.now();
+		const sessionValidUntil = sessionValidAfter + 24 * 60 * 60 * 1000;
 		const sessions: Session[] = chainIds.map((id) => ({
 			chain: CHAIN_CONFIG[id as SupportedNetworkId],
-			owners: { type: 'ecdsa', accounts: [sessionOwner] }
+			owners: { type: 'ecdsa', accounts: [sessionOwner] },
+			actions: [
+				{
+					policies: [
+						{
+							type: 'time-frame',
+							validAfter: sessionValidAfter,
+							validUntil: sessionValidUntil
+						}
+					]
+				}
+			]
 		}));
 	
 		// Rhinestone “enable mode” flow (sign once)
@@ -563,7 +596,11 @@ export class RhinestoneClient {
 				JSON.stringify(
 					{
 						// store minimal serializable version
-						sessions: sessions.map((s) => ({ chainId: s.chain.id, owners: { type: 'ecdsa', accounts: [{ address: sessionOwner.address }] } })),
+						sessions: sessions.map((s) => ({
+							chainId: s.chain.id,
+							validAfter: sessionValidAfter,
+							validUntil: sessionValidUntil
+						})),
 						enableSignature,
 						hashesAndChainIds: bundle.hashesAndChainIds
 					},
