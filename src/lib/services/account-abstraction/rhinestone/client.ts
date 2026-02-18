@@ -56,7 +56,6 @@ import { getPaymentTokensForNetwork } from '../tokens';
 import { type Session } from '@rhinestone/sdk';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
-
 import { createRpcTransport } from '$lib/utils/rpc';
 
 /**
@@ -161,11 +160,11 @@ interface RhinestoneAccount {
 	experimental_getSessionDetails?: (sessions: Session[]) => Promise<{
 		hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
 	}>;
-	
+
 	experimental_signEnableSession?: (sessionDetails: {
 		hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
 	}) => Promise<Hex>;
-	
+
 	signTransaction: (preparedTx: PreparedTransaction) => Promise<SignedTransaction>;
 	signAuthorizations: (preparedTx: PreparedTransaction) => Promise<SignedAuthorizationList>;
 	submitTransaction: (
@@ -313,14 +312,17 @@ export class RhinestoneClient {
 	// Cache EIP-7702 init signatures by account address (signature is valid across all chains)
 	private eip7702InitSignatureCache: Map<Address, Hex> = new Map();
 
-
-
 	private _accountCache = new Map<string, RhinestoneAccount>();
 
 	// Sessions cache: wallet+sessionOwner+chains → enable bundle
-	private sessionEnableCache: Map<string, { sessions: Session[]; enableSignature: Hex; hashesAndChainIds: any[] }> =
-	new Map();
-
+	private sessionEnableCache: Map<
+		string,
+		{
+			sessions: Session[];
+			enableSignature: Hex;
+			hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
+		}
+	> = new Map();
 
 	constructor(config: RhinestoneConfig) {
 		this.config = config;
@@ -355,70 +357,81 @@ export class RhinestoneClient {
 	async createAccount(
 		walletAccount: Account,
 		accountTypeOverride?: AccountType
-	  ): Promise<RhinestoneAccount> {
-		const accountType = (accountTypeOverride ?? (this.config.accountType as AccountType)) || 'smart';
-	  
+	): Promise<RhinestoneAccount> {
+		const accountType =
+			(accountTypeOverride ?? (this.config.accountType as AccountType)) || 'smart';
+
 		const cacheKey = `${walletAccount.address.toLowerCase()}:${accountType}`;
 		const cached = this._accountCache.get(cacheKey);
 		if (cached) return cached;
-	  
+
 		try {
-		  debugLog('createAccount called', {
-			walletAddress: walletAccount.address,
-			accountType
-		  });
-	  
-		  // Base owners config
-		  const baseOptions: any = {
-			owners: {
-			  type: 'ecdsa',
-			  accounts: [walletAccount]
+			debugLog('createAccount called', {
+				walletAddress: walletAccount.address,
+				accountType
+			});
+
+			// Base owners config (Rhinestone SDK createAccount options)
+			type CreateAccountOptions = {
+				owners: { type: 'ecdsa'; accounts: Account[] };
+				accountType?: '7702' | 'smart';
+				eoa?: Account;
+			};
+
+			const baseOptions: CreateAccountOptions = {
+				owners: {
+					type: 'ecdsa',
+					accounts: [walletAccount]
+				}
+			};
+
+			let createAccountOptions: CreateAccountOptions = baseOptions;
+
+			if (accountType === '7702') {
+				// 7702 path: EOA upgrade. This is where `eoa` belongs.
+				createAccountOptions = {
+					...baseOptions,
+					accountType: '7702',
+					eoa: walletAccount
+				};
+			} else {
+				// SMART path: explicitly force smart if SDK supports it.
+				// If SDK doesn't accept 'smart', remove this line and rely on default,
+				// but DO NOT pass `eoa`.
+				createAccountOptions = {
+					...baseOptions,
+					accountType: 'smart'
+				};
 			}
-		  };
-	  
-		  let createAccountOptions: any = baseOptions;
-	  
-		  if (accountType === '7702') {
-			// 7702 path: EOA upgrade. This is where `eoa` belongs.
-			createAccountOptions = {
-			  ...baseOptions,
-			  accountType: '7702',
-			  eoa: walletAccount
-			};
-		  } else {
-			// SMART path: explicitly force smart if SDK supports it.
-			// If SDK doesn't accept 'smart', remove this line and rely on default,
-			// but DO NOT pass `eoa`.
-			createAccountOptions = {
-			  ...baseOptions,
-			  accountType: 'smart'
-			};
-		  }
-	  
-		  debugLog('Calling SDK createAccount with options:', {
-			ownersType: createAccountOptions.owners?.type,
-			accountType: createAccountOptions.accountType,
-			hasEoa: Boolean(createAccountOptions.eoa)
-		  });
-	  
-		  const rhinestoneAccount = (await this.sdk.createAccount(createAccountOptions)) as unknown as RhinestoneAccount;
-	  
-		  debugLog('Account created successfully', {
-			accountType,
-			address: (rhinestoneAccount as any)?.getAddress?.() ?? 'unknown'
-		  });
-	  
-		  this._accountCache.set(cacheKey, rhinestoneAccount);
-		  return rhinestoneAccount;
+
+			debugLog('Calling SDK createAccount with options:', {
+				ownersType: createAccountOptions.owners?.type,
+				accountType: createAccountOptions.accountType,
+				hasEoa: Boolean(createAccountOptions.eoa)
+			});
+
+			const rhinestoneAccount = (await this.sdk.createAccount(
+				createAccountOptions
+			)) as unknown as RhinestoneAccount;
+
+			debugLog('Account created successfully', {
+				accountType,
+				address: rhinestoneAccount.getAddress() ?? 'unknown'
+			});
+
+			this._accountCache.set(cacheKey, rhinestoneAccount);
+			return rhinestoneAccount;
 		} catch (error) {
-		  console.error('[Rhinestone Client] createAccount failed:', error);
-		  throw new AAError(
-			`Failed to create Rhinestone account: ${error instanceof Error ? error.message : 'Unknown error'}`,
-			AAErrorCode.RHINESTONE_ERROR,
-			{ originalError: error, accountType }
-		  );
+			console.error('[Rhinestone Client] createAccount failed:', error);
+			throw new AAError(
+				`Failed to create Rhinestone account: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+				AAErrorCode.RHINESTONE_ERROR,
+				{ originalError: error, accountType }
+			);
 		}
-	  }
+	}
 
 	/**
 	 * Check if using EIP-7702 mode
@@ -477,84 +490,105 @@ export class RhinestoneClient {
 	private async canWalletSignAuthorizationOnChain(
 		walletAccount: Account,
 		chainId: number
-	  ): Promise<boolean> {
-		const wa = walletAccount as any;
-	  
+	): Promise<boolean> {
+		const wa = walletAccount as WalletAccountWithSignAuth;
+
 		if (typeof wa.signAuthorization !== 'function') return false;
-	  
+
 		try {
-		  // Probe call (won’t submit anything, just signs)
-		  await wa.signAuthorization({
-			contractAddress: EIP7702_DELEGATE_CONTRACT,
-			chainId,
-			nonce: 0
-		  });
-		  return true;
+			// Probe call (won’t submit anything, just signs)
+			await wa.signAuthorization({
+				contractAddress: EIP7702_DELEGATE_CONTRACT,
+				chainId,
+				nonce: 0
+			});
+			return true;
 		} catch (e) {
-		  const msg = e instanceof Error ? e.message : String(e);
-		  // Dynamic MPC “method exists but not supported” case
-		  if (msg.toLowerCase().includes('not supported') || msg.toLowerCase().includes('dynamic mpc')) {
+			const msg = e instanceof Error ? e.message : String(e);
+			// Dynamic MPC “method exists but not supported” case
+			if (
+				msg.toLowerCase().includes('not supported') ||
+				msg.toLowerCase().includes('dynamic mpc')
+			) {
+				return false;
+			}
+			// Any other error: treat as not supported (safer)
 			return false;
-		  }
-		  // Any other error: treat as not supported (safer)
-		  return false;
 		}
-	  }
-	  
+	}
 
 	private sessionsEnabled(): boolean {
 		return env.PUBLIC_RHINESTONE_SESSIONS_ENABLED === 'true';
 	}
-	
+
 	// ⚠️ Minimal storage: localStorage.
 	// For production you probably want encrypted storage / secure enclave.
 	private getSessionOwnerAccount(walletAddress: Address): Account {
 		const key = `rhinestone:sessionOwnerPk:${walletAddress.toLowerCase()}`;
 		let pk = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
-	
+
 		if (!pk) {
 			pk = generatePrivateKey(); // "0x..." hex
 			if (typeof window !== 'undefined') window.localStorage.setItem(key, pk);
 		}
-	
+
 		return privateKeyToAccount(pk as Hex);
 	}
-	
-	private sessionBundleCacheKey(walletAddress: Address, sessionOwner: Address, chainIds: number[]): string {
+
+	private sessionBundleCacheKey(
+		walletAddress: Address,
+		sessionOwner: Address,
+		chainIds: number[]
+	): string {
 		const chains = [...chainIds].sort((a, b) => a - b).join(',');
 		return `rhinestone:sessions:${walletAddress.toLowerCase()}:${sessionOwner.toLowerCase()}:${chains}`;
 	}
-	
+
 	private async getOrCreateSessionEnableBundle(
 		rhinestoneAccount: RhinestoneAccount,
 		walletAddress: Address,
 		chainIds: number[]
-	): Promise<{ sessions: Session[]; enableSignature: Hex; hashesAndChainIds: any[] }> {
+	): Promise<{
+		sessions: Session[];
+		enableSignature: Hex;
+		hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
+	}> {
 		if (!this.sessionsEnabled()) throw new Error('Sessions not enabled');
-	
-		if (!rhinestoneAccount.experimental_getSessionDetails || !rhinestoneAccount.experimental_signEnableSession) {
+
+		if (
+			!rhinestoneAccount.experimental_getSessionDetails ||
+			!rhinestoneAccount.experimental_signEnableSession
+		) {
 			throw new Error('Rhinestone SDK account does not support experimental session APIs');
 		}
-	
+
 		const sessionOwner = this.getSessionOwnerAccount(walletAddress);
 		const cacheKey = this.sessionBundleCacheKey(walletAddress, sessionOwner.address, chainIds);
-	
+
 		// 1) memory cache
 		const mem = this.sessionEnableCache.get(cacheKey);
 		if (mem) return mem;
-	
+
 		// 2) localStorage cache
 		if (typeof window !== 'undefined') {
 			const raw = window.localStorage.getItem(cacheKey);
 			if (raw) {
 				try {
-					const parsed = JSON.parse(raw) as { sessions: any[]; enableSignature: Hex; hashesAndChainIds: any[] };
+					const parsed = JSON.parse(raw) as {
+						sessions: Array<{ chainId?: number; chain?: { id: number }; owners?: unknown }>;
+						enableSignature: Hex;
+						hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
+					};
 					// revive sessions.chain from CHAIN_CONFIG by chainId
-					const sessions: Session[] = parsed.sessions.map((s) => ({
+					const sessions = parsed.sessions.map((s) => ({
 						...s,
 						chain: CHAIN_CONFIG[(s.chainId ?? s.chain?.id) as SupportedNetworkId]
-					}));
-					const bundle = { sessions, enableSignature: parsed.enableSignature, hashesAndChainIds: parsed.hashesAndChainIds };
+					})) as Session[];
+					const bundle = {
+						sessions,
+						enableSignature: parsed.enableSignature,
+						hashesAndChainIds: parsed.hashesAndChainIds
+					};
 					this.sessionEnableCache.set(cacheKey, bundle);
 					return bundle;
 				} catch {
@@ -562,23 +596,23 @@ export class RhinestoneClient {
 				}
 			}
 		}
-	
+
 		// 3) create sessions for requested chains (multi-chain enable-mode)
 		const sessions: Session[] = chainIds.map((id) => ({
 			chain: CHAIN_CONFIG[id as SupportedNetworkId],
 			owners: { type: 'ecdsa', accounts: [sessionOwner] }
 		}));
-	
+
 		// Rhinestone “enable mode” flow (sign once)
 		const sessionDetails = await rhinestoneAccount.experimental_getSessionDetails(sessions);
 		const enableSignature = await rhinestoneAccount.experimental_signEnableSession(sessionDetails);
-	
+
 		const bundle = {
 			sessions,
 			enableSignature,
 			hashesAndChainIds: sessionDetails.hashesAndChainIds
 		};
-	
+
 		// persist
 		if (typeof window !== 'undefined') {
 			window.localStorage.setItem(
@@ -586,7 +620,10 @@ export class RhinestoneClient {
 				JSON.stringify(
 					{
 						// store minimal serializable version
-						sessions: sessions.map((s) => ({ chainId: s.chain.id, owners: { type: 'ecdsa', accounts: [{ address: sessionOwner.address }] } })),
+						sessions: sessions.map((s) => ({
+							chainId: s.chain.id,
+							owners: { type: 'ecdsa', accounts: [{ address: sessionOwner.address }] }
+						})),
 						enableSignature,
 						hashesAndChainIds: bundle.hashesAndChainIds
 					},
@@ -595,42 +632,40 @@ export class RhinestoneClient {
 			);
 		}
 		this.sessionEnableCache.set(cacheKey, bundle);
-	
+
 		return bundle;
 	}
-	
+
 	private async maybeAttachSessionSigner(
 		rhinestoneAccount: RhinestoneAccount,
 		walletAddress: Address,
 		chainIdOrChainIds: number | number[],
 		tx: RhinestoneTransactionParams
-	  ): Promise<RhinestoneTransactionParams> {
+	): Promise<RhinestoneTransactionParams> {
 		if (!this.sessionsEnabled()) return tx;
-	  
+
 		const chainIds = Array.isArray(chainIdOrChainIds) ? chainIdOrChainIds : [chainIdOrChainIds];
-	  
+
 		// Build (or load) enable bundle for these chains
 		const { sessions, enableSignature, hashesAndChainIds } =
-		  await this.getOrCreateSessionEnableBundle(rhinestoneAccount, walletAddress, chainIds);
-	  
+			await this.getOrCreateSessionEnableBundle(rhinestoneAccount, walletAddress, chainIds);
+
 		// If you keep "one session per chain" in the bundle, sessionIndex must match one of them.
 		// For now we use the first session, but it's important that hashesAndChainIds includes all chains above.
 		const sessionIndex = 0;
-	  
+
 		const signers = {
-		  type: 'experimental_session',
-		  session: sessions[sessionIndex],
-		  enableData: {
-			userSignature: enableSignature,
-			hashesAndChainIds,
-			sessionIndex,
-		  },
+			type: 'experimental_session',
+			session: sessions[sessionIndex],
+			enableData: {
+				userSignature: enableSignature,
+				hashesAndChainIds,
+				sessionIndex
+			}
 		};
-	  
+
 		return { ...tx, signers };
-	  }
-	  
-	
+	}
 
 	/**
 	 * Check if account is deployed on a chain, and get EIP-7702 init signature if needed.
@@ -1723,8 +1758,6 @@ export class RhinestoneClient {
 			});
 		}
 	}
-	  
-	  
 
 	/**
 	 * Execute an omnichain transaction with arbitrary calls
@@ -1740,99 +1773,101 @@ export class RhinestoneClient {
 		params: OmnichainTransactionParams,
 		walletAccount: Account,
 		feeAsset?: string
-	  ): Promise<{ txHash: Hex; intentId: string }> {
+	): Promise<{ txHash: Hex; intentId: string }> {
 		try {
-		  debugLog('executeOmnichainTransaction called', {
-			sourceChain: params.sourceChain,
-			targetChain: params.targetChain,
-			callsCount: params.calls.length,
-			feeAsset,
-			walletAddress: walletAccount.address
-		  });
-	  
-		  if (!this.config.apiKey) {
-			throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
-		  }
-		  if (!this.isSupportedNetwork(params.sourceChain)) {
-			throw new AAError(
-			  `Source chain ${params.sourceChain} not supported`,
-			  AAErrorCode.UNSUPPORTED_NETWORK
+			debugLog('executeOmnichainTransaction called', {
+				sourceChain: params.sourceChain,
+				targetChain: params.targetChain,
+				callsCount: params.calls.length,
+				feeAsset,
+				walletAddress: walletAccount.address
+			});
+
+			if (!this.config.apiKey) {
+				throw new AAError('Rhinestone API key not configured', AAErrorCode.RHINESTONE_ERROR);
+			}
+			if (!this.isSupportedNetwork(params.sourceChain)) {
+				throw new AAError(
+					`Source chain ${params.sourceChain} not supported`,
+					AAErrorCode.UNSUPPORTED_NETWORK
+				);
+			}
+			if (!this.isSupportedNetwork(params.targetChain)) {
+				throw new AAError(
+					`Target chain ${params.targetChain} not supported`,
+					AAErrorCode.UNSUPPORTED_NETWORK
+				);
+			}
+
+			const rhinestoneAccount = await this.createAccount(walletAccount);
+			const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
+			const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
+
+			const { eip7702InitSignature } = await this.checkDeploymentAndGetInitSignature(
+				rhinestoneAccount,
+				walletAccount,
+				targetChain
 			);
-		  }
-		  if (!this.isSupportedNetwork(params.targetChain)) {
-			throw new AAError(
-			  `Target chain ${params.targetChain} not supported`,
-			  AAErrorCode.UNSUPPORTED_NETWORK
+
+			const tokenRequests =
+				params.tokenRequests?.map((req) => ({
+					address: req.token as Address,
+					amount: req.amount
+				})) || [];
+
+			const transactionParams: RhinestoneTransactionParams = {
+				sourceChain,
+				targetChain,
+				calls: params.calls.map((call) => ({
+					to: call.to as Address,
+					value: call.value || 0n,
+					data: call.data as Hex
+				})),
+				tokenRequests,
+				feeAsset,
+				eip7702InitSignature
+			};
+
+			// ✅ Sessions signer injection (right before prepareTransaction)
+			// For omnichain, attach session signer on SOURCE chain (origin signing context).
+			const txWithSigner = await this.maybeAttachSessionSigner(
+				rhinestoneAccount,
+				walletAccount.address as Address,
+				sourceChain.id,
+				transactionParams
 			);
-		  }
-	  
-		  const rhinestoneAccount = await this.createAccount(walletAccount);
-		  const sourceChain = CHAIN_CONFIG[params.sourceChain as SupportedNetworkId];
-		  const targetChain = CHAIN_CONFIG[params.targetChain as SupportedNetworkId];
-	  
-		  const { eip7702InitSignature } = await this.checkDeploymentAndGetInitSignature(
-			rhinestoneAccount,
-			walletAccount,
-			targetChain
-		  );
-	  
-		  const tokenRequests =
-			params.tokenRequests?.map((req) => ({
-			  address: req.token as Address,
-			  amount: req.amount
-			})) || [];
-	  
-		  const transactionParams: RhinestoneTransactionParams = {
-			sourceChain,
-			targetChain,
-			calls: params.calls.map((call) => ({
-			  to: call.to as Address,
-			  value: call.value || 0n,
-			  data: call.data as Hex
-			})),
-			tokenRequests,
-			feeAsset,
-			eip7702InitSignature
-		  };
-	  
-		  // ✅ Sessions signer injection (right before prepareTransaction)
-		  // For omnichain, attach session signer on SOURCE chain (origin signing context).
-		  const txWithSigner = await this.maybeAttachSessionSigner(
-			rhinestoneAccount,
-			walletAccount.address as Address,
-			sourceChain.id,
-			transactionParams
-		  );
-	  
-		  const preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
-		  const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
-		  const authorizations = await this.getSimpleAuthorizations(
-			rhinestoneAccount,
-			signedTx,
-			walletAccount,
-			targetChain.id
-		  );
-	  
-		  debugLog('Submitting omnichain transaction...');
-		  const transactionResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
-	  
-		  const status = await rhinestoneAccount.waitForExecution(transactionResult);
-		  const txHash = status.fill?.hash;
-		  if (!txHash) {
-			throw new AAError('Transaction completed but no hash returned', AAErrorCode.TRANSACTION_FAILED);
-		  }
-	  
-		  return { txHash, intentId: transactionResult.id.toString() };
+
+			const preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
+			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
+			const authorizations = await this.getSimpleAuthorizations(
+				rhinestoneAccount,
+				signedTx,
+				walletAccount,
+				targetChain.id
+			);
+
+			debugLog('Submitting omnichain transaction...');
+			const transactionResult = await rhinestoneAccount.submitTransaction(signedTx, authorizations);
+
+			const status = await rhinestoneAccount.waitForExecution(transactionResult);
+			const txHash = status.fill?.hash;
+			if (!txHash) {
+				throw new AAError(
+					'Transaction completed but no hash returned',
+					AAErrorCode.TRANSACTION_FAILED
+				);
+			}
+
+			return { txHash, intentId: transactionResult.id.toString() };
 		} catch (error) {
-		  if (error instanceof AAError) throw error;
-		  throw new AAError(
-			`Omnichain transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-			AAErrorCode.TRANSACTION_FAILED,
-			{ originalError: error }
-		  );
+			if (error instanceof AAError) throw error;
+			throw new AAError(
+				`Omnichain transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				AAErrorCode.TRANSACTION_FAILED,
+				{ originalError: error }
+			);
 		}
-	  }
-	  
+	}
 
 	/**
 	 * Execute a same-chain token swap using Rhinestone's solver network
@@ -2109,9 +2144,9 @@ export class RhinestoneClient {
 				chain.id,
 				transactionParams
 			);
-			console.log('here 1')
+			console.log('here 1');
 			const preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
-			console.log('here 2')
+			console.log('here 2');
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
 
 			// Brief delay to let Dynamic wallet UI settle between signing requests
@@ -2235,7 +2270,6 @@ export class RhinestoneClient {
 			);
 		}
 	}
-
 
 	/**
 	 * Manually sign EIP-7702 authorization using Dynamic wallet client
@@ -2499,7 +2533,6 @@ export function getRhinestoneClient(): RhinestoneClient {
 
 	return rhinestoneInstance;
 }
-
 
 /**
  * Check if Rhinestone is properly configured
