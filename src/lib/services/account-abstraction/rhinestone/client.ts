@@ -55,6 +55,7 @@ import { isDynamicEmbeddedWallet } from '../wallets/dynamic';
 import { getPaymentTokensForNetwork } from '../tokens';
 import { type Session } from '@rhinestone/sdk';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import type { SessionDetails } from '@rhinestone/sdk/dist/src/modules/validators/smart-sessions';
 
 
 import { createRpcTransport } from '$lib/utils/rpc';
@@ -158,14 +159,9 @@ interface RhinestoneAccount {
 		origin: unknown[];
 		destination: unknown;
 	};
-	experimental_getSessionDetails?: (sessions: Session[]) => Promise<{
-		hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
-	}>;
-	
-	experimental_signEnableSession?: (sessionDetails: {
-		hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
-	}) => Promise<Hex>;
-	
+	experimental_getSessionDetails: (sessions: Session[]) => Promise<SessionDetails>;
+	experimental_signEnableSession: (sessionDetails: SessionDetails) => Promise<Hex>;
+	experimental_isSessionEnabled: (session: Session) => Promise<boolean>;
 	signTransaction: (preparedTx: PreparedTransaction) => Promise<SignedTransaction>;
 	signAuthorizations: (preparedTx: PreparedTransaction) => Promise<SignedAuthorizationList>;
 	submitTransaction: (
@@ -500,10 +496,6 @@ export class RhinestoneClient {
 		chainIds: number[]
 	): Promise<{ sessions: Session[]; enableSignature: Hex; hashesAndChainIds: any[] }> {
 		if (!this.sessionsEnabled()) throw new Error('Sessions not enabled');
-	
-		if (!rhinestoneAccount.experimental_getSessionDetails || !rhinestoneAccount.experimental_signEnableSession) {
-			throw new Error('Rhinestone SDK account does not support experimental session APIs');
-		}
 	
 		const sessionOwner = this.getSessionOwnerAccount(walletAddress);
 		const cacheKey = this.sessionBundleCacheKey(walletAddress, sessionOwner.address, chainIds);
