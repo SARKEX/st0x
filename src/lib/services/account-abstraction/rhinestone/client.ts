@@ -57,7 +57,6 @@ import { getPaymentTokensForNetwork } from '../tokens';
 import { type Policy, type Session } from '@rhinestone/sdk';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
-
 import { createRpcTransport } from '$lib/utils/rpc';
 
 /**
@@ -319,6 +318,8 @@ let rhinestoneInstance: RhinestoneClient | null = null;
  * - Gas sponsorship (native, deposit USDC on Base)
  * - Quote retrieval
  */
+
+export type AccountType = '7702' | 'smart';
 export class RhinestoneClient {
 	private sdk: RhinestoneSDK;
 	private config: RhinestoneConfig;
@@ -330,6 +331,15 @@ export class RhinestoneClient {
 	// Sessions cache: wallet+sessionOwner+chains → enable bundle
 	private sessionEnableCache: Map<string, SessionEnableBundle> = new Map();
 
+	// Sessions cache: wallet+sessionOwner+chains → enable bundle
+	private sessionEnableCache: Map<
+		string,
+		{
+			sessions: Session[];
+			enableSignature: Hex;
+			hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
+		}
+	> = new Map();
 
 	constructor(config: RhinestoneConfig) {
 		this.config = config;
@@ -361,19 +371,27 @@ export class RhinestoneClient {
 	 * - Creates a new smart account contract
 	 * - New address derived from owner
 	 */
-	async createAccount(walletAccount: Account): Promise<RhinestoneAccount> {
+	async createAccount(
+		walletAccount: Account,
+		accountTypeOverride?: AccountType
+	): Promise<RhinestoneAccount> {
+		const accountType =
+			(accountTypeOverride ?? (this.config.accountType as AccountType)) || 'smart';
+
+		const cacheKey = `${walletAccount.address.toLowerCase()}:${accountType}`;
+		const cached = this._accountCache.get(cacheKey);
+		if (cached) return cached;
+
 		try {
 			debugLog('createAccount called', {
 				walletAddress: walletAccount.address,
-				accountType: this.config.accountType
+				accountType
 			});
 
-			// Build createAccount options based on account type
-			// For Dynamic wallets, always pass eoa to enable EIP-7702 support
-			// This matches the working implementation pattern
-			const createAccountOptions: {
+			// Base owners config (Rhinestone SDK createAccount options)
+			type CreateAccountOptions = {
 				owners: { type: 'ecdsa'; accounts: Account[] };
-				accountType?: '7702';
+				accountType?: '7702' | 'smart';
 				eoa?: Account;
 				experimental_sessions?: { enabled: boolean };
 			} = {
@@ -383,25 +401,23 @@ export class RhinestoneClient {
 				}
 			};
 
-			// Check if this is a Dynamic wallet account (has signAuthorization method)
-			// Dynamic wallets created with toAccount() will have signAuthorization
-			const walletAccountWithType = walletAccount as Account & { type?: string };
-			const isDynamicWallet =
-				typeof walletAccount.signAuthorization === 'function' ||
-				walletAccountWithType?.type === 'json-rpc' ||
-				walletAccountWithType?.type === 'local';
+			let createAccountOptions: CreateAccountOptions = baseOptions;
 
-			// For EIP-7702 mode, add the accountType and eoa parameter
-			// This tells Rhinestone to use EIP-7702 to upgrade the EOA
-			// instead of creating a separate smart account
-			if (this.config.accountType === '7702') {
-				createAccountOptions.accountType = '7702';
-				createAccountOptions.eoa = walletAccount;
-			} else if (isDynamicWallet) {
-				// Always pass eoa for Dynamic wallets (matches working implementation)
-				// This ensures proper EIP-7702 authorization signing support
-				debugLog('Detected Dynamic wallet, passing eoa for EIP-7702 support');
-				createAccountOptions.eoa = walletAccount;
+			if (accountType === '7702') {
+				// 7702 path: EOA upgrade. This is where `eoa` belongs.
+				createAccountOptions = {
+					...baseOptions,
+					accountType: '7702',
+					eoa: walletAccount
+				};
+			} else {
+				// SMART path: explicitly force smart if SDK supports it.
+				// If SDK doesn't accept 'smart', remove this line and rely on default,
+				// but DO NOT pass `eoa`.
+				createAccountOptions = {
+					...baseOptions,
+					accountType: 'smart'
+				};
 			}
 
 			if (this.sessionsEnabled()) {
@@ -409,17 +425,22 @@ export class RhinestoneClient {
 			}
 
 			debugLog('Calling SDK createAccount with options:', {
-				ownersType: createAccountOptions.owners.type,
-				accountType: createAccountOptions.accountType
+				ownersType: createAccountOptions.owners?.type,
+				accountType: createAccountOptions.accountType,
+				hasEoa: Boolean(createAccountOptions.eoa)
 			});
 
-			// Create the account via Rhinestone SDK
-			// For 7702 mode: This upgrades the EOA to act as a smart account
-			// For smart mode: This creates a new smart account contract
-			const rhinestoneAccount = await this.sdk.createAccount(createAccountOptions);
+			const rhinestoneAccount = (await this.sdk.createAccount(
+				createAccountOptions
+			)) as unknown as RhinestoneAccount;
 
-			debugLog('Account created successfully');
-			return rhinestoneAccount as unknown as RhinestoneAccount;
+			debugLog('Account created successfully', {
+				accountType,
+				address: rhinestoneAccount.getAddress() ?? 'unknown'
+			});
+
+			this._accountCache.set(cacheKey, rhinestoneAccount);
+			return rhinestoneAccount;
 		} catch (error) {
 			console.error('[Rhinestone Client] createAccount failed:', error);
 			throw new AAError(
@@ -427,7 +448,7 @@ export class RhinestoneClient {
 					error instanceof Error ? error.message : 'Unknown error'
 				}`,
 				AAErrorCode.RHINESTONE_ERROR,
-				{ originalError: error }
+				{ originalError: error, accountType }
 			);
 		}
 	}
@@ -486,6 +507,36 @@ export class RhinestoneClient {
 		}
 	}
 
+	private async canWalletSignAuthorizationOnChain(
+		walletAccount: Account,
+		chainId: number
+	): Promise<boolean> {
+		const wa = walletAccount as WalletAccountWithSignAuth;
+
+		if (typeof wa.signAuthorization !== 'function') return false;
+
+		try {
+			// Probe call (won’t submit anything, just signs)
+			await wa.signAuthorization({
+				contractAddress: EIP7702_DELEGATE_CONTRACT,
+				chainId,
+				nonce: 0
+			});
+			return true;
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			// Dynamic MPC “method exists but not supported” case
+			if (
+				msg.toLowerCase().includes('not supported') ||
+				msg.toLowerCase().includes('dynamic mpc')
+			) {
+				return false;
+			}
+			// Any other error: treat as not supported (safer)
+			return false;
+		}
+	}
+
 	private sessionsEnabled(): boolean {
 		return (
 			this.isSessionFeatureAvailable() && this.getSessionConsent() === 'granted'
@@ -518,22 +569,26 @@ export class RhinestoneClient {
 			this.clearSessionCaches();
 		}
 	}
-	
+
 	// ⚠️ Minimal storage: localStorage.
 	// For production you probably want encrypted storage / secure enclave.
 	private getSessionOwnerAccount(walletAddress: Address): Account {
 		const key = `rhinestone:sessionOwnerPk:${walletAddress.toLowerCase()}`;
 		let pk = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
-	
+
 		if (!pk) {
 			pk = generatePrivateKey(); // "0x..." hex
 			if (typeof window !== 'undefined') window.localStorage.setItem(key, pk);
 		}
-	
+
 		return privateKeyToAccount(pk as Hex);
 	}
-	
-	private sessionBundleCacheKey(walletAddress: Address, sessionOwner: Address, chainIds: number[]): string {
+
+	private sessionBundleCacheKey(
+		walletAddress: Address,
+		sessionOwner: Address,
+		chainIds: number[]
+	): string {
 		const chains = [...chainIds].sort((a, b) => a - b).join(',');
 		return `rhinestone:sessions:${walletAddress.toLowerCase()}:${sessionOwner.toLowerCase()}:${chains}`;
 	}
@@ -638,7 +693,7 @@ export class RhinestoneClient {
 	
 		const sessionOwner = this.getSessionOwnerAccount(walletAddress);
 		const cacheKey = this.sessionBundleCacheKey(walletAddress, sessionOwner.address, chainIds);
-	
+
 		// 1) memory cache
 		const mem = this.sessionEnableCache.get(cacheKey);
 		if (mem) {
@@ -698,7 +753,7 @@ export class RhinestoneClient {
 				}
 			}
 		}
-	
+
 		// 3) create sessions for requested chains (multi-chain enable-mode)
 		const sessionValidAfter = Date.now();
 		const sessionValidUntil = sessionValidAfter + 24 * 60 * 60 * 1000;
@@ -707,18 +762,18 @@ export class RhinestoneClient {
 			owners: { type: 'ecdsa', accounts: [sessionOwner] },
 			actions: this.buildSessionActions(id, sessionValidAfter, sessionValidUntil)
 		}));
-	
+
 		// Rhinestone “enable mode” flow (sign once)
 		const sessionDetails = await rhinestoneAccount.experimental_getSessionDetails(sessions);
 		const enableSignature = await rhinestoneAccount.experimental_signEnableSession(sessionDetails);
-	
+
 		const bundle = {
 			sessions,
 			enableSignature,
 			hashesAndChainIds: sessionDetails.hashesAndChainIds,
 			createdAt: sessionValidAfter
 		};
-	
+
 		// persist
 		if (typeof window !== 'undefined') {
 			window.localStorage.setItem(
@@ -740,7 +795,7 @@ export class RhinestoneClient {
 			);
 		}
 		this.sessionEnableCache.set(cacheKey, bundle);
-	
+
 		return bundle;
 	}
 
@@ -762,7 +817,7 @@ export class RhinestoneClient {
 	private async maybeAttachSessionSigner(
 		rhinestoneAccount: RhinestoneAccount,
 		walletAddress: Address,
-		chainId: number,
+		chainIdOrChainIds: number | number[],
 		tx: RhinestoneTransactionParams
 	): Promise<RhinestoneTransactionParams> {
 		if (!this.sessionsEnabled()) return tx;
@@ -807,7 +862,6 @@ export class RhinestoneClient {
 
 		return { ...tx, signers };
 	}
-	
 
 	/**
 	 * Check if account is deployed on a chain, and get EIP-7702 init signature if needed.
@@ -1677,6 +1731,9 @@ export class RhinestoneClient {
 					yParity: number;
 				}> = [];
 
+				// Track if wallet explicitly requires SDK-managed auth (e.g. Dynamic MPC)
+				let walletRequiresSdkAuth = false;
+
 				let sdkSucceeded = false;
 				try {
 					const sdkAuths = (await rhinestoneAccount.signAuthorizations(signedTx)) ?? [];
@@ -1787,6 +1844,14 @@ export class RhinestoneClient {
 									);
 								}
 
+								// Dynamic MPC and similar wallets require the Rhinestone SDK to provide authorizations
+								if (
+									errorMsg.includes('Dynamic MPC') ||
+									errorMsg.includes('Rhinestone SDK handles authorizations')
+								) {
+									walletRequiresSdkAuth = true;
+								}
+
 								console.warn(
 									'[Rhinestone Client] Could not sign authorization for chain, continuing:',
 									chainId
@@ -1799,6 +1864,40 @@ export class RhinestoneClient {
 							missingChainIds
 						);
 					}
+				}
+
+				// Ensure we don't submit with incomplete authorizations (orchestrator will reject)
+				// Exception: when SDK succeeded and returned [] or partial list, trust it - the account may
+				// already be delegated on those chains (e.g. second swap after first succeeded on Arbitrum)
+				const gotChainIdsFinal = new Set(
+					authsList.map((a) => Number(a.chainId)).filter((id) => !isNaN(id))
+				);
+				const stillMissingChainIds = chainsNeedingAuth
+					.map((c) => c.id)
+					.filter((chainId) => !gotChainIdsFinal.has(chainId));
+
+				if (stillMissingChainIds.length > 0 && !sdkSucceeded) {
+					// Only enforce when we fell back to manual and still have gaps
+					if (walletRequiresSdkAuth) {
+						throw new AAError(
+							'This cross-chain swap requires EIP-7702 authorizations. The Rhinestone SDK did not provide them, and your wallet (Dynamic MPC) does not support manual authorization signing. Please try again in a few minutes, or use a different wallet that supports EIP-7702 authorization signing.',
+							AAErrorCode.SWAP_FAILED,
+							{
+								missingChains: stillMissingChainIds,
+								chainsNeedingAuth: chainsNeedingAuth.map((c) => c.id)
+							}
+						);
+					}
+					throw new AAError(
+						`EIP-7702 authorizations could not be obtained for chain(s): ${stillMissingChainIds.join(
+							', '
+						)}. The transaction cannot be submitted without them.`,
+						AAErrorCode.SWAP_FAILED,
+						{
+							missingChains: stillMissingChainIds,
+							chainsNeedingAuth: chainsNeedingAuth.map((c) => c.id)
+						}
+					);
 				}
 
 				debugLog('Final authorization list:', {
@@ -2250,8 +2349,9 @@ export class RhinestoneClient {
 				chain.id,
 				transactionParams
 			);
-
+			console.log('here 1');
 			const preparedTx = await rhinestoneAccount.prepareTransaction(txWithSigner);
+			console.log('here 2');
 			const signedTx = await rhinestoneAccount.signTransaction(preparedTx);
 
 			// Brief delay to let Dynamic wallet UI settle between signing requests
@@ -2375,7 +2475,6 @@ export class RhinestoneClient {
 			);
 		}
 	}
-
 
 	/**
 	 * Manually sign EIP-7702 authorization using Dynamic wallet client
@@ -2652,21 +2751,26 @@ export function getRhinestoneClient(): RhinestoneClient {
 		const sponsorship: SponsorshipConfig | undefined =
 			env.PUBLIC_RHINESTONE_SPONSORSHIP_ENABLED === 'true' ? { enabled: true } : undefined;
 
-		// Determine account type based on wallet
-		// Dynamic embedded wallets support EIP-7702 mode, which preserves the EOA address
-		// External wallets (WalletConnect, injected) can also use EIP-7702 to preserve EOA address
+		/**
+		 * ✅ Account type selection
+		 *
+		 * Key rule:
+		 * - Dynamic embedded (MPC) currently cannot provide EIP-7702 authorization signing coverage
+		 *   required for cross-chain when source chain isn't deployed.
+		 * - So default Dynamic embedded -> "smart" (4337) to make cross-chain work.
+		 * - External wallets -> "7702" to preserve EOA address when supported.
+		 */
 		let accountType: '7702' | 'smart';
 
 		if (env.PUBLIC_RHINESTONE_ACCOUNT_TYPE) {
-			// Use explicitly configured type if set
+			// Explicit override always wins
 			accountType = env.PUBLIC_RHINESTONE_ACCOUNT_TYPE as '7702' | 'smart';
 		} else {
-			// Auto-detect based on wallet type
 			const isEmbedded = isDynamicEmbeddedWallet();
 
-			// Use '7702' for both embedded and external wallets to preserve EOA address
-			// This enables EIP-7702 Smart EOAs which upgrade the EOA without migration
-			accountType = '7702';
+			// ✅ IMPORTANT FIX:
+			// Dynamic embedded wallets should default to "smart" until they can sign 7702 authorizations.
+			accountType = isEmbedded ? 'smart' : '7702';
 
 			debugLog('Auto-selected account type:', accountType, { isEmbedded });
 		}
