@@ -7,6 +7,7 @@ import {
 	useEmbeddedReveal
 } from '@dynamic-labs/sdk-react-core';
 import { EthereumWalletConnectors, isEthereumWallet } from '@dynamic-labs/ethereum';
+import { SUPPORTED_NETWORKS } from '$lib/services/account-abstraction/types';
 
 // Static logo URL for Dynamic branding - served from /static/logo.svg
 export const ST0X_LOGO_URL = '/logo.svg';
@@ -358,6 +359,29 @@ function DynamicBridge({
 					return '8453';
 				};
 
+				// Fallback chain IDs when Dynamic throws "EVM network not found" (chain not in their config).
+				// signTypedData/signTransaction only need a wallet client; the chain in the payload is independent.
+				const FALLBACK_CHAIN_IDS = Object.values(SUPPORTED_NETWORKS).map(String);
+
+				const getWalletClientWithFallback = async (chainId: string) => {
+					const chainIdsToTry = [chainId, ...FALLBACK_CHAIN_IDS.filter((c) => c !== chainId)];
+					let lastError: unknown;
+					for (const cid of chainIdsToTry) {
+						try {
+							const client = await activeWallet.getWalletClient(cid);
+							if (client) return client;
+						} catch (e) {
+							lastError = e;
+							const msg = e instanceof Error ? e.message : String(e);
+							if (msg.includes('EVM network not found') || msg.includes('network not found')) {
+								continue;
+							}
+							throw e;
+						}
+					}
+					throw lastError ?? new Error('Could not get wallet client for any supported chain');
+				};
+
 				// Try connector signAuthorization first (bypasses viem; avoids "json-rpc not supported" error).
 				// walletClient.signAuthorization uses viem which rejects JSON-RPC accounts.
 				const signAuthorizationImpl = async (
@@ -434,7 +458,7 @@ function DynamicBridge({
 					},
 					signTransaction: async (tx) => {
 						const txParams = tx as { chainId?: unknown; chain?: { id?: unknown } };
-						const walletClient = await activeWallet.getWalletClient(
+						const walletClient = await getWalletClientWithFallback(
 							resolveChainId(txParams.chainId ?? txParams.chain?.id)
 						);
 						return walletClient.signTransaction(
@@ -442,7 +466,7 @@ function DynamicBridge({
 						) as unknown as Promise<string>;
 					},
 					signTypedData: async (args) => {
-						const walletClient = await activeWallet.getWalletClient(
+						const walletClient = await getWalletClientWithFallback(
 							resolveChainId(args?.domain?.chainId)
 						);
 						return walletClient.signTypedData(

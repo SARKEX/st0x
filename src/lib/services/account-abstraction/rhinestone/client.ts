@@ -327,19 +327,11 @@ export class RhinestoneClient {
 	private walletClientCache: Map<string, WalletClient> = new Map();
 	// Cache EIP-7702 init signatures by account address (signature is valid across all chains)
 	private eip7702InitSignatureCache: Map<Address, Hex> = new Map();
+	// Cache Rhinestone accounts by walletAddress:accountType
+	private _accountCache: Map<string, RhinestoneAccount> = new Map();
 
 	// Sessions cache: wallet+sessionOwner+chains → enable bundle
 	private sessionEnableCache: Map<string, SessionEnableBundle> = new Map();
-
-	// Sessions cache: wallet+sessionOwner+chains → enable bundle
-	private sessionEnableCache: Map<
-		string,
-		{
-			sessions: Session[];
-			enableSignature: Hex;
-			hashesAndChainIds: Array<{ hash: Hex; chainId: number }>;
-		}
-	> = new Map();
 
 	constructor(config: RhinestoneConfig) {
 		this.config = config;
@@ -394,7 +386,8 @@ export class RhinestoneClient {
 				accountType?: '7702' | 'smart';
 				eoa?: Account;
 				experimental_sessions?: { enabled: boolean };
-			} = {
+			};
+			const baseOptions: CreateAccountOptions = {
 				owners: {
 					type: 'ecdsa',
 					accounts: [walletAccount]
@@ -821,8 +814,11 @@ export class RhinestoneClient {
 		tx: RhinestoneTransactionParams
 	): Promise<RhinestoneTransactionParams> {
 		if (!this.sessionsEnabled()) return tx;
+		const chainId = Array.isArray(chainIdOrChainIds)
+			? (chainIdOrChainIds[0] ?? ('chain' in tx ? tx.chain.id : tx.targetChain.id))
+			: chainIdOrChainIds;
 		if (!this.canUseSessionForTransaction(tx, chainId)) return tx;
-	
+
 		// Build (or load) a single multi-chain session bundle and reuse it across transactions.
 		const allSupportedChainIds = Object.values(SUPPORTED_NETWORKS) as number[];
 		const { sessions, enableSignature, hashesAndChainIds } = await this.getOrCreateSessionEnableBundle(
@@ -830,7 +826,7 @@ export class RhinestoneClient {
 			walletAddress,
 			allSupportedChainIds
 		);
-	
+
 		const sessionIndex = sessions.findIndex((session) => session.chain.id === chainId);
 		if (sessionIndex < 0) {
 			throw new Error(`No session found for chain ${chainId}`);
