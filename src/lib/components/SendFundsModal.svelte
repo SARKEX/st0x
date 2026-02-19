@@ -326,8 +326,7 @@
 							: await getVaultAssetAddress(chainId, selectedTokenAddress);
 
 					const isUsdcVault =
-						vaultAssetAddress != null &&
-						vaultAssetAddress.toLowerCase() === usdcAddr.toLowerCase();
+						vaultAssetAddress != null && vaultAssetAddress.toLowerCase() === usdcAddr.toLowerCase();
 
 					// Use ERC4626 withdraw only for confirmed USDC vault tokens when wallet USDC is insufficient.
 					if (isUsdcVault && walletUsdcBal < amountInUnits) {

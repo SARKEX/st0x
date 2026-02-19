@@ -531,9 +531,7 @@ export class RhinestoneClient {
 	}
 
 	private sessionsEnabled(): boolean {
-		return (
-			this.isSessionFeatureAvailable() && this.getSessionConsent() === 'granted'
-		);
+		return this.isSessionFeatureAvailable() && this.getSessionConsent() === 'granted';
 	}
 
 	isSessionFeatureAvailable(): boolean {
@@ -554,10 +552,7 @@ export class RhinestoneClient {
 
 	setSessionConsent(consentGranted: boolean): void {
 		if (typeof window === 'undefined') return;
-		window.localStorage.setItem(
-			SESSION_CONSENT_STORAGE_KEY,
-			consentGranted ? 'granted' : 'denied'
-		);
+		window.localStorage.setItem(SESSION_CONSENT_STORAGE_KEY, consentGranted ? 'granted' : 'denied');
 		if (!consentGranted) {
 			this.clearSessionCaches();
 		}
@@ -676,14 +671,14 @@ export class RhinestoneClient {
 
 		return true;
 	}
-	
+
 	private async getOrCreateSessionEnableBundle(
 		rhinestoneAccount: RhinestoneAccount,
 		walletAddress: Address,
 		chainIds: number[]
 	): Promise<SessionEnableBundle> {
 		if (!this.sessionsEnabled()) throw new Error('Sessions not enabled');
-	
+
 		const sessionOwner = this.getSessionOwnerAccount(walletAddress);
 		const cacheKey = this.sessionBundleCacheKey(walletAddress, sessionOwner.address, chainIds);
 
@@ -698,7 +693,7 @@ export class RhinestoneClient {
 			}
 			this.sessionEnableCache.delete(cacheKey);
 		}
-	
+
 		// 2) localStorage cache
 		if (typeof window !== 'undefined') {
 			const raw = window.localStorage.getItem(cacheKey);
@@ -806,7 +801,7 @@ export class RhinestoneClient {
 		}
 		return true;
 	}
-	
+
 	private async maybeAttachSessionSigner(
 		rhinestoneAccount: RhinestoneAccount,
 		walletAddress: Address,
@@ -815,17 +810,18 @@ export class RhinestoneClient {
 	): Promise<RhinestoneTransactionParams> {
 		if (!this.sessionsEnabled()) return tx;
 		const chainId = Array.isArray(chainIdOrChainIds)
-			? (chainIdOrChainIds[0] ?? ('chain' in tx ? tx.chain.id : tx.targetChain.id))
+			? chainIdOrChainIds[0] ?? ('chain' in tx ? tx.chain.id : tx.targetChain.id)
 			: chainIdOrChainIds;
 		if (!this.canUseSessionForTransaction(tx, chainId)) return tx;
 
 		// Build (or load) a single multi-chain session bundle and reuse it across transactions.
 		const allSupportedChainIds = Object.values(SUPPORTED_NETWORKS) as number[];
-		const { sessions, enableSignature, hashesAndChainIds } = await this.getOrCreateSessionEnableBundle(
-			rhinestoneAccount,
-			walletAddress,
-			allSupportedChainIds
-		);
+		const { sessions, enableSignature, hashesAndChainIds } =
+			await this.getOrCreateSessionEnableBundle(
+				rhinestoneAccount,
+				walletAddress,
+				allSupportedChainIds
+			);
 
 		const sessionIndex = sessions.findIndex((session) => session.chain.id === chainId);
 		if (sessionIndex < 0) {

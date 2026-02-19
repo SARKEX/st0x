@@ -26,12 +26,7 @@ import type {
 import { createPublicClient, createWalletClient, custom } from 'viem';
 import { toAccount } from 'viem/accounts';
 import { get } from 'svelte/store';
-import {
-	type SupportedNetworkId,
-	CHAIN_CONFIG,
-	AAError,
-	AAErrorCode
-} from '../types';
+import { type SupportedNetworkId, CHAIN_CONFIG, AAError, AAErrorCode } from '../types';
 import { dynamicSession, dynamicSigner, type DynamicSigner } from '$lib/stores/dynamicStore';
 import { getDynamicWalletProvider } from '$lib/services/walletService';
 

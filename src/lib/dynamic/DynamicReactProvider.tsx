@@ -433,6 +433,7 @@ function DynamicBridge({
 					}
 
 					// 2) Try account.signAuthorization (local account only; skips walletClient to avoid viem json-rpc check)
+					const walletClient = await getWalletClientWithFallback(resolveChainId(params.chainId));
 					const account = (
 						walletClient as {
 							account?: { signAuthorization?: (p: unknown) => Promise<unknown>; type?: string };

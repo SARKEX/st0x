@@ -231,11 +231,11 @@
 							<div
 								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl"
 							>
-									<a
-										href="/dashboard"
-										class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
-										on:click={closeAccountMenu}
-									>
+								<a
+									href="/dashboard"
+									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
+									on:click={closeAccountMenu}
+								>
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path
 											stroke-linecap="round"
@@ -243,51 +243,51 @@
 											stroke-width="2"
 											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
 										/>
-										</svg>
-										Dashboard
-									</a>
-										<div class="border-t border-white/10 px-4 py-2">
-											<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
-											<p class="mt-1 text-xs text-gray-300">
-												{!sessionFeatureAvailable
-													? 'Unavailable for this wallet'
-													: sessionConsent === 'granted'
-														? 'Enabled'
-														: sessionConsent === 'denied'
-															? 'Disabled'
-															: 'Consent required'}
-											</p>
-										</div>
-										{#if sessionFeatureAvailable}
-											{#if sessionConsent !== 'granted'}
-												<button
-													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-													on:click={enableSmartSessions}
-												>
-													Enable Smart Sessions
-												</button>
-											{:else}
-												<button
-													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-													on:click={disableSmartSessions}
-												>
-													Disable Smart Sessions
-												</button>
-											{/if}
-											<button
-												class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
-												on:click={clearSessionCache}
-											>
-												Clear Session Cache
-											</button>
-										{/if}
-									{#if sessionMessage}
-										<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+									</svg>
+									Dashboard
+								</a>
+								<div class="border-t border-white/10 px-4 py-2">
+									<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+									<p class="mt-1 text-xs text-gray-300">
+										{!sessionFeatureAvailable
+											? 'Unavailable for this wallet'
+											: sessionConsent === 'granted'
+												? 'Enabled'
+												: sessionConsent === 'denied'
+													? 'Disabled'
+													: 'Consent required'}
+									</p>
+								</div>
+								{#if sessionFeatureAvailable}
+									{#if sessionConsent !== 'granted'}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={enableSmartSessions}
+										>
+											Enable Smart Sessions
+										</button>
+									{:else}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={disableSmartSessions}
+										>
+											Disable Smart Sessions
+										</button>
 									{/if}
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
-										on:click={() => {
-											closeAccountMenu();
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+										on:click={clearSessionCache}
+									>
+										Clear Session Cache
+									</button>
+								{/if}
+								{#if sessionMessage}
+									<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+								{/if}
+								<button
+									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+									on:click={() => {
+										closeAccountMenu();
 										handleDisconnect();
 									}}
 								>
@@ -346,51 +346,51 @@
 											stroke-width="2"
 											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
 										/>
-										</svg>
-										Dashboard
-									</a>
-										<div class="border-t border-white/10 px-4 py-2">
-											<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
-											<p class="mt-1 text-xs text-gray-300">
-												{!sessionFeatureAvailable
-													? 'Unavailable for this wallet'
-													: sessionConsent === 'granted'
-														? 'Enabled'
-														: sessionConsent === 'denied'
-															? 'Disabled'
-															: 'Consent required'}
-											</p>
-										</div>
-										{#if sessionFeatureAvailable}
-											{#if sessionConsent !== 'granted'}
-												<button
-													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-													on:click={enableSmartSessions}
-												>
-													Enable Smart Sessions
-												</button>
-											{:else}
-												<button
-													class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
-													on:click={disableSmartSessions}
-												>
-													Disable Smart Sessions
-												</button>
-											{/if}
-											<button
-												class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
-												on:click={clearSessionCache}
-											>
-												Clear Session Cache
-											</button>
-										{/if}
-									{#if sessionMessage}
-										<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+									</svg>
+									Dashboard
+								</a>
+								<div class="border-t border-white/10 px-4 py-2">
+									<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+									<p class="mt-1 text-xs text-gray-300">
+										{!sessionFeatureAvailable
+											? 'Unavailable for this wallet'
+											: sessionConsent === 'granted'
+												? 'Enabled'
+												: sessionConsent === 'denied'
+													? 'Disabled'
+													: 'Consent required'}
+									</p>
+								</div>
+								{#if sessionFeatureAvailable}
+									{#if sessionConsent !== 'granted'}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={enableSmartSessions}
+										>
+											Enable Smart Sessions
+										</button>
+									{:else}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={disableSmartSessions}
+										>
+											Disable Smart Sessions
+										</button>
 									{/if}
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
-										on:click={() => {
-											closeAccountMenu();
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+										on:click={clearSessionCache}
+									>
+										Clear Session Cache
+									</button>
+								{/if}
+								{#if sessionMessage}
+									<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+								{/if}
+								<button
+									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+									on:click={() => {
+										closeAccountMenu();
 										handleDisconnect();
 									}}
 								>
