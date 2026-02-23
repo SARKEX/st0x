@@ -18,8 +18,11 @@
 		isAddress,
 		encodeFunctionData,
 		erc20Abi,
-		formatUnits
+		formatUnits,
+		createPublicClient
 	} from 'viem';
+	import { CHAIN_CONFIG, type SupportedNetworkId } from '$lib/services/account-abstraction/types';
+	import { createRpcTransport } from '$lib/utils/rpc';
 	import { queryClient } from '$lib/clients/queryClient';
 
 	const dispatch = createEventDispatcher();
@@ -38,6 +41,16 @@
 				{ name: 'owner', type: 'address' }
 			],
 			outputs: [{ name: 'shares', type: 'uint256' }]
+		}
+	] as const;
+
+	const erc4626AssetAbi = [
+		{
+			type: 'function',
+			name: 'asset',
+			stateMutability: 'view',
+			inputs: [],
+			outputs: [{ name: '', type: 'address' }]
 		}
 	] as const;
 
@@ -228,6 +241,43 @@
 		}
 	}
 
+	async function getTokenBalance(
+		chainId: number,
+		tokenAddress: `0x${string}`,
+		walletAddress: `0x${string}`
+	): Promise<bigint> {
+		const publicClient = createPublicClient({
+			chain: CHAIN_CONFIG[chainId as SupportedNetworkId],
+			transport: createRpcTransport(chainId as SupportedNetworkId)
+		});
+		return publicClient.readContract({
+			address: tokenAddress,
+			abi: erc20Abi,
+			functionName: 'balanceOf',
+			args: [walletAddress]
+		});
+	}
+
+	async function getVaultAssetAddress(
+		chainId: number,
+		vaultAddress: `0x${string}`
+	): Promise<`0x${string}` | null> {
+		try {
+			const publicClient = createPublicClient({
+				chain: CHAIN_CONFIG[chainId as SupportedNetworkId],
+				transport: createRpcTransport(chainId as SupportedNetworkId)
+			});
+			const asset = await publicClient.readContract({
+				address: vaultAddress,
+				abi: erc4626AssetAbi,
+				functionName: 'asset'
+			});
+			return asset as `0x${string}`;
+		} catch {
+			return null;
+		}
+	}
+
 	async function handleSend() {
 		if (!canSend || !$dynamicSession?.walletAddress || !selectedToken) return;
 
@@ -258,30 +308,29 @@
 					const usdcAddr = getUSDCAddressForChain(chainId);
 					if (!usdcAddr) throw new Error('USDC not configured for this chain');
 
-					// 1) Check if the Rhinestone wallet actually holds USDC
 					let walletUsdcBal = 0n;
+					try {
+						walletUsdcBal = await getTokenBalance(
+							chainId,
+							usdcAddr as `0x${string}`,
+							$dynamicSession.walletAddress as `0x${string}`
+						);
+					} catch {
+						// Best effort check. If the read fails, fallback to direct transfer path.
+					}
 
-					// Heuristic: if modal was opened from vault screen, you likely want vault withdraw.
-					// If you have a flag in sendModalToken like `source: 'vault'`, use that instead.
-					const vault = getUSDCAddressForChain(chainId);
+					const selectedTokenAddress = selectedToken.address as `0x${string}`;
+					const vaultAssetAddress =
+						selectedTokenAddress.toLowerCase() === usdcAddr.toLowerCase()
+							? null
+							: await getVaultAssetAddress(chainId, selectedTokenAddress);
 
-					// 2) If wallet has USDC (or you are not in vault context) → normal transfer
-					const shouldTryDirectTransfer = !vault || walletUsdcBal >= amountInUnits;
+					const isUsdcVault =
+						vaultAssetAddress != null && vaultAssetAddress.toLowerCase() === usdcAddr.toLowerCase();
 
-					if (shouldTryDirectTransfer) {
-						const data = encodeFunctionData({
-							abi: erc20Abi,
-							functionName: 'transfer',
-							args: [recipientAddress as `0x${string}`, amountInUnits]
-						});
-
-						hash = await sendTransaction({
-							to: usdcAddr as `0x${string}`,
-							data,
-							...(chainId != null && { chainId })
-						});
-					} else {
-						// 3) Otherwise withdraw from vault directly to recipient (best UX: 1 tx)
+					// Use ERC4626 withdraw only for confirmed USDC vault tokens when wallet USDC is insufficient.
+					if (isUsdcVault && walletUsdcBal < amountInUnits) {
+						const vault = selectedTokenAddress;
 						const data = encodeFunctionData({
 							abi: erc4626Abi,
 							functionName: 'withdraw',
@@ -293,7 +342,20 @@
 						});
 
 						hash = await sendTransaction({
-							to: vault as `0x${string}`,
+							to: vault,
+							data,
+							...(chainId != null && { chainId })
+						});
+					} else {
+						// Plain ERC20 USDC transfer
+						const data = encodeFunctionData({
+							abi: erc20Abi,
+							functionName: 'transfer',
+							args: [recipientAddress as `0x${string}`, amountInUnits]
+						});
+
+						hash = await sendTransaction({
+							to: usdcAddr as `0x${string}`,
 							data,
 							...(chainId != null && { chainId })
 						});

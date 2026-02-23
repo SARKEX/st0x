@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import NetworkSelector from './NetworkSelector.svelte';
 	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
 	import ReferralButton from './referrals/ReferralButton.svelte';
@@ -11,6 +12,11 @@
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
+	import {
+		getRhinestoneClient,
+		isRhinestoneConfigured,
+		type SessionConsentState
+	} from '$lib/services/account-abstraction';
 
 	export let title: string;
 	export let isSidebarCollapsed = false;
@@ -19,6 +25,9 @@
 	let mobileNavOpen = false;
 	let accountMenuOpen = false;
 	let windowWidth = 0;
+	let sessionConsent: SessionConsentState = 'unset';
+	let sessionFeatureAvailable = false;
+	let sessionMessage: string | null = null;
 
 	function toggleMobileNav() {
 		mobileNavOpen = !mobileNavOpen;
@@ -34,6 +43,7 @@
 
 	function closeAccountMenu() {
 		accountMenuOpen = false;
+		sessionMessage = null;
 	}
 
 	function handleClickOutsideAccountMenu(event: MouseEvent) {
@@ -67,6 +77,7 @@
 	$: if (!isHamburgerMode) mobileNavOpen = false;
 
 	onMount(() => {
+		refreshSessionConsent();
 		windowWidth = window.innerWidth;
 		const handleResize = () => (windowWidth = window.innerWidth);
 		window.addEventListener('resize', handleResize);
@@ -76,6 +87,8 @@
 			document.removeEventListener('click', handleClickOutsideAccountMenu);
 		};
 	});
+
+	$: if (accountMenuOpen) refreshSessionConsent();
 
 	function handleConnectWallet() {
 		// For wallet users who are already connected, open wallet modal to manage/disconnect
@@ -93,6 +106,43 @@
 		} else {
 			$web3Modal.open();
 		}
+	}
+
+	function refreshSessionConsent(): void {
+		if (!browser || !isRhinestoneConfigured()) {
+			sessionConsent = 'unset';
+			sessionFeatureAvailable = false;
+			return;
+		}
+		const client = getRhinestoneClient();
+		sessionFeatureAvailable = client.isSessionFeatureAvailable();
+		sessionConsent = client.getSessionConsent();
+	}
+
+	function getActiveAddress(): `0x${string}` | undefined {
+		const value = ($walletAddress || $dynamicSession?.walletAddress) as string | undefined;
+		if (!value || !value.startsWith('0x') || value.length !== 42) return undefined;
+		return value as `0x${string}`;
+	}
+
+	function enableSmartSessions(): void {
+		if (!isRhinestoneConfigured() || !sessionFeatureAvailable) return;
+		getRhinestoneClient().setSessionConsent(true);
+		refreshSessionConsent();
+		sessionMessage = 'Smart sessions enabled.';
+	}
+
+	function disableSmartSessions(): void {
+		if (!isRhinestoneConfigured() || !sessionFeatureAvailable) return;
+		getRhinestoneClient().setSessionConsent(false);
+		refreshSessionConsent();
+		sessionMessage = 'Smart sessions disabled and cleared.';
+	}
+
+	function clearSessionCache(): void {
+		if (!isRhinestoneConfigured() || !sessionFeatureAvailable) return;
+		getRhinestoneClient().clearSessionCaches(getActiveAddress());
+		sessionMessage = 'Local session cache cleared.';
 	}
 
 	// Truncate email to show first 3 chars + @domain (e.g., "ala...@gmail.com")
@@ -196,6 +246,44 @@
 									</svg>
 									Dashboard
 								</a>
+								<div class="border-t border-white/10 px-4 py-2">
+									<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+									<p class="mt-1 text-xs text-gray-300">
+										{!sessionFeatureAvailable
+											? 'Unavailable for this wallet'
+											: sessionConsent === 'granted'
+												? 'Enabled'
+												: sessionConsent === 'denied'
+													? 'Disabled'
+													: 'Consent required'}
+									</p>
+								</div>
+								{#if sessionFeatureAvailable}
+									{#if sessionConsent !== 'granted'}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={enableSmartSessions}
+										>
+											Enable Smart Sessions
+										</button>
+									{:else}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={disableSmartSessions}
+										>
+											Disable Smart Sessions
+										</button>
+									{/if}
+									<button
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+										on:click={clearSessionCache}
+									>
+										Clear Session Cache
+									</button>
+								{/if}
+								{#if sessionMessage}
+									<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+								{/if}
 								<button
 									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
 									on:click={() => {
@@ -261,6 +349,44 @@
 									</svg>
 									Dashboard
 								</a>
+								<div class="border-t border-white/10 px-4 py-2">
+									<p class="text-[11px] uppercase tracking-wide text-gray-500">Smart Sessions</p>
+									<p class="mt-1 text-xs text-gray-300">
+										{!sessionFeatureAvailable
+											? 'Unavailable for this wallet'
+											: sessionConsent === 'granted'
+												? 'Enabled'
+												: sessionConsent === 'denied'
+													? 'Disabled'
+													: 'Consent required'}
+									</p>
+								</div>
+								{#if sessionFeatureAvailable}
+									{#if sessionConsent !== 'granted'}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={enableSmartSessions}
+										>
+											Enable Smart Sessions
+										</button>
+									{:else}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10"
+											on:click={disableSmartSessions}
+										>
+											Disable Smart Sessions
+										</button>
+									{/if}
+									<button
+										class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10"
+										on:click={clearSessionCache}
+									>
+										Clear Session Cache
+									</button>
+								{/if}
+								{#if sessionMessage}
+									<p class="px-4 pb-2 text-xs text-gray-400">{sessionMessage}</p>
+								{/if}
 								<button
 									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
 									on:click={() => {

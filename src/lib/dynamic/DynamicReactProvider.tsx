@@ -7,6 +7,7 @@ import {
 	useEmbeddedReveal
 } from '@dynamic-labs/sdk-react-core';
 import { EthereumWalletConnectors, isEthereumWallet } from '@dynamic-labs/ethereum';
+import { SUPPORTED_NETWORKS } from '$lib/services/account-abstraction/types';
 
 // Static logo URL for Dynamic branding - served from /static/logo.svg
 export const ST0X_LOGO_URL = '/logo.svg';
@@ -338,8 +339,48 @@ function DynamicBridge({
 
 		(async () => {
 			try {
-				const walletClient = await activeWallet.getWalletClient('8453');
-				if (cancelled || !walletClient) return;
+				const resolveChainId = (value: unknown): string => {
+					if (typeof value === 'number' && Number.isFinite(value)) {
+						return String(value);
+					}
+					if (typeof value === 'bigint') {
+						return value.toString();
+					}
+					if (typeof value === 'string' && value.length > 0) {
+						if (value.startsWith('0x')) {
+							try {
+								return String(parseInt(value, 16));
+							} catch {
+								return value;
+							}
+						}
+						return value;
+					}
+					return '8453';
+				};
+
+				// Fallback chain IDs when Dynamic throws "EVM network not found" (chain not in their config).
+				// signTypedData/signTransaction only need a wallet client; the chain in the payload is independent.
+				const FALLBACK_CHAIN_IDS = Object.values(SUPPORTED_NETWORKS).map(String);
+
+				const getWalletClientWithFallback = async (chainId: string) => {
+					const chainIdsToTry = [chainId, ...FALLBACK_CHAIN_IDS.filter((c) => c !== chainId)];
+					let lastError: unknown;
+					for (const cid of chainIdsToTry) {
+						try {
+							const client = await activeWallet.getWalletClient(cid);
+							if (client) return client;
+						} catch (e) {
+							lastError = e;
+							const msg = e instanceof Error ? e.message : String(e);
+							if (msg.includes('EVM network not found') || msg.includes('network not found')) {
+								continue;
+							}
+							throw e;
+						}
+					}
+					throw lastError ?? new Error('Could not get wallet client for any supported chain');
+				};
 
 				// Try connector signAuthorization first (bypasses viem; avoids "json-rpc not supported" error).
 				// walletClient.signAuthorization uses viem which rejects JSON-RPC accounts.
@@ -392,6 +433,7 @@ function DynamicBridge({
 					}
 
 					// 2) Try account.signAuthorization (local account only; skips walletClient to avoid viem json-rpc check)
+					const walletClient = await getWalletClientWithFallback(resolveChainId(params.chainId));
 					const account = (
 						walletClient as {
 							account?: { signAuthorization?: (p: unknown) => Promise<unknown>; type?: string };
@@ -416,11 +458,18 @@ function DynamicBridge({
 						return activeWallet.signMessage(message) as Promise<string>;
 					},
 					signTransaction: async (tx) => {
+						const txParams = tx as { chainId?: unknown; chain?: { id?: unknown } };
+						const walletClient = await getWalletClientWithFallback(
+							resolveChainId(txParams.chainId ?? txParams.chain?.id)
+						);
 						return walletClient.signTransaction(
 							tx as Parameters<typeof walletClient.signTransaction>[0]
 						) as unknown as Promise<string>;
 					},
 					signTypedData: async (args) => {
+						const walletClient = await getWalletClientWithFallback(
+							resolveChainId(args?.domain?.chainId)
+						);
 						return walletClient.signTypedData(
 							args as Parameters<typeof walletClient.signTypedData>[0]
 						) as unknown as Promise<string>;

@@ -1,4 +1,5 @@
 import { derived, get, type Readable } from 'svelte/store';
+import { browser } from '$app/environment';
 import { signerAddress, connected, chainId } from 'svelte-wagmi';
 import {
 	dynamicSession,
@@ -210,4 +211,20 @@ export function getCurrentAuthMethod(): AuthMethod {
  */
 export function checkIsAuthenticated(): boolean {
 	return get(isAuthenticated);
+}
+
+let previousWalletAddress: string | null = null;
+
+if (browser) {
+	walletAddress.subscribe((address) => {
+		if (!address && previousWalletAddress) {
+			void import('$lib/services/account-abstraction')
+				.then(({ isRhinestoneConfigured, getRhinestoneClient }) => {
+					if (!isRhinestoneConfigured()) return;
+					getRhinestoneClient().clearSessionCaches();
+				})
+				.catch(() => undefined);
+		}
+		previousWalletAddress = address;
+	});
 }

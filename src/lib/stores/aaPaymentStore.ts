@@ -10,6 +10,7 @@ import type { Account, Address, Hex } from 'viem';
 import {
 	type PaymentToken,
 	type CrossChainSwapQuote,
+	type SupportedNetworkId,
 	SETTLEMENT_CHAIN_ID,
 	getAAOrchestrator,
 	isRhinestoneConfigured,
@@ -50,7 +51,12 @@ async function checkSwapPrerequisites(
 		return setStoreError(update, 'Wallet not connected');
 	}
 
-	const walletAccountOrResult = await getDynamicAccountForRhinestone();
+	const sourceChainId = state.sourceToken?.chainId as SupportedNetworkId | undefined;
+	if (!sourceChainId) {
+		return setStoreError(update, 'No source chain selected for swap');
+	}
+
+	const walletAccountOrResult = await getDynamicAccountForRhinestone(sourceChainId);
 	if (!walletAccountOrResult) {
 		return setStoreError(update, 'Unable to get wallet account for cross-chain swap');
 	}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { get } from 'svelte/store';
 	import { env } from '$env/dynamic/public';
 	import { used } from 'svelte-preprocess-react';
 	import { DynamicReactProvider, type DynamicEventData } from './DynamicReactProvider';
@@ -63,6 +64,15 @@
 				break;
 
 			case 'logout':
+				// Clear AA session caches on explicit logout.
+				if (get(dynamicSession)?.walletAddress) {
+					void import('$lib/services/account-abstraction')
+						.then(({ isRhinestoneConfigured, getRhinestoneClient }) => {
+							if (!isRhinestoneConfigured()) return;
+							getRhinestoneClient().clearSessionCaches();
+						})
+						.catch(() => undefined);
+				}
 				dynamicSession.set(null);
 				dynamicLoading.set(false);
 				break;
