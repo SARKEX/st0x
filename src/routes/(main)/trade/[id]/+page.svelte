@@ -24,6 +24,7 @@
 		VolumeBucket,
 		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
+	import { env } from '$env/dynamic/public';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
 	import { extractBaseSymbol } from '$lib/utils/tradingViewSymbols';
@@ -78,6 +79,78 @@
 
 	// Get queryClient for cache lookup
 	const queryClient = useQueryClient();
+
+	let sessionsOptIn = false;
+	let sessionsToggleBusy = false;
+	let sessionsUiError: string | null = null;
+
+	function consentToBool(c: string) {
+		return c === 'granted';
+	}
+
+	function handleSessionsToggle(e: Event) {
+		const target = e.currentTarget as HTMLInputElement;
+		if (target) setSessionsOptIn(target.checked);
+	}
+
+	// show toggle only when feature is available for this wallet (embedded + flag)
+	$: sessionsSupported = isEmbeddedWallet && env.PUBLIC_RHINESTONE_SESSIONS_ENABLED === 'true';
+
+	async function refreshSessionsConsent() {
+		if (!browser || !sessionsSupported) {
+			sessionsOptIn = false;
+			return;
+		}
+		try {
+			const { isRhinestoneConfigured, getRhinestoneClient } = await import(
+				'$lib/services/account-abstraction'
+			);
+			if (!isRhinestoneConfigured()) return;
+
+			const client = getRhinestoneClient();
+			sessionsOptIn = consentToBool(client.getSessionConsent());
+		} catch (e) {
+			sessionsUiError = (e as Error)?.message ?? String(e);
+		}
+	}
+
+	async function setSessionsOptIn(next: boolean) {
+		if (!sessionsSupported) return;
+
+		sessionsToggleBusy = true;
+		sessionsUiError = null;
+
+		try {
+			const { isRhinestoneConfigured, getRhinestoneClient } = await import(
+				'$lib/services/account-abstraction'
+			);
+			if (!isRhinestoneConfigured()) throw new Error('Rhinestone not configured');
+
+			const client = getRhinestoneClient();
+			client.setSessionConsent(next); // persists to localStorage + clears caches on deny
+			sessionsOptIn = next;
+		} catch (e) {
+			sessionsUiError = (e as Error)?.message ?? String(e);
+			sessionsOptIn = !next; // revert
+		} finally {
+			sessionsToggleBusy = false;
+		}
+	}
+
+	onMount(() => {
+		// initial load
+		refreshSessionsConsent();
+
+		// keep consent in sync across tabs/windows
+		const onStorage = (ev: StorageEvent) => {
+			if (ev.key === 'rhinestone:sessions:consent:v1') {
+				refreshSessionsConsent();
+			}
+		};
+		window.addEventListener('storage', onStorage);
+
+		return () => window.removeEventListener('storage', onStorage);
+	});
 
 	// Use single token query - checks global cache first, falls back to single fetch
 	$: singleTokenQuery = createSingleVaultQuery(tokenId, $currentNetwork, queryClient);
@@ -1759,6 +1832,34 @@
 								>
 									Order Type
 								</span>
+								{#if sessionsSupported}
+								<div class="rounded-lg border border-white/10 bg-white/5 p-3">
+									<label class="flex items-start gap-3">
+										<input
+											type="checkbox"
+											class="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-yellow-400"
+											checked={sessionsOptIn}
+											disabled={sessionsToggleBusy}
+											on:change={handleSessionsToggle}
+										/>
+
+										<div class="min-w-0">
+											<div class="flex items-center gap-2">
+												<span class="text-sm font-semibold text-gray-200">Enable 1-click trades</span>
+												{#if sessionsToggleBusy}
+													<span class="text-xs text-gray-400">Saving…</span>
+												{/if}
+											</div>
+											<p class="mt-0.5 text-xs text-gray-400">
+												Sign once to authorize faster order execution for a limited time. You can disable anytime.
+											</p>
+											{#if sessionsUiError}
+												<p class="mt-1 text-xs text-red-400">{sessionsUiError}</p>
+											{/if}
+										</div>
+									</label>
+								</div>
+							{/if}
 								<Select
 									options={PANEL_STRATEGY_OPTIONS}
 									bind:selected={panelStrategy}

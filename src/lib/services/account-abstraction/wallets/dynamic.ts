@@ -52,11 +52,17 @@ export function getDynamicWalletAddress(): Address | null {
 }
 
 /**
- * Check if using Dynamic embedded wallet (supports EIP-7702)
+ * Check if we should use Rhinestone "smart" account (4337) instead of EIP-7702.
+ * Returns true for Dynamic embedded/Waas wallets that cannot sign EIP-7702 init
+ * or authorization (signTypedData for Initialize fails with DynamicWaasWalletClient).
+ * Only explicitly "external" Dynamic wallets use 7702.
  */
 export function isDynamicEmbeddedWallet(): boolean {
 	const session = get(dynamicSession);
-	return session?.walletType === 'embedded';
+	if (!session?.walletAddress) return false;
+	// Use smart account unless we know this is an external wallet (e.g. MetaMask).
+	// Embedded and Waas (walletType undefined or 'embedded') cannot sign 7702 init.
+	return session.walletType !== 'external';
 }
 
 /**
@@ -90,6 +96,21 @@ export interface DynamicAccountResult {
 	account: Account;
 	walletClient: WalletClient;
 }
+
+/**
+ * Standard EIP712Domain type for EIP-712. Some signers (e.g. Dynamic WaaS) expect this in types.
+ */
+const EIP712_DOMAIN_TYPE = [
+	{ name: 'name', type: 'string' },
+	{ name: 'version', type: 'string' },
+	{ name: 'chainId', type: 'uint256' },
+	{ name: 'verifyingContract', type: 'address' },
+	{ name: 'salt', type: 'bytes32' }
+] as const;
+
+/** Zero bytes32 for EIP-712 (32 bytes = 64 hex chars). Validators expect correct size and no undefined. */
+const ZERO_BYTES32 = '0x' + '00'.repeat(32);
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 /**
  * Helper function to convert BigInt values to strings for Dynamic signer
@@ -199,23 +220,43 @@ export async function getDynamicAccountForRhinestone(
 		}
 	};
 
-	const normalizeTypedDataForDynamic = (typedDataAny: unknown) => {
+	type NormalizeOptions = {
+		/** Keep EIP712Domain in types (Dynamic WaaS expects it for full EIP-712) */
+		keepEIP712Domain?: boolean;
+		/** If types lack EIP712Domain, add standard one so signer receives valid EIP-712 payload */
+		ensureEIP712Domain?: boolean;
+	};
+
+	const normalizeTypedDataForDynamic = (
+		typedDataAny: unknown,
+		options: NormalizeOptions = {}
+	): {
+		domain: Record<string, unknown>;
+		types: Record<string, unknown>;
+		primaryType: string;
+		message: Record<string, unknown>;
+	} => {
+		const { keepEIP712Domain = false, ensureEIP712Domain = false } = options;
 		const typedData = typedDataAny as {
 			types?: Record<string, unknown>;
 			domain?: Record<string, unknown>;
 			message?: Record<string, unknown>;
 			primaryType?: string;
 		};
-		// 1) Remove EIP712Domain if present (common Dynamic/WaaS edge case)
 		const typesRecord = (typedData?.types || {}) as Record<string, unknown>;
+		// Remove EIP712Domain only when not keeping it (fallback JSON-RPC path can hang with it)
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const { EIP712Domain: _, ...typesWithoutDomain } = typesRecord;
+		let types: Record<string, unknown> = keepEIP712Domain ? typesRecord : typesWithoutDomain;
+		if (ensureEIP712Domain && !types.EIP712Domain) {
+			types = { ...types, EIP712Domain: [...EIP712_DOMAIN_TYPE] };
+		}
 
-		// 2) Convert bigint -> string deeply in domain/message
+		// Convert bigint -> string deeply in domain/message
 		const domain = convertBigIntsToString(typedData?.domain || {}) as Record<string, unknown>;
 		const message = convertBigIntsToString(typedData?.message || {}) as Record<string, unknown>;
 
-		// 3) Normalize chainId (Dynamic often wants number/string, not bigint)
+		// Normalize chainId (Dynamic often wants number/string, not bigint)
 		if (domain.chainId != null) {
 			try {
 				domain.chainId = Number(domain.chainId);
@@ -224,11 +265,47 @@ export async function getDynamicAccountForRhinestone(
 			}
 		}
 
-		return {
+		// Ensure EIP712 domain fields are never undefined so validators don't read .length on undefined (e.g. domain.salt)
+		domain.name = domain.name ?? '';
+		domain.version = domain.version ?? '';
+		domain.verifyingContract =
+			domain.verifyingContract != null && domain.verifyingContract !== ''
+				? domain.verifyingContract
+				: ZERO_ADDRESS;
+		// bytes32 = 0x + 64 hex chars = 66 chars; reject undefined or wrong length
+		domain.salt =
+			domain.salt != null && typeof domain.salt === 'string' && domain.salt.length === 66
+				? domain.salt
+				: ZERO_BYTES32;
+
+		// Ensure message fields declared as bytes32/bytes in the primary type have valid values (no undefined)
+		const primaryType = (typedData?.primaryType ?? '') as string;
+		const messageType = types[primaryType] as Array<{ name: string; type: string }> | undefined;
+		if (primaryType && Array.isArray(messageType)) {
+			for (const field of messageType) {
+				const key = field.name;
+				const typ = (field.type || '').toLowerCase();
+				if (message[key] === undefined || message[key] === null) {
+					if (typ === 'bytes32') message[key] = ZERO_BYTES32;
+					else if (typ === 'bytes') message[key] = '0x';
+					else if (typ === 'address') message[key] = ZERO_ADDRESS;
+				}
+			}
+		}
+
+		const payload = {
 			domain,
-			types: typesWithoutDomain,
-			primaryType: (typedData?.primaryType ?? '') as string,
+			types,
+			primaryType,
 			message
+		};
+		// Deep clone so we send a plain JSON-serializable object (no getters/symbols).
+		// Domain and message now have no undefined required fields, so cloning is safe.
+		return JSON.parse(JSON.stringify(payload)) as {
+			domain: Record<string, unknown>;
+			types: Record<string, unknown>;
+			primaryType: string;
+			message: Record<string, unknown>;
 		};
 	};
 
@@ -302,7 +379,11 @@ export async function getDynamicAccountForRhinestone(
 						throw new Error('signTypedData not available on Dynamic signer');
 					}
 
-					const payload = normalizeTypedDataForDynamic(typedData);
+					// Use full EIP-712 shape for Dynamic signer (keep/add EIP712Domain) so WaaS accepts the payload
+					const payload = normalizeTypedDataForDynamic(typedData, {
+						keepEIP712Domain: true,
+						ensureEIP712Domain: true
+					});
 
 					console.log('[Dynamic Wallet] signTypedData payload (normalized):', {
 						primaryType: payload.primaryType,
@@ -310,21 +391,33 @@ export async function getDynamicAccountForRhinestone(
 						typesKeys: Object.keys(payload.types || {})
 					});
 
+					const signerPayload = {
+						domain: payload.domain,
+						types: payload.types,
+						primaryType: payload.primaryType,
+						message: payload.message
+					};
+					const timeoutMs = 45_000;
+
 					try {
 						const sig = await withTimeout(
-							signer!.signTypedData(
-								payload as {
-									domain: Record<string, unknown>;
-									types: Record<string, unknown>;
-									primaryType: string;
-									message: Record<string, unknown>;
-								}
-							),
-							30_000
+							signer!.signTypedData(signerPayload),
+							timeoutMs
 						);
 						return sig as Hex;
 					} catch (error) {
-						console.error('[Dynamic Wallet] signTypedData failed:', error, { payload });
+						const msg = error instanceof Error ? error.message : String(error);
+						console.error('[Dynamic Wallet] signTypedData failed:', error, {
+							primaryType: payload.primaryType,
+							timeout: msg.includes('timed out')
+						});
+						if (msg.includes('timed out')) {
+							throw new AAError(
+								'Signing request timed out. If you approved the request in the wallet popup, Dynamic may have failed to sign—try again or reconnect.',
+								AAErrorCode.WALLET_NOT_CONNECTED,
+								{ originalError: error }
+							);
+						}
 						throw error;
 					}
 				},

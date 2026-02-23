@@ -12,6 +12,7 @@ import type { Account, Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
 import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
 import { payFeesInStablecoin } from '$lib/stores';
+import { env } from '$env/dynamic/public';
 
 // Store for Dynamic wallet provider (set by React component)
 let dynamicWalletProvider: {
@@ -119,6 +120,11 @@ export async function sendTransaction(params: {
 				const rhinestoneClient = getRhinestoneClient();
 
 				try {
+					console.log('[Sessions] enabled?', {
+						flag: env.PUBLIC_RHINESTONE_SESSIONS_ENABLED,
+						consent: rhinestoneClient.getSessionConsent(),
+						eligible: rhinestoneClient.isSessionWalletEligible(),
+					  });	
 					const result = await rhinestoneClient.executeSameChainTransaction(
 						{
 							chainId: targetChainId as import('./account-abstraction/types').SupportedNetworkId,
