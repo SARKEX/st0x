@@ -94,47 +94,46 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			`[Manual Trigger] Selected blocks: ${block1} (first half), ${block2} (second half)`
 		);
 
-		const blockRecords: SnapshotBlockRecord[] = [];
 		const storedBlobs: { block: number; token: string; url: string }[] = [];
 
-		// Generate and store snapshots for both blocks
-		for (const blockNumber of [block1, block2]) {
-			// Use core generator function
-			const snapshots = await generateAllTokenSnapshots_v2(blockNumber);
-			const timestamp = await getBlockTimestamp(blockNumber);
+		// Process a single block: generate snapshots, upload to blob, update points
+		const processBlock = async (blockNumber: number) => {
+			const [snapshots, timestamp] = await Promise.all([
+				generateAllTokenSnapshots_v2(blockNumber),
+				getBlockTimestamp(blockNumber)
+			]);
 
 			console.log(
 				`[Manual Trigger] Generated ${snapshots.length} token snapshots for block ${blockNumber}`
 			);
 
-			// Store each token's snapshot to blob (overwrites existing)
-			for (const snapshot of snapshots) {
-				const blobPath = `snapshots/${snapshot.tokenSymbol}/${blockNumber}.json`;
+			// Upload all token snapshots in parallel
+			const blobResults = await Promise.all(
+				snapshots.map(async (snapshot) => {
+					const blobPath = `snapshots/${snapshot.tokenSymbol}/${blockNumber}.json`;
+					const blob = await put(blobPath, JSON.stringify(snapshot, null, 2), {
+						access: 'public',
+						contentType: 'application/json'
+					});
+					console.log(`[Manual Trigger] Stored ${snapshot.tokenSymbol} at block ${blockNumber}`);
+					return { block: blockNumber, token: snapshot.tokenSymbol, url: blob.url };
+				})
+			);
 
-				const blob = await put(blobPath, JSON.stringify(snapshot, null, 2), {
-					access: 'public',
-					contentType: 'application/json'
-				});
+			storedBlobs.push(...blobResults);
 
-				storedBlobs.push({
-					block: blockNumber,
-					token: snapshot.tokenSymbol,
-					url: blob.url
-				});
-
-				console.log(`[Manual Trigger] Stored ${snapshot.tokenSymbol} at block ${blockNumber}`);
-			}
-
-			// Update monthly points with this snapshot's data
 			await updateMonthlyPoints(snapshots, blockNumber, timestamp);
 
-			blockRecords.push({
+			return {
 				blockNumber,
 				timestamp,
 				date: dateStr,
 				generatedAt: new Date().toISOString()
-			});
-		}
+			} satisfies SnapshotBlockRecord;
+		};
+
+		// Generate both blocks in parallel
+		const blockRecords = await Promise.all([processBlock(block1), processBlock(block2)]);
 
 		// Store block records in KV
 		const kv = await getKv();
@@ -183,4 +182,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			{ status: 500 }
 		);
 	}
+};
+
+export const config = {
+	maxDuration: 800
 };
