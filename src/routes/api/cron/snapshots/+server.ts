@@ -4,6 +4,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
 import { dev } from '$app/environment';
+import { env } from '$env/dynamic/private';
 import {
 	generateAllTokenSnapshots_v2,
 	getBlockTimestamp,
@@ -38,7 +39,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	try {
 		// Verify cron secret if configured (for Vercel cron protection)
 		const authHeader = request.headers.get('authorization');
-		const cronSecret = process.env.CRON_SECRET;
+		const cronSecret = env.CRON_SECRET;
 
 		// Fail closed in production if CRON_SECRET is missing
 		if (!cronSecret && !dev) {

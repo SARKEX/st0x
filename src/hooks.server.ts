@@ -317,11 +317,37 @@ function addSecurityAndCorsHeaders(
 	});
 }
 
+// Bot/scanner paths to silently reject (WordPress probes, PHP shells, etc.)
+const BOT_PATH_PATTERNS = [
+	/\.php\d?$/,
+	/^\/wp-(content|admin|includes|login)/,
+	/^\/_next\//,
+	/^\/cgi-bin\//,
+	/^\/\.env/
+];
+
+/**
+ * Check if a request is from a bot scanner or has a malformed path
+ * (e.g. encoded absolute URLs treated as relative paths)
+ */
+function isBotOrMalformedPath(path: string): boolean {
+	// Encoded absolute URLs (crawlers mangling https:// into relative paths)
+	if (/^\/(https?|mailto|tel)%3A/i.test(path)) return true;
+
+	// Common bot scanner patterns
+	return BOT_PATH_PATTERNS.some((p) => p.test(path));
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { url, cookies, request } = event;
 	const path = url.pathname;
 	const origin = request.headers.get('Origin');
 	const method = request.method;
+
+	// Silently reject bot scanners and malformed paths (avoids noisy SvelteKitError logs)
+	if (isBotOrMalformedPath(path)) {
+		return new Response(null, { status: 404 });
+	}
 
 	const debug = env.DEBUG_LOGIN === 'true';
 
