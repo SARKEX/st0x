@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { truncateAddress } from '$lib/utils/format';
+	import { truncateAddress, formatPoints } from '$lib/utils/format';
 
 	interface ReferralLeaderboardEntry {
 		rank: number;
@@ -272,16 +272,6 @@
 		link.href = URL.createObjectURL(blob);
 		link.download = `referral-leaderboard-${selectedMonth}.csv`;
 		link.click();
-	}
-
-	function formatPoints(points: number): string {
-		if (points >= 1_000_000) {
-			return (points / 1_000_000).toFixed(1) + 'M';
-		}
-		if (points >= 1_000) {
-			return (points / 1_000).toFixed(1) + 'K';
-		}
-		return Math.round(points).toLocaleString();
 	}
 
 	function formatUsd(amount: number): string {

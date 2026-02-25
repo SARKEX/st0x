@@ -46,7 +46,7 @@ export const GET: RequestHandler = async ({ request }) => {
 			CACHE_KEYS.rewardsApy(),
 			async () => {
 				const now = new Date();
-				const currentMonth = getCurrentMonth();
+				const currentMonth = getCurrentMonth(now);
 
 				let monthlyData: RewardsData['monthlyData'] = null;
 				let poolConfig: RewardsData['poolConfig'] = null;
@@ -79,7 +79,10 @@ export const GET: RequestHandler = async ({ request }) => {
 					rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 				// Use projected progress to estimate RocketBoost bonus
-				const projectedRocketBoostAmount = calculateRocketBoostAmount(poolConfig, projectedProgressPercent);
+				const projectedRocketBoostAmount = calculateRocketBoostAmount(
+					poolConfig,
+					projectedProgressPercent
+				);
 
 				const poolAmount = poolConfig?.poolAmount ?? 0;
 				const effectivePool = poolAmount + projectedRocketBoostAmount;

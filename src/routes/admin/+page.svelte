@@ -2891,9 +2891,7 @@
 														</svg>
 													{/if}
 												</span>
-												<span class="font-mono text-xs text-white"
-													>{truncateAddress(wallet)}</span
-												>
+												<span class="font-mono text-xs text-white">{truncateAddress(wallet)}</span>
 											</button>
 										{/each}
 									</div>

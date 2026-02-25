@@ -10,6 +10,7 @@ import {
 	calculateRocketBoostAmount,
 	getDaysInMonth
 } from '$lib/server/rewards/rewardsCommon';
+import { isValidEthAddress } from '$lib/utils/format';
 
 // Pre-computed data for all wallets (cached once, used for all lookups)
 interface AllWalletData {
@@ -37,7 +38,7 @@ async function getAllWalletData(): Promise<AllWalletData> {
 		CACHE_KEYS.allWalletData(),
 		async () => {
 			const now = new Date();
-			const currentMonth = getCurrentMonth();
+			const currentMonth = getCurrentMonth(now);
 
 			const { monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth);
 
@@ -76,7 +77,10 @@ async function getAllWalletData(): Promise<AllWalletData> {
 				rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 			// Use projected progress to estimate RocketBoost bonus
-			const projectedRocketBoostAmount = calculateRocketBoostAmount(poolConfig, projectedProgressPercent);
+			const projectedRocketBoostAmount = calculateRocketBoostAmount(
+				poolConfig,
+				projectedProgressPercent
+			);
 
 			const poolAmount = poolConfig?.poolAmount ?? 0;
 			const effectivePool = poolAmount + projectedRocketBoostAmount;
@@ -122,7 +126,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
 	}
 
 	// Validate address format
-	if (!/^0x[a-f0-9]{40}$/i.test(walletAddress)) {
+	if (!isValidEthAddress(walletAddress)) {
 		return json({ success: false, error: 'Invalid wallet address format' }, { status: 400 });
 	}
 

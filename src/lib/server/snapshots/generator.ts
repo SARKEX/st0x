@@ -204,13 +204,14 @@ export async function generateAllTokenSnapshots_v2(blockNumber: number): Promise
 	const timestamp = await getBlockTimestamp(blockNumber);
 
 	// Fetch transfers, prices, vault holdings, and excluded wallets in parallel
-	const [transfers, { prices, priceTimestamp }, vaultHoldings, excludedWallets] =
-		await Promise.all([
+	const [transfers, { prices, priceTimestamp }, vaultHoldings, excludedWallets] = await Promise.all(
+		[
 			fetchAllTransfers(blockNumber, ALL_TOKEN_ADDRESSES),
 			fetchPythPricesAtTimestamp(timestamp, ALL_TOKEN_ADDRESSES),
 			fetchAllVaultHoldings(ALL_TOKEN_ADDRESSES, blockNumber),
 			kvGet<string[]>(KV_KEYS.excludedWallets()).then((w) => w || [])
-		]);
+		]
+	);
 
 	// Generate ONE snapshot per canonical token, combining all address variants
 	return TOKENS.map((token) => {

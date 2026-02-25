@@ -74,3 +74,19 @@ export interface SubgraphDeposit {
 		id: string;
 	};
 }
+
+export interface SubgraphWrappedTokenTransfer {
+	id: string;
+	from: string;
+	to: string;
+	value: string;
+	transaction: {
+		id: string;
+		blockNumber: string;
+		timestamp: string;
+	};
+	offchainAssetReceiptVault: {
+		id: string;
+		wrappedTokenContractAddress: string;
+	};
+}

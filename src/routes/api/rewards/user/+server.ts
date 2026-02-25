@@ -13,6 +13,7 @@ import {
 	getDaysInMonth,
 	type RewardsData
 } from '$lib/server/rewards/rewardsCommon';
+import { isValidEthAddress } from '$lib/utils/format';
 
 // Which RocketBoost tiers have been achieved
 interface RocketBoostTiersAchieved {
@@ -166,7 +167,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
 		return json({ error: 'Wallet address required' }, { status: 400 });
 	}
 
-	if (!/^0x[a-f0-9]{40}$/i.test(walletAddress)) {
+	if (!isValidEthAddress(walletAddress)) {
 		return json({ error: 'Invalid wallet address' }, { status: 400 });
 	}
 
