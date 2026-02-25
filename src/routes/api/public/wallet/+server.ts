@@ -38,7 +38,7 @@ async function getAllWalletData(): Promise<AllWalletData> {
 		CACHE_KEYS.allWalletData(),
 		async () => {
 			const now = new Date();
-			const currentMonth = getCurrentMonth();
+			const currentMonth = getCurrentMonth(now);
 
 			const { monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth);
 

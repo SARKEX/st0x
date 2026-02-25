@@ -262,10 +262,19 @@ async function fetchFromSubgraph(
 			wrappedHasMore
 				? fetchWrappedTokenTransfers(subgraphUrl, wrappedSkip, untilBlock, tokenAddresses).catch(
 						(err) => {
-							// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
-							console.warn(`[Scraper] wrappedTokenTransfers not available: ${err.message}`);
-							wrappedHasMore = false;
-							return [] as SubgraphWrappedTokenTransfer[];
+							const message = err instanceof Error ? err.message : String(err);
+							const isMissingEntity =
+								/Cannot query field\s+"wrappedTokenTransfers"/i.test(message) ||
+								/Unknown field.*wrappedTokenTransfers/i.test(message);
+
+							if (isMissingEntity) {
+								// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
+								console.warn(`[Scraper] wrappedTokenTransfers not available: ${message}`);
+								wrappedHasMore = false;
+								return [] as SubgraphWrappedTokenTransfer[];
+							}
+
+							throw err;
 						}
 					)
 				: Promise.resolve([])
@@ -293,7 +302,9 @@ async function fetchFromSubgraph(
 
 		// Process wrapped token transfers (ERC20 transfers of wrapped tokens like wtNVDA)
 		// tokenAddress = wrappedTokenContractAddress (the ERC20 wrapper, not the vault)
-		const processedWrapped: Transfer[] = wrappedBatch.map((w: SubgraphWrappedTokenTransfer) => ({
+		const processedWrapped: Transfer[] = wrappedBatch
+			.filter((w) => !!w.offchainAssetReceiptVault.wrappedTokenContractAddress)
+			.map((w: SubgraphWrappedTokenTransfer) => ({
 			tokenAddress: w.offchainAssetReceiptVault.wrappedTokenContractAddress.toLowerCase(),
 			from: w.from.toLowerCase(),
 			to: w.to.toLowerCase(),

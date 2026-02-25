@@ -46,7 +46,7 @@ export const GET: RequestHandler = async ({ request }) => {
 			CACHE_KEYS.rewardsApy(),
 			async () => {
 				const now = new Date();
-				const currentMonth = getCurrentMonth();
+				const currentMonth = getCurrentMonth(now);
 
 				let monthlyData: RewardsData['monthlyData'] = null;
 				let poolConfig: RewardsData['poolConfig'] = null;

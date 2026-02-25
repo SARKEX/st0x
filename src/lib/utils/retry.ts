@@ -7,6 +7,10 @@ export async function withRetry<T>(
 	maxRetries = 3,
 	delayMs = 1000
 ): Promise<T> {
+	if (maxRetries < 1) {
+		throw new Error('maxRetries must be at least 1');
+	}
+
 	let lastError: unknown;
 	for (let attempt = 0; attempt < maxRetries; attempt++) {
 		try {

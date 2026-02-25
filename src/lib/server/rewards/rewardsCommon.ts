@@ -14,12 +14,16 @@ export interface RewardsData {
 }
 
 export function getDaysInMonth(monthStr: string): number {
-	const [year, month] = monthStr.split('-').map(Number);
-	return new Date(year, month, 0).getDate();
+	const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(monthStr);
+	if (!match) {
+		throw new Error(`Invalid month format: ${monthStr}. Expected YYYY-MM`);
+	}
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-export function getCurrentMonth(): string {
-	const now = new Date();
+export function getCurrentMonth(now: Date = new Date()): string {
 	return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 

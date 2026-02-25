@@ -129,14 +129,23 @@ function findVaultByIdAndToken(
 	vaultId: string | undefined,
 	tokenAddress: string | undefined
 ): RaindexVault | undefined {
-	if (!vaultId || !tokenAddress) return undefined;
-	return vaults.find((v) => {
-		const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-		const vaultIdMatches =
-			v.vaultId.toString() === vaultId || vaultIdHex === vaultId?.toLowerCase();
-		const tokenMatches = v.token?.address?.toLowerCase() === tokenAddress?.toLowerCase();
-		return vaultIdMatches && tokenMatches;
-	});
+	if (!vaultId) return undefined;
+
+	let normalizedVaultId: bigint;
+	try {
+		normalizedVaultId = BigInt(vaultId);
+	} catch {
+		return undefined;
+	}
+
+	const idMatches = vaults.filter((v) => BigInt(v.vaultId.toString()) === normalizedVaultId);
+
+	const normalizedToken = tokenAddress?.toLowerCase();
+	if (!normalizedToken) {
+		return idMatches.length === 1 ? idMatches[0] : undefined;
+	}
+
+	return idMatches.find((v) => v.token?.address?.toLowerCase() === normalizedToken);
 }
 
 // Helper function to create Raindex v5 link data (safe, no HTML)
