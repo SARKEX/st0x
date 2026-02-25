@@ -10,6 +10,7 @@ import {
 	calculateRocketBoostAmount,
 	getDaysInMonth
 } from '$lib/server/rewards/rewardsCommon';
+import { isValidEthAddress } from '$lib/utils/format';
 
 // Pre-computed data for all wallets (cached once, used for all lookups)
 interface AllWalletData {
@@ -122,7 +123,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
 	}
 
 	// Validate address format
-	if (!/^0x[a-f0-9]{40}$/i.test(walletAddress)) {
+	if (!isValidEthAddress(walletAddress)) {
 		return json({ success: false, error: 'Invalid wallet address format' }, { status: 400 });
 	}
 

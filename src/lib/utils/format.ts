@@ -2,6 +2,15 @@
  * Format utilities to replace duplicate code across the app
  */
 
+const ETH_ADDRESS_RE = /^0x[a-f0-9]{40}$/i;
+
+/**
+ * Validate an Ethereum address (0x + 40 hex chars, case-insensitive)
+ */
+export function isValidEthAddress(address: string): boolean {
+	return ETH_ADDRESS_RE.test(address);
+}
+
 /**
  * Truncate an Ethereum address to show first 7 and last 4 characters
  */

@@ -6,7 +6,7 @@ import {
 	getWalletsReferredByCode
 } from '$lib/server/referrals';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
-import { truncateAddress } from '$lib/utils/format';
+import { truncateAddress, isValidEthAddress } from '$lib/utils/format';
 
 export const GET: RequestHandler = async ({ url, request }) => {
 	// Rate limiting
@@ -19,7 +19,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
 		return json({ success: false, error: 'Wallet address required' }, { status: 400 });
 	}
 
-	if (!/^0x[a-f0-9]{40}$/i.test(walletAddress)) {
+	if (!isValidEthAddress(walletAddress)) {
 		return json({ success: false, error: 'Invalid wallet address' }, { status: 400 });
 	}
 

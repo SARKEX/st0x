@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/adminAuth';
 import { getKv, kvGet, kvSet, KV_KEYS } from '$lib/server/kv';
+import { isValidEthAddress } from '$lib/utils/format';
 
 // GET - List all excluded wallets
 export const GET: RequestHandler = async ({ cookies, request }) => {
@@ -43,7 +44,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const normalizedAddress = address.toLowerCase();
 
 		// Validate Ethereum address format
-		if (!/^0x[a-f0-9]{40}$/i.test(normalizedAddress)) {
+		if (!isValidEthAddress(normalizedAddress)) {
 			return json({ error: 'Invalid Ethereum address' }, { status: 400 });
 		}
 
