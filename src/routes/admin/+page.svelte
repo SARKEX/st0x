@@ -5,6 +5,7 @@
 	import { networks } from '$lib/config/networks';
 	import { TOKENS, getTokenByAnyAddress, getTokenAddressVariants } from '$lib/config/tokens';
 	import { toDecimal } from '$lib/utils/tokenMath';
+	import { truncateAddress } from '$lib/utils/format';
 
 	// Chart.js types
 	type ChartInstance = {
@@ -1711,10 +1712,6 @@
 		}).format(amount);
 	}
 
-	function truncateAddress(addr: string): string {
-		return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-	}
-
 	function getPeriodLabel(): string {
 		switch (selectedPeriod) {
 			case '24h':
@@ -2895,7 +2892,7 @@
 													{/if}
 												</span>
 												<span class="font-mono text-xs text-white"
-													>{wallet.slice(0, 6)}...{wallet.slice(-4)}</span
+													>{truncateAddress(wallet)}</span
 												>
 											</button>
 										{/each}
@@ -2944,7 +2941,7 @@
 										<tr class="border-b border-gray-800 hover:bg-gray-800/50">
 											<td class="py-3 pr-4 text-gray-400">{i + 1}</td>
 											<td class="py-3 pr-4 font-mono text-xs text-white">
-												{entry.address.slice(0, 6)}...{entry.address.slice(-4)}
+												{truncateAddress(entry.address)}
 											</td>
 											<td class="py-3 pr-4 text-gray-300">{entry.accessCode || '-'}</td>
 											<td class="py-3 pr-4 text-right font-medium text-[#e8be89]"

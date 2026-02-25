@@ -19,8 +19,7 @@ import {
 	mergeWalletPointsIntoMonthlyData
 } from '$lib/server/snapshots/points';
 import { buildSnapshotBlobIndex } from '$lib/server/snapshots/blobIndex';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { requireAdmin } from '$lib/server/adminAuth';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	// Check if Blob token is available (required for Vercel Blob storage)
@@ -32,16 +31,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	}
 
 	try {
-		const rateLimitResponse = await applyRateLimit(
-			request,
-			rateLimiters.admin,
-			'admin-snapshots-recalculate'
-		);
-		if (rateLimitResponse) return rateLimitResponse;
-
-		if (!isAdminAuthenticated(cookies)) {
-			return json({ error: 'Unauthorized' }, { status: 401 });
-		}
+		const guardResponse = await requireAdmin(request, cookies, 'admin-snapshots-recalculate');
+		if (guardResponse) return guardResponse;
 
 		const body = await request.json();
 		const { month } = body;

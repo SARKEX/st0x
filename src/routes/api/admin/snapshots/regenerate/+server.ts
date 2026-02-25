@@ -8,8 +8,7 @@ import { generateAllTokenSnapshots_v2 } from '$lib/server/snapshots/generator';
 import { TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { env } from '$env/dynamic/private';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { requireAdmin } from '$lib/server/adminAuth';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	// Check if Blob token is available
@@ -20,16 +19,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		);
 	}
 
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-snapshots-regenerate'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-snapshots-regenerate');
+	if (guardResponse) return guardResponse;
 
 	try {
 		const body = await request.json();

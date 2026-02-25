@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import { truncateAddress } from '$lib/utils/format';
 
 	interface ReferralLeaderboardEntry {
 		rank: number;
@@ -285,10 +286,6 @@
 
 	function formatUsd(amount: number): string {
 		return '$' + amount.toFixed(2);
-	}
-
-	function truncateAddress(address: string): string {
-		return address.slice(0, 6) + '...' + address.slice(-4);
 	}
 
 	onMount(() => {

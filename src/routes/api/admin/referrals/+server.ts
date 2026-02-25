@@ -1,9 +1,8 @@
 // API endpoint to get referral code data with associated wallets
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { requireAdmin } from '$lib/server/adminAuth';
 import { listAccessCodes, getWalletsByCode } from '$lib/server/accessCodes';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 interface ReferralCodeData {
 	code: string;
@@ -13,12 +12,8 @@ interface ReferralCodeData {
 }
 
 export const GET: RequestHandler = async ({ cookies, request }) => {
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-referrals');
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-referrals');
+	if (guardResponse) return guardResponse;
 
 	try {
 		// Get all access codes

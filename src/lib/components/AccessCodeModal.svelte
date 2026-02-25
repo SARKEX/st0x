@@ -3,6 +3,7 @@
 	import { disconnect } from '@wagmi/core';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { walletAddress, authMethod } from '$lib/stores/authStore';
+	import { truncateAddress } from '$lib/utils/format';
 	import { logoutDynamic } from '$lib/stores/dynamicStore';
 	import { signMessage } from '$lib/services/walletService';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -164,7 +165,7 @@
 					/>
 				</svg>
 				<span class="text-sm text-gray-300">
-					{$walletAddress?.slice(0, 6)}...{$walletAddress?.slice(-4)}
+					{truncateAddress($walletAddress || '')}
 				</span>
 			</div>
 			<button

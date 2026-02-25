@@ -3,14 +3,13 @@
 // Optimized with incremental caching - only fetches new trades after first load
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { requireAdmin } from '$lib/server/adminAuth';
 import { listAccessCodes, getWalletsByCode } from '$lib/server/accessCodes';
 import { networks } from '$lib/config/networks';
 import { TOKENS } from '$lib/config/tokens';
 import { toDecimal } from '$lib/utils/tokenMath';
 import { getWalletTiers, type NansenTier } from '$lib/server/nansenTiers';
 import { cacheGet, cacheSet, CACHE_TTL } from '$lib/server/cache';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'.toLowerCase();
 const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
@@ -201,13 +200,8 @@ function processTrades(
 }
 
 export const GET: RequestHandler = async ({ cookies, request }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-nansen');
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-nansen');
+	if (guardResponse) return guardResponse;
 
 	try {
 		// STEP 1: Get Nansen wallets FIRST (fast KV lookup)

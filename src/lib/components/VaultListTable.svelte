@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
+	import { truncateAddress } from '$lib/utils/format';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import { ArrowUpFromBracketOutline } from 'flowbite-svelte-icons';
 	import type { SgVault, RaindexVault } from '@rainlanguage/orderbook';
@@ -80,7 +81,7 @@
 							<td class={tableStyles.cell}>
 								<span class="sm:hidden">…{vault.owner.toString().slice(-6)}</span>
 								<span class="hidden sm:inline"
-									>{vault.owner.toString().slice(0, 6)}...{vault.owner.toString().slice(-4)}</span
+									>{truncateAddress(vault.owner.toString())}</span
 								>
 							</td>
 							<td class={tableStyles.cell}>{vault.token.symbol}</td>

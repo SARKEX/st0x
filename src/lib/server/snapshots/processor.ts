@@ -10,9 +10,7 @@ import {
 	ORDERBOOK_ADDRESS,
 	SYSTEM_EXCLUDED_ADDRESSES
 } from '$lib/config/snapshots';
-
-// Zero address for filtering
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+import { ADDRESS_ZERO } from '$lib/config/constants';
 
 // Build excluded addresses set from config and optional dynamic list
 function getExcludedAddresses(dynamicExcluded: string[] = []): Set<string> {
@@ -54,7 +52,7 @@ export function calculateBalancesAtBlock(
 		if (!balances.has(from)) balances.set(from, 0n);
 		if (!balances.has(to)) balances.set(to, 0n);
 
-		if (from === ZERO_ADDRESS) {
+		if (from === ADDRESS_ZERO) {
 			// Mint - only add to receiver
 			balances.set(to, balances.get(to)! + valueBigInt);
 			totalSupply += valueBigInt;

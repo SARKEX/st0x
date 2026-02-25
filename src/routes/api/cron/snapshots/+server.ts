@@ -161,16 +161,6 @@ export const GET: RequestHandler = async ({ request }) => {
 	}
 };
 
-// POST endpoint for manual triggering with custom parameters
-export const POST: RequestHandler = async () => {
-	// For manual triggers, redirect to GET handler logic
-	// This maintains backwards compatibility
-	return json({
-		message: 'Use GET request instead. Vercel Cron uses GET by default.',
-		hint: 'The cron job has been moved to the GET handler.'
-	});
-};
-
 export const config = {
 	maxDuration: 800
 };

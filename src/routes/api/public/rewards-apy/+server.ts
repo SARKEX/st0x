@@ -1,16 +1,16 @@
 // Public API endpoint to get the current rewards APY
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import {
-	kvGet,
-	KV_KEYS,
-	getExcludedWalletsSet,
-	type MonthlyPointsData,
-	type RewardsPoolConfig
-} from '$lib/server/kv';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { computeProjectedDailyPoints } from '$lib/server/snapshots/points';
+import {
+	getCurrentMonth,
+	fetchRewardsData,
+	calculateTotalPoints,
+	calculateRocketBoostAmount,
+	getDaysInMonth
+} from '$lib/server/rewards/rewardsCommon';
 
 interface RewardsApyData {
 	success: boolean;
@@ -45,27 +45,12 @@ export const GET: RequestHandler = async ({ request }) => {
 			CACHE_KEYS.rewardsApy(),
 			async () => {
 				const now = new Date();
-				const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
-					2,
-					'0'
-				)}`;
+				const currentMonth = getCurrentMonth();
 
-				const [monthlyData, poolConfig, excludedSet] = await Promise.all([
-					kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-					kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
-					getExcludedWalletsSet()
-				]);
+				const { monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth);
 
-				let totalPoints = 0;
-				let snapshotCount = 0;
-
-				if (monthlyData) {
-					snapshotCount = monthlyData.snapshotCount ?? 0;
-					for (const [address, data] of Object.entries(monthlyData.wallets)) {
-						if (excludedSet.has(address.toLowerCase())) continue;
-						totalPoints += data.totalPoints;
-					}
-				}
+				const totalPoints = calculateTotalPoints(monthlyData, excludedSet);
+				const snapshotCount = monthlyData?.snapshotCount ?? 0;
 
 				// Calculate RocketBoost projected progress
 				const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
@@ -85,19 +70,8 @@ export const GET: RequestHandler = async ({ request }) => {
 				const projectedProgressPercent =
 					rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
 
-				const rocketBoostAmounts = poolConfig?.rocketBoostAmounts ?? {
-					tier25: 0,
-					tier50: 0,
-					tier75: 0,
-					tier100: 0
-				};
-
 				// Use projected progress to estimate RocketBoost bonus
-				const projectedRocketBoostAmount =
-					(projectedProgressPercent >= 25 ? rocketBoostAmounts.tier25 : 0) +
-					(projectedProgressPercent >= 50 ? rocketBoostAmounts.tier50 : 0) +
-					(projectedProgressPercent >= 75 ? rocketBoostAmounts.tier75 : 0) +
-					(projectedProgressPercent >= 100 ? rocketBoostAmounts.tier100 : 0);
+				const projectedRocketBoostAmount = calculateRocketBoostAmount(poolConfig, projectedProgressPercent);
 
 				const poolAmount = poolConfig?.poolAmount ?? 0;
 				const effectivePool = poolAmount + projectedRocketBoostAmount;
@@ -143,8 +117,3 @@ export const GET: RequestHandler = async ({ request }) => {
 		);
 	}
 };
-
-function getDaysInMonth(monthStr: string): number {
-	const [year, month] = monthStr.split('-').map(Number);
-	return new Date(year, month, 0).getDate();
-}

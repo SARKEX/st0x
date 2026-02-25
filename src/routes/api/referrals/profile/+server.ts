@@ -6,6 +6,7 @@ import {
 	getWalletsReferredByCode
 } from '$lib/server/referrals';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { truncateAddress } from '$lib/utils/format';
 
 export const GET: RequestHandler = async ({ url, request }) => {
 	// Rate limiting
@@ -55,7 +56,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
 				projectedRewards: performance.projectedRewards
 			},
 			referredWallets: referredWallets.map((w) => ({
-				address: w.slice(0, 6) + '...' + w.slice(-4) // Truncated for privacy
+				address: truncateAddress(w) // Truncated for privacy
 			}))
 		});
 	} catch (error) {

@@ -1,6 +1,5 @@
 import { fetchJson } from '$lib/clients/http';
-
-const HERMES_BASE_URL = 'https://hermes.pyth.network/v2/updates/price';
+import { HERMES_BASE_URL } from '$lib/config/constants';
 
 export interface HermesPriceData {
 	price: number | string;

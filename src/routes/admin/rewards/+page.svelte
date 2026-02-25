@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Card from '$lib/components/ui/Card.svelte';
+	import { truncateAddress } from '$lib/utils/format';
 	import type { BlockSnapshot } from '$lib/server/snapshots/types';
 	import { TOKENS } from '$lib/config/tokens';
 	import { computeProjectedDailyPoints } from '$lib/utils/points';
@@ -578,7 +579,7 @@
 			head: [['#', 'Wallet', 'Snapshots', 'Avg USD', 'Total USD', 'Points']],
 			body: statementData.walletSummary.map((w, i) => [
 				i + 1,
-				w.address.slice(0, 6) + '...' + w.address.slice(-4),
+				truncateAddress(w.address),
 				w.snapshotCount,
 				'$' + w.avgUsdValue.toFixed(2),
 				'$' + w.totalUsdValue.toFixed(2),
@@ -639,7 +640,7 @@
 			snapshot.wallets.forEach((wallet) => {
 				wallet.holdings.forEach((holding) => {
 					detailRows.push([
-						wallet.address.slice(0, 6) + '...' + wallet.address.slice(-4),
+						truncateAddress(wallet.address),
 						holding.symbol,
 						holding.quantity.toFixed(4),
 						'$' + holding.price.toFixed(2),
@@ -1773,10 +1774,6 @@
 		return '$' + price.toFixed(2);
 	}
 
-	function formatAddress(address: string): string {
-		return address.slice(0, 6) + '...' + address.slice(-4);
-	}
-
 	// ===== Wallet Search & Filter =====
 	let walletSearchQuery = '';
 
@@ -1925,7 +1922,7 @@
 		// Header info
 		doc.setFontSize(10);
 		doc.text(
-			`Wallet: ${walletStatementData.wallet.slice(0, 6)}...${walletStatementData.wallet.slice(-4)}`,
+			`Wallet: ${truncateAddress(walletStatementData.wallet)}`,
 			14,
 			y
 		);
@@ -2640,7 +2637,7 @@
 															rel="noopener noreferrer"
 															class="font-mono text-blue-400 hover:underline"
 														>
-															{formatAddress(row.address)}
+															{truncateAddress(row.address)}
 														</a>
 														{#if row.isExcluded}
 															<span
@@ -2972,7 +2969,7 @@
 															rel="noopener noreferrer"
 															class="font-mono text-xs text-blue-400 hover:underline"
 														>
-															{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+															{truncateAddress(wallet.address)}
 														</a>
 														{#if wallet.isExcluded}
 															<span
@@ -3088,7 +3085,7 @@
 														rel="noopener noreferrer"
 														class="font-mono text-xs text-blue-400 hover:underline"
 													>
-														{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+														{truncateAddress(wallet.address)}
 													</a>
 													{#if wallet.isExcluded}
 														<span
@@ -3327,7 +3324,7 @@
 														class="font-mono text-blue-400 hover:underline"
 														on:click|stopPropagation
 													>
-														{formatAddress(wallet.address)}
+														{truncateAddress(wallet.address)}
 													</a>
 													{#if wallet.isExcluded}
 														<span
@@ -4043,7 +4040,7 @@
 												<tr class="border-b border-gray-800 hover:bg-gray-800/50">
 													<td class="py-2 pr-4 text-gray-400">{i + 1}</td>
 													<td class="py-2 pr-4 font-mono text-xs text-white">
-														{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+														{truncateAddress(wallet.address)}
 													</td>
 													<td class="py-2 pr-4 text-right text-gray-300">
 														{wallet.points > 0 ? wallet.points.toLocaleString() : '-'}
@@ -4190,7 +4187,7 @@
 										<tr class="border-b border-gray-800 hover:bg-gray-800/50">
 											<td class="py-2 pr-4 text-gray-400">{i + 1}</td>
 											<td class="py-2 pr-4 font-mono text-xs text-white">
-												{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+												{truncateAddress(wallet.address)}
 											</td>
 											<td class="py-2 pr-4 font-mono text-xs text-gray-300">
 												{wallet.code}
@@ -4517,7 +4514,7 @@
 										<tr class="border-t border-gray-700 hover:bg-gray-800/50">
 											<td class="px-4 py-2 text-gray-400">{i + 1}</td>
 											<td class="px-4 py-2 font-mono text-xs text-white">
-												{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+												{truncateAddress(wallet.address)}
 											</td>
 											<td class="px-4 py-2 text-right text-gray-300">{wallet.snapshotCount}</td>
 											<td class="px-4 py-2 text-right text-gray-300"
@@ -4620,7 +4617,7 @@
 																		class="px-3 py-1.5 font-mono text-white"
 																		rowspan={wallet.holdings.length}
 																	>
-																		{wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+																		{truncateAddress(wallet.address)}
 																	</td>
 																{/if}
 																<td class="px-3 py-1.5 text-gray-300">{holding.symbol}</td>
@@ -4747,7 +4744,7 @@
 							target="_blank"
 							rel="noopener noreferrer"
 							class="font-mono text-[#e8be89] hover:underline"
-							>{walletStatementAddress.slice(0, 6)}...{walletStatementAddress.slice(-4)}</a
+							>{truncateAddress(walletStatementAddress)}</a
 						>
 						&middot; Month: <strong class="text-[#e8be89]">{selectedMonth}</strong>
 					</p>

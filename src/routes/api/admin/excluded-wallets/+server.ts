@@ -1,21 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { requireAdmin } from '$lib/server/adminAuth';
 import { getKv, kvGet, kvSet, KV_KEYS } from '$lib/server/kv';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 // GET - List all excluded wallets
 export const GET: RequestHandler = async ({ cookies, request }) => {
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-excluded-wallets-list'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-excluded-wallets-list');
+	if (guardResponse) return guardResponse;
 
 	// Return empty list if KV not configured (local dev)
 	const kv = await getKv();
@@ -30,16 +21,8 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 
 // POST - Add or remove excluded wallet
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-excluded-wallets-update'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-excluded-wallets-update');
+	if (guardResponse) return guardResponse;
 
 	const kv = await getKv();
 	if (!kv) {

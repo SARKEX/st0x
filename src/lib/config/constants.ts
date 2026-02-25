@@ -1,6 +1,13 @@
 export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 export const ONE = BigInt('1000000000000000000');
 
+/** 256-bit zero hex for Rain Float comparison */
+export const ZERO_FLOAT_HEX =
+	'0x0000000000000000000000000000000000000000000000000000000000000000';
+
+/** Pyth Hermes API base URL */
+export const HERMES_BASE_URL = 'https://hermes.pyth.network/v2/updates/price';
+
 export const MAGIC_NUMBERS = {
 	/**
 	 * Prefixes every rain meta document

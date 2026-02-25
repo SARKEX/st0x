@@ -1,5 +1,7 @@
 // Configuration for snapshot generation
 
+import { ADDRESS_ZERO } from '$lib/config/constants';
+
 // Wallets that should be excluded from TVL calculations
 // These could be team wallets, treasury, etc.
 export const EXCLUDED_WALLETS: string[] = [
@@ -12,7 +14,7 @@ export const ORDERBOOK_ADDRESS = '0x52ceb8ebef648744ffdde89f7bc9c3ac35944775';
 
 // Addresses that should always be excluded (zero address, etc.)
 export const SYSTEM_EXCLUDED_ADDRESSES = [
-	'0x0000000000000000000000000000000000000000' // Zero address
+	ADDRESS_ZERO // Zero address
 ];
 
 // Helper to check if an address is excluded

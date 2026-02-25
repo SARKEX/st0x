@@ -4,6 +4,7 @@ import type { RequestHandler } from './$types';
 import { kvGet, KV_KEYS, getExcludedWalletsSet, type MonthlyPointsData } from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
+import { getCurrentMonth } from '$lib/server/rewards/rewardsCommon';
 
 interface WalletRanking {
 	address: string;
@@ -47,8 +48,7 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
 
 async function computeLeaderboard() {
 	// Get current month
-	const now = new Date();
-	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+	const currentMonth = getCurrentMonth();
 
 	// Fetch data with error handling for Redis unavailability
 	let monthlyData: MonthlyPointsData | null = null;

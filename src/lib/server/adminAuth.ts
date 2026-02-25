@@ -1,4 +1,6 @@
+import { json } from '@sveltejs/kit';
 import { verifySessionToken } from './auth';
+import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 interface CookieStoreLike {
 	get: (name: string) => string | undefined;
@@ -21,4 +23,23 @@ export function isAdminAuthenticated(cookies: CookieStoreLike): boolean {
 	}
 
 	return verifySessionToken(sessionToken, timestamp);
+}
+
+/**
+ * Combined admin guard: rate limiting + session authentication.
+ * Returns a Response if the request should be rejected, or null if it passes.
+ */
+export async function requireAdmin(
+	request: Request,
+	cookies: CookieStoreLike,
+	rateLimitPrefix: string
+): Promise<Response | null> {
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, rateLimitPrefix);
+	if (rateLimitResponse) return rateLimitResponse;
+
+	if (!isAdminAuthenticated(cookies)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+	return null;
 }

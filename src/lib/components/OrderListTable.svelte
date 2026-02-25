@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
+	import { truncateAddress } from '$lib/utils/format';
 	import type { CreateInfiniteQueryResult, InfiniteData } from '@tanstack/svelte-query';
 	import type { SgOrderWithSubgraphName } from '@rainlanguage/orderbook';
 	import LoadingSpinner from './LoadingSpinner.svelte';
@@ -87,7 +88,7 @@
 							<td class={tableStyles.cell}>
 								<span class="sm:hidden">…{order.owner.toString().slice(-6)}</span>
 								<span class="hidden sm:inline"
-									>{order.owner.toString().slice(0, 6)}...{order.owner.toString().slice(-4)}</span
+									>{truncateAddress(order.owner.toString())}</span
 								>
 							</td>
 							<td class={tableStyles.cell}>

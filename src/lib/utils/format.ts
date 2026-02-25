@@ -17,26 +17,38 @@ export function truncateAddress(address: string): string {
 }
 
 /**
- * Format large numbers with K, M, B suffixes
+ * Format USD currency with K suffix for large values
  */
-export function formatCompact(value: number): string {
-	const isNegative = value < 0;
-	const absValue = Math.abs(value);
-	let formatted: string;
-
-	if (!Number.isFinite(value)) {
-		return String(value);
+export function formatUsd(amount: number): string {
+	if (amount >= 1000) {
+		return '$' + (amount / 1000).toFixed(1) + 'K';
 	}
+	return '$' + amount.toFixed(2);
+}
 
-	if (absValue >= 1_000_000_000) {
-		formatted = `${(absValue / 1_000_000_000).toFixed(2)}B`;
-	} else if (absValue >= 1_000_000) {
-		formatted = `${(absValue / 1_000_000).toFixed(2)}M`;
-	} else if (absValue >= 1_000) {
-		formatted = `${(absValue / 1_000).toFixed(1)}K`;
-	} else {
-		formatted = absValue.toFixed(2);
+/**
+ * Format points with M/K suffixes
+ */
+export function formatPoints(points: number): string {
+	if (points >= 1_000_000) {
+		return (points / 1_000_000).toFixed(1) + 'M';
 	}
+	if (points >= 1_000) {
+		return (points / 1_000).toFixed(1) + 'K';
+	}
+	return Math.round(points).toLocaleString();
+}
 
-	return isNegative ? `-${formatted}` : formatted;
+/**
+ * Format APY percentage with K suffix for large values
+ */
+export function formatApy(apy: number | null): string {
+	if (apy === null || apy === 0) return '-';
+	if (apy >= 1000) {
+		return (apy / 1000).toFixed(1) + 'K%';
+	}
+	if (apy >= 100) {
+		return Math.round(apy) + '%';
+	}
+	return apy.toFixed(1) + '%';
 }
