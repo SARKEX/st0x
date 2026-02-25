@@ -3,7 +3,12 @@
 
 import { networks } from '$lib/config/networks';
 import { TOKENS, getAllTokenAddressesFlat } from '$lib/config/tokens';
-import type { Transfer, SubgraphTransfer, SubgraphDeposit } from './types';
+import type {
+	Transfer,
+	SubgraphTransfer,
+	SubgraphDeposit,
+	SubgraphWrappedTokenTransfer
+} from './types';
 
 const BATCH_SIZE = 1000;
 
@@ -156,6 +161,77 @@ async function fetchDeposits(
 }
 
 /**
+ * Fetch wrapped token (ERC20) transfers from a specific SFT subgraph up to a specific block.
+ * These track movements of wrapped tokens (e.g. wtNVDA) which are invisible to sharesTransfers.
+ * Note: from/to are plain address strings, not nested objects like in sharesTransfers.
+ */
+async function fetchWrappedTokenTransfers(
+	subgraphUrl: string,
+	skip: number,
+	untilBlock: number,
+	tokenAddresses: string[]
+): Promise<SubgraphWrappedTokenTransfer[]> {
+	const query = `
+		query getWrappedTokenTransfers(
+			$skip: Int!
+			$first: Int!
+			$untilBlock: BigInt!
+			$vaultAddresses: [String!]!
+		) {
+			wrappedTokenTransfers(
+				skip: $skip
+				first: $first
+				orderBy: transaction__blockNumber
+				orderDirection: asc
+				where: {
+					offchainAssetReceiptVault_in: $vaultAddresses,
+					transaction_: {blockNumber_lte: $untilBlock}
+				}
+			) {
+				id
+				from
+				to
+				value
+				transaction {
+					id
+					blockNumber
+					timestamp
+				}
+				offchainAssetReceiptVault {
+					id
+					wrappedTokenContractAddress
+				}
+			}
+		}
+	`;
+
+	const response = await fetch(subgraphUrl, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			query,
+			variables: {
+				skip,
+				first: BATCH_SIZE,
+				untilBlock: untilBlock.toString(),
+				vaultAddresses: tokenAddresses
+			}
+		})
+	});
+
+	if (!response.ok) {
+		throw new Error(`Subgraph request failed: ${response.status}`);
+	}
+
+	const data = await response.json();
+	if (data.errors) {
+		throw new Error(`GraphQL error: ${data.errors[0]?.message}`);
+	}
+
+	return data.data?.wrappedTokenTransfers || [];
+}
+
+/**
  * Fetch all transfers and deposits from a single subgraph URL
  */
 async function fetchFromSubgraph(
@@ -165,20 +241,38 @@ async function fetchFromSubgraph(
 ): Promise<Transfer[]> {
 	let transfersSkip = 0;
 	let depositsSkip = 0;
+	let wrappedSkip = 0;
 	let transfersHasMore = true;
 	let depositsHasMore = true;
+	let wrappedHasMore = true;
 	const allTransfers: Transfer[] = [];
 
-	while (transfersHasMore || depositsHasMore) {
-		const [transfersBatch, depositsBatch]: [SubgraphTransfer[], SubgraphDeposit[]] =
-			await Promise.all([
-				transfersHasMore
-					? fetchTransfers(subgraphUrl, transfersSkip, untilBlock, tokenAddresses)
-					: Promise.resolve([]),
-				depositsHasMore
-					? fetchDeposits(subgraphUrl, depositsSkip, untilBlock, tokenAddresses)
-					: Promise.resolve([])
-			]);
+	while (transfersHasMore || depositsHasMore || wrappedHasMore) {
+		const [transfersBatch, depositsBatch, wrappedBatch]: [
+			SubgraphTransfer[],
+			SubgraphDeposit[],
+			SubgraphWrappedTokenTransfer[]
+		] = await Promise.all([
+			transfersHasMore
+				? fetchTransfers(subgraphUrl, transfersSkip, untilBlock, tokenAddresses)
+				: Promise.resolve([]),
+			depositsHasMore
+				? fetchDeposits(subgraphUrl, depositsSkip, untilBlock, tokenAddresses)
+				: Promise.resolve([]),
+			wrappedHasMore
+				? fetchWrappedTokenTransfers(
+						subgraphUrl,
+						wrappedSkip,
+						untilBlock,
+						tokenAddresses
+					).catch((err) => {
+						// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
+						console.warn(`[Scraper] wrappedTokenTransfers not available: ${err.message}`);
+						wrappedHasMore = false;
+						return [] as SubgraphWrappedTokenTransfer[];
+					})
+				: Promise.resolve([])
+		]);
 
 		// Process transfers
 		const processedTransfers: Transfer[] = transfersBatch.map((t: SubgraphTransfer) => ({
@@ -200,18 +294,34 @@ async function fetchFromSubgraph(
 			timestamp: parseInt(d.transaction.timestamp)
 		}));
 
-		allTransfers.push(...processedTransfers, ...processedDeposits);
+		// Process wrapped token transfers (ERC20 transfers of wrapped tokens like wtNVDA)
+		// tokenAddress = wrappedTokenContractAddress (the ERC20 wrapper, not the vault)
+		const processedWrapped: Transfer[] = wrappedBatch.map(
+			(w: SubgraphWrappedTokenTransfer) => ({
+				tokenAddress:
+					w.offchainAssetReceiptVault.wrappedTokenContractAddress.toLowerCase(),
+				from: w.from.toLowerCase(),
+				to: w.to.toLowerCase(),
+				value: w.value,
+				blockNumber: parseInt(w.transaction.blockNumber),
+				timestamp: parseInt(w.transaction.timestamp)
+			})
+		);
+
+		allTransfers.push(...processedTransfers, ...processedDeposits, ...processedWrapped);
 
 		console.log(
-			`[Scraper] Batch: ${transfersBatch.length} transfers, ${depositsBatch.length} deposits`
+			`[Scraper] Batch: ${transfersBatch.length} transfers, ${depositsBatch.length} deposits, ${wrappedBatch.length} wrapped`
 		);
 
 		// Update pagination
 		transfersHasMore = transfersBatch.length === BATCH_SIZE;
 		depositsHasMore = depositsBatch.length === BATCH_SIZE;
+		if (wrappedHasMore) wrappedHasMore = wrappedBatch.length === BATCH_SIZE;
 
 		if (transfersHasMore) transfersSkip += transfersBatch.length;
 		if (depositsHasMore) depositsSkip += depositsBatch.length;
+		if (wrappedHasMore) wrappedSkip += wrappedBatch.length;
 	}
 
 	return allTransfers;
