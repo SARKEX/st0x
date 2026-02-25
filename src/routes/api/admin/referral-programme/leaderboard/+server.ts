@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/adminAuth';
 import { buildAdminReferralLeaderboard } from '$lib/server/referrals';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
+import { getCurrentMonth } from '$lib/server/rewards/rewardsCommon';
 
 export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	const guardResponse = await requireAdmin(request, cookies, 'admin-referral-leaderboard');
@@ -43,7 +44,3 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	}
 };
 
-function getCurrentMonth(): string {
-	const now = new Date();
-	return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-}

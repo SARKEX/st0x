@@ -124,7 +124,7 @@ function createRaindexLink(
 	return { url, text: linkText };
 }
 
-import { ADDRESS_ZERO, ONE, ZERO_FLOAT_HEX } from '$lib/config/constants';
+import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 
 // Dynamic embedded wallet signing has a 16KB payload size limit
 // External wallets (MetaMask, etc.) don't have this limitation
