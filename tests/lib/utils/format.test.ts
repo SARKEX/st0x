@@ -50,8 +50,8 @@ describe('format utilities', () => {
 			[5_500_000, '5.5M'],
 			[1_000, '1.0K'],
 			[5_500, '5.5K'],
-			[999, '999'],
-			[0, '0']
+			[999, Math.round(999).toLocaleString('en-US')],
+			[0, Math.round(0).toLocaleString('en-US')]
 		])('should format %s as %s', (value, expected) => {
 			expect(formatPoints(value)).toBe(expected);
 		});

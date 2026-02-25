@@ -29,5 +29,7 @@ export async function withRetry<T>(
 			throw error;
 		}
 	}
+	// Unreachable: loop always exits via return or throw above.
+	// Retained to satisfy TypeScript control-flow analysis.
 	throw lastError;
 }
