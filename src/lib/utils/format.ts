@@ -45,7 +45,7 @@ export function formatPoints(points: number): string {
 	if (points >= 1_000) {
 		return (points / 1_000).toFixed(1) + 'K';
 	}
-	return Math.round(points).toLocaleString();
+	return Math.round(points).toLocaleString('en-US');
 }
 
 /**

@@ -9,7 +9,8 @@ import {
 	fetchRewardsData,
 	calculateTotalPoints,
 	calculateRocketBoostAmount,
-	getDaysInMonth
+	getDaysInMonth,
+	type RewardsData
 } from '$lib/server/rewards/rewardsCommon';
 
 interface RewardsApyData {
@@ -47,7 +48,14 @@ export const GET: RequestHandler = async ({ request }) => {
 				const now = new Date();
 				const currentMonth = getCurrentMonth();
 
-				const { monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth);
+				let monthlyData: RewardsData['monthlyData'] = null;
+				let poolConfig: RewardsData['poolConfig'] = null;
+				let excludedSet: RewardsData['excludedSet'] = new Set();
+				try {
+					({ monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth));
+				} catch (error) {
+					console.warn('[Public API - Rewards APY] Redis unavailable, returning empty data:', error);
+				}
 
 				const totalPoints = calculateTotalPoints(monthlyData, excludedSet);
 				const snapshotCount = monthlyData?.snapshotCount ?? 0;

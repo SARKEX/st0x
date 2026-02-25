@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { verifySessionToken } from './auth';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
-interface CookieStoreLike {
+export interface CookieStoreLike {
 	get: (name: string) => string | undefined;
 }
 

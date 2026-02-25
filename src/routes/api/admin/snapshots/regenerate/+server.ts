@@ -11,6 +11,9 @@ import { env } from '$env/dynamic/private';
 import { requireAdmin } from '$lib/server/adminAuth';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
+	const guardResponse = await requireAdmin(request, cookies, 'admin-snapshots-regenerate');
+	if (guardResponse) return guardResponse;
+
 	// Check if Blob token is available
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return json(
@@ -18,9 +21,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			{ status: 503 }
 		);
 	}
-
-	const guardResponse = await requireAdmin(request, cookies, 'admin-snapshots-regenerate');
-	if (guardResponse) return guardResponse;
 
 	try {
 		const body = await request.json();

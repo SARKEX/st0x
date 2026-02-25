@@ -162,6 +162,10 @@ export const DELETE: RequestHandler = async ({ url, cookies, request }) => {
 		return json({ error: 'Month parameter required' }, { status: 400 });
 	}
 
+	if (!/^\d{4}-\d{2}$/.test(month)) {
+		return json({ error: 'Invalid month format. Use YYYY-MM' }, { status: 400 });
+	}
+
 	// Delete the pool config
 	await kvDel(KV_KEYS.rewardsPool(month));
 
