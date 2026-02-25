@@ -138,7 +138,13 @@ function findVaultByIdAndToken(
 		return undefined;
 	}
 
-	const idMatches = vaults.filter((v) => BigInt(v.vaultId.toString()) === normalizedVaultId);
+	const idMatches = vaults.filter((v) => {
+		try {
+			return BigInt(v.vaultId.toString()) === normalizedVaultId;
+		} catch {
+			return false;
+		}
+	});
 
 	const normalizedToken = tokenAddress?.toLowerCase();
 	if (!normalizedToken) {
