@@ -7,6 +7,7 @@ import type {
 	Transfer,
 	SubgraphTransfer,
 	SubgraphDeposit,
+	SubgraphWithdrawal,
 	SubgraphWrappedTokenTransfer
 } from './types';
 
@@ -161,6 +162,70 @@ async function fetchDeposits(
 }
 
 /**
+ * Fetch withdrawals (burns) from a specific SFT subgraph up to a specific block
+ */
+async function fetchWithdrawals(
+	subgraphUrl: string,
+	skip: number,
+	untilBlock: number,
+	tokenAddresses: string[]
+): Promise<SubgraphWithdrawal[]> {
+	const query = `
+		query getWithdrawals($skip: Int!, $first: Int!, $untilBlock: Int!, $vaultAddresses: [String!]!) {
+			withdrawWithReceipts(
+				skip: $skip
+				first: $first
+				orderBy: transaction__blockNumber
+				orderDirection: asc
+				where: {
+					offchainAssetReceiptVault_in: $vaultAddresses,
+					transaction_: {blockNumber_lte: $untilBlock}
+				}
+			) {
+				id
+				owner {
+					address
+				}
+				amount
+				offchainAssetReceiptVault {
+					id
+				}
+				transaction {
+					id
+					timestamp
+					blockNumber
+				}
+			}
+		}
+	`;
+
+	const response = await fetch(subgraphUrl, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			query,
+			variables: {
+				skip,
+				first: BATCH_SIZE,
+				untilBlock,
+				vaultAddresses: tokenAddresses
+			}
+		})
+	});
+
+	if (!response.ok) {
+		throw new Error(`Subgraph request failed: ${response.status}`);
+	}
+
+	const data = await response.json();
+	if (data.errors) {
+		throw new Error(`GraphQL error: ${data.errors[0]?.message}`);
+	}
+
+	return data.data?.withdrawWithReceipts || [];
+}
+
+/**
  * Fetch wrapped token (ERC20) transfers from a specific SFT subgraph up to a specific block.
  * These track movements of wrapped tokens (e.g. wtNVDA) which are invisible to sharesTransfers.
  * Note: from/to are plain address strings, not nested objects like in sharesTransfers.
@@ -232,7 +297,7 @@ async function fetchWrappedTokenTransfers(
 }
 
 /**
- * Fetch all transfers and deposits from a single subgraph URL
+ * Fetch all transfers, deposits, withdrawals, and wrapped token transfers from a single subgraph URL
  */
 async function fetchFromSubgraph(
 	subgraphUrl: string,
@@ -241,16 +306,19 @@ async function fetchFromSubgraph(
 ): Promise<Transfer[]> {
 	let transfersSkip = 0;
 	let depositsSkip = 0;
+	let withdrawalsSkip = 0;
 	let wrappedSkip = 0;
 	let transfersHasMore = true;
 	let depositsHasMore = true;
+	let withdrawalsHasMore = true;
 	let wrappedHasMore = true;
 	const allTransfers: Transfer[] = [];
 
-	while (transfersHasMore || depositsHasMore || wrappedHasMore) {
-		const [transfersBatch, depositsBatch, wrappedBatch]: [
+	while (transfersHasMore || depositsHasMore || withdrawalsHasMore || wrappedHasMore) {
+		const [transfersBatch, depositsBatch, withdrawalsBatch, wrappedBatch]: [
 			SubgraphTransfer[],
 			SubgraphDeposit[],
+			SubgraphWithdrawal[],
 			SubgraphWrappedTokenTransfer[]
 		] = await Promise.all([
 			transfersHasMore
@@ -258,6 +326,9 @@ async function fetchFromSubgraph(
 				: Promise.resolve([]),
 			depositsHasMore
 				? fetchDeposits(subgraphUrl, depositsSkip, untilBlock, tokenAddresses)
+				: Promise.resolve([]),
+			withdrawalsHasMore
+				? fetchWithdrawals(subgraphUrl, withdrawalsSkip, untilBlock, tokenAddresses)
 				: Promise.resolve([]),
 			wrappedHasMore
 				? fetchWrappedTokenTransfers(subgraphUrl, wrappedSkip, untilBlock, tokenAddresses).catch(
@@ -300,6 +371,18 @@ async function fetchFromSubgraph(
 			timestamp: parseInt(d.transaction.timestamp)
 		}));
 
+		// Process withdrawals as burns (to address = 0x0)
+		const processedWithdrawals: Transfer[] = withdrawalsBatch.map(
+			(w: SubgraphWithdrawal) => ({
+				tokenAddress: w.offchainAssetReceiptVault.id.toLowerCase(),
+				from: w.owner.address.toLowerCase(),
+				to: '0x0000000000000000000000000000000000000000',
+				value: w.amount,
+				blockNumber: parseInt(w.transaction.blockNumber),
+				timestamp: parseInt(w.transaction.timestamp)
+			})
+		);
+
 		// Process wrapped token transfers (ERC20 transfers of wrapped tokens like wtNVDA)
 		// tokenAddress = wrappedTokenContractAddress (the ERC20 wrapper, not the vault)
 		const processedWrapped: Transfer[] = wrappedBatch
@@ -313,19 +396,26 @@ async function fetchFromSubgraph(
 			timestamp: parseInt(w.transaction.timestamp)
 		}));
 
-		allTransfers.push(...processedTransfers, ...processedDeposits, ...processedWrapped);
+		allTransfers.push(
+			...processedTransfers,
+			...processedDeposits,
+			...processedWithdrawals,
+			...processedWrapped
+		);
 
 		console.log(
-			`[Scraper] Batch: ${transfersBatch.length} transfers, ${depositsBatch.length} deposits, ${wrappedBatch.length} wrapped`
+			`[Scraper] Batch: ${transfersBatch.length} transfers, ${depositsBatch.length} deposits, ${withdrawalsBatch.length} withdrawals, ${wrappedBatch.length} wrapped`
 		);
 
 		// Update pagination
 		transfersHasMore = transfersBatch.length === BATCH_SIZE;
 		depositsHasMore = depositsBatch.length === BATCH_SIZE;
+		withdrawalsHasMore = withdrawalsBatch.length === BATCH_SIZE;
 		if (wrappedHasMore) wrappedHasMore = wrappedBatch.length === BATCH_SIZE;
 
 		if (transfersHasMore) transfersSkip += transfersBatch.length;
 		if (depositsHasMore) depositsSkip += depositsBatch.length;
+		if (withdrawalsHasMore) withdrawalsSkip += withdrawalsBatch.length;
 		if (wrappedHasMore) wrappedSkip += wrappedBatch.length;
 	}
 
@@ -333,7 +423,7 @@ async function fetchFromSubgraph(
 }
 
 /**
- * Fetch all transfers and deposits up to a specific block number.
+ * Fetch all transfers, deposits, withdrawals, and wrapped token transfers up to a specific block number.
  * Queries both current and legacy SFT subgraphs, merges and deduplicates results.
  */
 export async function fetchAllTransfers(

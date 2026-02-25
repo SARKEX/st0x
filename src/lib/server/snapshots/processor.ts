@@ -56,6 +56,10 @@ export function calculateBalancesAtBlock(
 			// Mint - only add to receiver
 			balances.set(to, balances.get(to)! + valueBigInt);
 			totalSupply += valueBigInt;
+		} else if (to === ADDRESS_ZERO) {
+			// Burn - only subtract from sender
+			balances.set(from, balances.get(from)! - valueBigInt);
+			totalSupply -= valueBigInt;
 		} else {
 			// Transfer - subtract from sender, add to receiver
 			balances.set(from, balances.get(from)! - valueBigInt);
