@@ -1,22 +1,13 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { requireAdmin } from '$lib/server/adminAuth';
 import { buildAdminReferralLeaderboard } from '$lib/server/referrals';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { getCurrentMonth } from '$lib/server/rewards/rewardsCommon';
 
 export const GET: RequestHandler = async ({ url, cookies, request }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-referral-leaderboard'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-referral-leaderboard');
+	if (guardResponse) return guardResponse;
 
 	// Optional month parameter (defaults to current month)
 	const month = url.searchParams.get('month') || getCurrentMonth();
@@ -53,7 +44,3 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	}
 };
 
-function getCurrentMonth(): string {
-	const now = new Date();
-	return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-}

@@ -3,17 +3,18 @@
 // CDN edge cached for fast global delivery
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import {
-	kvGet,
-	KV_KEYS,
-	getExcludedWalletsSet,
-	type MonthlyPointsData,
-	type RewardsPoolConfig,
-	type RocketBoostTiers
-} from '$lib/server/kv';
+import type { RocketBoostTiers } from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { computeProjectedDailyPoints } from '$lib/server/snapshots/points';
+import {
+	getCurrentMonth,
+	fetchRewardsData,
+	calculateTotalPoints,
+	calculateRocketBoostAmount,
+	getDaysInMonth,
+	type RewardsData
+} from '$lib/server/rewards/rewardsCommon';
 
 interface RocketBoostTiersAchieved {
 	tier25: boolean;
@@ -54,34 +55,29 @@ interface GlobalRewardsData {
 // Compute global rewards data (cached for 1 hour, invalidated on snapshot generation)
 async function computeGlobalRewardsData(): Promise<GlobalRewardsData> {
 	const now = new Date();
-	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+	const currentMonth = getCurrentMonth();
 
 	// Fetch data with error handling for Redis unavailability
-	let monthlyData: MonthlyPointsData | null = null;
-	let poolConfig: RewardsPoolConfig | null = null;
-	let excludedSet: Set<string> = new Set();
+	let monthlyData: RewardsData['monthlyData'] = null;
+	let poolConfig: RewardsData['poolConfig'] = null;
+	let excludedSet: RewardsData['excludedSet'] = new Set();
 
 	try {
-		[monthlyData, poolConfig, excludedSet] = await Promise.all([
-			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-			kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
-			getExcludedWalletsSet()
-		]);
+		({ monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth));
 	} catch (error) {
 		console.warn('[Global Rewards] Redis unavailable, returning empty data:', error);
 		// Continue with null/empty defaults - will return valid but empty response
 	}
 
 	// Calculate totals excluding excluded wallets
-	let totalPoints = 0;
+	const totalPoints = calculateTotalPoints(monthlyData, excludedSet);
 	let totalWallets = 0;
 	let snapshotCount = 0;
 
 	if (monthlyData) {
 		snapshotCount = monthlyData.snapshotCount ?? 0;
-		for (const [address, data] of Object.entries(monthlyData.wallets)) {
+		for (const [address] of Object.entries(monthlyData.wallets)) {
 			if (excludedSet.has(address.toLowerCase())) continue;
-			totalPoints += data.totalPoints;
 			totalWallets++;
 		}
 	}
@@ -111,11 +107,7 @@ async function computeGlobalRewardsData(): Promise<GlobalRewardsData> {
 		tier100: rocketBoostProgress >= 100
 	};
 
-	const rocketBoostAchievedAmount =
-		(rocketBoostTiersAchieved.tier25 ? rocketBoostAmounts.tier25 : 0) +
-		(rocketBoostTiersAchieved.tier50 ? rocketBoostAmounts.tier50 : 0) +
-		(rocketBoostTiersAchieved.tier75 ? rocketBoostAmounts.tier75 : 0) +
-		(rocketBoostTiersAchieved.tier100 ? rocketBoostAmounts.tier100 : 0);
+	const rocketBoostAchievedAmount = calculateRocketBoostAmount(poolConfig, rocketBoostProgress);
 
 	const effectivePool = poolAmount + rocketBoostAchievedAmount;
 
@@ -207,8 +199,3 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
 		);
 	}
 };
-
-function getDaysInMonth(monthStr: string): number {
-	const [year, month] = monthStr.split('-').map(Number);
-	return new Date(year, month, 0).getDate();
-}

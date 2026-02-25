@@ -9,19 +9,13 @@ import {
 	generateAccessCode,
 	updateAccessCode
 } from '$lib/server/accessCodes';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { requireAdmin } from '$lib/server/adminAuth';
 import { createAuditLogger } from '$lib/server/auditLog';
 
 // GET - List all access codes
 export const GET: RequestHandler = async ({ cookies, request }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-list');
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-codes-list');
+	if (guardResponse) return guardResponse;
 
 	const codes = await listAccessCodes();
 
@@ -41,13 +35,8 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 
 // POST - Create new access code
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-create');
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-codes-create');
+	if (guardResponse) return guardResponse;
 
 	const audit = createAuditLogger(request);
 
@@ -90,13 +79,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 // DELETE - Delete access code
 export const DELETE: RequestHandler = async ({ request, cookies }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-delete');
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-codes-delete');
+	if (guardResponse) return guardResponse;
 
 	const audit = createAuditLogger(request);
 
@@ -127,17 +111,8 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 
 // PATCH - Generate a new code (utility endpoint)
 export const PATCH: RequestHandler = async ({ cookies, request }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-codes-generate'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-codes-generate');
+	if (guardResponse) return guardResponse;
 
 	const code = generateAccessCode();
 	return json({ code });
@@ -145,13 +120,8 @@ export const PATCH: RequestHandler = async ({ cookies, request }) => {
 
 // PUT - Update an existing access code
 export const PUT: RequestHandler = async ({ request, cookies }) => {
-	// Rate limiting
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-codes-update');
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-codes-update');
+	if (guardResponse) return guardResponse;
 
 	const audit = createAuditLogger(request);
 

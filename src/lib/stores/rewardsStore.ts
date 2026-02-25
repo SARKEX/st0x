@@ -225,38 +225,5 @@ export function resetRewardsState(): void {
 	rewardsError.set(null);
 }
 
-// Format currency
-export function formatUsd(amount: number): string {
-	if (amount >= 1000) {
-		return '$' + (amount / 1000).toFixed(1) + 'K';
-	}
-	return '$' + amount.toFixed(2);
-}
-
-// Format points
-export function formatPoints(points: number): string {
-	if (points >= 1_000_000) {
-		return (points / 1_000_000).toFixed(1) + 'M';
-	}
-	if (points >= 1_000) {
-		return (points / 1_000).toFixed(1) + 'K';
-	}
-	return Math.round(points).toLocaleString();
-}
-
-// Format address for display
-export function formatAddress(address: string): string {
-	return address.slice(0, 6) + '...' + address.slice(-4);
-}
-
-// Format APY percentage
-export function formatApy(apy: number | null): string {
-	if (apy === null || apy === 0) return '-';
-	if (apy >= 1000) {
-		return (apy / 1000).toFixed(1) + 'K%';
-	}
-	if (apy >= 100) {
-		return Math.round(apy) + '%';
-	}
-	return apy.toFixed(1) + '%';
-}
+// Re-export formatting utilities for backwards compatibility
+export { formatUsd, formatPoints, formatApy, truncateAddress as formatAddress } from '$lib/utils/format';

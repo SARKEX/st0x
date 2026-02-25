@@ -1,8 +1,7 @@
 import type { Network } from '$lib/config/network';
 import type { PythToken } from '$lib/types';
 import type { TradingViewQuote } from './tradingview';
-
-const HERMES_BASE_URL = 'https://hermes.pyth.network/v2/updates/price';
+import { HERMES_BASE_URL } from '$lib/config/constants';
 
 interface PythPriceData {
 	price: number | string;

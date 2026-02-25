@@ -1,17 +1,16 @@
 // Public API endpoint to get RocketBoost progress (current and projected)
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import {
-	kvGet,
-	KV_KEYS,
-	getExcludedWalletsSet,
-	type MonthlyPointsData,
-	type RewardsPoolConfig,
-	type RocketBoostTiers
-} from '$lib/server/kv';
+import type { RocketBoostTiers } from '$lib/server/kv';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { computeProjectedDailyPoints } from '$lib/server/snapshots/points';
+import {
+	getCurrentMonth,
+	fetchRewardsData,
+	calculateTotalPoints,
+	getDaysInMonth
+} from '$lib/server/rewards/rewardsCommon';
 
 interface TierStatus {
 	target: number;
@@ -60,27 +59,12 @@ export const GET: RequestHandler = async ({ request }) => {
 			CACHE_KEYS.rocketboost(),
 			async () => {
 				const now = new Date();
-				const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
-					2,
-					'0'
-				)}`;
+				const currentMonth = getCurrentMonth();
 
-				const [monthlyData, poolConfig, excludedSet] = await Promise.all([
-					kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-					kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
-					getExcludedWalletsSet()
-				]);
+				const { monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth);
 
-				let totalPoints = 0;
-				let snapshotCount = 0;
-
-				if (monthlyData) {
-					snapshotCount = monthlyData.snapshotCount ?? 0;
-					for (const [address, data] of Object.entries(monthlyData.wallets)) {
-						if (excludedSet.has(address.toLowerCase())) continue;
-						totalPoints += data.totalPoints;
-					}
-				}
+				const totalPoints = calculateTotalPoints(monthlyData, excludedSet);
+				const snapshotCount = monthlyData?.snapshotCount ?? 0;
 
 				const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
 				const daysInMonth = getDaysInMonth(currentMonth);
@@ -178,8 +162,3 @@ export const GET: RequestHandler = async ({ request }) => {
 		);
 	}
 };
-
-function getDaysInMonth(monthStr: string): number {
-	const [year, month] = monthStr.split('-').map(Number);
-	return new Date(year, month, 0).getDate();
-}

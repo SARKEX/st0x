@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { wrongNetwork } from '$lib/stores';
 	import { isAuthenticated, walletAddress, promptAuth } from '$lib/stores/authStore';
+	import { truncateAddress } from '$lib/utils/format';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	export let onConnect: (() => void) | undefined = undefined;
@@ -38,7 +39,7 @@
 			<span class="sm:hidden">…{$walletAddress.slice(-6)}</span>
 			<!-- Desktop: full truncated 6...4 -->
 			<span class="hidden sm:inline"
-				>Connected {$walletAddress.slice(0, 6)}...{$walletAddress.slice(-4)}</span
+				>Connected {truncateAddress($walletAddress)}</span
 			>
 		</div>
 	{/if}

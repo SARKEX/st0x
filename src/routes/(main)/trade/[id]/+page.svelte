@@ -1488,7 +1488,7 @@
 												<span>
 													<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
-														{dep.emitter.address.slice(0, 6)}...{dep.emitter.address.slice(-4)}
+														{truncateAddress(dep.emitter.address)}
 													</span>
 												</span>
 												<span class="text-gray-600">•</span>
@@ -1532,7 +1532,7 @@
 												<span>
 													<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
-														{w.emitter.address.slice(0, 6)}...{w.emitter.address.slice(-4)}
+														{truncateAddress(w.emitter.address)}
 													</span>
 												</span>
 												<span class="text-gray-600">•</span>

@@ -7,6 +7,7 @@ import {
 	showAuthModal
 } from './dynamicStore';
 import type { Network } from '$lib/config/network';
+import { truncateAddress } from '$lib/utils/format';
 
 // Auth method enum
 export type AuthMethod = 'wallet' | 'dynamic' | 'none';
@@ -154,7 +155,7 @@ export const userDisplayInfo = derived(
 			return { address: null, displayName: 'Not connected', method: 'none' };
 		}
 
-		const truncatedAddress = `${$walletAddress.slice(0, 6)}...${$walletAddress.slice(-4)}`;
+		const truncatedAddress = truncateAddress($walletAddress);
 
 		if ($authMethod === 'dynamic' && $dynamicSession) {
 			// For Dynamic users, show email or social name if available

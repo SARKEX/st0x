@@ -1,17 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getWalletsByCode, getWalletInfo } from '$lib/server/accessCodes';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
+import { requireAdmin } from '$lib/server/adminAuth';
 
 // GET - List wallets for a given access code
 export const GET: RequestHandler = async ({ cookies, url, request }) => {
-	const rateLimitResponse = await applyRateLimit(request, rateLimiters.admin, 'admin-wallets-list');
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-wallets-list');
+	if (guardResponse) return guardResponse;
 
 	const code = url.searchParams.get('code');
 

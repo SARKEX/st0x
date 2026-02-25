@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
 	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
+	import { truncateAddress } from '$lib/utils/format';
 	import { page } from '$app/stores';
 	import ExternalLinkIcon from '$lib/components/icons/IconExternalLink.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
@@ -87,7 +88,7 @@
 						<div class="text-xs text-gray-400 sm:ml-2">
 							<span class="sm:hidden">…{$walletAddress?.slice(-6)}</span>
 							<span class="hidden sm:inline"
-								>{$walletAddress?.slice(0, 6)}...{$walletAddress?.slice(-4)}</span
+								>{truncateAddress($walletAddress || '')}</span
 							>
 						</div>
 					{:else}

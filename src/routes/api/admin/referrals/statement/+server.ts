@@ -1,14 +1,13 @@
 // API endpoint to generate detailed statement for a referral code
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { requireAdmin } from '$lib/server/adminAuth';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { getWalletsByCode } from '$lib/server/accessCodes';
 import { list } from '@vercel/blob';
 import { TOKENS } from '$lib/config/tokens';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { env } from '$env/dynamic/private';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 const POINTS_PER_DOLLAR = 100;
 const tokenSymbols = TOKENS.map((t) => t.symbol);
@@ -71,16 +70,8 @@ interface SnapshotData {
 }
 
 export const GET: RequestHandler = async ({ url, cookies, request }) => {
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-referrals-statement'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-referrals-statement');
+	if (guardResponse) return guardResponse;
 
 	const code = url.searchParams.get('code');
 	const month = url.searchParams.get('month');

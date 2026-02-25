@@ -11,6 +11,7 @@ import {
 import type { Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
 import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
+import { withRetry } from '$lib/utils/retry';
 
 // Store for Dynamic wallet provider (set by React component)
 let dynamicWalletProvider: {
@@ -31,31 +32,6 @@ export function setDynamicWalletProvider(
  */
 export function getDynamicWalletProvider(): typeof dynamicWalletProvider {
 	return dynamicWalletProvider;
-}
-
-// Retry wrapper for RPC calls
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000): Promise<T> {
-	let lastError: unknown;
-	for (let attempt = 0; attempt < maxRetries; attempt++) {
-		try {
-			return await fn();
-		} catch (error) {
-			lastError = error;
-			const errorMessage = String(error);
-			if (
-				errorMessage.includes('header not found') ||
-				errorMessage.includes('block not found') ||
-				(error as { code?: number })?.code === -32000
-			) {
-				if (attempt < maxRetries - 1) {
-					await new Promise((resolve) => setTimeout(resolve, delayMs * Math.pow(2, attempt)));
-					continue;
-				}
-			}
-			throw error;
-		}
-	}
-	throw lastError;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { isAdminAuthenticated } from '$lib/server/adminAuth';
+import { requireAdmin } from '$lib/server/adminAuth';
 import {
 	getKv,
 	kvGet,
@@ -10,20 +10,11 @@ import {
 	type RewardsPoolConfig,
 	type RocketBoostTiers
 } from '$lib/server/kv';
-import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 
 // GET - List all rewards pool configs or get a specific month
 export const GET: RequestHandler = async ({ url, cookies, request }) => {
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-rewards-pool-get'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-rewards-pool-get');
+	if (guardResponse) return guardResponse;
 
 	// Return empty data if KV not configured (local dev)
 	const kv = await getKv();
@@ -68,16 +59,8 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 
 // POST - Create or update rewards pool config
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-rewards-pool-update'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-rewards-pool-update');
+	if (guardResponse) return guardResponse;
 
 	const kv = await getKv();
 	if (!kv) {
@@ -162,16 +145,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 // DELETE - Remove rewards pool config for a month
 export const DELETE: RequestHandler = async ({ url, cookies, request }) => {
-	const rateLimitResponse = await applyRateLimit(
-		request,
-		rateLimiters.admin,
-		'admin-rewards-pool-delete'
-	);
-	if (rateLimitResponse) return rateLimitResponse;
-
-	if (!isAdminAuthenticated(cookies)) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const guardResponse = await requireAdmin(request, cookies, 'admin-rewards-pool-delete');
+	if (guardResponse) return guardResponse;
 
 	const kv = await getKv();
 	if (!kv) {
@@ -185,6 +160,10 @@ export const DELETE: RequestHandler = async ({ url, cookies, request }) => {
 
 	if (!month) {
 		return json({ error: 'Month parameter required' }, { status: 400 });
+	}
+
+	if (!/^\d{4}-\d{2}$/.test(month)) {
+		return json({ error: 'Invalid month format. Use YYYY-MM' }, { status: 400 });
 	}
 
 	// Delete the pool config

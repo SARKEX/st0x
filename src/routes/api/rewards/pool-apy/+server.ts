@@ -1,15 +1,16 @@
 // API endpoint to get the global pool APY (same for all users)
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import {
-	kvGet,
-	KV_KEYS,
-	getExcludedWalletsSet,
-	type MonthlyPointsData,
-	type RewardsPoolConfig
-} from '$lib/server/kv';
 import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
+import {
+	getCurrentMonth,
+	fetchRewardsData,
+	calculateTotalPoints,
+	calculateRocketBoostAmount,
+	getDaysInMonth,
+	type RewardsData
+} from '$lib/server/rewards/rewardsCommon';
 
 interface PoolApyData {
 	success: boolean;
@@ -22,36 +23,23 @@ interface PoolApyData {
 // Compute pool APY data (cached for 1 hour, invalidated on snapshot generation)
 async function computePoolApyData(): Promise<PoolApyData> {
 	// Get current month
-	const now = new Date();
-	const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+	const currentMonth = getCurrentMonth();
 
 	// Fetch data with error handling for Redis unavailability
-	let monthlyData: MonthlyPointsData | null = null;
-	let poolConfig: RewardsPoolConfig | null = null;
-	let excludedWalletsSet: Set<string> = new Set();
+	let monthlyData: RewardsData['monthlyData'] = null;
+	let poolConfig: RewardsData['poolConfig'] = null;
+	let excludedSet: RewardsData['excludedSet'] = new Set();
 
 	try {
-		[monthlyData, poolConfig, excludedWalletsSet] = await Promise.all([
-			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-			kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(currentMonth)),
-			getExcludedWalletsSet()
-		]);
+		({ monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth));
 	} catch (error) {
 		console.warn('[Pool APY] Redis unavailable, returning empty data:', error);
 		// Continue with null/empty defaults
 	}
 
 	// Calculate total points (excluding excluded wallets)
-	let totalPoints = 0;
-	let snapshotCount = 0;
-
-	if (monthlyData) {
-		snapshotCount = monthlyData.snapshotCount ?? 0;
-		for (const [walletAddress, data] of Object.entries(monthlyData.wallets)) {
-			if (excludedWalletsSet.has(walletAddress.toLowerCase())) continue;
-			totalPoints += data.totalPoints;
-		}
-	}
+	const totalPoints = calculateTotalPoints(monthlyData, excludedSet);
+	const snapshotCount = monthlyData?.snapshotCount ?? 0;
 
 	// Calculate RocketBoost target in points and progress
 	const rocketBoostTvlTarget = poolConfig?.rocketBoostTvlTarget ?? 0;
@@ -61,17 +49,7 @@ async function computePoolApyData(): Promise<PoolApyData> {
 		rocketBoostTargetPoints > 0 ? (totalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 	// Calculate achieved RocketBoost amount based on progress
-	const rocketBoostAmounts = poolConfig?.rocketBoostAmounts ?? {
-		tier25: 0,
-		tier50: 0,
-		tier75: 0,
-		tier100: 0
-	};
-	const rocketBoostAchievedAmount =
-		(progressPercent >= 25 ? rocketBoostAmounts.tier25 : 0) +
-		(progressPercent >= 50 ? rocketBoostAmounts.tier50 : 0) +
-		(progressPercent >= 75 ? rocketBoostAmounts.tier75 : 0) +
-		(progressPercent >= 100 ? rocketBoostAmounts.tier100 : 0);
+	const rocketBoostAchievedAmount = calculateRocketBoostAmount(poolConfig, progressPercent);
 
 	// Calculate effective pool
 	const poolAmount = poolConfig?.poolAmount ?? 0;
@@ -119,9 +97,3 @@ export const GET: RequestHandler = async ({ request }) => {
 		);
 	}
 };
-
-function getDaysInMonth(monthStr: string): number {
-	const [year, month] = monthStr.split('-').map(Number);
-	// Day 0 of next month gives last day of current month
-	return new Date(year, month, 0).getDate();
-}

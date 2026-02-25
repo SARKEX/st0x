@@ -13,34 +13,7 @@ import {
 	sendTransaction as walletServiceSendTransaction,
 	waitForTransaction as walletServiceWaitForTransaction
 } from '$lib/services/walletService';
-
-// Retry wrapper for RPC calls that fail with "header not found" error
-// This is a known RPC provider issue related to load balancing
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000): Promise<T> {
-	let lastError: unknown;
-	for (let attempt = 0; attempt < maxRetries; attempt++) {
-		try {
-			return await fn();
-		} catch (error) {
-			lastError = error;
-			const errorMessage = String(error);
-			// Retry on "header not found" or "block not found" RPC errors
-			if (
-				errorMessage.includes('header not found') ||
-				errorMessage.includes('block not found') ||
-				(error as { code?: number })?.code === -32000
-			) {
-				if (attempt < maxRetries - 1) {
-					// Exponential backoff
-					await new Promise((resolve) => setTimeout(resolve, delayMs * Math.pow(2, attempt)));
-					continue;
-				}
-			}
-			throw error;
-		}
-	}
-	throw lastError;
-}
+import { withRetry } from '$lib/utils/retry';
 
 // Wrapped wagmi functions with retry logic
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
@@ -151,8 +124,7 @@ function createRaindexLink(
 	return { url, text: linkText };
 }
 
-export const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
-export const ONE = BigInt('1000000000000000000');
+import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 
 // Dynamic embedded wallet signing has a 16KB payload size limit
 // External wallets (MetaMask, etc.) don't have this limitation
@@ -798,7 +770,6 @@ const transactionStore = () => {
 
 				// Filter to only vaults with non-zero balance
 				// Compare hex representation to avoid Float class instance mismatch
-				const ZERO_FLOAT_HEX = '0x0000000000000000000000000000000000000000000000000000000000000000';
 				const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
 					const balanceHex = vault.balance.asHex().toLowerCase();
 					console.log('[handleRemoveOrder] Vault balance check:', {
@@ -1066,7 +1037,6 @@ const transactionStore = () => {
 
 			// Filter to only vaults with non-zero balance
 			// Compare hex representation to avoid Float class instance mismatch
-			const ZERO_FLOAT_HEX = '0x0000000000000000000000000000000000000000000000000000000000000000';
 			const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
 				const balanceHex = vault.balance.asHex().toLowerCase();
 				return balanceHex !== ZERO_FLOAT_HEX;

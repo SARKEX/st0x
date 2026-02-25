@@ -9,8 +9,7 @@
 
 import { getTokenByAnyAddress } from '$lib/config/tokens';
 import { getPriceTimestamp } from './marketHours';
-
-const HERMES_URL = 'https://hermes.pyth.network/v2/updates/price';
+import { HERMES_BASE_URL } from '$lib/config/constants';
 
 interface PythPriceData {
 	price: string;
@@ -142,7 +141,7 @@ export async function fetchPythPricesAtTimestamp(
 	const feedIds = Array.from(tokenFeedMap.keys());
 	const idsParams = feedIds.map((id) => `ids[]=${id}`).join('&');
 
-	const url = `${HERMES_URL}/${adjustedTimestamp}?${idsParams}`;
+	const url = `${HERMES_BASE_URL}/${adjustedTimestamp}?${idsParams}`;
 	console.log(
 		`[Pyth] Fetching prices at timestamp ${adjustedTimestamp} for ${feedIds.length} feeds`
 	);
