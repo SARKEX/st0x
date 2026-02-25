@@ -113,6 +113,33 @@ function validateOrderbookAddress(orderbookAddress: string, network: Network): v
 	}
 }
 
+// Extract error message from transaction errors using standard Viem error hierarchy
+function extractTransactionError(
+	error: unknown,
+	fallback: TransactionErrorMessage = TransactionErrorMessage.GENERIC
+): TransactionErrorMessage {
+	const err = error as { cause?: { details?: string }; message?: string };
+	return (err?.cause?.details || err?.message || fallback) as TransactionErrorMessage;
+}
+
+// Find a vault by matching both vault ID and token address
+// Vault IDs can be decimal strings or hex strings, so we check both formats
+function findVaultByIdAndToken(
+	vaults: RaindexVault[],
+	vaultId: string | undefined,
+	tokenAddress: string | undefined
+): RaindexVault | undefined {
+	if (!vaultId || !tokenAddress) return undefined;
+	return vaults.find((v) => {
+		const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
+		const vaultIdMatches =
+			v.vaultId.toString() === vaultId || vaultIdHex === vaultId?.toLowerCase();
+		const tokenMatches =
+			v.token?.address?.toLowerCase() === tokenAddress?.toLowerCase();
+		return vaultIdMatches && tokenMatches;
+	});
+}
+
 // Helper function to create Raindex v5 link data (safe, no HTML)
 function createRaindexLink(
 	chainId: number,
@@ -332,14 +359,7 @@ const transactionStore = () => {
 						const msg = await handleStaleWalletSession(config);
 						return transactionError(msg as TransactionErrorMessage);
 					}
-					const errorMessage =
-						(error as unknown as { cause?: { details?: string } })?.cause?.details ||
-						TransactionErrorMessage.GENERIC;
-					const message =
-						typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-							? (errorMessage as TransactionErrorMessage)
-							: TransactionErrorMessage.GENERIC;
-					return transactionError(message);
+					return transactionError(extractTransactionError(error));
 				}
 			}
 		}
@@ -356,14 +376,7 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
-			const errorMessage =
-				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
-				TransactionErrorMessage.GENERIC;
-			const message =
-				typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-					? (errorMessage as TransactionErrorMessage)
-					: TransactionErrorMessage.GENERIC;
-			return transactionError(message);
+			return transactionError(extractTransactionError(error));
 		}
 
 		const tryFetchOrderLink = async () => {
@@ -558,12 +571,7 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
-			const err = error as { cause?: { details?: string }; message?: string };
-			return transactionError(
-				(err?.cause?.details ||
-					err?.message ||
-					TransactionErrorMessage.GENERIC) as TransactionErrorMessage
-			);
+			return transactionError(extractTransactionError(error));
 		}
 	};
 
@@ -618,10 +626,7 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
-			const err = error as { cause?: { details?: string }; message?: string };
-			return transactionError(
-				(err?.cause?.details || err?.message || `${actionName} failed`) as TransactionErrorMessage
-			);
+			return transactionError(extractTransactionError(error, `${actionName} failed` as TransactionErrorMessage));
 		}
 	};
 
@@ -717,16 +722,7 @@ const transactionStore = () => {
 				const addedVaultKeys = new Set<string>(); // Track by vaultId + token
 
 				if (quote.outputVaultId) {
-					// Find vault matching vaultId AND output token
-					const outputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.outputVaultId ||
-							vaultIdHex === quote.outputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.outputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
+					const outputVault = findVaultByIdAndToken(vaults, quote.outputVaultId, quote.outputTokenAddress);
 					if (outputVault) {
 						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -736,16 +732,7 @@ const transactionStore = () => {
 					}
 				}
 				if (quote.inputVaultId) {
-					// Find vault matching vaultId AND input token
-					const inputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.inputVaultId ||
-							vaultIdHex === quote.inputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
+					const inputVault = findVaultByIdAndToken(vaults, quote.inputVaultId, quote.inputTokenAddress);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -853,12 +840,7 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
-			const err = error as { cause?: { details?: string }; message?: string };
-			return transactionError(
-				(err?.cause?.details ||
-					err?.message ||
-					TransactionErrorMessage.GENERIC) as TransactionErrorMessage
-			);
+			return transactionError(extractTransactionError(error));
 		}
 	};
 
@@ -971,16 +953,7 @@ const transactionStore = () => {
 			if (isFilled) {
 				// Filled order: only withdraw from input vault (output is empty)
 				if (quote.inputVaultId) {
-					// Find vault matching vaultId AND input token
-					const inputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.inputVaultId ||
-							vaultIdHex === quote.inputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
+					const inputVault = findVaultByIdAndToken(vaults, quote.inputVaultId, quote.inputTokenAddress);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -992,16 +965,7 @@ const transactionStore = () => {
 			} else {
 				// Not filled: withdraw from both vaults
 				if (quote.outputVaultId) {
-					// Find vault matching vaultId AND output token
-					const outputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.outputVaultId ||
-							vaultIdHex === quote.outputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.outputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
+					const outputVault = findVaultByIdAndToken(vaults, quote.outputVaultId, quote.outputTokenAddress);
 					if (outputVault) {
 						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -1011,16 +975,7 @@ const transactionStore = () => {
 					}
 				}
 				if (quote.inputVaultId) {
-					// Find vault matching vaultId AND input token
-					const inputVault = vaults.find((v) => {
-						const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
-						const vaultIdMatches =
-							v.vaultId.toString() === quote.inputVaultId ||
-							vaultIdHex === quote.inputVaultId?.toLowerCase();
-						const tokenMatches =
-							v.token?.address?.toLowerCase() === quote.inputTokenAddress?.toLowerCase();
-						return vaultIdMatches && tokenMatches;
-					});
+					const inputVault = findVaultByIdAndToken(vaults, quote.inputVaultId, quote.inputTokenAddress);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -1114,12 +1069,7 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
-			const err = error as { cause?: { details?: string }; message?: string };
-			return transactionError(
-				(err?.cause?.details ||
-					err?.message ||
-					TransactionErrorMessage.GENERIC) as TransactionErrorMessage
-			);
+			return transactionError(extractTransactionError(error));
 		}
 	};
 
@@ -1375,23 +1325,15 @@ const transactionStore = () => {
 					return transactionError(msg as TransactionErrorMessage);
 				}
 
-				// Extract error message from various sources
-				const errorMessage =
-					(approvalError as unknown as { cause?: { details?: string } })?.cause?.details ||
-					(approvalError as Error)?.message ||
-					TransactionErrorMessage.APPROVAL_FAILED;
+				const errorMessage = extractTransactionError(approvalError, TransactionErrorMessage.APPROVAL_FAILED);
 
 				// Check for authentication errors
 				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
 				if (errorStr.includes('authentication') || errorStr.includes('log in')) {
-					return transactionError(errorMessage as TransactionErrorMessage);
+					return transactionError(errorMessage);
 				}
 
-				return transactionError(
-					typeof errorMessage === 'string'
-						? (errorMessage as TransactionErrorMessage)
-						: TransactionErrorMessage.APPROVAL_FAILED
-				);
+				return transactionError(errorMessage);
 			}
 		}
 
@@ -1555,11 +1497,7 @@ const transactionStore = () => {
 					return transactionError(msg as TransactionErrorMessage);
 				}
 
-				// Try to get error message from various sources
-				const errorMessage =
-					(error as unknown as { cause?: { details?: string } })?.cause?.details ||
-					(error as Error)?.message ||
-					TransactionErrorMessage.GENERIC;
+				const errorMessage = extractTransactionError(error);
 
 				console.error('[handleTakeOrders] Transaction error:', error);
 
@@ -1573,14 +1511,10 @@ const transactionStore = () => {
 
 				// Check for authentication errors
 				if (errorStr.includes('authentication') || errorStr.includes('log in')) {
-					return transactionError(errorMessage as TransactionErrorMessage);
+					return transactionError(errorMessage);
 				}
 
-				const message =
-					typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
-						? (errorMessage as TransactionErrorMessage)
-						: TransactionErrorMessage.GENERIC;
-				return transactionError(message);
+				return transactionError(errorMessage);
 			}
 		}
 
