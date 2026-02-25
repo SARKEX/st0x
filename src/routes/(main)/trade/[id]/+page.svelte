@@ -71,6 +71,7 @@
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
+	import { fetchSwapQuote } from '$lib/api/swapQuote';
 	$: tokenId = $page.params.id;
 
 	// Hide track in wallet buttons for embedded wallets
@@ -472,6 +473,13 @@
 	let oracleError: string | null = null;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
+	/** Prices from swap quote API when orderbook has no quotes */
+	let quoteApiPrices: { buy: number | null; sell: number | null } = { buy: null, sell: null };
+	let quoteApiFetchedFor: string | null = null;
+	/** True when we have no orderbook quotes and are waiting on the swap quote API */
+	let quoteApiLoading = false;
+	/** True when BID/OFFER are from quote API fallback (no orderbook); used to show loading state */
+	let usingQuoteApiFallback = false;
 	type OrderbookQuoteUiState = {
 		status: QueryObserverResult<OrderbookQuoteCache, Error>['status'];
 		hasData: boolean;
@@ -645,7 +653,44 @@
 	const resetOnChainPrices = () => {
 		buyPrice = null;
 		sellPrice = null;
+		quoteApiPrices = { buy: null, sell: null };
+		quoteApiFetchedFor = null;
+		quoteApiLoading = false;
+		usingQuoteApiFallback = false;
 	};
+	/** Fetch buy/sell prices from swap quote API (when orderbook has no quotes). API uses human-readable amounts: outputAmount "1" = 1 token. */
+	async function fetchOnChainPricesFromQuoteApi(
+		assetAddress: string,
+		_assetDecimals: number,
+		quoteAddress: string,
+		_quoteDecimals: number
+	) {
+		// Buy price = what you get when selling 1 asset (quote per 1 asset). Offer 1 asset, receive quote.
+		const buyQuotePromise = fetchSwapQuote({
+			inputToken: quoteAddress,
+			outputToken: assetAddress,
+			outputAmount: '1'
+		});
+		// Sell price = what you pay when buying. Offer 1 quote, receive asset; quote per 1 asset = 1 / assetReceived.
+		const sellQuotePromise = fetchSwapQuote({
+			inputToken: assetAddress,
+			outputToken: quoteAddress,
+			outputAmount: '1'
+		});
+		const [buyInputRaw, sellInputRaw] = await Promise.all([buyQuotePromise, sellQuotePromise]);
+		let buy: number | null = null;
+		let sell: number | null = null;
+		if (buyInputRaw) {
+			const quoteReceived = Number(buyInputRaw);
+			if (Number.isFinite(quoteReceived) && quoteReceived > 0) buy = quoteReceived;
+		}
+		if (sellInputRaw) {
+			const assetReceived = Number(sellInputRaw);
+			if (Number.isFinite(assetReceived) && assetReceived > 0) sell = 1 / assetReceived; // quote per 1 asset
+		}
+		quoteApiPrices = { buy, sell };
+	}
+	// Bid/Offer prices come ONLY from swap quote API (not from orderbook)
 	$: {
 		if (!browser || !currentToken || !$currentNetwork) {
 			resetOnChainPrices();
@@ -654,40 +699,37 @@
 			if (!settlementToken) {
 				resetOnChainPrices();
 			} else {
-				const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 				const quoteAddress = settlementToken.address?.toLowerCase();
-				let bestBid: number | null = null;
-				let bestAsk: number | null = null;
-				quotes.forEach((quote) => {
-					const ratioValue = ratioToNumber(quote.ratio);
-					const ratio = ratioValue ?? 0;
-					if (!Number.isFinite(ratio) || ratio <= 0) return;
-					const inputAddress = quote.inputTokenAddress.toLowerCase();
-					const outputAddress = quote.outputTokenAddress.toLowerCase();
-					const inputIsAsset = assetAddressSet.has(inputAddress);
-					const outputIsAsset = assetAddressSet.has(outputAddress);
-					// ASK: quote token -> asset (what you pay when buying)
-					if (inputAddress === quoteAddress && outputIsAsset) {
-						const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
-						const price = ratio;
-						if (tokenAmount !== null && Number.isFinite(price) && tokenAmount > 0 && price > 0) {
-							bestAsk = bestAsk === null ? price : Math.min(bestAsk, price);
-						}
+				const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
+				const assetDecimals = Number(currentPythToken?.decimals ?? 18);
+				const quoteDecimals = Number(settlementToken.decimals ?? 6);
+				if (assetAddress && quoteAddress) {
+					usingQuoteApiFallback = true;
+					const key = `${assetAddress}-${$currentNetwork.id}`;
+					if (quoteApiFetchedFor !== key) {
+						quoteApiFetchedFor = key;
+						quoteApiLoading = true;
+						fetchOnChainPricesFromQuoteApi(
+							assetAddress,
+							assetDecimals,
+							quoteAddress,
+							quoteDecimals
+						)
+							.then(() => {
+								quoteApiLoading = false;
+							})
+							.catch(() => {
+								quoteApiPrices = { buy: null, sell: null };
+								quoteApiLoading = false;
+							});
 					}
-					// BID: asset -> quote token (what you get when selling)
-					if (inputIsAsset && outputAddress === quoteAddress) {
-						const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
-						const price = 1 / ratio;
-						if (quoteAmount !== null && quoteAmount > 0 && Number.isFinite(price) && price > 0) {
-							const tokenAmount = quoteAmount / price;
-							if (Number.isFinite(tokenAmount) && tokenAmount > 0) {
-								bestBid = bestBid === null ? price : Math.max(bestBid, price);
-							}
-						}
-					}
-				});
-				buyPrice = bestBid; // Best bid - what you get when selling
-				sellPrice = bestAsk; // Best ask - what you pay when buying
+					buyPrice = quoteApiPrices.buy;
+					sellPrice = quoteApiPrices.sell;
+				} else {
+					buyPrice = null;
+					sellPrice = null;
+					usingQuoteApiFallback = false;
+				}
 			}
 		}
 	}
@@ -971,7 +1013,7 @@
 									Bid Price
 								</dt>
 								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
-									{#if orderbookQuoteUiState.loadingWithoutData}
+									{#if quoteApiLoading}
 										Loading...
 									{:else if buyPrice !== null}
 										${formatNumeric(buyPrice)}
@@ -985,7 +1027,7 @@
 									Offer Price
 								</dt>
 								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
-									{#if orderbookQuoteUiState.loadingWithoutData}
+									{#if quoteApiLoading}
 										Loading...
 									{:else if sellPrice !== null}
 										${formatNumeric(sellPrice)}
