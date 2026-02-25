@@ -87,9 +87,7 @@
 					{#if $isAuthenticated && $walletAddress}
 						<div class="text-xs text-gray-400 sm:ml-2">
 							<span class="sm:hidden">…{$walletAddress?.slice(-6)}</span>
-							<span class="hidden sm:inline"
-								>{truncateAddress($walletAddress || '')}</span
-							>
+							<span class="hidden sm:inline">{truncateAddress($walletAddress || '')}</span>
 						</div>
 					{:else}
 						<div class="text-xs text-gray-400 sm:ml-2">Not Connected</div>

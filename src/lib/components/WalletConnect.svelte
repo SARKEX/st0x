@@ -38,9 +38,7 @@
 			<!-- Mobile: last 6 only -->
 			<span class="sm:hidden">…{$walletAddress.slice(-6)}</span>
 			<!-- Desktop: full truncated 6...4 -->
-			<span class="hidden sm:inline"
-				>Connected {truncateAddress($walletAddress)}</span
-			>
+			<span class="hidden sm:inline">Connected {truncateAddress($walletAddress)}</span>
 		</div>
 	{/if}
 </Button>

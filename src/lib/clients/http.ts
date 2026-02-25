@@ -42,7 +42,9 @@ async function fetchWithRetry<T>(
 			}
 
 			// Create a synthetic Response with the already-read text for the parser
-			return await parseResponse(new Response(text, { status: response.status, headers: response.headers }));
+			return await parseResponse(
+				new Response(text, { status: response.status, headers: response.headers })
+			);
 		} catch (error) {
 			lastError = error;
 			if (attempt >= retries) {

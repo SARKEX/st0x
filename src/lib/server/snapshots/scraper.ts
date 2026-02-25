@@ -260,17 +260,14 @@ async function fetchFromSubgraph(
 				? fetchDeposits(subgraphUrl, depositsSkip, untilBlock, tokenAddresses)
 				: Promise.resolve([]),
 			wrappedHasMore
-				? fetchWrappedTokenTransfers(
-						subgraphUrl,
-						wrappedSkip,
-						untilBlock,
-						tokenAddresses
-					).catch((err) => {
-						// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
-						console.warn(`[Scraper] wrappedTokenTransfers not available: ${err.message}`);
-						wrappedHasMore = false;
-						return [] as SubgraphWrappedTokenTransfer[];
-					})
+				? fetchWrappedTokenTransfers(subgraphUrl, wrappedSkip, untilBlock, tokenAddresses).catch(
+						(err) => {
+							// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
+							console.warn(`[Scraper] wrappedTokenTransfers not available: ${err.message}`);
+							wrappedHasMore = false;
+							return [] as SubgraphWrappedTokenTransfer[];
+						}
+					)
 				: Promise.resolve([])
 		]);
 
@@ -296,17 +293,14 @@ async function fetchFromSubgraph(
 
 		// Process wrapped token transfers (ERC20 transfers of wrapped tokens like wtNVDA)
 		// tokenAddress = wrappedTokenContractAddress (the ERC20 wrapper, not the vault)
-		const processedWrapped: Transfer[] = wrappedBatch.map(
-			(w: SubgraphWrappedTokenTransfer) => ({
-				tokenAddress:
-					w.offchainAssetReceiptVault.wrappedTokenContractAddress.toLowerCase(),
-				from: w.from.toLowerCase(),
-				to: w.to.toLowerCase(),
-				value: w.value,
-				blockNumber: parseInt(w.transaction.blockNumber),
-				timestamp: parseInt(w.transaction.timestamp)
-			})
-		);
+		const processedWrapped: Transfer[] = wrappedBatch.map((w: SubgraphWrappedTokenTransfer) => ({
+			tokenAddress: w.offchainAssetReceiptVault.wrappedTokenContractAddress.toLowerCase(),
+			from: w.from.toLowerCase(),
+			to: w.to.toLowerCase(),
+			value: w.value,
+			blockNumber: parseInt(w.transaction.blockNumber),
+			timestamp: parseInt(w.transaction.timestamp)
+		}));
 
 		allTransfers.push(...processedTransfers, ...processedDeposits, ...processedWrapped);
 

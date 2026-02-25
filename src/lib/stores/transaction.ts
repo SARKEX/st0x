@@ -134,8 +134,7 @@ function findVaultByIdAndToken(
 		const vaultIdHex = `0x${v.vaultId.toString(16).padStart(64, '0')}`;
 		const vaultIdMatches =
 			v.vaultId.toString() === vaultId || vaultIdHex === vaultId?.toLowerCase();
-		const tokenMatches =
-			v.token?.address?.toLowerCase() === tokenAddress?.toLowerCase();
+		const tokenMatches = v.token?.address?.toLowerCase() === tokenAddress?.toLowerCase();
 		return vaultIdMatches && tokenMatches;
 	});
 }
@@ -151,7 +150,7 @@ function createRaindexLink(
 	return { url, text: linkText };
 }
 
-import { ADDRESS_ZERO, ONE, ZERO_FLOAT_HEX } from '$lib/config/constants';
+import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 
 // Dynamic embedded wallet signing has a 16KB payload size limit
 // External wallets (MetaMask, etc.) don't have this limitation
@@ -626,7 +625,9 @@ const transactionStore = () => {
 				const msg = await handleStaleWalletSession(config);
 				return transactionError(msg as TransactionErrorMessage);
 			}
-			return transactionError(extractTransactionError(error, `${actionName} failed` as TransactionErrorMessage));
+			return transactionError(
+				extractTransactionError(error, `${actionName} failed` as TransactionErrorMessage)
+			);
 		}
 	};
 
@@ -722,7 +723,11 @@ const transactionStore = () => {
 				const addedVaultKeys = new Set<string>(); // Track by vaultId + token
 
 				if (quote.outputVaultId) {
-					const outputVault = findVaultByIdAndToken(vaults, quote.outputVaultId, quote.outputTokenAddress);
+					const outputVault = findVaultByIdAndToken(
+						vaults,
+						quote.outputVaultId,
+						quote.outputTokenAddress
+					);
 					if (outputVault) {
 						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -732,7 +737,11 @@ const transactionStore = () => {
 					}
 				}
 				if (quote.inputVaultId) {
-					const inputVault = findVaultByIdAndToken(vaults, quote.inputVaultId, quote.inputTokenAddress);
+					const inputVault = findVaultByIdAndToken(
+						vaults,
+						quote.inputVaultId,
+						quote.inputTokenAddress
+					);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -953,7 +962,11 @@ const transactionStore = () => {
 			if (isFilled) {
 				// Filled order: only withdraw from input vault (output is empty)
 				if (quote.inputVaultId) {
-					const inputVault = findVaultByIdAndToken(vaults, quote.inputVaultId, quote.inputTokenAddress);
+					const inputVault = findVaultByIdAndToken(
+						vaults,
+						quote.inputVaultId,
+						quote.inputTokenAddress
+					);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -965,7 +978,11 @@ const transactionStore = () => {
 			} else {
 				// Not filled: withdraw from both vaults
 				if (quote.outputVaultId) {
-					const outputVault = findVaultByIdAndToken(vaults, quote.outputVaultId, quote.outputTokenAddress);
+					const outputVault = findVaultByIdAndToken(
+						vaults,
+						quote.outputVaultId,
+						quote.outputTokenAddress
+					);
 					if (outputVault) {
 						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -975,7 +992,11 @@ const transactionStore = () => {
 					}
 				}
 				if (quote.inputVaultId) {
-					const inputVault = findVaultByIdAndToken(vaults, quote.inputVaultId, quote.inputTokenAddress);
+					const inputVault = findVaultByIdAndToken(
+						vaults,
+						quote.inputVaultId,
+						quote.inputTokenAddress
+					);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
 						if (!addedVaultKeys.has(key)) {
@@ -1325,7 +1346,10 @@ const transactionStore = () => {
 					return transactionError(msg as TransactionErrorMessage);
 				}
 
-				const errorMessage = extractTransactionError(approvalError, TransactionErrorMessage.APPROVAL_FAILED);
+				const errorMessage = extractTransactionError(
+					approvalError,
+					TransactionErrorMessage.APPROVAL_FAILED
+				);
 
 				// Check for authentication errors
 				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';

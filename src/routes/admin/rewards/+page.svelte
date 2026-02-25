@@ -1921,11 +1921,7 @@
 
 		// Header info
 		doc.setFontSize(10);
-		doc.text(
-			`Wallet: ${truncateAddress(walletStatementData.wallet)}`,
-			14,
-			y
-		);
+		doc.text(`Wallet: ${truncateAddress(walletStatementData.wallet)}`, 14, y);
 		doc.text(`Month: ${walletStatementData.month}`, 120, y);
 		y += 6;
 		doc.text(`Total Snapshots: ${walletStatementData.totals.snapshotCount}`, 14, y);

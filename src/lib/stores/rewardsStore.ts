@@ -226,4 +226,9 @@ export function resetRewardsState(): void {
 }
 
 // Re-export formatting utilities for backwards compatibility
-export { formatUsd, formatPoints, formatApy, truncateAddress as formatAddress } from '$lib/utils/format';
+export {
+	formatUsd,
+	formatPoints,
+	formatApy,
+	truncateAddress as formatAddress
+} from '$lib/utils/format';

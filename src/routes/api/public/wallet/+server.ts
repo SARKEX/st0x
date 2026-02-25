@@ -77,7 +77,10 @@ async function getAllWalletData(): Promise<AllWalletData> {
 				rocketBoostTargetPoints > 0 ? (projectedTotalPoints / rocketBoostTargetPoints) * 100 : 0;
 
 			// Use projected progress to estimate RocketBoost bonus
-			const projectedRocketBoostAmount = calculateRocketBoostAmount(poolConfig, projectedProgressPercent);
+			const projectedRocketBoostAmount = calculateRocketBoostAmount(
+				poolConfig,
+				projectedProgressPercent
+			);
 
 			const poolAmount = poolConfig?.poolAmount ?? 0;
 			const effectivePool = poolAmount + projectedRocketBoostAmount;
