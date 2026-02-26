@@ -44,15 +44,7 @@ export interface MarketOrderResult {
  * Walk orderbook to get amounts and ratio, then call API (approvals → second call → swap calldata).
  */
 export async function executeMarketOrder(input: MarketOrderInput): Promise<MarketOrderResult> {
-	const {
-		orderSide,
-		amount,
-		inputMode = 'amount',
-		assetToken,
-		paymentToken,
-		quotes,
-		network
-	} = input;
+	const { orderSide, amount, inputMode = 'amount', assetToken, paymentToken, quotes } = input;
 
 	try {
 		const taker = getSignerAddress();
@@ -75,12 +67,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		}
 
 		const isBuy = orderSide === 'Buy';
-		const {
-			inputAmountFilled,
-			outputAmountGiven,
-			inputDecimals,
-			outputDecimals
-		} = walkResult;
+		const { inputAmountFilled, outputAmountGiven, inputDecimals, outputDecimals } = walkResult;
 
 		// User convention: input = token you put in, output = token you take out
 		// inputAmountFilled = what user receives, outputAmountGiven = what user gives

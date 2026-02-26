@@ -587,8 +587,7 @@
 				const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
 				const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
 				if (assetFilled > 0n) {
-					marketPrice =
-						orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
+					marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
 					hasAvailableOrders = fills.length > 0;
 					return;
 				}
@@ -626,7 +625,12 @@
 				if (swapQuote?.estimatedInput) {
 					const costNum = Number(swapQuote.estimatedInput);
 					const amountNum = parseFloat(amountHuman);
-					if (Number.isFinite(costNum) && costNum > 0 && Number.isFinite(amountNum) && amountNum > 0) {
+					if (
+						Number.isFinite(costNum) &&
+						costNum > 0 &&
+						Number.isFinite(amountNum) &&
+						amountNum > 0
+					) {
 						marketPrice = costNum / amountNum;
 						hasAvailableOrders = false;
 						estimateOnlyFromSwapApi = true;
@@ -644,7 +648,12 @@
 				if (swapQuote?.estimatedInput) {
 					const quoteNum = Number(swapQuote.estimatedInput);
 					const amountNum = parseFloat(amountHuman);
-					if (Number.isFinite(quoteNum) && quoteNum > 0 && Number.isFinite(amountNum) && amountNum > 0) {
+					if (
+						Number.isFinite(quoteNum) &&
+						quoteNum > 0 &&
+						Number.isFinite(amountNum) &&
+						amountNum > 0
+					) {
 						marketPrice = quoteNum / amountNum;
 						hasAvailableOrders = false;
 						estimateOnlyFromSwapApi = true;
@@ -1130,8 +1139,8 @@
 						<div
 							class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
 						>
-							Estimate from swap API. No orderbook liquidity to execute a market order — use a
-							limit order to place an order.
+							Estimate from swap API. No orderbook liquidity to execute a market order — use a limit
+							order to place an order.
 						</div>
 					{/if}
 					{#if priceError && selectedAmount && selectedAmount > 0n}
