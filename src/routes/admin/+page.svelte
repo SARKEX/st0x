@@ -66,7 +66,7 @@
 	);
 
 	// Section types (top-level navigation)
-	type Section = 'activity' | 'tvl';
+	type Section = 'activity' | 'tvl' | 'swaps';
 	let activeSection: Section = 'activity';
 
 	// Tab types
@@ -308,6 +308,34 @@
 	let tvlError = '';
 	let tvlData: TvlData = { latest: null, daily: [] };
 	let tvlLastUpdated: Date | null = null;
+
+	// Swap snapshot data
+	interface SwapOrderEntry {
+		legacySymbol: string;
+		wrappedSymbol: string;
+		orderHash: string;
+		orderActive: boolean;
+		inputVault: { tokenSymbol: string; balance: string; balanceFormatted: string } | null;
+		outputVault: { tokenSymbol: string; balance: string; balanceFormatted: string } | null;
+	}
+	interface LegacyHolder {
+		address: string;
+		balance: string;
+		balanceFormatted: string;
+	}
+	interface LegacyBalanceEntry {
+		legacySymbol: string;
+		legacyAddress: string;
+		wrappedSymbol: string;
+		totalSupply: string;
+		totalSupplyFormatted: string;
+		holderCount: number;
+		holders: LegacyHolder[];
+	}
+	let swapLoading = false;
+	let swapError = '';
+	let swapData: { swapOrders: SwapOrderEntry[]; legacyBalances: LegacyBalanceEntry[] } | null = null;
+	let expandedLegacyTokens: Set<string> = new Set();
 
 	// Leaderboard month filter
 	let leaderboardMonth: string = 'latest'; // 'latest' or 'YYYY-MM'
@@ -1213,6 +1241,32 @@
 		}
 	}
 
+	async function fetchSwapData() {
+		swapLoading = true;
+		swapError = '';
+		try {
+			const res = await fetch('/api/admin/swap-snapshot');
+			if (!res.ok) throw new Error('Failed to fetch swap data');
+			const data = await res.json();
+			if (!data.success) throw new Error(data.error || 'Unknown error');
+			swapData = { swapOrders: data.swapOrders, legacyBalances: data.legacyBalances };
+		} catch (err) {
+			swapError = err instanceof Error ? err.message : 'Failed to load swap data';
+			console.error('Failed to load swap data:', err);
+		} finally {
+			swapLoading = false;
+		}
+	}
+
+	function toggleLegacyExpand(symbol: string) {
+		if (expandedLegacyTokens.has(symbol)) {
+			expandedLegacyTokens.delete(symbol);
+		} else {
+			expandedLegacyTokens.add(symbol);
+		}
+		expandedLegacyTokens = expandedLegacyTokens;
+	}
+
 	onMount(() => {
 		// Set default custom dates
 		const now = new Date();
@@ -1222,6 +1276,7 @@
 
 		loadAllData();
 		fetchTvlData();
+		fetchSwapData();
 
 		// Load Chart.js library
 		ensureChartLib();
@@ -1780,6 +1835,14 @@
 		>
 			TVL
 		</button>
+		<button
+			on:click={() => (activeSection = 'swaps')}
+			class="border-b-2 pb-3 text-lg font-semibold transition-colors {activeSection === 'swaps'
+				? 'border-[#e8be89] text-[#e8be89]'
+				: 'border-transparent text-gray-400 hover:text-gray-300'}"
+		>
+			Swap Snapshot
+		</button>
 		<div class="ml-auto flex items-center gap-3 pb-3">
 			{#if lastUpdated}
 				<span class="text-xs text-gray-500">
@@ -1787,12 +1850,12 @@
 				</span>
 			{/if}
 			<button
-				on:click={loadAllData}
-				disabled={loading}
+				on:click={() => { if (activeSection === 'swaps') fetchSwapData(); else if (activeSection === 'tvl') fetchTvlData(); else loadAllData(); }}
+				disabled={loading || swapLoading}
 				class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white transition-colors hover:border-gray-500 hover:bg-gray-700 disabled:opacity-50"
 			>
 				<svg
-					class="h-4 w-4 {loading ? 'animate-spin' : ''}"
+					class="h-4 w-4 {loading || swapLoading ? 'animate-spin' : ''}"
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
@@ -2985,6 +3048,150 @@
 					</Card>
 				{/if}
 			{/if}
+		{/if}
+	{:else if activeSection === 'swaps'}
+		<!-- Swap Snapshot Section -->
+		{#if swapLoading}
+			<Card>
+				<div class="flex items-center justify-center py-12">
+					<div class="text-gray-400">Loading swap snapshot data...</div>
+				</div>
+			</Card>
+		{:else if swapError}
+			<Card>
+				<div class="py-8 text-center text-red-400">{swapError}</div>
+			</Card>
+		{:else if swapData}
+			<!-- Swap Order Vaults -->
+			<Card>
+				<h3 class="mb-4 text-lg font-medium text-white">Swap Order Vaults</h3>
+				<p class="mb-4 text-sm text-gray-400">
+					Input vault = legacy tokens received from users. Output vault = wrapped tokens given to users.
+				</p>
+				<div class="overflow-x-auto">
+					<table class="w-full text-left text-sm">
+						<thead>
+							<tr class="border-b border-gray-700 text-gray-400">
+								<th class="pb-3 pr-4">Token</th>
+								<th class="pb-3 pr-4">Status</th>
+								<th class="pb-3 pr-4 text-right">Input (Legacy Received)</th>
+								<th class="pb-3 pr-4 text-right">Output (Wrapped Remaining)</th>
+								<th class="pb-3 pr-4">Order Hash</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each swapData.swapOrders as order}
+								<tr class="border-b border-gray-800 hover:bg-gray-800/50">
+									<td class="py-3 pr-4">
+										<span class="font-medium text-white">{order.legacySymbol}</span>
+										<span class="text-gray-500"> → </span>
+										<span class="text-[#e8be89]">{order.wrappedSymbol}</span>
+									</td>
+									<td class="py-3 pr-4">
+										{#if order.inputVault === null && order.outputVault === null}
+											<span class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-400">Not Found</span>
+										{:else if order.orderActive}
+											<span class="rounded bg-green-900/50 px-2 py-0.5 text-xs text-green-400">Active</span>
+										{:else}
+											<span class="rounded bg-red-900/50 px-2 py-0.5 text-xs text-red-400">Inactive</span>
+										{/if}
+									</td>
+									<td class="py-3 pr-4 text-right">
+										{#if order.inputVault}
+											<span class="font-mono text-white">{Number(order.inputVault.balanceFormatted).toFixed(4)}</span>
+											<span class="ml-1 text-xs text-gray-400">{order.inputVault.tokenSymbol}</span>
+										{:else}
+											<span class="text-gray-500">—</span>
+										{/if}
+									</td>
+									<td class="py-3 pr-4 text-right">
+										{#if order.outputVault}
+											<span class="font-mono text-white">{Number(order.outputVault.balanceFormatted).toFixed(4)}</span>
+											<span class="ml-1 text-xs text-gray-400">{order.outputVault.tokenSymbol}</span>
+										{:else}
+											<span class="text-gray-500">—</span>
+										{/if}
+									</td>
+									<td class="py-3 pr-4">
+										<span class="font-mono text-xs text-gray-400" title={order.orderHash}>
+											{order.orderHash.slice(0, 10)}...
+										</span>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</Card>
+
+			<!-- Legacy Token Balances -->
+			<Card>
+				<h3 class="mb-4 text-lg font-medium text-white">Remaining Legacy Token Balances</h3>
+				<p class="mb-4 text-sm text-gray-400">
+					Holders still on old (pre-migration) tokens. Click a row to see individual holders.
+				</p>
+				{#if swapData.legacyBalances.length === 0}
+					<p class="py-8 text-center text-gray-400">No legacy token data found</p>
+				{:else}
+					<div class="overflow-x-auto">
+						<table class="w-full text-left text-sm">
+							<thead>
+								<tr class="border-b border-gray-700 text-gray-400">
+									<th class="pb-3 pr-4">Legacy Token</th>
+									<th class="pb-3 pr-4">Wrapped Token</th>
+									<th class="pb-3 pr-4 text-right">Total Supply</th>
+									<th class="pb-3 pr-4 text-right">Holders</th>
+									<th class="pb-3 pr-4">Legacy Address</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each swapData.legacyBalances as entry}
+									<tr
+										class="cursor-pointer border-b border-gray-800 hover:bg-gray-800/50"
+										on:click={() => toggleLegacyExpand(entry.legacySymbol)}
+									>
+										<td class="py-3 pr-4 font-medium text-white">{entry.legacySymbol}</td>
+										<td class="py-3 pr-4 text-[#e8be89]">{entry.wrappedSymbol}</td>
+										<td class="py-3 pr-4 text-right font-mono text-white">
+											{Number(entry.totalSupplyFormatted).toFixed(4)}
+										</td>
+										<td class="py-3 pr-4 text-right text-gray-300">{entry.holderCount}</td>
+										<td class="py-3 pr-4 font-mono text-xs text-gray-400">
+											{truncateAddress(entry.legacyAddress)}
+										</td>
+									</tr>
+									{#if expandedLegacyTokens.has(entry.legacySymbol) && entry.holders.length > 0}
+										<tr>
+											<td colspan="5" class="bg-gray-900/50 px-4 py-3">
+												<table class="w-full text-left text-xs">
+													<thead>
+														<tr class="text-gray-500">
+															<th class="pb-2 pr-4">Holder Address</th>
+															<th class="pb-2 text-right">Balance</th>
+														</tr>
+													</thead>
+													<tbody>
+														{#each entry.holders as holder}
+															<tr class="border-b border-gray-800/50">
+																<td class="py-2 pr-4 font-mono text-gray-300">
+																	{truncateAddress(holder.address)}
+																</td>
+																<td class="py-2 text-right font-mono text-white">
+																	{Number(holder.balanceFormatted).toFixed(4)}
+																</td>
+															</tr>
+														{/each}
+													</tbody>
+												</table>
+											</td>
+										</tr>
+									{/if}
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</Card>
 		{/if}
 	{/if}
 </div>
