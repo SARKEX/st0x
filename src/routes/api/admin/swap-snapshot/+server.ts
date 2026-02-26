@@ -134,6 +134,68 @@ function formatVaultBalance(
 }
 
 /**
+ * Fetch orderbook vault balances for legacy tokens, keyed by legacy token address.
+ * Returns a map: legacyAddress → array of { owner, balance } entries.
+ * This lets us attribute the orderbook contract's legacy holdings to individual vault owners.
+ */
+async function fetchOrderbookVaultOwners(
+	legacyAddresses: string[]
+): Promise<Map<string, Array<{ owner: string; balance: bigint }>>> {
+	const query = `
+		query getVaults($tokens: [String!]!) {
+			vaults(where: { token_in: $tokens }, first: 1000) {
+				owner
+				token { id decimals }
+				balance
+			}
+		}
+	`;
+
+	const result = new Map<string, Array<{ owner: string; balance: bigint }>>();
+
+	await Promise.all(
+		ORDERBOOK_SUBGRAPH_URLS.map(async (url) => {
+			try {
+				const response = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						query,
+						variables: { tokens: legacyAddresses.map((a) => a.toLowerCase()) }
+					})
+				});
+
+				if (!response.ok) return;
+				const data = await response.json();
+				if (data.errors) return;
+
+				for (const vault of data.data?.vaults ?? []) {
+					const tokenAddr = vault.token.id.toLowerCase();
+					const decimals = parseInt(vault.token.decimals) || 18;
+					const balance = parseFloatHex(vault.balance, decimals);
+					if (balance <= 0n) continue;
+
+					if (!result.has(tokenAddr)) result.set(tokenAddr, []);
+					const existing = result.get(tokenAddr)!;
+					// Deduplicate: same owner may appear from multiple subgraphs
+					const ownerLc = vault.owner.toLowerCase();
+					const prev = existing.find((e) => e.owner === ownerLc);
+					if (prev) {
+						if (balance > prev.balance) prev.balance = balance;
+					} else {
+						existing.push({ owner: ownerLc, balance });
+					}
+				}
+			} catch {
+				// Silently skip failed subgraphs
+			}
+		})
+	);
+
+	return result;
+}
+
+/**
  * Fetch legacy token holder data from the legacy SFT subgraph
  */
 async function fetchLegacyHolders(
@@ -259,33 +321,40 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 		// Get all swap order hashes
 		const orderHashes = Object.values(SWAP_ORDER_HASHES);
 
-		// Fetch swap orders, legacy holders, and team wallets in parallel
+		// Fetch swap orders, legacy holders, orderbook vault owners, and team wallets in parallel
 		const legacyAddresses = TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.address);
-		const [orders, legacyBalances, teamWallets] = await Promise.all([
+		const [orders, legacyBalances, orderbookVaults, teamWallets] = await Promise.all([
 			fetchSwapOrders(orderHashes),
 			fetchLegacyHolders(legacyAddresses),
+			fetchOrderbookVaultOwners(legacyAddresses),
 			getTeamWalletsSet()
 		]);
 
 		// Build order lookup by hash
 		const orderByHash = new Map(orders.map((o) => [o.orderHash, o]));
 
-		// Build legacy balance lookup by symbol for computing outstanding/team amounts
+		// Build legacy balance lookup by symbol and by address
 		const legacyBySymbol = new Map(legacyBalances.map((lb) => [lb.legacySymbol, lb]));
+		const legacySymbolByAddress = new Map(
+			TOKEN_MIGRATION_MAPPINGS.map((m) => [m.oldToken.address.toLowerCase(), m.oldToken.symbol])
+		);
 
-		// Addresses to exclude from "outstanding" (not held by real users)
-		const systemExcluded = new Set([
-			ORDERBOOK_ADDRESS.toLowerCase(),
-			...SYSTEM_EXCLUDED_ADDRESSES.map((a) => a.toLowerCase())
-		]);
+		// Addresses to exclude from "outstanding" (zero address, etc. — but NOT orderbook,
+		// since we attribute orderbook holdings to individual vault owners)
+		const systemExcluded = new Set(
+			SYSTEM_EXCLUDED_ADDRESSES.map((a) => a.toLowerCase())
+		);
+		const orderbookAddress = ORDERBOOK_ADDRESS.toLowerCase();
 
 		// Build swap order entries for each token migration
 		const swapOrders: SwapOrderEntry[] = TOKEN_MIGRATION_MAPPINGS.filter(
 			(m) => m.swapOrderHash
 		).map((mapping) => {
 			const order = orderByHash.get(mapping.swapOrderHash);
+			const legacyAddr = mapping.oldToken.address.toLowerCase();
 
-			// Compute legacy outstanding and team legacy from holder data
+			// Compute legacy outstanding and team legacy from holder data.
+			// For the orderbook contract, attribute its balance to individual vault owners.
 			const legacyEntry = legacyBySymbol.get(mapping.oldToken.symbol);
 			let outstandingBigInt = 0n;
 			let teamBigInt = 0n;
@@ -294,10 +363,21 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 					const addr = holder.address.toLowerCase();
 					const bal = BigInt(holder.balance);
 					if (systemExcluded.has(addr)) continue;
+					if (addr === orderbookAddress) continue; // handled via vault lookup below
 					outstandingBigInt += bal;
 					if (teamWallets.has(addr)) {
 						teamBigInt += bal;
 					}
+				}
+			}
+
+			// Attribute orderbook contract's legacy holdings to vault owners
+			const vaultEntries = orderbookVaults.get(legacyAddr) ?? [];
+			for (const v of vaultEntries) {
+				if (systemExcluded.has(v.owner)) continue;
+				outstandingBigInt += v.balance;
+				if (teamWallets.has(v.owner)) {
+					teamBigInt += v.balance;
 				}
 			}
 
