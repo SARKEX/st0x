@@ -663,7 +663,8 @@
 		assetAddress: string,
 		_assetDecimals: number,
 		quoteAddress: string,
-		_quoteDecimals: number
+		_quoteDecimals: number,
+		requestKey: string
 	) {
 		// Buy price = what you get when selling 1 asset (quote per 1 asset). Offer 1 asset, receive quote.
 		const buyQuotePromise = fetchSwapQuote({
@@ -678,6 +679,8 @@
 			outputAmount: '1'
 		});
 		const [buyInputRaw, sellInputRaw] = await Promise.all([buyQuotePromise, sellQuotePromise]);
+		// Only write if this request is still current (avoids stale response overwriting newer prices)
+		if (quoteApiFetchedFor !== requestKey) return;
 		let buy: number | null = null;
 		let sell: number | null = null;
 		if (buyInputRaw) {
@@ -688,6 +691,7 @@
 			const assetReceived = Number(sellInputRaw);
 			if (Number.isFinite(assetReceived) && assetReceived > 0) sell = 1 / assetReceived; // quote per 1 asset
 		}
+		if (quoteApiFetchedFor !== requestKey) return;
 		quoteApiPrices = { buy, sell };
 	}
 	// Bid/Offer prices come ONLY from swap quote API (not from orderbook)
@@ -713,14 +717,17 @@
 							assetAddress,
 							assetDecimals,
 							quoteAddress,
-							quoteDecimals
+							quoteDecimals,
+							key
 						)
 							.then(() => {
-								quoteApiLoading = false;
+								if (quoteApiFetchedFor === key) quoteApiLoading = false;
 							})
 							.catch(() => {
-								quoteApiPrices = { buy: null, sell: null };
-								quoteApiLoading = false;
+								if (quoteApiFetchedFor === key) {
+									quoteApiPrices = { buy: null, sell: null };
+									quoteApiLoading = false;
+								}
 							});
 					}
 					buyPrice = quoteApiPrices.buy;
