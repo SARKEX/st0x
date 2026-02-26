@@ -319,16 +319,17 @@
 	})();
 
 	$: totalTrades = (() => {
-		let total = 0;
+		const seenTx = new Set<string>();
 		analyzedTradesByNetwork.forEach((entries, chainId) => {
 			const activeSet = activeTokensByNetwork.get(chainId);
-			entries.forEach(({ analysis }) => {
+			entries.forEach(({ trade, analysis }) => {
 				const address = normalizeAddress(analysis.assetAddress);
 				if (activeSet && activeSet.size > 0 && address && !activeSet.has(address)) return;
-				total += 1;
+				const txId = trade.tradeEvent?.transaction?.id ?? trade.id;
+				if (txId) seenTx.add(txId);
 			});
 		});
-		return total;
+		return seenTx.size;
 	})();
 
 	// Build a set of tStock addresses for identification
