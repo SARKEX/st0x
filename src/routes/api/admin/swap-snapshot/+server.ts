@@ -4,7 +4,6 @@ import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/adminAuth';
 import { SWAP_ORDER_HASHES, TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
 import { networks } from '$lib/config/networks';
-import { TOKENS } from '$lib/config/tokens';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 import { formatUnits } from 'viem';
 
@@ -145,34 +144,14 @@ async function fetchLegacyHolders(
 		});
 	}
 
-	// The legacy SFT subgraph uses the unwrapped/vault address as the entity `id` field,
-	// but `wrappedTokenContractAddress` may point to the legacy wrapped token address.
-	// Query by both `id` (unwrapped) and `wrappedTokenContractAddress` (wrapped legacy).
-	// For legacy tokens, the `address` field = the unwrapped vault address.
-	// We also try querying with lowercased legacy addresses directly.
+	// The legacy SFT subgraph (v1.0.5) vault IDs are the legacy token addresses themselves.
+	// It does NOT have wrappedTokenContractAddress — query by id only.
 	const addressList = legacyAddresses.map((a) => `"${a.toLowerCase()}"`).join(',');
-
-	// Also get the unwrapped addresses corresponding to legacy tokens
-	const unwrappedAddresses = TOKENS.filter((t) => t.legacyAddress && t.unwrappedAddress)
-		.map((t) => `"${t.unwrappedAddress!.toLowerCase()}"`)
-		.join(',');
 
 	const query = `
 		{
-			byWrapped: offchainAssetReceiptVaults(where: {
-				wrappedTokenContractAddress_in: [${addressList}]
-			}) {
-				id
-				address
-				symbol
-				totalShares
-				tokenHolders {
-					address
-					balance
-				}
-			}
-			byId: offchainAssetReceiptVaults(where: {
-				id_in: [${unwrappedAddresses}]
+			offchainAssetReceiptVaults(where: {
+				id_in: [${addressList}]
 			}) {
 				id
 				address
@@ -203,37 +182,19 @@ async function fetchLegacyHolders(
 			console.error('[Swap Snapshot] Legacy subgraph errors:', data.errors);
 		}
 
-		// Merge results from both query paths, dedup by id
-		const byWrapped = (data.data?.byWrapped ?? []) as Array<{
+		const allVaults = (data.data?.offchainAssetReceiptVaults ?? []) as Array<{
 			id: string;
 			address: string;
 			symbol: string;
 			totalShares: string;
 			tokenHolders: Array<{ address: string; balance: string }>;
 		}>;
-		const byId = (data.data?.byId ?? []) as typeof byWrapped;
-		const seen = new Set<string>();
-		const allVaults = [...byWrapped, ...byId].filter((v) => {
-			if (seen.has(v.id)) return false;
-			seen.add(v.id);
-			return true;
-		});
 
 		const entries: LegacyBalanceEntry[] = [];
 
 		for (const vault of allVaults) {
-			// Match vault to our known legacy tokens
-			// The vault's address (unwrapped) maps to a TOKENS entry's unwrappedAddress
-			const token = TOKENS.find(
-				(t) =>
-					t.unwrappedAddress?.toLowerCase() === vault.id.toLowerCase() ||
-					t.unwrappedAddress?.toLowerCase() === vault.address?.toLowerCase() ||
-					t.legacyAddress?.toLowerCase() === vault.id.toLowerCase()
-			);
-
-			const tokenInfo = token?.legacyAddress
-				? legacyToToken.get(token.legacyAddress.toLowerCase())
-				: null;
+			// Vault id in the legacy subgraph IS the legacy token address
+			const tokenInfo = legacyToToken.get(vault.id.toLowerCase());
 
 			if (!tokenInfo) continue;
 
@@ -268,7 +229,7 @@ async function fetchLegacyHolders(
 
 			entries.push({
 				legacySymbol: tokenInfo.legacySymbol,
-				legacyAddress: token!.legacyAddress!,
+				legacyAddress: vault.id,
 				wrappedSymbol: tokenInfo.wrappedSymbol,
 				totalSupply: totalSupplyBigInt.toString(),
 				totalSupplyFormatted: formatUnits(totalSupplyBigInt, 18),
