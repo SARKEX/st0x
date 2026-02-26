@@ -1764,12 +1764,12 @@ const transactionStore = () => {
 		const network = get(currentNetwork) as Network;
 
 		const baseRatio = Number(params.maximumIoRatio) || 0;
-		const maxRatioWithBuffer = Math.ceil(baseRatio * 1.01);
+		const maxRatioWithBuffer = Math.ceil(baseRatio * 1.01).toString();
 		const apiParams = {
 			inputToken: params.inputToken,
 			outputToken: params.outputToken,
 			outputAmount: params.outputAmount,
-			maximumIoRatio: String(maxRatioWithBuffer),
+			maximumIoRatio: maxRatioWithBuffer,
 			taker: params.taker
 		};
 

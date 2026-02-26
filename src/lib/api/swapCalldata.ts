@@ -1,12 +1,10 @@
 /**
  * Swap calldata API client for st0x.
- * POST /v1/swap/calldata: returns approval tx(s) first; after user submits approval,
- * call again with same params to get the actual market order calldata.
+ * Uses server proxy POST /api/proxy-swap-calldata (which calls api.st0x.io/v1/swap/calldata).
+ * First call returns approvals; after user submits approval, call again with same params to get the actual calldata.
  */
 
-import { env } from '$env/dynamic/public';
-
-const SWAP_CALLDATA_URL = 'https://api.st0x.io/v1/swap/calldata';
+const PROXY_SWAP_CALLDATA_URL = '/api/proxy-swap-calldata';
 
 export interface SwapCalldataParams {
 	/** Token address the taker is putting in (spending) */
@@ -37,30 +35,20 @@ export interface SwapCalldataResponse {
 	approvals: SwapCalldataApproval[];
 }
 
-function getAuthHeader(): string | null {
-	const auth = env.PUBLIC_ST0X_SWAP_QUOTE_AUTH;
-	return typeof auth === 'string' && auth ? auth : null;
-}
-
 /**
- * Fetches swap calldata from the st0x API.
+ * Fetches swap calldata via the server proxy (auth is applied server-side).
  * First call returns approvals to execute; after user submits approval tx(s),
  * call again with the same params to get the actual swap calldata.
  */
 export async function fetchSwapCalldata(
 	params: SwapCalldataParams
 ): Promise<SwapCalldataResponse | null> {
-	const auth = getAuthHeader();
-	const headers: Record<string, string> = {
-		accept: 'application/json',
-		'Content-Type': 'application/json'
-	};
-	if (auth) {
-		headers['Authorization'] = `Basic ${auth}`;
-	}
-	const res = await fetch(SWAP_CALLDATA_URL, {
+	const res = await fetch(PROXY_SWAP_CALLDATA_URL, {
 		method: 'POST',
-		headers,
+		headers: {
+			accept: 'application/json',
+			'Content-Type': 'application/json'
+		},
 		body: JSON.stringify({
 			inputToken: params.inputToken,
 			outputToken: params.outputToken,
