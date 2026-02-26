@@ -2930,7 +2930,15 @@
 							<div class="rounded-lg bg-gray-800/50 p-3 text-center">
 								<p class="font-mono text-sm text-[#e8be89]">
 									{snapshotData.priceTimestamp
-										? new Date(snapshotData.priceTimestamp * 1000).toLocaleString()
+										? new Date(snapshotData.priceTimestamp * 1000).toLocaleString('en-US', {
+												timeZone: 'America/New_York',
+												year: 'numeric',
+												month: '2-digit',
+												day: '2-digit',
+												hour: '2-digit',
+												minute: '2-digit',
+												hour12: false
+											})
 										: 'N/A'}
 								</p>
 								<p class="text-xs text-gray-400">Price Timestamp</p>

@@ -59,38 +59,6 @@ export interface SubgraphTransfer {
 	};
 }
 
-export interface SubgraphDeposit {
-	id: string;
-	emitter: {
-		address: string;
-	};
-	amount: string;
-	transaction: {
-		id: string;
-		timestamp: string;
-		blockNumber: string;
-	};
-	offchainAssetReceiptVault: {
-		id: string;
-	};
-}
-
-export interface SubgraphWithdrawal {
-	id: string;
-	owner: {
-		address: string;
-	};
-	amount: string;
-	transaction: {
-		id: string;
-		timestamp: string;
-		blockNumber: string;
-	};
-	offchainAssetReceiptVault: {
-		id: string;
-	};
-}
-
 export interface SubgraphWrappedTokenTransfer {
 	id: string;
 	from: string;
