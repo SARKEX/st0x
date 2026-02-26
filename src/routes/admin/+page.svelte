@@ -1,6 +1,13 @@
+<script lang="ts" context="module">
+	type PeriodPreset = '24h' | '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
+	const VALID_PERIODS: PeriodPreset[] = ['24h', '7d', '30d', '90d', '1y', 'all'];
+</script>
+
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
+	import { replaceState } from '$app/navigation';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { networks } from '$lib/config/networks';
 	import { TOKENS, getTokenByAnyAddress, getTokenAddressVariants } from '$lib/config/tokens';
@@ -70,11 +77,16 @@
 	type TvlTab = 'tokens' | 'codes' | 'wallets';
 	let activeTvlTab: TvlTab = 'tokens';
 
-	// Period selector
-	type PeriodPreset = '24h' | '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
-	let selectedPeriod: PeriodPreset = '30d';
-	let customStartDate = '';
-	let customEndDate = '';
+	// Period selector (persisted in URL search params)
+	function getInitialPeriod(): PeriodPreset {
+		const param = $page.url.searchParams.get('period');
+		if (param === 'custom' && $page.url.searchParams.get('from') && $page.url.searchParams.get('to')) return 'custom';
+		if (param && (VALID_PERIODS as string[]).includes(param)) return param as PeriodPreset;
+		return '30d';
+	}
+	let selectedPeriod: PeriodPreset = getInitialPeriod();
+	let customStartDate = $page.url.searchParams.get('from') ?? '';
+	let customEndDate = $page.url.searchParams.get('to') ?? '';
 
 	const periodPresets: { value: PeriodPreset; label: string }[] = [
 		{ value: '24h', label: '24H' },
@@ -115,8 +127,22 @@
 		}
 	}
 
+	function updatePeriodUrl(period: PeriodPreset, from?: string, to?: string) {
+		const url = new URL($page.url);
+		url.searchParams.set('period', period);
+		if (period === 'custom' && from && to) {
+			url.searchParams.set('from', from);
+			url.searchParams.set('to', to);
+		} else {
+			url.searchParams.delete('from');
+			url.searchParams.delete('to');
+		}
+		replaceState(url, {});
+	}
+
 	function selectPeriod(period: PeriodPreset) {
 		selectedPeriod = period;
+		updatePeriodUrl(period);
 		if (period !== 'custom') {
 			loadAllData();
 		}
@@ -125,6 +151,7 @@
 	function applyCustomRange() {
 		if (customStartDate && customEndDate) {
 			selectedPeriod = 'custom';
+			updatePeriodUrl('custom', customStartDate, customEndDate);
 			loadAllData();
 		}
 	}
