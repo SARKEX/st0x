@@ -1962,7 +1962,8 @@ const transactionStore = () => {
 			formatUnits(receiveAmount, params.outputTokenDecimals)
 		);
 		const inputFilledDecimal = inputRequestedDecimal;
-		const fillPercentage = inputRequestedDecimal > 0 ? inputFilledDecimal / inputRequestedDecimal : 0;
+		const fillPercentage =
+			inputRequestedDecimal > 0 ? inputFilledDecimal / inputRequestedDecimal : 0;
 
 		const summary: MarketOrderSummary = {
 			inputAmount: receiveAmount,

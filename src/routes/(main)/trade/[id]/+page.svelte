@@ -478,8 +478,6 @@
 	let quoteApiFetchedFor: string | null = null;
 	/** True when we have no orderbook quotes and are waiting on the swap quote API */
 	let quoteApiLoading = false;
-	/** True when BID/OFFER are from quote API fallback (no orderbook); used to show loading state */
-	let usingQuoteApiFallback = false;
 	type OrderbookQuoteUiState = {
 		status: QueryObserverResult<OrderbookQuoteCache, Error>['status'];
 		hasData: boolean;
@@ -656,7 +654,6 @@
 		quoteApiPrices = { buy: null, sell: null };
 		quoteApiFetchedFor = null;
 		quoteApiLoading = false;
-		usingQuoteApiFallback = false;
 	};
 	/** Fetch buy/sell prices from swap quote API (when orderbook has no quotes). API uses human-readable amounts: outputAmount "1" = 1 token. */
 	async function fetchOnChainPricesFromQuoteApi(
@@ -708,7 +705,6 @@
 				const assetDecimals = Number(currentPythToken?.decimals ?? 18);
 				const quoteDecimals = Number(settlementToken.decimals ?? 6);
 				if (assetAddress && quoteAddress) {
-					usingQuoteApiFallback = true;
 					const key = `${assetAddress}-${$currentNetwork.id}`;
 					if (quoteApiFetchedFor !== key) {
 						quoteApiFetchedFor = key;
@@ -735,7 +731,6 @@
 				} else {
 					buyPrice = null;
 					sellPrice = null;
-					usingQuoteApiFallback = false;
 				}
 			}
 		}
