@@ -54,7 +54,10 @@ export const GET: RequestHandler = async ({ request }) => {
 				try {
 					({ monthlyData, poolConfig, excludedSet } = await fetchRewardsData(currentMonth));
 				} catch (error) {
-					console.warn('[Public API - Rewards APY] Redis unavailable, returning empty data:', error);
+					console.warn(
+						'[Public API - Rewards APY] Redis unavailable, returning empty data:',
+						error
+					);
 				}
 
 				const totalPoints = calculateTotalPoints(monthlyData, excludedSet);

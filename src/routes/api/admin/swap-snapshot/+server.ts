@@ -121,9 +121,11 @@ async function fetchSwapOrders(orderHashes: string[]): Promise<SubgraphOrder[]> 
 /**
  * Format a vault balance from Rain Float hex to human-readable
  */
-function formatVaultBalance(
-	vault: SubgraphOrderVault
-): { tokenSymbol: string; balance: string; balanceFormatted: string } {
+function formatVaultBalance(vault: SubgraphOrderVault): {
+	tokenSymbol: string;
+	balance: string;
+	balanceFormatted: string;
+} {
 	const decimals = parseInt(vault.token.decimals) || 18;
 	const balanceBigInt = parseFloatHex(vault.balance, decimals);
 	return {
@@ -198,9 +200,7 @@ async function fetchOrderbookVaultOwners(
 /**
  * Fetch legacy token holder data from the legacy SFT subgraph
  */
-async function fetchLegacyHolders(
-	legacyAddresses: string[]
-): Promise<LegacyBalanceEntry[]> {
+async function fetchLegacyHolders(legacyAddresses: string[]): Promise<LegacyBalanceEntry[]> {
 	if (!LEGACY_SFT_SUBGRAPH_URL) return [];
 
 	// Build mapping from legacy address to token info
@@ -335,15 +335,9 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 
 		// Build legacy balance lookup by symbol and by address
 		const legacyBySymbol = new Map(legacyBalances.map((lb) => [lb.legacySymbol, lb]));
-		const legacySymbolByAddress = new Map(
-			TOKEN_MIGRATION_MAPPINGS.map((m) => [m.oldToken.address.toLowerCase(), m.oldToken.symbol])
-		);
-
 		// Addresses to exclude from "outstanding" (zero address, etc. — but NOT orderbook,
 		// since we attribute orderbook holdings to individual vault owners)
-		const systemExcluded = new Set(
-			SYSTEM_EXCLUDED_ADDRESSES.map((a) => a.toLowerCase())
-		);
+		const systemExcluded = new Set(SYSTEM_EXCLUDED_ADDRESSES.map((a) => a.toLowerCase()));
 		const orderbookAddress = ORDERBOOK_ADDRESS.toLowerCase();
 
 		// Build swap order entries for each token migration

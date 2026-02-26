@@ -3,11 +3,7 @@
 
 import { networks } from '$lib/config/networks';
 import { TOKENS, getAllTokenAddressesFlat } from '$lib/config/tokens';
-import type {
-	Transfer,
-	SubgraphTransfer,
-	SubgraphWrappedTokenTransfer
-} from './types';
+import type { Transfer, SubgraphTransfer, SubgraphWrappedTokenTransfer } from './types';
 
 const BATCH_SIZE = 1000;
 
@@ -184,34 +180,32 @@ async function fetchFromSubgraph(
 	const allTransfers: Transfer[] = [];
 
 	while (transfersHasMore || wrappedHasMore) {
-		const [transfersBatch, wrappedBatch]: [
-			SubgraphTransfer[],
-			SubgraphWrappedTokenTransfer[]
-		] = await Promise.all([
-			transfersHasMore
-				? fetchTransfers(subgraphUrl, transfersSkip, untilBlock, tokenAddresses)
-				: Promise.resolve([]),
-			wrappedHasMore
-				? fetchWrappedTokenTransfers(subgraphUrl, wrappedSkip, untilBlock, tokenAddresses).catch(
-						(err) => {
-							const message = err instanceof Error ? err.message : String(err);
-							const isMissingEntity =
-								/Cannot query field\s+"wrappedTokenTransfers"/i.test(message) ||
-								/Unknown field.*wrappedTokenTransfers/i.test(message) ||
-								/has no field.*wrappedTokenTransfers/i.test(message);
+		const [transfersBatch, wrappedBatch]: [SubgraphTransfer[], SubgraphWrappedTokenTransfer[]] =
+			await Promise.all([
+				transfersHasMore
+					? fetchTransfers(subgraphUrl, transfersSkip, untilBlock, tokenAddresses)
+					: Promise.resolve([]),
+				wrappedHasMore
+					? fetchWrappedTokenTransfers(subgraphUrl, wrappedSkip, untilBlock, tokenAddresses).catch(
+							(err) => {
+								const message = err instanceof Error ? err.message : String(err);
+								const isMissingEntity =
+									/Cannot query field\s+"wrappedTokenTransfers"/i.test(message) ||
+									/Unknown field.*wrappedTokenTransfers/i.test(message) ||
+									/has no field.*wrappedTokenTransfers/i.test(message);
 
-							if (isMissingEntity) {
-								// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
-								console.warn(`[Scraper] wrappedTokenTransfers not available: ${message}`);
-								wrappedHasMore = false;
-								return [] as SubgraphWrappedTokenTransfer[];
+								if (isMissingEntity) {
+									// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
+									console.warn(`[Scraper] wrappedTokenTransfers not available: ${message}`);
+									wrappedHasMore = false;
+									return [] as SubgraphWrappedTokenTransfer[];
+								}
+
+								throw err;
 							}
-
-							throw err;
-						}
-					)
-				: Promise.resolve([])
-		]);
+						)
+					: Promise.resolve([])
+			]);
 
 		// Process sharesTransfers (includes mints from 0x0 and burns to 0x0)
 		const processedTransfers: Transfer[] = transfersBatch.map((t: SubgraphTransfer) => ({
@@ -228,18 +222,15 @@ async function fetchFromSubgraph(
 		const processedWrapped: Transfer[] = wrappedBatch
 			.filter((w) => !!w.offchainAssetReceiptVault.wrappedTokenContractAddress)
 			.map((w: SubgraphWrappedTokenTransfer) => ({
-			tokenAddress: w.offchainAssetReceiptVault.wrappedTokenContractAddress.toLowerCase(),
-			from: w.from.toLowerCase(),
-			to: w.to.toLowerCase(),
-			value: w.value,
-			blockNumber: parseInt(w.transaction.blockNumber),
-			timestamp: parseInt(w.transaction.timestamp)
-		}));
+				tokenAddress: w.offchainAssetReceiptVault.wrappedTokenContractAddress.toLowerCase(),
+				from: w.from.toLowerCase(),
+				to: w.to.toLowerCase(),
+				value: w.value,
+				blockNumber: parseInt(w.transaction.blockNumber),
+				timestamp: parseInt(w.transaction.timestamp)
+			}));
 
-		allTransfers.push(
-			...processedTransfers,
-			...processedWrapped
-		);
+		allTransfers.push(...processedTransfers, ...processedWrapped);
 
 		console.log(
 			`[Scraper] Batch: ${transfersBatch.length} transfers, ${wrappedBatch.length} wrapped`

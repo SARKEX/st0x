@@ -80,7 +80,12 @@
 	// Period selector (persisted in URL search params)
 	function getInitialPeriod(): PeriodPreset {
 		const param = $page.url.searchParams.get('period');
-		if (param === 'custom' && $page.url.searchParams.get('from') && $page.url.searchParams.get('to')) return 'custom';
+		if (
+			param === 'custom' &&
+			$page.url.searchParams.get('from') &&
+			$page.url.searchParams.get('to')
+		)
+			return 'custom';
 		if (param && (VALID_PERIODS as string[]).includes(param)) return param as PeriodPreset;
 		return '30d';
 	}
@@ -109,7 +114,13 @@
 		}
 
 		const DAY = 86400;
-		const periodDays: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90, '1y': 365 };
+		const periodDays: Record<string, number> = {
+			'24h': 1,
+			'7d': 7,
+			'30d': 30,
+			'90d': 90,
+			'1y': 365
+		};
 		const days = periodDays[selectedPeriod];
 		return { start: days ? now - days * DAY : 0, end: now };
 	}
@@ -325,7 +336,8 @@
 	}
 	let swapLoading = false;
 	let swapError = '';
-	let swapData: { swapOrders: SwapOrderEntry[]; legacyBalances: LegacyBalanceEntry[] } | null = null;
+	let swapData: { swapOrders: SwapOrderEntry[]; legacyBalances: LegacyBalanceEntry[] } | null =
+		null;
 	let expandedLegacyTokens: Set<string> = new Set();
 
 	// Leaderboard month filter
@@ -752,8 +764,7 @@
 						borderWidth: 1,
 						padding: 12,
 						callbacks: {
-							label: (context: { parsed?: { y?: number } }) =>
-								formatTooltip(context.parsed?.y || 0)
+							label: (context: { parsed?: { y?: number } }) => formatTooltip(context.parsed?.y || 0)
 						}
 					}
 				},
@@ -956,7 +967,14 @@
 	});
 
 	onDestroy(() => {
-		for (const chart of [tokenChart, codeChart, walletChart, tvlChart, tvlCodeChart, tvlWalletChart]) {
+		for (const chart of [
+			tokenChart,
+			codeChart,
+			walletChart,
+			tvlChart,
+			tvlCodeChart,
+			tvlWalletChart
+		]) {
 			chart?.destroy();
 		}
 		tokenChart = codeChart = walletChart = tvlChart = tvlCodeChart = tvlWalletChart = null;
@@ -1498,7 +1516,11 @@
 				</span>
 			{/if}
 			<button
-				on:click={() => { if (activeSection === 'swaps') fetchSwapData(); else if (activeSection === 'tvl') fetchTvlData(); else loadAllData(); }}
+				on:click={() => {
+					if (activeSection === 'swaps') fetchSwapData();
+					else if (activeSection === 'tvl') fetchTvlData();
+					else loadAllData();
+				}}
 				disabled={loading || swapLoading}
 				class="flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white transition-colors hover:border-gray-500 hover:bg-gray-700 disabled:opacity-50"
 			>
@@ -2714,7 +2736,8 @@
 			<Card>
 				<h3 class="mb-4 text-lg font-medium text-white">Swap Order Vaults</h3>
 				<p class="mb-4 text-sm text-gray-400">
-					Input vault = legacy tokens received from users. Output vault = wrapped tokens given to users.
+					Input vault = legacy tokens received from users. Output vault = wrapped tokens given to
+					users.
 				</p>
 				<div class="overflow-x-auto">
 					<table class="w-full text-left text-sm">
@@ -2739,16 +2762,24 @@
 									</td>
 									<td class="py-3 pr-4">
 										{#if order.inputVault === null && order.outputVault === null}
-											<span class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-400">Not Found</span>
+											<span class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-400"
+												>Not Found</span
+											>
 										{:else if order.orderActive}
-											<span class="rounded bg-green-900/50 px-2 py-0.5 text-xs text-green-400">Active</span>
+											<span class="rounded bg-green-900/50 px-2 py-0.5 text-xs text-green-400"
+												>Active</span
+											>
 										{:else}
-											<span class="rounded bg-red-900/50 px-2 py-0.5 text-xs text-red-400">Inactive</span>
+											<span class="rounded bg-red-900/50 px-2 py-0.5 text-xs text-red-400"
+												>Inactive</span
+											>
 										{/if}
 									</td>
 									<td class="py-3 pr-4 text-right">
 										{#if order.inputVault}
-											<span class="font-mono text-white">{Number(order.inputVault.balanceFormatted).toFixed(4)}</span>
+											<span class="font-mono text-white"
+												>{Number(order.inputVault.balanceFormatted).toFixed(4)}</span
+											>
 											<span class="ml-1 text-xs text-gray-400">{order.inputVault.tokenSymbol}</span>
 										{:else}
 											<span class="text-gray-500">—</span>
@@ -2756,17 +2787,24 @@
 									</td>
 									<td class="py-3 pr-4 text-right">
 										{#if order.outputVault}
-											<span class="font-mono text-white">{Number(order.outputVault.balanceFormatted).toFixed(4)}</span>
-											<span class="ml-1 text-xs text-gray-400">{order.outputVault.tokenSymbol}</span>
+											<span class="font-mono text-white"
+												>{Number(order.outputVault.balanceFormatted).toFixed(4)}</span
+											>
+											<span class="ml-1 text-xs text-gray-400">{order.outputVault.tokenSymbol}</span
+											>
 										{:else}
 											<span class="text-gray-500">—</span>
 										{/if}
 									</td>
 									<td class="py-3 pr-4 text-right">
-										<span class="font-mono text-white">{Number(order.legacyOutstandingFormatted).toFixed(4)}</span>
+										<span class="font-mono text-white"
+											>{Number(order.legacyOutstandingFormatted).toFixed(4)}</span
+										>
 									</td>
 									<td class="py-3 pr-4 text-right">
-										<span class="font-mono text-white">{Number(order.teamLegacyFormatted).toFixed(4)}</span>
+										<span class="font-mono text-white"
+											>{Number(order.teamLegacyFormatted).toFixed(4)}</span
+										>
 									</td>
 									<td class="py-3 pr-4">
 										<span class="font-mono text-xs text-gray-400" title={order.orderHash}>
