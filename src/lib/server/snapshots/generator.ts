@@ -10,71 +10,43 @@ import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { networks } from '$lib/config/networks';
 import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
 
-/**
- * Get block timestamp from RPC
- */
-export async function getBlockTimestamp(blockNumber: number): Promise<number> {
-	const network = networks[0];
-	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
+const RPC_URLS = [networks[0].rpcUrl, ...networks[0].fallbackRpcUrls];
 
-	for (const rpcUrl of rpcUrls) {
+/**
+ * Call a JSON-RPC method with fallback across all configured RPC URLs.
+ * Returns null if all RPCs fail, or the result field from the first successful response.
+ */
+async function callRpc(method: string, params: unknown[]): Promise<unknown | null> {
+	for (const rpcUrl of RPC_URLS) {
 		try {
 			const response = await fetch(rpcUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					method: 'eth_getBlockByNumber',
-					params: [`0x${blockNumber.toString(16)}`, false],
-					id: 1
-				})
+				body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 })
 			});
-
 			if (!response.ok) continue;
-
 			const data = await response.json();
-			if (data.result?.timestamp) {
-				return parseInt(data.result.timestamp, 16);
-			}
+			if (data.result) return data.result;
 		} catch {
 			continue;
 		}
 	}
+	return null;
+}
 
+export async function getBlockTimestamp(blockNumber: number): Promise<number> {
+	const result = await callRpc('eth_getBlockByNumber', [`0x${blockNumber.toString(16)}`, false]);
+	if (result && typeof result === 'object' && 'timestamp' in result) {
+		return parseInt((result as { timestamp: string }).timestamp, 16);
+	}
 	throw new Error('Failed to get block timestamp from any RPC');
 }
 
-/**
- * Get current block number from RPC
- */
 export async function getCurrentBlockNumber(): Promise<number> {
-	const network = networks[0];
-	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
-
-	for (const rpcUrl of rpcUrls) {
-		try {
-			const response = await fetch(rpcUrl, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					method: 'eth_blockNumber',
-					params: [],
-					id: 1
-				})
-			});
-
-			if (!response.ok) continue;
-
-			const data = await response.json();
-			if (data.result) {
-				return parseInt(data.result, 16);
-			}
-		} catch {
-			continue;
-		}
+	const result = await callRpc('eth_blockNumber', []);
+	if (typeof result === 'string') {
+		return parseInt(result, 16);
 	}
-
 	throw new Error('Failed to get current block number from any RPC');
 }
 
@@ -82,54 +54,22 @@ export async function getCurrentBlockNumber(): Promise<number> {
  * Get block number for a specific timestamp using binary search via RPC
  */
 export async function getBlockNumberForTimestamp(targetTimestamp: number): Promise<number> {
-	const network = networks[0];
-	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
-
-	// Get current block as upper bound
 	const latestBlock = await getCurrentBlockNumber();
 
-	// Binary search to find block closest to target timestamp
 	let left = 0;
 	let right = latestBlock;
 	let closestBlock = latestBlock;
 	let smallestDiff = Infinity;
 
-	const getTimestampForBlock = async (blockNum: number): Promise<number | null> => {
-		for (const rpcUrl of rpcUrls) {
-			try {
-				const response = await fetch(rpcUrl, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						jsonrpc: '2.0',
-						method: 'eth_getBlockByNumber',
-						params: [`0x${blockNum.toString(16)}`, false],
-						id: 1
-					})
-				});
-				if (response.ok) {
-					const data = await response.json();
-					if (data.result?.timestamp) {
-						return parseInt(data.result.timestamp, 16);
-					}
-				}
-			} catch {
-				continue;
-			}
-		}
-		return null;
-	};
-
-	// Perform binary search with limited iterations
 	for (let i = 0; i < 30 && left <= right; i++) {
 		const mid = Math.floor((left + right) / 2);
-		const blockTimestamp = await getTimestampForBlock(mid);
-
-		if (blockTimestamp === null) {
+		const block = await callRpc('eth_getBlockByNumber', [`0x${mid.toString(16)}`, false]);
+		if (!block || typeof block !== 'object' || !('timestamp' in block)) {
 			right = mid - 1;
 			continue;
 		}
 
+		const blockTimestamp = parseInt((block as { timestamp: string }).timestamp, 16);
 		const diff = Math.abs(blockTimestamp - targetTimestamp);
 		if (diff < smallestDiff) {
 			smallestDiff = diff;

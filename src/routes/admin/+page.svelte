@@ -108,23 +108,10 @@
 			};
 		}
 
-		const dayInSeconds = 24 * 60 * 60;
-		switch (selectedPeriod) {
-			case '24h':
-				return { start: now - dayInSeconds, end: now };
-			case '7d':
-				return { start: now - 7 * dayInSeconds, end: now };
-			case '30d':
-				return { start: now - 30 * dayInSeconds, end: now };
-			case '90d':
-				return { start: now - 90 * dayInSeconds, end: now };
-			case '1y':
-				return { start: now - 365 * dayInSeconds, end: now };
-			case 'all':
-				return { start: 0, end: now };
-			default:
-				return { start: now - 30 * dayInSeconds, end: now };
-		}
+		const DAY = 86400;
+		const periodDays: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90, '1y': 365 };
+		const days = periodDays[selectedPeriod];
+		return { start: days ? now - days * DAY : 0, end: now };
 	}
 
 	function updatePeriodUrl(period: PeriodPreset, from?: string, to?: string) {
@@ -364,13 +351,15 @@
 		selectedTokens = new Set(allTokenSymbols);
 	}
 
+	/** Toggle a value in a Set and return the Set (for Svelte reactivity reassignment) */
+	function toggleSetItem<T>(set: Set<T>, item: T): Set<T> {
+		if (set.has(item)) set.delete(item);
+		else set.add(item);
+		return set;
+	}
+
 	function toggleToken(symbol: string) {
-		if (selectedTokens.has(symbol)) {
-			selectedTokens.delete(symbol);
-		} else {
-			selectedTokens.add(symbol);
-		}
-		selectedTokens = selectedTokens; // Trigger reactivity
+		selectedTokens = toggleSetItem(selectedTokens, symbol);
 	}
 
 	function selectAllTokens() {
@@ -383,29 +372,16 @@
 
 	function closeDropdownOnClickOutside(event: MouseEvent) {
 		const target = event.target as HTMLElement;
-		if (!target.closest('.token-dropdown')) {
-			tokenDropdownOpen = false;
-		}
-		if (!target.closest('.code-dropdown')) {
-			codeDropdownOpen = false;
-		}
-		if (!target.closest('.wallet-dropdown')) {
-			walletDropdownOpen = false;
-		}
-		// TVL dropdowns
-		if (!target.closest('.tvl-filter-dropdown')) {
-			tvlFilterDropdownOpen = false;
-		}
-		if (!target.closest('.tvl-code-dropdown')) {
-			tvlCodeDropdownOpen = false;
-		}
-		if (!target.closest('.tvl-wallet-dropdown')) {
-			tvlWalletDropdownOpen = false;
-		}
-		// Leaderboard month dropdown
-		if (!target.closest('.leaderboard-month-dropdown')) {
-			leaderboardMonthDropdownOpen = false;
-		}
+		const close = (selector: string, setter: () => void) => {
+			if (!target.closest(selector)) setter();
+		};
+		close('.token-dropdown', () => (tokenDropdownOpen = false));
+		close('.code-dropdown', () => (codeDropdownOpen = false));
+		close('.wallet-dropdown', () => (walletDropdownOpen = false));
+		close('.tvl-filter-dropdown', () => (tvlFilterDropdownOpen = false));
+		close('.tvl-code-dropdown', () => (tvlCodeDropdownOpen = false));
+		close('.tvl-wallet-dropdown', () => (tvlWalletDropdownOpen = false));
+		close('.leaderboard-month-dropdown', () => (leaderboardMonthDropdownOpen = false));
 	}
 
 	// Access code chart controls
@@ -437,12 +413,7 @@
 	}
 
 	function toggleWallet(wallet: string) {
-		if (selectedWallets.has(wallet)) {
-			selectedWallets.delete(wallet);
-		} else {
-			selectedWallets.add(wallet);
-		}
-		selectedWallets = selectedWallets;
+		selectedWallets = toggleSetItem(selectedWallets, wallet);
 	}
 
 	function selectAllWallets() {
@@ -554,12 +525,7 @@
 	}
 
 	function toggleTvlWallet(wallet: string) {
-		if (tvlSelectedWallets.has(wallet)) {
-			tvlSelectedWallets.delete(wallet);
-		} else {
-			tvlSelectedWallets.add(wallet);
-		}
-		tvlSelectedWallets = tvlSelectedWallets;
+		tvlSelectedWallets = toggleSetItem(tvlSelectedWallets, wallet);
 	}
 
 	function selectAllTvlWallets() {
@@ -719,279 +685,51 @@
 		}
 	}
 
-	function updateTokenChart() {
-		if (!ChartCtor || !tokenChartCanvas) return;
-		const ctx = tokenChartCanvas.getContext('2d');
-		if (!ctx) return;
+	/**
+	 * Factory for creating bar charts with consistent styling.
+	 * Destroys the previous chart instance and returns the new one.
+	 */
+	function createBarChart(
+		canvas: HTMLCanvasElement | null,
+		prev: ChartInstance,
+		config: {
+			label: string;
+			labels: string[];
+			data: number[];
+			format: 'usd' | 'usd-large' | 'count';
+		}
+	): ChartInstance {
+		if (!ChartCtor || !canvas) return prev;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return prev;
 
-		// Destroy existing chart
-		if (tokenChart) {
-			tokenChart.destroy();
-			tokenChart = null;
+		if (prev) {
+			prev.destroy();
 		}
 
-		// Single dataset showing total of selected tokens
-		const chartLabel = tokenChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume';
+		const formatTooltip = (value: number): string => {
+			if (config.format === 'count') return `${value} transactions`;
+			return formatUsd(value);
+		};
 
-		tokenChart = new ChartCtor(ctx, {
-			type: 'bar',
-			data: {
-				labels: tokenChartData.map((d) => d.date),
-				datasets: [
-					{
-						label: chartLabel,
-						data: tokenChartData.map((day) => day.total),
-						backgroundColor: '#e8be89',
-						borderColor: '#d4a976',
-						borderWidth: 1,
-						borderRadius: 4
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				animation: false,
-				interaction: {
-					mode: 'index',
-					intersect: false
-				},
-				plugins: {
-					legend: {
-						display: false
-					},
-					tooltip: {
-						backgroundColor: 'rgba(17, 24, 39, 0.95)',
-						titleColor: '#f3f4f6',
-						bodyColor: '#d1d5db',
-						borderColor: 'rgba(75, 85, 99, 0.3)',
-						borderWidth: 1,
-						padding: 12,
-						callbacks: {
-							label: (context: { parsed?: { y?: number } }) => {
-								const value = context.parsed?.y || 0;
-								if (tokenChartMetric === 'usdc') {
-									return formatUsd(value);
-								}
-								return `${value} transactions`;
-							}
-						}
-					}
-				},
-				scales: {
-					x: {
-						ticks: {
-							color: '#9ca3af',
-							maxRotation: 45,
-							minRotation: 0
-						},
-						grid: {
-							color: 'rgba(75, 85, 99, 0.2)'
-						}
-					},
-					y: {
-						beginAtZero: true,
-						ticks: {
-							color: '#9ca3af',
-							callback: (value: string | number) => {
-								const num = Number(value);
-								if (tokenChartMetric === 'usdc') {
-									if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
-									return `$${num.toFixed(0)}`;
-								}
-								return num;
-							}
-						},
-						grid: {
-							color: 'rgba(75, 85, 99, 0.2)'
-						}
-					}
-				}
+		const formatYAxis = (value: string | number): string | number => {
+			const num = Number(value);
+			if (config.format === 'count') return num;
+			if (config.format === 'usd-large') {
+				if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
 			}
-		});
-	}
+			if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
+			return `$${num.toFixed(0)}`;
+		};
 
-	// Reactively update chart when data or selections change
-	$: if (browser && chartLibLoaded && tokenChartCanvas && activeTab === 'tokens') {
-		void tokenChartData;
-		void selectedTokens;
-		void tokenChartMetric;
-		setTimeout(() => updateTokenChart(), 0);
-	}
-
-	function updateCodeChart() {
-		if (!ChartCtor || !codeChartCanvas) return;
-		const ctx = codeChartCanvas.getContext('2d');
-		if (!ctx) return;
-
-		if (codeChart) {
-			codeChart.destroy();
-			codeChart = null;
-		}
-
-		const chartLabel = codeChartMetric === 'count' ? 'Transactions' : 'USDC Volume';
-
-		codeChart = new ChartCtor(ctx, {
+		return new ChartCtor(ctx, {
 			type: 'bar',
 			data: {
-				labels: codeChartData.map((d) => d.date),
+				labels: config.labels,
 				datasets: [
 					{
-						label: chartLabel,
-						data: codeChartData.map((d) => d.value),
-						backgroundColor: '#e8be89',
-						borderColor: '#d4a976',
-						borderWidth: 1,
-						borderRadius: 4
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				animation: false,
-				plugins: {
-					legend: { display: false },
-					tooltip: {
-						backgroundColor: 'rgba(17, 24, 39, 0.95)',
-						titleColor: '#f3f4f6',
-						bodyColor: '#d1d5db',
-						callbacks: {
-							label: (context: { parsed?: { y?: number } }) => {
-								const value = context.parsed?.y || 0;
-								return codeChartMetric === 'usdc' ? formatUsd(value) : `${value} transactions`;
-							}
-						}
-					}
-				},
-				scales: {
-					x: {
-						ticks: { color: '#9ca3af', maxRotation: 45 },
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					},
-					y: {
-						beginAtZero: true,
-						ticks: {
-							color: '#9ca3af',
-							callback: (value: string | number) => {
-								const num = Number(value);
-								if (codeChartMetric === 'usdc') {
-									return num >= 1000 ? `$${(num / 1000).toFixed(0)}k` : `$${num.toFixed(0)}`;
-								}
-								return num;
-							}
-						},
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					}
-				}
-			}
-		});
-	}
-
-	$: if (browser && chartLibLoaded && codeChartCanvas && activeTab === 'codes') {
-		void codeChartData;
-		void selectedCode;
-		void codeChartMetric;
-		setTimeout(() => updateCodeChart(), 0);
-	}
-
-	function updateWalletChart() {
-		if (!ChartCtor || !walletChartCanvas) return;
-		const ctx = walletChartCanvas.getContext('2d');
-		if (!ctx) return;
-
-		if (walletChart) {
-			walletChart.destroy();
-			walletChart = null;
-		}
-
-		const chartLabel = walletChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume';
-
-		walletChart = new ChartCtor(ctx, {
-			type: 'bar',
-			data: {
-				labels: walletChartData.map((d) => d.date),
-				datasets: [
-					{
-						label: chartLabel,
-						data: walletChartData.map((d) => d.total),
-						backgroundColor: '#e8be89',
-						borderColor: '#d4a976',
-						borderWidth: 1,
-						borderRadius: 4
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				animation: false,
-				plugins: {
-					legend: { display: false },
-					tooltip: {
-						backgroundColor: 'rgba(17, 24, 39, 0.95)',
-						titleColor: '#f3f4f6',
-						bodyColor: '#d1d5db',
-						callbacks: {
-							label: (context: { parsed?: { y?: number } }) => {
-								const value = context.parsed?.y || 0;
-								return walletChartMetric === 'usdc' ? formatUsd(value) : `${value} transactions`;
-							}
-						}
-					}
-				},
-				scales: {
-					x: {
-						ticks: { color: '#9ca3af', maxRotation: 45 },
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					},
-					y: {
-						beginAtZero: true,
-						ticks: {
-							color: '#9ca3af',
-							callback: (value: string | number) => {
-								const num = Number(value);
-								if (walletChartMetric === 'usdc') {
-									return num >= 1000 ? `$${(num / 1000).toFixed(0)}k` : `$${num.toFixed(0)}`;
-								}
-								return num;
-							}
-						},
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					}
-				}
-			}
-		});
-	}
-
-	$: if (browser && chartLibLoaded && walletChartCanvas && activeTab === 'wallets') {
-		void walletChartData;
-		void selectedWallets;
-		void walletChartMetric;
-		setTimeout(() => updateWalletChart(), 0);
-	}
-
-	// TVL Chart update functions
-	function updateTvlChart() {
-		if (!ChartCtor || !tvlChartCanvas) return;
-		const ctx = tvlChartCanvas.getContext('2d');
-		if (!ctx) return;
-
-		if (tvlChart) {
-			tvlChart.destroy();
-			tvlChart = null;
-		}
-
-		const filterLabel = tvlFilterOptions.find((o) => o.value === tvlFilter)?.label || 'TVL';
-
-		tvlChart = new ChartCtor(ctx, {
-			type: 'bar',
-			data: {
-				labels: tvlChartData.map((d) => d.date),
-				datasets: [
-					{
-						label: `${filterLabel} (USD)`,
-						data: tvlChartData.map((day) => day.value),
+						label: config.label,
+						data: config.data,
 						backgroundColor: '#e8be89',
 						borderColor: '#d4a976',
 						borderWidth: 1,
@@ -1014,10 +752,8 @@
 						borderWidth: 1,
 						padding: 12,
 						callbacks: {
-							label: (context: { parsed?: { y?: number } }) => {
-								const value = context.parsed?.y || 0;
-								return formatUsd(value);
-							}
+							label: (context: { parsed?: { y?: number } }) =>
+								formatTooltip(context.parsed?.y || 0)
 						}
 					}
 				},
@@ -1028,19 +764,70 @@
 					},
 					y: {
 						beginAtZero: true,
-						ticks: {
-							color: '#9ca3af',
-							callback: (value: string | number) => {
-								const num = Number(value);
-								if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
-								if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
-								return `$${num.toFixed(0)}`;
-							}
-						},
+						ticks: { color: '#9ca3af', callback: formatYAxis },
 						grid: { color: 'rgba(75, 85, 99, 0.2)' }
 					}
 				}
 			}
+		});
+	}
+
+	function updateTokenChart() {
+		tokenChart = createBarChart(tokenChartCanvas, tokenChart, {
+			label: tokenChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume',
+			labels: tokenChartData.map((d) => d.date),
+			data: tokenChartData.map((d) => d.total),
+			format: tokenChartMetric === 'count' ? 'count' : 'usd'
+		});
+	}
+
+	// Reactively update chart when data or selections change
+	$: if (browser && chartLibLoaded && tokenChartCanvas && activeTab === 'tokens') {
+		void tokenChartData;
+		void selectedTokens;
+		void tokenChartMetric;
+		setTimeout(() => updateTokenChart(), 0);
+	}
+
+	function updateCodeChart() {
+		codeChart = createBarChart(codeChartCanvas, codeChart, {
+			label: codeChartMetric === 'count' ? 'Transactions' : 'USDC Volume',
+			labels: codeChartData.map((d) => d.date),
+			data: codeChartData.map((d) => d.value),
+			format: codeChartMetric === 'count' ? 'count' : 'usd'
+		});
+	}
+
+	$: if (browser && chartLibLoaded && codeChartCanvas && activeTab === 'codes') {
+		void codeChartData;
+		void selectedCode;
+		void codeChartMetric;
+		setTimeout(() => updateCodeChart(), 0);
+	}
+
+	function updateWalletChart() {
+		walletChart = createBarChart(walletChartCanvas, walletChart, {
+			label: walletChartMetric === 'count' ? 'Total Transactions' : 'Total USDC Volume',
+			labels: walletChartData.map((d) => d.date),
+			data: walletChartData.map((d) => d.total),
+			format: walletChartMetric === 'count' ? 'count' : 'usd'
+		});
+	}
+
+	$: if (browser && chartLibLoaded && walletChartCanvas && activeTab === 'wallets') {
+		void walletChartData;
+		void selectedWallets;
+		void walletChartMetric;
+		setTimeout(() => updateWalletChart(), 0);
+	}
+
+	function updateTvlChart() {
+		const filterLabel = tvlFilterOptions.find((o) => o.value === tvlFilter)?.label || 'TVL';
+		tvlChart = createBarChart(tvlChartCanvas, tvlChart, {
+			label: `${filterLabel} (USD)`,
+			labels: tvlChartData.map((d) => d.date),
+			data: tvlChartData.map((d) => d.value),
+			format: 'usd-large'
 		});
 	}
 
@@ -1056,70 +843,12 @@
 		setTimeout(() => updateTvlChart(), 0);
 	}
 
-	// TVL Code Chart update function
 	function updateTvlCodeChart() {
-		if (!ChartCtor || !tvlCodeChartCanvas) return;
-		const ctx = tvlCodeChartCanvas.getContext('2d');
-		if (!ctx) return;
-
-		if (tvlCodeChart) {
-			tvlCodeChart.destroy();
-			tvlCodeChart = null;
-		}
-
-		tvlCodeChart = new ChartCtor(ctx, {
-			type: 'bar',
-			data: {
-				labels: tvlCodeChartData.map((d) => d.date),
-				datasets: [
-					{
-						label: 'TVL (USD)',
-						data: tvlCodeChartData.map((d) => d.value),
-						backgroundColor: '#e8be89',
-						borderColor: '#d4a976',
-						borderWidth: 1,
-						borderRadius: 4
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				animation: false,
-				plugins: {
-					legend: { display: false },
-					tooltip: {
-						backgroundColor: 'rgba(17, 24, 39, 0.95)',
-						titleColor: '#f3f4f6',
-						bodyColor: '#d1d5db',
-						callbacks: {
-							label: (context: { parsed?: { y?: number } }) => {
-								const value = context.parsed?.y || 0;
-								return formatUsd(value);
-							}
-						}
-					}
-				},
-				scales: {
-					x: {
-						ticks: { color: '#9ca3af', maxRotation: 45 },
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					},
-					y: {
-						beginAtZero: true,
-						ticks: {
-							color: '#9ca3af',
-							callback: (value: string | number) => {
-								const num = Number(value);
-								if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
-								if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
-								return `$${num.toFixed(0)}`;
-							}
-						},
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					}
-				}
-			}
+		tvlCodeChart = createBarChart(tvlCodeChartCanvas, tvlCodeChart, {
+			label: 'TVL (USD)',
+			labels: tvlCodeChartData.map((d) => d.date),
+			data: tvlCodeChartData.map((d) => d.value),
+			format: 'usd-large'
 		});
 	}
 
@@ -1135,70 +864,12 @@
 		setTimeout(() => updateTvlCodeChart(), 0);
 	}
 
-	// TVL Wallet Chart update function
 	function updateTvlWalletChart() {
-		if (!ChartCtor || !tvlWalletChartCanvas) return;
-		const ctx = tvlWalletChartCanvas.getContext('2d');
-		if (!ctx) return;
-
-		if (tvlWalletChart) {
-			tvlWalletChart.destroy();
-			tvlWalletChart = null;
-		}
-
-		tvlWalletChart = new ChartCtor(ctx, {
-			type: 'bar',
-			data: {
-				labels: tvlWalletChartData.map((d) => d.date),
-				datasets: [
-					{
-						label: 'TVL (USD)',
-						data: tvlWalletChartData.map((d) => d.total),
-						backgroundColor: '#e8be89',
-						borderColor: '#d4a976',
-						borderWidth: 1,
-						borderRadius: 4
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				animation: false,
-				plugins: {
-					legend: { display: false },
-					tooltip: {
-						backgroundColor: 'rgba(17, 24, 39, 0.95)',
-						titleColor: '#f3f4f6',
-						bodyColor: '#d1d5db',
-						callbacks: {
-							label: (context: { parsed?: { y?: number } }) => {
-								const value = context.parsed?.y || 0;
-								return formatUsd(value);
-							}
-						}
-					}
-				},
-				scales: {
-					x: {
-						ticks: { color: '#9ca3af', maxRotation: 45 },
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					},
-					y: {
-						beginAtZero: true,
-						ticks: {
-							color: '#9ca3af',
-							callback: (value: string | number) => {
-								const num = Number(value);
-								if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
-								if (num >= 1000) return `$${(num / 1000).toFixed(0)}k`;
-								return `$${num.toFixed(0)}`;
-							}
-						},
-						grid: { color: 'rgba(75, 85, 99, 0.2)' }
-					}
-				}
-			}
+		tvlWalletChart = createBarChart(tvlWalletChartCanvas, tvlWalletChart, {
+			label: 'TVL (USD)',
+			labels: tvlWalletChartData.map((d) => d.date),
+			data: tvlWalletChartData.map((d) => d.total),
+			format: 'usd-large'
 		});
 	}
 
@@ -1263,12 +934,7 @@
 	}
 
 	function toggleLegacyExpand(symbol: string) {
-		if (expandedLegacyTokens.has(symbol)) {
-			expandedLegacyTokens.delete(symbol);
-		} else {
-			expandedLegacyTokens.add(symbol);
-		}
-		expandedLegacyTokens = expandedLegacyTokens;
+		expandedLegacyTokens = toggleSetItem(expandedLegacyTokens, symbol);
 	}
 
 	onMount(() => {
@@ -1290,33 +956,11 @@
 	});
 
 	onDestroy(() => {
-		// Destroy charts on unmount
-		if (tokenChart) {
-			tokenChart.destroy();
-			tokenChart = null;
+		for (const chart of [tokenChart, codeChart, walletChart, tvlChart, tvlCodeChart, tvlWalletChart]) {
+			chart?.destroy();
 		}
-		if (codeChart) {
-			codeChart.destroy();
-			codeChart = null;
-		}
-		if (walletChart) {
-			walletChart.destroy();
-			walletChart = null;
-		}
-		// Destroy TVL charts
-		if (tvlChart) {
-			tvlChart.destroy();
-			tvlChart = null;
-		}
-		if (tvlCodeChart) {
-			tvlCodeChart.destroy();
-			tvlCodeChart = null;
-		}
-		if (tvlWalletChart) {
-			tvlWalletChart.destroy();
-			tvlWalletChart = null;
-		}
-		// Remove event listener
+		tokenChart = codeChart = walletChart = tvlChart = tvlCodeChart = tvlWalletChart = null;
+
 		if (browser) {
 			document.removeEventListener('click', closeDropdownOnClickOutside);
 		}
