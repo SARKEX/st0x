@@ -317,6 +317,10 @@
 		orderActive: boolean;
 		inputVault: { tokenSymbol: string; balance: string; balanceFormatted: string } | null;
 		outputVault: { tokenSymbol: string; balance: string; balanceFormatted: string } | null;
+		legacyOutstanding: string;
+		legacyOutstandingFormatted: string;
+		teamLegacy: string;
+		teamLegacyFormatted: string;
 	}
 	interface LegacyHolder {
 		address: string;
@@ -3076,6 +3080,8 @@
 								<th class="pb-3 pr-4">Status</th>
 								<th class="pb-3 pr-4 text-right">Input (Legacy Received)</th>
 								<th class="pb-3 pr-4 text-right">Output (Wrapped Remaining)</th>
+								<th class="pb-3 pr-4 text-right">Legacy Outstanding</th>
+								<th class="pb-3 pr-4 text-right">Team Legacy</th>
 								<th class="pb-3 pr-4">Order Hash</th>
 							</tr>
 						</thead>
@@ -3111,6 +3117,12 @@
 										{:else}
 											<span class="text-gray-500">—</span>
 										{/if}
+									</td>
+									<td class="py-3 pr-4 text-right">
+										<span class="font-mono text-white">{Number(order.legacyOutstandingFormatted).toFixed(4)}</span>
+									</td>
+									<td class="py-3 pr-4 text-right">
+										<span class="font-mono text-white">{Number(order.teamLegacyFormatted).toFixed(4)}</span>
 									</td>
 									<td class="py-3 pr-4">
 										<span class="font-mono text-xs text-gray-400" title={order.orderHash}>

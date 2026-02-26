@@ -4,6 +4,8 @@ import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/adminAuth';
 import { SWAP_ORDER_HASHES, TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
 import { networks } from '$lib/config/networks';
+import { ORDERBOOK_ADDRESS, SYSTEM_EXCLUDED_ADDRESSES } from '$lib/config/snapshots';
+import { getTeamWalletsSet } from '$lib/server/kv';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 import { formatUnits } from 'viem';
 
@@ -39,6 +41,10 @@ interface SwapOrderEntry {
 	orderActive: boolean;
 	inputVault: { tokenSymbol: string; balance: string; balanceFormatted: string } | null;
 	outputVault: { tokenSymbol: string; balance: string; balanceFormatted: string } | null;
+	legacyOutstanding: string;
+	legacyOutstandingFormatted: string;
+	teamLegacy: string;
+	teamLegacyFormatted: string;
 }
 
 interface LegacyHolder {
@@ -253,21 +259,47 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 		// Get all swap order hashes
 		const orderHashes = Object.values(SWAP_ORDER_HASHES);
 
-		// Fetch swap orders and legacy holders in parallel
+		// Fetch swap orders, legacy holders, and team wallets in parallel
 		const legacyAddresses = TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.address);
-		const [orders, legacyBalances] = await Promise.all([
+		const [orders, legacyBalances, teamWallets] = await Promise.all([
 			fetchSwapOrders(orderHashes),
-			fetchLegacyHolders(legacyAddresses)
+			fetchLegacyHolders(legacyAddresses),
+			getTeamWalletsSet()
 		]);
 
 		// Build order lookup by hash
 		const orderByHash = new Map(orders.map((o) => [o.orderHash, o]));
+
+		// Build legacy balance lookup by symbol for computing outstanding/team amounts
+		const legacyBySymbol = new Map(legacyBalances.map((lb) => [lb.legacySymbol, lb]));
+
+		// Addresses to exclude from "outstanding" (not held by real users)
+		const systemExcluded = new Set([
+			ORDERBOOK_ADDRESS.toLowerCase(),
+			...SYSTEM_EXCLUDED_ADDRESSES.map((a) => a.toLowerCase())
+		]);
 
 		// Build swap order entries for each token migration
 		const swapOrders: SwapOrderEntry[] = TOKEN_MIGRATION_MAPPINGS.filter(
 			(m) => m.swapOrderHash
 		).map((mapping) => {
 			const order = orderByHash.get(mapping.swapOrderHash);
+
+			// Compute legacy outstanding and team legacy from holder data
+			const legacyEntry = legacyBySymbol.get(mapping.oldToken.symbol);
+			let outstandingBigInt = 0n;
+			let teamBigInt = 0n;
+			if (legacyEntry) {
+				for (const holder of legacyEntry.holders) {
+					const addr = holder.address.toLowerCase();
+					const bal = BigInt(holder.balance);
+					if (systemExcluded.has(addr)) continue;
+					outstandingBigInt += bal;
+					if (teamWallets.has(addr)) {
+						teamBigInt += bal;
+					}
+				}
+			}
 
 			if (!order) {
 				return {
@@ -276,7 +308,11 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 					orderHash: mapping.swapOrderHash,
 					orderActive: false,
 					inputVault: null,
-					outputVault: null
+					outputVault: null,
+					legacyOutstanding: outstandingBigInt.toString(),
+					legacyOutstandingFormatted: formatUnits(outstandingBigInt, 18),
+					teamLegacy: teamBigInt.toString(),
+					teamLegacyFormatted: formatUnits(teamBigInt, 18)
 				};
 			}
 
@@ -291,7 +327,11 @@ export const GET: RequestHandler = async ({ cookies, request }) => {
 				orderHash: mapping.swapOrderHash,
 				orderActive: order.active,
 				inputVault,
-				outputVault
+				outputVault,
+				legacyOutstanding: outstandingBigInt.toString(),
+				legacyOutstandingFormatted: formatUnits(outstandingBigInt, 18),
+				teamLegacy: teamBigInt.toString(),
+				teamLegacyFormatted: formatUnits(teamBigInt, 18)
 			};
 		});
 
