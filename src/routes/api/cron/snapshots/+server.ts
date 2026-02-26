@@ -6,7 +6,7 @@ import { put } from '@vercel/blob';
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import {
-	generateAllTokenSnapshots_v2,
+	generateAllTokenSnapshots,
 	getBlockTimestamp,
 	getBlockNumberForTimestamp
 } from '$lib/server/snapshots/generator';
@@ -82,7 +82,7 @@ export const GET: RequestHandler = async ({ request }) => {
 		// Process a single block: generate snapshots, upload to blob, update points
 		const processBlock = async (blockNumber: number) => {
 			const [snapshots, timestamp] = await Promise.all([
-				generateAllTokenSnapshots_v2(blockNumber),
+				generateAllTokenSnapshots(blockNumber),
 				getBlockTimestamp(blockNumber)
 			]);
 

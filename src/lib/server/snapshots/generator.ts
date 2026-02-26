@@ -199,7 +199,7 @@ export async function generateTokenSnapshot(
  * Each token produces ONE snapshot combining holdings across
  * wrapped, unwrapped, and legacy addresses.
  */
-export async function generateAllTokenSnapshots_v2(blockNumber: number): Promise<BlockSnapshot[]> {
+export async function generateAllTokenSnapshots(blockNumber: number): Promise<BlockSnapshot[]> {
 	// Get block timestamp first (needed for Pyth price lookup)
 	const timestamp = await getBlockTimestamp(blockNumber);
 

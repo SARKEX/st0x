@@ -3,77 +3,10 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
 import {
-	fetchAllTransfers,
-	TOKEN_ADDRESSES,
-	ALL_TOKEN_ADDRESSES
-} from '$lib/server/snapshots/scraper';
-import { generateAllTokenSnapshots } from '$lib/server/snapshots/processor';
-import { fetchPythPricesAtTimestamp } from '$lib/server/snapshots/pyth';
-import { networks } from '$lib/config/networks';
-
-// Get current block number from RPC
-async function getCurrentBlockNumber(): Promise<number> {
-	const network = networks[0];
-	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
-
-	for (const rpcUrl of rpcUrls) {
-		try {
-			const response = await fetch(rpcUrl, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					method: 'eth_blockNumber',
-					params: [],
-					id: 1
-				})
-			});
-
-			if (!response.ok) continue;
-
-			const data = await response.json();
-			if (data.result) {
-				return parseInt(data.result, 16);
-			}
-		} catch {
-			continue;
-		}
-	}
-
-	throw new Error('Failed to get current block number from any RPC');
-}
-
-// Get block timestamp from RPC
-async function getBlockTimestamp(blockNumber: number): Promise<number> {
-	const network = networks[0];
-	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
-
-	for (const rpcUrl of rpcUrls) {
-		try {
-			const response = await fetch(rpcUrl, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					method: 'eth_getBlockByNumber',
-					params: [`0x${blockNumber.toString(16)}`, false],
-					id: 1
-				})
-			});
-
-			if (!response.ok) continue;
-
-			const data = await response.json();
-			if (data.result?.timestamp) {
-				return parseInt(data.result.timestamp, 16);
-			}
-		} catch {
-			continue;
-		}
-	}
-
-	throw new Error('Failed to get block timestamp from any RPC');
-}
+	generateAllTokenSnapshots,
+	getCurrentBlockNumber,
+	getBlockTimestamp
+} from '$lib/server/snapshots/generator';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -84,30 +17,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		console.log(`[Snapshot] Generating snapshots for block ${targetBlock}`);
 
-		// Get block timestamp
+		// Use the same generator as cron and preview
+		const snapshots = await generateAllTokenSnapshots(targetBlock);
 		const timestamp = await getBlockTimestamp(targetBlock);
 
-		// Fetch all transfers up to target block (use all address variants so both
-		// the new subgraph (vault id = unwrapped) and legacy subgraph are queried correctly)
-		const transfers = await fetchAllTransfers(targetBlock, ALL_TOKEN_ADDRESSES);
-
-		console.log(`[Snapshot] Fetched ${transfers.length} transfers`);
-
-		// Fetch Pyth prices at block timestamp (may be adjusted for market hours)
-		console.log(`[Snapshot] Fetching Pyth prices at timestamp ${timestamp}`);
-		const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, TOKEN_ADDRESSES);
-
-		// Generate snapshots for all tokens with prices
-		const snapshots = generateAllTokenSnapshots(
-			transfers,
-			targetBlock,
-			timestamp,
-			TOKEN_ADDRESSES,
-			prices,
-			undefined, // vaultHoldings
-			undefined, // dynamicExcluded
-			priceTimestamp
-		);
+		console.log(`[Snapshot] Generated ${snapshots.length} token snapshots`);
 
 		// Store each snapshot as a blob
 		const storedBlobs: { tokenSymbol: string; url: string }[] = [];

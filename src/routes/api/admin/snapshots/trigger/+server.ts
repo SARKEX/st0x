@@ -4,7 +4,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
 import {
-	generateAllTokenSnapshots_v2,
+	generateAllTokenSnapshots,
 	getBlockTimestamp,
 	getBlockNumberForTimestamp
 } from '$lib/server/snapshots/generator';
@@ -90,7 +90,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		// Process a single block: generate snapshots, upload to blob, update points
 		const processBlock = async (blockNumber: number) => {
 			const [snapshots, timestamp] = await Promise.all([
-				generateAllTokenSnapshots_v2(blockNumber),
+				generateAllTokenSnapshots(blockNumber),
 				getBlockTimestamp(blockNumber)
 			]);
 

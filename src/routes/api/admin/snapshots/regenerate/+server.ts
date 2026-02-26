@@ -4,7 +4,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
-import { generateAllTokenSnapshots_v2 } from '$lib/server/snapshots/generator';
+import { generateAllTokenSnapshots } from '$lib/server/snapshots/generator';
 import { TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { env } from '$env/dynamic/private';
@@ -85,9 +85,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 				// Generate snapshots using the updated code (with correct vault attribution)
 				console.log(
-					`[Regenerate] Calling generateAllTokenSnapshots_v2 for block ${block.blockNumber}...`
+					`[Regenerate] Calling generateAllTokenSnapshots for block ${block.blockNumber}...`
 				);
-				const snapshots = await generateAllTokenSnapshots_v2(block.blockNumber);
+				const snapshots = await generateAllTokenSnapshots(block.blockNumber);
 				console.log(
 					`[Regenerate] Generated ${snapshots.length} snapshots for block ${block.blockNumber}`
 				);

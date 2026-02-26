@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import {
 	getCurrentBlockNumber,
 	getBlockTimestamp,
-	generateAllTokenSnapshots_v2
+	generateAllTokenSnapshots
 } from '$lib/server/snapshots/generator';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { calculateWalletPointsFromSnapshotsWithProgress } from '$lib/server/snapshots/points';
@@ -45,7 +45,7 @@ export const GET: RequestHandler = async ({ url }) => {
 					total: 6,
 					message: 'Fetching transfers, prices, and vault holdings...'
 				});
-				const snapshots = await generateAllTokenSnapshots_v2(targetBlock);
+				const snapshots = await generateAllTokenSnapshots(targetBlock);
 				sendEvent('progress', {
 					step: 2,
 					total: 6,

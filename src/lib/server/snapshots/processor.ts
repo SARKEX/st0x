@@ -231,34 +231,3 @@ export function generateSnapshot(
 		priceTimestamp: priceTimestamp ?? null
 	};
 }
-
-/**
- * Generate snapshots for all tokens at a specific block
- * @param prices - Map of token address -> TokenPrice from Pyth
- * @param vaultHoldings - Vault holdings to attribute to owners instead of orderbook
- * @param dynamicExcluded - Optional list of wallet addresses from KV store to mark as excluded
- * @param priceTimestamp - Optional timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
- */
-export function generateAllTokenSnapshots(
-	transfers: Transfer[],
-	blockNumber: number,
-	timestamp: number,
-	tokenAddresses: string[],
-	prices?: Map<string, TokenPrice>,
-	vaultHoldings?: VaultHolding[],
-	dynamicExcluded?: string[],
-	priceTimestamp?: number
-): BlockSnapshot[] {
-	return tokenAddresses.map((tokenAddress) =>
-		generateSnapshot(
-			transfers,
-			blockNumber,
-			timestamp,
-			tokenAddress,
-			prices?.get(tokenAddress.toLowerCase()),
-			vaultHoldings,
-			dynamicExcluded,
-			priceTimestamp
-		)
-	);
-}

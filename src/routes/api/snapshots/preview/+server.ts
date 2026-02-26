@@ -5,7 +5,7 @@ import type { RequestHandler } from './$types';
 import {
 	getCurrentBlockNumber,
 	getBlockTimestamp,
-	generateAllTokenSnapshots_v2
+	generateAllTokenSnapshots
 } from '$lib/server/snapshots/generator';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { calculateWalletPointsFromSnapshots } from '$lib/server/snapshots/points';
@@ -29,7 +29,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Use the same core generator function as the cron job
 		console.log(`[Preview] Step 2/6: Generating token snapshots (transfers, prices, vaults)...`);
 		stepStart = Date.now();
-		const snapshots = await generateAllTokenSnapshots_v2(targetBlock);
+		const snapshots = await generateAllTokenSnapshots(targetBlock);
 		console.log(
 			`[Preview] Step 2/6: Done - ${snapshots.length} tokens (${Date.now() - stepStart}ms)`
 		);
