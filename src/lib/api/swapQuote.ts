@@ -29,10 +29,12 @@ function getAuthHeader(): string | null {
 }
 
 /**
- * Fetches a swap quote: how much inputToken you get when offering outputAmount of outputToken.
- * Returns the estimated input amount as a human-readable string (e.g. "81.090169875"), or null on error.
+ * Fetches a swap quote and returns the full API response.
+ * Use for market order estimation when orderbook has no quotes.
  */
-export async function fetchSwapQuote(params: SwapQuoteParams): Promise<string | null> {
+export async function fetchSwapQuoteFull(
+	params: SwapQuoteParams
+): Promise<SwapQuoteResponse | null> {
 	const auth = getAuthHeader();
 	const headers: Record<string, string> = {
 		accept: 'application/json',
@@ -51,8 +53,15 @@ export async function fetchSwapQuote(params: SwapQuoteParams): Promise<string | 
 		})
 	});
 	if (!res.ok) return null;
-	const data = (await res.json()) as SwapQuoteResponse;
-	// estimatedInput = amount of inputToken you need/receive (human-readable)
-	const raw = data.estimatedInput;
+	return (await res.json()) as SwapQuoteResponse;
+}
+
+/**
+ * Fetches a swap quote: how much inputToken you get when offering outputAmount of outputToken.
+ * Returns the estimated input amount as a human-readable string (e.g. "81.090169875"), or null on error.
+ */
+export async function fetchSwapQuote(params: SwapQuoteParams): Promise<string | null> {
+	const data = await fetchSwapQuoteFull(params);
+	const raw = data?.estimatedInput;
 	return typeof raw === 'string' ? raw : null;
 }

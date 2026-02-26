@@ -63,6 +63,8 @@ import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
+import { fetchSwapCalldata } from '$lib/api/swapCalldata';
+import { parseUnits } from 'viem';
 
 /**
  * Classify error messages into safe, non-sensitive categories for analytics.
@@ -195,6 +197,29 @@ export interface MarketOrderSummary {
 	actualSlippage: bigint;
 	isPartialFill: boolean;
 	isNoFill?: boolean;
+}
+
+/** Params for executing a market order via the swap calldata API (two-phase: approvals then swap).
+ * Convention: input = token you put in, output = token you take out. outputAmount is human-readable (e.g. "1.501223").
+ */
+export interface SwapCalldataApiParams {
+	/** Token address the user is putting in (spending) */
+	inputToken: string;
+	/** Token address the user is taking out (receiving) */
+	outputToken: string;
+	/** Amount of output token desired, human-readable (e.g. "1.501223" for USDC) */
+	outputAmount: string;
+	/** Maximum IO ratio = input/output, decimal string */
+	maximumIoRatio: string;
+	taker: string;
+	// Token metadata for success summary
+	inputTokenDecimals: number;
+	inputTokenSymbol: string;
+	inputTokenAddress: string;
+	outputTokenDecimals: number;
+	outputTokenSymbol: string;
+	outputTokenAddress: string;
+	requestedInputAmount: bigint;
 }
 
 // Asset token info for Track in Wallet prompt after order deployment
@@ -1727,6 +1752,181 @@ const transactionStore = () => {
 		return transactionSuccess(hash, undefined, { marketOrderSummary: summary, raindexLink });
 	};
 
+	/**
+	 * Executes a market order via the swap calldata API.
+	 * First call returns approvals; after user submits approval tx(s), second call returns actual swap calldata.
+	 */
+	const handleSwapCalldataApi = async (params: SwapCalldataApiParams) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const $signerAddress = get(walletAddress);
+		if (!$signerAddress) throw new Error('Signer address not found');
+		const network = get(currentNetwork) as Network;
+
+		const baseRatio = Number(params.maximumIoRatio) || 0;
+		const maxRatioWithBuffer = Math.ceil(baseRatio * 1.01);
+		const apiParams = {
+			inputToken: params.inputToken,
+			outputToken: params.outputToken,
+			outputAmount: params.outputAmount,
+			maximumIoRatio: String(maxRatioWithBuffer),
+			taker: params.taker
+		};
+
+		// 1. First call: get approvals (and optionally empty swap calldata)
+		awaitWalletConfirmation(`Preparing order...`);
+		let response = await fetchSwapCalldata(apiParams);
+		if (!response) {
+			return transactionError(
+				'Failed to prepare order. Please try again.' as TransactionErrorMessage
+			);
+		}
+
+		// Security: validate orderbook address before any approvals or main tx
+		try {
+			validateOrderbookAddress(response.to, network);
+		} catch (error) {
+			return transactionError((error as Error).message as TransactionErrorMessage);
+		}
+
+		// 2. Execute approval tx(s) if any
+		if (response.approvals && response.approvals.length > 0) {
+			for (const approval of response.approvals) {
+				try {
+					awaitWalletConfirmation(
+						`Awaiting wallet confirmation to approve ${approval.symbol || 'token'}...`
+					);
+					const approvalHash = await sendTransaction({
+						to: approval.token as `0x${string}`,
+						data: approval.approvalData as Hex,
+						value: 0n
+					});
+					awaitApprovalTx(approvalHash);
+					await waitForTransaction(approvalHash);
+				} catch (approvalError) {
+					console.error('[handleSwapCalldataApi] Approval error:', approvalError);
+					if (isStaleWalletSessionError(approvalError)) {
+						const msg = await handleStaleWalletSession(config);
+						return transactionError(msg as TransactionErrorMessage);
+					}
+					const errorMessage =
+						(approvalError as unknown as { cause?: { details?: string } })?.cause?.details ||
+						(approvalError as Error)?.message ||
+						TransactionErrorMessage.APPROVAL_FAILED;
+					const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+					if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+						return transactionError(errorMessage as TransactionErrorMessage);
+					}
+					return transactionError(
+						(typeof errorMessage === 'string'
+							? errorMessage
+							: TransactionErrorMessage.APPROVAL_FAILED) as TransactionErrorMessage
+					);
+				}
+			}
+		}
+
+		// 3. Second call: get actual swap calldata (same params)
+		awaitWalletConfirmation(`Refreshing order...`);
+		response = await fetchSwapCalldata(apiParams);
+		if (!response) {
+			return transactionError(
+				'Failed to get order calldata. Please try again.' as TransactionErrorMessage
+			);
+		}
+		if (!response.data || response.data === '0x') {
+			return transactionError(
+				'Failed to prepare swap. Please try again.' as TransactionErrorMessage
+			);
+		}
+
+		// 4. Execute swap tx
+		let hash: Hash;
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation to execute order...`);
+			hash = await sendTransaction({
+				to: response.to as `0x${string}`,
+				data: response.data as Hex,
+				value: BigInt(response.value || '0x0')
+			});
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+			await waitForTransaction(hash);
+		} catch (error) {
+			console.error('[handleSwapCalldataApi] Swap error:', error);
+			if (isStaleWalletSessionError(error)) {
+				const msg = await handleStaleWalletSession(config);
+				return transactionError(msg as TransactionErrorMessage);
+			}
+			const errorMessage =
+				(error as unknown as { cause?: { details?: string } })?.cause?.details ||
+				(error as Error)?.message ||
+				TransactionErrorMessage.GENERIC;
+			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+			if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
+				return transactionError(
+					'Insufficient token allowance. Please retry the order.' as TransactionErrorMessage
+				);
+			}
+			if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+				return transactionError(errorMessage as TransactionErrorMessage);
+			}
+			return transactionError(
+				(typeof errorMessage === 'string' && errorMessage !== TransactionErrorMessage.GENERIC
+					? errorMessage
+					: TransactionErrorMessage.GENERIC) as TransactionErrorMessage
+			);
+		}
+
+		// 5. Build summary from API response (outputAmount is human-readable e.g. "1.501223", estimatedInput is human-readable)
+		const outputAmountBigInt = (() => {
+			try {
+				return parseUnits(params.outputAmount, params.outputTokenDecimals);
+			} catch {
+				return 0n;
+			}
+		})();
+		const estimatedInputStr = response.estimatedInput ?? '0';
+		const inputAmountBigInt = (() => {
+			try {
+				return parseUnits(estimatedInputStr, params.inputTokenDecimals);
+			} catch {
+				return 0n;
+			}
+		})();
+		// Summary uses receive/give: input = what user receives, output = what user gives
+		const receiveAmount = outputAmountBigInt;
+		const giveAmount = inputAmountBigInt;
+		const ioRatio =
+			giveAmount > 0n
+				? parseFloat(formatUnits(receiveAmount, params.outputTokenDecimals)) /
+					parseFloat(formatUnits(giveAmount, params.inputTokenDecimals))
+				: 0;
+		const inputRequestedDecimal = parseFloat(
+			formatUnits(receiveAmount, params.outputTokenDecimals)
+		);
+		const inputFilledDecimal = inputRequestedDecimal;
+		const fillPercentage = inputRequestedDecimal > 0 ? inputFilledDecimal / inputRequestedDecimal : 0;
+
+		const summary: MarketOrderSummary = {
+			inputAmount: receiveAmount,
+			inputTokenDecimals: params.outputTokenDecimals,
+			inputTokenSymbol: params.outputTokenSymbol,
+			inputTokenAddress: params.outputTokenAddress,
+			outputAmount: giveAmount,
+			outputTokenDecimals: params.inputTokenDecimals,
+			outputTokenSymbol: params.inputTokenSymbol,
+			outputTokenAddress: params.inputTokenAddress,
+			requestedInputAmount: receiveAmount,
+			ioRatio,
+			actualSlippage: 0n,
+			isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
+			isNoFill: inputRequestedDecimal <= 0
+		};
+
+		invalidateDashboardBalances();
+		return transactionSuccess(hash, undefined, { marketOrderSummary: summary });
+	};
+
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
 		const network = get(currentNetwork);
 		awaitWalletConfirmation(`Preparing strategy...`);
@@ -1749,6 +1949,7 @@ const transactionStore = () => {
 		handleDsfDeploy,
 		handleFolioDeploy,
 		handleTakeOrders,
+		handleSwapCalldataApi,
 		handleWithdraw,
 		handleWrapUnwrap,
 		handleRemoveOrder,

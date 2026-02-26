@@ -21,6 +21,7 @@
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
 	import { onMount } from 'svelte';
+	import { fetchSwapQuoteFull } from '$lib/api/swapQuote';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -214,6 +215,8 @@
 	let priceError = false;
 	let priceErrorReason: 'no_quotes' | 'no_fill' | 'error' | null = null;
 	let orderPreparationError: string | null = null;
+	/** True when market price came from swap API only (no orderbook liquidity to execute) */
+	let estimateOnlyFromSwapApi = false;
 
 	// Best orderbook price based on order side (from parent props)
 	// Buy: use sellPrice (best ask - what you pay when buying)
@@ -404,7 +407,8 @@
 		insufficientBalanceError ||
 		isLoadingPrice ||
 		priceError ||
-		isSubmittingMarketOrder;
+		isSubmittingMarketOrder ||
+		(selectedAmount > 0n && !hasAvailableOrders);
 
 	// Calculate the "other side" of the trade for display
 	// In amount mode: show how much payment token you'll spend
@@ -552,7 +556,7 @@
 	}
 
 	async function fetchMarketPrice() {
-		if (!assetToken || !orderSide) {
+		if (!assetToken || !orderSide || !paymentToken) {
 			isLoadingPrice = false;
 			return;
 		}
@@ -561,6 +565,7 @@
 			isLoadingPrice = true;
 			priceError = false;
 			priceErrorReason = null;
+			estimateOnlyFromSwapApi = false;
 
 			// If no selected amount, don't calculate a price estimate
 			if (!selectedAmount || selectedAmount === 0n) {
@@ -569,36 +574,87 @@
 				return;
 			}
 
+			const assetAddress = assetToken.address?.toLowerCase();
+			const quoteAddress = paymentToken.address?.toLowerCase();
+			if (!assetAddress || !quoteAddress) {
+				isLoadingPrice = false;
+				return;
+			}
+
 			const walkResult = calculateOrderbookWalk();
 
-			if (!walkResult) {
-				console.warn('No relevant quotes found');
-				priceError = true;
-				priceErrorReason = 'no_quotes';
-				isLoadingPrice = false;
-				return;
+			if (walkResult && walkResult.fills.length > 0) {
+				const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
+				const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
+				if (assetFilled > 0n) {
+					marketPrice =
+						orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
+					hasAvailableOrders = fills.length > 0;
+					return;
+				}
 			}
 
-			const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
+			// No orderbook fills: try swap quote API for estimation only (cannot execute)
+			const assetDecimals = assetToken.decimals ?? 18;
+			const paymentDecimals = paymentToken.decimals ?? 6;
+			let swapQuote: Awaited<ReturnType<typeof fetchSwapQuoteFull>> = null;
 
-			// Check if anything was filled (asset amount)
-			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
-			if (assetFilled > 0n) {
-				// Convert ioRatio to price (quote per asset) for display
-				// BUY: ioRatio = asset/payment, so price = 1/ioRatio
-				// SELL: ioRatio = payment/asset = price
-				marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
-				hasAvailableOrders = fills.length > 0;
-			} else {
-				console.warn('No quantity filled from orderbook', {
-					selectedAmount: selectedAmount.toString(),
-					ordersWalked: fills.length
+			if (orderSide === 'Buy' && inputMode === 'spend') {
+				const spendHuman = formatUnits(selectedAmount, paymentDecimals);
+				swapQuote = await fetchSwapQuoteFull({
+					inputToken: assetAddress,
+					outputToken: quoteAddress,
+					outputAmount: spendHuman
 				});
-				priceError = true;
-				priceErrorReason = 'no_fill';
-				isLoadingPrice = false;
-				return;
+				if (swapQuote?.estimatedInput) {
+					const inputNum = Number(swapQuote.estimatedInput);
+					const spendNum = parseFloat(spendHuman);
+					if (Number.isFinite(inputNum) && inputNum > 0 && Number.isFinite(spendNum)) {
+						marketPrice = spendNum / inputNum;
+						hasAvailableOrders = false;
+						estimateOnlyFromSwapApi = true;
+						return;
+					}
+				}
+			} else if (orderSide === 'Buy' && inputMode === 'amount') {
+				const amountHuman = formatUnits(selectedAmount, assetDecimals);
+				swapQuote = await fetchSwapQuoteFull({
+					inputToken: quoteAddress,
+					outputToken: assetAddress,
+					outputAmount: amountHuman
+				});
+				if (swapQuote?.estimatedInput) {
+					const costNum = Number(swapQuote.estimatedInput);
+					const amountNum = parseFloat(amountHuman);
+					if (Number.isFinite(costNum) && costNum > 0 && Number.isFinite(amountNum) && amountNum > 0) {
+						marketPrice = costNum / amountNum;
+						hasAvailableOrders = false;
+						estimateOnlyFromSwapApi = true;
+						return;
+					}
+				}
+			} else {
+				// Sell: selectedAmount is asset
+				const amountHuman = formatUnits(selectedAmount, assetDecimals);
+				swapQuote = await fetchSwapQuoteFull({
+					inputToken: quoteAddress,
+					outputToken: assetAddress,
+					outputAmount: amountHuman
+				});
+				if (swapQuote?.estimatedInput) {
+					const quoteNum = Number(swapQuote.estimatedInput);
+					const amountNum = parseFloat(amountHuman);
+					if (Number.isFinite(quoteNum) && quoteNum > 0 && Number.isFinite(amountNum) && amountNum > 0) {
+						marketPrice = quoteNum / amountNum;
+						hasAvailableOrders = false;
+						estimateOnlyFromSwapApi = true;
+						return;
+					}
+				}
 			}
+
+			priceError = true;
+			priceErrorReason = 'no_quotes';
 		} catch (error) {
 			console.error('Error calculating market price:', error);
 			priceError = true;
@@ -608,15 +664,16 @@
 		}
 	}
 
-	// Fetch market price when component mounts or dependencies change
-	// Only calculates price when user has entered a quantity (selectedAmount > 0)
-	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes) {
+	// Fetch market price when component mounts or dependencies change.
+	// Tries orderbook first; if no fills, falls back to swap quote API for estimation only.
+	$: orderbookUpdatedAt = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
+	$: if (assetToken && orderSide && selectedAmount > 0n) {
+		void orderbookUpdatedAt; // re-run when orderbook data arrives
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
-		// Clear price when quantity is cleared
 		marketPrice = 0;
 		hasAvailableOrders = false;
+		estimateOnlyFromSwapApi = false;
 	}
 
 	// Walk the orderbook with current quotes and selected amount
@@ -1067,6 +1124,14 @@
 							{#if isOutsideMarketHours()}
 								<br /><br />This might be because US markets are currently closed.
 							{/if}
+						</div>
+					{/if}
+					{#if estimateOnlyFromSwapApi && selectedAmount && selectedAmount > 0n}
+						<div
+							class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
+						>
+							Estimate from swap API. No orderbook liquidity to execute a market order — use a
+							limit order to place an order.
 						</div>
 					{/if}
 					{#if priceError && selectedAmount && selectedAmount > 0n}
