@@ -174,12 +174,13 @@ async function fetchWrappedTokenTransfers(
 async function fetchFromSubgraph(
 	subgraphUrl: string,
 	untilBlock: number,
-	tokenAddresses: string[]
+	tokenAddresses: string[],
+	fetchWrapped: boolean = true
 ): Promise<Transfer[]> {
 	let transfersSkip = 0;
 	let wrappedSkip = 0;
 	let transfersHasMore = true;
-	let wrappedHasMore = true;
+	let wrappedHasMore = fetchWrapped;
 	const allTransfers: Transfer[] = [];
 
 	while (transfersHasMore || wrappedHasMore) {
@@ -196,7 +197,8 @@ async function fetchFromSubgraph(
 							const message = err instanceof Error ? err.message : String(err);
 							const isMissingEntity =
 								/Cannot query field\s+"wrappedTokenTransfers"/i.test(message) ||
-								/Unknown field.*wrappedTokenTransfers/i.test(message);
+								/Unknown field.*wrappedTokenTransfers/i.test(message) ||
+								/has no field.*wrappedTokenTransfers/i.test(message);
 
 							if (isMissingEntity) {
 								// Legacy subgraphs (v1.0.5) may not have wrappedTokenTransfers entity
@@ -270,10 +272,12 @@ export async function fetchAllTransfers(
 	);
 
 	// Query all subgraphs in parallel
+	const legacyUrlSet = new Set(SFT_SUBGRAPH_URLS_LEGACY);
 	const results = await Promise.all(
 		subgraphUrls.map(async (url, i) => {
 			try {
-				const transfers = await fetchFromSubgraph(url, untilBlock, tokenAddresses);
+				const isLegacy = legacyUrlSet.has(url);
+				const transfers = await fetchFromSubgraph(url, untilBlock, tokenAddresses, !isLegacy);
 				console.log(
 					`[Scraper] Subgraph ${i + 1}/${subgraphUrls.length}: ${transfers.length} transfers`
 				);
