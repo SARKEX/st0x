@@ -2868,7 +2868,14 @@
 														{#each entry.holders as holder}
 															<tr class="border-b border-gray-800/50">
 																<td class="py-2 pr-4 font-mono text-gray-300">
-																	{truncateAddress(holder.address)}
+																	<a
+																		href="https://basescan.org/address/{holder.address}"
+																		target="_blank"
+																		rel="noopener noreferrer"
+																		class="hover:text-[#e8be89] hover:underline"
+																	>
+																		{truncateAddress(holder.address)}
+																	</a>
 																</td>
 																<td class="py-2 text-right font-mono text-white">
 																	{Number(holder.balanceFormatted).toFixed(4)}
