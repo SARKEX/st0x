@@ -68,7 +68,11 @@ export async function invalidateRewardsCaches(): Promise<void> {
 		cacheDelete(CACHE_KEYS.rewardsLeaderboard()),
 		cacheDelete(CACHE_KEYS.rewardsPoolApy()),
 		cacheDelete(CACHE_KEYS.rewardsUserSharedData()),
-		cacheDelete(CACHE_KEYS.rewardsGlobalData())
+		cacheDelete(CACHE_KEYS.rewardsGlobalData()),
+		// Invalidate TVL caches (common limit values)
+		cacheDelete(CACHE_KEYS.tvl(90)),
+		cacheDelete(CACHE_KEYS.tvl(30)),
+		cacheDelete(CACHE_KEYS.tvl(365))
 	]);
 	console.log('[Cache] All rewards caches invalidated');
 }
@@ -174,7 +178,9 @@ export const CACHE_KEYS = {
 	rewardsGlobalData: () => 'cache:rewards:global-data',
 	// Referral programme cache keys
 	referralAdminLeaderboard: (month: string) => `cache:referral:admin-leaderboard:${month}`,
-	referralPublicLeaderboard: () => 'cache:referral:public-leaderboard'
+	referralPublicLeaderboard: () => 'cache:referral:public-leaderboard',
+	// Admin TVL cache (keyed by limit param)
+	tvl: (limit: number) => `tvl:cache:${limit}`
 } as const;
 
 // TTL constants (in seconds)

@@ -18,6 +18,7 @@ import {
 	type DailySnapshotRecord
 } from '$lib/server/kv';
 import { requireAdmin } from '$lib/server/adminAuth';
+import { invalidateRewardsCaches } from '$lib/server/cache';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -155,6 +156,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 			console.log(`[Manual Trigger] Stored block records in KV`);
 		}
+
+		// Invalidate all rewards and TVL caches so fresh data is computed
+		await invalidateRewardsCaches();
 
 		return json({
 			success: true,

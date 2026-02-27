@@ -385,7 +385,7 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 		if (cached) {
 			return json(cached, {
 				headers: {
-					'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=7200'
+					'Cache-Control': 'private, max-age=60'
 				}
 			});
 		}
@@ -509,7 +509,7 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 
 		return json(response, {
 			headers: {
-				'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=7200'
+				'Cache-Control': 'private, max-age=60'
 			}
 		});
 	} catch (error) {
