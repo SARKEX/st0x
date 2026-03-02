@@ -293,14 +293,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 	}
 
 	// Get quotes using batching with jitter and retries (same as fetchAndQuoteTokenOrders)
-	let quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>;
-	try {
-		quotesMap = await fetchQuotesWithBatching(allOrders);
-	} catch (error) {
-		console.error('[fetchAndQuotePaymentTokenOrders] Failed to fetch quotes:', error);
-		// Return empty array on complete failure to avoid showing stale/partial data
-		return [];
-	}
+	const quotesMap = await fetchQuotesWithBatching(allOrders);
 
 	// Process and filter the quotes
 	const processedQuotes = processOrdersWithQuotes(
@@ -366,14 +359,7 @@ export async function fetchAndQuoteTokenOrders(
 	const allOrders = ordersResult.value;
 
 	// Get quotes using batching with jitter and retries
-	let quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>;
-	try {
-		quotesMap = await fetchQuotesWithBatching(allOrders);
-	} catch (error) {
-		console.error('[fetchAndQuoteTokenOrders] Failed to fetch quotes:', error);
-		// Return empty array on complete failure to avoid showing stale/partial data
-		return [];
-	}
+	const quotesMap = await fetchQuotesWithBatching(allOrders);
 
 	// Process and filter the quotes
 	const processedQuotes = processOrdersWithQuotes(

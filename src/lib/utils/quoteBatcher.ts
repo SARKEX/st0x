@@ -25,7 +25,7 @@ export const QUOTE_BATCH_CONFIG = {
 	maxRetryDelayMs: 10000, // Cap retry delay at 10s
 
 	// Timeouts
-	quoteTimeoutMs: 5000 // Timeout for individual quote request
+	quoteTimeoutMs: 8000 // Timeout for individual quote request
 };
 
 /**

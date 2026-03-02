@@ -7,7 +7,7 @@
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
-	import { refreshTokenQuotes, prefetchGlobalOrders } from '$lib/queries/orderbook';
+	import { createTokenOrderbookQuotesQuery, prefetchGlobalOrders, refreshTokenQuotes } from '$lib/queries/orderbook';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
@@ -98,12 +98,15 @@
 	// ============ DATA LOADING ============
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
 
-	// Quotes storage (manually managed, not reactive query)
-	let quotes: ProcessedQuote[] = [];
-	let isLoadingQuotes = false;
-	let quotesLoadedForToken: string | null = null;
+	// TanStack Query for quotes — polls every 30s, retries on failure, preserves stale data
+	$: orderbookQuery = createTokenOrderbookQuotesQuery(
+		$currentNetwork, selectedTokenAddress, 30_000
+	);
+	$: quotes = $orderbookQuery.data?.quotes ?? [];
+	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
+	$: quoteFetchError = $orderbookQuery.isError;
 
-	// On mount: fetch orders for selected token, then prefetch others in background
+	// On mount: analytics + background prefetch of all tokens
 	onMount(() => {
 		panelOpenTime = Date.now();
 		track('quick_trade_panel_viewed', {
@@ -111,26 +114,9 @@
 			token_selected: selectedToken?.symbol
 		});
 
-		const loadInitialData = async () => {
-			if (!$currentNetwork || !selectedTokenAddress) return;
-
-			isLoadingQuotes = true;
-			try {
-				// 1. Fetch orders for selected token first (fast)
-				const cache = await refreshTokenQuotes($currentNetwork.id, selectedTokenAddress);
-				quotes = cache.quotes;
-				quotesLoadedForToken = selectedTokenAddress;
-
-				// 2. Prefetch all other tokens in background (don't await)
-				prefetchGlobalOrders($currentNetwork.id).catch(console.warn);
-			} catch (e) {
-				console.warn('[QuickTrade] Initial load failed:', e);
-			} finally {
-				isLoadingQuotes = false;
-			}
-		};
-
-		loadInitialData();
+		if ($currentNetwork) {
+			prefetchGlobalOrders($currentNetwork.id).catch(console.warn);
+		}
 	});
 
 	// Track abandonment on unmount
@@ -148,23 +134,6 @@
 			});
 		}
 	});
-
-	// When user enters an amount, refresh quotes for that token
-	async function refreshQuotesForCurrentToken() {
-		if (!$currentNetwork || !selectedTokenAddress) return;
-		if (quotesLoadedForToken === selectedTokenAddress && quotes.length > 0) return; // Already loaded
-
-		isLoadingQuotes = true;
-		try {
-			const cache = await refreshTokenQuotes($currentNetwork.id, selectedTokenAddress);
-			quotes = cache.quotes;
-			quotesLoadedForToken = selectedTokenAddress;
-		} catch (e) {
-			console.warn('[QuickTrade] Quote refresh failed:', e);
-		} finally {
-			isLoadingQuotes = false;
-		}
-	}
 
 	// ============ BALANCE QUERIES ============
 	$: usdcBalanceQuery = createQuery({
@@ -648,8 +617,6 @@
 		hasCappedThisBlur = false;
 		// Clear the other field to prevent both having user-entered values while prices load
 		bottomAmount = '';
-		// Refresh quotes when user enters a value
-		if (topAmount) refreshQuotesForCurrentToken();
 	}
 
 	function handleBottomInput(e: Event) {
@@ -661,8 +628,6 @@
 		hasCappedThisBlur = false;
 		// Clear the other field to prevent both having user-entered values while prices load
 		topAmount = '';
-		// Refresh quotes when user enters a value
-		if (bottomAmount) refreshQuotesForCurrentToken();
 	}
 
 	function handleSwapDirection() {
@@ -681,7 +646,6 @@
 		lastEditedField = 'top';
 		showLiquidityWarning = false;
 		hasCappedThisBlur = false;
-		refreshQuotesForCurrentToken();
 	}
 
 	function handleTokenPercentClick(percent: number) {
@@ -692,7 +656,6 @@
 		lastEditedField = 'bottom';
 		showLiquidityWarning = false;
 		hasCappedThisBlur = false;
-		refreshQuotesForCurrentToken();
 	}
 
 	// ============ TRADE EXECUTION ============
@@ -758,17 +721,22 @@
 				quotes: sortedQuotes,
 				network: $currentNetwork,
 				refreshQuotes: async () => {
-					const freshCache = await refreshTokenQuotes($currentNetwork!.id, selectedToken!.address);
-					quotes = freshCache.quotes;
-					return sortQuotesByPrice(
-						filterQuotesForSide(
-							freshCache.quotes,
-							orderSide,
-							selectedToken!.address,
-							paymentToken!.address
-						),
-						orderSide
-					);
+					try {
+						const freshCache = await refreshTokenQuotes($currentNetwork!.id, selectedToken!.address);
+						return sortQuotesByPrice(
+							filterQuotesForSide(
+								freshCache.quotes,
+								orderSide,
+								selectedToken!.address,
+								paymentToken!.address
+							),
+							orderSide
+						);
+					} catch (e) {
+						console.warn('[QuickTrade] refreshQuotes during trade failed:', e);
+						// Fall back to current quotes
+						return sortedQuotes;
+					}
 				}
 			});
 
@@ -1098,8 +1066,8 @@
 				variant="primary"
 				size="lg"
 				className="w-full rounded-xl py-4 text-base font-semibold"
-				disabled={!quote || (!topAmount && !bottomAmount) || isExecutingTrade || isLoadingQuotes}
-				on:click={handleTrade}
+				disabled={isExecutingTrade || isLoadingQuotes || (!(quoteFetchError && relevantQuotes.length === 0) && (!quote || (!topAmount && !bottomAmount)))}
+				on:click={quoteFetchError && relevantQuotes.length === 0 ? () => $orderbookQuery.refetch() : handleTrade}
 			>
 				{#if isExecutingTrade}
 					<span class="flex items-center justify-center gap-2">
@@ -1141,6 +1109,8 @@
 						</svg>
 						Loading prices...
 					</span>
+				{:else if quoteFetchError && relevantQuotes.length === 0}
+					Couldn't load prices — tap to retry
 				{:else if relevantQuotes.length === 0}
 					No liquidity
 				{:else if !quote}

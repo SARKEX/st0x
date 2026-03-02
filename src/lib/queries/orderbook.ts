@@ -70,6 +70,8 @@ export function createOrderbookQuotesQuery(
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(network),
 		staleTime: 60_000, // Stale after 60s
+		retry: 2,
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchInterval: pollInterval,
 		refetchOnWindowFocus: pollInterval ? true : false, // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
@@ -274,6 +276,8 @@ export function createTokenOrderbookQuotesQuery(
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(network && tokenAddress),
 		staleTime: 60_000, // Stale after 60s
+		retry: 2,
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchOnMount: 'always', // Always refresh when component mounts
 		refetchInterval: pollInterval, // Poll every 60s by default on trade pages
 		refetchOnWindowFocus: true, // Only refetch on focus if stale
