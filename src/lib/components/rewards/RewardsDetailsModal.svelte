@@ -360,22 +360,15 @@
 								<li class="flex gap-3">
 									<span class="flex-shrink-0 font-medium text-yellow-400">1.</span>
 									<span>
-										All tStocks listed on St0x.io are eligible. You can find tStocks at St0x.io and
-										Aerodrome. From time to time additional partners may be added.
+										All tStocks listed on St0x.io are eligible. You can find tStocks at St0x.io, Hydrex,
+										and Aerodrome. From time to time additional partners may be added.
 									</span>
 								</li>
 								<li class="flex gap-3">
 									<span class="flex-shrink-0 font-medium text-yellow-400">2.</span>
 									<span>
-										tStocks must be held in your wallet or in the orderbook contract underpinning
-										the venues listed above. As St0x integrates DeFi partners this list may change.
-									</span>
-								</li>
-								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">3.</span>
-									<span>
-										Balances in Aerodrome pools are based on the number of tokens deposited, not the
-										current balance.
+										tStocks must be held in your wallet or in the St0x orderbook contract. Partner pools are subject
+										to their own separate reward pools.
 									</span>
 								</li>
 								<li class="flex gap-3">
@@ -410,7 +403,7 @@
 								<li class="flex gap-3">
 									<span class="flex-shrink-0 font-medium text-yellow-400">8.</span>
 									<span>
-										The reward pool will be used to buy tSPLG for distribution. Due to market and
+										The reward pool will be used to buy wtSPYM for distribution. Due to market and
 										other factors the nominal value of rewards may vary at time of receipt.
 									</span>
 								</li>

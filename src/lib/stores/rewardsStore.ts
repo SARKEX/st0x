@@ -81,7 +81,6 @@ export const publicLeaderboardError = writable(false);
 // Modal visibility stores
 export const showDetailsModal = writable(false);
 export const showLeaderboardModal = writable(false);
-export const showRulesModal = writable(false);
 export const showTokenSwapAnnouncementModal = writable(false);
 export type RewardsModalTab = 'details' | 'rules';
 export const rewardsModalTab = writable<RewardsModalTab>('details');

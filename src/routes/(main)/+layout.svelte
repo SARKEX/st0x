@@ -5,8 +5,7 @@
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
 	import RewardsLeaderboardModal from '$lib/components/rewards/RewardsLeaderboardModal.svelte';
-	import RewardsRulesModal from '$lib/components/rewards/RewardsRulesModal.svelte';
-	import TokenSwapAnnouncementModal from '$lib/components/rewards/TokenSwapAnnouncementModal.svelte';
+import TokenSwapAnnouncementModal from '$lib/components/rewards/TokenSwapAnnouncementModal.svelte';
 	import ReferralJoinModal from '$lib/components/referrals/ReferralJoinModal.svelte';
 	import ReferralDashboardModal from '$lib/components/referrals/ReferralDashboardModal.svelte';
 	import ReferralLeaderboardModal from '$lib/components/referrals/ReferralLeaderboardModal.svelte';
@@ -173,10 +172,9 @@
 		/>
 	</div>
 
-	<!-- Rewards Modals (rendered at root level for proper fixed positioning) -->
-	<RewardsDetailsModal />
-	<RewardsLeaderboardModal />
-	<RewardsRulesModal />
+	<!-- Rewards Modals - temporarily hidden -->
+	<!-- <RewardsDetailsModal /> -->
+	<!-- <RewardsLeaderboardModal /> -->
 	<TokenSwapAnnouncementModal />
 
 	<!-- Referral Modals -->

@@ -94,42 +94,6 @@
 	// Reactively find pool config for selected month (avoids race condition on mount)
 	$: currentMonthPool = poolConfigs.find((p) => p.month === selectedMonth) || null;
 
-	// ===== Contract Check State =====
-	// Contract type: null = EOA, 'v2' = V2 pool, 'v3' = V3 pool, 'unknown' = other contract
-	let contractMap: Record<string, string | null> = {};
-	let lastCheckedWallets: string[] = []; // Track which wallets we've checked
-
-	// Auto-check contracts when wallet data changes
-	$: if (monthlyData?.wallets && monthlyData.wallets.length > 0) {
-		const currentAddresses = monthlyData.wallets.map((w) => w.address.toLowerCase()).sort();
-		const lastAddresses = lastCheckedWallets.sort();
-		// Only check if wallet list has changed
-		if (JSON.stringify(currentAddresses) !== JSON.stringify(lastAddresses)) {
-			checkContracts(monthlyData.wallets.map((w) => w.address));
-		}
-	}
-
-	async function checkContracts(addresses: string[]) {
-		if (addresses.length === 0) return;
-
-		lastCheckedWallets = addresses.map((a) => a.toLowerCase());
-
-		try {
-			const res = await fetch('/api/admin/check-contracts', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ addresses })
-			});
-
-			const data = await res.json();
-			if (res.ok && data.success) {
-				contractMap = data.contracts;
-			}
-		} catch {
-			// Silently fail - contract check is not critical
-		}
-	}
-
 	// ===== Airdrop CSV Modal State =====
 	let airdropModalOpen = false;
 	let airdropTokenAddress = '';
@@ -2640,25 +2604,6 @@
 																class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-xs text-yellow-400"
 															>
 																excluded
-															</span>
-														{/if}
-														{#if contractMap[row.address.toLowerCase()] === 'v2'}
-															<span
-																class="rounded bg-purple-900/50 px-1.5 py-0.5 text-xs text-purple-400"
-															>
-																v2 pool
-															</span>
-														{:else if contractMap[row.address.toLowerCase()] === 'v3'}
-															<span
-																class="rounded bg-purple-900/50 px-1.5 py-0.5 text-xs text-purple-400"
-															>
-																v3 pool
-															</span>
-														{:else if contractMap[row.address.toLowerCase()] === 'unknown'}
-															<span
-																class="rounded bg-purple-900/50 px-1.5 py-0.5 text-xs text-purple-400"
-															>
-																contract
 															</span>
 														{/if}
 													</div>
