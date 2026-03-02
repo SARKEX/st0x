@@ -10,6 +10,7 @@ import {
 	type RewardsPoolConfig,
 	type RocketBoostTiers
 } from '$lib/server/kv';
+import { invalidateRewardsCaches } from '$lib/server/cache';
 
 // GET - List all rewards pool configs or get a specific month
 export const GET: RequestHandler = async ({ url, cookies, request }) => {
@@ -136,6 +137,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			allMonths.sort((a, b) => b.localeCompare(a)); // Sort descending
 			await kvSet(KV_KEYS.rewardsPoolList(), allMonths);
 		}
+
+		// Invalidate cached rewards data so the main website picks up the new pool config
+		await invalidateRewardsCaches();
 
 		return json({ success: true, pool: config });
 	} catch {
