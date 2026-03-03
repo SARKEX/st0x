@@ -8,6 +8,7 @@ import {
 	KV_KEYS,
 	getExcludedWalletsSet,
 	getTeamWalletsSet,
+	getPoolWalletsSet,
 	type SnapshotBlockRecord
 } from '$lib/server/kv';
 import { list } from '@vercel/blob';
@@ -393,12 +394,18 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 			}
 		}
 
-		// Get wallet-to-code mapping, excluded wallets, and team wallets
-		const [walletToCode, excludedWallets, teamWallets] = await Promise.all([
+		// Get wallet-to-code mapping, excluded wallets, team wallets, and pool wallets
+		const [walletToCode, excludedWallets, teamWallets, poolWallets] = await Promise.all([
 			fetchWalletToCodeMapping(),
 			getExcludedWalletsSet(),
-			getTeamWalletsSet()
+			getTeamWalletsSet(),
+			getPoolWalletsSet()
 		]);
+
+		// Pool wallets should count toward TVL even if also in the excluded list
+		for (const pool of poolWallets) {
+			excludedWallets.delete(pool);
+		}
 
 		// Get all snapshot block records
 		const allBlocks = (await kvGet<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
