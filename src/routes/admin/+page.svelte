@@ -901,12 +901,12 @@
 	const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'.toLowerCase();
 
 	// Fetch TVL data from snapshots
-	async function fetchTvlData() {
+	async function fetchTvlData(refresh = false) {
 		tvlLoading = true;
 		tvlError = '';
 
 		try {
-			const res = await fetch('/api/admin/tvl?limit=90');
+			const res = await fetch(`/api/admin/tvl?limit=90${refresh ? '&refresh=1' : ''}`);
 			if (!res.ok) throw new Error('Failed to fetch TVL data');
 
 			const data = await res.json();
@@ -1518,7 +1518,7 @@
 			<button
 				on:click={() => {
 					if (activeSection === 'swaps') fetchSwapData();
-					else if (activeSection === 'tvl') fetchTvlData();
+					else if (activeSection === 'tvl') fetchTvlData(true);
 					else loadAllData();
 				}}
 				disabled={loading || swapLoading}

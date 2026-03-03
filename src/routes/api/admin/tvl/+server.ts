@@ -379,15 +379,18 @@ export const GET: RequestHandler = async ({ url, cookies, request }) => {
 		const parsedLimit = limitParam ? parseInt(limitParam) : 90;
 		const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 365) : 90;
 
-		// Check KV cache first
+		// Check KV cache first (skip if refresh=1 query param)
 		const cacheKey = `tvl:cache:${limit}`;
-		const cached = await kvGet<TvlResponse>(cacheKey);
-		if (cached) {
-			return json(cached, {
-				headers: {
-					'Cache-Control': 'private, max-age=60'
-				}
-			});
+		const skipCache = url.searchParams.get('refresh') === '1';
+		if (!skipCache) {
+			const cached = await kvGet<TvlResponse>(cacheKey);
+			if (cached) {
+				return json(cached, {
+					headers: {
+						'Cache-Control': 'private, max-age=60'
+					}
+				});
+			}
 		}
 
 		// Get wallet-to-code mapping, excluded wallets, and team wallets
