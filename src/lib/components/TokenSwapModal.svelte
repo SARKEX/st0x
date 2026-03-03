@@ -17,7 +17,8 @@
 	} from '$lib/config/tokenMigration';
 	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
-	import { createRaindexClient } from '$lib/clients/raindex';
+	import { getLoadBalancedClient } from '$lib/clients/raindex';
+	import type { Network } from '$lib/config/network';
 	import transactionStore from '$lib/stores/transaction';
 	import { TransactionErrorMessage } from '$lib/types/errors';
 	import { OrderV4_ABI, normalizeOrderData } from '$lib/utils/orderbook';
@@ -37,50 +38,58 @@
 	/** Fetch liquidity for a specific token migration order */
 	async function fetchLiquidityForToken(
 		mapping: (typeof TOKEN_MIGRATION_MAPPINGS)[0],
-		networkId: number
+		network: Network
 	): Promise<number> {
 		if (!mapping.swapOrderHash) return 0;
 
-		try {
-			const client = await createRaindexClient();
-			const ordersResult = await client.getOrders(
-				[networkId],
-				{ active: true, owners: [], orderHash: mapping.swapOrderHash as `0x${string}` },
-				1
-			);
+		const client = await getLoadBalancedClient(network);
+		const ordersResult = await client.getOrders(
+			[network.id],
+			{ active: true, owners: [], orderHash: mapping.swapOrderHash as `0x${string}` },
+			1
+		);
 
-			if (ordersResult.error || !ordersResult.value?.length) return 0;
-
-			const quotesResult = await ordersResult.value[0].getQuotes();
-			if (quotesResult.error || !quotesResult.value?.length) return 0;
-
-			const quote = quotesResult.value[0];
-			if (!quote?.success || !quote?.data?.maxOutput) return 0;
-
-			const maxOutputFloat = Float.fromHex(quote.data.maxOutput as `0x${string}`);
-			if (maxOutputFloat.error || !maxOutputFloat.value) return 0;
-
-			const fixedResult = maxOutputFloat.value.toFixedDecimalLossy(mapping.newToken.decimals);
-			if (fixedResult.error || !fixedResult.value) return 0;
-
-			const fdValue = fixedResult.value as unknown as Record<string, unknown>;
-			if (typeof fdValue?.value !== 'string') return 0;
-
-			return parseFloat(formatUnits(BigInt(fdValue.value), mapping.newToken.decimals));
-		} catch {
-			return 0;
+		if (ordersResult.error) {
+			throw new Error(`Failed to fetch order: ${ordersResult.error.readableMsg}`);
 		}
+		if (!ordersResult.value?.length) return 0;
+
+		const quotesResult = await ordersResult.value[0].getQuotes();
+		if (quotesResult.error) {
+			throw new Error(`Failed to fetch quotes: ${quotesResult.error.readableMsg}`);
+		}
+		if (!quotesResult.value?.length) return 0;
+
+		const quote = quotesResult.value[0];
+		if (!quote?.success || !quote?.data?.maxOutput) return 0;
+
+		const maxOutputFloat = Float.fromHex(quote.data.maxOutput as `0x${string}`);
+		if (maxOutputFloat.error || !maxOutputFloat.value) return 0;
+
+		const fixedResult = maxOutputFloat.value.toFixedDecimalLossy(mapping.newToken.decimals);
+		if (fixedResult.error || !fixedResult.value) return 0;
+
+		const fdValue = fixedResult.value as unknown as Record<string, unknown>;
+		if (typeof fdValue?.value !== 'string') return 0;
+
+		return parseFloat(formatUnits(BigInt(fdValue.value), mapping.newToken.decimals));
 	}
 
 	// Query to fetch liquidity for the currently selected token only
 	$: swapLiquidityQuery = createQuery({
 		queryKey: ['swapOrderLiquidity', $currentNetwork?.chainId, currentMapping?.swapOrderHash],
 		enabled: !!($currentNetwork && $showTokenSwapModal && currentMapping?.swapOrderHash),
-		staleTime: 30_000, // Cache for 30 seconds
+		staleTime: 10_000,
+		retry: 3,
+		retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8000),
+		refetchInterval: 15_000,
+		refetchOnMount: 'always' as const,
+		refetchOnWindowFocus: true,
+		refetchIntervalInBackground: false,
 		queryFn: async () => {
 			const network = $currentNetwork;
 			if (!network || !currentMapping) return 0;
-			return fetchLiquidityForToken(currentMapping, network.id);
+			return fetchLiquidityForToken(currentMapping, network);
 		}
 	});
 
@@ -311,7 +320,7 @@
 			const requestedTakerWantsAmount = parseUnits(swapAmountStr, mapping.newToken.decimals);
 
 			// 1. Fetch the migration swap order by order hash
-			const client = await createRaindexClient();
+			const client = await getLoadBalancedClient(network);
 			const ordersResult = await client.getOrders(
 				[network.id],
 				{
@@ -668,8 +677,10 @@
 						{#if currentMapping}
 							<div class="mt-1 flex justify-between">
 								<span>Available liquidity</span>
-								{#if $swapLiquidityQuery.isLoading}
-									<span class="animate-pulse text-gray-500">Loading...</span>
+								{#if $swapLiquidityQuery.isLoading || $swapLiquidityQuery.isFetching}
+									<span class="animate-pulse text-gray-500">Checking...</span>
+								{:else if $swapLiquidityQuery.isError}
+									<span class="text-orange-400">Failed to check — retrying...</span>
 								{:else if availableLiquidity > 0}
 									<span class="text-white"
 										>{formatNumberWithDecimals(
@@ -695,7 +706,8 @@
 							exceedsBalance ||
 							tokensToShow.length === 0 ||
 							$swapLiquidityQuery.isLoading ||
-							(availableLiquidity <= 0 && !$swapLiquidityQuery.isLoading)}
+							$swapLiquidityQuery.isError ||
+							availableLiquidity <= 0}
 						on:click={handleSwap}
 					>
 						{#if tokensToShow.length === 0}
@@ -703,7 +715,9 @@
 						{:else if !selectedTokenData}
 							Select a token
 						{:else if $swapLiquidityQuery.isLoading}
-							Loading liquidity...
+							Checking liquidity...
+						{:else if $swapLiquidityQuery.isError}
+							Checking liquidity — please wait...
 						{:else if availableLiquidity <= 0}
 							No liquidity available
 						{:else if parsedSwapAmount <= 0}
