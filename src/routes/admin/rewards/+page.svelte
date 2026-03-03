@@ -50,6 +50,20 @@
 	// Pool wallets set for badge display (to distinguish from regular excluded)
 	$: poolWalletsInData = new Set(poolWalletsList.map((w) => w.toLowerCase()));
 
+	/** Returns badge styling for excluded/pool wallet indicators. */
+	function exclusionBadge(
+		address: string,
+		size: 'xs' | 'sm' = 'xs'
+	): { label: string; className: string } {
+		const isPool = poolWalletsInData.has(address.toLowerCase());
+		const fontSize = size === 'xs' ? 'text-xs' : 'text-[10px]';
+		if (isPool) {
+			return { label: 'pool', className: `rounded px-1.5 py-0.5 ${fontSize} bg-purple-900/50 text-purple-400` };
+		}
+		const yellowBg = size === 'xs' ? 'bg-yellow-900/50' : 'bg-yellow-600/30';
+		return { label: 'excluded', className: `rounded px-1.5 py-0.5 ${fontSize} ${yellowBg} text-yellow-400` };
+	}
+
 	// Recalculate state
 	let recalculateLoading = false;
 	let recalculateError = '';
@@ -2644,17 +2658,8 @@
 															{truncateAddress(row.address)}
 														</a>
 														{#if row.isExcluded}
-															<span
-																class="rounded px-1.5 py-0.5 text-xs {poolWalletsInData.has(
-																	row.address.toLowerCase()
-																)
-																	? 'bg-purple-900/50 text-purple-400'
-																	: 'bg-yellow-900/50 text-yellow-400'}"
-															>
-																{poolWalletsInData.has(row.address.toLowerCase())
-																	? 'pool'
-																	: 'excluded'}
-															</span>
+															{@const badge = exclusionBadge(row.address)}
+															<span class={badge.className}>{badge.label}</span>
 														{/if}
 													</div>
 												</td>
@@ -2971,17 +2976,8 @@
 															{truncateAddress(wallet.address)}
 														</a>
 														{#if wallet.isExcluded}
-															<span
-																class="rounded px-1.5 py-0.5 text-[10px] {poolWalletsInData.has(
-																	wallet.address.toLowerCase()
-																)
-																	? 'bg-purple-900/50 text-purple-400'
-																	: 'bg-yellow-600/30 text-yellow-400'}"
-															>
-																{poolWalletsInData.has(wallet.address.toLowerCase())
-																	? 'pool'
-																	: 'excluded'}
-															</span>
+															{@const badge = exclusionBadge(wallet.address, 'sm')}
+															<span class={badge.className}>{badge.label}</span>
 														{/if}
 													</div>
 												</td>
@@ -3093,17 +3089,8 @@
 														{truncateAddress(wallet.address)}
 													</a>
 													{#if wallet.isExcluded}
-														<span
-															class="rounded px-1.5 py-0.5 text-[10px] {poolWalletsInData.has(
-																wallet.address.toLowerCase()
-															)
-																? 'bg-purple-900/50 text-purple-400'
-																: 'bg-yellow-600/30 text-yellow-400'}"
-														>
-															{poolWalletsInData.has(wallet.address.toLowerCase())
-																? 'pool'
-																: 'excluded'}
-														</span>
+														{@const badge = exclusionBadge(wallet.address, 'sm')}
+														<span class={badge.className}>{badge.label}</span>
 													{/if}
 												</div>
 											</td>
@@ -3338,17 +3325,8 @@
 														{truncateAddress(wallet.address)}
 													</a>
 													{#if wallet.isExcluded}
-														<span
-															class="rounded px-1.5 py-0.5 text-xs {poolWalletsInData.has(
-																wallet.address.toLowerCase()
-															)
-																? 'bg-purple-900/50 text-purple-400'
-																: 'bg-yellow-900/50 text-yellow-400'}"
-														>
-															{poolWalletsInData.has(wallet.address.toLowerCase())
-																? 'pool'
-																: 'excluded'}
-														</span>
+														{@const badge = exclusionBadge(wallet.address)}
+														<span class={badge.className}>{badge.label}</span>
 													{/if}
 												</div>
 											</td>

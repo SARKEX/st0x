@@ -4,8 +4,7 @@ import type { RequestHandler } from './$types';
 import {
 	kvGet,
 	KV_KEYS,
-	getExcludedWalletsSet,
-	getPoolWalletsSet,
+	getRewardsExcludedWalletsSet,
 	type MonthlyPointsData
 } from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
@@ -61,11 +60,7 @@ async function computeLeaderboard() {
 	let excludedSet: Set<string> = new Set();
 
 	try {
-		const [excluded, pools] = await Promise.all([
-			getExcludedWalletsSet(),
-			getPoolWalletsSet()
-		]);
-		excludedSet = new Set([...excluded, ...pools]);
+		excludedSet = await getRewardsExcludedWalletsSet();
 		monthlyData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth));
 	} catch (error) {
 		console.warn('[Leaderboard] Redis unavailable, returning empty data:', error);

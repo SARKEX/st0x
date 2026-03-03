@@ -185,3 +185,13 @@ export async function getPoolWalletsSet(): Promise<Set<string>> {
 	const wallets = (await kvGet<string[]>(KV_KEYS.poolWallets())) || [];
 	return new Set(wallets.map((w) => w.toLowerCase()));
 }
+
+/**
+ * Get the union of excluded + pool wallets as a lowercase Set.
+ * Both categories are excluded from rewards calculations (points, leaderboard, referrals).
+ * Pool wallets differ from excluded wallets only in that they still count toward TVL.
+ */
+export async function getRewardsExcludedWalletsSet(): Promise<Set<string>> {
+	const [excluded, pools] = await Promise.all([getExcludedWalletsSet(), getPoolWalletsSet()]);
+	return new Set([...excluded, ...pools]);
+}

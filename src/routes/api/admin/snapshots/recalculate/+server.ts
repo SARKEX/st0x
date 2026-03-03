@@ -6,8 +6,7 @@ import {
 	kvGet,
 	kvSet,
 	KV_KEYS,
-	getExcludedWalletsSet,
-	getPoolWalletsSet,
+	getRewardsExcludedWalletsSet,
 	type MonthlyPointsData,
 	type SnapshotBlockRecord
 } from '$lib/server/kv';
@@ -58,8 +57,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		console.log(`[Recalculate] Found ${monthBlocks.length} blocks for ${month}`);
 
 		// Get excluded + pool wallets for reporting (not for filtering - that happens at query time)
-		const [excluded, pools] = await Promise.all([getExcludedWalletsSet(), getPoolWalletsSet()]);
-		const excludedSet = new Set([...excluded, ...pools]);
+		const excludedSet = await getRewardsExcludedWalletsSet();
 
 		// Get existing monthly data to compare
 		const existingData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
