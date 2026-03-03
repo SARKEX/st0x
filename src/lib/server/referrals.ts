@@ -1,7 +1,7 @@
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { getKv, kvGet, kvSet, KV_KEYS, type MonthlyPointsData, type RewardsPoolConfig } from './kv';
-import { getExcludedWalletsSet } from './kv';
+import { getExcludedWalletsSet, getPoolWalletsSet } from './kv';
 import { getWalletInfo, type RegisteredWallet } from './accessCodes';
 
 // Create a public client for Base network for signature verification
@@ -313,7 +313,8 @@ export async function calculateReferralPerformance(
 	// Fetch monthly points data
 	const monthlyData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(month));
 	const poolConfig = await kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(month));
-	const excludedSet = await getExcludedWalletsSet();
+	const [excluded, pools] = await Promise.all([getExcludedWalletsSet(), getPoolWalletsSet()]);
+	const excludedSet = new Set([...excluded, ...pools]);
 
 	if (!monthlyData) {
 		return {

@@ -42,8 +42,13 @@
 		updatedAt: string;
 	} | null = null;
 
-	// Excluded wallets from the monthly data
-	let excludedWalletsInData: Set<string> = new Set();
+	// Rewards-excluded wallets (excluded + pool wallets combined) for points display
+	$: excludedWalletsInData = new Set([
+		...excludedWallets.map((w) => w.toLowerCase()),
+		...poolWalletsList.map((w) => w.toLowerCase())
+	]);
+	// Pool wallets set for badge display (to distinguish from regular excluded)
+	$: poolWalletsInData = new Set(poolWalletsList.map((w) => w.toLowerCase()));
 
 	// Recalculate state
 	let recalculateLoading = false;
@@ -763,6 +768,10 @@
 	let newTeamWalletAddress = '';
 	let addingTeamWallet = false;
 
+	// ===== Pool Wallets State =====
+	let poolWalletsLoading = false;
+	let poolWalletsList: string[] = [];
+
 	// ===== Rewards Pool Tab State =====
 	interface RocketBoostTiers {
 		tier25: number;
@@ -808,6 +817,7 @@
 		loadAvailableMonths();
 		loadExcludedWallets();
 		loadTeamWallets();
+		loadPoolWalletsList();
 		loadCanonicalBlocks();
 		loadPoolConfigs();
 		loadReferrals();
@@ -846,9 +856,6 @@
 			}
 
 			monthlyData = data;
-
-			// Update excluded wallets set
-			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
 		} catch (err) {
 			pointsError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -1444,7 +1451,6 @@
 			}
 
 			excludedWallets = data.wallets || [];
-			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
 		} catch (err) {
 			excludedError = err instanceof Error ? err.message : 'Unknown error';
 		} finally {
@@ -1484,7 +1490,6 @@
 			}
 
 			excludedWallets = data.wallets || [];
-			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
 			newWalletAddress = '';
 		} catch (err) {
 			excludedError = err instanceof Error ? err.message : 'Unknown error';
@@ -1508,7 +1513,6 @@
 			}
 
 			excludedWallets = data.wallets || [];
-			excludedWalletsInData = new Set(excludedWallets.map((w) => w.toLowerCase()));
 		} catch (err) {
 			excludedError = err instanceof Error ? err.message : 'Unknown error';
 		}
@@ -1592,6 +1596,46 @@
 			teamWallets = data.wallets || [];
 		} catch (err) {
 			teamError = err instanceof Error ? err.message : 'Unknown error';
+		}
+	}
+
+	// ===== Pool Wallets Functions =====
+	async function loadPoolWalletsList() {
+		poolWalletsLoading = true;
+
+		try {
+			const res = await fetch('/api/admin/pool-wallets');
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to load pool wallets');
+			}
+
+			poolWalletsList = data.wallets || [];
+		} catch {
+			// Pool wallets list load failure is non-critical
+		} finally {
+			poolWalletsLoading = false;
+		}
+	}
+
+	async function togglePoolWallet(address: string, isPool: boolean) {
+		try {
+			const res = await fetch('/api/admin/pool-wallets', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: isPool ? 'add' : 'remove', address: address.toLowerCase() })
+			});
+
+			const data = await res.json();
+
+			if (!res.ok) {
+				throw new Error(data.error || 'Failed to update pool status');
+			}
+
+			poolWalletsList = data.wallets || [];
+		} catch (err) {
+			excludedError = err instanceof Error ? err.message : 'Unknown error';
 		}
 	}
 
@@ -2601,9 +2645,15 @@
 														</a>
 														{#if row.isExcluded}
 															<span
-																class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-xs text-yellow-400"
+																class="rounded px-1.5 py-0.5 text-xs {poolWalletsInData.has(
+																	row.address.toLowerCase()
+																)
+																	? 'bg-purple-900/50 text-purple-400'
+																	: 'bg-yellow-900/50 text-yellow-400'}"
 															>
-																excluded
+																{poolWalletsInData.has(row.address.toLowerCase())
+																	? 'pool'
+																	: 'excluded'}
 															</span>
 														{/if}
 													</div>
@@ -2922,9 +2972,15 @@
 														</a>
 														{#if wallet.isExcluded}
 															<span
-																class="rounded bg-yellow-600/30 px-1.5 py-0.5 text-[10px] text-yellow-400"
+																class="rounded px-1.5 py-0.5 text-[10px] {poolWalletsInData.has(
+																	wallet.address.toLowerCase()
+																)
+																	? 'bg-purple-900/50 text-purple-400'
+																	: 'bg-yellow-600/30 text-yellow-400'}"
 															>
-																Excluded
+																{poolWalletsInData.has(wallet.address.toLowerCase())
+																	? 'pool'
+																	: 'excluded'}
 															</span>
 														{/if}
 													</div>
@@ -3038,9 +3094,15 @@
 													</a>
 													{#if wallet.isExcluded}
 														<span
-															class="rounded bg-yellow-600/30 px-1.5 py-0.5 text-[10px] text-yellow-400"
+															class="rounded px-1.5 py-0.5 text-[10px] {poolWalletsInData.has(
+																wallet.address.toLowerCase()
+															)
+																? 'bg-purple-900/50 text-purple-400'
+																: 'bg-yellow-600/30 text-yellow-400'}"
 														>
-															Excluded
+															{poolWalletsInData.has(wallet.address.toLowerCase())
+																? 'pool'
+																: 'excluded'}
 														</span>
 													{/if}
 												</div>
@@ -3277,9 +3339,15 @@
 													</a>
 													{#if wallet.isExcluded}
 														<span
-															class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-xs text-yellow-400"
+															class="rounded px-1.5 py-0.5 text-xs {poolWalletsInData.has(
+																wallet.address.toLowerCase()
+															)
+																? 'bg-purple-900/50 text-purple-400'
+																: 'bg-yellow-900/50 text-yellow-400'}"
 														>
-															excluded
+															{poolWalletsInData.has(wallet.address.toLowerCase())
+																? 'pool'
+																: 'excluded'}
 														</span>
 													{/if}
 												</div>
@@ -3449,8 +3517,8 @@
 					</button>
 				</div>
 				<p class="mt-2 text-sm text-gray-500">
-					Excluded wallets will be marked but still included in snapshots. They can be hidden from
-					TVL calculations using the toggle.
+					Excluded wallets are not eligible for rewards. Check "Pool" for LP contracts that should
+					still count toward TVL.
 				</p>
 			</Card>
 
@@ -3484,12 +3552,23 @@
 								>
 									{wallet}
 								</a>
-								<button
-									on:click={() => removeExcludedWallet(wallet)}
-									class="rounded px-3 py-1 text-sm text-red-400 transition-colors hover:bg-red-900/30"
-								>
-									Remove
-								</button>
+								<div class="flex items-center gap-3">
+									<label class="flex items-center gap-1.5 text-sm text-gray-400">
+										<input
+											type="checkbox"
+											checked={poolWalletsInData.has(wallet.toLowerCase())}
+											on:change={(e) => togglePoolWallet(wallet, e.currentTarget.checked)}
+											class="rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-purple-500"
+										/>
+										Pool
+									</label>
+									<button
+										on:click={() => removeExcludedWallet(wallet)}
+										class="rounded px-3 py-1 text-sm text-red-400 transition-colors hover:bg-red-900/30"
+									>
+										Remove
+									</button>
+								</div>
 							</div>
 						{/each}
 					</div>

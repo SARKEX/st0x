@@ -3,6 +3,7 @@ import {
 	kvGet,
 	KV_KEYS,
 	getExcludedWalletsSet,
+	getPoolWalletsSet,
 	type MonthlyPointsData,
 	type RewardsPoolConfig
 } from '$lib/server/kv';
@@ -28,12 +29,16 @@ export function getCurrentMonth(now: Date = new Date()): string {
 }
 
 export async function fetchRewardsData(month: string): Promise<RewardsData> {
-	const [monthlyData, poolConfig, excludedSet] = await Promise.all([
+	const [monthlyData, poolConfig, excludedSet, poolSet] = await Promise.all([
 		kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(month)),
 		kvGet<RewardsPoolConfig>(KV_KEYS.rewardsPool(month)),
-		getExcludedWalletsSet()
+		getExcludedWalletsSet(),
+		getPoolWalletsSet()
 	]);
-	return { monthlyData, poolConfig, excludedSet };
+	// Union excluded + pool wallets for rewards filtering
+	// (pool wallets are excluded from rewards but counted in TVL)
+	const rewardsExcludedSet = new Set([...excludedSet, ...poolSet]);
+	return { monthlyData, poolConfig, excludedSet: rewardsExcludedSet };
 }
 
 export function calculateTotalPoints(

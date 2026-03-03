@@ -1,7 +1,13 @@
 // Public API endpoint to get leaderboard data (no wallet required)
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { kvGet, KV_KEYS, getExcludedWalletsSet, type MonthlyPointsData } from '$lib/server/kv';
+import {
+	kvGet,
+	KV_KEYS,
+	getExcludedWalletsSet,
+	getPoolWalletsSet,
+	type MonthlyPointsData
+} from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { getCurrentMonth } from '$lib/server/rewards/rewardsCommon';
@@ -55,10 +61,12 @@ async function computeLeaderboard() {
 	let excludedSet: Set<string> = new Set();
 
 	try {
-		[monthlyData, excludedSet] = await Promise.all([
-			kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth)),
-			getExcludedWalletsSet()
+		const [excluded, pools] = await Promise.all([
+			getExcludedWalletsSet(),
+			getPoolWalletsSet()
 		]);
+		excludedSet = new Set([...excluded, ...pools]);
+		monthlyData = await kvGet<MonthlyPointsData>(KV_KEYS.monthlyPoints(currentMonth));
 	} catch (error) {
 		console.warn('[Leaderboard] Redis unavailable, returning empty data:', error);
 		// Continue with null/empty defaults

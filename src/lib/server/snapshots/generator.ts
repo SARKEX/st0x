@@ -114,8 +114,12 @@ export async function generateTokenSnapshot(
 	// Fetch vault holdings for all address variants at the specific block
 	const vaultHoldings = await fetchAllVaultHoldings(allAddresses, blockNumber);
 
-	// Fetch excluded wallets from KV
-	const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
+	// Fetch excluded + pool wallets from KV (both excluded from rewards)
+	const [excludedList, poolList] = await Promise.all([
+		kvGet<string[]>(KV_KEYS.excludedWallets()).then((w) => w || []),
+		kvGet<string[]>(KV_KEYS.poolWallets()).then((w) => w || [])
+	]);
+	const excludedWallets = [...excludedList, ...poolList];
 
 	// Generate snapshot combining all address variants into one
 	return generateSnapshot(
@@ -143,15 +147,16 @@ export async function generateAllTokenSnapshots(blockNumber: number): Promise<Bl
 	// Get block timestamp first (needed for Pyth price lookup)
 	const timestamp = await getBlockTimestamp(blockNumber);
 
-	// Fetch transfers, prices, vault holdings, and excluded wallets in parallel
-	const [transfers, { prices, priceTimestamp }, vaultHoldings, excludedWallets] = await Promise.all(
-		[
+	// Fetch transfers, prices, vault holdings, and excluded/pool wallets in parallel
+	const [transfers, { prices, priceTimestamp }, vaultHoldings, excludedList, poolList] =
+		await Promise.all([
 			fetchAllTransfers(blockNumber, ALL_TOKEN_ADDRESSES),
 			fetchPythPricesAtTimestamp(timestamp, ALL_TOKEN_ADDRESSES),
 			fetchAllVaultHoldings(ALL_TOKEN_ADDRESSES, blockNumber),
-			kvGet<string[]>(KV_KEYS.excludedWallets()).then((w) => w || [])
-		]
-	);
+			kvGet<string[]>(KV_KEYS.excludedWallets()).then((w) => w || []),
+			kvGet<string[]>(KV_KEYS.poolWallets()).then((w) => w || [])
+		]);
+	const excludedWallets = [...excludedList, ...poolList];
 
 	// Generate ONE snapshot per canonical token, combining all address variants
 	return TOKENS.map((token) => {
