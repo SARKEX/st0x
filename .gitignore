@@ -29,3 +29,7 @@ vite.config.ts.timestamp-*
 AGENTS.md
 CLAUDE.md
 .env*.local
+
+# Playwright
+.playwright-mcp/
+*.png

@@ -58,10 +58,16 @@
 		const isPool = poolWalletsInData.has(address.toLowerCase());
 		const fontSize = size === 'xs' ? 'text-xs' : 'text-[10px]';
 		if (isPool) {
-			return { label: 'pool', className: `rounded px-1.5 py-0.5 ${fontSize} bg-purple-900/50 text-purple-400` };
+			return {
+				label: 'pool',
+				className: `rounded px-1.5 py-0.5 ${fontSize} bg-purple-900/50 text-purple-400`
+			};
 		}
 		const yellowBg = size === 'xs' ? 'bg-yellow-900/50' : 'bg-yellow-600/30';
-		return { label: 'excluded', className: `rounded px-1.5 py-0.5 ${fontSize} ${yellowBg} text-yellow-400` };
+		return {
+			label: 'excluded',
+			className: `rounded px-1.5 py-0.5 ${fontSize} ${yellowBg} text-yellow-400`
+		};
 	}
 
 	// Recalculate state
@@ -2756,7 +2762,7 @@
 								<thead class="sticky top-0 border-b border-gray-700 bg-gray-900 text-gray-400">
 									<tr>
 										<th class="pb-2 pr-3">Date</th>
-										<th class="pb-2 pr-3">Time</th>
+										<th class="pb-2 pr-3">Time (UTC)</th>
 										<th class="pb-2 pr-3">Block</th>
 										<th class="pb-2 text-right">Actions</th>
 									</tr>
@@ -2773,7 +2779,7 @@
 											<td class="py-2 pr-3 text-gray-300">{block.date}</td>
 											<td class="py-2 pr-3 text-gray-300">
 												{new Date(block.timestamp * 1000).toLocaleTimeString('en-US', {
-													timeZone: 'America/New_York',
+													timeZone: 'UTC',
 													hour: '2-digit',
 													minute: '2-digit'
 												})}
