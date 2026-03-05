@@ -56,7 +56,12 @@
 	$: tokenBalancesQuery = createQuery({
 		queryKey: ['wrapUnwrapBalances', $walletAddress, $currentNetwork?.chainId, $wrapUnwrapMode],
 		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig && $showWrapUnwrapModal),
-		staleTime: 30_000,
+		staleTime: 10_000,
+		retry: 3,
+		retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8000),
+		refetchInterval: 15_000,
+		refetchOnMount: 'always' as const,
+		refetchOnWindowFocus: true,
 		queryFn: async () => {
 			if (!$walletAddress || !$wagmiConfig) return [];
 
@@ -102,7 +107,7 @@
 					.filter((item): item is NonNullable<typeof item> => item !== null && item.balance > 0n);
 			} catch (e) {
 				console.error('Failed to fetch token balances:', e);
-				return [];
+				throw e;
 			}
 		}
 	});
@@ -118,8 +123,16 @@
 	// Parse amount
 	$: parsedAmount = parseFloat(amount) || 0;
 
-	// Check if amount exceeds balance
-	$: exceedsBalance = selectedTokenData ? parsedAmount > selectedTokenData.balanceFormatted : false;
+	// Check if amount exceeds balance using bigint comparison to avoid floating point issues
+	$: exceedsBalance = (() => {
+		if (!selectedTokenData || !amount || parsedAmount <= 0) return false;
+		try {
+			const amountWei = parseUnits(amount, selectedTokenData.decimals);
+			return amountWei > selectedTokenData.balance;
+		} catch {
+			return false;
+		}
+	})();
 
 	// Update preview when amount changes
 	$: if (parsedAmount > 0 && selectedTokenData && currentMapping) {
@@ -181,10 +194,12 @@
 		amount = target.value;
 	}
 
-	// Set max amount
+	// Set max amount — truncate (not round) to 6 decimals so we never exceed balance
 	function handleMaxClick() {
 		if (!selectedTokenData) return;
-		amount = selectedTokenData.balanceFormatted.toFixed(6);
+		const full = formatUnits(selectedTokenData.balance, selectedTokenData.decimals);
+		const dot = full.indexOf('.');
+		amount = dot === -1 ? full : full.slice(0, dot + 7);
 	}
 
 	// Execute wrap or unwrap
@@ -296,8 +311,10 @@
 									on:change={(e) => handleTokenSelect(e.currentTarget.value)}
 								>
 									<option value="" disabled>Select token</option>
-									{#if $tokenBalancesQuery.isLoading}
-										<option value="" disabled>Loading...</option>
+									{#if $tokenBalancesQuery.isLoading || ($tokenBalancesQuery.isFetching && tokensWithBalance.length === 0)}
+										<option value="" disabled>Loading balances...</option>
+									{:else if $tokenBalancesQuery.isError}
+										<option value="" disabled>Failed to load — retrying...</option>
 									{:else if tokensWithBalance.length === 0}
 										<option value="" disabled>No tokens available</option>
 									{:else}
@@ -443,13 +460,19 @@
 						variant="primary"
 						size="lg"
 						className="w-full rounded-xl py-4 text-base font-semibold"
-						disabled={!selectedTokenData ||
+						disabled={$tokenBalancesQuery.isLoading ||
+							$tokenBalancesQuery.isError ||
+							!selectedTokenData ||
 							parsedAmount <= 0 ||
 							exceedsBalance ||
 							tokensWithBalance.length === 0}
 						on:click={handleExecute}
 					>
-						{#if tokensWithBalance.length === 0}
+						{#if $tokenBalancesQuery.isLoading || ($tokenBalancesQuery.isFetching && tokensWithBalance.length === 0)}
+							Loading balances...
+						{:else if $tokenBalancesQuery.isError}
+							Failed to load balances — retrying...
+						{:else if tokensWithBalance.length === 0}
 							No tokens available
 						{:else if !selectedTokenData}
 							Select a token
