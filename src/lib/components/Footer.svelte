@@ -38,7 +38,7 @@
 				>
 			</a>
 			<a
-				href="https://t.me/+oIzo_I9xi745ODU0"
+				href="https://t.me/ST0xCommunity"
 				target="_blank"
 				rel="noopener noreferrer"
 				class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
