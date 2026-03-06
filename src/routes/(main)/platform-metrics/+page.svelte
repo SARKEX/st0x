@@ -115,7 +115,7 @@
 	let vaultsLoading = true;
 	let vaultsError: string | null = null;
 
-	// TVL from admin API (includes all wallets)
+	// TVL from public API (aggregate totals)
 	let adminTvl: number | null = null;
 	let adminTokenTvl: Record<string, number> = {};
 	let adminTvlLoading = true;
@@ -125,7 +125,7 @@
 		adminTvlLoading = true;
 		adminTvlError = null;
 		try {
-			const response = await fetch('/api/admin/tvl?limit=1');
+			const response = await fetch('/api/public/tvl');
 			if (!response.ok) {
 				throw new Error('Failed to fetch TVL');
 			}
@@ -138,7 +138,7 @@
 				adminTokenTvl = {};
 			}
 		} catch (error) {
-			console.error('Failed to load admin TVL:', error);
+			console.error('Failed to load TVL:', error);
 			adminTvlError = error instanceof Error ? error.message : 'Failed to load TVL';
 			adminTvl = null;
 			adminTokenTvl = {};

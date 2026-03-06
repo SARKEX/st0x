@@ -180,7 +180,9 @@ export const CACHE_KEYS = {
 	referralAdminLeaderboard: (month: string) => `cache:referral:admin-leaderboard:${month}`,
 	referralPublicLeaderboard: () => 'cache:referral:public-leaderboard',
 	// Admin TVL cache (keyed by limit param)
-	tvl: (limit: number) => `tvl:cache:${limit}`
+	tvl: (limit: number) => `tvl:cache:${limit}`,
+	// Public TVL cache (aggregate only, no wallet data)
+	publicTvl: () => 'cache:public:tvl'
 } as const;
 
 // TTL constants (in seconds)
