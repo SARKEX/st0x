@@ -36,12 +36,7 @@ export function createOwnerOrdersQuery(
 		refetchInterval: 60_000,
 		queryFn: async () => {
 			if (!ownerAddress) return [];
-			return fetchOwnerOrdersForDisplay(
-				ownerAddress,
-				tokenAddresses ?? undefined,
-				page,
-				pageSize
-			);
+			return fetchOwnerOrdersForDisplay(ownerAddress, tokenAddresses ?? undefined, page, pageSize);
 		}
 	});
 }
