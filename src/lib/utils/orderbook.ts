@@ -72,7 +72,7 @@ export const OrderV4_ABI = `(address owner, ${EvaluableV4} evaluable, ${IOV2}[] 
 // Types for processed quotes
 export interface ProcessedQuote {
 	orderHash: string;
-	maxOutput: string; // Hex-encoded Float (64 hex chars + 0x prefix)
+	maxOutput: string | bigint; // Hex-encoded Float (64 hex chars + 0x prefix) or raw bigint from API
 	ratio: string; // Hex-encoded Float (64 hex chars + 0x prefix)
 	inputTokenSymbol: string;
 	outputTokenSymbol: string;

@@ -960,10 +960,11 @@
 				const isBuy = quote.side === 'bid';
 				const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol;
 				const tokenAddress = isBuy ? quote.inputTokenAddress : quote.outputTokenAddress;
-				const maxOutputBigInt = parseFloatHex(
-					quote.maxOutput,
-					isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18
-				);
+				const decimals = isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18;
+				const maxOutputBigInt =
+					typeof quote.maxOutput === 'bigint'
+						? quote.maxOutput
+						: parseFloatHex(quote.maxOutput, decimals);
 				const isFilled = maxOutputBigInt === 0n;
 				// Use the classified order type, defaulting to 'limit' if not set
 				const orderType = quote.orderType ?? 'limit';

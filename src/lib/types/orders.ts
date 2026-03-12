@@ -15,6 +15,8 @@ export type DisplayOrder = {
 	outputTokenSymbol: string;
 	inputAmount?: string;
 	outputAmount?: string;
+	/** Optional remaining amount (e.g. from st0x orders API) when quote.maxOutput is not set */
+	remainingAmount?: string;
 	price?: number;
 	isActive?: boolean;
 	isFilled?: boolean;
