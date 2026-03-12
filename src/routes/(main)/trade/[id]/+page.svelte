@@ -31,7 +31,6 @@
 		analyzeTrade,
 		createTokenLookup,
 		normalizeAddress,
-		ratioToNumber,
 		toDecimal,
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
@@ -39,12 +38,12 @@
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
+	import { refreshLegacyTokenQuotes, type OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import {
-		createTokenOrderbookQuotesQuery,
-		prefetchGlobalOrders,
-		refreshLegacyTokenQuotes,
-		type OrderbookQuoteCache
-	} from '$lib/queries/orderbook';
+		createTokenOrdersQuery,
+		createOwnerOrdersQuery,
+		createTokenApiQuotesQuery
+	} from '$lib/queries/tokenOrders';
 	import { getTrades } from '$lib/api/subgraph';
 	import type { QueryObserverResult } from '@tanstack/query-core';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
@@ -84,17 +83,16 @@
 	$: singleTokenQuery = createSingleVaultQuery(tokenId, $currentNetwork, queryClient);
 	$: currentToken = $singleTokenQuery.data;
 	const tokensLookup = createTokenLookup(TOKENS);
-	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
-		$currentNetwork,
-		currentToken?.address ?? null
-	);
+	$: ordersTokenAddress = currentPythToken?.address ?? currentToken?.address ?? null;
+	let orderbookQuotesQuery = createTokenApiQuotesQuery($currentNetwork, ordersTokenAddress);
+	let tokenOrdersQuery = createTokenOrdersQuery($currentNetwork, ordersTokenAddress);
+	let ownerOrdersQuery = createOwnerOrdersQuery($currentNetwork, $walletAddress, null);
 	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: {
-		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
-			$currentNetwork,
-			currentToken?.address ?? null
-		);
+		orderbookQuotesQuery = createTokenApiQuotesQuery($currentNetwork, ordersTokenAddress);
+		tokenOrdersQuery = createTokenOrdersQuery($currentNetwork, ordersTokenAddress);
+		ownerOrdersQuery = createOwnerOrdersQuery($currentNetwork, $walletAddress, assetAddressSet);
 		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
@@ -150,44 +148,26 @@
 		});
 	})();
 
-	// Transform quotes and market orders into DisplayOrder format for OrdersTable
-	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
+	// Transform token orders (from st0x API) and market orders into DisplayOrder format for OrdersTable.
+	// Limit orders come from the st0x orders API to reduce subgraph/RPC; orderbook quotes are still used for depth chart and market order execution.
+	// Owner orders (from owner API) are merged in and take precedence for "My Orders" accuracy.
 	$: tokenOrders = (() => {
-		const displayOrders: DisplayOrder[] = [];
+		const byHash = new Map<string, DisplayOrder>();
 		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
 
-		// Add limit orders from quotes (for current token only; match wrapped or legacy address)
-		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
-			const quotes = $orderbookQuotesQuery.data.quotes;
-
-			// Filter by token (input or output matches current token's wrapped or legacy address)
-			const filtered = quotes.filter(
-				(q) =>
-					assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
-					assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
-			);
-
-			// Transform to DisplayOrder
-			for (const quote of filtered) {
-				const isBuy = quote.side === 'bid';
-				const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol;
-				// Use the classified order type, defaulting to 'limit' if not set
-				const orderType = quote.orderType ?? 'limit';
-				displayOrders.push({
-					type: orderType === 'dynamic-spread' ? 'custom' : orderType,
-					orderHash: quote.orderHash,
-					timestamp: quote.sgOrder?.timestampAdded ? Number(quote.sgOrder.timestampAdded) : 0,
-					side: isBuy ? 'Buy' : 'Sell',
-					quote,
-					tokenSymbol,
-					tokenAddress,
-					inputTokenSymbol: quote.inputTokenSymbol,
-					outputTokenSymbol: quote.outputTokenSymbol,
-					price: quote.quotePerAsset,
-					isActive: quote.sgOrder?.active ?? true
-				});
+		// Add all-token orders (for "All Orders" view) — filter to matching token addresses
+		for (const order of $tokenOrdersQuery.data ?? []) {
+			if (assetAddressSet.has(order.tokenAddress)) {
+				byHash.set(order.orderHash.toLowerCase(), order);
 			}
 		}
+
+		// Overlay with owner-specific orders (for "My Orders" view) — already filtered to current token
+		for (const order of $ownerOrdersQuery.data ?? []) {
+			byHash.set(order.orderHash.toLowerCase(), order);
+		}
+
+		const displayOrders = Array.from(byHash.values());
 
 		// Add market orders (user's trades for this token)
 		if (userMarketOrders.length > 0 && tokenAddress) {
@@ -210,10 +190,8 @@
 	// User vaults query - no polling, invalidated after order deployment
 	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
-	// Background prefetch of global caches when page loads
+	// Background prefetch of user vaults when wallet connects
 	$: if (browser && $currentNetwork && $walletAddress) {
-		// Prefetch global orders and vaults in background (non-blocking)
-		prefetchGlobalOrders($currentNetwork.id).catch(() => {});
 		prefetchUserVaults($currentNetwork.id, $walletAddress).catch(() => {});
 	}
 
@@ -814,67 +792,36 @@
 	$: orderbookDepth = (() => {
 		if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
 		const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-		if (!quotes.length) {
-			return { bids: [], asks: [] };
-		}
-		const settlementToken = $currentNetwork.defaultPaymentToken;
-		if (!settlementToken) return { bids: [], asks: [] };
-		const quoteAddress = settlementToken.address?.toLowerCase();
-		if (!quoteAddress) {
-			return { bids: [], asks: [] };
-		}
+		if (!quotes.length) return { bids: [], asks: [] };
 
 		const bids: DepthSeries['bids'] = [];
 		const asks: DepthSeries['asks'] = [];
-		quotes.forEach((quote) => {
-			const ratioValue = ratioToNumber(quote.ratio);
-			const ratio = ratioValue ?? 0;
-			if (!Number.isFinite(ratio) || ratio <= 0) {
-				return;
+
+		for (const quote of quotes) {
+			const price = quote.quotePerAsset;
+			if (!price || !Number.isFinite(price) || price <= 0) continue;
+
+			// Resolve outputVaultBalance from bigint or hex maxOutput
+			let outputAmount: number;
+			if (typeof quote.maxOutput === 'bigint') {
+				outputAmount = Number(formatUnits(quote.maxOutput, quote.outputTokenDecimals ?? 18));
+			} else {
+				const decoded = toDecimal(quote.maxOutput, 0, { absolute: true });
+				outputAmount = decoded ?? 0;
 			}
-			const inputAddress = quote.inputTokenAddress.toLowerCase();
-			const outputAddress = quote.outputTokenAddress.toLowerCase();
-			if (!inputAddress || !outputAddress) {
-				return;
-			}
-			const inputIsAsset = assetAddressSet.has(inputAddress);
-			const outputIsAsset = assetAddressSet.has(outputAddress);
+			if (!outputAmount || outputAmount <= 0) continue;
 
-			// ASK: quote token -> asset (buying the asset)
-			if (inputAddress === quoteAddress && outputIsAsset) {
-				const tokenAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
-				const price = ratio;
-				if (tokenAmount === null || !Number.isFinite(price) || tokenAmount <= 0 || price <= 0) {
-					return;
-				}
-				asks.push({ price, quantity: tokenAmount });
-				return;
-			}
-
-			// BID: asset -> quote token (selling the asset)
-			if (inputIsAsset && outputAddress === quoteAddress) {
-				const quoteAmount = toDecimal(quote.maxOutput, 0, { absolute: true });
-				if (quoteAmount === null || quoteAmount <= 0) {
-					return;
-				}
-
-				// Determine price based on ratio magnitude
-				// If ratio > 1: it's already in USD/token form
-				// If ratio < 1: it's in token/USD form, so invert it
-				const price = ratio >= 1 ? ratio : 1 / ratio;
-				const tokenAmount = quoteAmount / price;
-
-				if (!Number.isFinite(price) || price <= 0) {
-					return;
-				}
-				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
-					return;
-				}
-
+			if (quote.side === 'ask') {
+				// ASK: input=payment, output=asset — outputAmount is asset quantity
+				asks.push({ price, quantity: outputAmount });
+			} else {
+				// BID: input=asset, output=payment — outputAmount is payment; convert to asset
+				const tokenAmount = outputAmount / price;
+				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) continue;
 				bids.push({ price, quantity: tokenAmount });
-				return;
 			}
-		});
+		}
+
 		return { bids, asks };
 	})();
 	$: {
@@ -1206,9 +1153,9 @@
 						<div class="mt-4">
 							<OrdersTable
 								orders={tokenOrders}
-								isLoading={$orderbookQuotesQuery.isLoading}
-								isError={$orderbookQuotesQuery.isError}
-								errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+								isLoading={$tokenOrdersQuery.isLoading}
+								isError={$tokenOrdersQuery.isError}
+								errorMessage={$tokenOrdersQuery.error?.message ?? ''}
 								tokenAddress={currentToken?.address ?? null}
 								showTokenColumn={false}
 							/>

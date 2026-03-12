@@ -399,10 +399,9 @@
 							{@const quote = order.quote}
 							{@const isBuy = order.side === 'Buy'}
 							{@const maxOutputBigInt = quote?.maxOutput
-								? parseFloatHex(
-										quote.maxOutput,
-										isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18
-									)
+								? typeof quote.maxOutput === 'bigint'
+									? quote.maxOutput
+									: parseFloatHex(quote.maxOutput, isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18)
 								: 0n}
 							{@const tokenDecimals = quote
 								? isBuy
@@ -413,13 +412,15 @@
 							{@const orderbookId = quote?.orderbookId || ''}
 							{@const isActive = order.isActive ?? quote?.sgOrder?.active ?? true}
 							{@const isFilled = order.isFilled ?? maxOutputBigInt === 0n}
-							{@const remainingAmount = !isActive
-								? 'n/a'
-								: isFilled
-									? '0'
-									: maxOutputBigInt > 0n
-										? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3)
-										: '—'}
+							{@const remainingAmount = order.remainingAmount != null
+								? order.remainingAmount
+								: !isActive
+									? 'n/a'
+									: isFilled
+										? '0'
+										: maxOutputBigInt > 0n
+											? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3)
+											: '—'}
 							{@const currentPrice =
 								order.price !== undefined && order.price !== null && Number.isFinite(order.price)
 									? order.price.toFixed(3)
