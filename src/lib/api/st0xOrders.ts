@@ -52,7 +52,9 @@ export async function fetchOrdersByToken(
 	pageSize = 20
 ): Promise<St0xOrdersByTokenResponse> {
 	const token = tokenAddress.startsWith('0x') ? tokenAddress : `0x${tokenAddress}`;
-	const url = `${PROXY_BASE}/${encodeURIComponent(token)}?side=${side}&page=${page}&pageSize=${pageSize}`;
+	const url = `${PROXY_BASE}/${encodeURIComponent(
+		token
+	)}?side=${side}&page=${page}&pageSize=${pageSize}`;
 	const res = await fetch(url, { method: 'GET', headers: { accept: 'application/json' } });
 	if (!res.ok) {
 		const err = await res.json().catch(() => ({}));
@@ -77,8 +79,7 @@ export function st0xOrderToDisplayOrder(
 	// side=input => token is input => user sells token => Sell
 	// side=output => token is output => user buys token => Buy
 	const orderSide: 'Buy' | 'Sell' = side === 'input' ? 'Sell' : 'Buy';
-	const tokenSymbol =
-		side === 'input' ? order.inputToken.symbol : order.outputToken.symbol;
+	const tokenSymbol = side === 'input' ? order.inputToken.symbol : order.outputToken.symbol;
 
 	// ioRatio is output/input. We want price = quote per token (USD per token).
 	// Sell (token=input, quote=output): ioRatio = quote/token = price.
@@ -251,8 +252,7 @@ export function st0xOrderToProcessedQuote(
 
 	const quoteSide: 'ask' | 'bid' = side === 'output' ? 'ask' : 'bid';
 	const quotePerAsset = side === 'output' ? ioRatioNum : 1 / ioRatioNum;
-	const assetAddress =
-		side === 'output' ? order.outputToken.address : order.inputToken.address;
+	const assetAddress = side === 'output' ? order.outputToken.address : order.inputToken.address;
 
 	// Convert outputVaultBalance string to bigint, truncating to outputToken decimals
 	const outputDecimals = order.outputToken.decimals;
@@ -329,9 +329,11 @@ export async function fetchTokenProcessedQuotes(
 		const addr = q.assetAddress.toLowerCase();
 		const existing = summary[addr] ?? {};
 		if (q.side === 'ask') {
-			if (existing.ask === undefined || q.quotePerAsset < existing.ask) existing.ask = q.quotePerAsset;
+			if (existing.ask === undefined || q.quotePerAsset < existing.ask)
+				existing.ask = q.quotePerAsset;
 		} else {
-			if (existing.bid === undefined || q.quotePerAsset > (existing.bid ?? 0)) existing.bid = q.quotePerAsset;
+			if (existing.bid === undefined || q.quotePerAsset > (existing.bid ?? 0))
+				existing.bid = q.quotePerAsset;
 		}
 		summary[addr] = existing;
 	}
