@@ -125,7 +125,7 @@
 						<div
 							class="flex items-center justify-between rounded-lg px-4 py-3 {wallet.address ===
 							$walletAddress?.toLowerCase()
-								? 'border border-yellow-500/50 bg-yellow-500/10'
+								? 'border border-brand-gold-500/50 bg-brand-gold-500/10'
 								: 'bg-gray-700/50'}"
 						>
 							<div class="flex items-center gap-3">
@@ -143,15 +143,15 @@
 											: formatAddress(wallet.address)}
 									</p>
 									{#if wallet.address === $walletAddress?.toLowerCase()}
-										<p class="text-xs text-yellow-400">Your position</p>
+										<p class="text-xs text-brand-gold-400">Your position</p>
 									{/if}
 								</div>
 							</div>
 							<span
 								class="font-medium {wallet.address === $walletAddress?.toLowerCase()
-									? 'text-yellow-400'
+									? 'text-brand-gold-400'
 									: wallet.rank <= 3
-										? 'text-yellow-400'
+										? 'text-brand-gold-400'
 										: 'text-white'}"
 							>
 								{formatPoints(wallet.points)}

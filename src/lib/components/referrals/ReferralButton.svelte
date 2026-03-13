@@ -112,7 +112,7 @@
 		{:else if $referralProfile && $referralPerformance}
 			<div class="relative z-10 flex items-center gap-2">
 				<span class="font-semibold text-white">Referral</span>
-				<span class="text-xs font-medium text-yellow-300">
+				<span class="text-xs font-medium text-brand-gold-300">
 					{formatPoints($referralPerformance.totalPoints)} pts
 				</span>
 			</div>
@@ -141,7 +141,7 @@
 				</div>
 				<div class="flex justify-between">
 					<span class="text-gray-400">Points</span>
-					<span class="font-medium text-yellow-300"
+					<span class="font-medium text-brand-gold-300"
 						>{formatPoints($referralPerformance.totalPoints)}</span
 					>
 				</div>
@@ -151,7 +151,7 @@
 						>{formatUsd($referralPerformance.projectedRewards)}</span
 					>
 				</div>
-				<div class="border-t border-gray-700 pt-2 text-xs text-gray-500">
+				<div class="border-t border-gray-700 pt-2 text-xs text-gray-400">
 					Earn rewards when your friends invest
 				</div>
 			</div>

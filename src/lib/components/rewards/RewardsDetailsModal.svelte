@@ -117,7 +117,7 @@
 								<div class="grid grid-cols-2 gap-4">
 									<div>
 										<p class="text-xs text-gray-400">Your Points</p>
-										<p class="text-xl font-bold text-yellow-400">
+										<p class="text-xl font-bold text-brand-gold-400">
 											{formatPoints($rewardsData.userPoints)}
 										</p>
 									</div>
@@ -172,7 +172,7 @@
 										<!-- Projected progress (background, lighter) -->
 										{#if projectedProgress > rocketBoostProgress}
 											<div
-												class="absolute h-full bg-yellow-500/30 transition-all duration-500"
+												class="absolute h-full bg-brand-gold-500/30 transition-all duration-500"
 												style="width: {projectedProgress}%"
 											/>
 										{/if}
@@ -181,14 +181,14 @@
 											class="relative h-full transition-all duration-500 {$globalRewardsData
 												.rocketBoostTiersAchieved.tier100
 												? 'bg-green-500'
-												: 'bg-yellow-500'}"
+												: 'bg-brand-gold-500'}"
 											style="width: {rocketBoostProgress}%"
 										/>
 									</div>
 									<!-- Projected progress marker (dashed line) -->
 									{#if projectedProgress > rocketBoostProgress && projectedProgress < 100}
 										<div
-											class="absolute top-0 h-3 w-0.5 border-l-2 border-dashed border-yellow-300/70"
+											class="absolute top-0 h-3 w-0.5 border-l-2 border-dashed border-brand-gold-300/70"
 											style="left: {projectedProgress}%"
 											title="Projected: {projectedProgress.toFixed(0)}%"
 										/>
@@ -207,16 +207,16 @@
 								<!-- Current vs Projected stats -->
 								<div class="mb-3 flex items-center justify-between text-xs">
 									<div class="flex items-center gap-2">
-										<span class="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
+										<span class="inline-block h-2 w-2 rounded-full bg-brand-gold-500"></span>
 										<span class="text-gray-400">Current: {rocketBoostProgress.toFixed(0)}%</span>
 									</div>
 									{#if $globalRewardsData.projection}
 										<div class="flex items-center gap-2">
 											<span
-												class="inline-block h-2 w-2 rounded-full bg-yellow-500/30 ring-1 ring-yellow-300/50"
+												class="inline-block h-2 w-2 rounded-full bg-brand-gold-500/30 ring-1 ring-brand-gold-300/50"
 											></span>
 											<span class="text-gray-400">
-												Projected: <span class="font-medium text-yellow-300"
+												Projected: <span class="font-medium text-brand-gold-300"
 													>{projectedProgress.toFixed(0)}%</span
 												>
 											</span>
@@ -231,14 +231,14 @@
 											class="rounded p-1 {achieved
 												? 'bg-green-900/30'
 												: projected
-													? 'bg-yellow-900/20'
+													? 'bg-brand-gold-900/20'
 													: 'bg-gray-700/50'}"
 										>
 											<div
 												class="font-medium {achieved
 													? 'text-green-400'
 													: projected
-														? 'text-yellow-300/70'
+														? 'text-brand-gold-300/70'
 														: 'text-gray-500'}"
 											>
 												{pct}%
@@ -247,7 +247,7 @@
 												class={achieved
 													? 'text-green-300'
 													: projected
-														? 'text-yellow-300/50'
+														? 'text-brand-gold-300/50'
 														: 'text-gray-500'}
 											>
 												+${Math.round(amount)}
@@ -264,7 +264,7 @@
 										>
 									</span>
 									{#if $globalRewardsData.projection}
-										<span class="text-gray-500">
+										<span class="text-gray-400">
 											{$globalRewardsData.projection.daysRemaining} days remaining
 										</span>
 									{/if}
@@ -274,7 +274,7 @@
 							<!-- View Leaderboard Button -->
 							<button
 								on:click={openLeaderboard}
-								class="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-500/20 px-4 py-3 font-medium text-yellow-400 transition-colors hover:bg-yellow-500/30"
+								class="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-gold-500/20 px-4 py-3 font-medium text-brand-gold-400 transition-colors hover:bg-brand-gold-500/30"
 							>
 								<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path
@@ -295,7 +295,7 @@
 				{:else}
 					<div class="space-y-6 pt-2 text-sm leading-relaxed text-gray-300">
 						<div>
-							<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-yellow-400">
+							<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-gold-400">
 								Boost Rewards Overview
 							</h3>
 							<p class="mb-4">
@@ -353,40 +353,40 @@
 						</div>
 
 						<div>
-							<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-yellow-400">
+							<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-gold-400">
 								Rules and Eligibility
 							</h3>
 							<ol class="space-y-3">
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">1.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">1.</span>
 									<span>
 										All tStocks listed on St0x.io are eligible. You can find tStocks at St0x.io, Hydrex,
 										and Aerodrome. From time to time additional partners may be added.
 									</span>
 								</li>
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">2.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">2.</span>
 									<span>
 										tStocks must be held in your wallet or in the St0x orderbook contract. Partner pools are subject
 										to their own separate reward pools.
 									</span>
 								</li>
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">4.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">4.</span>
 									<span>
 										St0x-operated accounts used for market making, protocol-owned liquidity, or
 										treasury are ineligible for rewards and do not count towards TVL targets.
 									</span>
 								</li>
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">5.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">5.</span>
 									<span>
 										Points accrual begins at 00:00:00 UTC on 1st December 2025 and resets monthly
 										until the programme end date, which will be announced in advance.
 									</span>
 								</li>
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">6.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">6.</span>
 									<span>
 										Points are awarded every UTC calendar day in proportion to the US$ value of
 										holdings at two randomly selected blocks, using the most recent regular market
@@ -394,21 +394,21 @@
 									</span>
 								</li>
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">7.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">7.</span>
 									<span>
 										For RocketBoost purposes, we calculate average TVL as the sum of each eligible
 										wallet's holdings in US$ for that block, averaged over the calendar month.
 									</span>
 								</li>
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">8.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">8.</span>
 									<span>
 										The reward pool will be used to buy wtSPYM for distribution. Due to market and
 										other factors the nominal value of rewards may vary at time of receipt.
 									</span>
 								</li>
 								<li class="flex gap-3">
-									<span class="flex-shrink-0 font-medium text-yellow-400">9.</span>
+									<span class="flex-shrink-0 font-medium text-brand-gold-400">9.</span>
 									<span>
 										Rewards below US$0.10 may be rounded down to $0 and not distributed.
 									</span>

@@ -64,7 +64,7 @@
 
 			<!-- Rocket Icon -->
 			<svg
-				class="relative z-10 h-4 w-4 text-yellow-400"
+				class="relative z-10 h-4 w-4 text-brand-gold-400"
 				fill="none"
 				stroke="currentColor"
 				viewBox="0 0 24 24"
@@ -79,13 +79,13 @@
 
 			{#if $rewardsLoading}
 				<div
-					class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-yellow-400"
+					class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-brand-gold-400"
 				/>
 				<span class="relative z-10 text-gray-400">Loading...</span>
 			{:else if $rewardsData}
 				<div class="relative z-10 flex items-center gap-2">
 					<span class="font-semibold text-white">Boost</span>
-					<span class="text-xs font-medium text-yellow-300">
+					<span class="text-xs font-medium text-brand-gold-300">
 						{formatPoints($rewardsData.userPoints)} pts
 					</span>
 					<span class="text-xs font-bold text-green-400">
@@ -134,19 +134,19 @@
 						{#if projectedProgress > rocketBoostProgress}
 							<div class="flex items-center justify-between text-xs">
 								<span class="text-gray-400">Projected</span>
-								<span class="text-yellow-300">{projectedProgress.toFixed(0)}%</span>
+								<span class="text-brand-gold-300">{projectedProgress.toFixed(0)}%</span>
 							</div>
 						{/if}
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
 							<!-- Projected progress (lighter) -->
 							{#if projectedProgress > rocketBoostProgress}
-								<div class="absolute h-full bg-yellow-500/30" style="width: {projectedProgress}%" />
+								<div class="absolute h-full bg-brand-gold-500/30" style="width: {projectedProgress}%" />
 							{/if}
 							<!-- Current progress -->
 							<div
 								class="relative h-full transition-all {rocketBoostProgress >= 100
 									? 'bg-green-500'
-									: 'bg-yellow-500'}"
+									: 'bg-brand-gold-500'}"
 								style="width: {rocketBoostProgress}%"
 							/>
 							<!-- Milestone markers -->
@@ -173,7 +173,7 @@
 				class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/50 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/50 group-hover:to-gray-800"
 			></span>
 			<svg
-				class="relative z-10 h-4 w-4 text-yellow-400"
+				class="relative z-10 h-4 w-4 text-brand-gold-400"
 				fill="none"
 				stroke="currentColor"
 				viewBox="0 0 24 24"
@@ -220,19 +220,19 @@
 						{#if projectedProgress > rocketBoostProgress}
 							<div class="flex items-center justify-between text-xs">
 								<span class="text-gray-400">Projected</span>
-								<span class="text-yellow-300">{projectedProgress.toFixed(0)}%</span>
+								<span class="text-brand-gold-300">{projectedProgress.toFixed(0)}%</span>
 							</div>
 						{/if}
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
 							<!-- Projected progress (lighter) -->
 							{#if projectedProgress > rocketBoostProgress}
-								<div class="absolute h-full bg-yellow-500/30" style="width: {projectedProgress}%" />
+								<div class="absolute h-full bg-brand-gold-500/30" style="width: {projectedProgress}%" />
 							{/if}
 							<!-- Current progress -->
 							<div
 								class="relative h-full transition-all {rocketBoostProgress >= 100
 									? 'bg-green-500'
-									: 'bg-yellow-500'}"
+									: 'bg-brand-gold-500'}"
 								style="width: {rocketBoostProgress}%"
 							/>
 							<!-- Milestone markers -->
@@ -241,7 +241,7 @@
 							{/each}
 						</div>
 					</div>
-					<p class="pt-1 text-xs text-gray-500">Connect wallet to see your rewards</p>
+					<p class="pt-1 text-xs text-gray-400">Connect wallet to see your rewards</p>
 				</div>
 			</div>
 		{/if}

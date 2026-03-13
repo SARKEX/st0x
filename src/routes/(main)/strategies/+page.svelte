@@ -129,7 +129,7 @@
 						size="md"
 						className={`gap-2 rounded-lg px-4 py-2 text-xs font-medium transition-all sm:py-3 sm:text-sm ${
 							activeStrategyType === type.id
-								? 'bg-yellow-500/20 text-yellow-500'
+								? 'bg-brand-gold-500/20 text-brand-gold-500'
 								: 'text-gray-400 hover:text-white'
 						}`}
 						on:click={() => handleStrategyTypeChange(type.id)}

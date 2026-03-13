@@ -250,7 +250,7 @@
 				{:else if $referralLoading}
 					<div class="flex items-center justify-center py-8">
 						<div
-							class="h-8 w-8 animate-spin rounded-full border-2 border-gray-600 border-t-yellow-400"
+							class="h-8 w-8 animate-spin rounded-full border-2 border-gray-600 border-t-brand-gold-400"
 						></div>
 					</div>
 				{:else if $referralProfile}
@@ -268,13 +268,13 @@
 												disabled={nicknameSaving}
 												placeholder="New nickname"
 												class="flex-1 rounded-lg border px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {nicknameValid
-													? 'border-gray-600 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
+													? 'border-gray-600 bg-gray-800 focus:border-brand-gold-500 focus:ring-brand-gold-500'
 													: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
 											/>
 											<button
 												on:click={saveNickname}
 												disabled={nicknameSaving || !nicknameValid || !newNickname.trim()}
-												class="rounded-lg bg-yellow-500 p-1.5 text-black transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50"
+												class="rounded-lg bg-brand-gold-500 p-1.5 text-black transition-colors hover:bg-brand-gold-400 disabled:cursor-not-allowed disabled:opacity-50"
 												title="Save"
 											>
 												{#if nicknameSaving}
@@ -356,7 +356,7 @@
 							<div class="space-y-2">
 								<span class="text-xs text-gray-400">Your Referral Code</span>
 								<div class="flex items-center gap-2">
-									<code class="flex-1 rounded-lg bg-gray-800 px-4 py-2 font-mono text-yellow-400">
+									<code class="flex-1 rounded-lg bg-gray-800 px-4 py-2 font-mono text-brand-gold-400">
 										{$referralProfile.referralCode}
 									</code>
 									<button
@@ -450,7 +450,7 @@
 										<p class="text-xs text-gray-400">Wallets Referred</p>
 									</div>
 									<div>
-										<p class="text-2xl font-bold text-yellow-400">
+										<p class="text-2xl font-bold text-brand-gold-400">
 											{formatPoints($referralPerformance.totalPoints)}
 										</p>
 										<p class="text-xs text-gray-400">Total Points</p>
@@ -478,7 +478,7 @@
 						<!-- View Leaderboard Button -->
 						<button
 							on:click={openLeaderboard}
-							class="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-500/20 px-4 py-3 font-medium text-yellow-400 transition-colors hover:bg-yellow-500/30"
+							class="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-gold-500/20 px-4 py-3 font-medium text-brand-gold-400 transition-colors hover:bg-brand-gold-500/30"
 						>
 							<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path

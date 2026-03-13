@@ -116,7 +116,7 @@
 				{#if $referralLeaderboardLoading}
 					<div class="flex items-center justify-center py-12">
 						<div
-							class="h-8 w-8 animate-spin rounded-full border-2 border-gray-600 border-t-yellow-400"
+							class="h-8 w-8 animate-spin rounded-full border-2 border-gray-600 border-t-brand-gold-400"
 						></div>
 					</div>
 				{:else if hasData}
@@ -137,7 +137,7 @@
 								: $referralProfile && entry.nickname === $referralProfile.nickname}
 							<div
 								class="grid grid-cols-12 items-center gap-2 rounded-lg px-4 py-3 {isUser
-									? 'border border-yellow-500/50 bg-yellow-500/10'
+									? 'border border-brand-gold-500/50 bg-brand-gold-500/10'
 									: 'bg-gray-700/50'}"
 							>
 								<!-- Rank -->
@@ -146,7 +146,7 @@
 										<span
 											class="flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold
 											{entry.rank === 1
-												? 'bg-yellow-500 text-gray-900'
+												? 'bg-brand-gold-500 text-gray-900'
 												: entry.rank === 2
 													? 'bg-gray-300 text-gray-900'
 													: 'bg-amber-600 text-white'}"
@@ -161,12 +161,12 @@
 								<!-- Nickname -->
 								<div class="col-span-4">
 									<p
-										class="truncate text-sm font-medium {isUser ? 'text-yellow-400' : 'text-white'}"
+										class="truncate text-sm font-medium {isUser ? 'text-brand-gold-400' : 'text-white'}"
 									>
 										{entry.nickname}
 									</p>
 									{#if isUser}
-										<p class="text-xs text-yellow-400/70">You</p>
+										<p class="text-xs text-brand-gold-400/70">You</p>
 									{/if}
 								</div>
 
@@ -179,9 +179,9 @@
 								<div class="col-span-3 text-right">
 									<span
 										class="text-sm font-medium {isUser
-											? 'text-yellow-400'
+											? 'text-brand-gold-400'
 											: entry.rank <= 3
-												? 'text-yellow-400'
+												? 'text-brand-gold-400'
 												: 'text-white'}"
 									>
 										{formatPoints(entry.totalPoints)}
@@ -208,7 +208,7 @@
 				{:else}
 					<div class="py-12 text-center">
 						<svg
-							class="mx-auto h-12 w-12 text-gray-600"
+							class="mx-auto h-12 w-12 text-gray-500"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -221,7 +221,7 @@
 							/>
 						</svg>
 						<p class="mt-4 text-gray-400">No referrers yet.</p>
-						<p class="text-sm text-gray-500">Be the first to join the referral programme!</p>
+						<p class="text-sm text-gray-400">Be the first to join the referral programme!</p>
 					</div>
 				{/if}
 			</div>

@@ -10,10 +10,10 @@
 				DEX Website Terms of Use
 			</h1>
 
-			<p class="mb-8 text-gray-500"><em>Last Updated: 30 June 2025</em></p>
+			<p class="mb-8 text-gray-400"><em>Last Updated: 30 June 2025</em></p>
 
-			<div class="mb-10 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-5">
-				<p class="font-semibold text-yellow-100">
+			<div class="mb-10 rounded-xl border border-brand-gold-500/20 bg-brand-gold-500/10 p-5">
+				<p class="font-semibold text-brand-gold-100">
 					YOU MUST READ THESE TERMS OF USE BEFORE USING THE WEBSITE. BY USING THE WEBSITE, YOU WILL
 					BE DEEMED TO HAVE ACCEPTED THESE TERMS OF USE.
 				</p>

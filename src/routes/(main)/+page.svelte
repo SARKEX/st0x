@@ -230,14 +230,14 @@
 				<QuickTrade />
 				<button
 					type="button"
-					class="w-full max-w-md rounded-lg bg-yellow-500 px-6 py-3 text-sm font-medium text-black transition hover:bg-yellow-400 sm:w-auto sm:py-2.5"
+					class="w-full max-w-md rounded-lg bg-brand-gold-500 px-6 py-3 text-sm font-medium text-black transition hover:bg-brand-gold-400 sm:w-auto sm:py-2.5"
 					on:click={() => goto('/trade/0x2289249984f1fa2ce86c4e8867e7eb819ea7df95')}
 				>
 					Launch Trading Terminal
 				</button>
 				<button
 					type="button"
-					class="hidden text-sm text-gray-400 underline decoration-gray-500 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500 sm:inline-block"
+					class="hidden text-sm text-gray-400 underline decoration-gray-500 underline-offset-4 transition hover:text-brand-gold-500 hover:decoration-brand-gold-500 sm:inline-block"
 					on:click={startTour}
 				>
 					New? Take the tour 👉
@@ -250,10 +250,10 @@
 				<div class="p-2 sm:p-5">
 					<div class="mb-2 flex justify-center sm:mb-4">
 						<div
-							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-12 w-12 items-center justify-center rounded-full bg-brand-gold-500/10 sm:h-20 sm:w-20"
 						>
 							<svg
-								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
+								class="h-6 w-6 text-brand-gold-500 sm:h-10 sm:w-10"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -279,10 +279,10 @@
 				<div class="p-2 sm:p-5">
 					<div class="mb-2 flex justify-center sm:mb-4">
 						<div
-							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-12 w-12 items-center justify-center rounded-full bg-brand-gold-500/10 sm:h-20 sm:w-20"
 						>
 							<svg
-								class="h-8 w-8 text-yellow-500 sm:h-12 sm:w-12"
+								class="h-8 w-8 text-brand-gold-500 sm:h-12 sm:w-12"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 36 24"
@@ -341,10 +341,10 @@
 				<div class="p-2 sm:p-5">
 					<div class="mb-2 flex justify-center sm:mb-4">
 						<div
-							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-12 w-12 items-center justify-center rounded-full bg-brand-gold-500/10 sm:h-20 sm:w-20"
 						>
 							<svg
-								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
+								class="h-6 w-6 text-brand-gold-500 sm:h-10 sm:w-10"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -447,7 +447,7 @@
 											? circulatingSupply * displayPrice
 											: null}
 									<tr
-										class="cursor-pointer transition-all hover:bg-yellow-500/5"
+										class="cursor-pointer transition-all hover:bg-brand-gold-500/5"
 										on:click={() => {
 											track('token_clicked', {
 												token_symbol: token.symbol,

@@ -75,7 +75,7 @@
 						class="h-8 w-8 rounded-full"
 					/>
 					<span
-						class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
+						class="bg-gradient-to-r from-brand-gold-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
 					>
 						ST0x
 					</span>

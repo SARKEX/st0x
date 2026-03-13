@@ -190,7 +190,7 @@
 						<div>
 							<p class="text-gray-300">Your referral code is:</p>
 							<div class="mt-2 flex items-center justify-center gap-2">
-								<code class="rounded-lg bg-gray-700 px-4 py-2 font-mono text-lg text-yellow-400">
+								<code class="rounded-lg bg-gray-700 px-4 py-2 font-mono text-lg text-brand-gold-400">
 									{generatedCode}
 								</code>
 								<button
@@ -244,7 +244,7 @@
 								disabled={submitting}
 								placeholder="@username"
 								class="w-full rounded-lg border px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {telegramValid
-									? 'border-gray-700 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
+									? 'border-gray-700 bg-gray-800 focus:border-brand-gold-500 focus:ring-brand-gold-500'
 									: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
 							/>
 							{#if !telegramValid}
@@ -266,7 +266,7 @@
 								disabled={submitting}
 								placeholder="Your display name"
 								class="w-full rounded-lg border px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {nicknameValid
-									? 'border-gray-700 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
+									? 'border-gray-700 bg-gray-800 focus:border-brand-gold-500 focus:ring-brand-gold-500'
 									: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
 							/>
 							{#if !nicknameValid}
@@ -274,7 +274,7 @@
 									3-20 characters, letters, numbers, and underscores only
 								</p>
 							{:else}
-								<p class="text-xs text-gray-500">
+								<p class="text-xs text-gray-400">
 									This will be displayed publicly on the leaderboard
 								</p>
 							{/if}
@@ -298,7 +298,7 @@
 							{/if}
 						</Button>
 
-						<p class="text-center text-xs text-gray-500">
+						<p class="text-center text-xs text-gray-400">
 							You'll sign a message to verify wallet ownership
 						</p>
 					</div>

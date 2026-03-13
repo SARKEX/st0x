@@ -1437,7 +1437,7 @@
 																<button
 																	type="button"
 																	on:click={() => openCostBasisModal(holding)}
-																	class="ml-1 rounded p-0.5 text-gray-400 transition hover:bg-white/10 hover:text-yellow-400"
+																	class="ml-1 rounded p-0.5 text-gray-400 transition hover:bg-white/10 hover:text-brand-gold-400"
 																	title={holding.manualEntry
 																		? `Edit cost basis for ${holding.untrackedBalance.toFixed(
 																				4
@@ -1463,7 +1463,7 @@
 															{/if}
 														</div>
 														{#if holding.untrackedBalance > 0.0001 && !holding.manualEntry}
-															<div class="mt-0.5 text-xs text-yellow-500/70">
+															<div class="mt-0.5 text-xs text-brand-gold-500/70">
 																{holding.untrackedBalance.toFixed(2)} untracked
 															</div>
 														{/if}
@@ -1496,7 +1496,7 @@
 														<button
 															type="button"
 															on:click={() => openCostBasisModal(holding)}
-															class="text-yellow-500/70 underline decoration-dotted underline-offset-2 transition hover:text-yellow-400"
+															class="text-brand-gold-500/70 underline decoration-dotted underline-offset-2 transition hover:text-brand-gold-400"
 														>
 															Add cost basis
 														</button>
@@ -1576,7 +1576,7 @@
 					<!-- Unwrapped Tokens Section -->
 					{#if unwrappedHoldings.length > 0}
 						<Section>
-							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+							<h2 class="mb-3 text-base font-semibold text-brand-gold-500 sm:mb-4 sm:text-lg">
 								Unwrapped Tokens
 							</h2>
 							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
@@ -1652,7 +1652,7 @@
 					<!-- Legacy Tokens Section -->
 					{#if legacyHoldings.length > 0}
 						<Section>
-							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+							<h2 class="mb-3 text-base font-semibold text-brand-gold-500 sm:mb-4 sm:text-lg">
 								Legacy Tokens
 							</h2>
 							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
@@ -1696,7 +1696,7 @@
 														<Button
 															size="sm"
 															variant="primary"
-															className="bg-yellow-500 hover:bg-yellow-400"
+															className="bg-brand-gold-500 hover:bg-brand-gold-400"
 															on:click={() => handleSwapLegacyToken(token)}
 														>
 															Swap
@@ -1735,7 +1735,7 @@
 							Error loading vaults: {$vaultsListQuery.error?.message}
 						</div>
 					{:else if sortedVaults.length === 0}
-						<EmptyState description="No vaults found." />
+						<EmptyState description="No vaults yet. Place a limit order or DCA to create your first vault." />
 					{:else}
 						<!-- Default Vaults Section -->
 						<div class="mb-6 sm:mb-8">
@@ -1744,7 +1744,7 @@
 								Your primary vault for each token
 							</p>
 							{#if defaultVaults.length === 0}
-								<div class="py-4 text-sm text-gray-500">
+								<div class="py-4 text-sm text-gray-400">
 									No default vaults found. Default vaults are created automatically when you make a
 									limit or DCA order.
 								</div>
@@ -1923,7 +1923,7 @@
 										</table>
 									</div>
 								{:else}
-									<div class="py-4 text-sm text-gray-500">
+									<div class="py-4 text-sm text-gray-400">
 										All other vaults contain only dust amounts.
 									</div>
 								{/if}
@@ -2059,7 +2059,7 @@
 			</h3>
 
 			<p class="mb-4 text-sm text-gray-400">
-				You have <span class="font-medium text-yellow-400"
+				You have <span class="font-medium text-brand-gold-400"
 					>{costBasisEditToken.untrackedBalance.toFixed(4)}</span
 				> tokens without trade history. Enter the cost basis for these tokens.
 			</p>
@@ -2076,10 +2076,10 @@
 						min="0"
 						max={costBasisEditToken.untrackedBalance}
 						bind:value={costBasisInputQuantity}
-						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-brand-gold-500 focus:outline-none focus:ring-1 focus:ring-brand-gold-500"
 						placeholder="0.0000"
 					/>
-					<p class="mt-1 text-xs text-gray-500">
+					<p class="mt-1 text-xs text-gray-400">
 						Max: {costBasisEditToken.untrackedBalance.toFixed(4)}
 					</p>
 				</div>
@@ -2094,20 +2094,20 @@
 						step="any"
 						min="0"
 						bind:value={costBasisInputPrice}
-						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-brand-gold-500 focus:outline-none focus:ring-1 focus:ring-brand-gold-500"
 						placeholder="0.00 (use 0 for gifts/airdrops)"
 					/>
 				</div>
 
 				<div>
 					<label for="cb-note" class="mb-1 block text-sm font-medium text-gray-300">
-						Note <span class="text-gray-500">(optional)</span>
+						Note <span class="text-gray-400">(optional)</span>
 					</label>
 					<input
 						id="cb-note"
 						type="text"
 						bind:value={costBasisInputNote}
-						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-brand-gold-500 focus:outline-none focus:ring-1 focus:ring-brand-gold-500"
 						placeholder="e.g., Gift, Purchased on Coinbase"
 					/>
 				</div>
@@ -2145,7 +2145,7 @@
 				<button
 					type="button"
 					on:click={saveCostBasisEntry}
-					class="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-medium text-black transition hover:bg-yellow-400"
+					class="rounded-lg bg-brand-gold-500 px-4 py-2 text-sm font-medium text-black transition hover:bg-brand-gold-400"
 				>
 					Save
 				</button>

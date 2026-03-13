@@ -808,7 +808,7 @@
 						</div>
 						<select
 							bind:value={selectedNetwork}
-							class="rounded-lg bg-gray-800/50 px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+							class="rounded-lg bg-gray-800/50 px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-gold-500"
 						>
 							{#each networks as network}
 								<option value={network}>{network.displayName}</option>
@@ -847,7 +847,7 @@
 											</div>
 										</div>
 									</td>
-									<td class="hidden p-2 text-right text-yellow-400 sm:table-cell sm:p-3"
+									<td class="hidden p-2 text-right text-brand-gold-400 sm:table-cell sm:p-3"
 										>{token.totalVolume.toFixed(3)}</td
 									>
 									<td class="p-2 text-right text-xs font-medium sm:p-3 sm:text-sm"
