@@ -361,14 +361,14 @@
 							<!-- Balance & Max -->
 							{#if selectedTokenData}
 								<div class="mt-2 flex items-center justify-between text-xs">
-									<span class="text-gray-500">
+									<span class="text-gray-400">
 										Balance: {selectedTokenData.balanceFormatted.toFixed(4)}
 										{selectedTokenData.symbol}
 									</span>
 									<button
 										type="button"
 										on:click={handleMaxClick}
-										class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+										class="rounded bg-gray-700/50 px-1.5 py-0.5 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
 									>
 										MAX
 									</button>
@@ -435,7 +435,7 @@
 								{@const targetToken = isWrapMode
 									? currentMapping.wrappedToken
 									: currentMapping.unwrappedToken}
-								<div class="mt-2 text-xs text-gray-500">
+								<div class="mt-2 text-xs text-gray-400">
 									{targetToken.name}
 								</div>
 							{/if}
@@ -448,7 +448,7 @@
 							<span>Exchange Rate</span>
 							<span class="text-white">1:1</span>
 						</div>
-						<div class="mt-1 text-gray-500">
+						<div class="mt-1 text-gray-400">
 							{isWrapMode
 								? 'Wrap your underlying tokens into the ERC4626 vault for trading.'
 								: 'Unwrap your vault shares back to the underlying tokens.'}
@@ -479,7 +479,7 @@
 						{:else if parsedAmount <= 0}
 							Enter amount
 						{:else if exceedsBalance}
-							Insufficient balance
+							Insufficient {selectedTokenData?.symbol ?? 'token'} balance
 						{:else}
 							{actionButtonText} {selectedTokenData?.symbol ?? ''}
 						{/if}

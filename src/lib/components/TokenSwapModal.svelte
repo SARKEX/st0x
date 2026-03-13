@@ -572,7 +572,7 @@
 									<button
 										type="button"
 										on:click={handleMaxClick}
-										class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+										class="rounded bg-gray-700/50 px-1.5 py-0.5 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
 									>
 										MAX
 									</button>

@@ -133,7 +133,7 @@
 	{#if (desktop && !collapsed) || (!desktop && visible)}
 		<!-- Assets List (scrollable) -->
 		<div class="flex-1 overflow-y-auto p-3">
-			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
+			<div class="mb-3 px-2 text-xs font-medium uppercase tracking-wider text-gray-500">
 				Assets
 			</div>
 			<div class="space-y-0.5">
@@ -169,7 +169,7 @@
 									<div class="truncate text-xs text-gray-400">{asset.name}</div>
 								</div>
 							</div>
-							<div class="text-sm font-medium text-white">
+							<div class="text-sm font-medium tabular-nums text-white">
 								${asset.price > 0 ? asset.price.toFixed(2) : 'N/A'}
 							</div>
 						</div>

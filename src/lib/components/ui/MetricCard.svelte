@@ -16,7 +16,7 @@
 <Card className={cardClass} {showGradient} {paddingClass}>
 	<div class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">{label}</div>
 	<div class="mb-2">
-		<span class={'block ' + valueClass}>{value}</span>
+		<span class={'block tabular-nums ' + valueClass}>{value}</span>
 	</div>
 	{#if change}
 		<div class={'flex items-center gap-1 ' + changeClass}>

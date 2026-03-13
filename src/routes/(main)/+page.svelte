@@ -467,12 +467,12 @@
 											/>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
-											<div class="font-medium text-white">
+											<div class="font-medium tabular-nums text-white">
 												{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
 											</div>
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="text-sm text-gray-300">
+											<div class="text-sm tabular-nums text-gray-300">
 												{#if marketCap != null}
 													{marketCap >= 1_000_000
 														? `$${(marketCap / 1_000_000).toFixed(2)}M`
@@ -485,14 +485,14 @@
 											</div>
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="text-sm text-gray-300">
+											<div class="text-sm tabular-nums text-gray-300">
 												{circulatingSupply >= 1000
 													? `${(circulatingSupply / 1000).toFixed(2)}K`
 													: circulatingSupply.toFixed(2)}
 											</div>
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="text-sm text-gray-300">{token.totalHolders}</div>
+											<div class="text-sm tabular-nums text-gray-300">{token.totalHolders}</div>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
 											<svg

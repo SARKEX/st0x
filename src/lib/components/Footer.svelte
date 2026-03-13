@@ -70,7 +70,7 @@
 			<p class="mb-4 text-xs text-gray-400">
 				© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
 			</p>
-			<p class="text-[10px] leading-relaxed text-gray-500 sm:text-xs">
+			<p class="text-xs leading-relaxed text-gray-500">
 				<span class="text-brand-gold-600">Risk Warning:</span> Trading tokenized assets involves substantial
 				risk. Past performance does not guarantee future results.
 			</p>

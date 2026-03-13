@@ -882,7 +882,7 @@
 	<div class="flex h-screen items-center justify-center">
 		<div class="text-center">
 			<p class="text-lg text-gray-400">Token not found</p>
-			<p class="mt-2 text-sm text-gray-500">ID: {tokenId}</p>
+			<p class="mt-2 text-sm text-gray-400">ID: {tokenId}</p>
 		</div>
 	</div>
 {:else}
@@ -899,7 +899,7 @@
 						<div class="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
-									<p class="text-[10px] uppercase tracking-wide text-gray-400 sm:text-xs">
+									<p class="text-xs uppercase tracking-wide text-gray-400">
 										Off-chain Reference
 									</p>
 									<p class="mt-0.5 text-sm font-semibold text-gray-200 sm:mt-1 sm:text-base">
@@ -939,10 +939,10 @@
 					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-3 backdrop-blur-sm sm:p-4">
 						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-3 sm:text-sm">
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-xs uppercase tracking-wide text-gray-400">
 									Oracle Price
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -953,10 +953,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-xs uppercase tracking-wide text-gray-400">
 									Confidence
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -967,10 +967,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-xs uppercase tracking-wide text-gray-400">
 									Bid Price
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
@@ -981,10 +981,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-xs uppercase tracking-wide text-gray-400">
 									Offer Price
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
@@ -1287,7 +1287,7 @@
 												{/if}
 											{:else}
 												<div class="py-8 text-center text-sm text-gray-400">
-													No vaults with balance found
+													No vault balances for this token.
 												</div>
 											{/if}
 										</div>
@@ -1484,14 +1484,14 @@
 													<TxLink hash={dep.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
 												<span>
 													<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{truncateAddress(dep.emitter.address)}
 													</span>
 												</span>
-												<span class="text-gray-600">•</span>
+												<span class="text-gray-500">•</span>
 												<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
@@ -1528,14 +1528,14 @@
 													<TxLink hash={w.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+											<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
 												<span>
 													<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{truncateAddress(w.emitter.address)}
 													</span>
 												</span>
-												<span class="text-gray-600">•</span>
+												<span class="text-gray-500">•</span>
 												<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
@@ -1736,7 +1736,7 @@
 									class="flex flex-wrap items-center gap-1 text-xs font-medium text-gray-300 sm:gap-2 sm:text-sm"
 								>
 									<span>{panelSummaryVerb} {panelTokenLabel}</span>
-									<span class="text-gray-500">{panelSummaryPreposition}</span>
+									<span class="text-gray-400">{panelSummaryPreposition}</span>
 									<span class="inline-flex items-center gap-1 text-gray-200">
 										{settlementTokenSymbol}
 										<img
@@ -1812,7 +1812,7 @@
 		<div class="mx-auto max-w-5xl">
 			<!-- Links Row - fewer on mobile -->
 			<div
-				class="mb-4 flex flex-wrap items-center justify-center gap-3 text-[10px] text-gray-400 sm:mb-6 sm:gap-6 sm:text-sm"
+				class="mb-4 flex flex-wrap items-center justify-center gap-3 text-xs text-gray-400 sm:mb-6 sm:gap-6 sm:text-sm"
 			>
 				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
 				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
@@ -1879,7 +1879,7 @@
 				<p class="mb-4 text-xs text-gray-500">
 					© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
 				</p>
-				<p class="text-[10px] leading-relaxed text-gray-600 sm:text-xs">
+				<p class="text-xs leading-relaxed text-gray-500">
 					<span class="text-yellow-600">Risk Warning:</span> Trading tokenized assets involves substantial
 					risk. Past performance does not guarantee future results.
 				</p>
@@ -1906,7 +1906,7 @@
 				class="flex items-center justify-between border-b border-white/10 px-3 py-3 sm:px-6 sm:py-5"
 			>
 				<div class="min-w-0 flex-1">
-					<p class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Advanced Chart</p>
+					<p class="text-xs uppercase tracking-wide text-gray-400">Advanced Chart</p>
 					<h2 class="truncate text-base font-semibold text-white sm:text-xl">{modalTitle}</h2>
 				</div>
 				<button
