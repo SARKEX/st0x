@@ -96,15 +96,15 @@ import TokenSwapAnnouncementModal from '$lib/components/rewards/TokenSwapAnnounc
 			></div>
 			<!-- Subtle grid pattern -->
 			<div
-				class="absolute inset-0 opacity-[0.02]"
+				class="absolute inset-0 opacity-[0.04]"
 				style="background-image: linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px); background-size: 60px 60px;"
 			></div>
 			<!-- Radial glow accents -->
 			<div
-				class="absolute left-1/4 top-1/4 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-500/5 blur-3xl"
+				class="absolute left-1/2 top-1/3 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-gold-500/[0.07] blur-[120px]"
 			></div>
 			<div
-				class="absolute bottom-1/4 right-1/4 h-[500px] w-[500px] translate-x-1/2 translate-y-1/2 rounded-full bg-blue-500/5 blur-3xl"
+				class="absolute bottom-0 right-1/4 h-[600px] w-[600px] rounded-full bg-brand-purple-500/[0.06] blur-[100px]"
 			></div>
 		</div>
 	{:else if !useEnhancedBackground}
