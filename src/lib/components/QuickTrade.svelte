@@ -794,9 +794,14 @@
 <!-- Close dropdown when clicking outside -->
 <svelte:window on:click={closeDropdown} />
 
-<div
-	class="relative w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/80 p-4 shadow-2xl backdrop-blur-xl sm:p-6"
->
+<div class="relative w-full max-w-md">
+	<!-- Glow halo -->
+	<div
+		class="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-brand-gold-500/20 via-brand-purple-500/20 to-brand-gold-500/20 opacity-75 blur-sm"
+	></div>
+	<div
+		class="relative w-full rounded-2xl border border-white/10 bg-gray-900/80 p-4 shadow-2xl backdrop-blur-xl sm:p-6"
+	>
 	<div
 		class="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-blue-500/20 via-transparent to-transparent opacity-50"
 	></div>
@@ -1134,6 +1139,7 @@
 			</Button>
 		{/if}
 	</div>
+</div>
 </div>
 
 <style>
