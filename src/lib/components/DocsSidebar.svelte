@@ -48,7 +48,7 @@
 			</a>
 			<a href="/">
 				<span
-					class="select-none bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
+					class="select-none bg-gradient-to-r from-brand-gold-400 via-blue-400 to-purple-500 bg-clip-text text-base font-extrabold tracking-tight text-transparent md:text-xl"
 					>ST0x</span
 				>
 			</a>
@@ -66,12 +66,12 @@
 					}}
 					class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
 					`/docs/${slug}`
-						? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
+						? 'border border-brand-gold-500/30 bg-brand-gold-500/20 text-brand-gold-500'
 						: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
 				>
 					<span>{title}</span>
 					{#if activePath === `/docs/${slug}`}
-						<div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
+						<div class="ml-auto h-2 w-2 rounded-full bg-brand-gold-500" />
 					{/if}
 				</a>
 			{/each}
@@ -83,7 +83,7 @@
 		<div class="flex w-full flex-col gap-3">
 			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
 				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
-					<div class="text-sm font-semibold text-yellow-500">{$currentNetwork.name}</div>
+					<div class="text-sm font-semibold text-brand-gold-500">{$currentNetwork.name}</div>
 					{#if $isAuthenticated && $walletAddress}
 						<div class="text-xs text-gray-400 sm:ml-2">
 							<span class="sm:hidden">…{$walletAddress?.slice(-6)}</span>

@@ -505,7 +505,7 @@
 							<div class="mb-3">
 								<select
 									id="swap-from-token"
-									class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-3 py-2 text-white focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+									class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-3 py-2 text-white focus:border-brand-gold-500 focus:outline-none focus:ring-1 focus:ring-brand-gold-500"
 									bind:value={selectedOldTokenAddress}
 									on:change={(e) => handleTokenSelect(e.currentTarget.value)}
 								>
@@ -562,7 +562,7 @@
 							<!-- Balance & Max -->
 							{#if selectedTokenData}
 								<div class="mt-2 flex items-center justify-between text-xs">
-									<span class="text-gray-500">
+									<span class="text-gray-400">
 										Balance: {formatBalance(
 											selectedTokenData.balance,
 											selectedTokenData.oldToken.decimals
@@ -631,7 +631,7 @@
 							</div>
 
 							{#if currentMapping}
-								<div class="mt-2 text-xs text-gray-500">
+								<div class="mt-2 text-xs text-gray-400">
 									{currentMapping.newToken.name}
 								</div>
 							{/if}
@@ -660,7 +660,7 @@
 								<div>
 									<p class="font-medium">Not enough inventory to fully swap right now.</p>
 									<p class="mt-0.5 text-blue-300/80">
-										Inventory will be periodically topped up. Please swap now and come back again
+										Liquidity is limited right now. Swap what you can and check back
 										later.
 									</p>
 								</div>
@@ -678,7 +678,7 @@
 							<div class="mt-1 flex justify-between">
 								<span>Available liquidity</span>
 								{#if $swapLiquidityQuery.isLoading || $swapLiquidityQuery.isFetching}
-									<span class="animate-pulse text-gray-500">Checking...</span>
+									<span class="animate-pulse text-gray-400">Checking...</span>
 								{:else if $swapLiquidityQuery.isError}
 									<span class="text-orange-400">Failed to check — retrying...</span>
 								{:else if availableLiquidity > 0}
@@ -690,7 +690,7 @@
 										{currentMapping.oldToken.symbol}</span
 									>
 								{:else}
-									<span class="text-yellow-500">No liquidity available</span>
+									<span class="text-brand-gold-500">No liquidity available</span>
 								{/if}
 							</div>
 						{/if}
@@ -717,13 +717,13 @@
 						{:else if $swapLiquidityQuery.isLoading}
 							Checking liquidity...
 						{:else if $swapLiquidityQuery.isError}
-							Checking liquidity — please wait...
+							Checking liquidity...
 						{:else if availableLiquidity <= 0}
 							No liquidity available
 						{:else if parsedSwapAmount <= 0}
 							Enter amount
 						{:else if exceedsBalance}
-							Insufficient balance
+							Insufficient {selectedTokenData?.oldToken.symbol ?? 'token'} balance
 						{:else}
 							Swap to {currentMapping?.newToken.symbol ?? 'Wrapped'}
 						{/if}

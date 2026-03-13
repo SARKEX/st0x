@@ -126,7 +126,7 @@
 						on:click={() => selectNetwork(network)}
 						class="flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm text-white transition-colors hover:bg-gray-700/80 active:bg-gray-600/80 {$currentNetwork.id ===
 						network.id
-							? 'bg-yellow-500/20'
+							? 'bg-brand-gold-500/20'
 							: ''}"
 					>
 						<img

@@ -59,21 +59,21 @@
 	onClose={() => handleClose()}
 >
 	{#if $transactionStore.status !== TransactionStatus.IDLE}
-		<div class="flex flex-col items-center justify-center gap-2 p-4 text-white">
+		<div class="flex flex-col items-center justify-center gap-2 p-4 text-white" aria-live="polite">
 			{#if $transactionStore.status === TransactionStatus.ERROR}
 				{@const isUserRejection =
 					$transactionStore.error === TransactionErrorMessage.USER_REJECTED_APPROVAL}
 				{@const isTimeout = $transactionStore.error === TransactionErrorMessage.TIMEOUT}
 				<div
 					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border {isUserRejection
-						? 'border-yellow-500/30 bg-yellow-500/20'
+						? 'border-amber-500/30 bg-amber-500/20'
 						: 'border-red-500/30 bg-red-500/20'}"
 					data-testid="error-icon"
 				>
 					{#if isUserRejection}
 						<!-- Hand/stop icon for user rejection -->
 						<svg
-							class="h-10 w-10 text-yellow-500"
+							class="h-10 w-10 text-amber-500"
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
@@ -120,7 +120,7 @@
 					{#if isUserRejection}
 						Transaction Cancelled
 					{:else if isTimeout}
-						Transaction Timeout
+						Transaction Timed Out
 					{:else}
 						{$transactionStore.status}
 					{/if}
@@ -132,7 +132,7 @@
 					<p class="mt-2 text-center text-sm text-gray-400">
 						If this issue persists, please contact support on our
 						<a
-							class="text-yellow-500 hover:text-yellow-400 hover:underline"
+							class="text-brand-gold-500 hover:text-brand-gold-400 hover:underline"
 							href="https://t.me/st0xio"
 							target="_blank"
 							rel="noopener noreferrer">Telegram group</a
@@ -145,12 +145,12 @@
 						label="View transaction on block explorer"
 						head={30}
 						tail={0}
-						className="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+						className="inline-flex items-center gap-1 text-sm text-brand-gold-500 hover:text-brand-gold-400 hover:underline transition-colors justify-center"
 						dataTestId="view-transaction-link"
 					/>
 				{/if}
 				<Button on:click={() => handleClose()} className="mt-6" dataTestId="dismiss-button">
-					{isUserRejection ? 'Close' : 'Dismiss'}
+					Close
 				</Button>
 			{:else if $transactionStore.status === TransactionStatus.SUCCESS}
 				<div
@@ -185,7 +185,7 @@
 							href={raindexLink.url}
 							target="_blank"
 							rel="noopener noreferrer"
-							class="inline-flex items-center justify-center gap-1 text-sm text-yellow-500 transition-colors hover:text-yellow-400 hover:underline"
+							class="inline-flex items-center justify-center gap-1 text-sm text-brand-gold-500 transition-colors hover:text-brand-gold-400 hover:underline"
 							data-testid="raindex-link"
 						>
 							{raindexLink.text}
@@ -203,14 +203,14 @@
 					<!-- Market order summary or no-fill message -->
 					{#if marketOrderDisplay?.isNoFill}
 						<div
-							class="w-full rounded-md border border-yellow-900/50 bg-yellow-900/20 p-4 text-left text-sm text-yellow-200"
+							class="w-full rounded-md border border-brand-gold-900/50 bg-brand-gold-900/20 p-4 text-left text-sm text-brand-gold-200"
 						>
-							<div class="mb-3 text-xs uppercase tracking-wide text-yellow-600">
+							<div class="mb-3 text-xs uppercase tracking-wide text-brand-gold-600">
 								No Tokens Available
 							</div>
 							<p class="mb-3">
 								No tokens available within 10% of oracle prices. During testing we have a guardrail
-								to avoid unfavourable prices. If you still want to make this purchase, use a limit
+								to avoid unfavorable prices. If you still want to make this purchase, use a limit
 								order and specify the desired price.
 							</p>
 						</div>
@@ -218,7 +218,7 @@
 						<div
 							class="w-full rounded-md border border-white/10 bg-gray-900/50 p-4 text-left text-sm text-gray-200"
 						>
-							<div class="mb-3 text-xs uppercase tracking-wide text-gray-500">
+							<div class="mb-3 text-xs uppercase tracking-wide text-gray-400">
 								Market Order Summary
 							</div>
 							<div class="flex justify-between">
@@ -246,9 +246,9 @@
 								</span>
 							</div>
 							{#if marketOrderDisplay.isPartialFill}
-								<div class="mt-3 rounded-md bg-yellow-900/30 p-2 text-xs text-yellow-200">
+								<div class="mt-3 rounded-md bg-brand-gold-900/30 p-2 text-xs text-brand-gold-200">
 									Partial fill: not all requested quantity was available within slippage tolerance.
-									We currently have a guardrail to avoid unfavourable prices. To ignore guardrails,
+									We currently have a guardrail to avoid unfavorable prices. To ignore guardrails,
 									use a limit order.
 								</div>
 							{/if}
@@ -286,7 +286,7 @@
 								label="View transaction"
 								head={20}
 								tail={0}
-								className="inline-flex items-center gap-1 text-sm text-yellow-500 hover:text-yellow-400 hover:underline transition-colors justify-center"
+								className="inline-flex items-center gap-1 text-sm text-brand-gold-500 hover:text-brand-gold-400 hover:underline transition-colors justify-center"
 								dataTestId="view-transaction-link"
 							/>
 						</div>
@@ -319,16 +319,16 @@
 				</div>
 
 				<Button on:click={() => handleClose()} className="mt-6" dataTestId="dismiss-button"
-					>Dismiss</Button
+					>Close</Button
 				>
 			{:else if $transactionStore.status === TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT}
 				<!-- Multi-transaction acknowledgment state -->
 				<div
-					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-yellow-500/30 bg-yellow-500/20"
+					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/20"
 					data-testid="multi-tx-icon"
 				>
 					<svg
-						class="h-10 w-10 text-yellow-500"
+						class="h-10 w-10 text-amber-500"
 						fill="none"
 						viewBox="0 0 24 24"
 						stroke="currentColor"
@@ -344,7 +344,10 @@
 				<p class="text-xl font-bold text-white" data-testid="multi-tx-title">
 					Multiple Transactions Required
 				</p>
-				<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
+				<p class="mt-2 text-center text-sm text-gray-400">
+				This action requires multiple transactions. You'll be prompted to approve each one.
+			</p>
+			<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
 					{$transactionStore.message}
 				</p>
 				<Button

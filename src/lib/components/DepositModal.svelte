@@ -289,7 +289,7 @@
 			<!-- Actions -->
 			<div class="flex gap-3">
 				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
-				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>Continue to Purchase</Button>
+				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>Buy Crypto</Button>
 			</div>
 		</div>
 	{:else}
@@ -324,7 +324,7 @@
 							<img src={qrCodeDataUrl} alt="Wallet QR Code" class="h-40 w-40" />
 						{:else if qrCodeError}
 							<div
-								class="flex h-40 w-40 items-center justify-center text-center text-sm text-gray-500"
+								class="flex h-40 w-40 items-center justify-center text-center text-sm text-gray-400"
 							>
 								{qrCodeError}
 							</div>
@@ -411,8 +411,8 @@
 			</div>
 
 			<!-- Warning -->
-			<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
-				<p class="text-xs text-yellow-400">
+			<div class="rounded-lg border border-brand-gold-500/30 bg-brand-gold-500/10 px-3 py-2">
+				<p class="text-xs text-brand-gold-400">
 					Only send tokens on the {$currentNetwork?.displayName || 'Base'} network. Tokens sent on other
 					networks may be lost.
 				</p>

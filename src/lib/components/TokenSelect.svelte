@@ -41,7 +41,7 @@
 	<!-- Selected value display -->
 	<button
 		type="button"
-		class="flex w-full items-center justify-between rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors hover:border-yellow-500/50 focus:border-yellow-500/50 focus:outline-none"
+		class="flex w-full items-center justify-between rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors hover:border-brand-gold-500/50 focus:border-brand-gold-500/50 focus:outline-none"
 		on:click={toggleDropdown}
 	>
 		<div class="flex items-center gap-3">

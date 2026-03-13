@@ -41,14 +41,14 @@
 		welcome: {
 			title: 'Welcome to ST0x',
 			description:
-				'U.S. equities on-chain. Fully decentralised. Fully backed by real equities. 24/7 trading.',
+				'U.S. equities on-chain. Fully decentralized. Fully backed by real equities. 24/7 trading.',
 			buttonText: 'Next',
 			isModal: true
 		},
 		'boost-rewards': {
 			title: 'Boost Rewards',
 			description:
-				'Earn monthly rewards for investing in real companies. Click this button to learn more.',
+				'Earn monthly rewards for holding tokenized equities.',
 			targetSelector: '[data-tutorial="boost-rewards"]',
 			buttonText: 'Next'
 		},
@@ -67,7 +67,7 @@
 		'buy-sell-panel': {
 			title: 'Place Orders',
 			description:
-				'Click Buy or Sell to open the order panel. Choose between market orders, limit orders, and DCAs. All orders are against USDC on Base.',
+				'All orders settle in USDC on Base. Choose between market orders, limit orders, and DCAs.',
 			targetSelector: ['[data-tutorial="buy-sell-buttons"]', '[data-tutorial="trade-panel"]'],
 			buttonText: 'Next'
 		},
@@ -284,7 +284,7 @@
 			<!-- Highlight border around each target (visual only) -->
 			{#each targetRects as rect}
 				<div
-					class="absolute rounded-lg border-2 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]"
+					class="absolute rounded-lg border-2 border-brand-gold-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]"
 					style="
 						left: {rect.left - 8}px;
 						top: {rect.top - 8}px;
@@ -334,7 +334,7 @@
 						Skip tutorial
 					</button>
 					<div class="flex items-center gap-3">
-						<span class="text-xs text-gray-500">
+						<span class="text-xs text-gray-400">
 							{$currentStepInfo.index + 1} / {$currentStepInfo.total}
 						</span>
 						<Button on:click={handleNext} variant="primary" size="sm">
@@ -359,10 +359,10 @@
 			>
 				<div class="mb-6 text-center">
 					<div
-						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20"
+						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-gold-500/20"
 					>
 						<svg
-							class="h-8 w-8 text-yellow-500"
+							class="h-8 w-8 text-brand-gold-500"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -392,7 +392,7 @@
 				</div>
 
 				{#if $currentStepInfo.index > 0}
-					<div class="mt-4 text-center text-xs text-gray-500">
+					<div class="mt-4 text-center text-xs text-gray-400">
 						Step {$currentStepInfo.index + 1} of {$currentStepInfo.total}
 					</div>
 				{/if}

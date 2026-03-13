@@ -202,14 +202,14 @@
 						Sending {amount}
 						{selectedToken?.symbol} to
 					</p>
-					<p class="mt-1 font-mono text-xs text-gray-500">
+					<p class="mt-1 font-mono text-xs text-gray-400">
 						{recipientAddress.slice(0, 10)}...{recipientAddress.slice(-8)}
 					</p>
 					<a
 						href="{$currentNetwork?.blockExplorer}/tx/{txHash}"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 hover:underline"
 					>
 						View on BaseScan
 						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -295,7 +295,7 @@
 								<button
 									type="button"
 									on:click={handleMax}
-									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-yellow-400 hover:bg-gray-600"
+									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-brand-gold-400 hover:bg-gray-600"
 								>
 									MAX
 								</button>

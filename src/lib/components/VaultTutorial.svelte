@@ -253,7 +253,7 @@
 
 			<!-- Highlight border around target -->
 			<div
-				class="pointer-events-none absolute rounded-lg border-2 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]"
+				class="pointer-events-none absolute rounded-lg border-2 border-brand-gold-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]"
 				style="
 					left: {targetRect.left - 8}px;
 					top: {targetRect.top - 8}px;
@@ -302,7 +302,7 @@
 						Skip
 					</button>
 					<div class="flex items-center gap-3">
-						<span class="text-xs text-gray-500">
+						<span class="text-xs text-gray-400">
 							{$currentVaultStepInfo.index + 1} / {$currentVaultStepInfo.total}
 						</span>
 						<Button on:click={handleNext} variant="primary" size="sm">
@@ -359,7 +359,7 @@
 					</button>
 				</div>
 
-				<div class="mt-4 text-center text-xs text-gray-500">
+				<div class="mt-4 text-center text-xs text-gray-400">
 					Step {$currentVaultStepInfo.index + 1} of {$currentVaultStepInfo.total}
 				</div>
 			</div>

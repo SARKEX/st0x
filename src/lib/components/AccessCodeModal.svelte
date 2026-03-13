@@ -192,12 +192,12 @@
 				bind:value={accessCode}
 				disabled={submitting}
 				placeholder="ST0X-XXXX-XXXX"
-				class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 uppercase text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500 disabled:cursor-not-allowed disabled:opacity-50"
+				class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 uppercase text-white placeholder-gray-500 focus:border-brand-gold-500 focus:outline-none focus:ring-1 focus:ring-brand-gold-500 disabled:cursor-not-allowed disabled:opacity-50"
 			/>
-			<p class="text-xs text-gray-500">
+			<p class="text-xs text-gray-400">
 				Don't have an access code? Contact us at <a
 					href="mailto:toby@st0x.io"
-					class="text-yellow-500 hover:underline">toby@st0x.io</a
+					class="text-brand-gold-500 hover:underline">toby@st0x.io</a
 				>
 			</p>
 		</div>
@@ -206,7 +206,7 @@
 		<div class="space-y-2">
 			{#if showReferralField}
 				<label for="referral-code-modal" class="text-sm font-medium text-gray-300">
-					Referral Code <span class="text-gray-500">(optional)</span>
+					Referral Code <span class="text-gray-400">(optional)</span>
 				</label>
 				<input
 					id="referral-code-modal"
@@ -215,7 +215,7 @@
 					disabled={submitting}
 					placeholder="st0x-ref-xxxxxx"
 					class="w-full rounded-lg border px-3 py-2 lowercase text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {referralCodeValid
-						? 'border-gray-700 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
+						? 'border-gray-700 bg-gray-800 focus:border-brand-gold-500 focus:ring-brand-gold-500'
 						: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
 				/>
 				{#if !referralCodeValid}
@@ -225,7 +225,7 @@
 				<button
 					type="button"
 					on:click={() => (showReferralField = true)}
-					class="text-sm text-gray-400 hover:text-yellow-500"
+					class="text-sm text-gray-400 hover:text-brand-gold-500"
 				>
 					+ Add referral code
 				</button>
@@ -249,7 +249,7 @@
 			{/if}
 		</Button>
 
-		<p class="text-center text-xs text-gray-500">
+		<p class="text-center text-xs text-gray-400">
 			You'll sign a message to verify wallet ownership
 		</p>
 	</div>
