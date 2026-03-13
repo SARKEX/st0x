@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../../app.css';
 	import { onMount } from 'svelte';
+	import { fade } from 'svelte/transition';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
 	import RewardsDetailsModal from '$lib/components/rewards/RewardsDetailsModal.svelte';
@@ -162,7 +163,11 @@ import TokenSwapAnnouncementModal from '$lib/components/rewards/TokenSwapAnnounc
 			<div class="hidden sm:block"><TickerTape /></div>
 		{/if}
 
-		<slot {sidebarExpanded} />
+		{#key $page.url.pathname}
+			<div in:fade={{ duration: 150, delay: 50 }}>
+				<slot {sidebarExpanded} />
+			</div>
+		{/key}
 		<TransactionModal />
 		<RainlangConfirmationModal
 			show={$rainlangConfirmationModal.show}

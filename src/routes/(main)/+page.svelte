@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { fly } from 'svelte/transition';
 	import { currentNetwork, sfts, vaultsQuery, oracleQuotes } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -434,7 +435,7 @@
 									</td>
 								</tr>
 							{:else}
-								{#each processedTokens as token (token.id)}
+								{#each processedTokens as token, i (token.id)}
 									{@const sft = sftLookup.get(token.id)}
 									{@const deposits = sumAmounts(sft?.deposits)}
 									{@const withdraws = sumAmounts(sft?.withdraws)}
@@ -447,6 +448,7 @@
 											? circulatingSupply * displayPrice
 											: null}
 									<tr
+										in:fly={{ y: 10, duration: 300, delay: Math.min(i * 50, 500) }}
 										class="cursor-pointer transition-all hover:bg-brand-gold-500/5"
 										on:click={() => {
 											track('token_clicked', {
