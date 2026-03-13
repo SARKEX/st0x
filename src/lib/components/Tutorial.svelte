@@ -90,9 +90,11 @@
 			buttonText: 'Finish'
 		},
 		complete: {
-			title: '',
-			description: '',
-			buttonText: ''
+			title: "You're all set!",
+			description:
+				"You've seen the markets, the trading terminal, and the on-chain data. Ready to make your first trade?",
+			buttonText: 'Start Trading',
+			isModal: true
 		}
 	};
 
@@ -194,6 +196,13 @@
 	async function handleNext() {
 		const step = $tutorialStep;
 
+		// Complete step: navigate to trade page and finish
+		if (step === 'complete') {
+			await goto('/trade/0x2289249984f1fa2ce86c4e8867e7eb819ea7df95');
+			completeTutorial();
+			return;
+		}
+
 		// Special handling for navigation step
 		if (step === 'navigate-trade') {
 			// Navigate to trade page for tSPLG
@@ -205,14 +214,13 @@
 		}
 
 		const next = nextTutorialStep();
-		if (next === 'complete') {
-			// Navigate back to home page before completing
-			await goto('/');
-			completeTutorial();
-		} else {
-			// Wait a tick for any DOM updates
-			setTimeout(updateTargetPosition, 100);
-		}
+		// Wait a tick for any DOM updates
+		setTimeout(updateTargetPosition, 100);
+	}
+
+	async function handleBackToMarkets() {
+		await goto('/');
+		completeTutorial();
 	}
 
 	function handleSkip() {
@@ -247,7 +255,7 @@
 
 	$: content = stepContent[$tutorialStep];
 	$: isModal = content?.isModal || targetRects.length === 0;
-	$: showTutorial = $tutorialActive && $tutorialStep !== 'complete';
+	$: showTutorial = $tutorialActive;
 </script>
 
 {#if showTutorial}
@@ -284,7 +292,7 @@
 			<!-- Highlight border around each target (visual only) -->
 			{#each targetRects as rect}
 				<div
-					class="absolute rounded-lg border-2 border-brand-gold-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]"
+					class="absolute rounded-lg border-2 border-brand-gold-500 shadow-[0_0_20px_rgba(224,153,54,0.3)]"
 					style="
 						left: {rect.left - 8}px;
 						top: {rect.top - 8}px;
@@ -380,15 +388,27 @@
 				</div>
 
 				<div class="flex flex-col gap-3">
-					<Button on:click={handleNext} variant="primary" fullWidth>
-						{content.buttonText}
-					</Button>
-					<button
-						on:click={handleSkip}
-						class="text-sm text-gray-400 transition-colors hover:text-white"
-					>
-						Skip tutorial
-					</button>
+					{#if $tutorialStep === 'complete'}
+						<Button on:click={handleNext} variant="primary" fullWidth>
+							{content.buttonText}
+						</Button>
+						<button
+							on:click={handleBackToMarkets}
+							class="text-sm text-gray-400 transition-colors hover:text-white"
+						>
+							Back to Markets
+						</button>
+					{:else}
+						<Button on:click={handleNext} variant="primary" fullWidth>
+							{content.buttonText}
+						</Button>
+						<button
+							on:click={handleSkip}
+							class="text-sm text-gray-400 transition-colors hover:text-white"
+						>
+							Skip tutorial
+						</button>
+					{/if}
 				</div>
 
 				{#if $currentStepInfo.index > 0}
