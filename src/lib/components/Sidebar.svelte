@@ -89,7 +89,7 @@
 {#if !desktop && !visible}
 	<button
 		on:click={() => dispatch('open')}
-		class="fixed left-0 top-1/3 z-[10001] flex items-center gap-1 rounded-r-lg border border-l-0 border-yellow-500/40 bg-gradient-to-r from-yellow-500/20 to-yellow-500/10 px-1.5 py-4 text-yellow-400 shadow-lg shadow-yellow-500/20 backdrop-blur-xl transition-all duration-300 hover:border-yellow-500/60 hover:bg-yellow-500/30 hover:pr-2.5 hover:text-yellow-300"
+		class="fixed left-0 top-1/3 z-[10001] flex items-center gap-1 rounded-r-lg border border-l-0 border-brand-gold-500/40 bg-gradient-to-r from-brand-gold-500/20 to-brand-gold-500/10 px-1.5 py-4 text-brand-gold-400 shadow-lg shadow-brand-gold-500/20 backdrop-blur-xl transition-all duration-300 hover:border-brand-gold-500/60 hover:bg-brand-gold-500/30 hover:pr-2.5 hover:text-brand-gold-300"
 		aria-label="Open token list"
 	>
 		<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,7 +133,7 @@
 	{#if (desktop && !collapsed) || (!desktop && visible)}
 		<!-- Assets List (scrollable) -->
 		<div class="flex-1 overflow-y-auto p-3">
-			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-gray-600">
+			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
 				Assets
 			</div>
 			<div class="space-y-0.5">
@@ -146,7 +146,7 @@
 						}}
 						class="block rounded-md px-2 py-2 transition-colors hover:bg-white/5 {activePath ===
 						`/trade/${tokenInfo?.address ?? asset.id}`
-							? 'border-l-2 border-yellow-500 bg-yellow-500/10'
+							? 'border-l-2 border-brand-gold-500 bg-brand-gold-500/10'
 							: ''}"
 					>
 						<div class="flex items-center justify-between gap-2">

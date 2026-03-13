@@ -125,14 +125,14 @@
 								href={item.href}
 								class={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${DESKTOP_NAV_WIDTH} ${
 									item.isActive || activePath === item.href
-										? 'bg-yellow-500/20 text-yellow-500'
+										? 'bg-brand-gold-500/20 text-brand-gold-500'
 										: 'text-gray-300 hover:bg-white/5 hover:text-white'
 								}`}
 							>
 								{item.name}
 								{#if item.showAlpha}
 									<span
-										class="rounded-full bg-yellow-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-yellow-400"
+										class="rounded-full bg-brand-gold-500/20 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold-400"
 										>Alpha</span
 									>
 								{/if}
@@ -153,11 +153,11 @@
 					<!-- Dynamic authenticated user -->
 					<div class="account-menu-container relative">
 						<button
-							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-yellow-400"
+							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-brand-gold-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-brand-gold-400"
 							on:click={toggleAccountMenu}
 						>
 							<span>My Dashboard</span>
-							<span class="text-[11px] font-normal text-yellow-800/70">
+							<span class="text-[11px] font-normal text-brand-gold-800/70">
 								{$dynamicSession.email
 									? truncateEmail($dynamicSession.email)
 									: `...${$dynamicSession.walletAddress.slice(-4)}`}
@@ -220,11 +220,11 @@
 					<!-- Wallet user (fully registered) -->
 					<div class="account-menu-container relative">
 						<button
-							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-yellow-400"
+							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-brand-gold-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-brand-gold-400"
 							on:click={toggleAccountMenu}
 						>
 							<span>My Dashboard</span>
-							<span class="text-[11px] font-normal text-yellow-800/70">
+							<span class="text-[11px] font-normal text-brand-gold-800/70">
 								...{$walletAddress?.slice(-4)}
 							</span>
 							<svg
@@ -360,14 +360,14 @@
 						on:click={closeMobileNav}
 						class="rounded-lg px-4 py-3 text-base font-medium transition-colors {item.isActive ||
 						activePath === item.href
-							? 'bg-yellow-500/20 text-yellow-500'
+							? 'bg-brand-gold-500/20 text-brand-gold-500'
 							: 'text-gray-300 hover:bg-white/5 hover:text-white'}"
 					>
 						<span class="flex items-center gap-2">
 							{item.name}
 							{#if item.showAlpha}
 								<span
-									class="rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-400"
+									class="rounded-full bg-brand-gold-500/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold-400"
 									>Alpha</span
 								>
 							{/if}
