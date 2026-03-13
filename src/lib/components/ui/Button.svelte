@@ -28,7 +28,7 @@
 	on:click={(e) => dispatch('click', e)}
 	data-testid={dataTestId}
 	class={'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg font-semibold transition-colors ' +
-		'focus:outline-none focus:ring-2 focus:ring-yellow-500/30 disabled:cursor-not-allowed disabled:opacity-50 ' +
+		'focus:outline-none focus:ring-2 focus:ring-brand-gold-500/30 disabled:cursor-not-allowed disabled:opacity-50 ' +
 		variantClass +
 		' ' +
 		sizeClass +

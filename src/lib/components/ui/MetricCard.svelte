@@ -5,7 +5,7 @@
 	export let change: string = '';
 	// New customization props with sensible defaults
 	export let valueClass: string = 'text-lg font-bold sm:text-xl lg:text-2xl';
-	export let changeClass: string = 'text-xs font-medium text-yellow-500 sm:text-sm';
+	export let changeClass: string = 'text-xs font-medium text-brand-gold-500 sm:text-sm';
 	export let icon: string | null = null; // allow custom icon character or null
 	export let cardClass: string = '';
 	export let showGradient: boolean | undefined = undefined;
@@ -25,6 +25,6 @@
 		</div>
 	{/if}
 	{#if subtitle}
-		<div class="mt-2 text-sm text-gray-500">{subtitle}</div>
+		<div class="mt-2 text-sm text-gray-400">{subtitle}</div>
 	{/if}
 </Card>

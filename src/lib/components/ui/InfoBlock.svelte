@@ -12,10 +12,10 @@
 			titleClass: 'text-blue-400'
 		},
 		warning: {
-			borderClass: 'border-yellow-500/30',
-			bgClass: 'bg-yellow-500/10',
-			iconClass: 'text-yellow-400',
-			titleClass: 'text-yellow-400'
+			borderClass: 'border-brand-gold-500/30',
+			bgClass: 'bg-brand-gold-500/10',
+			iconClass: 'text-brand-gold-400',
+			titleClass: 'text-brand-gold-400'
 		},
 		success: {
 			borderClass: 'border-green-500/30',

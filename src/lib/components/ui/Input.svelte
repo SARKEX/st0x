@@ -18,6 +18,8 @@
 
 	export let dataTestId: string = '';
 
+	$: errorId = dataTestId ? dataTestId + '-error' : '';
+
 	let displayValue = amount.toString();
 
 	const dispatch = createEventDispatcher();
@@ -53,7 +55,7 @@
 	<div
 		class="flex h-full w-full items-center justify-end text-white transition-colors focus-within:outline-none {noBorder
 			? 'bg-transparent'
-			: 'rounded-lg border border-white/10 bg-gray-700/50 focus-within:border-yellow-500/50'}"
+			: 'rounded-lg border border-white/10 bg-gray-700/50 focus-within:border-brand-gold-500/50'}"
 	>
 		<input
 			class="mr-2 w-full min-w-0 rounded border-none bg-transparent px-4 py-3 text-left text-base text-white outline-none [appearance:textfield] focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -65,6 +67,8 @@
 			type="text"
 			value={displayValue}
 			data-testid={dataTestId}
+			aria-invalid={isError}
+			aria-describedby={isError && errorId ? errorId : undefined}
 		/>
 		{#if unit}
 			<span
@@ -86,5 +90,5 @@
 	</div>
 </div>
 {#if error}
-	<span class="text-left text-sm text-red-500">{error}</span>
+	<span id={errorId || undefined} class="text-left text-sm text-red-500">{error}</span>
 {/if}
