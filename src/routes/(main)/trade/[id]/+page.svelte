@@ -1002,14 +1002,14 @@
 					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
 						<button
 							type="button"
-							class="rounded-xl bg-green-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
+							class="rounded-xl bg-emerald-500 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 ring-1 ring-inset ring-white/10 transition-all hover:bg-emerald-400 hover:shadow-xl hover:shadow-emerald-500/30 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3.5 sm:text-base"
 							on:click={() => openTradePanel('Buy')}
 						>
 							Buy
 						</button>
 						<button
 							type="button"
-							class="rounded-xl bg-red-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
+							class="rounded-xl bg-rose-500 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/25 ring-1 ring-inset ring-white/10 transition-all hover:bg-rose-400 hover:shadow-xl hover:shadow-rose-500/30 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-rose-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3.5 sm:text-base"
 							on:click={() => openTradePanel('Sell')}
 						>
 							Sell
