@@ -215,11 +215,11 @@
 	<section class="px-4 pb-16 pt-20 sm:px-6 sm:pb-24 sm:pt-28 lg:px-8 lg:pb-32 lg:pt-36">
 		<div class="mx-auto max-w-5xl text-center">
 			<h1
-				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
+				class="mb-8 font-serif text-4xl font-normal leading-[1.05] tracking-tight text-white sm:mb-10 sm:text-5xl lg:text-6xl xl:text-7xl"
 			>
 				Tokenised Equities.<br class="sm:hidden" />
-				<span class="text-yellow-400">{displayedText}</span><span
-					class="animate-blink text-yellow-400">|</span
+				<span class="bg-gradient-to-r from-brand-gold-300 to-brand-gold-500 bg-clip-text text-transparent">{displayedText}</span><span
+					class="animate-blink text-brand-gold-400">|</span
 				>
 			</h1>
 
