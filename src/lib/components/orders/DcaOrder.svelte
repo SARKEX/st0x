@@ -244,7 +244,7 @@
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					{orderSide === 'Buy' ? 'Purchase Budget' : 'Amount to Sell'}
-					<span class="ml-1 text-xs text-gray-500"
+					<span class="ml-1 text-xs text-gray-400"
 						>({orderSide === 'Buy' ? settlementLabel : selectedInputToken.symbol})</span
 					>
 				</div>
@@ -429,12 +429,12 @@
 						<select
 							id="receiving-vault-dca"
 							bind:value={selectedVaultOption}
-							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-brand-gold-500/50 focus:outline-none"
 						>
 							<option value="default">Default</option>
 							<option value="order-specific">Order-specific</option>
 						</select>
-						<p class="mt-1 text-xs text-gray-500">
+						<p class="mt-1 text-xs text-gray-400">
 							{#if selectedVaultOption === 'default'}
 								Uses the shared default vault for receiving tokens
 							{:else}
@@ -481,7 +481,7 @@
 				type="checkbox"
 				checked={$reviewStrategyOnDeploy}
 				on:change={(e) => reviewStrategyOnDeploy.set(e.currentTarget.checked)}
-				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-800"
+				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-brand-gold-500 focus:ring-brand-gold-500 focus:ring-offset-gray-800"
 			/>
 			<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
 		</label>

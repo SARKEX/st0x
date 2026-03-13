@@ -700,7 +700,7 @@
 			const sortedQuotes = sortQuotesByPrice(relevantQuotes, orderSide);
 
 			if (sortedQuotes.length === 0) {
-				tradeError = 'No liquidity available';
+				tradeError = 'No liquidity available right now. Try a limit order to set your own price.';
 				return;
 			}
 
@@ -830,7 +830,7 @@
 				</div>
 			</div>
 			<div class="flex items-center justify-between px-1 text-xs">
-				<span class="text-gray-500">
+				<span class="text-gray-400">
 					{#if $isAuthenticated && $walletAddress}
 						Balance: {formattedUsdcBalance.toFixed(2)} {paymentToken?.symbol ?? 'USDC'}
 					{:else}
@@ -843,7 +843,7 @@
 							<button
 								type="button"
 								on:click={() => handleUsdcPercentClick(percent)}
-								class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+								class="rounded bg-gray-700/50 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
 							>
 								{percent === 100 ? 'MAX' : `${percent}%`}
 							</button>
@@ -853,7 +853,7 @@
 			</div>
 			{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
 				<div
-					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
 					{#if showLiquidityWarning}
 						Order capped to max available liquidity.
@@ -872,7 +872,7 @@
 			<button
 				type="button"
 				on:click={handleSwapDirection}
-				class="rounded-full border border-white/10 bg-gray-800 p-2 transition hover:border-white/20 hover:bg-gray-700"
+				class="rounded-full border border-white/10 bg-gray-800 p-3 transition hover:border-white/20 hover:bg-gray-700"
 			>
 				<svg
 					class="h-4 w-4 text-gray-400 transition-transform duration-200"
@@ -967,7 +967,7 @@
 										<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
 										<div>
 											<div class="font-medium text-white">{token.symbol}</div>
-											<div class="text-xs text-gray-500">{token.name}</div>
+											<div class="text-xs text-gray-400">{token.name}</div>
 										</div>
 									</button>
 								{/each}
@@ -1007,7 +1007,7 @@
 				</div>
 			</div>
 			<div class="flex items-center justify-between px-1 text-xs">
-				<span class="text-gray-500">
+				<span class="text-gray-400">
 					{#if $isAuthenticated && $walletAddress}
 						Balance: {formattedTokenBalance.toFixed(4)} {selectedToken?.symbol ?? ''}
 					{:else if quote?.avgPrice}
@@ -1022,7 +1022,7 @@
 							<button
 								type="button"
 								on:click={() => handleTokenPercentClick(percent)}
-								class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+								class="rounded bg-gray-700/50 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
 							>
 								{percent === 100 ? 'MAX' : `${percent}%`}
 							</button>
@@ -1032,7 +1032,7 @@
 			</div>
 			{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
 				<div
-					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
 					{#if showLiquidityWarning}
 						Order capped to max available liquidity.
@@ -1047,18 +1047,20 @@
 		</div>
 
 		<!-- Network info -->
-		<div class="flex items-center justify-center gap-2 text-xs text-gray-500">
+		<div class="flex items-center justify-center gap-2 text-xs text-gray-400">
 			<span>Trading on</span>
 			<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
 			<span class="text-gray-400">{$currentNetwork?.displayName ?? 'Base'}</span>
 		</div>
 
 		<!-- Error display -->
+		<div aria-live="polite">
 		{#if tradeError}
 			<div class="rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-400">
 				{tradeError}
 			</div>
 		{/if}
+		</div>
 
 		<!-- Action button -->
 		{#if $isAuthenticated && $walletAddress}
@@ -1112,9 +1114,9 @@
 				{:else if quoteFetchError && relevantQuotes.length === 0}
 					Couldn't load prices — tap to retry
 				{:else if relevantQuotes.length === 0}
-					No liquidity
+					No liquidity available
 				{:else if !quote}
-					No liquidity
+					No liquidity available
 				{:else if isBuying}
 					Buy {selectedToken?.symbol}
 				{:else}

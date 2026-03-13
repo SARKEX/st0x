@@ -281,7 +281,7 @@
 		</div>
 	{:else if filteredOrders.length === 0}
 		<div class="py-8 text-center text-sm text-gray-400">
-			{selectedOrdersFilter === 'my' ? 'You have no orders' : 'No orders found'}
+			{selectedOrdersFilter === 'my' ? 'No orders yet. Head to the trade page to place your first order.' : 'No orders found'}
 		</div>
 	{:else}
 		<!-- Orders table -->
@@ -431,7 +431,7 @@
 								order.type === 'dca'
 									? 'bg-green-500/20 text-green-400'
 									: order.type === 'custom'
-										? 'bg-yellow-500/20 text-yellow-400'
+										? 'bg-brand-gold-500/20 text-brand-gold-400'
 										: 'bg-blue-500/20 text-blue-400'}
 							<tr class="border-b border-white/5 hover:bg-white/5">
 								<td class="py-3 pr-4">

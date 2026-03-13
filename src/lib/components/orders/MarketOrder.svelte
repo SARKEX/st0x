@@ -876,7 +876,7 @@
 			<div>
 				<!-- Unified input with integrated toggle and token -->
 				<div
-					class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50"
+					class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-brand-gold-500/50"
 				>
 					<!-- Left side: Buy/Spend or Sell toggle -->
 					{#if orderSide === 'Buy'}
@@ -956,13 +956,13 @@
 					{/each}
 				</div>
 				{#if percentageButtonsDisabled}
-					<p class="mt-1 text-xs text-yellow-400/80">Enter amount manually - price data loading</p>
+					<p class="mt-1 text-xs text-brand-gold-400/80">Enter amount manually - price data loading</p>
 				{/if}
 			</div>
 			<div>
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					Market Price
-					<span class="ml-1 text-xs text-gray-500">(per {assetToken.symbol})</span>
+					<span class="ml-1 text-xs text-gray-400">(per {assetToken.symbol})</span>
 				</div>
 				<div class="relative">
 					<input
@@ -977,7 +977,7 @@
 									? 'Price unavailable'
 									: `~${marketPrice.toFixed(2)} ${paymentTokenSymbol}`}
 						disabled
-						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-brand-gold-400/50 focus:outline-none focus:ring-1 focus:ring-brand-gold-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 					/>
 					{#if isLoadingPrice && selectedAmount > 0n}
 						<div class="absolute right-3 top-1/2 -translate-y-1/2">
@@ -986,7 +986,7 @@
 					{/if}
 				</div>
 				{#if selectedAmount && selectedAmount > 0n && !isLoadingPrice && !priceError}
-					<p class="mt-1 text-xs {isQuoteStale ? 'text-yellow-400' : 'text-gray-500'}">
+					<p class="mt-1 text-xs {isQuoteStale ? 'text-amber-400' : 'text-gray-400'}">
 						{#if isQuoteStale}
 							Price may be outdated ({quoteFreshnessSeconds}s ago)
 						{:else}
@@ -1038,7 +1038,7 @@
 								? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
 								: 'N/A'}
 						{:else if isLoadingPrice}
-							Loading...
+							Loading price...
 						{:else if priceError}
 							N/A
 						{:else}
@@ -1053,6 +1053,7 @@
 							{isLoadingPrice || priceError ? 'N/A' : estimatedTradeResult.value}
 						</span>
 					</div>
+					<div aria-live="polite">
 					{#if insufficientBalanceError}
 						<div class="mt-2 text-sm text-red-400">
 							Insufficient {spendingToken?.symbol ?? 'token'} balance
@@ -1060,7 +1061,7 @@
 					{/if}
 					{#if insufficientLiquidityWarning && !insufficientBalanceError}
 						<div
-							class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
+							class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-sm text-amber-300"
 						>
 							There currently isn't enough orderbook liquidity to fully fill this order. Continue to
 							fill approx. {availableLiquidityFormatted}.
@@ -1091,6 +1092,7 @@
 							{orderPreparationError}
 						</div>
 					{/if}
+					</div>
 				</div>
 			</div>
 		</div>
@@ -1117,6 +1119,6 @@
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">
-		<LoadingSpinner size="md" text="Loading..." />
+		<LoadingSpinner size="md" text="Loading order form..." />
 	</div>
 {/if}
