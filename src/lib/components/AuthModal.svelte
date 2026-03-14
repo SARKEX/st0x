@@ -85,7 +85,7 @@
 				{/if}
 			</Button>
 
-			<div class="mt-3 flex items-center justify-center gap-3 text-xs text-gray-500">
+			<div class="mt-3 flex items-center justify-center gap-3 text-xs text-gray-400">
 				<!-- Email icon -->
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
@@ -149,7 +149,7 @@
 		</div>
 
 		<!-- Footer note -->
-		<p class="text-center text-xs text-gray-500">
+		<p class="text-center text-xs text-gray-400">
 			By continuing, you agree to our Terms of Service
 		</p>
 	</div>

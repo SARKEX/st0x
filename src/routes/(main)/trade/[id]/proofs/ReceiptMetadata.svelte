@@ -39,7 +39,7 @@
 			)}</pre>
 	</Section>
 {:else}
-	<div class="rounded border border-red-500/30 bg-red-900/30 p-3 text-sm text-red-300">
-		No Metadata Found
+	<div class="rounded border border-gray-500/30 bg-gray-900/30 p-3 text-sm text-gray-400">
+		No metadata available for this receipt.
 	</div>
 {/if}

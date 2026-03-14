@@ -252,7 +252,7 @@
 		<div>
 			<h1 class="text-2xl font-semibold">Access Codes</h1>
 			{#if lastUpdated}
-				<span class="text-xs text-gray-500">
+				<span class="text-xs text-gray-400">
 					Auto-refreshes every 30s &middot; Last updated: {formatTime(lastUpdated)}
 				</span>
 			{/if}
@@ -470,7 +470,7 @@
 								</td>
 								<td class="py-2 pr-3 text-gray-400">{code.label || '-'}</td>
 								<td class="py-2 pr-3 text-center">
-									<span class="text-white">{code.currentUses}</span><span class="text-gray-500"
+									<span class="text-white">{code.currentUses}</span><span class="text-gray-400"
 										>/{code.maxUses ?? '∞'}</span
 									>
 								</td>
@@ -479,7 +479,7 @@
 									{#if code.expiresAt}
 										{formatDate(code.expiresAt)}
 									{:else}
-										<span class="text-gray-500">Never</span>
+										<span class="text-gray-400">Never</span>
 									{/if}
 								</td>
 								<td class="py-2 text-right">

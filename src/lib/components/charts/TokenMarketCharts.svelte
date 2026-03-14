@@ -718,7 +718,7 @@
 						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
 							Trade History
 						</h3>
-						<p class="mt-1 text-xs text-gray-500">On-chain trade executions over time</p>
+						<p class="mt-1 text-xs text-gray-400">On-chain trade executions over time</p>
 					</div>
 					{#if historyRangeOptions.length > 0}
 						<div class="flex items-center gap-2 self-start">
@@ -779,7 +779,7 @@
 		>
 			<div class="pb-3">
 				<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Orderbook Depth</h3>
-				<p class="mt-1 text-xs text-gray-500">Current on-chain liquidity</p>
+				<p class="mt-1 text-xs text-gray-400">Current on-chain liquidity</p>
 			</div>
 			<div class="relative min-h-80 flex-1 pt-4">
 				{#if !browser}

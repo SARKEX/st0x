@@ -27,7 +27,7 @@
 	{/if}
 
 	{#if description}
-		<p class="text-sm text-gray-500 sm:text-base">{description}</p>
+		<p class="text-sm text-gray-400 sm:text-base">{description}</p>
 	{:else if !title}
 		<p class="text-gray-400"><slot /></p>
 	{/if}

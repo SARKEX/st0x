@@ -1511,7 +1511,7 @@
 		</button>
 		<div class="ml-auto flex items-center gap-3 pb-3">
 			{#if lastUpdated}
-				<span class="text-xs text-gray-500">
+				<span class="text-xs text-gray-400">
 					Last updated: {formatTime(lastUpdated)}
 				</span>
 			{/if}
@@ -1585,7 +1585,7 @@
 					</div>
 				</div>
 				{#if selectedPeriod === 'custom'}
-					<p class="mt-2 text-xs text-gray-500">Showing data for: {getPeriodLabel()}</p>
+					<p class="mt-2 text-xs text-gray-400">Showing data for: {getPeriodLabel()}</p>
 				{/if}
 			</Card>
 		</div>
@@ -1737,7 +1737,7 @@
 													>
 														Select All
 													</button>
-													<span class="text-gray-600">|</span>
+													<span class="text-gray-500">|</span>
 													<button
 														on:click={clearAllTokens}
 														class="text-xs text-gray-400 hover:underline"
@@ -1905,7 +1905,7 @@
 								</tbody>
 							</table>
 							{#if transactions.length > 100}
-								<p class="mt-4 text-center text-sm text-gray-500">
+								<p class="mt-4 text-center text-sm text-gray-400">
 									Showing latest 100 of {transactions.length} transactions
 								</p>
 							{/if}
@@ -2071,7 +2071,7 @@
 													>
 														Select All
 													</button>
-													<span class="text-gray-600">|</span>
+													<span class="text-gray-500">|</span>
 													<button
 														on:click={clearAllWallets}
 														class="text-xs text-gray-400 hover:underline"
@@ -2214,11 +2214,11 @@
 							<p class="text-sm text-gray-400">
 								Snapshot: {new Date(tvlData.latest.timestamp * 1000).toLocaleString()}
 							</p>
-							<p class="text-xs text-gray-500">
+							<p class="text-xs text-gray-400">
 								Block #{tvlData.latest.blockNumber.toLocaleString()} · {tvlData.latest.walletCount} eligible
 								wallets
 							</p>
-							<p class="mt-1 text-xs italic text-gray-500">Approx. end of day balances</p>
+							<p class="mt-1 text-xs italic text-gray-400">Approx. end of day balances</p>
 						</div>
 					</div>
 				</Card>
@@ -2231,7 +2231,7 @@
 						<div class="text-center">
 							<p class="text-xl font-bold text-white">{formatUsd(tvl)}</p>
 							<p class="mt-1 text-sm text-gray-400">{symbol}</p>
-							<p class="text-xs text-gray-500">
+							<p class="text-xs text-gray-400">
 								{tvlData.latest.totalTvl > 0
 									? ((tvl / tvlData.latest.totalTvl) * 100).toFixed(1)
 									: 0}%
@@ -2556,7 +2556,7 @@
 								</table>
 							</div>
 							{#if leaderboardMonth !== 'latest'}
-								<p class="mt-3 text-xs text-gray-500">
+								<p class="mt-3 text-xs text-gray-400">
 									Showing end-of-month snapshot. Wallet count not available for historical data.
 								</p>
 							{/if}
@@ -2614,7 +2614,7 @@
 												>
 													Select All
 												</button>
-												<span class="text-gray-600">|</span>
+												<span class="text-gray-500">|</span>
 												<button
 													on:click={clearAllTvlWallets}
 													class="text-xs text-gray-400 hover:underline"
@@ -2859,7 +2859,7 @@
 											<td colspan="5" class="bg-gray-900/50 px-4 py-3">
 												<table class="w-full text-left text-xs">
 													<thead>
-														<tr class="text-gray-500">
+														<tr class="text-gray-400">
 															<th class="pb-2 pr-4">Holder Address</th>
 															<th class="pb-2 text-right">Balance</th>
 														</tr>

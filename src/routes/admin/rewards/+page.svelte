@@ -2133,7 +2133,7 @@
 							{/each}
 						</select>
 						{#if monthlyData}
-							<span class="text-sm text-gray-500">
+							<span class="text-sm text-gray-400">
 								{monthlyData.snapshotCount} snapshots &middot; Last updated: {new Date(
 									monthlyData.updatedAt
 								).toLocaleString()}
@@ -2439,7 +2439,7 @@
 											? 'text-green-300'
 											: projected
 												? 'text-yellow-300/70'
-												: 'text-gray-600'}>+{formatUsd(amount)}</span
+												: 'text-gray-500'}>+{formatUsd(amount)}</span
 									>
 								</div>
 							{/each}
@@ -2543,7 +2543,7 @@
 							<p class="text-3xl font-bold text-green-400">{formatUsd(projectedPoolAmount)}</p>
 							<p class="mt-1 text-sm text-gray-400">
 								Projected Pool
-								<span class="text-xs text-gray-500">({projectedProgressPercent.toFixed(0)}%)</span>
+								<span class="text-xs text-gray-400">({projectedProgressPercent.toFixed(0)}%)</span>
 							</p>
 						</div>
 					</Card>
@@ -2652,7 +2652,7 @@
 									<tbody class="divide-y divide-gray-800">
 										{#each filteredWalletRows.slice(0, 100) as row, i}
 											<tr class="hover:bg-gray-800/30 {row.isExcluded ? 'bg-yellow-900/10' : ''}">
-												<td class="px-3 py-2 text-gray-500">{i + 1}</td>
+												<td class="px-3 py-2 text-gray-400">{i + 1}</td>
 												<td class="px-3 py-2">
 													<div class="flex items-center gap-2">
 														<a
@@ -2713,7 +2713,7 @@
 									{/if}
 								</table>
 								{#if filteredWalletRows.length > 100}
-									<p class="mt-4 text-center text-sm text-gray-500">
+									<p class="mt-4 text-center text-sm text-gray-400">
 										Showing top 100 of {filteredWalletRows.length} wallets
 										{#if walletSearchQuery && filteredWalletRows.length !== walletRows.length}
 											(filtered from {walletRows.length} total)
@@ -2970,7 +2970,7 @@
 									<tbody class="divide-y divide-gray-700/50">
 										{#each snapshotWalletPoints.slice(0, 100) as wallet, i}
 											<tr class={wallet.isExcluded ? 'bg-yellow-900/10' : ''}>
-												<td class="px-3 py-2 text-gray-500">{i + 1}</td>
+												<td class="px-3 py-2 text-gray-400">{i + 1}</td>
 												<td class="px-3 py-2">
 													<div class="flex items-center gap-2">
 														<a
@@ -3006,7 +3006,7 @@
 								</table>
 							</div>
 							{#if snapshotWalletPoints.length > 100}
-								<p class="mt-2 text-center text-xs text-gray-500">
+								<p class="mt-2 text-center text-xs text-gray-400">
 									Showing top 100 of {snapshotWalletPoints.length} wallets
 								</p>
 							{/if}
@@ -3083,7 +3083,7 @@
 								<tbody class="divide-y divide-gray-700/50">
 									{#each aggregatedWalletData.slice(0, 100) as wallet, i}
 										<tr class={wallet.isExcluded ? 'bg-yellow-900/10' : ''}>
-											<td class="px-3 py-2 text-gray-500">{i + 1}</td>
+											<td class="px-3 py-2 text-gray-400">{i + 1}</td>
 											<td class="px-3 py-2">
 												<div class="flex items-center gap-2">
 													<a
@@ -3133,7 +3133,7 @@
 							</table>
 						</div>
 						{#if aggregatedWalletData.length > 100}
-							<p class="mt-2 text-center text-xs text-gray-500">
+							<p class="mt-2 text-center text-xs text-gray-400">
 								Showing top 100 of {aggregatedWalletData.length} wallets
 							</p>
 						{/if}
@@ -3213,7 +3213,7 @@
 
 								<!-- Token progress -->
 								{#if previewProgress.tokenIndex !== undefined && previewProgress.totalTokens}
-									<div class="mt-2 text-center text-xs text-gray-500">
+									<div class="mt-2 text-center text-xs text-gray-400">
 										Token {previewProgress.tokenIndex + 1}/{previewProgress.totalTokens}
 									</div>
 									<div class="h-1 w-full overflow-hidden rounded-full bg-gray-800">
@@ -3318,7 +3318,7 @@
 												(selectedWallet =
 													selectedWallet === wallet.address ? null : wallet.address)}
 										>
-											<td class="py-2 pr-4 text-gray-500">{i + 1}</td>
+											<td class="py-2 pr-4 text-gray-400">{i + 1}</td>
 											<td class="py-2 pr-4">
 												<div class="flex items-center gap-2">
 													<a
@@ -3350,7 +3350,7 @@
 								</tbody>
 							</table>
 							{#if previewWallets.length > 100}
-								<p class="mt-4 text-center text-sm text-gray-500">
+								<p class="mt-4 text-center text-sm text-gray-400">
 									Showing top 100 of {previewWallets.length} wallets
 								</p>
 							{/if}
@@ -3500,7 +3500,7 @@
 						{addingWallet ? 'Adding...' : 'Add Wallet'}
 					</button>
 				</div>
-				<p class="mt-2 text-sm text-gray-500">
+				<p class="mt-2 text-sm text-gray-400">
 					Excluded wallets are not eligible for rewards. Check "Pool" for LP contracts that should
 					still count toward TVL.
 				</p>
@@ -3589,7 +3589,7 @@
 						{addingTeamWallet ? 'Adding...' : 'Add Wallet'}
 					</button>
 				</div>
-				<p class="mt-2 text-sm text-gray-500">
+				<p class="mt-2 text-sm text-gray-400">
 					Team wallets are excluded from "TVL Excluding Team" stats but are still eligible for
 					rewards (unlike excluded wallets which are not eligible).
 				</p>
@@ -3750,7 +3750,7 @@
 									/>
 								</div>
 							</div>
-							<p class="mt-1 text-xs text-gray-500">
+							<p class="mt-1 text-xs text-gray-400">
 								Total RocketBoost: {formatUsd(totalRocketBoostAmount)}
 							</p>
 						</div>
@@ -4391,7 +4391,7 @@
 						min="0"
 						class="w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white placeholder-gray-500 focus:border-[#e8be89] focus:outline-none"
 					/>
-					<p class="mt-1 text-xs text-gray-500">
+					<p class="mt-1 text-xs text-gray-400">
 						Enter the human-readable amount (e.g. 1000 for 1000 tokens, not wei)
 					</p>
 				</div>
@@ -4416,7 +4416,7 @@
 				</button>
 			</div>
 
-			<p class="mt-4 text-xs text-gray-500">
+			<p class="mt-4 text-xs text-gray-400">
 				The CSV follows the Safe/Gnosis format for batch transfers with columns: token_type,
 				token_address, receiver, amount, id
 			</p>
@@ -4679,7 +4679,7 @@
 					<div class="rounded-lg bg-gray-900/30 p-4 text-sm">
 						<p class="mb-2 font-medium text-gray-300">Points Calculation Formula:</p>
 						<p class="text-gray-400">Points = (Token Quantity × Pyth Price) × 100</p>
-						<p class="mt-1 text-xs text-gray-500">
+						<p class="mt-1 text-xs text-gray-400">
 							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate
 							across all snapshots within the month.
 						</p>
@@ -4889,7 +4889,7 @@
 					<div class="rounded-lg bg-gray-900/30 p-4 text-sm">
 						<p class="mb-2 font-medium text-gray-300">Points Calculation Formula:</p>
 						<p class="text-gray-400">Points = (Token Quantity × Pyth Price) × 100</p>
-						<p class="mt-1 text-xs text-gray-500">
+						<p class="mt-1 text-xs text-gray-400">
 							100 points are awarded per $1 USD of holdings at each snapshot. Points accumulate
 							across all snapshots within the month.
 						</p>

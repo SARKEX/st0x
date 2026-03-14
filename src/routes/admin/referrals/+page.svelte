@@ -363,7 +363,7 @@
 
 				<div>
 					<label for="nickname" class="mb-1 block text-sm text-gray-400"
-						>Nickname * <span class="text-gray-500">(3-20 chars, alphanumeric)</span></label
+						>Nickname * <span class="text-gray-400">(3-20 chars, alphanumeric)</span></label
 					>
 					<input
 						id="nickname"
@@ -389,7 +389,7 @@
 
 				<div class="md:col-span-2">
 					<label for="migrate-code" class="mb-1 block text-sm text-gray-400">
-						Migrate from Access Code <span class="text-gray-500"
+						Migrate from Access Code <span class="text-gray-400"
 							>(optional - copies existing referred wallets)</span
 						>
 					</label>
@@ -711,7 +711,7 @@
 			</div>
 
 			{#if lastGenerated}
-				<div class="mt-4 text-center text-xs text-gray-500">
+				<div class="mt-4 text-center text-xs text-gray-400">
 					Last updated: {new Date(lastGenerated).toLocaleString()}
 				</div>
 			{/if}
