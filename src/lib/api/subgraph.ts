@@ -23,9 +23,9 @@ export const getSftById = async (
 	}
 
 	const query = `
-    {
+    query SftById($tokenId: String!) {
  offchainAssetReceiptVaults(where: {
- wrappedTokenContractAddress: "${tokenId.toLowerCase()}"
+ wrappedTokenContractAddress: $tokenId
  }) {
 
     withdraws(first: 1000) {
@@ -126,7 +126,7 @@ export const getSftById = async (
 
 	const data = await executeGraphql<{
 		offchainAssetReceiptVaults: OffchainAssetReceiptVault[];
-	}>(subgraphUrl, query);
+	}>(subgraphUrl, query, { tokenId: tokenId.toLowerCase() });
 	const vaults = data.offchainAssetReceiptVaults ?? [];
 	return vaults.length > 0 ? vaults[0] : null;
 };
@@ -137,11 +137,9 @@ export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVau
 	const subgraphUrl = network.subgraph_url;
 
 	const query = `
-    {
+    query SftsByAddresses($addresses: [String!]!) {
  offchainAssetReceiptVaults(where: {
- wrappedTokenContractAddress_in: [${networkTokens
-		.map((s) => `"${s.address.toLowerCase()}"`)
-		.join(',')}]
+ wrappedTokenContractAddress_in: $addresses
  }) {
 
     withdraws(first: 1000) {
@@ -242,7 +240,9 @@ export const getSfts = async (network: Network): Promise<OffchainAssetReceiptVau
 
 	const data = await executeGraphql<{
 		offchainAssetReceiptVaults: OffchainAssetReceiptVault[];
-	}>(subgraphUrl, query);
+	}>(subgraphUrl, query, {
+		addresses: networkTokens.map((s) => s.address.toLowerCase())
+	});
 	return (data.offchainAssetReceiptVaults ?? []) as OffchainAssetReceiptVault[];
 };
 
@@ -599,10 +599,11 @@ export const getSftMetadata = async (
 	vaultAddress: string,
 	subgraphUrl: string
 ): Promise<MetaV1S[]> => {
+	const subject = `0x000000000000000000000000${vaultAddress.slice(2).toLowerCase()}`;
 	const query = `
-    {
+    query SftMetadata($subject: String!) {
       metaV1S(
-        where: { subject: "0x000000000000000000000000${vaultAddress.slice(2)}" },
+        where: { subject: $subject },
         orderBy: transaction__timestamp,
         orderDirection: desc
       ) {
@@ -615,6 +616,6 @@ export const getSftMetadata = async (
     }
   `;
 
-	const data = await executeGraphql<{ metaV1S: MetaV1S[] }>(subgraphUrl, query);
+	const data = await executeGraphql<{ metaV1S: MetaV1S[] }>(subgraphUrl, query, { subject });
 	return data.metaV1S as MetaV1S[];
 };
