@@ -8,7 +8,7 @@
 	import transactionStore from '$lib/stores/transaction';
 	import { type ProcessedQuote, classifyOrderType } from '$lib/utils/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { createRaindexClient } from '$lib/clients/raindex';
+	import { getLoadBalancedClient } from '$lib/clients/raindex';
 	import type { GetOrdersFilters } from '@rainlanguage/orderbook';
 	import type { DisplayOrder } from '$lib/types/orders';
 
@@ -68,7 +68,7 @@
 				if (!enabled || !network || !signer) {
 					return [];
 				}
-				const client = await createRaindexClient();
+				const client = await getLoadBalancedClient($currentNetwork);
 				const filters: GetOrdersFilters = {
 					owners: [signer as `0x${string}`],
 					active: false

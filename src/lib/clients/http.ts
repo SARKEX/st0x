@@ -34,7 +34,13 @@ async function fetchWithRetry<T>(
 				// Only retry on selected status codes
 				if (defaultRetryableStatuses.has(response.status) && attempt < retries) {
 					attempt += 1;
-					await delay(retryDelayMs * Math.pow(2, attempt - 1));
+					const retryAfter = response.headers.get('Retry-After');
+					const parsed = retryAfter ? Number(retryAfter) * 1000 : NaN;
+					const retryDelay =
+						retryAfter && !isNaN(parsed)
+							? Math.min(parsed, 30_000)
+							: retryDelayMs * Math.pow(2, attempt - 1);
+					await delay(retryDelay);
 					continue;
 				}
 				const message = text || `${response.status} ${response.statusText}`;

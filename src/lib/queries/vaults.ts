@@ -8,7 +8,8 @@ import type { Network } from '$lib/config/network';
 import { getSfts, getSftById } from '$lib/api/subgraph';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import { queryClient } from '$lib/clients/queryClient';
-import { createRaindexClient } from '$lib/clients/raindex';
+import { getLoadBalancedClient } from '$lib/clients/raindex';
+import { getNetworkById } from '$lib/config/network';
 import type { RaindexVault, SgVault } from '@rainlanguage/orderbook';
 
 // =============================================================================
@@ -257,7 +258,9 @@ export async function fetchUserVaultsPage(
 	pageParam: number,
 	subgraphName: string
 ): Promise<UserVaultsPage> {
-	const client = await createRaindexClient();
+	const network = getNetworkById(networkId);
+	if (!network) throw new Error(`Unknown network: ${networkId}`);
+	const client = await getLoadBalancedClient(network);
 	const vaultsResult = await client.getVaults(
 		[networkId],
 		{

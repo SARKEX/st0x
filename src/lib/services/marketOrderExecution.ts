@@ -10,7 +10,7 @@ import {
 	type ProcessedQuote,
 	walkOrderbook
 } from '$lib/api/orders';
-import { createRaindexClient } from '$lib/clients/raindex';
+import { getLoadBalancedClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
 import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 import {
@@ -129,7 +129,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		}
 
 		// 3. Hydrate orders from Raindex to get full order data
-		const client = await createRaindexClient();
+		const client = await getLoadBalancedClient(network);
 		const orderInfos = Array.from(orderInfoMap.values());
 
 		await Promise.all(

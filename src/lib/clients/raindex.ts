@@ -85,8 +85,8 @@ export async function getLoadBalancedClient(network: Network): Promise<RaindexCl
 }
 
 /**
- * Create a RaindexClient using the strategies YAML.
- * The strategies YAML already contains network configurations including RPCs.
+ * @deprecated Use `getLoadBalancedClient(network)` instead for pooled clients.
+ * This creates a fresh client on every call — use only if pool is unavailable.
  */
 export async function createRaindexClient(): Promise<RaindexClient> {
 	const strategiesYaml = await getStrategiesYaml();

@@ -17,7 +17,7 @@ import {
 	getFolioDeploymentArgs
 } from '$lib/services/orderDeployment';
 import { mockCurrentNetwork } from '../mocks/mockCurrentNetwork';
-import { createRaindexClient } from '$lib/clients/raindex';
+import { getLoadBalancedClient } from '$lib/clients/raindex';
 import { decodeFunctionData } from 'viem';
 
 // Shared mock network object to avoid repetition
@@ -41,6 +41,7 @@ vi.mock('$lib/services/orderDeployment', async (importOriginal) => {
 });
 
 vi.mock('$lib/clients/raindex', () => ({
+	getLoadBalancedClient: vi.fn(),
 	createRaindexClient: vi.fn(),
 	RAIN_STRATEGIES_COMMIT: 'mock-commit-hash'
 }));
@@ -232,7 +233,7 @@ describe('transactionStore tests', () => {
 			args: ['0x1234', '0xde0b6b3a7640000'] // 1000000000000000000n in hex
 		} as unknown as ReturnType<typeof decodeFunctionData>);
 
-		// Mock createRaindexClient
+		// Mock getLoadBalancedClient
 		mockGetAddOrdersForTransaction = vi.fn().mockResolvedValue({
 			value: [
 				{
@@ -245,8 +246,8 @@ describe('transactionStore tests', () => {
 		const mockClient = {
 			getAddOrdersForTransaction: mockGetAddOrdersForTransaction
 		};
-		vi.mocked(createRaindexClient).mockResolvedValue(
-			mockClient as unknown as Awaited<ReturnType<typeof createRaindexClient>>
+		vi.mocked(getLoadBalancedClient).mockResolvedValue(
+			mockClient as unknown as Awaited<ReturnType<typeof getLoadBalancedClient>>
 		);
 
 		// Mock setInterval and clearInterval
@@ -419,7 +420,7 @@ describe('transactionStore tests', () => {
 			// Advance timer to trigger the polling interval (immediate attempt happens first)
 			await vi.advanceTimersByTimeAsync(2000);
 
-			expect(createRaindexClient).toHaveBeenCalled();
+			expect(getLoadBalancedClient).toHaveBeenCalled();
 			expect(mockGetAddOrdersForTransaction).toHaveBeenCalledWith(
 				mockNetwork.id,
 				'0x1234',

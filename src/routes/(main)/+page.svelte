@@ -6,6 +6,7 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { getAllTokensByNetwork } from '$lib/config/network';
+	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -461,9 +462,7 @@
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<TokenDisplay
-												logoUrl={ALL_TOKENS.find(
-													(s) => s.address.toLowerCase() === token.address.toLowerCase()
-												)?.logoUrl}
+												logoUrl={getTokenByAnyAddress(token.address)?.logoUrl}
 												symbol={token.symbol}
 												name={token.name}
 											/>

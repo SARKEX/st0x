@@ -57,7 +57,7 @@ import {
 } from '$lib/services/orderDeployment';
 import { wrapToken, unwrapToken } from '$lib/services/wrapService';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
-import { createRaindexClient } from '$lib/clients/raindex';
+import { getLoadBalancedClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
@@ -394,7 +394,7 @@ const transactionStore = () => {
 		}
 
 		const tryFetchOrderLink = async () => {
-			const client = await createRaindexClient();
+			const client = await getLoadBalancedClient(network);
 			const orders = await client.getAddOrdersForTransaction(
 				network.id,
 				deploymentArgs.orderbookAddress as `0x${string}`,
@@ -673,7 +673,7 @@ const transactionStore = () => {
 
 		try {
 			// Fetch the RaindexOrder from the SDK
-			const client = await createRaindexClient();
+			const client = await getLoadBalancedClient(network);
 			const ordersResult = await client.getOrders(
 				[network.id],
 				{
@@ -901,7 +901,7 @@ const transactionStore = () => {
 		});
 
 		try {
-			const client = await createRaindexClient();
+			const client = await getLoadBalancedClient(network);
 
 			// For filled orders, we need to deactivate first
 			if (isFilled) {

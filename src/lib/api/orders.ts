@@ -19,7 +19,7 @@ import {
 import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
-import { createRaindexClient, getLoadBalancedClient } from '$lib/clients/raindex';
+import { getLoadBalancedClient } from '$lib/clients/raindex';
 import { Float } from '@rainlanguage/float';
 import {
 	type ProcessedQuote,
@@ -239,7 +239,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 	);
 
 	// Create RaindexClient using standard configuration
-	const client = await createRaindexClient();
+	const client = await getLoadBalancedClient(network);
 
 	// Fetch all orders with pagination
 	const allOrders: RaindexOrder[] = [];

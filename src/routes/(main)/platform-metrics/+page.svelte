@@ -20,7 +20,7 @@
 		type TokenLookup
 	} from '$lib/utils/tokenMath';
 	import type { SgTrade } from '@rainlanguage/orderbook';
-	import { createRaindexClient } from '$lib/clients/raindex';
+	import { getLoadBalancedClient } from '$lib/clients/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
@@ -151,12 +151,12 @@
 		vaultsLoading = true;
 		vaultsError = null;
 		try {
-			const client = await createRaindexClient();
 			const map = new Map<number, RaindexVault[]>();
 			const filters: GetVaultsFilters = { owners: [], hideZeroBalance: true };
 
 			await Promise.all(
 				networks.map(async (network) => {
+					const client = await getLoadBalancedClient(network);
 					const collected: RaindexVault[] = [];
 					let page = 1;
 					const MAX_PAGES = 50;
