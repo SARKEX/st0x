@@ -2,10 +2,16 @@
 
 /**
  * Calculate total liquidity deployed in the orderbook smart contract
- * by a specific address.
+ * by a specific address, broken down by order type.
  *
- * Queries the orderbook subgraph for all vaults owned by the target address,
- * groups balances by token, and fetches USDC prices from Pyth oracle.
+ * Queries the orderbook subgraph for all vaults and orders owned by
+ * the target address. Classifies each order as "limit" (hardcoded swap),
+ * "dca", "dynamic-spread", or "custom" by inspecting the on-chain meta
+ * for rainlang patterns. Vault balances are then grouped into:
+ *
+ *   - LIMIT (hardcoded swap) — vaults used exclusively by limit orders
+ *   - ALGORITHMIC           — vaults used by at least one non-limit order
+ *   - UNASSOCIATED          — vaults not referenced by any active order
  *
  * Usage: node scripts/calculate-liquidity.mjs [address]
  *
@@ -162,11 +168,42 @@ query VaultsByOwner($owner: String!, $skip: Int!, $first: Int!) {
   }
 }`;
 
+// Query orders with their IO vault references and meta for classification.
+// The order entity in the Rain v4 subgraph exposes inputs/outputs as
+// derived IO entities that each carry a vaultId and token reference.
+const ORDERS_BY_OWNER_QUERY = `
+query OrdersByOwner($owner: String!, $skip: Int!, $first: Int!) {
+  orders(
+    where: { owner: $owner }
+    skip: $skip
+    first: $first
+    orderBy: id
+    orderDirection: asc
+  ) {
+    id
+    orderHash
+    active
+    meta
+    inputs {
+      token { id address }
+      vaultId
+    }
+    outputs {
+      token { id address }
+      vaultId
+    }
+  }
+}`;
+
+// ============================================================================
+// Subgraph fetching
+// ============================================================================
+
 /**
- * Fetch all vaults for an owner from a single subgraph endpoint with pagination.
+ * Execute a paginated GraphQL query against a single subgraph endpoint.
  */
-async function fetchVaultsFromEndpoint(endpoint, owner) {
-	const allVaults = [];
+async function fetchPaginated(endpoint, query, variables, entityKey) {
+	const all = [];
 	let skip = 0;
 	const first = 1000;
 	let hasMore = true;
@@ -176,8 +213,8 @@ async function fetchVaultsFromEndpoint(endpoint, owner) {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				query: VAULTS_BY_OWNER_QUERY,
-				variables: { owner, skip, first }
+				query,
+				variables: { ...variables, skip, first }
 			})
 		});
 
@@ -190,37 +227,191 @@ async function fetchVaultsFromEndpoint(endpoint, owner) {
 			throw new Error(`GraphQL: ${json.errors.map(e => e.message).join('; ')}`);
 		}
 
-		const vaults = json.data?.vaults ?? [];
-		allVaults.push(...vaults);
-		hasMore = vaults.length >= first;
+		const items = json.data?.[entityKey] ?? [];
+		all.push(...items);
+		hasMore = items.length >= first;
 		skip += first;
 	}
 
-	return allVaults;
+	return all;
 }
 
 /**
- * Fetch vaults from all subgraph endpoints, deduplicate by vault id.
+ * Fetch entities from all subgraph endpoints, deduplicate by entity id.
  */
-async function fetchAllVaults(owner) {
+async function fetchFromAllEndpoints(query, variables, entityKey) {
 	const results = await Promise.allSettled(
 		ORDERBOOK_SUBGRAPH_URLS.map(url =>
-			fetchVaultsFromEndpoint(url, owner).catch(err => {
-				console.error(`  Warning: failed to query ${url}: ${err.message}`);
+			fetchPaginated(url, query, variables, entityKey).catch(err => {
+				console.error(`  Warning: failed to query ${entityKey} from ${url}: ${err.message}`);
 				return [];
 			})
 		)
 	);
 
-	const allVaults = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+	const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
 
-	// Deduplicate by vault id, preferring the first occurrence (from active subgraph)
+	// Deduplicate by id, preferring the first occurrence (from active subgraph)
 	const seen = new Set();
-	return allVaults.filter(v => {
-		if (seen.has(v.id)) return false;
-		seen.add(v.id);
+	return all.filter(item => {
+		if (seen.has(item.id)) return false;
+		seen.add(item.id);
 		return true;
 	});
+}
+
+// ============================================================================
+// Order classification from meta bytes
+// ============================================================================
+
+/**
+ * Convert an ASCII string to its hex representation for pattern matching
+ * inside CBOR-encoded meta bytes.
+ */
+function textToHex(str) {
+	return Array.from(str).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+}
+
+// Pre-compute hex patterns for order classification
+const PATTERNS = {
+	dynamicSpread: textToHex('other-vwaio'),
+	dcaMinAmount:  textToHex('min-amount:'),
+	dcaLinear:     textToHex('linear-growth'),
+	dcaEpochs:    textToHex('amount-epochs'),
+	dcaHalflife:  textToHex('halflife'),
+	handleIo:     textToHex('handle-io'),
+	colonSemi:    textToHex(':;'),
+};
+
+/**
+ * Classify an order based on its on-chain meta bytes.
+ *
+ * The meta field is CBOR-encoded Rain metadata that embeds the rainlang
+ * source as a UTF-8 text item. Since CBOR preserves raw UTF-8 bytes
+ * contiguously, we can search for known text patterns directly in the
+ * hex-encoded meta without a full CBOR decoder.
+ *
+ * Classification matches src/lib/utils/orderbook.ts:classifyOrderType():
+ *   - 'dynamic-spread': rainlang contains "other-vwaio"
+ *   - 'dca': contains "min-amount:", "linear-growth", "amount-epochs", or "halflife"
+ *   - 'limit': handle-io section exists but is empty (just ":;")
+ *   - 'custom': everything else with code in handle-io
+ *   - 'unknown': no meta available
+ */
+function classifyOrderFromMeta(metaHex) {
+	if (!metaHex || metaHex === '0x' || metaHex.length < 20) return 'unknown';
+
+	const hex = (metaHex.startsWith('0x') ? metaHex.slice(2) : metaHex).toLowerCase();
+
+	// Dynamic spread: contains "other-vwaio"
+	if (hex.includes(PATTERNS.dynamicSpread)) return 'dynamic-spread';
+
+	// DCA: contains DCA-specific patterns
+	if (hex.includes(PATTERNS.dcaMinAmount) ||
+		hex.includes(PATTERNS.dcaLinear) ||
+		hex.includes(PATTERNS.dcaEpochs) ||
+		hex.includes(PATTERNS.dcaHalflife)) return 'dca';
+
+	// Check for handle-io section
+	const hiIdx = hex.indexOf(PATTERNS.handleIo);
+	if (hiIdx !== -1) {
+		// Look for ":;" within ~500 bytes (1000 hex chars) after "handle-io"
+		const searchEnd = Math.min(hiIdx + PATTERNS.handleIo.length + 1000, hex.length);
+		const searchRegion = hex.substring(hiIdx + PATTERNS.handleIo.length, searchEnd);
+		const csIdx = searchRegion.indexOf(PATTERNS.colonSemi);
+
+		if (csIdx !== -1 && csIdx < 200) {
+			// Extract the text between "handle-io" closing comment and ":;"
+			// and check if it's just whitespace / comment markers
+			const between = searchRegion.substring(0, csIdx);
+			let betweenText = '';
+			for (let i = 0; i < between.length; i += 2) {
+				if (i + 1 < between.length) {
+					const code = parseInt(between.substring(i, i + 2), 16);
+					if (code >= 32 && code <= 126) betweenText += String.fromCharCode(code);
+				}
+			}
+			// Remove comment syntax and whitespace — if nothing remains, it's limit
+			const stripped = betweenText.replace(/[\s*/]/g, '');
+			if (stripped.length === 0) return 'limit';
+		}
+
+		// handle-io exists and has non-trivial content
+		return 'custom';
+	}
+
+	// No handle-io found — might be an older format or no rainlang embedded
+	return 'unknown';
+}
+
+// ============================================================================
+// Vault ↔ Order mapping
+// ============================================================================
+
+/**
+ * Normalize a subgraph vaultId for consistent matching.
+ * The subgraph may store vault IDs as hex strings or decimal BigInt strings.
+ */
+function normalizeVaultId(vaultId) {
+	if (!vaultId) return '';
+	const str = String(vaultId);
+	// If it's hex, convert to decimal BigInt string for consistent comparison
+	if (str.startsWith('0x') || str.startsWith('0X')) {
+		try { return BigInt(str).toString(); } catch { return str.toLowerCase(); }
+	}
+	return str;
+}
+
+/**
+ * Build a composite key for matching a vault to order IOs.
+ * Uses vaultId + tokenAddress since the same vaultId can hold different tokens.
+ */
+function vaultKey(vaultId, tokenAddress) {
+	return `${normalizeVaultId(vaultId)}:${(tokenAddress || '').toLowerCase()}`;
+}
+
+/**
+ * Given orders with classified types, build a map from vaultKey → Set<orderType>.
+ * This tells us which order types reference each vault.
+ */
+function buildVaultOrderTypeMap(orders) {
+	// Map: vaultKey → Set<orderType>
+	const map = new Map();
+
+	for (const order of orders) {
+		if (!order.active) continue;
+
+		const orderType = order._classifiedType || 'unknown';
+
+		const ios = [...(order.inputs || []), ...(order.outputs || [])];
+		for (const io of ios) {
+			const tokenAddr = (io.token?.address || io.token?.id || '').toLowerCase();
+			const key = vaultKey(io.vaultId, tokenAddr);
+			if (!map.has(key)) map.set(key, new Set());
+			map.get(key).add(orderType);
+		}
+	}
+
+	return map;
+}
+
+/**
+ * Determine the category for a vault based on its associated order types.
+ *   - 'limit'        — ALL active orders referencing this vault are limit orders
+ *   - 'algorithmic'  — at least one non-limit order references this vault
+ *   - 'unassociated' — no active orders reference this vault
+ */
+function categorizeVault(vaultId, tokenAddress, vaultOrderTypeMap) {
+	const key = vaultKey(vaultId, tokenAddress);
+	const types = vaultOrderTypeMap.get(key);
+
+	if (!types || types.size === 0) return 'unassociated';
+
+	// If every order type for this vault is 'limit', it's a limit-only vault
+	const nonLimit = [...types].filter(t => t !== 'limit');
+	if (nonLimit.length === 0) return 'limit';
+
+	return 'algorithmic';
 }
 
 // ============================================================================
@@ -292,96 +483,31 @@ function formatBalance(rawBalance, decimals) {
 	return parseFloat(numStr);
 }
 
+/**
+ * Calculate USD value for a given balance.
+ */
+function getUsdValue(balance, symbol, tokenAddr, pythPrices) {
+	if (symbol === 'USDC') return balance;
+
+	const known = KNOWN_TOKENS[tokenAddr];
+	if (known?.priceFeedId) {
+		const feedId = normaliseFeedId(known.priceFeedId);
+		const price = pythPrices.get(feedId);
+		if (price != null) return balance * price;
+	}
+	return null;
+}
+
 // ============================================================================
-// Main
+// Display helpers
 // ============================================================================
 
-async function main() {
-	console.log('='.repeat(70));
-	console.log('Orderbook Liquidity Calculator');
-	console.log('='.repeat(70));
-	console.log(`Target address: ${TARGET_ADDRESS}`);
-	console.log(`Querying ${ORDERBOOK_SUBGRAPH_URLS.length} subgraph endpoint(s)...\n`);
+function formatUsd(value) {
+	if (value == null) return '(no price)';
+	return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
-	// Step 1: Fetch all vaults for the owner
-	const vaults = await fetchAllVaults(TARGET_ADDRESS);
-	console.log(`Found ${vaults.length} vault(s)\n`);
-
-	if (vaults.length === 0) {
-		console.log('No vaults found for this address.');
-		return;
-	}
-
-	// Step 2: Group vaults by token and sum balances
-	const tokenBalances = new Map(); // tokenAddress -> { symbol, decimals, totalRaw, vaultCount, vaultIds }
-
-	for (const vault of vaults) {
-		const tokenAddr = (vault.token.address || vault.token.id).toLowerCase();
-		const decimals = Number(vault.token.decimals) || 18;
-		const symbol = vault.token.symbol || 'UNKNOWN';
-		const name = vault.token.name || '';
-		const rawBalance = vault.balance || '0';
-
-		if (!tokenBalances.has(tokenAddr)) {
-			tokenBalances.set(tokenAddr, {
-				symbol,
-				name,
-				decimals,
-				totalRaw: 0n,
-				vaultCount: 0,
-				vaultIds: []
-			});
-		}
-
-		const entry = tokenBalances.get(tokenAddr);
-		entry.totalRaw += BigInt(rawBalance);
-		entry.vaultCount++;
-		entry.vaultIds.push(vault.vaultId);
-	}
-
-	// Step 3: Fetch prices from Pyth
-	const feedIdsToFetch = new Set();
-	for (const [addr] of tokenBalances) {
-		const known = KNOWN_TOKENS[addr];
-		if (known?.priceFeedId) {
-			feedIdsToFetch.add(known.priceFeedId);
-		}
-	}
-
-	console.log(`Fetching prices for ${feedIdsToFetch.size} token(s) from Pyth oracle...\n`);
-	const pythPrices = await fetchPythPrices([...feedIdsToFetch]);
-
-	// Step 4: Calculate and display results
-	console.log('-'.repeat(70));
-	console.log('VAULT BALANCES BY TOKEN');
-	console.log('-'.repeat(70));
-
-	let totalUsdcValue = 0;
-	const rows = [];
-
-	for (const [addr, entry] of tokenBalances) {
-		const balance = formatBalance(entry.totalRaw.toString(), entry.decimals);
-		const known = KNOWN_TOKENS[addr];
-		const symbol = known?.symbol || entry.symbol;
-
-		let usdValue = null;
-		if (symbol === 'USDC') {
-			usdValue = balance; // USDC is 1:1 with USD
-		} else if (known?.priceFeedId) {
-			const feedId = normaliseFeedId(known.priceFeedId);
-			const price = pythPrices.get(feedId);
-			if (price != null) {
-				usdValue = balance * price;
-			}
-		}
-
-		if (usdValue != null) {
-			totalUsdcValue += usdValue;
-		}
-
-		rows.push({ addr, symbol, balance, usdValue, entry });
-	}
-
+function printTokenRows(rows) {
 	// Sort by USD value descending (unknowns last)
 	rows.sort((a, b) => {
 		if (a.usdValue == null && b.usdValue == null) return 0;
@@ -391,18 +517,150 @@ async function main() {
 	});
 
 	for (const row of rows) {
-		const usdStr = row.usdValue != null
-			? `$${row.usdValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-			: '(no price)';
 		const balStr = row.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+		console.log(`    ${row.symbol.padEnd(18)} ${balStr.padStart(20)} tokens   ${formatUsd(row.usdValue).padStart(16)}   (${row.vaultCount} vault(s))`);
+	}
+}
 
-		console.log(`  ${row.symbol.padEnd(18)} ${balStr.padStart(20)} tokens   ${usdStr.padStart(16)}   (${row.entry.vaultCount} vault(s))`);
+// ============================================================================
+// Main
+// ============================================================================
+
+async function main() {
+	console.log('='.repeat(70));
+	console.log('Orderbook Liquidity Calculator (by Order Type)');
+	console.log('='.repeat(70));
+	console.log(`Target address: ${TARGET_ADDRESS}`);
+	console.log(`Querying ${ORDERBOOK_SUBGRAPH_URLS.length} subgraph endpoint(s)...\n`);
+
+	// Step 1: Fetch all vaults for the owner
+	const vaults = await fetchFromAllEndpoints(
+		VAULTS_BY_OWNER_QUERY, { owner: TARGET_ADDRESS }, 'vaults'
+	);
+	console.log(`Found ${vaults.length} vault(s)`);
+
+	if (vaults.length === 0) {
+		console.log('No vaults found for this address.');
+		return;
+	}
+
+	// Step 2: Fetch all orders for the owner and classify them
+	let orders = [];
+	let orderClassificationFailed = false;
+	try {
+		orders = await fetchFromAllEndpoints(
+			ORDERS_BY_OWNER_QUERY, { owner: TARGET_ADDRESS }, 'orders'
+		);
+		console.log(`Found ${orders.length} order(s)`);
+
+		// Classify each order from its meta
+		const typeCounts = { limit: 0, dca: 0, 'dynamic-spread': 0, custom: 0, unknown: 0 };
+		for (const order of orders) {
+			order._classifiedType = classifyOrderFromMeta(order.meta);
+			if (order.active) typeCounts[order._classifiedType] = (typeCounts[order._classifiedType] || 0) + 1;
+		}
+
+		const activeCount = orders.filter(o => o.active).length;
+		console.log(`Active orders: ${activeCount} — ` +
+			Object.entries(typeCounts).filter(([,v]) => v > 0).map(([k,v]) => `${v} ${k}`).join(', '));
+	} catch (err) {
+		console.error(`\n  Warning: Could not fetch orders for classification: ${err.message}`);
+		console.error(`  Falling back to totals only (no per-order-type breakdown).\n`);
+		orderClassificationFailed = true;
+	}
+
+	// Step 3: Build vault → order type mapping
+	const vaultOrderTypeMap = orderClassificationFailed ? new Map() : buildVaultOrderTypeMap(orders);
+
+	// Step 4: Fetch prices from Pyth
+	const feedIdsToFetch = new Set();
+	for (const vault of vaults) {
+		const addr = (vault.token.address || vault.token.id).toLowerCase();
+		const known = KNOWN_TOKENS[addr];
+		if (known?.priceFeedId) feedIdsToFetch.add(known.priceFeedId);
+	}
+
+	console.log(`\nFetching prices for ${feedIdsToFetch.size} token(s) from Pyth oracle...\n`);
+	const pythPrices = await fetchPythPrices([...feedIdsToFetch]);
+
+	// Step 5: Categorize each vault and accumulate balances per category
+	// categories: 'limit', 'algorithmic', 'unassociated'
+	// Each category has a Map<tokenAddr, { symbol, decimals, totalRaw, vaultCount }>
+	const categories = {
+		limit:        { label: 'LIMIT ORDERS (Hardcoded Swap)', balances: new Map(), totalUsd: 0 },
+		algorithmic:  { label: 'ALGORITHMIC ORDERS (DCA / Dynamic Spread / Custom)', balances: new Map(), totalUsd: 0 },
+		unassociated: { label: 'UNASSOCIATED VAULTS (No Active Orders)', balances: new Map(), totalUsd: 0 },
+	};
+
+	let grandTotalUsd = 0;
+
+	for (const vault of vaults) {
+		const tokenAddr = (vault.token.address || vault.token.id).toLowerCase();
+		const decimals = Number(vault.token.decimals) || 18;
+		const symbol = vault.token.symbol || 'UNKNOWN';
+		const rawBalance = vault.balance || '0';
+		const rawBigInt = BigInt(rawBalance);
+
+		if (rawBigInt === 0n) continue;
+
+		const category = orderClassificationFailed
+			? 'unassociated'
+			: categorizeVault(vault.vaultId, tokenAddr, vaultOrderTypeMap);
+		const cat = categories[category];
+
+		if (!cat.balances.has(tokenAddr)) {
+			cat.balances.set(tokenAddr, { symbol, decimals, totalRaw: 0n, vaultCount: 0 });
+		}
+
+		const entry = cat.balances.get(tokenAddr);
+		entry.totalRaw += rawBigInt;
+		entry.vaultCount++;
+	}
+
+	// Step 6: Display results
+	for (const [catKey, cat] of Object.entries(categories)) {
+		if (cat.balances.size === 0) continue;
+
+		console.log('-'.repeat(70));
+		console.log(`  ${cat.label}`);
+		console.log('-'.repeat(70));
+
+		const rows = [];
+		let catUsd = 0;
+
+		for (const [addr, entry] of cat.balances) {
+			const balance = formatBalance(entry.totalRaw.toString(), entry.decimals);
+			const known = KNOWN_TOKENS[addr];
+			const symbol = known?.symbol || entry.symbol;
+			const usdValue = getUsdValue(balance, symbol, addr, pythPrices);
+
+			if (usdValue != null) catUsd += usdValue;
+			rows.push({ symbol, balance, usdValue, vaultCount: entry.vaultCount });
+		}
+
+		printTokenRows(rows);
+		cat.totalUsd = catUsd;
+		grandTotalUsd += catUsd;
+
+		console.log(`    ${''.padEnd(18)} ${''.padStart(20)}          ${('Subtotal: ' + formatUsd(catUsd)).padStart(16)}`);
+		console.log('');
+	}
+
+	// Summary
+	console.log('='.repeat(70));
+	console.log('SUMMARY');
+	console.log('='.repeat(70));
+
+	for (const [, cat] of Object.entries(categories)) {
+		if (cat.balances.size === 0) continue;
+		console.log(`  ${cat.label.padEnd(55)} ${formatUsd(cat.totalUsd)}`);
 	}
 
 	console.log('-'.repeat(70));
-	console.log(`\nTOTAL LIQUIDITY (USD): $${totalUsdcValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-	console.log(`\nTotal vaults: ${vaults.length}`);
-	console.log(`Total unique tokens: ${tokenBalances.size}`);
+	console.log(`  ${'TOTAL LIQUIDITY'.padEnd(55)} ${formatUsd(grandTotalUsd)}`);
+	console.log('');
+	console.log(`  Total vaults with balance: ${vaults.filter(v => BigInt(v.balance || '0') > 0n).length}`);
+	console.log(`  Total active orders:       ${orders.filter(o => o.active).length}`);
 	console.log('='.repeat(70));
 }
 
