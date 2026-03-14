@@ -6,7 +6,9 @@
 			class="mb-6 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-400 sm:gap-6 sm:text-sm"
 		>
 			<a href="/terms" class="transition-colors hover:text-brand-gold-500 hover:underline">Terms</a>
-			<a href="/privacy-policy" class="transition-colors hover:text-brand-gold-500 hover:underline">Privacy</a>
+			<a href="/privacy-policy" class="transition-colors hover:text-brand-gold-500 hover:underline"
+				>Privacy</a
+			>
 			<a href="/docs" class="transition-colors hover:text-brand-gold-500 hover:underline">Docs</a>
 			<a href="/faqs" class="transition-colors hover:text-brand-gold-500 hover:underline">FAQs</a>
 		</div>

@@ -956,7 +956,9 @@
 					{/each}
 				</div>
 				{#if percentageButtonsDisabled}
-					<p class="mt-1 text-xs text-brand-gold-400/80">Enter amount manually - price data loading</p>
+					<p class="mt-1 text-xs text-brand-gold-400/80">
+						Enter amount manually - price data loading
+					</p>
 				{/if}
 			</div>
 			<div>
@@ -1054,44 +1056,44 @@
 						</span>
 					</div>
 					<div aria-live="polite">
-					{#if insufficientBalanceError}
-						<div class="mt-2 text-sm text-red-400">
-							Insufficient {spendingToken?.symbol ?? 'token'} balance
-						</div>
-					{/if}
-					{#if insufficientLiquidityWarning && !insufficientBalanceError}
-						<div
-							class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-sm text-amber-300"
-						>
-							There currently isn't enough orderbook liquidity to fully fill this order. Continue to
-							fill approx. {availableLiquidityFormatted}.
-							{#if isOutsideMarketHours()}
-								<br /><br />This might be because US markets are currently closed.
-							{/if}
-						</div>
-					{/if}
-					{#if priceError && selectedAmount && selectedAmount > 0n}
-						<div
-							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-						>
-							{#if priceErrorReason === 'no_quotes'}
-								No orders available within acceptable price range. Try a limit order instead to set
-								your own price.
-							{:else if priceErrorReason === 'no_fill'}
-								Order amount too large for current liquidity. Try a smaller amount or use a limit
-								order.
-							{:else}
-								Unable to fetch market price. Please try again or use a limit order.
-							{/if}
-						</div>
-					{/if}
-					{#if orderPreparationError}
-						<div
-							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-						>
-							{orderPreparationError}
-						</div>
-					{/if}
+						{#if insufficientBalanceError}
+							<div class="mt-2 text-sm text-red-400">
+								Insufficient {spendingToken?.symbol ?? 'token'} balance
+							</div>
+						{/if}
+						{#if insufficientLiquidityWarning && !insufficientBalanceError}
+							<div
+								class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-sm text-amber-300"
+							>
+								There currently isn't enough orderbook liquidity to fully fill this order. Continue
+								to fill approx. {availableLiquidityFormatted}.
+								{#if isOutsideMarketHours()}
+									<br /><br />This might be because US markets are currently closed.
+								{/if}
+							</div>
+						{/if}
+						{#if priceError && selectedAmount && selectedAmount > 0n}
+							<div
+								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+							>
+								{#if priceErrorReason === 'no_quotes'}
+									No orders available within acceptable price range. Try a limit order instead to
+									set your own price.
+								{:else if priceErrorReason === 'no_fill'}
+									Order amount too large for current liquidity. Try a smaller amount or use a limit
+									order.
+								{:else}
+									Unable to fetch market price. Please try again or use a limit order.
+								{/if}
+							</div>
+						{/if}
+						{#if orderPreparationError}
+							<div
+								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+							>
+								{orderPreparationError}
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>

@@ -281,7 +281,9 @@
 		</div>
 	{:else if filteredOrders.length === 0}
 		<div class="py-8 text-center text-sm text-gray-400">
-			{selectedOrdersFilter === 'my' ? 'No orders yet. Head to the trade page to place your first order.' : 'No orders found'}
+			{selectedOrdersFilter === 'my'
+				? 'No orders yet. Head to the trade page to place your first order.'
+				: 'No orders found'}
 		</div>
 	{:else}
 		<!-- Orders table -->

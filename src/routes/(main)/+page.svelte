@@ -5,14 +5,13 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
-	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import QuickTrade from '$lib/components/QuickTrade.svelte';
-	import { globalPoolApy, fetchGlobalRewards } from '$lib/stores/rewardsStore';
+	import { fetchGlobalRewards } from '$lib/stores/rewardsStore';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
 	import { track, trackPageView } from '$lib/services/analytics';
@@ -64,14 +63,6 @@
 		}
 	}
 
-	// Filter tokens by current network
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
-
-	// APY slot machine animation
-	let displayedApy = 0;
-	let isAnimating = false;
-	let animationComplete = false;
-
 	let cleanupScrollTracking: (() => void) | null = null;
 
 	onMount(() => {
@@ -94,47 +85,6 @@
 			cleanupScrollTracking();
 		}
 	});
-
-	// Animate APY when it becomes available
-	$: if ($globalPoolApy !== null && !isAnimating && !animationComplete) {
-		animateApy($globalPoolApy);
-	}
-
-	function animateApy(targetApy: number) {
-		isAnimating = true;
-		const duration = 1500; // 1.5 seconds
-		const frameRate = 30; // updates per second
-		const totalFrames = (duration / 1000) * frameRate;
-		let frame = 0;
-		const targetRounded = Math.round(targetApy);
-
-		// Start from 0
-		displayedApy = 0;
-
-		const interval = setInterval(() => {
-			frame++;
-			const progress = frame / totalFrames;
-
-			if (progress >= 1) {
-				displayedApy = targetRounded;
-				isAnimating = false;
-				animationComplete = true;
-				clearInterval(interval);
-			} else {
-				// Ease out - fast at start, slow at end
-				const easeOut = 1 - Math.pow(1 - progress, 3);
-				displayedApy = Math.round(easeOut * targetRounded);
-			}
-		}, 1000 / frameRate);
-	}
-
-	function formatApyDisplay(apy: number): string {
-		const rounded = Math.round(apy);
-		if (rounded >= 1000) {
-			return (rounded / 1000).toFixed(1) + 'K';
-		}
-		return rounded.toString();
-	}
 
 	type TokenRow = {
 		id: string;
@@ -220,9 +170,10 @@
 				class="mb-8 font-serif text-4xl font-normal leading-[1.05] tracking-tight text-white sm:mb-10 sm:text-5xl lg:text-6xl xl:text-7xl"
 			>
 				Tokenised Equities.<br class="sm:hidden" />
-				<span class="bg-gradient-to-r from-brand-gold-300 to-brand-gold-500 bg-clip-text text-transparent">{displayedText}</span><span
-					class="animate-blink text-brand-gold-400">|</span
-				>
+				<span
+					class="bg-gradient-to-r from-brand-gold-300 to-brand-gold-500 bg-clip-text text-transparent"
+					>{displayedText}</span
+				><span class="animate-blink text-brand-gold-400">|</span>
 			</h1>
 
 			<!-- Rewards APY Banner - temporarily hidden -->
@@ -534,83 +485,6 @@
 </div>
 
 <style>
-	/* Rainbow wave animation for the rewards banner */
-	.rewards-banner {
-		position: relative;
-		background: transparent;
-	}
-
-	.rewards-border {
-		position: absolute;
-		inset: 0;
-		border-radius: 1rem;
-		padding: 1px;
-		background: linear-gradient(
-			90deg,
-			#ff6b6b,
-			#feca57,
-			#48dbfb,
-			#ff9ff3,
-			#54a0ff,
-			#5f27cd,
-			#ff6b6b
-		);
-		background-size: 300% 100%;
-		animation: rainbow-wave 3s linear infinite;
-		-webkit-mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		mask:
-			linear-gradient(#fff 0 0) content-box,
-			linear-gradient(#fff 0 0);
-		-webkit-mask-composite: xor;
-		mask-composite: exclude;
-	}
-
-	@media (min-width: 640px) {
-		.rewards-border {
-			border-radius: 9999px;
-		}
-	}
-
-	/* Subtle glow effect */
-	.rewards-banner::before {
-		content: '';
-		position: absolute;
-		inset: -2px;
-		border-radius: 1rem;
-		background: linear-gradient(
-			90deg,
-			#ff6b6b40,
-			#feca5740,
-			#48dbfb40,
-			#ff9ff340,
-			#54a0ff40,
-			#5f27cd40,
-			#ff6b6b40
-		);
-		background-size: 300% 100%;
-		animation: rainbow-wave 3s linear infinite;
-		filter: blur(8px);
-		opacity: 0.5;
-		z-index: -1;
-	}
-
-	@media (min-width: 640px) {
-		.rewards-banner::before {
-			border-radius: 9999px;
-		}
-	}
-
-	@keyframes rainbow-wave {
-		0% {
-			background-position: 0% 50%;
-		}
-		100% {
-			background-position: 300% 50%;
-		}
-	}
-
 	/* Blinking cursor animation for typewriter */
 	.animate-blink {
 		animation: blink 1s step-end infinite;

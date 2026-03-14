@@ -47,8 +47,7 @@
 		},
 		'boost-rewards': {
 			title: 'Boost Rewards',
-			description:
-				'Earn monthly rewards for holding tokenized equities.',
+			description: 'Earn monthly rewards for holding tokenized equities.',
 			targetSelector: '[data-tutorial="boost-rewards"]',
 			buttonText: 'Next'
 		},
@@ -213,7 +212,7 @@
 			return;
 		}
 
-		const next = nextTutorialStep();
+		nextTutorialStep();
 		// Wait a tick for any DOM updates
 		setTimeout(updateTargetPosition, 100);
 	}

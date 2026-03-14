@@ -899,9 +899,7 @@
 						<div class="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
-									<p class="text-xs uppercase tracking-wide text-gray-400">
-										Off-chain Reference
-									</p>
+									<p class="text-xs uppercase tracking-wide text-gray-400">Off-chain Reference</p>
 									<p class="mt-0.5 text-sm font-semibold text-gray-200 sm:mt-1 sm:text-base">
 										{tokenDisplayName}
 									</p>
@@ -939,9 +937,7 @@
 					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-3 backdrop-blur-sm sm:p-4">
 						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-3 sm:text-sm">
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-400">
-									Oracle Price
-								</dt>
+								<dt class="text-xs uppercase tracking-wide text-gray-400">Oracle Price</dt>
 								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if oracleLoading}
 										Loading...
@@ -953,9 +949,7 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-400">
-									Confidence
-								</dt>
+								<dt class="text-xs uppercase tracking-wide text-gray-400">Confidence</dt>
 								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if oracleLoading}
 										Loading...
@@ -967,9 +961,7 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-400">
-									Bid Price
-								</dt>
+								<dt class="text-xs uppercase tracking-wide text-gray-400">Bid Price</dt>
 								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
@@ -981,9 +973,7 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-xs uppercase tracking-wide text-gray-400">
-									Offer Price
-								</dt>
+								<dt class="text-xs uppercase tracking-wide text-gray-400">Offer Price</dt>
 								<dd class="mt-0.5 text-sm font-medium tabular-nums text-white sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
@@ -1002,14 +992,14 @@
 					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
 						<button
 							type="button"
-							class="rounded-xl bg-emerald-500 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 ring-1 ring-inset ring-white/10 transition-all hover:bg-emerald-400 hover:shadow-xl hover:shadow-emerald-500/30 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3.5 sm:text-base"
+							class="rounded-xl bg-emerald-500 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 ring-1 ring-inset ring-white/10 transition-all hover:bg-emerald-400 hover:shadow-xl hover:shadow-emerald-500/30 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 active:scale-[0.98] sm:px-4 sm:py-3.5 sm:text-base"
 							on:click={() => openTradePanel('Buy')}
 						>
 							Buy
 						</button>
 						<button
 							type="button"
-							class="rounded-xl bg-rose-500 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/25 ring-1 ring-inset ring-white/10 transition-all hover:bg-rose-400 hover:shadow-xl hover:shadow-rose-500/30 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-rose-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3.5 sm:text-base"
+							class="rounded-xl bg-rose-500 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/25 ring-1 ring-inset ring-white/10 transition-all hover:bg-rose-400 hover:shadow-xl hover:shadow-rose-500/30 focus:outline-none focus:ring-2 focus:ring-rose-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 active:scale-[0.98] sm:px-4 sm:py-3.5 sm:text-base"
 							on:click={() => openTradePanel('Sell')}
 						>
 							Sell

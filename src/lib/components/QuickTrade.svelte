@@ -7,7 +7,11 @@
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
-	import { createTokenOrderbookQuotesQuery, prefetchGlobalOrders, refreshTokenQuotes } from '$lib/queries/orderbook';
+	import {
+		createTokenOrderbookQuotesQuery,
+		prefetchGlobalOrders,
+		refreshTokenQuotes
+	} from '$lib/queries/orderbook';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
@@ -100,7 +104,9 @@
 
 	// TanStack Query for quotes — polls every 30s, retries on failure, preserves stale data
 	$: orderbookQuery = createTokenOrderbookQuotesQuery(
-		$currentNetwork, selectedTokenAddress, 30_000
+		$currentNetwork,
+		selectedTokenAddress,
+		30_000
 	);
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
 	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
@@ -722,7 +728,10 @@
 				network: $currentNetwork,
 				refreshQuotes: async () => {
 					try {
-						const freshCache = await refreshTokenQuotes($currentNetwork!.id, selectedToken!.address);
+						const freshCache = await refreshTokenQuotes(
+							$currentNetwork!.id,
+							selectedToken!.address
+						);
 						return sortQuotesByPrice(
 							filterQuotesForSide(
 								freshCache.quotes,
@@ -802,344 +811,349 @@
 	<div
 		class="relative w-full rounded-2xl border border-white/10 bg-gray-900/80 p-4 shadow-2xl backdrop-blur-xl sm:p-6"
 	>
-	<div
-		class="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-blue-500/20 via-transparent to-transparent opacity-50"
-	></div>
+		<div
+			class="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-blue-500/20 via-transparent to-transparent opacity-50"
+		></div>
 
-	<div class="relative space-y-4">
-		<!-- USDC section -->
-		<div class="space-y-1">
-			<div
-				class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
-			>
-				<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
-					{#if paymentToken?.logoUrl}
-						<img
-							src={paymentToken.logoUrl}
-							alt={paymentToken.symbol}
-							class="h-6 w-6 rounded-full"
-						/>
-					{/if}
-					<span class="font-medium text-white">{paymentToken?.symbol ?? 'USDC'}</span>
-				</div>
-				<div class="flex-1 text-right">
-					<input
-						type="text"
-						inputmode="decimal"
-						placeholder="0"
-						value={topAmount}
-						on:input={handleTopInput}
-						on:blur={capAmountsIfNeeded}
-						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
-					/>
-				</div>
-			</div>
-			<div class="flex items-center justify-between px-1 text-xs">
-				<span class="text-gray-400">
-					{#if $isAuthenticated && $walletAddress}
-						Balance: {formattedUsdcBalance.toFixed(2)} {paymentToken?.symbol ?? 'USDC'}
-					{:else}
-						&nbsp;
-					{/if}
-				</span>
-				<div class="flex items-center gap-1">
-					{#if isBuying && $isAuthenticated && $walletAddress && formattedUsdcBalance > 0}
-						{#each [25, 50, 75, 100] as percent}
-							<button
-								type="button"
-								on:click={() => handleUsdcPercentClick(percent)}
-								class="rounded bg-gray-700/50 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
-							>
-								{percent === 100 ? 'MAX' : `${percent}%`}
-							</button>
-						{/each}
-					{/if}
-				</div>
-			</div>
-			{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
+		<div class="relative space-y-4">
+			<!-- USDC section -->
+			<div class="space-y-1">
 				<div
-					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
+					class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
 				>
-					{#if showLiquidityWarning}
-						Order capped to max available liquidity.
-					{:else}
-						Not enough liquidity to fully fill your order.
-					{/if}
-					{#if isOutsideMarketHours()}
-						<br />This might be because US markets are currently closed.
-					{/if}
-				</div>
-			{/if}
-		</div>
-
-		<!-- Direction arrow -->
-		<div class="flex justify-center">
-			<button
-				type="button"
-				on:click={handleSwapDirection}
-				class="rounded-full border border-white/10 bg-gray-800 p-3 transition hover:border-white/20 hover:bg-gray-700"
-			>
-				<svg
-					class="h-4 w-4 text-gray-400 transition-transform duration-200"
-					class:rotate-180={!isBuying}
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M19 14l-7 7m0 0l-7-7m7 7V3"
-					/>
-				</svg>
-			</button>
-		</div>
-
-		<!-- Token section -->
-		<div class="space-y-1">
-			<div
-				class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
-			>
-				<!-- Token selector - completely independent -->
-				<div class="relative">
-					<button
-						type="button"
-						on:click={toggleDropdown}
-						class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5 transition hover:bg-gray-700"
-					>
-						{#if selectedToken}
+					<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+						{#if paymentToken?.logoUrl}
 							<img
-								src={selectedToken.logoUrl}
-								alt={selectedToken.symbol}
+								src={paymentToken.logoUrl}
+								alt={paymentToken.symbol}
 								class="h-6 w-6 rounded-full"
 							/>
-							<span class="font-medium text-white">{selectedToken.symbol}</span>
-						{:else}
-							<span class="text-gray-400">Select</span>
 						{/if}
-						<svg
-							class="h-4 w-4 text-gray-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M19 9l-7 7-7-7"
-							/>
-						</svg>
-					</button>
-
-					{#if isDropdownOpen}
-						<!-- svelte-ignore a11y-click-events-have-key-events -->
-						<!-- svelte-ignore a11y-no-static-element-interactions -->
-						<div
-							on:click|stopPropagation
-							class="absolute left-0 top-full z-[100] mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-gray-800 shadow-xl"
-						>
-							<!-- Scroll up indicator -->
-							{#if canScrollUp}
-								<div class="flex justify-center border-b border-white/5 py-1">
-									<svg
-										class="h-4 w-4 text-gray-500"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M5 15l7-7 7 7"
-										/>
-									</svg>
-								</div>
-							{/if}
-							<div
-								class="token-dropdown max-h-[232px] overflow-y-scroll py-2"
-								on:scroll={handleDropdownScroll}
-								bind:this={dropdownScrollEl}
-							>
-								{#each tradableTokens as token (token.address)}
-									<button
-										type="button"
-										on:click|stopPropagation={() => handleTokenSelect(token.address)}
-										class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/5"
-									>
-										<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
-										<div>
-											<div class="font-medium text-white">{token.symbol}</div>
-											<div class="text-xs text-gray-400">{token.name}</div>
-										</div>
-									</button>
-								{/each}
-							</div>
-							<!-- Scroll down indicator -->
-							{#if canScrollDown}
-								<div class="flex justify-center border-t border-white/5 py-1">
-									<svg
-										class="h-4 w-4 text-gray-500"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M19 9l-7 7-7-7"
-										/>
-									</svg>
-								</div>
-							{/if}
-						</div>
-					{/if}
+						<span class="font-medium text-white">{paymentToken?.symbol ?? 'USDC'}</span>
+					</div>
+					<div class="flex-1 text-right">
+						<input
+							type="text"
+							inputmode="decimal"
+							placeholder="0"
+							value={topAmount}
+							on:input={handleTopInput}
+							on:blur={capAmountsIfNeeded}
+							class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
+						/>
+					</div>
 				</div>
-
-				<div class="flex-1 text-right">
-					<input
-						type="text"
-						inputmode="decimal"
-						placeholder="0"
-						value={bottomAmount}
-						on:input={handleBottomInput}
-						on:blur={capAmountsIfNeeded}
-						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
-					/>
+				<div class="flex items-center justify-between px-1 text-xs">
+					<span class="text-gray-400">
+						{#if $isAuthenticated && $walletAddress}
+							Balance: {formattedUsdcBalance.toFixed(2)} {paymentToken?.symbol ?? 'USDC'}
+						{:else}
+							&nbsp;
+						{/if}
+					</span>
+					<div class="flex items-center gap-1">
+						{#if isBuying && $isAuthenticated && $walletAddress && formattedUsdcBalance > 0}
+							{#each [25, 50, 75, 100] as percent}
+								<button
+									type="button"
+									on:click={() => handleUsdcPercentClick(percent)}
+									class="rounded bg-gray-700/50 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
+								>
+									{percent === 100 ? 'MAX' : `${percent}%`}
+								</button>
+							{/each}
+						{/if}
+					</div>
 				</div>
+				{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
+					<div
+						class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
+					>
+						{#if showLiquidityWarning}
+							Order capped to max available liquidity.
+						{:else}
+							Not enough liquidity to fully fill your order.
+						{/if}
+						{#if isOutsideMarketHours()}
+							<br />This might be because US markets are currently closed.
+						{/if}
+					</div>
+				{/if}
 			</div>
-			<div class="flex items-center justify-between px-1 text-xs">
-				<span class="text-gray-400">
-					{#if $isAuthenticated && $walletAddress}
-						Balance: {formattedTokenBalance.toFixed(4)} {selectedToken?.symbol ?? ''}
-					{:else if quote?.avgPrice}
-						~{formatPrice(quote.avgPrice)}/token
-					{:else if isBuying ? bestAskPrice : bestBidPrice}
-						Best: {formatPrice((isBuying ? bestAskPrice : bestBidPrice) ?? 0)}
-					{/if}
-				</span>
-				<div class="flex items-center gap-1">
-					{#if !isBuying && $isAuthenticated && $walletAddress && formattedTokenBalance > 0}
-						{#each [25, 50, 75, 100] as percent}
-							<button
-								type="button"
-								on:click={() => handleTokenPercentClick(percent)}
-								class="rounded bg-gray-700/50 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
-							>
-								{percent === 100 ? 'MAX' : `${percent}%`}
-							</button>
-						{/each}
-					{/if}
-				</div>
-			</div>
-			{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
-				<div
-					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
+
+			<!-- Direction arrow -->
+			<div class="flex justify-center">
+				<button
+					type="button"
+					on:click={handleSwapDirection}
+					class="rounded-full border border-white/10 bg-gray-800 p-3 transition hover:border-white/20 hover:bg-gray-700"
 				>
-					{#if showLiquidityWarning}
-						Order capped to max available liquidity.
-					{:else}
-						Not enough liquidity to fully fill your order.
-					{/if}
-					{#if isOutsideMarketHours()}
-						<br />This might be because US markets are currently closed.
-					{/if}
+					<svg
+						class="h-4 w-4 text-gray-400 transition-transform duration-200"
+						class:rotate-180={!isBuying}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M19 14l-7 7m0 0l-7-7m7 7V3"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Token section -->
+			<div class="space-y-1">
+				<div
+					class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
+				>
+					<!-- Token selector - completely independent -->
+					<div class="relative">
+						<button
+							type="button"
+							on:click={toggleDropdown}
+							class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5 transition hover:bg-gray-700"
+						>
+							{#if selectedToken}
+								<img
+									src={selectedToken.logoUrl}
+									alt={selectedToken.symbol}
+									class="h-6 w-6 rounded-full"
+								/>
+								<span class="font-medium text-white">{selectedToken.symbol}</span>
+							{:else}
+								<span class="text-gray-400">Select</span>
+							{/if}
+							<svg
+								class="h-4 w-4 text-gray-400"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M19 9l-7 7-7-7"
+								/>
+							</svg>
+						</button>
+
+						{#if isDropdownOpen}
+							<!-- svelte-ignore a11y-click-events-have-key-events -->
+							<!-- svelte-ignore a11y-no-static-element-interactions -->
+							<div
+								on:click|stopPropagation
+								class="absolute left-0 top-full z-[100] mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-gray-800 shadow-xl"
+							>
+								<!-- Scroll up indicator -->
+								{#if canScrollUp}
+									<div class="flex justify-center border-b border-white/5 py-1">
+										<svg
+											class="h-4 w-4 text-gray-500"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M5 15l7-7 7 7"
+											/>
+										</svg>
+									</div>
+								{/if}
+								<div
+									class="token-dropdown max-h-[232px] overflow-y-scroll py-2"
+									on:scroll={handleDropdownScroll}
+									bind:this={dropdownScrollEl}
+								>
+									{#each tradableTokens as token (token.address)}
+										<button
+											type="button"
+											on:click|stopPropagation={() => handleTokenSelect(token.address)}
+											class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/5"
+										>
+											<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
+											<div>
+												<div class="font-medium text-white">{token.symbol}</div>
+												<div class="text-xs text-gray-400">{token.name}</div>
+											</div>
+										</button>
+									{/each}
+								</div>
+								<!-- Scroll down indicator -->
+								{#if canScrollDown}
+									<div class="flex justify-center border-t border-white/5 py-1">
+										<svg
+											class="h-4 w-4 text-gray-500"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M19 9l-7 7-7-7"
+											/>
+										</svg>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+
+					<div class="flex-1 text-right">
+						<input
+							type="text"
+							inputmode="decimal"
+							placeholder="0"
+							value={bottomAmount}
+							on:input={handleBottomInput}
+							on:blur={capAmountsIfNeeded}
+							class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
+						/>
+					</div>
 				</div>
+				<div class="flex items-center justify-between px-1 text-xs">
+					<span class="text-gray-400">
+						{#if $isAuthenticated && $walletAddress}
+							Balance: {formattedTokenBalance.toFixed(4)} {selectedToken?.symbol ?? ''}
+						{:else if quote?.avgPrice}
+							~{formatPrice(quote.avgPrice)}/token
+						{:else if isBuying ? bestAskPrice : bestBidPrice}
+							Best: {formatPrice((isBuying ? bestAskPrice : bestBidPrice) ?? 0)}
+						{/if}
+					</span>
+					<div class="flex items-center gap-1">
+						{#if !isBuying && $isAuthenticated && $walletAddress && formattedTokenBalance > 0}
+							{#each [25, 50, 75, 100] as percent}
+								<button
+									type="button"
+									on:click={() => handleTokenPercentClick(percent)}
+									class="rounded bg-gray-700/50 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-600 hover:text-white"
+								>
+									{percent === 100 ? 'MAX' : `${percent}%`}
+								</button>
+							{/each}
+						{/if}
+					</div>
+				</div>
+				{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
+					<div
+						class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
+					>
+						{#if showLiquidityWarning}
+							Order capped to max available liquidity.
+						{:else}
+							Not enough liquidity to fully fill your order.
+						{/if}
+						{#if isOutsideMarketHours()}
+							<br />This might be because US markets are currently closed.
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Network info -->
+			<div class="flex items-center justify-center gap-2 text-xs text-gray-400">
+				<span>Trading on</span>
+				<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
+				<span class="text-gray-400">{$currentNetwork?.displayName ?? 'Base'}</span>
+			</div>
+
+			<!-- Error display -->
+			<div aria-live="polite">
+				{#if tradeError}
+					<div class="rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-400">
+						{tradeError}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Action button -->
+			{#if $isAuthenticated && $walletAddress}
+				<Button
+					variant="primary"
+					size="lg"
+					className="w-full rounded-xl py-4 text-base font-semibold"
+					disabled={isExecutingTrade ||
+						isLoadingQuotes ||
+						(!(quoteFetchError && relevantQuotes.length === 0) &&
+							(!quote || (!topAmount && !bottomAmount)))}
+					on:click={quoteFetchError && relevantQuotes.length === 0
+						? () => $orderbookQuery.refetch()
+						: handleTrade}
+				>
+					{#if isExecutingTrade}
+						<span class="flex items-center justify-center gap-2">
+							<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+								<circle
+									class="opacity-25"
+									cx="12"
+									cy="12"
+									r="10"
+									stroke="currentColor"
+									stroke-width="4"
+								></circle>
+								<path
+									class="opacity-75"
+									fill="currentColor"
+									d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+								></path>
+							</svg>
+							Processing...
+						</span>
+					{:else if !topAmount && !bottomAmount}
+						Enter amount
+					{:else if isLoadingQuotes}
+						<span class="flex items-center justify-center gap-2">
+							<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+								<circle
+									class="opacity-25"
+									cx="12"
+									cy="12"
+									r="10"
+									stroke="currentColor"
+									stroke-width="4"
+								></circle>
+								<path
+									class="opacity-75"
+									fill="currentColor"
+									d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+								></path>
+							</svg>
+							Loading prices...
+						</span>
+					{:else if quoteFetchError && relevantQuotes.length === 0}
+						Couldn't load prices — tap to retry
+					{:else if relevantQuotes.length === 0}
+						No liquidity available
+					{:else if !quote}
+						No liquidity available
+					{:else if isBuying}
+						Buy {selectedToken?.symbol}
+					{:else}
+						Sell {selectedToken?.symbol}
+					{/if}
+				</Button>
+			{:else}
+				<Button
+					variant="primary"
+					size="lg"
+					className="w-full rounded-xl py-4 text-base font-semibold"
+					on:click={handleConnectWallet}
+				>
+					Connect wallet
+				</Button>
 			{/if}
 		</div>
-
-		<!-- Network info -->
-		<div class="flex items-center justify-center gap-2 text-xs text-gray-400">
-			<span>Trading on</span>
-			<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
-			<span class="text-gray-400">{$currentNetwork?.displayName ?? 'Base'}</span>
-		</div>
-
-		<!-- Error display -->
-		<div aria-live="polite">
-		{#if tradeError}
-			<div class="rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-400">
-				{tradeError}
-			</div>
-		{/if}
-		</div>
-
-		<!-- Action button -->
-		{#if $isAuthenticated && $walletAddress}
-			<Button
-				variant="primary"
-				size="lg"
-				className="w-full rounded-xl py-4 text-base font-semibold"
-				disabled={isExecutingTrade || isLoadingQuotes || (!(quoteFetchError && relevantQuotes.length === 0) && (!quote || (!topAmount && !bottomAmount)))}
-				on:click={quoteFetchError && relevantQuotes.length === 0 ? () => $orderbookQuery.refetch() : handleTrade}
-			>
-				{#if isExecutingTrade}
-					<span class="flex items-center justify-center gap-2">
-						<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle
-								class="opacity-25"
-								cx="12"
-								cy="12"
-								r="10"
-								stroke="currentColor"
-								stroke-width="4"
-							></circle>
-							<path
-								class="opacity-75"
-								fill="currentColor"
-								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							></path>
-						</svg>
-						Processing...
-					</span>
-				{:else if !topAmount && !bottomAmount}
-					Enter amount
-				{:else if isLoadingQuotes}
-					<span class="flex items-center justify-center gap-2">
-						<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle
-								class="opacity-25"
-								cx="12"
-								cy="12"
-								r="10"
-								stroke="currentColor"
-								stroke-width="4"
-							></circle>
-							<path
-								class="opacity-75"
-								fill="currentColor"
-								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							></path>
-						</svg>
-						Loading prices...
-					</span>
-				{:else if quoteFetchError && relevantQuotes.length === 0}
-					Couldn't load prices — tap to retry
-				{:else if relevantQuotes.length === 0}
-					No liquidity available
-				{:else if !quote}
-					No liquidity available
-				{:else if isBuying}
-					Buy {selectedToken?.symbol}
-				{:else}
-					Sell {selectedToken?.symbol}
-				{/if}
-			</Button>
-		{:else}
-			<Button
-				variant="primary"
-				size="lg"
-				className="w-full rounded-xl py-4 text-base font-semibold"
-				on:click={handleConnectWallet}
-			>
-				Connect wallet
-			</Button>
-		{/if}
 	</div>
-</div>
 </div>
 
 <style>

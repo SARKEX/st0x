@@ -190,7 +190,9 @@
 						<div>
 							<p class="text-gray-300">Your referral code is:</p>
 							<div class="mt-2 flex items-center justify-center gap-2">
-								<code class="rounded-lg bg-gray-700 px-4 py-2 font-mono text-lg text-brand-gold-400">
+								<code
+									class="rounded-lg bg-gray-700 px-4 py-2 font-mono text-lg text-brand-gold-400"
+								>
 									{generatedCode}
 								</code>
 								<button

@@ -140,7 +140,10 @@
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
 							<!-- Projected progress (lighter) -->
 							{#if projectedProgress > rocketBoostProgress}
-								<div class="absolute h-full bg-brand-gold-500/30" style="width: {projectedProgress}%" />
+								<div
+									class="absolute h-full bg-brand-gold-500/30"
+									style="width: {projectedProgress}%"
+								/>
 							{/if}
 							<!-- Current progress -->
 							<div
@@ -226,7 +229,10 @@
 						<div class="relative mt-1 h-1.5 overflow-hidden rounded-full bg-gray-700">
 							<!-- Projected progress (lighter) -->
 							{#if projectedProgress > rocketBoostProgress}
-								<div class="absolute h-full bg-brand-gold-500/30" style="width: {projectedProgress}%" />
+								<div
+									class="absolute h-full bg-brand-gold-500/30"
+									style="width: {projectedProgress}%"
+								/>
 							{/if}
 							<!-- Current progress -->
 							<div

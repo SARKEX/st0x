@@ -402,16 +402,26 @@
 			</summary>
 			<ol class="mt-2 space-y-1.5 text-xs text-gray-400">
 				<li class="flex items-start gap-2">
-					<span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-gold-500/10 text-[10px] font-bold text-brand-gold-400">1</span>
+					<span
+						class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-gold-500/10 text-[10px] font-bold text-brand-gold-400"
+						>1</span
+					>
 					Your funds are deposited into a vault
 				</li>
 				<li class="flex items-start gap-2">
-					<span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-gold-500/10 text-[10px] font-bold text-brand-gold-400">2</span>
+					<span
+						class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-gold-500/10 text-[10px] font-bold text-brand-gold-400"
+						>2</span
+					>
 					Orders execute automatically at your chosen interval
 				</li>
 				<li class="flex items-start gap-2">
-					<span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-gold-500/10 text-[10px] font-bold text-brand-gold-400">3</span>
-					Withdraw tokens from <a href="/dashboard" class="text-brand-gold-500 hover:underline">Dashboard &gt; Vaults</a>
+					<span
+						class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-gold-500/10 text-[10px] font-bold text-brand-gold-400"
+						>3</span
+					>
+					Withdraw tokens from
+					<a href="/dashboard" class="text-brand-gold-500 hover:underline">Dashboard &gt; Vaults</a>
 				</li>
 			</ol>
 		</details>

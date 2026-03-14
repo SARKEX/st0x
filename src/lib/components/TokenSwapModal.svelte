@@ -660,8 +660,7 @@
 								<div>
 									<p class="font-medium">Not enough inventory to fully swap right now.</p>
 									<p class="mt-0.5 text-blue-300/80">
-										Liquidity is limited right now. Swap what you can and check back
-										later.
+										Liquidity is limited right now. Swap what you can and check back later.
 									</p>
 								</div>
 							</div>

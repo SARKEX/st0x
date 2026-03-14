@@ -1,6 +1,5 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
-	import RewardsDisplay from './rewards/RewardsDisplay.svelte';
 	import ReferralButton from './referrals/ReferralButton.svelte';
 	import { onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';

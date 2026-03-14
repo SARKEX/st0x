@@ -155,8 +155,24 @@
 			{:else if $transactionStore.status === TransactionStatus.SUCCESS}
 				<div class="mb-6 flex h-20 w-20 items-center justify-center" data-testid="success-icon">
 					<svg class="h-20 w-20" viewBox="0 0 52 52" fill="none">
-						<circle class="checkmark-circle" cx="26" cy="26" r="25" stroke="#22c55e" stroke-width="2" fill="none" />
-						<path class="checkmark-check" d="M14.1 27.2l7.1 7.2 16.7-16.8" stroke="#22c55e" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+						<circle
+							class="checkmark-circle"
+							cx="26"
+							cy="26"
+							r="25"
+							stroke="#22c55e"
+							stroke-width="2"
+							fill="none"
+						/>
+						<path
+							class="checkmark-check"
+							d="M14.1 27.2l7.1 7.2 16.7-16.8"
+							stroke="#22c55e"
+							stroke-width="3"
+							fill="none"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
 					</svg>
 				</div>
 				<div class="flex flex-col gap-4 text-center">
@@ -166,7 +182,8 @@
 					{#if marketOrderDisplay && !marketOrderDisplay.isNoFill}
 						<p class="text-base font-medium text-white">
 							{marketOrderDisplay.direction === 'Buy' ? 'You now hold' : 'You sold'}
-							{formatQuantity(marketOrderDisplay.assetAmount, marketOrderDisplay.assetDecimals)} {marketOrderDisplay.assetSymbol}
+							{formatQuantity(marketOrderDisplay.assetAmount, marketOrderDisplay.assetDecimals)}
+							{marketOrderDisplay.assetSymbol}
 						</p>
 					{/if}
 					{#if $transactionStore.message}
@@ -203,7 +220,9 @@
 								No Tokens Available
 							</div>
 							<p class="mb-3">
-								Your order was not filled. Our price protection system prevented execution at an unfavorable price. Try again with a smaller amount, or use a limit order to specify your desired price.
+								Your order was not filled. Our price protection system prevented execution at an
+								unfavorable price. Try again with a smaller amount, or use a limit order to specify
+								your desired price.
 							</p>
 						</div>
 					{:else if marketOrderDisplay}
@@ -239,7 +258,8 @@
 							</div>
 							{#if marketOrderDisplay.isPartialFill}
 								<div class="mt-3 rounded-md bg-brand-gold-900/30 p-2 text-xs text-brand-gold-200">
-									Partial fill: not all requested quantity was available within your slippage tolerance. Use a limit order to specify an exact price.
+									Partial fill: not all requested quantity was available within your slippage
+									tolerance. Use a limit order to specify an exact price.
 								</div>
 							{/if}
 						</div>
@@ -286,7 +306,12 @@
 						>
 							View in Dashboard
 							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 5l7 7-7 7"
+								/>
 							</svg>
 						</a>
 					{/if}
@@ -318,7 +343,11 @@
 					{#if assetTokenInfo && !marketOrderDisplay}
 						<p class="mt-2 text-xs text-gray-400">
 							When your order fills, withdraw tokens from
-							<a href="/dashboard" class="text-brand-gold-500 hover:text-brand-gold-400 hover:underline">Dashboard &gt; Vaults</a>.
+							<a
+								href="/dashboard"
+								class="text-brand-gold-500 hover:text-brand-gold-400 hover:underline"
+								>Dashboard &gt; Vaults</a
+							>.
 						</p>
 					{/if}
 				</div>
@@ -350,9 +379,9 @@
 					Multiple Transactions Required
 				</p>
 				<p class="mt-2 text-center text-sm text-gray-400">
-				This action requires multiple transactions. You'll be prompted to approve each one.
-			</p>
-			<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
+					This action requires multiple transactions. You'll be prompted to approve each one.
+				</p>
+				<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
 					{$transactionStore.message}
 				</p>
 				<Button
@@ -394,6 +423,8 @@
 		animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.4s forwards;
 	}
 	@keyframes stroke {
-		100% { stroke-dashoffset: 0; }
+		100% {
+			stroke-dashoffset: 0;
+		}
 	}
 </style>

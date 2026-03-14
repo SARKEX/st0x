@@ -556,14 +556,26 @@ ${TRADE_FIELDS}
 
 	try {
 		const allTradesPromises = allOrderbookUrls.flatMap((url) => [
-			(fetchAllPaginated(url, takerQuery, { sender: normalizedUser }, 'trades') as Promise<SgTrade[]>)
-				.catch(() => [] as SgTrade[]),
-			(fetchAllPaginated(url, txFromQuery, { from: normalizedUser }, 'trades') as Promise<SgTrade[]>)
-				.catch(() => [] as SgTrade[]),
-			(fetchAllPaginated(url, makerInputQuery, { owner: normalizedUser }, 'trades') as Promise<SgTrade[]>)
-				.catch(() => [] as SgTrade[]),
-			(fetchAllPaginated(url, makerOutputQuery, { owner: normalizedUser }, 'trades') as Promise<SgTrade[]>)
-				.catch(() => [] as SgTrade[])
+			(
+				fetchAllPaginated(url, takerQuery, { sender: normalizedUser }, 'trades') as Promise<
+					SgTrade[]
+				>
+			).catch(() => [] as SgTrade[]),
+			(
+				fetchAllPaginated(url, txFromQuery, { from: normalizedUser }, 'trades') as Promise<
+					SgTrade[]
+				>
+			).catch(() => [] as SgTrade[]),
+			(
+				fetchAllPaginated(url, makerInputQuery, { owner: normalizedUser }, 'trades') as Promise<
+					SgTrade[]
+				>
+			).catch(() => [] as SgTrade[]),
+			(
+				fetchAllPaginated(url, makerOutputQuery, { owner: normalizedUser }, 'trades') as Promise<
+					SgTrade[]
+				>
+			).catch(() => [] as SgTrade[])
 		]);
 
 		const allTradesResults = await Promise.all(allTradesPromises);
@@ -582,7 +594,8 @@ ${TRADE_FIELDS}
 			const normalizedToken = tokenAddress.toLowerCase();
 			allTrades = allTrades.filter((trade: SgTrade) => {
 				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
+				const outputTokenAddr =
+					trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
 				return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
 			});
 		}

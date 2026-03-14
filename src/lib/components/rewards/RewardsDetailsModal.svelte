@@ -360,15 +360,15 @@
 								<li class="flex gap-3">
 									<span class="flex-shrink-0 font-medium text-brand-gold-400">1.</span>
 									<span>
-										All tStocks listed on St0x.io are eligible. You can find tStocks at St0x.io, Hydrex,
-										and Aerodrome. From time to time additional partners may be added.
+										All tStocks listed on St0x.io are eligible. You can find tStocks at St0x.io,
+										Hydrex, and Aerodrome. From time to time additional partners may be added.
 									</span>
 								</li>
 								<li class="flex gap-3">
 									<span class="flex-shrink-0 font-medium text-brand-gold-400">2.</span>
 									<span>
-										tStocks must be held in your wallet or in the St0x orderbook contract. Partner pools are subject
-										to their own separate reward pools.
+										tStocks must be held in your wallet or in the St0x orderbook contract. Partner
+										pools are subject to their own separate reward pools.
 									</span>
 								</li>
 								<li class="flex gap-3">

@@ -133,9 +133,7 @@
 	{#if (desktop && !collapsed) || (!desktop && visible)}
 		<!-- Assets List (scrollable) -->
 		<div class="flex-1 overflow-y-auto p-3">
-			<div class="mb-3 px-2 text-xs font-medium uppercase tracking-wider text-gray-500">
-				Assets
-			</div>
+			<div class="mb-3 px-2 text-xs font-medium uppercase tracking-wider text-gray-500">Assets</div>
 			<div class="space-y-0.5">
 				{#each sortedAssets as asset}
 					{@const tokenInfo = getTokenByAnyAddress(asset.address)}

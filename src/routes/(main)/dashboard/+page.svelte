@@ -1735,7 +1735,9 @@
 							Error loading vaults: {$vaultsListQuery.error?.message}
 						</div>
 					{:else if sortedVaults.length === 0}
-						<EmptyState description="No vaults yet. Place a limit order or DCA to create your first vault." />
+						<EmptyState
+							description="No vaults yet. Place a limit order or DCA to create your first vault."
+						/>
 					{:else}
 						<!-- Default Vaults Section -->
 						<div class="mb-6 sm:mb-8">

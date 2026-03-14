@@ -161,7 +161,9 @@
 								<!-- Nickname -->
 								<div class="col-span-4">
 									<p
-										class="truncate text-sm font-medium {isUser ? 'text-brand-gold-400' : 'text-white'}"
+										class="truncate text-sm font-medium {isUser
+											? 'text-brand-gold-400'
+											: 'text-white'}"
 									>
 										{entry.nickname}
 									</p>
