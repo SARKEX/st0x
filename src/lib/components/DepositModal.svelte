@@ -2,7 +2,7 @@
 	import { browser } from '$app/environment';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import OnramperModal from '$lib/components/OnramperModal.svelte';
+	import CoinbaseModal from '$lib/components/CoinbaseModal.svelte';
 	import {
 		showDepositModal,
 		closeDepositModal,
@@ -11,10 +11,10 @@
 	import { walletAddress, authMethod } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 
-	type ModalView = 'options' | 'buy' | 'deposit';
+	type ModalView = 'options' | 'buy' | 'withdraw' | 'deposit';
 	let currentView: ModalView = 'options';
 	let copied = false;
-	let showOnramper = false;
+	let coinbaseMode: 'onramp' | 'offramp' | null = null;
 
 	// QR code generation
 	let qrCodeDataUrl: string = '';
@@ -47,18 +47,13 @@
 	}
 
 	// For external EOA users, go directly to buy view
-	// For Dynamic users, show options (buy or deposit)
+	// For Dynamic users, show options (buy, withdraw, or deposit)
+	const VALID_VIEWS = new Set<ModalView>(['buy', 'withdraw', 'deposit']);
+
 	$: if ($showDepositModal) {
 		if ($authMethod === 'dynamic') {
-			// Dynamic users see options menu
-			currentView =
-				$depositModalInitialView === 'deposit'
-					? 'deposit'
-					: $depositModalInitialView === 'buy'
-						? 'buy'
-						: 'options';
+			currentView = VALID_VIEWS.has($depositModalInitialView) ? $depositModalInitialView : 'options';
 		} else {
-			// External EOA users go directly to buy
 			currentView = 'buy';
 		}
 	}
@@ -66,26 +61,13 @@
 	function handleClose() {
 		closeDepositModal();
 		copied = false;
-		showOnramper = false;
+		coinbaseMode = null;
 		currentView = 'options';
 	}
 
-	function showBuyView() {
-		currentView = 'buy';
-	}
-
-	function handleBuyCrypto() {
-		// Open Onramper modal
-		showOnramper = true;
-	}
-
-	function handleOnramperClose() {
-		showOnramper = false;
+	function handleCoinbaseClose() {
+		coinbaseMode = null;
 		handleClose();
-	}
-
-	function showDepositView() {
-		currentView = 'deposit';
 	}
 
 	function goBack() {
@@ -111,19 +93,27 @@
 
 	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
 
-	$: modalTitle =
-		currentView === 'options'
-			? 'Add Funds'
-			: currentView === 'buy'
-				? 'Buy Crypto'
-				: 'Deposit from Wallet';
+	const VIEW_TITLES: Record<ModalView, string> = {
+		options: 'Manage Funds',
+		buy: 'Buy USDC',
+		withdraw: 'Withdraw Funds',
+		deposit: 'Deposit from Wallet'
+	};
+
+	$: modalTitle = VIEW_TITLES[currentView];
 </script>
 
-<!-- Onramper Modal (separate from main modal) -->
-<OnramperModal show={showOnramper} walletAddress={$walletAddress} onClose={handleOnramperClose} />
+{#if coinbaseMode}
+	<CoinbaseModal
+		show={true}
+		mode={coinbaseMode}
+		walletAddress={$walletAddress}
+		onClose={handleCoinbaseClose}
+	/>
+{/if}
 
 <Modal
-	show={$showDepositModal && !showOnramper}
+	show={$showDepositModal && !coinbaseMode}
 	title={modalTitle}
 	maxWidthClass="max-w-md"
 	onClose={handleClose}
@@ -131,12 +121,12 @@
 	{#if currentView === 'options'}
 		<!-- Options View (Dynamic users only) -->
 		<div class="space-y-4">
-			<p class="text-sm text-gray-400">Choose how you want to add funds to your wallet.</p>
+			<p class="text-sm text-gray-400">Choose how you want to manage your funds.</p>
 
 			<!-- Buy Crypto Option -->
 			<button
 				type="button"
-				on:click={showBuyView}
+				on:click={() => (currentView = 'buy')}
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
 			>
 				<div class="flex items-start gap-4">
@@ -158,9 +148,55 @@
 						</svg>
 					</div>
 					<div class="flex-1">
-						<h3 class="font-medium text-white">Buy with Card or Bank Transfer</h3>
+						<h3 class="font-medium text-white">Buy USDC</h3>
 						<p class="mt-1 text-sm text-gray-400">
-							Purchase crypto using a debit card, credit card, or bank transfer
+							Purchase USDC on Base using a card, bank transfer, or Coinbase account
+						</p>
+					</div>
+					<svg
+						class="h-5 w-5 flex-shrink-0 text-gray-500"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M9 5l7 7-7 7"
+						/>
+					</svg>
+				</div>
+			</button>
+
+			<!-- Withdraw Funds Option -->
+			<button
+				type="button"
+				on:click={() => (currentView = 'withdraw')}
+				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
+			>
+				<div class="flex items-start gap-4">
+					<div
+						class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-orange-500/20"
+					>
+						<svg
+							class="h-5 w-5 text-orange-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+							/>
+						</svg>
+					</div>
+					<div class="flex-1">
+						<h3 class="font-medium text-white">Withdraw Funds</h3>
+						<p class="mt-1 text-sm text-gray-400">
+							Cash out USDC to your bank account via Coinbase
 						</p>
 					</div>
 					<svg
@@ -182,7 +218,7 @@
 			<!-- Deposit from Wallet Option -->
 			<button
 				type="button"
-				on:click={showDepositView}
+				on:click={() => (currentView = 'deposit')}
 				class="w-full rounded-lg border border-gray-700 bg-gray-800 p-4 text-left transition hover:border-blue-500/50 hover:bg-gray-800/80"
 			>
 				<div class="flex items-start gap-4">
@@ -248,7 +284,7 @@
 			{/if}
 
 			<p class="text-sm text-gray-400">
-				Purchase ETH or USDC on Base network using your preferred payment method.
+				Purchase USDC on Base network using your preferred payment method.
 			</p>
 
 			<!-- Info -->
@@ -269,9 +305,10 @@
 					</svg>
 					<div class="text-xs text-gray-400">
 						<p class="mb-1">
-							Powered by Onramper, supporting multiple payment providers for the best rates.
+							Powered by Coinbase. Use a debit card, bank transfer, Apple Pay, or your Coinbase
+							account.
 						</p>
-						<p>Funds will be sent directly to your wallet on Base.</p>
+						<p>USDC will be sent directly to your wallet on Base.</p>
 					</div>
 				</div>
 			</div>
@@ -289,7 +326,81 @@
 			<!-- Actions -->
 			<div class="flex gap-3">
 				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
-				<Button on:click={handleBuyCrypto} variant="primary" fullWidth>Continue to Purchase</Button>
+				<Button on:click={() => (coinbaseMode = 'onramp')} variant="primary" fullWidth>Continue to Purchase</Button>
+			</div>
+		</div>
+	{:else if currentView === 'withdraw'}
+		<!-- Withdraw View -->
+		<div class="space-y-5">
+			<!-- Back button (only for Dynamic users who have options) -->
+			{#if $authMethod === 'dynamic'}
+				<button
+					type="button"
+					on:click={goBack}
+					class="flex items-center gap-1 text-sm text-gray-400 hover:text-white"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M15 19l-7-7 7-7"
+						/>
+					</svg>
+					Back
+				</button>
+			{/if}
+
+			<p class="text-sm text-gray-400">
+				Cash out your USDC to your bank account via Coinbase.
+			</p>
+
+			<!-- Info -->
+			<div class="rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-3">
+				<div class="flex items-start gap-3">
+					<svg
+						class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+					<div class="text-xs text-gray-400">
+						<p class="mb-1">
+							Powered by Coinbase. A Coinbase account with linked bank details is required.
+						</p>
+						<p>You will need to approve an onchain transaction to send funds to Coinbase for withdrawal.</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- Warning -->
+			<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
+				<p class="text-xs text-yellow-400">
+					Off-ramp transactions must be completed within 30 minutes after starting the withdrawal process.
+				</p>
+			</div>
+
+			<!-- Wallet Address Display -->
+			{#if $walletAddress}
+				<div class="rounded-lg border border-gray-700 bg-gray-800 p-3">
+					<span class="mb-1 block text-xs font-medium text-gray-400">Source Wallet</span>
+					<div class="break-all font-mono text-sm text-white">
+						{$walletAddress}
+					</div>
+				</div>
+			{/if}
+
+			<!-- Actions -->
+			<div class="flex gap-3">
+				<Button on:click={handleClose} variant="secondary" fullWidth>Cancel</Button>
+				<Button on:click={() => (coinbaseMode = 'offramp')} variant="primary" fullWidth>Continue to Withdraw</Button>
 			</div>
 		</div>
 	{:else}
