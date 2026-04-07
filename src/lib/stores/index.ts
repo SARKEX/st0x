@@ -5,7 +5,7 @@ import type { Network } from '$lib/config/network';
 import { networks } from '$lib/config/network';
 import type { OracleQuote } from '$lib/queries/oracleQuotes';
 import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
-import { createVaultsQuery } from '$lib/queries/vaults';
+import { createSftsQuery } from '$lib/queries/vaults';
 import type { CreateQueryResult } from '@tanstack/svelte-query';
 import { browser } from '$app/environment';
 
@@ -33,7 +33,7 @@ export const currentNetwork = writable<Network>(networks[0]); // Base is default
 export { wrongNetwork } from './authStore';
 
 export const vaultsQuery = createNetworkQueryStore(currentNetwork, (network) =>
-	createVaultsQuery(network ?? null)
+	createSftsQuery(network ?? null)
 );
 
 export const oracleQuotesQuery = createNetworkQueryStore(currentNetwork, (network) =>

@@ -80,7 +80,6 @@ export function createOrderbookQuotesQuery(
 				if (!network) {
 					return { summary: {}, quotes: [] };
 				}
-				console.log('[orderbookQuotesQuery] Fetching all orders...');
 				const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
 				const summary = buildSummaryFromQuotes(quotes, network.id);
 				return { summary, quotes };
@@ -144,7 +143,6 @@ export async function refreshTokenQuotes(
 			tokenAddress
 		]);
 		if (cached) {
-			console.log('[refreshTokenQuotes] Cache still fresh, skipping fetch');
 			return cached;
 		}
 	}
@@ -153,12 +151,6 @@ export async function refreshTokenQuotes(
 	// Only fetch the primary (wrapped) address on regular polls
 	const primaryAddress = token?.address ?? tokenAddress;
 	const uniqueAddresses = [primaryAddress.toLowerCase()];
-
-	console.log(
-		'[refreshTokenQuotes] Fetching fresh quotes for token:',
-		tokenAddress,
-		uniqueAddresses
-	);
 
 	const quotes: ProcessedQuote[] = [];
 	const seenOrderHash = new Set<string>();
@@ -195,8 +187,6 @@ export async function refreshTokenQuotes(
 			summary: mergedSummary,
 			quotes: mergedQuotes
 		});
-
-		console.log('[refreshTokenQuotes] Merged into global cache');
 	}
 
 	return { summary, quotes };
@@ -214,7 +204,6 @@ export async function refreshLegacyTokenQuotes(
 	if (!token?.legacyAddress) return;
 
 	const legacyAddr = token.legacyAddress.toLowerCase();
-	console.log('[refreshLegacyTokenQuotes] Fetching legacy quotes once:', legacyAddr);
 
 	const batch = await fetchAndQuoteTokenOrders(networkId, legacyAddr);
 	if (batch.length === 0) return;
@@ -255,7 +244,6 @@ export async function refreshLegacyTokenQuotes(
 			summary: mergedSummary,
 			quotes: mergedQuotes
 		});
-		console.log('[refreshLegacyTokenQuotes] Merged legacy quotes into caches');
 	}
 }
 
@@ -310,13 +298,11 @@ export function createTokenOrderbookQuotesQuery(
 export function invalidateOrderQueries(networkId?: number, tokenAddress?: string) {
 	if (tokenAddress && networkId) {
 		// Token-specific: fetch fresh data for this token and merge
-		console.log('[OrderbookQueries] Refreshing token-specific orders:', tokenAddress);
 		refreshTokenQuotes(networkId, tokenAddress).catch((err) =>
 			console.error('[OrderbookQueries] Token refresh failed:', err)
 		);
 	} else {
 		// Full invalidation: refetch entire global cache
-		console.log('[OrderbookQueries] Invalidating all order queries...');
 		queryClient.invalidateQueries({ queryKey: ['orderbookQuotes'] });
 	}
 	// Always invalidate closed orders query
@@ -330,11 +316,9 @@ export function invalidateOrderQueries(networkId?: number, tokenAddress?: string
 export async function prefetchGlobalOrders(networkId: number) {
 	const existing = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
 	if (existing?.quotes?.length) {
-		console.log('[prefetchGlobalOrders] Global cache already populated, skipping');
 		return;
 	}
 
-	console.log('[prefetchGlobalOrders] Prefetching global orders cache...');
 	await queryClient.prefetchQuery({
 		queryKey: ['orderbookQuotes', networkId],
 		queryFn: async () => {

@@ -72,10 +72,6 @@ export function createSingleSftQuery(
 	});
 }
 
-// Legacy alias for backward compatibility
-export const createVaultsQuery = createSftsQuery;
-export const createSingleVaultQuery = createSingleSftQuery;
-
 // =============================================================================
 // User Deposit Vault Queries (RaindexVault - user's token holdings in orderbook)
 // =============================================================================
@@ -161,12 +157,10 @@ export function invalidateUserVaultQueries(
 	tokenAddress?: string
 ) {
 	if (tokenAddress) {
-		console.log('[UserVaultQueries] Token-specific invalidation for:', tokenAddress);
 		// For token-specific, we still need to refetch since vaults are paginated
 		// and we can't easily merge. Just invalidate the whole cache.
 		queryClient.invalidateQueries({ queryKey: ['userVaults', networkId, signerAddress] });
 	} else {
-		console.log('[UserVaultQueries] Resetting all user vault queries...');
 		queryClient.resetQueries({ queryKey: ['userVaults'] });
 	}
 }
@@ -182,7 +176,6 @@ export async function prefetchUserVaults(networkId: number, signerAddress: strin
 	]);
 
 	if (existing?.pages?.length) {
-		console.log('[prefetchUserVaults] Cache already populated, skipping');
 		return;
 	}
 
@@ -191,7 +184,6 @@ export async function prefetchUserVaults(networkId: number, signerAddress: strin
 	const network = networks.find((n) => n.id === networkId);
 	if (!network) return;
 
-	console.log('[prefetchUserVaults] Prefetching user vaults...');
 	await queryClient.prefetchInfiniteQuery({
 		queryKey: ['userVaults', networkId, signerAddress],
 		initialPageParam: 0,
@@ -200,12 +192,6 @@ export async function prefetchUserVaults(networkId: number, signerAddress: strin
 		},
 		staleTime: Infinity
 	});
-}
-
-// Legacy function - redirects to new name
-export function invalidateVaultQueries() {
-	console.log('[VaultQueries] Resetting vault queries (legacy call)...');
-	queryClient.resetQueries({ queryKey: ['userVaults'] });
 }
 
 // =============================================================================

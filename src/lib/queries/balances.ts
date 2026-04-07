@@ -8,8 +8,6 @@ import { queryClient } from '$lib/clients/queryClient';
  * - Vault withdrawals
  */
 export function invalidateDashboardBalances() {
-	console.log('[balances] Invalidating dashboard balance queries...');
-
 	// Invalidate all balance-related queries
 	queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
 	queryClient.invalidateQueries({ queryKey: ['usdcWalletBalance'] });

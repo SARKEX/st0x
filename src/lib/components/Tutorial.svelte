@@ -45,13 +45,6 @@
 			buttonText: 'Next',
 			isModal: true
 		},
-		'boost-rewards': {
-			title: 'Boost Rewards',
-			description:
-				'Earn monthly rewards for investing in real companies. Click this button to learn more.',
-			targetSelector: '[data-tutorial="boost-rewards"]',
-			buttonText: 'Next'
-		},
 		'token-list': {
 			title: 'Tradeable Equities',
 			description: 'Currently tradeable equities. More coming soon.',

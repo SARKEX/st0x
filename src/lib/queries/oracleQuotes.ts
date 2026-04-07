@@ -11,7 +11,7 @@ export interface OracleQuote {
 	publishTime: number | null;
 }
 
-function tokensWithPriceFeed(network: Network | null) {
+export function tokensWithPriceFeed(network: Network | null) {
 	if (!network) return [];
 	const all = [...TOKENS, ...CRYPTO_TOKENS];
 	return all.filter((token) => token.chainId === network.chainId && token.priceFeedId);

@@ -63,7 +63,7 @@
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
 	import {
-		createSingleVaultQuery,
+		createSingleSftQuery,
 		createUserVaultsQuery,
 		prefetchUserVaults
 	} from '$lib/queries/vaults';
@@ -80,7 +80,7 @@
 	const queryClient = useQueryClient();
 
 	// Use single token query - checks global cache first, falls back to single fetch
-	$: singleTokenQuery = createSingleVaultQuery(tokenId, $currentNetwork, queryClient);
+	$: singleTokenQuery = createSingleSftQuery(tokenId, $currentNetwork, queryClient);
 	$: currentToken = $singleTokenQuery.data;
 	const tokensLookup = createTokenLookup(TOKENS);
 	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery(

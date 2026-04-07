@@ -5,70 +5,7 @@
 // Early close days are hand-rolled since no maintained library covers them
 
 import { isHoliday } from 'nyse-holidays';
-
-// US Eastern timezone offset from UTC
-// EST = UTC-5, EDT = UTC-4
-function getEasternOffset(date: Date): number {
-	// DST starts 2nd Sunday in March, ends 1st Sunday in November
-	const year = date.getUTCFullYear();
-
-	// Find 2nd Sunday in March
-	const march1 = new Date(Date.UTC(year, 2, 1)); // March 1
-	const marchFirstSunday = (7 - march1.getUTCDay()) % 7;
-	const dstStart = new Date(Date.UTC(year, 2, marchFirstSunday + 8, 7, 0, 0)); // 2nd Sunday at 2AM EST = 7AM UTC
-
-	// Find 1st Sunday in November
-	const nov1 = new Date(Date.UTC(year, 10, 1)); // November 1
-	const novFirstSunday = (7 - nov1.getUTCDay()) % 7 || 7;
-	const dstEnd = new Date(Date.UTC(year, 10, novFirstSunday, 6, 0, 0)); // 1st Sunday at 2AM EDT = 6AM UTC
-
-	// If between DST start and end, use EDT (-4), otherwise EST (-5)
-	if (date >= dstStart && date < dstEnd) {
-		return -4;
-	}
-	return -5;
-}
-
-// Convert UTC timestamp to Eastern time components
-function toEasternTime(timestamp: number): {
-	year: number;
-	month: number; // 0-indexed
-	day: number;
-	hour: number;
-	minute: number;
-	dayOfWeek: number; // 0 = Sunday
-	date: Date; // The original Date object for use with nyse-holidays
-} {
-	const date = new Date(timestamp * 1000);
-	const offset = getEasternOffset(date);
-	const easternDate = new Date(date.getTime() + offset * 60 * 60 * 1000);
-
-	return {
-		year: easternDate.getUTCFullYear(),
-		month: easternDate.getUTCMonth(),
-		day: easternDate.getUTCDate(),
-		hour: easternDate.getUTCHours(),
-		minute: easternDate.getUTCMinutes(),
-		dayOfWeek: easternDate.getUTCDay(),
-		date: easternDate
-	};
-}
-
-// Get Unix timestamp for a specific Eastern time
-function fromEasternTime(
-	year: number,
-	month: number,
-	day: number,
-	hour: number,
-	minute: number
-): number {
-	// Create a date in UTC that represents the Eastern time
-	const utcDate = new Date(Date.UTC(year, month, day, hour, minute, 0));
-	const offset = getEasternOffset(utcDate);
-	// Subtract the offset to convert from Eastern to UTC
-	const timestamp = Math.floor(utcDate.getTime() / 1000) - offset * 60 * 60;
-	return timestamp;
-}
+import { toEasternTime, fromEasternTime } from '$lib/utils/easternTime';
 
 // Check if a day is an early close day (1 PM instead of 4 PM)
 // Early close days per NYSE: https://www.nyse.com/markets/hours-calendars
@@ -108,7 +45,7 @@ function getMarketCloseHour(year: number, month: number, day: number, dayOfWeek:
 
 // Check if timestamp falls within US market hours
 function isWithinMarketHours(timestamp: number): boolean {
-	const et = toEasternTime(timestamp);
+	const et = toEasternTime(new Date(timestamp * 1000));
 
 	// Weekend check
 	if (et.dayOfWeek === 0 || et.dayOfWeek === 6) return false;
@@ -141,7 +78,7 @@ function isTradingDay(year: number, month: number, day: number, dayOfWeek: numbe
 
 // Find the last trading day's market close timestamp
 function getLastMarketClose(timestamp: number): number {
-	const et = toEasternTime(timestamp);
+	const et = toEasternTime(new Date(timestamp * 1000));
 	let { year, month, day, dayOfWeek } = et;
 	const currentMinutes = et.hour * 60 + et.minute;
 

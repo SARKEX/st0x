@@ -3,7 +3,6 @@ import { hideTutorial as persistHideTutorial } from '$lib/utils/tutorialStorage'
 
 export type TutorialStep =
 	| 'welcome'
-	| 'boost-rewards'
 	| 'token-list'
 	| 'navigate-trade'
 	| 'buy-sell-panel'
@@ -14,7 +13,6 @@ export type TutorialStep =
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
 	'welcome',
-	'boost-rewards',
 	'token-list',
 	'navigate-trade',
 	'buy-sell-panel',

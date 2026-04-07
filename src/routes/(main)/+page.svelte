@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { currentNetwork, sfts, vaultsQuery, oracleQuotes } from '$lib/stores';
+	import { currentNetwork, sfts, vaultsQuery } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
-	import { getAllTokensByNetwork } from '$lib/config/network';
+	import { getAllTokensByNetwork, getTokenByAnyAddress } from '$lib/config/network';
+	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
+	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -64,6 +66,10 @@
 
 	// Filter tokens by current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+
+	// Price feeds query — same source the sidebar uses for symbol-based price lookup
+	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 
 	// APY slot machine animation
 	let displayedApy = 0;
@@ -182,11 +188,15 @@
 	$: {
 		if ($sfts && $sfts.length) {
 			const rows: TokenRow[] = [];
+			const priceQuotes = $priceFeedsQuery?.data ?? [];
 			for (const sft of $sfts) {
-				const lookupAddress = sft.address.toLowerCase();
-				// Get oracle price for this token
-				const oracleData = $oracleQuotes[lookupAddress];
-				const price = oracleData?.price ?? null;
+				// Resolve token info (handles wrapped/unwrapped/legacy address variants),
+				// then use symbol-based lookup against the priceFeeds query — same pattern
+				// the sidebar uses so home/sidebar stay consistent.
+				const tokenInfo = getTokenByAnyAddress(sft.address);
+				const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;
+				const quote = findQuoteForSymbol(symbolForPrice, priceQuotes, ALL_TOKENS);
+				const price = quote?.close ?? null;
 
 				rows.push({
 					id: sft.id,

@@ -47,7 +47,7 @@
 </script>
 
 {#if $isAuthenticated && $walletAddress}
-	<div class="relative" data-tutorial="boost-rewards">
+	<div class="relative">
 		<!-- Boost Rewards Button with Rainbow Wave Animation -->
 		<button
 			on:click={openModal}
@@ -161,7 +161,7 @@
 	</div>
 {:else}
 	<!-- Button for non-connected users -->
-	<div class="relative" data-tutorial="boost-rewards">
+	<div class="relative">
 		<button
 			on:click={openModal}
 			on:mouseenter={() => (showTooltip = true)}
