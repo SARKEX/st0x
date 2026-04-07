@@ -1,5 +1,3 @@
-import { createQuery } from '@tanstack/svelte-query';
-import type { Network } from '$lib/config/network';
 import {
 	fetchAndQuotePaymentTokenOrders,
 	fetchAndQuoteTokenOrders,
@@ -31,8 +29,6 @@ export type OrderbookQuoteCache = {
 	quotes: ProcessedQuote[];
 };
 
-export type OrderbookQuoteState = OrderbookQuoteCache & { updatedAt?: number };
-
 /**
  * Build summary map from quotes array.
  * Shared helper to avoid duplication.
@@ -52,69 +48,6 @@ function buildSummaryFromQuotes(
 		summary[address.toLowerCase()] = value;
 	}
 	return summary;
-}
-
-/**
- * Creates the global orderbook quotes query.
- * This is the single source of truth for all orders.
- *
- * @param network - Current network
- * @param pollInterval - Polling interval in ms, or false to disable (default: false).
- *                       Dashboard: 60_000 (60s). Trade pages: false (uses token-specific query).
- */
-export function createOrderbookQuotesQuery(
-	network: Network | null,
-	pollInterval: number | false = false
-) {
-	return createQuery<OrderbookQuoteCache>({
-		queryKey: ['orderbookQuotes', network?.id],
-		enabled: Boolean(network),
-		staleTime: 60_000, // Stale after 60s
-		retry: 2,
-		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-		refetchInterval: pollInterval,
-		refetchOnWindowFocus: pollInterval ? true : false, // Only refetch on focus if stale
-		refetchIntervalInBackground: false,
-		queryFn: async () => {
-			try {
-				if (!network) {
-					return { summary: {}, quotes: [] };
-				}
-				console.log('[orderbookQuotesQuery] Fetching all orders...');
-				const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
-				const summary = buildSummaryFromQuotes(quotes, network.id);
-				return { summary, quotes };
-			} catch (error) {
-				console.error('[orderbookQuotesQuery] Failed:', error);
-				throw error;
-			}
-		}
-	});
-}
-
-/**
- * Get quotes for a specific token from the global cache.
- * Matches both wrapped and legacy addresses so tokens like tSTOX/wtSTOX show bid/ask.
- * Returns undefined if cache is empty.
- */
-export function getQuotesForToken(
-	networkId: number,
-	tokenAddress: string
-): OrderbookQuoteCache | undefined {
-	const globalCache = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
-	if (!globalCache?.quotes?.length) return undefined;
-
-	const addressSet = getTokenAddressSet(tokenAddress);
-	const filteredQuotes = globalCache.quotes.filter(
-		(q) =>
-			addressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
-			addressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
-	);
-
-	if (filteredQuotes.length === 0) return undefined;
-
-	const summary = buildSummaryFromQuotes(filteredQuotes, networkId);
-	return { summary, quotes: filteredQuotes };
 }
 
 /** Minimum age (ms) of cached data before we re-fetch. Prevents redundant fetches. */
@@ -175,7 +108,7 @@ export async function refreshTokenQuotes(
 	}
 	const summary = buildSummaryFromQuotes(quotes, networkId);
 
-	// Merge into global cache
+	// Merge into global cache (if it exists, for QuickTrade backward compat)
 	const globalCache = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
 	const addressSet = getTokenAddressSet(tokenAddress);
 	if (globalCache) {
@@ -260,64 +193,26 @@ export async function refreshLegacyTokenQuotes(
 }
 
 /**
- * Creates a query that reads from global cache and triggers background refresh for a token.
- * Shows stale data immediately while fetching fresh data.
- *
- * @param network - Current network
- * @param tokenAddress - Token address to fetch quotes for
- * @param pollInterval - Polling interval in ms (default: 60000 for trade pages)
- */
-export function createTokenOrderbookQuotesQuery(
-	network: Network | null,
-	tokenAddress: string | null,
-	pollInterval: number | false = 60_000
-) {
-	return createQuery<OrderbookQuoteCache>({
-		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
-		enabled: Boolean(network && tokenAddress),
-		staleTime: 60_000, // Stale after 60s
-		retry: 2,
-		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-		refetchOnMount: 'always', // Always refresh when component mounts
-		refetchInterval: pollInterval, // Poll every 60s by default on trade pages
-		refetchOnWindowFocus: true, // Only refetch on focus if stale
-		refetchIntervalInBackground: false,
-		// Use global cache as initial data for instant display
-		initialData: () => {
-			if (!network || !tokenAddress) return undefined;
-			return getQuotesForToken(network.id, tokenAddress);
-		},
-		initialDataUpdatedAt: () => {
-			if (!network) return undefined;
-			return queryClient.getQueryState(['orderbookQuotes', network.id])?.dataUpdatedAt;
-		},
-		queryFn: async () => {
-			if (!network || !tokenAddress) {
-				return { summary: {}, quotes: [] };
-			}
-			// Fetch fresh and merge into global cache
-			return refreshTokenQuotes(network.id, tokenAddress);
-		}
-	});
-}
-
-/**
  * Invalidate order queries.
  * @param networkId - Network ID
  * @param tokenAddress - Optional token address. If provided, only refreshes that token's data.
- *                       If omitted, invalidates the entire global cache.
+ *                       If omitted, invalidates all order caches.
  */
 export function invalidateOrderQueries(networkId?: number, tokenAddress?: string) {
 	if (tokenAddress && networkId) {
-		// Token-specific: fetch fresh data for this token and merge
+		// Token-specific: refresh old pipeline for QuickTrade + invalidate API cache
 		console.log('[OrderbookQueries] Refreshing token-specific orders:', tokenAddress);
 		refreshTokenQuotes(networkId, tokenAddress).catch((err) =>
 			console.error('[OrderbookQueries] Token refresh failed:', err)
 		);
+		queryClient.invalidateQueries({
+			queryKey: ['tokenApiQuotes', networkId, tokenAddress.toLowerCase()]
+		});
 	} else {
-		// Full invalidation: refetch entire global cache
+		// Full invalidation: both old Raindex cache and new API cache
 		console.log('[OrderbookQueries] Invalidating all order queries...');
 		queryClient.invalidateQueries({ queryKey: ['orderbookQuotes'] });
+		queryClient.invalidateQueries({ queryKey: ['tokenApiQuotes'] });
 	}
 	// Always invalidate closed orders query
 	queryClient.invalidateQueries({ queryKey: ['closedOrders'] });
@@ -326,6 +221,7 @@ export function invalidateOrderQueries(networkId?: number, tokenAddress?: string
 /**
  * Prefetch global orders cache in the background.
  * Call this after priority data loads to ensure global cache is populated.
+ * Used by QuickTrade for market order execution.
  */
 export async function prefetchGlobalOrders(networkId: number) {
 	const existing = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);

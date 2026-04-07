@@ -7,7 +7,8 @@
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
-	import { createTokenOrderbookQuotesQuery, prefetchGlobalOrders, refreshTokenQuotes } from '$lib/queries/orderbook';
+	import { prefetchGlobalOrders, refreshTokenQuotes } from '$lib/queries/orderbook';
+	import { createTokenApiQuotesQuery } from '$lib/queries/tokenOrders';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
@@ -98,10 +99,8 @@
 	// ============ DATA LOADING ============
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
 
-	// TanStack Query for quotes — polls every 30s, retries on failure, preserves stale data
-	$: orderbookQuery = createTokenOrderbookQuotesQuery(
-		$currentNetwork, selectedTokenAddress, 30_000
-	);
+	// TanStack Query for quotes — polls every 60s via st0x API
+	$: orderbookQuery = createTokenApiQuotesQuery($currentNetwork, selectedTokenAddress);
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
 	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
 	$: quoteFetchError = $orderbookQuery.isError;
@@ -191,7 +190,7 @@
 					price > 0
 				);
 			})
-			.sort((a, b) => (a.quotePerAsset ?? Infinity) - (b.quotePerAsset ?? Infinity));
+			.sort((a: ProcessedQuote, b: ProcessedQuote) => (a.quotePerAsset ?? Infinity) - (b.quotePerAsset ?? Infinity));
 	})();
 
 	$: bidQuotes = (() => {
@@ -213,7 +212,7 @@
 					price > 0
 				);
 			})
-			.sort((a, b) => (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0));
+			.sort((a: ProcessedQuote, b: ProcessedQuote) => (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0));
 	})();
 
 	$: relevantQuotes = isBuying ? askQuotes : bidQuotes;

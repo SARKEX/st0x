@@ -23,7 +23,12 @@
 	import { formatUnits, erc20Abi } from 'viem';
 	import { readContracts, getBalance } from '@wagmi/core';
 	import { getAllTokensByNetwork } from '$lib/config/network';
-	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK, getTokenByAnyAddress } from '$lib/config/tokens';
+	import {
+		TOKENS,
+		PAYMENT_TOKENS_BY_NETWORK,
+		getTokenByAnyAddress,
+		getTokensByNetwork
+	} from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -31,7 +36,9 @@
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { parseFloatHex, getRaindexVaultUrl } from '$lib/utils/tokenMath';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { fetchTokenProcessedQuotes } from '$lib/api/st0xOrders';
+	import type { ProcessedQuote, TokenPriceSummary } from '$lib/utils/orderbook';
+	import { createQueries } from '@tanstack/svelte-query';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
@@ -922,8 +929,38 @@
 			.filter((token) => !hideDust || token.balanceNum >= DUST_THRESHOLD);
 	})();
 
-	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 60_000);
+	// Orders: Per-token API queries (replaces global Raindex poll)
+	const mergedOrderbookStore = createQueries({
+		queries: derived(currentNetwork, ($net) => {
+			if (!$net) return [];
+			return getTokensByNetwork($net.id).map((t) => ({
+				queryKey: ['tokenApiQuotes', $net.id, t.address.toLowerCase(), 1, 50] as const,
+				enabled: true,
+				staleTime: 60_000,
+				refetchInterval: 60_000,
+				queryFn: () => fetchTokenProcessedQuotes(t.address, 1, 50)
+			}));
+		}),
+		combine: (results) => {
+			const allQuotes: ProcessedQuote[] = [];
+			const mergedSummary: Record<string, TokenPriceSummary> = {};
+			let isLoading = false;
+			let isError = false;
+			let errorMessage = '';
+			for (const q of results) {
+				if (q.isLoading) isLoading = true;
+				if (q.isError) {
+					isError = true;
+					errorMessage = q.error?.message ?? '';
+				}
+				if (q.data) {
+					allQuotes.push(...q.data.quotes);
+					Object.assign(mergedSummary, q.data.summary);
+				}
+			}
+			return { quotes: allQuotes, summary: mergedSummary, isLoading, isError, errorMessage };
+		}
+	});
 
 	// Trade activity for market orders - poll every 10 minutes, refetch on mount
 	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 600_000);
@@ -950,9 +987,9 @@
 		const displayOrders: DisplayOrder[] = [];
 
 		// Add limit orders from quotes (only user's orders)
-		if ($orderbookQuotesQuery.data?.quotes && $walletAddress) {
+		if ($mergedOrderbookStore.quotes.length > 0 && $walletAddress) {
 			const myAddress = $walletAddress.toLowerCase();
-			const myQuotes = $orderbookQuotesQuery.data.quotes.filter(
+			const myQuotes = $mergedOrderbookStore.quotes.filter(
 				(q) => q.sgOrder?.owner?.toLowerCase() === myAddress
 			);
 
@@ -1719,9 +1756,9 @@
 					<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Your Orders</h2>
 					<OrdersTable
 						orders={allOrders}
-						isLoading={$orderbookQuotesQuery.isLoading || $tradeActivityQuery.isLoading}
-						isError={$orderbookQuotesQuery.isError}
-						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+						isLoading={$mergedOrderbookStore.isLoading || $tradeActivityQuery.isLoading}
+						isError={$mergedOrderbookStore.isError}
+						errorMessage={$mergedOrderbookStore.errorMessage}
 						showOwnerFilter={false}
 					/>
 				</Section>

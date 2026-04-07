@@ -1,7 +1,13 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
+	import {
+		getAllTokensByNetwork,
+		getTokensByNetwork,
+		networks,
+		TOKENS,
+		CRYPTO_TOKENS
+	} from '$lib/config/network';
 	import type { CategorizedToken, Network } from '$lib/config/network';
 	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
@@ -22,7 +28,9 @@
 	import type { SgTrade } from '@rainlanguage/orderbook';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { createQueries } from '@tanstack/svelte-query';
+	import { fetchTokenProcessedQuotes } from '$lib/api/st0xOrders';
+	import type { ProcessedQuote, TokenPriceSummary } from '$lib/utils/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { trackPageView } from '$lib/services/analytics';
@@ -56,7 +64,31 @@
 
 	const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
 	const tradeActivityQueries = networks.map((network) => createTradeActivityQuery(network));
-	const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
+
+	// Per-network, per-token API queries (replaces global Raindex poll)
+	const orderbookQueries = networks.map((network) => {
+		const tokens = getTokensByNetwork(network.chainId);
+		return createQueries({
+			queries: tokens.map((t) => ({
+				queryKey: ['tokenApiQuotes', network.id, t.address.toLowerCase(), 1, 50] as const,
+				enabled: true,
+				staleTime: 60_000,
+				refetchInterval: 60_000,
+				queryFn: () => fetchTokenProcessedQuotes(t.address, 1, 50)
+			})),
+			combine: (results) => {
+				const allQuotes: ProcessedQuote[] = [];
+				const mergedSummary: Record<string, TokenPriceSummary> = {};
+				for (const q of results) {
+					if (q.data) {
+						allQuotes.push(...q.data.quotes);
+						Object.assign(mergedSummary, q.data.summary);
+					}
+				}
+				return { data: { quotes: allQuotes, summary: mergedSummary } };
+			}
+		});
+	});
 
 	const allPriceFeedQueries = derived(priceFeedQueries, (queries) => queries);
 	const allTradeQueries = derived(tradeActivityQueries, (queries) => queries);
