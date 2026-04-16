@@ -49,6 +49,9 @@ export interface CategorizedToken extends PythToken {
 	legacyAddress?: string; // Old token for migration (optional)
 	legacySymbol?: string; // Old symbol if different (e.g., tSPLG -> wtSPYM)
 	previousSymbols?: string[]; // Historical symbol names for blob storage lookups
+	// Temporary hardcoded price fallback for tokens whose Pyth feed is unavailable.
+	// Used by the snapshot pipeline when priceFeedId is empty. Remove once a real feed is wired up.
+	fallbackPrice?: number;
 }
 
 export const TOKENS: CategorizedToken[] = [
@@ -154,7 +157,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
 		logoUrl: '/images/SPLG.png',
 		priceFeedId: '',
-		// priceFeedId removed — Pyth no longer supports this feed ID
+		// priceFeedId removed — Pyth no longer supports this feed ID.
+		// Using a hardcoded fallback until a replacement feed is wired up.
+		fallbackPrice: 82.5,
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:SPLG',
 		tradingViewMarket: 'america',

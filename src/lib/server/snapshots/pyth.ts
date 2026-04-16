@@ -107,6 +107,17 @@ export async function fetchPythPricesAtTimestamp(
 				address: tokenAddress.toLowerCase(),
 				symbol: token.symbol
 			});
+		} else if (token && typeof token.fallbackPrice === 'number') {
+			// Token has no Pyth feed but a hardcoded fallback price is configured.
+			results.set(tokenAddress.toLowerCase(), {
+				tokenAddress: tokenAddress.toLowerCase(),
+				tokenSymbol: token.symbol,
+				priceFeedId: '',
+				price: token.fallbackPrice,
+				confidence: 0,
+				expo: null,
+				publishTime: adjustedTimestamp
+			});
 		}
 	}
 
