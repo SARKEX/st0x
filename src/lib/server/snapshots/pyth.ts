@@ -10,6 +10,7 @@
 import { getTokenByAnyAddress } from '$lib/config/tokens';
 import { getPriceTimestamp } from './marketHours';
 import { HERMES_BASE_URL } from '$lib/config/constants';
+import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
 
 interface PythPriceData {
 	price: string;
@@ -66,6 +67,81 @@ function normalizeConfidence(priceData: PythPriceData | null): number | null {
 export interface PythPriceResult {
 	prices: Map<string, TokenPrice>;
 	priceTimestamp: number; // The actual timestamp used for the price query (may differ from requested if outside market hours)
+}
+
+/**
+ * Fetch with retry + exponential backoff. Retries transient network and
+ * 5xx / 429 responses; throws immediately on 4xx (other than 429) because
+ * those are permanent (bad feed id, bad timestamp, etc.).
+ */
+async function fetchWithRetry(
+	url: string,
+	maxAttempts = 3
+): Promise<Response> {
+	let lastError: Error | null = null;
+	let lastStatus: number | undefined;
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		try {
+			const response = await fetch(url);
+
+			if (response.ok) return response;
+
+			lastStatus = response.status;
+
+			// 4xx errors (except 429) are permanent — don't retry.
+			if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+				const err = new Error(
+					`Hermes API permanent error: ${response.status} ${response.statusText}`
+				);
+				logQueryFailure({
+					kind: 'pyth_hermes_failed',
+					endpoint: 'hermes',
+					attempt,
+					maxAttempts,
+					status: response.status,
+					permanent: true,
+					error: err.message
+				});
+				throw err;
+			}
+
+			// 5xx or 429: treat as transient.
+			lastError = new Error(
+				`Hermes API transient error: ${response.status} ${response.statusText}`
+			);
+		} catch (error) {
+			lastError = error instanceof Error ? error : new Error(String(error));
+			// Don't retry permanent errors thrown above.
+			if (lastError.message.startsWith('Hermes API permanent error')) {
+				throw lastError;
+			}
+		}
+
+		if (attempt < maxAttempts) {
+			logQueryFailure({
+				kind: 'pyth_hermes_retry',
+				endpoint: 'hermes',
+				attempt,
+				maxAttempts,
+				status: lastStatus,
+				error: errorMessage(lastError)
+			});
+			// Exponential backoff with jitter: ~500ms, ~1.1s, ~2.2s
+			const base = 500 * 2 ** (attempt - 1);
+			const jitter = Math.random() * 200;
+			await new Promise((resolve) => setTimeout(resolve, base + jitter));
+		}
+	}
+	logQueryFailure({
+		kind: 'pyth_hermes_failed',
+		endpoint: 'hermes',
+		attempt: maxAttempts,
+		maxAttempts,
+		status: lastStatus,
+		permanent: false,
+		error: errorMessage(lastError)
+	});
+	throw lastError ?? new Error('Hermes API fetch failed after retries');
 }
 
 /**
@@ -157,62 +233,48 @@ export async function fetchPythPricesAtTimestamp(
 		`[Pyth] Fetching prices at timestamp ${adjustedTimestamp} for ${feedIds.length} feeds`
 	);
 
-	try {
-		const response = await fetch(url);
+	// Retries transient errors; throws on persistent failure so callers
+	// (e.g. snapshot generation) fail-fast instead of poisoning the DB with
+	// silent zero/null price snapshots.
+	const response = await fetchWithRetry(url);
+	const data: PythHistoricalResponse = await response.json();
 
-		if (!response.ok) {
-			console.error(`[Pyth] Hermes API error: ${response.status} ${response.statusText}`);
-			// Return empty prices for all tokens
-			for (const [, feedInfo] of tokenFeedMap) {
-				setResultsForFeed(feedInfo, null, null, null, null);
-			}
-			return { prices: results, priceTimestamp: adjustedTimestamp };
-		}
+	// Process parsed entries — fan out to all addresses sharing each feed ID
+	for (const entry of data.parsed || []) {
+		const normalizedId = normalizeFeedId(entry.id);
+		const feedInfo = tokenFeedMap.get(normalizedId);
 
-		const data: PythHistoricalResponse = await response.json();
-
-		// Process parsed entries — fan out to all addresses sharing each feed ID
-		for (const entry of data.parsed || []) {
-			const normalizedId = normalizeFeedId(entry.id);
-			const feedInfo = tokenFeedMap.get(normalizedId);
-
-			if (feedInfo) {
-				setResultsForFeed(
-					feedInfo,
-					normalizePrice(entry.price),
-					normalizeConfidence(entry.price),
-					entry.price?.expo ?? null,
-					entry.price?.publish_time ?? null
-				);
-			}
-		}
-
-		// Fill in missing tokens with null prices
-		for (const [, feedInfo] of tokenFeedMap) {
-			for (const addr of feedInfo.addresses) {
-				if (!results.has(addr.address)) {
-					results.set(addr.address, {
-						tokenAddress: addr.address,
-						tokenSymbol: addr.symbol,
-						priceFeedId: feedInfo.feedId,
-						price: null,
-						confidence: null,
-						expo: null,
-						publishTime: null
-					});
-				}
-			}
-		}
-
-		const successCount = Array.from(results.values()).filter((r) => r.price !== null).length;
-		console.log(`[Pyth] Successfully fetched ${successCount}/${results.size} prices`);
-	} catch (error) {
-		console.error('[Pyth] Error fetching prices:', error);
-		// Return empty prices for all tokens
-		for (const [, feedInfo] of tokenFeedMap) {
-			setResultsForFeed(feedInfo, null, null, null, null);
+		if (feedInfo) {
+			setResultsForFeed(
+				feedInfo,
+				normalizePrice(entry.price),
+				normalizeConfidence(entry.price),
+				entry.price?.expo ?? null,
+				entry.price?.publish_time ?? null
+			);
 		}
 	}
+
+	// Fill in missing tokens with null prices (feed not returned for this timestamp,
+	// e.g. outside market hours for a given stock)
+	for (const [, feedInfo] of tokenFeedMap) {
+		for (const addr of feedInfo.addresses) {
+			if (!results.has(addr.address)) {
+				results.set(addr.address, {
+					tokenAddress: addr.address,
+					tokenSymbol: addr.symbol,
+					priceFeedId: feedInfo.feedId,
+					price: null,
+					confidence: null,
+					expo: null,
+					publishTime: null
+				});
+			}
+		}
+	}
+
+	const successCount = Array.from(results.values()).filter((r) => r.price !== null).length;
+	console.log(`[Pyth] Successfully fetched ${successCount}/${results.size} prices`);
 
 	return { prices: results, priceTimestamp: adjustedTimestamp };
 }

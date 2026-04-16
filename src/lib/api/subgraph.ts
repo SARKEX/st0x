@@ -2,6 +2,7 @@ import type { SgTrade } from '@rainlanguage/orderbook';
 import { TOKENS } from '$lib/config/network';
 import type { Network } from '$lib/config/network';
 import type { OffchainAssetReceiptVault, MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
+import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
 
 /**
  * Fetch a single token by ID from the subgraph
@@ -294,6 +295,8 @@ export const getTrades = async (
   trades(
     skip: $skip
     first: $first
+    orderBy: timestamp
+    orderDirection: desc
     where: {
       and: [
         { timestamp_gt: $timestampGt },
@@ -592,46 +595,121 @@ ${TRADE_FIELDS}
 	}
 };
 
+// A GraphQL error typically indicates a permanent problem with the query (bad
+// fields, unknown arguments, etc.) so retrying won't help. Network/HTTP errors
+// are more often transient (rate limits, connection blips) and are worth retrying.
+class GraphQLError extends Error {}
+
+function fetchPageWithRetry(
+	endpoint: string,
+	body: string,
+	maxAttempts: number,
+	itemsKey?: string
+): Promise<unknown> {
+	const attempt = async (n: number): Promise<unknown> => {
+		try {
+			const response = await fetch(endpoint, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
+			}
+
+			const data = await response.json();
+			if (data.errors) {
+				throw new GraphQLError(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+			}
+			return data.data;
+		} catch (error) {
+			// Permanent errors: don't retry
+			if (error instanceof GraphQLError) {
+				logQueryFailure({
+					kind: 'subgraph_page_failed',
+					endpoint,
+					itemsKey,
+					attempt: n,
+					maxAttempts,
+					permanent: true,
+					error: errorMessage(error)
+				});
+				throw error;
+			}
+			// Out of retry budget
+			if (n >= maxAttempts) {
+				logQueryFailure({
+					kind: 'subgraph_page_failed',
+					endpoint,
+					itemsKey,
+					attempt: n,
+					maxAttempts,
+					permanent: false,
+					error: errorMessage(error)
+				});
+				throw error;
+			}
+			logQueryFailure({
+				kind: 'subgraph_page_retry',
+				endpoint,
+				itemsKey,
+				attempt: n,
+				maxAttempts,
+				error: errorMessage(error)
+			});
+			// Exponential backoff with jitter: ~400ms, ~900ms, ~1800ms, ...
+			const base = 400 * 2 ** (n - 1);
+			const jitter = Math.random() * 200;
+			await new Promise((resolve) => setTimeout(resolve, base + jitter));
+			return attempt(n + 1);
+		}
+	};
+	return attempt(1);
+}
+
 export async function fetchAllPaginatedData(
 	endpoint: string,
 	query: string,
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	variables: any,
 	itemsKey: string,
-	first = 1000
+	first = 1000,
+	options: { maxAttempts?: number } = {}
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
+	const maxAttempts = options.maxAttempts ?? 3;
 	const allItems = [];
 	let skip = 0;
 	let hasMore = true;
 	while (hasMore) {
 		// Prepare variables with updated pagination parameters
 		const paginatedVariables = { ...variables, skip, first };
-		// Fetch a batch of items
-		const response = await fetch(endpoint, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				query,
-				variables: paginatedVariables
-			})
-		});
+		const body = JSON.stringify({ query, variables: paginatedVariables });
 
-		if (!response.ok) {
-			throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
+		let items: unknown[];
+		try {
+			const data = (await fetchPageWithRetry(endpoint, body, maxAttempts, itemsKey)) as Record<
+				string,
+				unknown[]
+			>;
+			items = data[itemsKey] || [];
+		} catch (error) {
+			// Pagination page failed even after retries (upstream rate limit, outage, etc.).
+			// Returning what we have is strictly better than discarding thousands of
+			// already-fetched items — callers can still render partial results and
+			// a background refetch will pick up the tail on the next poll.
+			logQueryFailure({
+				kind: 'subgraph_pagination_interrupted',
+				endpoint,
+				itemsKey,
+				skip,
+				itemsSoFar: allItems.length,
+				error: errorMessage(error)
+			});
+			return allItems;
 		}
 
-		const data = await response.json();
-
-		// Check for GraphQL errors
-		if (data.errors) {
-			throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-		}
-
-		// Extract the items from the response
-		const items = data.data[itemsKey] || [];
 		allItems.push(...items); // Append items to the result array
 		// Check if fewer items are returned than the `first` limit
 		if (items.length < first) {

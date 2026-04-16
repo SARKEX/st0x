@@ -13,18 +13,15 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
-		analyzeTrade,
 		createTokenLookup,
 		normalizeAddress,
-		type TradeAnalysis,
 		type TokenLookup
 	} from '$lib/utils/tokenMath';
-	import type { SgTrade } from '@rainlanguage/orderbook';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import type { PublicTradeActivityResponse } from '../../api/public/trade-activity/+server';
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	import { walletAddress } from '$lib/stores/authStore';
@@ -36,11 +33,6 @@
 			tokenTvl: Record<string, number>;
 		} | null;
 	}
-
-	type AnalyzedTrade = {
-		trade: SgTrade;
-		analysis: TradeAnalysis;
-	};
 
 	type NetworkStat = {
 		network: (typeof networks)[number];
@@ -55,11 +47,9 @@
 	let selectedNetwork = networks[0];
 
 	const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
-	const tradeActivityQueries = networks.map((network) => createTradeActivityQuery(network));
 	const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
 
 	const allPriceFeedQueries = derived(priceFeedQueries, (queries) => queries);
-	const allTradeQueries = derived(tradeActivityQueries, (queries) => queries);
 	const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
 
 	let cleanupScrollTracking: (() => void) | null = null;
@@ -72,6 +62,7 @@
 
 		void loadVaults();
 		void loadAdminTvl();
+		void loadTradeActivity();
 	});
 
 	onDestroy(() => {
@@ -83,11 +74,6 @@
 	$: priceFeedStates = networks.map((network, index) => ({
 		network,
 		query: $allPriceFeedQueries[index]
-	}));
-
-	$: tradeStates = networks.map((network, index) => ({
-		network,
-		query: $allTradeQueries[index]
 	}));
 
 	$: orderbookStates = networks.map((network, index) => ({
@@ -104,16 +90,35 @@
 		return map;
 	})();
 
-	$: allNetworksTrades = tradeStates.map(({ network, query }) => ({
-		network,
-		trades: query?.data?.trades ?? [],
-		range: query?.data?.range,
-		status: query?.status ?? 'pending'
-	}));
-
 	let vaultsByNetwork = new Map<number, RaindexVault[]>();
 	let vaultsLoading = true;
 	let vaultsError: string | null = null;
+
+	// Trade activity served pre-aggregated by /api/public/trade-activity
+	// Replaces the old per-network tradeActivity queries that loaded ~4-6k raw trades
+	// into the browser on cold loads (and frequently failed due to Goldsky rate limits).
+	let tradeActivity: PublicTradeActivityResponse | null = null;
+	let tradeActivityLoading = true;
+	let tradeActivityError: string | null = null;
+
+	async function loadTradeActivity() {
+		tradeActivityLoading = true;
+		tradeActivityError = null;
+		try {
+			const response = await fetch('/api/public/trade-activity');
+			if (!response.ok) {
+				throw new Error(`Failed to fetch trade activity (${response.status})`);
+			}
+			tradeActivity = (await response.json()) as PublicTradeActivityResponse;
+		} catch (error) {
+			console.error('Failed to load trade activity:', error);
+			tradeActivityError =
+				error instanceof Error ? error.message : 'Failed to load trade activity';
+			tradeActivity = null;
+		} finally {
+			tradeActivityLoading = false;
+		}
+	}
 
 	// TVL from public API (aggregate totals)
 	let adminTvl: number | null = null;
@@ -150,43 +155,75 @@
 	async function loadVaults() {
 		vaultsLoading = true;
 		vaultsError = null;
+
+		let client: Awaited<ReturnType<typeof createRaindexClient>>;
 		try {
-			const client = await createRaindexClient();
-			const map = new Map<number, RaindexVault[]>();
-			const filters: GetVaultsFilters = { owners: [], hideZeroBalance: true };
-
-			await Promise.all(
-				networks.map(async (network) => {
-					const collected: RaindexVault[] = [];
-					let page = 1;
-					const MAX_PAGES = 50;
-					while (page <= MAX_PAGES) {
-						const result = await client.getVaults([network.id], filters, page);
-						if (result.error) {
-							throw new Error(result.error.readableMsg);
-						}
-						const items = result.value?.items ?? [];
-						if (!items.length) {
-							break;
-						}
-						collected.push(...items);
-						if (items.length < 1000) {
-							break;
-						}
-						page += 1;
-					}
-					map.set(network.chainId, collected);
-				})
-			);
-
-			vaultsByNetwork = map;
+			client = await createRaindexClient();
 		} catch (error) {
-			console.error('Failed to load vaults', error);
+			console.error('Failed to create Raindex client', error);
 			vaultsByNetwork = new Map();
 			vaultsError = error instanceof Error ? error.message : 'Failed to load vault data';
-		} finally {
 			vaultsLoading = false;
+			return;
 		}
+
+		const filters: GetVaultsFilters = { owners: [], hideZeroBalance: true };
+		const MAX_PAGES = 50;
+		const MAX_ATTEMPTS = 3;
+
+		const fetchPageWithRetry = async (networkId: number, page: number) => {
+			let lastError: Error | null = null;
+			for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+				try {
+					const result = await client.getVaults([networkId], filters, page);
+					if (result.error) {
+						throw new Error(result.error.readableMsg);
+					}
+					return result.value?.items ?? [];
+				} catch (error) {
+					lastError = error instanceof Error ? error : new Error(String(error));
+					if (attempt < MAX_ATTEMPTS) {
+						// Exponential backoff with jitter: ~400ms, ~900ms, ~1800ms
+						const base = 400 * 2 ** (attempt - 1);
+						const jitter = Math.random() * 200;
+						await new Promise((resolve) => setTimeout(resolve, base + jitter));
+					}
+				}
+			}
+			throw lastError ?? new Error('Failed to fetch vaults');
+		};
+
+		// Serialize per-network vault loading and collect partial results.
+		// Prior implementation ran all networks in parallel AND threw away every
+		// network's data if any single network failed — so a rate-limited subgraph
+		// would wipe the entire dex liquidity display.
+		const map = new Map<number, RaindexVault[]>();
+		const networkErrors: string[] = [];
+
+		for (const network of networks) {
+			try {
+				const collected: RaindexVault[] = [];
+				let page = 1;
+				while (page <= MAX_PAGES) {
+					const items = await fetchPageWithRetry(network.id, page);
+					if (!items.length) break;
+					collected.push(...items);
+					if (items.length < 1000) break;
+					page += 1;
+				}
+				map.set(network.chainId, collected);
+			} catch (error) {
+				console.error(`Failed to load vaults for ${network.name}`, error);
+				networkErrors.push(
+					`${network.displayName}: ${error instanceof Error ? error.message : 'unknown error'}`
+				);
+				// Leave this network out of the map — other networks still render.
+			}
+		}
+
+		vaultsByNetwork = map;
+		vaultsError = networkErrors.length ? networkErrors.join('; ') : null;
+		vaultsLoading = false;
 	}
 
 	// Token metadata helpers
@@ -212,32 +249,10 @@
 			.filter(Boolean) as string[]
 	);
 
-	// Analyze trades once per network for reuse
-	$: analyzedTradesByNetwork = (() => {
-		const map = new Map<number, AnalyzedTrade[]>();
-		allNetworksTrades.forEach(({ network, trades }) => {
-			const analyzed: AnalyzedTrade[] = [];
-			trades.forEach((trade) => {
-				const analysis = analyzeTrade(
-					trade as unknown as {
-						inputVaultBalanceChange?: {
-							vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
-							amount?: string;
-						};
-						outputVaultBalanceChange?: {
-							vault?: { token?: { address?: string; decimals?: number; symbol?: string } };
-							amount?: string;
-						};
-					},
-					network.defaultPaymentToken,
-					tokenLookup
-				);
-				if (analysis) {
-					analyzed.push({ trade, analysis });
-				}
-			});
-			map.set(network.chainId, analyzed);
-		});
+	// Map per-network server response by chainId for quick lookup
+	$: tradeActivityByChain = (() => {
+		const map = new Map<number, PublicTradeActivityResponse['networks'][number]>();
+		tradeActivity?.networks.forEach((n) => map.set(n.chainId, n));
 		return map;
 	})();
 
@@ -261,13 +276,13 @@
 			});
 		});
 
-		analyzedTradesByNetwork.forEach((entries, chainId) => {
+		// Add tokens that had trades (per-network) from the server aggregate
+		tradeActivityByChain.forEach((entry, chainId) => {
 			const set = map.get(chainId);
 			if (!set) return;
-			entries.forEach(({ analysis }) => {
-				const addr = normalizeAddress(analysis.assetAddress);
-				if (addr && canonicalTokens.has(addr)) {
-					set.add(addr);
+			entry.tokens.forEach((row) => {
+				if (row.trades > 0 && canonicalTokens.has(row.address)) {
+					set.add(row.address);
 				}
 			});
 		});
@@ -299,38 +314,8 @@
 		return Number.isFinite(balance) ? balance : 0;
 	}
 
-	$: tradingVolume = (() => {
-		let volume = 0;
-		analyzedTradesByNetwork.forEach((entries, chainId) => {
-			const activeSet = activeTokensByNetwork.get(chainId);
-			const seenTx = new Set<string>();
-			entries.forEach(({ trade, analysis }) => {
-				const address = normalizeAddress(analysis.assetAddress);
-				if (activeSet && activeSet.size > 0 && address && !activeSet.has(address)) return;
-				const txId = trade.tradeEvent?.transaction?.id ?? trade.id;
-				if (txId) {
-					if (seenTx.has(txId)) return;
-					seenTx.add(txId);
-				}
-				volume += analysis.quote;
-			});
-		});
-		return volume;
-	})();
-
-	$: totalTrades = (() => {
-		const seenTx = new Set<string>();
-		analyzedTradesByNetwork.forEach((entries, chainId) => {
-			const activeSet = activeTokensByNetwork.get(chainId);
-			entries.forEach(({ trade, analysis }) => {
-				const address = normalizeAddress(analysis.assetAddress);
-				if (activeSet && activeSet.size > 0 && address && !activeSet.has(address)) return;
-				const txId = trade.tradeEvent?.transaction?.id ?? trade.id;
-				if (txId) seenTx.add(txId);
-			});
-		});
-		return seenTx.size;
-	})();
+	$: tradingVolume = tradeActivity?.totals.tradingVolume ?? 0;
+	$: totalTrades = tradeActivity?.totals.totalTrades ?? 0;
 
 	// Build a set of tStock addresses for identification
 	$: tStockAddresses = new Set<string>(
@@ -513,20 +498,7 @@
 			}
 		});
 
-		const trades = analyzedTradesByNetwork.get(network.chainId) ?? [];
-		let tradingVolume = 0;
-		const seenTx = new Set<string>();
-		const activeSet = activeTokensByNetwork.get(network.chainId);
-		trades.forEach(({ trade, analysis }) => {
-			const address = normalizeAddress(analysis.assetAddress);
-			if (activeSet && activeSet.size > 0 && address && !activeSet.has(address)) return;
-			const txId = trade.tradeEvent?.transaction?.id ?? trade.id;
-			if (txId) {
-				if (seenTx.has(txId)) return;
-				seenTx.add(txId);
-			}
-			tradingVolume += analysis.quote;
-		});
+		const tradingVolume = tradeActivityByChain.get(network.chainId)?.tradingVolume ?? 0;
 
 		const orderHashes = new Set<string>();
 		orderbookStates
@@ -557,73 +529,17 @@
 	});
 
 	$: tokenTradingData = (() => {
-		const entries = analyzedTradesByNetwork.get(selectedNetwork.chainId) ?? [];
-		const aggregated = new Map<
-			string,
-			{
-				symbol?: string;
-				name?: string;
-				logoUrl?: string;
-				inVolume: number;
-				outVolume: number;
-				totalVolume: number;
-				quoteVolume: number;
-				transactions: Set<string>;
-			}
-		>();
-
-		// Initialize all canonical tokens for the selected network
-		[...TOKENS, ...CRYPTO_TOKENS]
-			.filter((token) => token.chainId === selectedNetwork.chainId)
-			.forEach((token) => {
-				const address = normalizeAddress(token.address);
-				if (address) {
-					aggregated.set(address, {
-						symbol: token.symbol,
-						name: token.name,
-						logoUrl: token.logoUrl,
-						inVolume: 0,
-						outVolume: 0,
-						totalVolume: 0,
-						quoteVolume: 0,
-						transactions: new Set<string>()
-					});
-				}
-			});
-
-		// Populate with trade data
-		entries.forEach(({ trade, analysis }) => {
-			const address = normalizeAddress(analysis.assetAddress);
-			if (!address || !aggregated.has(address)) return;
-			const record = aggregated.get(address);
-			if (!record) return;
-
-			if (analysis.side === 'bid') {
-				record.inVolume += analysis.tokens;
-			} else if (analysis.side === 'ask') {
-				record.outVolume += analysis.tokens;
-			}
-			record.totalVolume += analysis.tokens;
-
-			const txId = trade.tradeEvent?.transaction?.id ?? trade.id;
-			if (txId && !record.transactions.has(txId)) {
-				record.transactions.add(txId);
-				record.quoteVolume += analysis.quote;
-			}
-		});
-
-		return Array.from(aggregated.values())
-			.map((record) => ({
-				symbol: record.symbol,
-				name: record.name,
-				logoUrl: record.logoUrl,
-				inVolume: record.inVolume,
-				outVolume: record.outVolume,
-				totalVolume: record.totalVolume,
-				quoteValue: formatQuoteDisplay(record.quoteVolume),
-				trades: record.transactions.size
-			}))
-			.sort((a, b) => b.trades - a.trades);
+		const rows = tradeActivityByChain.get(selectedNetwork.chainId)?.tokens ?? [];
+		return rows.map((row) => ({
+			symbol: row.symbol,
+			name: row.name,
+			logoUrl: row.logoUrl,
+			inVolume: row.inVolume,
+			outVolume: row.outVolume,
+			totalVolume: row.totalVolume,
+			quoteValue: formatQuoteDisplay(row.quoteVolume),
+			trades: row.trades
+		}));
 	})();
 
 	function formatQuote(value: number) {
@@ -653,12 +569,7 @@
 		return `${formatted} ${symbol}`;
 	}
 
-	$: tradeLoading = tradeStates.some(({ query }) => {
-		const count = query?.data?.trades?.length ?? 0;
-		return !query || ((query.isPending || query.isFetching) && count === 0);
-	});
-
-	$: metricsLoading = vaultsLoading || tradeLoading || adminTvlLoading;
+	$: metricsLoading = vaultsLoading || tradeActivityLoading || adminTvlLoading;
 </script>
 
 <div class="relative z-10 min-h-screen text-white">
@@ -682,6 +593,14 @@
 
 			{#if adminTvlError}
 				<InfoBlock variant="warning" title="TVL data incomplete" description={adminTvlError} />
+			{/if}
+
+			{#if tradeActivityError}
+				<InfoBlock
+					variant="warning"
+					title="Trade activity incomplete"
+					description={tradeActivityError}
+				/>
 			{/if}
 
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">

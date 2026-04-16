@@ -182,7 +182,9 @@ export const CACHE_KEYS = {
 	// Admin TVL cache (keyed by limit param)
 	tvl: (limit: number) => `tvl:cache:${limit}`,
 	// Public TVL cache (aggregate only, no wallet data)
-	publicTvl: () => 'cache:public:tvl'
+	publicTvl: () => 'cache:public:tvl',
+	// Public trade activity cache (aggregate 30-day metrics)
+	publicTradeActivity: () => 'cache:public:trade-activity'
 } as const;
 
 // TTL constants (in seconds)
