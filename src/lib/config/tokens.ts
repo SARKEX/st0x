@@ -153,7 +153,8 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
 		logoUrl: '/images/SPLG.png',
-		priceFeedId: '0x4dfbf28d72ab41a878afcd4c6d5e9593dca7cf65a0da739cbad9b7414004f82d',
+		priceFeedId: '',
+		// priceFeedId removed — Pyth no longer supports this feed ID
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:SPLG',
 		tradingViewMarket: 'america',
