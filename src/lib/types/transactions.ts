@@ -52,4 +52,10 @@ export interface TakeOrdersParams {
 	// When IOIsInput=true (Buy+amount): input token decimals (takerWantsToken)
 	// When IOIsInput=false (Buy+spend, Sell): output token decimals (takerPaysToken)
 	orderFillDecimals?: number;
+
+	/**
+	 * Total payer-token allowance (wei) needed for **all** legs of a batched market take.
+	 * When set, multi-leg flows can approve once instead of per `getTakeCalldata` leg.
+	 */
+	requiredPayerAllowance?: bigint;
 }

@@ -11,7 +11,8 @@ import {
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import {
 	sendTransaction as walletServiceSendTransaction,
-	waitForTransaction as walletServiceWaitForTransaction
+	waitForTransaction as walletServiceWaitForTransaction,
+	APPROVAL_TX_CONFIRMATIONS
 } from '$lib/services/walletService';
 import { withRetry } from '$lib/utils/retry';
 
@@ -354,7 +355,7 @@ const transactionStore = () => {
 						data: approval.calldata as Hex
 					});
 					awaitApprovalTx(hash);
-					await waitForTransaction(hash);
+					await waitForTransaction(hash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 				} catch (error) {
 					if (isStaleWalletSessionError(error)) {
 						const msg = await handleStaleWalletSession(config);
@@ -1097,6 +1098,48 @@ const transactionStore = () => {
 	};
 
 	/**
+	 * One `approve(spender, totalWei)` for multi-leg takes. Per-leg SDK calldata only approves that
+	 * leg’s spend, so the first tx can consume the allowance and the second leg would ask to approve again.
+	 */
+	const ensureBulkPayerAllowanceIfNeeded = async (args: {
+		requiredWei: bigint;
+		payerToken: `0x${string}`;
+		symbol: string;
+		owner: `0x${string}`;
+		probeApprovalCalldata: Hex;
+	}) => {
+		const { requiredWei, payerToken, symbol, owner, probeApprovalCalldata } = args;
+		if (requiredWei <= 0n) return;
+
+		const decoded = decodeFunctionData({ abi: erc20Abi, data: probeApprovalCalldata });
+		if (decoded.functionName !== 'approve') return;
+		const spender = decoded.args[0] as `0x${string}`;
+
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+
+		const allowance = await readContract(config, {
+			address: payerToken,
+			abi: erc20Abi,
+			functionName: 'allowance',
+			args: [owner, spender],
+		});
+		if (allowance >= requiredWei) return;
+
+		awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${symbol}...`);
+		const approvalHash = await sendTransaction({
+			to: payerToken,
+			data: encodeFunctionData({
+				abi: erc20Abi,
+				functionName: 'approve',
+				args: [spender, requiredWei],
+			}),
+		});
+		awaitApprovalTx(approvalHash);
+		await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+	};
+
+	/**
 	 * Shared post-transaction logic for take orders: poll subgraph for trades,
 	 * build a MarketOrderSummary, and return a transactionSuccess result.
 	 */
@@ -1186,13 +1229,17 @@ const transactionStore = () => {
 		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
 		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
 
-		let fillPercentage = 0;
 		let isNoFill = false;
-		if (inputRequestedDecimal > 0) {
-			fillPercentage = inputFilledDecimal / inputRequestedDecimal;
-		} else {
+		if (inputRequestedDecimal <= 0) {
 			isNoFill = true;
 		}
+
+		// Partial fill: bigint ratio only. Below ~99.7% of requested ⇒ partial (execution haircut is 0; allow subgraph noise).
+		const MARKET_ORDER_FULL_FILL_THRESHOLD_BPS = 9970n;
+		const isPartialFill =
+			requestedInputAmount > 0n &&
+			totalInputAmount > 0n &&
+			totalInputAmount * 10_000n < requestedInputAmount * MARKET_ORDER_FULL_FILL_THRESHOLD_BPS;
 
 		const summary: MarketOrderSummary = {
 			inputAmount: totalInputAmount,
@@ -1206,7 +1253,7 @@ const transactionStore = () => {
 			requestedInputAmount,
 			ioRatio: actualIoRatio,
 			actualSlippage: 0n,
-			isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
+			isPartialFill,
 			isNoFill
 		};
 
@@ -1267,7 +1314,7 @@ const transactionStore = () => {
 				data: maybeApprovalInfo.calldata as Hex
 			});
 			awaitApprovalTx(approvalHash);
-			await waitForTransaction(approvalHash);
+			await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 			calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
 			if (calldataWrapped.error || !calldataWrapped.value) {
 				transactionError(
@@ -1378,10 +1425,38 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing order...`);
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleOracleOrders]';
+		const multiLegUseTotalAllowance =
+			oracleInputs.length > 1 &&
+			(params.requiredPayerAllowance ?? 0n) > 0n &&
+			params.takerPaysToken.address;
+
 		console.log(`${TX_LOG_PREFIX} starting`, {
 			oracleInputCount: oracleInputs.length,
 			mode
 		});
+
+		if (multiLegUseTotalAllowance && params.requiredPayerAllowance) {
+			const o0 = oracleInputs[0];
+			const probe = await o0.raindexOrder.getTakeCalldata(
+				o0.inputIndex,
+				o0.outputIndex,
+				o0.taker,
+				mode,
+				o0.amountStr,
+				o0.priceCapStr
+			);
+			const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
+				?.approvalInfo?.calldata;
+			if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
+				await ensureBulkPayerAllowanceIfNeeded({
+					requiredWei: params.requiredPayerAllowance,
+					payerToken: params.takerPaysToken.address as `0x${string}`,
+					symbol: approvalTokenSymbol,
+					owner: $signerAddress as `0x${string}`,
+					probeApprovalCalldata: probePayload as Hex,
+				});
+			}
+		}
 
 		for (let i = 0; i < oracleInputs.length; i++) {
 			const oracleInput = oracleInputs[i];
@@ -1400,23 +1475,55 @@ const transactionStore = () => {
 			const maybeApprovalInfo = (calldataResult.value as { approvalInfo?: { token: string; calldata: string } })
 				?.approvalInfo;
 			if ((calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval && maybeApprovalInfo) {
-				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
-				const approvalHash = await sendTransaction({
-					to: maybeApprovalInfo.token as `0x${string}`,
-					data: maybeApprovalInfo.calldata as Hex
-				});
-				awaitApprovalTx(approvalHash);
-				await waitForTransaction(approvalHash);
+				if (multiLegUseTotalAllowance) {
+					// Allowance already set for total spend; refresh calldata only.
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						oracleInput.amountStr,
+						oracleInput.priceCapStr
+					);
+					if (
+						(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
+						maybeApprovalInfo
+					) {
+						awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+						const approvalHash = await sendTransaction({
+							to: maybeApprovalInfo.token as `0x${string}`,
+							data: maybeApprovalInfo.calldata as Hex
+						});
+						awaitApprovalTx(approvalHash);
+						await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+						calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+							oracleInput.inputIndex,
+							oracleInput.outputIndex,
+							oracleInput.taker,
+							mode,
+							oracleInput.amountStr,
+							oracleInput.priceCapStr
+						);
+					}
+				} else {
+					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+					const approvalHash = await sendTransaction({
+						to: maybeApprovalInfo.token as `0x${string}`,
+						data: maybeApprovalInfo.calldata as Hex
+					});
+					awaitApprovalTx(approvalHash);
+					await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 
-				// Rebuild calldata after approval, as SDK expects fresh quote/context.
-				calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
-					oracleInput.inputIndex,
-					oracleInput.outputIndex,
-					oracleInput.taker,
-					mode,
-					oracleInput.amountStr,
-					oracleInput.priceCapStr
-				);
+					// Rebuild calldata after approval, as SDK expects fresh quote/context.
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						oracleInput.amountStr,
+						oracleInput.priceCapStr
+					);
+				}
 			}
 
 			// Oracle quote/signature readiness can be transient; retry briefly before failing.
@@ -1524,7 +1631,7 @@ const transactionStore = () => {
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV5,
 		raindexOrder: SgOrder,
-		_requiredApprovalAmount: bigint,
+		requiredApprovalAmount: bigint,
 		params: TakeOrdersParams,
 		recalculateConfig?: () => Promise<TakeOrdersConfigV5 | null>,
 		raindexOrders?: RaindexOrder[]
@@ -1614,11 +1721,46 @@ const transactionStore = () => {
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleTakeOrders]';
 
+		const multiLegUseTotalAllowance =
+			ordersToExecute.length > 1 &&
+			requiredApprovalAmount > 0n &&
+			params.takerPaysToken.address;
+
 		console.log(`${TX_LOG_PREFIX} Starting SDK per-order execution`, {
 			totalOrders: ordersToExecute.length,
 			mode,
 			isDynamicWallet
 		});
+
+		if (multiLegUseTotalAllowance) {
+			const order0 = ordersToExecute[0];
+			const cfg0 = finalConfig.orders[0];
+			if (cfg0) {
+				const fill0 = params.orderFillAmounts?.[0] ?? 0n;
+				const amountStr0 = String(
+					Float.fromFixedDecimalLossy(fill0, fillDecimals).float.format().value ?? '0'
+				);
+				const probe = await order0.getTakeCalldata(
+					Number(cfg0.inputIOIndex),
+					Number(cfg0.outputIOIndex),
+					$signerAddress,
+					mode,
+					amountStr0,
+					priceCapStr
+				);
+				const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
+					?.approvalInfo?.calldata;
+				if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
+					await ensureBulkPayerAllowanceIfNeeded({
+						requiredWei: requiredApprovalAmount,
+						payerToken: approvalTokenAddress as `0x${string}`,
+						symbol: approvalTokenSymbol,
+						owner: $signerAddress as `0x${string}`,
+						probeApprovalCalldata: probePayload as Hex,
+					});
+				}
+			}
+		}
 
 		for (let orderIndex = 0; orderIndex < ordersToExecute.length; orderIndex++) {
 			const orderToExecute = ordersToExecute[orderIndex];
@@ -1657,24 +1799,58 @@ const transactionStore = () => {
 					(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
 					maybeApprovalInfo
 				) {
-					awaitWalletConfirmation(
-						`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
-						progressData
-					);
-					const approvalHash = await sendTransaction({
-						to: maybeApprovalInfo.token as `0x${string}`,
-						data: maybeApprovalInfo.calldata as Hex
-					});
-					awaitApprovalTx(approvalHash);
-					await waitForTransaction(approvalHash);
-					readyCalldataResult = await orderToExecute.getTakeCalldata(
-						Number(orderConfig.inputIOIndex),
-						Number(orderConfig.outputIOIndex),
-						$signerAddress,
-						mode,
-						amountStr,
-						priceCapStr
-					);
+					if (multiLegUseTotalAllowance) {
+						readyCalldataResult = await orderToExecute.getTakeCalldata(
+							Number(orderConfig.inputIOIndex),
+							Number(orderConfig.outputIOIndex),
+							$signerAddress,
+							mode,
+							amountStr,
+							priceCapStr
+						);
+						if (
+							(readyCalldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
+							maybeApprovalInfo
+						) {
+							awaitWalletConfirmation(
+								`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
+								progressData
+							);
+							const approvalHash = await sendTransaction({
+								to: maybeApprovalInfo.token as `0x${string}`,
+								data: maybeApprovalInfo.calldata as Hex
+							});
+							awaitApprovalTx(approvalHash);
+							await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+							readyCalldataResult = await orderToExecute.getTakeCalldata(
+								Number(orderConfig.inputIOIndex),
+								Number(orderConfig.outputIOIndex),
+								$signerAddress,
+								mode,
+								amountStr,
+								priceCapStr
+							);
+						}
+					} else {
+						awaitWalletConfirmation(
+							`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
+							progressData
+						);
+						const approvalHash = await sendTransaction({
+							to: maybeApprovalInfo.token as `0x${string}`,
+							data: maybeApprovalInfo.calldata as Hex
+						});
+						awaitApprovalTx(approvalHash);
+						await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+						readyCalldataResult = await orderToExecute.getTakeCalldata(
+							Number(orderConfig.inputIOIndex),
+							Number(orderConfig.outputIOIndex),
+							$signerAddress,
+							mode,
+							amountStr,
+							priceCapStr
+						);
+					}
 				}
 				if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
 					return transactionError(

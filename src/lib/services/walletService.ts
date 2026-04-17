@@ -118,17 +118,28 @@ export async function sendTransaction(params: {
 	}
 }
 
+/** Extra confirmations after approvals so eth_call / simulation sees updated allowance on all RPCs. */
+export const APPROVAL_TX_CONFIRMATIONS = 2;
+
 /**
  * Wait for a transaction receipt
+ * @param confirmations — block confirmations after inclusion (default 1). Use {@link APPROVAL_TX_CONFIRMATIONS} after ERC20 approvals.
  */
-export async function waitForTransaction(hash: Hash): Promise<void> {
+export async function waitForTransaction(
+	hash: Hash,
+	options?: { confirmations?: number }
+): Promise<void> {
 	const config = get(wagmiConfig);
 	if (!config) {
 		throw new Error('Wagmi config not available');
 	}
 
-	// Use wagmi for receipt - works for both Dynamic and wagmi transactions
-	await withRetry(() => wagmiWaitForTransactionReceipt(config, { hash }));
+	await withRetry(() =>
+		wagmiWaitForTransactionReceipt(config, {
+			hash,
+			...(options?.confirmations != null ? { confirmations: options.confirmations } : {})
+		})
+	);
 }
 
 /**
