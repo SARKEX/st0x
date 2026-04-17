@@ -8,7 +8,8 @@ import type {
 	RaindexOrder,
 	RaindexOrderQuote,
 	GetOrdersFilters,
-	OrderV4
+	OrderV4,
+	SignedContextV1
 } from '@rainlanguage/orderbook';
 import {
 	networks,
@@ -154,6 +155,10 @@ function processOrdersWithQuotes(
 						return;
 					}
 
+					const quoteSignedContext = (
+						quote as RaindexOrderQuote & { signedContext?: SignedContextV1[] }
+					).signedContext;
+
 					const processedQuote: ProcessedQuote = {
 						orderHash: sgOrder.orderHash,
 						maxOutput,
@@ -168,6 +173,7 @@ function processOrdersWithQuotes(
 						outputVaultId: outputDefinition.vaultId?.toString?.() ?? outputDefinition.vaultId,
 						orderData,
 						sgOrder,
+						raindexOrder: order,
 						orderbookId: sgOrder.orderbook.id,
 						inputTokenDecimals:
 							inputDecimals ??
@@ -180,7 +186,8 @@ function processOrdersWithQuotes(
 								? quoteToken.decimals ?? 18
 								: 18),
 						rainlang,
-						orderType
+						orderType,
+						...(quoteSignedContext?.length ? { signedContext: quoteSignedContext } : {})
 					};
 
 					const metrics = describeQuote(processedQuote, quoteToken.address);
@@ -266,7 +273,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 				throw new Error(ordersResult.error.readableMsg);
 			}
 
-			const pageOrders = ordersResult.value;
+			const pageOrders = ordersResult.value.orders;
 			allOrders.push(...pageOrders);
 
 			// If we got fewer orders than the page size, we've reached the end
@@ -356,7 +363,7 @@ export async function fetchAndQuoteTokenOrders(
 		throw new Error(ordersResult.error.readableMsg);
 	}
 
-	const allOrders = ordersResult.value;
+	const allOrders = ordersResult.value.orders;
 
 	// Get quotes using batching with jitter and retries
 	const quotesMap = await fetchQuotesWithBatching(allOrders);

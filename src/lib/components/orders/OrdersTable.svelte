@@ -83,7 +83,7 @@
 					console.error('[closedOrdersQuery] Error:', result.error);
 					return [];
 				}
-				return result.value ?? [];
+				return result.value?.orders ?? [];
 			}
 		});
 	}

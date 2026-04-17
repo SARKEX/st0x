@@ -25,12 +25,12 @@ const sendTransaction = walletServiceSendTransaction;
 // Unified wait for transaction (works with both Dynamic and wagmi wallets, includes retry logic)
 const waitForTransaction = walletServiceWaitForTransaction;
 import {
-	getTakeOrders3Calldata,
 	type SgOrder,
 	type TakeOrdersConfigV5,
 	type DeploymentTransactionArgs,
 	type RaindexVault,
-	type RaindexOrder
+	type RaindexOrder,
+	type TakeOrdersMode
 } from '@rainlanguage/orderbook';
 import { Float } from '@rainlanguage/float';
 import {
@@ -167,10 +167,6 @@ function createRaindexLink(
 
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 
-// Dynamic embedded wallet signing has a 16KB payload size limit
-// External wallets (MetaMask, etc.) don't have this limitation
-const DYNAMIC_MAX_PAYLOAD_SIZE_BYTES = 16 * 1024;
-
 export enum TransactionStatus {
 	IDLE = 'Idle',
 	CHECKING_ALLOWANCE = 'Checking your approved spend...',
@@ -236,16 +232,6 @@ const initialState = {
 const transactionStore = () => {
 	const { subscribe, set, update } = writable(initialState);
 	const reset = () => set(initialState);
-
-	const normalizeCalldata = (value: string | Uint8Array): `0x${string}` => {
-		if (typeof value === 'string') {
-			return (value.startsWith('0x') ? value : `0x${value}`) as `0x${string}`;
-		}
-		const hex = Array.from(value)
-			.map((byte) => byte.toString(16).padStart(2, '0'))
-			.join('');
-		return `0x${hex}` as `0x${string}`;
-	};
 
 	// Generic state update helper
 	const setState = (
@@ -687,7 +673,7 @@ const transactionStore = () => {
 				throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
 			}
 
-			const orders = [...(ordersResult.value as Iterable<RaindexOrder>)];
+			const orders = ordersResult.value.orders;
 			if (orders.length === 0) {
 				throw new Error('Order not found');
 			}
@@ -921,7 +907,7 @@ const transactionStore = () => {
 					throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
 				}
 
-				const orders = [...(ordersResult.value as Iterable<RaindexOrder>)];
+				const orders = ordersResult.value.orders;
 				if (orders.length === 0) {
 					throw new Error('Order not found');
 				}
@@ -1110,173 +1096,300 @@ const transactionStore = () => {
 	};
 
 	/**
-	 * Split orders into batches that fit within the payload size limit.
-	 * Uses greedy approach to pack as many orders as possible in each batch.
-	 *
-	 * @param config - The full TakeOrdersConfigV5 to split
-	 * @param orderFillAmounts - Optional array of fill amounts parallel to config.orders
-	 *                           Used to calculate per-batch maximumIO
-	 * @param inputDecimals - Decimal places of the input token (required if orderFillAmounts provided)
+	 * Shared post-transaction logic for take orders: poll subgraph for trades,
+	 * build a MarketOrderSummary, and return a transactionSuccess result.
 	 */
-	const splitOrdersIntoBatches = (
-		config: TakeOrdersConfigV5,
-		orderFillAmounts?: bigint[],
-		inputDecimals?: number
-	): { batches: TakeOrdersConfigV5[]; needsSplit: boolean } => {
-		const LOG_PREFIX = '[splitOrdersIntoBatches]';
+	const pollAndFinalizeTakeOrders = async (
+		allTransactionHashes: Hash[],
+		primaryOrder: SgOrder,
+		params: TakeOrdersParams,
+		network: Network
+	) => {
+		const hash = allTransactionHashes[allTransactionHashes.length - 1];
 
-		console.log(`${LOG_PREFIX} Starting batch split analysis`, {
-			totalOrders: config.orders.length,
-			maxPayloadSize: DYNAMIC_MAX_PAYLOAD_SIZE_BYTES,
-			hasOrderFillAmounts: !!orderFillAmounts,
-			inputDecimals
-		});
+		const pollPendingTrades = async () => {
+			const MAX_ATTEMPTS = 60;
+			const totalBatches = allTransactionHashes.length;
 
-		// Try with all orders first
-		const fullResult = getTakeOrders3Calldata(config);
-		if (!fullResult.error && fullResult.value) {
-			const calldata = normalizeCalldata(fullResult.value as string | Uint8Array);
-			const payloadSize = new Blob([calldata]).size;
+			for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+				const now = Math.floor(Date.now() / 1000);
+				const trades = await getTrades(now - 600, now, network);
+				const allTrades = trades.filter((t) =>
+					allTransactionHashes.some(
+						(txHash) => t.tradeEvent?.transaction?.id.toLowerCase() === txHash.toLowerCase()
+					)
+				) as unknown as Array<{
+					tradeEvent?: { transaction?: { id?: string } };
+					order?: { orderHash?: string };
+					inputVaultBalanceChange?: { amount?: Hex; oldVaultBalance?: Hex; newVaultBalance?: Hex };
+					outputVaultBalanceChange?: { amount?: Hex; oldVaultBalance?: Hex; newVaultBalance?: Hex };
+				}>;
 
-			console.log(`${LOG_PREFIX} Full payload analysis`, {
-				totalOrders: config.orders.length,
-				payloadSize,
-				maxAllowed: DYNAMIC_MAX_PAYLOAD_SIZE_BYTES,
-				fitsInSingleTx: payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES
-			});
-
-			if (payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES) {
-				console.log(`${LOG_PREFIX} No split needed - all orders fit in single transaction`);
-				return { batches: [config], needsSplit: false };
-			}
-		}
-
-		console.log(`${LOG_PREFIX} Split required - payload exceeds limit, starting greedy packing`);
-
-		// Need to split - use greedy approach to pack orders
-		const orders = config.orders;
-		const batches: TakeOrdersConfigV5[] = [];
-		const batchPayloadSizes: number[] = [];
-		let currentBatchOrders: typeof orders = [];
-		let currentBatchIndices: number[] = [];
-		let currentBatchPayloadSize = 0;
-
-		for (let i = 0; i < orders.length; i++) {
-			const order = orders[i];
-			// Try adding this order to current batch
-			const testOrders = [...currentBatchOrders, order];
-			const testConfig: TakeOrdersConfigV5 = {
-				...config,
-				orders: testOrders
-			};
-
-			const testResult = getTakeOrders3Calldata(testConfig);
-			if (!testResult.error && testResult.value) {
-				const calldata = normalizeCalldata(testResult.value as string | Uint8Array);
-				const payloadSize = new Blob([calldata]).size;
-
-				if (payloadSize <= DYNAMIC_MAX_PAYLOAD_SIZE_BYTES) {
-					// Order fits, add to current batch
-					currentBatchOrders = testOrders;
-					currentBatchIndices = [...currentBatchIndices, i];
-					currentBatchPayloadSize = payloadSize;
-				} else {
-					// Order doesn't fit, start a new batch
-					if (currentBatchOrders.length > 0) {
-						// Calculate per-batch maximumIO if fill amounts provided
-						let batchMaximumInput = config.maximumIO;
-						let batchFillTotal = 0n;
-						if (orderFillAmounts && inputDecimals !== undefined) {
-							batchFillTotal = currentBatchIndices.reduce(
-								(sum, idx) => sum + (orderFillAmounts[idx] ?? 0n),
-								0n
-							);
-							if (batchFillTotal > 0n) {
-								const batchMaxInputFloat = Float.fromFixedDecimalLossy(
-									batchFillTotal,
-									inputDecimals
-								);
-								batchMaximumInput = batchMaxInputFloat.float.asHex();
-							}
-						}
-
-						console.log(`${LOG_PREFIX} Batch ${batches.length + 1} finalized`, {
-							orderCount: currentBatchOrders.length,
-							orderIndices: currentBatchIndices,
-							payloadSize: currentBatchPayloadSize,
-							batchFillTotal: batchFillTotal.toString(),
-							maximumIO: batchMaximumInput
-						});
-
-						batches.push({
-							...config,
-							orders: currentBatchOrders,
-							maximumIO: batchMaximumInput
-						});
-						batchPayloadSizes.push(currentBatchPayloadSize);
-					}
-					currentBatchOrders = [order];
-					currentBatchIndices = [i];
-					// Recalculate payload size for single order
-					const singleOrderResult = getTakeOrders3Calldata({ ...config, orders: [order] });
-					if (!singleOrderResult.error && singleOrderResult.value) {
-						const singleCalldata = normalizeCalldata(
-							singleOrderResult.value as string | Uint8Array
-						);
-						currentBatchPayloadSize = new Blob([singleCalldata]).size;
-					}
-				}
-			} else {
-				// Failed to generate calldata, skip this order
-				console.error(`${LOG_PREFIX} Failed to generate calldata for order ${i}, skipping`);
-			}
-		}
-
-		// Don't forget the last batch
-		if (currentBatchOrders.length > 0) {
-			// Calculate per-batch maximumIO if fill amounts provided
-			let batchMaximumInput = config.maximumIO;
-			let batchFillTotal = 0n;
-			if (orderFillAmounts && inputDecimals !== undefined) {
-				batchFillTotal = currentBatchIndices.reduce(
-					(sum, idx) => sum + (orderFillAmounts[idx] ?? 0n),
-					0n
+				const validTrades = allTrades.filter(
+					(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
 				);
-				if (batchFillTotal > 0n) {
-					const batchMaxInputFloat = Float.fromFixedDecimalLossy(batchFillTotal, inputDecimals);
-					batchMaximumInput = batchMaxInputFloat.float.asHex();
+
+				if (totalBatches > 1) {
+					const indexedTxHashes = new Set(
+						validTrades.map((t) => t.tradeEvent?.transaction?.id?.toLowerCase())
+					);
+					const allBatchesIndexed = allTransactionHashes.every((txHash) =>
+						indexedTxHashes.has(txHash.toLowerCase())
+					);
+					if (allBatchesIndexed) return validTrades;
+					if (attempt >= 6 && validTrades.length > 0) return validTrades;
+				} else {
+					if (validTrades.length > 0) return validTrades;
 				}
+
+				await new Promise((resolve) => setTimeout(resolve, 5_000));
 			}
+			return [];
+		};
 
-			console.log(`${LOG_PREFIX} Batch ${batches.length + 1} finalized (final)`, {
-				orderCount: currentBatchOrders.length,
-				orderIndices: currentBatchIndices,
-				payloadSize: currentBatchPayloadSize,
-				batchFillTotal: batchFillTotal.toString(),
-				maximumIO: batchMaximumInput
-			});
+		const validTrades = await pollPendingTrades();
 
-			batches.push({
-				...config,
-				orders: currentBatchOrders,
-				maximumIO: batchMaximumInput
-			});
-			batchPayloadSizes.push(currentBatchPayloadSize);
+		if (validTrades.length === 0) {
+			return transactionError(TransactionErrorMessage.GENERIC, hash);
 		}
 
-		// Log summary
-		console.log(`${LOG_PREFIX} Split complete`, {
-			totalBatches: batches.length,
-			needsSplit: batches.length > 1,
-			batchSummary: batches.map((b, i) => ({
-				batch: i + 1,
-				orders: b.orders.length,
-				payloadSize: batchPayloadSizes[i],
-				maximumIO: b.maximumIO
-			}))
+		const inputTokenDecimals = params.takerWantsToken.decimals;
+		const inputTokenSymbol = params.takerWantsToken.symbol;
+		const inputTokenAddress = params.takerWantsToken.address;
+		const outputTokenDecimals = params.takerPaysToken.decimals;
+		const outputTokenSymbol = params.takerPaysToken.symbol;
+		const outputTokenAddress = params.takerPaysToken.address;
+
+		let totalInputAmount = 0n;
+		let totalOutputAmount = 0n;
+		for (const trade of validTrades) {
+			totalInputAmount += parseFloatHex(
+				trade.outputVaultBalanceChange!.amount as Hex,
+				inputTokenDecimals,
+				true
+			);
+			totalOutputAmount += parseFloatHex(
+				trade.inputVaultBalanceChange!.amount as Hex,
+				outputTokenDecimals,
+				true
+			);
+		}
+
+		const actualIoRatio =
+			totalOutputAmount > 0n
+				? parseFloat(formatUnits(totalInputAmount, inputTokenDecimals)) /
+					parseFloat(formatUnits(totalOutputAmount, outputTokenDecimals))
+				: 0;
+
+		const requestedInputAmount = params.requestedTakerWantsAmount;
+		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
+		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
+
+		let fillPercentage = 0;
+		let isNoFill = false;
+		if (inputRequestedDecimal > 0) {
+			fillPercentage = inputFilledDecimal / inputRequestedDecimal;
+		} else {
+			isNoFill = true;
+		}
+
+		const summary: MarketOrderSummary = {
+			inputAmount: totalInputAmount,
+			inputTokenDecimals,
+			inputTokenSymbol,
+			inputTokenAddress,
+			outputAmount: totalOutputAmount,
+			outputTokenDecimals,
+			outputTokenSymbol,
+			outputTokenAddress,
+			requestedInputAmount,
+			ioRatio: actualIoRatio,
+			actualSlippage: 0n,
+			isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
+			isNoFill
+		};
+
+		const raindexLink = createRaindexLink(
+			network.id,
+			primaryOrder.orderbook.id,
+			primaryOrder.orderHash,
+			'View order on Raindex'
+		);
+
+		invalidateDashboardBalances();
+		return transactionSuccess(hash, undefined, { marketOrderSummary: summary, raindexLink });
+	};
+
+	/**
+	 * Executes market orders for oracle-enabled orders using RaindexOrder.getTakeCalldata(),
+	 * which internally calls the oracle server to populate signedContext.
+	 */
+	interface OracleOrderInput {
+		raindexOrder: RaindexOrder;
+		inputIndex: number;
+		outputIndex: number;
+		amountStr: string;
+		priceCapStr: string;
+		taker: string;
+	}
+
+	const handleOracleOrders = async (
+		oracleInputs: OracleOrderInput[],
+		mode: TakeOrdersMode,
+		primaryOrder: SgOrder,
+		approvalTokenSymbol: string,
+		params: TakeOrdersParams
+	) => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const $signerAddress = get(walletAddress);
+		if (!$signerAddress) throw new Error('Signer address not found');
+
+		const network = get(currentNetwork) as Network;
+
+		try {
+			validateOrderbookAddress(primaryOrder.orderbook.id, network);
+		} catch (error) {
+			return transactionError((error as Error).message as TransactionErrorMessage);
+		}
+
+		// Send one transaction per oracle order; getTakeCalldata() calls oracle server internally
+		awaitWalletConfirmation(`Preparing order...`);
+		const allTransactionHashes: Hash[] = [];
+		const TX_LOG_PREFIX = '[handleOracleOrders]';
+		console.log(`${TX_LOG_PREFIX} starting`, {
+			oracleInputCount: oracleInputs.length,
+			mode
 		});
 
-		return { batches, needsSplit: batches.length > 1 };
+		for (let i = 0; i < oracleInputs.length; i++) {
+			const oracleInput = oracleInputs[i];
+			const isLast = i === oracleInputs.length - 1;
+			const batchLabel = oracleInputs.length > 1 ? ` (${i + 1}/${oracleInputs.length})` : '';
+
+			let calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+				oracleInput.inputIndex,
+				oracleInput.outputIndex,
+				oracleInput.taker,
+				mode,
+				oracleInput.amountStr,
+				oracleInput.priceCapStr
+			);
+
+			const maybeApprovalInfo = (calldataResult.value as { approvalInfo?: { token: string; calldata: string } })
+				?.approvalInfo;
+			if ((calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval && maybeApprovalInfo) {
+				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+				const approvalHash = await sendTransaction({
+					to: maybeApprovalInfo.token as `0x${string}`,
+					data: maybeApprovalInfo.calldata as Hex
+				});
+				awaitApprovalTx(approvalHash);
+				await waitForTransaction(approvalHash);
+
+				// Rebuild calldata after approval, as SDK expects fresh quote/context.
+				calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+					oracleInput.inputIndex,
+					oracleInput.outputIndex,
+					oracleInput.taker,
+					mode,
+					oracleInput.amountStr,
+					oracleInput.priceCapStr
+				);
+			}
+
+			// Oracle quote/signature readiness can be transient; retry briefly before failing.
+			if (!calldataResult.error && (!calldataResult.value?.isReady || !calldataResult.value?.takeOrdersInfo)) {
+				for (let retry = 0; retry < 2; retry++) {
+					await new Promise((resolve) => setTimeout(resolve, 1200));
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						oracleInput.amountStr,
+						oracleInput.priceCapStr
+					);
+					if (calldataResult.error || (calldataResult.value?.isReady && calldataResult.value?.takeOrdersInfo)) {
+						break;
+					}
+				}
+			}
+			console.log(`${TX_LOG_PREFIX} getTakeCalldata result`, {
+				index: i,
+				orderHash: oracleInput.raindexOrder.orderHash,
+				inputIndex: oracleInput.inputIndex,
+				outputIndex: oracleInput.outputIndex,
+				amountStr: oracleInput.amountStr,
+				priceCapStr: oracleInput.priceCapStr,
+				isError: Boolean(calldataResult.error),
+				isReady: Boolean(calldataResult.value?.isReady),
+				hasTakeOrdersInfo: Boolean(calldataResult.value?.takeOrdersInfo),
+				error: calldataResult.error?.readableMsg
+			});
+
+			if (calldataResult.error) {
+				console.error(`${TX_LOG_PREFIX} getTakeCalldata error:`, calldataResult.error);
+				return transactionError(
+					`Order failed: ${calldataResult.error.readableMsg}` as TransactionErrorMessage
+				);
+			}
+
+			const result = calldataResult.value;
+			if (!result.isReady || !result.takeOrdersInfo) {
+				console.warn(`${TX_LOG_PREFIX} Order ${i + 1} not ready`, {
+					orderHash: oracleInput.raindexOrder.orderHash,
+					isReady: result.isReady,
+					hasTakeOrdersInfo: Boolean(result.takeOrdersInfo)
+				});
+				return transactionError(
+					`Order not ready for execution yet. Please refresh quotes and retry.` as TransactionErrorMessage
+				);
+			}
+
+			const { calldata, orderbook } = result.takeOrdersInfo;
+
+			try {
+				awaitWalletConfirmation(`Awaiting wallet confirmation to take order${batchLabel}...`);
+				const hash = await sendTransaction({
+					to: orderbook as `0x${string}`,
+					data: calldata as Hex
+				});
+
+				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`);
+				await waitForTransaction(hash);
+				allTransactionHashes.push(hash);
+
+				if (!isLast) {
+					awaitWalletConfirmation(`Transaction ${i + 1} confirmed. Preparing next order...`);
+				} else {
+					awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
+				}
+			} catch (txError) {
+				console.error(`${TX_LOG_PREFIX} Transaction ${i + 1} failed:`, txError);
+				if (isStaleWalletSessionError(txError)) {
+					const msg = await handleStaleWalletSession(config);
+					return transactionError(msg as TransactionErrorMessage);
+				}
+				const errorMessage = extractTransactionError(txError);
+				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+				if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
+					return transactionError(
+						'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
+					);
+				}
+				if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+					return transactionError(errorMessage);
+				}
+				return transactionError(errorMessage);
+			}
+		}
+
+		if (allTransactionHashes.length === 0) {
+			return transactionError('No orders could be executed. Please try again.' as TransactionErrorMessage);
+		}
+
+		return pollAndFinalizeTakeOrders(allTransactionHashes, primaryOrder, params, network);
 	};
 
 	/**
@@ -1290,9 +1403,10 @@ const transactionStore = () => {
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV5,
 		raindexOrder: SgOrder,
-		requiredApprovalAmount: bigint,
+		_requiredApprovalAmount: bigint,
 		params: TakeOrdersParams,
-		recalculateConfig?: () => Promise<TakeOrdersConfigV5 | null>
+		recalculateConfig?: () => Promise<TakeOrdersConfigV5 | null>,
+		raindexOrders?: RaindexOrder[]
 	) => {
 		const config = get(wagmiConfig);
 		if (!config) throw new Error('Wagmi config not found');
@@ -1327,55 +1441,6 @@ const transactionStore = () => {
 		const approvalTokenAddress = params.takerPaysToken.address;
 		const approvalTokenSymbol = params.takerPaysToken.symbol;
 
-		// Check current allowance for the token that needs approval
-		checkingWalletAllowance(`Checking token allowance...`);
-		const currentAllowance = await readContract(config, {
-			abi: erc20Abi,
-			address: approvalTokenAddress as `0x${string}`,
-			functionName: 'allowance',
-			args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
-		});
-
-		if (currentAllowance < requiredApprovalAmount) {
-			// Need to approve more tokens
-			try {
-				awaitWalletConfirmation(
-					`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`
-				);
-
-				const approvalHash = await sendTransaction({
-					to: approvalTokenAddress as `0x${string}`,
-					data: encodeFunctionData({
-						abi: erc20Abi,
-						functionName: 'approve',
-						args: [raindexOrder.orderbook.id as `0x${string}`, requiredApprovalAmount]
-					}) as Hex
-				});
-
-				awaitApprovalTx(approvalHash);
-				await waitForTransaction(approvalHash);
-			} catch (approvalError) {
-				console.error('[handleTakeOrders] Approval error:', approvalError);
-				if (isStaleWalletSessionError(approvalError)) {
-					const msg = await handleStaleWalletSession(config);
-					return transactionError(msg as TransactionErrorMessage);
-				}
-
-				const errorMessage = extractTransactionError(
-					approvalError,
-					TransactionErrorMessage.APPROVAL_FAILED
-				);
-
-				// Check for authentication errors
-				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
-				if (errorStr.includes('authentication') || errorStr.includes('log in')) {
-					return transactionError(errorMessage);
-				}
-
-				return transactionError(errorMessage);
-			}
-		}
-
 		// If recalculateConfig is provided, refresh quotes and recalculate config
 		// This handles SELL and BUY (spend mode) where prices may have moved during approval
 		let finalConfig = args;
@@ -1387,43 +1452,36 @@ const transactionStore = () => {
 			}
 		}
 
-		// Check if we need to split into multiple batches (only for Dynamic wallet due to 16KB payload limit)
 		awaitWalletConfirmation(`Preparing order...`);
 		const isDynamicWallet = get(authMethod) === 'dynamic';
+		const fillDecimals = params.orderFillDecimals ?? params.takerWantsToken.decimals;
+		const mode: TakeOrdersMode = finalConfig.IOIsInput ? 'buyExact' : 'spendExact';
+		const priceCapFloat = Float.fromHex(finalConfig.maximumIORatio as `0x${string}`);
+		const priceCapStr = String(priceCapFloat.value?.format().value ?? '1');
 
-		console.log('[handleTakeOrders] Preparing order batches', {
+		const ordersToExecute = raindexOrders ?? [];
+		if (ordersToExecute.length === 0) {
+			return transactionError('Failed to prepare order execution' as TransactionErrorMessage);
+		}
+
+		console.log('[handleTakeOrders] Preparing SDK calldata execution', {
 			isDynamicWallet,
 			totalOrders: finalConfig.orders.length,
+			raindexOrders: ordersToExecute.length,
 			hasOrderFillAmounts: !!params.orderFillAmounts,
 			orderFillAmounts: params.orderFillAmounts?.map((a) => a.toString()),
-			takerWantsDecimals: params.takerWantsToken.decimals,
-			originalMaximumIO: finalConfig.maximumIO,
-			originalMaximumIORatio: finalConfig.maximumIORatio
+			fillDecimals,
+			mode,
+			priceCapStr
 		});
 
-		const fillDecimals = params.orderFillDecimals ?? params.takerWantsToken.decimals;
-		const { batches, needsSplit } = isDynamicWallet
-			? splitOrdersIntoBatches(finalConfig, params.orderFillAmounts, fillDecimals)
-			: { batches: [finalConfig], needsSplit: false };
-
-		if (!isDynamicWallet) {
-			console.log('[handleTakeOrders] Non-Dynamic wallet - skipping split, using single batch', {
-				orderCount: finalConfig.orders.length
-			});
-		}
-
-		if (batches.length === 0) {
-			return transactionError('Failed to prepare order batches' as TransactionErrorMessage);
-		}
-
-		// If we need multiple transactions (Dynamic wallet only), show acknowledgment modal
-		if (needsSplit) {
+		if (ordersToExecute.length > 1) {
 			await new Promise<void>((resolve) => {
 				update((state) => ({
 					...state,
 					status: TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT,
-					message: `This order requires ${batches.length} separate transactions due to payload size limits. You will be asked to sign ${batches.length} times.`,
-					data: { multiTxProgress: { currentBatch: 0, totalBatches: batches.length } },
+					message: `This order requires ${ordersToExecute.length} separate transactions. You will be asked to sign ${ordersToExecute.length} times.`,
+					data: { multiTxProgress: { currentBatch: 0, totalBatches: ordersToExecute.length } },
 					onMultiTxAcknowledge: () => {
 						update((s) => ({ ...s, multiTxAcknowledged: true, onMultiTxAcknowledge: null }));
 						resolve();
@@ -1432,64 +1490,77 @@ const transactionStore = () => {
 			});
 		}
 
-		// Execute each batch
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleTakeOrders]';
 
-		console.log(`${TX_LOG_PREFIX} Starting batch execution`, {
-			totalBatches: batches.length,
-			needsSplit,
+		console.log(`${TX_LOG_PREFIX} Starting SDK per-order execution`, {
+			totalOrders: ordersToExecute.length,
+			mode,
 			isDynamicWallet
 		});
 
-		for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-			const batchConfig = batches[batchIndex];
-			const isMultiBatch = batches.length > 1;
-			const batchLabel = isMultiBatch ? ` (${batchIndex + 1}/${batches.length})` : '';
-
-			console.log(`${TX_LOG_PREFIX} Preparing batch ${batchIndex + 1}/${batches.length}`, {
-				orderCount: batchConfig.orders.length,
-				maximumIO: batchConfig.maximumIO,
-				maximumIORatio: batchConfig.maximumIORatio,
-				minimumIO: batchConfig.minimumIO
-			});
-
-			let result;
-			try {
-				result = getTakeOrders3Calldata(batchConfig);
-
-				if (result.error) {
-					console.error(`${TX_LOG_PREFIX} Failed to generate calldata`, result.error);
-					return transactionError(result.error as unknown as TransactionErrorMessage);
-				}
-
-				if (!result.value) {
-					console.error(`${TX_LOG_PREFIX} No calldata value returned`);
-					return transactionError(
-						'Failed to generate transaction calldata' as TransactionErrorMessage
-					);
-				}
-			} catch (calldataError) {
-				console.error(`${TX_LOG_PREFIX} Exception generating calldata`, calldataError);
-				return transactionError(
-					'Failed to generate transaction calldata' as TransactionErrorMessage
-				);
+		for (let orderIndex = 0; orderIndex < ordersToExecute.length; orderIndex++) {
+			const orderToExecute = ordersToExecute[orderIndex];
+			const orderConfig = finalConfig.orders[orderIndex];
+			if (!orderConfig) {
+				return transactionError('Order config mismatch' as TransactionErrorMessage);
 			}
-
-			const calldata = normalizeCalldata(result.value as string | Uint8Array);
-			const payloadSize = new Blob([calldata]).size;
-
-			console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} calldata generated`, {
-				payloadSize,
-				calldataLength: calldata.length,
-				targetOrderbook: raindexOrder.orderbook.id
-			});
+			const isMultiBatch = ordersToExecute.length > 1;
+			const batchLabel = isMultiBatch ? ` (${orderIndex + 1}/${ordersToExecute.length})` : '';
+			const fillAmount = params.orderFillAmounts?.[orderIndex] ?? 0n;
+			const amountStr = String(
+				Float.fromFixedDecimalLossy(fillAmount, fillDecimals).float.format().value ?? '0'
+			);
 
 			let hash: Hash;
 			try {
 				const progressData: TransactionMetadata = isMultiBatch
-					? { multiTxProgress: { currentBatch: batchIndex + 1, totalBatches: batches.length } }
+					? {
+							multiTxProgress: { currentBatch: orderIndex + 1, totalBatches: ordersToExecute.length }
+						}
 					: {};
+				const calldataResult = await orderToExecute.getTakeCalldata(
+					Number(orderConfig.inputIOIndex),
+					Number(orderConfig.outputIOIndex),
+					$signerAddress,
+					mode,
+					amountStr,
+					priceCapStr
+				);
+
+				const maybeApprovalInfo = (
+					calldataResult.value as { approvalInfo?: { token: string; calldata: string } }
+				)?.approvalInfo;
+				let readyCalldataResult = calldataResult;
+				if (
+					(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
+					maybeApprovalInfo
+				) {
+					awaitWalletConfirmation(
+						`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
+						progressData
+					);
+					const approvalHash = await sendTransaction({
+						to: maybeApprovalInfo.token as `0x${string}`,
+						data: maybeApprovalInfo.calldata as Hex
+					});
+					awaitApprovalTx(approvalHash);
+					await waitForTransaction(approvalHash);
+					readyCalldataResult = await orderToExecute.getTakeCalldata(
+						Number(orderConfig.inputIOIndex),
+						Number(orderConfig.outputIOIndex),
+						$signerAddress,
+						mode,
+						amountStr,
+						priceCapStr
+					);
+				}
+				if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
+					return transactionError(
+						(readyCalldataResult.error?.readableMsg ||
+							'Failed to generate transaction calldata') as TransactionErrorMessage
+					);
+				}
 
 				awaitWalletConfirmation(
 					`Awaiting wallet confirmation to take order${batchLabel}...`,
@@ -1497,37 +1568,36 @@ const transactionStore = () => {
 				);
 
 				hash = await sendTransaction({
-					to: raindexOrder.orderbook.id as `0x${string}`,
-					data: calldata as Hex
+					to: readyCalldataResult.value.takeOrdersInfo.orderbook as `0x${string}`,
+					data: readyCalldataResult.value.takeOrdersInfo.calldata as Hex
 				});
 
-				console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} transaction submitted`, {
+				console.log(`${TX_LOG_PREFIX} Order ${orderIndex + 1} transaction submitted`, {
 					hash,
-					orderCount: batchConfig.orders.length
+					orderHash: orderToExecute.orderHash
 				});
 
 				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`, progressData);
 				await waitForTransaction(hash);
 
-				console.log(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} transaction confirmed`, { hash });
+				console.log(`${TX_LOG_PREFIX} Order ${orderIndex + 1} transaction confirmed`, { hash });
 
 				allTransactionHashes.push(hash);
 
-				if (batchIndex < batches.length - 1) {
+				if (orderIndex < ordersToExecute.length - 1) {
 					awaitWalletConfirmation(
-						`Transaction ${batchIndex + 1} confirmed. Preparing next batch...`,
+						`Transaction ${orderIndex + 1} confirmed. Preparing next batch...`,
 						progressData
 					);
 				} else {
 					awaitWalletConfirmation(`Transaction confirmed. Waiting for indexer...`);
 				}
 			} catch (error) {
-				console.error(`${TX_LOG_PREFIX} Batch ${batchIndex + 1} failed`, {
-					batchIndex,
-					totalBatches: batches.length,
-					orderCount: batchConfig.orders.length,
-					maximumIO: batchConfig.maximumIO,
-					maximumIORatio: batchConfig.maximumIORatio,
+				console.error(`${TX_LOG_PREFIX} Order ${orderIndex + 1} failed`, {
+					orderIndex,
+					totalOrders: ordersToExecute.length,
+					mode,
+					fillAmount: fillAmount.toString(),
 					error
 				});
 
@@ -1557,174 +1627,7 @@ const transactionStore = () => {
 			}
 		}
 
-		// Use the last transaction hash for the success display
-		const hash = allTransactionHashes[allTransactionHashes.length - 1];
-
-		// Poll subgraph for all transactions to appear in trades (5 minute timeout)
-		const pollPendingTrades = async () => {
-			const MAX_ATTEMPTS = 60; // 5 minutes at 5s interval
-			const totalBatches = allTransactionHashes.length;
-
-			for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-				const now = Math.floor(Date.now() / 1000);
-				const trades = await getTrades(now - 600, now, network);
-				// Look for trades from ANY of our transaction hashes
-				const allTrades = trades.filter((t) =>
-					allTransactionHashes.some(
-						(txHash) => t.tradeEvent?.transaction?.id.toLowerCase() === txHash.toLowerCase()
-					)
-				) as unknown as Array<{
-					tradeEvent?: { transaction?: { id?: string } };
-					order?: { orderHash?: string };
-					inputVaultBalanceChange?: {
-						amount?: Hex;
-						oldVaultBalance?: Hex;
-						newVaultBalance?: Hex;
-					};
-					outputVaultBalanceChange?: {
-						amount?: Hex;
-						oldVaultBalance?: Hex;
-						newVaultBalance?: Hex;
-					};
-				}>;
-
-				const validTrades = allTrades.filter(
-					(t) => t.inputVaultBalanceChange?.amount && t.outputVaultBalanceChange?.amount
-				);
-
-				// For multi-batch transactions, wait until we have trades from ALL transaction hashes
-				if (totalBatches > 1) {
-					const indexedTxHashes = new Set(
-						validTrades.map((t) => t.tradeEvent?.transaction?.id?.toLowerCase())
-					);
-					const allBatchesIndexed = allTransactionHashes.every((txHash) =>
-						indexedTxHashes.has(txHash.toLowerCase())
-					);
-
-					console.log('[pollPendingTrades] Multi-batch progress', {
-						attempt,
-						totalBatches,
-						indexedBatches: indexedTxHashes.size,
-						allBatchesIndexed,
-						validTradesCount: validTrades.length
-					});
-
-					if (allBatchesIndexed) {
-						return validTrades;
-					}
-
-					// After 30 seconds (6 attempts), return whatever we have if we have any trades
-					// This prevents waiting too long if one batch had no fills
-					if (attempt >= 6 && validTrades.length > 0) {
-						console.log(
-							'[pollPendingTrades] Timeout waiting for all batches, returning partial results'
-						);
-						return validTrades;
-					}
-				} else {
-					// Single batch - return as soon as we have trades
-					if (validTrades.length > 0) {
-						return validTrades;
-					}
-				}
-
-				await new Promise((resolve) => setTimeout(resolve, 5_000));
-			}
-			return [];
-		};
-
-		const validTrades = await pollPendingTrades();
-
-		if (validTrades.length === 0) {
-			return transactionError(TransactionErrorMessage.GENERIC, hash);
-		}
-
-		// Get token info from params (passed by MarketOrder component)
-		// NOTE: Vault changes are from MAKER's perspective, we need TAKER's perspective:
-		//       - inputVaultBalanceChange = what MAKER receives = what TAKER gives (OUTPUT)
-		//       - outputVaultBalanceChange = what MAKER gives = what TAKER receives (INPUT)
-		const inputTokenDecimals = params.takerWantsToken.decimals;
-		const inputTokenSymbol = params.takerWantsToken.symbol;
-		const inputTokenAddress = params.takerWantsToken.address;
-
-		const outputTokenDecimals = params.takerPaysToken.decimals;
-		const outputTokenSymbol = params.takerPaysToken.symbol;
-		const outputTokenAddress = params.takerPaysToken.address;
-
-		// Sum vault changes from TAKER's perspective
-		let totalInputAmount = 0n;
-		let totalOutputAmount = 0n;
-		for (const trade of validTrades) {
-			// TAKER INPUT (what taker receives) = outputVaultBalanceChange (what maker gives)
-			const inputAmount = parseFloatHex(
-				trade.outputVaultBalanceChange!.amount as Hex,
-				inputTokenDecimals,
-				true // Use absolute value
-			);
-			totalInputAmount += inputAmount;
-
-			// TAKER OUTPUT (what taker gives) = inputVaultBalanceChange (what maker receives)
-			const outputAmount = parseFloatHex(
-				trade.inputVaultBalanceChange!.amount as Hex,
-				outputTokenDecimals,
-				true // Use absolute value
-			);
-			totalOutputAmount += outputAmount;
-		}
-
-		// Calculate actual ioRatio from transaction data
-		const actualIoRatio =
-			totalOutputAmount > 0n
-				? parseFloat(formatUnits(totalInputAmount, inputTokenDecimals)) /
-					parseFloat(formatUnits(totalOutputAmount, outputTokenDecimals))
-				: 0;
-
-		// Use the user's actual requested input amount
-		const requestedInputAmount = params.requestedTakerWantsAmount;
-
-		// Check if fill is complete (within 99.9% tolerance)
-		// Need to normalize both amounts to the same decimal scale for comparison
-		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
-		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
-
-		let fillPercentage = 0;
-		let isNoFill = false;
-
-		if (inputRequestedDecimal > 0) {
-			fillPercentage = inputFilledDecimal / inputRequestedDecimal;
-		} else {
-			// No requested quantity means no tokens requested
-			isNoFill = true;
-		}
-
-		// Build summary from actual transaction data
-		const summary: MarketOrderSummary = {
-			inputAmount: totalInputAmount,
-			inputTokenDecimals,
-			inputTokenSymbol,
-			inputTokenAddress,
-			outputAmount: totalOutputAmount,
-			outputTokenDecimals,
-			outputTokenSymbol,
-			outputTokenAddress,
-			requestedInputAmount,
-			ioRatio: actualIoRatio,
-			actualSlippage: 0n,
-			isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
-			isNoFill
-		};
-
-		const raindexLink = createRaindexLink(
-			network.id,
-			raindexOrder.orderbook.id,
-			raindexOrder.orderHash,
-			'View order on Raindex'
-		);
-
-		// Invalidate dashboard balances after successful market order
-		invalidateDashboardBalances();
-
-		return transactionSuccess(hash, undefined, { marketOrderSummary: summary, raindexLink });
+		return pollAndFinalizeTakeOrders(allTransactionHashes, raindexOrder, params, network);
 	};
 
 	const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
@@ -1748,6 +1651,7 @@ const transactionStore = () => {
 		handleLimitDeploy,
 		handleDsfDeploy,
 		handleFolioDeploy,
+		handleOracleOrders,
 		handleTakeOrders,
 		handleWithdraw,
 		handleWrapUnwrap,
