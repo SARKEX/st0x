@@ -466,7 +466,6 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					? paymentToken.decimals
 					: assetToken.decimals;
 
-			const takerAddress = getSignerAddress();
 			if (!takerAddress) {
 				return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
 			}
