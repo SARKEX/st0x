@@ -52,9 +52,9 @@
 		if (ordersResult.error) {
 			throw new Error(`Failed to fetch order: ${ordersResult.error.readableMsg}`);
 		}
-		if (!ordersResult.value?.length) return 0;
+		if (!ordersResult.value?.orders.length) return 0;
 
-		const quotesResult = await ordersResult.value[0].getQuotes();
+		const quotesResult = await ordersResult.value.orders[0].getQuotes();
 		if (quotesResult.error) {
 			throw new Error(`Failed to fetch quotes: ${quotesResult.error.readableMsg}`);
 		}
@@ -331,14 +331,14 @@
 				1
 			);
 
-			if (ordersResult.error || !ordersResult.value?.length) {
+			if (ordersResult.error || !ordersResult.value?.orders.length) {
 				transactionStore.transactionError(
 					'Migration order not available. Please try again later.' as TransactionErrorMessage
 				);
 				return;
 			}
 
-			const raindexOrderObj = ordersResult.value[0];
+			const raindexOrderObj = ordersResult.value.orders[0];
 			const sgOrderResult = raindexOrderObj.convertToSgOrder();
 			if (sgOrderResult.error || !sgOrderResult.value) {
 				transactionStore.transactionError(

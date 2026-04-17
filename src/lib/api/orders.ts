@@ -266,7 +266,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 				throw new Error(ordersResult.error.readableMsg);
 			}
 
-			const pageOrders = ordersResult.value;
+			const pageOrders = ordersResult.value.orders;
 			allOrders.push(...pageOrders);
 
 			// If we got fewer orders than the page size, we've reached the end
@@ -356,7 +356,7 @@ export async function fetchAndQuoteTokenOrders(
 		throw new Error(ordersResult.error.readableMsg);
 	}
 
-	const allOrders = ordersResult.value;
+	const allOrders = ordersResult.value.orders;
 
 	// Get quotes using batching with jitter and retries
 	const quotesMap = await fetchQuotesWithBatching(allOrders);

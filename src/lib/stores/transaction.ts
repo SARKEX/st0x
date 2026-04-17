@@ -29,8 +29,7 @@ import {
 	type SgOrder,
 	type TakeOrdersConfigV5,
 	type DeploymentTransactionArgs,
-	type RaindexVault,
-	type RaindexOrder
+	type RaindexVault
 } from '@rainlanguage/orderbook';
 import { Float } from '@rainlanguage/float';
 import {
@@ -687,7 +686,7 @@ const transactionStore = () => {
 				throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
 			}
 
-			const orders = [...(ordersResult.value as Iterable<RaindexOrder>)];
+			const orders = ordersResult.value.orders;
 			if (orders.length === 0) {
 				throw new Error('Order not found');
 			}
@@ -921,7 +920,7 @@ const transactionStore = () => {
 					throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
 				}
 
-				const orders = [...(ordersResult.value as Iterable<RaindexOrder>)];
+				const orders = ordersResult.value.orders;
 				if (orders.length === 0) {
 					throw new Error('Order not found');
 				}

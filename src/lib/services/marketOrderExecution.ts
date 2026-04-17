@@ -147,12 +147,12 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 						1
 					);
 
-					if (ordersResult.error || !ordersResult.value?.length) {
+					if (ordersResult.error || !ordersResult.value?.orders.length) {
 						console.error('Failed to fetch order:', orderInfo.order.orderHash);
 						return;
 					}
 
-					const raindexOrderObj = ordersResult.value[0];
+					const raindexOrderObj = ordersResult.value.orders[0];
 					const quotesResult = await raindexOrderObj.getQuotes();
 					if (quotesResult.error || !quotesResult.value?.length) return;
 
