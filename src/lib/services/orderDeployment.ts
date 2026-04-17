@@ -17,9 +17,11 @@ import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
-import { DotrainRegistry } from '@rainlanguage/orderbook';
+import { DotrainRainlang } from '@rainlanguage/orderbook';
 import { walletAddress } from '$lib/stores/authStore';
-import { RAIN_STRATEGIES_COMMIT } from '$lib/clients/raindex';
+
+/** Pinned commit for rain.strategies registry (holds strategy order definitions). */
+const RAIN_STRATEGIES_COMMIT = '9dd64902161158395d588335f0a02e3a6d52f772';
 
 /** Registry URL for rain.strategies (order definitions + shared settings). */
 const REGISTRY_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/registry`;
@@ -39,12 +41,12 @@ function getDeploymentKey(raindexNetworkSlug: string): string {
 }
 
 /** Cached registry instance to avoid repeated network fetches. */
-let registryPromise: Promise<DotrainRegistry> | null = null;
+let registryPromise: Promise<DotrainRainlang> | null = null;
 
-async function getRegistry(): Promise<DotrainRegistry> {
+async function getRegistry(): Promise<DotrainRainlang> {
 	if (!registryPromise) {
 		registryPromise = (async () => {
-			const result = await DotrainRegistry.new(REGISTRY_URL);
+			const result = await DotrainRainlang.new(REGISTRY_URL);
 			if (result.error) {
 				registryPromise = null;
 				throw new Error(result.error.readableMsg);

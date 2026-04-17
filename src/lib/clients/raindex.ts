@@ -1,19 +1,49 @@
 import { RaindexClient } from '@rainlanguage/orderbook';
-import { fetchText } from '$lib/clients/http';
-import { type Network } from '$lib/config/network';
+import type { Network } from '$lib/config/network';
 
-export const RAIN_STRATEGIES_COMMIT = '2c8192e9137736507041ebff820b0e7b5b29f0d2';
-export const RAIN_STRATEGIES_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/settings.yaml`;
-
-// Cache the strategies YAML so we don't refetch on every client creation.
-let strategiesYamlPromise: Promise<string> | null = null;
-
-async function getStrategiesYaml(): Promise<string> {
-	if (!strategiesYamlPromise) {
-		strategiesYamlPromise = fetchText(RAIN_STRATEGIES_URL);
-	}
-	return strategiesYamlPromise;
-}
+/**
+ * Raindex settings YAML.
+ *
+ * Hand-maintained in this file (rather than fetched from upstream rain.strategies)
+ * because:
+ *  - Upstream keeps adding fields (e.g. local-db-sync) that the SDK interprets
+ *    and refuses to start without corresponding callbacks we don't ship.
+ *  - No network fetch on client boot.
+ *  - Deterministic config — we know exactly what the SDK sees.
+ *
+ * When adding a new chain, add a `networks`, `subgraphs`, `metaboards`, `orderbooks`,
+ * and `rainlangs` entry below.
+ *
+ * NOTE: RPCs here are NOT the same as in networks.ts. The Raindex SDK uses
+ * multicall eth_call for quote simulation — many public RPCs (llamarpc, meowrpc,
+ * blastapi, tenderly) don't support this. Use RPCs known to handle eth_call.
+ */
+const SETTINGS_YAML = `version: 5
+networks:
+  base:
+    rpcs:
+      - https://mainnet.base.org
+      - https://base.drpc.org
+      - https://base-rpc.publicnode.com
+      - https://developer-access-mainnet.base.org
+    chain-id: 8453
+    network-id: 8453
+    currency: ETH
+subgraphs:
+  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2026-02-05-c4ef/gn
+metaboards:
+  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn
+orderbooks:
+  base:
+    address: 0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D
+    network: base
+    subgraph: base
+    deployment-block: 41747644
+rainlangs:
+  base:
+    address: 0x22508460712C350e914b49155982d3A92D923b10
+    network: base
+`;
 
 // Two-client pool for load balancing
 interface ClientPool {
@@ -26,16 +56,13 @@ const poolInitPromise: Map<number, Promise<ClientPool>> = new Map();
 
 /**
  * Initialize the client pool for a network.
- * Creates 2 clients for load balancing (both use the same strategies YAML config).
+ * Creates 2 clients for load balancing (both use the same settings YAML).
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function initializePool(_network: Network): Promise<ClientPool> {
-	const strategiesYaml = await getStrategiesYaml();
-
-	// Create both clients using the strategies YAML (which includes network configs)
 	const [resultA, resultB] = await Promise.all([
-		RaindexClient.new([strategiesYaml]),
-		RaindexClient.new([strategiesYaml])
+		RaindexClient.new([SETTINGS_YAML]),
+		RaindexClient.new([SETTINGS_YAML])
 	]);
 
 	if (resultA.error) {
@@ -85,13 +112,10 @@ export async function getLoadBalancedClient(network: Network): Promise<RaindexCl
 }
 
 /**
- * Create a RaindexClient using the strategies YAML.
- * The strategies YAML already contains network configurations including RPCs.
+ * Create a RaindexClient from the hardcoded settings YAML.
  */
 export async function createRaindexClient(): Promise<RaindexClient> {
-	const strategiesYaml = await getStrategiesYaml();
-
-	const clientResult = await RaindexClient.new([strategiesYaml]);
+	const clientResult = await RaindexClient.new([SETTINGS_YAML]);
 	if (clientResult.error) {
 		throw new Error(`Failed to create RaindexClient: ${clientResult.error.readableMsg}`);
 	}

@@ -7,7 +7,7 @@
  * - Quote processing and data normalization
  */
 
-import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
+import type { OrderV4, SgOrder, SignedContextV1, RaindexOrder } from '@rainlanguage/orderbook';
 import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tokenMath';
 import { parseUnits } from 'viem';
 
@@ -92,6 +92,8 @@ export interface ProcessedQuote {
 	quotePerAsset?: number;
 	rainlang?: string; // Decoded Rainlang source for the order
 	orderType?: OrderType; // Classified order type based on rainlang
+	signedContext?: SignedContextV1[];
+	raindexOrder?: RaindexOrder;
 }
 
 export type OrderType = 'limit' | 'dca' | 'dynamic-spread' | 'custom';
