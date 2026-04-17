@@ -223,7 +223,7 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/BMNR.png',
 		priceFeedId: '0x54e2e127c93950de5a710100fd1cd387aba1ec8920850efdb05da5fee57d2e32',
 		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:BMNR',
+		tradingViewSymbol: 'NYSE:BMNR',
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
