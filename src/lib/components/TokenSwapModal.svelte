@@ -423,7 +423,8 @@
 				sgOrder,
 				swapAmountWei,
 				params,
-				undefined
+				undefined,
+				[raindexOrderObj]
 			);
 
 			// Invalidate modal-specific + dashboard queries (balance queries handled by handleTakeOrders)

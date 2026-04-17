@@ -15,10 +15,12 @@ import type { Network } from '$lib/config/network';
 import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 import {
 	type OrderV4,
+	type RaindexOrder,
 	type RaindexOrderQuote,
 	type SgOrder,
 	type TakeOrderConfigV4,
-	type TakeOrdersConfigV5
+	type TakeOrdersConfigV5,
+	type TakeOrdersMode
 } from '@rainlanguage/orderbook';
 import { AbiCoder } from 'ethers';
 import { Float } from '@rainlanguage/float';
@@ -26,18 +28,22 @@ import transactionStore from '$lib/stores/transaction';
 import { getSignerAddress } from '$lib/services/walletService';
 
 // Safety bounds for market order execution
-const EMERGENCY_RATIO_MULTIPLIER = '2'; // 2x worst fill ratio as emergency stop
+const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
+const BUY_EXACT_RATIO_MULTIPLIER = '1.01'; // tighter cap for buy-exact to avoid oversized approvals
 const MINIMUM_IO = Float.fromBigint(0n).asHex();
 
 /**
  * Compute emergency ratio hex from a quote's worst fill ratio.
  * Returns the ratio as a hex string, or null if any Float operation fails.
  */
-function computeEmergencyRatioHex(ratioHex: `0x${string}`): `0x${string}` | null {
+function computeEmergencyRatioHex(
+	ratioHex: `0x${string}`,
+	multiplierRaw: string = EMERGENCY_RATIO_MULTIPLIER
+): `0x${string}` | null {
 	const ratio = Float.fromHex(ratioHex);
 	if (ratio.error || !ratio.value) return null;
 
-	const multiplier = Float.parse(EMERGENCY_RATIO_MULTIPLIER);
+	const multiplier = Float.parse(multiplierRaw);
 	if (multiplier.error || !multiplier.value) return null;
 
 	const emergency = ratio.value.mul(multiplier.value);
@@ -80,6 +86,7 @@ interface OrderInfo {
 	price: number;
 	inputIOIndex: number;
 	outputIOIndex: number;
+	raindexOrder?: RaindexOrder;
 }
 
 /**
@@ -123,7 +130,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					quotes: [],
 					price: fill.price,
 					inputIOIndex: fill.quote.inputIOIndex ?? 0,
-					outputIOIndex: fill.quote.outputIOIndex ?? 0
+					outputIOIndex: fill.quote.outputIOIndex ?? 0,
+					raindexOrder: fill.quote.raindexOrder
 				});
 			}
 		}
@@ -134,13 +142,14 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		await Promise.all(
 			orderInfos.map(async (orderInfo) => {
-				if (orderInfo.orderData?.owner) return; // Already hydrated
-
+				if (orderInfo.raindexOrder) {
+					// We already have the RaindexOrder object from quote processing.
+					return;
+				}
 				try {
 					const ordersResult = await client.getOrders(
 						[network.id],
 						{
-							active: true,
 							owners: [],
 							orderHash: orderInfo.order.orderHash as `0x${string}`
 						},
@@ -148,11 +157,23 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					);
 
 					if (ordersResult.error || !ordersResult.value?.orders.length) {
-						console.error('Failed to fetch order:', orderInfo.order.orderHash);
+						console.warn('[marketOrderExecution] Failed to hydrate RaindexOrder by hash', {
+							orderHash: orderInfo.order.orderHash,
+							error: ordersResult.error?.readableMsg
+						});
 						return;
 					}
 
 					const raindexOrderObj = ordersResult.value.orders[0];
+					// Always keep the RaindexOrder object so we can use getTakeCalldata(),
+					// which populates signedContext internally for oracle-enabled orders.
+					orderInfo.raindexOrder = raindexOrderObj;
+
+					// If we already have hydrated order data from quotes, no need to decode again.
+					if (orderInfo.orderData?.owner) {
+						return;
+					}
+
 					const quotesResult = await raindexOrderObj.getQuotes();
 					if (quotesResult.error || !quotesResult.value?.length) return;
 
@@ -203,7 +224,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const isBuy = orderSide === 'Buy';
 		const fillAmountsByOrderHash = new Map<string, bigint>();
 		for (const fill of walkResult.fills) {
-			const orderHash = fill.quote.orderHash;
+			const orderHash = fill.quote.orderHash?.toLowerCase() ?? '';
+			if (!orderHash) continue;
 			const wantAsset = useOutputCap ? !isBuy : isBuy;
 			const fillAmount = wantAsset ? fill.assetAmount : fill.paymentAmount;
 			const current = fillAmountsByOrderHash.get(orderHash) ?? 0n;
@@ -213,8 +235,12 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// 6. Build TakeOrderConfigs with parallel fill amounts array
 		const takeOrderConfigs: TakeOrderConfigV4[] = [];
 		const orderFillAmounts: bigint[] = [];
+		const takeOrderRaindexOrders: RaindexOrder[] = [];
 		for (const orderInfo of executableOrders) {
 			if (!orderInfo.orderData?.validInputs?.length || !orderInfo.orderData?.validOutputs?.length) {
+				continue;
+			}
+			if (!orderInfo.raindexOrder) {
 				continue;
 			}
 
@@ -227,15 +253,30 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				continue;
 			}
 
+			const matchingFill = walkResult.fills.find(
+				(f) =>
+					(f.quote.orderHash?.toLowerCase() ?? '') ===
+						(orderInfo.order.orderHash?.toLowerCase() ?? '') &&
+					(f.quote.inputIOIndex ?? 0) === inputIndex &&
+					(f.quote.outputIOIndex ?? 0) === outputIndex
+			);
+			const signedContext =
+				(
+					matchingFill?.quote as ProcessedQuote & {
+						signedContext?: TakeOrderConfigV4['signedContext'];
+					}
+				)?.signedContext ?? [];
+
 			takeOrderConfigs.push({
 				order: orderInfo.orderData,
 				inputIOIndex: inputIndex.toString(),
 				outputIOIndex: outputIndex.toString(),
-				signedContext: []
+				signedContext
 			});
+			takeOrderRaindexOrders.push(orderInfo.raindexOrder);
 
 			// Add fill amount for this order (parallel to takeOrderConfigs)
-			const orderHash = orderInfo.order.orderHash;
+			const orderHash = orderInfo.order.orderHash?.toLowerCase() ?? '';
 			orderFillAmounts.push(fillAmountsByOrderHash.get(orderHash) ?? 0n);
 		}
 
@@ -264,10 +305,134 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
 
-		const emergencyRatioHex = computeEmergencyRatioHex(worstFill.quote.ratio as `0x${string}`);
+		// Buy+amount uses buyExact mode, so the approval spend cap tracks priceCap.
+		// Keep this tighter than sell/spend to avoid unnecessary 2x approvals.
+		const ratioMultiplier = isBuy && inputMode !== 'spend' ? BUY_EXACT_RATIO_MULTIPLIER : EMERGENCY_RATIO_MULTIPLIER;
+		const emergencyRatioHex = computeEmergencyRatioHex(
+			worstFill.quote.ratio as `0x${string}`,
+			ratioMultiplier
+		);
 		if (!emergencyRatioHex) {
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
+
+		// 9a. Use getTakeCalldata() only when signed context is not already present on fills.
+		// If signed context exists, prefer the regular takeOrders path with explicit signedContext
+		// to avoid "not ready" oracle-calldata skips.
+		const ordersWithCalldata = executableOrders.filter((o) => o.raindexOrder);
+		const hasSignedContextOnFills = walkResult.fills.some((fill) => {
+			const quoteWithContext = fill.quote as ProcessedQuote & { signedContext?: unknown[] };
+			return (quoteWithContext.signedContext?.length ?? 0) > 0;
+		});
+		console.log('[marketOrderExecution] path decision', {
+			orderSide,
+			inputMode,
+			totalExecutableOrders: executableOrders.length,
+			ordersWithCalldata: ordersWithCalldata.length,
+			hasSignedContextOnFills,
+			fillCount: walkResult.fills.length
+		});
+		if (ordersWithCalldata.length > 0 && !hasSignedContextOnFills) {
+			const mode: TakeOrdersMode =
+				orderSide === 'Sell'
+					? 'spendExact'
+					: inputMode === 'spend'
+						? 'spendExact'
+						: 'buyExact';
+
+			// Amount decimals: what the taker specifies (asset for buy/sell, payment for buy+spend)
+			const amountDecimals =
+				orderSide === 'Buy' && inputMode === 'spend'
+					? paymentToken.decimals
+					: assetToken.decimals;
+
+			const emergencyFloat = Float.fromHex(emergencyRatioHex);
+			const priceCapStr = String(emergencyFloat.value?.format().value ?? '1e+18');
+
+			const takerAddress = getSignerAddress();
+			if (!takerAddress) {
+				return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
+			}
+
+			const oracleInputs = ordersWithCalldata
+				.filter((o) => o.raindexOrder)
+				.map((orderInfo) => {
+					const fillAmount =
+						fillAmountsByOrderHash.get(orderInfo.order.orderHash?.toLowerCase() ?? '') ?? 0n;
+					const amountStr = String(
+						Float.fromFixedDecimalLossy(fillAmount, amountDecimals).float.format().value ?? '0'
+					);
+					console.log('[marketOrderExecution] oracle input', {
+						orderHash: orderInfo.order.orderHash,
+						inputIndex: orderInfo.inputIOIndex,
+						outputIndex: orderInfo.outputIOIndex,
+						fillAmount: fillAmount.toString(),
+						amountStr,
+						priceCapStr
+					});
+					return {
+						raindexOrder: orderInfo.raindexOrder!,
+						inputIndex: orderInfo.inputIOIndex,
+						outputIndex: orderInfo.outputIOIndex,
+						fillAmount,
+						amountStr,
+						priceCapStr,
+						taker: takerAddress
+					};
+				})
+				.filter((input) => input.fillAmount > 0n)
+				.map(({ fillAmount: _fillAmount, ...input }) => input);
+
+			if (oracleInputs.length === 0) {
+				return {
+					success: false,
+					error: 'No executable quote amount found for selected order(s). Please refresh and try again.'
+				};
+			}
+
+			// 10–13 (oracle variant) - use params built from the same walkResult
+			const toTokenInfo = ({ address, decimals, symbol }: TokenInfo): TokenInfo => ({
+				address,
+				decimals,
+				symbol
+			});
+			const takerWantsInfo = toTokenInfo(isBuy ? assetToken : paymentToken);
+			const takerPaysInfo = toTokenInfo(isBuy ? paymentToken : assetToken);
+			const requestedTakerWantsAmount =
+				isBuy && inputMode !== 'spend' ? amount : inputAmountFilled;
+
+			const oracleParams: TakeOrdersParams = {
+				orderData: primaryOrder.orderData,
+				ioIndexes: { input: primaryOrder.inputIOIndex, output: primaryOrder.outputIOIndex },
+				takerWantsToken: takerWantsInfo,
+				takerPaysToken: takerPaysInfo,
+				requestedTakerWantsAmount,
+				simulation: walkResult,
+				orderFillAmounts,
+				orderFillDecimals: useOutputCap ? outputDecimals : inputDecimals
+			};
+
+			console.log('[marketOrderExecution] executing oracle calldata path', {
+				oracleInputCount: oracleInputs.length,
+				mode
+			});
+			await transactionStore.handleOracleOrders(
+				oracleInputs,
+				mode,
+				primaryOrder.order,
+				takerPaysInfo.symbol,
+				oracleParams
+			);
+			return { success: true };
+		}
+		console.log('[marketOrderExecution] executing takeOrders fallback path', {
+			orderCount: takeOrderConfigs.length,
+			raindexOrderCount: takeOrderRaindexOrders.length,
+			signedContextLengths: JSON.stringify(
+				takeOrderConfigs.map((o) => o.signedContext?.length ?? 0)
+			),
+			requiredApprovalAmount: requiredApprovalAmount.toString()
+		});
 
 		// 9. Build TakeOrdersConfig
 		// Output-cap: maximumIO is exact spend amount (IOIsInput=false)
@@ -365,7 +530,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			primaryOrder.order,
 			requiredApprovalAmount,
 			params,
-			recalculateConfig
+			recalculateConfig,
+			takeOrderRaindexOrders
 		);
 
 		return { success: true };
