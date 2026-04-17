@@ -29,9 +29,16 @@ import { getSignerAddress } from '$lib/services/walletService';
 
 // Safety bounds for market order execution
 const MINIMUM_IO = Float.fromBigint(0n).asHex();
-// No price cap: accept any ratio the order offers
-const MAX_IO_RATIO_HEX = Float.maxPositiveValue().value!.asHex();
-const MAX_IO_RATIO_STR = String(Float.maxPositiveValue().value!.formatWithScientific(true).value ?? '1e+38');
+
+/**
+ * Validate and normalize ratio hex from the walked quote.
+ * Returns the ratio as a hex string, or null if any Float operation fails.
+ */
+function computeEmergencyRatioHex(ratioHex: `0x${string}`): `0x${string}` | null {
+	const ratio = Float.fromHex(ratioHex);
+	if (ratio.error || !ratio.value) return null;
+	return ratio.value.asHex();
+}
 
 export interface MarketOrderInput {
 	// Order parameters
@@ -267,18 +274,27 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		const primaryOrder = executableOrders[0];
 
-		// 7. Calculate approval amount
+		// 7. Compute emergency ratio (worst fill as circuit breaker)
 		const { inputAmountFilled, outputAmountGiven, inputDecimals, outputDecimals } = walkResult;
 
+		const worstFill = walkResult.fills[walkResult.fills.length - 1];
+		if (!worstFill?.quote?.ratio) {
+			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+		}
+
+		const emergencyRatioHex = computeEmergencyRatioHex(worstFill.quote.ratio as `0x${string}`);
+		if (!emergencyRatioHex) {
+			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+		}
+
+		// 8. Calculate approval amount
 		let requiredApprovalAmount: bigint;
 		if (isBuy && inputMode !== 'spend') {
-			// Buy+amount: worst-case payment = requested asset amount / worst fill ratio.
-			// ratio = asset/payment (e.g. STOX per USDC), so maxPayment = assetAmount / ratio.
-			const worstFill = walkResult.fills[walkResult.fills.length - 1];
-			const worstRatioResult = worstFill?.quote?.ratio
-				? Float.fromHex(worstFill.quote.ratio as `0x${string}`)
-				: null;
-			const ratioStr = worstRatioResult?.value?.format().value;
+			// Buy+amount: worst-case payment = requested asset amount × emergency ratio.
+			// Using the emergency ratio (worst fill price cap) guarantees the approval is sufficient
+			// even if on-chain prices shift to the circuit-breaker level before execution.
+			const emergencyFloat = Float.fromHex(emergencyRatioHex);
+			const ratioStr = emergencyFloat.value?.format().value;
 			const assetAmountStr = Float.fromFixedDecimalLossy(amount, assetToken.decimals).float.format().value;
 
 			let maxPaymentFromRatio = 0n;
@@ -334,7 +350,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					? paymentToken.decimals
 					: assetToken.decimals;
 
-			const priceCapStr = MAX_IO_RATIO_STR;
+			const emergencyFloat = Float.fromHex(emergencyRatioHex);
+			const priceCapStr = String(emergencyFloat.value?.format().value ?? '1e+18');
 
 			const takerAddress = getSignerAddress();
 			if (!takerAddress) {
@@ -433,7 +450,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const takeOrdersConfig: TakeOrdersConfigV5 = {
 			minimumIO: MINIMUM_IO,
 			maximumIO: maximumIOFloat.float.asHex(),
-			maximumIORatio: MAX_IO_RATIO_HEX,
+			maximumIORatio: emergencyRatioHex,
 			IOIsInput: !useOutputCap as unknown as string,
 			orders: takeOrderConfigs,
 			data: '0x'
@@ -475,6 +492,14 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 								return null;
 							}
 
+							const freshWorstFill = freshWalkResult.fills[freshWalkResult.fills.length - 1];
+							if (!freshWorstFill?.quote?.ratio) return null;
+
+							const freshEmergencyRatioHex = computeEmergencyRatioHex(
+								freshWorstFill.quote.ratio as `0x${string}`
+							);
+							if (!freshEmergencyRatioHex) return null;
+
 							const freshMaximumIO = Float.fromFixedDecimalLossy(
 								amount,
 								freshWalkResult.outputDecimals
@@ -483,7 +508,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 							return {
 								minimumIO: MINIMUM_IO,
 								maximumIO: freshMaximumIO.float.asHex(),
-								maximumIORatio: MAX_IO_RATIO_HEX,
+								maximumIORatio: freshEmergencyRatioHex,
 								IOIsInput: false as unknown as string,
 								orders: takeOrderConfigs,
 								data: '0x'
