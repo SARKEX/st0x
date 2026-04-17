@@ -20,9 +20,11 @@ import {
 	type SgOrder,
 	type TakeOrderConfigV4,
 	type TakeOrdersConfigV5,
-	type TakeOrdersMode
+	type TakeOrdersMode,
+	type TakeOrdersRequest
 } from '@rainlanguage/orderbook';
 import { AbiCoder } from 'ethers';
+import { formatUnits } from 'viem';
 import { Float } from '@rainlanguage/float';
 import transactionStore from '$lib/stores/transaction';
 import { getSignerAddress } from '$lib/services/walletService';
@@ -119,6 +121,22 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'No orders available to fill' };
 		}
 
+		// Emergency ratio from worst priced leg (used for aggregated SDK take + legacy paths)
+		const worstFill = walkResult.fills[walkResult.fills.length - 1];
+		if (!worstFill?.quote?.ratio) {
+			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+		}
+		const isBuy = orderSide === 'Buy';
+		const ratioMultiplier =
+			isBuy && inputMode !== 'spend' ? BUY_EXACT_RATIO_MULTIPLIER : EMERGENCY_RATIO_MULTIPLIER;
+		const emergencyRatioHex = computeEmergencyRatioHex(
+			worstFill.quote.ratio as `0x${string}`,
+			ratioMultiplier
+		);
+		if (!emergencyRatioHex) {
+			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+		}
+
 		// 2. Build order info from fills
 		const orderInfoMap = new Map<string, OrderInfo>();
 		for (const fill of walkResult.fills) {
@@ -138,6 +156,69 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		// 3. Hydrate orders from Raindex to get full order data
 		const client = await createRaindexClient();
+
+		// 3a. Prefer RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven route across
+		// multiple maker orders (avoids per-order getTakeCalldata liquidity mismatch on thin top-of-book).
+		const takerAddress = getSignerAddress();
+		if (takerAddress) {
+			const userLc = takerAddress.toLowerCase();
+			const touchesOwnOrder = walkResult.fills.some((f) => {
+				const od = (f.quote as ProcessedQuote).orderData;
+				return od?.owner && od.owner.toLowerCase() === userLc;
+			});
+			if (!touchesOwnOrder) {
+				const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
+				if (firstQuote.orderData && firstQuote.sgOrder) {
+					const emergencyFloat = Float.fromHex(emergencyRatioHex);
+					const priceCapStr = String(emergencyFloat.value?.format().value ?? '1');
+					let mode: TakeOrdersMode;
+					let amountDecimals: number;
+					if (orderSide === 'Sell') {
+						mode = 'spendExact';
+						amountDecimals = assetToken.decimals;
+					} else if (inputMode === 'spend') {
+						mode = 'spendExact';
+						amountDecimals = paymentToken.decimals;
+					} else {
+						mode = 'buyExact';
+						amountDecimals = assetToken.decimals;
+					}
+					const takeRequest: TakeOrdersRequest = {
+						taker: takerAddress,
+						chainId: network.id,
+						sellToken: orderSide === 'Buy' ? paymentToken.address : assetToken.address,
+						buyToken: orderSide === 'Buy' ? assetToken.address : paymentToken.address,
+						mode,
+						amount: formatUnits(amount, amountDecimals),
+						priceCap: priceCapStr
+					};
+					const { inputAmountFilled } = walkResult;
+					const toTokenInfo = ({ address, decimals, symbol }: TokenInfo): TokenInfo => ({
+						address,
+						decimals,
+						symbol
+					});
+					const aggregatedParams: TakeOrdersParams = {
+						orderData: firstQuote.orderData as OrderV4,
+						ioIndexes: { input: firstQuote.inputIOIndex ?? 0, output: firstQuote.outputIOIndex ?? 0 },
+						takerWantsToken: toTokenInfo(isBuy ? assetToken : paymentToken),
+						takerPaysToken: toTokenInfo(isBuy ? paymentToken : assetToken),
+						requestedTakerWantsAmount: isBuy && inputMode !== 'spend' ? amount : inputAmountFilled,
+						simulation: walkResult
+					};
+					const aggregatedHandled = await transactionStore.handleAggregatedTakeOrdersCalldata(
+						takeRequest,
+						firstQuote.sgOrder as SgOrder,
+						aggregatedParams,
+						isBuy ? paymentToken.symbol : assetToken.symbol
+					);
+					if (aggregatedHandled) {
+						return { success: true };
+					}
+				}
+			}
+		}
+
 		const orderInfos = Array.from(orderInfoMap.values());
 
 		await Promise.all(
@@ -221,7 +302,6 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// 5. Compute per-order fill amounts from walkResult
 		// Output-cap (IOIsInput=false): amounts are what taker pays per order
 		// Input-cap (IOIsInput=true): amounts are what taker receives per order
-		const isBuy = orderSide === 'Buy';
 		const fillAmountsByOrderHash = new Map<string, bigint>();
 		for (const fill of walkResult.fills) {
 			const orderHash = fill.quote.orderHash?.toLowerCase() ?? '';
@@ -299,22 +379,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			requiredApprovalAmount = amount;
 		}
 
-		// 8. Compute emergency ratio (2x worst fill as circuit breaker)
-		const worstFill = walkResult.fills[walkResult.fills.length - 1];
-		if (!worstFill?.quote?.ratio) {
-			return { success: false, error: 'Unable to calculate order price. Please try again.' };
-		}
-
-		// Buy+amount uses buyExact mode, so the approval spend cap tracks priceCap.
-		// Keep this tighter than sell/spend to avoid unnecessary 2x approvals.
-		const ratioMultiplier = isBuy && inputMode !== 'spend' ? BUY_EXACT_RATIO_MULTIPLIER : EMERGENCY_RATIO_MULTIPLIER;
-		const emergencyRatioHex = computeEmergencyRatioHex(
-			worstFill.quote.ratio as `0x${string}`,
-			ratioMultiplier
-		);
-		if (!emergencyRatioHex) {
-			return { success: false, error: 'Unable to calculate order price. Please try again.' };
-		}
+		// 8. Emergency ratio: already computed from worst fill at start of execution (emergencyRatioHex).
 
 		// 9a. Use getTakeCalldata() only when signed context is not already present on fills.
 		// If signed context exists, prefer the regular takeOrders path with explicit signedContext

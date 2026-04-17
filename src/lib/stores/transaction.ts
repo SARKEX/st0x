@@ -30,7 +30,8 @@ import {
 	type DeploymentTransactionArgs,
 	type RaindexVault,
 	type RaindexOrder,
-	type TakeOrdersMode
+	type TakeOrdersMode,
+	type TakeOrdersRequest
 } from '@rainlanguage/orderbook';
 import { Float } from '@rainlanguage/float';
 import {
@@ -1221,6 +1222,126 @@ const transactionStore = () => {
 	};
 
 	/**
+	 * Single-tx market take via RaindexClient.getTakeOrdersCalldata(): subgraph discovery +
+	 * one takeOrders4 call that can aggregate multiple maker orders (solves thin top-of-book).
+	 *
+	 * @returns `true` if this path handled the flow (success or user-visible error).
+	 *          `false` if aggregated calldata is not available — caller should fall back to per-order execution.
+	 */
+	const handleAggregatedTakeOrdersCalldata = async (
+		takeRequest: TakeOrdersRequest,
+		primaryOrder: SgOrder,
+		params: TakeOrdersParams,
+		approvalTokenSymbol: string
+	): Promise<boolean> => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork) as Network;
+
+		try {
+			validateOrderbookAddress(primaryOrder.orderbook.id, network);
+		} catch (error) {
+			transactionError((error as Error).message as TransactionErrorMessage);
+			return true;
+		}
+
+		awaitWalletConfirmation(`Preparing order...`);
+		const TX_LOG_PREFIX = '[handleAggregatedTakeOrdersCalldata]';
+
+		const client = await createRaindexClient();
+		let calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+		if (calldataWrapped.error || !calldataWrapped.value) {
+			console.log(`${TX_LOG_PREFIX} skipping fallback: SDK returned no aggregated calldata`, {
+				msg: calldataWrapped.error?.readableMsg
+			});
+			return false;
+		}
+
+		let result = calldataWrapped.value;
+		const maybeApprovalInfo = (result as { approvalInfo?: { token: string; calldata: string } })
+			?.approvalInfo;
+		if (result.isNeedsApproval && maybeApprovalInfo) {
+			awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+			const approvalHash = await sendTransaction({
+				to: maybeApprovalInfo.token as `0x${string}`,
+				data: maybeApprovalInfo.calldata as Hex
+			});
+			awaitApprovalTx(approvalHash);
+			await waitForTransaction(approvalHash);
+			calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+			if (calldataWrapped.error || !calldataWrapped.value) {
+				transactionError(
+					(calldataWrapped.error?.readableMsg ||
+						'Failed to prepare order after approval') as TransactionErrorMessage
+				);
+				return true;
+			}
+			result = calldataWrapped.value;
+		}
+
+		if (!result.isReady || !result.takeOrdersInfo) {
+			for (let retry = 0; retry < 2; retry++) {
+				await new Promise((resolve) => setTimeout(resolve, 1200));
+				calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+				if (!calldataWrapped.error && calldataWrapped.value?.isReady && calldataWrapped.value?.takeOrdersInfo) {
+					result = calldataWrapped.value;
+					break;
+				}
+			}
+		}
+
+		if (!result.isReady || !result.takeOrdersInfo) {
+			console.log(`${TX_LOG_PREFIX} skipping fallback: aggregated calldata not ready`, {
+				isReady: result.isReady
+			});
+			return false;
+		}
+
+		try {
+			validateOrderbookAddress(result.takeOrdersInfo.orderbook as string, network);
+		} catch (error) {
+			transactionError((error as Error).message as TransactionErrorMessage);
+			return true;
+		}
+
+		const { calldata, orderbook } = result.takeOrdersInfo;
+		console.log(`${TX_LOG_PREFIX} sending aggregated takeOrders tx`, { orderbook });
+
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation...`);
+			const hash = await sendTransaction({
+				to: orderbook as `0x${string}`,
+				data: calldata as Hex
+			});
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+			await waitForTransaction(hash);
+			await pollAndFinalizeTakeOrders([hash], primaryOrder, params, network);
+			return true;
+		} catch (txError) {
+			console.error(`${TX_LOG_PREFIX} failed`, txError);
+			if (isStaleWalletSessionError(txError)) {
+				const msg = await handleStaleWalletSession(config);
+				transactionError(msg as TransactionErrorMessage);
+				return true;
+			}
+			const errorMessage = extractTransactionError(txError);
+			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+			if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
+				transactionError(
+					'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
+				);
+				return true;
+			}
+			if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+				transactionError(errorMessage);
+				return true;
+			}
+			transactionError(errorMessage);
+			return true;
+		}
+	};
+
+	/**
 	 * Executes market orders for oracle-enabled orders using RaindexOrder.getTakeCalldata(),
 	 * which internally calls the oracle server to populate signedContext.
 	 */
@@ -1652,6 +1773,7 @@ const transactionStore = () => {
 		handleDsfDeploy,
 		handleFolioDeploy,
 		handleOracleOrders,
+		handleAggregatedTakeOrdersCalldata,
 		handleTakeOrders,
 		handleWithdraw,
 		handleWrapUnwrap,
