@@ -17,15 +17,33 @@ export function tokensWithPriceFeed(network: Network | null) {
 	return all.filter((token) => token.chainId === network.chainId && token.priceFeedId);
 }
 
+/** Fetch SPYM price from the liquidity-monitor proxy endpoint. */
+async function fetchSpymPrice(): Promise<{
+	price: number | null;
+	timestamp: number | null;
+} | null> {
+	try {
+		const res = await fetch('/api/prices/spym');
+		if (!res.ok) return null;
+		const data = await res.json();
+		return { price: data.price ?? null, timestamp: data.timestamp ?? null };
+	} catch {
+		return null;
+	}
+}
+
 export function createOracleQuotesQuery(network: Network | null) {
 	return createQuery<Record<string, OracleQuote>>({
 		queryKey: ['oracleQuotes', network?.id],
 		enabled: Boolean(network),
 		refetchInterval: 15_000,
 		queryFn: async () => {
+			if (!network) return {};
 			const tokens = tokensWithPriceFeed(network);
-			if (!tokens.length || !network) return {};
-			const snapshots: OracleSnapshot[] = await getNetworkOracleSnapshots(tokens, network);
+			const [snapshots, spymPrice] = await Promise.all([
+				tokens.length ? getNetworkOracleSnapshots(tokens, network) : ([] as OracleSnapshot[]),
+				fetchSpymPrice()
+			]);
 			const records: Record<string, OracleQuote> = {};
 			snapshots.forEach((snapshot) => {
 				const address = snapshot.token.address?.toLowerCase?.() ?? snapshot.feedId;
@@ -37,6 +55,24 @@ export function createOracleQuotesQuery(network: Network | null) {
 					publishTime: snapshot.publishTime
 				};
 			});
+
+			// Merge SPYM from liquidity-monitor (no Pyth feed)
+			if (spymPrice?.price != null) {
+				const spymToken = TOKENS.find(
+					(t) => t.symbol === 'wtSPYM' && t.chainId === network.chainId
+				);
+				if (spymToken) {
+					const address = spymToken.address.toLowerCase();
+					records[address] = {
+						feedId: '',
+						tokenAddress: spymToken.address,
+						price: spymPrice.price,
+						confidence: null,
+						publishTime: spymPrice.timestamp
+					};
+				}
+			}
+
 			return records;
 		}
 	});

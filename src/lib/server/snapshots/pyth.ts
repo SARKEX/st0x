@@ -11,6 +11,7 @@ import { getTokenByAnyAddress } from '$lib/config/tokens';
 import { getPriceTimestamp } from './marketHours';
 import { HERMES_BASE_URL } from '$lib/config/constants';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
+import { env } from '$env/dynamic/private';
 
 interface PythPriceData {
 	price: string;
@@ -169,6 +170,9 @@ export async function fetchPythPricesAtTimestamp(
 		{ addresses: { address: string; symbol: string }[]; feedId: string }
 	>();
 
+	// Collect tokens that need a non-Pyth price (no feed ID but has fallbackPrice)
+	const fallbackTokenAddresses: { address: string; token: NonNullable<ReturnType<typeof getTokenByAnyAddress>> }[] = [];
+
 	for (const tokenAddress of tokenAddresses) {
 		const token = getTokenByAnyAddress(tokenAddress);
 		if (token?.priceFeedId) {
@@ -184,12 +188,36 @@ export async function fetchPythPricesAtTimestamp(
 				symbol: token.symbol
 			});
 		} else if (token && typeof token.fallbackPrice === 'number') {
-			// Token has no Pyth feed but a hardcoded fallback price is configured.
-			results.set(tokenAddress.toLowerCase(), {
-				tokenAddress: tokenAddress.toLowerCase(),
+			fallbackTokenAddresses.push({ address: tokenAddress, token });
+		}
+	}
+
+	// Fetch SPYM price from liquidity-monitor, fall back to hardcoded price
+	if (fallbackTokenAddresses.length > 0) {
+		let monitorPrice: number | null = null;
+		const monitorUrl = env.LIQUIDITY_MONITOR_URL;
+		if (monitorUrl) {
+			try {
+				const res = await fetch(
+					`${monitorUrl.replace(/\/$/, '')}/api/prices/spym`,
+					{ signal: AbortSignal.timeout(5000) }
+				);
+				if (res.ok) {
+					const data = await res.json();
+					monitorPrice = data.price ?? null;
+				}
+			} catch (e) {
+				console.warn('[Pyth] liquidity-monitor SPYM fetch failed:', e);
+			}
+		}
+
+		for (const { address, token } of fallbackTokenAddresses) {
+			const price = monitorPrice ?? token.fallbackPrice!;
+			results.set(address.toLowerCase(), {
+				tokenAddress: address.toLowerCase(),
 				tokenSymbol: token.symbol,
 				priceFeedId: '',
-				price: token.fallbackPrice,
+				price,
 				confidence: 0,
 				expo: null,
 				publishTime: adjustedTimestamp
