@@ -26,7 +26,8 @@ import {
 import { AbiCoder } from 'ethers';
 import { formatUnits } from 'viem';
 import { Float } from '@rainlanguage/float';
-import transactionStore from '$lib/stores/transaction';
+import { get } from 'svelte/store';
+import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
 import { getSignerAddress } from '$lib/services/walletService';
 
 // Safety bounds for market order execution
@@ -263,8 +264,22 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 						aggregatedParams,
 						isBuy ? paymentToken.symbol : assetToken.symbol
 					);
+					// Handler returns true for any "handled" outcome (success or user-visible error); false = fall back to legacy path.
 					if (aggregatedHandled) {
-						return { success: true };
+						const { status, error: txError } = get(transactionStore);
+						if (status === TransactionStatus.SUCCESS) {
+							return { success: true };
+						}
+						if (status === TransactionStatus.ERROR) {
+							return {
+								success: false,
+								error: txError || 'Order failed'
+							};
+						}
+						return {
+							success: false,
+							error: 'Order did not complete. Please try again.'
+						};
 					}
 				}
 			}
