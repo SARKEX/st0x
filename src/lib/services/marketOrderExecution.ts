@@ -28,28 +28,16 @@ import transactionStore from '$lib/stores/transaction';
 import { getSignerAddress } from '$lib/services/walletService';
 
 // Safety bounds for market order execution
-const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
-const BUY_EXACT_RATIO_MULTIPLIER = '1.01'; // tighter cap for buy-exact to avoid oversized approvals
 const MINIMUM_IO = Float.fromBigint(0n).asHex();
 
 /**
- * Compute emergency ratio hex from a quote's worst fill ratio.
+ * Validate and normalize ratio hex from the walked quote.
  * Returns the ratio as a hex string, or null if any Float operation fails.
  */
-function computeEmergencyRatioHex(
-	ratioHex: `0x${string}`,
-	multiplierRaw: string = EMERGENCY_RATIO_MULTIPLIER
-): `0x${string}` | null {
+function computeEmergencyRatioHex(ratioHex: `0x${string}`): `0x${string}` | null {
 	const ratio = Float.fromHex(ratioHex);
 	if (ratio.error || !ratio.value) return null;
-
-	const multiplier = Float.parse(multiplierRaw);
-	if (multiplier.error || !multiplier.value) return null;
-
-	const emergency = ratio.value.mul(multiplier.value);
-	if (emergency.error || !emergency.value) return null;
-
-	return emergency.value.asHex();
+	return ratio.value.asHex();
 }
 
 export interface MarketOrderInput {
@@ -286,34 +274,50 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		const primaryOrder = executableOrders[0];
 
-		// 7. Calculate approval amount
+		// 7. Compute emergency ratio (worst fill as circuit breaker)
 		const { inputAmountFilled, outputAmountGiven, inputDecimals, outputDecimals } = walkResult;
 
-		let requiredApprovalAmount: bigint;
-		if (isBuy && inputMode !== 'spend') {
-			// Buy+amount: buffer since we accept paying more for target quantity
-			const approvalBuffer = outputAmountGiven / 20n; // 5%
-			requiredApprovalAmount = outputAmountGiven + (approvalBuffer > 0n ? approvalBuffer : 1n);
-		} else {
-			// Buy+spend or Sell: exact spend amount, no padding needed
-			requiredApprovalAmount = amount;
-		}
-
-		// 8. Compute emergency ratio (2x worst fill as circuit breaker)
 		const worstFill = walkResult.fills[walkResult.fills.length - 1];
 		if (!worstFill?.quote?.ratio) {
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
 
-		// Buy+amount uses buyExact mode, so the approval spend cap tracks priceCap.
-		// Keep this tighter than sell/spend to avoid unnecessary 2x approvals.
-		const ratioMultiplier = isBuy && inputMode !== 'spend' ? BUY_EXACT_RATIO_MULTIPLIER : EMERGENCY_RATIO_MULTIPLIER;
-		const emergencyRatioHex = computeEmergencyRatioHex(
-			worstFill.quote.ratio as `0x${string}`,
-			ratioMultiplier
-		);
+		const emergencyRatioHex = computeEmergencyRatioHex(worstFill.quote.ratio as `0x${string}`);
 		if (!emergencyRatioHex) {
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+		}
+
+		// 8. Calculate approval amount
+		let requiredApprovalAmount: bigint;
+		if (isBuy && inputMode !== 'spend') {
+			// Buy+amount: worst-case payment = requested asset amount × emergency ratio.
+			// Using the emergency ratio (worst fill price cap) guarantees the approval is sufficient
+			// even if on-chain prices shift to the circuit-breaker level before execution.
+			const emergencyFloat = Float.fromHex(emergencyRatioHex);
+			const ratioStr = emergencyFloat.value?.format().value;
+			const assetAmountStr = Float.fromFixedDecimalLossy(amount, assetToken.decimals).float.format().value;
+
+			let maxPaymentFromRatio = 0n;
+			if (ratioStr != null && assetAmountStr != null) {
+				const ratioNum = parseFloat(String(ratioStr));
+				const assetNum = parseFloat(String(assetAmountStr));
+				// ratio = asset/payment (STOX per USDC), so maxPayment = assetAmount / ratio
+				if (ratioNum > 0) {
+					const maxPaymentDecimal = assetNum / ratioNum;
+					// Add 1% rounding buffer on top of the theoretical maximum
+					const bufferedPayment = maxPaymentDecimal * 1.01;
+					maxPaymentFromRatio = BigInt(Math.ceil(bufferedPayment * Math.pow(10, paymentToken.decimals)));
+				}
+			}
+
+			// Fallback: outputAmountGiven + 20% if Float parsing fails
+			const fallbackBuffer = outputAmountGiven / 5n;
+			const fallback = outputAmountGiven + (fallbackBuffer > 0n ? fallbackBuffer : 1n);
+
+			requiredApprovalAmount = maxPaymentFromRatio > 0n ? maxPaymentFromRatio : fallback;
+		} else {
+			// Buy+spend or Sell: exact spend amount, no padding needed
+			requiredApprovalAmount = amount;
 		}
 
 		// 9a. Use getTakeCalldata() only when signed context is not already present on fills.
@@ -420,7 +424,9 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				oracleInputs,
 				mode,
 				primaryOrder.order,
+				takerPaysInfo.address,
 				takerPaysInfo.symbol,
+				requiredApprovalAmount,
 				oracleParams
 			);
 			return { success: true };

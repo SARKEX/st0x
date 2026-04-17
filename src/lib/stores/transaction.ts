@@ -122,6 +122,15 @@ function extractTransactionError(
 	return (err?.cause?.details || err?.message || fallback) as TransactionErrorMessage;
 }
 
+function isAllowanceErrorMessage(message?: string): boolean {
+	const normalized = (message ?? '').toLowerCase();
+	return (
+		normalized.includes('allowance') ||
+		normalized.includes('exceeds allowance') ||
+		normalized.includes('transfer amount exceeds allowance')
+	);
+}
+
 // Find a vault by matching both vault ID and token address
 // Vault IDs can be decimal strings or hex strings, so we check both formats
 function findVaultByIdAndToken(
@@ -1237,7 +1246,9 @@ const transactionStore = () => {
 		oracleInputs: OracleOrderInput[],
 		mode: TakeOrdersMode,
 		primaryOrder: SgOrder,
+		approvalTokenAddress: string,
 		approvalTokenSymbol: string,
+		requiredApprovalAmount: bigint,
 		params: TakeOrdersParams
 	) => {
 		const config = get(wagmiConfig);
@@ -1276,13 +1287,70 @@ const transactionStore = () => {
 				oracleInput.priceCapStr
 			);
 
-			const maybeApprovalInfo = (calldataResult.value as { approvalInfo?: { token: string; calldata: string } })
-				?.approvalInfo;
-			if ((calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval && maybeApprovalInfo) {
+			// If preflight fails before approvalInfo is returned, recover once by bumping allowance.
+			if (
+				calldataResult.error &&
+				isAllowanceErrorMessage(calldataResult.error.readableMsg) &&
+				requiredApprovalAmount > 0n
+			) {
+				const currentAllowance = await readContract(config, {
+					abi: erc20Abi,
+					address: approvalTokenAddress as `0x${string}`,
+					functionName: 'allowance',
+					args: [$signerAddress as Hex, primaryOrder.orderbook.id as `0x${string}`]
+				});
+				const bumpedAllowance = currentAllowance + requiredApprovalAmount + 1n;
 				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
 				const approvalHash = await sendTransaction({
+					to: approvalTokenAddress as `0x${string}`,
+					data: encodeFunctionData({
+						abi: erc20Abi,
+						functionName: 'approve',
+						args: [primaryOrder.orderbook.id as `0x${string}`, bumpedAllowance]
+					}) as Hex
+				});
+				awaitApprovalTx(approvalHash);
+				await waitForTransaction(approvalHash);
+				calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+					oracleInput.inputIndex,
+					oracleInput.outputIndex,
+					oracleInput.taker,
+					mode,
+					oracleInput.amountStr,
+					oracleInput.priceCapStr
+				);
+			}
+
+			const maybeApprovalInfo = (
+				calldataResult.value as {
+					approvalInfo?: {
+						token: string;
+						calldata: string;
+						spender?: `0x${string}`;
+						amount?: Float;
+					};
+				}
+			)?.approvalInfo;
+			if ((calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval && maybeApprovalInfo) {
+				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+				let approvalCalldata = maybeApprovalInfo.calldata as Hex;
+				if (maybeApprovalInfo.amount && maybeApprovalInfo.spender) {
+					const amountResult = maybeApprovalInfo.amount.toFixedDecimalLossy(params.takerPaysToken.decimals);
+					if (!amountResult.error && amountResult.value) {
+						let roundedApprovalAmount = BigInt(amountResult.value.value);
+						if (!amountResult.value.lossless) {
+							roundedApprovalAmount += 1n;
+						}
+						approvalCalldata = encodeFunctionData({
+							abi: erc20Abi,
+							functionName: 'approve',
+							args: [maybeApprovalInfo.spender, roundedApprovalAmount]
+						}) as Hex;
+					}
+				}
+				const approvalHash = await sendTransaction({
 					to: maybeApprovalInfo.token as `0x${string}`,
-					data: maybeApprovalInfo.calldata as Hex
+					data: approvalCalldata
 				});
 				awaitApprovalTx(approvalHash);
 				await waitForTransaction(approvalHash);
@@ -1403,7 +1471,7 @@ const transactionStore = () => {
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV5,
 		raindexOrder: SgOrder,
-		_requiredApprovalAmount: bigint,
+		requiredApprovalAmount: bigint,
 		params: TakeOrdersParams,
 		recalculateConfig?: () => Promise<TakeOrdersConfigV5 | null>,
 		raindexOrders?: RaindexOrder[]
@@ -1527,22 +1595,82 @@ const transactionStore = () => {
 					amountStr,
 					priceCapStr
 				);
+				let recoveredCalldataResult = calldataResult;
+				if (
+					calldataResult.error &&
+					isAllowanceErrorMessage(calldataResult.error.readableMsg) &&
+					requiredApprovalAmount > 0n
+				) {
+					const currentAllowance = await readContract(config, {
+						abi: erc20Abi,
+						address: approvalTokenAddress as `0x${string}`,
+						functionName: 'allowance',
+						args: [$signerAddress as Hex, raindexOrder.orderbook.id as `0x${string}`]
+					});
+					const bumpedAllowance = currentAllowance + requiredApprovalAmount + 1n;
+					awaitWalletConfirmation(
+						`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
+						progressData
+					);
+					const approvalHash = await sendTransaction({
+						to: approvalTokenAddress as `0x${string}`,
+						data: encodeFunctionData({
+							abi: erc20Abi,
+							functionName: 'approve',
+							args: [raindexOrder.orderbook.id as `0x${string}`, bumpedAllowance]
+						}) as Hex
+					});
+					awaitApprovalTx(approvalHash);
+					await waitForTransaction(approvalHash);
+					recoveredCalldataResult = await orderToExecute.getTakeCalldata(
+						Number(orderConfig.inputIOIndex),
+						Number(orderConfig.outputIOIndex),
+						$signerAddress,
+						mode,
+						amountStr,
+						priceCapStr
+					);
+				}
 
 				const maybeApprovalInfo = (
-					calldataResult.value as { approvalInfo?: { token: string; calldata: string } }
+					recoveredCalldataResult.value as {
+						approvalInfo?: {
+							token: string;
+							calldata: string;
+							spender?: `0x${string}`;
+							amount?: Float;
+						};
+					}
 				)?.approvalInfo;
-				let readyCalldataResult = calldataResult;
+				let readyCalldataResult = recoveredCalldataResult;
 				if (
-					(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
+					(recoveredCalldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
 					maybeApprovalInfo
 				) {
 					awaitWalletConfirmation(
 						`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
 						progressData
 					);
+					let approvalCalldata = maybeApprovalInfo.calldata as Hex;
+					if (maybeApprovalInfo.amount && maybeApprovalInfo.spender) {
+						const amountResult = maybeApprovalInfo.amount.toFixedDecimalLossy(
+							params.takerPaysToken.decimals
+						);
+						if (!amountResult.error && amountResult.value) {
+							let roundedApprovalAmount = BigInt(amountResult.value.value);
+							if (!amountResult.value.lossless) {
+								roundedApprovalAmount += 1n;
+							}
+							approvalCalldata = encodeFunctionData({
+								abi: erc20Abi,
+								functionName: 'approve',
+								args: [maybeApprovalInfo.spender, roundedApprovalAmount]
+							}) as Hex;
+						}
+					}
 					const approvalHash = await sendTransaction({
 						to: maybeApprovalInfo.token as `0x${string}`,
-						data: maybeApprovalInfo.calldata as Hex
+						data: approvalCalldata
 					});
 					awaitApprovalTx(approvalHash);
 					await waitForTransaction(approvalHash);
