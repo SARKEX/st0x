@@ -31,6 +31,9 @@ import { getSignerAddress } from '$lib/services/walletService';
 const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
 const BUY_EXACT_RATIO_MULTIPLIER = '1.01'; // tighter cap for buy-exact to avoid oversized approvals
 const MINIMUM_IO = Float.fromBigint(0n).asHex();
+// No price cap: accept any ratio the order offers
+const MAX_IO_RATIO_HEX = Float.maxPositiveValue().value!.asHex();
+const MAX_IO_RATIO_STR = String(Float.maxPositiveValue().value!.formatWithScientific(true).value ?? '1e+38');
 
 /**
  * Compute emergency ratio hex from a quote's worst fill ratio.
@@ -346,8 +349,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					? paymentToken.decimals
 					: assetToken.decimals;
 
-			const emergencyFloat = Float.fromHex(emergencyRatioHex);
-			const priceCapStr = String(emergencyFloat.value?.format().value ?? '1e+18');
+			const priceCapStr = MAX_IO_RATIO_STR;
 
 			const takerAddress = getSignerAddress();
 			if (!takerAddress) {
@@ -444,7 +446,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const takeOrdersConfig: TakeOrdersConfigV5 = {
 			minimumIO: MINIMUM_IO,
 			maximumIO: maximumIOFloat.float.asHex(),
-			maximumIORatio: emergencyRatioHex,
+			maximumIORatio: MAX_IO_RATIO_HEX,
 			IOIsInput: !useOutputCap as unknown as string,
 			orders: takeOrderConfigs,
 			data: '0x'
@@ -502,7 +504,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 							return {
 								minimumIO: MINIMUM_IO,
 								maximumIO: freshMaximumIO.float.asHex(),
-								maximumIORatio: freshEmergencyRatioHex,
+								maximumIORatio: MAX_IO_RATIO_HEX,
 								IOIsInput: false as unknown as string,
 								orders: takeOrderConfigs,
 								data: '0x'
