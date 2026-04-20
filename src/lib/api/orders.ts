@@ -1,27 +1,20 @@
 /**
  * Orders API
  *
- * Fetches orders from the Raindex API and processes them with quotes
+ * Fetches orders from the st0x REST API and converts them to ProcessedQuotes.
+ * Server-side quoting and caching eliminates client-side Raindex SDK usage for orders.
  */
 
-import type {
-	RaindexOrder,
-	RaindexOrderQuote,
-	GetOrdersFilters,
-	OrderV4,
-	SignedContextV1
-} from '@rainlanguage/orderbook';
 import {
 	networks,
 	TOKENS,
 	DEFAULT_PAYMENT_TOKENS,
 	getDefaultPaymentTokenForNetwork
 } from '$lib/config/network';
-import { AbiCoder } from 'ethers';
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
-import { createRaindexClient, getLoadBalancedClient } from '$lib/clients/raindex';
 import { Float } from '@rainlanguage/float';
+import type { SgOrder } from '@rainlanguage/orderbook';
 import {
 	type ProcessedQuote,
 	OrderV4_ABI,
@@ -29,21 +22,17 @@ import {
 	buildTokenPriceMap as buildTokenPriceMapBase,
 	type TokenPriceSummary,
 	scaleAmount,
-	classifyOrderType,
 	walkOrderbook,
 	hexToBigInt
 } from '$lib/utils/orderbook';
-import { fetchQuotesWithBatching } from '$lib/utils/quoteBatcher';
+import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
 
-// Re-export types and utilities
 export type { ProcessedQuote, TokenPriceSummary };
 export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, hexToBigInt };
 
-// Re-export buildTokenPriceMap with describeQuote injected
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
 	buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);
 
-// Helper function to get token metadata by address
 function getTokenMetadata(address: string, tokens: PythToken[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
 	return {
@@ -52,329 +41,175 @@ function getTokenMetadata(address: string, tokens: PythToken[]) {
 	};
 }
 
-// Process orders with their quotes
-function processOrdersWithQuotes(
-	orders: RaindexOrder[],
-	quotesMap: Map<RaindexOrder, RaindexOrderQuote[]>,
-	quoteToken: PythToken,
-	stockTokens: PythToken[]
-): ProcessedQuote[] {
-	const processedQuotes: ProcessedQuote[] = [];
+/**
+ * Convert an API OrderSummary into a ProcessedQuote.
+ *
+ * Uses Float.parse() to convert the server's decimal ioRatio and outputVaultBalance
+ * back into hex-encoded Float strings, preserving compatibility with walkOrderbook
+ * and computeEmergencyRatioHex which expect hex Float format.
+ *
+ * The sgOrder is created as a minimal stub with just orderHash — marketOrderExecution.ts
+ * hydrates the full order from Raindex before executing.
+ */
+function convertApiOrderToProcessedQuote(
+	order: ApiOrderSummary,
+	quoteTokenAddress: string,
+	allTokens: PythToken[]
+): ProcessedQuote | null {
+	// Skip orders with no valid quote
+	if (!order.ioRatio || order.ioRatio === '-') return null;
 
-	// Process each order with its quotes
-	orders.forEach((order) => {
-		const quotes = quotesMap.get(order);
-		if (!quotes || quotes.length === 0) {
-			return;
+	// Skip orders with zero balance
+	const balance = parseFloat(order.outputVaultBalance);
+	if (!Number.isFinite(balance) || balance <= 0) return null;
+
+	// Filter: at least one side must be the quote (payment) token
+	const normalizedInput = normalizeAddress(order.inputToken.address);
+	const normalizedOutput = normalizeAddress(order.outputToken.address);
+	const normalizedQuote = normalizeAddress(quoteTokenAddress);
+	if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
+		return null;
+	}
+
+	// Convert ioRatio decimal to hex Float for consumers expecting hex (e.g. computeEmergencyRatioHex)
+	const ratioFloat = Float.parse(order.ioRatio);
+	if (ratioFloat.error || !ratioFloat.value) return null;
+	const ratio = ratioFloat.value.asHex();
+
+	// Convert outputVaultBalance to hex Float for walkOrderbook's computeAvailableQuantity
+	const balanceFloat = Float.parse(order.outputVaultBalance);
+	if (balanceFloat.error || !balanceFloat.value) return null;
+	const maxOutput = balanceFloat.value.asHex();
+
+	// Get token metadata from config (for symbol fallback)
+	const inputMeta = getTokenMetadata(order.inputToken.address, allTokens);
+	const outputMeta = getTokenMetadata(order.outputToken.address, allTokens);
+
+	const processedQuote: ProcessedQuote = {
+		orderHash: order.orderHash,
+		maxOutput,
+		ratio,
+		inputTokenSymbol: order.inputToken.symbol || inputMeta.symbol,
+		outputTokenSymbol: order.outputToken.symbol || outputMeta.symbol,
+		inputTokenAddress: order.inputToken.address,
+		outputTokenAddress: order.outputToken.address,
+		inputIOIndex: 0,
+		outputIOIndex: 0,
+		sgOrder: { orderHash: order.orderHash } as SgOrder,
+		orderbookId: order.orderbookId,
+		inputTokenDecimals: order.inputToken.decimals ?? inputMeta.decimals ?? 18,
+		outputTokenDecimals: order.outputToken.decimals ?? outputMeta.decimals ?? 18
+	};
+
+	// Pre-compute side and price from the ioRatio
+	const ioRatioNum = parseFloat(order.ioRatio);
+	if (Number.isFinite(ioRatioNum) && ioRatioNum > 0) {
+		if (normalizedInput === normalizedQuote) {
+			// ASK order: input=quote(USDC), output=asset — seller offering to sell
+			processedQuote.side = 'ask';
+			processedQuote.assetAddress = normalizedOutput ?? order.outputToken.address;
+			processedQuote.quotePerAsset = ioRatioNum;
+		} else {
+			// BID order: input=asset, output=quote(USDC) — buyer offering to buy
+			processedQuote.side = 'bid';
+			processedQuote.assetAddress = normalizedInput ?? order.inputToken.address;
+			processedQuote.quotePerAsset = 1 / ioRatioNum;
 		}
+	}
 
-		try {
-			// Convert RaindexOrder to SgOrder to get orderBytes
-			const sgOrderResult = order.convertToSgOrder();
-			if (sgOrderResult.error || !sgOrderResult.value) {
-				return;
-			}
-			const sgOrder = sgOrderResult.value;
-
-			// Decode order to get token addresses
-			const abiCoder = AbiCoder.defaultAbiCoder();
-			const decodedOrder = abiCoder.decode([OrderV4_ABI], sgOrder.orderBytes);
-			const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
-
-			// Process each quote for this order
-			quotes.forEach((quote) => {
-				try {
-					// Skip if the quote failed
-					if (!quote.success || !quote.data) {
-						return;
-					}
-
-					const { maxOutput, ratio } = quote.data;
-
-					// Validate that we have valid hex-encoded Float values (0x + 64 hex chars = 66 chars total)
-					if (
-						typeof ratio !== 'string' ||
-						!ratio.startsWith('0x') ||
-						ratio.length !== 66 ||
-						typeof maxOutput !== 'string' ||
-						!maxOutput.startsWith('0x') ||
-						maxOutput.length !== 66
-					) {
-						return;
-					}
-
-					// Verify maxOutput is not zero by converting to Float and checking
-					const maxOutputFloat = Float.fromHex(maxOutput as `0x${string}`);
-					if (maxOutputFloat.error || !maxOutputFloat.value) {
-						return;
-					}
-					// Check if maxOutput is zero
-					const zeroFloat = Float.fromHex(
-						'0x0000000000000000000000000000000000000000000000000000000000000000'
-					);
-					if (!zeroFloat.error && zeroFloat.value) {
-						const isZero = maxOutputFloat.value.eq(zeroFloat.value);
-						if (!isZero.error && isZero.value) {
-							return;
-						}
-					}
-					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
-					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
-					if (!inputDefinition || !outputDefinition) {
-						return;
-					}
-
-					// Use the input/output indexes from the quote pair
-					const inputTokenAddress = inputDefinition.token;
-					const outputTokenAddress = outputDefinition.token;
-
-					// Filter out quotes where neither input nor output is the quote token
-					const normalizedInput = normalizeAddress(inputTokenAddress);
-					const normalizedOutput = normalizeAddress(outputTokenAddress);
-					const normalizedQuote = normalizeAddress(quoteToken.address);
-					if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
-						return;
-					}
-					const allTokens = [quoteToken, ...stockTokens];
-					const inputTokenMeta = getTokenMetadata(inputTokenAddress, allTokens);
-					const outputTokenMeta = getTokenMetadata(outputTokenAddress, allTokens);
-
-					const inputDecimals = Number.isFinite(inputTokenMeta.decimals)
-						? Number(inputTokenMeta.decimals)
-						: undefined;
-					const outputDecimals = Number.isFinite(outputTokenMeta.decimals)
-						? Number(outputTokenMeta.decimals)
-						: undefined;
-
-					// Get rainlang source from the RaindexOrder and classify order type
-					const rainlang = order.rainlang;
-					const orderType = classifyOrderType(rainlang);
-
-					// Skip dynamic spread orders (return null from classifyOrderType)
-					if (orderType === null) {
-						return;
-					}
-
-					const quoteSignedContext = (
-						quote as RaindexOrderQuote & { signedContext?: SignedContextV1[] }
-					).signedContext;
-
-					const processedQuote: ProcessedQuote = {
-						orderHash: sgOrder.orderHash,
-						maxOutput,
-						ratio,
-						inputTokenSymbol: inputTokenMeta.symbol,
-						outputTokenSymbol: outputTokenMeta.symbol,
-						inputTokenAddress,
-						outputTokenAddress,
-						inputIOIndex: quote.pair.inputIndex ?? 0,
-						outputIOIndex: quote.pair.outputIndex ?? 0,
-						inputVaultId: inputDefinition.vaultId?.toString?.() ?? inputDefinition.vaultId,
-						outputVaultId: outputDefinition.vaultId?.toString?.() ?? outputDefinition.vaultId,
-						orderData,
-						sgOrder,
-						raindexOrder: order,
-						orderbookId: sgOrder.orderbook.id,
-						inputTokenDecimals:
-							inputDecimals ??
-							(normalizeAddress(inputTokenAddress) === normalizeAddress(quoteToken.address)
-								? quoteToken.decimals ?? 18
-								: 18),
-						outputTokenDecimals:
-							outputDecimals ??
-							(normalizeAddress(outputTokenAddress) === normalizeAddress(quoteToken.address)
-								? quoteToken.decimals ?? 18
-								: 18),
-						rainlang,
-						orderType,
-						...(quoteSignedContext?.length ? { signedContext: quoteSignedContext } : {})
-					};
-
-					const metrics = describeQuote(processedQuote, quoteToken.address);
-
-					if (metrics) {
-						processedQuote.side = metrics.side;
-						const normalizedAsset = normalizeAddress(metrics.assetAddress);
-						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
-						processedQuote.quotePerAsset = metrics.quotePerAsset;
-					}
-
-					processedQuotes.push(processedQuote);
-				} catch (error) {
-					// Skip quotes that fail to process (malformed data, decoding errors)
-					console.error('Error processing quote:', error);
-				}
-			});
-		} catch (error) {
-			// Skip orders that fail to process
-			console.error('Error processing order:', error);
-		}
-	});
-
-	return processedQuotes;
+	return processedQuote;
 }
 
-/**
- * Fetches all orders from subgraph, filters orders that involve the configured payment token and stock tokens,
- * and quotes all filtered orders using the RaindexClient API.
- */
-export async function fetchAndQuotePaymentTokenOrders(
-	networkId: number = 8453,
-	options: { maxPages?: number; pageSize?: number } = {},
+function resolveNetworkTokens(
+	networkId: number,
 	overridePaymentToken?: PythToken
-) {
-	const { maxPages = 100, pageSize = 1000 } = options;
-
-	// Get network configuration
-	const network = networks.find((n) => n.id === networkId);
-	if (!network) {
+): { paymentToken: PythToken; stockTokens: PythToken[]; allTokens: PythToken[] } {
+	if (!networks.some((n) => n.id === networkId)) {
 		throw new Error(`Network with id ${networkId} not found`);
 	}
 
-	// Determine the payment token for the network
-	const defaultPaymentToken =
+	const paymentToken =
 		overridePaymentToken ??
 		getDefaultPaymentTokenForNetwork(networkId) ??
 		DEFAULT_PAYMENT_TOKENS[networkId];
-	if (!defaultPaymentToken) {
+	if (!paymentToken) {
 		throw new Error(`Payment token not found for network ${networkId}`);
 	}
 
-	// Get stock tokens for the network
 	const stockTokens = TOKENS.filter(
 		(token) => token.chainId === networkId && token.category === 'ST0x'
 	);
 
-	// Create RaindexClient using standard configuration
-	const client = await createRaindexClient();
+	return { paymentToken, stockTokens, allTokens: [paymentToken, ...stockTokens] };
+}
 
-	// Fetch all orders with pagination
-	const allOrders: RaindexOrder[] = [];
-	let page = 1;
-	let hasMore = true;
+/**
+ * Fetches all orders for all stock tokens via the REST API and converts them to ProcessedQuotes.
+ * The REST API handles server-side quoting and caching.
+ */
+export async function fetchAndQuotePaymentTokenOrders(
+	networkId: number = 8453,
+	overridePaymentToken?: PythToken
+) {
+	const { paymentToken, stockTokens, allTokens } = resolveNetworkTokens(
+		networkId,
+		overridePaymentToken
+	);
 
-	while (hasMore) {
-		try {
-			// Use GetOrdersFilters to specify what orders to fetch
-			const filters: GetOrdersFilters = {
-				active: true,
-				owners: []
-			};
+	const processedQuotes: ProcessedQuote[] = [];
+	const seen = new Set<string>();
 
-			// Filter only by stock tokens - payment token filtering is too restrictive
-			// Orders should be visible regardless of which payment token is configured
-			const tokenAddresses = stockTokens.map((t) => t.address as `0x${string}`);
-
-			filters.tokens = { inputs: tokenAddresses, outputs: tokenAddresses };
-
-			const ordersResult = await client.getOrders([networkId], filters, page);
-
-			if (ordersResult.error) {
-				throw new Error(ordersResult.error.readableMsg);
+	const results = await Promise.allSettled(
+		stockTokens.map(async (token) => {
+			let page = 1;
+			let hasMore = true;
+			while (hasMore && page <= 10) {
+				const response = await apiGetOrdersByToken(token.address, { page, pageSize: 50 });
+				for (const order of response.orders) {
+					if (seen.has(order.orderHash)) continue;
+					seen.add(order.orderHash);
+					const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens);
+					if (quote) processedQuotes.push(quote);
+				}
+				hasMore = response.pagination.hasMore;
+				page++;
 			}
+		})
+	);
 
-			const pageOrders = ordersResult.value.orders;
-			allOrders.push(...pageOrders);
-
-			// If we got fewer orders than the page size, we've reached the end
-			hasMore = pageOrders.length === pageSize;
-			page++;
-
-			// Check if we've reached the maximum number of pages
-			if (page > maxPages) {
-				hasMore = false;
-			}
-
-			// Add a small delay to avoid overwhelming the API
-			if (hasMore) {
-				await new Promise((resolve) => setTimeout(resolve, 100));
-			}
-		} catch (error) {
-			// If it's a network error, we might want to retry
-			if (page > 1) {
-				break;
-			} else {
-				throw error;
-			}
+	// Log any failed token fetches
+	for (const result of results) {
+		if (result.status === 'rejected') {
+			console.warn('[orders] Token fetch failed:', result.reason);
 		}
 	}
-
-	// Get quotes using batching with jitter and retries (same as fetchAndQuoteTokenOrders)
-	const quotesMap = await fetchQuotesWithBatching(allOrders);
-
-	// Process and filter the quotes
-	const processedQuotes = processOrdersWithQuotes(
-		allOrders,
-		quotesMap,
-		defaultPaymentToken,
-		stockTokens
-	);
 
 	return processedQuotes;
 }
 
 /**
- * Fetches orders for a specific token only.
- * Much more efficient than fetching all orders.
- *
- * @param networkId - The network ID
- * @param tokenAddress - The specific token address to fetch orders for
- * @param overridePaymentToken - Optional override for payment token
+ * Fetches orders for a specific token via the REST API.
+ * The API handles server-side quoting and caching.
  */
 export async function fetchAndQuoteTokenOrders(
 	networkId: number,
 	tokenAddress: string,
 	overridePaymentToken?: PythToken
 ) {
-	// Get network configuration
-	const network = networks.find((n) => n.id === networkId);
-	if (!network) {
-		throw new Error(`Network with id ${networkId} not found`);
+	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
+
+	const processedQuotes: ProcessedQuote[] = [];
+	let page = 1;
+	let hasMore = true;
+	while (hasMore && page <= 10) {
+		const response = await apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 });
+		for (const order of response.orders) {
+			const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens);
+			if (quote) processedQuotes.push(quote);
+		}
+		hasMore = response.pagination.hasMore;
+		page++;
 	}
-
-	// Determine the payment token for the network
-	const defaultPaymentToken =
-		overridePaymentToken ??
-		getDefaultPaymentTokenForNetwork(networkId) ??
-		DEFAULT_PAYMENT_TOKENS[networkId];
-	if (!defaultPaymentToken) {
-		throw new Error(`Payment token not found for network ${networkId}`);
-	}
-
-	// Get stock tokens for the network (for metadata)
-	const stockTokens = TOKENS.filter(
-		(token) => token.chainId === networkId && token.category === 'ST0x'
-	);
-
-	// Get load-balanced client (round-robin between 2 clients, SDK handles RPC failover)
-	const client = await getLoadBalancedClient(network);
-
-	// Fetch orders for this specific token only
-	const tokenAddr = tokenAddress as `0x${string}`;
-	const filters: GetOrdersFilters = {
-		active: true,
-		owners: [],
-		tokens: { inputs: [tokenAddr], outputs: [tokenAddr] }
-	};
-
-	const ordersResult = await client.getOrders([networkId], filters, 1);
-
-	if (ordersResult.error) {
-		throw new Error(ordersResult.error.readableMsg);
-	}
-
-	const allOrders = ordersResult.value.orders;
-
-	// Get quotes using batching with jitter and retries
-	const quotesMap = await fetchQuotesWithBatching(allOrders);
-
-	// Process and filter the quotes
-	const processedQuotes = processOrdersWithQuotes(
-		allOrders,
-		quotesMap,
-		defaultPaymentToken,
-		stockTokens
-	);
 
 	return processedQuotes;
 }

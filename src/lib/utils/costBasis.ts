@@ -1,6 +1,32 @@
-import type { SgTrade } from '@rainlanguage/orderbook';
 import { toDecimal } from '$lib/utils/tokenMath';
 import { getMigrationMappingByAddress } from '$lib/config/tokenMigration';
+
+/**
+ * Minimal trade shape consumed by cost basis calculation.
+ * Compatible with SgTrade from @rainlanguage/orderbook but does not depend on it.
+ * API-sourced trades can satisfy this interface directly.
+ */
+export interface CostBasisTrade {
+	timestamp: number | string;
+	inputVaultBalanceChange?: {
+		amount?: string;
+		vault?: {
+			token?: { address?: string; decimals?: number | string };
+			owner?: string;
+		};
+	};
+	outputVaultBalanceChange?: {
+		amount?: string;
+		vault?: {
+			token?: { address?: string; decimals?: number | string };
+			owner?: string;
+		};
+	};
+	tradeEvent?: {
+		sender?: string;
+		transaction?: { from?: string };
+	};
+}
 
 export interface CostBasisData {
 	tokenAddress: string;
@@ -34,7 +60,7 @@ export interface PortfolioPnL {
  * @param userAddress - The user's wallet address (to determine taker vs maker)
  */
 export function calculateCostBasisForToken(
-	trades: SgTrade[],
+	trades: CostBasisTrade[],
 	assetTokenAddress: string,
 	paymentTokenAddresses: Set<string>,
 	userAddress: string
@@ -72,12 +98,8 @@ export function calculateCostBasisForToken(
 		const outputDecimals = Number(trade.outputVaultBalanceChange?.vault?.token?.decimals ?? 18);
 
 		// Get vault owners to determine if user is maker
-		const inputVaultOwner = (
-			trade.inputVaultBalanceChange?.vault as { owner?: string }
-		)?.owner?.toLowerCase();
-		const outputVaultOwner = (
-			trade.outputVaultBalanceChange?.vault as { owner?: string }
-		)?.owner?.toLowerCase();
+		const inputVaultOwner = trade.inputVaultBalanceChange?.vault?.owner?.toLowerCase();
+		const outputVaultOwner = trade.outputVaultBalanceChange?.vault?.owner?.toLowerCase();
 		const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
 		const txFrom = trade.tradeEvent?.transaction?.from?.toLowerCase();
 
@@ -91,7 +113,7 @@ export function calculateCostBasisForToken(
 			continue;
 		}
 
-		// Get amounts - these are Float hex strings from Rain orderbook
+		// Get amounts (hex Float from subgraph, or decimal strings from REST API)
 		const inputAmountRaw = trade.inputVaultBalanceChange?.amount;
 		const outputAmountRaw = trade.outputVaultBalanceChange?.amount;
 
@@ -180,7 +202,7 @@ export function calculateCostBasisForToken(
  * @param userAddress - The user's wallet address
  */
 export function calculateAllCostBases(
-	trades: SgTrade[],
+	trades: CostBasisTrade[],
 	paymentTokenAddresses: Set<string>,
 	userAddress: string
 ): Map<string, CostBasisData> {
@@ -243,15 +265,7 @@ export function calculateAllCostBases(
 			});
 		} else {
 			// New wrapped token has no trades yet — carry over old token's cost basis directly
-			costBasisMap.set(newTokenAddress, {
-				tokenAddress: newTokenAddress,
-				avgCostBasis: costBasis.avgCostBasis,
-				totalCost: costBasis.totalCost,
-				totalAcquired: costBasis.totalAcquired,
-				totalSold: costBasis.totalSold,
-				netPosition: costBasis.netPosition,
-				realizedPnL: costBasis.realizedPnL
-			});
+			costBasisMap.set(newTokenAddress, { ...costBasis, tokenAddress: newTokenAddress });
 		}
 
 		// Remove old token's cost basis entry (it's now merged)

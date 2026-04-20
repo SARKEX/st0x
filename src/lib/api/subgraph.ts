@@ -382,217 +382,25 @@ export const getTrades = async (
   }
 }`;
 
-	try {
-		// Query all orderbook subgraph URLs and combine results
-		const allTradesPromises = allOrderbookUrls.map(async (url) => {
+	const allTradesResults = await Promise.all(
+		allOrderbookUrls.map(async (url) => {
 			try {
-				const trades = await fetchAllPaginatedData(
+				return await fetchAllPaginatedData(
 					url,
 					tradesQuery,
-					{ timestampGt: timestampGt, timestampLt: timestampLt },
+					{ timestampGt, timestampLt },
 					'trades'
 				);
-
-				return trades;
 			} catch {
 				return [];
 			}
-		});
+		})
+	);
 
-		// Wait for all queries to complete
-		const allTradesResults = await Promise.all(allTradesPromises);
-
-		// Combine all results and remove duplicates based on trade ID
-		const allTrades = allTradesResults.flat();
-		const uniqueTrades = allTrades.filter(
-			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
-		);
-
-		return uniqueTrades;
-	} catch (error) {
-		throw new Error(
-			`Failed to fetch trades: ${error instanceof Error ? error.message : 'Unknown error'}`
-		);
-	}
-};
-
-// GraphQL fragment for trade fields - shared between queries
-const TRADE_FIELDS = `
-    id
-    tradeEvent{
-      transaction{
-        id
-        from
-        blockNumber
-        timestamp
-      }
-      sender
-    }
-    outputVaultBalanceChange {
-      id
-      __typename
-      amount
-      newVaultBalance
-      oldVaultBalance
-      vault {
-        id
-        vaultId
-        owner
-        token {
-          id
-          address
-          name
-          symbol
-          decimals
-        }
-      }
-      timestamp
-      transaction{
-        id
-        from
-        blockNumber
-        timestamp
-      }
-      orderbook{
-        id
-      }
-    }
-    order{
-      id
-      orderHash
-    }
-    inputVaultBalanceChange {
-      id
-      __typename
-      amount
-      newVaultBalance
-      oldVaultBalance
-      vault {
-        id
-        vaultId
-        owner
-        token {
-          id
-          address
-          name
-          symbol
-          decimals
-        }
-      }
-      timestamp
-      transaction{
-        id
-        from
-        blockNumber
-        timestamp
-      }
-      orderbook{
-        id
-      }
-    }
-    timestamp
-    orderbook{
-      id
-    }`;
-
-/**
- * Fetch ALL trades where the specified address is either:
- * 1. The sender (taker) - market orders
- * 2. The vault owner (maker) - limit order fills
- * Used for cost basis calculation to capture both market and limit order trades.
- */
-export const getTradesByUserAllTime = async (
-	userAddress: string,
-	tokenAddress: string | null,
-	network?: Network,
-	includeInactive: boolean = true
-): Promise<SgTrade[]> => {
-	if (!userAddress) {
-		return [];
-	}
-
-	const allOrderbookUrls: string[] = [];
-
-	if (network?.orderbook_subgraph_url) {
-		allOrderbookUrls.push(network.orderbook_subgraph_url);
-	}
-
-	if (
-		includeInactive &&
-		network?.orderbook_subgraph_urls_inactive &&
-		network.orderbook_subgraph_urls_inactive.length > 0
-	) {
-		allOrderbookUrls.push(...network.orderbook_subgraph_urls_inactive);
-	}
-
-	if (allOrderbookUrls.length === 0) {
-		return [];
-	}
-
-	// Query all trades without timestamp filter
-	const tradesQuery = `query TradesByUserAllTime($skip: Int = 0, $first: Int = 1000) {
-  trades(skip: $skip, first: $first, orderBy: timestamp, orderDirection: desc) {
-${TRADE_FIELDS}
-  }
-}`;
-
-	try {
-		const allTradesPromises = allOrderbookUrls.map(async (url) => {
-			try {
-				return await fetchAllPaginatedData(url, tradesQuery, {}, 'trades');
-			} catch {
-				return [];
-			}
-		});
-
-		const allTradesResults = await Promise.all(allTradesPromises);
-		const allTrades = allTradesResults.flat();
-
-		// Remove duplicates
-		let uniqueTrades = allTrades.filter(
-			(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
-		);
-
-		// Filter by user address - include trades where user is either:
-		// 1. The sender (taker) - they executed a market order via UI
-		// 2. The transaction initiator - they signed a tx (e.g., via aggregator)
-		// 3. The vault owner (maker) - their limit order/DCA was filled
-		const normalizedUser = userAddress.toLowerCase();
-		uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
-			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
-			const txFrom = trade.tradeEvent?.transaction?.from?.toLowerCase();
-			const inputVaultOwner = (
-				trade.inputVaultBalanceChange?.vault as { owner?: string }
-			)?.owner?.toLowerCase();
-			const outputVaultOwner = (
-				trade.outputVaultBalanceChange?.vault as { owner?: string }
-			)?.owner?.toLowerCase();
-
-			return (
-				tradeSender === normalizedUser ||
-				txFrom === normalizedUser ||
-				inputVaultOwner === normalizedUser ||
-				outputVaultOwner === normalizedUser
-			);
-		});
-
-		// Filter by token address if provided
-		if (tokenAddress) {
-			const normalizedToken = tokenAddress.toLowerCase();
-			uniqueTrades = uniqueTrades.filter((trade: SgTrade) => {
-				const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				const outputTokenAddr =
-					trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-				return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
-			});
-		}
-
-		return uniqueTrades;
-	} catch (error) {
-		throw new Error(
-			`Failed to fetch trades by user: ${error instanceof Error ? error.message : 'Unknown error'}`
-		);
-	}
+	const allTrades = allTradesResults.flat();
+	return allTrades.filter(
+		(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
+	);
 };
 
 // A GraphQL error typically indicates a permanent problem with the query (bad
@@ -683,7 +491,6 @@ export async function fetchAllPaginatedData(
 	let skip = 0;
 	let hasMore = true;
 	while (hasMore) {
-		// Prepare variables with updated pagination parameters
 		const paginatedVariables = { ...variables, skip, first };
 		const body = JSON.stringify({ query, variables: paginatedVariables });
 
@@ -710,13 +517,10 @@ export async function fetchAllPaginatedData(
 			return allItems;
 		}
 
-		allItems.push(...items); // Append items to the result array
-		// Check if fewer items are returned than the `first` limit
+		allItems.push(...items);
 		if (items.length < first) {
-			// All items fetched; exit the loop
 			hasMore = false;
 		}
-		// Increment skip for the next batch
 		skip += first;
 	}
 	return allItems;
