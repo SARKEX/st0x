@@ -55,10 +55,10 @@ function humanPriceCapStr(
 
 /**
  * Optional per-leg shave on buy asset amount sent to `getTakeCalldata` / `takeOrders`.
- * Keep at 0 for exact-size UX (buy 0.15 should execute as 0.15, not 0.14955).
- * If thin-book SDK/oracle mismatches reappear, prefer retries/refresh over global shaving.
+ * Temporary stabilizer for thin-book execution edge cases (Insufficient liquidity / MinimumIO).
+ * This may underfill exact-size buys slightly.
  */
-const BUY_FILL_EXECUTION_HAIRCUT_BPS = 0n;
+const BUY_FILL_EXECUTION_HAIRCUT_BPS = 30n;
 
 function haircutBuyExecutionFill(amount: bigint): bigint {
 	if (amount <= 0n) return 0n;

@@ -22,13 +22,6 @@
 	const handleMultiTxAcknowledge = () => {
 		transactionStore.acknowledgeMultiTx();
 	};
-	const handleMultiTxDecline = () => {
-		transactionStore.declineMultiTx();
-	};
-
-	const handleMakerRerouteDecision = (approved: boolean) => {
-		transactionStore.respondToMakerReroute(approved);
-	};
 
 	$: marketOrderSummary = $transactionStore.data?.marketOrderSummary;
 	$: marketOrderDisplay = marketOrderSummary
@@ -40,8 +33,6 @@
 
 	// Multi-transaction progress
 	$: multiTxProgress = $transactionStore.data?.multiTxProgress;
-	$: executionPlanNotice = $transactionStore.data?.executionPlanNotice;
-	$: makerRerouteNotice = $transactionStore.data?.makerRerouteNotice;
 
 	// Raindex link (safe, no @html needed)
 	$: raindexLink = $transactionStore.data?.raindexLink;
@@ -360,91 +351,13 @@
 				<p class="mt-4 text-center text-base text-gray-300" data-testid="multi-tx-message">
 					{$transactionStore.message}
 				</p>
-				{#if executionPlanNotice?.legs?.length}
-					<div class="mt-4 w-full rounded-md border border-white/10 bg-gray-900/50 p-3 text-left text-sm">
-						<div class="text-xs uppercase tracking-wide text-gray-500">{executionPlanNotice.title}</div>
-						{#each executionPlanNotice.legs as leg}
-							<div class="mt-3 rounded border border-white/5 bg-black/20 p-2">
-								<div class="text-gray-300">Fill: {leg.fillAmountDisplay}</div>
-								<a
-									href={leg.orderUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="mt-1 inline-flex items-center gap-1 text-yellow-500 hover:text-yellow-400 hover:underline"
-								>
-									{leg.orderHash}
-								</a>
-							</div>
-						{/each}
-					</div>
-				{/if}
-				<div class="mt-6 flex w-full gap-3">
-					<Button
-						className="flex-1"
-						on:click={handleMultiTxDecline}
-						dataTestId="multi-tx-cancel-button"
-					>
-						Cancel
-					</Button>
-					<Button
-						on:click={handleMultiTxAcknowledge}
-						className="flex-1"
-						dataTestId="multi-tx-ok-button"
-					>
-						Continue
-					</Button>
-				</div>
-			{:else if $transactionStore.status === TransactionStatus.PENDING_WALLET && makerRerouteNotice}
-				<div
-					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-yellow-500/30 bg-yellow-500/20"
-					data-testid="maker-reroute-icon"
+				<Button
+					on:click={handleMultiTxAcknowledge}
+					className="mt-6"
+					dataTestId="multi-tx-ok-button"
 				>
-					<svg
-						class="h-10 w-10 text-yellow-500"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M17 8l4 4m0 0l-4 4m4-4H3"
-						/>
-					</svg>
-				</div>
-				<p class="text-lg font-semibold text-white">Maker Route Change Detected</p>
-				<p class="mt-2 text-center text-sm text-gray-300">{makerRerouteNotice.message}</p>
-				<div class="mt-4 w-full rounded-md border border-white/10 bg-gray-900/50 p-3 text-left text-sm">
-					<div class="text-xs uppercase tracking-wide text-gray-500">Skipped order</div>
-					<a
-						href={makerRerouteNotice.fromOrderUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="mt-1 inline-flex items-center gap-1 text-yellow-500 hover:text-yellow-400 hover:underline"
-					>
-						{makerRerouteNotice.fromOrderHash}
-					</a>
-					<div class="mt-3 text-xs uppercase tracking-wide text-gray-500">Replacement order</div>
-					<a
-						href={makerRerouteNotice.toOrderUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="mt-1 inline-flex items-center gap-1 text-yellow-500 hover:text-yellow-400 hover:underline"
-					>
-						{makerRerouteNotice.toOrderHash}
-					</a>
-				</div>
-				<p class="mt-4 text-center text-sm text-gray-300">Should we move forward with this reroute?</p>
-				<div class="mt-5 flex w-full gap-3">
-					<Button
-						className="flex-1"
-						on:click={() => handleMakerRerouteDecision(false)}
-					>
-						Cancel
-					</Button>
-					<Button className="flex-1" on:click={() => handleMakerRerouteDecision(true)}>Continue</Button>
-				</div>
+					OK
+				</Button>
 			{:else if $transactionStore.status === TransactionStatus.CHECKING_ALLOWANCE || $transactionStore.status === TransactionStatus.PENDING_WALLET || $transactionStore.status === TransactionStatus.PENDING_APPROVAL}
 				<div
 					class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-gray-600/30 bg-gray-700/30"
