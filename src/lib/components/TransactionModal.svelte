@@ -37,19 +37,23 @@
 	// Raindex link (safe, no @html needed)
 	$: raindexLink = $transactionStore.data?.raindexLink;
 
-	// Helper function to format quantity with max 2 decimals
+	// Enough precision that small underfills (e.g. 0.01985 vs 0.02) are visible — 2 decimals rounded away that gap.
 	const formatQuantity = (quantity: bigint, decimals: number): string => {
-		const formatted = parseFloat(formatUnits(quantity, decimals));
-		// Round to 2 decimals (instead of truncating) to handle values like 0.999999...
-		const result = Math.round(formatted * 100) / 100;
-		return result.toString();
+		const s = formatUnits(quantity, decimals);
+		const n = parseFloat(s);
+		if (!Number.isFinite(n)) return s;
+		return n.toLocaleString('en-US', {
+			useGrouping: false,
+			minimumFractionDigits: 0,
+			maximumFractionDigits: 8
+		});
 	};
 
-	// Check if fill is complete (within 99.9% tolerance)
+	/** Match `pollAndFinalizeTakeOrders` partial-fill threshold. */
+	const FULL_FILL_BPS = 9970n;
 	const isFullFill = (filled: bigint, requested: bigint): boolean => {
 		if (requested === 0n) return true;
-		const fillPercentage = Number(filled) / Number(requested);
-		return fillPercentage >= 0.999;
+		return filled * 10_000n >= requested * FULL_FILL_BPS;
 	};
 </script>
 

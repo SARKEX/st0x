@@ -11,9 +11,13 @@ import {
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import {
 	sendTransaction as walletServiceSendTransaction,
-	waitForTransaction as walletServiceWaitForTransaction
+	waitForTransaction as walletServiceWaitForTransaction,
+	APPROVAL_TX_CONFIRMATIONS
 } from '$lib/services/walletService';
 import { withRetry } from '$lib/utils/retry';
+
+/** After a take confirms, wait before the next leg so RPC/oracle match on-chain state (multi-tx routes). */
+const SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG = 2500;
 
 // Wrapped wagmi functions with retry logic
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
@@ -30,7 +34,8 @@ import {
 	type DeploymentTransactionArgs,
 	type RaindexVault,
 	type RaindexOrder,
-	type TakeOrdersMode
+	type TakeOrdersMode,
+	type TakeOrdersRequest
 } from '@rainlanguage/orderbook';
 import { Float } from '@rainlanguage/float';
 import {
@@ -120,6 +125,103 @@ function extractTransactionError(
 ): TransactionErrorMessage {
 	const err = error as { cause?: { details?: string }; message?: string };
 	return (err?.cause?.details || err?.message || fallback) as TransactionErrorMessage;
+}
+
+/**
+ * Decide if a failing maker leg can be skipped and routed to the next leg.
+ * We only skip execution/simulation-style maker failures, and never skip
+ * user/session/network/funds/allowance class errors.
+ */
+function isSkippableMakerLegError(message: string | undefined): boolean {
+	if (!message) return false;
+	const normalized = message.toLowerCase();
+
+	// Never skip user/session/wallet/rpc/accounting failures.
+	if (
+		normalized.includes('user rejected') ||
+		normalized.includes('user denied') ||
+		normalized.includes('authentication') ||
+		normalized.includes('log in') ||
+		normalized.includes('allowance') ||
+		normalized.includes('insufficient funds') ||
+		normalized.includes('exceeds balance') ||
+		normalized.includes('nonce') ||
+		normalized.includes('network') ||
+		normalized.includes('disconnected')
+	) {
+		return false;
+	}
+
+	// Skip leg-level simulation / revert style errors.
+	return (
+		normalized.includes('preflight check failed') ||
+		normalized.includes('order failed simulation') ||
+		normalized.includes('execution reverted') ||
+		normalized.includes('reverted')
+	);
+}
+
+function extractAvailableLiquidityAmount(
+	message: string | undefined,
+	decimals: number
+): bigint | null {
+	if (!message) return null;
+	const match = message.match(/but only\s+([0-9]*\.?[0-9]+)\s+available/i);
+	if (!match?.[1]) return null;
+	const parsed = Float.parse(match[1]);
+	if (parsed.error || !parsed.value) return null;
+	const fixed = parsed.value.toFixedDecimalLossy(decimals);
+	if (fixed.error || !fixed.value?.value) return null;
+	try {
+		return BigInt(fixed.value.value);
+	} catch {
+		return null;
+	}
+}
+
+function safeOneWeiBelow(amount: bigint): bigint {
+	return amount > 1n ? amount - 1n : amount;
+}
+
+function buildExpectedPriceByOrderHash(
+	simulation: TakeOrdersParams['simulation'] | undefined
+): Map<string, number> {
+	const result = new Map<string, number>();
+	for (const fill of simulation?.fills ?? []) {
+		const hash = fill.quote.orderHash?.toLowerCase();
+		if (!hash) continue;
+		if (!Number.isFinite(fill.price) || fill.price <= 0) continue;
+		if (!result.has(hash)) {
+			result.set(hash, fill.price);
+		}
+	}
+	return result;
+}
+
+function formatPriceForReroute(value: number | undefined): string | null {
+	if (value === undefined || !Number.isFinite(value) || value <= 0) return null;
+	return value.toFixed(6);
+}
+
+function shortOrderHash(hash: string | undefined): string {
+	if (!hash) return 'unknown order';
+	return hash.length > 14 ? `${hash.slice(0, 10)}...${hash.slice(-4)}` : hash;
+}
+
+function buildLegRerouteMessage(args: {
+	fromOrderHash?: string;
+	toOrderHash?: string;
+	fromPrice?: number;
+	toPrice?: number;
+}): string {
+	const fromHash = shortOrderHash(args.fromOrderHash);
+	const toHash = shortOrderHash(args.toOrderHash);
+	const fromPrice = formatPriceForReroute(args.fromPrice);
+	const toPrice = formatPriceForReroute(args.toPrice);
+	if (fromPrice && toPrice) {
+		return `Maker leg ${fromHash} is not executable now. Routing to ${toHash} at updated ratio (${fromPrice} -> ${toPrice}).`;
+	}
+	return `Maker leg ${fromHash} is not executable now. Routing remaining size to ${toHash}.`;
 }
 
 // Find a vault by matching both vault ID and token address
@@ -353,7 +455,7 @@ const transactionStore = () => {
 						data: approval.calldata as Hex
 					});
 					awaitApprovalTx(hash);
-					await waitForTransaction(hash);
+					await waitForTransaction(hash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 				} catch (error) {
 					if (isStaleWalletSessionError(error)) {
 						const msg = await handleStaleWalletSession(config);
@@ -1096,6 +1198,48 @@ const transactionStore = () => {
 	};
 
 	/**
+	 * One `approve(spender, totalWei)` for multi-leg takes. Per-leg SDK calldata only approves that
+	 * leg’s spend, so the first tx can consume the allowance and the second leg would ask to approve again.
+	 */
+	const ensureBulkPayerAllowanceIfNeeded = async (args: {
+		requiredWei: bigint;
+		payerToken: `0x${string}`;
+		symbol: string;
+		owner: `0x${string}`;
+		probeApprovalCalldata: Hex;
+	}) => {
+		const { requiredWei, payerToken, symbol, owner, probeApprovalCalldata } = args;
+		if (requiredWei <= 0n) return;
+
+		const decoded = decodeFunctionData({ abi: erc20Abi, data: probeApprovalCalldata });
+		if (decoded.functionName !== 'approve') return;
+		const spender = decoded.args[0] as `0x${string}`;
+
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+
+		const allowance = await readContract(config, {
+			address: payerToken,
+			abi: erc20Abi,
+			functionName: 'allowance',
+			args: [owner, spender],
+		});
+		if (allowance >= requiredWei) return;
+
+		awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${symbol}...`);
+		const approvalHash = await sendTransaction({
+			to: payerToken,
+			data: encodeFunctionData({
+				abi: erc20Abi,
+				functionName: 'approve',
+				args: [spender, requiredWei],
+			}),
+		});
+		awaitApprovalTx(approvalHash);
+		await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+	};
+
+	/**
 	 * Shared post-transaction logic for take orders: poll subgraph for trades,
 	 * build a MarketOrderSummary, and return a transactionSuccess result.
 	 */
@@ -1185,13 +1329,17 @@ const transactionStore = () => {
 		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
 		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
 
-		let fillPercentage = 0;
 		let isNoFill = false;
-		if (inputRequestedDecimal > 0) {
-			fillPercentage = inputFilledDecimal / inputRequestedDecimal;
-		} else {
+		if (inputRequestedDecimal <= 0) {
 			isNoFill = true;
 		}
+
+		// Partial fill: bigint ratio only. Below ~99.7% of requested ⇒ partial (execution haircut is 0; allow subgraph noise).
+		const MARKET_ORDER_FULL_FILL_THRESHOLD_BPS = 9970n;
+		const isPartialFill =
+			requestedInputAmount > 0n &&
+			totalInputAmount > 0n &&
+			totalInputAmount * 10_000n < requestedInputAmount * MARKET_ORDER_FULL_FILL_THRESHOLD_BPS;
 
 		const summary: MarketOrderSummary = {
 			inputAmount: totalInputAmount,
@@ -1205,7 +1353,7 @@ const transactionStore = () => {
 			requestedInputAmount,
 			ioRatio: actualIoRatio,
 			actualSlippage: 0n,
-			isPartialFill: fillPercentage > 0 && fillPercentage < 0.999,
+			isPartialFill,
 			isNoFill
 		};
 
@@ -1218,6 +1366,126 @@ const transactionStore = () => {
 
 		invalidateDashboardBalances();
 		return transactionSuccess(hash, undefined, { marketOrderSummary: summary, raindexLink });
+	};
+
+	/**
+	 * Single-tx market take via RaindexClient.getTakeOrdersCalldata(): subgraph discovery +
+	 * one takeOrders4 call that can aggregate multiple maker orders (solves thin top-of-book).
+	 *
+	 * @returns `true` if this path handled the flow (success or user-visible error).
+	 *          `false` if aggregated calldata is not available — caller should fall back to per-order execution.
+	 */
+	const handleAggregatedTakeOrdersCalldata = async (
+		takeRequest: TakeOrdersRequest,
+		primaryOrder: SgOrder,
+		params: TakeOrdersParams,
+		approvalTokenSymbol: string
+	): Promise<boolean> => {
+		const config = get(wagmiConfig);
+		if (!config) throw new Error('Wagmi config not found');
+		const network = get(currentNetwork) as Network;
+
+		try {
+			validateOrderbookAddress(primaryOrder.orderbook.id, network);
+		} catch (error) {
+			transactionError((error as Error).message as TransactionErrorMessage);
+			return true;
+		}
+
+		awaitWalletConfirmation(`Preparing order...`);
+		const TX_LOG_PREFIX = '[handleAggregatedTakeOrdersCalldata]';
+
+		const client = await createRaindexClient();
+		let calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+		if (calldataWrapped.error || !calldataWrapped.value) {
+			console.log(`${TX_LOG_PREFIX} skipping fallback: SDK returned no aggregated calldata`, {
+				msg: calldataWrapped.error?.readableMsg
+			});
+			return false;
+		}
+
+		let result = calldataWrapped.value;
+		const maybeApprovalInfo = (result as { approvalInfo?: { token: string; calldata: string } })
+			?.approvalInfo;
+		if (result.isNeedsApproval && maybeApprovalInfo) {
+			awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+			const approvalHash = await sendTransaction({
+				to: maybeApprovalInfo.token as `0x${string}`,
+				data: maybeApprovalInfo.calldata as Hex
+			});
+			awaitApprovalTx(approvalHash);
+			await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+			calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+			if (calldataWrapped.error || !calldataWrapped.value) {
+				transactionError(
+					(calldataWrapped.error?.readableMsg ||
+						'Failed to prepare order after approval') as TransactionErrorMessage
+				);
+				return true;
+			}
+			result = calldataWrapped.value;
+		}
+
+		if (!result.isReady || !result.takeOrdersInfo) {
+			for (let retry = 0; retry < 2; retry++) {
+				await new Promise((resolve) => setTimeout(resolve, 1200));
+				calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+				if (!calldataWrapped.error && calldataWrapped.value?.isReady && calldataWrapped.value?.takeOrdersInfo) {
+					result = calldataWrapped.value;
+					break;
+				}
+			}
+		}
+
+		if (!result.isReady || !result.takeOrdersInfo) {
+			console.log(`${TX_LOG_PREFIX} skipping fallback: aggregated calldata not ready`, {
+				isReady: result.isReady
+			});
+			return false;
+		}
+
+		try {
+			validateOrderbookAddress(result.takeOrdersInfo.orderbook as string, network);
+		} catch (error) {
+			transactionError((error as Error).message as TransactionErrorMessage);
+			return true;
+		}
+
+		const { calldata, orderbook } = result.takeOrdersInfo;
+		console.log(`${TX_LOG_PREFIX} sending aggregated takeOrders tx`, { orderbook });
+
+		try {
+			awaitWalletConfirmation(`Awaiting wallet confirmation...`);
+			const hash = await sendTransaction({
+				to: orderbook as `0x${string}`,
+				data: calldata as Hex
+			});
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+			await waitForTransaction(hash);
+			await pollAndFinalizeTakeOrders([hash], primaryOrder, params, network);
+			return true;
+		} catch (txError) {
+			console.error(`${TX_LOG_PREFIX} failed`, txError);
+			if (isStaleWalletSessionError(txError)) {
+				const msg = await handleStaleWalletSession(config);
+				transactionError(msg as TransactionErrorMessage);
+				return true;
+			}
+			const errorMessage = extractTransactionError(txError);
+			const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+			if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
+				transactionError(
+					'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
+				);
+				return true;
+			}
+			if (errorStr.includes('authentication') || errorStr.includes('log in')) {
+				transactionError(errorMessage);
+				return true;
+			}
+			transactionError(errorMessage);
+			return true;
+		}
 	};
 
 	/**
@@ -1257,57 +1525,141 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing order...`);
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleOracleOrders]';
+		const expectedPriceByOrderHash = buildExpectedPriceByOrderHash(params.simulation);
+		const multiLegUseTotalAllowance =
+			oracleInputs.length > 1 &&
+			(params.requiredPayerAllowance ?? 0n) > 0n &&
+			params.takerPaysToken.address;
+
 		console.log(`${TX_LOG_PREFIX} starting`, {
 			oracleInputCount: oracleInputs.length,
 			mode
 		});
 
+		if (multiLegUseTotalAllowance && params.requiredPayerAllowance) {
+			const o0 = oracleInputs[0];
+			const probe = await o0.raindexOrder.getTakeCalldata(
+				o0.inputIndex,
+				o0.outputIndex,
+				o0.taker,
+				mode,
+				o0.amountStr,
+				o0.priceCapStr
+			);
+			const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
+				?.approvalInfo?.calldata;
+			if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
+				await ensureBulkPayerAllowanceIfNeeded({
+					requiredWei: params.requiredPayerAllowance,
+					payerToken: params.takerPaysToken.address as `0x${string}`,
+					symbol: approvalTokenSymbol,
+					owner: $signerAddress as `0x${string}`,
+					probeApprovalCalldata: probePayload as Hex,
+				});
+			}
+		}
+
+		const fillDecimals = params.orderFillDecimals ?? params.takerWantsToken.decimals;
+		if (oracleInputs.length > 1) {
+			awaitWalletConfirmation(
+				`This order requires ${oracleInputs.length} separate transactions. You will be asked to sign ${oracleInputs.length} times.`,
+				{ multiTxProgress: { currentBatch: 0, totalBatches: oracleInputs.length } }
+			);
+		}
+		let carryForwardFillAmount = 0n;
+
 		for (let i = 0; i < oracleInputs.length; i++) {
 			const oracleInput = oracleInputs[i];
 			const isLast = i === oracleInputs.length - 1;
 			const batchLabel = oracleInputs.length > 1 ? ` (${i + 1}/${oracleInputs.length})` : '';
+			const baseFillAmount = params.orderFillAmounts?.[i] ?? 0n;
+			let effectiveFillAmount = baseFillAmount + carryForwardFillAmount;
+			let amountStr = String(
+				Float.fromFixedDecimalLossy(effectiveFillAmount, fillDecimals).float.format().value ?? '0'
+			);
+
+			if (i > 0) {
+				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG));
+				awaitWalletConfirmation(
+					`Waiting for network to settle before preparing order ${i + 1} of ${oracleInputs.length}...`
+				);
+			}
 
 			let calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
 				oracleInput.inputIndex,
 				oracleInput.outputIndex,
 				oracleInput.taker,
 				mode,
-				oracleInput.amountStr,
+				amountStr,
 				oracleInput.priceCapStr
 			);
 
 			const maybeApprovalInfo = (calldataResult.value as { approvalInfo?: { token: string; calldata: string } })
 				?.approvalInfo;
 			if ((calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval && maybeApprovalInfo) {
-				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
-				const approvalHash = await sendTransaction({
-					to: maybeApprovalInfo.token as `0x${string}`,
-					data: maybeApprovalInfo.calldata as Hex
-				});
-				awaitApprovalTx(approvalHash);
-				await waitForTransaction(approvalHash);
+				if (multiLegUseTotalAllowance) {
+					// Allowance already set for total spend; refresh calldata only.
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						amountStr,
+						oracleInput.priceCapStr
+					);
+					if (
+						(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
+						maybeApprovalInfo
+					) {
+						awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+						const approvalHash = await sendTransaction({
+							to: maybeApprovalInfo.token as `0x${string}`,
+							data: maybeApprovalInfo.calldata as Hex
+						});
+						awaitApprovalTx(approvalHash);
+						await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+						calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+							oracleInput.inputIndex,
+							oracleInput.outputIndex,
+							oracleInput.taker,
+							mode,
+							amountStr,
+							oracleInput.priceCapStr
+						);
+					}
+				} else {
+					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+					const approvalHash = await sendTransaction({
+						to: maybeApprovalInfo.token as `0x${string}`,
+						data: maybeApprovalInfo.calldata as Hex
+					});
+					awaitApprovalTx(approvalHash);
+					await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 
-				// Rebuild calldata after approval, as SDK expects fresh quote/context.
-				calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
-					oracleInput.inputIndex,
-					oracleInput.outputIndex,
-					oracleInput.taker,
-					mode,
-					oracleInput.amountStr,
-					oracleInput.priceCapStr
-				);
+					// Rebuild calldata after approval, as SDK expects fresh quote/context.
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						amountStr,
+						oracleInput.priceCapStr
+					);
+				}
 			}
 
 			// Oracle quote/signature readiness can be transient; retry briefly before failing.
+			// Later legs need more attempts after the previous tx changed on-chain / oracle state.
+			const notReadyRetries = i === 0 ? 2 : 4;
 			if (!calldataResult.error && (!calldataResult.value?.isReady || !calldataResult.value?.takeOrdersInfo)) {
-				for (let retry = 0; retry < 2; retry++) {
+				for (let retry = 0; retry < notReadyRetries; retry++) {
 					await new Promise((resolve) => setTimeout(resolve, 1200));
 					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
 						oracleInput.inputIndex,
 						oracleInput.outputIndex,
 						oracleInput.taker,
 						mode,
-						oracleInput.amountStr,
+						amountStr,
 						oracleInput.priceCapStr
 					);
 					if (calldataResult.error || (calldataResult.value?.isReady && calldataResult.value?.takeOrdersInfo)) {
@@ -1315,12 +1667,46 @@ const transactionStore = () => {
 					}
 				}
 			}
+			// Second+ legs: transient SDK/oracle errors (common right after leg 1 confirms).
+			if (calldataResult.error && i > 0) {
+				for (let retry = 0; retry < 3; retry++) {
+					await new Promise((resolve) => setTimeout(resolve, 1500));
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						amountStr,
+						oracleInput.priceCapStr
+					);
+					if (!calldataResult.error) break;
+				}
+			}
+			if (calldataResult.error) {
+				const availableFill = extractAvailableLiquidityAmount(calldataResult.error.readableMsg, fillDecimals);
+				if (availableFill !== null && availableFill > 0n && availableFill < effectiveFillAmount) {
+					const oldEffectiveFill = effectiveFillAmount;
+					effectiveFillAmount = availableFill;
+					carryForwardFillAmount = oldEffectiveFill - availableFill;
+					amountStr = String(
+						Float.fromFixedDecimalLossy(effectiveFillAmount, fillDecimals).float.format().value ?? '0'
+					);
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						amountStr,
+						oracleInput.priceCapStr
+					);
+				}
+			}
 			console.log(`${TX_LOG_PREFIX} getTakeCalldata result`, {
 				index: i,
 				orderHash: oracleInput.raindexOrder.orderHash,
 				inputIndex: oracleInput.inputIndex,
 				outputIndex: oracleInput.outputIndex,
-				amountStr: oracleInput.amountStr,
+				amountStr,
 				priceCapStr: oracleInput.priceCapStr,
 				isError: Boolean(calldataResult.error),
 				isReady: Boolean(calldataResult.value?.isReady),
@@ -1329,6 +1715,20 @@ const transactionStore = () => {
 			});
 
 			if (calldataResult.error) {
+				if (isSkippableMakerLegError(calldataResult.error.readableMsg) && i < oracleInputs.length - 1) {
+					carryForwardFillAmount = effectiveFillAmount;
+					awaitWalletConfirmation(
+						buildLegRerouteMessage({
+							fromOrderHash: oracleInput.raindexOrder.orderHash,
+							toOrderHash: oracleInputs[i + 1]?.raindexOrder.orderHash,
+							fromPrice: expectedPriceByOrderHash.get(oracleInput.raindexOrder.orderHash.toLowerCase()),
+							toPrice: expectedPriceByOrderHash.get(
+								oracleInputs[i + 1]?.raindexOrder.orderHash?.toLowerCase() ?? ''
+							)
+						})
+					);
+					continue;
+				}
 				console.error(`${TX_LOG_PREFIX} getTakeCalldata error:`, calldataResult.error);
 				return transactionError(
 					`Order failed: ${calldataResult.error.readableMsg}` as TransactionErrorMessage
@@ -1359,6 +1759,7 @@ const transactionStore = () => {
 				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`);
 				await waitForTransaction(hash);
 				allTransactionHashes.push(hash);
+				carryForwardFillAmount = 0n;
 
 				if (!isLast) {
 					awaitWalletConfirmation(`Transaction ${i + 1} confirmed. Preparing next order...`);
@@ -1373,6 +1774,20 @@ const transactionStore = () => {
 				}
 				const errorMessage = extractTransactionError(txError);
 				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+				if (isSkippableMakerLegError(errorMessage) && i < oracleInputs.length - 1) {
+					carryForwardFillAmount = effectiveFillAmount;
+					awaitWalletConfirmation(
+						buildLegRerouteMessage({
+							fromOrderHash: oracleInput.raindexOrder.orderHash,
+							toOrderHash: oracleInputs[i + 1]?.raindexOrder.orderHash,
+							fromPrice: expectedPriceByOrderHash.get(oracleInput.raindexOrder.orderHash.toLowerCase()),
+							toPrice: expectedPriceByOrderHash.get(
+								oracleInputs[i + 1]?.raindexOrder.orderHash?.toLowerCase() ?? ''
+							)
+						})
+					);
+					continue;
+				}
 				if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
 					return transactionError(
 						'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
@@ -1403,7 +1818,7 @@ const transactionStore = () => {
 	const handleTakeOrders = async (
 		args: TakeOrdersConfigV5,
 		raindexOrder: SgOrder,
-		_requiredApprovalAmount: bigint,
+		requiredApprovalAmount: bigint,
 		params: TakeOrdersParams,
 		recalculateConfig?: () => Promise<TakeOrdersConfigV5 | null>,
 		raindexOrders?: RaindexOrder[]
@@ -1492,12 +1907,49 @@ const transactionStore = () => {
 
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleTakeOrders]';
+		const expectedPriceByOrderHash = buildExpectedPriceByOrderHash(params.simulation);
+
+		const multiLegUseTotalAllowance =
+			ordersToExecute.length > 1 &&
+			requiredApprovalAmount > 0n &&
+			params.takerPaysToken.address;
 
 		console.log(`${TX_LOG_PREFIX} Starting SDK per-order execution`, {
 			totalOrders: ordersToExecute.length,
 			mode,
 			isDynamicWallet
 		});
+		let carryForwardFillAmount = 0n;
+
+		if (multiLegUseTotalAllowance) {
+			const order0 = ordersToExecute[0];
+			const cfg0 = finalConfig.orders[0];
+			if (cfg0) {
+				const fill0 = params.orderFillAmounts?.[0] ?? 0n;
+				const amountStr0 = String(
+					Float.fromFixedDecimalLossy(fill0, fillDecimals).float.format().value ?? '0'
+				);
+				const probe = await order0.getTakeCalldata(
+					Number(cfg0.inputIOIndex),
+					Number(cfg0.outputIOIndex),
+					$signerAddress,
+					mode,
+					amountStr0,
+					priceCapStr
+				);
+				const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
+					?.approvalInfo?.calldata;
+				if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
+					await ensureBulkPayerAllowanceIfNeeded({
+						requiredWei: requiredApprovalAmount,
+						payerToken: approvalTokenAddress as `0x${string}`,
+						symbol: approvalTokenSymbol,
+						owner: $signerAddress as `0x${string}`,
+						probeApprovalCalldata: probePayload as Hex,
+					});
+				}
+			}
+		}
 
 		for (let orderIndex = 0; orderIndex < ordersToExecute.length; orderIndex++) {
 			const orderToExecute = ordersToExecute[orderIndex];
@@ -1505,10 +1957,17 @@ const transactionStore = () => {
 			if (!orderConfig) {
 				return transactionError('Order config mismatch' as TransactionErrorMessage);
 			}
+			if (orderIndex > 0) {
+				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG));
+				awaitWalletConfirmation(
+					`Waiting for network to settle before preparing order ${orderIndex + 1} of ${ordersToExecute.length}...`
+				);
+			}
 			const isMultiBatch = ordersToExecute.length > 1;
 			const batchLabel = isMultiBatch ? ` (${orderIndex + 1}/${ordersToExecute.length})` : '';
-			const fillAmount = params.orderFillAmounts?.[orderIndex] ?? 0n;
-			const amountStr = String(
+			const baseFillAmount = params.orderFillAmounts?.[orderIndex] ?? 0n;
+			let fillAmount = baseFillAmount + carryForwardFillAmount;
+			let amountStr = String(
 				Float.fromFixedDecimalLossy(fillAmount, fillDecimals).float.format().value ?? '0'
 			);
 
@@ -1536,30 +1995,120 @@ const transactionStore = () => {
 					(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
 					maybeApprovalInfo
 				) {
-					awaitWalletConfirmation(
-						`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
-						progressData
-					);
-					const approvalHash = await sendTransaction({
-						to: maybeApprovalInfo.token as `0x${string}`,
-						data: maybeApprovalInfo.calldata as Hex
-					});
-					awaitApprovalTx(approvalHash);
-					await waitForTransaction(approvalHash);
-					readyCalldataResult = await orderToExecute.getTakeCalldata(
-						Number(orderConfig.inputIOIndex),
-						Number(orderConfig.outputIOIndex),
-						$signerAddress,
-						mode,
-						amountStr,
-						priceCapStr
-					);
+					if (multiLegUseTotalAllowance) {
+						readyCalldataResult = await orderToExecute.getTakeCalldata(
+							Number(orderConfig.inputIOIndex),
+							Number(orderConfig.outputIOIndex),
+							$signerAddress,
+							mode,
+							amountStr,
+							priceCapStr
+						);
+						if (
+							(readyCalldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
+							maybeApprovalInfo
+						) {
+							awaitWalletConfirmation(
+								`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
+								progressData
+							);
+							const approvalHash = await sendTransaction({
+								to: maybeApprovalInfo.token as `0x${string}`,
+								data: maybeApprovalInfo.calldata as Hex
+							});
+							awaitApprovalTx(approvalHash);
+							await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+							readyCalldataResult = await orderToExecute.getTakeCalldata(
+								Number(orderConfig.inputIOIndex),
+								Number(orderConfig.outputIOIndex),
+								$signerAddress,
+								mode,
+								amountStr,
+								priceCapStr
+							);
+						}
+					} else {
+						awaitWalletConfirmation(
+							`Awaiting wallet confirmation to approve ${approvalTokenSymbol}${batchLabel}...`,
+							progressData
+						);
+						const approvalHash = await sendTransaction({
+							to: maybeApprovalInfo.token as `0x${string}`,
+							data: maybeApprovalInfo.calldata as Hex
+						});
+						awaitApprovalTx(approvalHash);
+						await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+						readyCalldataResult = await orderToExecute.getTakeCalldata(
+							Number(orderConfig.inputIOIndex),
+							Number(orderConfig.outputIOIndex),
+							$signerAddress,
+							mode,
+							amountStr,
+							priceCapStr
+						);
+					}
 				}
 				if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
-					return transactionError(
-						(readyCalldataResult.error?.readableMsg ||
-							'Failed to generate transaction calldata') as TransactionErrorMessage
+					if (orderIndex > 0) {
+						for (let retry = 0; retry < 3; retry++) {
+							await new Promise((resolve) => setTimeout(resolve, 1500));
+							readyCalldataResult = await orderToExecute.getTakeCalldata(
+								Number(orderConfig.inputIOIndex),
+								Number(orderConfig.outputIOIndex),
+								$signerAddress,
+								mode,
+								amountStr,
+								priceCapStr
+							);
+							if (!readyCalldataResult.error && readyCalldataResult.value?.takeOrdersInfo) {
+								break;
+							}
+						}
+					}
+					const availableFill = extractAvailableLiquidityAmount(
+						readyCalldataResult.error?.readableMsg,
+						fillDecimals
 					);
+					if (availableFill !== null && availableFill > 0n && availableFill < fillAmount) {
+						const oldFillAmount = fillAmount;
+						fillAmount = availableFill;
+						carryForwardFillAmount = oldFillAmount - availableFill;
+						amountStr = String(
+							Float.fromFixedDecimalLossy(fillAmount, fillDecimals).float.format().value ?? '0'
+						);
+						readyCalldataResult = await orderToExecute.getTakeCalldata(
+							Number(orderConfig.inputIOIndex),
+							Number(orderConfig.outputIOIndex),
+							$signerAddress,
+							mode,
+							amountStr,
+							priceCapStr
+						);
+					}
+					if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
+						if (
+							isSkippableMakerLegError(readyCalldataResult.error?.readableMsg) &&
+							orderIndex < ordersToExecute.length - 1
+						) {
+							carryForwardFillAmount = fillAmount;
+							awaitWalletConfirmation(
+								buildLegRerouteMessage({
+									fromOrderHash: orderToExecute.orderHash,
+									toOrderHash: ordersToExecute[orderIndex + 1]?.orderHash,
+									fromPrice: expectedPriceByOrderHash.get(orderToExecute.orderHash.toLowerCase()),
+									toPrice: expectedPriceByOrderHash.get(
+										ordersToExecute[orderIndex + 1]?.orderHash?.toLowerCase() ?? ''
+									)
+								}),
+								progressData
+							);
+							continue;
+						}
+						return transactionError(
+							(readyCalldataResult.error?.readableMsg ||
+								'Failed to generate transaction calldata') as TransactionErrorMessage
+						);
+					}
 				}
 
 				awaitWalletConfirmation(
@@ -1583,6 +2132,7 @@ const transactionStore = () => {
 				console.log(`${TX_LOG_PREFIX} Order ${orderIndex + 1} transaction confirmed`, { hash });
 
 				allTransactionHashes.push(hash);
+				carryForwardFillAmount = 0n;
 
 				if (orderIndex < ordersToExecute.length - 1) {
 					awaitWalletConfirmation(
@@ -1609,6 +2159,20 @@ const transactionStore = () => {
 				const errorMessage = extractTransactionError(error);
 
 				console.error('[handleTakeOrders] Transaction error:', error);
+				if (isSkippableMakerLegError(errorMessage) && orderIndex < ordersToExecute.length - 1) {
+					carryForwardFillAmount = fillAmount;
+					awaitWalletConfirmation(
+						buildLegRerouteMessage({
+							fromOrderHash: orderToExecute.orderHash,
+							toOrderHash: ordersToExecute[orderIndex + 1]?.orderHash,
+							fromPrice: expectedPriceByOrderHash.get(orderToExecute.orderHash.toLowerCase()),
+							toPrice: expectedPriceByOrderHash.get(
+								ordersToExecute[orderIndex + 1]?.orderHash?.toLowerCase() ?? ''
+							)
+						})
+					);
+					continue;
+				}
 
 				// Check for insufficient allowance error and provide helpful message
 				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
@@ -1652,6 +2216,7 @@ const transactionStore = () => {
 		handleDsfDeploy,
 		handleFolioDeploy,
 		handleOracleOrders,
+		handleAggregatedTakeOrdersCalldata,
 		handleTakeOrders,
 		handleWithdraw,
 		handleWrapUnwrap,
