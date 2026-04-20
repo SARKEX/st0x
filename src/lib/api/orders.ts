@@ -165,7 +165,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 		stockTokens.map(async (token) => {
 			let page = 1;
 			let hasMore = true;
-			while (hasMore && page <= 10) {
+			while (hasMore) {
 				const response = await apiGetOrdersByToken(token.address, { page, pageSize: 50 });
 				for (const order of response.orders) {
 					if (seen.has(order.orderHash)) continue;
@@ -175,11 +175,6 @@ export async function fetchAndQuotePaymentTokenOrders(
 				}
 				hasMore = response.pagination.hasMore;
 				page++;
-			}
-			if (hasMore) {
-				console.warn(
-					`[orders] Pagination cap reached for token ${token.address}; additional orders dropped.`
-				);
 			}
 		})
 	);
@@ -209,7 +204,7 @@ export async function fetchAndQuoteTokenOrders(
 	const seen = new Set<string>();
 	let page = 1;
 	let hasMore = true;
-	while (hasMore && page <= 10) {
+	while (hasMore) {
 		try {
 			const response = await apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 });
 			for (const order of response.orders) {
@@ -224,11 +219,6 @@ export async function fetchAndQuoteTokenOrders(
 			console.warn(`[orders] Page ${page} fetch failed for token ${tokenAddress}:`, error);
 			break;
 		}
-	}
-	if (hasMore) {
-		console.warn(
-			`[orders] Pagination cap reached for token ${tokenAddress}; additional orders dropped.`
-		);
 	}
 
 	return processedQuotes;

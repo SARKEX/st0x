@@ -42,14 +42,13 @@ function makerTradeToCostBasis(trade: ApiTradeByAddress, userAddress: string): C
  */
 async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]> {
 	const PAGE_SIZE = 50;
-	const MAX_PAGES = 100; // Safety cap: 5,000 trades max
 	const trades: CostBasisTrade[] = [];
 	const seen = new Set<string>();
 
 	// Fetch all maker trades (paginated)
 	let makerPage = 1;
 	let makerHasMore = true;
-	while (makerHasMore && makerPage <= MAX_PAGES) {
+	while (makerHasMore) {
 		const response = await apiGetTradesByAddress(userAddress, {
 			page: makerPage,
 			pageSize: PAGE_SIZE
@@ -65,16 +64,11 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 		makerHasMore = response.pagination.hasMore;
 		makerPage++;
 	}
-	if (makerHasMore) {
-		console.warn(
-			`[costBasis] Maker trade pagination cap reached (${MAX_PAGES} pages); cost basis may be incomplete.`
-		);
-	}
 
 	// Fetch all taker trades (paginated)
 	let takerPage = 1;
 	let takerHasMore = true;
-	while (takerHasMore && takerPage <= MAX_PAGES) {
+	while (takerHasMore) {
 		const response = await apiGetTakerTrades(userAddress, {
 			page: takerPage,
 			pageSize: PAGE_SIZE
@@ -107,11 +101,6 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 
 		takerHasMore = response.pagination.hasMore;
 		takerPage++;
-	}
-	if (takerHasMore) {
-		console.warn(
-			`[costBasis] Taker trade pagination cap reached (${MAX_PAGES} pages); cost basis may be incomplete.`
-		);
 	}
 
 	return trades;
