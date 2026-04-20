@@ -525,7 +525,11 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 					};
 				})
 				.filter((input) => input.fillAmount > 0n)
-				.map(({ fillAmount: _fillAmount, ...input }) => input);
+				.map((input) => {
+					const { fillAmount, ...rest } = input;
+					void fillAmount;
+					return rest;
+				});
 
 			if (oracleInputs.length === 0) {
 				return {

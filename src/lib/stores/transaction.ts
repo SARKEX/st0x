@@ -179,10 +179,6 @@ function extractAvailableLiquidityAmount(
 	}
 }
 
-function safeOneWeiBelow(amount: bigint): bigint {
-	return amount > 1n ? amount - 1n : amount;
-}
-
 function buildExpectedPriceByOrderHash(
 	simulation: TakeOrdersParams['simulation'] | undefined
 ): Map<string, number> {
@@ -1326,7 +1322,6 @@ const transactionStore = () => {
 				: 0;
 
 		const requestedInputAmount = params.requestedTakerWantsAmount;
-		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
 		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
 
 		let isNoFill = false;

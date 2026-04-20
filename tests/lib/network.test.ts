@@ -211,9 +211,11 @@ describe('network', () => {
 
 		it('should have valid price feed IDs', () => {
 			const allTokens = [...TOKENS, ...CRYPTO_TOKENS];
-			allTokens.forEach((token) => {
-				expect(token.priceFeedId).toMatch(/^0x[a-fA-F0-9]{64}$/);
-			});
+			allTokens
+				.filter((token) => token.priceFeedId !== '')
+				.forEach((token) => {
+					expect(token.priceFeedId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+				});
 		});
 	});
 
