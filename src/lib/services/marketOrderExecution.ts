@@ -55,15 +55,14 @@ function humanPriceCapStr(
 
 /**
  * Optional per-leg shave on buy asset amount sent to `getTakeCalldata` / `takeOrders`.
- * Kept at 0 so user-requested size matches on-chain (large haircuts caused ~0.75% underfills like
- * 0.01985 vs 0.02). If "Insufficient liquidity" resurfaces on thin books, try 5–15 bps or fix
- * `parseFloatHex` / quote maxOutput to floor conservatively instead of shrinking the user’s target.
+ * Walk/simulation can ask for slightly more than the SDK/oracle accepts (Float lossy conversion,
+ * stale top-of-book vs fresh oracle). ~25–30 bps stays below that gap without the large underfills
+ * seen at much higher haircuts (~0.75%).
  */
-const BUY_FILL_EXECUTION_HAIRCUT_BPS = 0n;
+const BUY_FILL_EXECUTION_HAIRCUT_BPS = 30n;
 
 function haircutBuyExecutionFill(amount: bigint): bigint {
 	if (amount <= 0n) return 0n;
-	if (BUY_FILL_EXECUTION_HAIRCUT_BPS === 0n) return amount;
 	const reduced = (amount * (10000n - BUY_FILL_EXECUTION_HAIRCUT_BPS)) / 10000n;
 	return reduced > 0n ? reduced : amount;
 }
@@ -155,9 +154,12 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 	} = input;
 
 	try {
-		// 1. Walk the orderbook to get fills
+		// 1. Walk the orderbook to get fills (best-priced quotes first — required for correct splitting
+		// across multiple maker orders: e.g. take all available at the thin 0x846f… leg, then the rest
+		// from the deep 0x4bc4… leg).
+		const orderedQuotes = sortQuotesByPrice(quotes, orderSide);
 		const walkResult = walkOrderbook({
-			quotes,
+			quotes: orderedQuotes,
 			orderSide,
 			selectedAmount: amount,
 			assetDecimals: assetToken.decimals,
@@ -212,7 +214,12 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const client = await createRaindexClient();
 
 		// 3a. Prefer RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven route across
-		// multiple maker orders (avoids per-order getTakeCalldata liquidity mismatch on thin top-of-book).
+		// multiple maker orders (matches “split” across thin + deep liquidity).
+		//
+		// If this path is skipped or fails, fallbacks use RaindexOrder.getTakeCalldata() once per maker
+		// order (see handleTakeOrders / handleOracleOrders). A failure preparing the *first* leg
+		// (often the best-priced, thin order) aborts the whole flow even when a later order could cover
+		// the remainder — hence aggressive quote freshness + conservative per-leg fill (haircut).
 		const takerAddress = getSignerAddress();
 		if (takerAddress) {
 			const userLc = takerAddress.toLowerCase();
@@ -442,7 +449,14 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		if (isBuy && inputMode !== 'spend') {
 			// Buy+amount: buffer since we accept paying more for target quantity
 			const approvalBuffer = outputAmountGiven / 20n; // 5%
-			requiredApprovalAmount = outputAmountGiven + (approvalBuffer > 0n ? approvalBuffer : 1n);
+			let total = outputAmountGiven + (approvalBuffer > 0n ? approvalBuffer : 1n);
+			// Multiple separate takes: leg 1 actual spend can exceed the walk estimate for that leg;
+			// add a little extra so leg 2 is not blocked by allowance.
+			if (executableOrders.length > 1) {
+				const multiLegExtra = outputAmountGiven / 50n; // +2%
+				total += multiLegExtra > 0n ? multiLegExtra : 1n;
+			}
+			requiredApprovalAmount = total;
 		} else {
 			// Buy+spend or Sell: exact spend amount, no padding needed
 			requiredApprovalAmount = amount;
@@ -605,7 +619,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 							const freshQuotes = await refreshQuotes();
 
 							const freshWalkResult = walkOrderbook({
-								quotes: freshQuotes,
+								quotes: sortQuotesByPrice(freshQuotes, orderSide),
 								orderSide,
 								selectedAmount: amount,
 								assetDecimals: assetToken.decimals,

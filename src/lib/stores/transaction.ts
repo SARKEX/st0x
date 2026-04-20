@@ -16,6 +16,9 @@ import {
 } from '$lib/services/walletService';
 import { withRetry } from '$lib/utils/retry';
 
+/** After a take confirms, wait before the next leg so RPC/oracle match on-chain state (multi-tx routes). */
+const SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG = 2500;
+
 // Wrapped wagmi functions with retry logic
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
 	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
@@ -1463,6 +1466,13 @@ const transactionStore = () => {
 			const isLast = i === oracleInputs.length - 1;
 			const batchLabel = oracleInputs.length > 1 ? ` (${i + 1}/${oracleInputs.length})` : '';
 
+			if (i > 0) {
+				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG));
+				awaitWalletConfirmation(
+					`Waiting for network to settle before preparing order ${i + 1} of ${oracleInputs.length}...`
+				);
+			}
+
 			let calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
 				oracleInput.inputIndex,
 				oracleInput.outputIndex,
@@ -1527,8 +1537,10 @@ const transactionStore = () => {
 			}
 
 			// Oracle quote/signature readiness can be transient; retry briefly before failing.
+			// Later legs need more attempts after the previous tx changed on-chain / oracle state.
+			const notReadyRetries = i === 0 ? 2 : 4;
 			if (!calldataResult.error && (!calldataResult.value?.isReady || !calldataResult.value?.takeOrdersInfo)) {
-				for (let retry = 0; retry < 2; retry++) {
+				for (let retry = 0; retry < notReadyRetries; retry++) {
 					await new Promise((resolve) => setTimeout(resolve, 1200));
 					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
 						oracleInput.inputIndex,
@@ -1541,6 +1553,21 @@ const transactionStore = () => {
 					if (calldataResult.error || (calldataResult.value?.isReady && calldataResult.value?.takeOrdersInfo)) {
 						break;
 					}
+				}
+			}
+			// Second+ legs: transient SDK/oracle errors (common right after leg 1 confirms).
+			if (calldataResult.error && i > 0) {
+				for (let retry = 0; retry < 3; retry++) {
+					await new Promise((resolve) => setTimeout(resolve, 1500));
+					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
+						oracleInput.inputIndex,
+						oracleInput.outputIndex,
+						oracleInput.taker,
+						mode,
+						oracleInput.amountStr,
+						oracleInput.priceCapStr
+					);
+					if (!calldataResult.error) break;
 				}
 			}
 			console.log(`${TX_LOG_PREFIX} getTakeCalldata result`, {
@@ -1768,6 +1795,12 @@ const transactionStore = () => {
 			if (!orderConfig) {
 				return transactionError('Order config mismatch' as TransactionErrorMessage);
 			}
+			if (orderIndex > 0) {
+				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG));
+				awaitWalletConfirmation(
+					`Waiting for network to settle before preparing order ${orderIndex + 1} of ${ordersToExecute.length}...`
+				);
+			}
 			const isMultiBatch = ordersToExecute.length > 1;
 			const batchLabel = isMultiBatch ? ` (${orderIndex + 1}/${ordersToExecute.length})` : '';
 			const fillAmount = params.orderFillAmounts?.[orderIndex] ?? 0n;
@@ -1853,10 +1886,28 @@ const transactionStore = () => {
 					}
 				}
 				if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
-					return transactionError(
-						(readyCalldataResult.error?.readableMsg ||
-							'Failed to generate transaction calldata') as TransactionErrorMessage
-					);
+					if (orderIndex > 0) {
+						for (let retry = 0; retry < 3; retry++) {
+							await new Promise((resolve) => setTimeout(resolve, 1500));
+							readyCalldataResult = await orderToExecute.getTakeCalldata(
+								Number(orderConfig.inputIOIndex),
+								Number(orderConfig.outputIOIndex),
+								$signerAddress,
+								mode,
+								amountStr,
+								priceCapStr
+							);
+							if (!readyCalldataResult.error && readyCalldataResult.value?.takeOrdersInfo) {
+								break;
+							}
+						}
+					}
+					if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
+						return transactionError(
+							(readyCalldataResult.error?.readableMsg ||
+								'Failed to generate transaction calldata') as TransactionErrorMessage
+						);
+					}
 				}
 
 				awaitWalletConfirmation(
