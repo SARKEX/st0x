@@ -27,9 +27,27 @@ function getAuthHeader(): string {
 	return 'Basic ' + btoa(`${key}:${secret}`);
 }
 
+const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp }> = [
+	{ method: 'GET', pattern: /^health$/ },
+	{ method: 'GET', pattern: /^v1\/orders\/token\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v1\/trades\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
+	{ method: 'POST', pattern: /^v1\/trades\/batch$/ }
+];
+
+function isAllowedProxyRoute(method: string, pathSuffix: string): boolean {
+	return ALLOWED_PROXY_ROUTES.some(
+		(route) => route.method === method && route.pattern.test(pathSuffix)
+	);
+}
+
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	const apiBase = getApiBase();
 	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
+	if (!isAllowedProxyRoute(request.method, pathSuffix)) {
+		return new Response('Not found', { status: 404 });
+	}
 	const targetUrl = `${apiBase}/${pathSuffix}${url.search}`;
 
 	const headers = new Headers();
@@ -63,7 +81,6 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 const handleOptions: RequestHandler = async () =>
 	new Response(null, {
 		headers: {
-			'Access-Control-Allow-Origin': '*',
 			'Access-Control-Allow-Headers': 'Content-Type',
 			'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
 		}

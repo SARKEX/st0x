@@ -65,6 +65,11 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 		makerHasMore = response.pagination.hasMore;
 		makerPage++;
 	}
+	if (makerHasMore) {
+		console.warn(
+			`[costBasis] Maker trade pagination cap reached (${MAX_PAGES} pages); cost basis may be incomplete.`
+		);
+	}
 
 	// Fetch all taker trades (paginated)
 	let takerPage = 1;
@@ -102,6 +107,11 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 
 		takerHasMore = response.pagination.hasMore;
 		takerPage++;
+	}
+	if (takerHasMore) {
+		console.warn(
+			`[costBasis] Taker trade pagination cap reached (${MAX_PAGES} pages); cost basis may be incomplete.`
+		);
 	}
 
 	return trades;

@@ -93,9 +93,11 @@ function convertApiOrderToProcessedQuote(
 		outputTokenSymbol: order.outputToken.symbol || outputMeta.symbol,
 		inputTokenAddress: order.inputToken.address,
 		outputTokenAddress: order.outputToken.address,
+		// All st0x orders have a single IO pair at index 0.
+		// TODO: Have the REST API return actual IO indexes per matched pair.
 		inputIOIndex: 0,
 		outputIOIndex: 0,
-		sgOrder: { orderHash: order.orderHash } as SgOrder,
+		sgOrder: { orderHash: order.orderHash, owner: order.owner } as SgOrder,
 		orderbookId: order.orderbookId,
 		inputTokenDecimals: order.inputToken.decimals ?? inputMeta.decimals ?? 18,
 		outputTokenDecimals: order.outputToken.decimals ?? outputMeta.decimals ?? 18
@@ -174,6 +176,11 @@ export async function fetchAndQuotePaymentTokenOrders(
 				hasMore = response.pagination.hasMore;
 				page++;
 			}
+			if (hasMore) {
+				console.warn(
+					`[orders] Pagination cap reached for token ${token.address}; additional orders dropped.`
+				);
+			}
 		})
 	);
 
@@ -199,16 +206,29 @@ export async function fetchAndQuoteTokenOrders(
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
 
 	const processedQuotes: ProcessedQuote[] = [];
+	const seen = new Set<string>();
 	let page = 1;
 	let hasMore = true;
 	while (hasMore && page <= 10) {
-		const response = await apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 });
-		for (const order of response.orders) {
-			const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens);
-			if (quote) processedQuotes.push(quote);
+		try {
+			const response = await apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 });
+			for (const order of response.orders) {
+				if (seen.has(order.orderHash)) continue;
+				seen.add(order.orderHash);
+				const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens);
+				if (quote) processedQuotes.push(quote);
+			}
+			hasMore = response.pagination.hasMore;
+			page++;
+		} catch (error) {
+			console.warn(`[orders] Page ${page} fetch failed for token ${tokenAddress}:`, error);
+			break;
 		}
-		hasMore = response.pagination.hasMore;
-		page++;
+	}
+	if (hasMore) {
+		console.warn(
+			`[orders] Pagination cap reached for token ${tokenAddress}; additional orders dropped.`
+		);
 	}
 
 	return processedQuotes;

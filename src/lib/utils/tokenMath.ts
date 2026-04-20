@@ -363,7 +363,11 @@ export function ratioToNumber(value: string | null | undefined): number | null {
 	}
 
 	// Handle plain decimal strings (from REST API responses)
-	const numeric = Number.parseFloat(value);
+	const trimmed = value.trim();
+	if (!/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(trimmed)) {
+		return null;
+	}
+	const numeric = Number(trimmed);
 	if (Number.isFinite(numeric) && numeric > 0 && numeric < 1e14) {
 		return numeric;
 	}
