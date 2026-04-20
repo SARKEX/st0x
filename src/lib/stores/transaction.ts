@@ -127,6 +127,119 @@ function extractTransactionError(
 	return (err?.cause?.details || err?.message || fallback) as TransactionErrorMessage;
 }
 
+/**
+ * Decide if a failing maker leg can be skipped and routed to the next leg.
+ * We only skip execution/simulation-style maker failures, and never skip
+ * user/session/network/funds/allowance class errors.
+ */
+function isSkippableMakerLegError(message: string | undefined): boolean {
+	if (!message) return false;
+	const normalized = message.toLowerCase();
+
+	// Never skip user/session/wallet/rpc/accounting failures.
+	if (
+		normalized.includes('user rejected') ||
+		normalized.includes('user denied') ||
+		normalized.includes('authentication') ||
+		normalized.includes('log in') ||
+		normalized.includes('allowance') ||
+		normalized.includes('insufficient funds') ||
+		normalized.includes('exceeds balance') ||
+		normalized.includes('nonce') ||
+		normalized.includes('network') ||
+		normalized.includes('disconnected')
+	) {
+		return false;
+	}
+
+	// Skip leg-level simulation / revert style errors.
+	return (
+		normalized.includes('preflight check failed') ||
+		normalized.includes('order failed simulation') ||
+		normalized.includes('execution reverted') ||
+		normalized.includes('reverted')
+	);
+}
+
+function buildExpectedPriceByOrderHash(
+	simulation: TakeOrdersParams['simulation'] | undefined
+): Map<string, number> {
+	const result = new Map<string, number>();
+	for (const fill of simulation?.fills ?? []) {
+		const hash = fill.quote.orderHash?.toLowerCase();
+		if (!hash) continue;
+		if (!Number.isFinite(fill.price) || fill.price <= 0) continue;
+		if (!result.has(hash)) {
+			result.set(hash, fill.price);
+		}
+	}
+	return result;
+}
+
+function formatPriceForReroute(value: number | undefined): string | null {
+	if (value === undefined || !Number.isFinite(value) || value <= 0) return null;
+	return value.toFixed(6);
+}
+
+function shortOrderHash(hash: string | undefined): string {
+	if (!hash) return 'unknown order';
+	return hash.length > 14 ? `${hash.slice(0, 10)}...${hash.slice(-4)}` : hash;
+}
+
+function buildLegRerouteMessage(args: {
+	fromOrderHash?: string;
+	toOrderHash?: string;
+	fromPrice?: number;
+	toPrice?: number;
+}): string {
+	const fromHash = shortOrderHash(args.fromOrderHash);
+	const toHash = shortOrderHash(args.toOrderHash);
+	const fromPrice = formatPriceForReroute(args.fromPrice);
+	const toPrice = formatPriceForReroute(args.toPrice);
+	if (fromPrice && toPrice) {
+		return `Maker leg ${fromHash} is not executable now. Routing to ${toHash} at updated ratio (${fromPrice} -> ${toPrice}).`;
+	}
+	return `Maker leg ${fromHash} is not executable now. Routing remaining size to ${toHash}.`;
+}
+
+function buildMakerRerouteNotice(args: {
+	chainId: number;
+	orderbookId: string;
+	fromOrderHash?: string;
+	toOrderHash?: string;
+	fromPrice?: number;
+	toPrice?: number;
+}): MakerRerouteNotice {
+	const fromOrderHash = args.fromOrderHash ?? 'unknown';
+	const toOrderHash = args.toOrderHash ?? 'unknown';
+	return {
+		message: buildLegRerouteMessage(args),
+		fromOrderHash,
+		fromOrderUrl: getRaindexOrderUrl(args.chainId, args.orderbookId, fromOrderHash),
+		toOrderHash,
+		toOrderUrl: getRaindexOrderUrl(args.chainId, args.orderbookId, toOrderHash)
+	};
+}
+
+function buildExecutionPlanNotice(args: {
+	chainId: number;
+	orderbookId: string;
+	orderHashes: string[];
+	fillAmounts: bigint[];
+	fillDecimals: number;
+	fillSymbol: string;
+}): ExecutionPlanNotice {
+	const legs = args.orderHashes.map((orderHash, index) => ({
+		orderHash,
+		orderUrl: getRaindexOrderUrl(args.chainId, args.orderbookId, orderHash),
+		fillAmountDisplay: `${formatUnits(args.fillAmounts[index] ?? 0n, args.fillDecimals)} ${args.fillSymbol}`
+	}));
+	return {
+		title: 'This market order will be split across multiple maker orders.',
+		legs
+	};
+}
+
 // Find a vault by matching both vault ID and token address
 // Vault IDs can be decimal strings or hex strings, so we check both formats
 function findVaultByIdAndToken(
@@ -216,11 +329,32 @@ export interface RaindexLink {
 	text: string;
 }
 
+export interface MakerRerouteNotice {
+	message: string;
+	fromOrderHash: string;
+	fromOrderUrl: string;
+	toOrderHash: string;
+	toOrderUrl: string;
+}
+
+export interface ExecutionPlanLeg {
+	orderHash: string;
+	orderUrl: string;
+	fillAmountDisplay: string;
+}
+
+export interface ExecutionPlanNotice {
+	title: string;
+	legs: ExecutionPlanLeg[];
+}
+
 export interface TransactionMetadata {
 	marketOrderSummary?: MarketOrderSummary;
 	assetTokenInfo?: AssetTokenInfo; // For limit/DCA order deployments
 	multiTxProgress?: MultiTxProgress; // For split order transactions
 	raindexLink?: RaindexLink; // Safe link data (replaces @html)
+	makerRerouteNotice?: MakerRerouteNotice;
+	executionPlanNotice?: ExecutionPlanNotice;
 }
 
 const initialState = {
@@ -231,7 +365,8 @@ const initialState = {
 	functionName: '',
 	message: '',
 	multiTxAcknowledged: false,
-	onMultiTxAcknowledge: null as (() => void) | null
+	onMultiTxDecision: null as ((approved: boolean) => void) | null,
+	onMakerRerouteDecision: null as ((approved: boolean) => void) | null
 };
 
 const transactionStore = () => {
@@ -267,10 +402,68 @@ const transactionStore = () => {
 	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
 		setState(TransactionStatus.ERROR, { error: message, hash });
 
+	const requestExecutionPlanConsent = async (
+		message: string,
+		data?: TransactionMetadata
+	): Promise<boolean> => {
+		return new Promise<boolean>((resolve) => {
+			update((state) => ({
+				...state,
+				status: TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT,
+				message,
+				data: data ?? state.data,
+				onMultiTxDecision: (approved: boolean) => {
+					update((s) => ({ ...s, onMultiTxDecision: null }));
+					resolve(approved);
+				}
+			}));
+		});
+	};
+
 	const acknowledgeMultiTx = () => {
 		update((state) => {
-			if (state.onMultiTxAcknowledge) {
-				state.onMultiTxAcknowledge();
+			if (state.onMultiTxDecision) {
+				state.onMultiTxDecision(true);
+			}
+			return state;
+		});
+	};
+
+	const declineMultiTx = () => {
+		update((state) => {
+			if (state.onMultiTxDecision) {
+				state.onMultiTxDecision(false);
+			}
+			return state;
+		});
+	};
+
+	const requestMakerRerouteConsent = async (
+		message: string,
+		notice: MakerRerouteNotice,
+		data?: TransactionMetadata
+	): Promise<boolean> => {
+		return new Promise<boolean>((resolve) => {
+			update((state) => ({
+				...state,
+				status: TransactionStatus.PENDING_WALLET,
+				message,
+				data: {
+					...(data ?? {}),
+					makerRerouteNotice: notice
+				},
+				onMakerRerouteDecision: (approved: boolean) => {
+					update((s) => ({ ...s, onMakerRerouteDecision: null }));
+					resolve(approved);
+				}
+			}));
+		});
+	};
+
+	const respondToMakerReroute = (approved: boolean) => {
+		update((state) => {
+			if (state.onMakerRerouteDecision) {
+				state.onMakerRerouteDecision(approved);
 			}
 			return state;
 		});
@@ -1428,6 +1621,7 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing order...`);
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleOracleOrders]';
+		const expectedPriceByOrderHash = buildExpectedPriceByOrderHash(params.simulation);
 		const multiLegUseTotalAllowance =
 			oracleInputs.length > 1 &&
 			(params.requiredPayerAllowance ?? 0n) > 0n &&
@@ -1461,10 +1655,37 @@ const transactionStore = () => {
 			}
 		}
 
+		const fillDecimals = params.orderFillDecimals ?? params.takerWantsToken.decimals;
+		if (oracleInputs.length > 1) {
+			const proceed = await requestExecutionPlanConsent(
+				`This order requires ${oracleInputs.length} separate transactions. Review exact per-order fills and confirm to continue.`,
+				{
+					multiTxProgress: { currentBatch: 0, totalBatches: oracleInputs.length },
+					executionPlanNotice: buildExecutionPlanNotice({
+						chainId: network.id,
+						orderbookId: primaryOrder.orderbook.id,
+						orderHashes: oracleInputs.map((o) => o.raindexOrder.orderHash),
+						fillAmounts: params.orderFillAmounts ?? [],
+						fillDecimals,
+						fillSymbol: params.takerWantsToken.symbol
+					})
+				}
+			);
+			if (!proceed) {
+				return transactionError('Transaction cancelled by user before multi-order execution.' as TransactionErrorMessage);
+			}
+		}
+		let carryForwardFillAmount = 0n;
+
 		for (let i = 0; i < oracleInputs.length; i++) {
 			const oracleInput = oracleInputs[i];
 			const isLast = i === oracleInputs.length - 1;
 			const batchLabel = oracleInputs.length > 1 ? ` (${i + 1}/${oracleInputs.length})` : '';
+			const baseFillAmount = params.orderFillAmounts?.[i] ?? 0n;
+			const effectiveFillAmount = baseFillAmount + carryForwardFillAmount;
+			const amountStr = String(
+				Float.fromFixedDecimalLossy(effectiveFillAmount, fillDecimals).float.format().value ?? '0'
+			);
 
 			if (i > 0) {
 				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG));
@@ -1478,7 +1699,7 @@ const transactionStore = () => {
 				oracleInput.outputIndex,
 				oracleInput.taker,
 				mode,
-				oracleInput.amountStr,
+				amountStr,
 				oracleInput.priceCapStr
 			);
 
@@ -1492,7 +1713,7 @@ const transactionStore = () => {
 						oracleInput.outputIndex,
 						oracleInput.taker,
 						mode,
-						oracleInput.amountStr,
+						amountStr,
 						oracleInput.priceCapStr
 					);
 					if (
@@ -1511,7 +1732,7 @@ const transactionStore = () => {
 							oracleInput.outputIndex,
 							oracleInput.taker,
 							mode,
-							oracleInput.amountStr,
+							amountStr,
 							oracleInput.priceCapStr
 						);
 					}
@@ -1530,7 +1751,7 @@ const transactionStore = () => {
 						oracleInput.outputIndex,
 						oracleInput.taker,
 						mode,
-						oracleInput.amountStr,
+						amountStr,
 						oracleInput.priceCapStr
 					);
 				}
@@ -1547,7 +1768,7 @@ const transactionStore = () => {
 						oracleInput.outputIndex,
 						oracleInput.taker,
 						mode,
-						oracleInput.amountStr,
+						amountStr,
 						oracleInput.priceCapStr
 					);
 					if (calldataResult.error || (calldataResult.value?.isReady && calldataResult.value?.takeOrdersInfo)) {
@@ -1564,7 +1785,7 @@ const transactionStore = () => {
 						oracleInput.outputIndex,
 						oracleInput.taker,
 						mode,
-						oracleInput.amountStr,
+						amountStr,
 						oracleInput.priceCapStr
 					);
 					if (!calldataResult.error) break;
@@ -1575,7 +1796,7 @@ const transactionStore = () => {
 				orderHash: oracleInput.raindexOrder.orderHash,
 				inputIndex: oracleInput.inputIndex,
 				outputIndex: oracleInput.outputIndex,
-				amountStr: oracleInput.amountStr,
+				amountStr,
 				priceCapStr: oracleInput.priceCapStr,
 				isError: Boolean(calldataResult.error),
 				isReady: Boolean(calldataResult.value?.isReady),
@@ -1584,6 +1805,26 @@ const transactionStore = () => {
 			});
 
 			if (calldataResult.error) {
+				if (isSkippableMakerLegError(calldataResult.error.readableMsg) && i < oracleInputs.length - 1) {
+					carryForwardFillAmount = effectiveFillAmount;
+					const proceed = await requestMakerRerouteConsent(
+						'A quoted maker leg cannot execute as quoted. Continue with rerouted liquidity?',
+						buildMakerRerouteNotice({
+							chainId: network.id,
+							orderbookId: primaryOrder.orderbook.id,
+							fromOrderHash: oracleInput.raindexOrder.orderHash,
+							toOrderHash: oracleInputs[i + 1]?.raindexOrder.orderHash,
+							fromPrice: expectedPriceByOrderHash.get(oracleInput.raindexOrder.orderHash.toLowerCase()),
+							toPrice: expectedPriceByOrderHash.get(
+								oracleInputs[i + 1]?.raindexOrder.orderHash?.toLowerCase() ?? ''
+							)
+						})
+					);
+					if (!proceed) {
+						return transactionError('Transaction cancelled by user during maker reroute consent.' as TransactionErrorMessage);
+					}
+					continue;
+				}
 				console.error(`${TX_LOG_PREFIX} getTakeCalldata error:`, calldataResult.error);
 				return transactionError(
 					`Order failed: ${calldataResult.error.readableMsg}` as TransactionErrorMessage
@@ -1614,6 +1855,7 @@ const transactionStore = () => {
 				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`);
 				await waitForTransaction(hash);
 				allTransactionHashes.push(hash);
+				carryForwardFillAmount = 0n;
 
 				if (!isLast) {
 					awaitWalletConfirmation(`Transaction ${i + 1} confirmed. Preparing next order...`);
@@ -1628,6 +1870,26 @@ const transactionStore = () => {
 				}
 				const errorMessage = extractTransactionError(txError);
 				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
+				if (isSkippableMakerLegError(errorMessage) && i < oracleInputs.length - 1) {
+					carryForwardFillAmount = effectiveFillAmount;
+					const proceed = await requestMakerRerouteConsent(
+						'A maker leg failed during execution. Continue with rerouted liquidity?',
+						buildMakerRerouteNotice({
+							chainId: network.id,
+							orderbookId: primaryOrder.orderbook.id,
+							fromOrderHash: oracleInput.raindexOrder.orderHash,
+							toOrderHash: oracleInputs[i + 1]?.raindexOrder.orderHash,
+							fromPrice: expectedPriceByOrderHash.get(oracleInput.raindexOrder.orderHash.toLowerCase()),
+							toPrice: expectedPriceByOrderHash.get(
+								oracleInputs[i + 1]?.raindexOrder.orderHash?.toLowerCase() ?? ''
+							)
+						})
+					);
+					if (!proceed) {
+						return transactionError('Transaction cancelled by user during maker reroute consent.' as TransactionErrorMessage);
+					}
+					continue;
+				}
 				if (errorStr.includes('allowance') || errorStr.includes('insufficient')) {
 					return transactionError(
 						'Insufficient token allowance. This is a known issue. Please retry the order.' as TransactionErrorMessage
@@ -1731,22 +1993,28 @@ const transactionStore = () => {
 		});
 
 		if (ordersToExecute.length > 1) {
-			await new Promise<void>((resolve) => {
-				update((state) => ({
-					...state,
-					status: TransactionStatus.PENDING_MULTI_TX_ACKNOWLEDGMENT,
-					message: `This order requires ${ordersToExecute.length} separate transactions. You will be asked to sign ${ordersToExecute.length} times.`,
-					data: { multiTxProgress: { currentBatch: 0, totalBatches: ordersToExecute.length } },
-					onMultiTxAcknowledge: () => {
-						update((s) => ({ ...s, multiTxAcknowledged: true, onMultiTxAcknowledge: null }));
-						resolve();
-					}
-				}));
-			});
+			const proceed = await requestExecutionPlanConsent(
+				`This order requires ${ordersToExecute.length} separate transactions. Review exact per-order fills and confirm to continue.`,
+				{
+					multiTxProgress: { currentBatch: 0, totalBatches: ordersToExecute.length },
+					executionPlanNotice: buildExecutionPlanNotice({
+						chainId: network.id,
+						orderbookId: raindexOrder.orderbook.id,
+						orderHashes: ordersToExecute.map((o) => o.orderHash),
+						fillAmounts: params.orderFillAmounts ?? [],
+						fillDecimals,
+						fillSymbol: params.takerWantsToken.symbol
+					})
+				}
+			);
+			if (!proceed) {
+				return transactionError('Transaction cancelled by user before multi-order execution.' as TransactionErrorMessage);
+			}
 		}
 
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleTakeOrders]';
+		const expectedPriceByOrderHash = buildExpectedPriceByOrderHash(params.simulation);
 
 		const multiLegUseTotalAllowance =
 			ordersToExecute.length > 1 &&
@@ -1758,6 +2026,7 @@ const transactionStore = () => {
 			mode,
 			isDynamicWallet
 		});
+		let carryForwardFillAmount = 0n;
 
 		if (multiLegUseTotalAllowance) {
 			const order0 = ordersToExecute[0];
@@ -1803,7 +2072,8 @@ const transactionStore = () => {
 			}
 			const isMultiBatch = ordersToExecute.length > 1;
 			const batchLabel = isMultiBatch ? ` (${orderIndex + 1}/${ordersToExecute.length})` : '';
-			const fillAmount = params.orderFillAmounts?.[orderIndex] ?? 0n;
+			const baseFillAmount = params.orderFillAmounts?.[orderIndex] ?? 0n;
+			const fillAmount = baseFillAmount + carryForwardFillAmount;
 			const amountStr = String(
 				Float.fromFixedDecimalLossy(fillAmount, fillDecimals).float.format().value ?? '0'
 			);
@@ -1903,6 +2173,30 @@ const transactionStore = () => {
 						}
 					}
 					if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
+						if (
+							isSkippableMakerLegError(readyCalldataResult.error?.readableMsg) &&
+							orderIndex < ordersToExecute.length - 1
+						) {
+							carryForwardFillAmount = fillAmount;
+							const proceed = await requestMakerRerouteConsent(
+								'A quoted maker leg cannot execute as quoted. Continue with rerouted liquidity?',
+								buildMakerRerouteNotice({
+									chainId: network.id,
+									orderbookId: raindexOrder.orderbook.id,
+									fromOrderHash: orderToExecute.orderHash,
+									toOrderHash: ordersToExecute[orderIndex + 1]?.orderHash,
+									fromPrice: expectedPriceByOrderHash.get(orderToExecute.orderHash.toLowerCase()),
+									toPrice: expectedPriceByOrderHash.get(
+										ordersToExecute[orderIndex + 1]?.orderHash?.toLowerCase() ?? ''
+									)
+								}),
+								progressData
+							);
+							if (!proceed) {
+								return transactionError('Transaction cancelled by user during maker reroute consent.' as TransactionErrorMessage);
+							}
+							continue;
+						}
 						return transactionError(
 							(readyCalldataResult.error?.readableMsg ||
 								'Failed to generate transaction calldata') as TransactionErrorMessage
@@ -1931,6 +2225,7 @@ const transactionStore = () => {
 				console.log(`${TX_LOG_PREFIX} Order ${orderIndex + 1} transaction confirmed`, { hash });
 
 				allTransactionHashes.push(hash);
+				carryForwardFillAmount = 0n;
 
 				if (orderIndex < ordersToExecute.length - 1) {
 					awaitWalletConfirmation(
@@ -1957,6 +2252,26 @@ const transactionStore = () => {
 				const errorMessage = extractTransactionError(error);
 
 				console.error('[handleTakeOrders] Transaction error:', error);
+				if (isSkippableMakerLegError(errorMessage) && orderIndex < ordersToExecute.length - 1) {
+					carryForwardFillAmount = fillAmount;
+					const proceed = await requestMakerRerouteConsent(
+						'A maker leg failed during execution. Continue with rerouted liquidity?',
+						buildMakerRerouteNotice({
+							chainId: network.id,
+							orderbookId: raindexOrder.orderbook.id,
+							fromOrderHash: orderToExecute.orderHash,
+							toOrderHash: ordersToExecute[orderIndex + 1]?.orderHash,
+							fromPrice: expectedPriceByOrderHash.get(orderToExecute.orderHash.toLowerCase()),
+							toPrice: expectedPriceByOrderHash.get(
+								ordersToExecute[orderIndex + 1]?.orderHash?.toLowerCase() ?? ''
+							)
+						})
+					);
+					if (!proceed) {
+						return transactionError('Transaction cancelled by user during maker reroute consent.' as TransactionErrorMessage);
+					}
+					continue;
+				}
 
 				// Check for insufficient allowance error and provide helpful message
 				const errorStr = typeof errorMessage === 'string' ? errorMessage.toLowerCase() : '';
@@ -1995,6 +2310,8 @@ const transactionStore = () => {
 		transactionSuccess,
 		transactionError,
 		acknowledgeMultiTx,
+		declineMultiTx,
+		respondToMakerReroute,
 		handleDcaDeploy,
 		handleLimitDeploy,
 		handleDsfDeploy,

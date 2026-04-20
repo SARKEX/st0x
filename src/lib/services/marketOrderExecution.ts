@@ -55,11 +55,10 @@ function humanPriceCapStr(
 
 /**
  * Optional per-leg shave on buy asset amount sent to `getTakeCalldata` / `takeOrders`.
- * Walk/simulation can ask for slightly more than the SDK/oracle accepts (Float lossy conversion,
- * stale top-of-book vs fresh oracle). ~25–30 bps stays below that gap without the large underfills
- * seen at much higher haircuts (~0.75%).
+ * Keep at 0 for exact-size UX (buy 0.15 should execute as 0.15, not 0.14955).
+ * If thin-book SDK/oracle mismatches reappear, prefer retries/refresh over global shaving.
  */
-const BUY_FILL_EXECUTION_HAIRCUT_BPS = 30n;
+const BUY_FILL_EXECUTION_HAIRCUT_BPS = 0n;
 
 function haircutBuyExecutionFill(amount: bigint): bigint {
 	if (amount <= 0n) return 0n;
