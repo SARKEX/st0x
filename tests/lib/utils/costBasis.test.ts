@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateCostBasisForToken } from '$lib/utils/costBasis';
-import type { SgTrade } from '@rainlanguage/orderbook';
+import { calculateCostBasisForToken, type CostBasisTrade } from '$lib/utils/costBasis';
 
 // Helper to create a mock trade
 function makeTrade({
@@ -19,7 +18,7 @@ function makeTrade({
 	userAddress: string;
 	assetAddress?: string;
 	paymentAddress?: string;
-}): SgTrade {
+}): CostBasisTrade {
 	// For taker perspective:
 	// isBuy=true: user pays USDC (input), receives asset (output)
 	// isBuy=false: user pays asset (input), receives USDC (output)
@@ -51,7 +50,7 @@ function makeTrade({
 		tradeEvent: {
 			sender: userAddress
 		}
-	} as unknown as SgTrade;
+	};
 }
 
 describe('costBasis', () => {

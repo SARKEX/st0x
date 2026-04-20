@@ -34,8 +34,7 @@ export function parseFloatHex(hexAmount: string, decimals: number, useAbsolute =
 			return 0n;
 		}
 
-		const fdValue = fixedResult.value;
-		const fdValueObj = fdValue as unknown as Record<string, unknown>;
+		const fdValueObj = fixedResult.value as unknown as Record<string, unknown>;
 		if (typeof fdValueObj?.value === 'string') {
 			return BigInt(fdValueObj.value as string);
 		}
@@ -363,6 +362,12 @@ export function ratioToNumber(value: string | null | undefined): number | null {
 		}
 	}
 
+	// Handle plain decimal strings (from REST API responses)
+	const numeric = Number.parseFloat(value);
+	if (Number.isFinite(numeric) && numeric > 0 && numeric < 1e14) {
+		return numeric;
+	}
+
 	return null;
 }
 
@@ -467,7 +472,7 @@ export function analyzeTrade(
 
 	const assetLookup = lookup?.(assetAddress);
 	const assetDecimals = Number(
-		assetLookup?.decimals ?? assetCandidate.decimals ?? assetCandidate?.decimals ?? 18
+		assetLookup?.decimals ?? assetCandidate.decimals ?? 18
 	);
 
 	const pair: PairDescriptor = {

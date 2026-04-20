@@ -31,8 +31,6 @@ export type OrderbookQuoteCache = {
 	quotes: ProcessedQuote[];
 };
 
-export type OrderbookQuoteState = OrderbookQuoteCache & { updatedAt?: number };
-
 /**
  * Build summary map from quotes array.
  * Shared helper to avoid duplication.
@@ -69,24 +67,19 @@ export function createOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(network),
-		staleTime: 60_000, // Stale after 60s
+		staleTime: 30_000, // Stale after 30s (server caches at 15s)
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchInterval: pollInterval,
-		refetchOnWindowFocus: pollInterval ? true : false, // Only refetch on focus if stale
+		refetchOnWindowFocus: Boolean(pollInterval), // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
 		queryFn: async () => {
-			try {
-				if (!network) {
-					return { summary: {}, quotes: [] };
-				}
-				const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
-				const summary = buildSummaryFromQuotes(quotes, network.id);
-				return { summary, quotes };
-			} catch (error) {
-				console.error('[orderbookQuotesQuery] Failed:', error);
-				throw error;
+			if (!network) {
+				return { summary: {}, quotes: [] };
 			}
+			const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
+			const summary = buildSummaryFromQuotes(quotes, network.id);
+			return { summary, quotes };
 		}
 	});
 }
@@ -149,22 +142,9 @@ export async function refreshTokenQuotes(
 
 	const token = getTokenByAnyAddress(tokenAddress);
 	// Only fetch the primary (wrapped) address on regular polls
-	const primaryAddress = token?.address ?? tokenAddress;
-	const uniqueAddresses = [primaryAddress.toLowerCase()];
+	const primaryAddress = (token?.address ?? tokenAddress).toLowerCase();
 
-	const quotes: ProcessedQuote[] = [];
-	const seenOrderHash = new Set<string>();
-	for (const addr of uniqueAddresses) {
-		const batch = await fetchAndQuoteTokenOrders(networkId, addr);
-		for (const q of batch) {
-			if (q.orderHash && !seenOrderHash.has(q.orderHash)) {
-				seenOrderHash.add(q.orderHash);
-				quotes.push(q);
-			} else if (!q.orderHash) {
-				quotes.push(q);
-			}
-		}
-	}
+	const quotes = await fetchAndQuoteTokenOrders(networkId, primaryAddress);
 	const summary = buildSummaryFromQuotes(quotes, networkId);
 
 	// Merge into global cache
@@ -263,7 +243,7 @@ export function createTokenOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(network && tokenAddress),
-		staleTime: 60_000, // Stale after 60s
+		staleTime: 30_000, // Stale after 30s (server caches at 15s)
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchOnMount: 'always', // Always refresh when component mounts
