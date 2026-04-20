@@ -47,6 +47,14 @@ export interface WalkQuotesOptions {
 	 * The 'receive' mode only makes sense for BUY orders.
 	 */
 	mode?: 'receive' | 'spend';
+	/**
+	 * Maximum allowed slippage as a percentage (e.g. 2 means 2%).
+	 * Stops filling when the weighted average price exceeds the best price by this percentage.
+	 *
+	 * For BUY: stops when avg price > bestPrice * (1 + slippage/100)
+	 * For SELL: stops when avg price < bestPrice * (1 - slippage/100)
+	 */
+	maxSlippagePercent?: number;
 }
 
 /**
@@ -62,6 +70,8 @@ export interface WalkQuotesResult {
 	outputDecimals: number; // Decimal scale of outputAmountGiven
 	ioRatio: number; // input per output (normalized to token scale: (input/10^inputDecimals) / (output/10^outputDecimals))
 	fills: QuoteFill[];
+	/** True if the walk stopped early because the average price exceeded the slippage limit */
+	slippageLimitHit?: boolean;
 }
 
 // ABI types for decoding order bytes
@@ -270,7 +280,8 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		selectedAmount,
 		assetDecimals,
 		paymentDecimals,
-		mode = 'receive'
+		mode = 'receive',
+		maxSlippagePercent
 	} = options;
 
 	// Determine which decimals apply to input/output based on order side
@@ -313,6 +324,8 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 	let assetAccumulated = 0n; // Total asset tokens traded (in asset decimals)
 	let paymentAccumulated = 0n; // Total payment tokens traded (in payment decimals)
 	const fills: QuoteFill[] = [];
+	let bestPrice: number | null = null; // First (best) price encountered
+	let slippageLimitHit = false;
 
 	for (const quote of quotes) {
 		// Check if we've reached our target
@@ -384,6 +397,35 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		assetAccumulated += assetFromQuote;
 		paymentAccumulated += paymentFromQuote;
 		fills.push({ quote, price, assetAmount: assetFromQuote, paymentAmount: paymentFromQuote });
+
+		// Track best price and enforce slippage limit
+		if (bestPrice === null) {
+			bestPrice = price;
+		}
+		if (
+			maxSlippagePercent !== undefined &&
+			maxSlippagePercent > 0 &&
+			bestPrice !== null &&
+			assetAccumulated > 0n
+		) {
+			// Calculate weighted average price across all fills so far
+			const avgPrice =
+				(Number(paymentAccumulated) / 10 ** paymentDecimals) /
+				(Number(assetAccumulated) / 10 ** assetDecimals);
+			// BUY: avg price should not exceed best (lowest) ask by more than slippage%
+			// SELL: avg price should not fall below best (highest) bid by more than slippage%
+			if (orderSide === 'Buy') {
+				if (avgPrice > bestPrice * (1 + maxSlippagePercent / 100)) {
+					slippageLimitHit = true;
+					break;
+				}
+			} else {
+				if (avgPrice < bestPrice * (1 - maxSlippagePercent / 100)) {
+					slippageLimitHit = true;
+					break;
+				}
+			}
+		}
 	}
 
 	// Map to user perspective (input = received, output = given away)
@@ -406,7 +448,8 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		inputDecimals,
 		outputDecimals,
 		ioRatio,
-		fills
+		fills,
+		slippageLimitHit
 	};
 }
 

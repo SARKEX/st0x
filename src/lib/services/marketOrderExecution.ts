@@ -120,6 +120,12 @@ export interface MarketOrderInput {
 
 	// Optional: callback to refresh quotes (for recalculation after approval)
 	refreshQuotes?: () => Promise<ProcessedQuote[]>;
+
+	/**
+	 * Maximum allowed slippage as a percentage (e.g. 2 means 2%).
+	 * Stops filling when the weighted average price exceeds the best price by this percentage.
+	 */
+	maxSlippagePercent?: number;
 }
 
 export interface MarketOrderResult {
@@ -149,7 +155,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		paymentToken,
 		quotes,
 		network,
-		refreshQuotes
+		refreshQuotes,
+		maxSlippagePercent
 	} = input;
 
 	try {
@@ -163,7 +170,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			selectedAmount: amount,
 			assetDecimals: assetToken.decimals,
 			paymentDecimals: paymentToken.decimals,
-			mode: inputMode === 'spend' ? 'spend' : 'receive'
+			mode: inputMode === 'spend' ? 'spend' : 'receive',
+			maxSlippagePercent
 		});
 
 		if (!walkResult || walkResult.fills.length === 0) {

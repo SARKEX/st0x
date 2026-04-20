@@ -95,6 +95,11 @@
 	let isExecutingTrade = false;
 	let tradeError: string | null = null;
 
+	// Slippage
+	const SLIPPAGE_PRESETS_QT = [0.5, 1, 2, 5];
+	let slippagePercent = 1; // Default 1%
+	let showSlippageSettings = false;
+
 	// ============ DATA LOADING ============
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
 
@@ -737,7 +742,8 @@
 						// Fall back to current quotes
 						return sortedQuotes;
 					}
-				}
+				},
+				maxSlippagePercent: slippagePercent
 			});
 
 			if (!result.success) {
@@ -1052,6 +1058,51 @@
 			<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
 			<span class="text-gray-400">{$currentNetwork?.displayName ?? 'Base'}</span>
 		</div>
+
+		<!-- Slippage -->
+		<div class="flex items-center justify-between px-1">
+			<button
+				type="button"
+				on:click={() => (showSlippageSettings = !showSlippageSettings)}
+				class="flex items-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-300"
+			>
+				<span>Slippage: {slippagePercent}%</span>
+				<svg
+					class="h-3 w-3 transition-transform {showSlippageSettings ? 'rotate-180' : ''}"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+				</svg>
+			</button>
+		</div>
+		{#if showSlippageSettings}
+			<div class="flex items-center gap-1.5 px-1">
+				{#each SLIPPAGE_PRESETS_QT as preset}
+					<button
+						type="button"
+						on:click={() => (slippagePercent = preset)}
+						class="rounded px-2 py-0.5 text-[10px] transition-colors {slippagePercent === preset
+							? 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/50'
+							: 'bg-gray-700/50 text-gray-400 border border-white/10 hover:border-white/20'}"
+					>
+						{preset}%
+					</button>
+				{/each}
+				<div class="relative">
+					<input
+						type="number"
+						min="0.1"
+						max="50"
+						step="0.1"
+						bind:value={slippagePercent}
+						class="w-14 rounded border border-white/10 bg-gray-700/50 px-1.5 py-0.5 pr-5 text-[10px] text-gray-300 focus:border-yellow-500/50 focus:outline-none"
+					/>
+					<span class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">%</span>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Error display -->
 		{#if tradeError}

@@ -46,6 +46,11 @@
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
+	const DEFAULT_SLIPPAGE_PERCENT = 1; // Default 1% slippage tolerance
+	const SLIPPAGE_PRESETS = [0.5, 1, 2, 5];
+
+	let slippagePercent: number = DEFAULT_SLIPPAGE_PERCENT;
+	let showSlippageSettings = false;
 
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
@@ -214,6 +219,7 @@
 	let priceError = false;
 	let priceErrorReason: 'no_quotes' | 'no_fill' | 'error' | null = null;
 	let orderPreparationError: string | null = null;
+	let slippageLimitHit = false; // True if walk stopped early due to slippage
 
 	// Best orderbook price based on order side (from parent props)
 	// Buy: use sellPrice (best ask - what you pay when buying)
@@ -579,7 +585,8 @@
 				return;
 			}
 
-			const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
+			const { inputAmountFilled, outputAmountGiven, ioRatio, fills, slippageLimitHit: hitSlippage } = walkResult;
+			slippageLimitHit = hitSlippage ?? false;
 
 			// Check if anything was filled (asset amount)
 			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
@@ -611,12 +618,13 @@
 	// Fetch market price when component mounts or dependencies change
 	// Only calculates price when user has entered a quantity (selectedAmount > 0)
 	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes) {
+	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes && slippagePercent >= 0) {
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
 		marketPrice = 0;
 		hasAvailableOrders = false;
+		slippageLimitHit = false;
 	}
 
 	// Walk the orderbook with current quotes and selected amount
@@ -703,7 +711,8 @@
 			selectedAmount,
 			assetDecimals: assetToken.decimals,
 			paymentDecimals: paymentToken.decimals,
-			mode: inputMode === 'spend' ? 'spend' : 'receive'
+			mode: inputMode === 'spend' ? 'spend' : 'receive',
+			maxSlippagePercent: slippagePercent
 		});
 	}
 
@@ -830,7 +839,8 @@
 				refreshQuotes: async () => {
 					await $orderbookQuotesQuery?.refetch?.();
 					return getQuotesWithPriceGuard();
-				}
+				},
+				maxSlippagePercent: slippagePercent
 			});
 
 			if (!result.success && result.error) {
@@ -1094,6 +1104,66 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- Slippage Settings -->
+		<div class="rounded-lg border border-white/10 bg-gray-800/30">
+			<button
+				type="button"
+				on:click={() => (showSlippageSettings = !showSlippageSettings)}
+				class="flex w-full items-center justify-between px-3 py-2 text-sm text-gray-400 transition-colors hover:text-gray-300"
+			>
+				<span>Max slippage</span>
+				<span class="flex items-center gap-1">
+					<span class="font-medium text-gray-300">{slippagePercent}%</span>
+					<svg
+						class="h-3.5 w-3.5 transition-transform {showSlippageSettings ? 'rotate-180' : ''}"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+					</svg>
+				</span>
+			</button>
+			{#if showSlippageSettings}
+				<div class="border-t border-white/10 px-3 py-3">
+					<div class="flex items-center gap-2">
+						{#each SLIPPAGE_PRESETS as preset}
+							<button
+								type="button"
+								on:click={() => (slippagePercent = preset)}
+								class="flex-1 rounded border px-2 py-1 text-xs transition-colors {slippagePercent === preset
+									? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-300'
+									: 'border-white/10 bg-gray-700/50 text-gray-300 hover:border-white/20'}"
+							>
+								{preset}%
+							</button>
+						{/each}
+						<div class="relative flex-1">
+							<input
+								type="number"
+								min="0.1"
+								max="50"
+								step="0.1"
+								bind:value={slippagePercent}
+								class="w-full rounded border border-white/10 bg-gray-700/50 px-2 py-1 pr-6 text-xs text-gray-300 focus:border-yellow-500/50 focus:outline-none"
+							/>
+							<span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">%</span>
+						</div>
+					</div>
+					<p class="mt-2 text-xs text-gray-500">
+						Order stops filling if the average price moves more than {slippagePercent}% from the best available price.
+					</p>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Slippage limit warning -->
+		{#if slippageLimitHit && selectedAmount && selectedAmount > 0n && !isLoadingPrice}
+			<div class="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300">
+				Order partially filled due to {slippagePercent}% slippage limit. Increase slippage tolerance or reduce order size to fill completely.
+			</div>
+		{/if}
 
 		<!-- Market Order Button -->
 		<button
