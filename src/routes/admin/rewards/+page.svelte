@@ -789,7 +789,6 @@
 	let addingTeamWallet = false;
 
 	// ===== Pool Wallets State =====
-	let poolWalletsLoading = false;
 	let poolWalletsList: string[] = [];
 
 	// ===== Rewards Pool Tab State =====
@@ -1621,8 +1620,6 @@
 
 	// ===== Pool Wallets Functions =====
 	async function loadPoolWalletsList() {
-		poolWalletsLoading = true;
-
 		try {
 			const res = await fetch('/api/admin/pool-wallets');
 			const data = await res.json();
@@ -1634,8 +1631,6 @@
 			poolWalletsList = data.wallets || [];
 		} catch {
 			// Pool wallets list load failure is non-critical
-		} finally {
-			poolWalletsLoading = false;
 		}
 	}
 
