@@ -1,5 +1,6 @@
 import { RaindexClient } from '@rainlanguage/orderbook';
 import type { Network } from '$lib/config/network';
+type RaindexClientInstance = RaindexClient;
 
 /**
  * Raindex settings YAML.
@@ -47,7 +48,7 @@ rainlangs:
 
 // Two-client pool for load balancing
 interface ClientPool {
-	clients: [RaindexClient, RaindexClient];
+	clients: [RaindexClientInstance, RaindexClientInstance];
 	currentIndex: number;
 }
 
@@ -104,7 +105,7 @@ async function getClientPool(network: Network): Promise<ClientPool> {
  * Get the next client using round-robin load balancing.
  * Each client has different primary RPCs, SDK handles failover within each.
  */
-export async function getLoadBalancedClient(network: Network): Promise<RaindexClient> {
+export async function getLoadBalancedClient(network: Network): Promise<RaindexClientInstance> {
 	const pool = await getClientPool(network);
 	const client = pool.clients[pool.currentIndex];
 	pool.currentIndex = (pool.currentIndex + 1) % 2;
@@ -114,7 +115,7 @@ export async function getLoadBalancedClient(network: Network): Promise<RaindexCl
 /**
  * Create a RaindexClient from the hardcoded settings YAML.
  */
-export async function createRaindexClient(): Promise<RaindexClient> {
+export async function createRaindexClient(): Promise<RaindexClientInstance> {
 	const clientResult = await RaindexClient.new([SETTINGS_YAML]);
 	if (clientResult.error) {
 		throw new Error(`Failed to create RaindexClient: ${clientResult.error.readableMsg}`);

@@ -17,8 +17,33 @@ import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
-import { DotrainRainlang } from '@rainlanguage/orderbook';
+import * as orderbookModule from '@rainlanguage/orderbook';
 import { walletAddress } from '$lib/stores/authStore';
+const DotrainRegistry =
+	(orderbookModule as { DotrainRegistry?: unknown }).DotrainRegistry ??
+	(
+		orderbookModule as unknown as {
+			default?: { DotrainRegistry?: unknown };
+		}
+	).default?.DotrainRegistry;
+if (!DotrainRegistry) {
+	throw new Error('DotrainRegistry not available from @rainlanguage/orderbook');
+}
+type DotrainRegistryInstance = {
+	getGui: (orderKey: string, deploymentKey: string) => Promise<{
+		error?: { readableMsg: string };
+		value: {
+			setSelectToken: (key: string, address: string) => Promise<unknown>;
+			setFieldValue: (key: string, value: string) => unknown;
+			setDeposit: (key: string, value: string) => unknown;
+			setVaultId: (type: 'input' | 'output', key: string, vaultId: Hex) => unknown;
+			getComposedRainlang: () => Promise<{ error?: { readableMsg: string }; value: string }>;
+			getDeploymentTransactionArgs: (
+				owner: string
+			) => Promise<{ error?: { readableMsg: string }; value: unknown }>;
+		};
+	}>;
+};
 
 /** Pinned commit for rain.strategies registry (holds strategy order definitions). */
 const RAIN_STRATEGIES_COMMIT = '9dd64902161158395d588335f0a02e3a6d52f772';
@@ -41,12 +66,12 @@ function getDeploymentKey(raindexNetworkSlug: string): string {
 }
 
 /** Cached registry instance to avoid repeated network fetches. */
-let registryPromise: Promise<DotrainRainlang> | null = null;
+let registryPromise: Promise<DotrainRegistryInstance> | null = null;
 
-async function getRegistry(): Promise<DotrainRainlang> {
+async function getRegistry(): Promise<DotrainRegistryInstance> {
 	if (!registryPromise) {
 		registryPromise = (async () => {
-			const result = await DotrainRainlang.new(REGISTRY_URL);
+			const result = await (DotrainRegistry as { new: (url: string) => Promise<any> }).new(REGISTRY_URL);
 			if (result.error) {
 				registryPromise = null;
 				throw new Error(result.error.readableMsg);

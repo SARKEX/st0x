@@ -35,6 +35,11 @@ import {
 } from '$lib/utils/orderbook';
 import { fetchQuotesWithBatching } from '$lib/utils/quoteBatcher';
 
+const DEBUG_ORDER_HASHES = new Set([
+	'0x560f94e25b5f7023862e8ba37a928c91e675de082c1fff41ea68f6da3d9ca2e8',
+	'0x3848e87a452747f3ab43158cfa706d449326c5024c28e6ce00818438a8519e4e'
+]);
+
 // Re-export types and utilities
 export type { ProcessedQuote, TokenPriceSummary };
 export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, hexToBigInt };
@@ -63,15 +68,35 @@ function processOrdersWithQuotes(
 
 	// Process each order with its quotes
 	orders.forEach((order) => {
+		const orderHashLc = order.orderHash?.toLowerCase();
+		const isDebugOrder = !!orderHashLc && DEBUG_ORDER_HASHES.has(orderHashLc);
 		const quotes = quotesMap.get(order);
 		if (!quotes || quotes.length === 0) {
+			if (isDebugOrder) {
+				console.log('[orders-debug] no quotes from batcher for order', {
+					orderHash: order.orderHash
+				});
+			}
 			return;
+		}
+		if (isDebugOrder) {
+			console.log('[orders-debug] quotes fetched for order', {
+				orderHash: order.orderHash,
+				quoteCount: quotes.length,
+				successCount: quotes.filter((q) => q.success && !!q.data).length
+			});
 		}
 
 		try {
 			// Convert RaindexOrder to SgOrder to get orderBytes
 			const sgOrderResult = order.convertToSgOrder();
 			if (sgOrderResult.error || !sgOrderResult.value) {
+				if (isDebugOrder) {
+					console.log('[orders-debug] convertToSgOrder failed', {
+						orderHash: order.orderHash,
+						error: sgOrderResult.error?.readableMsg
+					});
+				}
 				return;
 			}
 			const sgOrder = sgOrderResult.value;
@@ -86,6 +111,14 @@ function processOrdersWithQuotes(
 				try {
 					// Skip if the quote failed
 					if (!quote.success || !quote.data) {
+						if (isDebugOrder) {
+							console.log('[orders-debug] skipping failed/empty quote', {
+								orderHash: order.orderHash,
+								success: quote.success,
+								hasData: !!quote.data,
+								error: quote.error
+							});
+						}
 						return;
 					}
 
@@ -100,12 +133,26 @@ function processOrdersWithQuotes(
 						!maxOutput.startsWith('0x') ||
 						maxOutput.length !== 66
 					) {
+						if (isDebugOrder) {
+							console.log('[orders-debug] invalid ratio/maxOutput format', {
+								orderHash: order.orderHash,
+								ratio,
+								maxOutput
+							});
+						}
 						return;
 					}
 
 					// Verify maxOutput is not zero by converting to Float and checking
 					const maxOutputFloat = Float.fromHex(maxOutput as `0x${string}`);
 					if (maxOutputFloat.error || !maxOutputFloat.value) {
+						if (isDebugOrder) {
+							console.log('[orders-debug] maxOutput Float.fromHex failed', {
+								orderHash: order.orderHash,
+								maxOutput,
+								error: maxOutputFloat.error?.readableMsg
+							});
+						}
 						return;
 					}
 					// Check if maxOutput is zero
@@ -115,12 +162,26 @@ function processOrdersWithQuotes(
 					if (!zeroFloat.error && zeroFloat.value) {
 						const isZero = maxOutputFloat.value.eq(zeroFloat.value);
 						if (!isZero.error && isZero.value) {
+							if (isDebugOrder) {
+								console.log('[orders-debug] maxOutput is zero, skipping', {
+									orderHash: order.orderHash
+								});
+							}
 							return;
 						}
 					}
 					const inputDefinition = orderData.validInputs[quote.pair.inputIndex];
 					const outputDefinition = orderData.validOutputs[quote.pair.outputIndex];
 					if (!inputDefinition || !outputDefinition) {
+						if (isDebugOrder) {
+							console.log('[orders-debug] missing IO definition', {
+								orderHash: order.orderHash,
+								inputIndex: quote.pair.inputIndex,
+								outputIndex: quote.pair.outputIndex,
+								validInputsLen: orderData.validInputs.length,
+								validOutputsLen: orderData.validOutputs.length
+							});
+						}
 						return;
 					}
 
@@ -133,6 +194,14 @@ function processOrdersWithQuotes(
 					const normalizedOutput = normalizeAddress(outputTokenAddress);
 					const normalizedQuote = normalizeAddress(quoteToken.address);
 					if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
+						if (isDebugOrder) {
+							console.log('[orders-debug] dropped by quote-token filter', {
+								orderHash: order.orderHash,
+								inputTokenAddress,
+								outputTokenAddress,
+								quoteToken: quoteToken.address
+							});
+						}
 						return;
 					}
 					const allTokens = [quoteToken, ...stockTokens];
@@ -197,6 +266,23 @@ function processOrdersWithQuotes(
 						const normalizedAsset = normalizeAddress(metrics.assetAddress);
 						processedQuote.assetAddress = normalizedAsset ?? metrics.assetAddress;
 						processedQuote.quotePerAsset = metrics.quotePerAsset;
+						if (isDebugOrder) {
+							console.log('[orders-debug] processed quote side/price', {
+								orderHash: order.orderHash,
+								side: processedQuote.side,
+								assetAddress: processedQuote.assetAddress,
+								quotePerAsset: processedQuote.quotePerAsset,
+								inputTokenAddress,
+								outputTokenAddress
+							});
+						}
+					} else if (isDebugOrder) {
+						console.log('[orders-debug] describeQuote returned null', {
+							orderHash: order.orderHash,
+							inputTokenAddress,
+							outputTokenAddress,
+							quoteToken: quoteToken.address
+						});
 					}
 
 					processedQuotes.push(processedQuote);
@@ -261,9 +347,16 @@ export async function fetchAndQuotePaymentTokenOrders(
 				owners: []
 			};
 
-			// Filter only by stock tokens - payment token filtering is too restrictive
-			// Orders should be visible regardless of which payment token is configured
-			const tokenAddresses = stockTokens.map((t) => t.address as `0x${string}`);
+			// Include both stock + payment token addresses on each side.
+			// Some SDK/subgraph versions treat inputs+outputs as an AND condition; including payment
+			// here ensures stock/payment pairs (e.g. tSTOX/USDC) are not dropped server-side.
+			const tokenAddresses = [
+				...new Set(
+					stockTokens
+						.map((t) => t.address.toLowerCase())
+						.concat(defaultPaymentToken.address.toLowerCase())
+				)
+			] as `0x${string}`[];
 
 			filters.tokens = { inputs: tokenAddresses, outputs: tokenAddresses };
 
@@ -274,6 +367,15 @@ export async function fetchAndQuotePaymentTokenOrders(
 			}
 
 			const pageOrders = ordersResult.value.orders;
+			const debugPageOrders = pageOrders
+				.map((o) => o.orderHash?.toLowerCase())
+				.filter((h) => !!h && DEBUG_ORDER_HASHES.has(h));
+			if (debugPageOrders.length > 0) {
+				console.log('[orders-debug] fetchAndQuotePaymentTokenOrders found debug orders in page', {
+					page,
+					hashes: debugPageOrders
+				});
+			}
 			allOrders.push(...pageOrders);
 
 			// If we got fewer orders than the page size, we've reached the end
@@ -351,10 +453,14 @@ export async function fetchAndQuoteTokenOrders(
 
 	// Fetch orders for this specific token only
 	const tokenAddr = tokenAddress as `0x${string}`;
+	const paymentAddr = defaultPaymentToken.address as `0x${string}`;
+	const tokenPairAddresses = [...new Set([tokenAddr.toLowerCase(), paymentAddr.toLowerCase()])] as `0x${string}`[];
 	const filters: GetOrdersFilters = {
 		active: true,
 		owners: [],
-		tokens: { inputs: [tokenAddr], outputs: [tokenAddr] }
+		// Include payment token on both sides so stock/payment pairs are returned even
+		// when token filter semantics are strict (inputs AND outputs).
+		tokens: { inputs: tokenPairAddresses, outputs: tokenPairAddresses }
 	};
 
 	const ordersResult = await client.getOrders([networkId], filters, 1);
@@ -364,9 +470,30 @@ export async function fetchAndQuoteTokenOrders(
 	}
 
 	const allOrders = ordersResult.value.orders;
+	const debugOrders = allOrders
+		.map((o) => o.orderHash?.toLowerCase())
+		.filter((h) => !!h && DEBUG_ORDER_HASHES.has(h));
+	console.log('[orders-debug] fetchAndQuoteTokenOrders result', {
+		tokenAddress,
+		paymentToken: defaultPaymentToken.address,
+		totalOrders: allOrders.length,
+		debugOrderHashes: debugOrders
+	});
 
 	// Get quotes using batching with jitter and retries
 	const quotesMap = await fetchQuotesWithBatching(allOrders);
+	for (const order of allOrders) {
+		const hash = order.orderHash?.toLowerCase();
+		if (hash && DEBUG_ORDER_HASHES.has(hash)) {
+			const quotes = quotesMap.get(order) ?? [];
+			console.log('[orders-debug] batch quotes map entry', {
+				orderHash: order.orderHash,
+				quoteCount: quotes.length,
+				successCount: quotes.filter((q) => q.success && !!q.data).length,
+				errors: quotes.filter((q) => !q.success).map((q) => q.error)
+			});
+		}
+	}
 
 	// Process and filter the quotes
 	const processedQuotes = processOrdersWithQuotes(
@@ -375,6 +502,19 @@ export async function fetchAndQuoteTokenOrders(
 		defaultPaymentToken,
 		stockTokens
 	);
+	const debugProcessed = processedQuotes.filter((q) =>
+		DEBUG_ORDER_HASHES.has(q.orderHash?.toLowerCase?.() ?? '')
+	);
+	console.log('[orders-debug] processed quotes for debug hashes', {
+		count: debugProcessed.length,
+		entries: debugProcessed.map((q) => ({
+			orderHash: q.orderHash,
+			side: q.side,
+			inputTokenAddress: q.inputTokenAddress,
+			outputTokenAddress: q.outputTokenAddress,
+			quotePerAsset: q.quotePerAsset
+		}))
+	});
 
 	return processedQuotes;
 }

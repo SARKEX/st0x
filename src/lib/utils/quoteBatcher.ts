@@ -28,6 +28,11 @@ export const QUOTE_BATCH_CONFIG = {
 	quoteTimeoutMs: 8000 // Timeout for individual quote request
 };
 
+const DEBUG_ORDER_HASHES = new Set([
+	'0x560f94e25b5f7023862e8ba37a928c91e675de082c1fff41ea68f6da3d9ca2e8',
+	'0x3848e87a452747f3ab43158cfa706d449326c5024c28e6ce00818438a8519e4e'
+]);
+
 /**
  * Add random jitter to a delay to prevent synchronized requests
  */
@@ -274,6 +279,11 @@ export async function fetchQuotesWithBatching(
 	// Log error types for debugging
 	if (allFailed.size > 0) {
 		const errorTypes = new Map<string, number>();
+		const failedOrders = Array.from(allFailed.entries()).map(([order, error]) => ({
+			orderHash: order.orderHash,
+			error: error?.message ?? String(error),
+			debugTracked: DEBUG_ORDER_HASHES.has(order.orderHash?.toLowerCase?.() ?? '')
+		}));
 		allFailed.forEach((error) => {
 			let errorType = 'unknown';
 			if (isRateLimitError(error)) errorType = 'rate_limit';
@@ -284,6 +294,7 @@ export async function fetchQuotesWithBatching(
 		});
 
 		console.warn('[QuoteBatcher] Error breakdown:', Object.fromEntries(errorTypes));
+		console.warn('[QuoteBatcher] Failed order details:', failedOrders);
 	}
 
 	// If rate-limited, accept whatever we got (even 0%) — throwing would discard
@@ -291,9 +302,9 @@ export async function fetchQuotesWithBatching(
 	const wasRateLimited =
 		hasRateLimitErrors || Array.from(allFailed.values()).some(isRateLimitError);
 
-	if (!wasRateLimited && successRate < 90) {
+	if (!wasRateLimited && allSuccessful.size === 0) {
 		throw new Error(
-			`Quote fetch failed: only ${successRate.toFixed(1)}% successful (${allSuccessful.size}/${
+			`Quote fetch failed: no successful quotes (${allSuccessful.size}/${
 				orders.length
 			}). ` + `Failed orders: ${allFailed.size}`
 		);
