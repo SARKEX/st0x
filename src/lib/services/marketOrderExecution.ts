@@ -75,6 +75,8 @@ export interface MarketOrderInput {
 	amount: bigint;
 	/** 'amount' = specify asset quantity, 'spend' = specify payment amount (Buy only) */
 	inputMode?: 'amount' | 'spend';
+	/** User-configurable slippage in basis points (100 = 1%). */
+	slippageBps?: number;
 
 	// Tokens
 	assetToken: TokenInfo;
@@ -123,6 +125,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		orderSide,
 		amount,
 		inputMode = 'amount',
+		slippageBps = DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		assetToken,
 		paymentToken,
 		quotes,
@@ -162,8 +165,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
 		const isBuy = orderSide === 'Buy';
-		const ratioMultiplier =
-			isBuy && inputMode !== 'spend' ? BUY_EXACT_RATIO_MULTIPLIER : EMERGENCY_RATIO_MULTIPLIER;
+		const effectiveSlippageBps = clampSlippageBps(slippageBps);
+		const ratioMultiplier = isBuy
+			? String(1 + effectiveSlippageBps / 10_000)
+			: EMERGENCY_RATIO_MULTIPLIER;
 		const emergencyRatioHex = computeEmergencyRatioHex(
 			worstFill.quote.ratio as `0x${string}`,
 			ratioMultiplier
