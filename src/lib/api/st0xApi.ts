@@ -5,6 +5,7 @@
  * All requests go through the /api/st0x proxy route which handles authentication.
  */
 
+import { browser } from '$app/environment';
 import { fetchJson } from '$lib/clients/http';
 
 // ============================================================================
@@ -137,6 +138,12 @@ export interface ApiTakerTradesResponse {
 
 const API_PROXY_BASE = '/api/st0x';
 
+function assertBrowser(caller: string): void {
+	if (!browser) {
+		throw new Error(`${caller} can only be called in the browser (not during SSR)`);
+	}
+}
+
 function apiUrl(path: string, params?: Record<string, string | number | undefined>): string {
 	const url = `${API_PROXY_BASE}${path}`;
 	if (!params) return url;
@@ -158,6 +165,7 @@ export async function apiGetOrdersByToken(
 	tokenAddress: string,
 	options?: { page?: number; pageSize?: number; side?: 'input' | 'output' }
 ): Promise<ApiOrdersListResponse> {
+	assertBrowser('apiGetOrdersByToken');
 	const url = apiUrl(`/v1/orders/token/${tokenAddress}`, {
 		page: options?.page,
 		pageSize: options?.pageSize,
@@ -173,6 +181,7 @@ export async function apiGetOrdersByOwner(
 	ownerAddress: string,
 	options?: { page?: number; pageSize?: number }
 ): Promise<ApiOrdersListResponse> {
+	assertBrowser('apiGetOrdersByOwner');
 	const url = apiUrl(`/v1/orders/owner/${ownerAddress}`, {
 		page: options?.page,
 		pageSize: options?.pageSize
@@ -184,6 +193,7 @@ export async function apiGetOrdersByOwner(
  * Fetch trades for multiple orders in a single request
  */
 export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTradesBatchResponse> {
+	assertBrowser('apiGetTradesBatch');
 	return fetchJson<ApiTradesBatchResponse>(apiUrl('/v1/trades/batch'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -198,6 +208,7 @@ export async function apiGetTradesByAddress(
 	address: string,
 	options?: { page?: number; pageSize?: number; startTime?: number; endTime?: number }
 ): Promise<ApiTradesByAddressResponse> {
+	assertBrowser('apiGetTradesByAddress');
 	const url = apiUrl(`/v1/trades/${address}`, {
 		page: options?.page,
 		pageSize: options?.pageSize,
@@ -215,6 +226,7 @@ export async function apiGetTakerTrades(
 	address: string,
 	options?: { page?: number; pageSize?: number }
 ): Promise<ApiTakerTradesResponse> {
+	assertBrowser('apiGetTakerTrades');
 	const url = apiUrl(`/v1/trades/taker/${address}`, {
 		page: options?.page,
 		pageSize: options?.pageSize
