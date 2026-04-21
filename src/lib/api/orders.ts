@@ -204,7 +204,9 @@ export async function fetchAndQuotePaymentTokenOrders(
 				page++;
 			}
 			if (hasMore) {
-				console.warn(`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`);
+				console.warn(
+					`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`
+				);
 			}
 		})
 	);
@@ -251,7 +253,9 @@ export async function fetchAndQuoteTokenOrders(
 		}
 	}
 	if (hasMore) {
-		console.warn(`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${tokenAddress}`);
+		console.warn(
+			`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${tokenAddress}`
+		);
 	}
 
 	return processedQuotes;

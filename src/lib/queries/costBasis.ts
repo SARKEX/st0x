@@ -1,6 +1,10 @@
 import { createQuery } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
-import { calculateAllCostBases, type CostBasisData, type CostBasisTrade } from '$lib/utils/costBasis';
+import {
+	calculateAllCostBases,
+	type CostBasisData,
+	type CostBasisTrade
+} from '$lib/utils/costBasis';
 import { PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 import { apiGetTradesByAddress, apiGetTakerTrades, type ApiTradeByAddress } from '$lib/api/st0xApi';
 

@@ -475,9 +475,7 @@ export function analyzeTrade(
 	if (!assetAddress) return null;
 
 	const assetLookup = lookup?.(assetAddress);
-	const assetDecimals = Number(
-		assetLookup?.decimals ?? assetCandidate.decimals ?? 18
-	);
+	const assetDecimals = Number(assetLookup?.decimals ?? assetCandidate.decimals ?? 18);
 
 	const pair: PairDescriptor = {
 		asset: {
