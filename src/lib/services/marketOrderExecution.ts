@@ -251,16 +251,20 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		if (!firstQuote.orderData || !firstQuote.sgOrder) {
 			return { success: false, error: 'Unable to prepare aggregated order route. Please refresh and retry.' };
 		}
+		// Use *UpTo modes instead of *Exact to tolerate tiny Float precision gaps
+		// where the SDK's internal quote discovery computes available liquidity as
+		// e.g. 0.999...999 instead of exactly 1. *UpTo fills as much as available
+		// up to the requested amount, avoiding spurious "Insufficient liquidity" errors.
 		let mode: TakeOrdersMode;
 		let amountDecimals: number;
 		if (orderSide === 'Sell') {
-			mode = 'spendExact';
+			mode = 'spendUpTo';
 			amountDecimals = assetToken.decimals;
 		} else if (inputMode === 'spend') {
-			mode = 'spendExact';
+			mode = 'spendUpTo';
 			amountDecimals = paymentToken.decimals;
 		} else {
-			mode = 'buyExact';
+			mode = 'buyUpTo';
 			amountDecimals = assetToken.decimals;
 		}
 		const takeRequest: TakeOrdersRequest = {
@@ -272,6 +276,18 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			amount: formatUnits(amount, amountDecimals),
 			priceCap: priceCapStrForSdk
 		};
+		console.log('[executeMarketOrder] TakeOrdersRequest', {
+			mode: takeRequest.mode,
+			amount: takeRequest.amount,
+			priceCap: takeRequest.priceCap,
+			sellToken: takeRequest.sellToken,
+			buyToken: takeRequest.buyToken,
+			orderSide,
+			inputMode,
+			fillCount: walkResult.fills.length,
+			walkOutputGiven: walkResult.outputAmountGiven?.toString(),
+			walkInputFilled: walkResult.inputAmountFilled?.toString()
+		});
 		// Opportunistically prefetch aggregated calldata while we build final params.
 		void transactionStore.preloadAggregatedTakeOrdersCalldata(takeRequest);
 		const { inputAmountFilled } = walkResult;

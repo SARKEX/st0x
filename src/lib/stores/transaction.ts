@@ -1502,9 +1502,12 @@ const transactionStore = () => {
 
 		let calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: true });
 		if (calldataWrapped.error || !calldataWrapped.value) {
-			console.log(`${TX_LOG_PREFIX} skipping fallback: SDK returned no aggregated calldata`, {
-				msg: calldataWrapped.error?.readableMsg
-			});
+			const sdkMsg = calldataWrapped.error?.readableMsg;
+			console.log(`${TX_LOG_PREFIX} SDK error`, { msg: sdkMsg, request: takeRequest });
+			if (sdkMsg) {
+				transactionError(sdkMsg as TransactionErrorMessage);
+				return true;
+			}
 			return false;
 		}
 
@@ -1991,7 +1994,7 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing order...`);
 		const isDynamicWallet = get(authMethod) === 'dynamic';
 		const fillDecimals = params.orderFillDecimals ?? params.takerWantsToken.decimals;
-		const mode: TakeOrdersMode = finalConfig.IOIsInput ? 'buyExact' : 'spendExact';
+		const mode: TakeOrdersMode = finalConfig.IOIsInput ? 'buyUpTo' : 'spendUpTo';
 		const priceCapFloat = Float.fromHex(finalConfig.maximumIORatio as `0x${string}`);
 		const priceCapStr = String(priceCapFloat.value?.format().value ?? '1');
 		const aggregatedTakeRequest = buildTakeOrdersRequest({
