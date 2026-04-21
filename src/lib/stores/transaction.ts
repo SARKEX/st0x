@@ -241,15 +241,12 @@ function sumBigints(values: bigint[] | undefined): bigint {
 
 function deriveTakeRequestAmountWei(
 	mode: TakeOrdersMode,
-	params: TakeOrdersParams,
-	requiredPayerAllowance?: bigint
+	params: TakeOrdersParams
 ): bigint {
 	if (mode === 'buyExact' || mode === 'buyUpTo') {
 		return params.requestedTakerWantsAmount;
 	}
 	if (mode === 'spendExact' || mode === 'spendUpTo') {
-		const fromAllowance = requiredPayerAllowance ?? params.requiredPayerAllowance ?? 0n;
-		if (fromAllowance > 0n) return fromAllowance;
 		return sumBigints(params.orderFillAmounts);
 	}
 	return 0n;
@@ -260,11 +257,10 @@ function buildTakeOrdersRequest(args: {
 	params: TakeOrdersParams;
 	network: Network;
 	priceCapStr: string;
-	requiredPayerAllowance?: bigint;
 	taker: string;
 }): TakeOrdersRequest | null {
-	const { mode, params, network, priceCapStr, requiredPayerAllowance, taker } = args;
-	const amountWei = deriveTakeRequestAmountWei(mode, params, requiredPayerAllowance);
+	const { mode, params, network, priceCapStr, taker } = args;
+	const amountWei = deriveTakeRequestAmountWei(mode, params);
 	if (amountWei <= 0n) return null;
 	const amountDecimals =
 		mode === 'buyExact' || mode === 'buyUpTo'
@@ -290,6 +286,16 @@ const aggregatedTakeCalldataCache = new Map<string, AggregatedTakeCacheEntry>();
 
 function getAggregatedTakeCacheKey(takeRequest: TakeOrdersRequest): string {
 	return JSON.stringify(takeRequest);
+}
+
+function shouldCacheAggregatedTakeResult(
+	result: Awaited<ReturnType<Awaited<ReturnType<typeof createRaindexClient>>['getTakeOrdersCalldata']>>
+): boolean {
+	if (!result || typeof result !== 'object') return false;
+	const maybeWrapped = result as { error?: unknown; value?: unknown };
+	if (maybeWrapped.error || !maybeWrapped.value || typeof maybeWrapped.value !== 'object') return false;
+	const value = maybeWrapped.value as { isReady?: unknown; isNeedsApproval?: unknown };
+	return typeof value.isReady === 'boolean' || typeof value.isNeedsApproval === 'boolean';
 }
 
 // Find a vault by matching both vault ID and token address
@@ -1450,10 +1456,12 @@ const transactionStore = () => {
 		}
 		const client = await createRaindexClient();
 		const result = await client.getTakeOrdersCalldata(takeRequest);
-		aggregatedTakeCalldataCache.set(cacheKey, {
-			expiresAt: now + AGGREGATED_TAKE_CACHE_TTL_MS,
-			value: result
-		});
+		if (shouldCacheAggregatedTakeResult(result)) {
+			aggregatedTakeCalldataCache.set(cacheKey, {
+				expiresAt: now + AGGREGATED_TAKE_CACHE_TTL_MS,
+				value: result
+			});
+		}
 		return result;
 	};
 
@@ -1625,7 +1633,6 @@ const transactionStore = () => {
 			params,
 			network,
 			priceCapStr: oraclePriceCapStr,
-			requiredPayerAllowance: params.requiredPayerAllowance,
 			taker: $signerAddress
 		});
 		if (aggregatedTakeRequest) {
@@ -1992,7 +1999,6 @@ const transactionStore = () => {
 			params,
 			network,
 			priceCapStr,
-			requiredPayerAllowance: requiredApprovalAmount,
 			taker: $signerAddress
 		});
 		if (aggregatedTakeRequest) {

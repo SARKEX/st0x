@@ -137,6 +137,26 @@ interface OrderInfo {
 	raindexOrder?: RaindexOrder;
 }
 
+function getQuoteMakerAddress(quote: ProcessedQuote): string | null {
+	const ownerFromOrderData = quote.orderData?.owner;
+	if (typeof ownerFromOrderData === 'string' && ownerFromOrderData.length > 0) {
+		return ownerFromOrderData;
+	}
+	const ownerFromSgOrder = (quote.sgOrder as { owner?: unknown } | undefined)?.owner;
+	if (typeof ownerFromSgOrder === 'string' && ownerFromSgOrder.length > 0) {
+		return ownerFromSgOrder;
+	}
+	return null;
+}
+
+export function excludeTakerOwnedQuotes(quotes: ProcessedQuote[], takerAddress: string): ProcessedQuote[] {
+	const normalizedTaker = takerAddress.toLowerCase();
+	return quotes.filter((quote) => {
+		const maker = getQuoteMakerAddress(quote);
+		return !maker || maker.toLowerCase() !== normalizedTaker;
+	});
+}
+
 /**
  * Execute a market order by walking the orderbook and taking available orders
  */
@@ -153,10 +173,18 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 	} = input;
 
 	try {
+		const takerAddress = getSignerAddress();
+		if (!takerAddress) {
+			return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
+		}
+		const externalQuotes = excludeTakerOwnedQuotes(quotes, takerAddress);
+		if (externalQuotes.length === 0) {
+			return { success: false, error: 'No external orders available to fill' };
+		}
 		// 1. Walk the orderbook to get fills (best-priced quotes first — required for correct splitting
 		// across multiple maker orders: e.g. take all available at the thin 0x846f… leg, then the rest
 		// from the deep 0x4bc4… leg).
-		const orderedQuotes = sortQuotesByPrice(quotes, orderSide);
+		const orderedQuotes = sortQuotesByPrice(externalQuotes, orderSide);
 		const walkResult = walkOrderbook({
 			quotes: orderedQuotes,
 			orderSide,
@@ -219,10 +247,6 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// order (see handleTakeOrders / handleOracleOrders). A failure preparing the *first* leg
 		// (often the best-priced, thin order) aborts the whole flow even when a later order could cover
 		// the remainder — hence aggressive quote freshness + conservative per-leg fill (haircut).
-		const takerAddress = getSignerAddress();
-		if (!takerAddress) {
-			return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
-		}
 		const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
 		if (!firstQuote.orderData || !firstQuote.sgOrder) {
 			return { success: false, error: 'Unable to prepare aggregated order route. Please refresh and retry.' };
