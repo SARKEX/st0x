@@ -291,9 +291,9 @@ export async function fetchQuotesWithBatching(
 	const wasRateLimited =
 		hasRateLimitErrors || Array.from(allFailed.values()).some(isRateLimitError);
 
-	if (!wasRateLimited && successRate < 90) {
+	if (!wasRateLimited && allSuccessful.size === 0) {
 		throw new Error(
-			`Quote fetch failed: only ${successRate.toFixed(1)}% successful (${allSuccessful.size}/${
+			`Quote fetch failed: no successful quotes (${allSuccessful.size}/${
 				orders.length
 			}). ` + `Failed orders: ${allFailed.size}`
 		);

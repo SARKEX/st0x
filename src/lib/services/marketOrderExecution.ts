@@ -220,458 +220,76 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// (often the best-priced, thin order) aborts the whole flow even when a later order could cover
 		// the remainder — hence aggressive quote freshness + conservative per-leg fill (haircut).
 		const takerAddress = getSignerAddress();
-		if (takerAddress) {
-			const userLc = takerAddress.toLowerCase();
-			const touchesOwnOrder = walkResult.fills.some((f) => {
-				const od = (f.quote as ProcessedQuote).orderData;
-				return od?.owner && od.owner.toLowerCase() === userLc;
-			});
-			if (!touchesOwnOrder) {
-				const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
-				if (firstQuote.orderData && firstQuote.sgOrder) {
-					let mode: TakeOrdersMode;
-					let amountDecimals: number;
-					if (orderSide === 'Sell') {
-						mode = 'spendExact';
-						amountDecimals = assetToken.decimals;
-					} else if (inputMode === 'spend') {
-						mode = 'spendExact';
-						amountDecimals = paymentToken.decimals;
-					} else {
-						mode = 'buyExact';
-						amountDecimals = assetToken.decimals;
-					}
-					const takeRequest: TakeOrdersRequest = {
-						taker: takerAddress,
-						chainId: network.id,
-						sellToken: orderSide === 'Buy' ? paymentToken.address : assetToken.address,
-						buyToken: orderSide === 'Buy' ? assetToken.address : paymentToken.address,
-						mode,
-						amount: formatUnits(amount, amountDecimals),
-						priceCap: priceCapStrForSdk
-					};
-					const { inputAmountFilled } = walkResult;
-					const toTokenInfo = ({ address, decimals, symbol }: TokenInfo): TokenInfo => ({
-						address,
-						decimals,
-						symbol
-					});
-					const aggregatedParams: TakeOrdersParams = {
-						orderData: firstQuote.orderData as OrderV4,
-						ioIndexes: { input: firstQuote.inputIOIndex ?? 0, output: firstQuote.outputIOIndex ?? 0 },
-						takerWantsToken: toTokenInfo(isBuy ? assetToken : paymentToken),
-						takerPaysToken: toTokenInfo(isBuy ? paymentToken : assetToken),
-						requestedTakerWantsAmount: isBuy && inputMode !== 'spend' ? amount : inputAmountFilled,
-						simulation: walkResult
-					};
-					const aggregatedHandled = await transactionStore.handleAggregatedTakeOrdersCalldata(
-						takeRequest,
-						firstQuote.sgOrder as SgOrder,
-						aggregatedParams,
-						isBuy ? paymentToken.symbol : assetToken.symbol
-					);
-					// Handler returns true for any "handled" outcome (success or user-visible error); false = fall back to legacy path.
-					if (aggregatedHandled) {
-						const { status, error: txError } = get(transactionStore);
-						if (status === TransactionStatus.SUCCESS) {
-							return { success: true };
-						}
-						if (status === TransactionStatus.ERROR) {
-							return {
-								success: false,
-								error: txError || 'Order failed'
-							};
-						}
-						return {
-							success: false,
-							error: 'Order did not complete. Please try again.'
-						};
-					}
-				}
-			}
+		if (!takerAddress) {
+			return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
 		}
-
-		const orderInfos = Array.from(orderInfoMap.values());
-
-		await Promise.all(
-			orderInfos.map(async (orderInfo) => {
-				if (orderInfo.raindexOrder) {
-					// We already have the RaindexOrder object from quote processing.
-					return;
-				}
-				try {
-					const ordersResult = await client.getOrders(
-						[network.id],
-						{
-							owners: [],
-							orderHash: orderInfo.order.orderHash as `0x${string}`
-						},
-						1
-					);
-
-					if (ordersResult.error || !ordersResult.value?.orders.length) {
-						console.warn('[marketOrderExecution] Failed to hydrate RaindexOrder by hash', {
-							orderHash: orderInfo.order.orderHash,
-							error: ordersResult.error?.readableMsg
-						});
-						return;
-					}
-
-					const raindexOrderObj = ordersResult.value.orders[0];
-					// Always keep the RaindexOrder object so we can use getTakeCalldata(),
-					// which populates signedContext internally for oracle-enabled orders.
-					orderInfo.raindexOrder = raindexOrderObj;
-
-					// If we already have hydrated order data from quotes, no need to decode again.
-					if (orderInfo.orderData?.owner) {
-						return;
-					}
-
-					const quotesResult = await raindexOrderObj.getQuotes();
-					if (quotesResult.error || !quotesResult.value?.length) return;
-
-					const validQuotes = quotesResult.value.filter(
-						(q: RaindexOrderQuote) => q.success && q.data
-					);
-					if (validQuotes.length === 0) return;
-
-					const sgOrderResult = raindexOrderObj.convertToSgOrder();
-					if (sgOrderResult.error || !sgOrderResult.value) return;
-
-					const sgOrder = sgOrderResult.value;
-					const decodedOrder = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
-					const orderData = normalizeOrderData(decodedOrder[0] as OrderV4);
-
-					orderInfo.order = sgOrder;
-					orderInfo.orderData = orderData;
-					orderInfo.quotes = validQuotes;
-				} catch (orderError) {
-					console.error('Error hydrating order', orderInfo.order.orderHash, orderError);
-				}
-			})
-		);
-
-		// 4. Filter to only executable orders (exclude user's own orders)
-		const userAddress = getSignerAddress()?.toLowerCase();
-		const executableOrders = orderInfos.filter((info) => {
-			if (!info.orderData?.owner) return false;
-			// Cannot take your own order - contract will reject it
-			if (userAddress && info.orderData.owner.toLowerCase() === userAddress) {
-				console.log('[marketOrderExecution] Excluding own order:', info.order.orderHash);
-				return false;
-			}
-			return true;
-		});
-		if (executableOrders.length === 0) {
-			return { success: false, error: 'Orders temporarily unavailable. Please try again.' };
+		const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
+		if (!firstQuote.orderData || !firstQuote.sgOrder) {
+			return { success: false, error: 'Unable to prepare aggregated order route. Please refresh and retry.' };
 		}
-
-		// Determine if we can use an exact output cap (IOIsInput=false) instead of
-		// estimating the receive amount. This applies when the user specifies exactly
-		// how much they want to spend: Buy+spend (USD budget) or Sell (asset amount).
-		const useOutputCap = orderSide === 'Sell' || inputMode === 'spend';
-
-		// 5. Compute per-order fill amounts from walkResult
-		// Output-cap (IOIsInput=false): amounts are what taker pays per order
-		// Input-cap (IOIsInput=true): amounts are what taker receives per order
-		const fillAmountsByOrderHash = new Map<string, bigint>();
-		for (const fill of walkResult.fills) {
-			const orderHash = fill.quote.orderHash?.toLowerCase() ?? '';
-			if (!orderHash) continue;
-			const wantAsset = useOutputCap ? !isBuy : isBuy;
-			let fillAmount = wantAsset ? fill.assetAmount : fill.paymentAmount;
-			if (isBuy && wantAsset) {
-				fillAmount = haircutBuyExecutionFill(fillAmount);
-			}
-			const current = fillAmountsByOrderHash.get(orderHash) ?? 0n;
-			fillAmountsByOrderHash.set(orderHash, current + fillAmount);
-		}
-
-		// 6. Build TakeOrderConfigs with parallel fill amounts array
-		const takeOrderConfigs: TakeOrderConfigV4[] = [];
-		const orderFillAmounts: bigint[] = [];
-		const takeOrderRaindexOrders: RaindexOrder[] = [];
-		for (const orderInfo of executableOrders) {
-			if (!orderInfo.orderData?.validInputs?.length || !orderInfo.orderData?.validOutputs?.length) {
-				continue;
-			}
-			if (!orderInfo.raindexOrder) {
-				continue;
-			}
-
-			const inputIndex = orderInfo.inputIOIndex;
-			const outputIndex = orderInfo.outputIOIndex;
-			const hasInput = orderInfo.orderData.validInputs[inputIndex];
-			const hasOutput = orderInfo.orderData.validOutputs[outputIndex];
-
-			if (!hasInput || !hasOutput) {
-				continue;
-			}
-
-			const matchingFill = walkResult.fills.find(
-				(f) =>
-					(f.quote.orderHash?.toLowerCase() ?? '') ===
-						(orderInfo.order.orderHash?.toLowerCase() ?? '') &&
-					(f.quote.inputIOIndex ?? 0) === inputIndex &&
-					(f.quote.outputIOIndex ?? 0) === outputIndex
-			);
-			const signedContext =
-				(
-					matchingFill?.quote as ProcessedQuote & {
-						signedContext?: TakeOrderConfigV4['signedContext'];
-					}
-				)?.signedContext ?? [];
-
-			takeOrderConfigs.push({
-				order: orderInfo.orderData,
-				inputIOIndex: inputIndex.toString(),
-				outputIOIndex: outputIndex.toString(),
-				signedContext
-			});
-			takeOrderRaindexOrders.push(orderInfo.raindexOrder);
-
-			// Add fill amount for this order (parallel to takeOrderConfigs)
-			const orderHash = orderInfo.order.orderHash?.toLowerCase() ?? '';
-			orderFillAmounts.push(fillAmountsByOrderHash.get(orderHash) ?? 0n);
-		}
-
-		if (takeOrderConfigs.length === 0) {
-			return { success: false, error: 'Unable to prepare order. Please try again.' };
-		}
-
-		const primaryOrder = executableOrders[0];
-
-		// 7. Calculate approval amount
-		const { inputAmountFilled, outputAmountGiven, inputDecimals, outputDecimals } = walkResult;
-
-		let requiredApprovalAmount: bigint;
-		if (isBuy && inputMode !== 'spend') {
-			// Buy+amount: buffer since we accept paying more for target quantity
-			const approvalBuffer = outputAmountGiven / 20n; // 5%
-			let total = outputAmountGiven + (approvalBuffer > 0n ? approvalBuffer : 1n);
-			// Multiple separate takes: leg 1 actual spend can exceed the walk estimate for that leg;
-			// add a little extra so leg 2 is not blocked by allowance.
-			if (executableOrders.length > 1) {
-				const multiLegExtra = outputAmountGiven / 50n; // +2%
-				total += multiLegExtra > 0n ? multiLegExtra : 1n;
-			}
-			requiredApprovalAmount = total;
+		let mode: TakeOrdersMode;
+		let amountDecimals: number;
+		if (orderSide === 'Sell') {
+			mode = 'spendExact';
+			amountDecimals = assetToken.decimals;
+		} else if (inputMode === 'spend') {
+			mode = 'spendExact';
+			amountDecimals = paymentToken.decimals;
 		} else {
-			// Buy+spend or Sell: exact spend amount, no padding needed
-			requiredApprovalAmount = amount;
+			mode = 'buyExact';
+			amountDecimals = assetToken.decimals;
 		}
-
-		// 8. `priceCapStrForSdk` / emergency ratio hex: from worst fill (see above). `maximumIORatioHex`
-		// uses Float.maxPositiveValue() so the contract does not reject valid ratios (PR #150).
-
-		// 9a. Use getTakeCalldata() only when signed context is not already present on fills.
-		// If signed context exists, prefer the regular takeOrders path with explicit signedContext
-		// to avoid "not ready" oracle-calldata skips.
-		const ordersWithCalldata = executableOrders.filter((o) => o.raindexOrder);
-		const hasSignedContextOnFills = walkResult.fills.some((fill) => {
-			const quoteWithContext = fill.quote as ProcessedQuote & { signedContext?: unknown[] };
-			return (quoteWithContext.signedContext?.length ?? 0) > 0;
-		});
-		console.log('[marketOrderExecution] path decision', {
-			orderSide,
-			inputMode,
-			totalExecutableOrders: executableOrders.length,
-			ordersWithCalldata: ordersWithCalldata.length,
-			hasSignedContextOnFills,
-			fillCount: walkResult.fills.length
-		});
-		if (ordersWithCalldata.length > 0 && !hasSignedContextOnFills) {
-			const mode: TakeOrdersMode =
-				orderSide === 'Sell'
-					? 'spendExact'
-					: inputMode === 'spend'
-						? 'spendExact'
-						: 'buyExact';
-
-			// Amount decimals: what the taker specifies (asset for buy/sell, payment for buy+spend)
-			const amountDecimals =
-				orderSide === 'Buy' && inputMode === 'spend'
-					? paymentToken.decimals
-					: assetToken.decimals;
-
-			if (!takerAddress) {
-				return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
-			}
-
-			const oracleInputs = ordersWithCalldata
-				.filter((o) => o.raindexOrder)
-				.map((orderInfo) => {
-					const fillAmount =
-						fillAmountsByOrderHash.get(orderInfo.order.orderHash?.toLowerCase() ?? '') ?? 0n;
-					const amountStr = String(
-						Float.fromFixedDecimalLossy(fillAmount, amountDecimals).float.format().value ?? '0'
-					);
-					console.log('[marketOrderExecution] oracle input', {
-						orderHash: orderInfo.order.orderHash,
-						inputIndex: orderInfo.inputIOIndex,
-						outputIndex: orderInfo.outputIOIndex,
-						fillAmount: fillAmount.toString(),
-						amountStr,
-						priceCapStr: priceCapStrForSdk
-					});
-					return {
-						raindexOrder: orderInfo.raindexOrder!,
-						inputIndex: orderInfo.inputIOIndex,
-						outputIndex: orderInfo.outputIOIndex,
-						fillAmount,
-						amountStr,
-						priceCapStr: priceCapStrForSdk,
-						taker: takerAddress
-					};
-				})
-				.filter((input) => input.fillAmount > 0n)
-				.map(({ fillAmount: _fillAmount, ...input }) => input);
-
-			if (oracleInputs.length === 0) {
-				return {
-					success: false,
-					error: 'No executable quote amount found for selected order(s). Please refresh and try again.'
-				};
-			}
-
-			// 10–13 (oracle variant) - use params built from the same walkResult
-			const toTokenInfo = ({ address, decimals, symbol }: TokenInfo): TokenInfo => ({
-				address,
-				decimals,
-				symbol
-			});
-			const takerWantsInfo = toTokenInfo(isBuy ? assetToken : paymentToken);
-			const takerPaysInfo = toTokenInfo(isBuy ? paymentToken : assetToken);
-			const requestedTakerWantsAmount =
-				isBuy && inputMode !== 'spend' ? amount : inputAmountFilled;
-
-			const oracleParams: TakeOrdersParams = {
-				orderData: primaryOrder.orderData,
-				ioIndexes: { input: primaryOrder.inputIOIndex, output: primaryOrder.outputIOIndex },
-				takerWantsToken: takerWantsInfo,
-				takerPaysToken: takerPaysInfo,
-				requestedTakerWantsAmount,
-				simulation: walkResult,
-				orderFillAmounts,
-				orderFillDecimals: useOutputCap ? outputDecimals : inputDecimals,
-				requiredPayerAllowance: requiredApprovalAmount
-			};
-
-			console.log('[marketOrderExecution] executing oracle calldata path', {
-				oracleInputCount: oracleInputs.length,
-				mode
-			});
-			await transactionStore.handleOracleOrders(
-				oracleInputs,
-				mode,
-				primaryOrder.order,
-				takerPaysInfo.symbol,
-				oracleParams
-			);
-			return { success: true };
-		}
-		console.log('[marketOrderExecution] executing takeOrders fallback path', {
-			orderCount: takeOrderConfigs.length,
-			raindexOrderCount: takeOrderRaindexOrders.length,
-			signedContextLengths: JSON.stringify(
-				takeOrderConfigs.map((o) => o.signedContext?.length ?? 0)
-			),
-			requiredApprovalAmount: requiredApprovalAmount.toString()
-		});
-
-		// 9. Build TakeOrdersConfig
-		// Output-cap: maximumIO is exact spend amount (IOIsInput=false)
-		// Input-cap: maximumIO is exact receive amount (IOIsInput=true)
-		const maximumIOAmount = useOutputCap ? amount : inputAmountFilled;
-		const maximumIODecimals = useOutputCap ? outputDecimals : inputDecimals;
-		const maximumIOFloat = Float.fromFixedDecimalLossy(maximumIOAmount, maximumIODecimals);
-
-		const takeOrdersConfig: TakeOrdersConfigV5 = {
-			minimumIO: MINIMUM_IO,
-			maximumIO: maximumIOFloat.float.asHex(),
-			maximumIORatio: maximumIORatioHex,
-			IOIsInput: !useOutputCap as unknown as string,
-			orders: takeOrderConfigs,
-			data: '0x'
+		const takeRequest: TakeOrdersRequest = {
+			taker: takerAddress,
+			chainId: network.id,
+			sellToken: orderSide === 'Buy' ? paymentToken.address : assetToken.address,
+			buyToken: orderSide === 'Buy' ? assetToken.address : paymentToken.address,
+			mode,
+			amount: formatUnits(amount, amountDecimals),
+			priceCap: priceCapStrForSdk
 		};
-
-		// 10. Determine taker perspective tokens
+		// Opportunistically prefetch aggregated calldata while we build final params.
+		void transactionStore.preloadAggregatedTakeOrdersCalldata(takeRequest);
+		const { inputAmountFilled } = walkResult;
 		const toTokenInfo = ({ address, decimals, symbol }: TokenInfo): TokenInfo => ({
 			address,
 			decimals,
 			symbol
 		});
-		const takerWantsInfo = toTokenInfo(isBuy ? assetToken : paymentToken);
-		const takerPaysInfo = toTokenInfo(isBuy ? paymentToken : assetToken);
-
-		// 11. Calculate requested amount
-		// Buy+amount: user specified exact asset quantity
-		// Buy+spend or Sell: estimated receive from orderbook walk
-		const requestedTakerWantsAmount = isBuy && inputMode !== 'spend' ? amount : inputAmountFilled;
-
-		// 12. Build recalculate callback if needed
-		// Output-cap mode recalculates maximumIO after approval wait; ratio cap stays max-IO (PR #150).
-		const recalculateConfig =
-			useOutputCap && refreshQuotes
-				? async (): Promise<TakeOrdersConfigV5 | null> => {
-						try {
-							const freshQuotes = await refreshQuotes();
-
-							const freshWalkResult = walkOrderbook({
-								quotes: sortQuotesByPrice(freshQuotes, orderSide),
-								orderSide,
-								selectedAmount: amount,
-								assetDecimals: assetToken.decimals,
-								paymentDecimals: paymentToken.decimals,
-								mode: inputMode === 'spend' ? 'spend' : 'receive'
-							});
-
-							if (!freshWalkResult || freshWalkResult.inputAmountFilled === 0n) {
-								return null;
-							}
-
-							const freshMaximumIO = Float.fromFixedDecimalLossy(
-								amount,
-								freshWalkResult.outputDecimals
-							);
-
-							return {
-								minimumIO: MINIMUM_IO,
-								maximumIO: freshMaximumIO.float.asHex(),
-								maximumIORatio: getMaximumIORatioHex(emergencyRatioHex),
-								IOIsInput: false as unknown as string,
-								orders: takeOrderConfigs,
-								data: '0x'
-							};
-						} catch {
-							return null;
-						}
-					}
-				: undefined;
-
-		// 13. Execute transaction
-		const params: TakeOrdersParams = {
-			orderData: primaryOrder.orderData,
-			ioIndexes: { input: primaryOrder.inputIOIndex, output: primaryOrder.outputIOIndex },
-			takerWantsToken: takerWantsInfo,
-			takerPaysToken: takerPaysInfo,
-			requestedTakerWantsAmount,
-			simulation: walkResult,
-			orderFillAmounts,
-			orderFillDecimals: useOutputCap ? outputDecimals : inputDecimals,
-			requiredPayerAllowance: requiredApprovalAmount
+		const aggregatedParams: TakeOrdersParams = {
+			orderData: firstQuote.orderData as OrderV4,
+			ioIndexes: { input: firstQuote.inputIOIndex ?? 0, output: firstQuote.outputIOIndex ?? 0 },
+			takerWantsToken: toTokenInfo(isBuy ? assetToken : paymentToken),
+			takerPaysToken: toTokenInfo(isBuy ? paymentToken : assetToken),
+			requestedTakerWantsAmount: isBuy && inputMode !== 'spend' ? amount : inputAmountFilled,
+			simulation: walkResult
 		};
-
-		await transactionStore.handleTakeOrders(
-			takeOrdersConfig,
-			primaryOrder.order,
-			requiredApprovalAmount,
-			params,
-			recalculateConfig,
-			takeOrderRaindexOrders
+		const aggregatedHandled = await transactionStore.handleAggregatedTakeOrdersCalldata(
+			takeRequest,
+			firstQuote.sgOrder as SgOrder,
+			aggregatedParams,
+			isBuy ? paymentToken.symbol : assetToken.symbol
 		);
-
-		return { success: true };
+		if (!aggregatedHandled) {
+			return {
+				success: false,
+				error: 'Unable to prepare aggregated order transaction. Please refresh quotes and retry.'
+			};
+		}
+		const { status, error: txError } = get(transactionStore);
+		if (status === TransactionStatus.SUCCESS) {
+			return { success: true };
+		}
+		if (status === TransactionStatus.ERROR) {
+			return {
+				success: false,
+				error: txError || 'Order failed'
+			};
+		}
+		return {
+			success: false,
+			error: 'Order did not complete. Please try again.'
+		};
 	} catch (error) {
 		console.error('Market order execution error:', error);
 		return {

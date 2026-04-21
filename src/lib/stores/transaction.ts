@@ -16,8 +16,18 @@ import {
 } from '$lib/services/walletService';
 import { withRetry } from '$lib/utils/retry';
 
-/** After a take confirms, wait before the next leg so RPC/oracle match on-chain state (multi-tx routes). */
-const SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG = 2500;
+/** Retry cadence for SDK/oracle readiness checks. */
+const TAKE_ORDER_PREPARE_RETRY_MS = 100;
+/** Retry cadence for transient post-confirmation oracle/preflight failures on later legs. */
+const TAKE_ORDER_TRANSIENT_RETRY_MS = 150;
+/** Confirmations required before submitting the next market-take leg. */
+const TAKE_TX_CONFIRMATIONS = 1;
+/** TTL for cached aggregated calldata preparation results. */
+const AGGREGATED_TAKE_CACHE_TTL_MS = 10_000;
+/** Max retries for aggregated calldata readiness checks. */
+const AGGREGATED_PREPARE_MAX_RETRIES = 1;
+/** Retry delay for aggregated calldata readiness checks. */
+const AGGREGATED_PREPARE_RETRY_MS = 100;
 
 // Wrapped wagmi functions with retry logic
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
@@ -222,6 +232,64 @@ function buildLegRerouteMessage(args: {
 		return `Maker leg ${fromHash} is not executable now. Routing to ${toHash} at updated ratio (${fromPrice} -> ${toPrice}).`;
 	}
 	return `Maker leg ${fromHash} is not executable now. Routing remaining size to ${toHash}.`;
+}
+
+function sumBigints(values: bigint[] | undefined): bigint {
+	if (!values?.length) return 0n;
+	return values.reduce((acc, value) => acc + value, 0n);
+}
+
+function deriveTakeRequestAmountWei(
+	mode: TakeOrdersMode,
+	params: TakeOrdersParams,
+	requiredPayerAllowance?: bigint
+): bigint {
+	if (mode === 'buyExact' || mode === 'buyUpTo') {
+		return params.requestedTakerWantsAmount;
+	}
+	if (mode === 'spendExact' || mode === 'spendUpTo') {
+		const fromAllowance = requiredPayerAllowance ?? params.requiredPayerAllowance ?? 0n;
+		if (fromAllowance > 0n) return fromAllowance;
+		return sumBigints(params.orderFillAmounts);
+	}
+	return 0n;
+}
+
+function buildTakeOrdersRequest(args: {
+	mode: TakeOrdersMode;
+	params: TakeOrdersParams;
+	network: Network;
+	priceCapStr: string;
+	requiredPayerAllowance?: bigint;
+	taker: string;
+}): TakeOrdersRequest | null {
+	const { mode, params, network, priceCapStr, requiredPayerAllowance, taker } = args;
+	const amountWei = deriveTakeRequestAmountWei(mode, params, requiredPayerAllowance);
+	if (amountWei <= 0n) return null;
+	const amountDecimals =
+		mode === 'buyExact' || mode === 'buyUpTo'
+			? params.takerWantsToken.decimals
+			: params.takerPaysToken.decimals;
+	return {
+		taker,
+		chainId: network.id,
+		sellToken: params.takerPaysToken.address,
+		buyToken: params.takerWantsToken.address,
+		mode,
+		amount: formatUnits(amountWei, amountDecimals),
+		priceCap: priceCapStr
+	};
+}
+
+type AggregatedTakeCacheEntry = {
+	expiresAt: number;
+	value: Awaited<ReturnType<Awaited<ReturnType<typeof createRaindexClient>>['getTakeOrdersCalldata']>>;
+};
+
+const aggregatedTakeCalldataCache = new Map<string, AggregatedTakeCacheEntry>();
+
+function getAggregatedTakeCacheKey(takeRequest: TakeOrdersRequest): string {
+	return JSON.stringify(takeRequest);
 }
 
 // Find a vault by matching both vault ID and token address
@@ -654,7 +722,7 @@ const transactionStore = () => {
 			});
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
-			await waitForTransaction(hash);
+			await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
 
 			const $signer = get(walletAddress);
 			const raindexLink = {
@@ -1368,6 +1436,35 @@ const transactionStore = () => {
 		return transactionSuccess(hash, undefined, { marketOrderSummary: summary, raindexLink });
 	};
 
+	const fetchAggregatedTakeOrdersCalldata = async (
+		takeRequest: TakeOrdersRequest,
+		options: { preferCache: boolean }
+	) => {
+		const cacheKey = getAggregatedTakeCacheKey(takeRequest);
+		const now = Date.now();
+		if (options.preferCache) {
+			const cached = aggregatedTakeCalldataCache.get(cacheKey);
+			if (cached && cached.expiresAt > now) {
+				return cached.value;
+			}
+		}
+		const client = await createRaindexClient();
+		const result = await client.getTakeOrdersCalldata(takeRequest);
+		aggregatedTakeCalldataCache.set(cacheKey, {
+			expiresAt: now + AGGREGATED_TAKE_CACHE_TTL_MS,
+			value: result
+		});
+		return result;
+	};
+
+	const preloadAggregatedTakeOrdersCalldata = async (takeRequest: TakeOrdersRequest) => {
+		try {
+			await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: false });
+		} catch {
+			// Preload is opportunistic only; execution path handles failures explicitly.
+		}
+	};
+
 	/**
 	 * Single-tx market take via RaindexClient.getTakeOrdersCalldata(): subgraph discovery +
 	 * one takeOrders4 call that can aggregate multiple maker orders (solves thin top-of-book).
@@ -1395,8 +1492,7 @@ const transactionStore = () => {
 		awaitWalletConfirmation(`Preparing order...`);
 		const TX_LOG_PREFIX = '[handleAggregatedTakeOrdersCalldata]';
 
-		const client = await createRaindexClient();
-		let calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+		let calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: true });
 		if (calldataWrapped.error || !calldataWrapped.value) {
 			console.log(`${TX_LOG_PREFIX} skipping fallback: SDK returned no aggregated calldata`, {
 				msg: calldataWrapped.error?.readableMsg
@@ -1415,7 +1511,7 @@ const transactionStore = () => {
 			});
 			awaitApprovalTx(approvalHash);
 			await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
-			calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+			calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: false });
 			if (calldataWrapped.error || !calldataWrapped.value) {
 				transactionError(
 					(calldataWrapped.error?.readableMsg ||
@@ -1427,9 +1523,9 @@ const transactionStore = () => {
 		}
 
 		if (!result.isReady || !result.takeOrdersInfo) {
-			for (let retry = 0; retry < 2; retry++) {
-				await new Promise((resolve) => setTimeout(resolve, 1200));
-				calldataWrapped = await client.getTakeOrdersCalldata(takeRequest);
+			for (let retry = 0; retry < AGGREGATED_PREPARE_MAX_RETRIES; retry++) {
+				await new Promise((resolve) => setTimeout(resolve, AGGREGATED_PREPARE_RETRY_MS));
+				calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: false });
 				if (!calldataWrapped.error && calldataWrapped.value?.isReady && calldataWrapped.value?.takeOrdersInfo) {
 					result = calldataWrapped.value;
 					break;
@@ -1461,7 +1557,7 @@ const transactionStore = () => {
 				data: calldata as Hex
 			});
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-			await waitForTransaction(hash);
+			await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
 			await pollAndFinalizeTakeOrders([hash], primaryOrder, params, network);
 			return true;
 		} catch (txError) {
@@ -1523,6 +1619,27 @@ const transactionStore = () => {
 
 		// Send one transaction per oracle order; getTakeCalldata() calls oracle server internally
 		awaitWalletConfirmation(`Preparing order...`);
+		const oraclePriceCapStr = oracleInputs[0]?.priceCapStr ?? '1';
+		const aggregatedTakeRequest = buildTakeOrdersRequest({
+			mode,
+			params,
+			network,
+			priceCapStr: oraclePriceCapStr,
+			requiredPayerAllowance: params.requiredPayerAllowance,
+			taker: $signerAddress
+		});
+		if (aggregatedTakeRequest) {
+			const handled = await handleAggregatedTakeOrdersCalldata(
+				aggregatedTakeRequest,
+				primaryOrder,
+				params,
+				approvalTokenSymbol
+			);
+			if (handled) {
+				return;
+			}
+		}
+
 		const allTransactionHashes: Hash[] = [];
 		const TX_LOG_PREFIX = '[handleOracleOrders]';
 		const expectedPriceByOrderHash = buildExpectedPriceByOrderHash(params.simulation);
@@ -1579,10 +1696,7 @@ const transactionStore = () => {
 			);
 
 			if (i > 0) {
-				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG));
-				awaitWalletConfirmation(
-					`Waiting for network to settle before preparing order ${i + 1} of ${oracleInputs.length}...`
-				);
+				awaitWalletConfirmation(`Preparing order ${i + 1} of ${oracleInputs.length}...`);
 			}
 
 			let calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
@@ -1653,7 +1767,7 @@ const transactionStore = () => {
 			const notReadyRetries = i === 0 ? 2 : 4;
 			if (!calldataResult.error && (!calldataResult.value?.isReady || !calldataResult.value?.takeOrdersInfo)) {
 				for (let retry = 0; retry < notReadyRetries; retry++) {
-					await new Promise((resolve) => setTimeout(resolve, 1200));
+					await new Promise((resolve) => setTimeout(resolve, TAKE_ORDER_PREPARE_RETRY_MS));
 					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
 						oracleInput.inputIndex,
 						oracleInput.outputIndex,
@@ -1670,7 +1784,7 @@ const transactionStore = () => {
 			// Second+ legs: transient SDK/oracle errors (common right after leg 1 confirms).
 			if (calldataResult.error && i > 0) {
 				for (let retry = 0; retry < 3; retry++) {
-					await new Promise((resolve) => setTimeout(resolve, 1500));
+					await new Promise((resolve) => setTimeout(resolve, TAKE_ORDER_TRANSIENT_RETRY_MS));
 					calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
 						oracleInput.inputIndex,
 						oracleInput.outputIndex,
@@ -1757,7 +1871,7 @@ const transactionStore = () => {
 				});
 
 				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`);
-				await waitForTransaction(hash);
+				await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
 				allTransactionHashes.push(hash);
 				carryForwardFillAmount = 0n;
 
@@ -1873,6 +1987,25 @@ const transactionStore = () => {
 		const mode: TakeOrdersMode = finalConfig.IOIsInput ? 'buyExact' : 'spendExact';
 		const priceCapFloat = Float.fromHex(finalConfig.maximumIORatio as `0x${string}`);
 		const priceCapStr = String(priceCapFloat.value?.format().value ?? '1');
+		const aggregatedTakeRequest = buildTakeOrdersRequest({
+			mode,
+			params,
+			network,
+			priceCapStr,
+			requiredPayerAllowance: requiredApprovalAmount,
+			taker: $signerAddress
+		});
+		if (aggregatedTakeRequest) {
+			const handled = await handleAggregatedTakeOrdersCalldata(
+				aggregatedTakeRequest,
+				raindexOrder,
+				params,
+				approvalTokenSymbol
+			);
+			if (handled) {
+				return;
+			}
+		}
 
 		const ordersToExecute = raindexOrders ?? [];
 		if (ordersToExecute.length === 0) {
@@ -1958,10 +2091,7 @@ const transactionStore = () => {
 				return transactionError('Order config mismatch' as TransactionErrorMessage);
 			}
 			if (orderIndex > 0) {
-				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS_BEFORE_NEXT_TAKE_ORDER_LEG));
-				awaitWalletConfirmation(
-					`Waiting for network to settle before preparing order ${orderIndex + 1} of ${ordersToExecute.length}...`
-				);
+				awaitWalletConfirmation(`Preparing order ${orderIndex + 1} of ${ordersToExecute.length}...`);
 			}
 			const isMultiBatch = ordersToExecute.length > 1;
 			const batchLabel = isMultiBatch ? ` (${orderIndex + 1}/${ordersToExecute.length})` : '';
@@ -2051,7 +2181,7 @@ const transactionStore = () => {
 				if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
 					if (orderIndex > 0) {
 						for (let retry = 0; retry < 3; retry++) {
-							await new Promise((resolve) => setTimeout(resolve, 1500));
+							await new Promise((resolve) => setTimeout(resolve, TAKE_ORDER_TRANSIENT_RETRY_MS));
 							readyCalldataResult = await orderToExecute.getTakeCalldata(
 								Number(orderConfig.inputIOIndex),
 								Number(orderConfig.outputIOIndex),
@@ -2127,7 +2257,7 @@ const transactionStore = () => {
 				});
 
 				awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`, progressData);
-				await waitForTransaction(hash);
+				await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
 
 				console.log(`${TX_LOG_PREFIX} Order ${orderIndex + 1} transaction confirmed`, { hash });
 
@@ -2216,6 +2346,7 @@ const transactionStore = () => {
 		handleDsfDeploy,
 		handleFolioDeploy,
 		handleOracleOrders,
+		preloadAggregatedTakeOrdersCalldata,
 		handleAggregatedTakeOrdersCalldata,
 		handleTakeOrders,
 		handleWithdraw,

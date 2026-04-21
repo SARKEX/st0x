@@ -261,9 +261,16 @@ export async function fetchAndQuotePaymentTokenOrders(
 				owners: []
 			};
 
-			// Filter only by stock tokens - payment token filtering is too restrictive
-			// Orders should be visible regardless of which payment token is configured
-			const tokenAddresses = stockTokens.map((t) => t.address as `0x${string}`);
+			// Include both stock + payment token addresses on each side.
+			// Some SDK/subgraph versions treat inputs+outputs as an AND condition; including payment
+			// here ensures stock/payment pairs (e.g. tSTOX/USDC) are not dropped server-side.
+			const tokenAddresses = [
+				...new Set(
+					stockTokens
+						.map((t) => t.address.toLowerCase())
+						.concat(defaultPaymentToken.address.toLowerCase())
+				)
+			] as `0x${string}`[];
 
 			filters.tokens = { inputs: tokenAddresses, outputs: tokenAddresses };
 
@@ -351,10 +358,14 @@ export async function fetchAndQuoteTokenOrders(
 
 	// Fetch orders for this specific token only
 	const tokenAddr = tokenAddress as `0x${string}`;
+	const paymentAddr = defaultPaymentToken.address as `0x${string}`;
+	const tokenPairAddresses = [...new Set([tokenAddr.toLowerCase(), paymentAddr.toLowerCase()])] as `0x${string}`[];
 	const filters: GetOrdersFilters = {
 		active: true,
 		owners: [],
-		tokens: { inputs: [tokenAddr], outputs: [tokenAddr] }
+		// Include payment token on both sides so stock/payment pairs are returned even
+		// when token filter semantics are strict (inputs AND outputs).
+		tokens: { inputs: tokenPairAddresses, outputs: tokenPairAddresses }
 	};
 
 	const ordersResult = await client.getOrders([networkId], filters, 1);
