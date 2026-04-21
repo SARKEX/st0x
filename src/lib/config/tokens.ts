@@ -166,22 +166,22 @@ export const TOKENS: CategorizedToken[] = [
 		limitOrders: []
 	},
 	// wtSTOX token temporarily disabled
-	{
-		chainId: base.id,
-		address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
-		unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
-		legacyAddress: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
-		// legacySymbol: 'tSTOX',
-		symbol: 'wtSTOX',
-		decimals: 18,
-		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
-		logoUrl: '/images/SPLG.png',
-		priceFeedId: '0x54e2e127c93950de5a710100fd1cd387aba1ec8920850efdb05da5fee57d2e32',
-		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:SPLG',
-		tradingViewMarket: 'america',
-		limitOrders: []
-	},
+	// {
+	// 	chainId: base.id,
+	// 	address: '0xf3da872A3B8e674A8925c67c866b2a4a67a1fC8a',
+	// 	unwrappedAddress: '0x9e0052b62ff6ce9055b33996a1dee768041b1f67',
+	// 	legacyAddress: '0xcf877a4f3ebec00c5b070cccb0a6a0583afbcd88',
+	// 	// legacySymbol: 'tSTOX',
+	// 	symbol: 'wtSTOX',
+	// 	decimals: 18,
+	// 	name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
+	// 	logoUrl: '/images/SPLG.png',
+	// 	priceFeedId: '0x54e2e127c93950de5a710100fd1cd387aba1ec8920850efdb05da5fee57d2e32',
+	// 	category: 'ST0x',
+	// 	tradingViewSymbol: 'AMEX:SPLG',
+	// 	tradingViewMarket: 'america',
+	// 	limitOrders: []
+	// },
 	{
 		chainId: base.id,
 		address: '0xEB7F3E4093C9d68253b6104FbbfF561F3eC0442F',
