@@ -310,62 +310,32 @@ export function filterQuotesForSide(
 ): ProcessedQuote[] {
 	const normalizedAsset = assetAddress.toLowerCase();
 	const normalizedPayment = paymentAddress.toLowerCase();
-	const debugHashes = new Set([
-		'0x560f94e25b5f7023862e8ba37a928c91e675de082c1fff41ea68f6da3d9ca2e8',
-		'0x3848e87a452747f3ab43158cfa706d449326c5024c28e6ce00818438a8519e4e'
-	]);
 
 	return quotes.filter((quote) => {
 		const inputAddr = quote.inputTokenAddress?.toLowerCase();
 		const outputAddr = quote.outputTokenAddress?.toLowerCase();
 		const price = quote.quotePerAsset;
-		const orderHashLc = quote.orderHash?.toLowerCase();
-		const isDebug = !!orderHashLc && debugHashes.has(orderHashLc);
-		if (isDebug) {
-			console.log('[orders-debug] filterQuotesForSide incoming', {
-				orderHash: quote.orderHash,
-				orderSide,
-				inputAddr,
-				outputAddr,
-				normalizedAsset,
-				normalizedPayment,
-				side: quote.side,
-				price
-			});
-		}
 
 		if (orderSide === 'Buy') {
 			// For Buy: we need ASK orders (seller offering asset for payment)
-			const include =
+			return (
 				inputAddr === normalizedPayment &&
 				outputAddr === normalizedAsset &&
 				quote.side === 'ask' &&
 				price !== undefined &&
 				Number.isFinite(price) &&
-				price > 0;
-			if (isDebug) {
-				console.log('[orders-debug] filterQuotesForSide buy decision', {
-					orderHash: quote.orderHash,
-					include
-				});
-			}
-			return include;
+				price > 0
+			);
 		} else {
 			// For Sell: we need BID orders (buyer offering payment for asset)
-			const include =
+			return (
 				inputAddr === normalizedAsset &&
 				outputAddr === normalizedPayment &&
 				quote.side === 'bid' &&
 				price !== undefined &&
 				Number.isFinite(price) &&
-				price > 0;
-			if (isDebug) {
-				console.log('[orders-debug] filterQuotesForSide sell decision', {
-					orderHash: quote.orderHash,
-					include
-				});
-			}
-			return include;
+				price > 0
+			);
 		}
 	});
 }
