@@ -43,7 +43,20 @@ function isAllowedProxyRoute(method: string, pathSuffix: string): boolean {
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
-	const apiBase = getApiBase();
+	let apiBase: string;
+	let authHeader: string;
+	try {
+		apiBase = getApiBase();
+		authHeader = getAuthHeader();
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'Proxy configuration error';
+		console.error('[st0x-proxy] Config error:', msg);
+		return new Response(JSON.stringify({ error: msg }), {
+			status: 503,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
 	if (!isAllowedProxyRoute(request.method, pathSuffix)) {
 		return new Response('Not found', { status: 404 });
@@ -53,7 +66,7 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	const headers = new Headers();
 	headers.set('Content-Type', 'application/json');
 	headers.set('Accept', 'application/json');
-	headers.set('Authorization', getAuthHeader());
+	headers.set('Authorization', authHeader);
 
 	const init: RequestInit = {
 		method: request.method,
@@ -66,7 +79,17 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 		init.body = body;
 	}
 
-	const response = await fetch(targetUrl, init);
+	let response: Response;
+	try {
+		response = await fetch(targetUrl, init);
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'Unknown upstream error';
+		console.error(`[st0x-proxy] Upstream fetch failed (${targetUrl}):`, msg);
+		return new Response(JSON.stringify({ error: 'Upstream API unreachable', detail: msg }), {
+			status: 502,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');

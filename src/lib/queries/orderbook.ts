@@ -149,13 +149,14 @@ export async function refreshTokenQuotes(
 
 	// Merge into global cache
 	const globalCache = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
-	const addressSet = getTokenAddressSet(tokenAddress);
+	// Only evict quotes for the primary address we just re-fetched, preserving legacy quotes
+	const primaryAddressSet = new Set([primaryAddress]);
 	if (globalCache) {
-		// Remove old quotes for this token (wrapped or legacy)
+		// Remove old quotes only for the primary address (not legacy addresses)
 		const otherQuotes = globalCache.quotes.filter(
 			(q) =>
-				!addressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') &&
-				!addressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
+				!primaryAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') &&
+				!primaryAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
 		);
 
 		// Merge new quotes

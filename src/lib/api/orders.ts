@@ -33,6 +33,9 @@ export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, hexToBigIn
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
 	buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);
 
+/** Safety cap to prevent infinite pagination loops from a buggy API response */
+const MAX_ORDER_PAGES = 100;
+
 function getTokenMetadata(address: string, tokens: PythToken[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
 	return {
@@ -42,11 +45,37 @@ function getTokenMetadata(address: string, tokens: PythToken[]) {
 }
 
 /**
+ * For strategy orders with no live quote (ioRatio === '-'), estimate the ioRatio
+ * from the asset token's configured fallbackPrice. Returns a hex Float string or null.
+ */
+function estimateRatioFromFallback(
+	normalizedInput: string,
+	normalizedOutput: string,
+	normalizedQuote: string
+): string | null {
+	const assetAddress = normalizedInput === normalizedQuote ? normalizedOutput : normalizedInput;
+	const configToken = TOKENS.find((t) => normalizeAddress(t.address) === assetAddress);
+	if (!configToken?.fallbackPrice) return null;
+
+	// ASK (sell): input=payment, output=asset → ioRatio = price
+	// BID (buy):  input=asset, output=payment → ioRatio = 1/price
+	const estimatedRatio =
+		normalizedInput === normalizedQuote ? configToken.fallbackPrice : 1 / configToken.fallbackPrice;
+
+	const ratioFloat = Float.parse(String(estimatedRatio));
+	if (ratioFloat.error || !ratioFloat.value) return null;
+	return ratioFloat.value.asHex();
+}
+
+/**
  * Convert an API OrderSummary into a ProcessedQuote.
  *
  * Uses Float.parse() to convert the server's decimal ioRatio and outputVaultBalance
  * back into hex-encoded Float strings, preserving compatibility with walkOrderbook
  * and computeEmergencyRatioHex which expect hex Float format.
+ *
+ * Strategy orders with no live quote (ioRatio === '-') are estimated using the
+ * token's configured fallbackPrice so they appear in the orderbook chart.
  *
  * The sgOrder is created as a minimal stub with just orderHash — marketOrderExecution.ts
  * hydrates the full order from Raindex before executing.
@@ -56,9 +85,6 @@ function convertApiOrderToProcessedQuote(
 	quoteTokenAddress: string,
 	allTokens: PythToken[]
 ): ProcessedQuote | null {
-	// Skip orders with no valid quote
-	if (!order.ioRatio || order.ioRatio === '-') return null;
-
 	// Skip orders with zero balance
 	const balance = parseFloat(order.outputVaultBalance);
 	if (!Number.isFinite(balance) || balance <= 0) return null;
@@ -67,14 +93,23 @@ function convertApiOrderToProcessedQuote(
 	const normalizedInput = normalizeAddress(order.inputToken.address);
 	const normalizedOutput = normalizeAddress(order.outputToken.address);
 	const normalizedQuote = normalizeAddress(quoteTokenAddress);
+	if (!normalizedInput || !normalizedOutput || !normalizedQuote) return null;
 	if (normalizedInput !== normalizedQuote && normalizedOutput !== normalizedQuote) {
 		return null;
 	}
 
-	// Convert ioRatio decimal to hex Float for consumers expecting hex (e.g. computeEmergencyRatioHex)
-	const ratioFloat = Float.parse(order.ioRatio);
-	if (ratioFloat.error || !ratioFloat.value) return null;
-	const ratio = ratioFloat.value.asHex();
+	let ratio: string;
+	if (!order.ioRatio || order.ioRatio === '-') {
+		// Strategy order with no live quote — estimate from fallback price
+		const estimated = estimateRatioFromFallback(normalizedInput, normalizedOutput, normalizedQuote);
+		if (!estimated) return null;
+		ratio = estimated;
+	} else {
+		// Convert ioRatio decimal to hex Float for consumers expecting hex (e.g. computeEmergencyRatioHex)
+		const ratioFloat = Float.parse(order.ioRatio);
+		if (ratioFloat.error || !ratioFloat.value) return null;
+		ratio = ratioFloat.value.asHex();
+	}
 
 	// Convert outputVaultBalance to hex Float for walkOrderbook's computeAvailableQuantity
 	const balanceFloat = Float.parse(order.outputVaultBalance);
@@ -103,20 +138,12 @@ function convertApiOrderToProcessedQuote(
 		outputTokenDecimals: order.outputToken.decimals ?? outputMeta.decimals ?? 18
 	};
 
-	// Pre-compute side and price from the ioRatio
-	const ioRatioNum = parseFloat(order.ioRatio);
-	if (Number.isFinite(ioRatioNum) && ioRatioNum > 0) {
-		if (normalizedInput === normalizedQuote) {
-			// ASK order: input=quote(USDC), output=asset — seller offering to sell
-			processedQuote.side = 'ask';
-			processedQuote.assetAddress = normalizedOutput ?? order.outputToken.address;
-			processedQuote.quotePerAsset = ioRatioNum;
-		} else {
-			// BID order: input=asset, output=quote(USDC) — buyer offering to buy
-			processedQuote.side = 'bid';
-			processedQuote.assetAddress = normalizedInput ?? order.inputToken.address;
-			processedQuote.quotePerAsset = 1 / ioRatioNum;
-		}
+	// Pre-compute side and price using describeQuote (DRY with tokenMath)
+	const metrics = describeQuote(processedQuote, quoteTokenAddress);
+	if (metrics) {
+		processedQuote.side = metrics.side;
+		processedQuote.assetAddress = metrics.assetAddress;
+		processedQuote.quotePerAsset = metrics.quotePerAsset;
 	}
 
 	return processedQuote;
@@ -165,7 +192,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 		stockTokens.map(async (token) => {
 			let page = 1;
 			let hasMore = true;
-			while (hasMore) {
+			while (hasMore && page <= MAX_ORDER_PAGES) {
 				const response = await apiGetOrdersByToken(token.address, { page, pageSize: 50 });
 				for (const order of response.orders) {
 					if (seen.has(order.orderHash)) continue;
@@ -175,6 +202,9 @@ export async function fetchAndQuotePaymentTokenOrders(
 				}
 				hasMore = response.pagination.hasMore;
 				page++;
+			}
+			if (hasMore) {
+				console.warn(`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`);
 			}
 		})
 	);
@@ -204,7 +234,7 @@ export async function fetchAndQuoteTokenOrders(
 	const seen = new Set<string>();
 	let page = 1;
 	let hasMore = true;
-	while (hasMore) {
+	while (hasMore && page <= MAX_ORDER_PAGES) {
 		try {
 			const response = await apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 });
 			for (const order of response.orders) {
@@ -219,6 +249,9 @@ export async function fetchAndQuoteTokenOrders(
 			console.warn(`[orders] Page ${page} fetch failed for token ${tokenAddress}:`, error);
 			break;
 		}
+	}
+	if (hasMore) {
+		console.warn(`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${tokenAddress}`);
 	}
 
 	return processedQuotes;

@@ -398,9 +398,12 @@ export const getTrades = async (
 	);
 
 	const allTrades = allTradesResults.flat();
-	return allTrades.filter(
-		(trade, index, self) => index === self.findIndex((t) => t.id === trade.id)
-	);
+	const seenIds = new Set<string>();
+	return allTrades.filter((trade) => {
+		if (seenIds.has(trade.id)) return false;
+		seenIds.add(trade.id);
+		return true;
+	});
 };
 
 // A GraphQL error typically indicates a permanent problem with the query (bad
