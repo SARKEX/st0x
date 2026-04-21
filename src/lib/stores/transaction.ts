@@ -17,9 +17,9 @@ import {
 import { withRetry } from '$lib/utils/retry';
 
 /** Retry cadence for SDK/oracle readiness checks. */
-const TAKE_ORDER_PREPARE_RETRY_MS = 400;
+const TAKE_ORDER_PREPARE_RETRY_MS = 100;
 /** Retry cadence for transient post-confirmation oracle/preflight failures on later legs. */
-const TAKE_ORDER_TRANSIENT_RETRY_MS = 600;
+const TAKE_ORDER_TRANSIENT_RETRY_MS = 150;
 /** Confirmations required before submitting the next market-take leg. */
 const TAKE_TX_CONFIRMATIONS = 1;
 /** TTL for cached aggregated calldata preparation results. */
@@ -27,7 +27,7 @@ const AGGREGATED_TAKE_CACHE_TTL_MS = 10_000;
 /** Max retries for aggregated calldata readiness checks. */
 const AGGREGATED_PREPARE_MAX_RETRIES = 1;
 /** Retry delay for aggregated calldata readiness checks. */
-const AGGREGATED_PREPARE_RETRY_MS = 200;
+const AGGREGATED_PREPARE_RETRY_MS = 100;
 
 // Wrapped wagmi functions with retry logic
 const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
