@@ -33,6 +33,9 @@ export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, hexToBigIn
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
 	buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);
 
+/** Safety cap to prevent infinite pagination loops from a buggy API response */
+const MAX_ORDER_PAGES = 100;
+
 function getTokenMetadata(address: string, tokens: PythToken[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
 	return {
@@ -103,20 +106,12 @@ function convertApiOrderToProcessedQuote(
 		outputTokenDecimals: order.outputToken.decimals ?? outputMeta.decimals ?? 18
 	};
 
-	// Pre-compute side and price from the ioRatio
-	const ioRatioNum = parseFloat(order.ioRatio);
-	if (Number.isFinite(ioRatioNum) && ioRatioNum > 0) {
-		if (normalizedInput === normalizedQuote) {
-			// ASK order: input=quote(USDC), output=asset — seller offering to sell
-			processedQuote.side = 'ask';
-			processedQuote.assetAddress = normalizedOutput ?? order.outputToken.address;
-			processedQuote.quotePerAsset = ioRatioNum;
-		} else {
-			// BID order: input=asset, output=quote(USDC) — buyer offering to buy
-			processedQuote.side = 'bid';
-			processedQuote.assetAddress = normalizedInput ?? order.inputToken.address;
-			processedQuote.quotePerAsset = 1 / ioRatioNum;
-		}
+	// Pre-compute side and price using describeQuote (DRY with tokenMath)
+	const metrics = describeQuote(processedQuote, quoteTokenAddress);
+	if (metrics) {
+		processedQuote.side = metrics.side;
+		processedQuote.assetAddress = metrics.assetAddress;
+		processedQuote.quotePerAsset = metrics.quotePerAsset;
 	}
 
 	return processedQuote;
@@ -165,7 +160,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 		stockTokens.map(async (token) => {
 			let page = 1;
 			let hasMore = true;
-			while (hasMore) {
+			while (hasMore && page <= MAX_ORDER_PAGES) {
 				const response = await apiGetOrdersByToken(token.address, { page, pageSize: 50 });
 				for (const order of response.orders) {
 					if (seen.has(order.orderHash)) continue;
@@ -175,6 +170,9 @@ export async function fetchAndQuotePaymentTokenOrders(
 				}
 				hasMore = response.pagination.hasMore;
 				page++;
+			}
+			if (hasMore) {
+				console.warn(`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`);
 			}
 		})
 	);
@@ -204,7 +202,7 @@ export async function fetchAndQuoteTokenOrders(
 	const seen = new Set<string>();
 	let page = 1;
 	let hasMore = true;
-	while (hasMore) {
+	while (hasMore && page <= MAX_ORDER_PAGES) {
 		try {
 			const response = await apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 });
 			for (const order of response.orders) {
@@ -219,6 +217,9 @@ export async function fetchAndQuoteTokenOrders(
 			console.warn(`[orders] Page ${page} fetch failed for token ${tokenAddress}:`, error);
 			break;
 		}
+	}
+	if (hasMore) {
+		console.warn(`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${tokenAddress}`);
 	}
 
 	return processedQuotes;

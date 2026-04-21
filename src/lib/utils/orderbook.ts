@@ -273,6 +273,37 @@ function computeAvailableQuantity(
  * **Token Scale Normalization**: ioRatio is calculated as (input/10^inputDecimals) / (output/10^outputDecimals)
  * to provide a meaningful ratio despite different decimal scales.
  */
+/**
+ * Check whether including a fill would push the weighted average price beyond the slippage limit.
+ * Returns true when slippage is exceeded and the fill should be rejected.
+ */
+function checkSlippageExceeded(
+	totalAsset: bigint,
+	totalPayment: bigint,
+	assetDecimals: number,
+	paymentDecimals: number,
+	bestPrice: number | null,
+	maxSlippagePercent: number | undefined,
+	orderSide: 'Buy' | 'Sell'
+): boolean {
+	if (
+		maxSlippagePercent === undefined ||
+		maxSlippagePercent <= 0 ||
+		bestPrice === null ||
+		totalAsset <= 0n
+	) {
+		return false;
+	}
+	const avgPrice =
+		Number(totalPayment) / 10 ** paymentDecimals /
+		(Number(totalAsset) / 10 ** assetDecimals);
+	if (orderSide === 'Buy') {
+		return avgPrice > bestPrice * (1 + maxSlippagePercent / 100);
+	} else {
+		return avgPrice < bestPrice * (1 - maxSlippagePercent / 100);
+	}
+}
+
 export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 	const {
 		quotes,
@@ -372,6 +403,11 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 		const paymentFromQuote = scaleAmount(paymentInAssetScale, assetDecimals, paymentDecimals);
 		if (paymentFromQuote <= 0n) continue;
 
+		// Track best price (first fill sets the benchmark)
+		if (bestPrice === null) {
+			bestPrice = price;
+		}
+
 		// In payment-spend mode, ensure we don't exceed the payment budget
 		if (targetMode === 'payment') {
 			const newPaymentTotal = paymentAccumulated + paymentFromQuote;
@@ -386,6 +422,16 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 				);
 				const adjustedAsset = (adjustedPaymentInAssetScale * PRICE_SCALE) / priceScaled;
 				if (adjustedAsset > 0n) {
+					// Check slippage before committing the adjusted fill
+					if (checkSlippageExceeded(
+						assetAccumulated + adjustedAsset,
+						paymentAccumulated + adjustedPayment,
+						assetDecimals, paymentDecimals,
+						bestPrice, maxSlippagePercent, orderSide
+					)) {
+						slippageLimitHit = true;
+						break;
+					}
 					assetAccumulated += adjustedAsset;
 					paymentAccumulated = targetAmount;
 					fills.push({ quote, price, assetAmount: adjustedAsset, paymentAmount: adjustedPayment });
@@ -394,38 +440,24 @@ export function walkOrderbook(options: WalkQuotesOptions): WalkQuotesResult {
 			}
 		}
 
-		assetAccumulated += assetFromQuote;
-		paymentAccumulated += paymentFromQuote;
-		fills.push({ quote, price, assetAmount: assetFromQuote, paymentAmount: paymentFromQuote });
+		// Compute tentative totals BEFORE committing the fill
+		const tentativeAsset = assetAccumulated + assetFromQuote;
+		const tentativePayment = paymentAccumulated + paymentFromQuote;
 
-		// Track best price and enforce slippage limit
-		if (bestPrice === null) {
-			bestPrice = price;
+		// Enforce slippage limit against tentative totals
+		if (checkSlippageExceeded(
+			tentativeAsset, tentativePayment,
+			assetDecimals, paymentDecimals,
+			bestPrice, maxSlippagePercent, orderSide
+		)) {
+			slippageLimitHit = true;
+			break;
 		}
-		if (
-			maxSlippagePercent !== undefined &&
-			maxSlippagePercent > 0 &&
-			bestPrice !== null &&
-			assetAccumulated > 0n
-		) {
-			// Calculate weighted average price across all fills so far
-			const avgPrice =
-				(Number(paymentAccumulated) / 10 ** paymentDecimals) /
-				(Number(assetAccumulated) / 10 ** assetDecimals);
-			// BUY: avg price should not exceed best (lowest) ask by more than slippage%
-			// SELL: avg price should not fall below best (highest) bid by more than slippage%
-			if (orderSide === 'Buy') {
-				if (avgPrice > bestPrice * (1 + maxSlippagePercent / 100)) {
-					slippageLimitHit = true;
-					break;
-				}
-			} else {
-				if (avgPrice < bestPrice * (1 - maxSlippagePercent / 100)) {
-					slippageLimitHit = true;
-					break;
-				}
-			}
-		}
+
+		// Slippage OK — commit the fill
+		assetAccumulated = tentativeAsset;
+		paymentAccumulated = tentativePayment;
+		fills.push({ quote, price, assetAmount: assetFromQuote, paymentAmount: paymentFromQuote });
 	}
 
 	// Map to user perspective (input = received, output = given away)

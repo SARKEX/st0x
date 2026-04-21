@@ -52,6 +52,11 @@
 	let slippagePercent: number = DEFAULT_SLIPPAGE_PERCENT;
 	let showSlippageSettings = false;
 
+	// Clamp slippage to a safe range — HTML min/max doesn't prevent typed invalid values
+	$: effectiveSlippage = Number.isFinite(slippagePercent) && slippagePercent > 0
+		? Math.min(slippagePercent, 50)
+		: DEFAULT_SLIPPAGE_PERCENT;
+
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 
@@ -618,7 +623,7 @@
 	// Fetch market price when component mounts or dependencies change
 	// Only calculates price when user has entered a quantity (selectedAmount > 0)
 	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes && slippagePercent >= 0) {
+	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes && effectiveSlippage >= 0) {
 		fetchMarketPrice();
 	} else if (!selectedAmount || selectedAmount === 0n) {
 		// Clear price when quantity is cleared
@@ -712,7 +717,7 @@
 			assetDecimals: assetToken.decimals,
 			paymentDecimals: paymentToken.decimals,
 			mode: inputMode === 'spend' ? 'spend' : 'receive',
-			maxSlippagePercent: slippagePercent
+			maxSlippagePercent: effectiveSlippage
 		});
 	}
 
@@ -840,7 +845,7 @@
 					await $orderbookQuotesQuery?.refetch?.();
 					return getQuotesWithPriceGuard();
 				},
-				maxSlippagePercent: slippagePercent
+				maxSlippagePercent: effectiveSlippage
 			});
 
 			if (!result.success && result.error) {
@@ -1114,7 +1119,7 @@
 			>
 				<span>Max slippage</span>
 				<span class="flex items-center gap-1">
-					<span class="font-medium text-gray-300">{slippagePercent}%</span>
+					<span class="font-medium text-gray-300">{effectiveSlippage}%</span>
 					<svg
 						class="h-3.5 w-3.5 transition-transform {showSlippageSettings ? 'rotate-180' : ''}"
 						fill="none"
@@ -1152,7 +1157,7 @@
 						</div>
 					</div>
 					<p class="mt-2 text-xs text-gray-500">
-						Order stops filling if the average price moves more than {slippagePercent}% from the best available price.
+						Order stops filling if the average price moves more than {effectiveSlippage}% from the best available price.
 					</p>
 				</div>
 			{/if}
@@ -1161,7 +1166,7 @@
 		<!-- Slippage limit warning -->
 		{#if slippageLimitHit && selectedAmount && selectedAmount > 0n && !isLoadingPrice}
 			<div class="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300">
-				Order partially filled due to {slippagePercent}% slippage limit. Increase slippage tolerance or reduce order size to fill completely.
+				Order partially filled due to {effectiveSlippage}% slippage limit. Increase slippage tolerance or reduce order size to fill completely.
 			</div>
 		{/if}
 

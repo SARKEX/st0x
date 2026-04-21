@@ -97,8 +97,14 @@
 
 	// Slippage
 	const SLIPPAGE_PRESETS_QT = [0.5, 1, 2, 5];
-	let slippagePercent = 1; // Default 1%
+	const DEFAULT_SLIPPAGE_PERCENT_QT = 1;
+	let slippagePercent = DEFAULT_SLIPPAGE_PERCENT_QT;
 	let showSlippageSettings = false;
+
+	// Clamp slippage to a safe range — HTML min/max doesn't prevent typed invalid values
+	$: effectiveSlippage = Number.isFinite(slippagePercent) && slippagePercent > 0
+		? Math.min(slippagePercent, 50)
+		: DEFAULT_SLIPPAGE_PERCENT_QT;
 
 	// ============ DATA LOADING ============
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
@@ -743,7 +749,7 @@
 						return sortedQuotes;
 					}
 				},
-				maxSlippagePercent: slippagePercent
+				maxSlippagePercent: effectiveSlippage
 			});
 
 			if (!result.success) {
@@ -1066,7 +1072,7 @@
 				on:click={() => (showSlippageSettings = !showSlippageSettings)}
 				class="flex items-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-300"
 			>
-				<span>Slippage: {slippagePercent}%</span>
+				<span>Slippage: {effectiveSlippage}%</span>
 				<svg
 					class="h-3 w-3 transition-transform {showSlippageSettings ? 'rotate-180' : ''}"
 					fill="none"
