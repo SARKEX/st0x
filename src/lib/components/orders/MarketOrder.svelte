@@ -47,12 +47,11 @@
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
-	const SLIPPAGE_OPTIONS_BPS: number[] = [50, 100, 200, 300];
+	const HIGH_SLIPPAGE_WARNING_BPS = 500; // 5% — warn above this
 	let slippageBps = DEFAULT_MARKET_ORDER_SLIPPAGE_BPS;
-
-	function formatSlippageLabel(bpsValue: number): string {
-		return `${(bpsValue / 100).toFixed(bpsValue % 100 === 0 ? 0 : 1)}%`;
-	}
+	let slippageInputValue = String(slippageBps / 100);
+	let showHighSlippageWarning = false;
+	let pendingHighSlippageBps: number | null = null;
 
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
@@ -497,11 +496,46 @@
 		}
 	};
 
-	function handleSlippageChange(event: Event) {
+	function applySlippage(bps: number) {
+		slippageBps = bps;
+		slippageInputValue = String(bps / 100);
+	}
+
+	function handleSlippageInput(event: Event) {
 		const target = event.currentTarget;
-		if (!(target instanceof HTMLSelectElement)) return;
-		const next = Number(target.value);
-		if (Number.isFinite(next)) slippageBps = next;
+		if (!(target instanceof HTMLInputElement)) return;
+		slippageInputValue = target.value;
+	}
+
+	function handleSlippageCommit() {
+		const pct = parseFloat(slippageInputValue);
+		if (!Number.isFinite(pct) || pct <= 0) {
+			// Reset to current value on invalid input
+			slippageInputValue = String(slippageBps / 100);
+			return;
+		}
+		const bps = Math.round(pct * 100);
+		if (bps > HIGH_SLIPPAGE_WARNING_BPS) {
+			pendingHighSlippageBps = bps;
+			showHighSlippageWarning = true;
+		} else {
+			applySlippage(bps);
+		}
+	}
+
+	function confirmHighSlippage() {
+		if (pendingHighSlippageBps !== null) {
+			applySlippage(pendingHighSlippageBps);
+		}
+		pendingHighSlippageBps = null;
+		showHighSlippageWarning = false;
+	}
+
+	function cancelHighSlippage() {
+		// Reset input to current applied value
+		slippageInputValue = String(slippageBps / 100);
+		pendingHighSlippageBps = null;
+		showHighSlippageWarning = false;
 	}
 
 	// Calculate how much asset can be bought for a given payment amount using actual orderbook prices
@@ -1018,16 +1052,19 @@
 			<div class="space-y-2 text-sm">
 				<div class="flex items-center justify-between">
 					<label for="market-slippage" class="text-gray-400">Slippage tolerance</label>
-					<select
-						id="market-slippage"
-						value={String(slippageBps)}
-						on:change={handleSlippageChange}
-						class="rounded border border-white/10 bg-gray-800 px-2 py-1 text-sm text-gray-200 focus:border-yellow-400/50 focus:outline-none"
-					>
-						{#each SLIPPAGE_OPTIONS_BPS as bps (bps)}
-							<option value={String(Number(bps))}>{formatSlippageLabel(Number(bps))}</option>
-						{/each}
-					</select>
+					<div class="flex items-center gap-1">
+						<input
+							id="market-slippage"
+							type="text"
+							inputmode="decimal"
+							value={slippageInputValue}
+							on:input={handleSlippageInput}
+							on:blur={handleSlippageCommit}
+							on:keydown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
+							class="w-16 rounded border border-white/10 bg-gray-800 px-2 py-1 text-right text-sm text-gray-200 focus:border-yellow-400/50 focus:outline-none {slippageBps > HIGH_SLIPPAGE_WARNING_BPS ? 'border-yellow-500/50 text-yellow-400' : ''}"
+						/>
+						<span class="text-gray-500">%</span>
+					</div>
 				</div>
 				{#if inputMode === 'spend'}
 					<!-- Spend mode: show spending amount first -->
@@ -1146,5 +1183,42 @@
 {:else}
 	<div class="flex h-32 items-center justify-center">
 		<LoadingSpinner size="md" text="Loading..." />
+	</div>
+{/if}
+
+{#if showHighSlippageWarning}
+	<!-- svelte-ignore a11y-click-events-have-key-events -->
+	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+		on:click={cancelHighSlippage}
+	>
+		<div
+			class="mx-4 w-full max-w-sm rounded-lg border border-yellow-500/30 bg-gray-900 p-6 shadow-xl"
+			on:click|stopPropagation
+		>
+			<h3 class="mb-2 text-lg font-semibold text-yellow-400">High slippage warning</h3>
+			<p class="mb-4 text-sm text-gray-300">
+				You are setting slippage tolerance to
+				<span class="font-semibold text-yellow-400"
+					>{pendingHighSlippageBps !== null ? (pendingHighSlippageBps / 100).toFixed(2) : ''}%</span
+				>. This means your order could execute at a price significantly worse than the current market
+				price.
+			</p>
+			<div class="flex gap-3">
+				<button
+					class="flex-1 rounded-lg border border-white/10 bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+					on:click={cancelHighSlippage}
+				>
+					Cancel
+				</button>
+				<button
+					class="flex-1 rounded-lg bg-yellow-500/20 px-4 py-2 text-sm font-medium text-yellow-400 hover:bg-yellow-500/30"
+					on:click={confirmHighSlippage}
+				>
+					I understand, continue
+				</button>
+			</div>
+		</div>
 	</div>
 {/if}
