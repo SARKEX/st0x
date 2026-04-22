@@ -7,7 +7,7 @@
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
-	import { createTokenOrderbookQuotesQuery, prefetchGlobalOrders, refreshTokenQuotes } from '$lib/queries/orderbook';
+	import { createTokenOrderbookQuotesQuery, prefetchGlobalOrders } from '$lib/queries/orderbook';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
@@ -719,25 +719,7 @@
 					symbol: paymentToken.symbol
 				},
 				quotes: sortedQuotes,
-				network: $currentNetwork,
-				refreshQuotes: async () => {
-					try {
-						const freshCache = await refreshTokenQuotes($currentNetwork!.id, selectedToken!.address);
-						return sortQuotesByPrice(
-							filterQuotesForSide(
-								freshCache.quotes,
-								orderSide,
-								selectedToken!.address,
-								paymentToken!.address
-							),
-							orderSide
-						);
-					} catch (e) {
-						console.warn('[QuickTrade] refreshQuotes during trade failed:', e);
-						// Fall back to current quotes
-						return sortedQuotes;
-					}
-				}
+				network: $currentNetwork
 			});
 
 			if (!result.success) {

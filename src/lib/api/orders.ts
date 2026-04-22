@@ -22,14 +22,12 @@ import {
 	normalizeOrderData,
 	buildTokenPriceMap as buildTokenPriceMapBase,
 	type TokenPriceSummary,
-	scaleAmount,
-	walkOrderbook,
-	hexToBigInt
+	walkOrderbook
 } from '$lib/utils/orderbook';
 import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
 
 export type { ProcessedQuote, TokenPriceSummary };
-export { OrderV4_ABI, normalizeOrderData, scaleAmount, walkOrderbook, hexToBigInt };
+export { OrderV4_ABI, normalizeOrderData, walkOrderbook };
 
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
 	buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);

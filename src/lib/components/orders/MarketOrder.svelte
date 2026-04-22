@@ -15,6 +15,7 @@
 	import type { CreateQueryResult } from '@tanstack/svelte-query';
 	import {
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
+		MAX_SLIPPAGE_BPS,
 		executeMarketOrder,
 		filterQuotesForSide,
 		sortQuotesByPrice
@@ -514,7 +515,12 @@
 			slippageInputValue = String(slippageBps / 100);
 			return;
 		}
-		const bps = Math.round(pct * 100);
+		const maxPct = MAX_SLIPPAGE_BPS / 100;
+		const clampedPct = Math.min(pct, maxPct);
+		const bps = Math.round(clampedPct * 100);
+		if (pct > maxPct) {
+			slippageInputValue = String(maxPct);
+		}
 		if (bps > HIGH_SLIPPAGE_WARNING_BPS) {
 			pendingHighSlippageBps = bps;
 			showHighSlippageWarning = true;
@@ -875,11 +881,7 @@
 					symbol: paymentToken.symbol
 				},
 				quotes: filteredQuotes,
-				network: $currentNetwork,
-				refreshQuotes: async () => {
-					await $orderbookQuotesQuery?.refetch?.();
-					return getQuotesWithPriceGuard();
-				}
+				network: $currentNetwork
 			});
 
 			if (!result.success && result.error) {
@@ -917,6 +919,8 @@
 		}
 	};
 </script>
+
+<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && showHighSlippageWarning) cancelHighSlippage(); }} />
 
 {#if $currentNetwork && assetToken}
 	<div class="space-y-4">
