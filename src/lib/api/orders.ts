@@ -110,10 +110,12 @@ function convertApiOrderToProcessedQuote(
 		ratio = ratioFloat.value.asHex();
 	}
 
-	// Convert outputVaultBalance to hex Float for walkOrderbook's computeAvailableQuantity
-	const balanceFloat = Float.parse(order.outputVaultBalance);
-	if (balanceFloat.error || !balanceFloat.value) return null;
-	const maxOutput = balanceFloat.value.asHex();
+	// Use simulated maxOutput from quote (smaller than vault balance for DCA/strategy orders),
+	// falling back to vault balance when quote data is unavailable
+	const maxOutputSource = order.maxOutput || order.outputVaultBalance;
+	const maxOutputFloat = Float.parse(maxOutputSource);
+	if (maxOutputFloat.error || !maxOutputFloat.value) return null;
+	const maxOutput = maxOutputFloat.value.asHex();
 
 	// Get token metadata from config (for symbol fallback)
 	const inputMeta = getTokenMetadata(order.inputToken.address, allTokens);
