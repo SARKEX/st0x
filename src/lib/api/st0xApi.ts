@@ -189,3 +189,25 @@ export async function apiGetTakerTrades(
 	});
 	return fetchJson<ApiTakerTradesResponse>(url);
 }
+
+/**
+ * Fetch trades by token address from the REST API
+ */
+export async function apiGetTradesByToken(
+	tokenAddress: string,
+	page: number = 1,
+	pageSize: number = 200,
+	startTime?: number,
+	endTime?: number
+): Promise<ApiTradesByAddressResponse> {
+	assertBrowser('apiGetTradesByToken');
+	const params = new URLSearchParams({
+		page: String(page),
+		pageSize: String(pageSize)
+	});
+	if (startTime !== undefined) params.set('startTime', String(startTime));
+	if (endTime !== undefined) params.set('endTime', String(endTime));
+	return fetchJson<ApiTradesByAddressResponse>(
+		`/api/st0x/v1/trades/token/${tokenAddress}?${params}`
+	);
+}
