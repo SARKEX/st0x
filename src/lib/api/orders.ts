@@ -132,11 +132,26 @@ function convertApiOrderToProcessedQuote(
 			const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], order.orderBytes);
 			orderData = normalizeOrderData(decoded[0] as OrderV4);
 			sgOrder = { ...sgOrderBase, orderBytes: order.orderBytes } as SgOrder;
-		} catch {
+		} catch (e) {
+			console.warn(`[orders] Failed to decode orderBytes for ${order.orderHash}:`, e);
 			sgOrder = sgOrderBase as SgOrder;
 		}
 	} else {
 		sgOrder = sgOrderBase as SgOrder;
+	}
+
+	// Derive correct IO indexes from decoded orderData by matching token addresses
+	let inputIOIndex = 0;
+	let outputIOIndex = 0;
+	if (orderData) {
+		const inputIdx = (orderData.validInputs as { token: string }[])?.findIndex(
+			(i) => i.token.toLowerCase() === order.inputToken.address.toLowerCase()
+		);
+		const outputIdx = (orderData.validOutputs as { token: string }[])?.findIndex(
+			(o) => o.token.toLowerCase() === order.outputToken.address.toLowerCase()
+		);
+		if (inputIdx >= 0) inputIOIndex = inputIdx;
+		if (outputIdx >= 0) outputIOIndex = outputIdx;
 	}
 
 	const processedQuote: ProcessedQuote = {
@@ -147,8 +162,8 @@ function convertApiOrderToProcessedQuote(
 		outputTokenSymbol: order.outputToken.symbol || outputMeta.symbol,
 		inputTokenAddress: order.inputToken.address,
 		outputTokenAddress: order.outputToken.address,
-		inputIOIndex: 0,
-		outputIOIndex: 0,
+		inputIOIndex,
+		outputIOIndex,
 		sgOrder,
 		orderData,
 		orderbookId: order.orderbookId,

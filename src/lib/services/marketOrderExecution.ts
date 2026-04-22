@@ -220,6 +220,15 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		// Build aggregated take via RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven
 		// route across multiple maker orders (handles split across thin + deep liquidity).
+		// Verify all fills have orderData after hydration
+		const unhydratedFills = walkResult.fills.filter(
+			(f) => !f.quote.orderData || !(f.quote as ProcessedQuote).sgOrder?.orderBytes
+		);
+		if (unhydratedFills.length > 0) {
+			console.warn(
+				`[executeMarketOrder] ${unhydratedFills.length}/${walkResult.fills.length} fills missing orderData after hydration`
+			);
+		}
 		const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
 		if (!firstQuote.orderData || !firstQuote.sgOrder) {
 			return { success: false, error: 'Unable to prepare aggregated order route. Please refresh and retry.' };
