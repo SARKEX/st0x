@@ -159,7 +159,7 @@ const CSP_DIRECTIVES = [
 	"font-src 'self' https://fonts.gstatic.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://cdn.jsdelivr.net data:",
 	"img-src 'self' data: blob: https:",
 	// Tightened connect-src - explicitly list allowed API endpoints
-	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://base.drpc.org https://*.g.alchemy.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com https://st0x-oracle-server.fly.dev https://st0x-oracle.com http://st0x-oracle.com https://rain-oracle-server.fly.dev wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://*.posthog.com https://*.i.posthog.com",
+	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://base.drpc.org https://*.g.alchemy.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com https://st0x-oracle-server.fly.dev https://st0x-oracle.com http://st0x-oracle.com https://rain-oracle-server.fly.dev wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://base-mainnet.g.alchemy.com/v2/s-xoY73sLC1TBGjoi68cG https://*.posthog.com https://*.i.posthog.com",
 	"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://buy.onramper.com https://buy.onramper.dev https://*.tradingview.com https://*.tradingview-widget.com https://app.dynamicauth.com https://*.dynamicauth.com",
 	"frame-ancestors 'none'",
 	"base-uri 'self'",
@@ -266,9 +266,9 @@ function isAdminPath(path: string): boolean {
 function addSecurityHeaders(response: Response): Response {
 	const newHeaders = new Headers(response.headers);
 
-	// Add security headers (don't override existing ones)
+	// Add security headers. Always enforce project CSP to avoid upstream/default CSP conflicts.
 	for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-		if (!newHeaders.has(key)) {
+		if (key === 'Content-Security-Policy' || !newHeaders.has(key)) {
 			newHeaders.set(key, value);
 		}
 	}
@@ -288,9 +288,9 @@ function addSecurityAndCorsHeaders(
 ): Response {
 	const newHeaders = new Headers(response.headers);
 
-	// Add security headers (don't override existing ones)
+	// Add security headers. Always enforce project CSP to avoid upstream/default CSP conflicts.
 	for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-		if (!newHeaders.has(key)) {
+		if (key === 'Content-Security-Policy' || !newHeaders.has(key)) {
 			newHeaders.set(key, value);
 		}
 	}
