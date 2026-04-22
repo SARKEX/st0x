@@ -312,7 +312,7 @@
 						{#if order.type === 'market'}
 							<!-- Market Order Row -->
 							{@const trade = order.trade}
-							{@const txHash = trade?.tradeEvent?.transaction?.id || ''}
+							{@const txHash = order.txHash || trade?.tradeEvent?.transaction?.id || ''}
 							<!-- For market orders: outputAmount = asset received (Buy), inputAmount = asset given (Sell) -->
 							{@const amount = order.side === 'Buy' ? order.outputAmount : order.inputAmount}
 							<tr class="border-b border-white/5 hover:bg-white/5">

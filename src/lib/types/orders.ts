@@ -9,6 +9,7 @@ export type DisplayOrder = {
 	side: 'Buy' | 'Sell';
 	quote?: ProcessedQuote;
 	trade?: SgTrade;
+	txHash?: string;
 	tokenSymbol: string;
 	tokenAddress: string;
 	inputTokenSymbol: string;
