@@ -25,7 +25,7 @@
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK, getTokenByAnyAddress } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
-	import type { SgTrade } from '@rainlanguage/orderbook';
+	import { transformApiMarketOrdersToDisplay } from '$lib/utils/tradeTransform';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -33,7 +33,7 @@
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
-	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import { createTakerTradesQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
 	import { calculatePnL } from '$lib/utils/costBasis';
 	import { manualCostBasisStore, type ManualCostBasisEntry } from '$lib/stores/manualCostBasis';
@@ -42,7 +42,7 @@
 	import transactionStore from '$lib/stores/transaction';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
-	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
+
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	import {
 		getAllOldTokenAddresses,
@@ -925,8 +925,8 @@
 	// Orders: Fetch orderbook quotes for all tokens
 	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 60_000);
 
-	// Trade activity for market orders - poll every 10 minutes, refetch on mount
-	$: tradeActivityQuery = createTradeActivityQuery($currentNetwork, 600_000);
+	// Taker trades for market orders - poll every 10 minutes
+	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);
 
 	// Cost basis query for P&L calculation - one-shot (no polling, refreshes on window focus)
 	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
@@ -934,15 +934,11 @@
 	// Load manual cost basis entries when wallet changes
 	$: manualCostBasisStore.loadForWallet($walletAddress);
 
-	// Filter user's market orders from trades
+	// Transform taker trades into display orders
 	$: userMarketOrders = (() => {
-		if (!$walletAddress || !$tradeActivityQuery.data?.trades) return [];
-		const normalizedSender = $walletAddress.toLowerCase();
-
-		return $tradeActivityQuery.data.trades.filter((trade: SgTrade) => {
-			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
-			return tradeSender === normalizedSender;
-		});
+		const orders = $takerTradesQuery?.data?.marketOrders;
+		if (!orders?.length || !$currentNetwork) return [];
+		return transformApiMarketOrdersToDisplay(orders, $currentNetwork.chainId);
 	})();
 
 	// Combined orders (limit + market)
@@ -985,14 +981,9 @@
 			}
 		}
 
-		// Add market orders (trades)
-		for (const trade of userMarketOrders) {
-			const chainId = $currentNetwork?.chainId;
-			if (!chainId) continue;
-			const displayOrder = transformTradeToDisplayOrder(trade, { chainId });
-			if (displayOrder) {
-				displayOrders.push(displayOrder);
-			}
+		// Add market orders (from REST API taker trades)
+		for (const order of userMarketOrders) {
+			displayOrders.push(order);
 		}
 
 		// Filter to only valid tokens, then sort by timestamp descending
@@ -1718,7 +1709,7 @@
 					<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Your Orders</h2>
 					<OrdersTable
 						orders={allOrders}
-						isLoading={$orderbookQuotesQuery.isLoading || $tradeActivityQuery.isLoading}
+						isLoading={$orderbookQuotesQuery.isLoading || $takerTradesQuery.isLoading}
 						isError={$orderbookQuotesQuery.isError}
 						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
 						showOwnerFilter={false}
