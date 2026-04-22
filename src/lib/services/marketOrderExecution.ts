@@ -45,9 +45,15 @@ function humanPriceCapStr(
 	ratioMultiplier: string,
 	fallbackEmergencyRatioHex: `0x${string}`
 ): string {
-	const mult = Number(ratioMultiplier);
-	if (Number.isFinite(worstFillPrice) && worstFillPrice > 0 && Number.isFinite(mult) && mult > 0) {
-		return String(worstFillPrice * mult);
+	if (Number.isFinite(worstFillPrice) && worstFillPrice > 0) {
+		const price = Float.parse(String(worstFillPrice));
+		const multiplier = Float.parse(ratioMultiplier);
+		if (!price.error && price.value && !multiplier.error && multiplier.value) {
+			const capped = price.value.mul(multiplier.value);
+			if (!capped.error && capped.value) {
+				return String(capped.value.format().value ?? '1');
+			}
+		}
 	}
 	const emergencyFloat = Float.fromHex(fallbackEmergencyRatioHex);
 	return String(emergencyFloat.value?.format().value ?? '1');

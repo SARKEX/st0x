@@ -239,6 +239,19 @@ function sumBigints(values: bigint[] | undefined): bigint {
 	return values.reduce((acc, value) => acc + value, 0n);
 }
 
+function floatFromAmountWei(amountWei: bigint, decimals: number) {
+	return Float.fromFixedDecimalLossy(amountWei, decimals).float;
+}
+
+function divideAmountFloats(numeratorWei: bigint, numeratorDecimals: number, denominatorWei: bigint, denominatorDecimals: number): number {
+	if (denominatorWei <= 0n) return 0;
+	const numeratorFloat = floatFromAmountWei(numeratorWei, numeratorDecimals);
+	const denominatorFloat = floatFromAmountWei(denominatorWei, denominatorDecimals);
+	const ratio = numeratorFloat.div(denominatorFloat);
+	if (ratio.error || !ratio.value) return 0;
+	return Number(ratio.value.format().value ?? '0');
+}
+
 function deriveTakeRequestAmountWei(
 	mode: TakeOrdersMode,
 	params: TakeOrdersParams
@@ -1393,20 +1406,15 @@ const transactionStore = () => {
 			);
 		}
 
-		const actualIoRatio =
-			totalOutputAmount > 0n
-				? parseFloat(formatUnits(totalInputAmount, inputTokenDecimals)) /
-					parseFloat(formatUnits(totalOutputAmount, outputTokenDecimals))
-				: 0;
+		const actualIoRatio = divideAmountFloats(
+			totalInputAmount,
+			inputTokenDecimals,
+			totalOutputAmount,
+			outputTokenDecimals
+		);
 
 		const requestedInputAmount = params.requestedTakerWantsAmount;
-		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
-		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
-
-		let isNoFill = false;
-		if (inputRequestedDecimal <= 0) {
-			isNoFill = true;
-		}
+		const isNoFill = totalInputAmount <= 0n;
 
 		// Partial fill: bigint ratio only. Below ~99.7% of requested ⇒ partial (execution haircut is 0; allow subgraph noise).
 		const MARKET_ORDER_FULL_FILL_THRESHOLD_BPS = 9970n;
