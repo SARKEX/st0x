@@ -29,6 +29,7 @@ export interface ApiOrderSummary {
 	inputToken: ApiTokenRef;
 	outputToken: ApiTokenRef;
 	outputVaultBalance: string;
+	maxOutput: string;
 	ioRatio: string;
 	createdAt: number;
 	orderbookId: string;
