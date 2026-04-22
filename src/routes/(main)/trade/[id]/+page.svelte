@@ -45,9 +45,8 @@
 		refreshLegacyTokenQuotes,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
-	import { getTrades } from '$lib/api/subgraph';
 	import type { QueryObserverResult } from '@tanstack/query-core';
-	import { createTradeActivityQuery } from '$lib/queries/tradeActivity';
+	import { createTokenTradeActivityQuery, type TokenTradeActivityPayload } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
@@ -87,34 +86,15 @@
 		$currentNetwork,
 		currentToken?.address ?? null
 	);
-	let tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+	let tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: {
 		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
 			$currentNetwork,
 			currentToken?.address ?? null
 		);
-		tradeActivityQuery = createTradeActivityQuery($currentNetwork);
+		tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
-	}
-
-	// One-shot: fetch trades from inactive subgraph(s) once for trade history
-	let inactiveTrades: SgTrade[] = [];
-	let inactiveTradesFetchedForNetwork: number | null = null;
-	$: if (browser && $currentNetwork && inactiveTradesFetchedForNetwork !== $currentNetwork.id) {
-		const net = $currentNetwork;
-		if (net.orderbook_subgraph_urls_inactive?.length) {
-			inactiveTradesFetchedForNetwork = net.id;
-			const now = Math.floor(Date.now() / 1000);
-			const from = now - TRADE_HISTORY_LOOKBACK_SECONDS;
-			getTrades(from, now, net, true)
-				.then((trades) => {
-					inactiveTrades = trades;
-				})
-				.catch(() => {
-					inactiveTrades = [];
-				});
-		}
 	}
 
 	// One-shot: fetch legacy address quotes once per token
@@ -129,25 +109,8 @@
 		refreshLegacyTokenQuotes($currentNetwork.id, currentToken.address).catch(() => {});
 	}
 
-	// Filter trades from tradeActivityQuery to get user's market orders
-	$: userMarketOrders = (() => {
-		if (!$walletAddress || !currentToken?.address || !$tradeActivityQuery.data?.trades) {
-			return [];
-		}
-		const normalizedSender = $walletAddress.toLowerCase();
-		const normalizedToken = currentToken.address.toLowerCase();
-
-		return $tradeActivityQuery.data.trades.filter((trade: SgTrade) => {
-			// Check if user is the sender (taker)
-			const tradeSender = trade.tradeEvent?.sender?.toLowerCase();
-			if (tradeSender !== normalizedSender) return false;
-
-			// Check if trade involves the current token
-			const inputTokenAddr = trade.inputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-			const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
-			return inputTokenAddr === normalizedToken || outputTokenAddr === normalizedToken;
-		});
-	})();
+	// User market orders are tracked separately via the taker trades endpoint
+	$: userMarketOrders = [] as SgTrade[];
 
 	// Transform quotes and market orders into DisplayOrder format for OrdersTable
 	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
@@ -695,46 +658,59 @@
 		if (!browser || !currentToken || !$currentNetwork) return [];
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return [];
-		// Use wrapped address as the primary asset address for trade matching
-		// (currentToken.address from subgraph is the unwrapped address, but
-		// orderbook trades use the wrapped token address)
 		const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
-		const quoteAddress = settlementToken.address;
+		const quoteAddress = settlementToken.address?.toLowerCase();
 		if (!assetAddress || !quoteAddress) return [];
 		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
 		const quoteDecimals = Number(settlementToken.decimals ?? 6);
-		const range = $tradeActivityQuery?.data?.range ?? null;
+		const range = $tokenTradeQuery?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
 		const rangeEnd = range ? range.to * 1000 : now;
-		// TODO: Display range label in UI if needed
-		// Possible values: "Last X days", "Last 24 hours", "Recent activity", or "Last 30 days"
-		const activeTrades = ($tradeActivityQuery?.data?.trades ?? []) as SgTrade[];
-		// Merge active + inactive trades, dedup by trade ID
-		const tradeIdSet = new Set<string>();
-		const trades: SgTrade[] = [];
-		for (const trade of [...activeTrades, ...inactiveTrades]) {
-			const id = trade.id;
-			if (id && !tradeIdSet.has(id)) {
-				tradeIdSet.add(id);
-				trades.push(trade);
-			}
-		}
-		// Collect points for all address variants (wrapped from new orderbook + legacy from old)
+		const trades = $tokenTradeQuery?.data?.trades ?? [];
+
 		const points: TradeHistoryPoint[] = [];
-		for (const addr of assetAddressSet) {
-			for (const trade of trades) {
-				const point = tradeToPoint(trade, addr, assetDecimals, {
-					address: quoteAddress,
-					decimals: quoteDecimals,
-					symbol: settlementToken.symbol || ''
-				});
-				if (point && point.timestamp >= cutoff && point.timestamp <= rangeEnd) {
-					points.push(point);
-				}
+		for (const trade of trades) {
+			const timestamp = trade.timestamp * 1000;
+			if (timestamp < cutoff || timestamp > rangeEnd) continue;
+
+			const inputAddr = trade.inputToken?.address?.toLowerCase();
+			const outputAddr = trade.outputToken?.address?.toLowerCase();
+
+			// Determine which side is the asset and which is the quote
+			let tokens = 0;
+			let quote = 0;
+			let price = 0;
+			let side: 'bid' | 'ask' = 'bid';
+
+			const inputAmount = parseFloat(trade.inputAmount);
+			const outputAmount = parseFloat(trade.outputAmount);
+
+			if (assetAddressSet.has(inputAddr ?? '') && outputAddr === quoteAddress) {
+				// Asset is input (received by order), quote is output (given by order)
+				// Order receives asset and gives quote = bid
+				tokens = Math.abs(inputAmount);
+				quote = Math.abs(outputAmount);
+				side = 'bid';
+			} else if (assetAddressSet.has(outputAddr ?? '') && inputAddr === quoteAddress) {
+				// Asset is output (given by order), quote is input (received by order)
+				// Order gives asset and receives quote = ask
+				tokens = Math.abs(outputAmount);
+				quote = Math.abs(inputAmount);
+				side = 'ask';
+			} else {
+				continue; // Trade doesn't involve this token pair
 			}
+
+			if (tokens > 0) {
+				price = quote / tokens;
+			}
+			if (!Number.isFinite(price) || price <= 0) continue;
+
+			points.push({ timestamp, price, tokens, quote, side });
 		}
-		// Deduplicate by timestamp (same trade matched via different address variants)
+
+		// Deduplicate by timestamp+price+tokens
 		const seen = new Set<string>();
 		return points
 			.filter((p) => {
@@ -834,7 +810,7 @@
 		return { bids, asks };
 	})();
 	$: {
-		const tradeResource = $tradeActivityQuery;
+		const tradeResource = $tokenTradeQuery;
 		const tradeStatus = tradeResource?.status ?? 'pending';
 		const tradeHasData = (tradeResource?.data?.trades?.length ?? 0) > 0;
 		const tradeLoading = (tradeResource?.isPending ?? tradeStatus === 'pending') && !tradeHasData;
