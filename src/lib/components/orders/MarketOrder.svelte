@@ -14,6 +14,7 @@
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import type { CreateQueryResult } from '@tanstack/svelte-query';
 	import {
+		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		executeMarketOrder,
 		filterQuotesForSide,
 		sortQuotesByPrice
@@ -46,6 +47,12 @@
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
+	const SLIPPAGE_OPTIONS_BPS: number[] = [50, 100, 200, 300];
+	let slippageBps = DEFAULT_MARKET_ORDER_SLIPPAGE_BPS;
+
+	function formatSlippageLabel(bpsValue: number): string {
+		return `${(bpsValue / 100).toFixed(bpsValue % 100 === 0 ? 0 : 1)}%`;
+	}
 
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
@@ -490,6 +497,13 @@
 		}
 	};
 
+	function handleSlippageChange(event: Event) {
+		const target = event.currentTarget;
+		if (!(target instanceof HTMLSelectElement)) return;
+		const next = Number(target.value);
+		if (Number.isFinite(next)) slippageBps = next;
+	}
+
 	// Calculate how much asset can be bought for a given payment amount using actual orderbook prices
 	function calculateAssetAmountForSpend(
 		paymentAmount: bigint,
@@ -815,6 +829,7 @@
 				orderSide,
 				amount: selectedAmount,
 				inputMode,
+				slippageBps,
 				assetToken: {
 					address: assetToken.address,
 					decimals: assetToken.decimals,
@@ -1001,6 +1016,19 @@
 		<div class={containerStyles.cardBordered}>
 			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 			<div class="space-y-2 text-sm">
+				<div class="flex items-center justify-between">
+					<label for="market-slippage" class="text-gray-400">Slippage tolerance</label>
+					<select
+						id="market-slippage"
+						value={String(slippageBps)}
+						on:change={handleSlippageChange}
+						class="rounded border border-white/10 bg-gray-800 px-2 py-1 text-sm text-gray-200 focus:border-yellow-400/50 focus:outline-none"
+					>
+						{#each SLIPPAGE_OPTIONS_BPS as bps (bps)}
+							<option value={String(Number(bps))}>{formatSlippageLabel(Number(bps))}</option>
+						{/each}
+					</select>
+				</div>
 				{#if inputMode === 'spend'}
 					<!-- Spend mode: show spending amount first -->
 					<div class="flex justify-between">

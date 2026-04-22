@@ -29,7 +29,9 @@ import { getSignerAddress } from '$lib/services/walletService';
 
 // Safety bounds for market order execution
 const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
-const BUY_EXACT_RATIO_MULTIPLIER = '1.01'; // tighter cap for buy-exact to avoid oversized approvals
+const MIN_SLIPPAGE_BPS = 1;
+const MAX_SLIPPAGE_BPS = 5_000;
+export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = 100;
 /**
  * `getTakeOrdersCalldata` / oracle take helpers expect `priceCap` as a **human** decimal:
  * max sell (payment token) per 1 buy (asset token) for typical buy flows — i.e. the same units as
@@ -75,6 +77,8 @@ export interface MarketOrderInput {
 	amount: bigint;
 	/** 'amount' = specify asset quantity, 'spend' = specify payment amount (Buy only) */
 	inputMode?: 'amount' | 'spend';
+	/** User-configurable slippage in basis points (100 = 1%). */
+	slippageBps?: number;
 
 	// Tokens
 	assetToken: TokenInfo;
@@ -93,6 +97,11 @@ export interface MarketOrderInput {
 export interface MarketOrderResult {
 	success: boolean;
 	error?: string;
+}
+
+function clampSlippageBps(slippageBps: number): number {
+	if (!Number.isFinite(slippageBps)) return DEFAULT_MARKET_ORDER_SLIPPAGE_BPS;
+	return Math.max(MIN_SLIPPAGE_BPS, Math.min(MAX_SLIPPAGE_BPS, Math.round(slippageBps)));
 }
 
 function getQuoteMakerAddress(quote: ProcessedQuote): string | null {
@@ -123,6 +132,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		orderSide,
 		amount,
 		inputMode = 'amount',
+		slippageBps = DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		assetToken,
 		paymentToken,
 		quotes,
@@ -162,8 +172,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
 		const isBuy = orderSide === 'Buy';
-		const ratioMultiplier =
-			isBuy && inputMode !== 'spend' ? BUY_EXACT_RATIO_MULTIPLIER : EMERGENCY_RATIO_MULTIPLIER;
+		const effectiveSlippageBps = clampSlippageBps(slippageBps);
+		const ratioMultiplier = isBuy
+			? String(1 + effectiveSlippageBps / 10_000)
+			: EMERGENCY_RATIO_MULTIPLIER;
 		const emergencyRatioHex = computeEmergencyRatioHex(
 			worstFill.quote.ratio as `0x${string}`,
 			ratioMultiplier
