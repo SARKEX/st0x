@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { hexToBigInt, buildTokenPriceMap, type ProcessedQuote } from '$lib/api/orders';
+import { hexToBigInt } from '$lib/utils/orderbook';
+import { buildTokenPriceMap, type ProcessedQuote } from '$lib/api/orders';
 import * as tokenMath from '$lib/utils/tokenMath';
 
 // Helper to convert bigint to hex-encoded Float string for tests

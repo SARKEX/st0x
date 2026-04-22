@@ -10,7 +10,7 @@ import {
 	type ProcessedQuote,
 	walkOrderbook
 } from '$lib/api/orders';
-import { createRaindexClient } from '$lib/clients/raindex';
+import { getLoadBalancedClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
 import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 import {
@@ -30,7 +30,7 @@ import { getSignerAddress } from '$lib/services/walletService';
 // Safety bounds for market order execution
 const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
 const MIN_SLIPPAGE_BPS = 1;
-const MAX_SLIPPAGE_BPS = 5_000;
+export const MAX_SLIPPAGE_BPS = 5_000;
 export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = 100;
 /**
  * `getTakeOrdersCalldata` / oracle take helpers expect `priceCap` as a **human** decimal:
@@ -90,8 +90,6 @@ export interface MarketOrderInput {
 	// Network
 	network: Network;
 
-	// Optional: callback to refresh quotes (for recalculation after approval)
-	refreshQuotes?: () => Promise<ProcessedQuote[]>;
 }
 
 export interface MarketOrderResult {
@@ -136,8 +134,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		assetToken,
 		paymentToken,
 		quotes,
-		network,
-		refreshQuotes
+		network
 	} = input;
 
 	try {
@@ -194,33 +191,38 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			.map((f) => f.quote as ProcessedQuote)
 			.filter((q) => !q.orderData || !q.sgOrder?.orderBytes);
 		if (quotesToHydrate.length > 0) {
-			const client = await createRaindexClient();
+			const client = await getLoadBalancedClient(network);
 			const uniqueHashes = [...new Set(quotesToHydrate.map((q) => q.orderHash))];
-			for (const hash of uniqueHashes) {
-				try {
-					const ordersResult = await client.getOrders(
-						[network.id],
-						{ orderHash: hash as `0x${string}`, owners: [] },
-						1
-					);
-					if (ordersResult.error || !ordersResult.value?.orders.length) continue;
-					const raindexOrder = ordersResult.value.orders[0];
-					const sgResult = raindexOrder.convertToSgOrder();
-					if (sgResult.error || !sgResult.value) continue;
-					const sgOrder = sgResult.value;
-					const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
-					const orderData = normalizeOrderData(decoded[0] as OrderV4);
-					for (const fill of walkResult.fills) {
-						if (fill.quote.orderHash === hash) {
-							fill.quote.sgOrder = sgOrder;
-							fill.quote.orderData = orderData;
-							fill.quote.raindexOrder = raindexOrder as unknown as RaindexOrder;
+			await Promise.all(
+				uniqueHashes.map(async (hash) => {
+					try {
+						const ordersResult = await client.getOrders(
+							[network.id],
+							{ orderHash: hash as `0x${string}`, owners: [] },
+							1
+						);
+						if (ordersResult.error || !ordersResult.value?.orders.length) return;
+						const raindexOrder = ordersResult.value.orders[0];
+						const sgResult = raindexOrder.convertToSgOrder();
+						if (sgResult.error || !sgResult.value) return;
+						const sgOrder = sgResult.value;
+						const decoded = AbiCoder.defaultAbiCoder().decode(
+							[OrderV4_ABI],
+							sgOrder.orderBytes
+						);
+						const orderData = normalizeOrderData(decoded[0] as OrderV4);
+						for (const fill of walkResult.fills) {
+							if (fill.quote.orderHash === hash) {
+								fill.quote.sgOrder = sgOrder;
+								fill.quote.orderData = orderData;
+								fill.quote.raindexOrder = raindexOrder as unknown as RaindexOrder;
+							}
 						}
+					} catch (e) {
+						console.warn(`[executeMarketOrder] Failed to hydrate order ${hash}:`, e);
 					}
-				} catch (e) {
-					console.warn(`[executeMarketOrder] Failed to hydrate order ${hash}:`, e);
-				}
-			}
+				})
+			);
 		}
 
 		// Build aggregated take via RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven

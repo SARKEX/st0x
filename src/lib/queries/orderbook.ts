@@ -148,6 +148,14 @@ export async function refreshTokenQuotes(
 	const quotes = await fetchAndQuoteTokenOrders(networkId, primaryAddress);
 	const summary = buildSummaryFromQuotes(quotes, networkId);
 
+	const result = { summary, quotes };
+
+	// Write to token-specific cache so freshness checks work on next call
+	queryClient.setQueryData<OrderbookQuoteCache>(
+		['tokenOrderbookQuotes', networkId, tokenAddress],
+		result
+	);
+
 	// Merge into global cache
 	const globalCache = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
 	// Only evict quotes for the primary address we just re-fetched, preserving legacy quotes
@@ -171,7 +179,7 @@ export async function refreshTokenQuotes(
 		});
 	}
 
-	return { summary, quotes };
+	return result;
 }
 
 /**
@@ -308,6 +316,6 @@ export async function prefetchGlobalOrders(networkId: number) {
 			const summary = buildSummaryFromQuotes(quotes, networkId);
 			return { summary, quotes };
 		},
-		staleTime: Infinity
+		staleTime: 30_000
 	});
 }

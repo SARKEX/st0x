@@ -79,11 +79,13 @@ async function getRegistry(): Promise<DotrainRegistryInstance> {
 			const DotrainRegistry = await getDotrainRegistry();
 			const result = await DotrainRegistry.new(REGISTRY_URL);
 			if (result.error) {
-				registryPromise = null;
 				throw new Error(result.error.readableMsg);
 			}
 			return result.value;
-		})();
+		})().catch((err) => {
+			registryPromise = null;
+			throw err;
+		});
 	}
 	return registryPromise;
 }

@@ -25,7 +25,7 @@ export interface ApiTokenRef {
 export interface ApiOrderSummary {
 	orderHash: string;
 	owner: string;
-	orderBytes: string;
+	orderBytes?: string;
 	inputToken: ApiTokenRef;
 	outputToken: ApiTokenRef;
 	outputVaultBalance: string;
@@ -73,24 +73,6 @@ export interface ApiTradesPagination {
 export interface ApiTradesByAddressResponse {
 	trades: ApiTradeByAddress[];
 	pagination: ApiTradesPagination;
-}
-
-export interface ApiOrderTradeEntry {
-	id: string;
-	txHash: string;
-	inputAmount: string;
-	outputAmount: string;
-	timestamp: number;
-	sender: string;
-}
-
-export interface ApiTradesBatchEntry {
-	orderHash: string;
-	trades: ApiOrderTradeEntry[];
-}
-
-export interface ApiTradesBatchResponse {
-	orders: ApiTradesBatchEntry[];
 }
 
 export interface ApiTradeRequest {
@@ -173,33 +155,6 @@ export async function apiGetOrdersByToken(
 		side: options?.side
 	});
 	return fetchJson<ApiOrdersListResponse>(url);
-}
-
-/**
- * Fetch orders by owner address from the REST API
- */
-export async function apiGetOrdersByOwner(
-	ownerAddress: string,
-	options?: { page?: number; pageSize?: number }
-): Promise<ApiOrdersListResponse> {
-	assertBrowser('apiGetOrdersByOwner');
-	const url = apiUrl(`/v1/orders/owner/${ownerAddress}`, {
-		page: options?.page,
-		pageSize: options?.pageSize
-	});
-	return fetchJson<ApiOrdersListResponse>(url);
-}
-
-/**
- * Fetch trades for multiple orders in a single request
- */
-export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTradesBatchResponse> {
-	assertBrowser('apiGetTradesBatch');
-	return fetchJson<ApiTradesBatchResponse>(apiUrl('/v1/trades/batch'), {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ orderHashes })
-	});
 }
 
 /**
