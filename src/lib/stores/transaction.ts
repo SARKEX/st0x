@@ -1513,6 +1513,14 @@ const transactionStore = () => {
 			const sdkMsg = calldataWrapped.error?.readableMsg;
 			console.log(`${TX_LOG_PREFIX} SDK error`, { msg: sdkMsg, request: takeRequest });
 			if (sdkMsg) {
+				// For maker-leg simulation/revert failures (e.g. "Min trade amount"),
+				// fall back to per-order execution so leg-level reroute can continue.
+				if (isSkippableMakerLegError(sdkMsg)) {
+					console.log(`${TX_LOG_PREFIX} falling back to per-order flow for skippable SDK error`, {
+						msg: sdkMsg
+					});
+					return false;
+				}
 				transactionError(sdkMsg as TransactionErrorMessage);
 				return true;
 			}
@@ -1532,9 +1540,16 @@ const transactionStore = () => {
 			await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 			calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: false });
 			if (calldataWrapped.error || !calldataWrapped.value) {
+				const msg =
+					calldataWrapped.error?.readableMsg || 'Failed to prepare order after approval';
+				if (isSkippableMakerLegError(msg)) {
+					console.log(`${TX_LOG_PREFIX} falling back to per-order flow after approval`, {
+						msg
+					});
+					return false;
+				}
 				transactionError(
-					(calldataWrapped.error?.readableMsg ||
-						'Failed to prepare order after approval') as TransactionErrorMessage
+					msg as TransactionErrorMessage
 				);
 				return true;
 			}
@@ -2076,27 +2091,29 @@ const transactionStore = () => {
 			const cfg0 = finalConfig.orders[0];
 			if (cfg0) {
 				const fill0 = params.orderFillAmounts?.[0] ?? 0n;
-				const amountStr0 = String(
-					Float.fromFixedDecimalLossy(fill0, fillDecimals).float.format().value ?? '0'
-				);
-				const probe = await order0.getTakeCalldata(
-					Number(cfg0.inputIOIndex),
-					Number(cfg0.outputIOIndex),
-					$signerAddress,
-					mode,
-					amountStr0,
-					priceCapStr
-				);
-				const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
-					?.approvalInfo?.calldata;
-				if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
-					await ensureBulkPayerAllowanceIfNeeded({
-						requiredWei: requiredApprovalAmount,
-						payerToken: approvalTokenAddress as `0x${string}`,
-						symbol: approvalTokenSymbol,
-						owner: $signerAddress as `0x${string}`,
-						probeApprovalCalldata: probePayload as Hex,
-					});
+				if (fill0 > 0n) {
+					const amountStr0 = String(
+						Float.fromFixedDecimalLossy(fill0, fillDecimals).float.format().value ?? '0'
+					);
+					const probe = await order0.getTakeCalldata(
+						Number(cfg0.inputIOIndex),
+						Number(cfg0.outputIOIndex),
+						$signerAddress,
+						mode,
+						amountStr0,
+						priceCapStr
+					);
+					const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
+						?.approvalInfo?.calldata;
+					if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
+						await ensureBulkPayerAllowanceIfNeeded({
+							requiredWei: requiredApprovalAmount,
+							payerToken: approvalTokenAddress as `0x${string}`,
+							symbol: approvalTokenSymbol,
+							owner: $signerAddress as `0x${string}`,
+							probeApprovalCalldata: probePayload as Hex,
+						});
+					}
 				}
 			}
 		}
@@ -2114,6 +2131,15 @@ const transactionStore = () => {
 			const batchLabel = isMultiBatch ? ` (${orderIndex + 1}/${ordersToExecute.length})` : '';
 			const baseFillAmount = params.orderFillAmounts?.[orderIndex] ?? 0n;
 			let fillAmount = baseFillAmount + carryForwardFillAmount;
+			if (fillAmount <= 0n) {
+				console.log(`${TX_LOG_PREFIX} Skipping zero-size leg`, {
+					orderIndex,
+					orderHash: orderToExecute.orderHash,
+					baseFillAmount: baseFillAmount.toString(),
+					carryForwardFillAmount: carryForwardFillAmount.toString()
+				});
+				continue;
+			}
 			let amountStr = String(
 				Float.fromFixedDecimalLossy(fillAmount, fillDecimals).float.format().value ?? '0'
 			);
@@ -2251,6 +2277,22 @@ const transactionStore = () => {
 							);
 							continue;
 						}
+						if (isSkippableMakerLegError(readyCalldataResult.error?.readableMsg)) {
+							if (allTransactionHashes.length > 0) {
+								console.log(
+									`${TX_LOG_PREFIX} Last leg failed with skippable error; finalizing executed partial fills`,
+									{
+										orderIndex,
+										totalOrders: ordersToExecute.length,
+										error: readyCalldataResult.error?.readableMsg
+									}
+								);
+								return pollAndFinalizeTakeOrders(allTransactionHashes, raindexOrder, params, network);
+							}
+							return transactionError(
+								'No executable maker liquidity at this size. Try a larger amount or refresh quotes.' as TransactionErrorMessage
+							);
+						}
 						return transactionError(
 							(readyCalldataResult.error?.readableMsg ||
 								'Failed to generate transaction calldata') as TransactionErrorMessage
@@ -2319,6 +2361,22 @@ const transactionStore = () => {
 						})
 					);
 					continue;
+				}
+				if (isSkippableMakerLegError(errorMessage)) {
+					if (allTransactionHashes.length > 0) {
+						console.log(
+							`${TX_LOG_PREFIX} Last tx leg failed with skippable error; finalizing executed partial fills`,
+							{
+								orderIndex,
+								totalOrders: ordersToExecute.length,
+								error: errorMessage
+							}
+						);
+						return pollAndFinalizeTakeOrders(allTransactionHashes, raindexOrder, params, network);
+					}
+					return transactionError(
+						'No executable maker liquidity at this size. Try a larger amount or refresh quotes.' as TransactionErrorMessage
+					);
 				}
 
 				// Check for insufficient allowance error and provide helpful message

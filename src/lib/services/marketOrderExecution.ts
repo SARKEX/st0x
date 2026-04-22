@@ -226,25 +226,50 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		const maximumIORatioHex = getMaximumIORatioHex(emergencyRatioHex);
 
-		// 2. Build order info from fills
+		// 2. Build order info for fallback execution.
+		// Include ordered quote candidates (not only initially-filled legs) so
+		// per-order flow can reroute to the next maker if the first leg becomes non-executable.
 		const orderInfoMap = new Map<string, OrderInfo>();
+		const fillAmountByOrderHash = new Map<string, bigint>();
+		for (const quote of orderedQuotes) {
+			const orderHash = quote.orderHash;
+			if (!orderHash || orderInfoMap.has(orderHash)) continue;
+			if (!quote.orderData || !quote.sgOrder || !quote.raindexOrder) continue;
+
+			orderInfoMap.set(orderHash, {
+				order: quote.sgOrder as SgOrder,
+				orderData: quote.orderData as OrderV4,
+				quotes: quote.signedContext ? [{ signedContext: quote.signedContext } as RaindexOrderQuote] : [],
+				price: quote.quotePerAsset ?? 0,
+				inputIOIndex: quote.inputIOIndex ?? 0,
+				outputIOIndex: quote.outputIOIndex ?? 0,
+				raindexOrder: quote.raindexOrder
+			});
+		}
 		for (const fill of walkResult.fills) {
 			const orderHash = fill.quote.orderHash;
 			if (!orderInfoMap.has(orderHash)) {
 				orderInfoMap.set(orderHash, {
 					order: fill.quote.sgOrder as SgOrder,
 					orderData: fill.quote.orderData as OrderV4,
-					quotes: [],
+					quotes: fill.quote.signedContext ? [{ signedContext: fill.quote.signedContext } as RaindexOrderQuote] : [],
 					price: fill.price,
 					inputIOIndex: fill.quote.inputIOIndex ?? 0,
 					outputIOIndex: fill.quote.outputIOIndex ?? 0,
 					raindexOrder: fill.quote.raindexOrder
 				});
 			}
+			const fillContribution =
+				orderSide === 'Buy' && inputMode === 'spend' ? fill.paymentAmount : fill.assetAmount;
+			fillAmountByOrderHash.set(
+				orderHash,
+				(fillAmountByOrderHash.get(orderHash) ?? 0n) + fillContribution
+			);
 		}
 
-		// 3. Hydrate orders from Raindex to get full order data
-		const client = await createRaindexClient();
+		// 3. Ensure we have hydrated Raindex order objects for per-order fallback execution.
+		// createRaindexClient() remains intentionally called here to keep SDK initialization warm.
+		await createRaindexClient();
 
 		// 3a. Prefer RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven route across
 		// multiple maker orders (matches “split” across thin + deep liquidity).
@@ -317,10 +342,54 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			isBuy ? paymentToken.symbol : assetToken.symbol
 		);
 		if (!aggregatedHandled) {
-			return {
-				success: false,
-				error: 'Unable to prepare aggregated order transaction. Please refresh quotes and retry.'
+			console.log('[executeMarketOrder] Aggregated path unavailable; falling back to per-order execution');
+			const orderEntries = Array.from(orderInfoMap.values());
+			const ordersConfig: TakeOrderConfigV4[] = [];
+			const raindexOrders: RaindexOrder[] = [];
+			const orderFillAmounts: bigint[] = [];
+
+			for (const orderInfo of orderEntries) {
+				if (!orderInfo.raindexOrder) {
+					return {
+						success: false,
+						error: 'Unable to hydrate maker order route. Please refresh quotes and retry.'
+					};
+				}
+
+				ordersConfig.push({
+					order: orderInfo.orderData,
+					inputIOIndex: String(orderInfo.inputIOIndex),
+					outputIOIndex: String(orderInfo.outputIOIndex),
+					signedContext: []
+				});
+				raindexOrders.push(orderInfo.raindexOrder);
+				orderFillAmounts.push(fillAmountByOrderHash.get(orderInfo.order.orderHash) ?? 0n);
+			}
+
+			const maximumIO = Float.fromFixedDecimalLossy(amount, amountDecimals);
+			const fallbackConfig: TakeOrdersConfigV5 = {
+				minimumIO: MINIMUM_IO,
+				maximumIO: maximumIO.float.asHex(),
+				maximumIORatio: maximumIORatioHex,
+				IOIsInput: (mode === 'buyUpTo') as unknown as string,
+				orders: ordersConfig,
+				data: '0x'
 			};
+			const fallbackParams: TakeOrdersParams = {
+				...aggregatedParams,
+				orderFillAmounts,
+				orderFillDecimals:
+					mode === 'buyUpTo' ? aggregatedParams.takerWantsToken.decimals : aggregatedParams.takerPaysToken.decimals
+			};
+			const requiredApprovalAmount = walkResult.outputAmountGiven;
+			await transactionStore.handleTakeOrders(
+				fallbackConfig,
+				firstQuote.sgOrder as SgOrder,
+				requiredApprovalAmount,
+				fallbackParams,
+				undefined,
+				raindexOrders
+			);
 		}
 		const { status, error: txError } = get(transactionStore);
 		if (status === TransactionStatus.SUCCESS) {
