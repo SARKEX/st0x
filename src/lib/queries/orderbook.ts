@@ -1,4 +1,5 @@
 import { createQuery } from '@tanstack/svelte-query';
+import { browser } from '$app/environment';
 import type { Network } from '$lib/config/network';
 import {
 	fetchAndQuotePaymentTokenOrders,
@@ -66,7 +67,7 @@ export function createOrderbookQuotesQuery(
 ) {
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['orderbookQuotes', network?.id],
-		enabled: Boolean(network),
+		enabled: Boolean(browser && network),
 		staleTime: 30_000, // Stale after 30s (server caches at 15s)
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
@@ -243,7 +244,7 @@ export function createTokenOrderbookQuotesQuery(
 ) {
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
-		enabled: Boolean(network && tokenAddress),
+		enabled: Boolean(browser && network && tokenAddress),
 		staleTime: 30_000, // Stale after 30s (server caches at 15s)
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),

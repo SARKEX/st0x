@@ -16,10 +16,7 @@ import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 import {
 	type OrderV4,
 	type RaindexOrder,
-	type RaindexOrderQuote,
 	type SgOrder,
-	type TakeOrderConfigV4,
-	type TakeOrdersConfigV5,
 	type TakeOrdersMode,
 	type TakeOrdersRequest
 } from '@rainlanguage/orderbook';
@@ -33,8 +30,6 @@ import { getSignerAddress } from '$lib/services/walletService';
 // Safety bounds for market order execution
 const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
 const BUY_EXACT_RATIO_MULTIPLIER = '1.01'; // tighter cap for buy-exact to avoid oversized approvals
-const MINIMUM_IO = Float.fromBigint(0n).asHex();
-
 /**
  * `getTakeOrdersCalldata` / oracle take helpers expect `priceCap` as a **human** decimal:
  * max sell (payment token) per 1 buy (asset token) for typical buy flows — i.e. the same units as
@@ -51,33 +46,6 @@ function humanPriceCapStr(
 	}
 	const emergencyFloat = Float.fromHex(fallbackEmergencyRatioHex);
 	return String(emergencyFloat.value?.format().value ?? '1');
-}
-
-/**
- * Optional per-leg shave on buy asset amount sent to `getTakeCalldata` / `takeOrders`.
- * Temporary stabilizer for thin-book execution edge cases (Insufficient liquidity / MinimumIO).
- * This may underfill exact-size buys slightly.
- */
-const BUY_FILL_EXECUTION_HAIRCUT_BPS = 30n;
-
-function haircutBuyExecutionFill(amount: bigint): bigint {
-	if (amount <= 0n) return 0n;
-	const reduced = (amount * (10000n - BUY_FILL_EXECUTION_HAIRCUT_BPS)) / 10000n;
-	return reduced > 0n ? reduced : amount;
-}
-
-/**
- * On-chain `maximumIORatio` caps the worst IO ratio the taker will accept. Using the Float domain
- * maximum avoids rejecting valid takes when an emergency "worst leg × multiplier" is too tight
- * (see https://github.com/SARKEX/st0x/pull/150). Trade size and economics stay bounded by
- * `maximumIO` and each maker order's ratio.
- */
-function getMaximumIORatioHex(fallback: `0x${string}`): `0x${string}` {
-	const r = Float.maxPositiveValue();
-	if (!r.error && r.value) {
-		return r.value.asHex() as `0x${string}`;
-	}
-	return fallback;
 }
 
 /**
@@ -125,16 +93,6 @@ export interface MarketOrderInput {
 export interface MarketOrderResult {
 	success: boolean;
 	error?: string;
-}
-
-interface OrderInfo {
-	order: SgOrder;
-	orderData: OrderV4;
-	quotes: RaindexOrderQuote[];
-	price: number;
-	inputIOIndex: number;
-	outputIOIndex: number;
-	raindexOrder?: RaindexOrder;
 }
 
 function getQuoteMakerAddress(quote: ProcessedQuote): string | null {
@@ -218,35 +176,43 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			? humanPriceCapStr(worstFill.price, ratioMultiplier, emergencyRatioHex)
 			: String(Float.fromHex(emergencyRatioHex).value?.format().value ?? '1e+18');
 
-		const maximumIORatioHex = getMaximumIORatioHex(emergencyRatioHex);
-
-		// 2. Build order info from fills
-		const orderInfoMap = new Map<string, OrderInfo>();
-		for (const fill of walkResult.fills) {
-			const orderHash = fill.quote.orderHash;
-			if (!orderInfoMap.has(orderHash)) {
-				orderInfoMap.set(orderHash, {
-					order: fill.quote.sgOrder as SgOrder,
-					orderData: fill.quote.orderData as OrderV4,
-					quotes: [],
-					price: fill.price,
-					inputIOIndex: fill.quote.inputIOIndex ?? 0,
-					outputIOIndex: fill.quote.outputIOIndex ?? 0,
-					raindexOrder: fill.quote.raindexOrder
-				});
+		// Hydrate orderData/sgOrder for quotes sourced from the REST API (which only
+		// returns summaries). We need the full on-chain OrderV4 struct for take-order calldata.
+		const quotesToHydrate = walkResult.fills
+			.map((f) => f.quote as ProcessedQuote)
+			.filter((q) => !q.orderData || !q.sgOrder?.orderBytes);
+		if (quotesToHydrate.length > 0) {
+			const client = await createRaindexClient();
+			const uniqueHashes = [...new Set(quotesToHydrate.map((q) => q.orderHash))];
+			for (const hash of uniqueHashes) {
+				try {
+					const ordersResult = await client.getOrders(
+						[network.id],
+						{ orderHash: hash as `0x${string}`, owners: [] },
+						1
+					);
+					if (ordersResult.error || !ordersResult.value?.orders.length) continue;
+					const raindexOrder = ordersResult.value.orders[0];
+					const sgResult = raindexOrder.convertToSgOrder();
+					if (sgResult.error || !sgResult.value) continue;
+					const sgOrder = sgResult.value;
+					const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
+					const orderData = normalizeOrderData(decoded[0] as OrderV4);
+					for (const fill of walkResult.fills) {
+						if (fill.quote.orderHash === hash) {
+							fill.quote.sgOrder = sgOrder;
+							fill.quote.orderData = orderData;
+							fill.quote.raindexOrder = raindexOrder as unknown as RaindexOrder;
+						}
+					}
+				} catch (e) {
+					console.warn(`[executeMarketOrder] Failed to hydrate order ${hash}:`, e);
+				}
 			}
 		}
 
-		// 3. Hydrate orders from Raindex to get full order data
-		const client = await createRaindexClient();
-
-		// 3a. Prefer RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven route across
-		// multiple maker orders (matches “split” across thin + deep liquidity).
-		//
-		// If this path is skipped or fails, fallbacks use RaindexOrder.getTakeCalldata() once per maker
-		// order (see handleTakeOrders / handleOracleOrders). A failure preparing the *first* leg
-		// (often the best-priced, thin order) aborts the whole flow even when a later order could cover
-		// the remainder — hence aggressive quote freshness + conservative per-leg fill (haircut).
+		// Build aggregated take via RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven
+		// route across multiple maker orders (handles split across thin + deep liquidity).
 		const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
 		if (!firstQuote.orderData || !firstQuote.sgOrder) {
 			return { success: false, error: 'Unable to prepare aggregated order route. Please refresh and retry.' };

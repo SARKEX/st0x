@@ -14,7 +14,8 @@ import {
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
 import { Float } from '@rainlanguage/float';
-import type { SgOrder } from '@rainlanguage/orderbook';
+import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
+import { AbiCoder } from 'ethers';
 import {
 	type ProcessedQuote,
 	OrderV4_ABI,
@@ -120,6 +121,26 @@ function convertApiOrderToProcessedQuote(
 	const inputMeta = getTokenMetadata(order.inputToken.address, allTokens);
 	const outputMeta = getTokenMetadata(order.outputToken.address, allTokens);
 
+	// Decode full OrderV4 from orderBytes (ABI-encoded on-chain struct)
+	let orderData: OrderV4 | undefined;
+	const sgOrderBase = {
+		orderHash: order.orderHash,
+		owner: order.owner,
+		orderbook: { id: order.orderbookId }
+	};
+	let sgOrder: SgOrder;
+	if (order.orderBytes) {
+		try {
+			const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], order.orderBytes);
+			orderData = normalizeOrderData(decoded[0] as OrderV4);
+			sgOrder = { ...sgOrderBase, orderBytes: order.orderBytes } as SgOrder;
+		} catch {
+			sgOrder = sgOrderBase as SgOrder;
+		}
+	} else {
+		sgOrder = sgOrderBase as SgOrder;
+	}
+
 	const processedQuote: ProcessedQuote = {
 		orderHash: order.orderHash,
 		maxOutput,
@@ -128,11 +149,10 @@ function convertApiOrderToProcessedQuote(
 		outputTokenSymbol: order.outputToken.symbol || outputMeta.symbol,
 		inputTokenAddress: order.inputToken.address,
 		outputTokenAddress: order.outputToken.address,
-		// All st0x orders have a single IO pair at index 0.
-		// TODO: Have the REST API return actual IO indexes per matched pair.
 		inputIOIndex: 0,
 		outputIOIndex: 0,
-		sgOrder: { orderHash: order.orderHash, owner: order.owner } as SgOrder,
+		sgOrder,
+		orderData,
 		orderbookId: order.orderbookId,
 		inputTokenDecimals: order.inputToken.decimals ?? inputMeta.decimals ?? 18,
 		outputTokenDecimals: order.outputToken.decimals ?? outputMeta.decimals ?? 18

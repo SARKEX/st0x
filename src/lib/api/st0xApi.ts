@@ -25,6 +25,7 @@ export interface ApiTokenRef {
 export interface ApiOrderSummary {
 	orderHash: string;
 	owner: string;
+	orderBytes: string;
 	inputToken: ApiTokenRef;
 	outputToken: ApiTokenRef;
 	outputVaultBalance: string;

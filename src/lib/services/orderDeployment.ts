@@ -17,17 +17,22 @@ import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
-import * as orderbookModule from '@rainlanguage/orderbook';
 import { walletAddress } from '$lib/stores/authStore';
-const DotrainRegistry =
-	(orderbookModule as { DotrainRegistry?: unknown }).DotrainRegistry ??
-	(
-		orderbookModule as unknown as {
-			default?: { DotrainRegistry?: unknown };
-		}
-	).default?.DotrainRegistry;
-if (!DotrainRegistry) {
-	throw new Error('DotrainRegistry not available from @rainlanguage/orderbook');
+
+/** Lazily resolve DotrainRegistry from the WASM-based orderbook package. */
+async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any> }> {
+	const orderbookModule = await import('@rainlanguage/orderbook');
+	const Registry =
+		(orderbookModule as { DotrainRegistry?: unknown }).DotrainRegistry ??
+		(
+			orderbookModule as unknown as {
+				default?: { DotrainRegistry?: unknown };
+			}
+		).default?.DotrainRegistry;
+	if (!Registry) {
+		throw new Error('DotrainRegistry not available from @rainlanguage/orderbook');
+	}
+	return Registry as { new: (url: string) => Promise<any> };
 }
 type DotrainRegistryInstance = {
 	getGui: (orderKey: string, deploymentKey: string) => Promise<{
@@ -71,7 +76,8 @@ let registryPromise: Promise<DotrainRegistryInstance> | null = null;
 async function getRegistry(): Promise<DotrainRegistryInstance> {
 	if (!registryPromise) {
 		registryPromise = (async () => {
-			const result = await (DotrainRegistry as { new: (url: string) => Promise<any> }).new(REGISTRY_URL);
+			const DotrainRegistry = await getDotrainRegistry();
+			const result = await DotrainRegistry.new(REGISTRY_URL);
 			if (result.error) {
 				registryPromise = null;
 				throw new Error(result.error.readableMsg);
