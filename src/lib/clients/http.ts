@@ -64,7 +64,7 @@ async function fetchWithRetry<T>(
 export async function fetchJson<T>(url: string, init?: FetchJsonOptions): Promise<T> {
 	return fetchWithRetry(url, init, async (response) => {
 		const text = await response.text();
-		if (!text) return null as T;
+		if (!text) throw new Error(`Empty response body from ${url}`);
 		return JSON.parse(text) as T;
 	});
 }

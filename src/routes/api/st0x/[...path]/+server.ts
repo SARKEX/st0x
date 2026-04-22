@@ -31,7 +31,7 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp }> = [
 	{ method: 'GET', pattern: /^health$/ },
 	{ method: 'GET', pattern: /^v1\/orders\/token\/[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|batch$)[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
 	{ method: 'POST', pattern: /^v1\/trades\/batch$/ }
 ];
