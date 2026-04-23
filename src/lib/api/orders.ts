@@ -25,6 +25,8 @@ import {
 	walkOrderbook
 } from '$lib/utils/orderbook';
 import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
+import { queryClient } from '$lib/clients/queryClient';
+import type { OracleQuote } from '$lib/queries/oracleQuotes';
 
 export type { ProcessedQuote, TokenPriceSummary };
 export { OrderV4_ABI, normalizeOrderData, walkOrderbook };
@@ -45,21 +47,38 @@ function getTokenMetadata(address: string, tokens: PythToken[]) {
 
 /**
  * For strategy orders with no live quote (ioRatio === '-'), estimate the ioRatio
- * from the asset token's configured fallbackPrice. Returns a hex Float string or null.
+ * from the live oracle price (cached in TanStack Query), falling back to the
+ * token's configured fallbackPrice if the oracle cache is empty.
  */
 function estimateRatioFromFallback(
 	normalizedInput: string,
 	normalizedOutput: string,
-	normalizedQuote: string
+	normalizedQuote: string,
+	networkId: number
 ): string | null {
 	const assetAddress = normalizedInput === normalizedQuote ? normalizedOutput : normalizedInput;
-	const configToken = TOKENS.find((t) => normalizeAddress(t.address) === assetAddress);
-	if (!configToken?.fallbackPrice) return null;
+
+	// Try live oracle price from cache first (covers SPYM and any future tokens without Pyth)
+	let price: number | null = null;
+	const oracleCache = queryClient.getQueryData<Record<string, OracleQuote>>([
+		'oracleQuotes',
+		networkId
+	]);
+	if (oracleCache?.[assetAddress]?.price) {
+		price = oracleCache[assetAddress].price;
+	}
+
+	// Fall back to hardcoded fallbackPrice from token config
+	if (price == null) {
+		const configToken = TOKENS.find((t) => normalizeAddress(t.address) === assetAddress);
+		price = configToken?.fallbackPrice ?? null;
+	}
+
+	if (price == null) return null;
 
 	// ASK (sell): input=payment, output=asset → ioRatio = price
 	// BID (buy):  input=asset, output=payment → ioRatio = 1/price
-	const estimatedRatio =
-		normalizedInput === normalizedQuote ? configToken.fallbackPrice : 1 / configToken.fallbackPrice;
+	const estimatedRatio = normalizedInput === normalizedQuote ? price : 1 / price;
 
 	const ratioFloat = Float.parse(String(estimatedRatio));
 	if (ratioFloat.error || !ratioFloat.value) return null;
@@ -82,7 +101,8 @@ function estimateRatioFromFallback(
 function convertApiOrderToProcessedQuote(
 	order: ApiOrderSummary,
 	quoteTokenAddress: string,
-	allTokens: PythToken[]
+	allTokens: PythToken[],
+	networkId: number
 ): ProcessedQuote | null {
 	// Skip orders with zero balance
 	const balance = parseFloat(order.outputVaultBalance);
@@ -99,8 +119,8 @@ function convertApiOrderToProcessedQuote(
 
 	let ratio: string;
 	if (!order.ioRatio || order.ioRatio === '-') {
-		// Strategy order with no live quote — estimate from fallback price
-		const estimated = estimateRatioFromFallback(normalizedInput, normalizedOutput, normalizedQuote);
+		// Strategy order with no live quote — estimate from oracle cache or fallback price
+		const estimated = estimateRatioFromFallback(normalizedInput, normalizedOutput, normalizedQuote, networkId);
 		if (!estimated) return null;
 		ratio = estimated;
 	} else {
@@ -232,7 +252,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 				for (const order of response.orders) {
 					if (seen.has(order.orderHash)) continue;
 					seen.add(order.orderHash);
-					const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens);
+					const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens, networkId);
 					if (quote) processedQuotes.push(quote);
 				}
 				hasMore = response.pagination.hasMore;
@@ -277,7 +297,7 @@ export async function fetchAndQuoteTokenOrders(
 			for (const order of response.orders) {
 				if (seen.has(order.orderHash)) continue;
 				seen.add(order.orderHash);
-				const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens);
+				const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens, networkId);
 				if (quote) processedQuotes.push(quote);
 			}
 			hasMore = response.pagination.hasMore;
