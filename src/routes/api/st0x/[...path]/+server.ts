@@ -33,12 +33,12 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	{
 		method: 'GET',
 		pattern: /^v1\/orders\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=30'
+		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=30'
+		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
