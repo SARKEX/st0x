@@ -155,8 +155,8 @@ function analyzeApiTrades(
 		const outputAddr = normalizeAddress(trade.outputToken.address);
 		if (!inputAddr || !outputAddr) continue;
 
-		const inputAmount = parseFloat(trade.inputAmount);
-		const outputAmount = parseFloat(trade.outputAmount);
+		const inputAmount = Math.abs(parseFloat(trade.inputAmount));
+		const outputAmount = Math.abs(parseFloat(trade.outputAmount));
 		if (!Number.isFinite(inputAmount) || !Number.isFinite(outputAmount)) continue;
 		if (inputAmount <= 0 || outputAmount <= 0) continue;
 
