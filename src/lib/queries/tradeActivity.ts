@@ -1,5 +1,6 @@
 import { createQuery } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
+import { getTokenByAnyAddress } from '$lib/config/network';
 import {
 	apiGetTradesByToken,
 	apiGetTakerTrades,
@@ -19,9 +20,15 @@ export function createTokenTradeActivityQuery(
 	tokenAddress: string | null,
 	pollInterval: number = 300_000
 ) {
+	// Resolve to wrapped (primary) address — the SFT subgraph returns the unwrapped
+	// vault address, but trades are indexed by the wrapped ERC20 token address.
+	const primaryAddress = tokenAddress
+		? (getTokenByAnyAddress(tokenAddress)?.address ?? tokenAddress).toLowerCase()
+		: null;
+
 	return createQuery<TokenTradeActivityPayload>({
 		queryKey: ['tokenTradeActivity', network?.id, tokenAddress],
-		enabled: Boolean(network && tokenAddress),
+		enabled: Boolean(network && primaryAddress),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
@@ -33,7 +40,7 @@ export function createTokenTradeActivityQuery(
 
 			while (page <= 50) {
 				const response = await apiGetTradesByToken(
-					tokenAddress!,
+					primaryAddress!,
 					page,
 					PAGE_SIZE,
 					from,
