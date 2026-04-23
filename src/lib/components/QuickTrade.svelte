@@ -98,9 +98,9 @@
 	// ============ DATA LOADING ============
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
 
-	// TanStack Query for quotes — polls every 30s, retries on failure, preserves stale data
+	// TanStack Query for quotes — polls every 15s, retries on failure, preserves stale data
 	$: orderbookQuery = createTokenOrderbookQuotesQuery(
-		$currentNetwork, selectedTokenAddress, 30_000
+		$currentNetwork, selectedTokenAddress
 	);
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
 	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
