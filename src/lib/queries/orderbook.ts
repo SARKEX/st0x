@@ -59,7 +59,7 @@ function buildSummaryFromQuotes(
  *
  * @param network - Current network
  * @param pollInterval - Polling interval in ms, or false to disable (default: false).
- *                       Dashboard: 60_000 (60s). Trade pages: false (uses token-specific query).
+ *                       Dashboard: 15_000 (15s). Trade pages: false (uses token-specific query).
  */
 export function createOrderbookQuotesQuery(
 	network: Network | null,
@@ -243,12 +243,12 @@ export async function refreshLegacyTokenQuotes(
  *
  * @param network - Current network
  * @param tokenAddress - Token address to fetch quotes for
- * @param pollInterval - Polling interval in ms (default: 60000 for trade pages)
+ * @param pollInterval - Polling interval in ms (default: 15000 for trade pages)
  */
 export function createTokenOrderbookQuotesQuery(
 	network: Network | null,
 	tokenAddress: string | null,
-	pollInterval: number | false = 60_000
+	pollInterval: number | false = 15_000
 ) {
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
@@ -257,7 +257,7 @@ export function createTokenOrderbookQuotesQuery(
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchOnMount: 'always', // Always refresh when component mounts
-		refetchInterval: pollInterval, // Poll every 60s by default on trade pages
+		refetchInterval: pollInterval, // Poll every 15s by default on trade pages
 		refetchOnWindowFocus: true, // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
 		// Use global cache as initial data for instant display

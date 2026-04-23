@@ -923,7 +923,7 @@
 	})();
 
 	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 60_000);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 15_000);
 
 	// Taker trades for market orders - poll every 10 minutes
 	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);
