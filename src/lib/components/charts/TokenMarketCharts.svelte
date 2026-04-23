@@ -68,6 +68,12 @@
 	let loadingChartLib = false;
 	let chartLibError: string | null = null;
 	let chartsReady = false;
+	// Track whether isLoading has ever been true.
+	// chartsLoading starts false in the parent before reactive deps resolve,
+	// so without this guard the chart renders empty axes on mount.
+	let loadingEverStarted = false;
+	$: if (isLoading) loadingEverStarted = true;
+
 	function roundToNiceNumber(value: number): number {
 		if (!Number.isFinite(value) || value <= 0) return 1;
 		const exponent = Math.floor(Math.log10(value));
@@ -682,14 +688,21 @@
 		void historyRange;
 		void ohlcData;
 		const hasData = ohlcData.length > 0 || depth.bids.length > 0 || depth.asks.length > 0;
-		const doneLoading = !isLoading && !libraryLoading;
-		if (hasData || doneLoading) {
+		// Only consider loading "genuinely done" once isLoading has been true at
+		// least once.  chartsLoading in the parent starts as false before reactive
+		// deps resolve, which would otherwise flash empty axes on mount.
+		const genuinelyDone = loadingEverStarted && !isLoading && !libraryLoading;
+		if (hasData) {
 			tick().then(() => {
 				if (ChartCtor && browser) {
 					updateCharts();
 					chartsReady = true;
 				}
 			});
+		} else if (genuinelyDone) {
+			// Loading finished with no data — reveal "no data" overlays
+			// but do NOT create empty Chart.js instances (avoids empty-axes flash)
+			chartsReady = true;
 		} else {
 			chartsReady = false;
 		}
