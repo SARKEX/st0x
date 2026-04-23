@@ -46,7 +46,7 @@
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
-	import { createTokenTradeActivityQuery, type TokenTradeActivityPayload } from '$lib/queries/tradeActivity';
+	import { createTokenTradeActivityQuery, createTakerTradesQuery, type TokenTradeActivityPayload } from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
@@ -68,7 +68,7 @@
 	} from '$lib/queries/vaults';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
-	import { transformTradeToDisplayOrder } from '$lib/utils/tradeTransform';
+	import { transformApiMarketOrdersToDisplay } from '$lib/utils/tradeTransform';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	$: tokenId = $page.params.id;
 
@@ -109,8 +109,15 @@
 		refreshLegacyTokenQuotes($currentNetwork.id, currentToken.address).catch(() => {});
 	}
 
-	// User market orders are tracked separately via the taker trades endpoint
-	$: userMarketOrders = [] as SgTrade[];
+	// Taker trades for market orders (user's executed trades)
+	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);
+
+	// Transform taker trades into display orders (filtered to current token)
+	$: userMarketOrders = (() => {
+		const orders = $takerTradesQuery?.data?.marketOrders;
+		if (!orders?.length || !$currentNetwork) return [];
+		return transformApiMarketOrdersToDisplay(orders, $currentNetwork.chainId);
+	})();
 
 	// Transform quotes and market orders into DisplayOrder format for OrdersTable
 	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
@@ -151,14 +158,11 @@
 			}
 		}
 
-		// Add market orders (user's trades for this token)
+		// Add market orders (user's taker trades for this token)
 		if (userMarketOrders.length > 0 && tokenAddress) {
-			for (const trade of userMarketOrders) {
-				const displayOrder = transformTradeToDisplayOrder(trade, {
-					targetTokenAddress: tokenAddress
-				});
-				if (displayOrder) {
-					displayOrders.push(displayOrder);
+			for (const order of userMarketOrders) {
+				if (assetAddressSet.has(order.tokenAddress.toLowerCase())) {
+					displayOrders.push(order);
 				}
 			}
 		}
