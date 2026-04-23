@@ -30,6 +30,15 @@ import { getSignerAddress } from '$lib/services/walletService';
 // Safety bounds for market order execution
 const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
 const BUY_EXACT_RATIO_MULTIPLIER = '1.01'; // tighter cap for buy-exact to avoid oversized approvals
+const MIN_SLIPPAGE_BPS = 1;
+export const MAX_SLIPPAGE_BPS = 5_000;
+export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = 100;
+
+function clampSlippageBps(slippageBps: number): number {
+	if (!Number.isFinite(slippageBps)) return DEFAULT_MARKET_ORDER_SLIPPAGE_BPS;
+	return Math.max(MIN_SLIPPAGE_BPS, Math.min(MAX_SLIPPAGE_BPS, Math.round(slippageBps)));
+}
+
 /**
  * `getTakeOrdersCalldata` / oracle take helpers expect `priceCap` as a **human** decimal:
  * max sell (payment token) per 1 buy (asset token) for typical buy flows — i.e. the same units as
