@@ -154,9 +154,9 @@ function transformApiTradeEntry(
 	const assetSymbol = isBuy ? outputSymbol : inputIsAsset ? inputSymbol : outputSymbol;
 	const assetAddress = isBuy ? outputAddr : inputIsAsset ? inputAddr : outputAddr;
 
-	// Amounts from result (decimal strings)
-	const inputAmount = parseFloat(entry.result.inputAmount);
-	const outputAmount = parseFloat(entry.result.outputAmount);
+	// Amounts from result (decimal strings — API returns negative outputAmount for tokens given away)
+	const inputAmount = Math.abs(parseFloat(entry.result.inputAmount));
+	const outputAmount = Math.abs(parseFloat(entry.result.outputAmount));
 
 	let price: number | undefined;
 	if (inputAmount > 0 && outputAmount > 0) {
