@@ -659,7 +659,8 @@
 		(async () => {
 			await ensureChartLib();
 			if (!cancelled) {
-				updateCharts();
+				// Don't render charts here — the reactive block will handle it
+				// once both the library and data are available
 			}
 		})();
 
@@ -680,16 +681,18 @@
 		void rangeEndMs;
 		void historyRange;
 		void ohlcData;
-		chartsReady = false;
-		tick().then(() => {
-			if (ChartCtor && browser) {
-				updateCharts();
-				// Only mark as ready if we have actual data OR we're done loading
-				const hasData = ohlcData.length > 0 || depth.bids.length > 0 || depth.asks.length > 0;
-				const doneLoading = !isLoading && !libraryLoading;
-				chartsReady = hasData || doneLoading;
-			}
-		});
+		const hasData = ohlcData.length > 0 || depth.bids.length > 0 || depth.asks.length > 0;
+		const doneLoading = !isLoading && !libraryLoading;
+		if (hasData || doneLoading) {
+			tick().then(() => {
+				if (ChartCtor && browser) {
+					updateCharts();
+					chartsReady = true;
+				}
+			});
+		} else {
+			chartsReady = false;
+		}
 	}
 
 	$: historyEmpty = ohlcData.length === 0 && volumeBuckets.length === 0;
@@ -757,7 +760,7 @@
 					<div class="relative h-96 lg:h-80">
 						<canvas bind:this={historyCanvas} class="absolute inset-0 h-full w-full"></canvas>
 						{#if !chartsReady}
-							<div class="absolute inset-0 flex items-center justify-center bg-gray-900/60">
+							<div class="absolute inset-0 flex items-center justify-center bg-gray-900">
 								<LoadingSpinner variant="inline" size="md" text="Loading chart data..." />
 							</div>
 						{:else if chartsReady && historyEmpty}
@@ -796,7 +799,7 @@
 							on:mouseenter={handleDepthChartInspected}
 						></canvas>
 						{#if !chartsReady}
-							<div class="absolute inset-0 flex items-center justify-center bg-gray-900/60">
+							<div class="absolute inset-0 flex items-center justify-center bg-gray-900">
 								<LoadingSpinner variant="inline" size="md" text="Loading orderbook data..." />
 							</div>
 						{:else if chartsReady && depthEmpty}
