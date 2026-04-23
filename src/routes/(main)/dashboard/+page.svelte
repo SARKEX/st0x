@@ -1740,7 +1740,7 @@
 					<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Your Orders</h2>
 					<OrdersTable
 						orders={allOrders}
-						isLoading={$orderbookQuotesQuery.isLoading || $takerTradesQuery.isLoading}
+						isLoading={$orderbookQuotesQuery.isLoading}
 						isError={$orderbookQuotesQuery.isError}
 						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
 						showOwnerFilter={false}

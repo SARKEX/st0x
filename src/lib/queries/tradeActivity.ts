@@ -97,6 +97,7 @@ export function createTakerTradesQuery(
 		enabled: Boolean(network && walletAddress),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
+		retry: 2,
 		queryFn: async () => {
 			const PAGE_SIZE = 50;
 			let allOrders: ApiMarketOrder[] = [];
