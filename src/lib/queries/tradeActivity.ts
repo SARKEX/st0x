@@ -4,8 +4,10 @@ import { getTokenByAnyAddress } from '$lib/config/network';
 import {
 	apiGetTradesByToken,
 	apiGetTakerTrades,
+	apiGetTradesBatch,
 	type ApiTradeByAddress,
-	type ApiMarketOrder
+	type ApiMarketOrder,
+	type ApiOrderTradeEntry
 } from '$lib/api/st0xApi';
 
 export type TokenTradeActivityPayload = {
@@ -39,13 +41,7 @@ export function createTokenTradeActivityQuery(
 			let page = 1;
 
 			while (page <= 50) {
-				const response = await apiGetTradesByToken(
-					primaryAddress!,
-					page,
-					PAGE_SIZE,
-					from,
-					now
-				);
+				const response = await apiGetTradesByToken(primaryAddress!, page, PAGE_SIZE, from, now);
 				allTrades = allTrades.concat(response.trades);
 				if (!response.pagination.hasMore) break;
 				page++;
@@ -55,6 +51,34 @@ export function createTokenTradeActivityQuery(
 				trades: allTrades,
 				range: { from, to: now }
 			};
+		}
+	});
+}
+
+/**
+ * Fetch trades for a batch of order hashes.
+ * Returns a map of orderHash → trade entries for computing filled amounts.
+ */
+export function createBatchTradesQuery(
+	network: Network | null,
+	orderHashes: string[],
+	pollInterval: number = 600_000
+) {
+	// Stable query key: sort hashes so order doesn't matter
+	const sortedKey = orderHashes.slice().sort().join(',');
+
+	return createQuery<Map<string, ApiOrderTradeEntry[]>>({
+		queryKey: ['batchTrades', network?.id, sortedKey],
+		enabled: Boolean(network && orderHashes.length > 0),
+		staleTime: 600_000,
+		refetchInterval: pollInterval,
+		queryFn: async () => {
+			const response = await apiGetTradesBatch(orderHashes);
+			const map = new Map<string, ApiOrderTradeEntry[]>();
+			for (const entry of response.orders) {
+				map.set(entry.orderHash.toLowerCase(), entry.trades);
+			}
+			return map;
 		}
 	});
 }

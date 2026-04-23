@@ -163,6 +163,9 @@ function transformApiTradeEntry(
 		price = isBuy ? inputAmount / outputAmount : outputAmount / inputAmount;
 	}
 
+	// Market orders are always fully filled — filled = asset amount traded
+	const filled = isBuy ? outputAmount : inputAmount;
+
 	return {
 		type: 'market',
 		orderHash: entry.orderHash,
@@ -175,6 +178,8 @@ function transformApiTradeEntry(
 		outputTokenSymbol: outputSymbol,
 		inputAmount: inputAmount > 0 ? entry.result.inputAmount : undefined,
 		outputAmount: outputAmount > 0 ? entry.result.outputAmount : undefined,
-		price
+		price,
+		filled: filled > 0 ? filled : undefined,
+		filledSymbol: assetSymbol
 	};
 }

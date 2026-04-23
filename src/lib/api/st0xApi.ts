@@ -117,6 +117,28 @@ export interface ApiTakerTradesResponse {
 }
 
 // ============================================================================
+// Batch Trade Types
+// ============================================================================
+
+export interface ApiOrderTradeEntry {
+	id: string;
+	txHash: string;
+	inputAmount: string;
+	outputAmount: string;
+	timestamp: number;
+	sender: string;
+}
+
+export interface ApiTradesBatchEntry {
+	orderHash: string;
+	trades: ApiOrderTradeEntry[];
+}
+
+export interface ApiTradesBatchResponse {
+	orders: ApiTradesBatchEntry[];
+}
+
+// ============================================================================
 // API Client
 // ============================================================================
 
@@ -189,6 +211,34 @@ export async function apiGetTakerTrades(
 		pageSize: options?.pageSize
 	});
 	return fetchJson<ApiTakerTradesResponse>(url);
+}
+
+/**
+ * Fetch orders by owner address from the REST API
+ */
+export async function apiGetOrdersByOwner(
+	ownerAddress: string,
+	options?: { page?: number; pageSize?: number }
+): Promise<ApiOrdersListResponse> {
+	assertBrowser('apiGetOrdersByOwner');
+	const url = apiUrl(`/v1/orders/owner/${ownerAddress}`, {
+		page: options?.page,
+		pageSize: options?.pageSize
+	});
+	return fetchJson<ApiOrdersListResponse>(url);
+}
+
+/**
+ * Fetch trades for multiple orders in a single batch request.
+ * Used to compute filled amounts for a user's deployed orders.
+ */
+export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTradesBatchResponse> {
+	assertBrowser('apiGetTradesBatch');
+	return fetchJson<ApiTradesBatchResponse>(apiUrl('/v1/trades/batch'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ orderHashes })
+	});
 }
 
 /**
