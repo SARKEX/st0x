@@ -46,7 +46,12 @@
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
-	import { createTokenTradeActivityQuery, createTakerTradesQuery, type TokenTradeActivityPayload } from '$lib/queries/tradeActivity';
+	import {
+		createTokenTradeActivityQuery,
+		createTakerTradesQuery,
+		createBatchTradesQuery,
+		type TokenTradeActivityPayload
+	} from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
@@ -86,7 +91,10 @@
 		$currentNetwork,
 		currentToken?.address ?? null
 	);
-	let tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
+	let tokenTradeQuery = createTokenTradeActivityQuery(
+		$currentNetwork,
+		currentToken?.address ?? null
+	);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: {
 		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
@@ -119,11 +127,29 @@
 		return transformApiMarketOrdersToDisplay(orders, $currentNetwork.chainId);
 	})();
 
+	// Extract user's order hashes for batch trades (filled data)
+	$: userOrderHashesForToken = (() => {
+		if (!$orderbookQuotesQuery.data?.quotes || !$walletAddress) return [] as string[];
+		const myAddress = $walletAddress.toLowerCase();
+		return $orderbookQuotesQuery.data.quotes
+			.filter(
+				(q) =>
+					q.sgOrder?.owner?.toLowerCase() === myAddress &&
+					(assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
+						assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? ''))
+			)
+			.map((q) => q.orderHash);
+	})();
+
+	// Fetch batch trades for user's orders on this token
+	$: batchTradesQuery = createBatchTradesQuery($currentNetwork, userOrderHashesForToken, 600_000);
+
 	// Transform quotes and market orders into DisplayOrder format for OrdersTable
 	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
 	$: tokenOrders = (() => {
 		const displayOrders: DisplayOrder[] = [];
 		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
+		const tradesMap = $batchTradesQuery?.data;
 
 		// Add limit orders from quotes (for current token only; match wrapped or legacy address)
 		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
@@ -142,6 +168,22 @@
 				const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol;
 				// Use the classified order type, defaulting to 'limit' if not set
 				const orderType = quote.orderType ?? 'limit';
+
+				// Compute filled amount from batch trades (only for user's orders)
+				let filled: number | undefined;
+				let filledSymbol: string | undefined;
+				const trades = tradesMap?.get(quote.orderHash.toLowerCase());
+				if (trades?.length) {
+					let totalFilled = 0;
+					for (const trade of trades) {
+						totalFilled += Math.abs(parseFloat(isBuy ? trade.inputAmount : trade.outputAmount));
+					}
+					if (totalFilled > 0) {
+						filled = totalFilled;
+						filledSymbol = tokenSymbol;
+					}
+				}
+
 				displayOrders.push({
 					type: orderType === 'dynamic-spread' ? 'custom' : orderType,
 					orderHash: quote.orderHash,
@@ -153,6 +195,8 @@
 					inputTokenSymbol: quote.inputTokenSymbol,
 					outputTokenSymbol: quote.outputTokenSymbol,
 					price: quote.quotePerAsset,
+					filled,
+					filledSymbol,
 					isActive: quote.sgOrder?.active ?? true
 				});
 			}

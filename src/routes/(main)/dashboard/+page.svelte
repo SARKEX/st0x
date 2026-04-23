@@ -33,7 +33,7 @@
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
-	import { createTakerTradesQuery } from '$lib/queries/tradeActivity';
+	import { createTakerTradesQuery, createBatchTradesQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
 	import { calculatePnL } from '$lib/utils/costBasis';
 	import { manualCostBasisStore, type ManualCostBasisEntry } from '$lib/stores/manualCostBasis';
@@ -941,9 +941,22 @@
 		return transformApiMarketOrdersToDisplay(orders, $currentNetwork.chainId);
 	})();
 
+	// Extract user's order hashes for batch trades query
+	$: userOrderHashes = (() => {
+		if (!$orderbookQuotesQuery.data?.quotes || !$walletAddress) return [] as string[];
+		const myAddress = $walletAddress.toLowerCase();
+		return $orderbookQuotesQuery.data.quotes
+			.filter((q) => q.sgOrder?.owner?.toLowerCase() === myAddress)
+			.map((q) => q.orderHash);
+	})();
+
+	// Fetch trade fill data for user's deployed orders
+	$: batchTradesQuery = createBatchTradesQuery($currentNetwork, userOrderHashes, 600_000);
+
 	// Combined orders (limit + market)
 	$: allOrders = (() => {
 		const displayOrders: DisplayOrder[] = [];
+		const tradesMap = $batchTradesQuery?.data;
 
 		// Add limit orders from quotes (only user's orders)
 		if ($orderbookQuotesQuery.data?.quotes && $walletAddress) {
@@ -964,6 +977,22 @@
 				// Use the classified order type, defaulting to 'limit' if not set
 				const orderType = quote.orderType ?? 'limit';
 
+				// Compute filled amount from batch trades
+				let filled: number | undefined;
+				let filledSymbol: string | undefined;
+				const trades = tradesMap?.get(quote.orderHash.toLowerCase());
+				if (trades?.length) {
+					let totalFilled = 0;
+					for (const trade of trades) {
+						// Buy: order receives asset (inputAmount), Sell: order gives asset (outputAmount)
+						totalFilled += Math.abs(parseFloat(isBuy ? trade.inputAmount : trade.outputAmount));
+					}
+					if (totalFilled > 0) {
+						filled = totalFilled;
+						filledSymbol = tokenSymbol;
+					}
+				}
+
 				displayOrders.push({
 					type: orderType === 'dynamic-spread' ? 'custom' : orderType,
 					orderHash: quote.orderHash,
@@ -975,6 +1004,8 @@
 					inputTokenSymbol: quote.inputTokenSymbol,
 					outputTokenSymbol: quote.outputTokenSymbol,
 					price: quote.quotePerAsset,
+					filled,
+					filledSymbol,
 					isActive: quote.sgOrder?.active ?? true,
 					isFilled
 				});

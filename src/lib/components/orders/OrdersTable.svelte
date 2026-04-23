@@ -296,7 +296,8 @@
 						{/if}
 						<th class="pb-3 pr-4 font-medium">Direction</th>
 						<th class="pb-3 pr-4 font-medium">Status</th>
-						<th class="pb-3 pr-4 font-medium">Amount</th>
+						<th class="pb-3 pr-4 font-medium">Remaining</th>
+						<th class="pb-3 pr-4 font-medium">Filled</th>
 						<th class="pb-3 pr-4 font-medium">Price</th>
 						<th class="pb-3 pr-4 font-medium">
 							<span class="hidden sm:inline">Hash</span>
@@ -348,6 +349,7 @@
 										Executed
 									</span>
 								</td>
+								<td class="py-3 pr-4 text-gray-300">—</td>
 								<td class="py-3 pr-4 text-gray-300">
 									{amount ? Number(amount).toFixed(3) : '—'}
 									{order.tokenSymbol}
@@ -477,6 +479,14 @@
 								<td class="py-3 pr-4 text-gray-300">
 									{remainingAmount}
 									{order.tokenSymbol}
+								</td>
+								<td class="py-3 pr-4 text-gray-300">
+									{#if order.filled !== undefined && order.filled > 0}
+										{order.filled.toFixed(3)}
+										{order.filledSymbol ?? order.tokenSymbol}
+									{:else}
+										—
+									{/if}
 								</td>
 								<td class="py-3 pr-4 text-gray-300">{currentPrice}</td>
 								<td class="py-3 pr-4">

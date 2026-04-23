@@ -17,6 +17,8 @@ export type DisplayOrder = {
 	inputAmount?: string;
 	outputAmount?: string;
 	price?: number;
+	filled?: number;
+	filledSymbol?: string;
 	isActive?: boolean;
 	isFilled?: boolean;
 };
