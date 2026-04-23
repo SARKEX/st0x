@@ -27,20 +27,34 @@ function getAuthHeader(): string {
 	return 'Basic ' + btoa(`${key}:${secret}`);
 }
 
-const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp }> = [
+const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
 	{ method: 'GET', pattern: /^health$/ },
-	{ method: 'GET', pattern: /^v1\/orders\/token\/[^/]+$/ },
+	// Shared endpoints — same response for all users, cache at Vercel edge
+	{
+		method: 'GET',
+		pattern: /^v1\/orders\/token\/[^/]+$/,
+		cache: 'public, s-maxage=5, stale-while-revalidate=30'
+	},
+	{
+		method: 'GET',
+		pattern: /^v1\/trades\/token\/[^/]+$/,
+		cache: 'public, s-maxage=5, stale-while-revalidate=30'
+	},
+	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/token\/[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|batch$)[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
 	{ method: 'POST', pattern: /^v1\/trades\/batch$/ }
 ];
 
-function isAllowedProxyRoute(method: string, pathSuffix: string): boolean {
-	return ALLOWED_PROXY_ROUTES.some(
-		(route) => route.method === method && route.pattern.test(pathSuffix)
+function matchProxyRoute(
+	method: string,
+	pathSuffix: string
+): { cache?: string } | null {
+	const route = ALLOWED_PROXY_ROUTES.find(
+		(r) => r.method === method && r.pattern.test(pathSuffix)
 	);
+	return route ? { cache: route.cache } : null;
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
@@ -59,7 +73,8 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	}
 
 	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
-	if (!isAllowedProxyRoute(request.method, pathSuffix)) {
+	const matched = matchProxyRoute(request.method, pathSuffix);
+	if (!matched) {
 		return new Response('Not found', { status: 404 });
 	}
 	const targetUrl = `${apiBase}/${pathSuffix}${url.search}`;
@@ -94,6 +109,9 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
+	if (matched.cache && response.ok) {
+		responseHeaders.set('Cache-Control', matched.cache);
+	}
 
 	return new Response(response.body, {
 		status: response.status,
