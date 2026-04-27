@@ -26,18 +26,15 @@ import { Float } from '@rainlanguage/float';
 import { get } from 'svelte/store';
 import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
 import { getSignerAddress } from '$lib/services/walletService';
+import {
+	computeRatioMultiplier,
+	DEFAULT_MARKET_ORDER_SLIPPAGE_BPS as DEFAULT_BPS,
+	MAX_SLIPPAGE_BPS as MAX_BPS
+} from '$lib/utils/marketOrderFill';
 
-// Safety bounds for market order execution
-const EMERGENCY_RATIO_MULTIPLIER = '2'; // stricter cap for spend/sell modes
-const BUY_EXACT_RATIO_MULTIPLIER = '1.01'; // tighter cap for buy-exact to avoid oversized approvals
-const MIN_SLIPPAGE_BPS = 1;
-export const MAX_SLIPPAGE_BPS = 5_000;
-export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = 100;
-
-function clampSlippageBps(slippageBps: number): number {
-	if (!Number.isFinite(slippageBps)) return DEFAULT_MARKET_ORDER_SLIPPAGE_BPS;
-	return Math.max(MIN_SLIPPAGE_BPS, Math.min(MAX_SLIPPAGE_BPS, Math.round(slippageBps)));
-}
+// Re-export so existing imports (`MarketOrder.svelte`, `QuickTrade.svelte`) keep working.
+export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = DEFAULT_BPS;
+export const MAX_SLIPPAGE_BPS = MAX_BPS;
 
 /**
  * `getTakeOrdersCalldata` / oracle take helpers expect `priceCap` as a **human** decimal:
@@ -63,7 +60,7 @@ function humanPriceCapStr(
  */
 function computeEmergencyRatioHex(
 	ratioHex: `0x${string}`,
-	multiplierRaw: string = EMERGENCY_RATIO_MULTIPLIER
+	multiplierRaw: string
 ): `0x${string}` | null {
 	const ratio = Float.fromHex(ratioHex);
 	if (ratio.error || !ratio.value) return null;
@@ -171,10 +168,12 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: false, error: 'Unable to calculate order price. Please try again.' };
 		}
 		const isBuy = orderSide === 'Buy';
-		const effectiveSlippageBps = clampSlippageBps(slippageBps);
-		const ratioMultiplier = isBuy
-			? String(1 + effectiveSlippageBps / 10_000)
-			: EMERGENCY_RATIO_MULTIPLIER;
+		// Apply user-configured slippage to BOTH Buy and Sell. Previously Sell hardcoded
+		// a 2x emergency multiplier (~100% tolerance) regardless of user input — meaning
+		// a user setting "0.1% slippage" on a sell would still get filled at deep
+		// discounts. The SDK's `priceCap` is per-leg in either direction, so the same
+		// formula applies symmetrically.
+		const ratioMultiplier = computeRatioMultiplier(slippageBps);
 		const emergencyRatioHex = computeEmergencyRatioHex(
 			worstFill.quote.ratio as `0x${string}`,
 			ratioMultiplier
@@ -287,25 +286,85 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			decimals,
 			symbol
 		});
+		// Compute per-fill amounts for per-order fallback path
+		let orderFillAmounts: bigint[];
+		let orderFillDecimals: number;
+		if (orderSide === 'Sell') {
+			orderFillAmounts = walkResult.fills.map((f) => f.assetAmount);
+			orderFillDecimals = assetToken.decimals;
+		} else if (inputMode === 'spend') {
+			orderFillAmounts = walkResult.fills.map((f) => f.paymentAmount);
+			orderFillDecimals = paymentToken.decimals;
+		} else {
+			orderFillAmounts = walkResult.fills.map((f) => f.assetAmount);
+			orderFillDecimals = assetToken.decimals;
+		}
+		// Anchor for partial-fill detection lives on whichever side the user typed:
+		//   - Buy-by-asset (mode buyUpTo):  user's typed `amount` IS the wants amount
+		//   - Buy-by-spend  (mode spendUpTo): user's typed `amount` IS the pays amount
+		//   - Sell          (mode spendUpTo): user's typed `amount` IS the pays amount
+		// Setting `requestedTakerPaysAmount` for spend-mode flows lets downstream code
+		// compare actual paid vs typed paid (the right anchor) instead of conflating
+		// price slippage with quantity shortfall on the receive side.
+		const isSpendAnchored = orderSide === 'Sell' || inputMode === 'spend';
 		const aggregatedParams: TakeOrdersParams = {
 			orderData: firstQuote.orderData as OrderV4,
 			ioIndexes: { input: firstQuote.inputIOIndex ?? 0, output: firstQuote.outputIOIndex ?? 0 },
 			takerWantsToken: toTokenInfo(isBuy ? assetToken : paymentToken),
 			takerPaysToken: toTokenInfo(isBuy ? paymentToken : assetToken),
 			requestedTakerWantsAmount: isBuy && inputMode !== 'spend' ? amount : inputAmountFilled,
-			simulation: walkResult
+			requestedTakerPaysAmount: isSpendAnchored ? amount : undefined,
+			simulation: walkResult,
+			orderFillAmounts,
+			orderFillDecimals
 		};
+		const approvalSymbol = isBuy ? paymentToken.symbol : assetToken.symbol;
 		const aggregatedHandled = await transactionStore.handleAggregatedTakeOrdersCalldata(
 			takeRequest,
 			firstQuote.sgOrder as SgOrder,
 			aggregatedParams,
-			isBuy ? paymentToken.symbol : assetToken.symbol
+			approvalSymbol
 		);
 		if (!aggregatedHandled) {
-			return {
-				success: false,
-				error: 'Unable to prepare aggregated order transaction. Please refresh quotes and retry.'
+			// Aggregated SDK path failed (often stale subgraph vault balances).
+			// Fall back to per-order execution using hydrated RaindexOrder instances.
+			const indexedFills = walkResult.fills
+				.map((f, i) => ({ fill: f, fillAmount: orderFillAmounts[i] ?? 0n }))
+				.filter(
+					({ fill }) =>
+						fill.quote.raindexOrder &&
+						fill.quote.orderData &&
+						(fill.quote as ProcessedQuote).sgOrder?.orderBytes
+				);
+			if (indexedFills.length === 0) {
+				return {
+					success: false,
+					error: 'Unable to prepare order transaction. Please refresh quotes and retry.'
+				};
+			}
+			console.log('[executeMarketOrder] Falling back to per-order execution', {
+				hydratedFills: indexedFills.length,
+				totalFills: walkResult.fills.length
+			});
+			const oracleInputs = indexedFills.map(({ fill }) => ({
+				raindexOrder: fill.quote.raindexOrder as RaindexOrder,
+				inputIndex: fill.quote.inputIOIndex ?? 0,
+				outputIndex: fill.quote.outputIOIndex ?? 0,
+				amountStr: '',
+				priceCapStr: priceCapStrForSdk,
+				taker: takerAddress
+			}));
+			const fallbackParams: TakeOrdersParams = {
+				...aggregatedParams,
+				orderFillAmounts: indexedFills.map(({ fillAmount }) => fillAmount)
 			};
+			await transactionStore.handleOracleOrders(
+				oracleInputs,
+				mode,
+				firstQuote.sgOrder as SgOrder,
+				approvalSymbol,
+				fallbackParams
+			);
 		}
 		const { status, error: txError } = get(transactionStore);
 		if (status === TransactionStatus.SUCCESS) {

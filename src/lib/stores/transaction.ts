@@ -57,6 +57,7 @@ import {
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import type { TakeOrdersParams } from '$lib/types/transactions';
+import { evaluateMarketOrderFill } from '$lib/utils/marketOrderFill';
 import { wagmiConfig } from 'svelte-wagmi';
 import { walletAddress, authMethod } from '$lib/stores/authStore';
 import { track } from '$lib/services/analytics';
@@ -1400,20 +1401,18 @@ const transactionStore = () => {
 				: 0;
 
 		const requestedInputAmount = params.requestedTakerWantsAmount;
-		const inputFilledDecimal = parseFloat(formatUnits(totalInputAmount, inputTokenDecimals));
-		const inputRequestedDecimal = parseFloat(formatUnits(requestedInputAmount, inputTokenDecimals));
 
-		let isNoFill = false;
-		if (inputRequestedDecimal <= 0) {
-			isNoFill = true;
-		}
-
-		// Partial fill: bigint ratio only. Below ~99.7% of requested ⇒ partial (execution haircut is 0; allow subgraph noise).
-		const MARKET_ORDER_FULL_FILL_THRESHOLD_BPS = 9970n;
-		const isPartialFill =
-			requestedInputAmount > 0n &&
-			totalInputAmount > 0n &&
-			totalInputAmount * 10_000n < requestedInputAmount * MARKET_ORDER_FULL_FILL_THRESHOLD_BPS;
+		// Partial-fill detection anchors on whichever side the user typed their amount.
+		// For spend modes (Sell-by-asset, Buy-by-spend) the anchor is the pays side; for
+		// `buyUpTo` it's the wants side. Comparing the wrong side conflates price
+		// slippage with quantity shortfall (e.g. a Sell that fully sold the asset at a
+		// worse price would get falsely flagged as partial quantity).
+		const { isNoFill, isPartialFill } = evaluateMarketOrderFill({
+			totalTakerWantsAmount: totalInputAmount,
+			totalTakerPaysAmount: totalOutputAmount,
+			requestedTakerWantsAmount: requestedInputAmount,
+			requestedTakerPaysAmount: params.requestedTakerPaysAmount
+		});
 
 		const summary: MarketOrderSummary = {
 			inputAmount: totalInputAmount,
@@ -1505,6 +1504,12 @@ const transactionStore = () => {
 			const sdkMsg = calldataWrapped.error?.readableMsg;
 			console.log(`${TX_LOG_PREFIX} SDK error`, { msg: sdkMsg, request: takeRequest });
 			if (sdkMsg) {
+				// "No liquidity" from SDK is often a false negative when subgraph vault
+				// balances are stale. Return false to let callers try per-order fallback.
+				if (sdkMsg.includes('No liquidity')) {
+					console.warn(`${TX_LOG_PREFIX} SDK reported no liquidity — allowing per-order fallback`);
+					return false;
+				}
 				transactionError(sdkMsg as TransactionErrorMessage);
 				return true;
 			}

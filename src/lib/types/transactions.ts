@@ -25,6 +25,9 @@ export type OrderSimulation = WalkQuotesResult;
  * - takerWantsToken: What the user wants to RECEIVE
  * - takerPaysToken: What the user will GIVE AWAY
  * - requestedTakerWantsAmount: Amount user wants to receive
+ * - requestedTakerPaysAmount: Amount user wants to give away (set when the user typed
+ *   their order in the pays direction, e.g. Sell-by-asset or Buy-by-spend; controls
+ *   which side anchors partial-fill detection)
  */
 export interface TakeOrdersParams {
 	// Order identification
@@ -40,6 +43,13 @@ export interface TakeOrdersParams {
 
 	// Requested amount
 	requestedTakerWantsAmount: bigint; // Amount user wants to receive
+	/**
+	 * Optional: amount user wants to give away. When defined, partial-fill detection
+	 * compares actual paid vs this value (correct anchor for `spendUpTo` modes). When
+	 * undefined, falls back to comparing actual received vs `requestedTakerWantsAmount`
+	 * (correct for `buyUpTo` modes).
+	 */
+	requestedTakerPaysAmount?: bigint;
 
 	// Optional: pre-calculated simulation for validation
 	simulation?: OrderSimulation;
