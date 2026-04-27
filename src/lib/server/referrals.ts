@@ -14,7 +14,7 @@ import { getWalletInfo, type RegisteredWallet } from './accessCodes';
 // Create a public client for Base network for signature verification
 const basePublicClient = createPublicClient({
 	chain: base,
-	transport: http('https://mainnet.base.org')
+	transport: http('https://base-mainnet.g.alchemy.com/v2/y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9')
 });
 
 // Types

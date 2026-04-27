@@ -17,7 +17,7 @@ export function createMockNetwork(overrides?: Partial<Network>): Network {
 		name: 'Base',
 		shortName: 'base',
 		nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-		rpcUrls: ['https://mainnet.base.org'],
+		rpcUrls: ['https://base-mainnet.g.alchemy.com/v2/y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9'],
 		blockExplorers: [{ name: 'BaseScan', url: 'https://basescan.org' }],
 		contracts: {
 			orderbook: {
