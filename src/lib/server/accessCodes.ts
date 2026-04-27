@@ -7,7 +7,7 @@ import { env } from '$env/dynamic/private';
 // Supports ECDSA (EOA), EIP-1271 (Smart Contracts), and EIP-6492 (Undeployed)
 const basePublicClient = createPublicClient({
 	chain: base,
-	transport: http('https://base-mainnet.g.alchemy.com/v2/s-xoY73sLC1TBGjoi68cG')
+	transport: http('https://mainnet.base.org')
 });
 
 // Types

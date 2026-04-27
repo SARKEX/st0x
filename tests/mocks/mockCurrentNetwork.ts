@@ -11,7 +11,7 @@ export const mockCurrentNetwork = {
 	rpcUrl: 'https://base-rpc.publicnode.com',
 	fallbackRpcUrls: [
 		'https://base-rpc.publicnode.com',
-		'https://base-mainnet.g.alchemy.com/v2/s-xoY73sLC1TBGjoi68cG'
+		'https://mainnet.base.org'
 	],
 	icon: 'ethereum',
 	subgraph_url:

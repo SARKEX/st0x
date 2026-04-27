@@ -45,10 +45,10 @@ export const networks: Network[] = [
 		blockExplorer: 'https://basescan.org',
 		sftExplorer: 'https://stox2.h20.market',
 		blockExplorerIcon: 'etherscan',
-		rpcUrl: 'https://base-mainnet.g.alchemy.com/v2/s-xoY73sLC1TBGjoi68cG',
+		rpcUrl: 'https://mainnet.base.org',
 		fallbackRpcUrls: [
 			'https://base-rpc.publicnode.com',
-			'https://base-mainnet.g.alchemy.com/v2/s-xoY73sLC1TBGjoi68cG',
+			'https://mainnet.base.org',
 			'https://base.llamarpc.com',
 			'https://base.meowrpc.com',
 			'https://base-mainnet.public.blastapi.io',
