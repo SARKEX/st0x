@@ -23,7 +23,7 @@ const SETTINGS_YAML = `version: 5
 networks:
   base:
     rpcs:
-      - https://base-mainnet.g.alchemy.com/v2/s-xoY73sLC1TBGjoi68cG
+      - https://base-mainnet.g.alchemy.com/v2/y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9
     chain-id: 8453
     network-id: 8453
     currency: ETH
