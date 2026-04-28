@@ -99,46 +99,47 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ## Traceability
 
-Empty initially. Populated by the roadmapper agent during phase mapping.
+Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped across 4 phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OBS-01 | TBD | Pending |
-| OBS-02 | TBD | Pending |
-| OBS-03 | TBD | Pending |
-| OBS-04 | TBD | Pending |
-| OBS-05 | TBD | Pending |
-| TRADE-01 | TBD | Pending |
-| TRADE-02 | TBD | Pending |
-| TRADE-03 | TBD | Pending |
-| TRADE-04 | TBD | Pending |
-| PERF-01 | TBD | Pending |
-| SEC-01 | TBD | Pending |
-| SEC-02 | TBD | Pending |
-| SEC-03 | TBD | Pending |
-| SEC-04 | TBD | Pending |
-| SEC-05 | TBD | Pending |
-| SEC-06 | TBD | Pending |
-| SEC-07 | TBD | Pending |
-| REL-01 | TBD | Pending |
-| REL-02 | TBD | Pending |
-| REL-03 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| DRIFT-01 | TBD | Pending |
-| DRIFT-02 | TBD | Pending |
-| DRIFT-03 | TBD | Pending |
-| DEPR-01 | TBD | Pending |
-| DEPR-02 | TBD | Pending |
-| DEPR-03 | TBD | Pending |
+| OBS-01 | Phase 1 | Pending |
+| OBS-02 | Phase 1 | Pending |
+| OBS-03 | Phase 1 | Pending |
+| OBS-04 | Phase 1 | Pending |
+| OBS-05 | Phase 1 | Pending |
+| TRADE-01 | Phase 2 | Pending |
+| TRADE-02 | Phase 2 | Pending |
+| TRADE-03 | Phase 2 | Pending |
+| TRADE-04 | Phase 2 | Pending |
+| PERF-01 | Phase 2 | Pending |
+| SEC-01 | Phase 3 | Pending |
+| SEC-02 | Phase 3 | Pending |
+| SEC-03 | Phase 3 | Pending |
+| SEC-04 | Phase 3 | Pending |
+| SEC-05 | Phase 3 | Pending |
+| SEC-06 | Phase 3 | Pending |
+| SEC-07 | Phase 3 | Pending |
+| REL-01 | Phase 3 | Pending |
+| REL-02 | Phase 3 | Pending |
+| REL-03 | Phase 3 | Pending |
+| TEST-01 | Phase 4 | Pending |
+| TEST-02 | Phase 4 | Pending |
+| TEST-03 | Phase 4 | Pending |
+| TEST-04 | Phase 4 (conditional on DEPR-02) | Pending |
+| DRIFT-01 | Phase 4 | Pending |
+| DRIFT-02 | Phase 4 | Pending |
+| DRIFT-03 | Phase 4 | Pending |
+| DEPR-01 | Phase 1 | Pending |
+| DEPR-02 | Phase 1 | Pending |
+| DEPR-03 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 30 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 30 ⚠️ (will be filled by roadmapper)
+- Mapped to phases: 30 ✓
+- Unmapped: 0
+- By phase: Phase 1 = 8 (DEPR-01..03, OBS-01..05); Phase 2 = 5 (TRADE-01..04, PERF-01); Phase 3 = 10 (SEC-01..07, REL-01..03); Phase 4 = 7 (TEST-01..04, DRIFT-01..03)
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-28 after initial definition*
+*Last updated: 2026-04-28 after roadmapper phase mapping*
