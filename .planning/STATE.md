@@ -1,3 +1,15 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: planning
+stopped_at: Phase 1 context gathered (DEPR-02 surgery boundary locked; observability stack locked as Claude's Discretion)
+last_updated: "2026-04-28T22:00:00.000Z"
+last_activity: 2026-04-28 — Phase 1 CONTEXT.md written; 14 decisions captured (D-01..D-14); ready for /gsd-plan-phase 1
+progress:
+  percent: 0
+---
+
 # Project State
 
 ## Project Reference
@@ -19,6 +31,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: —
 - Total execution time: —
@@ -30,6 +43,7 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 **Recent Trend:**
+
 - Last 5 plans: —
 - Trend: —
 
@@ -54,8 +68,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 1 carries an open decision (DEPR-02) that requires internal team confirmation before the snapshot pipeline can be deleted. Plan-phase for Phase 1 should sequence this discovery early.
-- Phase 4 TEST-04 is conditional on the Phase 1 DEPR-02 outcome — closed by deletion if "remove," scoped to scraper edge-case tests if "keep with bandages."
+- ~~Phase 1 carries an open decision (DEPR-02) that requires internal team confirmation before the snapshot pipeline can be deleted.~~ **Resolved 2026-04-28** in `01-CONTEXT.md` D-01: delete the rewards layer; keep the snapshot pipeline because it feeds admin TVL + per-token volume views. SEC-06, REL-01, and TEST-04 therefore survive against the retained subsystem.
+- Phase 4 TEST-04 ~~is conditional on the Phase 1 DEPR-02 outcome~~ **applies** — DEPR-02 retained the scraper; scraper edge-case tests (pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure) are scoped for Phase 4.
 
 ## Deferred Items
 
@@ -68,6 +82,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-28
-Stopped at: Phase 1 UI-SPEC approved (deletion-heavy phase, minimal contract; 3 user decisions locked)
-Resume file: .planning/phase-01-shrink-the-surface-see-what-s-happening/01-UI-SPEC.md
-Next step: `/gsd-discuss-phase 1` (or `/gsd-plan-phase 1` to skip discussion)
+Stopped at: Phase 1 context gathered (DEPR-02 surgery boundary locked: delete rewards layer, keep snapshot pipeline for TVL/volume; observability stack locked as Claude's Discretion — Sentry + pino + Vercel Logs + Slack webhook alerts)
+Resume file: .planning/phase-01-shrink-the-surface-see-what-s-happening/01-CONTEXT.md
+Next step: `/gsd-plan-phase 1`
