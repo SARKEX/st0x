@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered (DEPR-02 surgery boundary locked; observability stack locked as Claude's Discretion)
-last_updated: "2026-04-28T22:00:00.000Z"
-last_activity: 2026-04-28 — Phase 1 CONTEXT.md written; 14 decisions captured (D-01..D-14); ready for /gsd-plan-phase 1
+status: ready_to_execute
+stopped_at: Phase 1 planned — 8 plans across 7 waves; verification passed iteration 2/3
+last_updated: "2026-04-28T23:35:00.000Z"
+last_activity: 2026-04-28 — Phase 1 PLAN.md files written (01-01..01-08); RESEARCH.md + PATTERNS.md generated; D-15/D-16 added to CONTEXT.md to resolve research open questions; plan-checker verified 0 BLOCKERs after revision loop
 progress:
   percent: 0
 ---
@@ -22,9 +22,9 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 1 of 4 (Shrink the Surface, See What's Happening)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-04-28 — Roadmap created, 30 v1 requirements mapped across 4 phases
+Plan: 0 of 8 in current phase
+Status: Ready to execute
+Last activity: 2026-04-28 — Phase 1 plans written (8 plans across 7 waves); verification passed
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -82,6 +82,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-28
-Stopped at: Phase 1 context gathered (DEPR-02 surgery boundary locked: delete rewards layer, keep snapshot pipeline for TVL/volume; observability stack locked as Claude's Discretion — Sentry + pino + Vercel Logs + Slack webhook alerts)
-Resume file: .planning/phase-01-shrink-the-surface-see-what-s-happening/01-CONTEXT.md
-Next step: `/gsd-plan-phase 1`
+Stopped at: Phase 1 planned — 8 plans (01-01 DEPR-02, 01-02 DEPR-01, 01-03 DEPR-03, 01-04 OBS-01 Sentry, 01-05 OBS-02 pino, 01-06 OBS-04 RPC instrumentation, 01-07 OBS-03 take-order transcript, 01-08 OBS-05 verification). Wave structure 1→2→3→4→5→6 (parallel 06+07)→7. Plan-checker verified PASS at iteration 2/3.
+Resume file: .planning/phase-01-shrink-the-surface-see-what-s-happening/01-01-PLAN.md
+Next step: `/gsd-execute-phase 1`

@@ -29,7 +29,36 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Per-RPC failure rate across the fallback chain is recorded and an alert fires when the entire chain fails for a single call — silent degradation is no longer possible
   4. Dead code that no user touches has been deleted (user-facing rewards UI, Onramper integration including the unsigned-cookie auth path), and the internal admin rewards/snapshot subsystem has had an explicit keep-or-delete decision applied
   5. Client-side unhandled errors and selected user-visible errors land in an error tracker with sensitive data (wallet addresses, signatures) scrubbed, so previously invisible production failures become countable
-**Plans**: TBD
+**Plans**: 8 plans (7 waves; sequential 1-5 due to .env.example + hooks.server.ts file conflicts; wave 6 runs OBS-03 + OBS-04 in parallel)
+
+**Wave 1**
+- [ ] 01-01-PLAN.md — DEPR-02: prune admin rewards UI + per-wallet points pipeline + LP_SUBGRAPH_URL
+
+**Wave 2** *(blocked on Wave 1 — both touch `.env.example` and the rewards/admin surface)*
+- [ ] 01-02-PLAN.md — DEPR-01: delete user-facing rewards UI + extract TokenSwapAnnouncement to announcements/ (per D-16)
+
+**Wave 3** *(blocked on Wave 2 — `+layout.svelte` rewards mounts + `hooks.server.ts:235` rewards carve-out must already be removed)*
+- [ ] 01-03-PLAN.md — DEPR-03: delete Onramper integration + collapse DepositModal to deposit-only (per D-10)
+
+**Wave 4** *(blocked on Wave 3 — `.env.example` + `hooks.server.ts` are stable post-deletions; Sentry CSP entry can land cleanly)*
+- [ ] 01-04-PLAN.md — OBS-01: Sentry SDK init + PII scrubber + CSP additions + sourcemap upload
+
+**Wave 5** *(blocked on Wave 4 — pino's request-id middleware sequences in `hooks.server.ts` ahead of the Sentry handle wired in Wave 4)*
+- [ ] 01-05-PLAN.md — OBS-02: pino structured logger + AsyncLocalStorage request-id middleware
+
+**Wave 6** *(blocked on Wave 5; 01-06 + 01-07 run in parallel — they touch disjoint files)*
+- [ ] 01-06-PLAN.md — OBS-04: RPC instrumentation in generator.ts + accessCodes.ts + chain-exhausted Slack alerts
+- [ ] 01-07-PLAN.md — OBS-03: take-order failure transcript at marketOrderExecution.ts (Sentry + console.error per D-15)
+
+**Wave 7** *(blocked on all prior waves — phase-exit verification + runbook)*
+- [ ] 01-08-PLAN.md — OBS-05 verification + phase exit (Speed Insights confirmation, runbook, cross-cutting cleanup grep)
+
+**Cross-cutting constraints** (truths that appear in 2+ plans — verify they hold across the phase, not just per-plan):
+- **CSP host pinning (Pitfall 1):** `src/hooks.server.ts` `connect-src` must NEVER contain bare `'*.sentry.io'` — wildcards don't cross dot boundaries. Use `'*.ingest.sentry.io'` and `'*.ingest.us.sentry.io'` only. Enforced in 01-04 acceptance criteria; 01-08 phase-exit grep gate re-verifies.
+- **REL-01 fence (visibility-only):** OBS-04 (01-06) instruments RPC failures but MUST NOT introduce retry-with-backoff in `generator.ts:callRpc`. Retry/backoff is REL-01 in Phase 3. Enforced by negative grep in 01-06 acceptance criteria.
+- **D-13 out-of-scope guardrails:** No account abstraction, no multi-chain expansion, no `+error.svelte`, no admin/+page.svelte refactor, no replacement on-ramp, no external log drain. Asserted in 01-01, 01-04, 01-05, 01-06, 01-07 threat models / must_haves.
+- **Audit-log non-regression:** No deleted file (DEPR-01/02/03) carries an audit-log call that protects a surviving admin endpoint. Pre-flight grep in RESEARCH §"Deletion Graph" already cleared this; 01-01, 01-02, 01-03 task acceptance re-verifies before delete.
+- **Single-chain Base 8453 + two auth paths (CLAUDE.md drift):** Plans treat single-chain Base + wagmi/Dynamic as ground truth; aspirational multi-chain/AA content in CLAUDE.md is ignored until DRIFT-03 in Phase 4.
 **UI hint**: yes
 
 Notes:

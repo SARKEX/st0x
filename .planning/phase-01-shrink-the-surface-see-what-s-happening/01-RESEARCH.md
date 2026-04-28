@@ -932,21 +932,26 @@ The store side: `src/lib/stores/dynamicStore.ts` exports `depositModalInitialVie
 | A8 | `console.error` JSON line in OBS-03 (browser-side) is captured by PostHog session replay (per INTEGRATIONS.md: PostHog `maskAllInputs: true`) and Vercel browser console capture, providing long-term searchability without an additional sink | Pattern 3; Open Question Q1 | If PostHog session replay doesn't capture console output (some configs disable it), the "long-term searchability" half of D-08 is incomplete. **Verify PostHog config in `src/lib/services/analytics.ts` — should record console events; if not, the planner notes the gap and either enables it or acknowledges Sentry-only as the storage layer.** |
 | A9 | The `LP_SUBGRAPH_URL` env var is consumed only by deleted code; the surviving snapshot pipeline does NOT use it | DEPR-02 D-05; Deletion Graph | Grep confirmed only `.env.example:30` reference remains in source. CONTEXT D-05 stated subgraph slug `st0x-rewards-base/1.0.23` confirms rewards-only scope. Deletion is safe. **VERIFIED via grep 2026-04-28.** |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **OBS-03 dual-sink semantics on the browser tier.** CONTEXT D-08 says "write to BOTH Sentry (`captureException`) AND pino (`logger.error('take-order failed', ...)`)." But `marketOrderExecution.ts` is browser code and the pino logger is server-only (lives in `$lib/server/`). The pattern in §"Code Examples" sends to Sentry + a JSON-shaped `console.error` (which PostHog session replay + Vercel browser console capture can find). Is this acceptable, or does the user expect the take-order failure to ALSO surface in Vercel server-side Logs (which would require a thin "/api/observability/take-order-failure" endpoint that the client posts to)?
    - What we know: D-08 written without addressing browser-vs-server tier.
    - What's unclear: whether "long-term searchability" requires server-side logs (Vercel Logs) or browser-side ones (PostHog session replay + Sentry breadcrumbs) suffice.
    - Recommendation: planner asks the user during plan-bounce, or defaults to "Sentry + console.error JSON; defer server-relayed take-order failure endpoint to a future phase."
+   - **RESOLVED:** CONTEXT D-15 (Sentry + console.error JSON line on browser tier; no server-relayed endpoint).
 
 2. **pino wallet scrubbing in error contexts vs admin convenience.** D-07 says "wallet scrubbed in error contexts; full address allowed in admin server logs because they're admin-only." The planner needs a concrete rule. Recommend: scrubbing is the responsibility of the Sentry scrubber (which goes to a third-party SaaS); pino retains full wallet (Vercel Logs is admin-only). If the user wants pino to also scrub wallet in errors, planner needs a wrapper helper in `logger.ts`. Defer to plan-phase decision.
+   - **RESOLVED:** CONTEXT D-07 wording (pino retains full wallet in admin-only Vercel Logs; scrubbing happens in Sentry beforeSend per Plan 01-04).
 
 3. **Where does Sentry server init live — `hooks.server.ts` or `instrumentation.server.ts`?** Sentry docs (current) recommend `instrumentation.server.ts` for SvelteKit 2.31.0+. We're on SvelteKit 2.8.0 — the `instrumentation.server.ts` opt-in via `svelte.config.js` `experimental.instrumentation` (added in 2.31) isn't available. Planner should put init in `hooks.server.ts` (compatible with our 2.8.0). Alternatively, upgrade SvelteKit to ≥2.31 — but that's scope creep into the SvelteKit upgrade matrix.
    - Recommendation: stay on SvelteKit 2.8.0 for Phase 1; init in `hooks.server.ts` per Pattern 1. Defer SvelteKit upgrade to a separate phase.
+   - **RESOLVED:** stay on SvelteKit 2.8.0; Sentry server init lives in `src/hooks.server.ts` per Plan 01-04. SvelteKit ≥2.31 `instrumentation.server.ts` deferred.
 
 4. **Slack workspace provisioning timing.** Operational detail: who creates the new channel, who provisions the webhook URL? Per CONTEXT Claude's Discretion, this is "operational detail, captured at deploy time." Planner records as a runbook task (not a code task).
+   - **RESOLVED:** Plan 01-08 Task 1 step 2 captures Slack workspace + channel provisioning as a runbook entry.
 
 5. **Should `pino` redact paths cover `event.cookies` and `event.params`?** For non-error logs (the per-request `request` log line), the request body isn't logged but the URL + method are. URL params on access flows (`?code=...`) might leak access codes. Recommend: extend pino redact to `req.url` if URL contains `code=` or `signature=` query parameters — though the simpler pattern is to NOT log the URL with query string at request-completion time, only the pathname.
+   - **RESOLVED:** Plan 01-05 logger emits `{path: url.pathname}` only at request-completion time — no query string. Sentry breadcrumb scrubber covers any URL with `?signature=` or `?code=` per Plan 01-04 task 2.
 
 ## Environment Availability
 
