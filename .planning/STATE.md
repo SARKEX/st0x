@@ -68,5 +68,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-28
-Stopped at: Roadmap created and 30 v1 requirements mapped across 4 phases
-Resume file: None — next step is `/gsd-plan-phase 1`
+Stopped at: Phase 1 UI-SPEC approved (deletion-heavy phase, minimal contract; 3 user decisions locked)
+Resume file: .planning/phase-01-shrink-the-surface-see-what-s-happening/01-UI-SPEC.md
+Next step: `/gsd-discuss-phase 1` (or `/gsd-plan-phase 1` to skip discussion)
