@@ -21,7 +21,6 @@ st0x is a single-chain (Base) decentralized exchange for trading tokenized secur
 - ✓ Two unified auth paths through `walletService.ts`: direct wallet (wagmi) + Dynamic Labs embedded wallet — existing
 - ✓ Pyth Network price feeds for asset pricing; SPYM uses external `LIQUIDITY_MONITOR_URL` proxy — existing
 - ✓ Goldsky subgraphs for orderbook events, SFT vaults, metadata; Raindex for order data — existing
-- ✓ Onramper integration for fiat on-ramp — existing
 - ✓ NYSE market-hours gating for tokenized-security trading — existing
 - ✓ Recent fix (commit 89571b3): slippage tolerance honored on Sell orders + correct partial-fill detection in spend-anchored modes — existing
 - ✓ Recent fix (commit 6c1919f): live oracle price used for `ioRatio` estimation instead of stale hardcoded fallback — existing
@@ -78,10 +77,11 @@ st0x is a single-chain (Base) decentralized exchange for trading tokenized secur
 - [ ] Replace scattered hardcoded USDC address constants with `isPaymentToken(addr, network)` / `getPaymentTokensForNetwork(network)`
 - [ ] Rewrite `CLAUDE.md` to match actual code (single chain, no AA/Rhinestone/EIP-7702, no `account-abstraction/` directory)
 
-**Rewards / snapshot subsystem deprecation:**
+**Unused-subsystem deprecation:**
 
 - [ ] Remove user-facing dead rewards code: leaderboard, monthly points, public rewards APIs, statement views, leaderboard polling
 - [ ] Decide and act on internal admin rewards/TVL views (`admin/rewards/+page.svelte` 4933 lines, the rewards section of `admin/+page.svelte`): if internal team accepts dropping it, remove the cron, snapshot pipeline (`src/lib/server/snapshots/`), and KV state to eliminate the bug surface; otherwise keep with bandages and accept the risk
+- [ ] Remove the entire Onramper fiat-on-ramp integration — `OnramperModal.svelte`, the `/api/onramper/sign-url` endpoint, `ONRAMPER_SECRET_KEY` / `PUBLIC_ONRAMPER_API_KEY` / `PUBLIC_ONRAMPER_ENV` env vars, and any docs/links pointing to it; the feature is unused and represents pure bug surface
 
 ### Out of Scope
 
@@ -93,6 +93,7 @@ st0x is a single-chain (Base) decentralized exchange for trading tokenized secur
 - **Admin-page architectural refactor** — `admin/+page.svelte` (2898 lines) and `admin/rewards/+page.svelte` (4933 lines) are bloated but internal-only. Painful for team velocity but doesn't affect end users; deferred to a separate cleanup milestone unless the rewards-subsystem deprecation eliminates one of them as a side effect.
 - **Mobile app** — Out of scope; web-only for this milestone.
 - **Compliance / regulatory programs (KYC, AML, tax reporting infrastructure beyond what already exists)** — Out of scope; not on the bug-whackamole critical path.
+- **Onramper fiat on-ramp** — Currently shipped but unused; being removed in this milestone (see Active deprecation requirements). Not part of go-forward scope.
 
 ## Context
 
