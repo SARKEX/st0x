@@ -76,14 +76,50 @@ Notes:
   3. Direct access to `inputTokenAddress` / `outputTokenAddress` / `inputIOIndex` / `outputIOIndex` outside `src/lib/types/orderPerspective.ts` is structurally prevented (lint rule or marker), so the maker/taker INPUT/OUTPUT naming collision can no longer silently invert sides in new code
   4. The `transaction.ts` monolith is split into focused, independently testable state machines (deploy, market-take, approval, partial-fill detection) with the circular-import surface to `marketOrderExecution.ts` structurally eliminated, not patched
   5. Trade-page p75 LCP hits the explicit target set during planning on representative network/device profiles, validated against the OBS-05 baseline dashboard
-**Plans**: TBD
+**Plans**: 8 plans (8 waves; sequential due to file conflicts on transaction.ts during TRADE-02 split + TRADE-* sequencing constraint TRADE-01 → TRADE-02 → TRADE-03 → TRADE-04 → PERF-01)
+
+**Wave 1**
+- [ ] 02-01-PLAN.md — TRADE-01: ESLint no-restricted-syntax rule + ts-morph codemod migrating 57 raw IO-perspective property reads + 4 accessor wrappers in orderPerspective.ts + lint fixture
+
+**Wave 2** *(blocked on Wave 1 — codemod touches transaction.ts before TRADE-02 split)*
+- [ ] 02-02-PLAN.md — TRADE-02 PR-1: extract TransactionStatus enum + 6 interfaces + 4 leaf utilities into transactionShared.ts; transaction.ts becomes a re-export façade for back-compat
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 02-03-PLAN.md — TRADE-02 PR-2: extract 5 market-take methods into marketTakeStore.ts + sever last lexical edge by rewiring marketOrderExecution.ts to import directly (not via transaction.ts façade)
+
+**Wave 4** *(blocked on Wave 3 — file conflict on transaction.ts forces serialization with PR-2)*
+- [ ] 02-04-PLAN.md — TRADE-02 PR-3: extract 10 deploy/wrap/withdraw methods into deployTransactionStore.ts
+
+**Wave 5** *(blocked on Waves 3+4)*
+- [ ] 02-05-PLAN.md — TRADE-02 PR-4 + PR-5: extract approvalStore.ts + partialFillDetection.ts; tighten orderDeployment.ts return-type annotations to clear the 4 svelte-check baseline errors; transaction.ts shrinks to ≤ 60-line façade
+
+**Wave 6** *(blocked on Wave 5 — marketTakeStore must exist before pre-flight wires through it)*
+- [ ] 02-06-PLAN.md — TRADE-03: pre-flight multicall via RaindexClient.getOrderQuotesBatch + auto-walk (≤ 2 levels) + transcript.vaultBalance population (closes Phase 1 D-08 LIMITATION) + 3 new failWith call sites raising the OBS-03 grep gate from ≥ 9 to ≥ 12 + D-05 inline terminal-state error in MarketOrder.svelte
+
+**Wave 7** *(blocked on Wave 6 — TRADE-04 priceCap symmetry test references the post-Phase-2 transcript shape)*
+- [ ] 02-07-PLAN.md — TRADE-04: 16-case parameterized regression matrix in marketOrderFill.test.ts pinning 89571b3's two coupled bug classes (anchor-side selection + asymmetric slippage) + bug class 1 reproduction in marketOrderExecution.test.ts
+
+**Wave 8** *(blocked on Wave 7 — PERF-01 lands LAST per CONTEXT D-08a to avoid bundle-shape changes mid-refactor)*
+- [ ] 02-08-PLAN.md — PERF-01: rollup-plugin-visualizer + jspdf removal + lazy-load LimitOrder + DcaOrder + chart libs with CLS-safe skeletons + TanStack Query waterfall reorganization + pre/post p75 LCP capture from Vercel Speed Insights (autonomous: false — has 2 human-action checkpoints for baseline + post-deploy verification)
+
+**Cross-cutting constraints** (truths that appear in 2+ plans — verify they hold across the phase, not just per-plan):
+- **OBS-03 transcript preservation:** Every new error-return path in `marketOrderExecution.ts` routes through `failWith()`. Phase-exit grep `failWith(` count in marketOrderExecution.ts ≥ 12 (Phase 1 baseline 9 + 3 new TRADE-03 paths: preflight_chain_unreachable, preflight_order_vanished, auto_retry_exhausted). Enforced in 02-06 acceptance criteria; cross-cutting check in 02-04, 02-05, 02-07.
+- **TRADE-01 lockdown (post-codemod, post-flip):** Raw access grep `\.(inputTokenAddress|outputTokenAddress|inputIOIndex|outputIOIndex)\b` returns 0 hits in src/ + tests/ outside the allowlist (orderPerspective.ts, utils/orderbook.ts, api/orders.ts, generated-graphql.ts, the io-perspective-violation.ts fixture, and comment-only matches). Enforced 02-01 + re-verified at every subsequent plan that touches the codemod surface.
+- **Circular import absence:** `grep -E "from ['\"]\$lib/stores/transaction['\"]" src/lib/services/marketOrderExecution.ts` MUST return 0 lines. The `marketTakeStore.ts` consumes the orchestration helpers without `marketOrderExecution.ts` importing back. Enforced 02-03 + re-verified at every subsequent plan that touches marketOrderExecution.ts.
+- **D-13 out-of-scope guardrails (carried from Phase 1):** No account abstraction. No multi-chain expansion. No `+error.svelte`. No admin/+page.svelte refactor. No replacement on-ramp. No external log drain. No SSR for trade page (D-08 explicit).
+- **WasmEncodedResult discipline:** All SDK calls (orderDeployment + new pre-flight in TRADE-03) check `.error` before reading `.value`. Pattern from `src/lib/services/orderDeployment.ts:188-193`. Enforced 02-05 + 02-06.
+- **TransactionStatus UI binding preservation:** The façade re-export pattern preserves all existing UI bindings (`import transactionStore, { TransactionStatus } from '$lib/stores/transaction'` continues to resolve) during the TRADE-02 migration. Phase-exit grep `import.*TransactionStatus.*from '\$lib/stores/transaction'` MUST still return ≥ 2 hits (TransactionModal.svelte + others) at Phase 2 close.
+- **Slippage + pre-flight coexistence:** D-03 rationale (pre-flight catches "order isn't there anymore"; slippage catches "price moved within an order"). Documented in 02-06 plan body so future contributors don't try to remove one or the other.
+- **Real-money rollout (D-08 / specifics):** TRADE-02 PR-2 (marketTakeStore extract) is the highest-risk PR — manual smoke test in 02-VALIDATION.md "Manual-Only Verifications" gates real-money rollout before subsequent PRs flip authority.
+- **TanStack Query staleTime: Infinity (do not weaken):** PERF-01 query-waterfall reorganization parallelizes/prefetches but DOES NOT reduce staleTime. Manual-invalidation pattern is intentional per CLAUDE.md ground truth. Enforced in 02-08.
+- **Single-chain Base 8453 + two auth paths (CLAUDE.md drift):** Plans treat single-chain Base + wagmi/Dynamic as ground truth; aspirational multi-chain/AA content in CLAUDE.md is ignored until DRIFT-03 in Phase 4.
 **UI hint**: yes
 
 Notes:
 - TRADE-01 (codify side semantics) is the prerequisite for TRADE-02 (split transaction.ts) which feeds into TRADE-03 (pre-flight check) and TRADE-04 (execution math correctness). Plans must respect this chain — do not let plan ordering scatter them.
-- The refactor must ship in pieces against live users on real money: feature flags, parallel implementations, and staged rollouts where appropriate. No "everything breaks for a day" migrations.
-- PERF-01's specific p75 LCP threshold is set during planning, not roadmapping — the OBS-05 dashboard from Phase 1 establishes the baseline against which the target is set.
-- "UI hint: yes" — TRADE-03 (visible UI staleness signaling) and PERF-01 (trade-page first-paint) are direct user-facing UI work.
+- The refactor must ship in pieces against live users on real money: PR-by-PR atomic shape with façade preservation through TRADE-02; svelte-check + tests green at every commit; manual smoke test gates PR-2 (marketTakeStore extraction) before subsequent PRs land.
+- PERF-01's specific p75 LCP threshold (< 2.5s on /trade/[id], Web Vitals "good") was locked in 02-CONTEXT.md D-07. Pre/post measurement against the OBS-05 Vercel Speed Insights dashboard.
+- "UI hint: yes" — TRADE-03 (D-05 inline terminal-state error in MarketOrder.svelte) and PERF-01 (lazy-load tabs with skeletons) are direct user-facing UI work.
 
 ### Phase 3: Production-Grade Hardening
 **Goal**: Close the latent security and reliability gaps the audit flagged so that no single environmental failure (committed key leak, missing env var, RPC misbehavior, GitHub raw outage) can cause a user-visible outage or expose an unauthenticated attack path
@@ -127,6 +163,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
-| 2. Trade-Execution Backbone Refactor | 0/TBD | Not started (unblocked) | - |
+| 2. Trade-Execution Backbone Refactor | 0/8 | Not started (planned) | - |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
