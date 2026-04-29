@@ -35,6 +35,11 @@ import {
 	DEFAULT_MARKET_ORDER_SLIPPAGE_BPS as DEFAULT_BPS,
 	MAX_SLIPPAGE_BPS as MAX_BPS
 } from '$lib/utils/marketOrderFill';
+import {
+	captureTakeOrderFailure,
+	type TakeOrderTranscript,
+	type TakeOrderFailureReason
+} from '$lib/services/observability/captureTakeOrderFailure';
 
 // Re-export so existing imports (`MarketOrder.svelte`, `QuickTrade.svelte`) keep working.
 export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = DEFAULT_BPS;
@@ -140,14 +145,81 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		network
 	} = input;
 
+	// OBS-03 transcript — built at function entry, mutated as the function progresses,
+	// dispatched on every failure path via `failWith`. Per CONTEXT D-15: client-side
+	// dual-sink (Sentry + console.error JSON line). NOT a server-relayed endpoint.
+	// vaultBalance stays null in Phase 1 (D-08-LIMITATION — Phase 2 / TRADE-03 introduces
+	// a server-side pre-flight read). request_id stays null on browser-only paths
+	// (logger.ts is server-only).
+	const transcript: TakeOrderTranscript = {
+		subgraphQuoteHash: null,
+		fullQuotePayload: quotes ?? [],
+		onChainStateRead: {
+			orderHash: null,
+			vaultBalance: null,
+			IOIndex: { input: null, output: null }
+		},
+		ratio: null,
+		slippageBps,
+		priceCap: null,
+		// Taker Buy crosses ask (counterparty sells); taker Sell crosses bid (counterparty buys).
+		side: orderSide === 'Buy' ? 'ask' : 'bid',
+		takerAction: orderSide,
+		userAction: orderSide,
+		mode: orderSide === 'Sell' || inputMode === 'spend' ? 'spendUpTo' : 'buyUpTo',
+		walletAddress: null,
+		request_id: null,
+		timestamp: new Date().toISOString()
+	};
+
+	// Single-seam dispatcher: every failure-return path routes through this so the
+	// transcript-builder pattern stays correct under future edits. Phase 1 fence:
+	// user-facing error strings are preserved verbatim (Phase 2 / TRADE-04 owns any
+	// UX refactor of these messages).
+	const failWith = (
+		reason: TakeOrderFailureReason,
+		errOrMessage: unknown,
+		userFacingError: string
+	) => {
+		captureTakeOrderFailure(errOrMessage, transcript, reason);
+		return { success: false, error: userFacingError };
+	};
+
 	try {
 		const takerAddress = getSignerAddress();
 		if (!takerAddress) {
+			// SKIP — not a no-liquidity scenario per RESEARCH §OBS-03 (the user disconnected
+			// the wallet; nothing to capture in a take-order transcript).
 			return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
 		}
+		transcript.walletAddress = takerAddress;
 		const externalQuotes = excludeTakerOwnedQuotes(quotes, takerAddress);
+		transcript.fullQuotePayload = externalQuotes;
+		// Per CONTEXT D-08 + checker W2: populate subgraphQuoteHash via SHA-256 of the
+		// serialized payload so the transcript field is non-null at emit time.
+		// crypto.subtle is available in browser context (this module is client-side).
+		try {
+			const hashBuf = await crypto.subtle.digest(
+				'SHA-256',
+				new TextEncoder().encode(JSON.stringify(externalQuotes))
+			);
+			transcript.subgraphQuoteHash =
+				'0x' +
+				Array.from(new Uint8Array(hashBuf))
+					.map((b) => b.toString(16).padStart(2, '0'))
+					.join('');
+		} catch {
+			// crypto.subtle should always be present in supported browsers; fall back to
+			// null rather than throwing through the trade UI.
+			transcript.subgraphQuoteHash = null;
+		}
+
 		if (externalQuotes.length === 0) {
-			return { success: false, error: 'No external orders available to fill' };
+			return failWith(
+				'no_quotes_available',
+				new Error('No external orders available to fill'),
+				'No external orders available to fill'
+			);
 		}
 		// 1. Walk the orderbook to get fills (best-priced quotes first — required for correct splitting
 		// across multiple maker orders: e.g. take all available at the thin 0x846f… leg, then the rest
@@ -163,14 +235,23 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		});
 
 		if (!walkResult || walkResult.fills.length === 0) {
-			return { success: false, error: 'No orders available to fill' };
+			return failWith(
+				'no_walk_fills',
+				new Error('No orders available to fill at current prices'),
+				'No orders available to fill'
+			);
 		}
 
 		// Emergency ratio from worst priced leg (used for aggregated SDK take + legacy paths)
 		const worstFill = walkResult.fills[walkResult.fills.length - 1];
 		if (!worstFill?.quote?.ratio) {
-			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+			return failWith(
+				'caught_exception',
+				new Error('worstFill missing ratio'),
+				'Unable to calculate order price. Please try again.'
+			);
 		}
+		transcript.ratio = worstFill.quote.ratio;
 		const isBuy = orderSide === 'Buy';
 		// Apply user-configured slippage to BOTH Buy and Sell. Previously Sell hardcoded
 		// a 2x emergency multiplier (~100% tolerance) regardless of user input — meaning
@@ -183,12 +264,17 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			ratioMultiplier
 		);
 		if (!emergencyRatioHex) {
-			return { success: false, error: 'Unable to calculate order price. Please try again.' };
+			return failWith(
+				'caught_exception',
+				new Error('emergencyRatioHex computation returned null'),
+				'Unable to calculate order price. Please try again.'
+			);
 		}
 
 		const priceCapStrForSdk = isBuy
 			? humanPriceCapStr(worstFill.price, ratioMultiplier, emergencyRatioHex)
 			: String(Float.fromHex(emergencyRatioHex).value?.format().value ?? '1e+18');
+		transcript.priceCap = priceCapStrForSdk;
 
 		// Hydrate orderData/sgOrder for quotes sourced from the REST API (which only
 		// returns summaries). We need the full on-chain OrderV4 struct for take-order calldata.
@@ -242,8 +328,24 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			);
 		}
 		const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
+		// Per CONTEXT D-08 + checker W3: orderHash + IOIndex.{input,output} are available
+		// locally on firstQuote (no new on-chain read required). Populate from the same
+		// data dispatchTakeOrders already receives below via aggregatedParams.
+		// vaultBalance stays null — populating it requires a new on-chain getVaultBalance
+		// call which is Phase 2 / TRADE-03 scope (the freshness-illusion fix introduces a
+		// server-side pre-flight read).
+		transcript.onChainStateRead.orderHash =
+			(firstQuote.sgOrder as { orderHash?: string } | undefined)?.orderHash ??
+			firstQuote.orderHash ??
+			null;
+		transcript.onChainStateRead.IOIndex.input = firstQuote.inputIOIndex ?? null;
+		transcript.onChainStateRead.IOIndex.output = firstQuote.outputIOIndex ?? null;
 		if (!firstQuote.orderData || !firstQuote.sgOrder) {
-			return { success: false, error: 'Unable to prepare aggregated order route. Please refresh and retry.' };
+			return failWith(
+				'unhydrated_fills',
+				new Error('firstQuote missing orderData/sgOrder after hydration'),
+				'Unable to prepare aggregated order route. Please refresh and retry.'
+			);
 		}
 		// Use *UpTo modes instead of *Exact to tolerate tiny Float precision gaps
 		// where the SDK's internal quote discovery computes available liquidity as
@@ -341,10 +443,11 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 						(fill.quote as ProcessedQuote).sgOrder?.orderBytes
 				);
 			if (indexedFills.length === 0) {
-				return {
-					success: false,
-					error: 'Unable to prepare order transaction. Please refresh quotes and retry.'
-				};
+				return failWith(
+					'aggregated_failed',
+					new Error('indexedFills empty in fallback path'),
+					'Unable to prepare order transaction. Please refresh quotes and retry.'
+				);
 			}
 			console.log('[executeMarketOrder] Falling back to per-order execution', {
 				hydratedFills: indexedFills.length,
@@ -375,21 +478,24 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return { success: true };
 		}
 		if (status === TransactionStatus.ERROR) {
-			return {
-				success: false,
-				error: txError || 'Order failed'
-			};
+			return failWith(
+				'aggregated_failed',
+				new Error(txError ?? 'Transaction store reported ERROR status'),
+				txError || 'Order failed'
+			);
 		}
-		return {
-			success: false,
-			error: 'Order did not complete. Please try again.'
-		};
+		return failWith(
+			'aggregated_failed',
+			new Error(`Transaction store terminal status: ${String(status)}`),
+			'Order did not complete. Please try again.'
+		);
 	} catch (error) {
 		console.error('Market order execution error:', error);
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : 'Unknown error occurred'
-		};
+		return failWith(
+			'caught_exception',
+			error,
+			error instanceof Error ? error.message : 'Unknown error occurred'
+		);
 	}
 }
 
