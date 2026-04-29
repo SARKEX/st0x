@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 2 (Trade-Execution Backbone Refactor) discuss-phase complete. NEW .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md (8 locked decisions D-01..D-08, full canonical-refs surface for downstream agents) and 02-DISCUSSION-LOG.md (alternatives audit). User selected three gray areas (TRADE-01 ban mechanism, TRADE-03 staleness UX, PERF-01 target & approach); TRADE-02 split granularity and rollout/risk strategy captured as Claude's discretion. Locked: ESLint custom rule for the IO-perspective ban (codemod 88 sites first, flip rule on after); silent pre-flight multicall safety net with auto-walk to next-best on-chain order — slippage-vs-pre-flight scope distinction explicit per discussion (slippage covers price-moved-within-order, pre-flight covers order-vanished-or-drained — they coexist non-redundantly); inline 'No liquidity available' terminal-state error only when auto-retry chain exhausts; OBS-03 failWith() transcript constraint preserved through all new failure paths; p75 LCP < 2.5s on /trade/[id] via lazy-load + bundle prune + query-waterfall reduction (NO SSR — explicitly deferred). Phase 2 ready for /gsd-plan-phase 2."
-last_updated: "2026-04-29T20:56:06Z"
-last_activity: 2026-04-29 -- Phase 2 Plan 02-02 (TRADE-02 PR-1) executed
+stopped_at: "Plan 02-03 (TRADE-02 PR-2) complete. Two atomic commits: ee67803 (Task 1 — lift 5 market-take methods + 9 helpers + cache + ensureBulkPayerAllowance into new src/lib/stores/marketTakeStore.ts, 1337 lines; transaction.ts now imports them from ./marketTakeStore + re-exports via export-default for the 15+ UI binding sites; -1220 net lines, 2265→1045) and 44a2666 (Task 2 — rewire src/lib/services/marketOrderExecution.ts:31 from `import transactionStore, { TransactionStatus } from '$lib/stores/transaction'` to two leaf imports, transactionStoreInternal+TransactionStatus from transactionShared and the 3 take methods from marketTakeStore; rewrites 4 call sites). Phase-exit gate `grep -E \"from '\\$lib/stores/transaction'\" src/lib/services/marketOrderExecution.ts` returns 0 — TRADE-02 success-criterion-4 (structural circular-import elimination, not patched as in 89571b3) is met. Reverse-cycle gate `grep -cE \"from '\\$lib/services/marketOrderExecution'\" src/lib/stores/marketTakeStore.ts` returns 0 (one-way dep preserved). Sequential-block JSDoc on pollAndFinalizeTakeOrders protects Pitfall 6 (vault invalidation must run before partial-fill detection). svelte-check at 7-error baseline (4 transaction.ts DeploymentTransactionArgs errors line-shifted from 541/563/585/2223 to 380/402/424/1003 due to deletion — Plan 02-05 owns the fix). 486 tests pass / 1 skipped, no regressions. failWith() count holds at 9. TRADE-01 raw-IO-perspective gate holds at 0. Ready for Plan 02-04 (TRADE-02 PR-3 — extract deployTransactionStore + approvalStore + partialFillDetection)."
+last_updated: "2026-04-29T21:14:30Z"
+last_activity: 2026-04-29 -- Phase 2 Plan 02-03 (TRADE-02 PR-2) executed — circular-import edge severed
 progress:
   total_phases: 4
   completed_phases: 1
@@ -26,31 +26,31 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 2 — Trade-Execution Backbone Refactor (EXECUTING)
-Plan: 3 of 8 (Plans 02-01 + 02-02 complete; ready for 02-03)
+Plan: 4 of 8 (Plans 02-01 + 02-02 + 02-03 complete; ready for 02-04)
 Status: Executing Phase 2
-Last activity: 2026-04-29 -- Plan 02-02 (TRADE-02 PR-1) executed
+Last activity: 2026-04-29 -- Plan 02-03 (TRADE-02 PR-2) executed — circular-import edge severed
 
-Progress: [██████████] 100% (8/8 Phase 1 plans complete; 2/8 Phase 2 plans complete; 1/4 phases complete; 9/30 milestone REQ-IDs complete — TRADE-02 still in progress across 02-02..02-05)
+Progress: [██████████] 100% (8/8 Phase 1 plans complete; 3/8 Phase 2 plans complete; 1/4 phases complete; 9/30 milestone REQ-IDs complete — TRADE-02 still in progress across 02-02..02-05)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 10
-- Average duration: ~9.4min
-- Total execution time: ~94min
+- Total plans completed: 11
+- Average duration: ~9.6min
+- Total execution time: ~106min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 8 | 76min | ~9.5min |
-| 2 | 2 | 18min | 9min |
+| 2 | 3 | 30min | 10min |
 
 **Recent Trend:**
 
-- Last 10 plans: 02-02 TRADE-02 PR-1 (7min, 2 commits), 02-01 TRADE-01 (11min, 2 commits), 01-08 OBS-05+RUNBOOK+phase-exit (12min, 1 task commit), 01-07 OBS-03 (17min, 2 commits), 01-06 OBS-04 (6min, 3 commits), 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
-- Trend: Plan 02-02 (TRADE-02 PR-1) shipped in 7 minutes / 2 atomic commits with zero deviations — fastest plan since 01-04..06. Test-first additive extraction: 13 unit tests for the new `transactionShared.ts` leaf landed BEFORE `transaction.ts` was modified, giving Task 2's deletion phase total confidence. Single-line `export {…}` blocks (with prettier-ignore directives) chosen over multi-line to satisfy the plan's exact `grep -c "export {.*TransactionStatus"` acceptance gate. 109 net lines deleted from `transaction.ts` (2374→2265); `TransactionStatus` enum now exists in EXACTLY one file (T-02-02-02 mitigation); leaf has zero `$lib/services` imports (T-02-02-03 mitigation). svelte-check holds at the 7-error baseline; 473→486 tests pass (+13 new). All 15+ UI binding sites preserved unchanged via the destructure + re-export façade pattern.
+- Last 10 plans: 02-03 TRADE-02 PR-2 (12min, 2 commits — circular-import edge severed), 02-02 TRADE-02 PR-1 (7min, 2 commits), 02-01 TRADE-01 (11min, 2 commits), 01-08 OBS-05+RUNBOOK+phase-exit (12min, 1 task commit), 01-07 OBS-03 (17min, 2 commits), 01-06 OBS-04 (6min, 3 commits), 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits)
+- Trend: Plan 02-03 (TRADE-02 PR-2) shipped in 12 min / 2 atomic commits with 1 trivial Rule-3 import-trim auto-fix. The structural fix that meets TRADE-02 success-criterion-4 — `marketOrderExecution.ts` no longer imports from `$lib/stores/transaction` at all, importing the 3 take methods directly from `$lib/stores/marketTakeStore` and `TransactionStatus + transactionStoreInternal` from `$lib/stores/transactionShared`. Lift-and-shift extraction: 1064 lines of method bodies + 9 private helpers + cache + `ensureBulkPayerAllowanceIfNeeded` lifted verbatim into the new file (1337 total lines), with destructure-at-module-top pattern preserving every `awaitWalletConfirmation`/`transactionError` reference unchanged. `transaction.ts` shrank by 1220 net lines (2265→1045). 15+ UI binding sites untouched. svelte-check 7-error baseline preserved (the 4 transaction.ts DeploymentTransactionArgs errors line-shifted from 541/563/585/2223 → 380/402/424/1003 — Plan 02-05 owns the fix). 486 tests pass.
 
 *Updated after each plan completion*
 
@@ -116,6 +116,12 @@ Recent decisions affecting current work:
 - 02-02: Did NOT touch the `MarketOrderSummary` interface FIELD names (`inputTokenAddress`, `outputTokenAddress` etc.) — these are type members, not raw reads; the 02-01 ESLint MemberExpression selector does not fire on interface field declarations (confirmed by 02-PATTERNS.md commentary on the moved interface).
 - 02-02: Test-first additive extraction (Task 1 = RED+GREEN in same commit because the test imports cannot resolve until the module exists; splitting RED into a separate commit would require a placeholder/empty module, no review or bisect value). Task 2 deletion was pure refactor, not feat — labelled `refactor(02-02)` in commit message.
 - 02-02: TRADE-02 requirement NOT marked complete in REQUIREMENTS.md after this plan — TRADE-02 is the umbrella REQ across plans 02-02..02-05; this PR ships only the leaf+façade structure. ROADMAP.md `update-plan-progress` correctly reflects 2/8 plans done; final TRADE-02 mark-complete will happen at plan 02-05 (or later) once the circular import surface with marketOrderExecution.ts is fully severed.
+- 02-03: Lifted helpers + cache as PRIVATE module-scope of marketTakeStore.ts (NOT re-exported, NOT promoted to a shared $lib/utils module). 9 helpers + 4-symbol cache + ensureBulkPayerAllowanceIfNeeded all became internal to the new module — public API surface is exactly the 5 methods. If a future state-machine consumer needs them, promote-then.
+- 02-03: createRaindexLink kept in BOTH transaction.ts (5 deploy/withdraw/remove sites) and marketTakeStore.ts (1 site in pollAndFinalizeTakeOrders). The 4-line wrapper around getRaindexOrderUrl from $lib/utils/tokenMath duplicates trivially; promoting it to a shared util is out-of-scope. Disappears when Plan 04+ extracts the rest of transaction.ts.
+- 02-03: Method bodies lifted VERBATIM. Two seams changed only: (a) destructure of awaitWalletConfirmation/awaitApprovalTx/transactionError/transactionSuccess/update happens at module top instead of the factory closure (so bodies don't need per-callsite `transactionStoreInternal.X(...)` rewrites), and (b) console.* tag prefix renames from `[handleX]` to `[marketTakeStore:handleX]` inside the lifted bodies for triage clarity. Behavior on the trade page is byte-equivalent.
+- 02-03: marketOrderExecution.ts:482 `get(transactionStore)` rewritten to `get(transactionStoreInternal)` — the underlying writable is the same; the difference is the import path. transactionStoreInternal is the leaf (one path); transactionStore is the façade default export (the path being severed). Plan-author flagged this as the Task 2 case-(b) that requires a leaf-import addition; my read found exactly 1 such site and rewrote it through the leaf.
+- 02-03: UI consumers UNTOUCHED. TokenSwapModal.svelte:421, WrapUnwrapModal.svelte:231, TransactionModal.svelte's 5+ reactive `$transactionStore.X` reads, MarketOrder.svelte, QuickTrade.svelte, etc. all use the façade default export from `$lib/stores/transaction`. The export-default object continues to spread the 5 take methods alongside the unchanged deploy/wrap/remove/withdraw methods.
+- 02-03: Plan acceptance criterion `grep -cE "from '\$lib/services" src/lib/stores/marketTakeStore.ts` returns 0 was overly strict for the lift-and-shift case — the new module needs walletService imports (sendTransaction, waitForTransaction, APPROVAL_TX_CONFIRMATIONS) that the original code in transaction.ts also had. The materially-important gate `grep -cE "from '\$lib/services/marketOrderExecution'" src/lib/stores/marketTakeStore.ts = 0` is satisfied; the structural cycle severance is met. Documented in 02-03-SUMMARY.md "Issues Encountered" as a plan-text-vs-plan-intent discrepancy.
 
 ### Pending Todos
 
@@ -137,6 +143,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Plan 02-02 (TRADE-02 PR-1) complete. Two atomic commits: c3137ab (transactionShared.ts leaf module, 209 lines, + 13 unit tests covering enum values + classifier branches + trusted-orderbook validation + extractTransactionError fallbacks) and b5f7961 (transaction.ts converted to re-export façade — deleted 160 lines of duplicate definitions, replaced the local writable factory with a destructure from transactionStoreInternal, added re-export façade at bottom; -109 net lines, 2374→2265). TransactionStatus enum exists in EXACTLY one file across src/lib/stores/*.ts (T-02-02-02 mitigation); transactionShared.ts has zero $lib/services imports (T-02-02-03 mitigation). svelte-check at 7-error baseline (4 transaction.ts pre-existing DeploymentTransactionArgs cast errors at lines 541/563/585/2223 — Plan 02-05 will clear via orderDeployment.ts return-type fix). 473→486 tests pass (+13 new). All 15+ UI binding sites untouched: TransactionModal.svelte, MarketOrder.svelte, QuickTrade.svelte, marketOrderExecution.ts:31, +page.svelte, etc., still import from $lib/stores/transaction unchanged. Ready for Plan 02-03 (TRADE-02 PR-2 — extract marketTakeStore.ts and sever the marketOrderExecution.ts → transaction.ts circular-import edge by importing marketTakeStore directly).
-Resume file: .planning/phases/phase-02-trade-execution-backbone-refactor/02-03-PLAN.md
-Next step: `/gsd-execute-plan 02 03`
+Stopped at: Plan 02-03 (TRADE-02 PR-2) complete. Two atomic commits: ee67803 (Task 1 — lifted 5 market-take methods + 9 private helpers + aggregated-calldata cache + ensureBulkPayerAllowanceIfNeeded into NEW src/lib/stores/marketTakeStore.ts (1337 lines); transaction.ts deleted the 5 method bodies + helpers + cache, imports the 5 methods from ./marketTakeStore at the top, continues to expose them on the export-default for the 15+ UI binding sites; -1220 net lines, 2265→1045) and 44a2666 (Task 2 — rewired src/lib/services/marketOrderExecution.ts:31 from `import transactionStore, { TransactionStatus } from '$lib/stores/transaction'` to two leaf imports: TransactionStatus + transactionStoreInternal from $lib/stores/transactionShared and the 3 take methods from $lib/stores/marketTakeStore directly; rewrote 4 call sites at :394 :434 :474 :482). Phase-exit grep gate `grep -E "from '\$lib/stores/transaction'" src/lib/services/marketOrderExecution.ts` returns 0 lines — TRADE-02 success-criterion-4 (structural circular-import elimination, NOT patched as in 89571b3) is met. Reverse-cycle gate `grep -cE "from '\$lib/services/marketOrderExecution'" src/lib/stores/marketTakeStore.ts` returns 0 (one-way dep preserved). Sequential-block JSDoc on pollAndFinalizeTakeOrders protects Pitfall 6 (vault invalidation must run before partial-fill detection). svelte-check at 7-error baseline (4 transaction.ts DeploymentTransactionArgs errors line-shifted from 541/563/585/2223 → 380/402/424/1003 due to deletion — Plan 02-05 owns the actual fix via orderDeployment.ts return-type annotation). 486 tests pass / 1 skipped, no regressions. failWith() count holds at 9 (OBS-03 baseline preserved). TRADE-01 raw-IO-perspective gate holds at 0. UI consumers (TokenSwapModal.svelte:421 `transactionStore.handleTakeOrders`, WrapUnwrapModal.svelte:231 `transactionStore.handleWrapUnwrap`, TransactionModal.svelte multiple `$transactionStore.*` reactive reads, MarketOrder.svelte, QuickTrade.svelte, +page.svelte, etc.) all UNTOUCHED — keep importing from $lib/stores/transaction via the façade default export. Ready for Plan 02-04 (TRADE-02 PR-3 — extract deployTransactionStore + approvalStore + partialFillDetection from the remaining 1045 lines of transaction.ts).
+Resume file: .planning/phases/phase-02-trade-execution-backbone-refactor/02-04-PLAN.md
+Next step: `/gsd-execute-plan 02 04`

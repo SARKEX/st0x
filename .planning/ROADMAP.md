@@ -85,7 +85,7 @@ Notes:
 - [x] 02-02-PLAN.md — TRADE-02 PR-1: extract TransactionStatus enum + 6 interfaces + 4 leaf utilities into transactionShared.ts; transaction.ts becomes a re-export façade for back-compat
 
 **Wave 3** *(blocked on Wave 2)*
-- [ ] 02-03-PLAN.md — TRADE-02 PR-2: extract 5 market-take methods into marketTakeStore.ts + sever last lexical edge by rewiring marketOrderExecution.ts to import directly (not via transaction.ts façade)
+- [x] 02-03-PLAN.md — TRADE-02 PR-2: extract 5 market-take methods into marketTakeStore.ts + sever last lexical edge by rewiring marketOrderExecution.ts to import directly (not via transaction.ts façade)
 
 **Wave 4** *(blocked on Wave 3 — file conflict on transaction.ts forces serialization with PR-2)*
 - [ ] 02-04-PLAN.md — TRADE-02 PR-3: extract 10 deploy/wrap/withdraw methods into deployTransactionStore.ts
@@ -163,6 +163,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
-| 2. Trade-Execution Backbone Refactor | 2/8 | In Progress|  |
+| 2. Trade-Execution Backbone Refactor | 3/8 | In Progress|  |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
