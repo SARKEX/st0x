@@ -94,7 +94,7 @@ Notes:
 - [x] 02-05-PLAN.md — TRADE-02 PR-4 + PR-5: extract approvalStore.ts + partialFillDetection.ts; tighten orderDeployment.ts return-type annotations to clear the 4 svelte-check baseline errors; transaction.ts shrinks to ≤ 60-line façade
 
 **Wave 6** *(blocked on Wave 5 — marketTakeStore must exist before pre-flight wires through it)*
-- [ ] 02-06-PLAN.md — TRADE-03: pre-flight multicall via RaindexClient.getOrderQuotesBatch + auto-walk (≤ 2 levels) + transcript.vaultBalance population (closes Phase 1 D-08 LIMITATION) + 3 new failWith call sites raising the OBS-03 grep gate from ≥ 9 to ≥ 12 + D-05 inline terminal-state error in MarketOrder.svelte
+- [x] 02-06-PLAN.md — TRADE-03: pre-flight multicall via RaindexClient.getOrderQuotesBatch + auto-walk (≤ 2 levels) + transcript.vaultBalance population (closes Phase 1 D-08 LIMITATION) + 3 new failWith call sites raising the OBS-03 grep gate from ≥ 9 to ≥ 12 + D-05 inline terminal-state error in MarketOrder.svelte
 
 **Wave 7** *(blocked on Wave 6 — TRADE-04 priceCap symmetry test references the post-Phase-2 transcript shape)*
 - [ ] 02-07-PLAN.md — TRADE-04: 16-case parameterized regression matrix in marketOrderFill.test.ts pinning 89571b3's two coupled bug classes (anchor-side selection + asymmetric slippage) + bug class 1 reproduction in marketOrderExecution.test.ts
@@ -163,6 +163,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
-| 2. Trade-Execution Backbone Refactor | 5/8 | In Progress|  |
+| 2. Trade-Execution Backbone Refactor | 6/8 | In Progress|  |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |

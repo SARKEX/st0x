@@ -23,7 +23,7 @@ The bug-factory class. Refactor four tightly-coupled pieces of the trade-executi
 
 - [x] **TRADE-01**: INPUT/OUTPUT taker-vs-maker side semantics are codified through a single source of truth (`src/lib/types/orderPerspective.ts`); raw `inputTokenAddress` / `outputTokenAddress` / `inputIOIndex` / `outputIOIndex` access outside the helpers is banned (lint rule or comment marker); every boundary has unit-test coverage that pins the side
 - [x] **TRADE-02**: `src/lib/stores/transaction.ts` (2373 lines) is split into focused, independently testable state machines for deploy, market-take, approval, and partial-fill detection; the circular import surface with `marketOrderExecution.ts` is structurally eliminated (not just patched as it was in commit 89571b3)
-- [ ] **TRADE-03**: Market-order submission performs an on-chain pre-flight check (multicall against current orderbook state) before submitting take-orders; UI staleness is visible to the user when the subgraph lags chain truth, so "no liquidity" failures stop being silent surprises
+- [x] **TRADE-03**: Market-order submission performs an on-chain pre-flight check (multicall against current orderbook state) before submitting take-orders; UI staleness is visible to the user when the subgraph lags chain truth, so "no liquidity" failures stop being silent surprises
 - [ ] **TRADE-04**: Market-order execution math is provably symmetric across Buy / Sell / spend-anchored / asset-anchored modes — slippage-cap derivation, ratio multipliers, and order prioritization produce equivalent semantics; regression tests exist for each mode crossing each side
 
 ### Performance
@@ -110,7 +110,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | OBS-05 | Phase 1 | Complete (01-08, 2026-04-29) |
 | TRADE-01 | Phase 2 | Complete (02-01, 2026-04-29) |
 | TRADE-02 | Phase 2 | Complete (02-02..02-05, 2026-04-29) |
-| TRADE-03 | Phase 2 | Pending |
+| TRADE-03 | Phase 2 | Complete |
 | TRADE-04 | Phase 2 | Pending |
 | PERF-01 | Phase 2 | Pending |
 | SEC-01 | Phase 3 | Pending |
