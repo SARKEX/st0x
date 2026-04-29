@@ -59,7 +59,7 @@
 	$: hasNoFunds = usdcBalance === 0n && $usdcBalanceQuery.isSuccess;
 	$: showBanner = $isAuthenticated && hasNoFunds && !dismissed;
 
-	function handleAddFunds() {
+	function handleDeposit() {
 		openDepositModal();
 	}
 
@@ -82,10 +82,10 @@
 			<span>No USDC found in your wallet.</span>
 			<button
 				type="button"
-				on:click={handleAddFunds}
+				on:click={handleDeposit}
 				class="ml-1 font-semibold underline underline-offset-2 transition hover:text-blue-100"
 			>
-				Add funds to start trading
+				Deposit to start trading
 			</button>
 			<button
 				type="button"
