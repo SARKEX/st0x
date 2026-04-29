@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase_2_pending_planning
-stopped_at: Phase 2 (Trade-Execution Backbone Refactor) discuss-phase complete. NEW .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md (locked 8 decisions D-01..D-08) and 02-DISCUSSION-LOG.md (alternatives audit). Three gray areas discussed (TRADE-01 ban mechanism, TRADE-03 staleness UX, PERF-01 target & approach); two captured as Claude's discretion (TRADE-02 split granularity, rollout/risk strategy). Locked decisions — TRADE-01 (D-01/D-02): ESLint custom rule banning direct inputTokenAddress / outputTokenAddress / inputIOIndex / outputIOIndex reads outside src/lib/types/orderPerspective.ts; codemod-first migration over the 88 existing call sites (17 files), then flip the rule on. TRADE-03 (D-03/D-04/D-05/D-06): pre-flight multicall as silent safety net (not a UX interruption); on targeted-order-vanished/drained auto-walk to the next-best on-chain order using fresh on-chain truth instead of the stale subgraph (extending the existing aggregated→fallback→per-order cascade in marketOrderExecution.ts:328-368); inline terminal-state error on the order form only when the auto-retry chain exhausts ('No liquidity available right now for this size'); OBS-03 failWith() transcript constraint preserved through all new failure paths (Plan 01-07 seam re-verified by phase-exit grep). Reframed during discussion in response to user's 'why not just submit and let slippage handle it' pushback — pre-flight specifically catches 'order isn't there anymore' which slippage cannot help with; slippage and pre-flight coexist non-redundantly. PERF-01 (D-07/D-08): p75 LCP < 2.5s on /trade/[id] (Web Vitals 'good' threshold) validated against the existing Vercel Speed Insights dashboard; lazy-load (LimitOrder.svelte / DcaOrder.svelte / chart libs) + bundle prune + query-waterfall reduction; NO SSR (explicitly deferred to a future milestone to avoid concurrent surgery on the trade page during TRADE-01..04 landing). Phase 2 ready for /gsd-plan-phase 2.
-last_updated: "2026-04-29T13:30:00Z"
-last_activity: 2026-04-29 -- Phase 2 discuss-phase complete (3 gray areas, 8 locked decisions, 1 commit) — Phase 2 ready to plan
+status: executing
+stopped_at: "Phase 2 (Trade-Execution Backbone Refactor) discuss-phase complete. NEW .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md (8 locked decisions D-01..D-08, full canonical-refs surface for downstream agents) and 02-DISCUSSION-LOG.md (alternatives audit). User selected three gray areas (TRADE-01 ban mechanism, TRADE-03 staleness UX, PERF-01 target & approach); TRADE-02 split granularity and rollout/risk strategy captured as Claude's discretion. Locked: ESLint custom rule for the IO-perspective ban (codemod 88 sites first, flip rule on after); silent pre-flight multicall safety net with auto-walk to next-best on-chain order — slippage-vs-pre-flight scope distinction explicit per discussion (slippage covers price-moved-within-order, pre-flight covers order-vanished-or-drained — they coexist non-redundantly); inline 'No liquidity available' terminal-state error only when auto-retry chain exhausts; OBS-03 failWith() transcript constraint preserved through all new failure paths; p75 LCP < 2.5s on /trade/[id] via lazy-load + bundle prune + query-waterfall reduction (NO SSR — explicitly deferred). Phase 2 ready for /gsd-plan-phase 2."
+last_updated: "2026-04-29T19:39:41.158Z"
+last_activity: 2026-04-29 -- Phase 2 planning complete
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 8
-  completed_plans: 8
-  percent: 25
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 100
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 Phase: 2 (Trade-Execution Backbone Refactor) — context gathered, ready to plan
 Plan: 0 of TBD (next: /gsd-plan-phase 2)
-Status: 02-CONTEXT.md and 02-DISCUSSION-LOG.md committed; 8 implementation decisions locked (D-01..D-08)
-Last activity: 2026-04-29 -- Phase 2 discuss-phase complete
+Status: Ready to execute
+Last activity: 2026-04-29 -- Phase 2 planning complete
 
 Progress: [██████████] 100% (8/8 Phase 1 plans complete; 1/4 phases complete; 8/30 milestone REQ-IDs complete)
 
