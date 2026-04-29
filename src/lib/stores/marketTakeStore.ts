@@ -237,6 +237,21 @@ type AggregatedTakeCacheEntry = {
 
 const aggregatedTakeCalldataCache = new Map<string, AggregatedTakeCacheEntry>();
 
+/**
+ * Sweeps expired entries on every write. Without this, a user dragging the
+ * slippage slider or rapidly editing the amount field generates many distinct
+ * cache keys (cache key is JSON.stringify(takeRequest), so every distinct
+ * (taker, sellToken, buyToken, mode, amount, priceCap, chainId) combo is a
+ * new entry) that are otherwise never reclaimed — entries only got evicted
+ * on read of the same key. The sweep is O(n) per write but n stays small
+ * because expired entries get drained continuously.
+ */
+function pruneExpiredAggregatedTakeCache(now: number): void {
+	for (const [k, v] of aggregatedTakeCalldataCache) {
+		if (v.expiresAt <= now) aggregatedTakeCalldataCache.delete(k);
+	}
+}
+
 function getAggregatedTakeCacheKey(takeRequest: TakeOrdersRequest): string {
 	return JSON.stringify(takeRequest);
 }
@@ -281,6 +296,7 @@ const fetchAggregatedTakeOrdersCalldata = async (
 			expiresAt: now + AGGREGATED_TAKE_CACHE_TTL_MS,
 			value: result
 		});
+		pruneExpiredAggregatedTakeCache(now);
 	}
 	return result;
 };
