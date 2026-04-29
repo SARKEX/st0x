@@ -482,6 +482,20 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// the same shape. The aggregatedParams construction below operates on these
 		// post-pre-flight fills.
 		walkResult.fills = workingFills;
+		// Recompute aggregate totals from the survivors. walkOrderbook produced these
+		// against the ORIGINAL fills set, but the partial-fill anchor downstream
+		// (params.requestedTakerWantsAmount → pollAndFinalizeTakeOrders) reads
+		// walkResult.inputAmountFilled directly. Without this recompute, a successful
+		// trade against survivors-only liquidity would be flagged as a partial fill
+		// because the anchor was inflated by the pre-pre-flight totals.
+		// User-perspective mapping (matches walkOrderbook): Buy → input=asset/output=payment;
+		// Sell → input=payment/output=asset.
+		const survivorAssetTotal = workingFills.reduce((acc, f) => acc + f.assetAmount, 0n);
+		const survivorPaymentTotal = workingFills.reduce((acc, f) => acc + f.paymentAmount, 0n);
+		walkResult.inputAmountFilled =
+			orderSide === 'Buy' ? survivorAssetTotal : survivorPaymentTotal;
+		walkResult.outputAmountGiven =
+			orderSide === 'Buy' ? survivorPaymentTotal : survivorAssetTotal;
 		// === END TRADE-03 pre-flight block ===
 
 		// NOTE: Slippage cap (priceCap) constructed above operates on the survivors from
