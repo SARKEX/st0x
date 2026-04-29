@@ -231,8 +231,6 @@ function isPublicPath(path: string): boolean {
 // Paths that require wallet registration (server-side enforcement)
 function requiresWalletRegistration(path: string): boolean {
 	// Protected API endpoints that need wallet registration
-	// Exception: /api/rewards/global is public (displays RocketBoost progress to all users)
-	if (path.startsWith('/api/rewards/') && path !== '/api/rewards/global') return true;
 	if (path.startsWith('/api/snapshots/')) return true;
 	if (path === '/api/onramper/sign-url') return true;
 

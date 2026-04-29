@@ -2,7 +2,7 @@
 	import {
 		showTokenSwapAnnouncementModal,
 		markTokenSwapAnnouncementSeen
-	} from '$lib/stores/rewardsStore';
+	} from '$lib/stores/announcementStore';
 	import { goto } from '$app/navigation';
 	import { track } from '$lib/services/analytics';
 

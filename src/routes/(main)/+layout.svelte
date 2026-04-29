@@ -3,11 +3,11 @@
 	import { onMount } from 'svelte';
 	import TransactionModal from '$lib/components/TransactionModal.svelte';
 	import RainlangConfirmationModal from '$lib/components/RainlangConfirmationModal.svelte';
-	import TokenSwapAnnouncementModal from '$lib/components/rewards/TokenSwapAnnouncementModal.svelte';
+	import TokenSwapAnnouncementModal from '$lib/components/announcements/TokenSwapAnnouncementModal.svelte';
 	import ReferralJoinModal from '$lib/components/referrals/ReferralJoinModal.svelte';
 	import ReferralDashboardModal from '$lib/components/referrals/ReferralDashboardModal.svelte';
 	import ReferralLeaderboardModal from '$lib/components/referrals/ReferralLeaderboardModal.svelte';
-	import { initTokenSwapAnnouncement } from '$lib/stores/rewardsStore';
+	import { initTokenSwapAnnouncement } from '$lib/stores/announcementStore';
 	import AccessCodeModal from '$lib/components/AccessCodeModal.svelte';
 	import WalletConnectionModal from '$lib/components/WalletConnectionModal.svelte';
 	import Tutorial from '$lib/components/Tutorial.svelte';
@@ -170,9 +170,6 @@
 		/>
 	</div>
 
-	<!-- Rewards Modals - temporarily hidden -->
-	<!-- <RewardsDetailsModal /> -->
-	<!-- <RewardsLeaderboardModal /> -->
 	<TokenSwapAnnouncementModal />
 
 	<!-- Referral Modals -->

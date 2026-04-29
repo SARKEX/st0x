@@ -145,7 +145,6 @@
 				<!-- Hide on mobile, show in hamburger menu instead -->
 				{#if !isHamburgerMode}
 					<ReferralButton />
-					<!-- RewardsDisplay temporarily hidden -->
 				{/if}
 
 				{#if $authMethod === 'dynamic' && $dynamicSession}
@@ -346,10 +345,9 @@
 		class="fixed left-0 right-0 top-[60px] z-[99] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg"
 	>
 		<div class="flex flex-col gap-4 p-4">
-			<!-- Boost Rewards and Referrals in mobile menu -->
+			<!-- Referrals in mobile menu -->
 			<div class="flex flex-wrap gap-2 border-b border-white/10 pb-4">
 				<ReferralButton />
-				<!-- RewardsDisplay temporarily hidden -->
 			</div>
 
 			<nav class="flex flex-col gap-2">
