@@ -39,7 +39,7 @@ import {
 	APPROVAL_TX_CONFIRMATIONS
 } from '$lib/services/walletService';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
-import { evaluateMarketOrderFill } from '$lib/utils/marketOrderFill';
+import { detectPartialFill } from './partialFillDetection';
 import { ensureAllowance } from './approvalStore';
 import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 import { createRaindexClient } from '$lib/clients/raindex';
@@ -60,7 +60,6 @@ import {
 	validateOrderbookAddress,
 	extractTransactionError,
 	type TransactionMetadata,
-	type MarketOrderSummary,
 	type RaindexLink
 } from './transactionShared';
 
@@ -412,34 +411,6 @@ export const pollAndFinalizeTakeOrders = async (
 
 	const requestedInputAmount = params.requestedTakerWantsAmount;
 
-	// Partial-fill detection anchors on whichever side the user typed their amount.
-	// For spend modes (Sell-by-asset, Buy-by-spend) the anchor is the pays side; for
-	// `buyUpTo` it's the wants side. Comparing the wrong side conflates price
-	// slippage with quantity shortfall (e.g. a Sell that fully sold the asset at a
-	// worse price would get falsely flagged as partial quantity).
-	const { isNoFill, isPartialFill } = evaluateMarketOrderFill({
-		totalTakerWantsAmount: totalInputAmount,
-		totalTakerPaysAmount: totalOutputAmount,
-		requestedTakerWantsAmount: requestedInputAmount,
-		requestedTakerPaysAmount: params.requestedTakerPaysAmount
-	});
-
-	const summary: MarketOrderSummary = {
-		inputAmount: totalInputAmount,
-		inputTokenDecimals,
-		inputTokenSymbol,
-		inputTokenAddress,
-		outputAmount: totalOutputAmount,
-		outputTokenDecimals,
-		outputTokenSymbol,
-		outputTokenAddress,
-		requestedInputAmount,
-		ioRatio: actualIoRatio,
-		actualSlippage: 0n,
-		isPartialFill,
-		isNoFill
-	};
-
 	const raindexLink = createRaindexLink(
 		network.id,
 		primaryOrder.orderbook.id,
@@ -447,7 +418,33 @@ export const pollAndFinalizeTakeOrders = async (
 		'View order on Raindex'
 	);
 
+	// Sequential block — Pitfall 6 mitigation (02-RESEARCH §"Pitfall 6"):
+	// vault-balance invalidation MUST run BEFORE partial-fill detection consumes
+	// the trade totals. If detectPartialFill ran first, the partial-fill banner
+	// could render with stale on-chain balance reads (the user just got tokens
+	// the cache hasn't seen yet).
 	invalidateDashboardBalances();
+
+	// Partial-fill detection anchors on whichever side the user typed their amount.
+	// For spend modes (Sell-by-asset, Buy-by-spend) the anchor is the pays side; for
+	// `buyUpTo` it's the wants side. Comparing the wrong side conflates price
+	// slippage with quantity shortfall (e.g. a Sell that fully sold the asset at a
+	// worse price would get falsely flagged as partial quantity).
+	const summary = detectPartialFill({
+		totalTakerWantsAmount: totalInputAmount,
+		totalTakerPaysAmount: totalOutputAmount,
+		requestedTakerWantsAmount: requestedInputAmount,
+		requestedTakerPaysAmount: params.requestedTakerPaysAmount,
+		inputTokenSymbol,
+		inputTokenAddress,
+		inputTokenDecimals,
+		outputTokenSymbol,
+		outputTokenAddress,
+		outputTokenDecimals,
+		ioRatio: actualIoRatio,
+		actualSlippage: 0n
+	});
+
 	return transactionSuccess(hash, undefined, { marketOrderSummary: summary, raindexLink });
 };
 
