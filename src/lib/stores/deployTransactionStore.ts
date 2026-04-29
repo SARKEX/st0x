@@ -1,0 +1,988 @@
+/**
+ * Deploy state machine — extracted from transaction.ts (TRADE-02 PR-3).
+ *
+ * Owns the orchestration methods that deploy Rain-orderbook strategies
+ * (limit / DCA / DSF / folio), wrap/unwrap operations, and order/wallet
+ * withdrawals: handleStrategyDeployment, showRainlangConfirmation,
+ * handleDsfDeploy, handleDcaDeploy, handleLimitDeploy, handleFolioDeploy,
+ * handleWithdraw, handleRemoveOrder, handleWithdrawFromOrder, handleWrapUnwrap.
+ *
+ * This module is consumed by:
+ *   - src/lib/stores/transaction.ts (re-exports for UI back-compat).
+ *
+ * This module MUST NOT import from $lib/stores/marketTakeStore — deploy and
+ * market-take are sibling state machines that share the leaf (transactionShared)
+ * but do not depend on each other.
+ */
+
+import { get } from 'svelte/store';
+import {
+	decodeFunctionData,
+	erc20Abi,
+	type Hash,
+	type Hex
+} from 'viem';
+import { readContract as wagmiReadContract } from '@wagmi/core';
+import { wagmiConfig } from 'svelte-wagmi';
+import {
+	type DeploymentTransactionArgs,
+	type RaindexVault
+} from '@rainlanguage/orderbook';
+import {
+	sendTransaction as walletServiceSendTransaction,
+	waitForTransaction as walletServiceWaitForTransaction,
+	APPROVAL_TX_CONFIRMATIONS
+} from '$lib/services/walletService';
+import { withRetry } from '$lib/utils/retry';
+import {
+	getDcaDeploymentArgs,
+	getLimitOrderDeploymentArgs,
+	getMarketMakingDeploymentArgs,
+	getFolioDeploymentArgs,
+	type FolioDeploymentArgs,
+	type DcaDeploymentArgs,
+	type LimitOrderDeploymentArgs,
+	type MarketMakingDeploymentArgs
+} from '$lib/services/orderDeployment';
+import { wrapToken, unwrapToken } from '$lib/services/wrapService';
+import { track } from '$lib/services/analytics';
+import { createRaindexClient } from '$lib/clients/raindex';
+import { invalidateOrderQueries } from '$lib/queries/orderbook';
+import { invalidateUserVaultQueries } from '$lib/queries/vaults';
+import { invalidateDashboardBalances } from '$lib/queries/balances';
+import { walletAddress } from '$lib/stores/authStore';
+import { currentNetwork } from '$lib/stores';
+import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
+import {
+	getRaindexOrderUrl,
+	getRaindexVaultUrl,
+	isPaymentToken
+} from '$lib/utils/tokenMath';
+import { ZERO_FLOAT_HEX } from '$lib/config/constants';
+import {
+	getMakerOutputTokenAddress,
+	getMakerInputTokenAddress
+} from '$lib/types/orderPerspective';
+import { TransactionErrorMessage } from '$lib/types/errors';
+import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
+import {
+	transactionStoreInternal,
+	classifyError,
+	validateOrderbookAddress,
+	extractTransactionError,
+	type TransactionMetadata,
+	type RaindexLink,
+	type AssetTokenInfo
+} from './transactionShared';
+
+/** Confirmations required before submitting the next market-take leg. */
+const TAKE_TX_CONFIRMATIONS = 1;
+
+// Wrapped wagmi functions with retry logic
+const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
+	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
+
+// Unified send transaction (works with both Dynamic and wagmi wallets)
+const sendTransaction = walletServiceSendTransaction;
+
+// Unified wait for transaction (works with both Dynamic and wagmi wallets, includes retry logic)
+const waitForTransaction = walletServiceWaitForTransaction;
+
+// Destructure the leaf-owned status-helper surface so the lifted method bodies
+// below can keep calling `awaitWalletConfirmation(...)` etc. unchanged. This
+// mirrors the destructure seam in marketTakeStore.ts (TRADE-02 PR-2).
+const {
+	reset,
+	checkingWalletAllowance,
+	awaitWalletConfirmation,
+	awaitApprovalTx,
+	transactionSuccess,
+	transactionError
+} = transactionStoreInternal;
+
+// Find a vault by matching both vault ID and token address
+// Vault IDs can be decimal strings or hex strings, so we check both formats
+function findVaultByIdAndToken(
+	vaults: RaindexVault[],
+	vaultId: string | undefined,
+	tokenAddress: string | undefined
+): RaindexVault | undefined {
+	if (!vaultId) return undefined;
+
+	let normalizedVaultId: bigint;
+	try {
+		normalizedVaultId = BigInt(vaultId);
+	} catch {
+		return undefined;
+	}
+
+	const idMatches = vaults.filter((v) => {
+		try {
+			return BigInt(v.vaultId.toString()) === normalizedVaultId;
+		} catch {
+			return false;
+		}
+	});
+
+	const normalizedToken = tokenAddress?.toLowerCase();
+	if (!normalizedToken) {
+		return idMatches.length === 1 ? idMatches[0] : undefined;
+	}
+
+	return idMatches.find((v) => v.token?.address?.toLowerCase() === normalizedToken);
+}
+
+// Helper function to create Raindex v5 link data (safe, no HTML)
+function createRaindexLink(
+	chainId: number,
+	orderbookId: string,
+	orderHashOrVaultId: string,
+	linkText = 'Manage your order on Raindex'
+): RaindexLink {
+	const url = getRaindexOrderUrl(chainId, orderbookId, orderHashOrVaultId);
+	return { url, text: linkText };
+}
+
+export const handleStrategyDeployment = async (
+	deploymentArgs: DeploymentTransactionArgs,
+	assetTokenInfo?: AssetTokenInfo
+) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+	const $signerAddress = get(walletAddress);
+	if (!$signerAddress) throw new Error('Signer address not found');
+
+	// Get network early - used for validation and later for subgraph queries
+	const network = get(currentNetwork);
+
+	// Security: Validate orderbook address BEFORE any approvals are granted
+	// This prevents a compromised orderbook from receiving token approvals
+	try {
+		validateOrderbookAddress(deploymentArgs.orderbookAddress, network);
+	} catch (error) {
+		return transactionError((error as Error).message as TransactionErrorMessage);
+	}
+
+	// Filter approvals: check balance + allowance in parallel, skip if already approved
+	const approvalsNeeded: typeof deploymentArgs.approvals = [];
+
+	if (deploymentArgs.approvals.length > 0) {
+		checkingWalletAllowance('Checking balances and allowances...');
+
+		// Check all balances and allowances in PARALLEL
+		const checks = await Promise.all(
+			deploymentArgs.approvals.map(async (approval) => {
+				const { args: approvalArgs } = decodeFunctionData({
+					abi: erc20Abi,
+					data: approval.calldata as Hex
+				});
+				const spender = approvalArgs[0] as Hex;
+				const requiredAmount = BigInt(approvalArgs[1] as string);
+
+				// Check balance and allowance in parallel
+				const [balance, allowance] = await Promise.all([
+					readContract(config, {
+						abi: erc20Abi,
+						address: approval.token as `0x${string}`,
+						functionName: 'balanceOf',
+						args: [$signerAddress as Hex]
+					}),
+					readContract(config, {
+						abi: erc20Abi,
+						address: approval.token as `0x${string}`,
+						functionName: 'allowance',
+						args: [$signerAddress as Hex, spender]
+					})
+				]);
+
+				return { approval, balance, allowance, requiredAmount };
+			})
+		);
+
+		// Validate balances and filter approvals
+		for (const { approval, balance, allowance, requiredAmount } of checks) {
+			// Check if user has sufficient balance
+			if (balance < requiredAmount) {
+				return transactionError(
+					`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
+				);
+			}
+
+			// Only add approval if current allowance is insufficient
+			if (allowance < requiredAmount) {
+				approvalsNeeded.push(approval);
+			}
+		}
+	}
+
+	// Only execute approvals that are actually needed
+	if (approvalsNeeded.length > 0) {
+		for (const approval of approvalsNeeded) {
+			try {
+				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
+				const hash = await sendTransaction({
+					to: approval.token as `0x${string}`,
+					data: approval.calldata as Hex
+				});
+				awaitApprovalTx(hash);
+				await waitForTransaction(hash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+			} catch (error) {
+				if (isStaleWalletSessionError(error)) {
+					const msg = await handleStaleWalletSession(config);
+					return transactionError(msg as TransactionErrorMessage);
+				}
+				return transactionError(extractTransactionError(error));
+			}
+		}
+	}
+	let hash: Hash;
+	try {
+		awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
+
+		hash = await sendTransaction({
+			to: deploymentArgs.orderbookAddress as `0x${string}`,
+			data: deploymentArgs.deploymentCalldata as Hex
+		});
+	} catch (error) {
+		if (isStaleWalletSessionError(error)) {
+			const msg = await handleStaleWalletSession(config);
+			return transactionError(msg as TransactionErrorMessage);
+		}
+		return transactionError(extractTransactionError(error));
+	}
+
+	const tryFetchOrderLink = async () => {
+		const client = await createRaindexClient();
+		const orders = await client.getAddOrdersForTransaction(
+			network.id,
+			deploymentArgs.orderbookAddress as `0x${string}`,
+			hash as `0x${string}`
+		);
+		if (orders.error || !orders.value?.length) {
+			return null;
+		}
+		const orderHash = orders.value[0].orderHash;
+		const orderbookId = orders.value[0].orderbook;
+		const chainId = network.id;
+		return createRaindexLink(chainId, orderbookId, orderHash);
+	};
+
+	// Poll for the order to be added to the orderbook
+	let attempts = 0;
+	const maxAttempts = 30; // 1 minute max (30 * 2 seconds)
+
+	// Build metadata with asset token info if provided
+	const buildMetadata = (raindexLink?: RaindexLink): TransactionMetadata => ({
+		...(assetTokenInfo ? { assetTokenInfo } : {}),
+		...(raindexLink ? { raindexLink } : {})
+	});
+
+	// Immediate attempt before scheduling interval
+	const immediateLink = await tryFetchOrderLink();
+	if (immediateLink) {
+		invalidateOrderQueries();
+		invalidateDashboardBalances();
+		return transactionSuccess(hash, undefined, buildMetadata(immediateLink));
+	}
+
+	const interval = setInterval(async () => {
+		attempts++;
+
+		// Stop polling after max attempts
+		if (attempts >= maxAttempts) {
+			clearInterval(interval);
+			invalidateOrderQueries();
+			invalidateDashboardBalances();
+			return transactionSuccess(hash, 'Order deployed successfully!', buildMetadata());
+		}
+
+		try {
+			const link = await tryFetchOrderLink();
+			if (link) {
+				clearInterval(interval);
+				invalidateOrderQueries();
+				invalidateDashboardBalances();
+				return transactionSuccess(hash, undefined, buildMetadata(link));
+			}
+		} catch (error) {
+			// Continue polling
+			console.error('[deployTransactionStore] Error checking for orders:', error);
+		}
+	}, 2000);
+};
+
+export const showRainlangConfirmation = (
+	composedRainlang: string,
+	deploymentArgs: DeploymentTransactionArgs,
+	assetTokenInfo?: AssetTokenInfo
+) => {
+	// Check if user wants to review strategy source code before deploying
+	const shouldReview = get(reviewStrategyOnDeploy);
+
+	if (shouldReview) {
+		// Show modal for user to review and confirm
+		rainlangConfirmationModal.set({
+			show: true,
+			rainlangCode: composedRainlang,
+			onDeploy: () => {
+				rainlangConfirmationModal.set({
+					show: false,
+					rainlangCode: '',
+					onDeploy: null,
+					onCancel: null
+				});
+				handleStrategyDeployment(deploymentArgs, assetTokenInfo);
+			},
+			onCancel: () => {
+				rainlangConfirmationModal.set({
+					show: false,
+					rainlangCode: '',
+					onDeploy: null,
+					onCancel: null
+				});
+				reset();
+			}
+		});
+	} else {
+		// Skip modal and deploy directly
+		handleStrategyDeployment(deploymentArgs, assetTokenInfo);
+	}
+};
+
+export const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+	const network = get(currentNetwork);
+	awaitWalletConfirmation(`Preparing strategy...`);
+	const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(network, args);
+
+	showRainlangConfirmation(composedRainlang, deploymentArgs);
+};
+
+export const handleDcaDeploy = async (args: DcaDeploymentArgs) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+	const network = get(currentNetwork);
+	awaitWalletConfirmation(`Preparing strategy...`);
+	const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(network, args);
+
+	// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
+	// Buy DCA: outputToken is payment token (e.g., USDC), inputToken is the asset
+	// Sell DCA: no need to track - user is receiving payment token
+	const isBuyOrder = isPaymentToken(args.outputToken.symbol);
+	const assetTokenInfo: AssetTokenInfo | undefined = isBuyOrder
+		? {
+				address: args.inputToken.address,
+				symbol: args.inputToken.symbol,
+				decimals: args.inputToken.decimals
+			}
+		: undefined;
+
+	showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo);
+};
+
+export const handleLimitDeploy = async (args: LimitOrderDeploymentArgs) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+	const network = get(currentNetwork);
+	awaitWalletConfirmation(`Preparing strategy...`);
+	const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(network, args);
+
+	// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
+	// Buy Limit: outputToken is payment token (e.g., USDC), inputToken is the asset
+	// Sell Limit: no need to track - user is receiving payment token
+	const isBuyOrder = isPaymentToken(args.outputToken.symbol);
+	const assetTokenInfo: AssetTokenInfo | undefined = isBuyOrder
+		? {
+				address: args.inputToken.address,
+				symbol: args.inputToken.symbol,
+				decimals: args.inputToken.decimals
+			}
+		: undefined;
+
+	showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo);
+};
+
+export const handleWithdraw = async (vault: RaindexVault) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+
+	// vault.balance is already a Float instance, use it directly
+	const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
+	if (vaultWithdrawCalldata.error) throw new Error(vaultWithdrawCalldata.error.readableMsg);
+	let hash: Hash;
+	try {
+		// Security: Validate orderbook address is trusted before sending transaction
+		const network = get(currentNetwork);
+		validateOrderbookAddress(vault.orderbook, network);
+
+		awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
+
+		hash = await sendTransaction({
+			to: vault.orderbook as `0x${string}`,
+			data: vaultWithdrawCalldata.value as Hex
+		});
+		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+
+		await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
+
+		const $signer = get(walletAddress);
+		const raindexLink = {
+			url: getRaindexVaultUrl(network.id, vault.orderbook, vault.id),
+			text: 'Manage your vault on Raindex'
+		};
+
+		// Invalidate vault queries for this specific token
+		const tokenAddress = vault.token?.address ?? vault.token?.id;
+		invalidateUserVaultQueries(network.id, $signer ?? undefined, tokenAddress);
+		invalidateDashboardBalances();
+
+		return transactionSuccess(hash, undefined, { raindexLink });
+	} catch (error) {
+		if (isStaleWalletSessionError(error)) {
+			const msg = await handleStaleWalletSession(config);
+			return transactionError(msg as TransactionErrorMessage);
+		}
+		return transactionError(extractTransactionError(error));
+	}
+};
+
+/**
+ * Wrap or unwrap tokens using ERC4626 vaults.
+ * Follows the same pattern as handleWithdraw.
+ */
+export const handleWrapUnwrap = async (
+	mode: 'wrap' | 'unwrap',
+	tokenAddress: `0x${string}`,
+	amount: bigint,
+	userAddress: `0x${string}`,
+	tokenSymbol: string,
+	targetSymbol: string
+) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+
+	let hash: Hash;
+	const actionName = mode === 'wrap' ? 'Wrap' : 'Unwrap';
+
+	try {
+		awaitWalletConfirmation(`Awaiting wallet confirmation to ${mode} ${tokenSymbol}...`);
+
+		if (mode === 'wrap') {
+			hash = await wrapToken(tokenAddress, amount, userAddress);
+		} else {
+			hash = await unwrapToken(tokenAddress, amount, userAddress, userAddress);
+		}
+
+		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+		await waitForTransaction(hash);
+
+		// Invalidate balance queries (same pattern as handleWithdraw)
+		invalidateDashboardBalances();
+
+		track(`${mode}_success`, {
+			token_symbol: tokenSymbol,
+			target_symbol: targetSymbol,
+			transaction_hash: hash
+		});
+
+		return transactionSuccess(hash, `Successfully ${mode}ped ${tokenSymbol} to ${targetSymbol}`);
+	} catch (error) {
+		track(`${mode}_failed`, {
+			token_symbol: tokenSymbol,
+			target_symbol: targetSymbol,
+			error: classifyError(error)
+		});
+
+		if (isStaleWalletSessionError(error)) {
+			const msg = await handleStaleWalletSession(config);
+			return transactionError(msg as TransactionErrorMessage);
+		}
+		return transactionError(
+			extractTransactionError(error, `${actionName} failed` as TransactionErrorMessage)
+		);
+	}
+};
+
+/**
+ * Cancel an order: withdraw from vaults first, then deactivate the order.
+ * This combines both operations into a single user flow.
+ */
+export const handleRemoveOrder = async (quote: {
+	orderHash: string;
+	orderbookId?: string;
+	inputVaultId?: string;
+	outputVaultId?: string;
+	inputTokenAddress?: string;
+	outputTokenAddress?: string;
+}) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+	const network = get(currentNetwork);
+	const $signerAddress = get(walletAddress);
+
+	if (!$signerAddress) {
+		throw new Error('Wallet not connected');
+	}
+
+	track('order_removal_initiated', {
+		order_hash: quote.orderHash
+	});
+
+	try {
+		// Fetch the RaindexOrder from the SDK
+		const client = await createRaindexClient();
+		const ordersResult = await client.getOrders(
+			[network.id],
+			{
+				orderHash: quote.orderHash as `0x${string}`,
+				owners: [$signerAddress as `0x${string}`]
+			},
+			1 // Page 1 (1-indexed)
+		);
+
+		if (ordersResult.error || !ordersResult.value) {
+			throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
+		}
+
+		const orders = ordersResult.value.orders;
+		if (orders.length === 0) {
+			throw new Error('Order not found');
+		}
+
+		const order = orders[0];
+
+		// Step 1: Withdraw from vaults first
+		// Fetch all user vaults to find ones associated with this order
+		const vaultsResult = await client.getVaults(
+			[network.id],
+			{
+				owners: [$signerAddress as `0x${string}`],
+				hideZeroBalance: false,
+				tokens: []
+			},
+			1 // Page 1 (1-indexed)
+		);
+
+		console.log('[deployTransactionStore:handleRemoveOrder] Vaults API response:', {
+			error: vaultsResult.error?.readableMsg,
+			hasValue: !!vaultsResult.value,
+			hasItems: !!vaultsResult.value?.items,
+			itemCount: vaultsResult.value?.items?.length,
+			signerAddress: $signerAddress,
+			networkId: network.id
+		});
+
+		if (!vaultsResult.error && vaultsResult.value?.items) {
+			const vaults = vaultsResult.value.items as RaindexVault[];
+
+			console.log('[deployTransactionStore:handleRemoveOrder] Looking for vaults:', {
+				outputVaultId: quote.outputVaultId,
+				outputTokenAddress: getMakerOutputTokenAddress(quote),
+				inputVaultId: quote.inputVaultId,
+				inputTokenAddress: getMakerInputTokenAddress(quote),
+				availableVaultIds: vaults.map((v) => ({
+					vaultId: v.vaultId.toString(),
+					vaultIdHex: `0x${v.vaultId.toString(16).padStart(64, '0')}`,
+					token: v.token?.symbol,
+					tokenAddress: v.token?.address
+				}))
+			});
+
+			// Find vaults for this order
+			// Note: vaultId alone doesn't uniquely identify a vault - need (vaultId + token)
+			// Same vaultId can hold different tokens (e.g., input vault has USDC, output vault has tSTOX)
+			const vaultsToWithdraw: RaindexVault[] = [];
+			const addedVaultKeys = new Set<string>(); // Track by vaultId + token
+
+			if (quote.outputVaultId) {
+				const outputVault = findVaultByIdAndToken(
+					vaults,
+					quote.outputVaultId,
+					getMakerOutputTokenAddress(quote)
+				);
+				if (outputVault) {
+					const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
+					if (!addedVaultKeys.has(key)) {
+						vaultsToWithdraw.push(outputVault);
+						addedVaultKeys.add(key);
+					}
+				}
+			}
+			if (quote.inputVaultId) {
+				const inputVault = findVaultByIdAndToken(
+					vaults,
+					quote.inputVaultId,
+					getMakerInputTokenAddress(quote)
+				);
+				if (inputVault) {
+					const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
+					if (!addedVaultKeys.has(key)) {
+						vaultsToWithdraw.push(inputVault);
+						addedVaultKeys.add(key);
+					}
+				}
+			}
+
+			console.log(
+				'[deployTransactionStore:handleRemoveOrder] Found vaults to withdraw:',
+				vaultsToWithdraw.length
+			);
+			console.log(
+				'[deployTransactionStore:handleRemoveOrder] Vault details:',
+				vaultsToWithdraw.map((v) => ({
+					vaultId: v.vaultId.toString(),
+					vaultIdHex: `0x${v.vaultId.toString(16).padStart(64, '0')}`,
+					token: v.token?.symbol,
+					tokenAddress: v.token?.address,
+					balanceHex: v.balance.asHex(),
+					orderbook: v.orderbook
+				}))
+			);
+
+			// Filter to only vaults with non-zero balance
+			// Compare hex representation to avoid Float class instance mismatch
+			const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
+				const balanceHex = vault.balance.asHex().toLowerCase();
+				console.log('[deployTransactionStore:handleRemoveOrder] Vault balance check:', {
+					vaultId: vault.vaultId.toString(),
+					token: vault.token?.symbol,
+					balanceHex,
+					isZero: balanceHex === ZERO_FLOAT_HEX
+				});
+				return balanceHex !== ZERO_FLOAT_HEX;
+			});
+
+			// Withdraw from each vault with balance
+			for (let i = 0; i < vaultsWithBalance.length; i++) {
+				const vault = vaultsWithBalance[i];
+
+				// Security: Validate orderbook address is trusted
+				validateOrderbookAddress(vault.orderbook, network);
+
+				const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
+				if (vaultWithdrawCalldata.error) {
+					throw new Error(vaultWithdrawCalldata.error.readableMsg);
+				}
+
+				awaitWalletConfirmation(`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`);
+
+				const withdrawHash = await sendTransaction({
+					to: vault.orderbook as `0x${string}`,
+					data: vaultWithdrawCalldata.value as Hex
+				});
+
+				awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
+
+				await waitForTransaction(withdrawHash);
+			}
+		}
+
+		// Step 2: Deactivate/remove the order
+		// Security: Validate orderbook address is trusted
+		validateOrderbookAddress(order.orderbook, network);
+
+		const removeCalldata = order.getRemoveCalldata();
+		if (removeCalldata.error) {
+			throw new Error(removeCalldata.error.readableMsg);
+		}
+
+		awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
+
+		const hash = await sendTransaction({
+			to: order.orderbook as `0x${string}`,
+			data: removeCalldata.value as Hex
+		});
+
+		awaitWalletConfirmation('Awaiting transaction confirmation...');
+
+		await waitForTransaction(hash);
+
+		const raindexLink = createRaindexLink(network.id, order.orderbook, quote.orderHash);
+
+		// Invalidate queries for the tokens involved in this order
+		const tokenAddresses = [
+			getMakerInputTokenAddress(quote),
+			getMakerOutputTokenAddress(quote)
+		].filter(Boolean);
+		for (const tokenAddr of tokenAddresses) {
+			if (tokenAddr) {
+				invalidateOrderQueries(network.id, tokenAddr);
+				invalidateUserVaultQueries(network.id, $signerAddress, tokenAddr);
+			}
+		}
+
+		track('order_removal_success', {
+			order_hash: quote.orderHash,
+			transaction_hash: hash
+		});
+
+		return transactionSuccess(hash, undefined, { raindexLink });
+	} catch (error: unknown) {
+		track('order_removal_failed', {
+			order_hash: quote.orderHash,
+			error: classifyError(error)
+		});
+
+		if (isStaleWalletSessionError(error)) {
+			const msg = await handleStaleWalletSession(config);
+			return transactionError(msg as TransactionErrorMessage);
+		}
+		return transactionError(extractTransactionError(error));
+	}
+};
+
+/**
+ * Withdraw from order vaults.
+ *
+ * Behavior based on order state:
+ * - If isFilled (remaining = 0): Deactivate order first, then withdraw from input vault only
+ * - If not filled (remaining > 0): Withdraw from both output and input vaults
+ */
+export const handleWithdrawFromOrder = async (quote: {
+	orderHash: string;
+	orderbookId?: string;
+	inputVaultId?: string;
+	outputVaultId?: string;
+	inputTokenAddress?: string;
+	outputTokenAddress?: string;
+	isFilled?: boolean;
+}) => {
+	const config = get(wagmiConfig);
+	if (!config) throw new Error('Wagmi config not found');
+	const network = get(currentNetwork);
+	const $signerAddress = get(walletAddress);
+
+	if (!$signerAddress) {
+		throw new Error('Wallet not connected');
+	}
+
+	const isFilled = quote.isFilled ?? false;
+
+	track('order_withdrawal_initiated', {
+		order_hash: quote.orderHash,
+		is_filled: isFilled
+	});
+
+	try {
+		const client = await createRaindexClient();
+
+		// For filled orders, we need to deactivate first
+		if (isFilled) {
+			// Step 1: Deactivate the order
+			awaitWalletConfirmation('Deactivating filled order...');
+
+			const ordersResult = await client.getOrders(
+				[network.id],
+				{
+					orderHash: quote.orderHash as `0x${string}`,
+					owners: [$signerAddress as `0x${string}`]
+				},
+				1 // Page 1 (1-indexed)
+			);
+
+			if (ordersResult.error || !ordersResult.value) {
+				throw new Error(ordersResult.error?.readableMsg || 'Failed to fetch order');
+			}
+
+			const orders = ordersResult.value.orders;
+			if (orders.length === 0) {
+				throw new Error('Order not found');
+			}
+
+			const order = orders[0];
+
+			// Only deactivate if order is still active
+			const sgOrderResult = order.convertToSgOrder();
+			if (!sgOrderResult.error && sgOrderResult.value?.active) {
+				// Security: Validate orderbook address is trusted
+				validateOrderbookAddress(order.orderbook, network);
+
+				const removeCalldata = order.getRemoveCalldata();
+				if (removeCalldata.error) {
+					throw new Error(removeCalldata.error.readableMsg);
+				}
+
+				awaitWalletConfirmation('Awaiting wallet confirmation to deactivate order...');
+
+				const removeHash = await sendTransaction({
+					to: order.orderbook as `0x${string}`,
+					data: removeCalldata.value as Hex
+				});
+
+				awaitWalletConfirmation('Awaiting deactivation confirmation...');
+
+				await waitForTransaction(removeHash);
+			}
+		}
+
+		// Fetch all user vaults
+		const vaultsResult = await client.getVaults(
+			[network.id],
+			{
+				owners: [$signerAddress as `0x${string}`],
+				hideZeroBalance: false,
+				tokens: []
+			},
+			1 // Page 1 (1-indexed)
+		);
+
+		if (vaultsResult.error || !vaultsResult.value?.items) {
+			throw new Error(vaultsResult.error?.readableMsg || 'Failed to fetch vaults');
+		}
+
+		const vaults = vaultsResult.value.items as RaindexVault[];
+
+		// Determine which vaults to withdraw from
+		// Note: vaultId alone doesn't uniquely identify a vault - need (vaultId + token)
+		const vaultsToWithdraw: RaindexVault[] = [];
+		const addedVaultKeys = new Set<string>(); // Track by vaultId + token
+
+		if (isFilled) {
+			// Filled order: only withdraw from input vault (output is empty)
+			if (quote.inputVaultId) {
+				const inputVault = findVaultByIdAndToken(
+					vaults,
+					quote.inputVaultId,
+					getMakerInputTokenAddress(quote)
+				);
+				if (inputVault) {
+					const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
+					if (!addedVaultKeys.has(key)) {
+						vaultsToWithdraw.push(inputVault);
+						addedVaultKeys.add(key);
+					}
+				}
+			}
+		} else {
+			// Not filled: withdraw from both vaults
+			if (quote.outputVaultId) {
+				const outputVault = findVaultByIdAndToken(
+					vaults,
+					quote.outputVaultId,
+					getMakerOutputTokenAddress(quote)
+				);
+				if (outputVault) {
+					const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
+					if (!addedVaultKeys.has(key)) {
+						vaultsToWithdraw.push(outputVault);
+						addedVaultKeys.add(key);
+					}
+				}
+			}
+			if (quote.inputVaultId) {
+				const inputVault = findVaultByIdAndToken(
+					vaults,
+					quote.inputVaultId,
+					getMakerInputTokenAddress(quote)
+				);
+				if (inputVault) {
+					const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
+					if (!addedVaultKeys.has(key)) {
+						vaultsToWithdraw.push(inputVault);
+						addedVaultKeys.add(key);
+					}
+				}
+			}
+		}
+
+		if (vaultsToWithdraw.length === 0) {
+			throw new Error('No vaults found to withdraw from');
+		}
+
+		// Filter to only vaults with non-zero balance
+		// Compare hex representation to avoid Float class instance mismatch
+		const vaultsWithBalance = vaultsToWithdraw.filter((vault) => {
+			const balanceHex = vault.balance.asHex().toLowerCase();
+			return balanceHex !== ZERO_FLOAT_HEX;
+		});
+
+		if (vaultsWithBalance.length === 0) {
+			// No vaults have balance - nothing to withdraw
+			const chainId = network.id;
+			const raindexLink = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+			// Still invalidate queries in case order was deactivated
+			const tokenAddrs = [
+				getMakerInputTokenAddress(quote),
+				getMakerOutputTokenAddress(quote)
+			].filter(Boolean);
+			for (const tokenAddr of tokenAddrs) {
+				if (tokenAddr) {
+					invalidateOrderQueries(network.id, tokenAddr);
+					invalidateUserVaultQueries(network.id, $signerAddress, tokenAddr);
+				}
+			}
+			return transactionSuccess('0x' as Hash, 'No balance to withdraw.', { raindexLink });
+		}
+
+		// Withdraw from each vault with balance
+		let lastHash: Hash = '0x';
+		for (let i = 0; i < vaultsWithBalance.length; i++) {
+			const vault = vaultsWithBalance[i];
+
+			// Security: Validate orderbook address is trusted
+			validateOrderbookAddress(vault.orderbook, network);
+
+			const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
+			if (vaultWithdrawCalldata.error) {
+				throw new Error(vaultWithdrawCalldata.error.readableMsg);
+			}
+
+			awaitWalletConfirmation(
+				`Awaiting wallet confirmation for withdrawal ${i + 1}/${vaultsWithBalance.length}...`
+			);
+
+			lastHash = await sendTransaction({
+				to: vault.orderbook as `0x${string}`,
+				data: vaultWithdrawCalldata.value as Hex
+			});
+
+			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
+
+			await waitForTransaction(lastHash);
+		}
+
+		const chainId = network.id;
+		const raindexLink = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
+
+		// Invalidate queries for the tokens involved in this order
+		const tokenAddrs = [
+			getMakerInputTokenAddress(quote),
+			getMakerOutputTokenAddress(quote)
+		].filter(Boolean);
+		for (const tokenAddr of tokenAddrs) {
+			if (tokenAddr) {
+				invalidateOrderQueries(network.id, tokenAddr);
+				invalidateUserVaultQueries(network.id, $signerAddress, tokenAddr);
+			}
+		}
+
+		track('order_withdrawal_success', {
+			order_hash: quote.orderHash,
+			is_filled: isFilled,
+			transaction_hash: lastHash
+		});
+
+		return transactionSuccess(lastHash, undefined, { raindexLink });
+	} catch (error: unknown) {
+		track('order_withdrawal_failed', {
+			order_hash: quote.orderHash,
+			is_filled: isFilled,
+			error: classifyError(error)
+		});
+
+		if (isStaleWalletSessionError(error)) {
+			const msg = await handleStaleWalletSession(config);
+			return transactionError(msg as TransactionErrorMessage);
+		}
+		return transactionError(extractTransactionError(error));
+	}
+};
+
+export const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
+	const network = get(currentNetwork);
+	awaitWalletConfirmation(`Preparing strategy...`);
+	const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args);
+
+	showRainlangConfirmation(composedRainlang, deploymentArgs);
+};
