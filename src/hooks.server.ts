@@ -1,8 +1,30 @@
 import type { Handle } from '@sveltejs/kit';
+import * as Sentry from '@sentry/sveltekit';
+import { sequence } from '@sveltejs/kit/hooks';
 import { verifySessionToken } from '$lib/server/auth';
 import { isWalletRegistered } from '$lib/server/accessCodes';
+import { scrubSentryEvent } from '$lib/observability/scrub';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
+
+// =============================================================================
+// Sentry Server Init (OBS-01)
+// =============================================================================
+// Errors-only configuration — no Replay, no Performance, no Feedback (D-06 / free-tier).
+// Init gated by !dev && Boolean(env.SENTRY_DSN) so dev runs no-op and missing DSN in prod
+// degrades gracefully. PII scrubbing runs in BOTH beforeSend AND beforeBreadcrumb (Pitfall 9).
+Sentry.init({
+	dsn: env.SENTRY_DSN,
+	enabled: !dev && Boolean(env.SENTRY_DSN),
+	tracesSampleRate: 0,
+	integrations: [],
+	beforeSend(event) {
+		return scrubSentryEvent(event);
+	},
+	beforeBreadcrumb(breadcrumb) {
+		return scrubSentryEvent(breadcrumb);
+	}
+});
 
 // =============================================================================
 // CORS Configuration
@@ -159,7 +181,7 @@ const CSP_DIRECTIVES = [
 	"font-src 'self' https://fonts.gstatic.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://cdn.jsdelivr.net data:",
 	"img-src 'self' data: blob: https:",
 	// Tightened connect-src - explicitly list allowed API endpoints
-	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://base.drpc.org https://*.g.alchemy.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com https://st0x-oracle-server.fly.dev https://st0x-oracle.com http://st0x-oracle.com https://rain-oracle-server.fly.dev wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://*.posthog.com https://*.i.posthog.com",
+	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://base.drpc.org https://*.g.alchemy.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com https://st0x-oracle-server.fly.dev https://st0x-oracle.com http://st0x-oracle.com https://rain-oracle-server.fly.dev wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://*.posthog.com https://*.i.posthog.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
 	"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://*.tradingview.com https://*.tradingview-widget.com https://app.dynamicauth.com https://*.dynamicauth.com https://verify.walletconnect.com https://verify.walletconnect.org",
 	"frame-ancestors 'none'",
 	"base-uri 'self'",
@@ -335,7 +357,7 @@ function isBotOrMalformedPath(path: string): boolean {
 	return BOT_PATH_PATTERNS.some((p) => p.test(path));
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const existingHandle: Handle = async ({ event, resolve }) => {
 	const { url, cookies, request } = event;
 	const path = url.pathname;
 	const origin = request.headers.get('Origin');
@@ -464,3 +486,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 	return addSecurityAndCorsHeaders(response, origin, path);
 };
+
+// =============================================================================
+// Hook chain export (OBS-01)
+// =============================================================================
+// Sentry's sentryHandle() must run early so it can attach request context to any error
+// raised inside existingHandle. Plan 01-05 (OBS-02) will prepend the request-id middleware:
+// `sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle)`.
+export const handle = sequence(Sentry.sentryHandle(), existingHandle);
+
+export const handleError = Sentry.handleErrorWithSentry(
+	({ error, event }: { error: unknown; event: unknown }) => {
+		console.error('[hooks.server] Unhandled server error:', error, event);
+	}
+);
