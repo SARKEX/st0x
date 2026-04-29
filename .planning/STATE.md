@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1 planned — 8 plans (01-01 DEPR-02, 01-02 DEPR-01, 01-03 DEPR-03, 01-04 OBS-01 Sentry, 01-05 OBS-02 pino, 01-06 OBS-04 RPC instrumentation, 01-07 OBS-03 take-order transcript, 01-08 OBS-05 verification). Wave structure 1→2→3→4→5→6 (parallel 06+07)→7. Plan-checker verified PASS at iteration 2/3.
-last_updated: "2026-04-29T09:18:20.117Z"
-last_activity: 2026-04-29 -- Phase 1 execution started
+stopped_at: Plan 01-01 (DEPR-02) complete. Wave 1 done — admin rewards UI + per-wallet points pipeline + LP_SUBGRAPH_URL pruned. Next up: Wave 2 (01-02 DEPR-01, user-facing rewards delete + announcement extraction).
+last_updated: "2026-04-29T09:46:55Z"
+last_activity: 2026-04-29 -- Plan 01-01 complete (3 commits, ~17min, 0 new svelte-check errors, 429 vitest tests pass)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 1
+  completed_plans: 1
+  percent: 3
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 1 (Shrink the Surface, See What's Happening) — EXECUTING
-Plan: 1 of 8
+Plan: 2 of 8 (01-01 DEPR-02 complete; next up 01-02 DEPR-01)
 Status: Executing Phase 1
-Last activity: 2026-04-29 -- Phase 1 execution started
+Last activity: 2026-04-29 -- Plan 01-01 complete
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 12.5% (1/8 plans complete in Phase 1; 0/4 phases complete)
 
 ## Performance Metrics
 
@@ -44,12 +44,12 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 1 | 1 | 17min | 17min |
 
 **Recent Trend:**
 
-- Last 5 plans: —
-- Trend: —
+- Last 5 plans: 01-01 DEPR-02 (17min, 3 commits)
+- Trend: First plan baseline established
 
 *Updated after each plan completion*
 
@@ -65,6 +65,9 @@ Recent decisions affecting current work:
 - Init: Refactor full trade-execution backbone (TRADE-01..04) as one connected effort — pieces are tightly coupled
 - Init: Done = outcome-based (whackamole stops + ship-without-fear), not metrics or audit-checklist
 - Init: Coarse phase granularity (4 phases for this milestone)
+- 01-01: Defer `src/lib/server/rewards/rewardsCommon.ts` deletion — surviving consumer at `/api/admin/referral-programme/leaderboard` is NOT in 01-02's scope; relocate `getCurrentMonth`/`getDaysInMonth` into `$lib/utils/dates.ts` before deletion
+- 01-01: Retarget `computeProjectedDailyPoints` imports to `$lib/utils/points` (source) rather than restoring a stub re-export module at the deleted `points.ts` path
+- 01-01: Delete `/api/admin/snapshots/recalculate/+server.ts` entirely — its sole purpose was monthly-points recalculation; no surviving function with the points pipeline gone
 
 ### Pending Todos
 
@@ -85,7 +88,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-28
-Stopped at: Phase 1 planned — 8 plans (01-01 DEPR-02, 01-02 DEPR-01, 01-03 DEPR-03, 01-04 OBS-01 Sentry, 01-05 OBS-02 pino, 01-06 OBS-04 RPC instrumentation, 01-07 OBS-03 take-order transcript, 01-08 OBS-05 verification). Wave structure 1→2→3→4→5→6 (parallel 06+07)→7. Plan-checker verified PASS at iteration 2/3.
-Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-01-PLAN.md
-Next step: `/gsd-execute-phase 1`
+Last session: 2026-04-29
+Stopped at: Plan 01-01 (DEPR-02) complete. Wave 1 done. Next up: Wave 2 (Plan 01-02 DEPR-01 user-facing rewards delete + announcement extraction).
+Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-02-PLAN.md
+Next step: `/gsd-execute-phase 1` (continues into Wave 2)

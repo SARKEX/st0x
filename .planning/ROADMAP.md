@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 8 plans (7 waves; sequential 1-5 due to .env.example + hooks.server.ts file conflicts; wave 6 runs OBS-03 + OBS-04 in parallel)
 
 **Wave 1**
-- [ ] 01-01-PLAN.md — DEPR-02: prune admin rewards UI + per-wallet points pipeline + LP_SUBGRAPH_URL
+- [x] 01-01-PLAN.md — DEPR-02: prune admin rewards UI + per-wallet points pipeline + LP_SUBGRAPH_URL
 
 **Wave 2** *(blocked on Wave 1 — both touch `.env.example` and the rewards/admin surface)*
 - [ ] 01-02-PLAN.md — DEPR-01: delete user-facing rewards UI + extract TokenSwapAnnouncement to announcements/ (per D-16)
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Shrink the Surface, See What's Happening | 0/TBD | Not started | - |
+| 1. Shrink the Surface, See What's Happening | 1/8 | In progress | - |
 | 2. Trade-Execution Backbone Refactor | 0/TBD | Not started | - |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
