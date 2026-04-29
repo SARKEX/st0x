@@ -156,44 +156,51 @@ When `gsd/phase-1-shrink-the-surface-see-what-s-happening` reaches a deploy or m
    Expected: at least one JSON line per RPC call with `rpc_url`, `fn: 'callRpc:eth_blockNumber'` (or similar), `ok`, `status_or_error`, `duration_ms`, plus the inherited `request_id`, `wallet`, `route`, `method` from Plan 01-05's logger.
 
 2. **Chain-exhausted alert (live deploy):**
-   Set `OBSERVABILITY_ALERT_WEBHOOK_URL` to a test Slack channel webhook. Simulate RPC chain failure by temporarily setting all `RPC_URLS` to `127.0.0.1:1` (a closed port; force ECONNREFUSED) and trigger `/api/admin/snapshots/preview`. Expected:
+   Set both `OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN` and `OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID` to a test bot/chat. Simulate RPC chain failure by temporarily setting all `RPC_URLS` to `127.0.0.1:1` (a closed port; force ECONNREFUSED) and trigger `/api/admin/snapshots/preview`. Expected:
    - Vercel Logs JSON line: `"event":"rpc_chain_exhausted"`, `"fn":"callRpc:eth_blockNumber"`, `"attempts":[...]`, `"request_id":"..."`, `level: "error"`.
-   - Slack message in the test channel containing: `:rotating_light: *st0x RPC chain exhausted* — \`callRpc:eth_blockNumber\``, the attempted RPC URLs (each truncated to 512 chars), the last error per RPC, and the `request_id`.
+   - Telegram message in the test chat containing: `🚨 st0x RPC chain exhausted — callRpc:eth_blockNumber`, the attempted RPC URLs (each truncated to 512 chars), the last error per RPC, and the `request_id`.
 
-3. **Fail-closed verification (production env without webhook):**
-   Unset `OBSERVABILITY_ALERT_WEBHOOK_URL` in production env, trigger chain-exhausted, confirm:
-   - Vercel Logs JSON line: `[alerts] OBSERVABILITY_ALERT_WEBHOOK_URL not configured in production — alerts disabled` (level: error).
+3. **Fail-closed verification (production env without bot config):**
+   Unset either `OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN` or `OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID` in production env, trigger chain-exhausted, confirm:
+   - Vercel Logs JSON line: `[alerts] OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN or OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID not configured in production — alerts disabled` (level: error).
    - Endpoint returns the same response as before (no 500, module continues).
 
 4. **request_id correlation:**
    Pull the `x-request-id` header from the response (Plan 01-05's middleware sets it unconditionally) and confirm the same value appears in:
    - The per-attempt `rpc_failed` log lines.
    - The `rpc_chain_exhausted` log line.
-   - The Slack alert payload (`request_id: <uuid>`).
+   - The Telegram alert payload (`request_id: <uuid>`).
 
-These four checks prove (a) per-attempt instrumentation works, (b) chain-exhausted alerts fire to Slack, (c) fail-closed mild form does not kill cold-start, and (d) request_id propagation through ALS works end-to-end. **Smoke tests 1, 3, and 4 require no external service; smoke test 2 requires a real Slack workspace + webhook (see "User Setup Required").**
+These four checks prove (a) per-attempt instrumentation works, (b) chain-exhausted alerts fire to Telegram, (c) fail-closed mild form does not kill cold-start, and (d) request_id propagation through ALS works end-to-end. **Smoke tests 1, 3, and 4 require no external service; smoke test 2 requires a real Telegram bot + chat (see "User Setup Required").**
 
 ## User Setup Required
 
-**Slack workspace + incoming webhook (one-time, manual; matches the pattern from 01-04 SENTRY_DSN setup):**
+**Telegram bot + chat_id (one-time, manual; matches the pattern from 01-04 SENTRY_DSN setup). D-17 (2026-04-29) supersedes the original D-09 Slack-incoming-webhook plan — team uses Telegram, not Slack.**
 
-1. **Provision Slack incoming webhook:**
-   - Slack admin → Apps → Incoming Webhooks → Add new
-   - Channel: `#st0x-alerts` (or equivalent — recommend a dedicated low-traffic channel)
-   - Permission scope: post-message-to-channel
-   - Copy the webhook URL (begins with `https://hooks.slack.com/services/...`)
+1. **Provision a Telegram bot:**
+   - In Telegram, message [@BotFather](https://t.me/BotFather)
+   - `/newbot` → choose a name and a unique handle (e.g., `st0x_alerts_bot`)
+   - BotFather replies with the bot token (long string in the form `123456789:ABCDEF…`). **This is the value for `OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN`.**
+   - Recommended: `/setprivacy` → `Disable` so the bot can post to groups; `/setjoingroups` → `Enable`.
 
-2. **Set the env var in Vercel:**
+2. **Get the chat_id:**
+   - Add the bot to your team alerts group (or use a 1:1 chat with the bot for solo ops).
+   - In that chat, send any message (e.g., `/start` or `hi`).
+   - From any browser, GET `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+   - In the JSON response, find `result[].message.chat.id`. **This is the value for `OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID`.** Note: group/channel IDs are negative integers (e.g., `-100123456789`); 1:1 chat IDs are positive.
+
+3. **Set the env vars in Vercel:**
    - Vercel project → Settings → Environment Variables
-   - Add `OBSERVABILITY_ALERT_WEBHOOK_URL` with the webhook URL
+   - Add `OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN` with the bot token
+   - Add `OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID` with the chat id
    - Scope: Production (and Preview if desired)
-   - Save → trigger a redeploy to pick up the new env var
+   - Save → trigger a redeploy to pick up the new env vars
 
-3. **Verify with smoke test 2 above.**
+4. **Verify with smoke test 2 above.**
 
-Until the webhook is provisioned, alerts.ts no-ops in production with an error-level pino log (`[alerts] OBSERVABILITY_ALERT_WEBHOOK_URL not configured in production — alerts disabled`). The cold-start is NOT killed — the rest of the app boots normally. Plan 01-08 (RUNBOOK) will quote this user-setup recipe as one of the deploy-time checklist items alongside the SENTRY_DSN one.
+Until both vars are provisioned, alerts.ts no-ops in production with an error-level pino log (`[alerts] OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN or OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID not configured in production — alerts disabled`). The cold-start is NOT killed — the rest of the app boots normally. Plan 01-08 (RUNBOOK) will quote this user-setup recipe as one of the deploy-time checklist items alongside the SENTRY_DSN one.
 
-**No code-side dependency on the webhook being present.** Phase 1 ships with the fail-closed mild form active; the operator can defer webhook provisioning without breaking any code path.
+**No code-side dependency on the bot being present.** Phase 1 ships with the fail-closed mild form active; the operator can defer Telegram provisioning without breaking any code path.
 
 ## Threat Flags
 
