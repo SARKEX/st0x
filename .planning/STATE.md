@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 01-07 (OBS-03) complete. Wave 6 closed — both RPC failure metrics (01-06) AND take-order failure transcripts (01-07) shipped. NEW src/lib/services/observability/captureTakeOrderFailure.ts (101 lines; TakeOrderTranscript interface, TakeOrderFailureReason union, dual-sink dispatcher per CONTEXT D-15: Sentry.captureException with {tags, extra} + console.error JSON line — NOT a server-relayed endpoint). MOD src/lib/services/marketOrderExecution.ts (+154/-21): single-seam transcript-builder at function entry; failWith helper (3-arg: reason, errOrMessage, userFacingError); 9 failure-return paths wrapped (no_quotes_available x1, no_walk_fills x1, unhydrated_fills x1, aggregated_failed x3, caught_exception x3); subgraphQuoteHash via crypto.subtle.digest SHA-256; onChainStateRead.IOIndex populated from firstQuote (no new on-chain read); vaultBalance stays null (D-08-LIMITATION → Phase 2 / TRADE-03). User-facing error strings preserved verbatim — Phase 1 fence held. ProcessedQuote re-exported from marketOrderExecution one-line addition. Wallet-not-connected branch EXCLUDED per RESEARCH §OBS-03 (not a no-liquidity scenario). MOD vitest-setup.ts (+27): vi.mock('@sentry/sveltekit', ...) Rule 3 fix — Sentry browser entry transitively imports $app/stores from inside node_modules; Vite resolver cannot reach SvelteKit virtual modules in node_modules in test env. Production unaffected (Sentry init in hooks.{client,server}.ts gated on !dev && DSN). Discovery: orchestrator's pre-flight failure-path table listed 8 INCLUDE paths; current source has 9 (the indexedFills.length === 0 branch in the per-order fallback path was missed) — surfaced as a deviation; same `aggregated_failed` reason already required ≥2 times so wrapping the 9th strengthens coverage without scope creep. svelte-check at 4-pre-existing baseline; 447 tests pass. Next up: Plan 01-08 (OBS-05 + RUNBOOK + phase-exit verification) — Wave 7.
-last_updated: "2026-04-29T13:09:35Z"
-last_activity: 2026-04-29 -- Plan 01-07 complete (2 commits, ~17min, 0 new svelte-check errors, 447 vitest tests pass)
+stopped_at: Phase 1 COMPLETE. Plan 01-08 (OBS-05 + RUNBOOK + phase-exit verification) closed; all 8 plans done (8/8) and all 8 Phase 1 REQ-IDs closed (DEPR-01..03, OBS-01..05). NEW .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md (328 lines) — operational runbook documenting Vercel Speed Insights URL (https://vercel.com/st-0x/st0x/observability/speed-insights — confirmed receiving data via Vercel API at Phase 1 close, hasData=true since 2025-07-21, ~9 months of LCP/CLS/INP/TTFB baseline data; orchestrator queried project_id prj_tTuOMTtlZKU2tOXN4UQCfnsDxlmv directly, no user roundtrip). Sentry org + Telegram bot provisioning state, env-var deploy checklist (5 add: SENTRY_DSN/PUBLIC_SENTRY_DSN/AUTH_TOKEN/ORG/PROJECT + OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN/CHAT_ID per D-17 — NOT Slack as originally drafted in D-09; 4 remove: LP_SUBGRAPH_URL + 3x ONRAMPER_*), 4 smoke tests (Sentry test event w/ PII redaction; pino x-request-id header; Telegram chain-exhausted alert; OBS-03 take-order failure transcript replay). RUNBOOK records a doc correction over original CONTEXT/PLAN: injectSpeedInsights() lives in src/routes/+layout.svelte:31 (consent-gated via onAnalyticsAccepted callback wired into <CookieConsent />), NOT CookieConsent.svelte. Phase exit verification battery: npm run check at 4-pre-existing-error baseline (transaction.ts, Phase 2 / TRADE-01..04); 447 tests pass / 1 skipped (no regressions); Vite build ✓ built in 16.65s (post-Vite Vercel adapt fails on local Node v24 — pre-existing env issue documented since 01-04, Vercel CI uses Node 22); 7 of 8 cross-cutting cleanup greps clean (Onramper/Buy crypto/LP_SUBGRAPH_URL/api/onramper/api/public/wallet*/Edge runtime all 0 hits); 1 stale-comment hit at cache.ts:48-53 referencing /api/rewards/* logged as deferred (NOT auto-fixed per scope_guard — owned by next plan that touches cache.ts per existing 01-02 deferred-items entry). OBS-03 transcript completeness: 9 failWith( call sites in marketOrderExecution.ts (≥8 required); Wallet-not-connected branch EXCLUDED per RESEARCH §OBS-03. Sentry init gating verified (`enabled: !dev && Boolean(env.{PUBLIC_,}SENTRY_DSN)` in both hooks.{client,server}.ts). Phase 2 unblocked.
+last_updated: "2026-04-29T12:46:00Z"
+last_activity: 2026-04-29 -- Plan 01-08 complete (1 task commit + 1 docs commit, ~12min, 0 new svelte-check errors, 447 vitest tests pass) — Phase 1 closed
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 6
-  completed_plans: 7
-  percent: 22
+  completed_phases: 1
+  total_plans: 8
+  completed_plans: 8
+  percent: 25
 ---
 
 # Project State
@@ -25,31 +25,31 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 ## Current Position
 
-Phase: 1 (Shrink the Surface, See What's Happening) — EXECUTING
-Plan: 8 of 8 (01-01..01-07 complete; Wave 6 closed — both 01-06 OBS-04 + 01-07 OBS-03 done; next up 01-08 OBS-05 + RUNBOOK + phase-exit verification — Wave 7)
-Status: Executing Phase 1
-Last activity: 2026-04-29 -- Plan 01-07 complete
+Phase: 1 (Shrink the Surface, See What's Happening) — COMPLETE
+Plan: 8 of 8 (01-01..01-08 complete; all waves closed; all 8 Phase 1 REQ-IDs closed: DEPR-01..03, OBS-01..05)
+Status: Phase 1 closed; Phase 2 (Trade-Execution Backbone Refactor) unblocked
+Last activity: 2026-04-29 -- Plan 01-08 complete; Phase 1 closed
 
-Progress: [█████████░] 88% (7/8 plans complete in Phase 1; 0/4 phases complete)
+Progress: [██████████] 100% (8/8 Phase 1 plans complete; 1/4 phases complete; 8/30 milestone REQ-IDs complete)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 7
-- Average duration: ~9.1min
-- Total execution time: 64min
+- Total plans completed: 8
+- Average duration: ~9.5min
+- Total execution time: 76min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 7 | 64min | ~9.1min |
+| 1 | 8 | 76min | ~9.5min |
 
 **Recent Trend:**
 
-- Last 7 plans: 01-07 OBS-03 (17min, 2 commits), 01-06 OBS-04 (6min, 3 commits), 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
-- Trend: Wave 6 closed with 01-07 OBS-03 — two-task split (NEW captureTakeOrderFailure.ts dual-sink dispatcher → MOD marketOrderExecution.ts single-seam transcript-builder + failWith helper at 9 failure-return paths). Slightly longer (17min vs typical ~6min) because of a Rule 3 detour: the new `import * as Sentry from '@sentry/sveltekit'` transitive load broke an existing pure-function test (excludeTakerOwnedQuotes) — Sentry's browser entry imports `$app/stores` from node_modules and Vite's test-mode resolver cannot reach SvelteKit virtual modules from there. Fix: `vi.mock('@sentry/sveltekit', ...)` no-op stubs in vitest-setup.ts (same trust pattern as existing svelte-wagmi + $app/stores mocks; production unaffected). Discovery: orchestrator's pre-flight failure-path table over-counted to 8; current source has 9 INCLUDE paths (the indexedFills.length === 0 branch in the per-order fallback path was missed) — wrapped as `aggregated_failed`, same reason already required ≥2 times so the 9th strengthens coverage without scope creep.
+- Last 8 plans: 01-08 OBS-05+RUNBOOK+phase-exit (12min, 1 task commit), 01-07 OBS-03 (17min, 2 commits), 01-06 OBS-04 (6min, 3 commits), 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
+- Trend: Phase 1 closed with 01-08 — verify-only + documentation plan; no source-code edits. Task 1 (Speed Insights human-verify) was resolved by orchestrator-side Vercel API check (user delegated; speedInsights.hasData=true since 2025-07-21). Task 2 wrote the 328-line operational runbook (Vercel project URL filled in, D-17 Telegram phrasing throughout, doc correction recorded that injectSpeedInsights() lives in +layout.svelte:31 not CookieConsent.svelte). Task 3 ran the phase-exit verification battery read-only: type-check at 4-pre-existing-error baseline; 447 tests pass; Vite build clean; 7 of 8 cross-cutting cleanup greps clean; 1 stale-comment hit in cache.ts:48-53 logged as deferred (NOT auto-fixed per scope_guard — owned by next plan that touches cache.ts). OBS-03 failWith count = 9, ≥8 required.
 
 *Updated after each plan completion*
 
@@ -100,6 +100,9 @@ Recent decisions affecting current work:
 - 01-07: ProcessedQuote re-exported from marketOrderExecution.ts (one-line `export type { ProcessedQuote }`). Plan Task 1 notes outlined two options: (a) re-export, (b) inline shape. Picked (a) per the plan's recommendation — single-line addition, no behavior change, keeps the observability helper's import path matching what the plan specified.
 - 01-07: Auto-fixed Rule 3 — `vi.mock('@sentry/sveltekit', ...)` added to vitest-setup.ts. The new transitive Sentry import broke `tests/lib/services/marketOrderExecution.test.ts` (which only uses `excludeTakerOwnedQuotes` — a pure function) because the SDK's browser entry imports `from '$app/stores'` from inside node_modules; Vite's test-mode resolver cannot reach SvelteKit virtual modules from there. The mock provides no-op stubs (init, captureException, captureMessage, addBreadcrumb, setUser, setTag, setContext, setExtra, withScope, sentryHandle, handleErrorWithSentry, sentrySvelteKit). Same trust pattern as the existing svelte-wagmi + $app/stores mocks. Production Sentry init in hooks.{client,server}.ts is environmentally gated on `!dev && DSN`, so the mock only applies under Vitest.
 - 01-07: Discovery — orchestrator's pre-flight line-drift table listed 8 INCLUDE failure paths; current source has 9. The `indexedFills.length === 0` branch in the per-order fallback path (lines 339-344 of current source) was missed. Wrapped as `aggregated_failed` (same reason already required ≥2 times by acceptance criteria). Surfaces as deviation; strengthens coverage without scope creep.
+- 01-08: Task 1 (Speed Insights human-verify) resolved by orchestrator-side Vercel API check (NOT user roundtrip) — user delegated the check; orchestrator queried project_id prj_tTuOMTtlZKU2tOXN4UQCfnsDxlmv directly: speedInsights.hasData=true, enabledAt 2025-07-21 (~9 months of LCP/CLS/INP/TTFB data), webAnalytics also enabled. Resolved URL https://vercel.com/st-0x/st0x/observability/speed-insights captured for runbook.
+- 01-08: RUNBOOK records a doc correction over original CONTEXT/PLAN — injectSpeedInsights() lives in src/routes/+layout.svelte:31 (consent-gated via onAnalyticsAccepted callback wired into <CookieConsent />), NOT in CookieConsent.svelte. Same net effect; future debugging now lands on the right file.
+- 01-08: Phase exit verification ran read-only per scope_guard. The 1 stale-comment hit in src/lib/server/cache.ts:48-53 (references deleted /api/rewards/* helpers in past tense) was NOT auto-fixed — logged as deferred per the existing 01-02 deferred-items entry (orphaned CACHE_KEYS cluster + stale comment block) which already scoped this for the next plan that touches cache.ts. failWith count grep `-c "failWith("` returned 9 (call sites only — the helper definition `const failWith = (` is not counted because no `(` immediately follows the identifier; 9 ≥ 8 required).
 
 ### Pending Todos
 
@@ -121,6 +124,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Plan 01-07 (OBS-03) complete. Wave 6 closed — both 01-06 OBS-04 (RPC failure metrics + Telegram chain-exhausted alerts) and 01-07 OBS-03 (take-order failure transcripts) shipped. NEW src/lib/services/observability/captureTakeOrderFailure.ts (101 lines): TakeOrderTranscript interface (D-08 shape), TakeOrderFailureReason union, browser-tier dual-sink dispatcher per CONTEXT D-15 — Sentry.captureException with {tags: {failure_reason, side}, extra: transcript} + console.error('[take-order failed]', JSON.stringify(...)). NOT a server-relayed endpoint (D-15 invariant). Both sinks wrapped in try/catch — logging never throws back into caller. MOD src/lib/services/marketOrderExecution.ts (+154/-21): single-seam transcript-builder at function entry (subgraphQuoteHash, fullQuotePayload, onChainStateRead, ratio, slippageBps, priceCap, side, takerAction, userAction, mode, walletAddress, request_id, timestamp); failWith(reason, errOrMessage, userFacingError) helper closure-captures the transcript; 9 failure-return paths wrapped (no_quotes_available x1, no_walk_fills x1, unhydrated_fills x1, aggregated_failed x3, caught_exception x3); Wallet-not-connected branch EXCLUDED (not a no-liquidity scenario per RESEARCH §OBS-03). subgraphQuoteHash via crypto.subtle.digest SHA-256 (hex-encoded with 0x prefix per checker W2). onChainStateRead.IOIndex populated from firstQuote.{inputIOIndex,outputIOIndex} per checker W3 (no new on-chain read). vaultBalance stays null — D-08-LIMITATION → Phase 2 / TRADE-03 introduces server-side pre-flight vault read. User-facing error strings preserved verbatim (Phase 1 fence). ProcessedQuote re-exported from marketOrderExecution one-line addition. MOD vitest-setup.ts (+27): vi.mock('@sentry/sveltekit', ...) Rule 3 fix — Sentry browser entry transitively imports $app/stores from inside node_modules; Vite resolver cannot reach SvelteKit virtual modules in node_modules in test env. Production unaffected (Sentry init gated on !dev && DSN). Discovery: orchestrator's pre-flight failure-path table listed 8 INCLUDE paths; current source has 9 (the indexedFills.length === 0 branch in the per-order fallback path was missed) — wrapped as aggregated_failed (same reason already required ≥2 times); strengthens coverage without scope creep. svelte-check at 4-pre-existing baseline; 447/1-skipped tests pass; Vite build clean (`✓ built in 15.65s`). 7/8 Phase 1 plans complete; only 01-08 (OBS-05 confirmation + RUNBOOK + phase-exit verification) remains in Wave 7.
-Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-08-PLAN.md
-Next step: `/gsd-execute-phase 1` (continues with 01-08)
+Stopped at: Phase 1 COMPLETE. Plan 01-08 (OBS-05 + RUNBOOK + phase-exit verification) closed; all 8 plans done; all 8 Phase 1 REQ-IDs closed (DEPR-01, DEPR-02, DEPR-03, OBS-01, OBS-02, OBS-03, OBS-04, OBS-05). NEW .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md (328 lines) — operational runbook documenting the resolved Vercel Speed Insights URL (https://vercel.com/st-0x/st0x/observability/speed-insights, confirmed receiving data via Vercel API at Phase 1 close), Sentry org + Telegram bot provisioning state, env-var deploy checklist (5 add + 4 remove), 4 smoke tests, cross-cutting cleanup grep recipe, deferred items table, and the Phase 1 → Phase 2 hand-off note. Phase exit verification battery: type-check at 4-pre-existing-error baseline; 447/1-skipped tests pass; Vite build clean (`✓ built in 16.65s`); 7 of 8 cross-cutting cleanup greps clean (1 stale-comment hit in cache.ts:48-53 logged as deferred, NOT auto-fixed per scope_guard); Pitfall 2 (no Edge runtime) re-verified; OBS-03 failWith count = 9 ≥ 8; Sentry init gating verified in both hooks tiers. Phase 1's 5 ROADMAP success criteria all met. Phase 2 (Trade-Execution Backbone Refactor: TRADE-01..04 + PERF-01) unblocked.
+Resume file: .planning/ROADMAP.md (Phase 2)
+Next step: `/gsd-plan-phase 2`

@@ -15,7 +15,7 @@ Foundational visibility that must come before refactor work, so we can both diag
 - [x] **OBS-02**: Server-side structured logging is in place across SvelteKit endpoints (`src/routes/api/`), the cron entry point, and the take-order critical path, with consistent fields (request id, wallet, route, latency) and minimum log levels by route class
 - [x] **OBS-03**: Take-order failure instrumentation captures the state at failure (subgraph quote, on-chain state when checked, ratio, slippage cap, side, taker action) so "no liquidity" and partial-fill misclassifications become diagnosable from logs alone
 - [x] **OBS-04**: RPC failure metrics record per-RPC failure rate across the fallback chain (`generator.ts`, `accessCodes.ts`), with alerting when the entire chain fails for a single call
-- [ ] **OBS-05**: Trade-page web vitals dashboard exists (LCP, CLS, INP, TTFB at minimum) so first-paint regressions are visible against a baseline
+- [x] **OBS-05**: Trade-page web vitals dashboard exists (LCP, CLS, INP, TTFB at minimum) so first-paint regressions are visible against a baseline **[Completed 01-08, 2026-04-29: Vercel Speed Insights confirmed receiving data at https://vercel.com/st-0x/st0x/observability/speed-insights via Vercel API check (speedInsights.hasData=true, enabled 2025-07-21, ~9 months of data). Already wired pre-Phase-1 via injectSpeedInsights() in src/routes/+layout.svelte:31, consent-gated through onAnalyticsAccepted callback wired into <CookieConsent />. Documented in .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md alongside the env-var deploy checklist + 4 smoke tests + cross-cutting cleanup grep recipe + Phase 2 / PERF-01 hand-off (this is the baseline against which the explicit p75 LCP target is set in Phase 2 planning)]**
 
 ### Trade Execution
 
@@ -107,7 +107,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | OBS-02 | Phase 1 | Complete |
 | OBS-03 | Phase 1 | Complete |
 | OBS-04 | Phase 1 | Complete |
-| OBS-05 | Phase 1 | Pending |
+| OBS-05 | Phase 1 | Complete (01-08, 2026-04-29) |
 | TRADE-01 | Phase 2 | Pending |
 | TRADE-02 | Phase 2 | Pending |
 | TRADE-03 | Phase 2 | Pending |

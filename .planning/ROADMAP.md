@@ -12,7 +12,7 @@ Move st0x from "permanent alpha/early-beta" to production-ready by killing the u
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Shrink the Surface, See What's Happening** - Delete dead/unused subsystems and stand up zero-to-one observability so the trade-execution refactor is diagnosable
+- [x] **Phase 1: Shrink the Surface, See What's Happening** - Delete dead/unused subsystems and stand up zero-to-one observability so the trade-execution refactor is diagnosable
 - [ ] **Phase 2: Trade-Execution Backbone Refactor** - Kill the four-piece bug-factory (side semantics, transaction store, freshness illusion, execution math) and hit the trade-page first-paint target
 - [ ] **Phase 3: Production-Grade Hardening** - Close the latent security and reliability holes the audit flagged (secrets, sessions, RPC fallback, vendored registry)
 - [ ] **Phase 4: Boundary Tests & Drift Cleanup** - Lock in regression coverage at the audit's high-risk boundaries and remove the documentation/code drift that produces silent breakage
@@ -51,7 +51,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 01-07-PLAN.md — OBS-03: take-order failure transcript at marketOrderExecution.ts (Sentry + console.error per D-15)
 
 **Wave 7** *(blocked on all prior waves — phase-exit verification + runbook)*
-- [ ] 01-08-PLAN.md — OBS-05 verification + phase exit (Speed Insights confirmation, runbook, cross-cutting cleanup grep)
+- [x] 01-08-PLAN.md — OBS-05 verification + phase exit (Speed Insights confirmation, runbook, cross-cutting cleanup grep)
 
 **Cross-cutting constraints** (truths that appear in 2+ plans — verify they hold across the phase, not just per-plan):
 - **CSP host pinning (Pitfall 1):** `src/hooks.server.ts` `connect-src` must NEVER contain bare `'*.sentry.io'` — wildcards don't cross dot boundaries. Use `'*.ingest.sentry.io'` and `'*.ingest.us.sentry.io'` only. Enforced in 01-04 acceptance criteria; 01-08 phase-exit grep gate re-verifies.
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Shrink the Surface, See What's Happening | 7/8 | In progress | - |
-| 2. Trade-Execution Backbone Refactor | 0/TBD | Not started | - |
+| 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
+| 2. Trade-Execution Backbone Refactor | 0/TBD | Not started (unblocked) | - |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
