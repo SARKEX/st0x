@@ -6,6 +6,8 @@
  * - Taker perspective: The user executing against the orderbook (what user wants/pays)
  */
 
+import type { ProcessedQuote } from '$lib/utils/orderbook';
+
 /**
  * Minimal token interface for order perspective types
  * Subset of full Token from $lib/types - only includes fields needed for order calculations
@@ -193,4 +195,67 @@ export function takerToMakerTokens(taker: TakerOrderTokens): MakerOrderTokens {
 		orderInputToken: taker.takerWants, // What order receives = what taker wants
 		orderOutputToken: taker.takerPays // What order gives = what taker pays
 	};
+}
+
+// ============================================================================
+// TRADE-01: Canonical accessor wrappers for ProcessedQuote IO-perspective fields
+// ============================================================================
+//
+// These wrappers are the single boundary through which non-allowlisted code
+// reads `inputTokenAddress` / `outputTokenAddress` / `inputIOIndex` /
+// `outputIOIndex` on a ProcessedQuote. The ESLint `no-restricted-syntax` rule
+// (eslint.config.js) forbids direct `.inputTokenAddress` / `.outputTokenAddress`
+// / `.inputIOIndex` / `.outputIOIndex` MemberExpression reads outside the
+// allowlist (this file + utils/orderbook.ts + api/orders.ts +
+// generated-graphql.ts). The wrapper bodies below ARE legal raw reads
+// because this file is the canonical IO-perspective access boundary.
+//
+// Naming: `getMaker...` reflects that these fields are the on-chain order
+// (maker) perspective — `inputTokenAddress` is what the order RECEIVES,
+// `outputTokenAddress` is what it GIVES AWAY (CLAUDE.md §"Order Semantics").
+
+/**
+ * Read maker INPUT token address from a ProcessedQuote.
+ *
+ * Use this instead of direct `.inputTokenAddress` access to keep the
+ * IO-perspective boundary structurally enforced by ESLint.
+ *
+ * @param quote - ProcessedQuote with on-chain order perspective fields
+ * @returns The address the order RECEIVES (on-chain INPUT)
+ */
+export function getMakerInputTokenAddress(quote: ProcessedQuote): string {
+	return quote.inputTokenAddress;
+}
+
+/**
+ * Read maker OUTPUT token address from a ProcessedQuote.
+ *
+ * Use this instead of direct `.outputTokenAddress` access to keep the
+ * IO-perspective boundary structurally enforced by ESLint.
+ *
+ * @param quote - ProcessedQuote with on-chain order perspective fields
+ * @returns The address the order GIVES AWAY (on-chain OUTPUT)
+ */
+export function getMakerOutputTokenAddress(quote: ProcessedQuote): string {
+	return quote.outputTokenAddress;
+}
+
+/**
+ * Read input IO-index from a ProcessedQuote (used by aggregated take-order calldata).
+ *
+ * @param quote - ProcessedQuote with on-chain order perspective fields
+ * @returns The IO index in the order's `validInputs` array
+ */
+export function getMakerInputIOIndex(quote: ProcessedQuote): number {
+	return quote.inputIOIndex;
+}
+
+/**
+ * Read output IO-index from a ProcessedQuote (used by aggregated take-order calldata).
+ *
+ * @param quote - ProcessedQuote with on-chain order perspective fields
+ * @returns The IO index in the order's `validOutputs` array
+ */
+export function getMakerOutputIOIndex(quote: ProcessedQuote): number {
+	return quote.outputIOIndex;
 }

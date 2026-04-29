@@ -4,9 +4,14 @@ import {
 	deriveMakerSide,
 	makerToTakerTokens,
 	takerToMakerTokens,
+	getMakerInputTokenAddress,
+	getMakerOutputTokenAddress,
+	getMakerInputIOIndex,
+	getMakerOutputIOIndex,
 	type MinimalToken,
 	type MakerOrderTokens
 } from '$lib/types/orderPerspective';
+import type { ProcessedQuote } from '$lib/utils/orderbook';
 
 // Mock tokens for testing
 const USDC: MinimalToken = {
@@ -193,6 +198,46 @@ describe('orderPerspective', () => {
 			// This should be an ASK order (payment token as input)
 			const side = deriveMakerSide(maker.orderInputToken, maker.orderOutputToken, USDC);
 			expect(side).toBe('ask');
+		});
+	});
+
+	describe('TRADE-01 accessor wrappers', () => {
+		// Partial fixture — only the 4 fields the accessors read are populated.
+		// The `as ProcessedQuote` cast is intentional; constructing a full
+		// ProcessedQuote here would noise the test without strengthening the
+		// assertion (the accessors are pure projections of these 4 fields).
+		const quote = {
+			inputTokenAddress: '0xAAaa1111111111111111111111111111111111aa',
+			outputTokenAddress: '0xBBbb2222222222222222222222222222222222bb',
+			inputIOIndex: 0,
+			outputIOIndex: 1
+		} as ProcessedQuote;
+
+		it('getMakerInputTokenAddress returns inputTokenAddress', () => {
+			expect(getMakerInputTokenAddress(quote)).toBe(
+				'0xAAaa1111111111111111111111111111111111aa'
+			);
+		});
+
+		it('getMakerOutputTokenAddress returns outputTokenAddress', () => {
+			expect(getMakerOutputTokenAddress(quote)).toBe(
+				'0xBBbb2222222222222222222222222222222222bb'
+			);
+		});
+
+		it('getMakerInputIOIndex returns inputIOIndex', () => {
+			expect(getMakerInputIOIndex(quote)).toBe(0);
+		});
+
+		it('getMakerOutputIOIndex returns outputIOIndex', () => {
+			expect(getMakerOutputIOIndex(quote)).toBe(1);
+		});
+
+		it('accessors return primitive types (string for addresses, number for indices)', () => {
+			expect(typeof getMakerInputTokenAddress(quote)).toBe('string');
+			expect(typeof getMakerOutputTokenAddress(quote)).toBe('string');
+			expect(typeof getMakerInputIOIndex(quote)).toBe('number');
+			expect(typeof getMakerOutputIOIndex(quote)).toBe('number');
 		});
 	});
 });
