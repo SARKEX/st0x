@@ -19,13 +19,11 @@
 import { get } from 'svelte/store';
 import {
 	decodeFunctionData,
-	encodeFunctionData,
 	erc20Abi,
 	formatUnits,
 	type Hash,
 	type Hex
 } from 'viem';
-import { readContract as wagmiReadContract } from '@wagmi/core';
 import { wagmiConfig } from 'svelte-wagmi';
 import {
 	type SgOrder,
@@ -40,9 +38,9 @@ import {
 	waitForTransaction as walletServiceWaitForTransaction,
 	APPROVAL_TX_CONFIRMATIONS
 } from '$lib/services/walletService';
-import { withRetry } from '$lib/utils/retry';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import { evaluateMarketOrderFill } from '$lib/utils/marketOrderFill';
+import { ensureAllowance } from './approvalStore';
 import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
@@ -79,11 +77,10 @@ const AGGREGATED_PREPARE_MAX_RETRIES = 1;
 /** Retry delay for aggregated calldata readiness checks. */
 const AGGREGATED_PREPARE_RETRY_MS = 100;
 
-// Wrapped wagmi functions with retry logic
-const readContract: typeof wagmiReadContract = ((...args: Parameters<typeof wagmiReadContract>) =>
-	withRetry(() => wagmiReadContract(...args))) as typeof wagmiReadContract;
-
-// Unified send/wait transaction (works with both Dynamic and wagmi wallets)
+// Unified send/wait transaction (works with both Dynamic and wagmi wallets).
+// Per-leg take-order tx submission and SDK-driven approvalInfo.calldata flows
+// still use these directly; allowance reads + ERC20 approve tx submission have
+// been lifted into ./approvalStore (TRADE-02 PR-4).
 const sendTransaction = walletServiceSendTransaction;
 const waitForTransaction = walletServiceWaitForTransaction;
 
@@ -295,36 +292,28 @@ const ensureBulkPayerAllowanceIfNeeded = async (args: {
 	symbol: string;
 	owner: `0x${string}`;
 	probeApprovalCalldata: Hex;
+	network: Network;
 }) => {
-	const { requiredWei, payerToken, symbol, owner, probeApprovalCalldata } = args;
+	const { requiredWei, payerToken, symbol, owner, probeApprovalCalldata, network } = args;
 	if (requiredWei <= 0n) return;
 
 	const decoded = decodeFunctionData({ abi: erc20Abi, data: probeApprovalCalldata });
 	if (decoded.functionName !== 'approve') return;
 	const spender = decoded.args[0] as `0x${string}`;
 
-	const config = get(wagmiConfig);
-	if (!config) throw new Error('Wagmi config not found');
-
-	const allowance = await readContract(config, {
-		address: payerToken,
-		abi: erc20Abi,
-		functionName: 'allowance',
-		args: [owner, spender],
-	});
-	if (allowance >= requiredWei) return;
-
+	// Wallet-confirmation status preserved for the multi-leg pre-grant — the
+	// `ensureAllowance` utility only handles CHECKING_ALLOWANCE / PENDING_APPROVAL
+	// transitions, but this path needs a "Waiting for wallet to approve {symbol}"
+	// message before the user signs.
 	awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${symbol}...`);
-	const approvalHash = await sendTransaction({
-		to: payerToken,
-		data: encodeFunctionData({
-			abi: erc20Abi,
-			functionName: 'approve',
-			args: [spender, requiredWei],
-		}),
+	await ensureAllowance({
+		token: { address: payerToken, decimals: 0 },
+		owner,
+		spender,
+		amount: requiredWei,
+		network,
+		setStatus: (s) => update((state) => ({ ...state, status: s }))
 	});
-	awaitApprovalTx(approvalHash);
-	await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 };
 
 /**
@@ -685,6 +674,7 @@ export const handleOracleOrders = async (
 				symbol: approvalTokenSymbol,
 				owner: $signerAddress as `0x${string}`,
 				probeApprovalCalldata: probePayload as Hex,
+				network,
 			});
 		}
 	}
@@ -1091,6 +1081,7 @@ export const handleTakeOrders = async (
 					symbol: approvalTokenSymbol,
 					owner: $signerAddress as `0x${string}`,
 					probeApprovalCalldata: probePayload as Hex,
+					network,
 				});
 			}
 		}

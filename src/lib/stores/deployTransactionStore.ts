@@ -30,8 +30,7 @@ import {
 } from '@rainlanguage/orderbook';
 import {
 	sendTransaction as walletServiceSendTransaction,
-	waitForTransaction as walletServiceWaitForTransaction,
-	APPROVAL_TX_CONFIRMATIONS
+	waitForTransaction as walletServiceWaitForTransaction
 } from '$lib/services/walletService';
 import { withRetry } from '$lib/utils/retry';
 import {
@@ -74,6 +73,7 @@ import {
 	type RaindexLink,
 	type AssetTokenInfo
 } from './transactionShared';
+import { ensureAllowance } from './approvalStore';
 
 /** Confirmations required before submitting the next market-take leg. */
 const TAKE_TX_CONFIRMATIONS = 1;
@@ -91,11 +91,16 @@ const waitForTransaction = walletServiceWaitForTransaction;
 // Destructure the leaf-owned status-helper surface so the lifted method bodies
 // below can keep calling `awaitWalletConfirmation(...)` etc. unchanged. This
 // mirrors the destructure seam in marketTakeStore.ts (TRADE-02 PR-2).
+// `awaitApprovalTx` is no longer destructured here — approval tx submission
+// has moved into `./approvalStore.ts` (TRADE-02 PR-4); the only remaining
+// approval-status transition this module owns is the
+// `awaitWalletConfirmation('Awaiting wallet confirmation to approve {symbol}...')`
+// pre-message, which `ensureAllowance` then overwrites with CHECKING_ALLOWANCE /
+// PENDING_APPROVAL via its setStatus callback.
 const {
 	reset,
 	checkingWalletAllowance,
 	awaitWalletConfirmation,
-	awaitApprovalTx,
 	transactionSuccess,
 	transactionError
 } = transactionStoreInternal;
@@ -163,69 +168,69 @@ export const handleStrategyDeployment = async (
 		return transactionError((error as Error).message as TransactionErrorMessage);
 	}
 
-	// Filter approvals: check balance + allowance in parallel, skip if already approved
-	const approvalsNeeded: typeof deploymentArgs.approvals = [];
+	// Decode each approval calldata once + check balances in parallel.
+	// Allowance reads + approve-tx submission are delegated to `ensureAllowance`
+	// (TRADE-02 PR-4) so the canonical approval flow lives in exactly one module.
+	type DecodedApproval = {
+		approval: (typeof deploymentArgs.approvals)[number];
+		spender: Hex;
+		requiredAmount: bigint;
+	};
 
-	if (deploymentArgs.approvals.length > 0) {
+	const decodedApprovals: DecodedApproval[] = deploymentArgs.approvals.map((approval) => {
+		const { args: approvalArgs } = decodeFunctionData({
+			abi: erc20Abi,
+			data: approval.calldata as Hex
+		});
+		return {
+			approval,
+			spender: approvalArgs[0] as Hex,
+			requiredAmount: BigInt(approvalArgs[1] as string)
+		};
+	});
+
+	if (decodedApprovals.length > 0) {
 		checkingWalletAllowance('Checking balances and allowances...');
 
-		// Check all balances and allowances in PARALLEL
-		const checks = await Promise.all(
-			deploymentArgs.approvals.map(async (approval) => {
-				const { args: approvalArgs } = decodeFunctionData({
+		// Check all balances in PARALLEL — balance shortfalls block deployment
+		// before any wallet prompt (cheaper failure mode for the user). Allowance
+		// reads are inside `ensureAllowance` so we don't double-read them here.
+		const balances = await Promise.all(
+			decodedApprovals.map((d) =>
+				readContract(config, {
 					abi: erc20Abi,
-					data: approval.calldata as Hex
-				});
-				const spender = approvalArgs[0] as Hex;
-				const requiredAmount = BigInt(approvalArgs[1] as string);
-
-				// Check balance and allowance in parallel
-				const [balance, allowance] = await Promise.all([
-					readContract(config, {
-						abi: erc20Abi,
-						address: approval.token as `0x${string}`,
-						functionName: 'balanceOf',
-						args: [$signerAddress as Hex]
-					}),
-					readContract(config, {
-						abi: erc20Abi,
-						address: approval.token as `0x${string}`,
-						functionName: 'allowance',
-						args: [$signerAddress as Hex, spender]
-					})
-				]);
-
-				return { approval, balance, allowance, requiredAmount };
-			})
+					address: d.approval.token as `0x${string}`,
+					functionName: 'balanceOf',
+					args: [$signerAddress as Hex]
+				})
+			)
 		);
 
-		// Validate balances and filter approvals
-		for (const { approval, balance, allowance, requiredAmount } of checks) {
-			// Check if user has sufficient balance
-			if (balance < requiredAmount) {
+		for (let i = 0; i < decodedApprovals.length; i++) {
+			const { approval, requiredAmount } = decodedApprovals[i];
+			if (balances[i] < requiredAmount) {
 				return transactionError(
 					`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
 				);
 			}
-
-			// Only add approval if current allowance is insufficient
-			if (allowance < requiredAmount) {
-				approvalsNeeded.push(approval);
-			}
 		}
-	}
 
-	// Only execute approvals that are actually needed
-	if (approvalsNeeded.length > 0) {
-		for (const approval of approvalsNeeded) {
+		for (const { approval, spender, requiredAmount } of decodedApprovals) {
 			try {
+				// Pre-set wallet-confirmation message so the user sees which token is
+				// about to prompt for approval. `ensureAllowance` will overwrite to
+				// CHECKING_ALLOWANCE / PENDING_APPROVAL (only when an approve tx is
+				// actually needed) via the setStatus callback.
 				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
-				const hash = await sendTransaction({
-					to: approval.token as `0x${string}`,
-					data: approval.calldata as Hex
+				await ensureAllowance({
+					token: { address: approval.token as `0x${string}`, decimals: 0 },
+					owner: $signerAddress as `0x${string}`,
+					spender,
+					amount: requiredAmount,
+					network,
+					setStatus: (s) =>
+						transactionStoreInternal.update((state) => ({ ...state, status: s }))
 				});
-				awaitApprovalTx(hash);
-				await waitForTransaction(hash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 			} catch (error) {
 				if (isStaleWalletSessionError(error)) {
 					const msg = await handleStaleWalletSession(config);
