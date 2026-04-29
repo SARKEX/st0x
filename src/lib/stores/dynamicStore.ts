@@ -146,14 +146,10 @@ export function closeSendFundsModal(): void {
 	sendModalToken.set(null);
 }
 
-// Track which view to show when modal opens
-export const depositModalInitialView = writable<'options' | 'buy' | 'deposit'>('options');
-
 /**
  * Open the deposit modal
  */
-export function openDepositModal(initialView: 'options' | 'buy' | 'deposit' = 'options'): void {
-	depositModalInitialView.set(initialView);
+export function openDepositModal(): void {
 	showDepositModal.set(true);
 }
 
