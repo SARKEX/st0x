@@ -1,5 +1,16 @@
 // Processor for calculating balances from transfers
 // Modeled after albion.rewards/src/processor.ts
+//
+// Phase 1 (DEPR-02 D-03): Per-wallet points calculation was deleted from the
+// snapshot pipeline. This processor never owned the points step (it lived in
+// the now-deleted src/lib/server/snapshots/points.ts), but documenting the
+// boundary here so future contributors understand the surviving pipeline only
+// produces TVL + per-token balances + excluded-wallet flags.
+//
+// Phase 1 (DEPR-02 D-04): Existing Vercel Blob snapshots at
+// snapshots/{tokenSymbol}/{blockNumber}.json may contain legacy points/rewards
+// fields written by the deleted pipeline. Those fields are LEFT AS-IS — readers
+// ignore unknown fields. No backfill, no wipe.
 
 import type { Transfer, BlockSnapshot, TokenBalances, SnapshotPrice } from './types';
 import type { TokenPrice } from './pyth';

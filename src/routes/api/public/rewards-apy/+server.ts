@@ -3,7 +3,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
 import { withCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
-import { computeProjectedDailyPoints } from '$lib/server/snapshots/points';
+import { computeProjectedDailyPoints } from '$lib/utils/points';
 import {
 	getCurrentMonth,
 	fetchRewardsData,

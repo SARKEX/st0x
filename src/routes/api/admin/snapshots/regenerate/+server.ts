@@ -138,7 +138,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			}
 		}
 
-		// Note: Use the "Recalculate Points" button after regeneration to update monthly points.
+		// Per-wallet points pipeline was deleted in Phase 1 (DEPR-02 D-03);
+		// regenerated blobs no longer require a follow-up recalculate step.
 
 		const successful = results.filter((r) => r.success).length;
 		const failed = results.filter((r) => !r.success).length;
@@ -147,7 +148,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		return json({
 			success: true,
-			message: `Regenerated ${successful} blocks (${failed} failed). Use the Recalculate Points button to update monthly points.`,
+			message: `Regenerated ${successful} blocks (${failed} failed).`,
 			totalBlocks: blocksToRegenerate.length,
 			successful,
 			failed,

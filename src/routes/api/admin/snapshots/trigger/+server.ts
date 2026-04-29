@@ -1,5 +1,8 @@
 // Manual snapshot trigger endpoint for admin
-// Allows generating snapshots for a specific date (overwrites existing)
+// Allows generating snapshots for a specific date (overwrites existing).
+// Per-wallet points calculation removed in Phase 1 (DEPR-02 D-03); the trigger
+// now only generates TVL/volume blobs and KV records (no points step, no
+// rewards-cache invalidation).
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { put } from '@vercel/blob';
@@ -8,7 +11,6 @@ import {
 	getBlockTimestamp,
 	getBlockNumberForTimestamp
 } from '$lib/server/snapshots/generator';
-import { updateMonthlyPoints } from '$lib/server/snapshots/points';
 import {
 	getKv,
 	kvGet,
@@ -18,7 +20,6 @@ import {
 	type DailySnapshotRecord
 } from '$lib/server/kv';
 import { requireAdmin } from '$lib/server/adminAuth';
-import { invalidateRewardsCaches } from '$lib/server/cache';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -88,7 +89,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		const storedBlobs: { block: number; token: string; url: string }[] = [];
 
-		// Process a single block: generate snapshots, upload to blob, update points
+		// Process a single block: generate snapshots and upload to blob.
+		// Per-wallet points calculation removed in Phase 1 (DEPR-02 D-03).
 		const processBlock = async (blockNumber: number) => {
 			const [snapshots, timestamp] = await Promise.all([
 				generateAllTokenSnapshots(blockNumber),
@@ -113,8 +115,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			);
 
 			storedBlobs.push(...blobResults);
-
-			await updateMonthlyPoints(snapshots, blockNumber, timestamp);
 
 			return {
 				blockNumber,
@@ -157,8 +157,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			console.log(`[Manual Trigger] Stored block records in KV`);
 		}
 
-		// Invalidate all rewards and TVL caches so fresh data is computed
-		await invalidateRewardsCaches();
+		// Rewards-cache invalidation removed in Phase 1 (DEPR-02) — the rewards
+		// caches it covered are deleted alongside the rewards layer (Plan 01-02).
 
 		return json({
 			success: true,
