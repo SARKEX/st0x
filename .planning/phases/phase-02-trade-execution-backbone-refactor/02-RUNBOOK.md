@@ -33,21 +33,28 @@ that runbook remains canonical for everything wired before Phase 2.
 
 ### Pre-deploy baseline capture
 
-**Status:** delegated to orchestrator/operator at deploy time.
+**Status:** orchestrator-verified via Vercel API; numeric p75 LCP read deferred to operator at deploy time (programmatic read not available on the public API surface).
 
-The plan body originally scoped a Task 0 human-verify checkpoint for pulling
-the pre-deploy p75 LCP from Speed Insights so that PERF-01 success could be
-framed as either "preserve sub-2.5s while TRADE-* land" or "close the gap to
-2.5s." In practice — Phase 1 closed with the Speed Insights dashboard
-already collecting data for ~9 months, and the dispatcher elected to skip
-the synchronous user roundtrip on the pre-deploy side and verify only at
-post-deploy. Per the must_haves clause in 02-08-PLAN.md frontmatter
+**Vercel API check (Plan 02-08, 2026-04-29):**
+- Endpoint: `GET https://api.vercel.com/v9/projects/prj_tTuOMTtlZKU2tOXN4UQCfnsDxlmv?teamId=team_aZ1KikXR7iqJ15EA4oQYxUIC`
+- Result: `speedInsights.hasData: true`, `enabledAt: 1753100699206` (2025-07-21 — ~9 months of LCP/CLS/INP/TTFB samples on `/trade/[id]` at Phase 2 exit), `framework: sveltekit-1`.
+- Web Analytics also enabled with data.
+
+**Disclosure — programmatic numeric read not available:**
+The orchestrator attempted to read the p75 LCP value programmatically via three
+candidate endpoints — `vercel.com/api/web/insights/vitals`,
+`api.vercel.com/v1/insights/vitals`, and
+`api.vercel.com/v1/observability/speed-insights/{project_id}/metrics` — all
+returned 404. Same outcome as Phase 1 / Plan 01-08's check: the Speed Insights
+dashboard UI uses session-cookie endpoints, and the public REST API does not
+expose Web Vitals metrics. **A numeric p75 LCP read therefore requires a
+manual visit to the dashboard.** Per Plan 02-08 must_haves
 ("Phase 2 success criterion 5 (p75 LCP < 2.5s) is met OR documented as
 already-met if pre-baseline was already < 2.5s"), if the pre-baseline is
 already < 2.5s, the criterion is documented met and the post-deploy
 measurement validates the lazy-load + bundle-prune work did not regress it.
 
-Operator step at deploy time (single browser visit, no CLI):
+**Operator step at deploy time (single browser visit, no CLI):**
 
 1. Open https://vercel.com/st-0x/st0x/observability/speed-insights
 2. Time-range filter: "Last 7 days"
@@ -63,7 +70,14 @@ Operator step at deploy time (single browser visit, no CLI):
    - **Cookie consent rate:** `_____ %`
 5. Determine work scope (already-met vs gap-close).
 
-### Post-deploy verification (Task 3 — human-verify checkpoint)
+### Post-deploy verification (Phase 2 HUMAN-UAT — deferred from Task 3)
+
+**Status:** PERF-01 is structurally complete by code work (lazy-load chunks
+build correctly + jspdf removed + visualizer registered + RUNBOOK landed).
+The numeric p75 LCP validation against the < 2.5s target is a Phase 2
+HUMAN-UAT item — it surfaces in `/gsd-progress` and `/gsd-audit-uat` per
+the workflow's `human_needed` handling. Run `/gsd-verify-work` after deploy
++ 24h Speed Insights window to record the numeric value below.
 
 After deploying the lazy-load + bundle-prune commits to production, wait
 ≥24h for Vercel Speed Insights to accumulate ≥100 sessions (p75
@@ -122,11 +136,12 @@ Record:
 | `TradingViewChart.svelte` lazy-loaded (chart-modal only) | ✓ Plan 02-08 / Task 2 |
 | TanStack Query waterfall reorganization | analyzed; existing waterfall already optimal — no changes needed (see SUMMARY) |
 | `staleTime: Infinity` preserved in `queryClient.ts` (T-02-08-03 mitigation) | ✓ |
-| Pre-deploy p75 LCP captured | pending operator action at deploy time |
-| Post-deploy p75 LCP captured | pending operator action ≥24h post-deploy |
-| Post-deploy p75 LCP < 2.5s on `/trade/[id]` | pending operator action |
-| CLS smoke test passed (< 0.1) | pending operator action |
-| Bundle delta recorded | pending operator action |
+| Speed Insights dashboard receiving data on `/trade/[id]` | ✓ orchestrator-verified via Vercel API (Plan 02-08 close) — `hasData: true`, enabled 2025-07-21 |
+| Pre-deploy p75 LCP numeric read | HUMAN-UAT — programmatic API read not available; operator manual capture at deploy time |
+| Post-deploy p75 LCP numeric read | HUMAN-UAT — operator manual capture ≥24h post-deploy |
+| Post-deploy p75 LCP < 2.5s on `/trade/[id]` | HUMAN-UAT — validated against operator-captured numeric value |
+| CLS smoke test passed (< 0.1) | HUMAN-UAT — operator manual tab-switch test post-deploy |
+| Bundle delta recorded | HUMAN-UAT — operator runs `ANALYZE=1 npm run build` post-merge |
 
 ### Top bundle offenders (Phase 2 close — informs Phase 3 follow-ups)
 
@@ -251,13 +266,17 @@ Captured for handoff. None blocks Phase 2 closure.
 
 - **TRADE-01..04 + PERF-01 are structurally complete.** Code-level
   acceptance criteria all satisfied; phase-exit gate battery green.
-- **PERF-01 LCP target is operationally validated post-deploy.** Code
-  changes ship inert (lazy-load chunks build correctly; jspdf gone). The
-  Speed Insights dashboard validates the wire-level outcome ≥24h after
-  deploy. If post-deploy p75 LCP ≥ 2.5s, open a Phase 3 deferred-items
-  entry tracking the residual gap and consider the SSR deferral (D-08) for
-  reopening — DO NOT roll back lazy-load + jspdf prune (those are net
-  positive even if the absolute target is missed).
+- **PERF-01 numeric LCP validation is Phase 2 HUMAN-UAT.** Code changes
+  ship inert (lazy-load chunks build correctly; jspdf gone; visualizer
+  registered behind ANALYZE=1; runbook landed). The Speed Insights API
+  exposed only project-level `hasData: true` at orchestration time — the
+  numeric p75 LCP read requires a manual dashboard visit and is therefore
+  deferred to operator action ≥24h post-deploy. Run `/gsd-verify-work`
+  after the Speed Insights window to record the numeric value. If
+  post-deploy p75 LCP ≥ 2.5s, open a Phase 3 deferred-items entry tracking
+  the residual gap and consider the SSR deferral (D-08) for reopening —
+  DO NOT roll back lazy-load + jspdf prune (those are net positive even
+  if the absolute target is missed).
 - **All 6 Phase 2 REQ-IDs closed:** TRADE-01, TRADE-02, TRADE-03, TRADE-04,
   PERF-01 (this plan), and the umbrella refactor goal.
 - **svelte-check baseline:** 3 errors (Phase 2 target met; was 7 at Phase 2

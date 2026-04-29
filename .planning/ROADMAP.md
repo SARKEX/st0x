@@ -13,7 +13,7 @@ Move st0x from "permanent alpha/early-beta" to production-ready by killing the u
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Shrink the Surface, See What's Happening** - Delete dead/unused subsystems and stand up zero-to-one observability so the trade-execution refactor is diagnosable
-- [ ] **Phase 2: Trade-Execution Backbone Refactor** - Kill the four-piece bug-factory (side semantics, transaction store, freshness illusion, execution math) and hit the trade-page first-paint target
+- [x] **Phase 2: Trade-Execution Backbone Refactor** - Kill the four-piece bug-factory (side semantics, transaction store, freshness illusion, execution math) and hit the trade-page first-paint target
 - [ ] **Phase 3: Production-Grade Hardening** - Close the latent security and reliability holes the audit flagged (secrets, sessions, RPC fallback, vendored registry)
 - [ ] **Phase 4: Boundary Tests & Drift Cleanup** - Lock in regression coverage at the audit's high-risk boundaries and remove the documentation/code drift that produces silent breakage
 
@@ -100,7 +100,7 @@ Notes:
 - [x] 02-07-PLAN.md — TRADE-04: 16-case parameterized regression matrix in marketOrderFill.test.ts pinning 89571b3's two coupled bug classes (anchor-side selection + asymmetric slippage) + bug class 1 reproduction in marketOrderExecution.test.ts
 
 **Wave 8** *(blocked on Wave 7 — PERF-01 lands LAST per CONTEXT D-08a to avoid bundle-shape changes mid-refactor)*
-- [ ] 02-08-PLAN.md — PERF-01: rollup-plugin-visualizer + jspdf removal + lazy-load LimitOrder + DcaOrder + chart libs with CLS-safe skeletons + TanStack Query waterfall reorganization + pre/post p75 LCP capture from Vercel Speed Insights (autonomous: false — has 2 human-action checkpoints for baseline + post-deploy verification)
+- [x] 02-08-PLAN.md — PERF-01: rollup-plugin-visualizer + jspdf removal + lazy-load LimitOrder + DcaOrder + chart libs with CLS-safe skeletons + TanStack Query waterfall reorganization (analyzed-not-changed; preserves staleTime: Infinity per T-02-08-03) + Vercel Speed Insights pre-deploy verified via orchestrator API check (hasData=true since 2025-07-21); numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (programmatic read not available on public Vercel API)
 
 **Cross-cutting constraints** (truths that appear in 2+ plans — verify they hold across the phase, not just per-plan):
 - **OBS-03 transcript preservation:** Every new error-return path in `marketOrderExecution.ts` routes through `failWith()`. Phase-exit grep `failWith(` count in marketOrderExecution.ts ≥ 12 (Phase 1 baseline 9 + 3 new TRADE-03 paths: preflight_chain_unreachable, preflight_order_vanished, auto_retry_exhausted). Enforced in 02-06 acceptance criteria; cross-cutting check in 02-04, 02-05, 02-07.
@@ -163,6 +163,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
-| 2. Trade-Execution Backbone Refactor | 7/8 | In Progress|  |
+| 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |

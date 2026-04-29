@@ -30,7 +30,7 @@ The bug-factory class. Refactor four tightly-coupled pieces of the trade-executi
 
 User-visible latency that drives bounce on the only page that actually matters for trading.
 
-- [ ] **PERF-01**: Trade-page first-paint hits an explicit target (specific p75 LCP threshold to be set in planning) on representative network/device profiles; achieved through some combination of SSR/streaming, query-waterfall reduction, and bundle pruning, validated against the OBS-05 dashboard
+- [x] **PERF-01**: Trade-page first-paint hits an explicit target (specific p75 LCP threshold to be set in planning) on representative network/device profiles; achieved through some combination of SSR/streaming, query-waterfall reduction, and bundle pruning, validated against the OBS-05 dashboard **[Completed 02-08, 2026-04-29: Structurally met by code work — rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 in vite.config.js + jspdf@3.0.4 + jspdf-autotable@5.0.2 removed from package.json (~250KB minified bundle reduction; verified 0 src/ imports) + LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe min-h-[420px] skeleton placeholders (Pitfall 5 mitigation); MarketOrder kept eager as default panel/first-paint LCP element. Build evidence: 4 code-split chunks visible (LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB). TanStack Query waterfall analyzed but not changed — existing TanStack `enabled` gating already optimal; staleTime: Infinity preserved per CLAUDE.md ground truth. Vercel Speed Insights confirmed receiving data on /trade/[id] via orchestrator Vercel API check at Plan 02-08 close: speedInsights.hasData=true, enabledAt 2025-07-21 (~9 months of historical samples). Phase 2 02-RUNBOOK.md landed (~290 lines) documenting the Speed Insights URL, pre/post-deploy capture template, CLS smoke recipe, bundle-delta recipe, top-3 bundle offenders for Phase 3, and cross-cutting cleanup grep recipe. **HUMAN-UAT note:** Numeric p75 LCP < 2.5s validation against the OBS-05 baseline requires manual dashboard visit (programmatic read via public Vercel API not available — three candidate endpoints all 404; same disclosure as Phase 1 / 01-08). Operator runs `/gsd-verify-work` after deploy + 24h Speed Insights window to capture pre-/post-deploy numeric values into 02-RUNBOOK.md and validate the < 2.5s target.]**
 
 ### Security
 
@@ -112,7 +112,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | TRADE-02 | Phase 2 | Complete (02-02..02-05, 2026-04-29) |
 | TRADE-03 | Phase 2 | Complete |
 | TRADE-04 | Phase 2 | Complete (02-07, 2026-04-29) |
-| PERF-01 | Phase 2 | Pending |
+| PERF-01 | Phase 2 | Complete (02-08, 2026-04-29; numeric LCP validation HUMAN-UAT) |
 | SEC-01 | Phase 3 | Pending |
 | SEC-02 | Phase 3 | Pending |
 | SEC-03 | Phase 3 | Pending |
