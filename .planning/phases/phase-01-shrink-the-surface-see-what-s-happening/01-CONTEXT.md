@@ -95,7 +95,7 @@ The following are owned by the planner / executor; the user has not constrained 
 
 ### Phase Artifacts
 
-- `.planning/phase-01-shrink-the-surface-see-what-s-happening/01-UI-SPEC.md` — UI design contract approved 2026-04-28. Pins the DepositModal collapse copy (D-10), confirms Vercel Speed Insights is the OBS-05 dashboard (D-11), and defers `+error.svelte` (D-12). Includes two non-blocking planner recommendations: (a) when DEPR-02 admin nav prunes happen, confirm `admin/+page.svelte` default tab stays `activity`; (b) DEPR-03 visual-debt sweep — grep for orphaned "Buy crypto" / "Add funds" / `Onramper` references across the tree.
+- `.planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-UI-SPEC.md` — UI design contract approved 2026-04-28. Pins the DepositModal collapse copy (D-10), confirms Vercel Speed Insights is the OBS-05 dashboard (D-11), and defers `+error.svelte` (D-12). Includes two non-blocking planner recommendations: (a) when DEPR-02 admin nav prunes happen, confirm `admin/+page.svelte` default tab stays `activity`; (b) DEPR-03 visual-debt sweep — grep for orphaned "Buy crypto" / "Add funds" / `Onramper` references across the tree.
 
 ### Project Guidance (with drift warning)
 

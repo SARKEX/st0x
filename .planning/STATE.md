@@ -83,5 +83,5 @@ Items acknowledged and carried forward from previous milestone close:
 
 Last session: 2026-04-28
 Stopped at: Phase 1 planned — 8 plans (01-01 DEPR-02, 01-02 DEPR-01, 01-03 DEPR-03, 01-04 OBS-01 Sentry, 01-05 OBS-02 pino, 01-06 OBS-04 RPC instrumentation, 01-07 OBS-03 take-order transcript, 01-08 OBS-05 verification). Wave structure 1→2→3→4→5→6 (parallel 06+07)→7. Plan-checker verified PASS at iteration 2/3.
-Resume file: .planning/phase-01-shrink-the-surface-see-what-s-happening/01-01-PLAN.md
+Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-01-PLAN.md
 Next step: `/gsd-execute-phase 1`

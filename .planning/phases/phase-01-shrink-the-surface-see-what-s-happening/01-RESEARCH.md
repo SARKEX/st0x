@@ -1135,7 +1135,7 @@ No code change. Verification steps:
 2. Confirm at least one entry under "Recent Visits" or per-route metrics for the production deployment within the last 24 hours.
 3. Confirm LCP / CLS / INP / TTFB columns are populated for the `/trade/[token]` route (the highest-traffic route per PROJECT.md).
 4. If empty: check `src/lib/components/CookieConsent.svelte` to confirm `injectSpeedInsights()` is called after consent acceptance, then accept the cookie banner in an incognito session and reload `/trade/...` twice; data should appear within ~5 minutes.
-5. Document the dashboard URL in `.planning/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md` (or whatever the team uses for runbooks) with a note: "Trade-page web vitals baseline lives here; Phase 2's PERF-01 sets a target against this dashboard."
+5. Document the dashboard URL in `.planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md` (or whatever the team uses for runbooks) with a note: "Trade-page web vitals baseline lives here; Phase 2's PERF-01 sets a target against this dashboard."
 
 ## Validation Architecture
 
