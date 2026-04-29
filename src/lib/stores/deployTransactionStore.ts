@@ -290,28 +290,39 @@ export const handleStrategyDeployment = async (
 		return transactionSuccess(hash, undefined, buildMetadata(immediateLink));
 	}
 
+	// Inflight guard: setInterval does NOT wait for the previous async callback
+	// to complete before scheduling the next tick — a slow subgraph response
+	// could otherwise produce overlapping ticks, both calling
+	// transactionSuccess() with potentially different raindexLink resolution
+	// windows. Skip ticks while a prior fetch is outstanding.
+	let inflight = false;
 	const interval = setInterval(async () => {
+		if (inflight) return;
+		inflight = true;
 		attempts++;
 
-		// Stop polling after max attempts
-		if (attempts >= maxAttempts) {
-			clearInterval(interval);
-			invalidateOrderQueries();
-			invalidateDashboardBalances();
-			return transactionSuccess(hash, 'Order deployed successfully!', buildMetadata());
-		}
-
 		try {
+			// Stop polling after max attempts.
+			if (attempts >= maxAttempts) {
+				clearInterval(interval);
+				invalidateOrderQueries();
+				invalidateDashboardBalances();
+				transactionSuccess(hash, 'Order deployed successfully!', buildMetadata());
+				return;
+			}
+
 			const link = await tryFetchOrderLink();
 			if (link) {
 				clearInterval(interval);
 				invalidateOrderQueries();
 				invalidateDashboardBalances();
-				return transactionSuccess(hash, undefined, buildMetadata(link));
+				transactionSuccess(hash, undefined, buildMetadata(link));
 			}
 		} catch (error) {
 			// Continue polling
 			console.error('[deployTransactionStore] Error checking for orders:', error);
+		} finally {
+			inflight = false;
 		}
 	}, 2000);
 };
