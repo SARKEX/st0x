@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 01-02-PLAN.md — DEPR-01: delete user-facing rewards UI + extract TokenSwapAnnouncement to announcements/ (per D-16)
 
 **Wave 3** *(blocked on Wave 2 — `+layout.svelte` rewards mounts + `hooks.server.ts:235` rewards carve-out must already be removed)*
-- [ ] 01-03-PLAN.md — DEPR-03: delete Onramper integration + collapse DepositModal to deposit-only (per D-10)
+- [x] 01-03-PLAN.md — DEPR-03: delete Onramper integration + collapse DepositModal to deposit-only (per D-10)
 
 **Wave 4** *(blocked on Wave 3 — `.env.example` + `hooks.server.ts` are stable post-deletions; Sentry CSP entry can land cleanly)*
 - [ ] 01-04-PLAN.md — OBS-01: Sentry SDK init + PII scrubber + CSP additions + sourcemap upload
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Shrink the Surface, See What's Happening | 2/8 | In progress | - |
+| 1. Shrink the Surface, See What's Happening | 3/8 | In progress | - |
 | 2. Trade-Execution Backbone Refactor | 0/TBD | Not started | - |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
