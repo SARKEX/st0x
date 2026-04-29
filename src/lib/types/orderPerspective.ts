@@ -6,8 +6,6 @@
  * - Taker perspective: The user executing against the orderbook (what user wants/pays)
  */
 
-import type { ProcessedQuote } from '$lib/utils/orderbook';
-
 /**
  * Minimal token interface for order perspective types
  * Subset of full Token from $lib/types - only includes fields needed for order calculations
@@ -198,64 +196,90 @@ export function takerToMakerTokens(taker: TakerOrderTokens): MakerOrderTokens {
 }
 
 // ============================================================================
-// TRADE-01: Canonical accessor wrappers for ProcessedQuote IO-perspective fields
+// TRADE-01: Canonical accessor wrappers for IO-perspective fields
 // ============================================================================
 //
 // These wrappers are the single boundary through which non-allowlisted code
 // reads `inputTokenAddress` / `outputTokenAddress` / `inputIOIndex` /
-// `outputIOIndex` on a ProcessedQuote. The ESLint `no-restricted-syntax` rule
-// (eslint.config.js) forbids direct `.inputTokenAddress` / `.outputTokenAddress`
-// / `.inputIOIndex` / `.outputIOIndex` MemberExpression reads outside the
-// allowlist (this file + utils/orderbook.ts + api/orders.ts +
-// generated-graphql.ts). The wrapper bodies below ARE legal raw reads
+// `outputIOIndex` on any maker-shaped object (ProcessedQuote, the inline
+// types in transaction.ts:handleRemoveOrder, QuoteLike from tokenMath.ts,
+// TakeOrderConfigV4 from the SDK, etc.). The ESLint `no-restricted-syntax`
+// rule (eslint.config.js) forbids direct `.inputTokenAddress` /
+// `.outputTokenAddress` / `.inputIOIndex` / `.outputIOIndex` MemberExpression
+// reads outside the allowlist (this file + utils/orderbook.ts + api/orders.ts
+// + generated-graphql.ts). The wrapper bodies below ARE legal raw reads
 // because this file is the canonical IO-perspective access boundary.
 //
 // Naming: `getMaker...` reflects that these fields are the on-chain order
 // (maker) perspective — `inputTokenAddress` is what the order RECEIVES,
 // `outputTokenAddress` is what it GIVES AWAY (CLAUDE.md §"Order Semantics").
+//
+// Type design: each accessor takes a structural type with only the field it
+// reads. This lets the helpers serve the multiple receiver shapes that exist
+// today (ProcessedQuote, partial inline shapes, TakeOrderConfigV4, etc.)
+// without forcing all receivers to widen to ProcessedQuote. The structural
+// types accept `string | undefined` for addresses so callers preserving
+// optional-field semantics (e.g. handleRemoveOrder) don't lose them at the
+// boundary; the return type matches the field's declared type.
 
 /**
- * Read maker INPUT token address from a ProcessedQuote.
+ * Read maker INPUT token address from any object that has one.
  *
  * Use this instead of direct `.inputTokenAddress` access to keep the
- * IO-perspective boundary structurally enforced by ESLint.
+ * IO-perspective boundary structurally enforced by ESLint. Field-only
+ * generics let the wrapper serve every receiver shape the codebase has —
+ * `ProcessedQuote` (string), the inline `handleRemoveOrder` shape
+ * (`string?`), `QuoteLike` (string), and partial fixtures in tests — without
+ * forcing all of them to widen to one interface.
  *
- * @param quote - ProcessedQuote with on-chain order perspective fields
- * @returns The address the order RECEIVES (on-chain INPUT)
+ * Returns whatever type the field has on the receiver (string for full
+ * `ProcessedQuote`, `string | undefined` for optional fields, etc.).
+ *
+ * @param quote - any object with an `inputTokenAddress` field
+ * @returns the value of the `inputTokenAddress` field
  */
-export function getMakerInputTokenAddress(quote: ProcessedQuote): string {
+export function getMakerInputTokenAddress<T extends { inputTokenAddress?: unknown }>(
+	quote: T
+): T['inputTokenAddress'] {
 	return quote.inputTokenAddress;
 }
 
 /**
- * Read maker OUTPUT token address from a ProcessedQuote.
+ * Read maker OUTPUT token address from any object that has one.
  *
- * Use this instead of direct `.outputTokenAddress` access to keep the
- * IO-perspective boundary structurally enforced by ESLint.
- *
- * @param quote - ProcessedQuote with on-chain order perspective fields
- * @returns The address the order GIVES AWAY (on-chain OUTPUT)
+ * @param quote - any object with an `outputTokenAddress` field
+ * @returns the value of the `outputTokenAddress` field
  */
-export function getMakerOutputTokenAddress(quote: ProcessedQuote): string {
+export function getMakerOutputTokenAddress<T extends { outputTokenAddress?: unknown }>(
+	quote: T
+): T['outputTokenAddress'] {
 	return quote.outputTokenAddress;
 }
 
 /**
- * Read input IO-index from a ProcessedQuote (used by aggregated take-order calldata).
+ * Read input IO-index from any object that has one.
  *
- * @param quote - ProcessedQuote with on-chain order perspective fields
- * @returns The IO index in the order's `validInputs` array
+ * Receiver shapes the codebase exposes: `ProcessedQuote` (number),
+ * `TakeOrderConfigV4` from the SDK (string). The wrapper is type-transparent
+ * — it returns whatever the field is declared as on the receiver type.
+ *
+ * @param quote - any object with an `inputIOIndex` field
+ * @returns the value of the `inputIOIndex` field
  */
-export function getMakerInputIOIndex(quote: ProcessedQuote): number {
+export function getMakerInputIOIndex<T extends { inputIOIndex?: unknown }>(
+	quote: T
+): T['inputIOIndex'] {
 	return quote.inputIOIndex;
 }
 
 /**
- * Read output IO-index from a ProcessedQuote (used by aggregated take-order calldata).
+ * Read output IO-index from any object that has one.
  *
- * @param quote - ProcessedQuote with on-chain order perspective fields
- * @returns The IO index in the order's `validOutputs` array
+ * @param quote - any object with an `outputIOIndex` field
+ * @returns the value of the `outputIOIndex` field
  */
-export function getMakerOutputIOIndex(quote: ProcessedQuote): number {
+export function getMakerOutputIOIndex<T extends { outputIOIndex?: unknown }>(
+	quote: T
+): T['outputIOIndex'] {
 	return quote.outputIOIndex;
 }

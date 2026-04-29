@@ -40,6 +40,7 @@ import {
 	type TakeOrderTranscript,
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
+import { getMakerInputIOIndex, getMakerOutputIOIndex, getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
 
 // Re-export so existing imports (`MarketOrder.svelte`, `QuickTrade.svelte`) keep working.
 export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = DEFAULT_BPS;
@@ -338,8 +339,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			(firstQuote.sgOrder as { orderHash?: string } | undefined)?.orderHash ??
 			firstQuote.orderHash ??
 			null;
-		transcript.onChainStateRead.IOIndex.input = firstQuote.inputIOIndex ?? null;
-		transcript.onChainStateRead.IOIndex.output = firstQuote.outputIOIndex ?? null;
+		transcript.onChainStateRead.IOIndex.input = getMakerInputIOIndex(firstQuote) ?? null;
+		transcript.onChainStateRead.IOIndex.output = getMakerOutputIOIndex(firstQuote) ?? null;
 		if (!firstQuote.orderData || !firstQuote.sgOrder) {
 			return failWith(
 				'unhydrated_fills',
@@ -415,7 +416,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const isSpendAnchored = orderSide === 'Sell' || inputMode === 'spend';
 		const aggregatedParams: TakeOrdersParams = {
 			orderData: firstQuote.orderData as OrderV4,
-			ioIndexes: { input: firstQuote.inputIOIndex ?? 0, output: firstQuote.outputIOIndex ?? 0 },
+			ioIndexes: { input: getMakerInputIOIndex(firstQuote) ?? 0, output: getMakerOutputIOIndex(firstQuote) ?? 0 },
 			takerWantsToken: toTokenInfo(isBuy ? assetToken : paymentToken),
 			takerPaysToken: toTokenInfo(isBuy ? paymentToken : assetToken),
 			requestedTakerWantsAmount: isBuy && inputMode !== 'spend' ? amount : inputAmountFilled,
@@ -455,8 +456,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			});
 			const oracleInputs = indexedFills.map(({ fill }) => ({
 				raindexOrder: fill.quote.raindexOrder as RaindexOrder,
-				inputIndex: fill.quote.inputIOIndex ?? 0,
-				outputIndex: fill.quote.outputIOIndex ?? 0,
+				inputIndex: getMakerInputIOIndex(fill.quote) ?? 0,
+				outputIndex: getMakerOutputIOIndex(fill.quote) ?? 0,
 				amountStr: '',
 				priceCapStr: priceCapStrForSdk,
 				taker: takerAddress
@@ -512,8 +513,8 @@ export function filterQuotesForSide(
 	const normalizedPayment = paymentAddress.toLowerCase();
 
 	return quotes.filter((quote) => {
-		const inputAddr = quote.inputTokenAddress?.toLowerCase();
-		const outputAddr = quote.outputTokenAddress?.toLowerCase();
+		const inputAddr = getMakerInputTokenAddress(quote)?.toLowerCase();
+		const outputAddr = getMakerOutputTokenAddress(quote)?.toLowerCase();
 		const price = quote.quotePerAsset;
 
 		if (orderSide === 'Buy') {

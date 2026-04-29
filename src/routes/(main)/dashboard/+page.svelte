@@ -30,6 +30,10 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { parseFloatHex, getRaindexVaultUrl } from '$lib/utils/tokenMath';
+	import {
+		getMakerInputTokenAddress,
+		getMakerOutputTokenAddress
+	} from '$lib/types/orderPerspective';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
@@ -968,7 +972,9 @@
 			for (const quote of myQuotes) {
 				const isBuy = quote.side === 'bid';
 				const tokenSymbol = isBuy ? quote.inputTokenSymbol : quote.outputTokenSymbol;
-				const tokenAddress = isBuy ? quote.inputTokenAddress : quote.outputTokenAddress;
+				const tokenAddress = isBuy
+					? getMakerInputTokenAddress(quote)
+					: getMakerOutputTokenAddress(quote);
 				const maxOutputBigInt = parseFloatHex(
 					quote.maxOutput,
 					isBuy ? quote.inputTokenDecimals || 18 : quote.outputTokenDecimals || 18

@@ -343,6 +343,7 @@ function createRaindexLink(
 }
 
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
+import { getMakerOutputTokenAddress, getMakerInputTokenAddress, getMakerInputIOIndex, getMakerOutputIOIndex } from "$lib/types/orderPerspective";
 
 export enum TransactionStatus {
 	IDLE = 'Idle',
@@ -883,9 +884,9 @@ const transactionStore = () => {
 
 				console.log('[handleRemoveOrder] Looking for vaults:', {
 					outputVaultId: quote.outputVaultId,
-					outputTokenAddress: quote.outputTokenAddress,
+					outputTokenAddress: getMakerOutputTokenAddress(quote),
 					inputVaultId: quote.inputVaultId,
-					inputTokenAddress: quote.inputTokenAddress,
+					inputTokenAddress: getMakerInputTokenAddress(quote),
 					availableVaultIds: vaults.map((v) => ({
 						vaultId: v.vaultId.toString(),
 						vaultIdHex: `0x${v.vaultId.toString(16).padStart(64, '0')}`,
@@ -904,7 +905,7 @@ const transactionStore = () => {
 					const outputVault = findVaultByIdAndToken(
 						vaults,
 						quote.outputVaultId,
-						quote.outputTokenAddress
+						getMakerOutputTokenAddress(quote)
 					);
 					if (outputVault) {
 						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
@@ -918,7 +919,7 @@ const transactionStore = () => {
 					const inputVault = findVaultByIdAndToken(
 						vaults,
 						quote.inputVaultId,
-						quote.inputTokenAddress
+						getMakerInputTokenAddress(quote)
 					);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
@@ -1003,7 +1004,7 @@ const transactionStore = () => {
 			const raindexLink = createRaindexLink(network.id, order.orderbook, quote.orderHash);
 
 			// Invalidate queries for the tokens involved in this order
-			const tokenAddresses = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
+			const tokenAddresses = [getMakerInputTokenAddress(quote), getMakerOutputTokenAddress(quote)].filter(Boolean);
 			for (const tokenAddr of tokenAddresses) {
 				if (tokenAddr) {
 					invalidateOrderQueries(network.id, tokenAddr);
@@ -1143,7 +1144,7 @@ const transactionStore = () => {
 					const inputVault = findVaultByIdAndToken(
 						vaults,
 						quote.inputVaultId,
-						quote.inputTokenAddress
+						getMakerInputTokenAddress(quote)
 					);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
@@ -1159,7 +1160,7 @@ const transactionStore = () => {
 					const outputVault = findVaultByIdAndToken(
 						vaults,
 						quote.outputVaultId,
-						quote.outputTokenAddress
+						getMakerOutputTokenAddress(quote)
 					);
 					if (outputVault) {
 						const key = `${outputVault.vaultId.toString()}-${outputVault.token?.address?.toLowerCase()}`;
@@ -1173,7 +1174,7 @@ const transactionStore = () => {
 					const inputVault = findVaultByIdAndToken(
 						vaults,
 						quote.inputVaultId,
-						quote.inputTokenAddress
+						getMakerInputTokenAddress(quote)
 					);
 					if (inputVault) {
 						const key = `${inputVault.vaultId.toString()}-${inputVault.token?.address?.toLowerCase()}`;
@@ -1201,7 +1202,7 @@ const transactionStore = () => {
 				const chainId = network.id;
 				const raindexLink = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 				// Still invalidate queries in case order was deactivated
-				const tokenAddrs = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
+				const tokenAddrs = [getMakerInputTokenAddress(quote), getMakerOutputTokenAddress(quote)].filter(Boolean);
 				for (const tokenAddr of tokenAddrs) {
 					if (tokenAddr) {
 						invalidateOrderQueries(network.id, tokenAddr);
@@ -1242,7 +1243,7 @@ const transactionStore = () => {
 			const raindexLink = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 
 			// Invalidate queries for the tokens involved in this order
-			const tokenAddrs = [quote.inputTokenAddress, quote.outputTokenAddress].filter(Boolean);
+			const tokenAddrs = [getMakerInputTokenAddress(quote), getMakerOutputTokenAddress(quote)].filter(Boolean);
 			for (const tokenAddr of tokenAddrs) {
 				if (tokenAddr) {
 					invalidateOrderQueries(network.id, tokenAddr);
@@ -2077,8 +2078,8 @@ const transactionStore = () => {
 					Float.fromFixedDecimalLossy(fill0, fillDecimals).float.format().value ?? '0'
 				);
 				const probe = await order0.getTakeCalldata(
-					Number(cfg0.inputIOIndex),
-					Number(cfg0.outputIOIndex),
+					Number(getMakerInputIOIndex(cfg0)),
+					Number(getMakerOutputIOIndex(cfg0)),
 					$signerAddress,
 					mode,
 					amountStr0,
@@ -2123,8 +2124,8 @@ const transactionStore = () => {
 						}
 					: {};
 				const calldataResult = await orderToExecute.getTakeCalldata(
-					Number(orderConfig.inputIOIndex),
-					Number(orderConfig.outputIOIndex),
+					Number(getMakerInputIOIndex(orderConfig)),
+					Number(getMakerOutputIOIndex(orderConfig)),
 					$signerAddress,
 					mode,
 					amountStr,
@@ -2141,8 +2142,8 @@ const transactionStore = () => {
 				) {
 					if (multiLegUseTotalAllowance) {
 						readyCalldataResult = await orderToExecute.getTakeCalldata(
-							Number(orderConfig.inputIOIndex),
-							Number(orderConfig.outputIOIndex),
+							Number(getMakerInputIOIndex(orderConfig)),
+							Number(getMakerOutputIOIndex(orderConfig)),
 							$signerAddress,
 							mode,
 							amountStr,
@@ -2163,8 +2164,8 @@ const transactionStore = () => {
 							awaitApprovalTx(approvalHash);
 							await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 							readyCalldataResult = await orderToExecute.getTakeCalldata(
-								Number(orderConfig.inputIOIndex),
-								Number(orderConfig.outputIOIndex),
+								Number(getMakerInputIOIndex(orderConfig)),
+								Number(getMakerOutputIOIndex(orderConfig)),
 								$signerAddress,
 								mode,
 								amountStr,
@@ -2183,8 +2184,8 @@ const transactionStore = () => {
 						awaitApprovalTx(approvalHash);
 						await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 						readyCalldataResult = await orderToExecute.getTakeCalldata(
-							Number(orderConfig.inputIOIndex),
-							Number(orderConfig.outputIOIndex),
+							Number(getMakerInputIOIndex(orderConfig)),
+							Number(getMakerOutputIOIndex(orderConfig)),
 							$signerAddress,
 							mode,
 							amountStr,
@@ -2197,8 +2198,8 @@ const transactionStore = () => {
 						for (let retry = 0; retry < 3; retry++) {
 							await new Promise((resolve) => setTimeout(resolve, TAKE_ORDER_TRANSIENT_RETRY_MS));
 							readyCalldataResult = await orderToExecute.getTakeCalldata(
-								Number(orderConfig.inputIOIndex),
-								Number(orderConfig.outputIOIndex),
+								Number(getMakerInputIOIndex(orderConfig)),
+								Number(getMakerOutputIOIndex(orderConfig)),
 								$signerAddress,
 								mode,
 								amountStr,
@@ -2221,8 +2222,8 @@ const transactionStore = () => {
 							Float.fromFixedDecimalLossy(fillAmount, fillDecimals).float.format().value ?? '0'
 						);
 						readyCalldataResult = await orderToExecute.getTakeCalldata(
-							Number(orderConfig.inputIOIndex),
-							Number(orderConfig.outputIOIndex),
+							Number(getMakerInputIOIndex(orderConfig)),
+							Number(getMakerOutputIOIndex(orderConfig)),
 							$signerAddress,
 							mode,
 							amountStr,

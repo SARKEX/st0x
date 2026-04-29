@@ -36,6 +36,10 @@
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
+	import {
+		getMakerInputTokenAddress,
+		getMakerOutputTokenAddress
+	} from '$lib/types/orderPerspective';
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -135,8 +139,8 @@
 			.filter(
 				(q) =>
 					q.sgOrder?.owner?.toLowerCase() === myAddress &&
-					(assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
-						assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? ''))
+					(assetAddressSet.has(getMakerInputTokenAddress(q)?.toLowerCase() ?? '') ||
+						assetAddressSet.has(getMakerOutputTokenAddress(q)?.toLowerCase() ?? ''))
 			)
 			.map((q) => q.orderHash);
 	})();
@@ -158,8 +162,8 @@
 			// Filter by token (input or output matches current token's wrapped or legacy address)
 			const filtered = quotes.filter(
 				(q) =>
-					assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
-					assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
+					assetAddressSet.has(getMakerInputTokenAddress(q)?.toLowerCase() ?? '') ||
+					assetAddressSet.has(getMakerOutputTokenAddress(q)?.toLowerCase() ?? '')
 			);
 
 			// Transform to DisplayOrder
@@ -673,8 +677,8 @@
 					const ratioValue = ratioToNumber(quote.ratio);
 					const ratio = ratioValue ?? 0;
 					if (!Number.isFinite(ratio) || ratio <= 0) return;
-					const inputAddress = quote.inputTokenAddress.toLowerCase();
-					const outputAddress = quote.outputTokenAddress.toLowerCase();
+					const inputAddress = getMakerInputTokenAddress(quote).toLowerCase();
+					const outputAddress = getMakerOutputTokenAddress(quote).toLowerCase();
 					const inputIsAsset = assetAddressSet.has(inputAddress);
 					const outputIsAsset = assetAddressSet.has(outputAddress);
 					// ASK: quote token -> asset (what you pay when buying)
@@ -812,8 +816,8 @@
 			if (!Number.isFinite(ratio) || ratio <= 0) {
 				return;
 			}
-			const inputAddress = quote.inputTokenAddress.toLowerCase();
-			const outputAddress = quote.outputTokenAddress.toLowerCase();
+			const inputAddress = getMakerInputTokenAddress(quote).toLowerCase();
+			const outputAddress = getMakerOutputTokenAddress(quote).toLowerCase();
 			if (!inputAddress || !outputAddress) {
 				return;
 			}

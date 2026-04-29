@@ -1,5 +1,6 @@
 import { formatUnits } from 'viem';
 import { Float } from '@rainlanguage/float';
+import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
 
 export type AmountLike = bigint | string | number | null | undefined;
 
@@ -388,8 +389,8 @@ export interface QuoteMetrics {
 }
 
 export function describeQuote(quote: QuoteLike, quoteTokenAddress: string): QuoteMetrics | null {
-	const input = normalizeAddress(quote.inputTokenAddress);
-	const output = normalizeAddress(quote.outputTokenAddress);
+	const input = normalizeAddress(getMakerInputTokenAddress(quote));
+	const output = normalizeAddress(getMakerOutputTokenAddress(quote));
 	const quoteAddress = normalizeAddress(quoteTokenAddress);
 
 	if (!input || !output || !quoteAddress) {

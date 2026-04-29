@@ -2,6 +2,10 @@
 	import type { CategorizedToken } from '$lib/config/network';
 	import { currentNetwork } from '$lib/stores';
 	import { type ProcessedQuote, walkOrderbook } from '$lib/api/orders';
+	import {
+		getMakerInputTokenAddress,
+		getMakerOutputTokenAddress
+	} from '$lib/types/orderPerspective';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
@@ -304,8 +308,8 @@
 
 			// Filter quotes by side and token pair
 			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-				const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-				const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+				const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
+				const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
 				const targetOutputAddress =
 					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
 				const targetInputAddress =
@@ -569,8 +573,8 @@
 
 		// Filter quotes for BUY side with price guard
 		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+			const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
+			const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
 			const quotePerAsset = quote.quotePerAsset;
 
 			return (
@@ -698,8 +702,8 @@
 			oraclePrice && oraclePrice > 0 ? oraclePrice / PRICE_GUARD_MULTIPLIER : 0;
 
 		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+			const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
+			const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
 			const targetOutputAddress =
 				orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
 			const targetInputAddress =
