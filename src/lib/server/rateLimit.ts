@@ -318,11 +318,6 @@ export const tieredLimits: Record<string, TieredRateLimitConfig> = {
 	accessCheck: {
 		anonymous: { windowMs: 60 * 1000, maxRequests: 20 }, // 20/min for anon
 		authenticated: { windowMs: 60 * 1000, maxRequests: 120 } // 120/min for wallet
-	},
-	// Onramper (requires wallet)
-	onramper: {
-		anonymous: { windowMs: 60 * 1000, maxRequests: 2 }, // 2/min for anon (shouldn't happen)
-		authenticated: { windowMs: 60 * 1000, maxRequests: 10 } // 10/min for wallet
 	}
 };
 
