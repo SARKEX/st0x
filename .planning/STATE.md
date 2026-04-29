@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase_2_pending_discussion
-stopped_at: Phase 1 COMPLETE. Plan 01-08 (OBS-05 + RUNBOOK + phase-exit verification) closed; all 8 plans done (8/8) and all 8 Phase 1 REQ-IDs closed (DEPR-01..03, OBS-01..05). NEW .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md (328 lines) — operational runbook documenting Vercel Speed Insights URL (https://vercel.com/st-0x/st0x/observability/speed-insights — confirmed receiving data via Vercel API at Phase 1 close, hasData=true since 2025-07-21, ~9 months of LCP/CLS/INP/TTFB baseline data; orchestrator queried project_id prj_tTuOMTtlZKU2tOXN4UQCfnsDxlmv directly, no user roundtrip). Sentry org + Telegram bot provisioning state, env-var deploy checklist (5 add: SENTRY_DSN/PUBLIC_SENTRY_DSN/AUTH_TOKEN/ORG/PROJECT + OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN/CHAT_ID per D-17 — NOT Slack as originally drafted in D-09; 4 remove: LP_SUBGRAPH_URL + 3x ONRAMPER_*), 4 smoke tests (Sentry test event w/ PII redaction; pino x-request-id header; Telegram chain-exhausted alert; OBS-03 take-order failure transcript replay). RUNBOOK records a doc correction over original CONTEXT/PLAN: injectSpeedInsights() lives in src/routes/+layout.svelte:31 (consent-gated via onAnalyticsAccepted callback wired into <CookieConsent />), NOT CookieConsent.svelte. Phase exit verification battery: npm run check at 4-pre-existing-error baseline (transaction.ts, Phase 2 / TRADE-01..04); 447 tests pass / 1 skipped (no regressions); Vite build ✓ built in 16.65s (post-Vite Vercel adapt fails on local Node v24 — pre-existing env issue documented since 01-04, Vercel CI uses Node 22); 7 of 8 cross-cutting cleanup greps clean (Onramper/Buy crypto/LP_SUBGRAPH_URL/api/onramper/api/public/wallet*/Edge runtime all 0 hits); 1 stale-comment hit at cache.ts:48-53 referencing /api/rewards/* logged as deferred (NOT auto-fixed per scope_guard — owned by next plan that touches cache.ts per existing 01-02 deferred-items entry). OBS-03 transcript completeness: 9 failWith( call sites in marketOrderExecution.ts (≥8 required); Wallet-not-connected branch EXCLUDED per RESEARCH §OBS-03. Sentry init gating verified (`enabled: !dev && Boolean(env.{PUBLIC_,}SENTRY_DSN)` in both hooks.{client,server}.ts). Phase 2 unblocked.
-last_updated: "2026-04-29T12:46:00Z"
-last_activity: 2026-04-29 -- Plan 01-08 complete (1 task commit + 1 docs commit, ~12min, 0 new svelte-check errors, 447 vitest tests pass) — Phase 1 closed
+status: phase_2_pending_planning
+stopped_at: Phase 2 (Trade-Execution Backbone Refactor) discuss-phase complete. NEW .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md (locked 8 decisions D-01..D-08) and 02-DISCUSSION-LOG.md (alternatives audit). Three gray areas discussed (TRADE-01 ban mechanism, TRADE-03 staleness UX, PERF-01 target & approach); two captured as Claude's discretion (TRADE-02 split granularity, rollout/risk strategy). Locked decisions — TRADE-01 (D-01/D-02): ESLint custom rule banning direct inputTokenAddress / outputTokenAddress / inputIOIndex / outputIOIndex reads outside src/lib/types/orderPerspective.ts; codemod-first migration over the 88 existing call sites (17 files), then flip the rule on. TRADE-03 (D-03/D-04/D-05/D-06): pre-flight multicall as silent safety net (not a UX interruption); on targeted-order-vanished/drained auto-walk to the next-best on-chain order using fresh on-chain truth instead of the stale subgraph (extending the existing aggregated→fallback→per-order cascade in marketOrderExecution.ts:328-368); inline terminal-state error on the order form only when the auto-retry chain exhausts ('No liquidity available right now for this size'); OBS-03 failWith() transcript constraint preserved through all new failure paths (Plan 01-07 seam re-verified by phase-exit grep). Reframed during discussion in response to user's 'why not just submit and let slippage handle it' pushback — pre-flight specifically catches 'order isn't there anymore' which slippage cannot help with; slippage and pre-flight coexist non-redundantly. PERF-01 (D-07/D-08): p75 LCP < 2.5s on /trade/[id] (Web Vitals 'good' threshold) validated against the existing Vercel Speed Insights dashboard; lazy-load (LimitOrder.svelte / DcaOrder.svelte / chart libs) + bundle prune + query-waterfall reduction; NO SSR (explicitly deferred to a future milestone to avoid concurrent surgery on the trade page during TRADE-01..04 landing). Phase 2 ready for /gsd-plan-phase 2.
+last_updated: "2026-04-29T13:30:00Z"
+last_activity: 2026-04-29 -- Phase 2 discuss-phase complete (3 gray areas, 8 locked decisions, 1 commit) — Phase 2 ready to plan
 progress:
   total_phases: 4
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** Phase 2 — Trade-Execution Backbone Refactor (about to begin discussion)
+**Current focus:** Phase 2 — Trade-Execution Backbone Refactor (context gathered; ready to plan)
 
 ## Current Position
 
-Phase: 1 (Shrink the Surface, See What's Happening) — COMPLETE
-Plan: 8 of 8 (01-01..01-08 complete; all waves closed; all 8 Phase 1 REQ-IDs closed: DEPR-01..03, OBS-01..05)
-Status: Phase 1 closed; Phase 2 (Trade-Execution Backbone Refactor) unblocked
-Last activity: 2026-04-29 -- Plan 01-08 complete; Phase 1 closed
+Phase: 2 (Trade-Execution Backbone Refactor) — context gathered, ready to plan
+Plan: 0 of TBD (next: /gsd-plan-phase 2)
+Status: 02-CONTEXT.md and 02-DISCUSSION-LOG.md committed; 8 implementation decisions locked (D-01..D-08)
+Last activity: 2026-04-29 -- Phase 2 discuss-phase complete
 
 Progress: [██████████] 100% (8/8 Phase 1 plans complete; 1/4 phases complete; 8/30 milestone REQ-IDs complete)
 
@@ -124,6 +124,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Phase 1 COMPLETE. Plan 01-08 (OBS-05 + RUNBOOK + phase-exit verification) closed; all 8 plans done; all 8 Phase 1 REQ-IDs closed (DEPR-01, DEPR-02, DEPR-03, OBS-01, OBS-02, OBS-03, OBS-04, OBS-05). NEW .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md (328 lines) — operational runbook documenting the resolved Vercel Speed Insights URL (https://vercel.com/st-0x/st0x/observability/speed-insights, confirmed receiving data via Vercel API at Phase 1 close), Sentry org + Telegram bot provisioning state, env-var deploy checklist (5 add + 4 remove), 4 smoke tests, cross-cutting cleanup grep recipe, deferred items table, and the Phase 1 → Phase 2 hand-off note. Phase exit verification battery: type-check at 4-pre-existing-error baseline; 447/1-skipped tests pass; Vite build clean (`✓ built in 16.65s`); 7 of 8 cross-cutting cleanup greps clean (1 stale-comment hit in cache.ts:48-53 logged as deferred, NOT auto-fixed per scope_guard); Pitfall 2 (no Edge runtime) re-verified; OBS-03 failWith count = 9 ≥ 8; Sentry init gating verified in both hooks tiers. Phase 1's 5 ROADMAP success criteria all met. Phase 2 (Trade-Execution Backbone Refactor: TRADE-01..04 + PERF-01) unblocked.
-Resume file: .planning/ROADMAP.md (Phase 2)
+Stopped at: Phase 2 (Trade-Execution Backbone Refactor) discuss-phase complete. NEW .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md (8 locked decisions D-01..D-08, full canonical-refs surface for downstream agents) and 02-DISCUSSION-LOG.md (alternatives audit). User selected three gray areas (TRADE-01 ban mechanism, TRADE-03 staleness UX, PERF-01 target & approach); TRADE-02 split granularity and rollout/risk strategy captured as Claude's discretion. Locked: ESLint custom rule for the IO-perspective ban (codemod 88 sites first, flip rule on after); silent pre-flight multicall safety net with auto-walk to next-best on-chain order — slippage-vs-pre-flight scope distinction explicit per discussion (slippage covers price-moved-within-order, pre-flight covers order-vanished-or-drained — they coexist non-redundantly); inline 'No liquidity available' terminal-state error only when auto-retry chain exhausts; OBS-03 failWith() transcript constraint preserved through all new failure paths; p75 LCP < 2.5s on /trade/[id] via lazy-load + bundle prune + query-waterfall reduction (NO SSR — explicitly deferred). Phase 2 ready for /gsd-plan-phase 2.
+Resume file: .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md
 Next step: `/gsd-plan-phase 2`
