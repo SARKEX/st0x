@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { verifySessionToken } from '$lib/server/auth';
 import { isWalletRegistered } from '$lib/server/accessCodes';
+import { requestContextHandle } from '$lib/server/logger';
 import { scrubSentryEvent } from '$lib/observability/scrub';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
@@ -488,12 +489,12 @@ const existingHandle: Handle = async ({ event, resolve }) => {
 };
 
 // =============================================================================
-// Hook chain export (OBS-01)
+// Hook chain export (OBS-01 + OBS-02)
 // =============================================================================
-// Sentry's sentryHandle() must run early so it can attach request context to any error
-// raised inside existingHandle. Plan 01-05 (OBS-02) will prepend the request-id middleware:
-// `sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle)`.
-export const handle = sequence(Sentry.sentryHandle(), existingHandle);
+// Order: request-id FIRST so Sentry breadcrumbs and the existing CSP/CORS/auth/bot-rejection
+// chain all see the same request_id. Sentry then wraps so it can attach request context to
+// any error raised inside existingHandle. Existing handle runs last.
+export const handle = sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle);
 
 export const handleError = Sentry.handleErrorWithSentry(
 	({ error, event }: { error: unknown; event: unknown }) => {
