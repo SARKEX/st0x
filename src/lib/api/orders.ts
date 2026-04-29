@@ -25,8 +25,6 @@ import {
 	walkOrderbook
 } from '$lib/utils/orderbook';
 import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
-import { queryClient } from '$lib/clients/queryClient';
-import type { OracleQuote } from '$lib/queries/oracleQuotes';
 
 export type { ProcessedQuote, TokenPriceSummary };
 export { OrderV4_ABI, normalizeOrderData, walkOrderbook };
@@ -46,54 +44,16 @@ function getTokenMetadata(address: string, tokens: PythToken[]) {
 }
 
 /**
- * For strategy orders with no live quote (ioRatio === '-'), estimate the ioRatio
- * from the live oracle price (cached in TanStack Query), falling back to the
- * token's configured fallbackPrice if the oracle cache is empty.
- */
-function estimateRatioFromFallback(
-	normalizedInput: string,
-	normalizedOutput: string,
-	normalizedQuote: string,
-	networkId: number
-): string | null {
-	const assetAddress = normalizedInput === normalizedQuote ? normalizedOutput : normalizedInput;
-
-	// Try live oracle price from cache first (covers SPYM and any future tokens without Pyth)
-	let price: number | null = null;
-	const oracleCache = queryClient.getQueryData<Record<string, OracleQuote>>([
-		'oracleQuotes',
-		networkId
-	]);
-	if (oracleCache?.[assetAddress]?.price) {
-		price = oracleCache[assetAddress].price;
-	}
-
-	// Fall back to hardcoded fallbackPrice from token config
-	if (price == null) {
-		const configToken = TOKENS.find((t) => normalizeAddress(t.address) === assetAddress);
-		price = configToken?.fallbackPrice ?? null;
-	}
-
-	if (price == null) return null;
-
-	// ASK (sell): input=payment, output=asset → ioRatio = price
-	// BID (buy):  input=asset, output=payment → ioRatio = 1/price
-	const estimatedRatio = normalizedInput === normalizedQuote ? price : 1 / price;
-
-	const ratioFloat = Float.parse(String(estimatedRatio));
-	if (ratioFloat.error || !ratioFloat.value) return null;
-	return ratioFloat.value.asHex();
-}
-
-/**
  * Convert an API OrderSummary into a ProcessedQuote.
  *
  * Uses Float.parse() to convert the server's decimal ioRatio and outputVaultBalance
  * back into hex-encoded Float strings, preserving compatibility with walkOrderbook
  * and computeEmergencyRatioHex which expect hex Float format.
  *
- * Strategy orders with no live quote (ioRatio === '-') are estimated using the
- * token's configured fallbackPrice so they appear in the orderbook chart.
+ * Orders with no live quote (`ioRatio === '-'`, i.e. the API's on-chain `quote()`
+ * call reverted — typically Pyth-oracle orders quoted without a signed context) are
+ * dropped entirely. They cannot be honoured at any displayable price, so showing them
+ * in the depth chart would advertise liquidity that doesn't actually execute.
  *
  * The sgOrder is created as a minimal stub with just orderHash — marketOrderExecution.ts
  * hydrates the full order from Raindex before executing.
@@ -117,18 +77,15 @@ function convertApiOrderToProcessedQuote(
 		return null;
 	}
 
-	let ratio: string;
 	if (!order.ioRatio || order.ioRatio === '-') {
-		// Strategy order with no live quote — estimate from oracle cache or fallback price
-		const estimated = estimateRatioFromFallback(normalizedInput, normalizedOutput, normalizedQuote, networkId);
-		if (!estimated) return null;
-		ratio = estimated;
-	} else {
-		// Convert ioRatio decimal to hex Float for consumers expecting hex (e.g. computeEmergencyRatioHex)
-		const ratioFloat = Float.parse(order.ioRatio);
-		if (ratioFloat.error || !ratioFloat.value) return null;
-		ratio = ratioFloat.value.asHex();
+		// On-chain quote() failed (e.g. Pyth-oracle order quoted without signed context).
+		// Drop the order — it cannot be honoured at the price the chart would show.
+		return null;
 	}
+	// Convert ioRatio decimal to hex Float for consumers expecting hex (e.g. computeEmergencyRatioHex)
+	const ratioFloat = Float.parse(order.ioRatio);
+	if (ratioFloat.error || !ratioFloat.value) return null;
+	const ratio = ratioFloat.value.asHex();
 
 	// Use simulated maxOutput from quote (smaller than vault balance for DCA/strategy orders),
 	// falling back to vault balance when quote data is unavailable

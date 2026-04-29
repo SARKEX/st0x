@@ -22,6 +22,21 @@ export interface ApiTokenRef {
 // Order Types
 // ============================================================================
 
+/**
+ * Parsed Rain metadata items attached to an order. Mirrors `ParsedMeta` in the
+ * Rust API (which mirrors the Rain SDK's `ParsedMeta` enum). Variants we care
+ * about today:
+ * - `RaindexSignedContextOracleV1`: order quotes from a maker-signed oracle
+ *   endpoint (URL); the API cannot quote it server-side without a signed payload.
+ *
+ * Other variants (`DotrainSourceV1`, `DotrainGuiStateV1`) are passed through
+ * but currently unused by the frontend.
+ */
+export type ApiParsedMeta =
+	| { RaindexSignedContextOracleV1: string }
+	| { DotrainSourceV1: string }
+	| { DotrainGuiStateV1: unknown };
+
 export interface ApiOrderSummary {
 	orderHash: string;
 	owner: string;
@@ -33,6 +48,7 @@ export interface ApiOrderSummary {
 	ioRatio: string;
 	createdAt: number;
 	orderbookId: string;
+	parsedMeta?: ApiParsedMeta[];
 }
 
 export interface ApiOrdersPagination {
