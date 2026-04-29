@@ -2,6 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { sentrySvelteKit } from '@sentry/sveltekit';
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
 export default defineConfig(({ mode }) => ({
@@ -16,7 +17,21 @@ export default defineConfig(({ mode }) => ({
 			autoUploadSourceMaps: !!process.env.SENTRY_AUTH_TOKEN
 		}),
 		sveltekit(),
-		svelteTesting()
+		svelteTesting(),
+		// PERF-01: bundle visualizer gated on ANALYZE=1 (developer-local only).
+		// Output (`stats.html`) is .gitignore'd so it never ships.
+		...(process.env.ANALYZE === '1'
+			? [
+					visualizer({
+						emitFile: true,
+						filename: 'stats.html',
+						open: false,
+						gzipSize: true,
+						brotliSize: true,
+						template: 'treemap'
+					})
+				]
+			: [])
 	],
 	resolve: {
 	  conditions: mode === 'test' ? ['browser'] : [],

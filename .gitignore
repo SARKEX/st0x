@@ -33,3 +33,7 @@ CLAUDE.md
 # Playwright
 .playwright-mcp/
 *.png
+
+# rollup-plugin-visualizer build artifact (PERF-01) — never commit
+stats.html
+.svelte-kit/output/client/stats.html
