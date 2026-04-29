@@ -31,7 +31,14 @@ export type TakeOrderFailureReason =
 	| 'no_walk_fills'
 	| 'unhydrated_fills'
 	| 'aggregated_failed'
-	| 'caught_exception';
+	| 'caught_exception'
+	// NEW (TRADE-03 / Plan 02-06): pre-flight multicall + auto-walk failure modes.
+	// Per Decision D-06a: `preflight_vault_drained` is conceptually subsumed by
+	// `preflight_order_vanished` — the SDK's `success: false` already considers a
+	// drained vault as vanished, so a separate variant would be redundant.
+	| 'preflight_chain_unreachable' // pre-flight RPC failure or SDK error
+	| 'preflight_order_vanished' // SDK returns success: false on a candidate, OR maxOutput is 0 / drained
+	| 'auto_retry_exhausted'; // pre-flight + auto-walk completed N levels without finding a viable order
 
 export interface TakeOrderTranscript {
 	// Quote-side state — replay vector for D-08 acceptance test
