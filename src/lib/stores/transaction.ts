@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { get } from 'svelte/store';
 import { currentNetwork } from '$lib/stores';
 import {
 	decodeFunctionData,
@@ -80,63 +80,9 @@ import { invalidateDashboardBalances } from '$lib/queries/balances';
 import type { Network } from '$lib/config/network';
 import { getTrades } from '$lib/api/subgraph';
 
-/**
- * Classify error messages into safe, non-sensitive categories for analytics.
- * Avoids sending raw error messages that may contain addresses, keys, or internal details.
- */
-function classifyError(error: unknown): string {
-	const msg = ((error as Error)?.message ?? '').toLowerCase();
-	if (msg.includes('user rejected') || msg.includes('user denied')) return 'user_rejected';
-	if (msg.includes('insufficient funds') || msg.includes('exceeds balance'))
-		return 'insufficient_funds';
-	if (msg.includes('allowance') || msg.includes('exceeds allowance'))
-		return 'insufficient_allowance';
-	if (msg.includes('nonce')) return 'nonce_error';
-	if (msg.includes('timeout') || msg.includes('timed out')) return 'timeout';
-	if (msg.includes('network') || msg.includes('disconnected')) return 'network_error';
-	if (msg.includes('header not found') || msg.includes('block not found')) return 'rpc_error';
-	if (msg.includes('gas')) return 'gas_error';
-	if (msg.includes('reverted') || msg.includes('revert')) return 'transaction_reverted';
-	return 'unknown';
-}
-
-/**
- * Validates that an orderbook address is in the trusted whitelist for the current network.
- * This prevents transactions to malicious contracts if the API or subgraph is compromised.
- *
- * @param orderbookAddress - The orderbook address to validate
- * @param network - The current network configuration
- * @returns true if the orderbook is trusted, false otherwise
- */
-function isOrderbookTrusted(orderbookAddress: string, network: Network): boolean {
-	const normalizedAddress = orderbookAddress.toLowerCase();
-	return network.trustedOrderbooks.some((trusted) => trusted.toLowerCase() === normalizedAddress);
-}
-
-/**
- * Throws an error if the orderbook address is not in the trusted whitelist.
- * Call this before sending any transaction to an orderbook contract.
- */
-function validateOrderbookAddress(orderbookAddress: string, network: Network): void {
-	if (!isOrderbookTrusted(orderbookAddress, network)) {
-		console.error('[Security] Untrusted orderbook address blocked:', {
-			address: orderbookAddress,
-			trustedOrderbooks: network.trustedOrderbooks
-		});
-		throw new Error(
-			'Transaction blocked: Untrusted orderbook contract. Please contact support if this is unexpected.'
-		);
-	}
-}
-
-// Extract error message from transaction errors using standard Viem error hierarchy
-function extractTransactionError(
-	error: unknown,
-	fallback: TransactionErrorMessage = TransactionErrorMessage.GENERIC
-): TransactionErrorMessage {
-	const err = error as { cause?: { details?: string }; message?: string };
-	return (err?.cause?.details || err?.message || fallback) as TransactionErrorMessage;
-}
+// classifyError, isOrderbookTrusted, validateOrderbookAddress, and
+// extractTransactionError were lifted into ./transactionShared (TRADE-02 PR-1).
+// They are imported below alongside TransactionStatus + the shared interfaces.
 
 /**
  * Decide if a failing maker leg can be skipped and routed to the next leg.
@@ -344,110 +290,40 @@ function createRaindexLink(
 
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 import { getMakerOutputTokenAddress, getMakerInputTokenAddress, getMakerInputIOIndex, getMakerOutputIOIndex } from "$lib/types/orderPerspective";
-
-export enum TransactionStatus {
-	IDLE = 'Idle',
-	CHECKING_ALLOWANCE = 'Checking your approved spend...',
-	PENDING_WALLET = 'Waiting for wallet confirmation...',
-	PENDING_APPROVAL = 'Approving spend...',
-	PENDING_MULTI_TX_ACKNOWLEDGMENT = 'Multiple transactions required',
-	SUCCESS = 'Success! Transaction confirmed',
-	ERROR = 'Something went wrong'
-}
-
-export interface MarketOrderSummary {
-	inputAmount: bigint; // What the user RECEIVES
-	inputTokenDecimals: number;
-	inputTokenSymbol: string;
-	inputTokenAddress: string;
-	outputAmount: bigint; // What the user GIVES AWAY
-	outputTokenDecimals: number;
-	outputTokenSymbol: string;
-	outputTokenAddress: string;
-	requestedInputAmount: bigint; // What the user requested to receive
-	ioRatio: number; // input per output (how much input received per unit output given)
-	actualSlippage: bigint;
-	isPartialFill: boolean;
-	isNoFill?: boolean;
-}
-
-// Asset token info for Track in Wallet prompt after order deployment
-export interface AssetTokenInfo {
-	address: string;
-	symbol: string;
-	decimals: number;
-}
-
-// Multi-transaction tracking for split orders
-export interface MultiTxProgress {
-	currentBatch: number;
-	totalBatches: number;
-}
-
-export interface RaindexLink {
-	url: string;
-	text: string;
-}
-
-export interface TransactionMetadata {
-	marketOrderSummary?: MarketOrderSummary;
-	assetTokenInfo?: AssetTokenInfo; // For limit/DCA order deployments
-	multiTxProgress?: MultiTxProgress; // For split order transactions
-	raindexLink?: RaindexLink; // Safe link data (replaces @html)
-}
-
-const initialState = {
-	status: TransactionStatus.IDLE,
-	error: '',
-	hash: '',
-	data: null as TransactionMetadata | null,
-	functionName: '',
-	message: '',
-	multiTxAcknowledged: false,
-	onMultiTxAcknowledge: null as (() => void) | null
-};
+import {
+	transactionStoreInternal,
+	TransactionStatus,
+	classifyError,
+	validateOrderbookAddress,
+	isOrderbookTrusted,
+	extractTransactionError,
+	type TransactionMetadata,
+	type MarketOrderSummary,
+	type RaindexLink,
+	type MultiTxProgress,
+	type AssetTokenInfo
+} from './transactionShared';
 
 const transactionStore = () => {
-	const { subscribe, set, update } = writable(initialState);
-	const reset = () => set(initialState);
-
-	// Generic state update helper
-	const setState = (
-		status: TransactionStatus,
-		options: {
-			message?: string;
-			hash?: string;
-			error?: string;
-			data?: TransactionMetadata | null;
-		} = {}
-	) =>
-		update((state) => ({
-			...state,
-			status,
-			message: options.message ?? '',
-			hash: options.hash ?? '',
-			error: options.error ?? '',
-			data: options.data ?? null
-		}));
-
-	const checkingWalletAllowance = (message?: string) =>
-		setState(TransactionStatus.CHECKING_ALLOWANCE, { message });
-	const awaitWalletConfirmation = (message?: string, data?: TransactionMetadata) =>
-		setState(TransactionStatus.PENDING_WALLET, { message, data });
-	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
-	const transactionSuccess = (hash: string, message?: string, data?: TransactionMetadata) =>
-		setState(TransactionStatus.SUCCESS, { hash, message, data });
-	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
-		setState(TransactionStatus.ERROR, { error: message, hash });
-
-	const acknowledgeMultiTx = () => {
-		update((state) => {
-			if (state.onMultiTxAcknowledge) {
-				state.onMultiTxAcknowledge();
-			}
-			return state;
-		});
-	};
+	// Destructure the leaf-owned store API and status-helper surface so the
+	// existing handler bodies below can keep calling `awaitWalletConfirmation(...)`
+	// etc. without prefixing every call site. Plans 03/04/05 will progressively
+	// move handlers OUT of this file; until then this destructure is the seam.
+	const {
+		subscribe,
+		set,
+		update,
+		reset,
+		checkingWalletAllowance,
+		awaitWalletConfirmation,
+		awaitApprovalTx,
+		transactionSuccess,
+		transactionError,
+		acknowledgeMultiTx
+	} = transactionStoreInternal;
+	// `set` is currently unused in this file but is part of the store API surface
+	// preserved by the façade default-export below.
+	void set;
 
 	const handleStrategyDeployment = async (
 		deploymentArgs: DeploymentTransactionArgs,
@@ -2372,3 +2248,18 @@ const transactionStore = () => {
 };
 
 export default transactionStore();
+
+// ---------------------------------------------------------------------------
+// Re-export façade for back-compat (TRADE-02 PR-1).
+//
+// New code should import from the focused module directly (transactionShared
+// today; deployTransactionStore + marketTakeStore land in Plans 03/04).
+//
+// PRESERVED until at least the end of Phase 2 to avoid breaking the 15+
+// existing UI binding sites that do
+//   `import transactionStore, { TransactionStatus } from '$lib/stores/transaction'`.
+// ---------------------------------------------------------------------------
+// prettier-ignore
+export { TransactionStatus, classifyError, validateOrderbookAddress, isOrderbookTrusted, extractTransactionError };
+// prettier-ignore
+export type { TransactionMetadata, MarketOrderSummary, RaindexLink, MultiTxProgress, AssetTokenInfo };
