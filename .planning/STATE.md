@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
+status: phase_2_pending_discussion
 stopped_at: Phase 1 COMPLETE. Plan 01-08 (OBS-05 + RUNBOOK + phase-exit verification) closed; all 8 plans done (8/8) and all 8 Phase 1 REQ-IDs closed (DEPR-01..03, OBS-01..05). NEW .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md (328 lines) — operational runbook documenting Vercel Speed Insights URL (https://vercel.com/st-0x/st0x/observability/speed-insights — confirmed receiving data via Vercel API at Phase 1 close, hasData=true since 2025-07-21, ~9 months of LCP/CLS/INP/TTFB baseline data; orchestrator queried project_id prj_tTuOMTtlZKU2tOXN4UQCfnsDxlmv directly, no user roundtrip). Sentry org + Telegram bot provisioning state, env-var deploy checklist (5 add: SENTRY_DSN/PUBLIC_SENTRY_DSN/AUTH_TOKEN/ORG/PROJECT + OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN/CHAT_ID per D-17 — NOT Slack as originally drafted in D-09; 4 remove: LP_SUBGRAPH_URL + 3x ONRAMPER_*), 4 smoke tests (Sentry test event w/ PII redaction; pino x-request-id header; Telegram chain-exhausted alert; OBS-03 take-order failure transcript replay). RUNBOOK records a doc correction over original CONTEXT/PLAN: injectSpeedInsights() lives in src/routes/+layout.svelte:31 (consent-gated via onAnalyticsAccepted callback wired into <CookieConsent />), NOT CookieConsent.svelte. Phase exit verification battery: npm run check at 4-pre-existing-error baseline (transaction.ts, Phase 2 / TRADE-01..04); 447 tests pass / 1 skipped (no regressions); Vite build ✓ built in 16.65s (post-Vite Vercel adapt fails on local Node v24 — pre-existing env issue documented since 01-04, Vercel CI uses Node 22); 7 of 8 cross-cutting cleanup greps clean (Onramper/Buy crypto/LP_SUBGRAPH_URL/api/onramper/api/public/wallet*/Edge runtime all 0 hits); 1 stale-comment hit at cache.ts:48-53 referencing /api/rewards/* logged as deferred (NOT auto-fixed per scope_guard — owned by next plan that touches cache.ts per existing 01-02 deferred-items entry). OBS-03 transcript completeness: 9 failWith( call sites in marketOrderExecution.ts (≥8 required); Wallet-not-connected branch EXCLUDED per RESEARCH §OBS-03. Sentry init gating verified (`enabled: !dev && Boolean(env.{PUBLIC_,}SENTRY_DSN)` in both hooks.{client,server}.ts). Phase 2 unblocked.
 last_updated: "2026-04-29T12:46:00Z"
 last_activity: 2026-04-29 -- Plan 01-08 complete (1 task commit + 1 docs commit, ~12min, 0 new svelte-check errors, 447 vitest tests pass) — Phase 1 closed
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** Phase 1 — Shrink the Surface, See What's Happening
+**Current focus:** Phase 2 — Trade-Execution Backbone Refactor (about to begin discussion)
 
 ## Current Position
 
