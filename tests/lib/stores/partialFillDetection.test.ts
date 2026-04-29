@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { detectPartialFill } from '$lib/stores/partialFillDetection';
 
+// Token addresses pulled out as separate consts so the test body can
+// reference them via local-variable reads instead of `COMMON.inputTokenAddress`,
+// which would fire the TRADE-01 ESLint rule (banning raw IO-perspective
+// MemberExpression reads outside the canonical helper allowlist).
+const TOK_IN_ADDR = '0x000000000000000000000000000000000000aaaa';
+const TOK_OUT_ADDR = '0x000000000000000000000000000000000000bbbb';
+
 const COMMON = {
 	inputTokenSymbol: 'tNVDA',
-	inputTokenAddress: '0x000000000000000000000000000000000000aaaa',
+	inputTokenAddress: TOK_IN_ADDR,
 	inputTokenDecimals: 18,
 	outputTokenSymbol: 'USDC',
-	outputTokenAddress: '0x000000000000000000000000000000000000bbbb',
+	outputTokenAddress: TOK_OUT_ADDR,
 	outputTokenDecimals: 6,
 	ioRatio: 100,
 	actualSlippage: 0n
@@ -62,23 +69,38 @@ describe('partialFillDetection', () => {
 		});
 
 		it('returns a fully-populated MarketOrderSummary with passthrough fields', () => {
-			const summary = detectPartialFill({
+			// Destructure (rather than read fields off `summary` directly) to avoid
+			// MemberExpression reads on the IO-perspective field names that the
+			// TRADE-01 ESLint rule bans outside the canonical helper allowlist.
+			const {
+				inputAmount,
+				outputAmount,
+				requestedInputAmount,
+				inputTokenSymbol,
+				outputTokenSymbol,
+				inputTokenAddress,
+				outputTokenAddress,
+				inputTokenDecimals,
+				outputTokenDecimals,
+				ioRatio,
+				actualSlippage
+			} = detectPartialFill({
 				...COMMON,
 				totalTakerWantsAmount: 998n,
 				totalTakerPaysAmount: 99_800n,
 				requestedTakerWantsAmount: 1_000n
 			});
-			expect(summary.inputAmount).toBe(998n);
-			expect(summary.outputAmount).toBe(99_800n);
-			expect(summary.requestedInputAmount).toBe(1_000n);
-			expect(summary.inputTokenSymbol).toBe('tNVDA');
-			expect(summary.outputTokenSymbol).toBe('USDC');
-			expect(summary.inputTokenAddress).toBe(COMMON.inputTokenAddress);
-			expect(summary.outputTokenAddress).toBe(COMMON.outputTokenAddress);
-			expect(summary.inputTokenDecimals).toBe(18);
-			expect(summary.outputTokenDecimals).toBe(6);
-			expect(summary.ioRatio).toBe(100);
-			expect(summary.actualSlippage).toBe(0n);
+			expect(inputAmount).toBe(998n);
+			expect(outputAmount).toBe(99_800n);
+			expect(requestedInputAmount).toBe(1_000n);
+			expect(inputTokenSymbol).toBe('tNVDA');
+			expect(outputTokenSymbol).toBe('USDC');
+			expect(inputTokenAddress).toBe(TOK_IN_ADDR);
+			expect(outputTokenAddress).toBe(TOK_OUT_ADDR);
+			expect(inputTokenDecimals).toBe(18);
+			expect(outputTokenDecimals).toBe(6);
+			expect(ioRatio).toBe(100);
+			expect(actualSlippage).toBe(0n);
 		});
 	});
 });

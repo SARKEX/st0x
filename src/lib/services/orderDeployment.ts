@@ -16,6 +16,7 @@ import type { Token } from '$lib/types';
 import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
+import type { DeploymentTransactionArgs } from '@rainlanguage/orderbook';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { walletAddress } from '$lib/stores/authStore';
 
@@ -144,7 +145,10 @@ export type DcaDeploymentArgs = {
 	inputVaultId?: Hex; // Optional override for input vault (defaults to DEFAULT_INPUT_VAULT_ID)
 };
 
-export const getDcaDeploymentArgs = async (network: Network, args: DcaDeploymentArgs) => {
+export const getDcaDeploymentArgs = async (
+	network: Network,
+	args: DcaDeploymentArgs
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('auction-dca', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('output', args.outputToken.address);
@@ -190,7 +194,7 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,
@@ -209,7 +213,7 @@ export type LimitOrderDeploymentArgs = {
 export const getLimitOrderDeploymentArgs = async (
 	network: Network,
 	args: LimitOrderDeploymentArgs
-) => {
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.inputToken.address);
@@ -236,7 +240,7 @@ export const getLimitOrderDeploymentArgs = async (
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,
@@ -263,7 +267,7 @@ export type MarketMakingDeploymentArgs = {
 export const getMarketMakingDeploymentArgs = async (
 	network: Network,
 	args: MarketMakingDeploymentArgs
-) => {
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('dynamic-spread', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.token1.address);
@@ -310,7 +314,7 @@ export const getMarketMakingDeploymentArgs = async (
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,
@@ -351,7 +355,10 @@ export type FolioDeploymentArgs = {
 	outputVaultId7: Hex | undefined;
 };
 
-export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploymentArgs) => {
+export const getFolioDeploymentArgs = async (
+	network: Network,
+	args: FolioDeploymentArgs
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('folio', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.selectedToken1.address);
@@ -447,7 +454,7 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,
