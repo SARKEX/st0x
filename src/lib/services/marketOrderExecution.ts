@@ -28,7 +28,12 @@ import { AbiCoder } from 'ethers';
 import { formatUnits } from 'viem';
 import { Float } from '@rainlanguage/float';
 import { get } from 'svelte/store';
-import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
+import { TransactionStatus, transactionStoreInternal } from '$lib/stores/transactionShared';
+import {
+	preloadAggregatedTakeOrdersCalldata,
+	handleAggregatedTakeOrdersCalldata,
+	handleOracleOrders
+} from '$lib/stores/marketTakeStore';
 import { getSignerAddress } from '$lib/services/walletService';
 import {
 	computeRatioMultiplier,
@@ -386,7 +391,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			walkInputFilled: walkResult.inputAmountFilled?.toString()
 		});
 		// Opportunistically prefetch aggregated calldata while we build final params.
-		void transactionStore.preloadAggregatedTakeOrdersCalldata(takeRequest);
+		void preloadAggregatedTakeOrdersCalldata(takeRequest);
 		const { inputAmountFilled } = walkResult;
 		const toTokenInfo = ({ address, decimals, symbol }: TokenInfo): TokenInfo => ({
 			address,
@@ -426,7 +431,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			orderFillDecimals
 		};
 		const approvalSymbol = isBuy ? paymentToken.symbol : assetToken.symbol;
-		const aggregatedHandled = await transactionStore.handleAggregatedTakeOrdersCalldata(
+		const aggregatedHandled = await handleAggregatedTakeOrdersCalldata(
 			takeRequest,
 			firstQuote.sgOrder as SgOrder,
 			aggregatedParams,
@@ -466,7 +471,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				...aggregatedParams,
 				orderFillAmounts: indexedFills.map(({ fillAmount }) => fillAmount)
 			};
-			await transactionStore.handleOracleOrders(
+			await handleOracleOrders(
 				oracleInputs,
 				mode,
 				firstQuote.sgOrder as SgOrder,
@@ -474,7 +479,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				fallbackParams
 			);
 		}
-		const { status, error: txError } = get(transactionStore);
+		const { status, error: txError } = get(transactionStoreInternal);
 		if (status === TransactionStatus.SUCCESS) {
 			return { success: true };
 		}
