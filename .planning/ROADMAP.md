@@ -41,7 +41,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 01-03-PLAN.md — DEPR-03: delete Onramper integration + collapse DepositModal to deposit-only (per D-10)
 
 **Wave 4** *(blocked on Wave 3 — `.env.example` + `hooks.server.ts` are stable post-deletions; Sentry CSP entry can land cleanly)*
-- [ ] 01-04-PLAN.md — OBS-01: Sentry SDK init + PII scrubber + CSP additions + sourcemap upload
+- [x] 01-04-PLAN.md — OBS-01: Sentry SDK init + PII scrubber + CSP additions + sourcemap upload
 
 **Wave 5** *(blocked on Wave 4 — pino's request-id middleware sequences in `hooks.server.ts` ahead of the Sentry handle wired in Wave 4)*
 - [ ] 01-05-PLAN.md — OBS-02: pino structured logger + AsyncLocalStorage request-id middleware
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Shrink the Surface, See What's Happening | 3/8 | In progress | - |
+| 1. Shrink the Surface, See What's Happening | 4/8 | In progress | - |
 | 2. Trade-Execution Backbone Refactor | 0/TBD | Not started | - |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |

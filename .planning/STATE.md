@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 01-03 (DEPR-03) complete. Wave 3 done — Onramper integration entirely removed (modal, sign-url endpoint with unsigned-cookie auth path, audit-log event, rate-limit tier, CSP frame-src, env vars); DepositModal collapsed 425→174 lines to deposit-only flow per UI-SPEC §DepositModal; cross-cutting CTA copy renamed (Buy Crypto button deleted, Add Funds → Deposit); deferred '/rewards' page-protection check from 01-02 closed opportunistically. Next up: Wave 4 (01-04 OBS-01 Sentry SDK + PII scrubber + CSP additions).
-last_updated: "2026-04-29T10:55:02Z"
-last_activity: 2026-04-29 -- Plan 01-03 complete (3 commits, ~6min, 0 new svelte-check errors, 429 vitest tests pass)
+stopped_at: Plan 01-04 (OBS-01) complete. Wave 4 done — @sentry/sveltekit@10.50.0 wired client + server with errors-only config (no Replay/Performance/Feedback); recursive PII scrubber (scrubSentryEvent at $lib/observability/scrub.ts) covers wallet + signature + ?signature= URL params via beforeSend AND beforeBreadcrumb (Pitfall 9); CSP connect-src extended with *.ingest.sentry.io + *.ingest.us.sentry.io (Pitfall 1); sourcemap upload via Vite plugin gated on !!process.env.SENTRY_AUTH_TOKEN (Pitfall 4); src/hooks.client.ts greenfield + hooks.server.ts handle wrapped in sequence(Sentry.sentryHandle(), existingHandle). SDK ships inert until Vercel env vars set — operational follow-up documented in SUMMARY. Next up: Wave 5 (01-05 OBS-02 pino + AsyncLocalStorage request-id middleware).
+last_updated: "2026-04-29T11:14:11Z"
+last_activity: 2026-04-29 -- Plan 01-04 complete (3 commits, ~6min, 0 new svelte-check errors, 434 vitest tests pass)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 3
-  completed_plans: 3
-  percent: 9
+  total_plans: 4
+  completed_plans: 4
+  percent: 12
 ---
 
 # Project State
@@ -26,30 +26,30 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 1 (Shrink the Surface, See What's Happening) — EXECUTING
-Plan: 4 of 8 (01-01 DEPR-02 + 01-02 DEPR-01 + 01-03 DEPR-03 complete; next up 01-04 OBS-01)
+Plan: 5 of 8 (01-01 DEPR-02 + 01-02 DEPR-01 + 01-03 DEPR-03 + 01-04 OBS-01 complete; next up 01-05 OBS-02)
 Status: Executing Phase 1
-Last activity: 2026-04-29 -- Plan 01-03 complete
+Last activity: 2026-04-29 -- Plan 01-04 complete
 
-Progress: [████░░░░░░] 37.5% (3/8 plans complete in Phase 1; 0/4 phases complete)
+Progress: [█████░░░░░] 50.0% (4/8 plans complete in Phase 1; 0/4 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3
-- Average duration: ~9.7min
-- Total execution time: 29min
+- Total plans completed: 4
+- Average duration: ~8.75min
+- Total execution time: 35min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 3 | 29min | ~9.7min |
+| 1 | 4 | 35min | ~8.75min |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
-- Trend: Wave 3 matched Wave 2's pace — surgical deletion + DepositModal rewrite + cross-cutting CTA cleanup. The carry-over deferred '/rewards' check was closed opportunistically.
+- Last 5 plans: 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
+- Trend: Wave 4 matched the Wave 2/3 pace — three-task split (dep + scrubber/tests; vite plugin + hooks.client; server init + CSP + sequence-wrap) kept svelte-check green at every commit. SDK ships inert pending operator Sentry-org creation; gating means PR previews build cleanly without SENTRY_AUTH_TOKEN.
 
 *Updated after each plan completion*
 
@@ -76,6 +76,10 @@ Recent decisions affecting current work:
 - 01-03: Honored orchestrator success_criteria over plan text on CTA copy — orchestrator forbade 'Buy Crypto' / 'Add Funds' in src/ (grep_proofs require 0 hits); plan said 'Add Funds' was OPTIONAL to rename. Renamed all 3 instances + deleted Onramper-specific Buy Crypto button at dashboard:1965
 - 01-03: Closed deferred '/rewards' page-protection check from 01-02 opportunistically — orchestrator note explicitly allowed cleanup if editing same hooks.server.ts line range; the dead check on line 238 fell within the same edit block as the Onramper carve-out removal at line 235
 - 01-03: DepositModal final size 174 lines (over 130 soft target) — bulk above target is preserved-verbatim inline SVG paths from the original deposit branch; trimming further would violate "no new icons" guardrail. Acceptance criteria all satisfied (chooser scaffolding gone; copy contract verbatim; svelte-check 0 new errors)
+- 01-04: Three-task split for Sentry wiring (dep + pure module/tests → vite plugin + client init → server init + CSP + sequence-wrap) keeps svelte-check green at every commit. The pure scrubber + tests must land before any init code so the import surface compiles cleanly.
+- 01-04: Init gated by `!dev && Boolean(env.{PUBLIC_,}SENTRY_DSN)` — dev no-ops, missing DSN in prod degrades gracefully (no crash). Sentry plugin's `autoUploadSourceMaps: !!process.env.SENTRY_AUTH_TOKEN` mirrors this for build time. Both are deliberate ungated-mode-friendly designs for solo-team operations.
+- 01-04: CSP appended NOT replaced — every existing connect-src host preserved verbatim; only added `*.ingest.sentry.io` + `*.ingest.us.sentry.io`. EU region (`*.ingest.de.sentry.io`) deferred to deploy-time decision when org region is chosen.
+- 01-04: handleError callback typed explicitly `{ error: unknown; event: unknown }` to satisfy svelte-check strict — caught implicit-any on first commit and fixed in same task before commit.
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Plan 01-03 (DEPR-03) complete. Wave 3 done. Next up: Wave 4 (Plan 01-04 OBS-01 Sentry SDK + PII scrubber + CSP additions per D-06; per RESEARCH §"Pitfall 1" use *.ingest.sentry.io NOT *.sentry.io).
-Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-04-PLAN.md
-Next step: `/gsd-execute-phase 1` (continues into Wave 4)
+Stopped at: Plan 01-04 (OBS-01) complete. Wave 4 done — Sentry SDK errors-only wired client + server with PII scrubbing and CSP additions; SDK ships inert until Vercel env vars (SENTRY_DSN, PUBLIC_SENTRY_DSN, SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT) are set. Operator must create the Sentry org/project before deploys begin emitting events. Next up: Wave 5 (Plan 01-05 OBS-02 pino structured logger + AsyncLocalStorage request-id middleware; per Pattern 1 the request-id middleware will be prepended to `sequence(Sentry.sentryHandle(), existingHandle)`).
+Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-05-PLAN.md
+Next step: `/gsd-execute-phase 1` (continues into Wave 5)
