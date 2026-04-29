@@ -10,6 +10,10 @@ import {
 	type ProcessedQuote,
 	walkOrderbook
 } from '$lib/api/orders';
+
+// Re-export so observability helpers (Plan 01-07 OBS-03) can import the same shape
+// from the service module without reaching through to $lib/api/orders.
+export type { ProcessedQuote };
 import { getLoadBalancedClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
 import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
