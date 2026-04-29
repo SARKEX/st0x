@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 01-05 (OBS-02) complete. Wave 5 done — pino@^9.14.0 structured server logger + AsyncLocalStorage request-context middleware in src/lib/server/logger.ts (130 lines; exports default baseLogger + named { logger }, getLogger(), getRequestContext(), requestContextHandle Handle, pickLevelForRoute helper). hooks.server.ts handle now sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle) — request-id FIRST so Sentry breadcrumbs and the existing CSP/CORS/auth chain see the same id. crypto.randomUUID() (CSPRNG) for request_id; client-supplied x-request-id reused for cross-correlation; response x-request-id header set unconditionally. Per-route log-level matrix matches D-07 exactly. Pino built-in redact covers Authorization/cookie/*.signature/*.privateKey at any depth. 13 new unit tests pass (447 / 1 skipped total). Pitfall 2 verified: 0 routes export runtime: 'edge'. Next up: Wave 6 (01-06 OBS-04 RPC metrics + Slack alerts; 01-07 OBS-03 take-order failure transcripts — parallel-eligible).
-last_updated: "2026-04-29T11:26:42Z"
-last_activity: 2026-04-29 -- Plan 01-05 complete (3 commits, ~6min, 0 new svelte-check errors, 447 vitest tests pass)
+stopped_at: Plan 01-06 (OBS-04) complete. Wave 6 partially done — RPC failure metrics + chain-exhausted Slack alerts shipped. NEW src/lib/server/rpcMetrics.ts (74 lines; recordRpcAttempt + reportChainExhausted + ChainExhaustedDetails; consumes getLogger/getRequestContext from Plan 01-05's logger.ts). NEW src/lib/server/alerts.ts (62 lines; notifyChainExhausted Slack incoming-webhook poster; fail-closed mild env pattern, 3s AbortSignal.timeout, ERROR_TEXT_CAP=512 per-error length cap, plain {text:'...'} payload). MOD src/lib/server/snapshots/generator.ts:callRpc instrumented (3 failure paths: HTTP non-2xx, exception, empty result; chain-exhausted on full loop failure). MOD src/lib/server/accessCodes.ts:verifyWalletSignature instrumented (single-RPC = chain-exhausted on failure; rpc_url='alchemy-base-mainnet' stable label per T-06-04 mitigation). .env.example: OBSERVABILITY_ALERT_WEBHOOK_URL added. Pitfall 3 / REL-01 fence held mechanically (grep -nE "setTimeout.*retry|backoff|exponential" → 0 hits). svelte-check at 4-pre-existing baseline; 447 tests pass. Next up: Plan 01-07 OBS-03 take-order failure transcripts (sequential per parallelization=false in this wave).
+last_updated: "2026-04-29T11:39:49Z"
+last_activity: 2026-04-29 -- Plan 01-06 complete (3 commits, ~6min, 0 new svelte-check errors, 447 vitest tests pass)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 5
-  completed_plans: 5
-  percent: 16
+  total_plans: 6
+  completed_plans: 6
+  percent: 19
 ---
 
 # Project State
@@ -26,30 +26,30 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 1 (Shrink the Surface, See What's Happening) — EXECUTING
-Plan: 6 of 8 (01-01 DEPR-02 + 01-02 DEPR-01 + 01-03 DEPR-03 + 01-04 OBS-01 + 01-05 OBS-02 complete; next up Wave 6: 01-06 OBS-04 + 01-07 OBS-03 — parallel-eligible)
+Plan: 7 of 8 (01-01..01-06 complete; next up 01-07 OBS-03 take-order failure transcripts — sequential in this wave per parallelization=false)
 Status: Executing Phase 1
-Last activity: 2026-04-29 -- Plan 01-05 complete
+Last activity: 2026-04-29 -- Plan 01-06 complete
 
-Progress: [██████░░░░] 62.5% (5/8 plans complete in Phase 1; 0/4 phases complete)
+Progress: [████████░░] 75% (6/8 plans complete in Phase 1; 0/4 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 5
-- Average duration: ~8.2min
-- Total execution time: 41min
+- Total plans completed: 6
+- Average duration: ~7.8min
+- Total execution time: 47min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 5 | 41min | ~8.2min |
+| 1 | 6 | 47min | ~7.8min |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
-- Trend: Wave 5 matched the Wave 2/3/4 pace — three-task split (pino install + edge-runtime audit → pure logger module + 13 tests → hooks sequence reorder) kept svelte-check green at every commit. Surgical edit philosophy: 1 import line + 1 sequence reorder in hooks.server.ts; nothing else touched. crypto.randomUUID() (Node ≥19 native) skips the uuid dep entirely.
+- Last 6 plans: 01-06 OBS-04 (6min, 3 commits), 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
+- Trend: Wave 6's first half (01-06 OBS-04) maintained the Wave 2/3/4/5 pace — three-task split (alerts.ts → rpcMetrics.ts → instrumentation) with intentional mid-flight broken type between Tasks 1 and 2 (alerts.ts imports `ChainExhaustedDetails` from rpcMetrics which doesn't exist until Task 2). Pitfall 3 fence held mechanically by grep proofs. Stable-identifier `'alchemy-base-mainnet'` pattern for accessCodes.ts dodges T-06-04 Alchemy-key-leak via Slack payload — the SEC-01-flagged hardcoded key stays out of the alert text without touching the underlying wiring (Phase 3 territory).
 
 *Updated after each plan completion*
 
@@ -85,6 +85,12 @@ Recent decisions affecting current work:
 - 01-05: Wallet retained in FULL in pino logs (not truncated). Per D-07: Vercel Logs is admin-only-readable; Sentry's beforeSend scrubber from 01-04 handles third-party SaaS exposure separately. Doing both layers would double-redact and lose forensic value in the admin tier where the wallet is the primary join key.
 - 01-05: Pino built-in `redact` config (paths array) chosen over a custom serializer — faster (runs at JSON-emit time, not a walker) and canonical (RESEARCH §Security V5). Covers Authorization, cookie, `*.signature`, `*.privateKey` at any depth.
 - 01-05: Sequence chain ordering as a hard contract: request-id middleware FIRST, then Sentry, then existing handle. Documented inline above the export so future plans don't reshuffle. Sentry breadcrumbs now inherit request_id from the ALS store via getRequestContext(), enabling Plan 01-07 to embed request_id in Sentry `extra` payloads for trivial triage correlation.
+- 01-06: Three-task split for OBS-04 (alerts.ts → rpcMetrics.ts → instrumentation) with intentional mid-flight broken type between Tasks 1 and 2. alerts.ts imports `ChainExhaustedDetails` from rpcMetrics.ts (doesn't exist yet at Task 1 commit point) — Task 2 closes the cycle and svelte-check passes at the 4-pre-existing-error baseline from there. Same surgical-edit philosophy as 01-04 + 01-05.
+- 01-06: Stable-identifier `'alchemy-base-mainnet'` for accessCodes.ts:verifyWalletSignature's `rpc_url` label — NOT the actual URL (which contains the SEC-01-flagged hardcoded Alchemy key). T-06-04 mitigation: prevents the key from leaking into Slack alert payloads without touching the underlying wiring (SEC-01 / Phase 3 fixes by env-var-izing). Residual risk in generator.ts:callRpc (RPC_URLS may also contain keys) accepted for Phase 1 — Slack channel + codebase share the same trust boundary.
+- 01-06: Pitfall 3 / REL-01 / REL-02 fence held mechanically. JSDoc comment in callRpc initially said "no retry/backoff" which matched the orchestrator's `setTimeout.*retry|backoff|exponential` grep proof (false-positive on `backoff`); reworded to "single-attempt-per-RPC behavior is preserved verbatim" — same meaning, no bait words. Final grep returns 0 hits across both modified files.
+- 01-06: Empty-result `continue` semantics in callRpc preserved verbatim. Phase 1 records visibility around the existing behavior; REL-01 in Phase 3 will treat empty as a hard failure across the chain. The silent latestBlock fallback in getBlockNumberForTimestamp is also REL-01 territory — NOT touched.
+- 01-06: alerts.ts re-throws on fetch failure → rpcMetrics.reportChainExhausted catches and logs alert-delivery-failure separately. Two-layer separation: alerts.ts is the delivery surface (no pino knowledge), rpcMetrics is the metric layer (owns sequencing). One Vercel Logs query reveals both the chain-exhausted event and any delivery failure adjacent.
+- 01-06: Plain `{text: '...'}` Slack payload (NOT Block Kit) per RESEARCH §"Don't Hand-Roll" — Block Kit is over-engineered for solo-team scale. Per-error length cap at 512 chars (`ERROR_TEXT_CAP`) prevents log spam DoS from attacker-controlled multi-MB error responses (V5 ASVS / T-06-02). 3s `AbortSignal.timeout` (tighter than pyth.ts's 5s) — alert delivery feels synchronous from caller; don't extend tail latency.
 
 ### Pending Todos
 
@@ -106,6 +112,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Plan 01-05 (OBS-02) complete. Wave 5 done — pino@^9.14.0 + AsyncLocalStorage request-context middleware in src/lib/server/logger.ts (130 lines). hooks.server.ts handle now `sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle)`. Every server response carries `x-request-id`; per-request summary log line emitted at pickLevelForRoute(route, status) level. Sentry breadcrumbs now inherit request_id via the ALS store. 13 new unit tests pass (447 total). Pitfall 2 verified: 0 routes export `runtime: 'edge'`. SDK + logger fully wired and shipping JSON to stdout — Vercel Logs picks it up automatically; no operator action required. Next up: Wave 6 (Plan 01-06 OBS-04 RPC failure metrics + chain-exhausted Slack alerts; Plan 01-07 OBS-03 take-order failure transcripts — these two run in parallel since they touch disjoint files).
-Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-06-PLAN.md
-Next step: `/gsd-execute-phase 1` (continues into Wave 6)
+Stopped at: Plan 01-06 (OBS-04) complete. Wave 6 partially done — RPC failure metrics + chain-exhausted Slack alerts shipped. Two new server-only modules: src/lib/server/rpcMetrics.ts (74 lines; recordRpcAttempt + reportChainExhausted; consumes Plan 01-05's getLogger + getRequestContext) and src/lib/server/alerts.ts (62 lines; notifyChainExhausted Slack incoming-webhook poster with fail-closed mild env, 3s AbortSignal.timeout, ERROR_TEXT_CAP=512). Two surgical instrumentations: callRpc in src/lib/server/snapshots/generator.ts (3 failure paths instrumented; chain-exhausted on full loop failure) and verifyWalletSignature in src/lib/server/accessCodes.ts (single-RPC = chain-exhausted on failure; stable rpc_url label `'alchemy-base-mainnet'` per T-06-04 mitigation). .env.example documents OBSERVABILITY_ALERT_WEBHOOK_URL with provisioning instructions. Pitfall 3 / REL-01 / REL-02 fence held mechanically by grep proof: `setTimeout.*retry|backoff|exponential` → 0 hits across both files. svelte-check at the 4-pre-existing baseline; 447 vitest tests pass. Operational follow-up: provision Slack incoming webhook for #st0x-alerts and set OBSERVABILITY_ALERT_WEBHOOK_URL in Vercel project env (alerts no-op safely until then via fail-closed mild form). Next up: Plan 01-07 OBS-03 take-order failure transcripts (sequential in Wave 6 per parallelization=false in config.json).
+Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-07-PLAN.md
+Next step: `/gsd-execute-phase 1` (continues with 01-07)

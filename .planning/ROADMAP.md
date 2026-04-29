@@ -47,7 +47,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 01-05-PLAN.md — OBS-02: pino structured logger + AsyncLocalStorage request-id middleware
 
 **Wave 6** *(blocked on Wave 5; 01-06 + 01-07 run in parallel — they touch disjoint files)*
-- [ ] 01-06-PLAN.md — OBS-04: RPC instrumentation in generator.ts + accessCodes.ts + chain-exhausted Slack alerts
+- [x] 01-06-PLAN.md — OBS-04: RPC instrumentation in generator.ts + accessCodes.ts + chain-exhausted Slack alerts
 - [ ] 01-07-PLAN.md — OBS-03: take-order failure transcript at marketOrderExecution.ts (Sentry + console.error per D-15)
 
 **Wave 7** *(blocked on all prior waves — phase-exit verification + runbook)*
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Shrink the Surface, See What's Happening | 5/8 | In progress | - |
+| 1. Shrink the Surface, See What's Happening | 6/8 | In progress | - |
 | 2. Trade-Execution Backbone Refactor | 0/TBD | Not started | - |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |

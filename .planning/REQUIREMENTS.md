@@ -14,7 +14,7 @@ Foundational visibility that must come before refactor work, so we can both diag
 - [x] **OBS-01**: Client-side error tracking is wired into the SvelteKit app with sensitive-data scrubbing (wallet addresses + signatures redacted), capturing unhandled errors, promise rejections, and selected user-visible errors with breadcrumbs
 - [x] **OBS-02**: Server-side structured logging is in place across SvelteKit endpoints (`src/routes/api/`), the cron entry point, and the take-order critical path, with consistent fields (request id, wallet, route, latency) and minimum log levels by route class
 - [ ] **OBS-03**: Take-order failure instrumentation captures the state at failure (subgraph quote, on-chain state when checked, ratio, slippage cap, side, taker action) so "no liquidity" and partial-fill misclassifications become diagnosable from logs alone
-- [ ] **OBS-04**: RPC failure metrics record per-RPC failure rate across the fallback chain (`generator.ts`, `accessCodes.ts`), with alerting when the entire chain fails for a single call
+- [x] **OBS-04**: RPC failure metrics record per-RPC failure rate across the fallback chain (`generator.ts`, `accessCodes.ts`), with alerting when the entire chain fails for a single call
 - [ ] **OBS-05**: Trade-page web vitals dashboard exists (LCP, CLS, INP, TTFB at minimum) so first-paint regressions are visible against a baseline
 
 ### Trade Execution
@@ -106,7 +106,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | OBS-01 | Phase 1 | Complete |
 | OBS-02 | Phase 1 | Complete |
 | OBS-03 | Phase 1 | Pending |
-| OBS-04 | Phase 1 | Pending |
+| OBS-04 | Phase 1 | Complete |
 | OBS-05 | Phase 1 | Pending |
 | TRADE-01 | Phase 2 | Pending |
 | TRADE-02 | Phase 2 | Pending |
