@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: "Phase 2 (Trade-Execution Backbone Refactor) discuss-phase complete. NEW .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md (8 locked decisions D-01..D-08, full canonical-refs surface for downstream agents) and 02-DISCUSSION-LOG.md (alternatives audit). User selected three gray areas (TRADE-01 ban mechanism, TRADE-03 staleness UX, PERF-01 target & approach); TRADE-02 split granularity and rollout/risk strategy captured as Claude's discretion. Locked: ESLint custom rule for the IO-perspective ban (codemod 88 sites first, flip rule on after); silent pre-flight multicall safety net with auto-walk to next-best on-chain order — slippage-vs-pre-flight scope distinction explicit per discussion (slippage covers price-moved-within-order, pre-flight covers order-vanished-or-drained — they coexist non-redundantly); inline 'No liquidity available' terminal-state error only when auto-retry chain exhausts; OBS-03 failWith() transcript constraint preserved through all new failure paths; p75 LCP < 2.5s on /trade/[id] via lazy-load + bundle prune + query-waterfall reduction (NO SSR — explicitly deferred). Phase 2 ready for /gsd-plan-phase 2."
-last_updated: "2026-04-29T19:39:41.158Z"
-last_activity: 2026-04-29 -- Phase 2 planning complete
+last_updated: "2026-04-29T20:42:37Z"
+last_activity: 2026-04-29 -- Phase 2 Plan 02-01 (TRADE-01) executed
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -21,35 +21,36 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** Phase 2 — Trade-Execution Backbone Refactor (context gathered; ready to plan)
+**Current focus:** Phase null
 
 ## Current Position
 
-Phase: 2 (Trade-Execution Backbone Refactor) — context gathered, ready to plan
-Plan: 0 of TBD (next: /gsd-plan-phase 2)
-Status: Ready to execute
-Last activity: 2026-04-29 -- Phase 2 planning complete
+Phase: 2 — Trade-Execution Backbone Refactor (EXECUTING)
+Plan: 2 of 8 (Plan 02-01 complete; ready for 02-02)
+Status: Executing Phase 2
+Last activity: 2026-04-29 -- Plan 02-01 (TRADE-01) executed
 
-Progress: [██████████] 100% (8/8 Phase 1 plans complete; 1/4 phases complete; 8/30 milestone REQ-IDs complete)
+Progress: [██████████] 100% (8/8 Phase 1 plans complete; 1/8 Phase 2 plans complete; 1/4 phases complete; 9/30 milestone REQ-IDs complete)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 8
-- Average duration: ~9.5min
-- Total execution time: 76min
+- Total plans completed: 9
+- Average duration: ~9.7min
+- Total execution time: ~87min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 8 | 76min | ~9.5min |
+| 2 | 1 | 11min | 11min |
 
 **Recent Trend:**
 
-- Last 8 plans: 01-08 OBS-05+RUNBOOK+phase-exit (12min, 1 task commit), 01-07 OBS-03 (17min, 2 commits), 01-06 OBS-04 (6min, 3 commits), 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
-- Trend: Phase 1 closed with 01-08 — verify-only + documentation plan; no source-code edits. Task 1 (Speed Insights human-verify) was resolved by orchestrator-side Vercel API check (user delegated; speedInsights.hasData=true since 2025-07-21). Task 2 wrote the 328-line operational runbook (Vercel project URL filled in, D-17 Telegram phrasing throughout, doc correction recorded that injectSpeedInsights() lives in +layout.svelte:31 not CookieConsent.svelte). Task 3 ran the phase-exit verification battery read-only: type-check at 4-pre-existing-error baseline; 447 tests pass; Vite build clean; 7 of 8 cross-cutting cleanup greps clean; 1 stale-comment hit in cache.ts:48-53 logged as deferred (NOT auto-fixed per scope_guard — owned by next plan that touches cache.ts). OBS-03 failWith count = 9, ≥8 required.
+- Last 9 plans: 02-01 TRADE-01 (11min, 2 commits), 01-08 OBS-05+RUNBOOK+phase-exit (12min, 1 task commit), 01-07 OBS-03 (17min, 2 commits), 01-06 OBS-04 (6min, 3 commits), 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
+- Trend: Phase 2 opens with 02-01 — TRADE-01 IO-perspective lockdown landed in 11 minutes / 2 atomic commits despite a 31-error svelte-check regression mid-execution. Rule 1 auto-fix widened the 4 accessor signatures from `quote: ProcessedQuote` to field-only structural generics `<T extends { field?: unknown }>(quote: T): T['field']` — closed the regression without scope creep. Codemod harness rewrote 43 .ts read sites (reverse-iteration walk to handle nested matches like `fill.quote.inputIOIndex`); 14 .svelte reads hand-edited per RESEARCH §"Pattern 2". ESLint rule active; fixture file proves it fires (4 errors); phase-exit grep gate at 0 raw reads. 0 escape-hatch usage. svelte-check at 7-error baseline; 473 tests pass.
 
 *Updated after each plan completion*
 
@@ -103,6 +104,12 @@ Recent decisions affecting current work:
 - 01-08: Task 1 (Speed Insights human-verify) resolved by orchestrator-side Vercel API check (NOT user roundtrip) — user delegated the check; orchestrator queried project_id prj_tTuOMTtlZKU2tOXN4UQCfnsDxlmv directly: speedInsights.hasData=true, enabledAt 2025-07-21 (~9 months of LCP/CLS/INP/TTFB data), webAnalytics also enabled. Resolved URL https://vercel.com/st-0x/st0x/observability/speed-insights captured for runbook.
 - 01-08: RUNBOOK records a doc correction over original CONTEXT/PLAN — injectSpeedInsights() lives in src/routes/+layout.svelte:31 (consent-gated via onAnalyticsAccepted callback wired into <CookieConsent />), NOT in CookieConsent.svelte. Same net effect; future debugging now lands on the right file.
 - 01-08: Phase exit verification ran read-only per scope_guard. The 1 stale-comment hit in src/lib/server/cache.ts:48-53 (references deleted /api/rewards/* helpers in past tense) was NOT auto-fixed — logged as deferred per the existing 01-02 deferred-items entry (orphaned CACHE_KEYS cluster + stale comment block) which already scoped this for the next plan that touches cache.ts. failWith count grep `-c "failWith("` returned 9 (call sites only — the helper definition `const failWith = (` is not counted because no `(` immediately follows the identifier; 9 ≥ 8 required).
+- 02-01: Field-only structural-generic accessor signatures `<T extends { inputTokenAddress?: unknown }>(quote: T): T['inputTokenAddress']` instead of the plan-stated `quote: ProcessedQuote`. The codemod correctly identified 14 IO-perspective reads on receivers that are NOT ProcessedQuote (QuoteLike in tokenMath.ts, inline shapes in transaction.ts:handleRemoveOrder with optional fields, TakeOrderConfigV4 from the Rain SDK with `inputIOIndex: string`). Wider signature is structurally correct because the IO-perspective ban is about the field-name access pattern (enforced by the ESLint rule), not about a specific receiver type. Wrapper is now type-transparent.
+- 02-01: Codemod iterates PropertyAccessExpression descendants in REVERSE order with a `wasForgotten()` guard. Forward iteration crashed on nested matches (`fill.quote.inputIOIndex` rewrites invalidated the `fill.quote` inner node); reverse-iterate handles nesting correctly without two passes.
+- 02-01: Codemod skips `.svelte` files entirely; 14 reads across 4 .svelte files are hand-edited. Building a Svelte-preprocessor extraction step costs more than 14 manual edits.
+- 02-01: ESLint allowlist contains exactly the 4 D-02 files: orderPerspective.ts (canonical), utils/orderbook.ts (ProcessedQuote interface), api/orders.ts (convertApiOrderToProcessedQuote populates raw fields), generated-graphql.ts (codegen).
+- 02-01: scripts/codemod-trade-01.ts is committed alongside the migration (NOT deleted post-run). Plan 02-08 phase-exit will decide on deletion. Keeping it lets future plans re-run the migration if direct-read sites slip in via merges.
+- 02-01: Plan baseline counts didn't match actual repo (12 existing tests not 19; 468 tests not 447; 57 raw-read sites not 88). Acceptance criteria satisfied against actuals. Differences are rate of refactor between planning-time and execution-time, not bugs in either.
 
 ### Pending Todos
 
@@ -124,6 +131,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Phase 2 (Trade-Execution Backbone Refactor) discuss-phase complete. NEW .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md (8 locked decisions D-01..D-08, full canonical-refs surface for downstream agents) and 02-DISCUSSION-LOG.md (alternatives audit). User selected three gray areas (TRADE-01 ban mechanism, TRADE-03 staleness UX, PERF-01 target & approach); TRADE-02 split granularity and rollout/risk strategy captured as Claude's discretion. Locked: ESLint custom rule for the IO-perspective ban (codemod 88 sites first, flip rule on after); silent pre-flight multicall safety net with auto-walk to next-best on-chain order — slippage-vs-pre-flight scope distinction explicit per discussion (slippage covers price-moved-within-order, pre-flight covers order-vanished-or-drained — they coexist non-redundantly); inline 'No liquidity available' terminal-state error only when auto-retry chain exhausts; OBS-03 failWith() transcript constraint preserved through all new failure paths; p75 LCP < 2.5s on /trade/[id] via lazy-load + bundle prune + query-waterfall reduction (NO SSR — explicitly deferred). Phase 2 ready for /gsd-plan-phase 2.
-Resume file: .planning/phases/phase-02-trade-execution-backbone-refactor/02-CONTEXT.md
-Next step: `/gsd-plan-phase 2`
+Stopped at: Plan 02-01 (TRADE-01) complete. Two atomic commits: f090790 (4 accessor wrappers + 5 unit tests + ts-morph install) and 2fa6419 (43-site codemod + 14-site hand-edit + ESLint rule + fixture). 0 raw IO-perspective reads outside the 4-file allowlist + fixture; ESLint rule fires on fixture (4 errors), silent on canonical helper; svelte-check at 7-error baseline; 473 tests pass. Field-only structural-generic accessor pattern (`<T extends { field?: unknown }>(quote: T): T['field']`) replaces plan-stated `quote: ProcessedQuote` to handle the 14 codemod sites with non-ProcessedQuote receivers (QuoteLike, inline shapes with optional fields, TakeOrderConfigV4). Codemod uses reverse-iteration walk + wasForgotten() guard to handle nested matches. Ready for Plan 02-02 (TRADE-02 PR-1 — extract TransactionStatus + interfaces into transactionShared.ts as a re-export façade).
+Resume file: .planning/phases/phase-02-trade-execution-backbone-refactor/02-02-PLAN.md
+Next step: `/gsd-execute-plan 02 02`
