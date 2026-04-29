@@ -18,11 +18,14 @@ import { getLoadBalancedClient } from '$lib/clients/raindex';
 import type { Network } from '$lib/config/network';
 import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 import {
+	RaindexOrders,
 	type OrderV4,
 	type RaindexOrder,
+	type RaindexOrderQuote,
 	type SgOrder,
 	type TakeOrdersMode,
-	type TakeOrdersRequest
+	type TakeOrdersRequest,
+	type WasmEncodedResult
 } from '@rainlanguage/orderbook';
 import { AbiCoder } from 'ethers';
 import { formatUnits } from 'viem';
@@ -46,6 +49,12 @@ import {
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
 import { getMakerInputIOIndex, getMakerOutputIOIndex, getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
+import { withRetry } from '$lib/utils/retry';
+
+// TRADE-03 (Plan 02-06): pre-flight + auto-walk depth bound. Two walks max — the
+// subgraph that produced these candidates is what's stale, so re-walking from
+// scratch beyond level 2 has no better information source. Future tunable.
+const PREFLIGHT_MAX_WALKS = 2;
 
 // Re-export so existing imports (`MarketOrder.svelte`, `QuickTrade.svelte`) keep working.
 export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = DEFAULT_BPS;
@@ -353,6 +362,133 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				'Unable to prepare aggregated order route. Please refresh and retry.'
 			);
 		}
+
+		// === TRADE-03 (Plan 02-06): pre-flight multicall + auto-walk ===
+		// Per Decision D-03: silent safety net — slippage protects "price moved within
+		// an order"; pre-flight catches "order isn't there anymore" (filled / drained /
+		// cancelled). The two safeguards coexist non-redundantly. Per D-04: on detected
+		// staleness, auto-walk to the next-best on-chain order (≤ 2 levels) using fresh
+		// on-chain truth, NOT the stale subgraph.
+		// Per D-06: every error-return path routes through `failWith()` so the OBS-03
+		// transcript captures the failure mode. This block contributes 3 new failWith
+		// call sites (preflight_chain_unreachable, preflight_order_vanished, auto_retry_exhausted).
+		let preflightWalkCount = 0;
+		let workingFills = walkResult.fills;
+		let preflightCompleted = false;
+		while (preflightWalkCount < PREFLIGHT_MAX_WALKS) {
+			const targetedOrders: RaindexOrder[] = workingFills
+				.map((f) => f.quote.raindexOrder)
+				.filter((o): o is RaindexOrder => Boolean(o));
+
+			if (targetedOrders.length === 0) {
+				return failWith(
+					'preflight_chain_unreachable',
+					new Error('No hydrated RaindexOrder instances available to pre-flight'),
+					'Unable to verify orderbook state. Please refresh quotes and retry.'
+				);
+			}
+
+			const ordersWrapper = new RaindexOrders();
+			for (const o of targetedOrders) ordersWrapper.push(o);
+
+			const preflightClient = await getLoadBalancedClient(network);
+			let preflightResult: WasmEncodedResult<RaindexOrderQuote[][]>;
+			try {
+				preflightResult = await withRetry(() =>
+					preflightClient.getOrderQuotesBatch(ordersWrapper, null, null)
+				);
+			} catch (e) {
+				return failWith(
+					'preflight_chain_unreachable',
+					e instanceof Error ? e : new Error(String(e)),
+					'Unable to verify orderbook state. Please refresh quotes and retry.'
+				);
+			}
+
+			if (preflightResult.error || !preflightResult.value) {
+				return failWith(
+					'preflight_chain_unreachable',
+					new Error(
+						preflightResult.error?.readableMsg ?? 'getOrderQuotesBatch returned no value'
+					),
+					'Unable to verify orderbook state. Please refresh quotes and retry.'
+				);
+			}
+
+			// Pitfall 3 (02-RESEARCH): SDK returns RaindexOrderQuote[][] — outer array per
+			// order, inner array per IO-pair quote. Use `result[i]?.[0]?.data?.formattedMaxOutput`
+			// (with the `[0]` to pick the first inner element), NOT `result[i].data.formattedMaxOutput`.
+			// Populate transcript.vaultBalance from the first (best) candidate — closes the
+			// Phase 1 D-08 LIMITATION (`01-CONTEXT.md` left it null deliberately). Populated
+			// BEFORE any failure path can fire so even `preflight_order_vanished` carries it.
+			transcript.onChainStateRead.vaultBalance =
+				preflightResult.value[0]?.[0]?.data?.formattedMaxOutput ?? null;
+
+			// Filter candidates: drop any with success=false OR maxOutput==='0'.
+			const survivors = workingFills.filter((_fill, i) => {
+				const candidateQuote = preflightResult.value![i]?.[0];
+				if (!candidateQuote) return false;
+				if (!candidateQuote.success) return false;
+				const maxOut = candidateQuote.data?.formattedMaxOutput ?? '0';
+				return maxOut !== '0' && Number(maxOut) > 0;
+			});
+
+			if (survivors.length === workingFills.length) {
+				// All candidates passed pre-flight — proceed to dispatch with the original walk.
+				preflightCompleted = true;
+				break;
+			}
+
+			if (survivors.length > 0) {
+				// Some candidates dropped; one or more orders vanished/drained.
+				// Replace fills with survivors and re-enter loop for the next walk level.
+				workingFills = survivors;
+				preflightWalkCount += 1;
+				continue;
+			}
+
+			// All candidates dropped at this walk level.
+			if (preflightWalkCount + 1 < PREFLIGHT_MAX_WALKS) {
+				// Theoretically we could re-walk the orderbook from scratch here, but the
+				// subgraph is what produced these candidates and it's stale — we have no
+				// better source on a single page render. Fail terminally with the
+				// vanished-order signal.
+				return failWith(
+					'preflight_order_vanished',
+					new Error(
+						`All ${targetedOrders.length} candidate orders failed pre-flight at walk level ${preflightWalkCount + 1}`
+					),
+					'No liquidity available right now for this size. Try a smaller amount or check back in a minute.'
+				);
+			}
+
+			return failWith(
+				'auto_retry_exhausted',
+				new Error(`Pre-flight + auto-walk exhausted after ${PREFLIGHT_MAX_WALKS} levels`),
+				'No liquidity available right now for this size. Try a smaller amount or check back in a minute.'
+			);
+		}
+		if (!preflightCompleted) {
+			// Loop ran PREFLIGHT_MAX_WALKS times without locking in survivors (always had
+			// some drops but never zero — the partial-survivor branch falls through here).
+			return failWith(
+				'auto_retry_exhausted',
+				new Error(`Pre-flight + auto-walk exhausted after ${PREFLIGHT_MAX_WALKS} levels`),
+				'No liquidity available right now for this size. Try a smaller amount or check back in a minute.'
+			);
+		}
+		// After the loop: workingFills contains the survivors that passed pre-flight.
+		// Mutate walkResult.fills (NOT a fresh object) so all downstream consumers see
+		// the same shape. The aggregatedParams construction below operates on these
+		// post-pre-flight fills.
+		walkResult.fills = workingFills;
+		// === END TRADE-03 pre-flight block ===
+
+		// NOTE: Slippage cap (priceCap) constructed above operates on the survivors from
+		// TRADE-03 pre-flight. Slippage protects "price moved within an order"; pre-flight
+		// catches "order isn't there anymore". The two safeguards are non-redundant — DO NOT
+		// remove either thinking the other replaces it. (See 02-CONTEXT.md §"specifics".)
+
 		// Use *UpTo modes instead of *Exact to tolerate tiny Float precision gaps
 		// where the SDK's internal quote discovery computes available liquidity as
 		// e.g. 0.999...999 instead of exactly 1. *UpTo fills as much as available
