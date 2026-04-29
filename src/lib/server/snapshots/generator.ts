@@ -9,28 +9,84 @@ import { fetchAllVaultHoldings } from './vaults';
 import { getRewardsExcludedWalletsSet } from '$lib/server/kv';
 import { networks } from '$lib/config/networks';
 import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
+import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 
 const RPC_URLS = [networks[0].rpcUrl, ...networks[0].fallbackRpcUrls];
 
 /**
  * Call a JSON-RPC method with fallback across all configured RPC URLs.
  * Returns null if all RPCs fail, or the result field from the first successful response.
+ *
+ * Phase 1 / OBS-04 instrumentation (D-09): every attempt emits a structured pino line
+ * via recordRpcAttempt; chain exhaustion (every iteration failed for a single logical
+ * call) fires reportChainExhausted (error-level pino + Slack alert).
+ *
+ * Pitfall 3 / REL-01 fence: visibility ONLY. The single-attempt-per-RPC behavior is
+ * preserved verbatim. The empty-result `continue` semantics (success with `null`
+ * result counts as a per-RPC failure here, but the function returns null only if
+ * EVERY RPC fails or returns empty) survive; REL-01 in Phase 3 will treat empty as
+ * a failure across the chain. The silent latestBlock fallback in
+ * getBlockNumberForTimestamp is also REL-01 territory and is NOT touched here.
  */
 async function callRpc(method: string, params: unknown[]): Promise<unknown | null> {
+	const attempts: Array<{ rpc_url: string; status_or_error: string }> = [];
 	for (const rpcUrl of RPC_URLS) {
+		const start = Date.now();
 		try {
 			const response = await fetch(rpcUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 })
 			});
-			if (!response.ok) continue;
+			if (!response.ok) {
+				const status_or_error = `HTTP ${response.status}`;
+				recordRpcAttempt({
+					rpc_url: rpcUrl,
+					fn: `callRpc:${method}`,
+					ok: false,
+					status_or_error,
+					duration_ms: Date.now() - start
+				});
+				attempts.push({ rpc_url: rpcUrl, status_or_error });
+				continue;
+			}
 			const data = await response.json();
-			if (data.result) return data.result;
-		} catch {
+			if (data.result) {
+				recordRpcAttempt({
+					rpc_url: rpcUrl,
+					fn: `callRpc:${method}`,
+					ok: true,
+					status_or_error: 'ok',
+					duration_ms: Date.now() - start
+				});
+				return data.result;
+			}
+			// Empty result — Phase 1 still treats as success-with-null; REL-01 in
+			// Phase 3 will treat as failure. For OBS-04 visibility we record it as a
+			// per-attempt failure so the operator sees empty-result rates in logs.
+			recordRpcAttempt({
+				rpc_url: rpcUrl,
+				fn: `callRpc:${method}`,
+				ok: false,
+				status_or_error: 'empty result',
+				duration_ms: Date.now() - start
+			});
+			attempts.push({ rpc_url: rpcUrl, status_or_error: 'empty result' });
+		} catch (err) {
+			const status_or_error = err instanceof Error ? err.message : String(err);
+			recordRpcAttempt({
+				rpc_url: rpcUrl,
+				fn: `callRpc:${method}`,
+				ok: false,
+				status_or_error,
+				duration_ms: Date.now() - start
+			});
+			attempts.push({ rpc_url: rpcUrl, status_or_error });
 			continue;
 		}
 	}
+	// Chain exhausted — every attempt failed (HTTP error, exception, or empty result).
+	await reportChainExhausted({ fn: `callRpc:${method}`, attempts });
 	return null;
 }
 

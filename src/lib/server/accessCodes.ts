@@ -2,6 +2,7 @@ import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { getKv, kvGet, kvSet, kvDel, KV_KEYS } from './kv';
 import { env } from '$env/dynamic/private';
+import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 
 // Create a public client for Base network for signature verification
 // Supports ECDSA (EOA), EIP-1271 (Smart Contracts), and EIP-6492 (Undeployed)
@@ -61,11 +62,22 @@ Timestamp: ${Date.now()}`;
 
 // Verify a wallet signature
 // Supports: ECDSA (EOA), EIP-1271 (Smart Contract Wallets), EIP-6492 (Undeployed Counterfactual)
+//
+// Phase 1 / OBS-04 instrumentation (D-09): single-RPC verification — recordRpcAttempt
+// on attempt; reportChainExhausted on failure (single-attempt = chain exhausted on
+// failure, semantically). The `rpc_url` label is the literal `'alchemy-base-mainnet'`
+// (a stable identifier — REL-02 in Phase 3 will introduce a real fallback chain with
+// real URLs). The hardcoded Alchemy key in the basePublicClient is SEC-01 / Phase 3
+// scope; Phase 1 does NOT touch it.
+//
+// Pitfall 3 / REL-02 fence: visibility ONLY. No retry, no fallback chain — those are
+// Phase 3.
 export async function verifyWalletSignature(
 	address: string,
 	message: string,
 	signature: `0x${string}`
 ): Promise<boolean> {
+	const start = Date.now();
 	try {
 		// viem's publicClient.verifyMessage handles all signature types:
 		// - ECDSA for EOA wallets
@@ -76,10 +88,33 @@ export async function verifyWalletSignature(
 			message,
 			signature
 		});
+		recordRpcAttempt({
+			rpc_url: 'alchemy-base-mainnet',
+			fn: 'verifyWalletSignature',
+			ok: true,
+			status_or_error: valid ? 'verified' : 'mismatch',
+			duration_ms: Date.now() - start
+		});
 		return valid;
 	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Unknown verification error';
-		console.error('[accessCodes] Signature verification failed:', { message });
+		const status_or_error =
+			error instanceof Error ? error.message : 'Unknown verification error';
+		recordRpcAttempt({
+			rpc_url: 'alchemy-base-mainnet',
+			fn: 'verifyWalletSignature',
+			ok: false,
+			status_or_error,
+			duration_ms: Date.now() - start
+		});
+		// Single-RPC for now (REL-02 in Phase 3 will add a real fallback chain).
+		// For Phase 1, single-RPC failure IS chain-exhaustion semantically.
+		await reportChainExhausted({
+			fn: 'verifyWalletSignature',
+			attempts: [{ rpc_url: 'alchemy-base-mainnet', status_or_error }]
+		});
+		console.error('[accessCodes] Signature verification failed:', {
+			message: status_or_error
+		});
 		return false;
 	}
 }
