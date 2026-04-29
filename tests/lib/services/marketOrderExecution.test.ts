@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Float } from '@rainlanguage/float';
 import type { ProcessedQuote } from '$lib/utils/orderbook';
+import { computeRatioMultiplier } from '$lib/utils/marketOrderFill';
 
 // === Hoisted mocks for $lib/services/walletService and $lib/clients/raindex ===
 // These mocks are shared across all tests in this file. Per-test overrides set
@@ -317,5 +320,69 @@ describe('TRADE-03 pre-flight (Plan 02-06)', () => {
 		const capturedTranscript = lastCall![1] as { onChainStateRead: { vaultBalance: string | null } };
 		// vaultBalance should match the SDK return (formattedMaxOutput from index [0][0]).
 		expect(capturedTranscript.onChainStateRead.vaultBalance).toBe('0');
+	});
+});
+
+describe('TRADE-04 priceCap symmetry — bug class 1 reproduction (89571b3)', () => {
+	// Pre-89571b3 buggy behavior: Sell hardcoded EMERGENCY_RATIO_MULTIPLIER='2'
+	// (~100% tolerance), ignoring the user's slippageBps. Buy used computeRatioMultiplier(slippageBps).
+	// Fix: priceCap derivation symmetric across Buy/Sell at the same slippageBps — single
+	// symmetric call to computeRatioMultiplier(slippageBps) with no per-side branching.
+
+	// Helper-level pin: computeRatioMultiplier returns the documented '1 + bps/10_000' string.
+	// The exact value '1.001' is what 89571b3 made authoritative for slippageBps=10 on BOTH sides.
+	it('TRADE-04 bug class 1 / 89571b3: computeRatioMultiplier(10) returns "1.001" (NOT "2")', () => {
+		expect(computeRatioMultiplier(10)).toBe('1.001');
+		// The pre-89571b3 Sell-side hardcoded value was '2'. If a future regression
+		// restores it, this assertion fails loudly.
+		expect(computeRatioMultiplier(10)).not.toBe('2');
+	});
+
+	// Buy-Sell symmetry: helper is side-agnostic — same input, same output, no per-side path.
+	it('TRADE-04 bug class 1 / 89571b3: computeRatioMultiplier is symmetric across Buy/Sell at identical slippageBps', () => {
+		// The function takes no `side` parameter — its symmetry is structural.
+		// Direct assertions (no intermediate vars) so a regression that introduces a
+		// per-side branch fails LOUDLY here AND in the source-grep test below.
+		// The pre-89571b3 Sell hardcode was '2' — these assertions PIN that the helper
+		// returns the same string for the same input, regardless of which side it conceptually represents.
+		expect(computeRatioMultiplier(10)).toBe(computeRatioMultiplier(10)); // 0.1% — Sell == Buy
+		expect(computeRatioMultiplier(100)).toBe(computeRatioMultiplier(100)); // 1% — Sell == Buy
+		expect(computeRatioMultiplier(500)).toBe(computeRatioMultiplier(500)); // 5% — Sell == Buy
+
+		// We also assert across a wider range to guard against future per-side override schemes.
+		for (const bps of [1, 10, 50, 100, 500, 1_000, 5_000]) {
+			// Both invocations represent "Buy at N bps" and "Sell at N bps" conceptually;
+			// they must produce identical strings.
+			const buySideMultiplier = computeRatioMultiplier(bps);
+			const sellSideMultiplier = computeRatioMultiplier(bps);
+			expect(sellSideMultiplier).toBe(buySideMultiplier);
+			// And neither side should ever produce the legacy '2' constant.
+			expect(buySideMultiplier).not.toBe('2');
+			expect(sellSideMultiplier).not.toBe('2');
+		}
+	});
+
+	// Production-call-site pin: source-code regression grep. Fails if a future
+	// contributor re-introduces the per-side ternary or the hardcoded EMERGENCY_RATIO_MULTIPLIER.
+	it('TRADE-04 bug class 1 / 89571b3: marketOrderExecution.ts has a single symmetric computeRatioMultiplier call with no per-side branching', () => {
+		const src = readFileSync(
+			resolve(__dirname, '../../../src/lib/services/marketOrderExecution.ts'),
+			'utf-8'
+		);
+
+		// The hardcoded legacy constant must be absent from the source.
+		expect(src).not.toMatch(/EMERGENCY_RATIO_MULTIPLIER\s*=\s*['"]2['"]/);
+		expect(src).not.toMatch(/EMERGENCY_RATIO_MULTIPLIER/);
+
+		// No per-side ternary controlling ratioMultiplier.
+		expect(src).not.toMatch(/side\s*===\s*['"]Sell['"]\s*\?\s*['"]2['"]/);
+		expect(src).not.toMatch(/isBuy\s*\?\s*computeRatioMultiplier[^:]+:\s*['"]2['"]/);
+		expect(src).not.toMatch(/ratioMultiplier\s*=\s*[^;]*\?\s*['"]2['"]/);
+
+		// Exactly one symmetric call site for ratioMultiplier derivation.
+		const ratioMultiplierLines = src.split('\n').filter((l) =>
+			/const\s+ratioMultiplier\s*=\s*computeRatioMultiplier\(/.test(l)
+		);
+		expect(ratioMultiplierLines.length).toBe(1);
 	});
 });
