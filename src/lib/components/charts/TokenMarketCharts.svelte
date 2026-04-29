@@ -494,19 +494,16 @@
 		const cumulative: Array<{ x: number; y: number }> = [];
 		let running = 0;
 
-		// Get the starting price (max for bids, min for asks)
-		const startPrice = sorted.length > 0 ? sorted[0].price : 0;
-
-		// Start at the first price with 0 volume
-		cumulative.push({ x: startPrice, y: 0 });
-
-		// For each point, add the cumulative volume step
+		// Two points per order — pre-step at the running total before this order,
+		// post-step at the running total after. The pre-step on the first iteration
+		// is implicitly the y=0 anchor (`running` starts at 0), so no separate
+		// anchor point is needed. Emitting one would just duplicate the pre-step
+		// at the same (price, 0) coordinate, which Chart.js's `nearest` hover mode
+		// reports as two `0.0000 @ $price` tooltip rows and confuses users into
+		// thinking those are real zero-volume orders.
 		for (const point of sorted) {
-			// Point at current price with volume before this order
 			cumulative.push({ x: point.price, y: running });
-			// Add this order's volume to running total
 			running += point.quantity;
-			// Point at current price with volume after this order
 			cumulative.push({ x: point.price, y: running });
 		}
 
@@ -569,6 +566,17 @@
 					plugins: {
 						legend: { position: 'bottom', labels: { color: '#d1d5db' } },
 						tooltip: {
+							// Drop any data points whose cumulative volume is zero. The
+							// step-function representation puts a `(price, 0)` point at
+							// the leading edge of each side so the line falls back to the
+							// x-axis. Those points carry no information for the user but
+							// `interaction.mode = 'nearest'` will still surface them as
+							// `0.0000 @ $price` rows on hover, which reads as a real
+							// zero-volume order.
+							filter: (item: {
+								raw?: { y?: number };
+								parsed?: { y?: number };
+							}) => Number(item.raw?.y ?? item.parsed?.y ?? 0) > 0,
 							callbacks: {
 								label: (context: {
 									dataset?: { candlestick?: boolean; label?: string };
