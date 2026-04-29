@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 01-04 (OBS-01) complete. Wave 4 done — @sentry/sveltekit@10.50.0 wired client + server with errors-only config (no Replay/Performance/Feedback); recursive PII scrubber (scrubSentryEvent at $lib/observability/scrub.ts) covers wallet + signature + ?signature= URL params via beforeSend AND beforeBreadcrumb (Pitfall 9); CSP connect-src extended with *.ingest.sentry.io + *.ingest.us.sentry.io (Pitfall 1); sourcemap upload via Vite plugin gated on !!process.env.SENTRY_AUTH_TOKEN (Pitfall 4); src/hooks.client.ts greenfield + hooks.server.ts handle wrapped in sequence(Sentry.sentryHandle(), existingHandle). SDK ships inert until Vercel env vars set — operational follow-up documented in SUMMARY. Next up: Wave 5 (01-05 OBS-02 pino + AsyncLocalStorage request-id middleware).
-last_updated: "2026-04-29T11:14:11Z"
-last_activity: 2026-04-29 -- Plan 01-04 complete (3 commits, ~6min, 0 new svelte-check errors, 434 vitest tests pass)
+stopped_at: Plan 01-05 (OBS-02) complete. Wave 5 done — pino@^9.14.0 structured server logger + AsyncLocalStorage request-context middleware in src/lib/server/logger.ts (130 lines; exports default baseLogger + named { logger }, getLogger(), getRequestContext(), requestContextHandle Handle, pickLevelForRoute helper). hooks.server.ts handle now sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle) — request-id FIRST so Sentry breadcrumbs and the existing CSP/CORS/auth chain see the same id. crypto.randomUUID() (CSPRNG) for request_id; client-supplied x-request-id reused for cross-correlation; response x-request-id header set unconditionally. Per-route log-level matrix matches D-07 exactly. Pino built-in redact covers Authorization/cookie/*.signature/*.privateKey at any depth. 13 new unit tests pass (447 / 1 skipped total). Pitfall 2 verified: 0 routes export runtime: 'edge'. Next up: Wave 6 (01-06 OBS-04 RPC metrics + Slack alerts; 01-07 OBS-03 take-order failure transcripts — parallel-eligible).
+last_updated: "2026-04-29T11:26:42Z"
+last_activity: 2026-04-29 -- Plan 01-05 complete (3 commits, ~6min, 0 new svelte-check errors, 447 vitest tests pass)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 4
-  completed_plans: 4
-  percent: 12
+  total_plans: 5
+  completed_plans: 5
+  percent: 16
 ---
 
 # Project State
@@ -26,30 +26,30 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 1 (Shrink the Surface, See What's Happening) — EXECUTING
-Plan: 5 of 8 (01-01 DEPR-02 + 01-02 DEPR-01 + 01-03 DEPR-03 + 01-04 OBS-01 complete; next up 01-05 OBS-02)
+Plan: 6 of 8 (01-01 DEPR-02 + 01-02 DEPR-01 + 01-03 DEPR-03 + 01-04 OBS-01 + 01-05 OBS-02 complete; next up Wave 6: 01-06 OBS-04 + 01-07 OBS-03 — parallel-eligible)
 Status: Executing Phase 1
-Last activity: 2026-04-29 -- Plan 01-04 complete
+Last activity: 2026-04-29 -- Plan 01-05 complete
 
-Progress: [█████░░░░░] 50.0% (4/8 plans complete in Phase 1; 0/4 phases complete)
+Progress: [██████░░░░] 62.5% (5/8 plans complete in Phase 1; 0/4 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
-- Average duration: ~8.75min
-- Total execution time: 35min
+- Total plans completed: 5
+- Average duration: ~8.2min
+- Total execution time: 41min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 4 | 35min | ~8.75min |
+| 1 | 5 | 41min | ~8.2min |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
-- Trend: Wave 4 matched the Wave 2/3 pace — three-task split (dep + scrubber/tests; vite plugin + hooks.client; server init + CSP + sequence-wrap) kept svelte-check green at every commit. SDK ships inert pending operator Sentry-org creation; gating means PR previews build cleanly without SENTRY_AUTH_TOKEN.
+- Last 5 plans: 01-05 OBS-02 (6min, 3 commits), 01-04 OBS-01 (6min, 3 commits), 01-03 DEPR-03 (6min, 3 commits), 01-02 DEPR-01 (6min, 2 commits), 01-01 DEPR-02 (17min, 3 commits)
+- Trend: Wave 5 matched the Wave 2/3/4 pace — three-task split (pino install + edge-runtime audit → pure logger module + 13 tests → hooks sequence reorder) kept svelte-check green at every commit. Surgical edit philosophy: 1 import line + 1 sequence reorder in hooks.server.ts; nothing else touched. crypto.randomUUID() (Node ≥19 native) skips the uuid dep entirely.
 
 *Updated after each plan completion*
 
@@ -80,6 +80,11 @@ Recent decisions affecting current work:
 - 01-04: Init gated by `!dev && Boolean(env.{PUBLIC_,}SENTRY_DSN)` — dev no-ops, missing DSN in prod degrades gracefully (no crash). Sentry plugin's `autoUploadSourceMaps: !!process.env.SENTRY_AUTH_TOKEN` mirrors this for build time. Both are deliberate ungated-mode-friendly designs for solo-team operations.
 - 01-04: CSP appended NOT replaced — every existing connect-src host preserved verbatim; only added `*.ingest.sentry.io` + `*.ingest.us.sentry.io`. EU region (`*.ingest.de.sentry.io`) deferred to deploy-time decision when org region is chosen.
 - 01-04: handleError callback typed explicitly `{ error: unknown; event: unknown }` to satisfy svelte-check strict — caught implicit-any on first commit and fixed in same task before commit.
+- 01-05: Three-task split for pino logging (dep install + Pitfall 2 audit → pure module + 13 unit tests → hooks sequence reorder) keeps svelte-check at the 4-pre-existing-error baseline at every commit. Tests landed before the hooks edit so the import surface compiled cleanly throughout.
+- 01-05: Use Node-built-in `crypto.randomUUID()` from `node:crypto` instead of the `uuid` npm package. CSPRNG-backed (V6 ASVS satisfied — T-05-06); zero new dependency in addition to pino. Project runs Node 24, well above the Node 19 minimum for randomUUID.
+- 01-05: Wallet retained in FULL in pino logs (not truncated). Per D-07: Vercel Logs is admin-only-readable; Sentry's beforeSend scrubber from 01-04 handles third-party SaaS exposure separately. Doing both layers would double-redact and lose forensic value in the admin tier where the wallet is the primary join key.
+- 01-05: Pino built-in `redact` config (paths array) chosen over a custom serializer — faster (runs at JSON-emit time, not a walker) and canonical (RESEARCH §Security V5). Covers Authorization, cookie, `*.signature`, `*.privateKey` at any depth.
+- 01-05: Sequence chain ordering as a hard contract: request-id middleware FIRST, then Sentry, then existing handle. Documented inline above the export so future plans don't reshuffle. Sentry breadcrumbs now inherit request_id from the ALS store via getRequestContext(), enabling Plan 01-07 to embed request_id in Sentry `extra` payloads for trivial triage correlation.
 
 ### Pending Todos
 
@@ -101,6 +106,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Plan 01-04 (OBS-01) complete. Wave 4 done — Sentry SDK errors-only wired client + server with PII scrubbing and CSP additions; SDK ships inert until Vercel env vars (SENTRY_DSN, PUBLIC_SENTRY_DSN, SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT) are set. Operator must create the Sentry org/project before deploys begin emitting events. Next up: Wave 5 (Plan 01-05 OBS-02 pino structured logger + AsyncLocalStorage request-id middleware; per Pattern 1 the request-id middleware will be prepended to `sequence(Sentry.sentryHandle(), existingHandle)`).
-Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-05-PLAN.md
-Next step: `/gsd-execute-phase 1` (continues into Wave 5)
+Stopped at: Plan 01-05 (OBS-02) complete. Wave 5 done — pino@^9.14.0 + AsyncLocalStorage request-context middleware in src/lib/server/logger.ts (130 lines). hooks.server.ts handle now `sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle)`. Every server response carries `x-request-id`; per-request summary log line emitted at pickLevelForRoute(route, status) level. Sentry breadcrumbs now inherit request_id via the ALS store. 13 new unit tests pass (447 total). Pitfall 2 verified: 0 routes export `runtime: 'edge'`. SDK + logger fully wired and shipping JSON to stdout — Vercel Logs picks it up automatically; no operator action required. Next up: Wave 6 (Plan 01-06 OBS-04 RPC failure metrics + chain-exhausted Slack alerts; Plan 01-07 OBS-03 take-order failure transcripts — these two run in parallel since they touch disjoint files).
+Resume file: .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-06-PLAN.md
+Next step: `/gsd-execute-phase 1` (continues into Wave 6)
