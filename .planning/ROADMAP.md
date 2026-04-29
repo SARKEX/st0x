@@ -82,7 +82,7 @@ Notes:
 - [x] 02-01-PLAN.md — TRADE-01: ESLint no-restricted-syntax rule + ts-morph codemod migrating 57 raw IO-perspective property reads + 4 accessor wrappers in orderPerspective.ts + lint fixture
 
 **Wave 2** *(blocked on Wave 1 — codemod touches transaction.ts before TRADE-02 split)*
-- [ ] 02-02-PLAN.md — TRADE-02 PR-1: extract TransactionStatus enum + 6 interfaces + 4 leaf utilities into transactionShared.ts; transaction.ts becomes a re-export façade for back-compat
+- [x] 02-02-PLAN.md — TRADE-02 PR-1: extract TransactionStatus enum + 6 interfaces + 4 leaf utilities into transactionShared.ts; transaction.ts becomes a re-export façade for back-compat
 
 **Wave 3** *(blocked on Wave 2)*
 - [ ] 02-03-PLAN.md — TRADE-02 PR-2: extract 5 market-take methods into marketTakeStore.ts + sever last lexical edge by rewiring marketOrderExecution.ts to import directly (not via transaction.ts façade)
@@ -163,6 +163,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
-| 2. Trade-Execution Backbone Refactor | 1/8 | In progress | - |
+| 2. Trade-Execution Backbone Refactor | 2/8 | In Progress|  |
 | 3. Production-Grade Hardening | 0/TBD | Not started | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
