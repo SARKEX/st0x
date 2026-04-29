@@ -73,7 +73,7 @@ Documentation and code drift that misleads future contributors and produces low-
 
 Three subsystems that ship but no longer earn their bug surface: dead user-facing rewards UI, internal "nice to have" admin/rewards views, and the entire Onramper fiat on-ramp. Removing these eliminates whole bug categories before we even touch the trade-execution refactor.
 
-- [ ] **DEPR-01**: User-facing rewards code is removed: leaderboard pages, monthly points UI, statement views, public rewards APIs that feed the user UI, leaderboard polling — anything users currently see (which is all dead) is deleted, not gated
+- [x] **DEPR-01**: User-facing rewards code is removed: leaderboard pages, monthly points UI, statement views, public rewards APIs that feed the user UI, leaderboard polling — anything users currently see (which is all dead) is deleted, not gated **[Completed 01-02, 2026-04-29: 3 rewards components, rewardsStore.ts, 4 rewards APIs, and 3 public-rewards APIs deleted; TokenSwapAnnouncementModal preserved per D-16 in new src/lib/components/announcements/ + announcementStore.ts; Pitfall 8 carve-out closed in hooks.server.ts]**
 - [x] **DEPR-02**: Internal admin rewards/TVL views (`admin/rewards/+page.svelte` 4933 lines, the rewards section of `admin/+page.svelte`) and the snapshot pipeline (`src/lib/server/snapshots/`, the cron, the KV state) are either fully removed (preferred — eliminates the bug surface) or explicitly retained with bandages applied (per-RPC retry, rate limits, monitoring) — decision made during Phase 1 discovery after confirming with the internal team **[Completed 01-01: admin rewards UI deleted; snapshot pipeline RETAINED per D-01 (feeds admin TVL/volume views); per-wallet points step deleted per D-03; LP_SUBGRAPH_URL wiring removed per D-05]**
 - [ ] **DEPR-03**: Onramper fiat on-ramp integration is fully removed — `OnramperModal.svelte`, `/api/onramper/sign-url/+server.ts`, related routes/links/docs, and the `ONRAMPER_SECRET_KEY` / `PUBLIC_ONRAMPER_API_KEY` / `PUBLIC_ONRAMPER_ENV` env vars; the feature is unused and represents pure bug surface (including the unsigned-cookie auth path flagged in CONCERNS.md security)
 
@@ -130,7 +130,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | DRIFT-01 | Phase 4 | Pending |
 | DRIFT-02 | Phase 4 | Pending |
 | DRIFT-03 | Phase 4 | Pending |
-| DEPR-01 | Phase 1 | Pending |
+| DEPR-01 | Phase 1 | Complete (01-02, 2026-04-29) |
 | DEPR-02 | Phase 1 | Complete (01-01, 2026-04-29) |
 | DEPR-03 | Phase 1 | Pending |
 
