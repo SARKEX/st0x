@@ -52,7 +52,7 @@ describe('approvalStore', () => {
 			const setStatus = vi.fn();
 
 			await ensureAllowance({
-				token: { address: TOKEN, decimals: 6 },
+				token: { address: TOKEN },
 				owner: OWNER,
 				spender: SPENDER,
 				amount: 500n,
@@ -76,7 +76,7 @@ describe('approvalStore', () => {
 			const setStatus = vi.fn();
 
 			await ensureAllowance({
-				token: { address: TOKEN, decimals: 6 },
+				token: { address: TOKEN },
 				owner: OWNER,
 				spender: SPENDER,
 				amount: 1_000_000n,
@@ -112,7 +112,7 @@ describe('approvalStore', () => {
 			const setStatus = vi.fn();
 
 			await ensureAllowance({
-				token: { address: TOKEN, decimals: 6 },
+				token: { address: TOKEN },
 				owner: OWNER,
 				spender: SPENDER,
 				amount: 1n,

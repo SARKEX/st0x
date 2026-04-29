@@ -50,7 +50,7 @@ import { TransactionStatus } from './transactionShared';
 export const APPROVAL_TX_CONFIRMATIONS = 2;
 
 export interface EnsureAllowanceParams {
-	token: { address: Address; decimals: number };
+	token: { address: Address };
 	owner: Address;
 	spender: Address;
 	amount: bigint;

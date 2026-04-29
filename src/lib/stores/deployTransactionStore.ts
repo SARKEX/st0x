@@ -223,7 +223,7 @@ export const handleStrategyDeployment = async (
 				// actually needed) via the setStatus callback.
 				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approval.symbol}...`);
 				await ensureAllowance({
-					token: { address: approval.token as `0x${string}`, decimals: 0 },
+					token: { address: approval.token as `0x${string}` },
 					owner: $signerAddress as `0x${string}`,
 					spender,
 					amount: requiredAmount,

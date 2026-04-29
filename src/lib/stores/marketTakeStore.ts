@@ -306,7 +306,7 @@ const ensureBulkPayerAllowanceIfNeeded = async (args: {
 	// message before the user signs.
 	awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${symbol}...`);
 	await ensureAllowance({
-		token: { address: payerToken, decimals: 0 },
+		token: { address: payerToken },
 		owner,
 		spender,
 		amount: requiredWei,
