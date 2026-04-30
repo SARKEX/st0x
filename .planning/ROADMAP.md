@@ -145,7 +145,7 @@ Notes:
 - [x] 03-05-PLAN.md — SEC-06: snapshotsPreview tier on rateLimit.ts + applyTieredRateLimit on preview/preview-stream + requireAdmin on POST generate
 
 **Wave 4** *(REL-01 retry pattern unblocks REL-02)*
-- [ ] 03-06-PLAN.md — REL-01: generator.ts callRpc per-RPC withRetry + chain-exhaustion throw + kill silent latestBlock fallback in getBlockNumberForTimestamp
+- [x] 03-06-PLAN.md — REL-01: generator.ts callRpc per-RPC withRetry + chain-exhaustion throw + kill silent latestBlock fallback in getBlockNumberForTimestamp
 
 **Wave 5** *(depends on Wave 1 SEC-01 env var + Wave 4 retry pattern)*
 - [ ] 03-07-PLAN.md — REL-02: viem fallback transport for accessCodes.ts verifyWalletSignature; OBS-04 label rename to fallback-chain-base
