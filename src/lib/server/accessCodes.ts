@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { getKv, kvGet, kvSet, kvDel, KV_KEYS } from './kv';
@@ -55,11 +56,25 @@ const devStore = {
 	codeWallets: new Map<string, string[]>()
 };
 
+// SEC-05: rejection-sampled CSPRNG pick from a fixed alphabet.
+// `limit = floor(256/N)*N` discards bytes that would otherwise bias indices on
+// alphabets where N does not divide 256 evenly (RESEARCH §Pitfall 9). For the
+// 32-char access-code alphabet limit = 256 exactly, so no rejection actually
+// occurs — but the helper shape stays uniform with referrals.ts (31-char).
+function pickFromAlphabet(alphabet: string): string {
+	const n = alphabet.length;
+	const limit = Math.floor(256 / n) * n;
+	while (true) {
+		const byte = crypto.randomBytes(1)[0];
+		if (byte < limit) return alphabet[byte % n];
+	}
+}
+
 // Generate a random code in format ST0X-XXXX-XXXX
 export function generateAccessCode(): string {
 	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars (0, O, 1, I)
 	const randomPart = (length: number) =>
-		Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+		Array.from({ length }, () => pickFromAlphabet(chars)).join('');
 	return `ST0X-${randomPart(4)}-${randomPart(4)}`;
 }
 
