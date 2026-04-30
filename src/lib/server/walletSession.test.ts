@@ -30,7 +30,7 @@ describe('walletSession (SEC-03)', () => {
 
 	it('createSession round-trip: returns 64-hex sessionId; readSession returns lowercased wallet record', async () => {
 		const store = new Map<string, string>();
-		const kvSet = vi.fn(async (key: string, value: string) => {
+		const kvSet = vi.fn(async (key: string, value: string, _opts?: { PX: number }) => {
 			store.set(key, value);
 		});
 		const kvGet = vi.fn(async (key: string) => store.get(key) ?? null);
@@ -94,10 +94,11 @@ describe('walletSession (SEC-03)', () => {
 		const { maybeRefreshSession } = await import('./walletSession');
 
 		const now = Date.now();
+		const originalLastSeen = now - 25 * 60 * 60 * 1000;
 		const record = {
 			walletAddress: '0xabc',
-			issuedAt: now - 25 * 60 * 60 * 1000,
-			lastSeenAt: now - 25 * 60 * 60 * 1000 // 25h ago — past threshold
+			issuedAt: originalLastSeen,
+			lastSeenAt: originalLastSeen // 25h ago — past threshold
 		};
 
 		await maybeRefreshSession('session-id-stale', record);
@@ -107,10 +108,10 @@ describe('walletSession (SEC-03)', () => {
 		expect(key).toBe('wallet_session:session-id-stale');
 		const parsed = JSON.parse(value as string);
 		// lastSeenAt should be updated to ~now (after the refresh)
-		expect(parsed.lastSeenAt).toBeGreaterThan(record.lastSeenAt);
+		expect(parsed.lastSeenAt).toBeGreaterThan(originalLastSeen);
 		expect(opts).toEqual({ PX: SESSION_TTL_MS });
 		// In-place mutation also updates the caller's record (sliding refresh)
-		expect(record.lastSeenAt).toBeGreaterThan(now - 25 * 60 * 60 * 1000);
+		expect(record.lastSeenAt).toBeGreaterThan(originalLastSeen);
 	});
 
 	it('deleteSession calls kv.del; subsequent readSession returns null', async () => {

@@ -14,7 +14,8 @@ const ATOMIC_GET_DEL_SCRIPT = `
 export type SignatureChallengePurpose =
 	| 'access_register'
 	| 'referral_join'
-	| 'referral_update_nickname';
+	| 'referral_update_nickname'
+	| 'session_login';
 
 interface SignatureChallengeRecord {
 	purpose: SignatureChallengePurpose;
@@ -119,6 +120,20 @@ Wallet: ${address}
 New Nickname: ${nickname}
 Nonce: ${nonce}
 Issued At: ${issuedAtIso}`;
+}
+
+function buildSessionLoginMessage(
+	address: string,
+	nonce: string,
+	issuedAtIso: string
+): string {
+	return `Sign in to st0x.
+
+Wallet: ${address}
+Nonce: ${nonce}
+Issued At: ${issuedAtIso}
+
+This signature does not authorize any transaction; it only proves wallet ownership for the session cookie. Expires in 5 minutes.`;
 }
 
 async function storeChallenge(record: SignatureChallengeRecord): Promise<void> {
@@ -313,4 +328,39 @@ export async function verifyReferralNicknameUpdateChallenge(
 	const normalizedNickname = nickname.trim();
 	const record = await consumeChallenge('referral_update_nickname', normalizedAddress, nonce);
 	return validateChallengeRecord(record, { nickname: normalizedNickname });
+}
+
+// SEC-03 / Plan 03-08a: session-login challenge purpose. User POSTs address
+// to /api/auth/session/challenge → this function issues a one-time nonce; the
+// user signs the returned message; /api/auth/session POST consumes the nonce
+// via verifySessionLoginChallenge atomically (same Lua GET+DEL precedent as
+// access_register). On success the session cookie is minted by walletSession.ts.
+export async function issueSessionLoginChallenge(address: string): Promise<ChallengeResponse> {
+	const normalizedAddress = normalizeAddress(address);
+	const nonce = generateNonce();
+	const issuedAt = nowMs();
+	const issuedAtIso = new Date(issuedAt).toISOString();
+	const expiresAt = issuedAt + CHALLENGE_TTL_MS;
+	const message = buildSessionLoginMessage(normalizedAddress, nonce, issuedAtIso);
+
+	await storeChallenge({
+		purpose: 'session_login',
+		address: normalizedAddress,
+		nonce,
+		message,
+		issuedAt,
+		expiresAt,
+		context: {}
+	});
+
+	return { nonce, message, expiresAt };
+}
+
+export async function verifySessionLoginChallenge(
+	address: string,
+	nonce: string
+): Promise<ChallengeValidationResult> {
+	const normalizedAddress = normalizeAddress(address);
+	const record = await consumeChallenge('session_login', normalizedAddress, nonce);
+	return validateChallengeRecord(record, {});
 }
