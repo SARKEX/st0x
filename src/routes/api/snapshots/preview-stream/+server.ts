@@ -8,8 +8,22 @@ import {
 	generateAllTokenSnapshots
 } from '$lib/server/snapshots/generator';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
+import { applyTieredRateLimit } from '$lib/server/rateLimit';
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, request, cookies }) => {
+	// SEC-06: rate-limit BEFORE constructing the SSE stream so a 429 returns plain JSON, not an event-stream.
+	// Plan 03-08b / SEC-03 will swap 'wallet-address' → 'session' cookie + KV lookup.
+	const cookieWallet = cookies.get('wallet-address');
+	const wallet =
+		cookieWallet && /^0x[a-fA-F0-9]{40}$/.test(cookieWallet) ? cookieWallet : null;
+	const rateLimitResponse = await applyTieredRateLimit(
+		request,
+		'snapshotsPreview',
+		'snapshots-preview-stream',
+		wallet
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
 	const blockParam = url.searchParams.get('block');
 
 	const stream = new ReadableStream({
