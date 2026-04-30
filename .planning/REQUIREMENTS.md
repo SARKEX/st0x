@@ -36,7 +36,7 @@ User-visible latency that drives bounce on the only page that actually matters f
 
 Latent risks the audit (`.planning/codebase/CONCERNS.md`) flagged. Not yet exploited but each represents a real attack path.
 
-- [ ] **SEC-01**: Hardcoded Alchemy API key is removed from source (`raindex.ts`, `networks.ts`, `accessCodes.ts`) and replaced with environment variables (`PUBLIC_BASE_RPC_URL` for client, `BASE_RPC_URL` for server); the existing committed key is rotated on deploy
+- [x] **SEC-01**: Hardcoded Alchemy API key is removed from source (`raindex.ts`, `networks.ts`, `accessCodes.ts`, `referrals.ts`) and replaced with environment variables (`PUBLIC_BASE_RPC_URL` for client, `BASE_RPC_URL` for server); the existing committed key is rotated on deploy *(structural removal complete 2026-04-30 / Plan 03-01; Vercel-side rotation tracked in 03-RUNBOOK.md / Plan 03-11)*
 - [ ] **SEC-02**: `SESSION_SECRET` and CSRF-secret fallback strings are removed; missing secrets cause the module to throw at load time in production (mirror the pattern already used for `CRON_SECRET`)
 - [ ] **SEC-03**: A server-issued session cookie (HttpOnly + Secure + SameSite=Strict) is bound to a verified wallet signature (extending the `signatureChallenge.ts` flow); the existing `wallet-address` cookie is downgraded to a non-authoritative hint and no longer accepted as proof of ownership in any remaining endpoints (`/api/access/check` plus any others surviving the deprecations in DEPR-01..DEPR-03)
 - [ ] **SEC-04**: CSRF tokens are bound to the session cookie via the double-submit-cookie pattern (server-issued session-id, validated on each CSRF-protected call) instead of being stateless and issued by an unauthenticated endpoint
@@ -113,7 +113,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | TRADE-03 | Phase 2 | Complete |
 | TRADE-04 | Phase 2 | Complete (02-07, 2026-04-29) |
 | PERF-01 | Phase 2 | Complete (02-08, 2026-04-29; numeric LCP validation HUMAN-UAT) |
-| SEC-01 | Phase 3 | Pending |
+| SEC-01 | Phase 3 | Complete (03-01, 2026-04-30) |
 | SEC-02 | Phase 3 | Pending |
 | SEC-03 | Phase 3 | Pending |
 | SEC-04 | Phase 3 | Pending |
