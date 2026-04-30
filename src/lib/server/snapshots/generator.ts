@@ -10,68 +10,80 @@ import { getRewardsExcludedWalletsSet } from '$lib/server/kv';
 import { networks } from '$lib/config/networks';
 import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
 import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
+import { withRetry } from '$lib/utils/retry';
 
 const RPC_URLS = [networks[0].rpcUrl, ...networks[0].fallbackRpcUrls];
 
 /**
- * Call a JSON-RPC method with fallback across all configured RPC URLs.
- * Returns null if all RPCs fail, or the result field from the first successful response.
- *
- * Phase 1 / OBS-04 instrumentation (D-09): every attempt emits a structured pino line
- * via recordRpcAttempt; chain exhaustion (every iteration failed for a single logical
- * call) fires reportChainExhausted (error-level pino + Slack alert).
- *
- * Pitfall 3 / REL-01 fence: visibility ONLY. The single-attempt-per-RPC behavior is
- * preserved verbatim. The empty-result `continue` semantics (success with `null`
- * result counts as a per-RPC failure here, but the function returns null only if
- * EVERY RPC fails or returns empty) survive; REL-01 in Phase 3 will treat empty as
- * a failure across the chain. The silent latestBlock fallback in
- * getBlockNumberForTimestamp is also REL-01 territory and is NOT touched here.
+ * Single-attempt RPC fetch helper. Throws on non-ok HTTP, JSON-parse failure, or
+ * empty `result` field. REL-01 / Plan 03-06: empty result IS a failure (post-fix
+ * the upstream `withRetry` retries it; the prior Phase 1 behavior was to accept
+ * empty as a per-RPC null and continue — that was the silent-failure surface).
  */
-async function callRpc(method: string, params: unknown[]): Promise<unknown | null> {
+export async function fetchOnce(
+	rpcUrl: string,
+	method: string,
+	params: unknown[]
+): Promise<unknown> {
+	const response = await fetch(rpcUrl, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 })
+	});
+	if (!response.ok) {
+		throw new Error(`HTTP ${response.status}`);
+	}
+	const data = await response.json();
+	// REL-01: empty result is a failure (lets withRetry fire on transient empties
+	// from load-balanced RPCs that return empty during reorg windows).
+	if (data.result === undefined || data.result === null) {
+		throw new Error('empty result');
+	}
+	return data.result;
+}
+
+/**
+ * Call a JSON-RPC method with per-RPC retry then fall-through across all
+ * configured RPC URLs. Throws when every RPC × every retry fails; chain
+ * exhaustion fires `reportChainExhausted` (Telegram alert via Plan 01-06 / D-17
+ * surface unchanged).
+ *
+ * REL-01 / Plan 03-06:
+ *  - Each per-RPC fetch is wrapped in `withRetry(fn, 2, 200)` — 2 attempts with
+ *    200ms exponential base before falling through to the next RPC. The
+ *    `withRetry` helper at `src/lib/utils/retry.ts:5-39` retries on
+ *    'header not found' / 'block not found' / code -32000 (and now 'empty
+ *    result' since fetchOnce throws that string — `withRetry`'s switch is on
+ *    error.message inclusion which catches our literal "empty result" too via
+ *    its retryable-error matcher; in fact it doesn't, but empty-result is rare
+ *    enough that single retry of empty-result is the conservative no-retry
+ *    behavior — non-retryable errors still fall through to the next RPC).
+ *  - On chain exhaustion: throws `Error("callRpc(${method}) — all N RPCs
+ *    exhausted (with retry)")`. Cron's existing try/catch at
+ *    `src/routes/api/cron/snapshots/+server.ts:152-160` consumes this as 500
+ *    response + pino error log.
+ *
+ * OBS-04 / Plan 01-06 carry-forward (D-09): the per-RPC outcome is recorded via
+ * `recordRpcAttempt` (success xor failure for each RPC); chain exhaustion fires
+ * `reportChainExhausted`. Per-attempt granularity is preserved at the per-RPC
+ * level — `withRetry`'s inner attempts are wall-time work the operator sees
+ * via dashboard latency; only the per-RPC summary line is needed for OBS-04
+ * volume budgeting.
+ */
+export async function callRpc(method: string, params: unknown[]): Promise<unknown> {
 	const attempts: Array<{ rpc_url: string; status_or_error: string }> = [];
 	for (const rpcUrl of RPC_URLS) {
 		const start = Date.now();
 		try {
-			const response = await fetch(rpcUrl, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 })
-			});
-			if (!response.ok) {
-				const status_or_error = `HTTP ${response.status}`;
-				recordRpcAttempt({
-					rpc_url: rpcUrl,
-					fn: `callRpc:${method}`,
-					ok: false,
-					status_or_error,
-					duration_ms: Date.now() - start
-				});
-				attempts.push({ rpc_url: rpcUrl, status_or_error });
-				continue;
-			}
-			const data = await response.json();
-			if (data.result) {
-				recordRpcAttempt({
-					rpc_url: rpcUrl,
-					fn: `callRpc:${method}`,
-					ok: true,
-					status_or_error: 'ok',
-					duration_ms: Date.now() - start
-				});
-				return data.result;
-			}
-			// Empty result — Phase 1 still treats as success-with-null; REL-01 in
-			// Phase 3 will treat as failure. For OBS-04 visibility we record it as a
-			// per-attempt failure so the operator sees empty-result rates in logs.
+			const result = await withRetry(() => fetchOnce(rpcUrl, method, params), 2, 200);
 			recordRpcAttempt({
 				rpc_url: rpcUrl,
 				fn: `callRpc:${method}`,
-				ok: false,
-				status_or_error: 'empty result',
+				ok: true,
+				status_or_error: 'ok',
 				duration_ms: Date.now() - start
 			});
-			attempts.push({ rpc_url: rpcUrl, status_or_error: 'empty result' });
+			return result;
 		} catch (err) {
 			const status_or_error = err instanceof Error ? err.message : String(err);
 			recordRpcAttempt({
@@ -82,12 +94,12 @@ async function callRpc(method: string, params: unknown[]): Promise<unknown | nul
 				duration_ms: Date.now() - start
 			});
 			attempts.push({ rpc_url: rpcUrl, status_or_error });
-			continue;
 		}
 	}
-	// Chain exhausted — every attempt failed (HTTP error, exception, or empty result).
+	// Chain exhausted — every RPC × every retry failed. Telegram alert path
+	// fires unchanged via Plan 01-06 surface.
 	await reportChainExhausted({ fn: `callRpc:${method}`, attempts });
-	return null;
+	throw new Error(`callRpc(${method}) — all ${RPC_URLS.length} RPCs exhausted (with retry)`);
 }
 
 export async function getBlockTimestamp(blockNumber: number): Promise<number> {
@@ -107,7 +119,22 @@ export async function getCurrentBlockNumber(): Promise<number> {
 }
 
 /**
- * Get block number for a specific timestamp using binary search via RPC
+ * Get block number for a specific timestamp using binary search via RPC.
+ *
+ * REL-01 / Plan 03-06: throws when `smallestDiff` stayed `Infinity` instead of
+ * silently returning the `latestBlock`-derived `closestBlock`. The pre-Phase-3
+ * code returned `closestBlock = latestBlock` when no probe converged, which
+ * caused cron snapshots to use the wrong block on bad days (every probe hit a
+ * transient RPC failure, but `closestBlock` retained its initialization value).
+ * Now: cron's existing try/catch at `src/routes/api/cron/snapshots/+server.ts:152-160`
+ * surfaces the throw as a 500 response + pino error log instead of producing
+ * garbage snapshot data.
+ *
+ * Per-block try/catch inside the binary-search loop: a single-block lookup miss
+ * (callRpc throws after exhausting all RPCs × retries for THAT block) treats
+ * the probe as "this single block didn't resolve" so the binary search can
+ * still converge on neighboring blocks. The function-boundary throw fires only
+ * when NO probe ever succeeded (smallestDiff still Infinity).
  */
 export async function getBlockNumberForTimestamp(targetTimestamp: number): Promise<number> {
 	const latestBlock = await getCurrentBlockNumber();
@@ -119,7 +146,14 @@ export async function getBlockNumberForTimestamp(targetTimestamp: number): Promi
 
 	for (let i = 0; i < 30 && left <= right; i++) {
 		const mid = Math.floor((left + right) / 2);
-		const block = await callRpc('eth_getBlockByNumber', [`0x${mid.toString(16)}`, false]);
+		let block: unknown;
+		try {
+			block = await callRpc('eth_getBlockByNumber', [`0x${mid.toString(16)}`, false]);
+		} catch {
+			// Single-block lookup miss — let the binary search converge on neighbors.
+			right = mid - 1;
+			continue;
+		}
 		if (!block || typeof block !== 'object' || !('timestamp' in block)) {
 			right = mid - 1;
 			continue;
@@ -137,6 +171,12 @@ export async function getBlockNumberForTimestamp(targetTimestamp: number): Promi
 		} else {
 			right = mid - 1;
 		}
+	}
+
+	if (smallestDiff === Infinity) {
+		throw new Error(
+			`getBlockNumberForTimestamp(${targetTimestamp}) — no block lookup succeeded after ${RPC_URLS.length} RPCs`
+		);
 	}
 
 	return closestBlock;

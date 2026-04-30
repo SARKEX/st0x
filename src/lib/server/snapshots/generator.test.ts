@@ -76,12 +76,12 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
-		// @ts-expect-error — assigning to global.fetch in tests
-		global.fetch = vi.fn();
+		global.fetch = vi.fn() as unknown as typeof global.fetch;
 	});
 
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
 	});
 
 	it('Test 1: returns result on first-attempt RPC success', async () => {
@@ -128,7 +128,11 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 		await expect(callRpc('eth_blockNumber', [])).rejects.toThrow(/all .* RPCs exhausted/);
 		// 3 RPCs × 1 outer record per RPC = 3 recordRpcAttempt calls (all failures)
 		expect(mockRecordRpcAttempt).toHaveBeenCalledTimes(3);
-		expect(mockRecordRpcAttempt.mock.calls.every((call) => call[0].ok === false)).toBe(true);
+		expect(
+			mockRecordRpcAttempt.mock.calls.every(
+				(call: unknown[]) => (call[0] as { ok: boolean }).ok === false
+			)
+		).toBe(true);
 		// Chain exhaustion fires exactly once
 		expect(mockReportChainExhausted).toHaveBeenCalledTimes(1);
 		expect(mockReportChainExhausted).toHaveBeenCalledWith(
@@ -143,13 +147,23 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 		expect(mockReportChainExhausted).toHaveBeenCalledTimes(1);
 		// Every per-RPC outcome was a failure
 		expect(mockRecordRpcAttempt).toHaveBeenCalledTimes(3);
-		expect(mockRecordRpcAttempt.mock.calls.every((call) => call[0].ok === false)).toBe(true);
+		expect(
+			mockRecordRpcAttempt.mock.calls.every(
+				(call: unknown[]) => (call[0] as { ok: boolean }).ok === false
+			)
+		).toBe(true);
 	});
 
 	it('Test 5: getBlockNumberForTimestamp throws when smallestDiff stays Infinity', async () => {
 		// First call (getCurrentBlockNumber → eth_blockNumber) succeeds so we reach the
 		// binary search; every subsequent eth_getBlockByNumber probe throws across all
 		// RPCs × retries → smallestDiff stays Infinity → function-boundary throw fires.
+		// Stub setTimeout so withRetry's exponential backoff doesn't bloat wall time
+		// (binary search × 30 iters × 3 RPCs × 1 retry = many setTimeouts).
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((cb: () => void) => {
+			cb();
+			return 0;
+		}) as unknown as typeof setTimeout);
 		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
 		// Successful blockNumber response, then ALL block-by-number probes fail.
 		fetchMock.mockImplementation(async (_url, init) => {
@@ -186,6 +200,10 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 		// getBlockNumberForTimestamp must propagate the throw — NOT swallow + return
 		// null/0/latestBlock. A future regression that re-introduces a null-swallow
 		// fails this test.
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((cb: () => void) => {
+			cb();
+			return 0;
+		}) as unknown as typeof setTimeout);
 		const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
 		fetchMock.mockImplementation(async (_url, init) => {
 			const body = JSON.parse((init as { body: string }).body);
