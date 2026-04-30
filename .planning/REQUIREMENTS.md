@@ -49,7 +49,7 @@ Latent risks the audit (`.planning/codebase/CONCERNS.md`) flagged. Not yet explo
 Failure modes that have caused user-visible outages or silent data corruption.
 
 - [x] **REL-01**: The RPC fallback chain in `src/lib/server/snapshots/generator.ts` retries each RPC with backoff, treats empty `result` fields as failure, and never silently falls back to `latestBlock` when all RPCs misbehave during `getBlockNumberForTimestamp`
-- [ ] **REL-02**: EIP-1271 / EIP-6492 signature verification in `accessCodes.ts` uses the same fallback RPC chain (with retry) as the snapshot generator, instead of a single hardcoded Alchemy RPC
+- [x] **REL-02**: EIP-1271 / EIP-6492 signature verification in `accessCodes.ts` uses the same fallback RPC chain (with retry) as the snapshot generator, instead of a single hardcoded Alchemy RPC *(complete 2026-04-30 / Plan 03-07; basePublicClient swapped to viem fallback([http × 6], { retryCount: 2, retryDelay: 200, rank: false }) reading networks[0]-derived RPC_URLS — same shape as generator.ts:14; OBS-04 fan-out relabeled to 'fallback-chain-base'; RESEARCH Pitfall 7 mitigated structurally — no outer retry wrapper around verifyMessage)*
 - [ ] **REL-03**: The Rain strategies registry is vendored into the bundle (`/static/registry/` or compiled-in) instead of being fetched live from GitHub raw at a pinned commit, so order deployment no longer depends on external SaaS availability or rate limits
 
 ### Test Coverage
@@ -121,7 +121,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | SEC-06 | Phase 3 | Complete (03-05, 2026-04-30) |
 | SEC-07 | Phase 3 | Complete (03-04, 2026-04-30) |
 | REL-01 | Phase 3 | Complete (03-06, 2026-04-30) |
-| REL-02 | Phase 3 | Pending |
+| REL-02 | Phase 3 | Complete (03-07, 2026-04-30) |
 | REL-03 | Phase 3 | Pending |
 | TEST-01 | Phase 4 | Pending |
 | TEST-02 | Phase 4 | Pending |
