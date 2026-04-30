@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 2 closed; Phase 3 unblocked
-stopped_at: "Phase 2 CLOSED — Plan 02-08 (PERF-01 + Phase 2 RUNBOOK + phase exit) complete. Four atomic commits: 80c6233 (Task 1: rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 + jspdf/jspdf-autotable removed; ~250KB minified bundle reduction), a04b0a7 (Task 2: LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe skeletons; MarketOrder kept eager as default panel/first-paint LCP element; build evidence: 4 code-split chunks visible — LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB), ee34014 (RUNBOOK scaffold), and final docs commit (RUNBOOK fill with Vercel API check finding + Phase 2 HUMAN-UAT framing + 02-08-SUMMARY.md + STATE/ROADMAP/REQUIREMENTS updates). Task 0 pre-deploy human-verify resolved by orchestrator-side Vercel API check (NOT user roundtrip, exactly like Phase 1 / 01-08). PERF-01 marked complete in REQUIREMENTS.md as STRUCTURALLY MET BY CODE WORK; numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (operator runs /gsd-verify-work after deploy + 24h Speed Insights window). Phase 2 closed: 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates preserved: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check baseline = 3 errors (Phase 2 target ✓), staleTime: Infinity preserved (T-02-08-03). Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked."
-last_updated: "2026-04-29T23:20:38.383Z"
-last_activity: 2026-04-29
+status: Phase 3 context gathered; ready for plan-phase
+stopped_at: "Phase 3 CONTEXT gathered (commit 52f165a, 03-CONTEXT.md + 03-DISCUSSION-LOG.md). User selected one umbrella discussion area (Phase-internal sequencing + rollout) covering 4 sub-questions. Decisions locked: D-01 wave shape (9 waves: SEC-01 → SEC-02 + SEC-05 + SEC-07 parallel → SEC-06 → REL-01 → REL-02 → SEC-03+04 paired → REL-03), D-02 single-Alchemy-key both sides (PUBLIC_BASE_RPC_URL = BASE_RPC_URL = same Alchemy app — explicit acceptance of bundle-key leak risk for operational simplicity), D-03 SEC-06 requireAdmin + heaviest applyTieredRateLimit tier on preview endpoints (cron is separate path; researcher confirms during planning), D-04 atomic-flip SEC-03+04 rollout in single coupled PR with one-time wallet re-sign at deploy + D-04a 30-day sliding session lifetime + D-04b hard UX guarantee that wallet signature is per-session never per-request. Carry-forward gates from Phases 1+2: TRADE-01 IO-perspective lockdown, TRADE-02 cycle severance, failWith() count ≥12, EMERGENCY_RATIO_MULTIPLIER = 0, svelte-check baseline = 3, staleTime: Infinity, Telegram alert wiring, single-chain Base 8453, no AA/+error.svelte/admin-refactor/external-log-drain. Claude's discretion preserved for: REL-01 retry shape + latestBlock-fallback replacement, REL-02 viem Transport choice, REL-03 vendor strategy, SEC-03+04 storage backend (Vercel KV is the obvious starting choice given signatureChallenge.ts precedent), SEC-03 logout endpoint shape, SEC-05 alphabet preservation, SEC-07 env-detection signal, SEC-02 throw site, phase-exit wave verification gates. Phase 3 ready for /gsd-plan-phase 3."
+last_updated: "2026-04-30T00:00:00.000Z"
+last_activity: 2026-04-30
 progress:
   total_phases: 4
   completed_phases: 0
@@ -27,8 +27,10 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 Phase: 3
 Plan: Not started
-Status: Phase 2 closed; Phase 3 unblocked
-Last activity: 2026-04-29
+Status: Phase 3 context gathered; ready for plan-phase
+Last activity: 2026-04-30
+Resume file: .planning/phases/phase-03-production-grade-hardening/03-CONTEXT.md
+Next step: `/gsd-plan-phase 3`
 
 Progress: [█████░░░░░] 50% (8/8 Phase 1 plans complete; 8/8 Phase 2 plans complete; 2/4 phases complete; 15/30 milestone REQ-IDs complete — Phase 2 closed all 5 REQ-IDs: TRADE-01..04 + PERF-01 structurally complete; PERF-01 numeric LCP validation deferred to post-deploy HUMAN-UAT)
 
