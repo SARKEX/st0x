@@ -142,7 +142,7 @@ Notes:
 - [x] 03-04-PLAN.md — SEC-07: hCaptcha VERCEL_ENV-based fail-closed (preview no longer bypasses) — depends_on: [03-01, 03-03]
 
 **Wave 3**
-- [ ] 03-05-PLAN.md — SEC-06: snapshotsPreview tier on rateLimit.ts + applyTieredRateLimit on preview/preview-stream + requireAdmin on POST generate
+- [x] 03-05-PLAN.md — SEC-06: snapshotsPreview tier on rateLimit.ts + applyTieredRateLimit on preview/preview-stream + requireAdmin on POST generate
 
 **Wave 4** *(REL-01 retry pattern unblocks REL-02)*
 - [ ] 03-06-PLAN.md — REL-01: generator.ts callRpc per-RPC withRetry + chain-exhaustion throw + kill silent latestBlock fallback in getBlockNumberForTimestamp
@@ -200,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
-| 3. Production-Grade Hardening | 4/11 | In progress | - |
+| 3. Production-Grade Hardening | 5/11 | In progress | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
