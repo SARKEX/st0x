@@ -151,7 +151,7 @@ Notes:
 - [x] 03-07-PLAN.md — REL-02: viem fallback transport for accessCodes.ts verifyWalletSignature; OBS-04 label rename to fallback-chain-base
 
 **Wave 6** *(SEC-03 + SEC-04 paired atomic flip; manual smoke gate; 03-08a + 03-08b ship as a single PR per Phase 2 D-08 atomic-flip-PR-shape pattern)*
-- [ ] 03-08a-PLAN.md — SEC-03 + SEC-04 infrastructure: walletSession.ts + session_login challenge + /api/auth/session + /api/auth/logout + session-bound CSRF + GET /api/auth/csrf gate
+- [x] 03-08a-PLAN.md — SEC-03 + SEC-04 infrastructure: walletSession.ts + session_login challenge + /api/auth/session + /api/auth/logout + session-bound CSRF + GET /api/auth/csrf gate (2026-04-30)
 - [ ] 03-08b-PLAN.md — SEC-03 consumer migration: hooks.server.ts (async getWalletFromRequest) + logger.ts + /api/access/check + /access/+page.server.ts + snapshot preview/preview-stream consumer migration + +layout.svelte hint downgrade + manual smoke checkpoint — depends_on: [03-08a]
 
 **Wave 7**
@@ -200,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
-| 3. Production-Grade Hardening | 7/11 | In progress | - |
+| 3. Production-Grade Hardening | 8/11 | In progress | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |

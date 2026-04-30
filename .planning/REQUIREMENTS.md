@@ -38,8 +38,8 @@ Latent risks the audit (`.planning/codebase/CONCERNS.md`) flagged. Not yet explo
 
 - [x] **SEC-01**: Hardcoded Alchemy API key is removed from source (`raindex.ts`, `networks.ts`, `accessCodes.ts`, `referrals.ts`) and replaced with environment variables (`PUBLIC_BASE_RPC_URL` for client, `BASE_RPC_URL` for server); the existing committed key is rotated on deploy *(structural removal complete 2026-04-30 / Plan 03-01; Vercel-side rotation tracked in 03-RUNBOOK.md / Plan 03-11)*
 - [x] **SEC-02**: `SESSION_SECRET` and CSRF-secret fallback strings are removed; missing secrets cause the module to throw at load time in production (mirror the pattern already used for `CRON_SECRET`) *(complete 2026-04-30 / Plan 03-02)*
-- [ ] **SEC-03**: A server-issued session cookie (HttpOnly + Secure + SameSite=Strict) is bound to a verified wallet signature (extending the `signatureChallenge.ts` flow); the existing `wallet-address` cookie is downgraded to a non-authoritative hint and no longer accepted as proof of ownership in any remaining endpoints (`/api/access/check` plus any others surviving the deprecations in DEPR-01..DEPR-03)
-- [ ] **SEC-04**: CSRF tokens are bound to the session cookie via the double-submit-cookie pattern (server-issued session-id, validated on each CSRF-protected call) instead of being stateless and issued by an unauthenticated endpoint
+- [ ] **SEC-03**: A server-issued session cookie (HttpOnly + Secure + SameSite=Strict) is bound to a verified wallet signature (extending the `signatureChallenge.ts` flow); the existing `wallet-address` cookie is downgraded to a non-authoritative hint and no longer accepted as proof of ownership in any remaining endpoints (`/api/access/check` plus any others surviving the deprecations in DEPR-01..DEPR-03) — *partial: infrastructure shipped 03-08a (2026-04-30); consumer migration pending 03-08b*
+- [x] **SEC-04**: CSRF tokens are bound to the session cookie via the double-submit-cookie pattern (server-issued session-id, validated on each CSRF-protected call) instead of being stateless and issued by an unauthenticated endpoint — *complete: csrf.ts session-bound HMAC + GET /api/auth/csrf gated on session cookie shipped 03-08a (2026-04-30)*
 - [x] **SEC-05**: Access codes (`accessCodes.ts`) and referral codes (`referrals.ts`) are generated with `crypto.randomBytes()` and rejection-sampled into the alphabet — `Math.random()` is removed from these paths *(complete 2026-04-30 / Plan 03-03)*
 - [x] **SEC-06**: `/api/snapshots/preview` and `/api/snapshots/preview-stream` have tiered rate limiting applied (`applyTieredRateLimit`); `POST /api/snapshots/generate` is admin-gated (`requireAdmin`) *(complete 2026-04-30 / Plan 03-05)*
 - [x] **SEC-07**: hCaptcha verification fails closed in non-production environments where `HCAPTCHA_SECRET` is missing on Vercel preview deploys (not just `process.env.NODE_ENV === 'production'`) *(complete 2026-04-30 / Plan 03-04)*
@@ -115,8 +115,8 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | PERF-01 | Phase 2 | Complete (02-08, 2026-04-29; numeric LCP validation HUMAN-UAT) |
 | SEC-01 | Phase 3 | Complete (03-01, 2026-04-30) |
 | SEC-02 | Phase 3 | Complete (03-02, 2026-04-30) |
-| SEC-03 | Phase 3 | Pending |
-| SEC-04 | Phase 3 | Pending |
+| SEC-03 | Phase 3 | Partial (03-08a infrastructure 2026-04-30; consumer migration pending 03-08b) |
+| SEC-04 | Phase 3 | Complete (03-08a, 2026-04-30) |
 | SEC-05 | Phase 3 | Complete (03-03, 2026-04-30) |
 | SEC-06 | Phase 3 | Complete (03-05, 2026-04-30) |
 | SEC-07 | Phase 3 | Complete (03-04, 2026-04-30) |
