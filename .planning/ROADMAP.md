@@ -131,7 +131,43 @@ Notes:
   3. CSRF tokens are bound to the session cookie (double-submit-cookie pattern) and access/referral codes are generated from `crypto.randomBytes()` — none of these auth-adjacent paths uses `Math.random()` or stateless tokens issued by an unauthenticated endpoint anymore
   4. Heavy/admin endpoints (`/api/snapshots/preview*`, `POST /api/snapshots/generate`) cannot be DoS'd or invoked by non-admins; hCaptcha fails closed in Vercel preview deploys, not just production
   5. The RPC fallback chain (in `generator.ts` and EIP-1271/6492 verification) retries each RPC with backoff, treats empty `result` as failure, never silently substitutes `latestBlock`, and the Rain strategies registry is served from our own bundle — order deployment no longer depends on GitHub raw availability or rate limits
-**Plans**: TBD
+**Plans**: 11 plans (8 waves; SEC-03+SEC-04 paired in Wave 6 per CONTEXT D-01; 03-08 split into 03-08a + 03-08b per checker fix #5 — both ship as a single atomic-flip PR, atomic-flip discipline preserved at PR-shape per Phase 2 D-08 pattern)
+
+**Wave 1** *(SEC-01 unblocks REL-02 by provisioning BASE_RPC_URL env var)*
+- [ ] 03-01-PLAN.md — SEC-01: Alchemy key removal + env-var swap (networks.ts + raindex.ts + accessCodes.ts) + .env.example
+
+**Wave 2** *(quick wins; 03-03 and 03-04 sequence after 03-01 due to accessCodes.ts file-modification chain)*
+- [ ] 03-02-PLAN.md — SEC-02: auth.ts + csrf.ts module-load fail-closed (mirrors CRON_SECRET precedent) — independent of 03-01
+- [ ] 03-03-PLAN.md — SEC-05: crypto.randomBytes + rejection sampling for accessCodes + referrals — depends_on: [03-01]
+- [ ] 03-04-PLAN.md — SEC-07: hCaptcha VERCEL_ENV-based fail-closed (preview no longer bypasses) — depends_on: [03-01, 03-03]
+
+**Wave 3**
+- [ ] 03-05-PLAN.md — SEC-06: snapshotsPreview tier on rateLimit.ts + applyTieredRateLimit on preview/preview-stream + requireAdmin on POST generate
+
+**Wave 4** *(REL-01 retry pattern unblocks REL-02)*
+- [ ] 03-06-PLAN.md — REL-01: generator.ts callRpc per-RPC withRetry + chain-exhaustion throw + kill silent latestBlock fallback in getBlockNumberForTimestamp
+
+**Wave 5** *(depends on Wave 1 SEC-01 env var + Wave 4 retry pattern)*
+- [ ] 03-07-PLAN.md — REL-02: viem fallback transport for accessCodes.ts verifyWalletSignature; OBS-04 label rename to fallback-chain-base
+
+**Wave 6** *(SEC-03 + SEC-04 paired atomic flip; manual smoke gate; 03-08a + 03-08b ship as a single PR per Phase 2 D-08 atomic-flip-PR-shape pattern)*
+- [ ] 03-08a-PLAN.md — SEC-03 + SEC-04 infrastructure: walletSession.ts + session_login challenge + /api/auth/session + /api/auth/logout + session-bound CSRF + GET /api/auth/csrf gate
+- [ ] 03-08b-PLAN.md — SEC-03 consumer migration: hooks.server.ts (async getWalletFromRequest) + logger.ts + /api/access/check + /access/+page.server.ts + snapshot preview/preview-stream consumer migration + +layout.svelte hint downgrade + manual smoke checkpoint — depends_on: [03-08a]
+
+**Wave 7**
+- [ ] 03-10-PLAN.md — REL-03: vendor static/registry/ from upstream commit 9dd64902; orderDeployment.ts swap to same-origin /registry
+
+**Wave 8** *(phase-exit + RUNBOOK)*
+- [ ] 03-11-PLAN.md — Phase-exit grep gates + 03-RUNBOOK.md (env-var checklist + Alchemy rotation + session smoke + smoke-test KV cleanup + registry refresh + Phase 4 hand-off) — depends_on: all 10 prior plans
+
+**Cross-cutting constraints** (truths that appear in 2+ plans):
+- **D-04b hard UX guarantee:** wallet signature is per-session, never per-request. hooks.server.ts reads cookie+KV only; never calls verifyWalletSignature on per-request path. Plan 03-08b manual smoke is the gate.
+- **OBS-04 carry-forward:** every retry attempt in generator.ts records via recordRpcAttempt; chain exhaustion fires reportChainExhausted (Telegram alert via Plan 01-06 surface unchanged).
+- **TRADE-01 / TRADE-02 / OBS-03 lockdown:** no Phase 3 work touches marketOrderExecution.ts, transaction.ts, or orderPerspective.ts; failWith() count ≥ 12 carried forward; 02-08 cross-cutting gates re-verified at 03-11 phase exit.
+- **Single Alchemy key both sides (D-02):** PUBLIC_BASE_RPC_URL = BASE_RPC_URL = same Alchemy app. Splitting into two apps is deferred unless quota abuse becomes measurable.
+- **Atomic flip for SEC-03+SEC-04 (D-04):** single coupled PR. One-time wallet-signature prompt at deploy; never per-request. wallet-address cookie downgraded to non-authoritative hint.
+- **Single-chain Base 8453 + two auth paths:** treat .planning/codebase/ as ground truth; CLAUDE.md aspirational multi-chain/AA content ignored until DRIFT-03 in Phase 4.
+**UI hint**: yes (one-time wallet-signature prompt on next visit post Wave 6 deploy; +layout.svelte comment downgrade)
 
 Notes:
 - SEC-03 (session cookie) and SEC-04 (CSRF binding) are coupled and should ship together. SEC-01 (Alchemy key) and SEC-02 (session/CSRF secret fallbacks) are independent and can land first as quick wins.
@@ -164,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
-| 3. Production-Grade Hardening | 0/TBD | Not started | - |
+| 3. Production-Grade Hardening | 0/10 | Planned | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |

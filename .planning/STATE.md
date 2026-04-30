@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 3 context gathered; ready for plan-phase
-stopped_at: "Phase 3 CONTEXT gathered (commit 52f165a, 03-CONTEXT.md + 03-DISCUSSION-LOG.md). User selected one umbrella discussion area (Phase-internal sequencing + rollout) covering 4 sub-questions. Decisions locked: D-01 wave shape (9 waves: SEC-01 → SEC-02 + SEC-05 + SEC-07 parallel → SEC-06 → REL-01 → REL-02 → SEC-03+04 paired → REL-03), D-02 single-Alchemy-key both sides (PUBLIC_BASE_RPC_URL = BASE_RPC_URL = same Alchemy app — explicit acceptance of bundle-key leak risk for operational simplicity), D-03 SEC-06 requireAdmin + heaviest applyTieredRateLimit tier on preview endpoints (cron is separate path; researcher confirms during planning), D-04 atomic-flip SEC-03+04 rollout in single coupled PR with one-time wallet re-sign at deploy + D-04a 30-day sliding session lifetime + D-04b hard UX guarantee that wallet signature is per-session never per-request. Carry-forward gates from Phases 1+2: TRADE-01 IO-perspective lockdown, TRADE-02 cycle severance, failWith() count ≥12, EMERGENCY_RATIO_MULTIPLIER = 0, svelte-check baseline = 3, staleTime: Infinity, Telegram alert wiring, single-chain Base 8453, no AA/+error.svelte/admin-refactor/external-log-drain. Claude's discretion preserved for: REL-01 retry shape + latestBlock-fallback replacement, REL-02 viem Transport choice, REL-03 vendor strategy, SEC-03+04 storage backend (Vercel KV is the obvious starting choice given signatureChallenge.ts precedent), SEC-03 logout endpoint shape, SEC-05 alphabet preservation, SEC-07 env-detection signal, SEC-02 throw site, phase-exit wave verification gates. Phase 3 ready for /gsd-plan-phase 3."
+status: Phase 3 planned; ready to execute
+stopped_at: "Phase 3 PLANNED (11 plans, 8 waves). Plan checker passed iteration 2/3 with all 5 prior BLOCKERs + 4 WARNINGs resolved (3 non-blocking warnings remain on 03-08a file-budget edge, 03-11 multi-task verification shape, locked-input CONTEXT stale ref). Plans: 03-01 (SEC-01 Alchemy env vars), 03-02 (SEC-02 fail-closed auth/csrf), 03-03 (SEC-05 crypto.randomBytes), 03-04 (SEC-07 hCaptcha VERCEL_ENV), 03-05 (SEC-06 snapshot rate-limit + admin gate; new snapshotsPreview tier), 03-06 (REL-01 callRpc retry + kill silent latestBlock; throw on chain exhaustion via reportChainExhausted), 03-07 (REL-02 viem fallback Transport), 03-08a (SEC-04 walletSession infra + new auth routes + csrf SEC-04 rewrite), 03-08b (SEC-03 consumer migration + manual smoke gate; ships single PR with 03-08a per Phase 2 D-08 atomic-flip-PR-shape), 03-10 (REL-03 static/registry vendor), 03-11 (phase-exit grep gates + 03-RUNBOOK.md). Wave 2 serialized via depends_on (03-01 → 03-03 → 03-04) due to accessCodes.ts file-conflict chain. Cross-cutting Phase 2 gates re-verified at phase-exit (TRADE-01 IO-perspective lockdown, TRADE-02 cycle severance, failWith() ≥ 12, EMERGENCY_RATIO_MULTIPLIER = 0, svelte-check baseline ≤ 3, staleTime: Infinity). VALIDATION.md nyquist_compliant: true. Next: /gsd-execute-phase 3."
 last_updated: "2026-04-30T00:00:00.000Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 11
   completed_plans: 0
   percent: 50
 ---
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 3
-Plan: Not started
-Status: Phase 3 context gathered; ready for plan-phase
+Plan: Not started (11 plans ready)
+Status: Phase 3 planned; ready to execute
 Last activity: 2026-04-30
-Resume file: .planning/phases/phase-03-production-grade-hardening/03-CONTEXT.md
-Next step: `/gsd-plan-phase 3`
+Resume file: .planning/phases/phase-03-production-grade-hardening/03-01-PLAN.md
+Next step: `/gsd-execute-phase 3`
 
 Progress: [█████░░░░░] 50% (8/8 Phase 1 plans complete; 8/8 Phase 2 plans complete; 2/4 phases complete; 15/30 milestone REQ-IDs complete — Phase 2 closed all 5 REQ-IDs: TRADE-01..04 + PERF-01 structurally complete; PERF-01 numeric LCP validation deferred to post-deploy HUMAN-UAT)
 
