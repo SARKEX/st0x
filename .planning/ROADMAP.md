@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Shrink the Surface, See What's Happening** - Delete dead/unused subsystems and stand up zero-to-one observability so the trade-execution refactor is diagnosable
 - [x] **Phase 2: Trade-Execution Backbone Refactor** - Kill the four-piece bug-factory (side semantics, transaction store, freshness illusion, execution math) and hit the trade-page first-paint target
-- [ ] **Phase 3: Production-Grade Hardening** - Close the latent security and reliability holes the audit flagged (secrets, sessions, RPC fallback, vendored registry)
+- [x] **Phase 3: Production-Grade Hardening** - Close the latent security and reliability holes the audit flagged (secrets, sessions, RPC fallback, vendored registry)
 - [ ] **Phase 4: Boundary Tests & Drift Cleanup** - Lock in regression coverage at the audit's high-risk boundaries and remove the documentation/code drift that produces silent breakage
 
 ## Phase Details
@@ -158,7 +158,7 @@ Notes:
 - [x] 03-10-PLAN.md — REL-03: vendor static/registry/ from upstream commit 9dd64902 (9 .rain + settings.yaml + same-origin manifest); orderDeployment.ts swap RAIN_STRATEGIES_COMMIT → publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest'; Phase-exit grep gate green; smoke-tested via npm run dev (2026-04-30)
 
 **Wave 8** *(phase-exit + RUNBOOK)*
-- [ ] 03-11-PLAN.md — Phase-exit grep gates + 03-RUNBOOK.md (env-var checklist + Alchemy rotation + session smoke + smoke-test KV cleanup + registry refresh + Phase 4 hand-off) — depends_on: all 10 prior plans
+- [x] 03-11-PLAN.md — Phase-exit grep gates + 03-RUNBOOK.md (env-var checklist + Alchemy rotation + session smoke + smoke-test KV cleanup + registry refresh + Phase 4 hand-off) — depends_on: all 10 prior plans (2026-04-30)
 
 **Cross-cutting constraints** (truths that appear in 2+ plans):
 - **D-04b hard UX guarantee:** wallet signature is per-session, never per-request. hooks.server.ts reads cookie+KV only; never calls verifyWalletSignature on per-request path. Plan 03-08b manual smoke is the gate.
@@ -200,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
-| 3. Production-Grade Hardening | 10/11 | In progress | - |
+| 3. Production-Grade Hardening | 11/11 | Complete | 2026-04-30 |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
