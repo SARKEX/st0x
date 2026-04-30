@@ -1,27 +1,45 @@
 import crypto from 'crypto';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, fallback, http } from 'viem';
 import { base } from 'viem/chains';
 import { getKv, kvGet, kvSet, kvDel, KV_KEYS } from './kv';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
+import { networks } from '$lib/config/networks';
 import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 
 // SEC-01 / Phase 3 D-02: Same Alchemy key on both sides per D-02 (single key, single
-// rotation event). REL-02 (Wave 5) wraps this in viem's fallback([...]) transport
-// using the same RPC_URLS shape as src/lib/server/snapshots/generator.ts:14.
-// D-02b: module-load throw mirrors the CRON_SECRET pattern at
-// src/routes/api/cron/snapshots/+server.ts:45 — fires at cold start in production,
-// surfaces in Vercel Logs immediately rather than at first request.
+// rotation event). REL-02 (Plan 03-07) now wraps this in viem's fallback([...])
+// transport using the same RPC_URLS shape as src/lib/server/snapshots/generator.ts:14
+// (single source of truth in networks.ts). D-02b: module-load throw mirrors the
+// CRON_SECRET pattern at src/routes/api/cron/snapshots/+server.ts:45 — fires at cold
+// start in production, surfaces in Vercel Logs immediately rather than at first request.
 const PRIMARY_RPC_URL = env.BASE_RPC_URL;
 if (!dev && !PRIMARY_RPC_URL) {
 	throw new Error('[accessCodes] BASE_RPC_URL required in production');
 }
 
+// REL-02 / Plan 03-07: viem fallback Transport — same RPC_URLS shape as generator.ts:14.
+// PRIMARY_RPC_URL is prepended only when set (production); in dev we fall through to
+// networks[0].fallbackRpcUrls (which already starts with https://base-rpc.publicnode.com,
+// the prior dev fallback URL).
+const RPC_URLS = (PRIMARY_RPC_URL ? [PRIMARY_RPC_URL] : []).concat(networks[0].fallbackRpcUrls);
+
 // Create a public client for Base network for signature verification.
 // Supports ECDSA (EOA), EIP-1271 (Smart Contracts), and EIP-6492 (Undeployed).
+//
+// RESEARCH Pattern 3 + Pitfall 7 (multiplicative-retry trap): viem's fallback transport
+// already retries each underlying http() transport `retryCount` times with `retryDelay`
+// backoff before falling through to the next URL — do NOT add an outer retry wrapper
+// (the helper at $lib/utils/retry.ts is reserved for callers without an inner retry
+// primitive, e.g. generator.ts:callRpc). `rank: false` keeps deterministic ordering
+// (primary first); per-RPC ranking would reorder by latency, which is incompatible
+// with our preference for the paid Alchemy endpoint as the first attempt.
 const basePublicClient = createPublicClient({
 	chain: base,
-	transport: http(PRIMARY_RPC_URL || 'https://base-rpc.publicnode.com') // dev fallback
+	transport: fallback(
+		RPC_URLS.map((url) => http(url)),
+		{ retryCount: 2, retryDelay: 200, rank: false }
+	)
 });
 
 // Types
@@ -90,15 +108,16 @@ Timestamp: ${Date.now()}`;
 // Verify a wallet signature
 // Supports: ECDSA (EOA), EIP-1271 (Smart Contract Wallets), EIP-6492 (Undeployed Counterfactual)
 //
-// Phase 1 / OBS-04 instrumentation (D-09): single-RPC verification — recordRpcAttempt
-// on attempt; reportChainExhausted on failure (single-attempt = chain exhausted on
-// failure, semantically). The `rpc_url` label is the literal `'alchemy-base-mainnet'`
-// (a stable identifier — REL-02 in Phase 3 will introduce a real fallback chain with
-// real URLs). The hardcoded Alchemy key in the basePublicClient is SEC-01 / Phase 3
-// scope; Phase 1 does NOT touch it.
+// OBS-04 instrumentation (D-09 + Plan 03-07): the `rpc_url` label is the synthetic
+// stable identifier `'fallback-chain-base'` — single per-call instrumentation per
+// RESEARCH §"Pattern 3" + Open Question 4. viem's fallback transport handles the
+// per-transport retry / fall-through internally; per-RPC granularity in OBS-04 logs
+// is deferred to Phase 4 (custom wrapped Transport with per-attempt instrumentation).
 //
-// Pitfall 3 / REL-02 fence: visibility ONLY. No retry, no fallback chain — those are
-// Phase 3.
+// RESEARCH Pitfall 7 (do not wrap): verifyMessage is NOT wrapped in any outer retry
+// helper — viem's fallback transport already retries each url retryCount times
+// before falling through; an outer wrap would multiply retries (N transports ×
+// M retryCount × K outer-retries).
 export async function verifyWalletSignature(
 	address: string,
 	message: string,
@@ -116,7 +135,7 @@ export async function verifyWalletSignature(
 			signature
 		});
 		recordRpcAttempt({
-			rpc_url: 'alchemy-base-mainnet',
+			rpc_url: 'fallback-chain-base',
 			fn: 'verifyWalletSignature',
 			ok: true,
 			status_or_error: valid ? 'verified' : 'mismatch',
@@ -127,17 +146,17 @@ export async function verifyWalletSignature(
 		const status_or_error =
 			error instanceof Error ? error.message : 'Unknown verification error';
 		recordRpcAttempt({
-			rpc_url: 'alchemy-base-mainnet',
+			rpc_url: 'fallback-chain-base',
 			fn: 'verifyWalletSignature',
 			ok: false,
 			status_or_error,
 			duration_ms: Date.now() - start
 		});
-		// Single-RPC for now (REL-02 in Phase 3 will add a real fallback chain).
-		// For Phase 1, single-RPC failure IS chain-exhaustion semantically.
+		// REL-02: viem fallback transport exhausted all RPCs (each retried retryCount
+		// times). Surface a chain-exhausted event for OBS-04 alerting.
 		await reportChainExhausted({
 			fn: 'verifyWalletSignature',
-			attempts: [{ rpc_url: 'alchemy-base-mainnet', status_or_error }]
+			attempts: [{ rpc_url: 'fallback-chain-base', status_or_error }]
 		});
 		console.error('[accessCodes] Signature verification failed:', {
 			message: status_or_error

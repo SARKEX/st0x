@@ -20,9 +20,14 @@ vi.mock('./kv', () => ({
 	}
 }));
 
+// REL-02 / Plan 03-07: accessCodes.ts now wraps its publicClient in viem's
+// `fallback([...])` Transport — the test viem mock must export `fallback` too,
+// otherwise the transitive import via `referrals.ts -> accessCodes.ts` fails at
+// module load with "No \"fallback\" export is defined on the \"viem\" mock".
 vi.mock('viem', () => ({
 	createPublicClient: vi.fn(() => ({ verifyMessage: vi.fn() })),
-	http: vi.fn(() => ({}))
+	http: vi.fn(() => ({})),
+	fallback: vi.fn(() => ({}))
 }));
 
 vi.mock('viem/chains', () => ({ base: { id: 8453 } }));
