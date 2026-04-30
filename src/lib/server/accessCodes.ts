@@ -2,13 +2,25 @@ import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { getKv, kvGet, kvSet, kvDel, KV_KEYS } from './kv';
 import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 
-// Create a public client for Base network for signature verification
-// Supports ECDSA (EOA), EIP-1271 (Smart Contracts), and EIP-6492 (Undeployed)
+// SEC-01 / Phase 3 D-02: Same Alchemy key on both sides per D-02 (single key, single
+// rotation event). REL-02 (Wave 5) wraps this in viem's fallback([...]) transport
+// using the same RPC_URLS shape as src/lib/server/snapshots/generator.ts:14.
+// D-02b: module-load throw mirrors the CRON_SECRET pattern at
+// src/routes/api/cron/snapshots/+server.ts:45 — fires at cold start in production,
+// surfaces in Vercel Logs immediately rather than at first request.
+const PRIMARY_RPC_URL = env.BASE_RPC_URL;
+if (!dev && !PRIMARY_RPC_URL) {
+	throw new Error('[accessCodes] BASE_RPC_URL required in production');
+}
+
+// Create a public client for Base network for signature verification.
+// Supports ECDSA (EOA), EIP-1271 (Smart Contracts), and EIP-6492 (Undeployed).
 const basePublicClient = createPublicClient({
 	chain: base,
-	transport: http('https://base-mainnet.g.alchemy.com/v2/y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9')
+	transport: http(PRIMARY_RPC_URL || 'https://base-rpc.publicnode.com') // dev fallback
 });
 
 // Types

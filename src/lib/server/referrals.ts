@@ -1,5 +1,7 @@
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
+import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 import {
 	getKv,
 	kvGet,
@@ -11,10 +13,18 @@ import {
 } from './kv';
 import { getWalletInfo, type RegisteredWallet } from './accessCodes';
 
+// SEC-01 / Phase 3 D-02: Same BASE_RPC_URL the accessCodes signature-verification path
+// uses (single Alchemy key both sides per D-02). Module-load throw mirrors the
+// CRON_SECRET pattern at src/routes/api/cron/snapshots/+server.ts:45.
+const PRIMARY_RPC_URL = env.BASE_RPC_URL;
+if (!dev && !PRIMARY_RPC_URL) {
+	throw new Error('[referrals] BASE_RPC_URL required in production');
+}
+
 // Create a public client for Base network for signature verification
 const basePublicClient = createPublicClient({
 	chain: base,
-	transport: http('https://base-mainnet.g.alchemy.com/v2/y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9')
+	transport: http(PRIMARY_RPC_URL || 'https://base-rpc.publicnode.com') // dev fallback
 });
 
 // Types
