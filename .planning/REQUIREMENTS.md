@@ -40,7 +40,7 @@ Latent risks the audit (`.planning/codebase/CONCERNS.md`) flagged. Not yet explo
 - [x] **SEC-02**: `SESSION_SECRET` and CSRF-secret fallback strings are removed; missing secrets cause the module to throw at load time in production (mirror the pattern already used for `CRON_SECRET`) *(complete 2026-04-30 / Plan 03-02)*
 - [ ] **SEC-03**: A server-issued session cookie (HttpOnly + Secure + SameSite=Strict) is bound to a verified wallet signature (extending the `signatureChallenge.ts` flow); the existing `wallet-address` cookie is downgraded to a non-authoritative hint and no longer accepted as proof of ownership in any remaining endpoints (`/api/access/check` plus any others surviving the deprecations in DEPR-01..DEPR-03)
 - [ ] **SEC-04**: CSRF tokens are bound to the session cookie via the double-submit-cookie pattern (server-issued session-id, validated on each CSRF-protected call) instead of being stateless and issued by an unauthenticated endpoint
-- [ ] **SEC-05**: Access codes (`accessCodes.ts`) and referral codes (`referrals.ts`) are generated with `crypto.randomBytes()` and rejection-sampled into the alphabet — `Math.random()` is removed from these paths
+- [x] **SEC-05**: Access codes (`accessCodes.ts`) and referral codes (`referrals.ts`) are generated with `crypto.randomBytes()` and rejection-sampled into the alphabet — `Math.random()` is removed from these paths *(complete 2026-04-30 / Plan 03-03)*
 - [ ] **SEC-06**: `/api/snapshots/preview` and `/api/snapshots/preview-stream` have tiered rate limiting applied (`applyTieredRateLimit`); `POST /api/snapshots/generate` is admin-gated (`requireAdmin`)
 - [ ] **SEC-07**: hCaptcha verification fails closed in non-production environments where `HCAPTCHA_SECRET` is missing on Vercel preview deploys (not just `process.env.NODE_ENV === 'production'`)
 
@@ -117,7 +117,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | SEC-02 | Phase 3 | Complete (03-02, 2026-04-30) |
 | SEC-03 | Phase 3 | Pending |
 | SEC-04 | Phase 3 | Pending |
-| SEC-05 | Phase 3 | Pending |
+| SEC-05 | Phase 3 | Complete (03-03, 2026-04-30) |
 | SEC-06 | Phase 3 | Pending |
 | SEC-07 | Phase 3 | Pending |
 | REL-01 | Phase 3 | Pending |

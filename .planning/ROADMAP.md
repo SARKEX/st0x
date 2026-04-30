@@ -138,7 +138,7 @@ Notes:
 
 **Wave 2** *(quick wins; 03-03 and 03-04 sequence after 03-01 due to accessCodes.ts file-modification chain)*
 - [x] 03-02-PLAN.md — SEC-02: auth.ts + csrf.ts module-load fail-closed (mirrors CRON_SECRET precedent) — independent of 03-01
-- [ ] 03-03-PLAN.md — SEC-05: crypto.randomBytes + rejection sampling for accessCodes + referrals — depends_on: [03-01]
+- [x] 03-03-PLAN.md — SEC-05: crypto.randomBytes + rejection sampling for accessCodes + referrals — depends_on: [03-01]
 - [ ] 03-04-PLAN.md — SEC-07: hCaptcha VERCEL_ENV-based fail-closed (preview no longer bypasses) — depends_on: [03-01, 03-03]
 
 **Wave 3**
@@ -200,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
-| 3. Production-Grade Hardening | 2/11 | In progress | - |
+| 3. Production-Grade Hardening | 3/11 | In progress | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
