@@ -5,9 +5,25 @@
  * but this module adds additional protection for sensitive endpoints.
  */
 import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 import crypto from 'crypto';
 
-const CSRF_SECRET = env.SESSION_SECRET || 'default-csrf-secret-change-in-production';
+// SEC-02: fail-closed at module load in production when neither CSRF_SECRET nor
+// SESSION_SECRET is set. Mirrors the CRON_SECRET precedent at
+// src/routes/api/cron/snapshots/+server.ts:42-49 (module-top throw so missing
+// secrets crash the lambda at cold start, surfacing in Vercel Logs immediately
+// rather than silently using a known/committed dev fallback).
+//
+// A4 aliasing: CSRF_SECRET is preferred when set; otherwise SESSION_SECRET is
+// used (preserves current production behaviour where Vercel project has only
+// SESSION_SECRET set). Plan 03-08a (SEC-04) will rewrite generateCsrfToken /
+// validateCsrfToken into session-bound variants; this plan only swaps the
+// secret-fallback string.
+if (!dev && !env.CSRF_SECRET && !env.SESSION_SECRET) {
+	throw new Error('[csrf] CSRF_SECRET or SESSION_SECRET required in production');
+}
+const CSRF_SECRET =
+	env.CSRF_SECRET || env.SESSION_SECRET || (dev ? 'dev-only-do-not-use-in-prod' : '');
 const TOKEN_VALIDITY_MS = 60 * 60 * 1000; // 1 hour
 
 /**
