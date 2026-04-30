@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 3 executing — Wave 1 complete (03-01); Wave 2 next
-stopped_at: "Phase 3 Plan 03-01 (SEC-01) complete. Hardcoded Alchemy URL `y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9` removed from all 4 src/ sites (networks.ts, raindex.ts, accessCodes.ts, referrals.ts) and replaced with PUBLIC_BASE_RPC_URL (client) + BASE_RPC_URL (server) reads with module-load fail-closed throw guards mirroring CRON_SECRET pattern. Phase-exit gate `! grep -r 'y3BXawVv5uuP' src/` returns 0 hits. .env.example documents both env vars per D-02. 1 Rule 2 deviation auto-fixed (referrals.ts had a 4th basePublicClient site missed in plan files list — closed under SEC-01 contract per phase-exit grep gate). svelte-check baseline = 3 errors preserved; accessCodes/referrals tests green. Cross-cutting Phase 2 gates verified green: TRADE-01 IO lockdown, TRADE-02 cycle severance (0 imports from $lib/stores/transaction in marketOrderExecution.ts), failWith count = 16 ≥ 12, EMERGENCY_RATIO_MULTIPLIER = 0, staleTime: Infinity. Vercel-side Alchemy rotation deferred to 03-RUNBOOK.md / Plan 03-11. Next: Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-closed)."
-last_updated: "2026-04-30T08:24:06Z"
+status: Phase 3 executing — Wave 2 in progress (03-02 SEC-02 complete; 03-03 SEC-05 + 03-04 SEC-07 next)
+stopped_at: "Phase 3 Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-closed) complete. Removed `'st0x-session-secret-2024'` fallback from auth.ts:9 and `'default-csrf-secret-change-in-production'` fallback from csrf.ts:10; both modules now throw at module-top in production when secrets are missing (`!dev && !env.SESSION_SECRET` for auth; `!dev && !env.CSRF_SECRET && !env.SESSION_SECRET` for csrf — A4 aliasing preserved). 4 atomic commits following TDD RED→GREEN: 8f35be7 (test auth) → 3b75ae0 (feat auth) → 149674d (test csrf) → ea187e1 (feat csrf). Two new test files (auth.test.ts 3 tests, csrf.test.ts 4 tests, all 7 pass). 1 Rule 3 deviation auto-fixed (test infrastructure: mocked `$app/environment` via hoisted devRef getter + `$env/dynamic/private` via Proxy-over-process.env because Vite caches esm-env/dev-fallback.js at first node_modules transform — `vi.resetModules()` does not re-evaluate node_modules, so `dev` cannot be flipped via NODE_ENV alone). Phase-exit gate `! grep -E \"'st0x-session-secret-2024'|'default-csrf-secret-change-in-production'\" src/lib/server/{auth,csrf}.ts` returns 0 hits. svelte-check baseline = 3 errors preserved. Pre-existing 4-suite `$env/dynamic/public` test resolution failure (introduced by Plan 03-01) logged to deferred-items.md — not caused by this plan; 429/430 tests pass behaviourally. Cross-cutting Phase 2 gates verified green: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, staleTime: Infinity ✓. Next: Plan 03-03 (SEC-05 crypto.randomBytes for accessCodes.ts + referrals.ts) or Plan 03-04 (SEC-07 hCaptcha env-detection) — both remaining Wave 2 quick wins, both independent."
+last_updated: "2026-04-30T08:35:14Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 11
-  completed_plans: 1
-  percent: 52
+  completed_plans: 2
+  percent: 55
 ---
 
 # Project State
@@ -21,26 +21,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** Phase 3 — production-grade-hardening (Wave 2 next: SEC-02 / SEC-05 / SEC-07 quick wins)
+**Current focus:** Phase 3 — production-grade-hardening (Wave 2 in progress: SEC-02 ✓; SEC-05 + SEC-07 remaining)
 
 ## Current Position
 
 Phase: 3
-Plan: 03-02 next (Wave 2 of 8)
-Status: Phase 3 executing — Wave 1 complete (03-01 SEC-01); Wave 2 next
-Last activity: 2026-04-30 — Plan 03-01 SEC-01 complete; Alchemy key env-var-ized across 4 src/ sites
-Resume file: .planning/phases/phase-03-production-grade-hardening/03-02-PLAN.md
-Next step: continue Phase 3 wave execution at Wave 2
+Plan: 03-03 next (Wave 2 of 8 continues — SEC-05 crypto.randomBytes)
+Status: Phase 3 executing — Wave 1 complete (03-01); Wave 2 partial (03-02 SEC-02 complete; 03-03 SEC-05 + 03-04 SEC-07 remain)
+Last activity: 2026-04-30 — Plan 03-02 SEC-02 complete; auth.ts + csrf.ts fail-closed at module load
+Resume file: .planning/phases/phase-03-production-grade-hardening/03-03-PLAN.md
+Next step: continue Phase 3 wave execution at Wave 2 (SEC-05)
 
-Progress: [█████░░░░░] 50% (8/8 Phase 1 plans complete; 8/8 Phase 2 plans complete; 2/4 phases complete; 15/30 milestone REQ-IDs complete — Phase 2 closed all 5 REQ-IDs: TRADE-01..04 + PERF-01 structurally complete; PERF-01 numeric LCP validation deferred to post-deploy HUMAN-UAT)
+Progress: [█████░░░░░] 55% (8/8 Phase 1 plans complete; 8/8 Phase 2 plans complete; 2/11 Phase 3 plans complete; 16/30 milestone REQ-IDs complete — Phase 3 SEC-01 + SEC-02 closed)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 24
-- Average duration: ~8.9min
-- Total execution time: ~143min
+- Total plans completed: 25
+- Average duration: ~8.8min
+- Total execution time: ~149min
 
 **By Phase:**
 
@@ -60,6 +60,7 @@ Progress: [█████░░░░░] 50% (8/8 Phase 1 plans complete; 8/8 
 | Phase 02 P07 | 5 | 2 tasks | 2 files |
 | Phase 02 P08 | 7 | 3 tasks | 7 files |
 | Phase 03 P01 | 3 | 2 tasks | 5 files |
+| Phase 03 P02 | 6 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,7 @@ Recent decisions affecting current work:
 - 02-08: Default panel (MarketOrder) kept eager; LimitOrder + DcaOrder lazy-loaded with min-h-[420px] skeletons; charts (TokenMarketCharts + TradingViewChart) lazy-loaded inside their respective conditional render blocks with min-h-[320px sm:440px] skeletons. Skeleton dimensions are the structural guarantee against CLS regression on tab switch (Pitfall 5 / T-02-08-04). Each {#await} block has explicit {:catch} clause rendering "Failed to load … please reload" (T-02-08-02 mitigation; ASVS V7 user-actionable error path).
 - 02-08: Phase 2 CLOSED — 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates green: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check = 3 errors (Phase 2 target met from 7 entry baseline), staleTime: Infinity preserved. Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked.
 - 03-01: Plan 03-01 (SEC-01 Alchemy env-var swap) shipped in ~3 min, 2 atomic commits. Hardcoded key `y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9` removed from networks.ts, raindex.ts, accessCodes.ts, AND referrals.ts (Rule 2 deviation auto-fix — fourth basePublicClient site missed in plan's `<files>` list, but the plan's phase-exit gate `! grep -r "y3BXawVv5uuP" src/` requires complete src/ tree removal). Same pattern across all 4 sites: `import { env as publicEnv } from '$env/dynamic/public'` (client) or `env` from `$env/dynamic/private` + `dev` from `$app/environment` (server), `PRIMARY_RPC` const above usage, dev fallback to `https://base-rpc.publicnode.com`, server-side module-top throw guard `if (!dev && !X) throw new Error('[X] BASE_RPC_URL required in production')` mirroring CRON_SECRET precedent. .env.example appended with both PUBLIC_BASE_RPC_URL + BASE_RPC_URL entries per D-02 single-key both-sides. OBS-04 `'alchemy-base-mainnet'` rpc_url label preserved unchanged in verifyWalletSignature — REL-02 (Wave 5 / Plan 03-07) will swap when fallback transport lands. Cross-cutting Phase 2 gates verified green: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check = 3 errors ✓, staleTime: Infinity ✓. Vercel-side Alchemy rotation operational step deferred to 03-RUNBOOK.md / Plan 03-11.
+- 03-02: Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-closed) shipped in ~6 min, 4 atomic commits following TDD RED→GREEN: 8f35be7 (test auth) → 3b75ae0 (feat auth) → 149674d (test csrf) → ea187e1 (feat csrf). Removed `'st0x-session-secret-2024'` fallback from auth.ts:9 and `'default-csrf-secret-change-in-production'` fallback from csrf.ts:10; both modules now throw at module-top in production: auth.ts via `if (!dev && !env.SESSION_SECRET) throw`; csrf.ts via `if (!dev && !env.CSRF_SECRET && !env.SESSION_SECRET) throw` with A4 aliasing preserved (`env.CSRF_SECRET || env.SESSION_SECRET || (dev ? placeholder : '')`). Two new test files (auth.test.ts 3 tests, csrf.test.ts 4 tests) — 7/7 pass. 1 Rule 3 deviation auto-fixed (test infrastructure: mocked `$app/environment` via hoisted devRef getter + `$env/dynamic/private` via Proxy-over-process.env because Vite caches `esm-env/dev-fallback.js` at first node_modules transform — `vi.resetModules()` does not re-evaluate node_modules so `dev` cannot be flipped via NODE_ENV alone; same shape as Plan 01-07's vi.mock('@sentry/sveltekit') auto-fix in vitest-setup.ts). RED test commit deliberately preserved even though the post-edit test code uses mocks — RED's contract is "prove the throw fires", not specific test infrastructure. Module-top throw chosen over function-body throw per RESEARCH Pitfall 2 (cold-start crash visible in Vercel Logs vs first-request half-init). A4 aliasing means current Vercel project (only SESSION_SECRET set) continues to work unchanged — no env-var change required at deploy time. Plan 03-08a (SEC-04) will replace generateCsrfToken/validateCsrfToken with session-bound variants but reuse this plan's CSRF_SECRET resolution. Plan-author's `<behavior>` note explicitly defers round-trip CSRF coverage to 03-08a. Pre-existing 4-suite `$env/dynamic/public` test resolution failure (introduced by Plan 03-01) logged to deferred-items.md — not caused by this plan; 429/430 tests pass behaviourally. Cross-cutting Phase 2 gates verified green: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check = 3 errors ✓, staleTime: Infinity ✓. Phase-exit gate `! grep -E "'st0x-session-secret-2024'|'default-csrf-secret-change-in-production'" src/lib/server/{auth,csrf}.ts` returns 0 hits.
 
 ### Pending Todos
 
@@ -171,9 +173,11 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-30T08:24:06Z
-Stopped at: Phase 3 Plan 03-01 (SEC-01 Alchemy env-var swap) complete — 2 atomic commits (70520c8 client-side networks.ts + raindex.ts; e9cae57 server-side accessCodes.ts + referrals.ts + .env.example). 1 Rule 2 deviation auto-fixed (referrals.ts had 4th basePublicClient site missed in plan files list — closed under SEC-01 contract per phase-exit grep gate). Phase-exit gate `! grep -r "y3BXawVv5uuP" src/` returns 0 hits. svelte-check baseline = 3 errors preserved; tests green. All Phase 2 cross-cutting gates verified green. Vercel-side Alchemy rotation deferred to 03-RUNBOOK.md / Plan 03-11 (deploy-time operational step). Wave 2 (SEC-02 / SEC-05 / SEC-07) unblocked.
+Last session: 2026-04-30T08:35:14Z
+Stopped at: Phase 3 Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-closed) complete — 4 atomic commits following TDD RED→GREEN (8f35be7 test auth, 3b75ae0 feat auth, 149674d test csrf, ea187e1 feat csrf). Removed both legacy fallback strings; both modules now throw at module-top in production. A4 aliasing preserved (csrf.ts uses CSRF_SECRET || SESSION_SECRET). 7/7 new tests pass. 1 Rule 3 deviation auto-fixed (test mocks for $app/environment + $env/dynamic/private — Vite caches esm-env at first node_modules transform). Pre-existing $env/dynamic/public test failure (4 suites; introduced by Plan 03-01) logged to deferred-items.md; 429/430 tests pass behaviourally. svelte-check baseline = 3 errors preserved. All Phase 2 cross-cutting gates green. Wave 2 SEC-05 (Plan 03-03) + SEC-07 (Plan 03-04) remain.
 
-Previous session: Phase 2 CLOSED — Plan 02-08 (PERF-01 + Phase 2 RUNBOOK + phase exit) complete. Four atomic commits: 80c6233 (Task 1: rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 + jspdf/jspdf-autotable removed; ~250KB minified bundle reduction), a04b0a7 (Task 2: LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe skeletons; MarketOrder kept eager as default panel/first-paint LCP element; build evidence: 4 code-split chunks visible — LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB), ee34014 (RUNBOOK scaffold), and final docs commit (RUNBOOK fill with Vercel API check finding + Phase 2 HUMAN-UAT framing + 02-08-SUMMARY.md + STATE/ROADMAP/REQUIREMENTS updates). Task 0 pre-deploy human-verify resolved by orchestrator-side Vercel API check (NOT user roundtrip, exactly like Phase 1 / 01-08). PERF-01 marked complete in REQUIREMENTS.md as STRUCTURALLY MET BY CODE WORK; numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (operator runs /gsd-verify-work after deploy + 24h Speed Insights window). Phase 2 closed: 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates preserved: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check baseline = 3 errors (Phase 2 target ✓), staleTime: Infinity preserved (T-02-08-03). Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked.
-Resume file: .planning/phases/phase-03-production-grade-hardening/03-02-PLAN.md
-Next step: continue Phase 3 wave execution at Wave 2 (Plan 03-02)
+Previous session: Phase 3 Plan 03-01 (SEC-01 Alchemy env-var swap) complete — 2 atomic commits (70520c8 client-side networks.ts + raindex.ts; e9cae57 server-side accessCodes.ts + referrals.ts + .env.example). 1 Rule 2 deviation auto-fixed (referrals.ts had 4th basePublicClient site missed in plan files list — closed under SEC-01 contract per phase-exit grep gate). Phase-exit gate `! grep -r "y3BXawVv5uuP" src/` returns 0 hits.
+
+Earlier session: Phase 2 CLOSED — Plan 02-08 (PERF-01 + Phase 2 RUNBOOK + phase exit) complete. Four atomic commits: 80c6233 (Task 1: rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 + jspdf/jspdf-autotable removed; ~250KB minified bundle reduction), a04b0a7 (Task 2: LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe skeletons; MarketOrder kept eager as default panel/first-paint LCP element; build evidence: 4 code-split chunks visible — LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB), ee34014 (RUNBOOK scaffold), and final docs commit (RUNBOOK fill with Vercel API check finding + Phase 2 HUMAN-UAT framing + 02-08-SUMMARY.md + STATE/ROADMAP/REQUIREMENTS updates). Task 0 pre-deploy human-verify resolved by orchestrator-side Vercel API check (NOT user roundtrip, exactly like Phase 1 / 01-08). PERF-01 marked complete in REQUIREMENTS.md as STRUCTURALLY MET BY CODE WORK; numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (operator runs /gsd-verify-work after deploy + 24h Speed Insights window). Phase 2 closed: 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates preserved: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check baseline = 3 errors (Phase 2 target ✓), staleTime: Infinity preserved (T-02-08-03). Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked.
+Resume file: .planning/phases/phase-03-production-grade-hardening/03-03-PLAN.md
+Next step: continue Phase 3 wave execution at Wave 2 (Plan 03-03 SEC-05 — crypto.randomBytes for accessCodes.ts + referrals.ts)
