@@ -85,28 +85,21 @@ describe('processRegistration', () => {
 		expect(result.error).toBe('Invalid access code');
 	});
 
-	it('fails closed for captcha when secret is missing in production', async () => {
+	it('fails closed for captcha when secret is missing (default — VERCEL_ENV undefined)', async () => {
+		// SEC-07 / Plan 03-04: Without VERCEL_ENV='development', verifyCaptcha
+		// fails closed regardless of NODE_ENV. The static $env/dynamic/private
+		// mock at the top of this file does not set VERCEL_ENV, so the gate
+		// evaluates `undefined !== 'development'` → true → return false.
 		process.env.NODE_ENV = 'production';
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { verifyCaptcha } = await import('./accessCodes');
 
 		const valid = await verifyCaptcha('captcha-token');
 		expect(valid).toBe(false);
-		expect(errorSpy).toHaveBeenCalledWith('HCAPTCHA_SECRET not configured in production');
-		errorSpy.mockRestore();
-	});
-
-	it('allows captcha bypass when secret is missing in non-production', async () => {
-		process.env.NODE_ENV = 'test';
-		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		const { verifyCaptcha } = await import('./accessCodes');
-
-		const valid = await verifyCaptcha('captcha-token');
-		expect(valid).toBe(true);
-		expect(warnSpy).toHaveBeenCalledWith(
-			'HCAPTCHA_SECRET not configured, skipping captcha verification'
+		expect(errorSpy).toHaveBeenCalledWith(
+			expect.stringContaining('HCAPTCHA_SECRET not configured')
 		);
-		warnSpy.mockRestore();
+		errorSpy.mockRestore();
 	});
 });
 

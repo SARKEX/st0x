@@ -147,16 +147,26 @@ export async function verifyWalletSignature(
 }
 
 // Verify hCaptcha token
+//
+// SEC-07 / Phase 3: Fail closed everywhere except local development. Vercel preview
+// deploys have VERCEL_ENV='preview' (NOT 'production') and would bypass a NODE_ENV-based
+// gate (NODE_ENV is 'production' on BOTH preview and production deploys per Vercel build
+// defaults). VERCEL_ENV is the canonical Vercel environment classifier with values
+// 'production' | 'preview' | 'development' (per Vercel docs); 'development' is local
+// `vercel dev` or local Node.
 export async function verifyCaptcha(token: string): Promise<boolean> {
 	const secret = env.HCAPTCHA_SECRET;
 	if (!secret) {
-		if (process.env.NODE_ENV === 'production') {
-			console.error('HCAPTCHA_SECRET not configured in production');
+		// Fail closed everywhere except local development.
+		if (env.VERCEL_ENV !== 'development') {
+			console.error(
+				'[accessCodes] HCAPTCHA_SECRET not configured (VERCEL_ENV=' + env.VERCEL_ENV + ')'
+			);
 			return false;
 		}
 
-		console.warn('HCAPTCHA_SECRET not configured, skipping captcha verification');
-		return true; // Allow in non-production without captcha
+		console.warn('[accessCodes] HCAPTCHA_SECRET not configured, skipping in development');
+		return true; // Allow in local development only
 	}
 
 	try {
