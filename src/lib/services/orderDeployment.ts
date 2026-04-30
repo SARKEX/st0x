@@ -12,6 +12,7 @@
  */
 
 import { get } from 'svelte/store';
+import { env as publicEnv } from '$env/dynamic/public';
 import type { Token } from '$lib/types';
 import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
@@ -51,11 +52,12 @@ type DotrainRegistryInstance = {
 	}>;
 };
 
-/** Pinned commit for rain.strategies registry (holds strategy order definitions). */
-const RAIN_STRATEGIES_COMMIT = '9dd64902161158395d588335f0a02e3a6d52f772';
-
-/** Registry URL for rain.strategies (order definitions + shared settings). */
-const REGISTRY_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/registry`;
+/**
+ * Registry URL for rain.strategies. Vendored under static/registry/ and served same-origin.
+ * Set PUBLIC_REGISTRY_URL only for staging tests against an alternate registry.
+ * Refresh procedure: see 03-RUNBOOK.md "Registry Refresh".
+ */
+const REGISTRY_URL = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
 
 /** Maps app network slug to the deployment key in rain.strategies registry. */
 function getDeploymentKey(raindexNetworkSlug: string): string {
