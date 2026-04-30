@@ -10,12 +10,18 @@ import {
 } from '$lib/server/snapshots/generator';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
+import { readSession } from '$lib/server/walletSession';
 
 export const GET: RequestHandler = async ({ url, request, cookies }) => {
-	// SEC-06: tiered rate-limit. Plan 03-08b / SEC-03 will swap 'wallet-address' → 'session' cookie + KV lookup.
-	const cookieWallet = cookies.get('wallet-address');
-	const wallet =
-		cookieWallet && /^0x[a-fA-F0-9]{40}$/.test(cookieWallet) ? cookieWallet : null;
+	// SEC-06 + SEC-03 (Plan 03-08b atomic flip): tiered rate-limit using the
+	// server-issued 'session' cookie + KV record (not the spoofable client-set
+	// 'wallet-address' cookie). Replaces the breadcrumb wired in Plan 03-05.
+	const sessionId = cookies.get('session');
+	let wallet: string | null = null;
+	if (sessionId && /^[a-f0-9]{64}$/.test(sessionId)) {
+		const record = await readSession(sessionId);
+		wallet = record?.walletAddress ?? null;
+	}
 	const rateLimitResponse = await applyTieredRateLimit(
 		request,
 		'snapshotsPreview',

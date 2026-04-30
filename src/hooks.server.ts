@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { verifySessionToken } from '$lib/server/auth';
 import { isWalletRegistered } from '$lib/server/accessCodes';
+import { readSession, maybeRefreshSession } from '$lib/server/walletSession';
 import { requestContextHandle } from '$lib/server/logger';
 import { scrubSentryEvent } from '$lib/observability/scrub';
 import { env } from '$env/dynamic/private';
@@ -271,18 +272,27 @@ function requiresWalletRegistration(path: string): boolean {
 	return false;
 }
 
-// Extract wallet address from cookies or request
-function getWalletFromRequest(cookies: {
+// Extract wallet address from the server-issued 'session' cookie + KV record.
+// SEC-03 (Plan 03-08b atomic flip): the client-set 'wallet-address' cookie is
+// no longer trusted as auth proof. Authentication is established by the
+// 'session' cookie minted at /api/auth/session POST after wallet signature
+// verification (Plan 03-08a). This reader (a) regex-validates the sessionId
+// shape, (b) looks up the KV record via readSession, and (c) fire-and-forgets
+// maybeRefreshSession to slide the 30-day TTL (throttled to 1 KV write per 24h
+// per session — D-04a UX guarantee).
+//
+// Per D-04b: wallet signature is NEVER re-prompted per request. This function
+// only reads KV state bound to a previously-verified wallet.
+async function getWalletFromRequest(cookies: {
 	get: (name: string) => string | undefined;
-}): string | null {
-	const walletAddress = cookies.get('wallet-address');
-
-	if (walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-		return walletAddress.toLowerCase();
-	}
-
-	// If no direct wallet cookie, return null (will check via API or client)
-	return null;
+}): Promise<string | null> {
+	const sessionId = cookies.get('session');
+	if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) return null;
+	const record = await readSession(sessionId);
+	if (!record) return null;
+	// Fire-and-forget sliding refresh; throttled internally to 1 KV write per 24h.
+	void maybeRefreshSession(sessionId, record);
+	return record.walletAddress;
 }
 
 function isAdminPath(path: string): boolean {
@@ -441,7 +451,7 @@ const existingHandle: Handle = async ({ event, resolve }) => {
 			}
 		}
 
-		const walletAddress = getWalletFromRequest(cookies);
+		const walletAddress = await getWalletFromRequest(cookies);
 
 		if (debug) {
 			console.log('[auth] protected path', path, { wallet: walletAddress });

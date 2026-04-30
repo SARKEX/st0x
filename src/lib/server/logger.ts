@@ -21,6 +21,7 @@ import { randomUUID } from 'node:crypto';
 import pino, { type Logger } from 'pino';
 import type { Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
+import { readSession } from './walletSession';
 
 interface RequestContext {
 	request_id: string;
@@ -90,12 +91,21 @@ export function getRequestContext(): RequestContext | undefined {
  * If the client supplies an `x-request-id` header we reuse it (cross-correlation);
  * otherwise we generate a CSPRNG-backed UUIDv4 via `crypto.randomUUID()` (T-05-06).
  *
- * Wallet best-effort: read the `wallet-address` cookie if present; null otherwise.
- * The same cookie is used by `getWalletFromRequest()` in hooks.server.ts.
+ * Wallet best-effort: SEC-03 (Plan 03-08b atomic flip) — wallet is now derived
+ * from the server-issued 'session' cookie + KV record (the same source of truth
+ * `getWalletFromRequest()` in hooks.server.ts uses). The client-set
+ * 'wallet-address' cookie is no longer trusted as auth proof. If the session
+ * cookie is missing or KV is unavailable, wallet is null (logs simply lack the
+ * field rather than blocking the request).
  */
 export const requestContextHandle: Handle = async ({ event, resolve }) => {
 	const request_id = event.request.headers.get('x-request-id') ?? randomUUID();
-	const wallet = event.cookies.get('wallet-address') ?? null;
+	const sessionId = event.cookies.get('session');
+	let wallet: string | null = null;
+	if (sessionId && /^[a-f0-9]{64}$/.test(sessionId)) {
+		const record = await readSession(sessionId);
+		wallet = record?.walletAddress ?? null;
+	}
 	const route = event.url.pathname;
 	const method = event.request.method;
 	const start_ms = Date.now();

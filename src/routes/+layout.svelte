@@ -60,8 +60,13 @@
 		await erckit.init();
 	};
 
-	// Set wallet-address cookie for server-side rate limiting
-	// This allows the server to use wallet-based rate limits instead of IP-based
+	// SEC-03 (Plan 03-08b atomic flip): the 'wallet-address' cookie is a
+	// NON-AUTHORITATIVE personalization hint. It is NEVER read by the server as
+	// proof of authentication — authentication is established exclusively by the
+	// server-issued HttpOnly 'session' cookie minted at /api/auth/session POST
+	// after wallet signature verification (Plan 03-08a). Do NOT use this cookie
+	// to grant any permission server-side. It remains here only because the
+	// client-side code still inspects it for UI personalization (e.g. nav state).
 	function setWalletCookie(address: string | null) {
 		if (typeof document === 'undefined') return;
 
