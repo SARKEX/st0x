@@ -155,7 +155,7 @@ Notes:
 - [x] 03-08b-PLAN.md — SEC-03 consumer migration: hooks.server.ts (async getWalletFromRequest) + logger.ts + /api/access/check + /access/+page.server.ts + snapshot preview/preview-stream consumer migration + +layout.svelte hint downgrade + manual smoke APPROVED on Vercel preview (11/11 structural checks PASS) (2026-04-30)
 
 **Wave 7**
-- [ ] 03-10-PLAN.md — REL-03: vendor static/registry/ from upstream commit 9dd64902; orderDeployment.ts swap to same-origin /registry
+- [x] 03-10-PLAN.md — REL-03: vendor static/registry/ from upstream commit 9dd64902 (9 .rain + settings.yaml + same-origin manifest); orderDeployment.ts swap RAIN_STRATEGIES_COMMIT → publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest'; Phase-exit grep gate green; smoke-tested via npm run dev (2026-04-30)
 
 **Wave 8** *(phase-exit + RUNBOOK)*
 - [ ] 03-11-PLAN.md — Phase-exit grep gates + 03-RUNBOOK.md (env-var checklist + Alchemy rotation + session smoke + smoke-test KV cleanup + registry refresh + Phase 4 hand-off) — depends_on: all 10 prior plans
@@ -200,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
-| 3. Production-Grade Hardening | 9/11 | In progress | - |
+| 3. Production-Grade Hardening | 10/11 | In progress | - |
 | 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
