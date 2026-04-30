@@ -242,6 +242,13 @@ function isPublicPath(path: string): boolean {
 	if (path === '/api/auth/csrf') return true;
 	if (path === '/api/newsletter') return true;
 
+	// SEC-03 / Plan 03-08a: session-login + logout endpoints. They self-check
+	// (challenge POST issues a nonce; session POST verifies signature; logout
+	// POST clears cookie). Hooks-level wallet-registration check would be
+	// circular — the cookie is what /api/auth/session is trying to mint.
+	if (path === '/api/auth/session' || path === '/api/auth/session/challenge') return true;
+	if (path === '/api/auth/logout') return true;
+
 	// TradingView endpoints (public data)
 	if (path.startsWith('/api/tradingview/')) return true;
 
