@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { env } from '$env/dynamic/private';
@@ -69,13 +70,25 @@ const devStore = {
 	codeWallets: new Map<string, string[]>() // Shared with accessCodes system
 };
 
+// SEC-05: rejection-sampled CSPRNG pick from a fixed alphabet.
+// `limit = floor(256/N)*N` discards bytes that would otherwise bias indices on
+// alphabets where N does not divide 256 evenly (RESEARCH §Pitfall 9). For the
+// 31-char referral alphabet limit = 248; bytes 248-255 trigger re-roll
+// (~3% rejection rate) — without this, indices 0-7 would carry 9/256 weight
+// vs 8/256 for indices 8-30.
+function pickFromAlphabet(alphabet: string): string {
+	const n = alphabet.length;
+	const limit = Math.floor(256 / n) * n;
+	while (true) {
+		const byte = crypto.randomBytes(1)[0];
+		if (byte < limit) return alphabet[byte % n];
+	}
+}
+
 // Generate a random referral code in format st0x-ref-xxxxxx
 export function generateReferralCode(): string {
 	const chars = 'abcdefghjkmnpqrstuvwxyz23456789'; // Removed confusing chars (0, o, 1, i, l)
-	const randomPart = Array.from(
-		{ length: 6 },
-		() => chars[Math.floor(Math.random() * chars.length)]
-	).join('');
+	const randomPart = Array.from({ length: 6 }, () => pickFromAlphabet(chars)).join('');
 	return `st0x-ref-${randomPart}`;
 }
 
