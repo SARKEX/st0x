@@ -109,3 +109,55 @@ describe('processRegistration', () => {
 		warnSpy.mockRestore();
 	});
 });
+
+describe('SEC-05 generateAccessCode CSPRNG', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		vi.restoreAllMocks();
+	});
+
+	it('returns format ST0X-XXXX-XXXX with 32-char alphabet', async () => {
+		const { generateAccessCode } = await import('./accessCodes');
+		const code = generateAccessCode();
+		expect(code).toMatch(/^ST0X-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/);
+	});
+
+	it('produces unique codes across 1000 calls', async () => {
+		const { generateAccessCode } = await import('./accessCodes');
+		const codes = new Set(Array.from({ length: 1000 }, () => generateAccessCode()));
+		expect(codes.size).toBe(1000);
+	});
+
+	it('has roughly uniform distribution across 10000 samples', async () => {
+		const { generateAccessCode } = await import('./accessCodes');
+		const counts: Record<string, number> = {};
+		for (let i = 0; i < 10000; i++) {
+			const code = generateAccessCode();
+			// strip "ST0X-" prefix and the dash between groups → 8 random chars
+			const body = code.slice('ST0X-'.length).replace('-', '');
+			for (const ch of body) counts[ch] = (counts[ch] || 0) + 1;
+		}
+		const totalPicks = 80000; // 10000 codes × 8 picks
+		const expected = totalPicks / 32;
+		for (const count of Object.values(counts)) {
+			// 10% wide tolerance to avoid flake; 32-char clean modulo (limit=256) means no rejection
+			expect(count).toBeGreaterThan(expected * 0.9);
+			expect(count).toBeLessThan(expected * 1.1);
+		}
+	});
+
+	it('uses crypto.randomBytes (CSPRNG witness via spy)', async () => {
+		const cryptoMod = await import('crypto');
+		const spy = vi.spyOn(cryptoMod.default, 'randomBytes');
+		const { generateAccessCode } = await import('./accessCodes');
+		const code = generateAccessCode();
+		// 32-char alphabet, limit = 256 → no rejection; exactly 8 byte draws per code.
+		expect(spy).toHaveBeenCalled();
+		// Witness: each call asks for exactly 1 byte (the per-pick CSPRNG draw shape).
+		for (const call of spy.mock.calls) {
+			expect(call[0]).toBe(1);
+		}
+		expect(code).toMatch(/^ST0X-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/);
+		spy.mockRestore();
+	});
+});
