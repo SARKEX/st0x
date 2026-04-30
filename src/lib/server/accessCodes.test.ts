@@ -1,8 +1,27 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockGetKv, mockVerifyMessage } = vi.hoisted(() => ({
+const {
+	mockGetKv,
+	mockVerifyMessage,
+	mockFallback,
+	mockHttp,
+	mockCreatePublicClient,
+	mockRecordRpcAttempt,
+	mockReportChainExhausted
+} = vi.hoisted(() => ({
 	mockGetKv: vi.fn(),
-	mockVerifyMessage: vi.fn()
+	mockVerifyMessage: vi.fn(),
+	mockFallback: vi.fn((transports: unknown[], opts: unknown) => ({
+		__isFallback: true,
+		transports,
+		opts
+	})),
+	mockHttp: vi.fn((url: string) => ({ __isHttp: true, url })),
+	mockCreatePublicClient: vi.fn(() => ({
+		verifyMessage: (...args: unknown[]) => mockVerifyMessage(...args)
+	})),
+	mockRecordRpcAttempt: vi.fn(),
+	mockReportChainExhausted: vi.fn().mockResolvedValue(undefined)
 }));
 
 vi.mock('./kv', () => ({
@@ -19,10 +38,14 @@ vi.mock('./kv', () => ({
 }));
 
 vi.mock('viem', () => ({
-	createPublicClient: vi.fn(() => ({
-		verifyMessage: mockVerifyMessage
-	})),
-	http: vi.fn(() => ({}))
+	createPublicClient: mockCreatePublicClient,
+	http: mockHttp,
+	fallback: mockFallback
+}));
+
+vi.mock('$lib/server/rpcMetrics', () => ({
+	recordRpcAttempt: mockRecordRpcAttempt,
+	reportChainExhausted: mockReportChainExhausted
 }));
 
 vi.mock('viem/chains', () => ({
@@ -224,5 +247,111 @@ describe('SEC-07 verifyCaptcha VERCEL_ENV fail-closed', () => {
 			'https://hcaptcha.com/siteverify',
 			expect.objectContaining({ method: 'POST' })
 		);
+	});
+});
+
+// REL-02 / Plan 03-07: viem fallback Transport for verifyWalletSignature.
+// Pins (a) basePublicClient construction shape uses fallback([http, http, ...], { retryCount, retryDelay, rank }),
+// (b) verifyWalletSignature OBS-04 fan-out uses the new 'fallback-chain-base' label, NOT the
+// legacy 'alchemy-base-mainnet' literal, (c) RESEARCH Pitfall 7 — no withRetry wrap (viem's
+// fallback transport already retries per-transport internally; outer wrap = multiplicative).
+describe('REL-02 fallback transport for verifyWalletSignature', () => {
+	const originalBaseRpcUrl = process.env.BASE_RPC_URL;
+
+	beforeEach(() => {
+		vi.resetModules();
+		vi.clearAllMocks();
+		process.env.BASE_RPC_URL = 'https://base-mainnet.example.com/v2/test-key';
+		// Ensure mocks return their default factory shape after clearAllMocks().
+		mockFallback.mockImplementation((transports: unknown[], opts: unknown) => ({
+			__isFallback: true,
+			transports,
+			opts
+		}));
+		mockHttp.mockImplementation((url: string) => ({ __isHttp: true, url }));
+		mockCreatePublicClient.mockImplementation(() => ({
+			verifyMessage: (...args: unknown[]) => mockVerifyMessage(...args)
+		}));
+		mockReportChainExhausted.mockResolvedValue(undefined);
+	});
+
+	afterAll(() => {
+		if (originalBaseRpcUrl !== undefined) process.env.BASE_RPC_URL = originalBaseRpcUrl;
+		else delete process.env.BASE_RPC_URL;
+	});
+
+	it('constructs basePublicClient with fallback transport (retryCount=2, retryDelay=200, rank=false)', async () => {
+		await import('./accessCodes');
+		expect(mockFallback).toHaveBeenCalled();
+		const [transports, opts] = mockFallback.mock.calls[0];
+		expect(Array.isArray(transports)).toBe(true);
+		expect((transports as unknown[]).length).toBeGreaterThanOrEqual(2);
+		expect(opts).toMatchObject({ retryCount: 2, retryDelay: 200, rank: false });
+	});
+
+	it('records ok=true with fallback-chain-base label on successful verification', async () => {
+		mockVerifyMessage.mockResolvedValue(true);
+		const { verifyWalletSignature } = await import('./accessCodes');
+		const result = await verifyWalletSignature(
+			'0x' + '1'.repeat(40),
+			'message',
+			('0x' + '2'.repeat(130)) as `0x${string}`
+		);
+		expect(result).toBe(true);
+		expect(mockRecordRpcAttempt).toHaveBeenCalledWith(
+			expect.objectContaining({
+				rpc_url: 'fallback-chain-base',
+				fn: 'verifyWalletSignature',
+				ok: true,
+				status_or_error: 'verified'
+			})
+		);
+	});
+
+	it('records ok=true status=mismatch when verification returns false', async () => {
+		mockVerifyMessage.mockResolvedValue(false);
+		const { verifyWalletSignature } = await import('./accessCodes');
+		const result = await verifyWalletSignature(
+			'0x' + '1'.repeat(40),
+			'message',
+			('0x' + '2'.repeat(130)) as `0x${string}`
+		);
+		expect(result).toBe(false);
+		expect(mockRecordRpcAttempt).toHaveBeenCalledWith(
+			expect.objectContaining({
+				rpc_url: 'fallback-chain-base',
+				fn: 'verifyWalletSignature',
+				ok: true,
+				status_or_error: 'mismatch'
+			})
+		);
+	});
+
+	it('records ok=false + reports chain exhausted when verifyMessage throws', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		mockVerifyMessage.mockRejectedValue(new Error('Network unreachable'));
+		const { verifyWalletSignature } = await import('./accessCodes');
+		const result = await verifyWalletSignature(
+			'0x' + '1'.repeat(40),
+			'message',
+			('0x' + '2'.repeat(130)) as `0x${string}`
+		);
+		expect(result).toBe(false);
+		expect(mockRecordRpcAttempt).toHaveBeenCalledWith(
+			expect.objectContaining({
+				rpc_url: 'fallback-chain-base',
+				fn: 'verifyWalletSignature',
+				ok: false
+			})
+		);
+		expect(mockReportChainExhausted).toHaveBeenCalledWith(
+			expect.objectContaining({
+				fn: 'verifyWalletSignature',
+				attempts: expect.arrayContaining([
+					expect.objectContaining({ rpc_url: 'fallback-chain-base' })
+				])
+			})
+		);
+		errorSpy.mockRestore();
 	});
 });
