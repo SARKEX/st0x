@@ -75,3 +75,75 @@ describe('csrf.ts SEC-02 fail-closed', () => {
 		expect(mod).toBeDefined();
 	});
 });
+
+describe('SEC-04 session-bound CSRF', () => {
+	const originalNodeEnv = process.env.NODE_ENV;
+	const originalSessionSecret = process.env.SESSION_SECRET;
+	const originalCsrfSecret = process.env.CSRF_SECRET;
+
+	beforeEach(() => {
+		vi.resetModules();
+		devRef.value = true;
+		process.env.NODE_ENV = 'test';
+		// Provide a stable test secret so module-load doesn't need fail-closed pathway
+		process.env.SESSION_SECRET = 'sec-04-test-session-secret';
+		delete process.env.CSRF_SECRET;
+	});
+
+	afterAll(() => {
+		process.env.NODE_ENV = originalNodeEnv;
+		if (originalSessionSecret !== undefined) {
+			process.env.SESSION_SECRET = originalSessionSecret;
+		} else {
+			delete process.env.SESSION_SECRET;
+		}
+		if (originalCsrfSecret !== undefined) {
+			process.env.CSRF_SECRET = originalCsrfSecret;
+		} else {
+			delete process.env.CSRF_SECRET;
+		}
+	});
+
+	it('round-trip: generateCsrfTokenForSession + validateCsrfTokenForSession returns true (32-hex-char token)', async () => {
+		const { generateCsrfTokenForSession, validateCsrfTokenForSession } = await import('./csrf');
+		const sessionId = 'a'.repeat(64);
+		const token = generateCsrfTokenForSession(sessionId);
+		expect(token).toMatch(/^[a-f0-9]{32}$/);
+		expect(validateCsrfTokenForSession(token, sessionId)).toBe(true);
+	});
+
+	it('cross-session token rejected (HMAC mismatch)', async () => {
+		const { generateCsrfTokenForSession, validateCsrfTokenForSession } = await import('./csrf');
+		const tokenA = generateCsrfTokenForSession('session-A');
+		expect(validateCsrfTokenForSession(tokenA, 'session-B')).toBe(false);
+	});
+
+	it('missing inputs rejected (defensive)', async () => {
+		const { generateCsrfTokenForSession, validateCsrfTokenForSession } = await import('./csrf');
+		const sessionId = 'session-id';
+		const token = generateCsrfTokenForSession(sessionId);
+		expect(validateCsrfTokenForSession('', sessionId)).toBe(false);
+		expect(validateCsrfTokenForSession(token, '')).toBe(false);
+		expect(validateCsrfTokenForSession(token, undefined as never)).toBe(false);
+		expect(validateCsrfTokenForSession(undefined as never, sessionId)).toBe(false);
+	});
+
+	it('length-mismatched token rejected before timingSafeEqual is called', async () => {
+		const { validateCsrfTokenForSession } = await import('./csrf');
+		// Short token cannot match a 32-hex-char HMAC
+		expect(validateCsrfTokenForSession('short', 'any-session-id')).toBe(false);
+	});
+
+	it('uses crypto.timingSafeEqual for constant-time compare', async () => {
+		const crypto = await import('crypto');
+		const spy = vi.spyOn(crypto.default, 'timingSafeEqual');
+		const { generateCsrfTokenForSession, validateCsrfTokenForSession } = await import('./csrf');
+
+		const sessionId = 'spy-session-id';
+		const token = generateCsrfTokenForSession(sessionId);
+		validateCsrfTokenForSession(token, sessionId);
+
+		expect(spy).toHaveBeenCalled();
+		spy.mockRestore();
+	});
+});
