@@ -2,8 +2,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // SEC-02 fail-closed test: mock both `$app/environment` and `$env/dynamic/private`.
 // Same boilerplate as auth.test.ts — see that file for the rationale.
-// Round-trip coverage on session-bound CSRF lives in Plan 03-08a (SEC-04) which
-// will replace generateCsrfToken/validateCsrfToken with session-bound variants.
+// Plan 03-08a (SEC-04) replaced the prior stateless generate/validate token API
+// with session-bound generateCsrfTokenForSession/validateCsrfTokenForSession;
+// round-trip coverage now lives in the SEC-04 describe block below.
 const { devRef } = vi.hoisted(() => ({ devRef: { value: true } }));
 
 vi.mock('$app/environment', () => ({

@@ -1,92 +1,63 @@
 /**
- * CSRF Protection utilities for server-side request validation
+ * CSRF Protection — session-bound double-submit-cookie pattern (SEC-04).
  *
- * SvelteKit automatically includes some CSRF protection via the Origin header check,
- * but this module adds additional protection for sensitive endpoints.
+ * Replaces the prior stateless timestamp-encoded token (Phase 3 Plan 03-08a):
+ * tokens are now bound to the server-issued session-id via HMAC(sessionId,
+ * CSRF_SECRET). Tokens can only be issued AFTER a session cookie exists
+ * (GET /api/auth/csrf returns 401 without it). Validation is HTTP-level —
+ * never re-prompts wallet signature (CONTEXT D-04b hard guarantee).
+ *
+ * SvelteKit also includes built-in Origin header CSRF protection; this module
+ * is defense-in-depth on top of that.
  */
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
 import crypto from 'crypto';
 
-// SEC-02: fail-closed at module load in production when neither CSRF_SECRET nor
-// SESSION_SECRET is set. Mirrors the CRON_SECRET precedent at
-// src/routes/api/cron/snapshots/+server.ts:42-49 (module-top throw so missing
+// SEC-02 (Plan 03-02): fail-closed at module load in production when neither
+// CSRF_SECRET nor SESSION_SECRET is set. Mirrors the CRON_SECRET precedent at
+// src/routes/api/cron/snapshots/+server.ts:42-49 — module-top throw so missing
 // secrets crash the lambda at cold start, surfacing in Vercel Logs immediately
-// rather than silently using a known/committed dev fallback).
+// rather than silently using a known/committed dev fallback.
 //
 // A4 aliasing: CSRF_SECRET is preferred when set; otherwise SESSION_SECRET is
 // used (preserves current production behaviour where Vercel project has only
-// SESSION_SECRET set). Plan 03-08a (SEC-04) will rewrite generateCsrfToken /
-// validateCsrfToken into session-bound variants; this plan only swaps the
-// secret-fallback string.
+// SESSION_SECRET set).
 if (!dev && !env.CSRF_SECRET && !env.SESSION_SECRET) {
 	throw new Error('[csrf] CSRF_SECRET or SESSION_SECRET required in production');
 }
 const CSRF_SECRET =
 	env.CSRF_SECRET || env.SESSION_SECRET || (dev ? 'dev-only-do-not-use-in-prod' : '');
-const TOKEN_VALIDITY_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * Generate a CSRF token that can be validated server-side
- * The token includes a timestamp to enforce expiration
+ * Generate a CSRF token bound to a session-id via HMAC. Caller must provide
+ * a verified session-id (from the 'session' cookie minted at /api/auth/session).
+ *
+ * Returns the first 32 hex chars of HMAC-SHA256(sessionId, CSRF_SECRET) — same
+ * truncation length the Phase 2 token signature used. Tokens regenerate on
+ * session change (new session-id ⇒ different HMAC), so stale tokens fail
+ * cleanly after re-login.
  */
-export function generateCsrfToken(): string {
-	const timestamp = Date.now().toString(36);
-	const randomBytes = crypto.randomBytes(16).toString('hex');
-	const data = `${timestamp}.${randomBytes}`;
-	const signature = crypto
-		.createHmac('sha256', CSRF_SECRET)
-		.update(data)
-		.digest('hex')
-		.slice(0, 16);
-
-	return `${data}.${signature}`;
+export function generateCsrfTokenForSession(sessionId: string): string {
+	return crypto.createHmac('sha256', CSRF_SECRET).update(sessionId).digest('hex').slice(0, 32);
 }
 
 /**
- * Validate a CSRF token
- * Checks both the signature and the timestamp
+ * Validate a CSRF token against the session-id it should have been bound to.
+ * Returns false on missing inputs, length mismatch, or HMAC mismatch. Uses
+ * crypto.timingSafeEqual to prevent timing-leak compare. Per CONTEXT D-04b:
+ * never re-prompts wallet signature — purely an HTTP-level check.
  */
-export function validateCsrfToken(token: string): boolean {
-	if (!token || typeof token !== 'string') {
-		return false;
-	}
-
-	const parts = token.split('.');
-	if (parts.length !== 3) {
-		return false;
-	}
-
-	const [timestamp, randomBytes, providedSignature] = parts;
-
-	// Verify timestamp is not expired
-	const tokenTime = parseInt(timestamp, 36);
-	if (isNaN(tokenTime) || Date.now() - tokenTime > TOKEN_VALIDITY_MS) {
-		return false;
-	}
-
-	// Verify signature
-	const data = `${timestamp}.${randomBytes}`;
-	const expectedSignature = crypto
-		.createHmac('sha256', CSRF_SECRET)
-		.update(data)
-		.digest('hex')
-		.slice(0, 16);
-
-	// Constant-time comparison to prevent timing attacks
-	if (providedSignature.length !== expectedSignature.length) {
-		return false;
-	}
-
-	return crypto.timingSafeEqual(
-		Buffer.from(providedSignature, 'utf8'),
-		Buffer.from(expectedSignature, 'utf8')
-	);
+export function validateCsrfTokenForSession(token: string, sessionId: string): boolean {
+	if (!token || !sessionId) return false;
+	const expected = generateCsrfTokenForSession(sessionId);
+	if (token.length !== expected.length) return false;
+	return crypto.timingSafeEqual(Buffer.from(token, 'utf8'), Buffer.from(expected, 'utf8'));
 }
 
 /**
  * Validate request origin for CSRF protection
- * This is a defense-in-depth measure alongside SvelteKit's built-in Origin check
+ * Defense-in-depth alongside SvelteKit's built-in Origin check.
  */
 export function validateRequestOrigin(request: Request, allowedOrigins?: string[]): boolean {
 	const origin = request.headers.get('Origin');
