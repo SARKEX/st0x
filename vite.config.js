@@ -55,6 +55,7 @@ export default defineConfig(({ mode }) => ({
 	  },
 	  environment: 'jsdom',
 	  include: ['src/**/*.{test,spec}.{js,ts}', 'tests/**/*.{test,spec}.{js,ts}'],
+	  exclude: ['**/node_modules/**', '**/dist/**', 'tests/integration/**'],
 	  includeSource: ['src/**/*.{js,ts}', 'tests/**/*.{js,ts}'],
 	  setupFiles: ['./vitest-setup.ts']
 	}

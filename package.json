@@ -12,6 +12,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest",
+		"test:integration": "vitest --config vite.config.integration.js --passWithNoTests run",
 		"format": "prettier --write src",
 		"lint": "eslint --fix src",
 		"lint-check": "eslint src",
