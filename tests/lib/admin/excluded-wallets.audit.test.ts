@@ -43,7 +43,7 @@ describe('admin/excluded-wallets audit-log fan-out', () => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ action: 'add', address: '0xabc' })
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		expect(createAuditLogger).toHaveBeenCalledWith(event.request);
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
@@ -68,7 +68,7 @@ describe('admin/excluded-wallets audit-log fan-out', () => {
 			url: 'http://localhost/api/admin/excluded-wallets',
 			body: JSON.stringify({ action: 'remove', address: '0xabc' })
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
 		expect(logger.logSuccess).toHaveBeenCalledWith(
@@ -92,7 +92,7 @@ describe('admin/excluded-wallets audit-log fan-out', () => {
 			url: 'http://localhost/api/admin/excluded-wallets',
 			body: JSON.stringify({ action: 'add', address: '0xabc' })
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
 		expect(logger.logFailure).toHaveBeenCalledWith(
@@ -117,7 +117,7 @@ describe('admin/excluded-wallets audit-log fan-out', () => {
 			url: 'http://localhost/api/admin/excluded-wallets',
 			body: JSON.stringify({})
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
 		expect(logger.logSuccess).not.toHaveBeenCalled();

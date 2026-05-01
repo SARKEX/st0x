@@ -41,7 +41,7 @@ describe('admin/pool-wallets audit-log fan-out', () => {
 			url: 'http://localhost/api/admin/pool-wallets',
 			body: JSON.stringify({ action: 'add', address: '0xpool' })
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
 		expect(logger.logSuccess).toHaveBeenCalledWith(
@@ -65,7 +65,7 @@ describe('admin/pool-wallets audit-log fan-out', () => {
 			url: 'http://localhost/api/admin/pool-wallets',
 			body: JSON.stringify({ action: 'remove', address: '0xpool' })
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
 		expect(logger.logSuccess).toHaveBeenCalledWith(
@@ -89,7 +89,7 @@ describe('admin/pool-wallets audit-log fan-out', () => {
 			url: 'http://localhost/api/admin/pool-wallets',
 			body: JSON.stringify({ action: 'remove', address: '0xpool' })
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
 		expect(logger.logFailure).toHaveBeenCalledWith(
@@ -113,7 +113,7 @@ describe('admin/pool-wallets audit-log fan-out', () => {
 			url: 'http://localhost/api/admin/pool-wallets',
 			body: JSON.stringify({ action: 'foo', address: '0xpool' })
 		});
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
 		expect(logger.logSuccess).not.toHaveBeenCalled();

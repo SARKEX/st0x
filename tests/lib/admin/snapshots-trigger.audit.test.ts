@@ -69,7 +69,7 @@ describe('admin/snapshots/trigger audit-log fan-out', () => {
 
 	it('logs SNAPSHOT_TRIGGERED success on happy-path POST', async () => {
 		const event = makeEvent({ date: PAST_DATE, confirmText: 'CONFIRM' });
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		expect(createAuditLogger).toHaveBeenCalledWith(event.request);
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
@@ -90,7 +90,7 @@ describe('admin/snapshots/trigger audit-log fan-out', () => {
 		(generateAllTokenSnapshots as Mock).mockRejectedValue(new Error('generator boom'));
 
 		const event = makeEvent({ date: PAST_DATE, confirmText: 'CONFIRM' });
-		const response = await POST(event);
+		const response = await POST(event as Parameters<typeof POST>[0]);
 
 		// Endpoint propagates a 500 (success: false response body)
 		expect((response as Response).status).toBe(500);

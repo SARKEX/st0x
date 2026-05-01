@@ -65,7 +65,7 @@ describe('admin/snapshots/regenerate audit-log fan-out', () => {
 
 	it('logs SNAPSHOT_REGENERATED success on single-block regenerate', async () => {
 		const event = makeEvent({ blockNumber: 1234 });
-		await POST(event);
+		await POST(event as Parameters<typeof POST>[0]);
 
 		expect(createAuditLogger).toHaveBeenCalledWith(event.request);
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
@@ -87,7 +87,7 @@ describe('admin/snapshots/regenerate audit-log fan-out', () => {
 		(kvGet as Mock).mockRejectedValue(new Error('kv outage'));
 
 		const event = makeEvent({ blockNumber: 1234 });
-		const response = await POST(event);
+		const response = await POST(event as Parameters<typeof POST>[0]);
 
 		expect((response as Response).status).toBe(500);
 
