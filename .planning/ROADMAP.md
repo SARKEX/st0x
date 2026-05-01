@@ -223,6 +223,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
 | 3. Production-Grade Hardening | 11/11 | Complete | 2026-04-30 |
-| 4. Boundary Tests & Drift Cleanup | 10/10 | Complete   | 2026-05-01 |
+| 4. Boundary Tests & Drift Cleanup | 10/10 | Complete    | 2026-05-01 |
 
 **Stabilization milestone closed: 2026-05-01** — 33/33 v1 REQ-IDs across 4 phases (Phase 1: 8/8 DEPR-* + OBS-*; Phase 2: 5/5 TRADE-* + PERF-*; Phase 3: 10/10 SEC-* + REL-*; Phase 4: 7/7 TEST-* + DRIFT-*). HUMAN-UAT carry-forwards (PERF-01 numeric p75 LCP < 2.5s, SEC-03+04 D-04b runtime UX, anvil-fork CI run with archive-RPC `BASE_RPC_URL`, OBS-03 transcript-capture refresh) deferred to `/gsd-verify-work --milestone stabilization --human-uat` post-deploy per `04-RUNBOOK.md` §"Hand-off — Milestone Close".
