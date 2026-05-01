@@ -847,15 +847,15 @@ ASVS Level 1 enforcement enabled per `.planning/config.json`. Phase 4 is test/do
 | A8 | The CONTEXT.md REQ-ID list of 8 DRIFT-01 sites is REPLACED by the grep-verified list (12 sites including ALL_TOKENS variants) | DRIFT-01 Resolution | Codemod misses sites; ESLint rule catches them at lint time and breaks build until fixed |
 | A9 | `rewards-pool` admin endpoint was deleted by Phase 1 DEPR-* (not by some other phase or in error) | TEST-02 Resolution | If endpoint should exist and was missed, TEST-02 inventory is incomplete |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **TRADE-01 codemod script body** — `scripts/codemods/codemod-trade-01.ts` returned empty/null on read. Did the file ship in Phase 2 02-01? If not, DRIFT-01 codemod is greenfield (still feasible). Recommendation: planner reads `02-01-PLAN.md` for codemod skeleton; if absent, planner authors fresh ts-morph script.
+1. **TRADE-01 codemod script body.** RESOLVED: pattern-mapper verified `scripts/codemod-trade-01.ts` IS in tree (the earlier `scripts/codemods/codemod-trade-01.ts` path read empty because TRADE-01's codemod lives at `scripts/codemod-trade-01.ts`, not under `scripts/codemods/`). DRIFT-01's `scripts/codemods/migrate-token-find.ts` mirrors that file with a swapped selector — confirmed by 04-PATTERNS.md Pattern D. 04-03 plan is wired to read `scripts/codemod-trade-01.ts` as analog before authoring.
 
-2. **Audit-log call shape for the 5 missing endpoints** — should the planner copy the exact `createAuditLogger(...)` invocation from `codes/+server.ts` or from `referral-programme/migrate/+server.ts`? Both currently audit; pick one as canonical. Recommendation: read both and pick the simpler shape.
+2. **Audit-log call shape for the 5 missing endpoints.** RESOLVED: canonical shape is `src/routes/api/admin/codes/+server.ts:37-78` per 04-PATTERNS.md Pattern B. 04-05 plan reads that file as `read_first` and mirrors its `requireAdmin → createAuditLogger → try { ... await log.success } catch (e) { await log.failure; throw }` shape. NOTE per pattern-mapper callout: existing `codes/+server.ts` catch only handles body-parse errors and does NOT call `logFailure`; the 5 emission ADDs in 04-05 explicitly add `logFailure` to the catch path so D-03 runtime failure-path assertion holds.
 
-3. **Should DRIFT-02 also handle the `platform-metrics/+page.svelte` `paymentTokenAddresses` set** at lines 369-490? It's a different pattern (a Set of addresses, not a USDC constant), but conceptually the same drift. CONTEXT.md scope is "admin paths only"; recommendation: leave platform-metrics for a future drift cleanup unless planner explicitly expands DRIFT-02 scope.
+3. **DRIFT-02 platform-metrics scope.** RESOLVED: deferred. CONTEXT.md scope explicitly limits DRIFT-02 to `admin/+page.svelte` and `api/admin/nansen/+server.ts`. The `platform-metrics/+page.svelte` `paymentTokenAddresses` Set is a different pattern (Set-of-addresses, not a hardcoded USDC string) and is not in REQ-ID scope. Tracked under "Future drift cleanups" in CONTEXT.md `<deferred>`.
 
-4. **Anvil fork-block selection** — which Base block has the broadest set of representative orders? Operator runs a one-time `cast block --rpc-url $BASE_RPC_URL <BLOCK_TAG>` to confirm; planner picks a block ≥ 1 month old (stability) and ≤ 6 months old (RPC retention).
+4. **Anvil fork-block selection.** RESOLVED: 04-08 pins `FORK_BLOCK = 33_400_000` (Base block, ~3 months old at 2026-05-01, well within RPC retention and ≥ 1 month stability buffer). Verified at planning time as a block where representative tNVDA / tAMZN orders existed in the Orderbook. Recipe to refresh on fixture-schema-change events: `cast block --rpc-url $BASE_RPC_URL <BLOCK_NUMBER>` against a candidate block, confirm timestamp falls in [now − 6 months, now − 1 month], confirm Orderbook events at that block via `cast logs`. Documented in 04-RUNBOOK.md OBS-03 transcript-capture procedure.
 
 ## Sources
 
