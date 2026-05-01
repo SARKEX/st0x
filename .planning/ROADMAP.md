@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Shrink the Surface, See What's Happening** - Delete dead/unused subsystems and stand up zero-to-one observability so the trade-execution refactor is diagnosable
 - [x] **Phase 2: Trade-Execution Backbone Refactor** - Kill the four-piece bug-factory (side semantics, transaction store, freshness illusion, execution math) and hit the trade-page first-paint target
 - [x] **Phase 3: Production-Grade Hardening** - Close the latent security and reliability holes the audit flagged (secrets, sessions, RPC fallback, vendored registry)
-- [ ] **Phase 4: Boundary Tests & Drift Cleanup** - Lock in regression coverage at the audit's high-risk boundaries and remove the documentation/code drift that produces silent breakage
+- [x] **Phase 4: Boundary Tests & Drift Cleanup** - Lock in regression coverage at the audit's high-risk boundaries and remove the documentation/code drift that produces silent breakage
 
 ## Phase Details
 
@@ -184,7 +184,29 @@ Notes:
   3. Every state-mutating admin endpoint (rewards-pool, snapshots, swap-snapshot, tvl, wallet-statement, wallets, team-wallets, excluded-wallets, pool-wallets, nansen, plus survivors of DEPR-02) calls `createAuditLogger` and a test asserts the audit record is emitted on success and failure — admin actions can be reconstructed from logs
   4. Token lookups that have to handle the wrapped/unwrapped/legacy address triplet go through `getTokenByAnyAddress`, scattered hardcoded USDC constants are replaced with `isPaymentToken` / `getPaymentTokensForNetwork`, and a guard (ESLint rule or comment marker) prevents either pattern from regressing
   5. `CLAUDE.md` describes only what's actually shipped — single chain (Base 8453), two auth paths, no Rhinestone / EIP-7702 / `account-abstraction/` — and points at `.planning/codebase/CONCERNS.md` so future contributors land on accurate context
-**Plans**: TBD
+**Plans**: 10 plans (6 waves)
+
+**Wave 1**
+- [x] 04-01-PLAN.md — DRIFT-03: CLAUDE.md surgical edit + Ground Truth header pointing at .planning/codebase/
+
+**Wave 2**
+- [x] 04-02-PLAN.md — DRIFT-02: USDC hardcoding → getPaymentTokensForNetwork / isPaymentToken in admin/+page.svelte + api/admin/nansen/+server.ts
+
+**Wave 3**
+- [x] 04-03-PLAN.md — DRIFT-01: ts-morph codemod + ESLint no-restricted-syntax rule banning TOKENS.find / ALL_TOKENS.find outside allowlist; lint fixture
+
+**Wave 4** *(TEST-01 + TEST-02 in parallel — disjoint surfaces)*
+- [x] 04-04-PLAN.md — TEST-01: tests/hooks/{cors,csp,public-paths,admin-gate,wallet-session,bot-rejection}.test.ts + _helpers.ts factories
+- [x] 04-05-PLAN.md — TEST-02: tests/lib/admin/*.audit.test.ts (8 endpoints) + createAuditLogger ADD on 5 missing endpoints
+
+**Wave 5** *(TEST-03 split across 3 plans + TEST-04)*
+- [x] 04-06-PLAN.md — TEST-03 anvil scaffold: tests/helpers/anvil.ts + loadTranscript.ts + vitest.integration.config.ts + Foundry CI install step
+- [x] 04-07-PLAN.md — TEST-03 anvil suite: tests/integration/marketOrder/anvil-fork.test.ts (pinned at FORK_BLOCK 33_400_000)
+- [x] 04-08-PLAN.md — TEST-03 replay suite: tests/integration/marketOrder/replay-*.test.ts + ≥ 7 redacted JSON fixtures under tests/fixtures/marketOrder/
+- [x] 04-09-PLAN.md — TEST-04: src/lib/server/snapshots/scraper.test.ts (pagination + wrappedTokenTransfers fallback + transient subgraph failure)
+
+**Wave 6** *(phase-exit + RUNBOOK + milestone close)*
+- [x] 04-10-PLAN.md — Phase-exit grep gates + 04-RUNBOOK.md (Foundry/anvil CI + OBS-03 transcript-capture + DRIFT-01 codemod replay + milestone close handoff) — depends_on: all 9 prior plans (2026-05-01)
 
 Notes:
 - TEST-04 is conditional: if Phase 1's DEPR-02 decision was "remove," TEST-04 is closed by deletion (no new tests needed); if "keep with bandages," scraper edge-case tests must be written. Plan-phase resolves this against Phase 1 outcomes.
@@ -201,4 +223,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
 | 3. Production-Grade Hardening | 11/11 | Complete | 2026-04-30 |
-| 4. Boundary Tests & Drift Cleanup | 7/10 | In Progress|  |
+| 4. Boundary Tests & Drift Cleanup | 10/10 | Complete   | 2026-05-01 |
+
+**Stabilization milestone closed: 2026-05-01** — 33/33 v1 REQ-IDs across 4 phases (Phase 1: 8/8 DEPR-* + OBS-*; Phase 2: 5/5 TRADE-* + PERF-*; Phase 3: 10/10 SEC-* + REL-*; Phase 4: 7/7 TEST-* + DRIFT-*). HUMAN-UAT carry-forwards (PERF-01 numeric p75 LCP < 2.5s, SEC-03+04 D-04b runtime UX, anvil-fork CI run with archive-RPC `BASE_RPC_URL`, OBS-03 transcript-capture refresh) deferred to `/gsd-verify-work --milestone stabilization --human-uat` post-deploy per `04-RUNBOOK.md` §"Hand-off — Milestone Close".

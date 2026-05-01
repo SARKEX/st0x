@@ -56,18 +56,18 @@ Failure modes that have caused user-visible outages or silent data corruption.
 
 Coverage at the boundaries that the audit flagged as both high-risk and currently untested.
 
-- [x] **TEST-01**: Integration tests for `src/hooks.server.ts` exercise public-path / admin / wallet-registration classification, CORS, CSP, and bot-rejection ordering across representative request shapes
-- [x] **TEST-02**: Admin endpoints have audit-log coverage — every admin endpoint that mutates state (rewards-pool, snapshots, swap-snapshot, tvl, wallet-statement, wallets, team-wallets, excluded-wallets, pool-wallets, nansen, plus any survivors of DEPR-02) calls `createAuditLogger`; a test asserts each handler emits an audit record on success and failure
-- [x] **TEST-03**: Integration tests cover the full market-order path through `marketOrderExecution.ts` + `transaction.ts` for aggregated → fallback → per-order, hydration failures, and stale-session recovery
-- [x] **TEST-04**: If the rewards/snapshot subsystem is retained per DEPR-02, snapshot scraper edge cases (pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure) get test coverage; if removed, this requirement is closed by deletion
+- [x] **TEST-01**: Integration tests for `src/hooks.server.ts` exercise public-path / admin / wallet-registration classification, CORS, CSP, and bot-rejection ordering across representative request shapes **[Completed 04-04, 2026-05-01: 6 test files added under `tests/hooks/` (cors, csp, public-paths, admin-gate, wallet-session, bot-rejection) plus shared `_helpers.ts` factories (`createMockRequestEvent`, `createMockKv`, `createMockSession`); each file ≥ 1 describe block; pins SEC-03/04 atomic-flip session-cookie shape, CSP host allowlist (Pitfall 1), and bot-rejection ordering at hooks.server.ts. No HUMAN-UAT carry-forward.]**
+- [x] **TEST-02**: Admin endpoints have audit-log coverage — every admin endpoint that mutates state (rewards-pool, snapshots, swap-snapshot, tvl, wallet-statement, wallets, team-wallets, excluded-wallets, pool-wallets, nansen, plus any survivors of DEPR-02) calls `createAuditLogger`; a test asserts each handler emits an audit record on success and failure **[Completed 04-05, 2026-05-01: 8 audit test files under `tests/lib/admin/` (codes, excluded-wallets, pool-wallets, team-wallets, snapshots-trigger, snapshots-regenerate, referral-programme-migrate, referral-programme-refresh); 5 `createAuditLogger` ADD endpoints (excluded-wallets, pool-wallets, team-wallets, snapshots/trigger, snapshots/regenerate) — each emits 2 audit records on success/failure paths; all 8 state-mutating admin endpoints now `import { createAuditLogger } from '$lib/server/auditLog'`.]**
+- [x] **TEST-03**: Integration tests cover the full market-order path through `marketOrderExecution.ts` + `transaction.ts` for aggregated → fallback → per-order, hydration failures, and stale-session recovery **[Completed 04-06+04-07+04-08, 2026-05-01: anvil scaffold (`tests/helpers/anvil.ts` + `loadTranscript.ts` + `vitest.integration.config.ts` + `package.json` `"test:integration"` script + Foundry CI install procedure documented in 04-RUNBOOK.md); anvil-fork suite at `tests/integration/marketOrder/anvil-fork.test.ts` (4 tests, pinned at FORK_BLOCK 33_400_000, archive-RPC required); 7 redacted JSON fixtures under `tests/fixtures/marketOrder/` covering aggregated-quote-stale, fallback-no-liquidity, hydration-failure, partial-fill, stale-session, etc.; replay suite passes 7/7 locally; un-redacted hex addresses = 0 (modulo USDC canonical allowlist). HUMAN-UAT carry-forward: anvil-fork CI run with `BASE_RPC_URL` archive provider (4 tests skip without it locally — expected per A1 risk).]**
+- [x] **TEST-04**: If the rewards/snapshot subsystem is retained per DEPR-02, snapshot scraper edge cases (pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure) get test coverage; if removed, this requirement is closed by deletion **[Completed 04-09, 2026-05-01: DEPR-02 retained the snapshot pipeline per Phase 1 D-01; co-located test file `src/lib/server/snapshots/scraper.test.ts` covers all 3 categories (pagination boundaries + legacy `wrappedTokenTransfers` fallback + transient subgraph failure / retry); category-keyword grep returns 6 matches.]**
 
 ### Drift
 
 Documentation and code drift that misleads future contributors and produces low-grade silent breakage.
 
-- [x] **DRIFT-01**: Direct `TOKENS.find(...)` lookups against the wrapped address only are replaced with `getTokenByAnyAddress(addr)` in `tradeTransform.ts`, `api/orders.ts`, `api/subgraph.ts`, `oracleQuotes.ts`, `priceFeeds.ts`, `QuickTrade.svelte`, `LimitOrder.svelte`, and `DcaOrder.svelte`; an ESLint rule or comment marker prevents recurrence outside the canonical lookup module
-- [x] **DRIFT-02**: Hardcoded USDC address constants in `admin/+page.svelte` and `api/admin/nansen/+server.ts` are replaced with `isPaymentToken(addr, network)` / a new `getPaymentTokensForNetwork(network)` helper resolved from `src/lib/config/tokens.ts`
-- [x] **DRIFT-03**: `CLAUDE.md` is rewritten to match actual code — single chain (Base 8453), two auth paths (wagmi + Dynamic embedded), no Rhinestone / EIP-7702 / `account-abstraction/` directory; this file is added as a counterweight pointer to `.planning/codebase/CONCERNS.md`
+- [x] **DRIFT-01**: Direct `TOKENS.find(...)` lookups against the wrapped address only are replaced with `getTokenByAnyAddress(addr)` in `tradeTransform.ts`, `api/orders.ts`, `api/subgraph.ts`, `oracleQuotes.ts`, `priceFeeds.ts`, `QuickTrade.svelte`, `LimitOrder.svelte`, and `DcaOrder.svelte`; an ESLint rule or comment marker prevents recurrence outside the canonical lookup module **[Completed 04-03, 2026-05-01: ts-morph codemod at `scripts/codemods/migrate-token-find.ts` (idempotent; conservative — skips compound predicates) migrated 8 of 12 sites to `getTokenByAnyAddress(addr)`; ESLint `no-restricted-syntax` rule registered in `eslint.config.js` (mirroring TRADE-01 at lines 46-65) bans `TOKENS.find` / `ALL_TOKENS.find` outside the canonical lookup module; lint fixture at `tests/fixtures/eslint/token-lookup-violation.ts` proves the rule fires; 4 sites retained with single-line `eslint-disable-next-line no-restricted-syntax` + justification (symbol-based SPYM lookups in oracleQuotes/priceFeeds + payment-token USDC lookups in DcaOrder/LimitOrder where DRIFT-01 silent-wrapped-only matching does not apply).]**
+- [x] **DRIFT-02**: Hardcoded USDC address constants in `admin/+page.svelte` and `api/admin/nansen/+server.ts` are replaced with `isPaymentToken(addr, network)` / a new `getPaymentTokensForNetwork(network)` helper resolved from `src/lib/config/tokens.ts` **[Completed 04-02, 2026-05-01: `getPaymentTokensForNetwork` + `isPaymentToken` helpers added to `src/lib/config/tokens.ts`; `admin/+page.svelte` and `api/admin/nansen/+server.ts` migrated; phase-exit grep gate `grep -RE '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' src/routes/admin/ src/routes/api/admin/` returns 0 hits; helper usage = 20 references across admin paths.]**
+- [x] **DRIFT-03**: `CLAUDE.md` is rewritten to match actual code — single chain (Base 8453), two auth paths (wagmi + Dynamic embedded), no Rhinestone / EIP-7702 / `account-abstraction/` directory; this file is added as a counterweight pointer to `.planning/codebase/CONCERNS.md` **[Completed 04-01, 2026-05-01: surgical edit (not full rewrite per D-05) struck 4 false claims (Rhinestone SDK, EIP-7702, `account-abstraction/` directory, multi-chain table) and replaced with single-chain disclaimer + non-existence disclaimer; Ground Truth header added pointing at `.planning/codebase/`; Order Semantics INPUT/OUTPUT preserved verbatim per Pitfall 7. The 2 remaining `Account Abstraction` matches are inside the disclaimer paragraph that explicitly DENIES the term's applicability — over-strict-grep carve-out documented in 04-RUNBOOK.md §"Notes / Anomalies" mirroring Phase 3 SEC-07 deviation. HUMAN-UAT carry-forward: reviewer reads post-edit prose for natural flow.]**
 
 ### Unused-Subsystem Deprecation
 
@@ -123,13 +123,13 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | REL-01 | Phase 3 | Complete (03-06, 2026-04-30) |
 | REL-02 | Phase 3 | Complete (03-07, 2026-04-30) |
 | REL-03 | Phase 3 | Complete (03-10, 2026-04-30) |
-| TEST-01 | Phase 4 | Complete |
-| TEST-02 | Phase 4 | Complete |
-| TEST-03 | Phase 4 | Complete |
-| TEST-04 | Phase 4 (conditional on DEPR-02) | Complete |
-| DRIFT-01 | Phase 4 | Complete |
-| DRIFT-02 | Phase 4 | Complete |
-| DRIFT-03 | Phase 4 | Complete |
+| TEST-01 | Phase 4 | Complete (04-04, 2026-05-01) |
+| TEST-02 | Phase 4 | Complete (04-05, 2026-05-01) |
+| TEST-03 | Phase 4 | Complete (04-06+04-07+04-08, 2026-05-01) |
+| TEST-04 | Phase 4 (conditional on DEPR-02 — confirmed retained) | Complete (04-09, 2026-05-01) |
+| DRIFT-01 | Phase 4 | Complete (04-03, 2026-05-01) |
+| DRIFT-02 | Phase 4 | Complete (04-02, 2026-05-01) |
+| DRIFT-03 | Phase 4 | Complete (04-01, 2026-05-01) |
 | DEPR-01 | Phase 1 | Complete (01-02, 2026-04-29) |
 | DEPR-02 | Phase 1 | Complete (01-01, 2026-04-29) |
 | DEPR-03 | Phase 1 | Complete (01-03, 2026-04-29) |
@@ -142,4 +142,4 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-30 — Phase 3 closed (Plan 03-11): all 10 SEC-01..07 + REL-01..03 marked Complete; runbook + phase-exit grep gates green; Phase 4 (TEST-01..04 + DRIFT-01..03) unblocked.*
+*Last updated: 2026-05-01 — Phase 4 closed (Plan 04-10): all 7 TEST-01..04 + DRIFT-01..03 marked Complete; runbook + phase-exit grep gates green; Phase 2 + Phase 3 carry-forward invariants preserved; **stabilization milestone closed (30/30 v1 REQ-IDs across 4 phases)**. HUMAN-UAT carry-forwards (PERF-01 numeric p75 LCP, SEC-03+04 D-04b runtime UX, anvil-fork CI, OBS-03 transcript-capture refresh) deferred to `/gsd-verify-work` post-deploy per `04-RUNBOOK.md` §"Hand-off — Milestone Close".*
