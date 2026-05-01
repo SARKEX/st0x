@@ -62,5 +62,41 @@ export default [
 				}
 			]
 		}
+	},
+	// DRIFT-01: ban direct `TOKENS.find` / `ALL_TOKENS.find` lookups outside
+	// the canonical lookup module. Per MEMORY.md, each ST0x token has 3
+	// address variants (wrapped, unwrapped, legacy); a raw
+	// `TOKENS.find((t) => t.address === x)` only matches the wrapped variant
+	// — silent breakage. `getTokenByAnyAddress(addr)` from $lib/config/tokens
+	// handles all 3 variants.
+	//
+	// The selector matches CallExpressions of shape
+	// `<TOKENS|ALL_TOKENS>.find(...)` only. Other find-call shapes
+	// (e.g. `tokens.find(...)`, `getAllTokensByNetwork(...).find(...)`) are
+	// out of scope.
+	//
+	// The TRADE-01 block above is unaffected — ESLint flat config merges
+	// multiple `no-restricted-syntax` rule entries across blocks.
+	{
+		files: ['src/**/*.ts', 'src/**/*.svelte', 'tests/**/*.ts'],
+		ignores: [
+			'src/lib/config/tokens.ts', // canonical lookup module
+			'src/lib/config/network.ts' // re-exports of the canonical module
+			// NOTE: tests/fixtures/eslint/token-lookup-violation.ts is intentionally
+			// NOT ignored — the rule MUST fire on it. The fixture is excluded from
+			// the project lint by virtue of `lint-check`/`lint` targeting `src/`
+			// only; the fixture is verified separately via direct `npx eslint <path>`.
+		],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector:
+						"CallExpression[callee.object.name=/^(TOKENS|ALL_TOKENS)$/][callee.property.name='find']",
+					message:
+						'Direct TOKENS.find / ALL_TOKENS.find is banned (DRIFT-01). Use getTokenByAnyAddress(addr) from $lib/config/tokens.ts (handles wrapped/unwrapped/legacy address variants). Per-callsite escape: // eslint-disable-next-line no-restricted-syntax -- justification: ...'
+				}
+			]
+		}
 	}
 ];
