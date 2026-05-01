@@ -6,12 +6,13 @@ import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/adminAuth';
 import { listAccessCodes, getWalletsByCode } from '$lib/server/accessCodes';
 import { networks } from '$lib/config/networks';
-import { TOKENS } from '$lib/config/tokens';
-import { toDecimal } from '$lib/utils/tokenMath';
+import { TOKENS, getPaymentTokensForNetwork } from '$lib/config/tokens';
+import { toDecimal, isPaymentToken } from '$lib/utils/tokenMath';
 import { getWalletTiers, type NansenTier } from '$lib/server/nansenTiers';
 import { cacheGet, cacheSet, CACHE_TTL } from '$lib/server/cache';
 
-const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'.toLowerCase();
+const paymentTokens = getPaymentTokensForNetwork(8453);
+const usdc = paymentTokens[0];
 const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
 
 interface Trade {
@@ -138,8 +139,8 @@ async function fetchTradesSince(sinceTimestamp: number): Promise<Trade[]> {
 		const outputAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
 		if (!inputAddr || !outputAddr) return false;
 
-		const inputIsUsdc = inputAddr === USDC_ADDRESS;
-		const outputIsUsdc = outputAddr === USDC_ADDRESS;
+		const inputIsUsdc = isPaymentToken({ address: inputAddr }, usdc);
+		const outputIsUsdc = isPaymentToken({ address: outputAddr }, usdc);
 		const inputIsAsset = validTokenAddresses.has(inputAddr);
 		const outputIsAsset = validTokenAddresses.has(outputAddr);
 
@@ -165,13 +166,13 @@ function processTrades(
 		const txId = trade.tradeEvent?.transaction?.id?.toLowerCase() || trade.id;
 
 		// Determine if this is a BUY (user is receiving asset, giving USDC)
-		const ownerIsBuying = output.vault.token.address.toLowerCase() === USDC_ADDRESS;
+		const ownerIsBuying = isPaymentToken({ address: output.vault.token.address }, usdc);
 
 		// Calculate USDC amount
 		let usdcAmount = 0;
-		if (input.vault.token.address.toLowerCase() === USDC_ADDRESS) {
+		if (isPaymentToken({ address: input.vault.token.address }, usdc)) {
 			usdcAmount = toDecimal(input.amount, input.vault.token.decimals, { absolute: true }) ?? 0;
-		} else if (output.vault.token.address.toLowerCase() === USDC_ADDRESS) {
+		} else if (isPaymentToken({ address: output.vault.token.address }, usdc)) {
 			usdcAmount = toDecimal(output.amount, output.vault.token.decimals, { absolute: true }) ?? 0;
 		}
 
