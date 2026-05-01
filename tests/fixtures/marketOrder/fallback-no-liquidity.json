@@ -1,0 +1,21 @@
+{
+  "subgraphQuoteHash": null,
+  "fullQuotePayload": [],
+  "onChainStateRead": {
+    "orderHash": null,
+    "vaultBalance": null,
+    "IOIndex": { "input": null, "output": null }
+  },
+  "ratio": null,
+  "slippageBps": 100,
+  "priceCap": null,
+  "side": "ask",
+  "takerAction": "Buy",
+  "userAction": "Buy",
+  "mode": "buyUpTo",
+  "walletAddress": "0x...redacted",
+  "request_id": null,
+  "timestamp": "2026-04-16T09:11:43.812Z",
+  "failure_mode": "fallback-no-liquidity",
+  "expected_reason": "no_quotes_available"
+}

@@ -1,0 +1,35 @@
+{
+  "subgraphQuoteHash": "0x...redacted",
+  "fullQuotePayload": [
+    {
+      "orderHash": "0xhydrate11111111111111111111111111111111111111111111111111111111",
+      "maxOutput": "0x...redacted",
+      "ratio": "0x...redacted",
+      "inputTokenSymbol": "USDC",
+      "outputTokenSymbol": "tTSLA",
+      "inputTokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "outputTokenAddress": "0x...redacted",
+      "inputIOIndex": 0,
+      "outputIOIndex": 0,
+      "side": "ask",
+      "quotePerAsset": 245.7
+    }
+  ],
+  "onChainStateRead": {
+    "orderHash": null,
+    "vaultBalance": null,
+    "IOIndex": { "input": null, "output": null }
+  },
+  "ratio": null,
+  "slippageBps": 100,
+  "priceCap": null,
+  "side": "ask",
+  "takerAction": "Buy",
+  "userAction": "Buy",
+  "mode": "buyUpTo",
+  "walletAddress": "0x...redacted",
+  "request_id": null,
+  "timestamp": "2026-04-18T11:05:32.560Z",
+  "failure_mode": "hydration-failure",
+  "expected_reason": "unhydrated_fills"
+}
