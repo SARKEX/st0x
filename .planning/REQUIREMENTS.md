@@ -58,7 +58,7 @@ Coverage at the boundaries that the audit flagged as both high-risk and currentl
 
 - [x] **TEST-01**: Integration tests for `src/hooks.server.ts` exercise public-path / admin / wallet-registration classification, CORS, CSP, and bot-rejection ordering across representative request shapes
 - [x] **TEST-02**: Admin endpoints have audit-log coverage — every admin endpoint that mutates state (rewards-pool, snapshots, swap-snapshot, tvl, wallet-statement, wallets, team-wallets, excluded-wallets, pool-wallets, nansen, plus any survivors of DEPR-02) calls `createAuditLogger`; a test asserts each handler emits an audit record on success and failure
-- [ ] **TEST-03**: Integration tests cover the full market-order path through `marketOrderExecution.ts` + `transaction.ts` for aggregated → fallback → per-order, hydration failures, and stale-session recovery
+- [x] **TEST-03**: Integration tests cover the full market-order path through `marketOrderExecution.ts` + `transaction.ts` for aggregated → fallback → per-order, hydration failures, and stale-session recovery
 - [ ] **TEST-04**: If the rewards/snapshot subsystem is retained per DEPR-02, snapshot scraper edge cases (pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure) get test coverage; if removed, this requirement is closed by deletion
 
 ### Drift
@@ -125,7 +125,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | REL-03 | Phase 3 | Complete (03-10, 2026-04-30) |
 | TEST-01 | Phase 4 | Complete |
 | TEST-02 | Phase 4 | Complete |
-| TEST-03 | Phase 4 | Pending |
+| TEST-03 | Phase 4 | Complete |
 | TEST-04 | Phase 4 (conditional on DEPR-02) | Pending |
 | DRIFT-01 | Phase 4 | Complete |
 | DRIFT-02 | Phase 4 | Complete |
