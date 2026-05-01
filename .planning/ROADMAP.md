@@ -201,4 +201,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
 | 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
 | 3. Production-Grade Hardening | 11/11 | Complete | 2026-04-30 |
-| 4. Boundary Tests & Drift Cleanup | 2/10 | In Progress|  |
+| 4. Boundary Tests & Drift Cleanup | 4/10 | In Progress|  |
