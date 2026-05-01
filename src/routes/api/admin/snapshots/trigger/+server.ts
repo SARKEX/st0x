@@ -20,6 +20,7 @@ import {
 	type DailySnapshotRecord
 } from '$lib/server/kv';
 import { requireAdmin } from '$lib/server/adminAuth';
+import { createAuditLogger } from '$lib/server/auditLog';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -36,12 +37,15 @@ function pickRandomBlocksFromHalves(startBlock: number, endBlock: number): [numb
 }
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
+	const audit = createAuditLogger(request);
+	let dateForAudit: string | undefined;
 	try {
 		const guardResponse = await requireAdmin(request, cookies, 'admin-snapshots-trigger');
 		if (guardResponse) return guardResponse;
 
 		const body = await request.json();
 		const { date, confirmText } = body;
+		dateForAudit = typeof date === 'string' ? date : undefined;
 
 		// Validate confirmation
 		if (confirmText !== 'CONFIRM') {
@@ -160,6 +164,21 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		// Rewards-cache invalidation removed in Phase 1 (DEPR-02) — the rewards
 		// caches it covered are deleted alongside the rewards layer (Plan 01-02).
 
+		try {
+			await audit.logSuccess(
+				'SNAPSHOT_TRIGGERED',
+				{
+					date: dateStr,
+					blocks: blockRecords.map((b) => b.blockNumber),
+					blobsStored: storedBlobs.length,
+					triggeredAt: new Date().toISOString()
+				},
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Manual Trigger] Audit-log emission failed:', auditErr);
+		}
+
 		return json({
 			success: true,
 			date: dateStr,
@@ -169,6 +188,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		});
 	} catch (error) {
 		console.error('[Manual Trigger] Error generating snapshots:', error);
+		try {
+			await audit.logFailure(
+				'SNAPSHOT_TRIGGERED',
+				{ date: dateForAudit, triggeredAt: new Date().toISOString() },
+				error instanceof Error ? error.message : 'Unknown error',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Manual Trigger] Audit-log failure emission failed:', auditErr);
+		}
 		return json(
 			{
 				success: false,

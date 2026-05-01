@@ -9,6 +9,7 @@ import { TOKEN_ADDRESSES } from '$lib/server/snapshots/scraper';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { env } from '$env/dynamic/private';
 import { requireAdmin } from '$lib/server/adminAuth';
+import { createAuditLogger } from '$lib/server/auditLog';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const guardResponse = await requireAdmin(request, cookies, 'admin-snapshots-regenerate');
@@ -22,9 +23,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		);
 	}
 
+	const audit = createAuditLogger(request);
+	let scopeForAudit: { month?: string; blockNumber?: number } = {};
+
 	try {
 		const body = await request.json();
 		const { confirmText, month, blockNumber } = body;
+		scopeForAudit = {
+			month: typeof month === 'string' ? month : undefined,
+			blockNumber: typeof blockNumber === 'number' ? blockNumber : undefined
+		};
 
 		// For single block regeneration, no confirmation needed
 		// For bulk regeneration, require REGENERATE confirmation
@@ -146,6 +154,22 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 		console.log(`[Regenerate] Completed: ${successful} successful, ${failed} failed`);
 
+		try {
+			await audit.logSuccess(
+				'SNAPSHOT_REGENERATED',
+				{
+					...scopeForAudit,
+					totalBlocks: blocksToRegenerate.length,
+					successful,
+					failed,
+					regeneratedAt: new Date().toISOString()
+				},
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Regenerate] Audit-log emission failed:', auditErr);
+		}
+
 		return json({
 			success: true,
 			message: `Regenerated ${successful} blocks (${failed} failed).`,
@@ -156,6 +180,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		});
 	} catch (error) {
 		console.error('[Regenerate] Error:', error);
+		try {
+			await audit.logFailure(
+				'SNAPSHOT_REGENERATED',
+				{ ...scopeForAudit, regeneratedAt: new Date().toISOString() },
+				error instanceof Error ? error.message : 'Unknown error',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Regenerate] Audit-log failure emission failed:', auditErr);
+		}
 		return json(
 			{
 				success: false,
