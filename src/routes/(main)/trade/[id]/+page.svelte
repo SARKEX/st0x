@@ -256,14 +256,11 @@
 	// Note: currentToken.address from subgraph may differ from the wrapped token address
 	$: currentPythToken = (() => {
 		if (!tokenId || !$currentNetwork?.chainId) return undefined;
-		const byAddress = TOKENS.find(
-			(token) =>
-				token.address.toLowerCase() === tokenId.toLowerCase() &&
-				token.chainId === $currentNetwork.chainId
-		);
-		if (byAddress) return byAddress;
-		const byAnyAddress = getTokenByAnyAddress(tokenId);
-		return byAnyAddress?.chainId === $currentNetwork.chainId ? byAnyAddress : undefined;
+		// DRIFT-01: getTokenByAnyAddress already matches wrapped/unwrapped/legacy
+		// address variants (and the wrapped-address path is a strict subset of
+		// what it covers), so the previous two-step lookup collapses to one call.
+		const match = getTokenByAnyAddress(tokenId);
+		return match?.chainId === $currentNetwork.chainId ? match : undefined;
 	})();
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;

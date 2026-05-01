@@ -1429,9 +1429,7 @@
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
-														logoUrl={ALL_TOKENS.find(
-															(s) => s.address.toLowerCase() === holding.address.toLowerCase()
-														)?.logoUrl}
+														logoUrl={getTokenByAnyAddress(holding.address)?.logoUrl}
 														symbol={holding.symbol}
 														name={holding.name}
 														hideNameOnMobile={true}
@@ -1565,10 +1563,7 @@
 																		address: holding.address,
 																		symbol: holding.symbol,
 																		decimals: holding.decimals,
-																		image: ALL_TOKENS.find(
-																			(s) =>
-																				s.address.toLowerCase() === holding.address.toLowerCase()
-																		)?.logoUrl
+																		image: getTokenByAnyAddress(holding.address)?.logoUrl
 																	})}
 																class="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-1.5 text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
 																title="Track in Wallet"

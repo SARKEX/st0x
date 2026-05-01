@@ -421,9 +421,7 @@
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<TokenDisplay
-												logoUrl={ALL_TOKENS.find(
-													(s) => s.address.toLowerCase() === token.address.toLowerCase()
-												)?.logoUrl}
+												logoUrl={getTokenByAnyAddress(token.address)?.logoUrl}
 												symbol={token.symbol}
 												name={token.name}
 											/>

@@ -58,6 +58,7 @@ export function createOracleQuotesQuery(network: Network | null) {
 
 			// Merge SPYM from liquidity-monitor (no Pyth feed)
 			if (spymPrice?.price != null) {
+				// eslint-disable-next-line no-restricted-syntax -- justification: symbol-based lookup, not address — DRIFT-01 (silent wrapped-only matching) does not apply. getTokenByAnyAddress is address-keyed and cannot resolve by symbol.
 				const spymToken = TOKENS.find(
 					(t) => t.symbol === 'wtSPYM' && t.chainId === network.chainId
 				);

@@ -78,6 +78,7 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
+			// eslint-disable-next-line no-restricted-syntax -- justification: lookup against the network-scoped ALL_TOKENS universe (assets + payment tokens) for a payment-token (USDC). DRIFT-01's getTokenByAnyAddress only resolves ST0x asset-token address variants and would never match USDC, so it is not a valid replacement here.
 			const match = ALL_TOKENS.find(
 				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
 			);

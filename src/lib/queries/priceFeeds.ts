@@ -7,6 +7,7 @@ import { tokensWithPriceFeed } from '$lib/queries/oracleQuotes';
 
 /** Fetch SPYM price from the liquidity-monitor proxy (no Pyth feed available). */
 async function fetchSpymQuote(network: Network): Promise<TradingViewQuote | null> {
+	// eslint-disable-next-line no-restricted-syntax -- justification: symbol-based lookup, not address — DRIFT-01 (silent wrapped-only matching) does not apply. getTokenByAnyAddress is address-keyed and cannot resolve by symbol.
 	const spymToken = TOKENS.find(
 		(t) => t.symbol === 'wtSPYM' && t.chainId === network.chainId
 	);
