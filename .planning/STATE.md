@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 3 CLOSED — Plan 03-11 (Phase 3 RUNBOOK + phase-exit verification + REQUIREMENTS/ROADMAP/STATE close-out + SUMMARY) complete. Continuation-agent shape: prior agent (a2236d7fed80bc358) ran Task 1 grep gates (all 10 SEC + REL gates green at 2026-04-30T12:08:53Z; Phase 2 carry-forward gates green; test suite 569/1/0; svelte-check = 3) and authored 03-RUNBOOK.md at d16d0e3 (473 lines, 12 sections); user user-verify checkpoint APPROVED via blanket "wrap it up" instruction; this agent ran Task 3 REQUIREMENTS/ROADMAP/STATE close-out + Task 4 SUMMARY + final docs commit. Phase 3 progress: 11/11 plans, 10/10 phase REQ-IDs (SEC-01..07 + REL-01/02/03). All cross-cutting carry-forward gates green: TRADE-01 IO-perspective lockdown ✓; TRADE-02 cycle severance ✓; failWith count = 16 ≥12 ✓; EMERGENCY_RATIO_MULTIPLIER = 0 ✓; svelte-check = 3 errors ✓; staleTime: Infinity ✓. Branch: `gsd/phase-2-trade-execution-backbone-refactor` — Phase 3 work intentionally landed on the Phase 2 branch per user's chained-PR-base-into-Phase-1 instruction; not renamed. HUMAN-UAT deferred to operator post-deploy: numeric p75 LCP < 2.5s validation (Phase 2 carry-forward), Alchemy atomic-swap-then-rotate, HCAPTCHA_SECRET set in Vercel preview/production, session-cookie real-wallet smoke, Telegram alert test (REL-01), per-RPC OBS-04 granularity (Phase 4 add-on if measured). Phase 4 (TEST-01..04 + DRIFT-01..03) unblocked; next session: /gsd-plan-phase 4. Resume file: (none)."
-last_updated: "2026-05-01T21:19:27.821Z"
+stopped_at: Completed 04-08-PLAN.md
+last_updated: "2026-05-01T21:30:43.979Z"
 last_activity: 2026-05-01
 progress:
   total_phases: 4
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 4 (boundary-tests-and-drift-cleanup) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-05-01
 Resume file: None
@@ -76,6 +76,7 @@ Progress: [██████████] 100% of milestone-defined plans throu
 | Phase 04 P05 | 25min | 2 tasks | 7 files |
 | Phase 04 P06 | ~6min | 2 tasks | 8 files |
 | Phase 04 P07 | 12min | 3 tasks | 6 files |
+| Phase 04 P08 | 30 | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -204,6 +205,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 04-06: Pinned current behavior (no logFailure emission) on swallowed-error branches in codes/refresh endpoints
 - [Phase ?]: Two-config Vitest split: tests/integration/** only runs via npm run test:integration; default npm test surface unchanged
 - [Phase ?]: Foundry CI install via foundryup with actions/cache@v4 keyed on ~/.foundry (foundry-<os>-v1)
+- [Phase ?]: 04-08: Synthesized 7 OBS-03 transcripts (Vercel CLI unavailable; plan permits synthesis fallback). FORK_BLOCK pinned 33_400_000. Default test surface unchanged 50/655/1; svelte-check baseline 3 preserved.
 
 ### Pending Todos
 
@@ -224,8 +226,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-01T21:19:17.011Z
-Stopped at: Phase 3 CLOSED — Plan 03-11 (Phase 3 RUNBOOK + phase-exit verification + REQUIREMENTS/ROADMAP/STATE close-out + SUMMARY) complete. Continuation-agent shape: prior agent (a2236d7fed80bc358) ran Task 1 grep gates (all 10 SEC + REL gates green at 2026-04-30T12:08:53Z; Phase 2 carry-forward gates green; test suite 569/1/0; svelte-check = 3) and authored 03-RUNBOOK.md at d16d0e3 (473 lines, 12 sections); user user-verify checkpoint APPROVED via blanket "wrap it up" instruction; this agent ran Task 3 REQUIREMENTS/ROADMAP/STATE close-out + Task 4 SUMMARY + final docs commit. Phase 3 progress: 11/11 plans, 10/10 phase REQ-IDs (SEC-01..07 + REL-01/02/03). All cross-cutting carry-forward gates green: TRADE-01 IO-perspective lockdown ✓; TRADE-02 cycle severance ✓; failWith count = 16 ≥12 ✓; EMERGENCY_RATIO_MULTIPLIER = 0 ✓; svelte-check = 3 errors ✓; staleTime: Infinity ✓. Branch: `gsd/phase-2-trade-execution-backbone-refactor` — Phase 3 work intentionally landed on the Phase 2 branch per user's chained-PR-base-into-Phase-1 instruction; not renamed. HUMAN-UAT deferred to operator post-deploy: numeric p75 LCP < 2.5s validation (Phase 2 carry-forward), Alchemy atomic-swap-then-rotate, HCAPTCHA_SECRET set in Vercel preview/production, session-cookie real-wallet smoke, Telegram alert test (REL-01), per-RPC OBS-04 granularity (Phase 4 add-on if measured). Phase 4 (TEST-01..04 + DRIFT-01..03) unblocked; next session: /gsd-plan-phase 4. Resume file: (none).
+Last session: 2026-05-01T21:30:40.897Z
+Stopped at: Completed 04-08-PLAN.md
 
 Previous session: 2026-04-30T11:46:27Z
 Stopped at: Phase 3 Plan 03-08b (SEC-03 atomic-flip consumer migration + manual smoke APPROVED) complete — 2-commit sequence: 417cd19 (Task 1 by prior agent ae54ea7487cf04689: feat — 5 server-side wallet-address consumers migrated to readSession atomically; +layout.svelte NON-AUTHORITATIVE comment downgrade; access/+page.server.ts deleteSession + 'session' cookie clear + 'wallet-address' hint clear; getWalletFromRequest at hooks.server.ts becomes async; logger.ts wallet enrichment via readSession; /api/access/check + /api/snapshots/preview + /api/snapshots/preview-stream rate-limit tier wallet via session cookie + KV; phase-exit grep gate 0 hits) + this docs commit (Task 2 manual smoke APPROVED via Vercel preview structural coverage 11/11 PASS). Manual smoke verdict: APPROVED via automated playwright-equivalent structural coverage on Vercel preview deploy https://st0x-30q6oqdau-st-0x.vercel.app (deploy dpl_DULYLYdLmbvJF3vdWsmzoMksLrvZ at sha 417cd19) — 11/11 checks PASS pinning SEC-03 + SEC-04 + SEC-06 + REL-02 + cookie-attribute correctness + security headers. D-04b runtime UX assertion (per-request signature absence) deferred to post-deploy HUMAN-UAT — structurally guaranteed since verifyWalletSignature is unreachable from per-request path. Vercel-side env vars set during smoke ritual: SESSION_SECRET / BASE_RPC_URL / PUBLIC_BASE_RPC_URL (encrypted, preview+production); HCAPTCHA_SECRET deliberately NOT yet set — Plan 03-04 fails closed without it; MUST land in 03-RUNBOOK.md / Plan 03-11. 0 code-level deviations; 1 plan-text reframing (Task 2 recipe substituted automated structural coverage for the 10-step real-wallet recipe — same pattern as 01-08 / 02-08 HUMAN-UAT deferral). Cross-cutting Phase 2 gates carry-forward green: TRADE-01 lockdown ✓, TRADE-02 cycle severance = 0 ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, staleTime: Infinity ✓, svelte-check baseline = 3 errors preserved ✓. Phase-exit gates green: SEC-02 (no fallback secret strings), SEC-03 (atomic-flip cookie-name grep = 0 hits), SEC-04 (session-bound CSRF active), REL-02 (viem fallback transport preserved). SEC-03 marked COMPLETE in REQUIREMENTS.md (closes audit finding §"client-set wallet-address cookie accepted as auth"). Wave 6 COMPLETE (2/2 plans atomic-flip-paired per CONTEXT D-04). Phase 3 progress: 9/11 plans, 9/10 phase REQ-IDs (SEC-01..07 + REL-01/02 all closed). Hand-off to Plan 03-11 03-RUNBOOK.md: 4 operational items captured (Vercel env-var checklist incl. pending HCAPTCHA_SECRET; Alchemy atomic-swap-then-rotate recipe per D-02; SEC-03+SEC-04 production-deploy smoke recipe re-running 11 structural checks; smoke-test KV cleanup recipe). Next session: Plan 03-10 (REL-03 — vendor static/registry/ from upstream commit 9dd64902 + orderDeployment.ts swap to same-origin /registry).
