@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: "Phase 3 CLOSED — Plan 03-11 (Phase 3 RUNBOOK + phase-exit verification + REQUIREMENTS/ROADMAP/STATE close-out + SUMMARY) complete. Continuation-agent shape: prior agent (a2236d7fed80bc358) ran Task 1 grep gates (all 10 SEC + REL gates green at 2026-04-30T12:08:53Z; Phase 2 carry-forward gates green; test suite 569/1/0; svelte-check = 3) and authored 03-RUNBOOK.md at d16d0e3 (473 lines, 12 sections); user user-verify checkpoint APPROVED via blanket "wrap it up" instruction; this agent ran Task 3 REQUIREMENTS/ROADMAP/STATE close-out + Task 4 SUMMARY + final docs commit. Phase 3 progress: 11/11 plans, 10/10 phase REQ-IDs (SEC-01..07 + REL-01/02/03). All cross-cutting carry-forward gates green: TRADE-01 IO-perspective lockdown ✓; TRADE-02 cycle severance ✓; failWith count = 16 ≥12 ✓; EMERGENCY_RATIO_MULTIPLIER = 0 ✓; svelte-check = 3 errors ✓; staleTime: Infinity ✓. Branch: `gsd/phase-2-trade-execution-backbone-refactor` — Phase 3 work intentionally landed on the Phase 2 branch per user's chained-PR-base-into-Phase-1 instruction; not renamed. HUMAN-UAT deferred to operator post-deploy: numeric p75 LCP < 2.5s validation (Phase 2 carry-forward), Alchemy atomic-swap-then-rotate, HCAPTCHA_SECRET set in Vercel preview/production, session-cookie real-wallet smoke, Telegram alert test (REL-01), per-RPC OBS-04 granularity (Phase 4 add-on if measured). Phase 4 (TEST-01..04 + DRIFT-01..03) unblocked; next session: /gsd-plan-phase 4. Resume file: (none)."
-last_updated: "2026-05-01T20:22:20.967Z"
+last_updated: "2026-05-01T20:34:45.395Z"
 last_activity: 2026-05-01
 progress:
   total_phases: 4
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 4 (boundary-tests-and-drift-cleanup) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-05-01
 Resume file: None
@@ -70,6 +70,7 @@ Progress: [██████████] 100% of milestone-defined plans throu
 | Phase 03 P10 | 25 | 2 tasks | 12 files |
 | Phase 03 P11 | ~30 (split across 2 agent sessions) | 4 tasks (Task 1 grep gates by prior agent + Task 2 03-RUNBOOK.md docs commit by prior agent + Task 3 REQUIREMENTS/ROADMAP/STATE close-out + Task 4 SUMMARY + final commit) | 5 files (03-RUNBOOK.md + REQUIREMENTS.md + ROADMAP.md + STATE.md + 03-11-SUMMARY.md) |
 | Phase 04 P01 | 128 | 1 tasks | 1 files |
+| Phase 04 P02 | 600 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -187,6 +188,7 @@ Recent decisions affecting current work:
 - 03-11: Phase 3 deferred-items.md reviewed; only entry is the resolved $env/dynamic/public test-resolution failure introduced by 03-01 (closed by orchestrator vitest-setup.ts fix between 03-02 and 03-03). No open items carry forward to Phase 4 — all surface deferrals are captured in 03-RUNBOOK.md "Open Items / Deferred to Phase 4" (numeric p75 LCP HUMAN-UAT, per-RPC OBS-04 granularity, wallet-address cookie permanent removal — all properly tagged for Phase 4 follow-on plans).
 - 03-03: Plan 03-03 (SEC-05 crypto.randomBytes + rejection sampling for accessCodes.ts + referrals.ts) shipped in ~5 min, 4 atomic commits following TDD RED→GREEN: fe1579a (test accessCodes) → d5621c3 (feat accessCodes) → b452715 (test referrals NEW file) → 116f936 (feat referrals). Replaced `Math.floor(Math.random() * chars.length)` at accessCodes.ts:62 and referrals.ts:77 with rejection-sampled `crypto.randomBytes(1)[0]` via private `pickFromAlphabet` helper (limit = floor(256/N)*N cutoff per RESEARCH §Pitfall 9). For 32-char access-code alphabet limit=256 → no rejection ever fires; for 31-char referral alphabet limit=248 → bytes 248-255 trigger re-roll (~3% rejection rate, prevents modulo bias on indices 0-7). Helper duplicated between modules (private to each, NOT promoted to a shared util) — 8-line helper, inlining is fine, Phase 4 / DRIFT-01 may consolidate. Format `ST0X-XXXX-XXXX` (32-char alphabet `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`) and `st0x-ref-xxxxxx` (31-char alphabet `abcdefghjkmnpqrstuvwxyz23456789`) preserved verbatim per CONTEXT discretion. accessCodes.test.ts extended with 4 SEC-05 tests (format / 1000-uniqueness / 10000-statistical / CSPRNG witness via vi.spyOn(cryptoMod.default, 'randomBytes')); referrals.test.ts NEW with 5 SEC-05 tests (same 4 + rejection-sampling structural witness using sequenced `[250, 250, 5, 0, 0, 0, 0, 0]` mock proving picker re-rolls twice then accepts on byte 5 → 'st0x-ref-faaaaa' after 8 spy calls). All 13 SEC-05 tests pass. 0 Rule 1/2/3/4 deviations — single tolerance widening 5%→10% on the accessCodes statistical test (RED revealed Math.random's natural drift triggers a 5%-bound flake on a single 10000-sample run; 10% gives ~6σ headroom while still detecting systematic bias) documented under SUMMARY key-decisions. Acceptance gates green: 0 Math.random in both files (carry-forward gate ✓), pickFromAlphabet count = 2 in each (def + call), alphabet strings verbatim, format prefixes preserved. svelte-check baseline = 3 errors preserved. Full test suite 539 passed | 1 skipped | 0 failed (was 530/531 in 03-02 — net +9 from 13 new SEC-05 tests; 4 prior `$env/dynamic/public` failures resolved by 72a9ed0 vitest-setup fix between plans). Cross-cutting Phase 2 gates verified green: TRADE-01 lockdown = 0 banned IO reads ✓, TRADE-02 cycle severance = 0 transaction-store imports in marketOrderExecution.ts ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, staleTime: Infinity ✓. Phase-exit gate `! grep -E "Math\.random\(\)" src/lib/server/accessCodes.ts src/lib/server/referrals.ts` returns 0 hits. Test infrastructure decision: rejection-sampling structural test uses vi.spyOn().mockImplementation rather than vi.mock('crypto') — preserves the real module shape (cryptoMod.default + named exports) while overriding only the one method; vi.mock('crypto') would require providing the entire surface and break other consumers transitively. CSPRNG witness asserts shape (each call requests 1 byte) without coupling to specific index values, so the test stays robust under future helper refactors.
 - [Phase ?]: DRIFT-03: CLAUDE.md surgically aligned with shipped code; force-added (gitignored entry left in place); Ground Truth pointer added to .planning/codebase/
+- [Phase ?]: 04-02: Split execution into 2 atomic commits (one per file) — continuation-agent shape after prior session usage limit; nansen migration was complete in working tree, admin page only had imports; per-file commit kept resume point auditable, plan single-commit suggestion was stylistic not correctness.
 
 ### Pending Todos
 
@@ -207,7 +209,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-01T20:22:17.853Z
+Last session: 2026-05-01T20:34:42.621Z
 Stopped at: Phase 3 CLOSED — Plan 03-11 (Phase 3 RUNBOOK + phase-exit verification + REQUIREMENTS/ROADMAP/STATE close-out + SUMMARY) complete. Continuation-agent shape: prior agent (a2236d7fed80bc358) ran Task 1 grep gates (all 10 SEC + REL gates green at 2026-04-30T12:08:53Z; Phase 2 carry-forward gates green; test suite 569/1/0; svelte-check = 3) and authored 03-RUNBOOK.md at d16d0e3 (473 lines, 12 sections); user user-verify checkpoint APPROVED via blanket "wrap it up" instruction; this agent ran Task 3 REQUIREMENTS/ROADMAP/STATE close-out + Task 4 SUMMARY + final docs commit. Phase 3 progress: 11/11 plans, 10/10 phase REQ-IDs (SEC-01..07 + REL-01/02/03). All cross-cutting carry-forward gates green: TRADE-01 IO-perspective lockdown ✓; TRADE-02 cycle severance ✓; failWith count = 16 ≥12 ✓; EMERGENCY_RATIO_MULTIPLIER = 0 ✓; svelte-check = 3 errors ✓; staleTime: Infinity ✓. Branch: `gsd/phase-2-trade-execution-backbone-refactor` — Phase 3 work intentionally landed on the Phase 2 branch per user's chained-PR-base-into-Phase-1 instruction; not renamed. HUMAN-UAT deferred to operator post-deploy: numeric p75 LCP < 2.5s validation (Phase 2 carry-forward), Alchemy atomic-swap-then-rotate, HCAPTCHA_SECRET set in Vercel preview/production, session-cookie real-wallet smoke, Telegram alert test (REL-01), per-RPC OBS-04 granularity (Phase 4 add-on if measured). Phase 4 (TEST-01..04 + DRIFT-01..03) unblocked; next session: /gsd-plan-phase 4. Resume file: (none).
 
 Previous session: 2026-04-30T11:46:27Z

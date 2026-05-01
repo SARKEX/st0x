@@ -66,7 +66,7 @@ Coverage at the boundaries that the audit flagged as both high-risk and currentl
 Documentation and code drift that misleads future contributors and produces low-grade silent breakage.
 
 - [ ] **DRIFT-01**: Direct `TOKENS.find(...)` lookups against the wrapped address only are replaced with `getTokenByAnyAddress(addr)` in `tradeTransform.ts`, `api/orders.ts`, `api/subgraph.ts`, `oracleQuotes.ts`, `priceFeeds.ts`, `QuickTrade.svelte`, `LimitOrder.svelte`, and `DcaOrder.svelte`; an ESLint rule or comment marker prevents recurrence outside the canonical lookup module
-- [ ] **DRIFT-02**: Hardcoded USDC address constants in `admin/+page.svelte` and `api/admin/nansen/+server.ts` are replaced with `isPaymentToken(addr, network)` / a new `getPaymentTokensForNetwork(network)` helper resolved from `src/lib/config/tokens.ts`
+- [x] **DRIFT-02**: Hardcoded USDC address constants in `admin/+page.svelte` and `api/admin/nansen/+server.ts` are replaced with `isPaymentToken(addr, network)` / a new `getPaymentTokensForNetwork(network)` helper resolved from `src/lib/config/tokens.ts`
 - [x] **DRIFT-03**: `CLAUDE.md` is rewritten to match actual code — single chain (Base 8453), two auth paths (wagmi + Dynamic embedded), no Rhinestone / EIP-7702 / `account-abstraction/` directory; this file is added as a counterweight pointer to `.planning/codebase/CONCERNS.md`
 
 ### Unused-Subsystem Deprecation
@@ -128,7 +128,7 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 | TEST-03 | Phase 4 | Pending |
 | TEST-04 | Phase 4 (conditional on DEPR-02) | Pending |
 | DRIFT-01 | Phase 4 | Pending |
-| DRIFT-02 | Phase 4 | Pending |
+| DRIFT-02 | Phase 4 | Complete |
 | DRIFT-03 | Phase 4 | Complete |
 | DEPR-01 | Phase 1 | Complete (01-02, 2026-04-29) |
 | DEPR-02 | Phase 1 | Complete (01-01, 2026-04-29) |
