@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 Phase: 4
 Plan: Not started
 Status: **Stabilization milestone closed** — HUMAN-UAT carry-forwards deferred to `/gsd-verify-work --milestone stabilization --human-uat` post-deploy
-Last activity: 2026-05-01
+Last activity: 2026-05-03 - Completed quick task 260503-tm8: Close v1.0 milestone gaps
 Resume file: None
 Next step: `/gsd-verify-work --milestone stabilization --human-uat` after deploy + 24h Speed Insights window
 
@@ -218,6 +218,12 @@ None yet.
 
 - ~~Phase 1 carries an open decision (DEPR-02) that requires internal team confirmation before the snapshot pipeline can be deleted.~~ **Resolved 2026-04-28** in `01-CONTEXT.md` D-01: delete the rewards layer; keep the snapshot pipeline because it feeds admin TVL + per-token volume views. SEC-06, REL-01, and TEST-04 therefore survive against the retained subsystem.
 - Phase 4 TEST-04 ~~is conditional on the Phase 1 DEPR-02 outcome~~ **applies** — DEPR-02 retained the scraper; scraper edge-case tests (pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure) are scoped for Phase 4.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260503-tm8 | Close v1.0 milestone gaps: fix TEST-02 audit-log fan-out + retroactively author Phase 1 and Phase 3 VERIFICATION.md | 2026-05-03 | 72de561 | [260503-tm8-close-v1-0-milestone-gaps-fix-test-02-au](./quick/260503-tm8-close-v1-0-milestone-gaps-fix-test-02-au/) |
 
 ## Deferred Items
 
