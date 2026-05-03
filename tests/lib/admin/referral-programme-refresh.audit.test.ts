@@ -68,7 +68,7 @@ describe('admin/referral-programme/refresh audit-log fan-out', () => {
 		);
 	});
 
-	it('does NOT emit success when cacheDelete throws (handler swallows error → 500)', async () => {
+	it('logs REFERRAL_CACHE_REFRESH failure when cacheDelete throws', async () => {
 		(cacheDelete as Mock).mockRejectedValueOnce(new Error('cache outage'));
 
 		const event = makeEvent();
@@ -76,10 +76,12 @@ describe('admin/referral-programme/refresh audit-log fan-out', () => {
 		expect((response as Response).status).toBe(500);
 
 		const logger = (createAuditLogger as Mock).mock.results[0].value;
-		// The refresh endpoint does not currently emit logFailure on this path
-		// (the catch returns json without auditing). Pinning current behavior;
-		// a future regression that adds logFailure would update this test.
 		expect(logger.logSuccess).not.toHaveBeenCalled();
-		expect(logger.logFailure).not.toHaveBeenCalled();
+		expect(logger.logFailure).toHaveBeenCalledWith(
+			'REFERRAL_CACHE_REFRESH',
+			expect.objectContaining({ month: 'all' }),
+			'cache outage',
+			expect.objectContaining({ adminUser: 'admin' })
+		);
 	});
 });

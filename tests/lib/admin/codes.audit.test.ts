@@ -80,7 +80,7 @@ describe('admin/codes audit-log fan-out', () => {
 			);
 		});
 
-		it('does NOT emit audit when validation throws (existing-code branch returns early without audit)', async () => {
+		it('logs ACCESS_CODE_CREATED failure when duplicate code is rejected', async () => {
 			(getAccessCode as Mock).mockResolvedValue({ code: 'DUP' });
 
 			const event = makeEvent('POST', { code: 'DUP', maxUses: 10 });
@@ -88,12 +88,15 @@ describe('admin/codes audit-log fan-out', () => {
 
 			const logger = (createAuditLogger as Mock).mock.results[0].value;
 			expect(logger.logSuccess).not.toHaveBeenCalled();
-			// codes/+server.ts does not currently emit logFailure for the
-			// pre-create rejection paths — this test pins that behavior.
-			expect(logger.logFailure).not.toHaveBeenCalled();
+			expect(logger.logFailure).toHaveBeenCalledWith(
+				'ACCESS_CODE_CREATED',
+				expect.objectContaining({ code: 'DUP', reason: 'duplicate' }),
+				expect.any(String),
+				expect.objectContaining({ adminUser: 'admin' })
+			);
 		});
 
-		it('does NOT emit audit when underlying create throws (caught by handler, returns 400)', async () => {
+		it('logs ACCESS_CODE_CREATED failure when underlying create throws', async () => {
 			(getAccessCode as Mock).mockResolvedValue(null);
 			(createAccessCode as Mock).mockRejectedValue(new Error('db down'));
 
@@ -101,11 +104,13 @@ describe('admin/codes audit-log fan-out', () => {
 			await POST(event as Parameters<typeof POST>[0]);
 
 			const logger = (createAuditLogger as Mock).mock.results[0].value;
-			// codes POST swallows errors and returns 400 with no logFailure call.
-			// Pinning current behavior: a future regression that adds logFailure
-			// would update this test deliberately.
 			expect(logger.logSuccess).not.toHaveBeenCalled();
-			expect(logger.logFailure).not.toHaveBeenCalled();
+			expect(logger.logFailure).toHaveBeenCalledWith(
+				'ACCESS_CODE_CREATED',
+				expect.objectContaining({ reason: 'invalid_request_body' }),
+				'db down',
+				expect.objectContaining({ adminUser: 'admin' })
+			);
 		});
 	});
 
@@ -124,7 +129,7 @@ describe('admin/codes audit-log fan-out', () => {
 			);
 		});
 
-		it('does NOT emit success when code not found (deleteAccessCode returns false → 404)', async () => {
+		it('logs ACCESS_CODE_DELETED failure when code not found (deleteAccessCode returns false → 404)', async () => {
 			(deleteAccessCode as Mock).mockResolvedValue(false);
 
 			const event = makeEvent('DELETE', { code: 'NONE' });
@@ -132,7 +137,12 @@ describe('admin/codes audit-log fan-out', () => {
 
 			const logger = (createAuditLogger as Mock).mock.results[0].value;
 			expect(logger.logSuccess).not.toHaveBeenCalled();
-			expect(logger.logFailure).not.toHaveBeenCalled();
+			expect(logger.logFailure).toHaveBeenCalledWith(
+				'ACCESS_CODE_DELETED',
+				expect.objectContaining({ code: 'NONE', reason: 'not_found' }),
+				'Access code not found',
+				expect.objectContaining({ adminUser: 'admin' })
+			);
 		});
 	});
 
@@ -160,7 +170,7 @@ describe('admin/codes audit-log fan-out', () => {
 			);
 		});
 
-		it('does NOT emit success when update returns null (returns 500 without audit)', async () => {
+		it('logs ACCESS_CODE_UPDATED failure when update returns null (returns 500)', async () => {
 			(getAccessCode as Mock).mockResolvedValue({ code: 'ABC123' });
 			(updateAccessCode as Mock).mockResolvedValue(null);
 
@@ -169,7 +179,12 @@ describe('admin/codes audit-log fan-out', () => {
 
 			const logger = (createAuditLogger as Mock).mock.results[0].value;
 			expect(logger.logSuccess).not.toHaveBeenCalled();
-			expect(logger.logFailure).not.toHaveBeenCalled();
+			expect(logger.logFailure).toHaveBeenCalledWith(
+				'ACCESS_CODE_UPDATED',
+				expect.objectContaining({ code: 'ABC123', reason: 'update_returned_null' }),
+				'Failed to update code',
+				expect.objectContaining({ adminUser: 'admin' })
+			);
 		});
 	});
 });

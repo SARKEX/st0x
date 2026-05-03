@@ -47,6 +47,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		if (code && typeof code === 'string') {
 			const existingCode = await getAccessCode(code);
 			if (existingCode) {
+				try {
+					await audit.logFailure(
+						'ACCESS_CODE_CREATED',
+						{ code, reason: 'duplicate' },
+						'Access code already exists',
+						{ adminUser: 'admin' }
+					);
+				} catch (auditErr) {
+					console.error('[Admin Codes POST] Audit-log failure emission failed:', auditErr);
+				}
 				return json({ error: 'Access code already exists' }, { status: 400 });
 			}
 		}
@@ -72,7 +82,17 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		);
 
 		return json({ success: true, code: accessCode });
-	} catch {
+	} catch (err) {
+		try {
+			await audit.logFailure(
+				'ACCESS_CODE_CREATED',
+				{ reason: 'invalid_request_body' },
+				err instanceof Error ? err.message : 'Invalid request body',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Admin Codes POST] Audit-log failure emission failed:', auditErr);
+		}
 		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };
@@ -103,8 +123,28 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
 			return json({ success: true });
 		}
 
+		try {
+			await audit.logFailure(
+				'ACCESS_CODE_DELETED',
+				{ code: code.toUpperCase(), reason: 'not_found' },
+				'Access code not found',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Admin Codes DELETE] Audit-log failure emission failed:', auditErr);
+		}
 		return json({ error: 'Access code not found' }, { status: 404 });
-	} catch {
+	} catch (err) {
+		try {
+			await audit.logFailure(
+				'ACCESS_CODE_DELETED',
+				{ reason: 'invalid_request_body' },
+				err instanceof Error ? err.message : 'Invalid request body',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Admin Codes DELETE] Audit-log failure emission failed:', auditErr);
+		}
 		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };
@@ -157,8 +197,28 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 			return json({ success: true, code: updatedCode });
 		}
 
+		try {
+			await audit.logFailure(
+				'ACCESS_CODE_UPDATED',
+				{ code: code.toUpperCase(), reason: 'update_returned_null' },
+				'Failed to update code',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Admin Codes PUT] Audit-log failure emission failed:', auditErr);
+		}
 		return json({ error: 'Failed to update code' }, { status: 500 });
-	} catch {
+	} catch (err) {
+		try {
+			await audit.logFailure(
+				'ACCESS_CODE_UPDATED',
+				{ reason: 'invalid_request_body' },
+				err instanceof Error ? err.message : 'Invalid request body',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Admin Codes PUT] Audit-log failure emission failed:', auditErr);
+		}
 		return json({ error: 'Invalid request body' }, { status: 400 });
 	}
 };
