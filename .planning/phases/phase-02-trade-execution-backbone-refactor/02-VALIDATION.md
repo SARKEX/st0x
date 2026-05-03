@@ -2,7 +2,7 @@
 phase: 02
 slug: trade-execution-backbone-refactor
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: true
 created: 2026-04-29
 last_audited: 2026-05-03
@@ -55,7 +55,7 @@ last_audited: 2026-05-03
 
 | Req ID | Behavior | Test Type | Automated Command | Status |
 |--------|----------|-----------|-------------------|--------|
-| TRADE-01 | ESLint rule fires on a known violation fixture | unit (lint) | `npm test -- --run tests/lib/lint/trade-01-rule.test.ts` | ❌ red — ESCALATED 2026-05-03 (impl bug: TRADE-01 selector in eslint.config.js:55-65 clobbered by DRIFT-01 block at lines 91-100; flat-config does NOT merge same-named rule entries across blocks. Fix: consolidate both selectors into a single `no-restricted-syntax` rule with two options entries.) |
+| TRADE-01 | ESLint rule fires on a known violation fixture | unit (lint) | `npm test -- --run tests/lib/lint/trade-01-rule.test.ts` | ✅ resolved 2026-05-03 (eslint.config.js TRADE-01 + DRIFT-01 selectors consolidated into a single `no-restricted-syntax` rule with two options entries; both selectors verified active via `--print-config`) |
 | TRADE-01 | ESLint rule does NOT fire on canonical helper itself | unit (lint) | `npm run lint-check -- src/lib/types/orderPerspective.ts` | ✅ |
 | TRADE-01 | Codemod migration leaves zero raw-access hits in src/ | grep | `grep -rnE "\.(inputTokenAddress\|outputTokenAddress\|inputIOIndex\|outputIOIndex)\b" --include="*.ts" --include="*.svelte" src/ tests/ \| grep -vE "(orderPerspective\|utils/orderbook\|api/orders\|generated-graphql\|tests/fixtures/)" \| grep -vE "^[^:]+:[0-9]+:[[:space:]]*//" \| wc -l` MUST = 0 | ✅ verified 2026-05-03 (returns 0; excludes intentional fixture violations and comment-only mentions) |
 | TRADE-01 | Helper accessor tests round-trip | unit | `npm test -- --run tests/lib/types/orderPerspective.test.ts` | ✅ extend |
@@ -165,5 +165,23 @@ Place the consolidated rule in a single config block whose `files`/`ignores` cov
 Gap 3 (no automated test for TRADE-01 ESLint rule) is structurally resolved by `tests/lib/lint/trade-01-rule.test.ts`. The test is wired into the suite and runnable via `npm test`; it will turn green automatically when Gap 1's eslint.config.js fix lands. No additional action required from auditor.
 
 ### Frontmatter rationale
-- `nyquist_compliant: false` — Gap 1 is an open BLOCKER; the TRADE-01 ESLint enforcement requirement is unmet in code despite the rule definition existing.
+- `nyquist_compliant: true` — Gap 1 resolved 2026-05-03 by consolidating TRADE-01 + DRIFT-01 into a single `no-restricted-syntax` rule (eslint.config.js); regression test `tests/lib/lint/trade-01-rule.test.ts` now passes 2/2. All requirement rows in the verification map are green.
 - `wave_0_complete: true` — All 12 W0 deliverables (fixture, MarketOrder.test.ts, 5 split modules, codemod, ESLint rule definition, `.gitignore` entry, npm installs, vite.config visualizer) are present on disk per pre-audit.
+
+---
+
+## Validation Audit — 2026-05-03 (re-audit, post-fix)
+
+**Auditor:** orchestrator follow-up
+**Scope:** verify Gap 1 (BLOCKER) closes after eslint.config.js consolidation
+
+| Metric | Count |
+|--------|-------|
+| Open gaps from prior audit | 1 |
+| Resolved | 1 (Gap 1 — TRADE-01 + DRIFT-01 selectors consolidated into single rule entry; both selectors verified active via `npx eslint --print-config`) |
+| New gaps | 0 |
+
+**Verification:**
+- `npm test -- --run tests/lib/lint/trade-01-rule.test.ts` → 2/2 pass
+- `npx eslint --print-config src/lib/services/marketOrderExecution.ts` → `no-restricted-syntax` resolves to 2 selectors (TRADE-01 + DRIFT-01)
+- `npm run lint-check` baseline unchanged (15 pre-existing errors, 0 new)
