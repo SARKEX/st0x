@@ -261,11 +261,7 @@ export const rateLimiters = {
 
 	// Snapshot generation (expensive): 2 requests/minute
 	snapshotGenerate: (identifier: string) =>
-		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 2 }),
-
-	// Newsletter signup: 3 requests/minute
-	newsletter: (identifier: string) =>
-		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 3 })
+		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 2 })
 };
 
 import { json } from '@sveltejs/kit';
