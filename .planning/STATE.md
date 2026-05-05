@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Completed 04-08-PLAN.md
-last_updated: "2026-05-01T22:00:58.512Z"
-last_activity: 2026-05-01
+last_updated: "2026-05-05T19:31:22.683Z"
+last_activity: 2026-05-05
 progress:
   total_phases: 4
   completed_phases: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** Phase 4 — boundary-tests-and-drift-cleanup
+**Current focus:** v1.0 shipped + tagged. Awaiting next milestone definition.
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: **Stabilization milestone closed** — HUMAN-UAT carry-forwards deferred to `/gsd-verify-work --milestone stabilization --human-uat` post-deploy
-Last activity: 2026-05-03 - Completed quick task 260503-tm8: Close v1.0 milestone gaps
+Phase: — (between milestones)
+Plan: —
+Status: **v1.0 Stabilization milestone closed and tagged 2026-05-05.** Code shipped to `main`. HUMAN-UAT + tech-debt carry-forwards tracked in `## Deferred Items` below.
+Last activity: 2026-05-05 — milestone close (archive + tag v1.0)
 Resume file: None
-Next step: `/gsd-verify-work --milestone stabilization --human-uat` after deploy + 24h Speed Insights window
+Next step: `/gsd-new-milestone` to start the next milestone, OR `/gsd-verify-work --milestone v1.0 --human-uat` to close out deferred verifications.
 
 Progress: [██████████] 100% — **stabilization milestone closed (33/33 v1 REQ-IDs)** across 4 phases (Phase 1: 8 DEPR-01..03 + OBS-01..05; Phase 2: 5 TRADE-01..04 + PERF-01; Phase 3: 10 SEC-01..07 + REL-01..03; Phase 4: 7 TEST-01..04 + DRIFT-01..03). HUMAN-UAT carry-forwards: PERF-01 numeric p75 LCP < 2.5s, SEC-03+04 D-04b runtime UX, anvil-fork CI run with archive-RPC `BASE_RPC_URL`, OBS-03 transcript-capture refresh, CLAUDE.md natural-read review.
 
@@ -227,11 +227,15 @@ None yet.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none — first milestone)* | | | |
+| HUMAN-UAT (PERF-01) | Numeric p75 LCP < 2.5s on `/trade/[id]` from Vercel Speed Insights — requires post-deploy + 24h sampling window | Pending | 2026-05-05 |
+| HUMAN-UAT (SEC-03 + SEC-04 D-04b) | Runtime UX assertion: ONE wallet signature on first sign-in, NO signature prompts on subsequent trades, signature re-prompts after explicit logout — requires real wallet on production | Pending | 2026-05-05 |
+| Tech debt (REL-02) | Per-RPC attribution in OBS-04 logs lost when `verifyMessage` routes through viem fallback Transport at `accessCodes.ts` | Acknowledged | 2026-05-05 |
+| Operations (Alchemy) | Atomic-swap-then-rotate the `BASE_RPC_URL` Alchemy key (current key is git-public from pre-SEC-01 history) — recipe at [milestones/v1.0-phases/phase-03-production-grade-hardening/03-RUNBOOK.md §3](#) (or current archive path) | Pending | 2026-05-05 |
+| CI baseline (Phase 4 carry) | 3 pre-existing svelte-check errors in `tests/lib/server/rpcMetrics.test.ts:182` (tuple-type narrowing); test-integration job foundryup install failure | Acknowledged tech debt | 2026-05-05 |
 
 ## Session Continuity
 
