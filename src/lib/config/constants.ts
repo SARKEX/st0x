@@ -33,7 +33,3 @@ export const MAGIC_NUMBERS = {
 	 */
 	OA_TOKEN_CREDENTIAL_LINKS: BigInt(0xffbc38eb14ad2209n)
 };
-
-// Newsletter configuration
-export const MAILERLITE_SUBSCRIBE_ENDPOINT =
-	'https://assets.mailerlite.com/jsonp/1830582/forms/167181006278755829/subscribe';
