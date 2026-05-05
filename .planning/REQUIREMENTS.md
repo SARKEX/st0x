@@ -11,71 +11,71 @@ Requirements for the stabilization milestone. Each maps to exactly one roadmap p
 
 Foundational visibility that must come before refactor work, so we can both diagnose unknown root causes (e.g. "no liquidity" mismatches) and validate that subsequent changes actually improve the metric.
 
-- [ ] **OBS-01**: Client-side error tracking is wired into the SvelteKit app with sensitive-data scrubbing (wallet addresses + signatures redacted), capturing unhandled errors, promise rejections, and selected user-visible errors with breadcrumbs
-- [ ] **OBS-02**: Server-side structured logging is in place across SvelteKit endpoints (`src/routes/api/`), the cron entry point, and the take-order critical path, with consistent fields (request id, wallet, route, latency) and minimum log levels by route class
-- [ ] **OBS-03**: Take-order failure instrumentation captures the state at failure (subgraph quote, on-chain state when checked, ratio, slippage cap, side, taker action) so "no liquidity" and partial-fill misclassifications become diagnosable from logs alone
-- [ ] **OBS-04**: RPC failure metrics record per-RPC failure rate across the fallback chain (`generator.ts`, `accessCodes.ts`), with alerting when the entire chain fails for a single call
-- [ ] **OBS-05**: Trade-page web vitals dashboard exists (LCP, CLS, INP, TTFB at minimum) so first-paint regressions are visible against a baseline
+- [x] **OBS-01**: Client-side error tracking is wired into the SvelteKit app with sensitive-data scrubbing (wallet addresses + signatures redacted), capturing unhandled errors, promise rejections, and selected user-visible errors with breadcrumbs
+- [x] **OBS-02**: Server-side structured logging is in place across SvelteKit endpoints (`src/routes/api/`), the cron entry point, and the take-order critical path, with consistent fields (request id, wallet, route, latency) and minimum log levels by route class
+- [x] **OBS-03**: Take-order failure instrumentation captures the state at failure (subgraph quote, on-chain state when checked, ratio, slippage cap, side, taker action) so "no liquidity" and partial-fill misclassifications become diagnosable from logs alone
+- [x] **OBS-04**: RPC failure metrics record per-RPC failure rate across the fallback chain (`generator.ts`, `accessCodes.ts`), with alerting when the entire chain fails for a single call
+- [x] **OBS-05**: Trade-page web vitals dashboard exists (LCP, CLS, INP, TTFB at minimum) so first-paint regressions are visible against a baseline **[Completed 01-08, 2026-04-29: Vercel Speed Insights confirmed receiving data at https://vercel.com/st-0x/st0x/observability/speed-insights via Vercel API check (speedInsights.hasData=true, enabled 2025-07-21, ~9 months of data). Already wired pre-Phase-1 via injectSpeedInsights() in src/routes/+layout.svelte:31, consent-gated through onAnalyticsAccepted callback wired into <CookieConsent />. Documented in .planning/phases/phase-01-shrink-the-surface-see-what-s-happening/01-RUNBOOK.md alongside the env-var deploy checklist + 4 smoke tests + cross-cutting cleanup grep recipe + Phase 2 / PERF-01 hand-off (this is the baseline against which the explicit p75 LCP target is set in Phase 2 planning)]**
 
 ### Trade Execution
 
 The bug-factory class. Refactor four tightly-coupled pieces of the trade-execution backbone so the underlying bug classes (side inversions, freshness illusions, orchestration cascades, prioritization errors) cannot recur — not just the specific instances we've already fixed.
 
-- [ ] **TRADE-01**: INPUT/OUTPUT taker-vs-maker side semantics are codified through a single source of truth (`src/lib/types/orderPerspective.ts`); raw `inputTokenAddress` / `outputTokenAddress` / `inputIOIndex` / `outputIOIndex` access outside the helpers is banned (lint rule or comment marker); every boundary has unit-test coverage that pins the side
-- [ ] **TRADE-02**: `src/lib/stores/transaction.ts` (2373 lines) is split into focused, independently testable state machines for deploy, market-take, approval, and partial-fill detection; the circular import surface with `marketOrderExecution.ts` is structurally eliminated (not just patched as it was in commit 89571b3)
-- [ ] **TRADE-03**: Market-order submission performs an on-chain pre-flight check (multicall against current orderbook state) before submitting take-orders; UI staleness is visible to the user when the subgraph lags chain truth, so "no liquidity" failures stop being silent surprises
-- [ ] **TRADE-04**: Market-order execution math is provably symmetric across Buy / Sell / spend-anchored / asset-anchored modes — slippage-cap derivation, ratio multipliers, and order prioritization produce equivalent semantics; regression tests exist for each mode crossing each side
+- [x] **TRADE-01**: INPUT/OUTPUT taker-vs-maker side semantics are codified through a single source of truth (`src/lib/types/orderPerspective.ts`); raw `inputTokenAddress` / `outputTokenAddress` / `inputIOIndex` / `outputIOIndex` access outside the helpers is banned (lint rule or comment marker); every boundary has unit-test coverage that pins the side
+- [x] **TRADE-02**: `src/lib/stores/transaction.ts` (2373 lines) is split into focused, independently testable state machines for deploy, market-take, approval, and partial-fill detection; the circular import surface with `marketOrderExecution.ts` is structurally eliminated (not just patched as it was in commit 89571b3)
+- [x] **TRADE-03**: Market-order submission performs an on-chain pre-flight check (multicall against current orderbook state) before submitting take-orders; UI staleness is visible to the user when the subgraph lags chain truth, so "no liquidity" failures stop being silent surprises
+- [x] **TRADE-04**: Market-order execution math is provably symmetric across Buy / Sell / spend-anchored / asset-anchored modes — slippage-cap derivation, ratio multipliers, and order prioritization produce equivalent semantics; regression tests exist for each mode crossing each side
 
 ### Performance
 
 User-visible latency that drives bounce on the only page that actually matters for trading.
 
-- [ ] **PERF-01**: Trade-page first-paint hits an explicit target (specific p75 LCP threshold to be set in planning) on representative network/device profiles; achieved through some combination of SSR/streaming, query-waterfall reduction, and bundle pruning, validated against the OBS-05 dashboard
+- [x] **PERF-01**: Trade-page first-paint hits an explicit target (specific p75 LCP threshold to be set in planning) on representative network/device profiles; achieved through some combination of SSR/streaming, query-waterfall reduction, and bundle pruning, validated against the OBS-05 dashboard **[Completed 02-08, 2026-04-29: Structurally met by code work — rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 in vite.config.js + jspdf@3.0.4 + jspdf-autotable@5.0.2 removed from package.json (~250KB minified bundle reduction; verified 0 src/ imports) + LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe min-h-[420px] skeleton placeholders (Pitfall 5 mitigation); MarketOrder kept eager as default panel/first-paint LCP element. Build evidence: 4 code-split chunks visible (LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB). TanStack Query waterfall analyzed but not changed — existing TanStack `enabled` gating already optimal; staleTime: Infinity preserved per CLAUDE.md ground truth. Vercel Speed Insights confirmed receiving data on /trade/[id] via orchestrator Vercel API check at Plan 02-08 close: speedInsights.hasData=true, enabledAt 2025-07-21 (~9 months of historical samples). Phase 2 02-RUNBOOK.md landed (~290 lines) documenting the Speed Insights URL, pre/post-deploy capture template, CLS smoke recipe, bundle-delta recipe, top-3 bundle offenders for Phase 3, and cross-cutting cleanup grep recipe. **HUMAN-UAT note:** Numeric p75 LCP < 2.5s validation against the OBS-05 baseline requires manual dashboard visit (programmatic read via public Vercel API not available — three candidate endpoints all 404; same disclosure as Phase 1 / 01-08). Operator runs `/gsd-verify-work` after deploy + 24h Speed Insights window to capture pre-/post-deploy numeric values into 02-RUNBOOK.md and validate the < 2.5s target.]**
 
 ### Security
 
 Latent risks the audit (`.planning/codebase/CONCERNS.md`) flagged. Not yet exploited but each represents a real attack path.
 
-- [ ] **SEC-01**: Hardcoded Alchemy API key is removed from source (`raindex.ts`, `networks.ts`, `accessCodes.ts`) and replaced with environment variables (`PUBLIC_BASE_RPC_URL` for client, `BASE_RPC_URL` for server); the existing committed key is rotated on deploy
-- [ ] **SEC-02**: `SESSION_SECRET` and CSRF-secret fallback strings are removed; missing secrets cause the module to throw at load time in production (mirror the pattern already used for `CRON_SECRET`)
-- [ ] **SEC-03**: A server-issued session cookie (HttpOnly + Secure + SameSite=Strict) is bound to a verified wallet signature (extending the `signatureChallenge.ts` flow); the existing `wallet-address` cookie is downgraded to a non-authoritative hint and no longer accepted as proof of ownership in any remaining endpoints (`/api/access/check` plus any others surviving the deprecations in DEPR-01..DEPR-03)
-- [ ] **SEC-04**: CSRF tokens are bound to the session cookie via the double-submit-cookie pattern (server-issued session-id, validated on each CSRF-protected call) instead of being stateless and issued by an unauthenticated endpoint
-- [ ] **SEC-05**: Access codes (`accessCodes.ts`) and referral codes (`referrals.ts`) are generated with `crypto.randomBytes()` and rejection-sampled into the alphabet — `Math.random()` is removed from these paths
-- [ ] **SEC-06**: `/api/snapshots/preview` and `/api/snapshots/preview-stream` have tiered rate limiting applied (`applyTieredRateLimit`); `POST /api/snapshots/generate` is admin-gated (`requireAdmin`)
-- [ ] **SEC-07**: hCaptcha verification fails closed in non-production environments where `HCAPTCHA_SECRET` is missing on Vercel preview deploys (not just `process.env.NODE_ENV === 'production'`)
+- [x] **SEC-01**: Hardcoded Alchemy API key is removed from source (`raindex.ts`, `networks.ts`, `accessCodes.ts`, `referrals.ts`) and replaced with environment variables (`PUBLIC_BASE_RPC_URL` for client, `BASE_RPC_URL` for server); the existing committed key is rotated on deploy *(structural removal complete 2026-04-30 / Plan 03-01; Vercel-side rotation tracked in 03-RUNBOOK.md / Plan 03-11)*
+- [x] **SEC-02**: `SESSION_SECRET` and CSRF-secret fallback strings are removed; missing secrets cause the module to throw at load time in production (mirror the pattern already used for `CRON_SECRET`) *(complete 2026-04-30 / Plan 03-02)*
+- [x] **SEC-03**: A server-issued session cookie (HttpOnly + Secure + SameSite=Strict) is bound to a verified wallet signature (extending the `signatureChallenge.ts` flow); the existing `wallet-address` cookie is downgraded to a non-authoritative hint and no longer accepted as proof of ownership in any remaining endpoints (`/api/access/check` plus any others surviving the deprecations in DEPR-01..DEPR-03) *(complete 2026-04-30 / Plans 03-08a infrastructure + 03-08b consumer migration shipped as a single atomic-flip PR per CONTEXT D-04; phase-exit grep gate `! grep -rn "cookies.get('wallet-address')" src/lib src/hooks.server.ts src/routes/api` returns 0 hits; manual smoke APPROVED on Vercel preview with 11/11 automated structural checks; D-04b runtime UX assertion deferred to post-deploy HUMAN-UAT — code-level enforcement structurally guaranteed since verifyWalletSignature is unreachable from the per-request path)*
+- [x] **SEC-04**: CSRF tokens are bound to the session cookie via the double-submit-cookie pattern (server-issued session-id, validated on each CSRF-protected call) instead of being stateless and issued by an unauthenticated endpoint — *complete: csrf.ts session-bound HMAC + GET /api/auth/csrf gated on session cookie shipped 03-08a (2026-04-30)*
+- [x] **SEC-05**: Access codes (`accessCodes.ts`) and referral codes (`referrals.ts`) are generated with `crypto.randomBytes()` and rejection-sampled into the alphabet — `Math.random()` is removed from these paths *(complete 2026-04-30 / Plan 03-03)*
+- [x] **SEC-06**: `/api/snapshots/preview` and `/api/snapshots/preview-stream` have tiered rate limiting applied (`applyTieredRateLimit`); `POST /api/snapshots/generate` is admin-gated (`requireAdmin`) *(complete 2026-04-30 / Plan 03-05)*
+- [x] **SEC-07**: hCaptcha verification fails closed in non-production environments where `HCAPTCHA_SECRET` is missing on Vercel preview deploys (not just `process.env.NODE_ENV === 'production'`) *(complete 2026-04-30 / Plan 03-04)*
 
 ### Reliability
 
 Failure modes that have caused user-visible outages or silent data corruption.
 
-- [ ] **REL-01**: The RPC fallback chain in `src/lib/server/snapshots/generator.ts` retries each RPC with backoff, treats empty `result` fields as failure, and never silently falls back to `latestBlock` when all RPCs misbehave during `getBlockNumberForTimestamp`
-- [ ] **REL-02**: EIP-1271 / EIP-6492 signature verification in `accessCodes.ts` uses the same fallback RPC chain (with retry) as the snapshot generator, instead of a single hardcoded Alchemy RPC
-- [ ] **REL-03**: The Rain strategies registry is vendored into the bundle (`/static/registry/` or compiled-in) instead of being fetched live from GitHub raw at a pinned commit, so order deployment no longer depends on external SaaS availability or rate limits
+- [x] **REL-01**: The RPC fallback chain in `src/lib/server/snapshots/generator.ts` retries each RPC with backoff, treats empty `result` fields as failure, and never silently falls back to `latestBlock` when all RPCs misbehave during `getBlockNumberForTimestamp` *(complete 2026-04-30 / Plan 03-06; new `fetchOnce` helper throws on non-ok HTTP / JSON-parse failure / empty data.result; `callRpc` wraps each per-RPC fetch in `withRetry(() => fetchOnce(...), 2, 200)` reusing `src/lib/utils/retry.ts:5-39`; chain exhaustion throws `Error 'callRpc(method) — all N RPCs exhausted (with retry)'` with `reportChainExhausted` Telegram fan-out unchanged from Plan 01-06; `getBlockNumberForTimestamp` gains per-block try/catch INSIDE binary-search loop + function-boundary throw on `smallestDiff===Infinity`; cron's existing try/catch consumes throws as 500+pino error log; phase-exit gate `grep -c 'all .* RPCs exhausted' src/lib/server/snapshots/generator.ts = 1 ✓` and `'no block lookup succeeded' = 1 ✓`; OBS-04 per-attempt granularity preserved at per-RPC summary level — `recordRpcAttempt` fires once per RPC, withRetry inner retries don't double-emit)*
+- [x] **REL-02**: EIP-1271 / EIP-6492 signature verification in `accessCodes.ts` uses the same fallback RPC chain (with retry) as the snapshot generator, instead of a single hardcoded Alchemy RPC *(complete 2026-04-30 / Plan 03-07; basePublicClient swapped to viem fallback([http × 6], { retryCount: 2, retryDelay: 200, rank: false }) reading networks[0]-derived RPC_URLS — same shape as generator.ts:14; OBS-04 fan-out relabeled to 'fallback-chain-base'; RESEARCH Pitfall 7 mitigated structurally — no outer retry wrapper around verifyMessage)*
+- [x] **REL-03**: The Rain strategies registry is vendored into the bundle (`/static/registry/` or compiled-in) instead of being fetched live from GitHub raw at a pinned commit, so order deployment no longer depends on external SaaS availability or rate limits *(complete 2026-04-30 / Plan 03-10; static/registry/ mirrored from upstream pinned commit 9dd64902 — 9 .rain strategies + settings.yaml + authored same-origin manifest at static/registry/manifest pointing at relative /registry/* paths; orderDeployment.ts:54-58 RAIN_STRATEGIES_COMMIT removed; REGISTRY_URL = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest'; phase-exit gate `! grep -rE "RAIN_STRATEGIES_COMMIT|raw.githubusercontent.com.*rain.strategies" src/` returns 0 hits; bundle delta = 0 — static/ served as static files, never bundled into JS, PERF-01 invariant preserved)*
 
 ### Test Coverage
 
 Coverage at the boundaries that the audit flagged as both high-risk and currently untested.
 
-- [ ] **TEST-01**: Integration tests for `src/hooks.server.ts` exercise public-path / admin / wallet-registration classification, CORS, CSP, and bot-rejection ordering across representative request shapes
-- [ ] **TEST-02**: Admin endpoints have audit-log coverage — every admin endpoint that mutates state (rewards-pool, snapshots, swap-snapshot, tvl, wallet-statement, wallets, team-wallets, excluded-wallets, pool-wallets, nansen, plus any survivors of DEPR-02) calls `createAuditLogger`; a test asserts each handler emits an audit record on success and failure
-- [ ] **TEST-03**: Integration tests cover the full market-order path through `marketOrderExecution.ts` + `transaction.ts` for aggregated → fallback → per-order, hydration failures, and stale-session recovery
-- [ ] **TEST-04**: If the rewards/snapshot subsystem is retained per DEPR-02, snapshot scraper edge cases (pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure) get test coverage; if removed, this requirement is closed by deletion
+- [x] **TEST-01**: Integration tests for `src/hooks.server.ts` exercise public-path / admin / wallet-registration classification, CORS, CSP, and bot-rejection ordering across representative request shapes **[Completed 04-04, 2026-05-01: 6 test files added under `tests/hooks/` (cors, csp, public-paths, admin-gate, wallet-session, bot-rejection) plus shared `_helpers.ts` factories (`createMockRequestEvent`, `createMockKv`, `createMockSession`); each file ≥ 1 describe block; pins SEC-03/04 atomic-flip session-cookie shape, CSP host allowlist (Pitfall 1), and bot-rejection ordering at hooks.server.ts. No HUMAN-UAT carry-forward.]**
+- [x] **TEST-02**: Admin endpoints have audit-log coverage — every admin endpoint that mutates state (rewards-pool, snapshots, swap-snapshot, tvl, wallet-statement, wallets, team-wallets, excluded-wallets, pool-wallets, nansen, plus any survivors of DEPR-02) calls `createAuditLogger`; a test asserts each handler emits an audit record on success and failure **[Completed 04-05, 2026-05-01: 8 audit test files under `tests/lib/admin/` (codes, excluded-wallets, pool-wallets, team-wallets, snapshots-trigger, snapshots-regenerate, referral-programme-migrate, referral-programme-refresh); 5 `createAuditLogger` ADD endpoints (excluded-wallets, pool-wallets, team-wallets, snapshots/trigger, snapshots/regenerate) — each emits 2 audit records on success/failure paths; all 8 state-mutating admin endpoints now `import { createAuditLogger } from '$lib/server/auditLog'`.]**
+- [x] **TEST-03**: Integration tests cover the full market-order path through `marketOrderExecution.ts` + `transaction.ts` for aggregated → fallback → per-order, hydration failures, and stale-session recovery **[Completed 04-06+04-07+04-08, 2026-05-01: anvil scaffold (`tests/helpers/anvil.ts` + `loadTranscript.ts` + `vitest.integration.config.ts` + `package.json` `"test:integration"` script + Foundry CI install procedure documented in 04-RUNBOOK.md); anvil-fork suite at `tests/integration/marketOrder/anvil-fork.test.ts` (4 tests, pinned at FORK_BLOCK 33_400_000, archive-RPC required); 7 redacted JSON fixtures under `tests/fixtures/marketOrder/` covering aggregated-quote-stale, fallback-no-liquidity, hydration-failure, partial-fill, stale-session, etc.; replay suite passes 7/7 locally; un-redacted hex addresses = 0 (modulo USDC canonical allowlist). HUMAN-UAT carry-forward: anvil-fork CI run with `BASE_RPC_URL` archive provider (4 tests skip without it locally — expected per A1 risk).]**
+- [x] **TEST-04**: If the rewards/snapshot subsystem is retained per DEPR-02, snapshot scraper edge cases (pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure) get test coverage; if removed, this requirement is closed by deletion **[Completed 04-09, 2026-05-01: DEPR-02 retained the snapshot pipeline per Phase 1 D-01; co-located test file `src/lib/server/snapshots/scraper.test.ts` covers all 3 categories (pagination boundaries + legacy `wrappedTokenTransfers` fallback + transient subgraph failure / retry); category-keyword grep returns 6 matches.]**
 
 ### Drift
 
 Documentation and code drift that misleads future contributors and produces low-grade silent breakage.
 
-- [ ] **DRIFT-01**: Direct `TOKENS.find(...)` lookups against the wrapped address only are replaced with `getTokenByAnyAddress(addr)` in `tradeTransform.ts`, `api/orders.ts`, `api/subgraph.ts`, `oracleQuotes.ts`, `priceFeeds.ts`, `QuickTrade.svelte`, `LimitOrder.svelte`, and `DcaOrder.svelte`; an ESLint rule or comment marker prevents recurrence outside the canonical lookup module
-- [ ] **DRIFT-02**: Hardcoded USDC address constants in `admin/+page.svelte` and `api/admin/nansen/+server.ts` are replaced with `isPaymentToken(addr, network)` / a new `getPaymentTokensForNetwork(network)` helper resolved from `src/lib/config/tokens.ts`
-- [ ] **DRIFT-03**: `CLAUDE.md` is rewritten to match actual code — single chain (Base 8453), two auth paths (wagmi + Dynamic embedded), no Rhinestone / EIP-7702 / `account-abstraction/` directory; this file is added as a counterweight pointer to `.planning/codebase/CONCERNS.md`
+- [x] **DRIFT-01**: Direct `TOKENS.find(...)` lookups against the wrapped address only are replaced with `getTokenByAnyAddress(addr)` in `tradeTransform.ts`, `api/orders.ts`, `api/subgraph.ts`, `oracleQuotes.ts`, `priceFeeds.ts`, `QuickTrade.svelte`, `LimitOrder.svelte`, and `DcaOrder.svelte`; an ESLint rule or comment marker prevents recurrence outside the canonical lookup module **[Completed 04-03, 2026-05-01: ts-morph codemod at `scripts/codemods/migrate-token-find.ts` (idempotent; conservative — skips compound predicates) migrated 8 of 12 sites to `getTokenByAnyAddress(addr)`; ESLint `no-restricted-syntax` rule registered in `eslint.config.js` (mirroring TRADE-01 at lines 46-65) bans `TOKENS.find` / `ALL_TOKENS.find` outside the canonical lookup module; lint fixture at `tests/fixtures/eslint/token-lookup-violation.ts` proves the rule fires; 4 sites retained with single-line `eslint-disable-next-line no-restricted-syntax` + justification (symbol-based SPYM lookups in oracleQuotes/priceFeeds + payment-token USDC lookups in DcaOrder/LimitOrder where DRIFT-01 silent-wrapped-only matching does not apply).]**
+- [x] **DRIFT-02**: Hardcoded USDC address constants in `admin/+page.svelte` and `api/admin/nansen/+server.ts` are replaced with `isPaymentToken(addr, network)` / a new `getPaymentTokensForNetwork(network)` helper resolved from `src/lib/config/tokens.ts` **[Completed 04-02, 2026-05-01: `getPaymentTokensForNetwork` + `isPaymentToken` helpers added to `src/lib/config/tokens.ts`; `admin/+page.svelte` and `api/admin/nansen/+server.ts` migrated; phase-exit grep gate `grep -RE '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' src/routes/admin/ src/routes/api/admin/` returns 0 hits; helper usage = 20 references across admin paths.]**
+- [x] **DRIFT-03**: `CLAUDE.md` is rewritten to match actual code — single chain (Base 8453), two auth paths (wagmi + Dynamic embedded), no Rhinestone / EIP-7702 / `account-abstraction/` directory; this file is added as a counterweight pointer to `.planning/codebase/CONCERNS.md` **[Completed 04-01, 2026-05-01: surgical edit (not full rewrite per D-05) struck 4 false claims (Rhinestone SDK, EIP-7702, `account-abstraction/` directory, multi-chain table) and replaced with single-chain disclaimer + non-existence disclaimer; Ground Truth header added pointing at `.planning/codebase/`; Order Semantics INPUT/OUTPUT preserved verbatim per Pitfall 7. The 2 remaining `Account Abstraction` matches are inside the disclaimer paragraph that explicitly DENIES the term's applicability — over-strict-grep carve-out documented in 04-RUNBOOK.md §"Notes / Anomalies" mirroring Phase 3 SEC-07 deviation. HUMAN-UAT carry-forward: reviewer reads post-edit prose for natural flow.]**
 
 ### Unused-Subsystem Deprecation
 
 Three subsystems that ship but no longer earn their bug surface: dead user-facing rewards UI, internal "nice to have" admin/rewards views, and the entire Onramper fiat on-ramp. Removing these eliminates whole bug categories before we even touch the trade-execution refactor.
 
-- [ ] **DEPR-01**: User-facing rewards code is removed: leaderboard pages, monthly points UI, statement views, public rewards APIs that feed the user UI, leaderboard polling — anything users currently see (which is all dead) is deleted, not gated
-- [ ] **DEPR-02**: Internal admin rewards/TVL views (`admin/rewards/+page.svelte` 4933 lines, the rewards section of `admin/+page.svelte`) and the snapshot pipeline (`src/lib/server/snapshots/`, the cron, the KV state) are either fully removed (preferred — eliminates the bug surface) or explicitly retained with bandages applied (per-RPC retry, rate limits, monitoring) — decision made during Phase 1 discovery after confirming with the internal team
-- [ ] **DEPR-03**: Onramper fiat on-ramp integration is fully removed — `OnramperModal.svelte`, `/api/onramper/sign-url/+server.ts`, related routes/links/docs, and the `ONRAMPER_SECRET_KEY` / `PUBLIC_ONRAMPER_API_KEY` / `PUBLIC_ONRAMPER_ENV` env vars; the feature is unused and represents pure bug surface (including the unsigned-cookie auth path flagged in CONCERNS.md security)
+- [x] **DEPR-01**: User-facing rewards code is removed: leaderboard pages, monthly points UI, statement views, public rewards APIs that feed the user UI, leaderboard polling — anything users currently see (which is all dead) is deleted, not gated **[Completed 01-02, 2026-04-29: 3 rewards components, rewardsStore.ts, 4 rewards APIs, and 3 public-rewards APIs deleted; TokenSwapAnnouncementModal preserved per D-16 in new src/lib/components/announcements/ + announcementStore.ts; Pitfall 8 carve-out closed in hooks.server.ts]**
+- [x] **DEPR-02**: Internal admin rewards/TVL views (`admin/rewards/+page.svelte` 4933 lines, the rewards section of `admin/+page.svelte`) and the snapshot pipeline (`src/lib/server/snapshots/`, the cron, the KV state) are either fully removed (preferred — eliminates the bug surface) or explicitly retained with bandages applied (per-RPC retry, rate limits, monitoring) — decision made during Phase 1 discovery after confirming with the internal team **[Completed 01-01: admin rewards UI deleted; snapshot pipeline RETAINED per D-01 (feeds admin TVL/volume views); per-wallet points step deleted per D-03; LP_SUBGRAPH_URL wiring removed per D-05]**
+- [x] **DEPR-03**: Onramper fiat on-ramp integration is fully removed — `OnramperModal.svelte`, `/api/onramper/sign-url/+server.ts`, related routes/links/docs, and the `ONRAMPER_SECRET_KEY` / `PUBLIC_ONRAMPER_API_KEY` / `PUBLIC_ONRAMPER_ENV` env vars; the feature is unused and represents pure bug surface (including the unsigned-cookie auth path flagged in CONCERNS.md security) **[Completed 01-03, 2026-04-29: OnramperModal + sign-url deleted; DepositModal collapsed 425→174 lines to deposit-only per UI-SPEC §DepositModal copy contract; ONRAMPER_URL_SIGNED audit-log union member + onramper rate-limit tier + CSP frame-src entries + wallet-registration carve-out + .env.example block all removed; cross-cutting Buy Crypto / Add Funds CTAs renamed to Deposit; deferred '/rewards' page-protection check from 01-02 closed opportunistically]**
 
 ## v2 Requirements
 
@@ -103,36 +103,36 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OBS-01 | Phase 1 | Pending |
-| OBS-02 | Phase 1 | Pending |
-| OBS-03 | Phase 1 | Pending |
-| OBS-04 | Phase 1 | Pending |
-| OBS-05 | Phase 1 | Pending |
-| TRADE-01 | Phase 2 | Pending |
-| TRADE-02 | Phase 2 | Pending |
-| TRADE-03 | Phase 2 | Pending |
-| TRADE-04 | Phase 2 | Pending |
-| PERF-01 | Phase 2 | Pending |
-| SEC-01 | Phase 3 | Pending |
-| SEC-02 | Phase 3 | Pending |
-| SEC-03 | Phase 3 | Pending |
-| SEC-04 | Phase 3 | Pending |
-| SEC-05 | Phase 3 | Pending |
-| SEC-06 | Phase 3 | Pending |
-| SEC-07 | Phase 3 | Pending |
-| REL-01 | Phase 3 | Pending |
-| REL-02 | Phase 3 | Pending |
-| REL-03 | Phase 3 | Pending |
-| TEST-01 | Phase 4 | Pending |
-| TEST-02 | Phase 4 | Pending |
-| TEST-03 | Phase 4 | Pending |
-| TEST-04 | Phase 4 (conditional on DEPR-02) | Pending |
-| DRIFT-01 | Phase 4 | Pending |
-| DRIFT-02 | Phase 4 | Pending |
-| DRIFT-03 | Phase 4 | Pending |
-| DEPR-01 | Phase 1 | Pending |
-| DEPR-02 | Phase 1 | Pending |
-| DEPR-03 | Phase 1 | Pending |
+| OBS-01 | Phase 1 | Complete |
+| OBS-02 | Phase 1 | Complete |
+| OBS-03 | Phase 1 | Complete |
+| OBS-04 | Phase 1 | Complete |
+| OBS-05 | Phase 1 | Complete (01-08, 2026-04-29) |
+| TRADE-01 | Phase 2 | Complete (02-01, 2026-04-29) |
+| TRADE-02 | Phase 2 | Complete (02-02..02-05, 2026-04-29) |
+| TRADE-03 | Phase 2 | Complete |
+| TRADE-04 | Phase 2 | Complete (02-07, 2026-04-29) |
+| PERF-01 | Phase 2 | Complete (02-08, 2026-04-29; numeric LCP validation HUMAN-UAT) |
+| SEC-01 | Phase 3 | Complete (03-01, 2026-04-30) |
+| SEC-02 | Phase 3 | Complete (03-02, 2026-04-30) |
+| SEC-03 | Phase 3 | Complete (03-08a infrastructure + 03-08b consumer migration, 2026-04-30) |
+| SEC-04 | Phase 3 | Complete (03-08a, 2026-04-30) |
+| SEC-05 | Phase 3 | Complete (03-03, 2026-04-30) |
+| SEC-06 | Phase 3 | Complete (03-05, 2026-04-30) |
+| SEC-07 | Phase 3 | Complete (03-04, 2026-04-30) |
+| REL-01 | Phase 3 | Complete (03-06, 2026-04-30) |
+| REL-02 | Phase 3 | Complete (03-07, 2026-04-30) |
+| REL-03 | Phase 3 | Complete (03-10, 2026-04-30) |
+| TEST-01 | Phase 4 | Complete (04-04, 2026-05-01) |
+| TEST-02 | Phase 4 | Complete (04-05, 2026-05-01) |
+| TEST-03 | Phase 4 | Complete (04-06+04-07+04-08, 2026-05-01) |
+| TEST-04 | Phase 4 (conditional on DEPR-02 — confirmed retained) | Complete (04-09, 2026-05-01) |
+| DRIFT-01 | Phase 4 | Complete (04-03, 2026-05-01) |
+| DRIFT-02 | Phase 4 | Complete (04-02, 2026-05-01) |
+| DRIFT-03 | Phase 4 | Complete (04-01, 2026-05-01) |
+| DEPR-01 | Phase 1 | Complete (01-02, 2026-04-29) |
+| DEPR-02 | Phase 1 | Complete (01-01, 2026-04-29) |
+| DEPR-03 | Phase 1 | Complete (01-03, 2026-04-29) |
 
 **Coverage:**
 - v1 requirements: 30 total
@@ -142,4 +142,4 @@ Populated by the roadmapper agent on 2026-04-28. All 30 v1 requirements mapped a
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-28 after roadmapper phase mapping*
+*Last updated: 2026-05-01 — Phase 4 closed (Plan 04-10): all 7 TEST-01..04 + DRIFT-01..03 marked Complete; runbook + phase-exit grep gates green; Phase 2 + Phase 3 carry-forward invariants preserved; **stabilization milestone closed (30/30 v1 REQ-IDs across 4 phases)**. HUMAN-UAT carry-forwards (PERF-01 numeric p75 LCP, SEC-03+04 D-04b runtime UX, anvil-fork CI, OBS-03 transcript-capture refresh) deferred to `/gsd-verify-work` post-deploy per `04-RUNBOOK.md` §"Hand-off — Milestone Close".*

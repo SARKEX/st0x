@@ -12,7 +12,7 @@
 	} from '$lib/stores/referralStore';
 	import { walletAddress } from '$lib/stores/authStore';
 	import { signMessage } from '$lib/services/walletService';
-	import { formatPoints, formatUsd } from '$lib/stores/rewardsStore';
+	import { formatPoints, formatUsd } from '$lib/utils/format';
 	import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import ModalTabs from '$lib/components/ui/ModalTabs.svelte';

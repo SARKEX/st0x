@@ -319,10 +319,12 @@ export const tieredLimits: Record<string, TieredRateLimitConfig> = {
 		anonymous: { windowMs: 60 * 1000, maxRequests: 20 }, // 20/min for anon
 		authenticated: { windowMs: 60 * 1000, maxRequests: 120 } // 120/min for wallet
 	},
-	// Onramper (requires wallet)
-	onramper: {
-		anonymous: { windowMs: 60 * 1000, maxRequests: 2 }, // 2/min for anon (shouldn't happen)
-		authenticated: { windowMs: 60 * 1000, maxRequests: 10 } // 10/min for wallet
+	// SEC-06: Snapshots preview (10-60s wall time per request — heaviest tier in spirit)
+	// MUST exist BEFORE wrapping preview endpoints — applyTieredRateLimit fails OPEN on unknown tier names.
+	// Cookie name 'wallet-address' is read at the call sites until Plan 03-08b / SEC-03 atomic flip swaps to 'session' cookie + KV lookup.
+	snapshotsPreview: {
+		anonymous: { windowMs: 60 * 1000, maxRequests: 1 }, // 1/min anon — preview is expensive
+		authenticated: { windowMs: 60 * 1000, maxRequests: 3 } // 3/min for connected wallets
 	}
 };
 

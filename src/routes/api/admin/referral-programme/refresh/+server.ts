@@ -42,6 +42,16 @@ export const POST: RequestHandler = async ({ url, cookies, request }) => {
 		});
 	} catch (error) {
 		console.error('[Admin Referral Refresh] Error:', error);
+		try {
+			await audit.logFailure(
+				'REFERRAL_CACHE_REFRESH',
+				{ month: month || 'all' },
+				error instanceof Error ? error.message : 'Unknown error',
+				{ adminUser: 'admin' }
+			);
+		} catch (auditErr) {
+			console.error('[Admin Referral Refresh] Audit-log failure emission failed:', auditErr);
+		}
 		return json(
 			{
 				success: false,

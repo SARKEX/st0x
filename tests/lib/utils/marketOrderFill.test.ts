@@ -181,3 +181,222 @@ describe('evaluateMarketOrderFill', () => {
 		});
 	});
 });
+
+describe('TRADE-04 regression matrix — pins 89571b3 bug classes', () => {
+	// This block is the executable specification of the two bug classes 89571b3 fixed:
+	//   Bug class 1 (asymmetric slippage):  hardcoded EMERGENCY_RATIO_MULTIPLIER='2' for Sell
+	//                                        vs computeRatioMultiplier(slippageBps) for Buy.
+	//                                        Pinned in marketOrderExecution.test.ts (Task 2).
+	//   Bug class 2 (anchor inversion):     partial-fill check anchored on requestedTakerWantsAmount
+	//                                        when it should have been requestedTakerPaysAmount for
+	//                                        spend-anchored modes (Sell-by-asset, Buy-by-spend).
+	//                                        Pinned BELOW.
+	//
+	// Threshold reminder: MARKET_ORDER_FULL_FILL_THRESHOLD_BPS = 9_970n
+	//   isPartialFill iff !isNoFill AND actual * 10_000 < requested * 9_970
+	//   i.e. partial when actual / requested < 99.7%
+
+	interface RegressionCase {
+		description: string;
+		// Test inputs to evaluateMarketOrderFill:
+		totalTakerWantsAmount: bigint;
+		totalTakerPaysAmount: bigint;
+		requestedTakerWantsAmount: bigint;
+		requestedTakerPaysAmount?: bigint;
+		// Expected outputs:
+		expectPartialFill: boolean;
+		expectNoFill: boolean;
+	}
+
+	const REGRESSION_CASES: RegressionCase[] = [
+		// ── BUG CLASS 2: anchor inversion. The 89571b3 fix was: anchor on PAYS for spend-anchored
+		//    modes, not WANTS. Pre-fix code wrongly anchored on WANTS for Sell-by-asset and
+		//    Buy-by-spend. Each mode×side gets full-fill / partial / 99.7%-boundary / no-fill.
+
+		// ─── Sell-by-asset (spend-anchored) ────────────────────────────────────────────────────
+		// Sell IS spend-anchored regardless of inputMode — user typed an asset amount they're SELLING.
+		// The "anchor" is what the user committed to part with: their asset (the PAYS side from
+		// the taker's view). Anchor = requestedTakerPaysAmount.
+		{
+			description:
+				'Sell-by-asset full-fill (asset fully sold, USDC < typed): NOT partial — anchor on PAYS catches this',
+			totalTakerWantsAmount: 90_000_000n, // got 90 USDC (worse price than typed 95 estimate)
+			totalTakerPaysAmount: 1_000_000_000_000_000_000n, // sold full 1.0 asset (full-fill on the anchor)
+			requestedTakerWantsAmount: 95_000_000n,
+			requestedTakerPaysAmount: 1_000_000_000_000_000_000n,
+			expectPartialFill: false,
+			expectNoFill: false
+			// PRE-89571b3: would have anchored on WANTS → 90/95 = 94.7% < 99.7% → flagged partial (WRONG).
+		},
+		{
+			description:
+				'Sell-by-asset partial: only 80% of asset sold (vault drained mid-fill) — flagged partial',
+			totalTakerWantsAmount: 75_000_000n,
+			totalTakerPaysAmount: 800_000_000_000_000_000n, // 0.8 of typed 1.0 asset = 80%
+			requestedTakerWantsAmount: 95_000_000n,
+			requestedTakerPaysAmount: 1_000_000_000_000_000_000n,
+			expectPartialFill: true,
+			expectNoFill: false
+		},
+		{
+			description:
+				'Sell-by-asset 99.7% boundary: exactly 99.7% of asset sold — NOT partial (boundary)',
+			totalTakerWantsAmount: 94_700_000n,
+			totalTakerPaysAmount: 997_000_000_000_000_000n, // 0.997 of 1.0 asset
+			requestedTakerWantsAmount: 95_000_000n,
+			requestedTakerPaysAmount: 1_000_000_000_000_000_000n,
+			expectPartialFill: false,
+			expectNoFill: false
+		},
+		{
+			description: 'Sell-by-asset no-fill: 0 received → isNoFill, NOT isPartialFill',
+			totalTakerWantsAmount: 0n,
+			totalTakerPaysAmount: 0n,
+			requestedTakerWantsAmount: 95_000_000n,
+			requestedTakerPaysAmount: 1_000_000_000_000_000_000n,
+			expectPartialFill: false,
+			expectNoFill: true
+		},
+
+		// ─── Buy-by-asset (wants-anchored) ─────────────────────────────────────────────────────
+		// User typed an asset amount they want to BUY. Anchor = the asset they want = WANTS side
+		// from taker. requestedTakerPaysAmount is undefined (or 0) — falls back to wants-anchor.
+		{
+			description:
+				'Buy-by-asset full-fill (asset fully received, USDC paid > typed): NOT partial — anchor on WANTS',
+			totalTakerWantsAmount: 1_000_000_000_000_000_000n, // got full 1.0 asset (full-fill)
+			totalTakerPaysAmount: 100_500_000n, // paid 100.5 USDC (slippage within tolerance)
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: undefined,
+			expectPartialFill: false,
+			expectNoFill: false
+		},
+		{
+			description: 'Buy-by-asset partial: only 80% asset received',
+			totalTakerWantsAmount: 800_000_000_000_000_000n, // 0.8 of 1.0 asset
+			totalTakerPaysAmount: 80_000_000n,
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: undefined,
+			expectPartialFill: true,
+			expectNoFill: false
+		},
+		{
+			description: 'Buy-by-asset 99.7% boundary: exactly 99.7% of asset received — NOT partial',
+			totalTakerWantsAmount: 997_000_000_000_000_000n,
+			totalTakerPaysAmount: 99_700_000n,
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: undefined,
+			expectPartialFill: false,
+			expectNoFill: false
+		},
+		{
+			description: 'Buy-by-asset no-fill: 0 received → isNoFill',
+			totalTakerWantsAmount: 0n,
+			totalTakerPaysAmount: 0n,
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: undefined,
+			expectPartialFill: false,
+			expectNoFill: true
+		},
+
+		// ─── Buy-by-spend (spend-anchored) ─────────────────────────────────────────────────────
+		// User typed a USDC amount they're spending. Anchor = the USDC = PAYS side from taker.
+		{
+			description:
+				'Buy-by-spend full-fill (USDC fully spent, asset received < estimate): NOT partial — anchor on PAYS catches this',
+			totalTakerWantsAmount: 950_000_000_000_000_000n, // got 0.95 asset (worse price than typed 1.0)
+			totalTakerPaysAmount: 100_000_000n, // spent full 100 USDC (full on anchor)
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: 100_000_000n,
+			expectPartialFill: false,
+			expectNoFill: false
+			// PRE-89571b3: would have anchored on WANTS → 0.95/1.0 < 99.7% → flagged partial (WRONG).
+		},
+		{
+			description: 'Buy-by-spend partial: only 80% USDC spent (vault drained for fewer asset units)',
+			totalTakerWantsAmount: 800_000_000_000_000_000n,
+			totalTakerPaysAmount: 80_000_000n, // 80% of typed 100 USDC
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: 100_000_000n,
+			expectPartialFill: true,
+			expectNoFill: false
+		},
+		{
+			description: 'Buy-by-spend 99.7% boundary: exactly 99.7% of USDC spent — NOT partial',
+			totalTakerWantsAmount: 997_000_000_000_000_000n,
+			totalTakerPaysAmount: 99_700_000n, // exactly 99.7% of 100 USDC
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: 100_000_000n,
+			expectPartialFill: false,
+			expectNoFill: false
+		},
+		{
+			description: 'Buy-by-spend no-fill: 0 received → isNoFill',
+			totalTakerWantsAmount: 0n,
+			totalTakerPaysAmount: 0n,
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: 100_000_000n,
+			expectPartialFill: false,
+			expectNoFill: true
+		},
+
+		// ─── Anchor-fallback: requestedTakerPaysAmount = 0n (treated as undefined per 89571b3) ──
+		{
+			description:
+				'Anchor-fallback: pays = 0n falls back to wants-anchor (Buy-by-asset path)',
+			totalTakerWantsAmount: 1_000_000_000_000_000_000n,
+			totalTakerPaysAmount: 100_500_000n,
+			requestedTakerWantsAmount: 1_000_000_000_000_000_000n,
+			requestedTakerPaysAmount: 0n,
+			expectPartialFill: false,
+			expectNoFill: false
+		},
+
+		// ─── Edge: 0 actual but non-zero requested (Sell-by-asset, vault drained pre-fill) ─────
+		{
+			description:
+				'Sell-by-asset 0 received (vault entirely drained pre-fill): isNoFill',
+			totalTakerWantsAmount: 0n,
+			totalTakerPaysAmount: 0n,
+			requestedTakerWantsAmount: 95_000_000n,
+			requestedTakerPaysAmount: 1_000_000_000_000_000_000n,
+			expectPartialFill: false,
+			expectNoFill: true
+		},
+
+		// ─── Edge: 0 requested → isNoFill (defensive — guards against pre-flight failure) ─────
+		{
+			description: 'Defensive: 0 requestedWants AND undefined requestedPays → isNoFill',
+			totalTakerWantsAmount: 100_000n,
+			totalTakerPaysAmount: 100_000n,
+			requestedTakerWantsAmount: 0n,
+			requestedTakerPaysAmount: undefined,
+			expectPartialFill: false,
+			expectNoFill: true
+		},
+
+		// ─── Just-above-boundary: 99.71% of pays-anchor → NOT partial ─────────────────────────
+		{
+			description: 'Just-above-boundary: 99.71% of pays-anchor → NOT partial',
+			totalTakerWantsAmount: 95_000_000n,
+			totalTakerPaysAmount: 997_100_000_000_000_000n,
+			requestedTakerWantsAmount: 95_000_000n,
+			requestedTakerPaysAmount: 1_000_000_000_000_000_000n,
+			expectPartialFill: false,
+			expectNoFill: false
+		}
+	];
+
+	REGRESSION_CASES.forEach((c) => {
+		it(c.description, () => {
+			const result = evaluateMarketOrderFill({
+				totalTakerWantsAmount: c.totalTakerWantsAmount,
+				totalTakerPaysAmount: c.totalTakerPaysAmount,
+				requestedTakerWantsAmount: c.requestedTakerWantsAmount,
+				requestedTakerPaysAmount: c.requestedTakerPaysAmount
+			});
+			expect(result.isPartialFill).toBe(c.expectPartialFill);
+			expect(result.isNoFill).toBe(c.expectNoFill);
+		});
+	});
+});

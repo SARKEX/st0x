@@ -2,6 +2,10 @@
 	import type { CategorizedToken } from '$lib/config/network';
 	import { currentNetwork } from '$lib/stores';
 	import { type ProcessedQuote, walkOrderbook } from '$lib/api/orders';
+	import {
+		getMakerInputTokenAddress,
+		getMakerOutputTokenAddress
+	} from '$lib/types/orderPerspective';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
@@ -214,6 +218,15 @@
 
 	$: isQuoteStale = quoteFreshnessSeconds > ORDERBOOK_MAX_STALENESS_MS / 1000;
 
+	// TRADE-03 D-05 (Plan 02-06): detect terminal-state failure from the pre-flight
+	// + auto-retry cascade. The user-facing error string carrying the D-05 copy is
+	// returned by `executeMarketOrder()` and stored locally in `orderPreparationError`
+	// (see handleMarketOrder below). When the cascade exhausts (auto_retry_exhausted
+	// or preflight_order_vanished), the inline block below renders without a form
+	// reset or toast — user input stays intact. (See `marketOrderExecution.ts` for
+	// the failWith() user-facing copy that lands here.)
+	$: noLiquidityError = (orderPreparationError ?? '').includes('No liquidity available right now');
+
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
@@ -304,8 +317,8 @@
 
 			// Filter quotes by side and token pair
 			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-				const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-				const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+				const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
+				const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
 				const targetOutputAddress =
 					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
 				const targetInputAddress =
@@ -569,8 +582,8 @@
 
 		// Filter quotes for BUY side with price guard
 		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+			const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
+			const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
 			const quotePerAsset = quote.quotePerAsset;
 
 			return (
@@ -698,8 +711,8 @@
 			oraclePrice && oraclePrice > 0 ? oraclePrice / PRICE_GUARD_MULTIPLIER : 0;
 
 		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(quote.outputTokenAddress);
-			const quoteInputAddressNormalized = normalizeAddress(quote.inputTokenAddress);
+			const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
+			const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
 			const targetOutputAddress =
 				orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
 			const targetInputAddress =
@@ -1047,6 +1060,14 @@
 						{/if}
 					</p>
 				{/if}
+				<!-- TRADE-03 D-05 (Plan 02-06): terminal-state inline error when the
+					 pre-flight + auto-retry cascade exhausts. User input stays intact (no
+					 form reset, no toast). Copy locked in 02-CONTEXT.md D-05. -->
+				{#if noLiquidityError}
+					<p class="mt-2 text-xs text-red-400">
+						No liquidity available right now for this size. Try a smaller amount or check back in a minute.
+					</p>
+				{/if}
 			</div>
 		</div>
 
@@ -1153,7 +1174,11 @@
 							{/if}
 						</div>
 					{/if}
-					{#if orderPreparationError}
+					{#if orderPreparationError && !noLiquidityError}
+						<!-- TRADE-03: when the D-05 inline block above is rendering the
+							 verbatim "No liquidity available right now ..." copy, suppress
+							 the generic orderPreparationError box so the message is not
+							 duplicated. Other preparation errors still surface here. -->
 						<div
 							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
 						>

@@ -12,10 +12,12 @@
  */
 
 import { get } from 'svelte/store';
+import { env as publicEnv } from '$env/dynamic/public';
 import type { Token } from '$lib/types';
 import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
+import type { DeploymentTransactionArgs } from '@rainlanguage/orderbook';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { walletAddress } from '$lib/stores/authStore';
 
@@ -50,11 +52,12 @@ type DotrainRegistryInstance = {
 	}>;
 };
 
-/** Pinned commit for rain.strategies registry (holds strategy order definitions). */
-const RAIN_STRATEGIES_COMMIT = '9dd64902161158395d588335f0a02e3a6d52f772';
-
-/** Registry URL for rain.strategies (order definitions + shared settings). */
-const REGISTRY_URL = `https://raw.githubusercontent.com/rainlanguage/rain.strategies/${RAIN_STRATEGIES_COMMIT}/registry`;
+/**
+ * Registry URL for rain.strategies. Vendored under static/registry/ and served same-origin.
+ * Set PUBLIC_REGISTRY_URL only for staging tests against an alternate registry.
+ * Refresh procedure: see 03-RUNBOOK.md "Registry Refresh".
+ */
+const REGISTRY_URL = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
 
 /** Maps app network slug to the deployment key in rain.strategies registry. */
 function getDeploymentKey(raindexNetworkSlug: string): string {
@@ -144,7 +147,10 @@ export type DcaDeploymentArgs = {
 	inputVaultId?: Hex; // Optional override for input vault (defaults to DEFAULT_INPUT_VAULT_ID)
 };
 
-export const getDcaDeploymentArgs = async (network: Network, args: DcaDeploymentArgs) => {
+export const getDcaDeploymentArgs = async (
+	network: Network,
+	args: DcaDeploymentArgs
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('auction-dca', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('output', args.outputToken.address);
@@ -190,7 +196,7 @@ export const getDcaDeploymentArgs = async (network: Network, args: DcaDeployment
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,
@@ -209,7 +215,7 @@ export type LimitOrderDeploymentArgs = {
 export const getLimitOrderDeploymentArgs = async (
 	network: Network,
 	args: LimitOrderDeploymentArgs
-) => {
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.inputToken.address);
@@ -236,7 +242,7 @@ export const getLimitOrderDeploymentArgs = async (
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,
@@ -263,7 +269,7 @@ export type MarketMakingDeploymentArgs = {
 export const getMarketMakingDeploymentArgs = async (
 	network: Network,
 	args: MarketMakingDeploymentArgs
-) => {
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('dynamic-spread', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.token1.address);
@@ -310,7 +316,7 @@ export const getMarketMakingDeploymentArgs = async (
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,
@@ -351,7 +357,10 @@ export type FolioDeploymentArgs = {
 	outputVaultId7: Hex | undefined;
 };
 
-export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploymentArgs) => {
+export const getFolioDeploymentArgs = async (
+	network: Network,
+	args: FolioDeploymentArgs
+): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('folio', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.selectedToken1.address);
@@ -447,7 +456,7 @@ export const getFolioDeploymentArgs = async (network: Network, args: FolioDeploy
 
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
-	const deploymentArgs = deploymentArgsResult.value;
+	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
 	return {
 		composedRainlang,

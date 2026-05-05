@@ -1,13 +1,23 @@
 import crypto from 'crypto';
 import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
+
+// SEC-02: fail-closed at module load in production when SESSION_SECRET is missing.
+// Mirrors the CRON_SECRET precedent at src/routes/api/cron/snapshots/+server.ts:42-49,
+// but throws at module-top so a missing secret crashes the lambda at cold start
+// (visible in Vercel Logs immediately) rather than silently using a known/committed
+// dev fallback that any repo reader could forge.
+if (!dev && !env.SESSION_SECRET) {
+	throw new Error('[auth] SESSION_SECRET required in production');
+}
+const SESSION_SECRET = env.SESSION_SECRET || (dev ? 'dev-only-do-not-use-in-prod' : '');
 
 export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function createSessionToken(timestamp: number): string {
 	const user = env.BASIC_AUTH_USER || '';
 	const pass = env.BASIC_AUTH_PASS || '';
-	const secret = env.SESSION_SECRET || 'st0x-session-secret-2024';
-	const data = `${timestamp}-${user}:${pass}-${secret}`;
+	const data = `${timestamp}-${user}:${pass}-${SESSION_SECRET}`;
 	return crypto.createHash('sha256').update(data).digest('hex');
 }
 

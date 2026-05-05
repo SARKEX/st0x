@@ -67,6 +67,18 @@ export async function kvDel(key: string): Promise<void> {
 }
 
 // Key prefixes for organization
+//
+// Phase 1 (DEPR-02 D-04): The per-wallet points pipeline that wrote
+// `monthlyPoints` / `monthlyPointsList` / `rewardsPool` / `rewardsPoolList`
+// was deleted in DEPR-02. The keys + types are retained because
+// src/lib/server/referrals.ts (referral-performance calc, KEPT per D-14)
+// still reads them. After DEPR-02, those reads return null/empty data and
+// referral-performance becomes a no-op until SEC-05 hardens it in Phase 3.
+// Existing KV entries are LEFT AS-IS — no backfill, no wipe.
+//
+// `excludedWallets` / `poolWallets` / `teamWallets` are NOT rewards-only —
+// the orderbook excluded-wallet logic in src/lib/server/snapshots/generator.ts
+// consumes them via `getRewardsExcludedWalletsSet()`. They MUST be retained.
 export const KV_KEYS = {
 	accessCode: (code: string) => `access_codes:${code.toUpperCase()}`,
 	wallet: (address: string) => `wallets:${address.toLowerCase()}`,
@@ -75,16 +87,16 @@ export const KV_KEYS = {
 	// Snapshot keys
 	snapshotBlocks: () => 'snapshots:blocks', // List of all snapshot block records
 	snapshotBlocksByDate: (date: string) => `snapshots:date:${date}`, // Blocks for a specific date (YYYY-MM-DD)
-	// Monthly points keys
+	// Monthly points keys (legacy data tolerance per D-04 — see comment above)
 	monthlyPoints: (month: string) => `snapshots:points:${month}`, // Monthly points (YYYY-MM)
 	monthlyPointsList: () => 'snapshots:points:__all__', // List of all months with data
-	// Excluded wallets for rewards
+	// Excluded wallets for rewards/orderbook filtering (KEPT — used by snapshot generator)
 	excludedWallets: () => 'rewards:excluded_wallets', // List of wallet addresses excluded from TVL
 	// Team wallets - excluded from TVL stats but still eligible for rewards
 	teamWallets: () => 'rewards:team_wallets', // List of team wallet addresses
 	// Pool wallets - excluded from rewards but counted as non-team TVL
 	poolWallets: () => 'rewards:pool_wallets', // List of pool/AMM contract addresses
-	// Rewards pool configuration
+	// Rewards pool configuration (legacy data tolerance per D-04 — see comment above)
 	rewardsPool: (month: string) => `rewards:pool:${month}`, // Rewards pool config (YYYY-MM)
 	rewardsPoolList: () => 'rewards:pool:__all__', // List of all months with pool config
 	// Referral programme keys
@@ -114,8 +126,11 @@ export interface DailySnapshotRecord {
 	generatedAt: string;
 }
 
-// Types for monthly points tracking
-// Points = 100 per $1 USD of holdings at each snapshot
+// Types for monthly points tracking.
+// Phase 1 (DEPR-02 D-04): The writer (src/lib/server/snapshots/points.ts)
+// was deleted; these types are retained for the surviving reader in
+// src/lib/server/referrals.ts (referral-performance calc, KEPT per D-14).
+// Points = 100 per $1 USD of holdings at each snapshot (legacy semantics).
 export interface WalletTokenPoints {
 	points: number; // Cumulative points from this token
 	lastBalance: string; // Last recorded balance (for reference)

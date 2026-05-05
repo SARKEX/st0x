@@ -10,7 +10,9 @@ import {
 	getBlockTimestamp,
 	getBlockNumberForTimestamp
 } from '$lib/server/snapshots/generator';
-import { updateMonthlyPoints } from '$lib/server/snapshots/points';
+// Per-wallet points calculation removed in Phase 1 (DEPR-02 D-03); cron now
+// writes only TVL + volume aggregates. The rewards-cache invalidation helper
+// also went away with the rewards layer (DEPR-02 + DEPR-01).
 import {
 	getKv,
 	kvGet,
@@ -19,7 +21,6 @@ import {
 	type SnapshotBlockRecord,
 	type DailySnapshotRecord
 } from '$lib/server/kv';
-import { invalidateRewardsCaches } from '$lib/server/cache';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -79,7 +80,8 @@ export const GET: RequestHandler = async ({ request }) => {
 
 		const storedBlobs: { block: number; token: string; url: string }[] = [];
 
-		// Process a single block: generate snapshots, upload to blob, update points
+		// Process a single block: generate snapshots, upload to blob.
+		// Per-wallet points calculation removed in Phase 1 (DEPR-02 D-03).
 		const processBlock = async (blockNumber: number) => {
 			const [snapshots, timestamp] = await Promise.all([
 				generateAllTokenSnapshots(blockNumber),
@@ -102,8 +104,6 @@ export const GET: RequestHandler = async ({ request }) => {
 			);
 
 			storedBlobs.push(...blobResults);
-
-			await updateMonthlyPoints(snapshots, blockNumber, timestamp);
 
 			return {
 				blockNumber,
@@ -139,8 +139,8 @@ export const GET: RequestHandler = async ({ request }) => {
 			console.log(`[Cron] Stored block records in KV`);
 		}
 
-		// Invalidate all rewards-related caches so fresh data is computed
-		await invalidateRewardsCaches();
+		// Rewards-cache invalidation removed in Phase 1 (DEPR-02) — the rewards
+		// caches it covered are deleted alongside the rewards layer (Plan 01-02).
 
 		return json({
 			success: true,

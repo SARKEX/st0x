@@ -7,8 +7,14 @@ import {
 	getCurrentBlockNumber,
 	getBlockTimestamp
 } from '$lib/server/snapshots/generator';
+import { requireAdmin } from '$lib/server/adminAuth';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
+	// SEC-06: admin gate. Cron does NOT call this endpoint (verified by grep — RESEARCH Pitfall 5);
+	// cron uses CRON_SECRET and calls generateAllTokenSnapshots() directly from the generator module.
+	const guardResponse = await requireAdmin(request, cookies, 'snapshots-generate');
+	if (guardResponse) return guardResponse;
+
 	try {
 		const body = await request.json().catch(() => ({}));
 		const targetBlock = body.blockNumber

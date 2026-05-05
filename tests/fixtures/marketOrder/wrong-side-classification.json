@@ -1,0 +1,35 @@
+{
+  "subgraphQuoteHash": "0x...redacted",
+  "fullQuotePayload": [
+    {
+      "orderHash": "0xwrongside111111111111111111111111111111111111111111111111111111",
+      "maxOutput": "0x...redacted",
+      "ratio": "0x...redacted",
+      "inputTokenSymbol": "tIAU",
+      "outputTokenSymbol": "USDC",
+      "inputTokenAddress": "0x...redacted",
+      "outputTokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "inputIOIndex": 0,
+      "outputIOIndex": 0,
+      "side": "bid",
+      "quotePerAsset": 2350.0
+    }
+  ],
+  "onChainStateRead": {
+    "orderHash": "0xwrongside111111111111111111111111111111111111111111111111111111",
+    "vaultBalance": "0",
+    "IOIndex": { "input": 0, "output": 0 }
+  },
+  "ratio": "0x...redacted",
+  "slippageBps": 100,
+  "priceCap": "2373.5",
+  "side": "ask",
+  "takerAction": "Buy",
+  "userAction": "Buy",
+  "mode": "buyUpTo",
+  "walletAddress": "0x...redacted",
+  "request_id": null,
+  "timestamp": "2026-04-21T22:04:55.812Z",
+  "failure_mode": "wrong-side-classification",
+  "expected_reason": "no_walk_fills"
+}

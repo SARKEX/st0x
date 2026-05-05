@@ -12,7 +12,6 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import QuickTrade from '$lib/components/QuickTrade.svelte';
-	import { fetchGlobalRewards } from '$lib/stores/rewardsStore';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
 	import { track, trackPageView } from '$lib/services/analytics';
@@ -74,7 +73,6 @@
 	let cleanupScrollTracking: (() => void) | null = null;
 
 	onMount(() => {
-		fetchGlobalRewards();
 		// Start typewriter animation
 		typewriterTick();
 
@@ -423,9 +421,7 @@
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<TokenDisplay
-												logoUrl={ALL_TOKENS.find(
-													(s) => s.address.toLowerCase() === token.address.toLowerCase()
-												)?.logoUrl}
+												logoUrl={getTokenByAnyAddress(token.address)?.logoUrl}
 												symbol={token.symbol}
 												name={token.name}
 											/>

@@ -1,8 +1,32 @@
 import type { Handle } from '@sveltejs/kit';
+import * as Sentry from '@sentry/sveltekit';
+import { sequence } from '@sveltejs/kit/hooks';
 import { verifySessionToken } from '$lib/server/auth';
 import { isWalletRegistered } from '$lib/server/accessCodes';
+import { readSession, maybeRefreshSession } from '$lib/server/walletSession';
+import { requestContextHandle } from '$lib/server/logger';
+import { scrubSentryEvent } from '$lib/observability/scrub';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
+
+// =============================================================================
+// Sentry Server Init (OBS-01)
+// =============================================================================
+// Errors-only configuration — no Replay, no Performance, no Feedback (D-06 / free-tier).
+// Init gated by !dev && Boolean(env.SENTRY_DSN) so dev runs no-op and missing DSN in prod
+// degrades gracefully. PII scrubbing runs in BOTH beforeSend AND beforeBreadcrumb (Pitfall 9).
+Sentry.init({
+	dsn: env.SENTRY_DSN,
+	enabled: !dev && Boolean(env.SENTRY_DSN),
+	tracesSampleRate: 0,
+	integrations: [],
+	beforeSend(event) {
+		return scrubSentryEvent(event);
+	},
+	beforeBreadcrumb(breadcrumb) {
+		return scrubSentryEvent(breadcrumb);
+	}
+});
 
 // =============================================================================
 // CORS Configuration
@@ -159,8 +183,8 @@ const CSP_DIRECTIVES = [
 	"font-src 'self' https://fonts.gstatic.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://cdn.jsdelivr.net data:",
 	"img-src 'self' data: blob: https:",
 	// Tightened connect-src - explicitly list allowed API endpoints
-	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://base.drpc.org https://*.g.alchemy.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com https://st0x-oracle-server.fly.dev https://st0x-oracle.com http://st0x-oracle.com https://rain-oracle-server.fly.dev wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://*.posthog.com https://*.i.posthog.com",
-	"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://buy.onramper.com https://buy.onramper.dev https://*.tradingview.com https://*.tradingview-widget.com https://app.dynamicauth.com https://*.dynamicauth.com https://verify.walletconnect.com https://verify.walletconnect.org",
+	"connect-src 'self' https://*.st0x.io https://*.vercel-kv.com https://*.vercel.app https://api.goldsky.com https://*.base.org https://*.publicnode.com https://*.llamarpc.com https://*.meowrpc.com https://*.blastapi.io https://gateway.tenderly.co https://*.tradingview.com https://*.walletconnect.com https://*.walletconnect.org https://api.web3modal.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://api.dynamic.xyz https://*.dynamic.xyz https://app.dynamicauth.com https://*.dynamicauth.com https://dynamic-static-assets.com https://*.dynamic-static-assets.com https://rpc.ankr.com https://base.drpc.org https://*.g.alchemy.com https://hermes.pyth.network https://*.pyth.network https://raw.githubusercontent.com https://st0x-oracle-server.fly.dev https://st0x-oracle.com http://st0x-oracle.com https://rain-oracle-server.fly.dev wss://*.dynamic.xyz wss://*.dynamicauth.com https://api.openchain.xyz https://va.vercel-scripts.com https://assets.mailerlite.com https://tokens.coingecko.com https://*.coingecko.com https://cdn.jsdelivr.net https://*.posthog.com https://*.i.posthog.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
+	"frame-src 'self' https://newassets.hcaptcha.com https://challenges.cloudflare.com https://www.google.com https://*.tradingview.com https://*.tradingview-widget.com https://app.dynamicauth.com https://*.dynamicauth.com https://verify.walletconnect.com https://verify.walletconnect.org",
 	"frame-ancestors 'none'",
 	"base-uri 'self'",
 	"form-action 'self'",
@@ -219,6 +243,13 @@ function isPublicPath(path: string): boolean {
 	if (path === '/api/auth/csrf') return true;
 	if (path === '/api/newsletter') return true;
 
+	// SEC-03 / Plan 03-08a: session-login + logout endpoints. They self-check
+	// (challenge POST issues a nonce; session POST verifies signature; logout
+	// POST clears cookie). Hooks-level wallet-registration check would be
+	// circular — the cookie is what /api/auth/session is trying to mint.
+	if (path === '/api/auth/session' || path === '/api/auth/session/challenge') return true;
+	if (path === '/api/auth/logout') return true;
+
 	// TradingView endpoints (public data)
 	if (path.startsWith('/api/tradingview/')) return true;
 
@@ -231,31 +262,37 @@ function isPublicPath(path: string): boolean {
 // Paths that require wallet registration (server-side enforcement)
 function requiresWalletRegistration(path: string): boolean {
 	// Protected API endpoints that need wallet registration
-	// Exception: /api/rewards/global is public (displays RocketBoost progress to all users)
-	if (path.startsWith('/api/rewards/') && path !== '/api/rewards/global') return true;
 	if (path.startsWith('/api/snapshots/')) return true;
-	if (path === '/api/onramper/sign-url') return true;
 
 	// Protected pages
-	if (path === '/' || path === '/rewards' || path === '/trade' || path === '/portfolio') {
+	if (path === '/' || path === '/trade' || path === '/portfolio') {
 		return true;
 	}
 
 	return false;
 }
 
-// Extract wallet address from cookies or request
-function getWalletFromRequest(cookies: {
+// Extract wallet address from the server-issued 'session' cookie + KV record.
+// SEC-03 (Plan 03-08b atomic flip): the client-set 'wallet-address' cookie is
+// no longer trusted as auth proof. Authentication is established by the
+// 'session' cookie minted at /api/auth/session POST after wallet signature
+// verification (Plan 03-08a). This reader (a) regex-validates the sessionId
+// shape, (b) looks up the KV record via readSession, and (c) fire-and-forgets
+// maybeRefreshSession to slide the 30-day TTL (throttled to 1 KV write per 24h
+// per session — D-04a UX guarantee).
+//
+// Per D-04b: wallet signature is NEVER re-prompted per request. This function
+// only reads KV state bound to a previously-verified wallet.
+async function getWalletFromRequest(cookies: {
 	get: (name: string) => string | undefined;
-}): string | null {
-	const walletAddress = cookies.get('wallet-address');
-
-	if (walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-		return walletAddress.toLowerCase();
-	}
-
-	// If no direct wallet cookie, return null (will check via API or client)
-	return null;
+}): Promise<string | null> {
+	const sessionId = cookies.get('session');
+	if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) return null;
+	const record = await readSession(sessionId);
+	if (!record) return null;
+	// Fire-and-forget sliding refresh; throttled internally to 1 KV write per 24h.
+	void maybeRefreshSession(sessionId, record);
+	return record.walletAddress;
 }
 
 function isAdminPath(path: string): boolean {
@@ -338,7 +375,7 @@ function isBotOrMalformedPath(path: string): boolean {
 	return BOT_PATH_PATTERNS.some((p) => p.test(path));
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const existingHandle: Handle = async ({ event, resolve }) => {
 	const { url, cookies, request } = event;
 	const path = url.pathname;
 	const origin = request.headers.get('Origin');
@@ -414,7 +451,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			}
 		}
 
-		const walletAddress = getWalletFromRequest(cookies);
+		const walletAddress = await getWalletFromRequest(cookies);
 
 		if (debug) {
 			console.log('[auth] protected path', path, { wallet: walletAddress });
@@ -467,3 +504,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 	return addSecurityAndCorsHeaders(response, origin, path);
 };
+
+// =============================================================================
+// Hook chain export (OBS-01 + OBS-02)
+// =============================================================================
+// Order: request-id FIRST so Sentry breadcrumbs and the existing CSP/CORS/auth/bot-rejection
+// chain all see the same request_id. Sentry then wraps so it can attach request context to
+// any error raised inside existingHandle. Existing handle runs last.
+export const handle = sequence(requestContextHandle, Sentry.sentryHandle(), existingHandle);
+
+export const handleError = Sentry.handleErrorWithSentry(
+	({ error, event }: { error: unknown; event: unknown }) => {
+		console.error('[hooks.server] Unhandled server error:', error, event);
+	}
+);

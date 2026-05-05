@@ -14,6 +14,7 @@ import {
 	getTokenByAnyAddress
 } from '$lib/config/network';
 import { queryClient } from '$lib/clients/queryClient';
+import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
 
 /**
  * Get the set of addresses that represent a token (wrapped + legacy) for matching quotes.
@@ -100,8 +101,8 @@ export function getQuotesForToken(
 	const addressSet = getTokenAddressSet(tokenAddress);
 	const filteredQuotes = globalCache.quotes.filter(
 		(q) =>
-			addressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
-			addressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
+			addressSet.has(getMakerInputTokenAddress(q)?.toLowerCase() ?? '') ||
+			addressSet.has(getMakerOutputTokenAddress(q)?.toLowerCase() ?? '')
 	);
 
 	if (filteredQuotes.length === 0) return undefined;
@@ -164,8 +165,8 @@ export async function refreshTokenQuotes(
 		// Remove old quotes only for the primary address (not legacy addresses)
 		const otherQuotes = globalCache.quotes.filter(
 			(q) =>
-				!primaryAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') &&
-				!primaryAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
+				!primaryAddressSet.has(getMakerInputTokenAddress(q)?.toLowerCase() ?? '') &&
+				!primaryAddressSet.has(getMakerOutputTokenAddress(q)?.toLowerCase() ?? '')
 		);
 
 		// Merge new quotes

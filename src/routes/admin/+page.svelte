@@ -10,8 +10,13 @@
 	import { replaceState } from '$app/navigation';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { networks } from '$lib/config/networks';
-	import { TOKENS, getTokenByAnyAddress, getTokenAddressVariants } from '$lib/config/tokens';
-	import { toDecimal } from '$lib/utils/tokenMath';
+	import {
+		TOKENS,
+		getTokenByAnyAddress,
+		getTokenAddressVariants,
+		getPaymentTokensForNetwork
+	} from '$lib/config/tokens';
+	import { toDecimal, isPaymentToken } from '$lib/utils/tokenMath';
 	import { truncateAddress } from '$lib/utils/format';
 
 	// Chart.js types
@@ -898,7 +903,8 @@
 
 	// Network config
 	const network = networks[0]; // Base mainnet
-	const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'.toLowerCase();
+	const paymentTokens = getPaymentTokensForNetwork(8453);
+	const usdc = paymentTokens[0];
 
 	// Fetch TVL data from snapshots
 	async function fetchTvlData(refresh = false) {
@@ -1164,8 +1170,8 @@
 			const outputTokenAddr = trade.outputVaultBalanceChange?.vault?.token?.address?.toLowerCase();
 			if (!inputTokenAddr || !outputTokenAddr) return false;
 
-			const inputIsUsdc = inputTokenAddr === USDC_ADDRESS;
-			const outputIsUsdc = outputTokenAddr === USDC_ADDRESS;
+			const inputIsUsdc = isPaymentToken({ address: inputTokenAddr }, usdc);
+			const outputIsUsdc = isPaymentToken({ address: outputTokenAddr }, usdc);
 			const inputIsAsset = validTokenAddresses.has(inputTokenAddr);
 			const outputIsAsset = validTokenAddresses.has(outputTokenAddr);
 
@@ -1260,9 +1266,9 @@
 
 			// Determine USDC amount for volume tracking
 			let usdcAmount = 0;
-			if (inputToken.address.toLowerCase() === USDC_ADDRESS) {
+			if (isPaymentToken({ address: inputToken.address }, usdc)) {
 				usdcAmount = inputAmount;
-			} else if (outputToken.address.toLowerCase() === USDC_ADDRESS) {
+			} else if (isPaymentToken({ address: outputToken.address }, usdc)) {
 				usdcAmount = outputAmount;
 			}
 
@@ -1277,17 +1283,19 @@
 			}
 
 			// Token stats - track from vault owner's perspective
-			const assetToken =
-				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputToken : outputToken;
-			const assetAmount =
-				inputToken.address.toLowerCase() !== USDC_ADDRESS ? inputAmount : outputAmount;
-			const ownerIsBuying = outputToken.address.toLowerCase() === USDC_ADDRESS;
+			const assetToken = !isPaymentToken({ address: inputToken.address }, usdc)
+				? inputToken
+				: outputToken;
+			const assetAmount = !isPaymentToken({ address: inputToken.address }, usdc)
+				? inputAmount
+				: outputAmount;
+			const ownerIsBuying = isPaymentToken({ address: outputToken.address }, usdc);
 			const assetAddress = assetToken.address.toLowerCase();
 
 			// Resolve canonical symbol (groups unwrapped/legacy trades under wrapped symbol)
 			const canonicalSymbol = addressToCanonicalSymbol.get(assetAddress) ?? assetToken.symbol;
 
-			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
+			if (!isPaymentToken({ address: assetAddress }, usdc) && validTokenAddresses.has(assetAddress)) {
 				if (!tokenMap.has(canonicalSymbol)) {
 					// Look up the parent token config for the canonical address
 					const parentToken = getTokenByAnyAddress(assetAddress);
@@ -1380,7 +1388,7 @@
 			dateSet.add(dateKey);
 
 			// Daily breakdown by token (deduped by txHash, grouped by canonical symbol)
-			if (assetAddress !== USDC_ADDRESS && validTokenAddresses.has(assetAddress)) {
+			if (!isPaymentToken({ address: assetAddress }, usdc) && validTokenAddresses.has(assetAddress)) {
 				tokenSymbolSet.add(canonicalSymbol);
 				addDailyStats(dailyTokenMap, seenTokenTx, dateKey, canonicalSymbol, txHash, usdcAmount);
 			}

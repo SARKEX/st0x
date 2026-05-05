@@ -12,10 +12,10 @@ Move st0x from "permanent alpha/early-beta" to production-ready by killing the u
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Shrink the Surface, See What's Happening** - Delete dead/unused subsystems and stand up zero-to-one observability so the trade-execution refactor is diagnosable
-- [ ] **Phase 2: Trade-Execution Backbone Refactor** - Kill the four-piece bug-factory (side semantics, transaction store, freshness illusion, execution math) and hit the trade-page first-paint target
-- [ ] **Phase 3: Production-Grade Hardening** - Close the latent security and reliability holes the audit flagged (secrets, sessions, RPC fallback, vendored registry)
-- [ ] **Phase 4: Boundary Tests & Drift Cleanup** - Lock in regression coverage at the audit's high-risk boundaries and remove the documentation/code drift that produces silent breakage
+- [x] **Phase 1: Shrink the Surface, See What's Happening** - Delete dead/unused subsystems and stand up zero-to-one observability so the trade-execution refactor is diagnosable
+- [x] **Phase 2: Trade-Execution Backbone Refactor** - Kill the four-piece bug-factory (side semantics, transaction store, freshness illusion, execution math) and hit the trade-page first-paint target
+- [x] **Phase 3: Production-Grade Hardening** - Close the latent security and reliability holes the audit flagged (secrets, sessions, RPC fallback, vendored registry)
+- [x] **Phase 4: Boundary Tests & Drift Cleanup** - Lock in regression coverage at the audit's high-risk boundaries and remove the documentation/code drift that produces silent breakage
 
 ## Phase Details
 
@@ -32,26 +32,26 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 8 plans (7 waves; sequential 1-5 due to .env.example + hooks.server.ts file conflicts; wave 6 runs OBS-03 + OBS-04 in parallel)
 
 **Wave 1**
-- [ ] 01-01-PLAN.md — DEPR-02: prune admin rewards UI + per-wallet points pipeline + LP_SUBGRAPH_URL
+- [x] 01-01-PLAN.md — DEPR-02: prune admin rewards UI + per-wallet points pipeline + LP_SUBGRAPH_URL
 
 **Wave 2** *(blocked on Wave 1 — both touch `.env.example` and the rewards/admin surface)*
-- [ ] 01-02-PLAN.md — DEPR-01: delete user-facing rewards UI + extract TokenSwapAnnouncement to announcements/ (per D-16)
+- [x] 01-02-PLAN.md — DEPR-01: delete user-facing rewards UI + extract TokenSwapAnnouncement to announcements/ (per D-16)
 
 **Wave 3** *(blocked on Wave 2 — `+layout.svelte` rewards mounts + `hooks.server.ts:235` rewards carve-out must already be removed)*
-- [ ] 01-03-PLAN.md — DEPR-03: delete Onramper integration + collapse DepositModal to deposit-only (per D-10)
+- [x] 01-03-PLAN.md — DEPR-03: delete Onramper integration + collapse DepositModal to deposit-only (per D-10)
 
 **Wave 4** *(blocked on Wave 3 — `.env.example` + `hooks.server.ts` are stable post-deletions; Sentry CSP entry can land cleanly)*
-- [ ] 01-04-PLAN.md — OBS-01: Sentry SDK init + PII scrubber + CSP additions + sourcemap upload
+- [x] 01-04-PLAN.md — OBS-01: Sentry SDK init + PII scrubber + CSP additions + sourcemap upload
 
 **Wave 5** *(blocked on Wave 4 — pino's request-id middleware sequences in `hooks.server.ts` ahead of the Sentry handle wired in Wave 4)*
-- [ ] 01-05-PLAN.md — OBS-02: pino structured logger + AsyncLocalStorage request-id middleware
+- [x] 01-05-PLAN.md — OBS-02: pino structured logger + AsyncLocalStorage request-id middleware
 
 **Wave 6** *(blocked on Wave 5; 01-06 + 01-07 run in parallel — they touch disjoint files)*
-- [ ] 01-06-PLAN.md — OBS-04: RPC instrumentation in generator.ts + accessCodes.ts + chain-exhausted Slack alerts
-- [ ] 01-07-PLAN.md — OBS-03: take-order failure transcript at marketOrderExecution.ts (Sentry + console.error per D-15)
+- [x] 01-06-PLAN.md — OBS-04: RPC instrumentation in generator.ts + accessCodes.ts + chain-exhausted Slack alerts
+- [x] 01-07-PLAN.md — OBS-03: take-order failure transcript at marketOrderExecution.ts (Sentry + console.error per D-15)
 
 **Wave 7** *(blocked on all prior waves — phase-exit verification + runbook)*
-- [ ] 01-08-PLAN.md — OBS-05 verification + phase exit (Speed Insights confirmation, runbook, cross-cutting cleanup grep)
+- [x] 01-08-PLAN.md — OBS-05 verification + phase exit (Speed Insights confirmation, runbook, cross-cutting cleanup grep)
 
 **Cross-cutting constraints** (truths that appear in 2+ plans — verify they hold across the phase, not just per-plan):
 - **CSP host pinning (Pitfall 1):** `src/hooks.server.ts` `connect-src` must NEVER contain bare `'*.sentry.io'` — wildcards don't cross dot boundaries. Use `'*.ingest.sentry.io'` and `'*.ingest.us.sentry.io'` only. Enforced in 01-04 acceptance criteria; 01-08 phase-exit grep gate re-verifies.
@@ -76,14 +76,50 @@ Notes:
   3. Direct access to `inputTokenAddress` / `outputTokenAddress` / `inputIOIndex` / `outputIOIndex` outside `src/lib/types/orderPerspective.ts` is structurally prevented (lint rule or marker), so the maker/taker INPUT/OUTPUT naming collision can no longer silently invert sides in new code
   4. The `transaction.ts` monolith is split into focused, independently testable state machines (deploy, market-take, approval, partial-fill detection) with the circular-import surface to `marketOrderExecution.ts` structurally eliminated, not patched
   5. Trade-page p75 LCP hits the explicit target set during planning on representative network/device profiles, validated against the OBS-05 baseline dashboard
-**Plans**: TBD
+**Plans**: 8 plans (8 waves; sequential due to file conflicts on transaction.ts during TRADE-02 split + TRADE-* sequencing constraint TRADE-01 → TRADE-02 → TRADE-03 → TRADE-04 → PERF-01)
+
+**Wave 1**
+- [x] 02-01-PLAN.md — TRADE-01: ESLint no-restricted-syntax rule + ts-morph codemod migrating 57 raw IO-perspective property reads + 4 accessor wrappers in orderPerspective.ts + lint fixture
+
+**Wave 2** *(blocked on Wave 1 — codemod touches transaction.ts before TRADE-02 split)*
+- [x] 02-02-PLAN.md — TRADE-02 PR-1: extract TransactionStatus enum + 6 interfaces + 4 leaf utilities into transactionShared.ts; transaction.ts becomes a re-export façade for back-compat
+
+**Wave 3** *(blocked on Wave 2)*
+- [x] 02-03-PLAN.md — TRADE-02 PR-2: extract 5 market-take methods into marketTakeStore.ts + sever last lexical edge by rewiring marketOrderExecution.ts to import directly (not via transaction.ts façade)
+
+**Wave 4** *(blocked on Wave 3 — file conflict on transaction.ts forces serialization with PR-2)*
+- [x] 02-04-PLAN.md — TRADE-02 PR-3: extract 10 deploy/wrap/withdraw methods into deployTransactionStore.ts
+
+**Wave 5** *(blocked on Waves 3+4)*
+- [x] 02-05-PLAN.md — TRADE-02 PR-4 + PR-5: extract approvalStore.ts + partialFillDetection.ts; tighten orderDeployment.ts return-type annotations to clear the 4 svelte-check baseline errors; transaction.ts shrinks to ≤ 60-line façade
+
+**Wave 6** *(blocked on Wave 5 — marketTakeStore must exist before pre-flight wires through it)*
+- [x] 02-06-PLAN.md — TRADE-03: pre-flight multicall via RaindexClient.getOrderQuotesBatch + auto-walk (≤ 2 levels) + transcript.vaultBalance population (closes Phase 1 D-08 LIMITATION) + 3 new failWith call sites raising the OBS-03 grep gate from ≥ 9 to ≥ 12 + D-05 inline terminal-state error in MarketOrder.svelte
+
+**Wave 7** *(blocked on Wave 6 — TRADE-04 priceCap symmetry test references the post-Phase-2 transcript shape)*
+- [x] 02-07-PLAN.md — TRADE-04: 16-case parameterized regression matrix in marketOrderFill.test.ts pinning 89571b3's two coupled bug classes (anchor-side selection + asymmetric slippage) + bug class 1 reproduction in marketOrderExecution.test.ts
+
+**Wave 8** *(blocked on Wave 7 — PERF-01 lands LAST per CONTEXT D-08a to avoid bundle-shape changes mid-refactor)*
+- [x] 02-08-PLAN.md — PERF-01: rollup-plugin-visualizer + jspdf removal + lazy-load LimitOrder + DcaOrder + chart libs with CLS-safe skeletons + TanStack Query waterfall reorganization (analyzed-not-changed; preserves staleTime: Infinity per T-02-08-03) + Vercel Speed Insights pre-deploy verified via orchestrator API check (hasData=true since 2025-07-21); numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (programmatic read not available on public Vercel API)
+
+**Cross-cutting constraints** (truths that appear in 2+ plans — verify they hold across the phase, not just per-plan):
+- **OBS-03 transcript preservation:** Every new error-return path in `marketOrderExecution.ts` routes through `failWith()`. Phase-exit grep `failWith(` count in marketOrderExecution.ts ≥ 12 (Phase 1 baseline 9 + 3 new TRADE-03 paths: preflight_chain_unreachable, preflight_order_vanished, auto_retry_exhausted). Enforced in 02-06 acceptance criteria; cross-cutting check in 02-04, 02-05, 02-07.
+- **TRADE-01 lockdown (post-codemod, post-flip):** Raw access grep `\.(inputTokenAddress|outputTokenAddress|inputIOIndex|outputIOIndex)\b` returns 0 hits in src/ + tests/ outside the allowlist (orderPerspective.ts, utils/orderbook.ts, api/orders.ts, generated-graphql.ts, the io-perspective-violation.ts fixture, and comment-only matches). Enforced 02-01 + re-verified at every subsequent plan that touches the codemod surface.
+- **Circular import absence:** `grep -E "from ['\"]\$lib/stores/transaction['\"]" src/lib/services/marketOrderExecution.ts` MUST return 0 lines. The `marketTakeStore.ts` consumes the orchestration helpers without `marketOrderExecution.ts` importing back. Enforced 02-03 + re-verified at every subsequent plan that touches marketOrderExecution.ts.
+- **D-13 out-of-scope guardrails (carried from Phase 1):** No account abstraction. No multi-chain expansion. No `+error.svelte`. No admin/+page.svelte refactor. No replacement on-ramp. No external log drain. No SSR for trade page (D-08 explicit).
+- **WasmEncodedResult discipline:** All SDK calls (orderDeployment + new pre-flight in TRADE-03) check `.error` before reading `.value`. Pattern from `src/lib/services/orderDeployment.ts:188-193`. Enforced 02-05 + 02-06.
+- **TransactionStatus UI binding preservation:** The façade re-export pattern preserves all existing UI bindings (`import transactionStore, { TransactionStatus } from '$lib/stores/transaction'` continues to resolve) during the TRADE-02 migration. Phase-exit grep `import.*TransactionStatus.*from '\$lib/stores/transaction'` MUST still return ≥ 2 hits (TransactionModal.svelte + others) at Phase 2 close.
+- **Slippage + pre-flight coexistence:** D-03 rationale (pre-flight catches "order isn't there anymore"; slippage catches "price moved within an order"). Documented in 02-06 plan body so future contributors don't try to remove one or the other.
+- **Real-money rollout (D-08 / specifics):** TRADE-02 PR-2 (marketTakeStore extract) is the highest-risk PR — manual smoke test in 02-VALIDATION.md "Manual-Only Verifications" gates real-money rollout before subsequent PRs flip authority.
+- **TanStack Query staleTime: Infinity (do not weaken):** PERF-01 query-waterfall reorganization parallelizes/prefetches but DOES NOT reduce staleTime. Manual-invalidation pattern is intentional per CLAUDE.md ground truth. Enforced in 02-08.
+- **Single-chain Base 8453 + two auth paths (CLAUDE.md drift):** Plans treat single-chain Base + wagmi/Dynamic as ground truth; aspirational multi-chain/AA content in CLAUDE.md is ignored until DRIFT-03 in Phase 4.
 **UI hint**: yes
 
 Notes:
 - TRADE-01 (codify side semantics) is the prerequisite for TRADE-02 (split transaction.ts) which feeds into TRADE-03 (pre-flight check) and TRADE-04 (execution math correctness). Plans must respect this chain — do not let plan ordering scatter them.
-- The refactor must ship in pieces against live users on real money: feature flags, parallel implementations, and staged rollouts where appropriate. No "everything breaks for a day" migrations.
-- PERF-01's specific p75 LCP threshold is set during planning, not roadmapping — the OBS-05 dashboard from Phase 1 establishes the baseline against which the target is set.
-- "UI hint: yes" — TRADE-03 (visible UI staleness signaling) and PERF-01 (trade-page first-paint) are direct user-facing UI work.
+- The refactor must ship in pieces against live users on real money: PR-by-PR atomic shape with façade preservation through TRADE-02; svelte-check + tests green at every commit; manual smoke test gates PR-2 (marketTakeStore extraction) before subsequent PRs land.
+- PERF-01's specific p75 LCP threshold (< 2.5s on /trade/[id], Web Vitals "good") was locked in 02-CONTEXT.md D-07. Pre/post measurement against the OBS-05 Vercel Speed Insights dashboard.
+- "UI hint: yes" — TRADE-03 (D-05 inline terminal-state error in MarketOrder.svelte) and PERF-01 (lazy-load tabs with skeletons) are direct user-facing UI work.
 
 ### Phase 3: Production-Grade Hardening
 **Goal**: Close the latent security and reliability gaps the audit flagged so that no single environmental failure (committed key leak, missing env var, RPC misbehavior, GitHub raw outage) can cause a user-visible outage or expose an unauthenticated attack path
@@ -95,7 +131,43 @@ Notes:
   3. CSRF tokens are bound to the session cookie (double-submit-cookie pattern) and access/referral codes are generated from `crypto.randomBytes()` — none of these auth-adjacent paths uses `Math.random()` or stateless tokens issued by an unauthenticated endpoint anymore
   4. Heavy/admin endpoints (`/api/snapshots/preview*`, `POST /api/snapshots/generate`) cannot be DoS'd or invoked by non-admins; hCaptcha fails closed in Vercel preview deploys, not just production
   5. The RPC fallback chain (in `generator.ts` and EIP-1271/6492 verification) retries each RPC with backoff, treats empty `result` as failure, never silently substitutes `latestBlock`, and the Rain strategies registry is served from our own bundle — order deployment no longer depends on GitHub raw availability or rate limits
-**Plans**: TBD
+**Plans**: 11 plans (8 waves; SEC-03+SEC-04 paired in Wave 6 per CONTEXT D-01; 03-08 split into 03-08a + 03-08b per checker fix #5 — both ship as a single atomic-flip PR, atomic-flip discipline preserved at PR-shape per Phase 2 D-08 pattern)
+
+**Wave 1** *(SEC-01 unblocks REL-02 by provisioning BASE_RPC_URL env var)*
+- [x] 03-01-PLAN.md — SEC-01: Alchemy key removal + env-var swap (networks.ts + raindex.ts + accessCodes.ts + referrals.ts) + .env.example
+
+**Wave 2** *(quick wins; 03-03 and 03-04 sequence after 03-01 due to accessCodes.ts file-modification chain)*
+- [x] 03-02-PLAN.md — SEC-02: auth.ts + csrf.ts module-load fail-closed (mirrors CRON_SECRET precedent) — independent of 03-01
+- [x] 03-03-PLAN.md — SEC-05: crypto.randomBytes + rejection sampling for accessCodes + referrals — depends_on: [03-01]
+- [x] 03-04-PLAN.md — SEC-07: hCaptcha VERCEL_ENV-based fail-closed (preview no longer bypasses) — depends_on: [03-01, 03-03]
+
+**Wave 3**
+- [x] 03-05-PLAN.md — SEC-06: snapshotsPreview tier on rateLimit.ts + applyTieredRateLimit on preview/preview-stream + requireAdmin on POST generate
+
+**Wave 4** *(REL-01 retry pattern unblocks REL-02)*
+- [x] 03-06-PLAN.md — REL-01: generator.ts callRpc per-RPC withRetry + chain-exhaustion throw + kill silent latestBlock fallback in getBlockNumberForTimestamp
+
+**Wave 5** *(depends on Wave 1 SEC-01 env var + Wave 4 retry pattern)*
+- [x] 03-07-PLAN.md — REL-02: viem fallback transport for accessCodes.ts verifyWalletSignature; OBS-04 label rename to fallback-chain-base
+
+**Wave 6** *(SEC-03 + SEC-04 paired atomic flip; manual smoke gate; 03-08a + 03-08b ship as a single PR per Phase 2 D-08 atomic-flip-PR-shape pattern)*
+- [x] 03-08a-PLAN.md — SEC-03 + SEC-04 infrastructure: walletSession.ts + session_login challenge + /api/auth/session + /api/auth/logout + session-bound CSRF + GET /api/auth/csrf gate (2026-04-30)
+- [x] 03-08b-PLAN.md — SEC-03 consumer migration: hooks.server.ts (async getWalletFromRequest) + logger.ts + /api/access/check + /access/+page.server.ts + snapshot preview/preview-stream consumer migration + +layout.svelte hint downgrade + manual smoke APPROVED on Vercel preview (11/11 structural checks PASS) (2026-04-30)
+
+**Wave 7**
+- [x] 03-10-PLAN.md — REL-03: vendor static/registry/ from upstream commit 9dd64902 (9 .rain + settings.yaml + same-origin manifest); orderDeployment.ts swap RAIN_STRATEGIES_COMMIT → publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest'; Phase-exit grep gate green; smoke-tested via npm run dev (2026-04-30)
+
+**Wave 8** *(phase-exit + RUNBOOK)*
+- [x] 03-11-PLAN.md — Phase-exit grep gates + 03-RUNBOOK.md (env-var checklist + Alchemy rotation + session smoke + smoke-test KV cleanup + registry refresh + Phase 4 hand-off) — depends_on: all 10 prior plans (2026-04-30)
+
+**Cross-cutting constraints** (truths that appear in 2+ plans):
+- **D-04b hard UX guarantee:** wallet signature is per-session, never per-request. hooks.server.ts reads cookie+KV only; never calls verifyWalletSignature on per-request path. Plan 03-08b manual smoke is the gate.
+- **OBS-04 carry-forward:** every retry attempt in generator.ts records via recordRpcAttempt; chain exhaustion fires reportChainExhausted (Telegram alert via Plan 01-06 surface unchanged).
+- **TRADE-01 / TRADE-02 / OBS-03 lockdown:** no Phase 3 work touches marketOrderExecution.ts, transaction.ts, or orderPerspective.ts; failWith() count ≥ 12 carried forward; 02-08 cross-cutting gates re-verified at 03-11 phase exit.
+- **Single Alchemy key both sides (D-02):** PUBLIC_BASE_RPC_URL = BASE_RPC_URL = same Alchemy app. Splitting into two apps is deferred unless quota abuse becomes measurable.
+- **Atomic flip for SEC-03+SEC-04 (D-04):** single coupled PR. One-time wallet-signature prompt at deploy; never per-request. wallet-address cookie downgraded to non-authoritative hint.
+- **Single-chain Base 8453 + two auth paths:** treat .planning/codebase/ as ground truth; CLAUDE.md aspirational multi-chain/AA content ignored until DRIFT-03 in Phase 4.
+**UI hint**: yes (one-time wallet-signature prompt on next visit post Wave 6 deploy; +layout.svelte comment downgrade)
 
 Notes:
 - SEC-03 (session cookie) and SEC-04 (CSRF binding) are coupled and should ship together. SEC-01 (Alchemy key) and SEC-02 (session/CSRF secret fallbacks) are independent and can land first as quick wins.
@@ -112,7 +184,29 @@ Notes:
   3. Every state-mutating admin endpoint (rewards-pool, snapshots, swap-snapshot, tvl, wallet-statement, wallets, team-wallets, excluded-wallets, pool-wallets, nansen, plus survivors of DEPR-02) calls `createAuditLogger` and a test asserts the audit record is emitted on success and failure — admin actions can be reconstructed from logs
   4. Token lookups that have to handle the wrapped/unwrapped/legacy address triplet go through `getTokenByAnyAddress`, scattered hardcoded USDC constants are replaced with `isPaymentToken` / `getPaymentTokensForNetwork`, and a guard (ESLint rule or comment marker) prevents either pattern from regressing
   5. `CLAUDE.md` describes only what's actually shipped — single chain (Base 8453), two auth paths, no Rhinestone / EIP-7702 / `account-abstraction/` — and points at `.planning/codebase/CONCERNS.md` so future contributors land on accurate context
-**Plans**: TBD
+**Plans**: 10 plans (6 waves)
+
+**Wave 1**
+- [x] 04-01-PLAN.md — DRIFT-03: CLAUDE.md surgical edit + Ground Truth header pointing at .planning/codebase/
+
+**Wave 2**
+- [x] 04-02-PLAN.md — DRIFT-02: USDC hardcoding → getPaymentTokensForNetwork / isPaymentToken in admin/+page.svelte + api/admin/nansen/+server.ts
+
+**Wave 3**
+- [x] 04-03-PLAN.md — DRIFT-01: ts-morph codemod + ESLint no-restricted-syntax rule banning TOKENS.find / ALL_TOKENS.find outside allowlist; lint fixture
+
+**Wave 4** *(TEST-01 + TEST-02 in parallel — disjoint surfaces)*
+- [x] 04-04-PLAN.md — TEST-01: tests/hooks/{cors,csp,public-paths,admin-gate,wallet-session,bot-rejection}.test.ts + _helpers.ts factories
+- [x] 04-05-PLAN.md — TEST-02: tests/lib/admin/*.audit.test.ts (8 endpoints) + createAuditLogger ADD on 5 missing endpoints
+
+**Wave 5** *(TEST-03 split across 3 plans + TEST-04)*
+- [x] 04-06-PLAN.md — TEST-03 anvil scaffold: tests/helpers/anvil.ts + loadTranscript.ts + vitest.integration.config.ts + Foundry CI install step
+- [x] 04-07-PLAN.md — TEST-03 anvil suite: tests/integration/marketOrder/anvil-fork.test.ts (pinned at FORK_BLOCK 33_400_000)
+- [x] 04-08-PLAN.md — TEST-03 replay suite: tests/integration/marketOrder/replay-*.test.ts + ≥ 7 redacted JSON fixtures under tests/fixtures/marketOrder/
+- [x] 04-09-PLAN.md — TEST-04: src/lib/server/snapshots/scraper.test.ts (pagination + wrappedTokenTransfers fallback + transient subgraph failure)
+
+**Wave 6** *(phase-exit + RUNBOOK + milestone close)*
+- [x] 04-10-PLAN.md — Phase-exit grep gates + 04-RUNBOOK.md (Foundry/anvil CI + OBS-03 transcript-capture + DRIFT-01 codemod replay + milestone close handoff) — depends_on: all 9 prior plans (2026-05-01)
 
 Notes:
 - TEST-04 is conditional: if Phase 1's DEPR-02 decision was "remove," TEST-04 is closed by deletion (no new tests needed); if "keep with bandages," scraper edge-case tests must be written. Plan-phase resolves this against Phase 1 outcomes.
@@ -126,7 +220,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Shrink the Surface, See What's Happening | 0/TBD | Not started | - |
-| 2. Trade-Execution Backbone Refactor | 0/TBD | Not started | - |
-| 3. Production-Grade Hardening | 0/TBD | Not started | - |
-| 4. Boundary Tests & Drift Cleanup | 0/TBD | Not started | - |
+| 1. Shrink the Surface, See What's Happening | 8/8 | Complete | 2026-04-29 |
+| 2. Trade-Execution Backbone Refactor | 8/8 | Complete | 2026-04-29 |
+| 3. Production-Grade Hardening | 11/11 | Complete | 2026-04-30 |
+| 4. Boundary Tests & Drift Cleanup | 10/10 | Complete    | 2026-05-01 |
+
+**Stabilization milestone closed: 2026-05-01** — 33/33 v1 REQ-IDs across 4 phases (Phase 1: 8/8 DEPR-* + OBS-*; Phase 2: 5/5 TRADE-* + PERF-*; Phase 3: 10/10 SEC-* + REL-*; Phase 4: 7/7 TEST-* + DRIFT-*). HUMAN-UAT carry-forwards (PERF-01 numeric p75 LCP < 2.5s, SEC-03+04 D-04b runtime UX, anvil-fork CI run with archive-RPC `BASE_RPC_URL`, OBS-03 transcript-capture refresh) deferred to `/gsd-verify-work --milestone stabilization --human-uat` post-deploy per `04-RUNBOOK.md` §"Hand-off — Milestone Close".

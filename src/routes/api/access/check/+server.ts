@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { isWalletRegistered, getWalletInfo } from '$lib/server/accessCodes';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 import { withCache } from '$lib/server/cache';
+import { readSession } from '$lib/server/walletSession';
 
 // Cache TTL for access check (5 minutes - registration status rarely changes)
 const ACCESS_CHECK_CACHE_TTL = 5 * 60;
@@ -19,10 +20,17 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 		return json({ error: 'Invalid address format' }, { status: 400 });
 	}
 
-	// Get wallet address from cookie for tiered rate limiting
-	// Only grant authenticated (higher) rate limits when checking your OWN address
-	// This prevents using someone else's authenticated quota to enumerate wallets
-	const cookieWallet = cookies.get('wallet-address');
+	// SEC-03 (Plan 03-08b atomic flip): wallet for tiered rate limiting is now
+	// derived from the server-issued 'session' cookie + KV record, not from the
+	// spoofable client-set 'wallet-address' cookie. Only grant authenticated
+	// (higher) rate limits when checking your OWN address — prevents using
+	// someone else's authenticated quota to enumerate wallets.
+	const sessionId = cookies.get('session');
+	let cookieWallet: string | null = null;
+	if (sessionId && /^[a-f0-9]{64}$/.test(sessionId)) {
+		const record = await readSession(sessionId);
+		cookieWallet = record?.walletAddress ?? null;
+	}
 	const isOwnAddress = cookieWallet?.toLowerCase() === address.toLowerCase();
 	const walletForRateLimit = isOwnAddress ? address : null;
 

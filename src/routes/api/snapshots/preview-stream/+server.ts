@@ -1,4 +1,6 @@
-// Streaming preview endpoint with Server-Sent Events for progress updates
+// Streaming preview endpoint with Server-Sent Events for progress updates.
+// Per-wallet points calculation removed in Phase 1 (DEPR-02 D-03); the streamed
+// preview now aggregates wallet holdings + USD value across token snapshots.
 import type { RequestHandler } from './$types';
 import {
 	getCurrentBlockNumber,
@@ -6,9 +8,28 @@ import {
 	generateAllTokenSnapshots
 } from '$lib/server/snapshots/generator';
 import { kvGet, KV_KEYS } from '$lib/server/kv';
-import { calculateWalletPointsFromSnapshotsWithProgress } from '$lib/server/snapshots/points';
+import { applyTieredRateLimit } from '$lib/server/rateLimit';
+import { readSession } from '$lib/server/walletSession';
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, request, cookies }) => {
+	// SEC-06 + SEC-03 (Plan 03-08b atomic flip): rate-limit BEFORE constructing
+	// the SSE stream so a 429 returns plain JSON, not an event-stream. Wallet
+	// for tier promotion is derived from the server-issued 'session' cookie + KV
+	// record (replaces the 'wallet-address' breadcrumb wired in Plan 03-05).
+	const sessionId = cookies.get('session');
+	let wallet: string | null = null;
+	if (sessionId && /^[a-f0-9]{64}$/.test(sessionId)) {
+		const record = await readSession(sessionId);
+		wallet = record?.walletAddress ?? null;
+	}
+	const rateLimitResponse = await applyTieredRateLimit(
+		request,
+		'snapshotsPreview',
+		'snapshots-preview-stream',
+		wallet
+	);
+	if (rateLimitResponse) return rateLimitResponse;
+
 	const blockParam = url.searchParams.get('block');
 
 	const stream = new ReadableStream({
@@ -23,7 +44,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				const overallStart = Date.now();
 
 				// Step 1: Get block number
-				sendEvent('progress', { step: 1, total: 6, message: 'Getting block number...' });
+				sendEvent('progress', { step: 1, total: 5, message: 'Getting block number...' });
 				const targetBlock = blockParam ? parseInt(blockParam) : await getCurrentBlockNumber();
 
 				if (isNaN(targetBlock) || targetBlock <= 0) {
@@ -34,7 +55,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 				sendEvent('progress', {
 					step: 1,
-					total: 6,
+					total: 5,
 					message: `Block ${targetBlock}`,
 					done: true
 				});
@@ -42,67 +63,41 @@ export const GET: RequestHandler = async ({ url }) => {
 				// Step 2: Generate snapshots
 				sendEvent('progress', {
 					step: 2,
-					total: 6,
+					total: 5,
 					message: 'Fetching transfers, prices, and vault holdings...'
 				});
 				const snapshots = await generateAllTokenSnapshots(targetBlock);
 				sendEvent('progress', {
 					step: 2,
-					total: 6,
+					total: 5,
 					message: `${snapshots.length} tokens loaded`,
 					done: true
 				});
 
 				// Step 3: Get timestamp
-				sendEvent('progress', { step: 3, total: 6, message: 'Getting block timestamp...' });
+				sendEvent('progress', { step: 3, total: 5, message: 'Getting block timestamp...' });
 				const timestamp = await getBlockTimestamp(targetBlock);
 				const blockDate = new Date(timestamp * 1000).toISOString();
 				sendEvent('progress', {
 					step: 3,
-					total: 6,
+					total: 5,
 					message: blockDate,
 					done: true
 				});
 
 				// Step 4: Load excluded wallets
-				sendEvent('progress', { step: 4, total: 6, message: 'Loading excluded wallets...' });
+				sendEvent('progress', { step: 4, total: 5, message: 'Loading excluded wallets...' });
 				const excludedWallets = (await kvGet<string[]>(KV_KEYS.excludedWallets())) || [];
 				const excludedSet = new Set(excludedWallets.map((w) => w.toLowerCase()));
 				sendEvent('progress', {
 					step: 4,
-					total: 6,
+					total: 5,
 					message: `${excludedWallets.length} excluded`,
 					done: true
 				});
 
-				// Step 5: Calculate wallet points
-				sendEvent('progress', {
-					step: 5,
-					total: 6,
-					message: 'Calculating points...'
-				});
-
-				const walletPointsMap = calculateWalletPointsFromSnapshotsWithProgress(
-					snapshots,
-					(tokenIndex, tokenSymbol, holdersCount) => {
-						sendEvent('token-progress', {
-							tokenIndex,
-							totalTokens: snapshots.length,
-							tokenSymbol,
-							holdersCount
-						});
-					}
-				);
-
-				sendEvent('progress', {
-					step: 5,
-					total: 6,
-					message: `${walletPointsMap.size} wallets processed`,
-					done: true
-				});
-
-				// Step 6: Format response
-				sendEvent('progress', { step: 6, total: 6, message: 'Formatting response...' });
+				// Step 5: Aggregate wallets and format response
+				sendEvent('progress', { step: 5, total: 5, message: 'Aggregating wallet holdings...' });
 
 				const tokenSummary = snapshots.map((s) => ({
 					token: s.tokenSymbol,
@@ -120,37 +115,76 @@ export const GET: RequestHandler = async ({ url }) => {
 					tokenPriceMap.set(s.tokenAddress.toLowerCase(), s.price?.price ?? 0);
 				}
 
-				const wallets = Array.from(walletPointsMap.entries())
-					.map(([address, data]) => {
-						const tokens = Array.from(data.tokens.entries()).map(([tokenAddress, tokenData]) => {
-							const price = tokenPriceMap.get(tokenAddress) ?? 0;
-							const balanceFloat = Number(tokenData.balance) / 1e18;
-							const value = balanceFloat * price;
+				type PreviewWallet = {
+					address: string;
+					totalValue: number;
+					tokens: {
+						symbol: string;
+						address: string;
+						balance: string;
+						value: number;
+					}[];
+					isExcluded: boolean;
+				};
 
-							return {
-								symbol: tokenSymbolMap.get(tokenAddress) ?? 'UNKNOWN',
-								address: tokenAddress,
-								balance: tokenData.balance.toString(),
-								value,
-								points: tokenData.points
-							};
+				const walletAggregates = new Map<
+					string,
+					{
+						tokens: PreviewWallet['tokens'];
+						totalValue: number;
+					}
+				>();
+
+				// Replaces the deleted points pipeline. We still emit per-token progress
+				// events so the streaming UI keeps its progress bar.
+				for (let i = 0; i < snapshots.length; i++) {
+					const snapshot = snapshots[i];
+					const tokenAddressLower = snapshot.tokenAddress.toLowerCase();
+					const symbol = tokenSymbolMap.get(tokenAddressLower) ?? 'UNKNOWN';
+					const price = tokenPriceMap.get(tokenAddressLower) ?? 0;
+					const holdersCount = Object.keys(snapshot.balances).length;
+
+					sendEvent('token-progress', {
+						tokenIndex: i,
+						totalTokens: snapshots.length,
+						tokenSymbol: snapshot.tokenSymbol,
+						holdersCount
+					});
+
+					for (const [walletAddress, balanceStr] of Object.entries(snapshot.balances)) {
+						const address = walletAddress.toLowerCase();
+						const balance = BigInt(balanceStr);
+						if (balance <= 0n) continue;
+
+						const balanceFloat = Number(balance) / 1e18;
+						const value = balanceFloat * price;
+
+						if (!walletAggregates.has(address)) {
+							walletAggregates.set(address, { tokens: [], totalValue: 0 });
+						}
+						const agg = walletAggregates.get(address)!;
+						agg.tokens.push({
+							symbol,
+							address: tokenAddressLower,
+							balance: balance.toString(),
+							value
 						});
+						agg.totalValue += value;
+					}
+				}
 
-						const totalValue = tokens.reduce((sum, t) => sum + t.value, 0);
-
-						return {
-							address,
-							totalValue,
-							totalPoints: data.totalPoints,
-							tokens,
-							isExcluded: excludedSet.has(address)
-						};
-					})
+				const wallets: PreviewWallet[] = Array.from(walletAggregates.entries())
+					.map(([address, data]) => ({
+						address,
+						totalValue: data.totalValue,
+						tokens: data.tokens,
+						isExcluded: excludedSet.has(address)
+					}))
 					.sort((a, b) => b.totalValue - a.totalValue);
 
 				sendEvent('progress', {
-					step: 6,
-					total: 6,
+					step: 5,
+					total: 5,
 					message: 'Complete',
 					done: true
 				});

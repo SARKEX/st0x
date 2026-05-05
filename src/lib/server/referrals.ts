@@ -1,5 +1,8 @@
+import crypto from 'crypto';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
+import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 import {
 	getKv,
 	kvGet,
@@ -11,10 +14,18 @@ import {
 } from './kv';
 import { getWalletInfo, type RegisteredWallet } from './accessCodes';
 
+// SEC-01 / Phase 3 D-02: Same BASE_RPC_URL the accessCodes signature-verification path
+// uses (single Alchemy key both sides per D-02). Module-load throw mirrors the
+// CRON_SECRET pattern at src/routes/api/cron/snapshots/+server.ts:45.
+const PRIMARY_RPC_URL = env.BASE_RPC_URL;
+if (!dev && !PRIMARY_RPC_URL) {
+	throw new Error('[referrals] BASE_RPC_URL required in production');
+}
+
 // Create a public client for Base network for signature verification
 const basePublicClient = createPublicClient({
 	chain: base,
-	transport: http('https://base-mainnet.g.alchemy.com/v2/y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9')
+	transport: http(PRIMARY_RPC_URL || 'https://base-rpc.publicnode.com') // dev fallback
 });
 
 // Types
@@ -59,13 +70,25 @@ const devStore = {
 	codeWallets: new Map<string, string[]>() // Shared with accessCodes system
 };
 
+// SEC-05: rejection-sampled CSPRNG pick from a fixed alphabet.
+// `limit = floor(256/N)*N` discards bytes that would otherwise bias indices on
+// alphabets where N does not divide 256 evenly (RESEARCH §Pitfall 9). For the
+// 31-char referral alphabet limit = 248; bytes 248-255 trigger re-roll
+// (~3% rejection rate) — without this, indices 0-7 would carry 9/256 weight
+// vs 8/256 for indices 8-30.
+function pickFromAlphabet(alphabet: string): string {
+	const n = alphabet.length;
+	const limit = Math.floor(256 / n) * n;
+	while (true) {
+		const byte = crypto.randomBytes(1)[0];
+		if (byte < limit) return alphabet[byte % n];
+	}
+}
+
 // Generate a random referral code in format st0x-ref-xxxxxx
 export function generateReferralCode(): string {
 	const chars = 'abcdefghjkmnpqrstuvwxyz23456789'; // Removed confusing chars (0, o, 1, i, l)
-	const randomPart = Array.from(
-		{ length: 6 },
-		() => chars[Math.floor(Math.random() * chars.length)]
-	).join('');
+	const randomPart = Array.from({ length: 6 }, () => pickFromAlphabet(chars)).join('');
 	return `st0x-ref-${randomPart}`;
 }
 

@@ -10,7 +10,7 @@
 		fetchReferralLeaderboard,
 		referralProfile
 	} from '$lib/stores/referralStore';
-	import { formatPoints, formatUsd } from '$lib/stores/rewardsStore';
+	import { formatPoints, formatUsd } from '$lib/utils/format';
 
 	let scrollContainer: HTMLDivElement;
 

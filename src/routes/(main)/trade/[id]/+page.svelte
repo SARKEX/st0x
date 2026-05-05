@@ -5,9 +5,13 @@
 	import { formatUnits } from 'viem';
 	import { TOKENS, getTokenByAnyAddress } from '$lib/config/network';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import LimitOrder from '$lib/components/orders/LimitOrder.svelte';
+	// PERF-01: LimitOrder + DcaOrder are lazy-loaded via {#await import()} below
+	// (only fetched when their tab is selected). MarketOrder stays eager — it is
+	// the default tab (panelStrategy = 'market') and represents the panel's
+	// first-paint LCP element when the user opens the trade panel.
 	import { truncateAddress } from '$lib/utils/format';
-	import TradingViewChart from '$lib/components/charts/TradingViewChart.svelte';
+	// PERF-01: TradingViewChart is lazy-loaded — it only renders inside the
+	// chart-modal (showChartModal) which is closed on first paint.
 	import TradingViewWidget from '$lib/components/charts/TradingViewWidget.svelte';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -17,7 +21,8 @@
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import type { SgTrade } from '@rainlanguage/orderbook';
-	import TokenMarketCharts from '$lib/components/charts/TokenMarketCharts.svelte';
+	// PERF-01: TokenMarketCharts is lazy-loaded — it pulls lightweight-charts
+	// (~150KB minified) and only renders when activeOnchainTab === 'market'.
 	import type {
 		DepthSeries,
 		TradeHistoryPoint,
@@ -25,7 +30,6 @@
 		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
-	import DcaOrder from '$lib/components/orders/DcaOrder.svelte';
 	import { extractBaseSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
@@ -36,6 +40,10 @@
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
+	import {
+		getMakerInputTokenAddress,
+		getMakerOutputTokenAddress
+	} from '$lib/types/orderPerspective';
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -135,8 +143,8 @@
 			.filter(
 				(q) =>
 					q.sgOrder?.owner?.toLowerCase() === myAddress &&
-					(assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
-						assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? ''))
+					(assetAddressSet.has(getMakerInputTokenAddress(q)?.toLowerCase() ?? '') ||
+						assetAddressSet.has(getMakerOutputTokenAddress(q)?.toLowerCase() ?? ''))
 			)
 			.map((q) => q.orderHash);
 	})();
@@ -158,8 +166,8 @@
 			// Filter by token (input or output matches current token's wrapped or legacy address)
 			const filtered = quotes.filter(
 				(q) =>
-					assetAddressSet.has(q.inputTokenAddress?.toLowerCase() ?? '') ||
-					assetAddressSet.has(q.outputTokenAddress?.toLowerCase() ?? '')
+					assetAddressSet.has(getMakerInputTokenAddress(q)?.toLowerCase() ?? '') ||
+					assetAddressSet.has(getMakerOutputTokenAddress(q)?.toLowerCase() ?? '')
 			);
 
 			// Transform to DisplayOrder
@@ -248,14 +256,11 @@
 	// Note: currentToken.address from subgraph may differ from the wrapped token address
 	$: currentPythToken = (() => {
 		if (!tokenId || !$currentNetwork?.chainId) return undefined;
-		const byAddress = TOKENS.find(
-			(token) =>
-				token.address.toLowerCase() === tokenId.toLowerCase() &&
-				token.chainId === $currentNetwork.chainId
-		);
-		if (byAddress) return byAddress;
-		const byAnyAddress = getTokenByAnyAddress(tokenId);
-		return byAnyAddress?.chainId === $currentNetwork.chainId ? byAnyAddress : undefined;
+		// DRIFT-01: getTokenByAnyAddress already matches wrapped/unwrapped/legacy
+		// address variants (and the wrapped-address path is a strict subset of
+		// what it covers), so the previous two-step lookup collapses to one call.
+		const match = getTokenByAnyAddress(tokenId);
+		return match?.chainId === $currentNetwork.chainId ? match : undefined;
 	})();
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
@@ -673,8 +678,8 @@
 					const ratioValue = ratioToNumber(quote.ratio);
 					const ratio = ratioValue ?? 0;
 					if (!Number.isFinite(ratio) || ratio <= 0) return;
-					const inputAddress = quote.inputTokenAddress.toLowerCase();
-					const outputAddress = quote.outputTokenAddress.toLowerCase();
+					const inputAddress = getMakerInputTokenAddress(quote).toLowerCase();
+					const outputAddress = getMakerOutputTokenAddress(quote).toLowerCase();
 					const inputIsAsset = assetAddressSet.has(inputAddress);
 					const outputIsAsset = assetAddressSet.has(outputAddress);
 					// ASK: quote token -> asset (what you pay when buying)
@@ -812,8 +817,8 @@
 			if (!Number.isFinite(ratio) || ratio <= 0) {
 				return;
 			}
-			const inputAddress = quote.inputTokenAddress.toLowerCase();
-			const outputAddress = quote.outputTokenAddress.toLowerCase();
+			const inputAddress = getMakerInputTokenAddress(quote).toLowerCase();
+			const outputAddress = getMakerOutputTokenAddress(quote).toLowerCase();
 			if (!inputAddress || !outputAddress) {
 				return;
 			}
@@ -1164,24 +1169,42 @@
 					/>
 				</div>
 
-				<!-- Fixed height container to prevent layout jumps between tabs -->
+				<!--
+					Fixed height container to prevent layout jumps between tabs.
+					PERF-01: TokenMarketCharts pulls lightweight-charts (~150KB);
+					lazy-load with a skeleton equal to the container's
+					min-height so CLS remains stable when the chunk arrives.
+				-->
 				<div class="min-h-[320px] sm:min-h-[440px]">
 					{#if activeOnchainTab === 'market'}
-						<TokenMarketCharts
-							volumeBuckets={tradeVolumeBuckets}
-							depth={orderbookDepth}
-							{ohlcData}
-							rangeStartMs={historyRangeStartMs}
-							rangeEndMs={historyRangeEndMs}
-							isLoading={chartsLoading}
-							error={tradeQueryError}
-							{historyRange}
-							historyRangeOptions={HISTORY_RANGE_OPTIONS}
-							on:rangeChange={(e) => (historyRange = e.detail.key)}
-						/>
-						<div class="mt-2 hidden text-xs text-gray-400 sm:block">
-							All times are displayed in your local timezone
-						</div>
+						{#await import('$lib/components/charts/TokenMarketCharts.svelte')}
+							<div
+								class="flex min-h-[320px] items-center justify-center sm:min-h-[440px]"
+							>
+								<LoadingSpinner size="md" text="Loading market charts…" />
+							</div>
+						{:then Mod}
+							<svelte:component
+								this={Mod.default}
+								volumeBuckets={tradeVolumeBuckets}
+								depth={orderbookDepth}
+								{ohlcData}
+								rangeStartMs={historyRangeStartMs}
+								rangeEndMs={historyRangeEndMs}
+								isLoading={chartsLoading}
+								error={tradeQueryError}
+								{historyRange}
+								historyRangeOptions={HISTORY_RANGE_OPTIONS}
+								on:rangeChange={(e) => (historyRange = e.detail.key)}
+							/>
+							<div class="mt-2 hidden text-xs text-gray-400 sm:block">
+								All times are displayed in your local timezone
+							</div>
+						{:catch _err}
+							<div class="min-h-[320px] p-4 text-sm text-red-400 sm:min-h-[440px]">
+								Failed to load market charts. Please reload the page.
+							</div>
+						{/await}
 					{:else if activeOnchainTab === 'orders'}
 						<div class="mt-4">
 							<OrdersTable
@@ -1802,17 +1825,35 @@
 									}}
 								/>
 							</label>
-							<div>
+							<!--
+								PERF-01: LimitOrder + DcaOrder lazy-load via {#await import()}.
+								Skeleton placeholders use min-h-[420px] to match rendered form
+								height ±20px and prevent CLS regression on tab switch
+								(Pitfall 5 mitigation; CLS smoke target < 0.1).
+								MarketOrder stays eager (default tab, first-paint LCP element).
+							-->
+							<div class="min-h-[420px]">
 								{#if panelStrategy === 'limit'}
-									<LimitOrder
-										orderSide={panelOrderSide}
-										assetToken={currentPythToken}
-										currentPrice={panelOrderSide === 'Buy'
-											? (sellPrice ?? oraclePriceData?.price)?.toFixed(4)
-											: (buyPrice ?? oraclePriceData?.price)?.toFixed(4)}
-										{buyPrice}
-										{sellPrice}
-									/>
+									{#await import('$lib/components/orders/LimitOrder.svelte')}
+										<div class="flex min-h-[420px] items-center justify-center">
+											<LoadingSpinner size="md" text="Loading limit order form…" />
+										</div>
+									{:then Mod}
+										<svelte:component
+											this={Mod.default}
+											orderSide={panelOrderSide}
+											assetToken={currentPythToken}
+											currentPrice={panelOrderSide === 'Buy'
+												? (sellPrice ?? oraclePriceData?.price)?.toFixed(4)
+												: (buyPrice ?? oraclePriceData?.price)?.toFixed(4)}
+											{buyPrice}
+											{sellPrice}
+										/>
+									{:catch _err}
+										<div class="min-h-[420px] p-4 text-sm text-red-400">
+											Failed to load Limit order form. Please reload the page.
+										</div>
+									{/await}
 								{:else if panelStrategy === 'market'}
 									<MarketOrder
 										orderSide={panelOrderSide}
@@ -1822,7 +1863,21 @@
 										{sellPrice}
 									/>
 								{:else if panelStrategy === 'dca'}
-									<DcaOrder orderSide={panelOrderSide} assetToken={currentPythToken} />
+									{#await import('$lib/components/orders/DcaOrder.svelte')}
+										<div class="flex min-h-[420px] items-center justify-center">
+											<LoadingSpinner size="md" text="Loading DCA order form…" />
+										</div>
+									{:then Mod}
+										<svelte:component
+											this={Mod.default}
+											orderSide={panelOrderSide}
+											assetToken={currentPythToken}
+										/>
+									{:catch _err}
+										<div class="min-h-[420px] p-4 text-sm text-red-400">
+											Failed to load DCA order form. Please reload the page.
+										</div>
+									{/await}
 								{/if}
 							</div>
 						</div>
@@ -1955,7 +2010,26 @@
 			<div class="flex-1 overflow-hidden px-2 pb-2 pt-2 sm:px-6 sm:pb-6 sm:pt-4">
 				<div class="h-full w-full rounded-xl border border-white/10 bg-gray-900 p-1 sm:p-2">
 					{#if tradingViewSymbol}
-						<TradingViewChart symbol={tradingViewSymbol} interval="60" />
+						<!--
+							PERF-01: TradingViewChart lives inside the chart modal
+							(showChartModal=false on first paint). Lazy-load defers the
+							TradingView widget bundle until the user opens the modal.
+						-->
+						{#await import('$lib/components/charts/TradingViewChart.svelte')}
+							<div class="flex h-full items-center justify-center">
+								<LoadingSpinner size="md" text="Loading TradingView chart…" />
+							</div>
+						{:then Mod}
+							<svelte:component
+								this={Mod.default}
+								symbol={tradingViewSymbol}
+								interval="60"
+							/>
+						{:catch _err}
+							<div class="flex h-full items-center justify-center text-sm text-red-400">
+								Failed to load TradingView chart. Please reload the page.
+							</div>
+						{/await}
 					{:else}
 						<div class="flex h-full items-center justify-center text-sm text-gray-400">
 							TradingView data unavailable for this token.

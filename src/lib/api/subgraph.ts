@@ -1,5 +1,6 @@
 import type { SgTrade } from '@rainlanguage/orderbook';
 import { TOKENS } from '$lib/config/network';
+import { getTokenByAnyAddress } from '$lib/config/tokens';
 import type { Network } from '$lib/config/network';
 import type { OffchainAssetReceiptVault, MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
@@ -14,10 +15,10 @@ export const getSftById = async (
 ): Promise<OffchainAssetReceiptVault | null> => {
 	const subgraphUrl = network.subgraph_url;
 
-	// Validate that the token exists in our config
-	const token = TOKENS.find(
-		(t) => t.chainId === network.chainId && t.address.toLowerCase() === tokenId.toLowerCase()
-	);
+	// Validate that the token exists in our config.
+	// DRIFT-01: getTokenByAnyAddress matches wrapped/unwrapped/legacy variants.
+	const tokenMatch = getTokenByAnyAddress(tokenId);
+	const token = tokenMatch?.chainId === network.chainId ? tokenMatch : null;
 	if (!token) {
 		return null;
 	}

@@ -45,37 +45,12 @@ export async function cacheDelete(key: string): Promise<void> {
 	}
 }
 
-/**
- * Invalidate all public API caches (rewards APY, rocketboost, wallet data)
- */
-export async function invalidatePublicApiCaches(): Promise<void> {
-	await Promise.all([
-		cacheDelete(CACHE_KEYS.rewardsApy()),
-		cacheDelete(CACHE_KEYS.rocketboost()),
-		cacheDelete(CACHE_KEYS.allWalletData())
-	]);
-	console.log('[Cache] Public API caches invalidated');
-}
-
-/**
- * Invalidate all rewards-related caches (called after snapshot generation)
- */
-export async function invalidateRewardsCaches(): Promise<void> {
-	await Promise.all([
-		cacheDelete(CACHE_KEYS.rewardsApy()),
-		cacheDelete(CACHE_KEYS.rocketboost()),
-		cacheDelete(CACHE_KEYS.allWalletData()),
-		cacheDelete(CACHE_KEYS.rewardsLeaderboard()),
-		cacheDelete(CACHE_KEYS.rewardsPoolApy()),
-		cacheDelete(CACHE_KEYS.rewardsUserSharedData()),
-		cacheDelete(CACHE_KEYS.rewardsGlobalData()),
-		// Invalidate TVL caches (common limit values)
-		cacheDelete(CACHE_KEYS.tvl(90)),
-		cacheDelete(CACHE_KEYS.tvl(30)),
-		cacheDelete(CACHE_KEYS.tvl(365))
-	]);
-	console.log('[Cache] All rewards caches invalidated');
-}
+// invalidatePublicApiCaches() and invalidateRewardsCaches() were deleted in
+// Phase 1 (DEPR-02). Their callers (admin/rewards-pool POST, admin/snapshots/
+// {trigger,recalculate}, cron/snapshots) were all unwired or deleted as part
+// of the rewards-layer prune. The CACHE_KEYS constants below are kept because
+// the surviving rewards APIs in /api/rewards/* and /api/public/* still read
+// them; those readers will be deleted in Plan 01-02 (DEPR-01).
 
 // In-memory locks to prevent cache stampede
 const computeLocks = new Map<string, Promise<unknown>>();

@@ -8,6 +8,7 @@
 import type { MarketOrderSummary } from '$lib/stores/transaction';
 import { formatUnits } from 'viem';
 import { isPaymentToken, computePrice } from '$lib/utils/tokenMath';
+import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
 
 export interface MarketOrderDisplay {
 	direction: 'Buy' | 'Sell';
@@ -47,7 +48,7 @@ export function translateMarketOrderForDisplay(summary: MarketOrderSummary): Mar
 	const assetSymbol = direction === 'Buy' ? summary.inputTokenSymbol : summary.outputTokenSymbol;
 	const assetDecimals =
 		direction === 'Buy' ? summary.inputTokenDecimals : summary.outputTokenDecimals;
-	const assetAddress = direction === 'Buy' ? summary.inputTokenAddress : summary.outputTokenAddress;
+	const assetAddress = direction === 'Buy' ? getMakerInputTokenAddress(summary) : getMakerOutputTokenAddress(summary);
 
 	const paymentAmount = direction === 'Buy' ? summary.outputAmount : summary.inputAmount;
 	const paymentSymbol = direction === 'Buy' ? summary.outputTokenSymbol : summary.inputTokenSymbol;

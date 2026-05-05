@@ -12,6 +12,10 @@
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
+	import {
+		getMakerInputTokenAddress,
+		getMakerOutputTokenAddress
+	} from '$lib/types/orderPerspective';
 	import Button from './ui/Button.svelte';
 	import {
 		executeMarketOrder,
@@ -179,8 +183,8 @@
 
 		return quotes
 			.filter((quote: ProcessedQuote) => {
-				const inputAddr = normalizeAddress(quote.inputTokenAddress);
-				const outputAddr = normalizeAddress(quote.outputTokenAddress);
+				const inputAddr = normalizeAddress(getMakerInputTokenAddress(quote));
+				const outputAddr = normalizeAddress(getMakerOutputTokenAddress(quote));
 				const price = quote.quotePerAsset;
 				return (
 					inputAddr === quoteAddress &&
@@ -201,8 +205,8 @@
 
 		return quotes
 			.filter((quote: ProcessedQuote) => {
-				const inputAddr = normalizeAddress(quote.inputTokenAddress);
-				const outputAddr = normalizeAddress(quote.outputTokenAddress);
+				const inputAddr = normalizeAddress(getMakerInputTokenAddress(quote));
+				const outputAddr = normalizeAddress(getMakerOutputTokenAddress(quote));
 				const price = quote.quotePerAsset;
 				return (
 					inputAddr === assetAddress &&

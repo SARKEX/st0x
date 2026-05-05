@@ -1,6 +1,13 @@
 import { RaindexClient } from '@rainlanguage/orderbook';
+import { env as publicEnv } from '$env/dynamic/public';
 import type { Network } from '$lib/config/network';
 type RaindexClientInstance = RaindexClient;
+
+// SEC-01 / Phase 3 D-02: Same PUBLIC_BASE_RPC_URL the client networks config reads.
+// Dev fallback preserves the `npm run dev` no-env-needed path; production sets the
+// Alchemy URL via Vercel env vars. The literal Alchemy URL was committed pre-Phase-3
+// and is rotated as part of the SEC-01 deploy (see 03-RUNBOOK.md / Plan 03-10).
+const PRIMARY_RPC = publicEnv.PUBLIC_BASE_RPC_URL || 'https://base-rpc.publicnode.com';
 
 /**
  * Raindex settings YAML.
@@ -23,7 +30,7 @@ const SETTINGS_YAML = `version: 5
 networks:
   base:
     rpcs:
-      - https://base-mainnet.g.alchemy.com/v2/y3BXawVv5uuP_g8BaDlKbKoTBGHo9zD9
+      - ${PRIMARY_RPC}
     chain-id: 8453
     network-id: 8453
     currency: ETH

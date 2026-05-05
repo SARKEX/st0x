@@ -1,6 +1,6 @@
 import { formatUnits } from 'viem';
 import { parseFloatHex } from '$lib/utils/tokenMath';
-import { TOKENS } from '$lib/config/tokens';
+import { TOKENS, getTokenByAnyAddress } from '$lib/config/tokens';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DisplayOrder } from '$lib/types/orders';
 import type { ApiMarketOrder, ApiTradeByTxEntry } from '$lib/api/st0xApi';
@@ -134,13 +134,13 @@ function transformApiTradeEntry(
 	const inputAddr = entry.request.inputToken.toLowerCase();
 	const outputAddr = entry.request.outputToken.toLowerCase();
 
-	// Look up token config for symbol and classification
-	const inputConfig = TOKENS.find(
-		(t) => t.chainId === chainId && t.address.toLowerCase() === inputAddr
-	);
-	const outputConfig = TOKENS.find(
-		(t) => t.chainId === chainId && t.address.toLowerCase() === outputAddr
-	);
+	// Look up token config for symbol and classification.
+	// DRIFT-01: use getTokenByAnyAddress to match wrapped/unwrapped/legacy
+	// address variants. Post-filter chainId to preserve the original guard.
+	const inputMatch = getTokenByAnyAddress(inputAddr);
+	const outputMatch = getTokenByAnyAddress(outputAddr);
+	const inputConfig = inputMatch?.chainId === chainId ? inputMatch : undefined;
+	const outputConfig = outputMatch?.chainId === chainId ? outputMatch : undefined;
 
 	const inputSymbol = inputConfig?.symbol ?? 'UNKNOWN';
 	const outputSymbol = outputConfig?.symbol ?? 'UNKNOWN';
