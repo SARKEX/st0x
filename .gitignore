@@ -30,6 +30,9 @@ AGENTS.md
 CLAUDE.md
 .env*.local
 
+# Claude Code (per-user/per-machine settings, runtime locks, local worktrees)
+.claude/
+
 # Playwright
 .playwright-mcp/
 *.png
