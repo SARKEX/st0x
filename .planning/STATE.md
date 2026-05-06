@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Test & Observe
 status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-05-06T18:58:28.907Z"
+last_updated: "2026-05-06T19:07:28.449Z"
 last_activity: 2026-05-06
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 9
-  completed_plans: 2
-  percent: 22
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
 Phase: 01 (ui-driven-e2e-order-test-coverage) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-05-06
 
@@ -79,6 +79,7 @@ Last activity: 2026-05-06
 | Phase 04 P10 | 1800 | 9 tasks | 4 files |
 | Phase 01 P01 | 11 | 3 tasks | 13 files |
 | Phase 01 P02 | 6 | - tasks | - files |
+| Phase 01 P03 | 18 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -215,6 +216,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-01: sr-only test-only mode-tab buttons alongside existing <Select> — defers full UX retrofit to Plan 01-03 per CONTEXT D-10
 - [Phase ?]: 01-01: side-toggle testids on +page.svelte panel buttons (where Buy/Sell live), not MarketOrder.svelte (which receives orderSide as a prop)
 - [Phase ?]: Plan 01-02 audit: marketHours.test.ts must-fix gap surfaced; routed to 01-08
+- [Phase ?]: errorClass taxonomy precedence: insufficient_balance > no_liquidity > slippage > stale_oracle > market_closed (highest-priority class wins when multiple errors active)
+- [Phase ?]: error-banner rendered sr-only to preserve existing visible UX while exposing E2E selector with role=alert
 
 ### Pending Todos
 
@@ -245,7 +248,7 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-06T18:58:11.324Z
+Last session: 2026-05-06T19:07:13.656Z
 Stopped at: Phase 1 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
