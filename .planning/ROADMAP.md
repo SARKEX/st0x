@@ -58,7 +58,7 @@ Full milestone detail: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Shrink the Surface, See What's Happening | v1.0 | 8/8 | Complete | 2026-04-29 |
+| 1. Shrink the Surface, See What's Happening | v1.0 | 1/9 | In Progress|  |
 | 2. Trade-Execution Backbone Refactor | v1.0 | 8/8 | Complete | 2026-04-29 |
 | 3. Production-Grade Hardening | v1.0 | 11/11 | Complete | 2026-04-30 |
 | 4. Boundary Tests & Drift Cleanup | v1.0 | 10/10 | Complete | 2026-05-01 |
