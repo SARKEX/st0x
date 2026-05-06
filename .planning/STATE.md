@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Test & Observe
-status: executing
+status: verifying
 stopped_at: Phase 1 context gathered
-last_updated: "2026-05-06T19:32:33.921Z"
+last_updated: "2026-05-06T20:01:13.166Z"
 last_activity: 2026-05-06
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
 Phase: 01 (ui-driven-e2e-order-test-coverage) — EXECUTING
 Plan: 9 of 9
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-06
 
 ## Performance Metrics
@@ -84,6 +84,7 @@ Last activity: 2026-05-06
 | Phase 01 P05 | 5 | 1 tasks | 1 files |
 | Phase 01 P06 | 6 | 1 tasks | 1 files |
 | Phase 01 P07 | 8 | 1 task tasks | 1 file files |
+| Phase 01 P08 | 7 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 01-09: Smoke pre-flight runs ONLY smoke.spec.ts before full E2E suite — D-14 fast-fail surfaces misconfig in <2 min
 - [Phase ?]: 01-05: TEST-07 Sell market-order E2E mirrors 01-04 Buy shape with BOTH-sides delta assertions (tNVDA debited AND USDC credited) — strictly stronger TRADE-01 inversion pin than Buy single-axis check. Wave-3 market-order coverage complete.
 - [Phase ?]: Phase 01-07: TEST-09 limit-deploy + counterparty-fill UI E2E spec shipped (Sell maker OUTPUT-vault drain assertion + simulated takeOrders3 from anvil[1]); WalletClient pattern adopted because TestClient lacks writeContract
+- [Phase ?]: Plan 01-08: Closed TEST-08e must-fix gap by authoring tests/lib/utils/marketHours.test.ts (11 cases). Audit re-walked — all UI E2E placeholder cells replaced with shipped paths from 01-04..01-07.
 
 ### Pending Todos
 
@@ -256,7 +258,7 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-06T19:32:07.874Z
+Last session: 2026-05-06T20:01:02.058Z
 Stopped at: Phase 1 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
