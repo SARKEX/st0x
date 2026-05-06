@@ -1031,6 +1031,8 @@
 					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
 						<button
 							type="button"
+							data-testid="open-trade"
+							data-side="buy"
 							class="rounded-xl bg-green-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Buy')}
 						>
@@ -1038,6 +1040,8 @@
 						</button>
 						<button
 							type="button"
+							data-testid="open-trade"
+							data-side="sell"
 							class="rounded-xl bg-red-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Sell')}
 						>
@@ -1757,6 +1761,8 @@
 							<div class="grid grid-cols-2 gap-2 sm:gap-3" aria-label="Select order side">
 								<button
 									type="button"
+									data-testid="side-toggle"
+									data-side="buy"
 									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Buy'
 											? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
@@ -1768,6 +1774,8 @@
 								</button>
 								<button
 									type="button"
+									data-testid="side-toggle"
+									data-side="sell"
 									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Sell'
 											? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
@@ -1799,6 +1807,38 @@
 									<span>{$currentNetwork.displayName}</span>
 								</div>
 							</div>
+							<!--
+								E2E test hooks for mode selection. The Select below is the user-facing
+								control; these sr-only buttons let Playwright drive panelStrategy via
+								data-testid="mode-tab" without depending on <select> semantics. The
+								`sr-only` Tailwind utility hides them from sighted users while keeping
+								them in the accessibility tree. Full mode-tab UX retrofit lands in
+								Plan 01-03 per CONTEXT D-10.
+							-->
+							<button
+								type="button"
+								data-testid="mode-tab"
+								data-mode="market"
+								class="sr-only"
+								tabindex="-1"
+								on:click={() => (panelStrategy = 'market')}
+							>Market</button>
+							<button
+								type="button"
+								data-testid="mode-tab"
+								data-mode="limit"
+								class="sr-only"
+								tabindex="-1"
+								on:click={() => (panelStrategy = 'limit')}
+							>Limit</button>
+							<button
+								type="button"
+								data-testid="mode-tab"
+								data-mode="dca"
+								class="sr-only"
+								tabindex="-1"
+								on:click={() => (panelStrategy = 'dca')}
+							>DCA</button>
 							<label class="block space-y-1.5 sm:space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
 								<span
 									id={PANEL_STRATEGY_LABEL_ID}
