@@ -20,14 +20,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** v1.0 shipped + tagged. Awaiting next milestone definition.
+**Current focus:** v1.1 Test & Observe — UI-driven Anvil-fork E2E tests + observability deepening (Sentry Session Replay, transaction event taxonomy, funnel, correlation IDs).
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
+Phase: 1 — UI-Driven E2E + Order Test Coverage (next up; not yet planned)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-06 — Milestone v1.1 started
+Status: Roadmap drafted; awaiting Phase 1 planning via /gsd-plan-phase 1
+Last activity: 2026-05-06 — Roadmap created for v1.1 (14/14 REQ-IDs mapped: TEST-05..12 → Phase 1, OBS-06..11 → Phase 2)
 
 ## Performance Metrics
 

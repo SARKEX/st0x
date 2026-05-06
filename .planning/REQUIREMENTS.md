@@ -53,4 +53,21 @@ Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and tur
 
 ## Traceability
 
-*(filled in by roadmapper — every REQ-ID maps to exactly one phase)*
+Coverage: 14/14 v1 REQ-IDs mapped — no orphans, no duplicates.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TEST-05 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-06 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-07 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-08 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-09 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-10 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-11 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-12 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| OBS-06  | Phase 2 — Observability for Transacting Users | Pending |
+| OBS-07  | Phase 2 — Observability for Transacting Users | Pending |
+| OBS-08  | Phase 2 — Observability for Transacting Users | Pending |
+| OBS-09  | Phase 2 — Observability for Transacting Users | Pending |
+| OBS-10  | Phase 2 — Observability for Transacting Users | Pending |
+| OBS-11  | Phase 2 — Observability for Transacting Users | Pending |

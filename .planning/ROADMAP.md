@@ -3,8 +3,16 @@
 ## Milestones
 
 - ✅ **v1.0 Stabilization** — Phases 1-4 (shipped 2026-05-05) — see [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
+- 🚧 **v1.1 Test & Observe** — Phases 1-2 (in planning) — phase numbering reset; v1.0 phases archived to [milestones/v1.0-phases/](milestones/v1.0-phases/)
+
+## Goal — v1.1 Test & Observe
+
+Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and turn the v1.0 observability foundation into a tool that surfaces transacting-user pain before users have to report it.
 
 ## Phases
+
+- [ ] **Phase 1: UI-Driven E2E + Order Test Coverage** — Anvil-fork harness against Base mainnet with live Rain counterparties; UI-button-driven E2E for market Buy/Sell (happy + failure) and limit-order deploy/fill; audit-and-remediate existing order tests; UI-coupling discipline for the planned UI→API migration.
+- [ ] **Phase 2: Observability for Transacting Users** — Sentry Session Replay (privacy-masked, transaction-biased sampling); transaction event taxonomy in PostHog + pino; funnel/drop-off dashboard; correlation ID threading across Sentry / PostHog / pino; production verification + privacy review.
 
 <details>
 <summary>✅ v1.0 Stabilization (Phases 1-4) — SHIPPED 2026-05-05</summary>
@@ -18,13 +26,33 @@ Full milestone detail: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 
 </details>
 
-### 📋 Next milestone (not yet planned)
+## Phase Details — v1.1
 
-To start the next milestone (questioning → research → requirements → roadmap):
+### Phase 1: UI-Driven E2E + Order Test Coverage
+**Goal**: A trade-page UI flow has E2E coverage that catches a deliberately introduced regression in side semantics, slippage handling, or freshness — before it reaches a user.
+**Depends on**: Nothing (first phase of v1.1; builds on v1.0 anvil-fork suite TEST-03 from `milestones/v1.0-phases/phase-04-boundary-tests-and-drift-cleanup/`)
+**Requirements**: TEST-05, TEST-06, TEST-07, TEST-08, TEST-09, TEST-10, TEST-11, TEST-12
+**Success Criteria** (what must be TRUE):
+  1. Running the test suite spins up a deterministic Base-mainnet Anvil fork at a pinned recent block with live Rain counterparty orders, and per-test snapshot/revert keeps runs reproducible.
+  2. Driving the actual trade-page Buy and Sell buttons through the UI executes a market order against forked counterparties and asserts on-chain fill plus correct user/vault state — for both directions.
+  3. Each market-order failure mode (slippage exceeded, no liquidity, stale oracle price, insufficient balance, market-hours gating) surfaces the user-visible error the UI is supposed to show, asserted via the rendered UI rather than service internals.
+  4. Deploying a limit order through the UI deposits into the correct (output) vault, and a simulated counterparty fill on the fork completes the order and leaves vault state matching expectations.
+  5. A written gap report covers every existing order-related test under `tests/`, every "must-fix" gap is closed in this milestone, and a documented convention establishes that E2E tests reference UI selectors / data-testids rather than internal service exports.
+**Plans**: TBD
+**UI hint**: yes
 
-```
-/gsd-new-milestone
-```
+### Phase 2: Observability for Transacting Users
+**Goal**: When a real user's trade fails, an engineer can pick the Sentry event and within minutes see the matching session replay AND the matching server logs, and a funnel dashboard shows where transacting users are dropping off.
+**Depends on**: Phase 1 (test harness gives confidence to ship instrumentation changes; v1.0 OBS-01..05 foundation already live: Sentry SDK + pino + transcripts + RPC metrics + Speed Insights)
+**Requirements**: OBS-06, OBS-07, OBS-08, OBS-09, OBS-10, OBS-11
+**Success Criteria** (what must be TRUE):
+  1. Sentry Session Replay is live for transacting users, sampling is biased toward sessions that initiated a Buy / Sell / limit-deploy, and PII fields plus addresses-where-appropriate are masked.
+  2. A documented transaction event taxonomy is emitted in PostHog and pino across Buy, Sell, limit-deploy, and DCA-deploy flows — covering open page, quote received, click submit, sign approval, sign trade, broadcast, confirmed/failed — with documented properties (mode, side, amounts, slippage, error class).
+  3. A single PostHog dashboard renders trade-page → quote → submit → signed → confirmed funnels with named drop-off steps and counts, broken out by order type (market, limit).
+  4. For any failed trade, a shared correlation ID emitted at trade start lets an engineer navigate from Sentry event → PostHog session replay → pino server logs without manual joins.
+  5. At least one real production trade roundtrip is captured end-to-end across Sentry replay, PostHog events, and pino server logs, and Session Replay masking + event properties have passed a documented privacy review against `.planning/codebase/CONCERNS.md` PII guidance and the OBS-01 Sentry PII scrubbing config.
+**Plans**: TBD
+**UI hint**: yes
 
 ## Progress
 
@@ -34,8 +62,18 @@ To start the next milestone (questioning → research → requirements → roadm
 | 2. Trade-Execution Backbone Refactor | v1.0 | 8/8 | Complete | 2026-04-29 |
 | 3. Production-Grade Hardening | v1.0 | 11/11 | Complete | 2026-04-30 |
 | 4. Boundary Tests & Drift Cleanup | v1.0 | 10/10 | Complete | 2026-05-01 |
+| 1. UI-Driven E2E + Order Test Coverage | v1.1 | 0/0 | Not started | - |
+| 2. Observability for Transacting Users | v1.1 | 0/0 | Not started | - |
 
 **v1.0 Stabilization milestone closed: 2026-05-05** — 33/33 v1 REQ-IDs across 4 phases. HUMAN-UAT carry-forwards (PERF-01 numeric p75 LCP < 2.5s, SEC-03+04 D-04b runtime UX, REL-02 per-RPC attribution) tracked in [STATE.md](STATE.md) `## Deferred Items` for post-deploy verification via `/gsd-verify-work --milestone v1.0 --human-uat`.
+
+## Coverage — v1.1
+
+- v1 requirements mapped: 14/14
+  - Phase 1: TEST-05, TEST-06, TEST-07, TEST-08, TEST-09, TEST-10, TEST-11, TEST-12 (8)
+  - Phase 2: OBS-06, OBS-07, OBS-08, OBS-09, OBS-10, OBS-11 (6)
+- Orphaned: 0
+- Duplicates: 0
 
 ## Backlog
 
@@ -65,3 +103,6 @@ Items captured at v1.0 close that are not yet sized into a milestone. Use `/gsd-
 - **999.11 — Anvil-fork CI run with archive `BASE_RPC_URL`.** v1.0 closed without a green CI run of the anvil-fork integration suite against an archive RPC. Once 999.8 is fixed, set `BASE_RPC_URL` in CI env to an archive node and verify the suite passes at `FORK_BLOCK 33_400_000`. **Source:** v1.0 audit `tech_debt` HUMAN-UAT carry-forward.
 - **999.12 — OBS-03 transcript-capture refresh.** Phase 4 used 7 synthesized transcripts (Vercel CLI was unavailable at execution time). Refresh from real Vercel logs once the production Sentry stack has captured a sample of real failure modes. **Source:** v1.0 audit `tech_debt`.
 - **999.13 — `CLAUDE.md` natural-read review.** Post-DRIFT-03 rewrite, do a fresh natural-language read-through to catch any remaining single-chain / no-AA prose drift, plus reflect the post-v1.0 architecture (Sentry live, session cookie atomic-flipped, vendored Rain registry). **Source:** v1.0 audit `tech_debt`.
+
+---
+*Last updated: 2026-05-06 — v1.1 Test & Observe milestone planned; 2 phases, numbering reset to 1, 2.*
