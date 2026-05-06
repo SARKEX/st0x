@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Test & Observe
-status: verifying
-stopped_at: Phase 1 context gathered
-last_updated: "2026-05-06T20:01:13.166Z"
-last_activity: 2026-05-06
+status: completed
+stopped_at: Phase 2 context gathered
+last_updated: "2026-05-06T21:07:34.127Z"
+last_activity: 2026-05-06 -- Phase 01 marked complete
 progress:
   total_phases: 2
   completed_phases: 1
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
-Phase: 01 (ui-driven-e2e-order-test-coverage) — EXECUTING
+Phase: 01 — COMPLETE
 Plan: 9 of 9
-Status: Phase complete — ready for verification
-Last activity: 2026-05-06
+Status: Phase 01 complete
+Last activity: 2026-05-06 -- Phase 01 marked complete
 
 ## Performance Metrics
 
@@ -258,8 +258,8 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-06T20:01:02.058Z
-Stopped at: Phase 1 context gathered
+Last session: 2026-05-06T21:07:34.123Z
+Stopped at: Phase 2 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
 Stopped at: Phase 3 Plan 03-08b (SEC-03 atomic-flip consumer migration + manual smoke APPROVED) complete — 2-commit sequence: 417cd19 (Task 1 by prior agent ae54ea7487cf04689: feat — 5 server-side wallet-address consumers migrated to readSession atomically; +layout.svelte NON-AUTHORITATIVE comment downgrade; access/+page.server.ts deleteSession + 'session' cookie clear + 'wallet-address' hint clear; getWalletFromRequest at hooks.server.ts becomes async; logger.ts wallet enrichment via readSession; /api/access/check + /api/snapshots/preview + /api/snapshots/preview-stream rate-limit tier wallet via session cookie + KV; phase-exit grep gate 0 hits) + this docs commit (Task 2 manual smoke APPROVED via Vercel preview structural coverage 11/11 PASS). Manual smoke verdict: APPROVED via automated playwright-equivalent structural coverage on Vercel preview deploy https://st0x-30q6oqdau-st-0x.vercel.app (deploy dpl_DULYLYdLmbvJF3vdWsmzoMksLrvZ at sha 417cd19) — 11/11 checks PASS pinning SEC-03 + SEC-04 + SEC-06 + REL-02 + cookie-attribute correctness + security headers. D-04b runtime UX assertion (per-request signature absence) deferred to post-deploy HUMAN-UAT — structurally guaranteed since verifyWalletSignature is unreachable from per-request path. Vercel-side env vars set during smoke ritual: SESSION_SECRET / BASE_RPC_URL / PUBLIC_BASE_RPC_URL (encrypted, preview+production); HCAPTCHA_SECRET deliberately NOT yet set — Plan 03-04 fails closed without it; MUST land in 03-RUNBOOK.md / Plan 03-11. 0 code-level deviations; 1 plan-text reframing (Task 2 recipe substituted automated structural coverage for the 10-step real-wallet recipe — same pattern as 01-08 / 02-08 HUMAN-UAT deferral). Cross-cutting Phase 2 gates carry-forward green: TRADE-01 lockdown ✓, TRADE-02 cycle severance = 0 ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, staleTime: Infinity ✓, svelte-check baseline = 3 errors preserved ✓. Phase-exit gates green: SEC-02 (no fallback secret strings), SEC-03 (atomic-flip cookie-name grep = 0 hits), SEC-04 (session-bound CSRF active), REL-02 (viem fallback transport preserved). SEC-03 marked COMPLETE in REQUIREMENTS.md (closes audit finding §"client-set wallet-address cookie accepted as auth"). Wave 6 COMPLETE (2/2 plans atomic-flip-paired per CONTEXT D-04). Phase 3 progress: 9/11 plans, 9/10 phase REQ-IDs (SEC-01..07 + REL-01/02 all closed). Hand-off to Plan 03-11 03-RUNBOOK.md: 4 operational items captured (Vercel env-var checklist incl. pending HCAPTCHA_SECRET; Alchemy atomic-swap-then-rotate recipe per D-02; SEC-03+SEC-04 production-deploy smoke recipe re-running 11 structural checks; smoke-test KV cleanup recipe). Next session: Plan 03-10 (REL-03 — vendor static/registry/ from upstream commit 9dd64902 + orderDeployment.ts swap to same-origin /registry).
@@ -276,5 +276,5 @@ Earlier session: Phase 3 Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-c
 Earlier session: Phase 3 Plan 03-01 (SEC-01 Alchemy env-var swap) complete — 2 atomic commits (70520c8 client-side networks.ts + raindex.ts; e9cae57 server-side accessCodes.ts + referrals.ts + .env.example). 1 Rule 2 deviation auto-fixed (referrals.ts had 4th basePublicClient site missed in plan files list — closed under SEC-01 contract per phase-exit grep gate). Phase-exit gate `! grep -r "y3BXawVv5uuP" src/` returns 0 hits.
 
 Earlier session: Phase 2 CLOSED — Plan 02-08 (PERF-01 + Phase 2 RUNBOOK + phase exit) complete. Four atomic commits: 80c6233 (Task 1: rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 + jspdf/jspdf-autotable removed; ~250KB minified bundle reduction), a04b0a7 (Task 2: LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe skeletons; MarketOrder kept eager as default panel/first-paint LCP element; build evidence: 4 code-split chunks visible — LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB), ee34014 (RUNBOOK scaffold), and final docs commit (RUNBOOK fill with Vercel API check finding + Phase 2 HUMAN-UAT framing + 02-08-SUMMARY.md + STATE/ROADMAP/REQUIREMENTS updates). Task 0 pre-deploy human-verify resolved by orchestrator-side Vercel API check (NOT user roundtrip, exactly like Phase 1 / 01-08). PERF-01 marked complete in REQUIREMENTS.md as STRUCTURALLY MET BY CODE WORK; numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (operator runs /gsd-verify-work after deploy + 24h Speed Insights window). Phase 2 closed: 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates preserved: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check baseline = 3 errors (Phase 2 target ✓), staleTime: Infinity preserved (T-02-08-03). Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked.
-Resume file: None
+Resume file: .planning/phases/02-observability-for-transacting-users/02-CONTEXT.md
 Next step: continue Phase 3 wave execution at Wave 3 (Plan 03-05 SEC-06 — snapshotsPreview tiered rate-limit + admin gate)
