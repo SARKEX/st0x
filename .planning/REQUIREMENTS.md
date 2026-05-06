@@ -18,7 +18,7 @@ Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and tur
 ### Testing — Anvil-Fork E2E + Order Test Coverage
 
 - [x] **TEST-05**: UI-driven Anvil-fork harness wired into the test runner — Base mainnet fork at a pinned recent block with live Rain counterparty orders; reproducible, deterministic per-test snapshot/revert
-- [ ] **TEST-06**: E2E test — Buy market order triggered from the actual trade-page UI button executes against forked counterparties and asserts on-chain fill + correct user/vault state
+- [x] **TEST-06**: E2E test — Buy market order triggered from the actual trade-page UI button executes against forked counterparties and asserts on-chain fill + correct user/vault state
 - [ ] **TEST-07**: E2E test — Sell market order triggered from the UI button executes against forked counterparties and asserts on-chain fill + correct user/vault state
 - [ ] **TEST-08**: E2E test — market order failure paths each fail gracefully with the user-visible error the UI is supposed to show: slippage exceeded, no liquidity, stale oracle price, insufficient balance, market-hours gating
 - [ ] **TEST-09**: E2E test — limit order deployment from the UI deposits into the correct (output) vault and the on-chain order is matchable; a simulated counterparty fill on the fork completes the order and asserts vault state
@@ -58,7 +58,7 @@ Coverage: 14/14 v1 REQ-IDs mapped — no orphans, no duplicates.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | TEST-05 | Phase 1 — UI-Driven E2E + Order Test Coverage | Complete |
-| TEST-06 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-06 | Phase 1 — UI-Driven E2E + Order Test Coverage | Complete |
 | TEST-07 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
 | TEST-08 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
 | TEST-09 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
