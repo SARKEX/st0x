@@ -366,10 +366,24 @@
 </script>
 
 {#if $currentNetwork && ALL_TOKENS.length > 0 && orderInputToken && orderOutputToken && assetToken}
-	<div class="space-y-4">
+	<!-- D-09 / D-10: limit-form is the outer shell; limit-form-loaded is the
+	     post-skeleton anchor for Playwright `waitFor` past the lazy-load chunk
+	     (Pitfall 4). Both carry `data-mode` + `data-side` so E2E selectors compose
+	     `[data-testid="limit-form-loaded"][data-side="buy"]` etc. -->
+	<div
+		data-testid="limit-form"
+		data-mode="limit"
+		data-side={orderSide.toLowerCase()}
+	>
+	<div
+		class="space-y-4"
+		data-testid="limit-form-loaded"
+		data-mode="limit"
+		data-side={orderSide.toLowerCase()}
+	>
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
-			<div>
+			<div data-testid="deposit-input">
 				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
 				<TradeAmountInput
 					bind:this={tradeAmountInputRef}
@@ -407,6 +421,7 @@
 					aria-label="Limit Price"
 					type="number"
 					unit={settlementLabel}
+					dataTestId="price-input"
 					bind:amount={selectedInitialRatio}
 					validate={validateBaseline}
 					bind:isError={selectedInitialRatioError}
@@ -507,6 +522,9 @@
 
 		<!-- Deploy Button -->
 		<button
+			data-testid="deploy-submit"
+			data-side={orderSide.toLowerCase()}
+			data-mode="limit"
 			on:click={handleDeploy}
 			disabled={disableDeploy}
 			class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
@@ -530,6 +548,33 @@
 			{/if}
 		</button>
 
+		<!-- D-09 error-banner: classified error surface mirroring the MarketOrder
+		     taxonomy (slippage / no_liquidity / stale_oracle / insufficient_balance /
+		     market_closed). For LimitOrder the only deterministic pre-deploy classify
+		     case is `insufficient_balance` (below-min-trade is captured as a separate
+		     visible message above; not part of the TEST-08 taxonomy). -->
+		{#if belowMinTradeError}
+			<div
+				data-testid="error-banner"
+				data-error-class="insufficient_balance"
+				data-mode="limit"
+				data-side={orderSide.toLowerCase()}
+				class="sr-only"
+				role="alert"
+				aria-live="polite"
+			>insufficient_balance</div>
+		{/if}
+		{#if tradeSubmittedSuccessfully}
+			<div
+				data-testid="success-toast"
+				data-mode="limit"
+				data-side={orderSide.toLowerCase()}
+				class="sr-only"
+				role="status"
+				aria-live="polite"
+			>Order deployed</div>
+		{/if}
+
 		<!-- Review Strategy Checkbox -->
 		<label class="mt-3 flex cursor-pointer items-center gap-2">
 			<input
@@ -540,6 +585,7 @@
 			/>
 			<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
 		</label>
+	</div>
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">
