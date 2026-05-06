@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Test & Observe
-status: planning
+status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-05-06T14:03:09.514Z"
-last_activity: "2026-05-06 — Roadmap created for v1.1 (14/14 REQ-IDs mapped: TEST-05..12 → Phase 1, OBS-06..11 → Phase 2)"
+last_updated: "2026-05-06T18:52:49.161Z"
+last_activity: 2026-05-06
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 9
+  completed_plans: 1
+  percent: 11
 ---
 
 # Project State
@@ -20,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** v1.1 Test & Observe — UI-driven Anvil-fork E2E tests + observability deepening (Sentry Session Replay, transaction event taxonomy, funnel, correlation IDs).
+**Current focus:** Phase 01 — ui-driven-e2e-order-test-coverage
 
 ## Current Position
 
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
-Phase: 1 — UI-Driven E2E + Order Test Coverage (next up; not yet planned)
-Plan: —
-Status: Roadmap drafted; awaiting Phase 1 planning via /gsd-plan-phase 1
-Last activity: 2026-05-06 — Roadmap created for v1.1 (14/14 REQ-IDs mapped: TEST-05..12 → Phase 1, OBS-06..11 → Phase 2)
+Phase: 01 (ui-driven-e2e-order-test-coverage) — EXECUTING
+Plan: 2 of 9
+Status: Ready to execute
+Last activity: 2026-05-06
 
 ## Performance Metrics
 
@@ -76,6 +77,7 @@ Last activity: 2026-05-06 — Roadmap created for v1.1 (14/14 REQ-IDs mapped: TE
 | Phase 04 P08 | 30 | 3 tasks | 17 files |
 | Phase 04 P09 | 6 | 1 tasks | 1 files |
 | Phase 04 P10 | 1800 | 9 tasks | 4 files |
+| Phase 01 P01 | 11 | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -205,6 +207,12 @@ Recent decisions affecting current work:
 - [Phase ?]: Two-config Vitest split: tests/integration/** only runs via npm run test:integration; default npm test surface unchanged
 - [Phase ?]: Foundry CI install via foundryup with actions/cache@v4 keyed on ~/.foundry (foundry-<os>-v1)
 - [Phase ?]: 04-08: Synthesized 7 OBS-03 transcripts (Vercel CLI unavailable; plan permits synthesis fallback). FORK_BLOCK pinned 33_400_000. Default test surface unchanged 50/655/1; svelte-check baseline 3 preserved.
+- [Phase ?]: 01-01: FORK_BLOCK=33_400_000 inherited from v1.0 TEST-03; refresh recipe in 01-RUNBOOK
+- [Phase ?]: 01-01: Custom 80-LOC EIP-1193 stub via addInitScript instead of @web3-mock library — anvil unlocked accounts let stub be a thin RPC proxy with no in-browser secp256k1
+- [Phase ?]: 01-01: ERC20 funding via anvil_setStorageAt with per-token slot table (USDC slot 9 / OZ ERC20 slot 0) — deterministic, no Transfer-event side effects
+- [Phase ?]: 01-01: E2E=1 env-gated CSP relaxation in hooks.server.ts (one if-clause) over a same-origin RPC proxy alternative
+- [Phase ?]: 01-01: sr-only test-only mode-tab buttons alongside existing <Select> — defers full UX retrofit to Plan 01-03 per CONTEXT D-10
+- [Phase ?]: 01-01: side-toggle testids on +page.svelte panel buttons (where Buy/Sell live), not MarketOrder.svelte (which receives orderSide as a prop)
 
 ### Pending Todos
 
@@ -235,7 +243,7 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-06T14:03:09.509Z
+Last session: 2026-05-06T18:52:26.496Z
 Stopped at: Phase 1 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
@@ -253,5 +261,5 @@ Earlier session: Phase 3 Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-c
 Earlier session: Phase 3 Plan 03-01 (SEC-01 Alchemy env-var swap) complete — 2 atomic commits (70520c8 client-side networks.ts + raindex.ts; e9cae57 server-side accessCodes.ts + referrals.ts + .env.example). 1 Rule 2 deviation auto-fixed (referrals.ts had 4th basePublicClient site missed in plan files list — closed under SEC-01 contract per phase-exit grep gate). Phase-exit gate `! grep -r "y3BXawVv5uuP" src/` returns 0 hits.
 
 Earlier session: Phase 2 CLOSED — Plan 02-08 (PERF-01 + Phase 2 RUNBOOK + phase exit) complete. Four atomic commits: 80c6233 (Task 1: rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 + jspdf/jspdf-autotable removed; ~250KB minified bundle reduction), a04b0a7 (Task 2: LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe skeletons; MarketOrder kept eager as default panel/first-paint LCP element; build evidence: 4 code-split chunks visible — LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB), ee34014 (RUNBOOK scaffold), and final docs commit (RUNBOOK fill with Vercel API check finding + Phase 2 HUMAN-UAT framing + 02-08-SUMMARY.md + STATE/ROADMAP/REQUIREMENTS updates). Task 0 pre-deploy human-verify resolved by orchestrator-side Vercel API check (NOT user roundtrip, exactly like Phase 1 / 01-08). PERF-01 marked complete in REQUIREMENTS.md as STRUCTURALLY MET BY CODE WORK; numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (operator runs /gsd-verify-work after deploy + 24h Speed Insights window). Phase 2 closed: 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates preserved: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check baseline = 3 errors (Phase 2 target ✓), staleTime: Infinity preserved (T-02-08-03). Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked.
-Resume file: .planning/phases/01-ui-driven-e2e-order-test-coverage/01-CONTEXT.md
+Resume file: None
 Next step: continue Phase 3 wave execution at Wave 3 (Plan 03-05 SEC-06 — snapshotsPreview tiered rate-limit + admin gate)
