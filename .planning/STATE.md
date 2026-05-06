@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Test & Observe
 status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-05-06T19:15:18.877Z"
+last_updated: "2026-05-06T19:19:26.283Z"
 last_activity: 2026-05-06
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 9
-  completed_plans: 5
-  percent: 56
+  completed_plans: 6
+  percent: 67
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
 Phase: 01 (ui-driven-e2e-order-test-coverage) — EXECUTING
-Plan: 6 of 9
+Plan: 7 of 9
 Status: Ready to execute
 Last activity: 2026-05-06
 
@@ -81,6 +81,7 @@ Last activity: 2026-05-06
 | Phase 01 P02 | 6 | - tasks | - files |
 | Phase 01 P03 | 18 | 2 tasks | 5 files |
 | Phase 01 P09 | 10 | 1 tasks | 2 files |
+| Phase 01 P05 | 5 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -221,6 +222,7 @@ Recent decisions affecting current work:
 - [Phase ?]: error-banner rendered sr-only to preserve existing visible UX while exposing E2E selector with role=alert
 - [Phase ?]: Plan 01-09: Use foundry-rs/foundry-toolchain@v1 (tag-pinned) instead of curl-bash install — closes 999.8
 - [Phase ?]: Plan 01-09: Smoke pre-flight runs ONLY smoke.spec.ts before full E2E suite — D-14 fast-fail surfaces misconfig in <2 min
+- [Phase ?]: 01-05: TEST-07 Sell market-order E2E mirrors 01-04 Buy shape with BOTH-sides delta assertions (tNVDA debited AND USDC credited) — strictly stronger TRADE-01 inversion pin than Buy single-axis check. Wave-3 market-order coverage complete.
 
 ### Pending Todos
 
@@ -251,7 +253,7 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-06T19:15:18.874Z
+Last session: 2026-05-06T19:18:49.989Z
 Stopped at: Phase 1 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
