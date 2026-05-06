@@ -22,7 +22,7 @@ Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and tur
 - [ ] **TEST-07**: E2E test — Sell market order triggered from the UI button executes against forked counterparties and asserts on-chain fill + correct user/vault state
 - [ ] **TEST-08**: E2E test — market order failure paths each fail gracefully with the user-visible error the UI is supposed to show: slippage exceeded, no liquidity, stale oracle price, insufficient balance, market-hours gating
 - [ ] **TEST-09**: E2E test — limit order deployment from the UI deposits into the correct (output) vault and the on-chain order is matchable; a simulated counterparty fill on the fork completes the order and asserts vault state
-- [ ] **TEST-10**: Order-test coverage audit — review every existing unit + integration test under `tests/` related to order deployment, market execution, side semantics, and freshness; produce a written gap report mapped to the audit
+- [x] **TEST-10**: Order-test coverage audit — review every existing unit + integration test under `tests/` related to order deployment, market execution, side semantics, and freshness; produce a written gap report mapped to the audit
 - [ ] **TEST-11**: Gap remediation — every gap classified "must-fix" in TEST-10 has tests added in this milestone
 - [ ] **TEST-12**: UI-coupling discipline — E2E tests reference UI selectors/data-testids, not internal service exports; documented as a convention so the UI→API migration doesn't break the suite
 
@@ -62,7 +62,7 @@ Coverage: 14/14 v1 REQ-IDs mapped — no orphans, no duplicates.
 | TEST-07 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
 | TEST-08 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
 | TEST-09 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
-| TEST-10 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-10 | Phase 1 — UI-Driven E2E + Order Test Coverage | Complete |
 | TEST-11 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
 | TEST-12 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
 | OBS-06  | Phase 2 — Observability for Transacting Users | Pending |
