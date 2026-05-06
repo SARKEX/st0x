@@ -38,7 +38,29 @@ st0x is a single-chain (Base) decentralized exchange for trading tokenized secur
 
 ### Active
 
-*(none — v1.0 shipped, next milestone scope to be defined via `/gsd-new-milestone`)*
+**v1.1 Test & Observe milestone — in planning:**
+
+- **TEST-05**: UI-driven Anvil-fork E2E harness — Base mainnet fork at a recent block with live counterparty orders, wired into the test runner so trades can be simulated end-to-end
+- **TEST-06**: E2E coverage — market order Buy/Sell happy path triggered from the actual UI button, asserting on-chain fill
+- **TEST-07**: E2E coverage — market order failure paths (slippage exceeded, no liquidity, stale price, insufficient balance, market-hours gating)
+- **TEST-08**: E2E coverage — limit order deployment + simulated counterparty fill, asserting vault state
+- **TEST-09**: Order-test audit — review all existing order-related unit + integration tests, identify gaps, remediate in-milestone
+- **TEST-10**: UI-first test orientation — tests drive through routes/components rather than internal services, so they survive the planned UI→API logic migration
+- **OBS-06**: Sentry Session Replay integrated for transacting users — privacy-masked, sampling biased toward trade flows
+- **OBS-07**: Transaction event taxonomy — defined event names, properties, and step coverage for Buy/Sell/limit/DCA flows in PostHog + pino
+- **OBS-08**: Funnel + drop-off dashboard — PostHog funnel from "opened trade page" → "tx confirmed" with named drop-off steps
+- **OBS-09**: Correlation ID threading — Sentry event ↔ PostHog session ↔ pino server log linkable for any failed trade
+
+## Current Milestone: v1.1 Test & Observe
+
+**Goal:** Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and turn the v1.0 observability foundation into a tool that surfaces transacting-user pain before users have to report it.
+
+**Target features:**
+- UI-driven Anvil-fork E2E test harness covering market orders (happy + failure paths) and limit order deployment + fill
+- Audit and gap-fill of all existing order tests, oriented around the UI so they survive the planned UI→API migration
+- Sentry Session Replay scoped to transacting users (privacy-masked)
+- Transaction event taxonomy + funnel/drop-off dashboard in PostHog
+- Cross-tool correlation: Sentry ↔ PostHog ↔ pino linked by correlation ID for any failed trade
 
 ### Out of Scope
 
@@ -110,4 +132,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-05 — v1.0 Stabilization milestone shipped (37 plans, 33/33 v1 REQ-IDs across 4 phases). All v1.0 Active requirements moved to Validated. HUMAN-UAT carry-forwards (PERF-01 LCP, SEC-03+04 D-04b, REL-02 attribution) tracked in `STATE.md ## Deferred Items` for post-deploy verification. Sentry observability stack live in production (PR #170 + Vercel env vars set 2026-05-05). Next milestone scope to be defined via `/gsd-new-milestone`.*
+*Last updated: 2026-05-06 — v1.1 Test & Observe mini-milestone opened. Phase numbering reset to 1, 2 (v1.0 phases archived to `.planning/milestones/v1.0-phases/`). Scope: UI-driven Anvil-fork E2E tests + observability deepening (Sentry Session Replay, event taxonomy, funnel, correlation IDs).*

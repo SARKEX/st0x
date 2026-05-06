@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: verifying
-stopped_at: Completed 04-08-PLAN.md
-last_updated: "2026-05-05T19:31:22.683Z"
-last_activity: 2026-05-05
+milestone: v1.1
+milestone_name: Test & Observe
+status: planning
+last_updated: "2026-05-06T11:15:11.544Z"
+last_activity: 2026-05-06
 progress:
-  total_phases: 4
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 100
+  percent: 0
 ---
 
 # Project State
@@ -25,14 +24,10 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 ## Current Position
 
-Phase: — (between milestones)
+Phase: Not started (defining requirements)
 Plan: —
-Status: **v1.0 Stabilization milestone closed and tagged 2026-05-05.** Code shipped to `main`. HUMAN-UAT + tech-debt carry-forwards tracked in `## Deferred Items` below.
-Last activity: 2026-05-05 — milestone close (archive + tag v1.0)
-Resume file: None
-Next step: `/gsd-new-milestone` to start the next milestone, OR `/gsd-verify-work --milestone v1.0 --human-uat` to close out deferred verifications.
-
-Progress: [██████████] 100% — **stabilization milestone closed (33/33 v1 REQ-IDs)** across 4 phases (Phase 1: 8 DEPR-01..03 + OBS-01..05; Phase 2: 5 TRADE-01..04 + PERF-01; Phase 3: 10 SEC-01..07 + REL-01..03; Phase 4: 7 TEST-01..04 + DRIFT-01..03). HUMAN-UAT carry-forwards: PERF-01 numeric p75 LCP < 2.5s, SEC-03+04 D-04b runtime UX, anvil-fork CI run with archive-RPC `BASE_RPC_URL`, OBS-03 transcript-capture refresh, CLAUDE.md natural-read review.
+Status: Defining requirements
+Last activity: 2026-05-06 — Milestone v1.1 started
 
 ## Performance Metrics
 
