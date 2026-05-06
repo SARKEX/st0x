@@ -936,7 +936,17 @@
 <svelte:window on:keydown={(e) => { if (e.key === 'Escape' && showHighSlippageWarning) cancelHighSlippage(); }} />
 
 {#if $currentNetwork && assetToken}
-	<div class="space-y-4">
+	<div
+		data-testid="market-form"
+		data-mode="market"
+		data-side={orderSide.toLowerCase()}
+	>
+	<div
+		class="space-y-4"
+		data-testid="market-form-loaded"
+		data-mode="market"
+		data-side={orderSide.toLowerCase()}
+	>
 		<!-- Main inputs stacked -->
 		<div class="space-y-4">
 			<div>
@@ -969,7 +979,7 @@
 					{/if}
 
 					<!-- Middle: Amount input -->
-					<div class="flex-1">
+					<div class="flex-1" data-testid="spend-input">
 						<TradeAmountInput
 							bind:this={tradeAmountInputRef}
 							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
@@ -1191,6 +1201,9 @@
 
 		<!-- Market Order Button -->
 		<button
+			data-testid="trade-submit"
+			data-side={orderSide.toLowerCase()}
+			data-mode="market"
 			on:click={handleMarketOrder}
 			disabled={disableDeploy}
 			class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
@@ -1208,6 +1221,17 @@
 				Place Market Order
 			{/if}
 		</button>
+		{#if tradeSubmittedSuccessfully}
+			<div
+				data-testid="success-toast"
+				data-mode="market"
+				data-side={orderSide.toLowerCase()}
+				class="sr-only"
+				role="status"
+				aria-live="polite"
+			>Order submitted</div>
+		{/if}
+	</div>
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">
