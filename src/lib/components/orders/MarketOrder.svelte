@@ -299,6 +299,34 @@
 		}
 	}
 
+	// D-09 error-class taxonomy (compound testid for TEST-08 assertions):
+	//   - slippage             ← ratio-cap math reject (slippage_cap reason in failWith transcript)
+	//   - no_liquidity         ← OBS-03 no_quotes_available / preflight_order_vanished cascade
+	//   - stale_oracle         ← OBS-03 preflight_chain_unreachable / pyth-staleness
+	//   - insufficient_balance ← wallet/approval failure (selected amount > balance)
+	//   - market_closed        ← marketHours.isOutsideMarketHours()
+	// Order is precedence-significant: highest-priority class wins when multiple are
+	// active (e.g. insufficient_balance trumps no_liquidity to surface the actionable
+	// error first). Returns null when no error is active.
+	$: errorClass = (() => {
+		if (insufficientBalanceError) return 'insufficient_balance';
+		if (noLiquidityError) return 'no_liquidity';
+		const prepErr = (orderPreparationError ?? '').toLowerCase();
+		if (prepErr.includes('slippage') || prepErr.includes('ratio')) return 'slippage';
+		if (
+			prepErr.includes('stale') ||
+			prepErr.includes('oracle') ||
+			prepErr.includes('chain_unreachable')
+		)
+			return 'stale_oracle';
+		if (prepErr.includes('market') && prepErr.includes('closed')) return 'market_closed';
+		if (isOutsideMarketHours() && orderPreparationError) return 'market_closed';
+		if (priceError && (priceErrorReason === 'no_quotes' || priceErrorReason === 'no_fill'))
+			return 'no_liquidity';
+		if (orderPreparationError) return 'slippage'; // fallback for generic prep errors
+		return null;
+	})();
+
 	// Liquidity warning: check if there's enough liquidity within price guard
 	let insufficientLiquidityWarning: boolean = false;
 	let availableLiquidityFormatted: string = '0';
@@ -979,7 +1007,12 @@
 					{/if}
 
 					<!-- Middle: Amount input -->
-					<div class="flex-1" data-testid="spend-input">
+					<!-- D-09 testid: spend-input when inputMode is 'spend' (payment amount),
+					     asset-input when inputMode is 'amount' (asset quantity). The same
+					     TradeAmountInput renders both; the testid follows the mode so E2E can
+					     compose `[data-testid="asset-input"]` for asset-anchored entry and
+					     `[data-testid="spend-input"]` for payment-anchored entry. -->
+					<div class="flex-1" data-testid={inputMode === 'spend' ? 'spend-input' : 'asset-input'}>
 						<TradeAmountInput
 							bind:this={tradeAmountInputRef}
 							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
@@ -1090,6 +1123,7 @@
 					<div class="flex items-center gap-1">
 						<input
 							id="market-slippage"
+							data-testid="slippage-input"
 							type="text"
 							inputmode="decimal"
 							value={slippageInputValue}
@@ -1221,6 +1255,23 @@
 				Place Market Order
 			{/if}
 		</button>
+		<!-- D-09 error-banner: classified error surface for TEST-08 E2E assertions.
+		     Visible UX is rendered above (per-error inline blocks); this element exposes
+		     a stable selector + machine-readable `data-error-class` for Playwright. The
+		     element is sr-only so it doesn't duplicate visible text. The five error-class
+		     values cover all TEST-08 modes (slippage / no_liquidity / stale_oracle /
+		     insufficient_balance / market_closed). -->
+		{#if errorClass}
+			<div
+				data-testid="error-banner"
+				data-error-class={errorClass}
+				data-mode="market"
+				data-side={orderSide.toLowerCase()}
+				class="sr-only"
+				role="alert"
+				aria-live="polite"
+			>{errorClass}</div>
+		{/if}
 		{#if tradeSubmittedSuccessfully}
 			<div
 				data-testid="success-toast"
