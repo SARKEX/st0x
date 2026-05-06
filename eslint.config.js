@@ -92,5 +92,51 @@ export default [
 				}
 			]
 		}
+	},
+	// D-11 (Phase 1 v1.1): UI E2E tests must not import internal-logic modules.
+	// Drive everything through the rendered UI (data-testid selectors). The
+	// convention erodes silently without a lint gate; selector hygiene beyond
+	// this is trusted to convention doc + code review (semantic role/text via
+	// getByText/getByRole is sometimes the right tool, e.g. accessibility-aligned
+	// assertions on the wallet-connect button label).
+	//
+	// Companion: .planning/codebase/TESTING.md §"UI Test Selectors".
+	// Companion: tests/fixtures/eslint/ui-test-import-violation.ts proves this
+	// rule fires (the fixture path is included in `files` below so the rule
+	// applies even though the file lives outside tests/integration/ui/).
+	//
+	// IMPORTANT: appended as a NEW scoped block (NOT merged into the TRADE-01 /
+	// DRIFT-01 block above) per the flat-config-doesn't-merge warning at lines
+	// 35-38. `no-restricted-imports` is a different rule from `no-restricted-syntax`
+	// so the two coexist cleanly.
+	{
+		files: [
+			'tests/integration/ui/**/*.{ts,js}',
+			'tests/fixtures/eslint/ui-test-import-violation.ts'
+		],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: [
+								'$lib/services/marketOrderExecution',
+								'$lib/services/marketOrderExecution*',
+								'$lib/stores/transaction',
+								'$lib/stores/transaction*',
+								'$lib/services/orderDeployment',
+								'$lib/services/orderDeployment*',
+								'$lib/services/walletService',
+								'$lib/services/walletService*',
+								'$lib/types/orderPerspective'
+							],
+							message:
+								'UI E2E tests must NOT import internal-logic modules. Drive through the rendered UI (data-testid selectors). See .planning/codebase/TESTING.md §"UI Test Selectors". Companion fixture: tests/fixtures/eslint/ui-test-import-violation.ts.'
+						}
+					]
+				}
+			]
+		}
 	}
 ];
