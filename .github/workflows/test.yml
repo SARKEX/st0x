@@ -40,23 +40,9 @@ jobs:
           determinate: true
       - uses: DeterminateSystems/flakehub-cache-action@main
 
-      - name: Cache Foundry installation
-        uses: actions/cache@v4
+      - uses: foundry-rs/foundry-toolchain@v1
         with:
-          path: ~/.foundry
-          # Rotate by bumping the v1 suffix when foundryup major changes
-          # (per RESEARCH Pitfall 3).
-          key: foundry-${{ runner.os }}-v1
-          restore-keys: |
-            foundry-${{ runner.os }}-
-
-      - name: Install Foundry (anvil)
-        run: |
-          if [ ! -x "$HOME/.foundry/bin/anvil" ]; then
-            curl -L https://foundry.paradigm.xyz | bash
-            "$HOME/.foundry/bin/foundryup"
-          fi
-          echo "$HOME/.foundry/bin" >> $GITHUB_PATH
+          version: stable
 
       - name: Verify anvil
         run: anvil --version
@@ -65,6 +51,60 @@ jobs:
 
       - name: Run integration tests
         run: nix develop -c npm run test:integration
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          PUBLIC_WALLETCONNECT_ID: ${{ secrets.PUBLIC_WALLETCONNECT_ID }}
+          PUBLIC_ALPHAVANTAGE_API_KEY: ${{ secrets.PUBLIC_ALPHAVANTAGE_API_KEY }}
+          PRIVATE_PINATA_JWT: ${{ secrets.PRIVATE_PINATA_JWT }}
+          PUBLIC_PINATA_GATEWAY_URL: ${{ secrets.PUBLIC_PINATA_GATEWAY_URL }}
+          PRIVATE_PINATA_GATEWAY_KEY: ${{ secrets.PRIVATE_PINATA_GATEWAY_KEY }}
+
+  test-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: true
+      - uses: DeterminateSystems/flakehub-cache-action@main
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Verify anvil
+        run: anvil --version
+
+      - run: nix develop -c npm i
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: nix develop -c npx playwright install --with-deps chromium
+
+      - name: E2E smoke pre-flight (fast-fail per D-14)
+        run: nix develop -c npx playwright test smoke.spec.ts
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          PUBLIC_WALLETCONNECT_ID: ${{ secrets.PUBLIC_WALLETCONNECT_ID }}
+          PUBLIC_ALPHAVANTAGE_API_KEY: ${{ secrets.PUBLIC_ALPHAVANTAGE_API_KEY }}
+          PRIVATE_PINATA_JWT: ${{ secrets.PRIVATE_PINATA_JWT }}
+          PUBLIC_PINATA_GATEWAY_URL: ${{ secrets.PUBLIC_PINATA_GATEWAY_URL }}
+          PRIVATE_PINATA_GATEWAY_KEY: ${{ secrets.PRIVATE_PINATA_GATEWAY_KEY }}
+
+      - name: E2E full suite
+        run: nix develop -c npm run test:e2e
         env:
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
           PUBLIC_WALLETCONNECT_ID: ${{ secrets.PUBLIC_WALLETCONNECT_ID }}

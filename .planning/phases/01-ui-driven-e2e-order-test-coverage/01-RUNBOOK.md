@@ -215,3 +215,50 @@ when the adapter swap is in effect.
 This swap is a Plan 01-01 deferred-decision — ONLY land it if the smoke probe in
 `globalSetup.ts` actually trips; otherwise leave the simpler `vite preview` path in
 place.
+
+## CI workflow
+
+`.github/workflows/test.yml` carries three relevant jobs:
+
+| Job | Purpose | Key inputs |
+|-----|---------|-----------|
+| `test` | Unit tests under Vitest jsdom | secrets: walletconnect, alphavantage, pinata |
+| `test-integration` | Anvil-fork integration tests under Vitest | secret: `BASE_RPC_URL` (archive) + walletconnect/alphavantage/pinata |
+| `test-e2e` | Playwright UI E2E (anvil + vite preview + chromium) | secret: `BASE_RPC_URL` (archive) + walletconnect/alphavantage/pinata |
+
+Plan 01-09 swapped both fork-using jobs to install foundry via
+`foundry-rs/foundry-toolchain@v1` (closes 999.8 — the custom curl + foundryup script
+is no longer the install path).
+
+### Required CI secrets
+
+- `BASE_RPC_URL` — Base archive provider with retention back to `FORK_BLOCK=33_400_000`. Sourced from `${{ secrets.BASE_RPC_URL }}`; **never** echo this value in workflow steps. GitHub Actions auto-masks values from the `secrets.` context in logs.
+- `PUBLIC_WALLETCONNECT_ID`, `PUBLIC_ALPHAVANTAGE_API_KEY`, `PRIVATE_PINATA_JWT`, `PUBLIC_PINATA_GATEWAY_URL`, `PRIVATE_PINATA_GATEWAY_KEY` — required by build-time env for vite preview to start.
+
+### Playwright browser cache
+
+Cached at `~/.cache/ms-playwright`, keyed on `playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}`. Bumping `@playwright/test` in `package-lock.json` invalidates the cache automatically (T-1-09-02 mitigation).
+
+### Smoke fast-fail expectation
+
+The `test-e2e` job runs `npx playwright test smoke.spec.ts` BEFORE `npm run test:e2e` (full suite). Per D-14, smoke surfaces misconfig (missing `BASE_RPC_URL`, archive pruning at `FORK_BLOCK`, EIP-1193 stub regression, vite-preview API-route fidelity per Pitfall 7) in <2 minutes; a failed smoke skips the full suite.
+
+### Foundry-toolchain unavailability fallback
+
+If `foundry-rs/foundry-toolchain@v1` is unavailable upstream (T-1-09-03), revert the affected job to the previous custom install:
+```yaml
+- name: Cache Foundry installation
+  uses: actions/cache@v4
+  with:
+    path: ~/.foundry
+    key: foundry-${{ runner.os }}-v1
+    restore-keys: |
+      foundry-${{ runner.os }}-
+- name: Install Foundry (anvil)
+  run: |
+    if [ ! -x "$HOME/.foundry/bin/anvil" ]; then
+      curl -L https://foundry.paradigm.xyz | bash
+      "$HOME/.foundry/bin/foundryup"
+    fi
+    echo "$HOME/.foundry/bin" >> $GITHUB_PATH
+```
