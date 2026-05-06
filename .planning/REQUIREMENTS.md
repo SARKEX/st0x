@@ -24,7 +24,7 @@ Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and tur
 - [ ] **TEST-09**: E2E test — limit order deployment from the UI deposits into the correct (output) vault and the on-chain order is matchable; a simulated counterparty fill on the fork completes the order and asserts vault state
 - [x] **TEST-10**: Order-test coverage audit — review every existing unit + integration test under `tests/` related to order deployment, market execution, side semantics, and freshness; produce a written gap report mapped to the audit
 - [ ] **TEST-11**: Gap remediation — every gap classified "must-fix" in TEST-10 has tests added in this milestone
-- [ ] **TEST-12**: UI-coupling discipline — E2E tests reference UI selectors/data-testids, not internal service exports; documented as a convention so the UI→API migration doesn't break the suite
+- [x] **TEST-12**: UI-coupling discipline — E2E tests reference UI selectors/data-testids, not internal service exports; documented as a convention so the UI→API migration doesn't break the suite
 
 ### Observability — Transacting-User Visibility
 
@@ -64,7 +64,7 @@ Coverage: 14/14 v1 REQ-IDs mapped — no orphans, no duplicates.
 | TEST-09 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
 | TEST-10 | Phase 1 — UI-Driven E2E + Order Test Coverage | Complete |
 | TEST-11 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
-| TEST-12 | Phase 1 — UI-Driven E2E + Order Test Coverage | Pending |
+| TEST-12 | Phase 1 — UI-Driven E2E + Order Test Coverage | Complete |
 | OBS-06  | Phase 2 — Observability for Transacting Users | Pending |
 | OBS-07  | Phase 2 — Observability for Transacting Users | Pending |
 | OBS-08  | Phase 2 — Observability for Transacting Users | Pending |
