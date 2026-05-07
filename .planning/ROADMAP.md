@@ -51,7 +51,11 @@ Full milestone detail: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. A single PostHog dashboard renders trade-page → quote → submit → signed → confirmed funnels with named drop-off steps and counts, broken out by order type (market, limit).
   4. For any failed trade, a shared correlation ID emitted at trade start lets an engineer navigate from Sentry event → PostHog session replay → pino server logs without manual joins.
   5. At least one real production trade roundtrip is captured end-to-end across Sentry replay, PostHog events, and pino server logs, and Session Replay masking + event properties have passed a documented privacy review against `.planning/codebase/CONCERNS.md` PII guidance and the OBS-01 Sentry PII scrubbing config.
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 02-01-PLAN.md — Foundation modules: tradeId lifecycle, tradeEvents typed wrapper, pino RequestContext extension (OBS-07/OBS-09 base)
+  - [ ] 02-02-PLAN.md — Sentry Replay integration + captureTakeOrderFailure trade_id tag (OBS-06/OBS-09)
+  - [ ] 02-03-PLAN.md — Component instrumentation: MarketOrder/LimitOrder/DcaOrder/page route + service-side SDK callbacks (OBS-07/OBS-09 wiring)
+  - [ ] 02-04-PLAN.md — Operator config + OBS-08 funnel + OBS-10 production smoke + OBS-11 privacy review
 **UI hint**: yes
 
 ## Progress
@@ -63,7 +67,7 @@ Full milestone detail: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 | 3. Production-Grade Hardening | v1.0 | 11/11 | Complete | 2026-04-30 |
 | 4. Boundary Tests & Drift Cleanup | v1.0 | 10/10 | Complete | 2026-05-01 |
 | 1. UI-Driven E2E + Order Test Coverage | v1.1 | 0/0 | Not started | - |
-| 2. Observability for Transacting Users | v1.1 | 0/0 | Not started | - |
+| 2. Observability for Transacting Users | v1.1 | 0/4 | Planned | - |
 
 **v1.0 Stabilization milestone closed: 2026-05-05** — 33/33 v1 REQ-IDs across 4 phases. HUMAN-UAT carry-forwards (PERF-01 numeric p75 LCP < 2.5s, SEC-03+04 D-04b runtime UX, REL-02 per-RPC attribution) tracked in [STATE.md](STATE.md) `## Deferred Items` for post-deploy verification via `/gsd-verify-work --milestone v1.0 --human-uat`.
 
