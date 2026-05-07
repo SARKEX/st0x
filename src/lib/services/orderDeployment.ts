@@ -20,6 +20,19 @@ import { formatUnits } from 'viem';
 import type { DeploymentTransactionArgs } from '@rainlanguage/orderbook';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { walletAddress } from '$lib/stores/authStore';
+import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
+
+/**
+ * OBS-07 (Plan 02-03 Task 2c) — mandatory funnel-event context for deploy paths.
+ *
+ * Per checker fix #6: `order_type` MUST be supplied by the caller. There is NO
+ * default and NO silent fallback to `'limit'` (which was the DCA-funnel-corruption
+ * bug pre-Plan 02-03). The TypeScript compiler enforces this contract — every
+ * caller (LimitOrder, DcaOrder via deployTransactionStore) MUST pass it explicitly.
+ */
+export interface DeployEventContext {
+	order_type: 'limit' | 'dca';
+}
 
 /** Lazily resolve DotrainRegistry from the WASM-based orderbook package. */
 async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any> }> {
@@ -149,7 +162,8 @@ export type DcaDeploymentArgs = {
 
 export const getDcaDeploymentArgs = async (
 	network: Network,
-	args: DcaDeploymentArgs
+	args: DcaDeploymentArgs,
+	eventContext: DeployEventContext
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('auction-dca', network.raindexNetworkSlug);
 
@@ -198,6 +212,15 @@ export const getDcaDeploymentArgs = async (
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
+	// OBS-07: deploy calldata is built and the user is about to be prompted to
+	// sign. `sign_trade` is the funnel step at this boundary. order_type comes
+	// from the caller's eventContext — no silent fallback (checker fix #6).
+	trackTradeEvent('sign_trade', {
+		order_type: eventContext.order_type,
+		asset_symbol: args.inputToken.symbol,
+		payment_symbol: args.outputToken.symbol
+	});
+
 	return {
 		composedRainlang,
 		deploymentArgs
@@ -214,7 +237,8 @@ export type LimitOrderDeploymentArgs = {
 
 export const getLimitOrderDeploymentArgs = async (
 	network: Network,
-	args: LimitOrderDeploymentArgs
+	args: LimitOrderDeploymentArgs,
+	eventContext: DeployEventContext
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug);
 
@@ -243,6 +267,13 @@ export const getLimitOrderDeploymentArgs = async (
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
+
+	// OBS-07: see getDcaDeploymentArgs for emission rationale.
+	trackTradeEvent('sign_trade', {
+		order_type: eventContext.order_type,
+		asset_symbol: args.inputToken.symbol,
+		payment_symbol: args.outputToken.symbol
+	});
 
 	return {
 		composedRainlang,

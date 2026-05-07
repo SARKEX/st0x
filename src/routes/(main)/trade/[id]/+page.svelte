@@ -578,7 +578,10 @@
 	// Uses lastTrackedTokenId to ensure tracking fires for each new token during client-side navigation
 	$: if (currentPythToken?.symbol && $page.params.id !== lastTrackedTokenId) {
 		lastTrackedTokenId = $page.params.id;
-		trackPageView('trade_page', {
+		// OBS-08 (Plan 02-03 Task 2c, checker fix #7): emit `page_viewed` with
+		// `page: 'trade'` so the funnel filter (`page === 'trade'`) works at the
+		// intent step. Was previously `'trade_page'` which the funnel cannot match.
+		trackPageView('trade', {
 			token_symbol: currentPythToken.symbol,
 			token_id: $page.params.id
 		});
