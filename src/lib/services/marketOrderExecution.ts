@@ -48,6 +48,7 @@ import {
 	type TakeOrderTranscript,
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
+import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
 import { getMakerInputIOIndex, getMakerOutputIOIndex, getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
 import { withRetry } from '$lib/utils/retry';
 
@@ -631,6 +632,25 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		}
 		const { status, error: txError } = get(transactionStoreInternal);
 		if (status === TransactionStatus.SUCCESS) {
+			// OBS-07 (Plan 02-03 Task 1b): SDK callback boundary collapse.
+			// `handleAggregatedTakeOrdersCalldata` / `handleOracleOrders` already block
+			// through wallet-sign → on-chain dispatch → receipt confirmation by the
+			// time control returns here. There is no per-callback hook at this layer
+			// to distinguish "broadcast" (post-dispatch, pre-confirm) from "confirmed"
+			// (post-receipt). Per plan §Task 1b: emit BOTH back-to-back at the same
+			// boundary so the funnel contract holds (Plan 04 §3 OBS-08 funnel definition).
+			trackTradeEvent('broadcast', {
+				order_type: 'market',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken.symbol,
+				payment_symbol: paymentToken.symbol
+			});
+			trackTradeEvent('confirmed', {
+				order_type: 'market',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken.symbol,
+				payment_symbol: paymentToken.symbol
+			});
 			return { success: true };
 		}
 		if (status === TransactionStatus.ERROR) {
