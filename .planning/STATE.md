@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Test & Observe
 status: executing
 stopped_at: Phase 2 context gathered
-last_updated: "2026-05-07T08:52:01.795Z"
-last_activity: 2026-05-07 -- Phase 02 planning complete
+last_updated: "2026-05-07T09:23:57.156Z"
+last_activity: 2026-05-07
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 13
-  completed_plans: 9
-  percent: 69
+  completed_plans: 10
+  percent: 77
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** Phase 01 — ui-driven-e2e-order-test-coverage
+**Current focus:** Phase 02 — observability-for-transacting-users
 
 ## Current Position
 
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
-Phase: 01 — COMPLETE
-Plan: 9 of 9
+Phase: 02 (observability-for-transacting-users) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-05-07 -- Phase 02 planning complete
+Last activity: 2026-05-07
 
 ## Performance Metrics
 
@@ -85,6 +85,7 @@ Last activity: 2026-05-07 -- Phase 02 planning complete
 | Phase 01 P06 | 6 | 1 tasks | 1 files |
 | Phase 01 P07 | 8 | 1 task tasks | 1 file files |
 | Phase 01 P08 | 7 | 1 tasks | 2 files |
+| Phase 02 P01 | 7min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -228,6 +229,7 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-05: TEST-07 Sell market-order E2E mirrors 01-04 Buy shape with BOTH-sides delta assertions (tNVDA debited AND USDC credited) — strictly stronger TRADE-01 inversion pin than Buy single-axis check. Wave-3 market-order coverage complete.
 - [Phase ?]: Phase 01-07: TEST-09 limit-deploy + counterparty-fill UI E2E spec shipped (Sell maker OUTPUT-vault drain assertion + simulated takeOrders3 from anvil[1]); WalletClient pattern adopted because TestClient lacks writeContract
 - [Phase ?]: Plan 01-08: Closed TEST-08e must-fix gap by authoring tests/lib/utils/marketHours.test.ts (11 cases). Audit re-walked — all UI E2E placeholder cells replaced with shipped paths from 01-04..01-07.
+- [Phase ?]: Plan 02-01: Strict UUIDv4 regex for X-Trade-Id validation in pino RequestContext (T-2-A); duplicated PII scrub regexes in tradeEvents.ts for PostHog boundary parallel to scrub.ts (T-2-B)
 
 ### Pending Todos
 
@@ -258,7 +260,7 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-06T21:07:34.123Z
+Last session: 2026-05-07T09:23:50.584Z
 Stopped at: Phase 2 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
@@ -276,5 +278,5 @@ Earlier session: Phase 3 Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-c
 Earlier session: Phase 3 Plan 03-01 (SEC-01 Alchemy env-var swap) complete — 2 atomic commits (70520c8 client-side networks.ts + raindex.ts; e9cae57 server-side accessCodes.ts + referrals.ts + .env.example). 1 Rule 2 deviation auto-fixed (referrals.ts had 4th basePublicClient site missed in plan files list — closed under SEC-01 contract per phase-exit grep gate). Phase-exit gate `! grep -r "y3BXawVv5uuP" src/` returns 0 hits.
 
 Earlier session: Phase 2 CLOSED — Plan 02-08 (PERF-01 + Phase 2 RUNBOOK + phase exit) complete. Four atomic commits: 80c6233 (Task 1: rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 + jspdf/jspdf-autotable removed; ~250KB minified bundle reduction), a04b0a7 (Task 2: LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe skeletons; MarketOrder kept eager as default panel/first-paint LCP element; build evidence: 4 code-split chunks visible — LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB), ee34014 (RUNBOOK scaffold), and final docs commit (RUNBOOK fill with Vercel API check finding + Phase 2 HUMAN-UAT framing + 02-08-SUMMARY.md + STATE/ROADMAP/REQUIREMENTS updates). Task 0 pre-deploy human-verify resolved by orchestrator-side Vercel API check (NOT user roundtrip, exactly like Phase 1 / 01-08). PERF-01 marked complete in REQUIREMENTS.md as STRUCTURALLY MET BY CODE WORK; numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (operator runs /gsd-verify-work after deploy + 24h Speed Insights window). Phase 2 closed: 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates preserved: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check baseline = 3 errors (Phase 2 target ✓), staleTime: Infinity preserved (T-02-08-03). Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked.
-Resume file: .planning/phases/02-observability-for-transacting-users/02-CONTEXT.md
+Resume file: None
 Next step: continue Phase 3 wave execution at Wave 3 (Plan 03-05 SEC-06 — snapshotsPreview tiered rate-limit + admin gate)

@@ -29,9 +29,9 @@ Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and tur
 ### Observability — Transacting-User Visibility
 
 - [ ] **OBS-06**: Sentry Session Replay integrated, privacy-masked (PII fields, addresses where appropriate), sampling biased toward sessions that initiated a Buy/Sell/limit-deploy
-- [ ] **OBS-07**: Transaction event taxonomy defined and emitted — named events at every meaningful step of Buy, Sell, limit deployment, and DCA deployment flows (open page, quote received, click submit, sign approval, sign trade, broadcast, confirmed/failed); each event carries documented properties (mode, side, amounts, slippage, error class)
+- [x] **OBS-07**: Transaction event taxonomy defined and emitted — named events at every meaningful step of Buy, Sell, limit deployment, and DCA deployment flows (open page, quote received, click submit, sign approval, sign trade, broadcast, confirmed/failed); each event carries documented properties (mode, side, amounts, slippage, error class)
 - [ ] **OBS-08**: PostHog funnel + drop-off dashboard — single dashboard showing trade-page → quote → submit → signed → confirmed funnel with named drop-off steps and counts; one per order type (market, limit)
-- [ ] **OBS-09**: Correlation ID threading — every failed trade can be navigated from a Sentry event to the matching PostHog session replay and pino server logs via a shared correlation ID emitted at trade start
+- [x] **OBS-09**: Correlation ID threading — every failed trade can be navigated from a Sentry event to the matching PostHog session replay and pino server logs via a shared correlation ID emitted at trade start
 - [ ] **OBS-10**: Replay + taxonomy live in production — verified with at least one real trade roundtrip captured end-to-end across Sentry replay, PostHog events, and server logs
 - [ ] **OBS-11**: Privacy review — Session Replay masking rules and event properties reviewed against `.planning/codebase/CONCERNS.md` PII guidance and Sentry SDK PII scrubbing config from OBS-01
 
@@ -66,8 +66,8 @@ Coverage: 14/14 v1 REQ-IDs mapped — no orphans, no duplicates.
 | TEST-11 | Phase 1 — UI-Driven E2E + Order Test Coverage | Complete |
 | TEST-12 | Phase 1 — UI-Driven E2E + Order Test Coverage | Complete |
 | OBS-06  | Phase 2 — Observability for Transacting Users | Pending |
-| OBS-07  | Phase 2 — Observability for Transacting Users | Pending |
+| OBS-07  | Phase 2 — Observability for Transacting Users | Complete |
 | OBS-08  | Phase 2 — Observability for Transacting Users | Pending |
-| OBS-09  | Phase 2 — Observability for Transacting Users | Pending |
+| OBS-09  | Phase 2 — Observability for Transacting Users | Complete |
 | OBS-10  | Phase 2 — Observability for Transacting Users | Pending |
 | OBS-11  | Phase 2 — Observability for Transacting Users | Pending |
