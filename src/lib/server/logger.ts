@@ -28,6 +28,10 @@ interface RequestContext {
 	wallet: string | null;
 	route: string;
 	method: string;
+	// OBS-09 Plan 02-01 Task 3: orthogonal browser-minted correlation key,
+	// extracted from the `X-Trade-Id` request header after strict UUIDv4 validation.
+	// Null when the header is absent or fails the UUIDv4 regex (T-2-A mitigation).
+	trade_id: string | null;
 	start_ms: number;
 }
 
@@ -73,7 +77,10 @@ export function getLogger(): Logger {
 		request_id: ctx.request_id,
 		wallet: ctx.wallet,
 		route: ctx.route,
-		method: ctx.method
+		method: ctx.method,
+		// Conditionally include trade_id only when present — keeps existing log shape
+		// orthogonal to the OBS-09 extension. Absent header / invalid header → omitted.
+		...(ctx.trade_id ? { trade_id: ctx.trade_id } : {})
 	});
 }
 
@@ -110,7 +117,18 @@ export const requestContextHandle: Handle = async ({ event, resolve }) => {
 	const method = event.request.method;
 	const start_ms = Date.now();
 
-	return contextStore.run({ request_id, wallet, route, method, start_ms }, async () => {
+	// OBS-09 Plan 02-01 Task 3: extract + validate the browser-minted X-Trade-Id header.
+	// Strict UUIDv4 regex (8-4-4-4-12 with version `4` nibble + variant `[89ab]`) — rejects
+	// log-forging payloads (newlines, SQL/JS, oversized strings). T-2-A mitigation; ASVS V5.
+	// Server only consumes the header — never mints (mint stays in the browser per D-claim).
+	const headerTradeId = event.request.headers.get('x-trade-id');
+	const trade_id =
+		headerTradeId &&
+		/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(headerTradeId)
+			? headerTradeId
+			: null;
+
+	return contextStore.run({ request_id, wallet, route, method, trade_id, start_ms }, async () => {
 		const response = await resolve(event);
 		response.headers.set('x-request-id', request_id);
 
