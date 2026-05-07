@@ -53,7 +53,7 @@ Full milestone detail: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   5. At least one real production trade roundtrip is captured end-to-end across Sentry replay, PostHog events, and pino server logs, and Session Replay masking + event properties have passed a documented privacy review against `.planning/codebase/CONCERNS.md` PII guidance and the OBS-01 Sentry PII scrubbing config.
 **Plans**: 4 plans
   - [x] 02-01-PLAN.md — Foundation modules: tradeId lifecycle, tradeEvents typed wrapper, pino RequestContext extension (OBS-07/OBS-09 base)
-  - [ ] 02-02-PLAN.md — Sentry Replay integration + captureTakeOrderFailure trade_id tag (OBS-06/OBS-09)
+  - [x] 02-02-PLAN.md — Sentry Replay integration + captureTakeOrderFailure trade_id tag (OBS-06/OBS-09)
   - [ ] 02-03-PLAN.md — Component instrumentation: MarketOrder/LimitOrder/DcaOrder/page route + service-side SDK callbacks (OBS-07/OBS-09 wiring)
   - [ ] 02-04-PLAN.md — Operator config + OBS-08 funnel + OBS-10 production smoke + OBS-11 privacy review
 **UI hint**: yes

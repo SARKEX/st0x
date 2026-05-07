@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Test & Observe
 status: executing
 stopped_at: Phase 2 context gathered
-last_updated: "2026-05-07T09:23:57.156Z"
+last_updated: "2026-05-07T09:31:53.714Z"
 last_activity: 2026-05-07
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 13
-  completed_plans: 10
-  percent: 77
+  completed_plans: 11
+  percent: 85
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
 Phase: 02 (observability-for-transacting-users) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-05-07
 
@@ -86,6 +86,7 @@ Last activity: 2026-05-07
 | Phase 01 P07 | 8 | 1 task tasks | 1 file files |
 | Phase 01 P08 | 7 | 1 tasks | 2 files |
 | Phase 02 P01 | 7min | 3 tasks | 7 files |
+| Phase 02 P02 | 5min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -230,6 +231,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 01-07: TEST-09 limit-deploy + counterparty-fill UI E2E spec shipped (Sell maker OUTPUT-vault drain assertion + simulated takeOrders3 from anvil[1]); WalletClient pattern adopted because TestClient lacks writeContract
 - [Phase ?]: Plan 01-08: Closed TEST-08e must-fix gap by authoring tests/lib/utils/marketHours.test.ts (11 cases). Audit re-walked — all UI E2E placeholder cells replaced with shipped paths from 01-04..01-07.
 - [Phase ?]: Plan 02-01: Strict UUIDv4 regex for X-Trade-Id validation in pino RequestContext (T-2-A); duplicated PII scrub regexes in tradeEvents.ts for PostHog boundary parallel to scrub.ts (T-2-B)
+- [Phase ?]: Plan 02-02: Extract CSP_DIRECTIVES into src/lib/server/csp.ts so it is unit-testable without invoking hooks.server.ts top-level side effects.
+- [Phase ?]: Plan 02-02: Conditional spread for optional trade_id Sentry tag keeps tags object key-free when no trade is active (verified via Object.keys).
 
 ### Pending Todos
 
@@ -260,7 +263,7 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-07T09:23:50.584Z
+Last session: 2026-05-07T09:31:53.707Z
 Stopped at: Phase 2 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
