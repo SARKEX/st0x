@@ -17,7 +17,22 @@
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 	import { track } from '$lib/services/analytics';
+	import {
+		trackTradeEvent,
+		type ErrorClass
+	} from '$lib/services/observability/tradeEvents';
+	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
 	import { onMount, onDestroy } from 'svelte';
+
+	// OBS-07/OBS-09 (Plan 02-03 Task 2a) — local error classifier.
+	function classifyDeployError(err: unknown): ErrorClass {
+		const msg = String((err as { message?: string })?.message ?? err ?? '').toLowerCase();
+		if (msg.includes('user reject') || msg.includes('user denied') || msg.includes('rejected'))
+			return 'user_rejected';
+		if (msg.includes('insufficient') || msg.includes('balance')) return 'insufficient_balance';
+		if (msg.includes('rpc') || msg.includes('network')) return 'rpc_error';
+		return 'unknown';
+	}
 
 	// Analytics tracking
 	let panelOpenTime = Date.now();
@@ -204,16 +219,6 @@
 	};
 
 	const handleDeploy = async () => {
-		// Track button click
-		track('trade_button_clicked', {
-			order_type: 'limit',
-			token_symbol: assetToken?.symbol,
-			order_side: orderSide.toLowerCase(),
-			amount: assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
-			limit_price: selectedInitialRatio || null,
-			is_authenticated: $isAuthenticated
-		});
-
 		if (!orderInputToken || !orderOutputToken || !assetToken || !settlementToken) return;
 		// Check if user is connected
 		if (!$isAuthenticated) {
@@ -236,64 +241,99 @@
 			return;
 		}
 
-		// Prepare deploy data
-		let deployData: {
-			inputToken: CategorizedToken;
-			outputToken: CategorizedToken;
-			ioRatio: string;
-			depositAmount: bigint;
-			inputVaultId: Hex | undefined;
-		};
-
-		// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
-		const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
-
-		if (orderType === 'Bid') {
-			// Bid order (user buying): Places order to buy asset with the settlement token
-			// User specifies quantity to acquire and price willing to pay
-			// Price interpretation: "I pay X quote tokens per 1 asset"
-			// The deployed order uses inverted ratio: 1/X
-			const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
-			const price = parseFloat(selectedInitialRatio || '0');
-			const settlementNeeded = parseFloat(assetQuantity) * price;
-			const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
-
-			deployData = {
-				inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
-				outputToken: orderOutputToken, // payment token (token to be deposited as payment)
-				// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
-				ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
-				depositAmount: settlementAmount, // Payment amount in settlement token
-				inputVaultId: selectedInputVaultId
-			};
-		} else {
-			// Ask order (user selling): Places order to sell asset for the settlement token
-			// User specifies quantity to offer and price willing to receive
-			// Price interpretation: "I receive X quote tokens per 1 asset"
-			// The deployed order uses direct ratio: X
-			deployData = {
-				inputToken: orderInputToken, // payment token (token expected in return)
-				outputToken: orderOutputToken, // Asset (token being offered for sale)
-				// Ask price remains unchanged: user says "receive X", orderbook stores "X"
-				ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
-				depositAmount: selectedAmount, // Asset amount being offered
-				inputVaultId: selectedInputVaultId
-			};
-		}
-
-		// Check if price warning is needed
-		if (checkPriceWarning()) {
-			pendingDeployData = deployData;
-			showPriceWarning = true;
-		} else {
-			tradeSubmittedSuccessfully = true;
-			track('limit_order_deployed', {
-				token_symbol: assetToken?.symbol,
-				order_side: orderSide.toLowerCase(),
-				price: selectedInitialRatio,
-				amount: formatUnits(selectedAmount, assetToken.decimals)
+		// Mint AFTER guards, BEFORE try (Pitfall 2 / T-2-E discipline).
+		mintTradeId();
+		// `cleared` flag: when the modal-warning path defers deploy to proceedWithDeploy,
+		// proceedWithDeploy owns the clear (the trade_id stays alive across the modal).
+		// Otherwise this handler clears in finally below.
+		let deferredToProceed = false;
+		try {
+			trackTradeEvent('trade_button_clicked', {
+				order_type: 'limit',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken?.symbol,
+				payment_symbol: settlementToken?.symbol,
+				amount:
+					assetToken && selectedAmount ? formatUnits(selectedAmount, assetToken.decimals) : '0',
+				limit_price: selectedInitialRatio || null
 			});
-			transactionStore.handleLimitDeploy(deployData);
+
+			// Prepare deploy data
+			let deployData: {
+				inputToken: CategorizedToken;
+				outputToken: CategorizedToken;
+				ioRatio: string;
+				depositAmount: bigint;
+				inputVaultId: Hex | undefined;
+			};
+
+			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
+			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+
+			if (orderType === 'Bid') {
+				// Bid order (user buying): Places order to buy asset with the settlement token
+				// User specifies quantity to acquire and price willing to pay
+				// Price interpretation: "I pay X quote tokens per 1 asset"
+				// The deployed order uses inverted ratio: 1/X
+				const assetQuantity = formatUnits(selectedAmount || 0n, assetToken.decimals);
+				const price = parseFloat(selectedInitialRatio || '0');
+				const settlementNeeded = parseFloat(assetQuantity) * price;
+				const settlementAmount = parseUnits(settlementNeeded.toString(), settlementToken.decimals);
+
+				deployData = {
+					inputToken: orderInputToken, // Asset (token to be acquired, used for IO ratio)
+					outputToken: orderOutputToken, // payment token (token to be deposited as payment)
+					// Bid price must be inverted: user says "pay X", orderbook stores "1/X"
+					ioRatio: priceToIoratioString('Bid', selectedInitialRatio, true),
+					depositAmount: settlementAmount, // Payment amount in settlement token
+					inputVaultId: selectedInputVaultId
+				};
+			} else {
+				// Ask order (user selling): Places order to sell asset for the settlement token
+				// User specifies quantity to offer and price willing to receive
+				// Price interpretation: "I receive X quote tokens per 1 asset"
+				// The deployed order uses direct ratio: X
+				deployData = {
+					inputToken: orderInputToken, // payment token (token expected in return)
+					outputToken: orderOutputToken, // Asset (token being offered for sale)
+					// Ask price remains unchanged: user says "receive X", orderbook stores "X"
+					ioRatio: priceToIoratioString('Ask', selectedInitialRatio, true),
+					depositAmount: selectedAmount, // Asset amount being offered
+					inputVaultId: selectedInputVaultId
+				};
+			}
+
+			// Check if price warning is needed
+			if (checkPriceWarning()) {
+				pendingDeployData = deployData;
+				showPriceWarning = true;
+				// Defer trade_id clearing to proceedWithDeploy (warning-acknowledged path)
+				// or cancelDeploy. Same trade_id spans the modal lifecycle.
+				deferredToProceed = true;
+			} else {
+				tradeSubmittedSuccessfully = true;
+				trackTradeEvent('limit_order_deployed', {
+					order_type: 'limit',
+					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+					asset_symbol: assetToken?.symbol,
+					price: selectedInitialRatio,
+					amount: formatUnits(selectedAmount, assetToken.decimals)
+				});
+				transactionStore.handleLimitDeploy(deployData, { order_type: 'limit' });
+			}
+		} catch (error) {
+			trackTradeEvent('trade_failed', {
+				order_type: 'limit',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken?.symbol,
+				error_class: classifyDeployError(error),
+				error_message: error instanceof Error ? error.message : String(error)
+			});
+			throw error;
+		} finally {
+			if (!deferredToProceed) {
+				clearTradeId();
+			}
 		}
 	};
 
@@ -336,20 +376,29 @@
 
 	const proceedWithDeploy = () => {
 		if (!pendingDeployData) return;
-		tradeSubmittedSuccessfully = true;
-		track('limit_order_deployed', {
-			token_symbol: assetToken?.symbol,
-			order_side: orderSide.toLowerCase(),
-			price: selectedInitialRatio,
-			amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0'
-		});
-		transactionStore.handleLimitDeploy(pendingDeployData);
-		showPriceWarning = false;
-		userAcknowledgesWarning = false;
-		pendingDeployData = null;
+		try {
+			tradeSubmittedSuccessfully = true;
+			trackTradeEvent('limit_order_deployed', {
+				order_type: 'limit',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken?.symbol,
+				price: selectedInitialRatio,
+				amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0'
+			});
+			transactionStore.handleLimitDeploy(pendingDeployData, { order_type: 'limit' });
+		} finally {
+			// Pitfall 2 (T-2-E): trade_id was minted in handleDeploy and deferred
+			// across the modal — clear here on the warning-acknowledged path.
+			clearTradeId();
+			showPriceWarning = false;
+			userAcknowledgesWarning = false;
+			pendingDeployData = null;
+		}
 	};
 
 	const cancelDeploy = () => {
+		// Pitfall 2 (T-2-E): warning-cancel path also clears the deferred trade_id.
+		clearTradeId();
 		showPriceWarning = false;
 		userAcknowledgesWarning = false;
 		pendingDeployData = null;
