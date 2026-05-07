@@ -34,15 +34,18 @@ function makeEvent(headers: Record<string, string> = {}, path = '/api/test', met
 }
 
 describe('requestContextHandle — trade_id extraction (Task 3)', () => {
-	let childSpy: ReturnType<typeof vi.spyOn>;
 	let capturedChildBindings: Record<string, unknown>[] = [];
 
 	beforeEach(() => {
 		capturedChildBindings = [];
-		childSpy = vi.spyOn(baseLogger, 'child').mockImplementation((bindings) => {
-			capturedChildBindings.push(bindings as Record<string, unknown>);
-			return baseLogger; // return self so further .info() calls don't crash
-		});
+		// Cast to satisfy pino's strict child() overload — for our purposes we just
+		// capture the bindings argument and return the base logger as a no-op chain.
+		vi.spyOn(baseLogger, 'child').mockImplementation(
+			((bindings: Record<string, unknown>) => {
+				capturedChildBindings.push(bindings);
+				return baseLogger;
+			}) as unknown as typeof baseLogger.child
+		);
 	});
 
 	async function runHandle(headers: Record<string, string>) {
@@ -78,6 +81,8 @@ describe('requestContextHandle — trade_id extraction (Task 3)', () => {
 	});
 
 	it('Test 3: invalid X-Trade-Id shape → trade_id absent (T-2-A header injection)', async () => {
+		// Note: HTTP-level newline injection is rejected by the Headers constructor itself;
+		// here we cover the values that CAN reach the validator.
 		const invalids = [
 			'not-a-uuid',
 			"'; DROP TABLE--",
@@ -85,7 +90,7 @@ describe('requestContextHandle — trade_id extraction (Task 3)', () => {
 			'a'.repeat(1000),
 			'550e8400-e29b-41d4-a716-44665544000', // too short
 			'550e8400-e29b-31d4-a716-446655440000', // version 3, not 4
-			'550e8400\ne29b-41d4-a716-446655440000' // newline injection
+			'550e8400-e29b-41d4-c716-446655440000' // bad variant nibble (c, not 8/9/a/b)
 		];
 		for (const bad of invalids) {
 			capturedChildBindings = [];
