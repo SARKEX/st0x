@@ -49,13 +49,30 @@ describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 		expect(rawTrack).toBeNull();
 	});
 
-	it('Test L4: handleDeploy pairs mintTradeId() with clearTradeId() in finally', () => {
+	it('Test L4: handleDeploy pairs mintTradeId() with clearTradeId() reachable from finally', () => {
 		const handlerStart = componentSource.indexOf('const handleDeploy');
 		expect(handlerStart).toBeGreaterThan(-1);
-		// Find first '};' that closes handleDeploy (handler is ~100 lines).
-		const handlerBlock = componentSource.slice(handlerStart, handlerStart + 4000);
+		const handlerBlock = componentSource.slice(handlerStart, handlerStart + 5000);
 		expect(handlerBlock).toMatch(/mintTradeId\(\)/);
-		expect(handlerBlock).toMatch(/finally\s*\{[\s\S]*?clearTradeId\(\)[\s\S]*?\}/);
+		// Find `finally {` then ensure `clearTradeId()` appears within ~300 chars
+		// after it (covers both direct call and guarded `if (!deferredToProceed) clearTradeId()`).
+		const finallyIdx = handlerBlock.indexOf('finally {');
+		expect(finallyIdx).toBeGreaterThan(-1);
+		const after = handlerBlock.slice(finallyIdx, finallyIdx + 300);
+		expect(after).toMatch(/clearTradeId\(\)/);
+	});
+
+	it('Test L4b: warning-deferred paths (proceedWithDeploy + cancelDeploy) call clearTradeId', () => {
+		// Pitfall 2 (T-2-E) — warning-acknowledged AND warning-cancel paths must
+		// clear the deferred trade_id minted by handleDeploy.
+		const proceedFn = componentSource.match(
+			/const proceedWithDeploy = [\s\S]*?\n\s*\};/
+		);
+		const cancelFn = componentSource.match(/const cancelDeploy = [\s\S]*?\n\s*\};/);
+		expect(proceedFn).toBeTruthy();
+		expect(cancelFn).toBeTruthy();
+		expect(proceedFn![0]).toMatch(/clearTradeId\(\)/);
+		expect(cancelFn![0]).toMatch(/clearTradeId\(\)/);
 	});
 
 	it('Test L5: emits trade_failed with order_type "limit" and error_class on error path', () => {
