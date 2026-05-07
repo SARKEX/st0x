@@ -25,6 +25,7 @@
 
 import * as Sentry from '@sentry/sveltekit';
 import type { ProcessedQuote } from '$lib/services/marketOrderExecution';
+import { getCurrentTradeId } from './tradeId';
 
 export type TakeOrderFailureReason =
 	| 'no_quotes_available'
@@ -83,10 +84,21 @@ export function captureTakeOrderFailure(
 ): void {
 	const errorMessage = err instanceof Error ? err.message : String(err);
 
+	// OBS-09 (Plan 02-02 Task 2): attach the active trade_id (if any) so the on-error
+	// Sentry Replay is navigable to PostHog events + pino logs. Conditional spread
+	// keeps the tags object clean when no trade is active (no `trade_id: null` noise).
+	// `getCurrentTradeId()` is a pure module-state read and cannot throw (Plan 02-01
+	// Task 1 guarantee), so no extra try/catch is needed beyond the existing one.
+	const tradeId = getCurrentTradeId();
+
 	// Sink 1: Sentry — immediate alert + breadcrumb context with PII scrubbed by beforeSend
 	try {
 		Sentry.captureException(err, {
-			tags: { failure_reason: reason, side: transcript.side },
+			tags: {
+				failure_reason: reason,
+				side: transcript.side,
+				...(tradeId ? { trade_id: tradeId } : {})
+			},
 			extra: {
 				...transcript,
 				errorMessage
