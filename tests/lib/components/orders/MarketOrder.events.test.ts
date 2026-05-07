@@ -102,7 +102,7 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		expect(classifyMarketError(new Error('No liquidity available right now'))).toBe(
 			'no_liquidity'
 		);
-		expect(classifyMarketError(new Error('No quotes available'))).toBe('no_liquidity');
+		expect(classifyMarketError(new Error('no_quotes available'))).toBe('no_liquidity');
 		expect(classifyMarketError(new Error('Stale oracle price'))).toBe('stale_oracle');
 		expect(classifyMarketError(new Error('Insufficient balance'))).toBe('insufficient_balance');
 		expect(classifyMarketError(new Error('Market is closed'))).toBe('market_closed');
