@@ -422,32 +422,32 @@ Sentry.captureException(err, {
 | A7 | DCA deploy flow shares enough shape with Limit deploy that the same taxonomy applies (`order_type: 'dca'`, no per-cycle event spam) | OBS-07 §scope | Low — DCA is a deploy-once strategy; the deploy event is the relevant moment. Per-cycle execution is upstream Rain protocol behavior, not user-visible. |
 | A8 | OBS-08 funnel "broken out by order_type" works in PostHog UI as a Breakdown on the `order_type` event property | OBS-08 | Low — standard PostHog Funnels feature. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `trade_id` propagate to the Pyth Hermes / Goldsky subgraph / Rain Oracle Server requests?**
    - What we know: These are third-party calls; adding a custom header triggers CORS preflight.
    - What's unclear: Whether per-RPC attribution (deferred per backlog 999.6) wants this hook in place.
-   - Recommendation: NO for this phase — propagate only to same-origin `/api/*` calls. Per-RPC attribution remains deferred.
+   - RESOLVED: NO for this phase — propagate only to same-origin `/api/*` calls. Per-RPC attribution remains deferred.
 
 2. **What's the policy for OBS-08 funnel filtering — exclude failed-pre-submit (validation) attempts?**
    - What we know: `trade_panel_opened` fires on page mount; `trade_button_clicked` fires on the click even if the user isn't authenticated.
    - What's unclear: Should the funnel start at `submit_clicked` (only people who actually intended to trade) or at `page_opened` (entire intent funnel)?
-   - Recommendation: TWO funnels in one dashboard — (a) intent funnel from `page_opened` → `quote_received` → `submit_clicked`, (b) execution funnel from `submit_clicked` → `sign_*` → `broadcast` → `confirmed`. Both broken out by `order_type`.
+   - RESOLVED: TWO funnels in one dashboard — (a) intent funnel from `page_opened` → `quote_received` → `submit_clicked`, (b) execution funnel from `submit_clicked` → `sign_*` → `broadcast` → `confirmed`. Both broken out by `order_type`.
 
 3. **Cookie-consent gating for Sentry Replay?**
    - What we know: PostHog is gated behind cookie consent (`initAnalytics` only runs after consent per v1.0). Sentry currently runs from module load without consent.
    - What's unclear: Is on-error Sentry Replay (D-02) considered "essential" or "analytics" under the consent policy?
-   - Recommendation: Treat as essential (it activates only on errors and is the primary triage tool); document this stance in `02-PRIVACY-REVIEW.md`. Operator/legal sign-off required.
+   - RESOLVED: Treat as essential (it activates only on errors and is the primary triage tool); document this stance in `02-PRIVACY-REVIEW.md`. Operator/legal sign-off required.
 
 4. **Production readiness of pinned `posthog-js` 1.337.0 for OBS-08 funnels?**
    - What we know: PostHog SDK supports funnels regardless of version (funnels are dashboard-side, not SDK-side).
    - What's unclear: Whether the `defaults: '2025-11-30'` snapshot in `analytics.ts:22` controls anything funnel-relevant.
-   - Recommendation: No version bump; if funnel issues arise, they're fixed in dashboard config not code.
+   - RESOLVED: No version bump; if funnel issues arise, they're fixed in dashboard config not code.
 
 5. **Where exactly does `trade.broadcast` and `trade.confirmed` fire in `executeMarketOrder`?**
    - What we know: `marketOrderExecution.ts` orchestrates the take-order path; it returns success/error to the caller.
    - What's unclear: Whether the SDK exposes a "broadcast" callback distinct from "confirmed", or if these collapse into one event in the existing call shape.
-   - Recommendation: Plan tasks should include a small spike to map exact callback points in `marketOrderExecution.ts` and `orderDeployment.ts` before writing the emission code.
+   - RESOLVED: Plan tasks should include a small spike to map exact callback points in `marketOrderExecution.ts` and `orderDeployment.ts` before writing the emission code.
 
 ## Environment Availability
 
