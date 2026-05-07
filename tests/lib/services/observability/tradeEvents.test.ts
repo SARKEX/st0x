@@ -32,10 +32,10 @@ import {
 
 describe('trackTradeEvent', () => {
 	beforeEach(() => {
+		vi.restoreAllMocks();
 		trackMock.mockReset();
 		getCurrentTradeIdMock.mockReset();
 		getCurrentTradeIdMock.mockReturnValue('test-uuid');
-		vi.restoreAllMocks();
 	});
 
 	it('Test 1: calls track once with eventName + props + trade_id', () => {
