@@ -241,6 +241,48 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'AMEX:PPLT',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x823FF7Bbde2869aAe73A6CD53e7f614442836757',
+		unwrappedAddress: '0x09ee803ba675052e10a54bfc8e18c0f67793056b',
+		symbol: 'wtQQQM',
+		decimals: 18,
+		name: 'Wrapped Invesco NASDAQ 100 ETF ST0x',
+		logoUrl: '/images/QQQM.png',
+		priceFeedId: '0x433b196b3b026f46f76b5e901c84c575a7280dcba0f4272edefe0529b599ad64',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:QQQM',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x23ec6886b49D7ab123E9ee8e474D2fa7AB6Cbc2d',
+		unwrappedAddress: '0x0acfea6833c4a3f41bf2fbd736aa9eea547d90ee',
+		symbol: 'wtVWO',
+		decimals: 18,
+		name: 'Wrapped Vanguard Emerging Markets Stock Index Fund ST0x',
+		logoUrl: '/images/VWO.png',
+		priceFeedId: '0x2f91d775954c0c828d4563448d253cf09df218b620825242775d878d1d5956c7',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:VWO',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x9FfF48B4535AF3765Ac9E1b164720EDc01DF8EE7',
+		unwrappedAddress: '0x323804af6f3bb463d688b854667c6870a0fc06ad',
+		symbol: 'wtARKK',
+		decimals: 18,
+		name: 'Wrapped ARK Innovation ETF ST0x',
+		logoUrl: '/images/ARKK.png',
+		priceFeedId: '0xb2fe0af6c828efefda3ffda664f919825a535aa28a0f19fc238945c7aff540b1',
+		category: 'ST0x',
+		tradingViewSymbol: 'AMEX:ARKK',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
