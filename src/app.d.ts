@@ -9,27 +9,6 @@ declare global {
 
 		type MdsvexResolver = () => Promise<MdsvexFile>;
 	}
-
-	// hCaptcha global
-	interface Window {
-		hcaptcha?: {
-			render: (
-				container: string | HTMLElement,
-				options: {
-					sitekey: string;
-					callback?: (token: string) => void;
-					'expired-callback'?: () => void;
-					'error-callback'?: () => void;
-					theme?: 'light' | 'dark';
-					size?: 'normal' | 'compact' | 'invisible';
-				}
-			) => string;
-			reset: (widgetId?: string) => void;
-			remove: (widgetId?: string) => void;
-			getResponse: (widgetId?: string) => string;
-			execute: (widgetId?: string) => void;
-		};
-	}
 }
 
 export {};

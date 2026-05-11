@@ -295,7 +295,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// returns summaries). We need the full on-chain OrderV4 struct for take-order calldata.
 		const quotesToHydrate = walkResult.fills
 			.map((f) => f.quote as ProcessedQuote)
-			.filter((q) => !q.orderData || !q.sgOrder?.orderBytes);
+			.filter((q) => !q.orderData || !q.sgOrder?.orderBytes || !q.raindexOrder);
 		if (quotesToHydrate.length > 0) {
 			const client = await getLoadBalancedClient(network);
 			const uniqueHashes = [...new Set(quotesToHydrate.map((q) => q.orderHash))];

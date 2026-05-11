@@ -25,63 +25,42 @@ st0x is a single-chain (Base) decentralized exchange for trading tokenized secur
 - ✓ Recent fix (commit 89571b3): slippage tolerance honored on Sell orders + correct partial-fill detection in spend-anchored modes — existing
 - ✓ Recent fix (commit 6c1919f): live oracle price used for `ioRatio` estimation instead of stale hardcoded fallback — existing
 
+**v1.0 Stabilization milestone — shipped 2026-05-05:**
+
+- ✓ **Observability foundation** — Sentry client/server SDK with PII scrubbing (OBS-01); pino structured logging across SvelteKit endpoints, cron, take-order critical path (OBS-02); failed-take-order transcript capture with breadcrumbs (OBS-03); per-RPC failure metrics + Telegram chain-exhaustion alerts (OBS-04); Vercel Speed Insights wired (OBS-05) — v1.0
+- ✓ **Trade-execution backbone refactor** — INPUT/OUTPUT side semantics codified with single-source-of-truth helpers + ESLint banned patterns (TRADE-01); 2,373-line `transaction.ts` split into focused stores with cycle severance (TRADE-02); pre-flight on-chain freshness check + visible UI staleness signaling (TRADE-03); Buy/Sell/spend-anchored/asset-anchored modes provably symmetric (TRADE-04) — v1.0
+- ✓ **Trade-page first-paint performance** — ~250KB minified bundle reduction via visualizer/jspdf removal + Svelte 4 lazy-load with CLS-safe skeletons (PERF-01) — v1.0; numeric p75 LCP < 2.5s capture deferred to post-deploy HUMAN-UAT
+- ✓ **Security hardening** — hardcoded Alchemy key removed → env vars (SEC-01); module-load fail-closed for `auth.ts` + `csrf.ts` (SEC-02); atomic-flip server-signed session cookie tied to wallet signature (SEC-03); session-bound HMAC CSRF (SEC-04); CSPRNG access codes + referrals (SEC-05); snapshot rate-limit + admin gate (SEC-06); Vercel-preview captcha fail-closed (SEC-07) — v1.0
+- ✓ **Reliability hardening** — per-RPC retry + chain-exhausted throws (REL-01); viem fallback transport for EIP-1271/EIP-6492 verification (REL-02); Rain strategies registry vendored to `static/registry/` (REL-03) — v1.0
+- ✓ **Test coverage at danger boundaries** — `hooks.server.ts` boundary tests (TEST-01); audit-log fan-out tests across 8 admin endpoints (TEST-02); anvil-fork integration suite + replay tests at FORK_BLOCK 33_400_000 (TEST-03); snapshot scraper edge-case tests (TEST-04) — v1.0
+- ✓ **Drift cleanup** — `getTokenByAnyAddress(addr)` codemod across all `TOKENS.find` call sites + ESLint rule (DRIFT-01); `isPaymentToken(addr, network)` + `getPaymentTokensForNetwork(network)` helpers (DRIFT-02); CLAUDE.md rewritten to match actual code — single chain, no AA/Rhinestone/EIP-7702 (DRIFT-03) — v1.0
+- ✓ **Unused-subsystem deprecation** — user-facing rewards code, points pipeline, Onramper integration, captcha + newsletter scaffolding all removed (DEPR-01..03 + post-execution cleanup PR #169) — v1.0
+
 ### Active
 
-<!-- Stabilization milestone scope. Hypotheses until shipped. -->
+**v1.1 Test & Observe milestone — in planning:**
 
-**Observability foundation (must come first — you can't refactor blind):**
+- **TEST-05**: UI-driven Anvil-fork E2E harness — Base mainnet fork at a recent block with live counterparty orders, wired into the test runner so trades can be simulated end-to-end
+- **TEST-06**: E2E coverage — market order Buy/Sell happy path triggered from the actual UI button, asserting on-chain fill
+- **TEST-07**: E2E coverage — market order failure paths (slippage exceeded, no liquidity, stale price, insufficient balance, market-hours gating)
+- **TEST-08**: E2E coverage — limit order deployment + simulated counterparty fill, asserting vault state
+- **TEST-09**: Order-test audit — review all existing order-related unit + integration tests, identify gaps, remediate in-milestone
+- **TEST-10**: UI-first test orientation — tests drive through routes/components rather than internal services, so they survive the planned UI→API logic migration
+- **OBS-06**: Sentry Session Replay integrated for transacting users — privacy-masked, sampling biased toward trade flows
+- **OBS-07**: Transaction event taxonomy — defined event names, properties, and step coverage for Buy/Sell/limit/DCA flows in PostHog + pino
+- **OBS-08**: Funnel + drop-off dashboard — PostHog funnel from "opened trade page" → "tx confirmed" with named drop-off steps
+- **OBS-09**: Correlation ID threading — Sentry event ↔ PostHog session ↔ pino server log linkable for any failed trade
 
-- [ ] Client-side error tracking (e.g. Sentry / Highlight) wired into the SvelteKit app, with sensitive-data scrubbing
-- [ ] Server-side structured logging across SvelteKit endpoints, the cron job, and the take-order critical path
-- [ ] Take-order instrumentation: capture failed take-order attempts with breadcrumbs (subgraph state, on-chain state, ratio, slippage cap, side) so "no liquidity" failures become diagnosable
-- [ ] RPC failure metrics + alerting (track per-RPC failure rate across the fallback chain; alert when total chain fails)
-- [ ] Trade-page web vitals dashboard so first-paint regressions are visible
+## Current Milestone: v1.1 Test & Observe
 
-**Trade-execution backbone refactor (the bug-factory class):**
+**Goal:** Lock in trade-execution correctness with UI-driven Anvil-fork E2E tests, and turn the v1.0 observability foundation into a tool that surfaces transacting-user pain before users have to report it.
 
-- [ ] Codify INPUT/OUTPUT taker-vs-maker side semantics so side-inversion bugs cannot recur — single source of truth helpers, banned raw access patterns, comprehensive boundary tests
-- [ ] Split `src/lib/stores/transaction.ts` (2373 lines) into focused, independently testable state machines for deploy, market-take, approval, partial-fill detection — eliminate circular import surface
-- [ ] Address UI/chain freshness illusion: pre-flight on-chain check before submitting market takes; visible UI staleness signaling so "no liquidity" failures aren't a surprise
-- [ ] Fix market-order execution path: prioritization correctness, ratio-multiplier math, slippage-cap derivation — make Buy/Sell/spend-anchored/asset-anchored modes provably symmetric
-
-**Trade-page first-paint performance:**
-
-- [ ] Reduce trade-page first paint to acceptable target (specific metric to be set in planning) — likely combination of SSR/streaming, query-waterfall reduction, bundle pruning
-
-**Security hardening:**
-
-- [ ] Replace hardcoded Alchemy API key (`raindex.ts`, `networks.ts`, `accessCodes.ts`) with environment variables; rotate the live key on next deploy
-- [ ] Replace hardcoded `SESSION_SECRET` and `CSRF_SECRET` fallbacks with fail-closed checks at module load in production
-- [ ] Issue server-signed session cookie tied to verified wallet signature; mark HttpOnly + Secure + SameSite=Strict; downgrade `wallet-address` cookie to a non-authoritative hint
-- [ ] Bind CSRF tokens to a server-issued session-id cookie (double-submit-cookie pattern) instead of stateless tokens issued by an unauthenticated endpoint
-- [ ] Replace `Math.random()` with `crypto.randomBytes()` for access-code and referral-code generation
-- [ ] Apply tiered rate limiting to `/api/snapshots/preview*` and admin-gate the `POST /api/snapshots/generate` endpoint
-- [ ] Fail captcha closed in Vercel preview deploys (not just production)
-
-**Reliability hardening:**
-
-- [ ] Per-RPC retry with backoff in the fallback chain (`generator.ts`); treat empty `result` as failure, not success-with-null; never silently fall back to `latestBlock` when RPCs are misbehaving
-- [ ] Use the fallback RPC chain (with retry) for EIP-1271/EIP-6492 signature verification in `accessCodes.ts` instead of a single Alchemy RPC
-- [ ] Vendor the Rain strategies registry (currently fetched live from GitHub raw at a pinned commit) into the bundle or `/static/` to remove the GitHub-raw rate-limit/availability dependency
-
-**Test coverage at danger boundaries:**
-
-- [ ] Unit + integration tests for `src/hooks.server.ts` — public-path / admin / wallet-registration classification, CORS, CSP, bot-rejection ordering
-- [ ] Tests for `/api/onramper/sign-url` authorization (CSRF, cookie match, rejection of mismatched wallet)
-- [ ] Tests for snapshot scraper edge cases — pagination boundaries, legacy `wrappedTokenTransfers` fallback, transient subgraph failure
-- [ ] Integration tests for the full market-order path (`marketOrderExecution.ts` + `transaction.ts`): aggregated → fallback → per-order, hydration failures, stale session
-
-**Drift cleanup:**
-
-- [ ] Replace direct `TOKENS.find(...)` lookups against the wrapped address only with `getTokenByAnyAddress(addr)` in `tradeTransform.ts`, `api/orders.ts`, `api/subgraph.ts`, `QuickTrade.svelte`, `LimitOrder.svelte`, `DcaOrder.svelte`; consider an ESLint rule to prevent recurrence
-- [ ] Replace scattered hardcoded USDC address constants with `isPaymentToken(addr, network)` / `getPaymentTokensForNetwork(network)`
-- [ ] Rewrite `CLAUDE.md` to match actual code (single chain, no AA/Rhinestone/EIP-7702, no `account-abstraction/` directory)
-
-**Unused-subsystem deprecation:**
-
-- [ ] Remove user-facing dead rewards code: leaderboard, monthly points, public rewards APIs, statement views, leaderboard polling
-- [ ] Decide and act on internal admin rewards/TVL views (`admin/rewards/+page.svelte` 4933 lines, the rewards section of `admin/+page.svelte`): if internal team accepts dropping it, remove the cron, snapshot pipeline (`src/lib/server/snapshots/`), and KV state to eliminate the bug surface; otherwise keep with bandages and accept the risk
-- [ ] Remove the entire Onramper fiat-on-ramp integration — `OnramperModal.svelte`, the `/api/onramper/sign-url` endpoint, `ONRAMPER_SECRET_KEY` / `PUBLIC_ONRAMPER_API_KEY` / `PUBLIC_ONRAMPER_ENV` env vars, and any docs/links pointing to it; the feature is unused and represents pure bug surface
+**Target features:**
+- UI-driven Anvil-fork E2E test harness covering market orders (happy + failure paths) and limit order deployment + fill
+- Audit and gap-fill of all existing order tests, oriented around the UI so they survive the planned UI→API migration
+- Sentry Session Replay scoped to transacting users (privacy-masked)
+- Transaction event taxonomy + funnel/drop-off dashboard in PostHog
+- Cross-tool correlation: Sentry ↔ PostHog ↔ pino linked by correlation ID for any failed trade
 
 ### Out of Scope
 
@@ -125,13 +104,15 @@ These are deliberately not metrics-based or audit-checklist-based: the user expl
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Frame the milestone as "stop the bug whackamole at the source," not "fix everything in CONCERNS.md" | The audit covers a lot of ground; outcome-based framing keeps scope honest | — Pending |
-| Refactor the full trade-execution backbone (boundary semantics + transaction store + freshness + execution path) as one connected effort | The four pieces are tightly coupled; fixing one without the others leaves the bug factory open | — Pending |
-| Observability comes before any refactor | Cannot diagnose "no liquidity" mismatches or validate that a refactor improved anything without monitoring; refactoring blind risks new whackamole on top of old | — Pending |
-| Out-of-scope: multi-chain, AA, new features, admin refactor | Each adds bug surface to a system whose core is unstable; expand only after stabilization | — Pending |
-| Remove user-facing rewards/leaderboard code; defer internal admin rewards decision to Phase 1 discovery | User-facing is dead and shipping risk; internal is a "nice to have" the team can drop, but worth confirming before deletion | — Pending |
-| Done = outcome-based (whackamole stops + ship-without-fear), not metrics or audit-checklist | User explicitly chose outcomes over checklists when offered both | — Pending |
-| Coarse phase granularity (3-5 phases, 1-3 plans each) | Solo / 1-2 dev team can't parallelize across many phases; coarse keeps focus | — Pending |
+| Frame the milestone as "stop the bug whackamole at the source," not "fix everything in CONCERNS.md" | The audit covers a lot of ground; outcome-based framing keeps scope honest | ✓ Good (v1.0) |
+| Refactor the full trade-execution backbone (boundary semantics + transaction store + freshness + execution path) as one connected effort | The four pieces are tightly coupled; fixing one without the others leaves the bug factory open | ✓ Good (v1.0 Phase 2) |
+| Observability comes before any refactor | Cannot diagnose "no liquidity" mismatches or validate that a refactor improved anything without monitoring; refactoring blind risks new whackamole on top of old | ✓ Good (v1.0 Phase 1 — observability stack live + transcripts captured before Phase 2 touched trade execution) |
+| Out-of-scope: multi-chain, AA, new features, admin refactor | Each adds bug surface to a system whose core is unstable; expand only after stabilization | ✓ Held (v1.0; carry-forward to next milestone scope review) |
+| Remove user-facing rewards/leaderboard code; defer internal admin rewards decision to Phase 1 discovery | User-facing is dead and shipping risk; internal is a "nice to have" the team can drop, but worth confirming before deletion | ✓ Resolved (D-01 in Phase 1 CONTEXT — keep snapshot pipeline for admin TVL/volume; delete user-facing rewards layer) |
+| Done = outcome-based (whackamole stops + ship-without-fear), not metrics or audit-checklist | User explicitly chose outcomes over checklists when offered both | ⚠ Revisit — early signal good but needs sustained user-bug-report window post-v1.0 |
+| Coarse phase granularity (3-5 phases, 1-3 plans each) | Solo / 1-2 dev team can't parallelize across many phases; coarse keeps focus | ⚠ Revisit — landed at 4 phases / 8-11 plans each; coarser-by-phase but not coarser-by-plan |
+| Captcha + newsletter scaffolding kept SEC-07 fail-closed plumbing for inactive flows | Originally treated as live; later audit during v1.0 close found zero production callers | ✓ Resolved — both removed in PR #169 post-execution cleanup; tracked as drift sourced from never-completed wiring |
+| EU-region Sentry CSP entry added in PR #170 | Phase 1 CSP allowlist anticipated US-region only; the actual project DSN is EU-region. Wildcards don't cross dot boundaries (Phase 1 OBS-01 RUNBOOK Pitfall 1) | ✓ Resolved (PR #170) — verified live on production deploy 2026-05-05 |
 
 ## Evolution
 
@@ -151,4 +132,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-01 — Phase 4 (Boundary Tests & Drift Cleanup) complete; stabilization milestone delivered all 33/33 v1 REQ-IDs across 4 phases. Active-section checkboxes preserved for milestone-close (`/gsd-complete-milestone`) review.*
+*Last updated: 2026-05-06 — v1.1 Test & Observe mini-milestone opened. Phase numbering reset to 1, 2 (v1.0 phases archived to `.planning/milestones/v1.0-phases/`). Scope: UI-driven Anvil-fork E2E tests + observability deepening (Sentry Session Replay, event taxonomy, funnel, correlation IDs).*
