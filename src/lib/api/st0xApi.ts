@@ -92,66 +92,18 @@ export interface ApiTradesByAddressResponse {
 	pagination: ApiTradesPagination;
 }
 
-export interface ApiTradeRequest {
-	inputToken: string;
-	outputToken: string;
-	maximumInput: string;
-	maximumIoRatio: string;
-}
-
-export interface ApiTradeResult {
-	inputAmount: string;
-	outputAmount: string;
-	actualIoRatio: string;
-}
-
-export interface ApiTradeByTxEntry {
-	orderHash: string;
-	orderOwner: string;
-	request: ApiTradeRequest;
-	result: ApiTradeResult;
-}
-
-export interface ApiTradesTotals {
-	totalInputAmount: string;
-	totalOutputAmount: string;
-	averageIoRatio: string;
-}
-
-export interface ApiMarketOrder {
-	txHash: string;
-	blockNumber: number;
-	timestamp: number;
-	sender: string;
-	trades: ApiTradeByTxEntry[];
-	totals: ApiTradesTotals;
-}
-
-export interface ApiTakerTradesResponse {
-	marketOrders: ApiMarketOrder[];
-	pagination: ApiTradesPagination;
-}
-
 // ============================================================================
 // Batch Trade Types
 // ============================================================================
 
-export interface ApiOrderTradeEntry {
-	id: string;
-	txHash: string;
-	inputAmount: string;
-	outputAmount: string;
-	timestamp: number;
-	sender: string;
-}
-
 export interface ApiTradesBatchEntry {
 	orderHash: string;
-	trades: ApiOrderTradeEntry[];
+	trades: ApiTradeByAddress[];
 }
 
 export interface ApiTradesBatchResponse {
-	orders: ApiTradesBatchEntry[];
+	tradesByOrderHash: ApiTradesBatchEntry[];
+	totalCount: number;
 }
 
 // ============================================================================
@@ -214,19 +166,18 @@ export async function apiGetTradesByAddress(
 }
 
 /**
- * Fetch trades where the user was the taker (market orders).
- * Returns trades grouped by transaction hash.
+ * Fetch trades where the user was the taker.
  */
 export async function apiGetTakerTrades(
 	address: string,
 	options?: { page?: number; pageSize?: number }
-): Promise<ApiTakerTradesResponse> {
+): Promise<ApiTradesByAddressResponse> {
 	assertBrowser('apiGetTakerTrades');
 	const url = apiUrl(`/v1/trades/taker/${address}`, {
 		page: options?.page,
 		pageSize: options?.pageSize
 	});
-	return fetchJson<ApiTakerTradesResponse>(url);
+	return fetchJson<ApiTradesByAddressResponse>(url);
 }
 
 /**
@@ -245,12 +196,12 @@ export async function apiGetOrdersByOwner(
 }
 
 /**
- * Fetch trades for multiple orders in a single batch request.
+ * Fetch trades for multiple orders in a single query request.
  * Used to compute filled amounts for a user's deployed orders.
  */
 export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTradesBatchResponse> {
 	assertBrowser('apiGetTradesBatch');
-	return fetchJson<ApiTradesBatchResponse>(apiUrl('/v1/trades/batch'), {
+	return fetchJson<ApiTradesBatchResponse>(apiUrl('/v1/trades/query'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ orderHashes })

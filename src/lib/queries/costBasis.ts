@@ -41,6 +41,30 @@ function makerTradeToCostBasis(trade: ApiTradeByAddress, userAddress: string): C
 }
 
 /**
+ * Convert a taker trade to a CostBasisTrade.
+ * Input/output are still from the ORDER's perspective, so the taker gives inputToken
+ * and receives outputToken.
+ */
+function takerTradeToCostBasis(trade: ApiTradeByAddress, userAddress: string): CostBasisTrade {
+	return {
+		timestamp: trade.timestamp,
+		inputVaultBalanceChange: {
+			amount: ensureDecimal(trade.inputAmount),
+			vault: {
+				token: { address: trade.inputToken.address, decimals: 0 }
+			}
+		},
+		outputVaultBalanceChange: {
+			amount: ensureDecimal(trade.outputAmount),
+			vault: {
+				token: { address: trade.outputToken.address, decimals: 0 }
+			}
+		},
+		tradeEvent: { sender: userAddress }
+	};
+}
+
+/**
  * Fetch all trades for a user from the REST API (paginated).
  * Combines maker trades (user's orders were filled) and taker trades (user executed market orders).
  */
@@ -78,29 +102,11 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 			pageSize: PAGE_SIZE
 		});
 
-		for (const marketOrder of response.marketOrders) {
-			for (const entry of marketOrder.trades) {
-				const key = `${marketOrder.txHash}:${entry.orderHash}`;
-				if (seen.has(key)) continue;
-				seen.add(key);
-
-				trades.push({
-					timestamp: marketOrder.timestamp,
-					inputVaultBalanceChange: {
-						amount: ensureDecimal(entry.result.inputAmount),
-						vault: {
-							token: { address: entry.request.inputToken, decimals: 0 }
-						}
-					},
-					outputVaultBalanceChange: {
-						amount: ensureDecimal(entry.result.outputAmount),
-						vault: {
-							token: { address: entry.request.outputToken, decimals: 0 }
-						}
-					},
-					tradeEvent: { sender: userAddress }
-				});
-			}
+		for (const trade of response.trades) {
+			const key = `${trade.txHash}:${trade.orderHash ?? ''}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			trades.push(takerTradeToCostBasis(trade, userAddress));
 		}
 
 		takerHasMore = response.pagination.hasMore;

@@ -3,7 +3,7 @@ import { parseFloatHex } from '$lib/utils/tokenMath';
 import { TOKENS, getTokenByAnyAddress } from '$lib/config/tokens';
 import type { SgTrade } from '@rainlanguage/orderbook';
 import type { DisplayOrder } from '$lib/types/orders';
-import type { ApiMarketOrder, ApiTradeByTxEntry } from '$lib/api/st0xApi';
+import type { ApiTradeByAddress } from '$lib/api/st0xApi';
 
 /**
  * Transform a trade into a DisplayOrder for the OrdersTable component.
@@ -100,39 +100,35 @@ export function transformTradeToDisplayOrder(
 }
 
 /**
- * Transform REST API taker trades (ApiMarketOrder[]) into DisplayOrder[] for the dashboard.
+ * Transform REST API taker trades into DisplayOrder[] for the dashboard.
  *
- * Each ApiMarketOrder is one transaction (potentially filling multiple orders).
- * Each ApiTradeByTxEntry within it is one order fill. We create one DisplayOrder per fill.
+ * Each ApiTradeByAddress is one order fill from the order's perspective.
  *
  * Buy/Sell from taker's perspective:
- * - request.inputToken = what the ORDER takes in (= what taker GIVES)
- * - request.outputToken = what the ORDER gives out (= what taker RECEIVES)
+ * - inputToken = what the ORDER takes in (= what taker GIVES)
+ * - outputToken = what the ORDER gives out (= what taker RECEIVES)
  * - If taker received an asset token, they bought it
  */
-export function transformApiMarketOrdersToDisplay(
-	marketOrders: ApiMarketOrder[],
+export function transformApiTakerTradesToDisplay(
+	trades: ApiTradeByAddress[],
 	chainId: number
 ): DisplayOrder[] {
 	const displayOrders: DisplayOrder[] = [];
 
-	for (const mo of marketOrders) {
-		for (const entry of mo.trades) {
-			const order = transformApiTradeEntry(entry, mo, chainId);
-			if (order) displayOrders.push(order);
-		}
+	for (const trade of trades) {
+		const order = transformApiTradeEntry(trade, chainId);
+		if (order) displayOrders.push(order);
 	}
 
 	return displayOrders;
 }
 
 function transformApiTradeEntry(
-	entry: ApiTradeByTxEntry,
-	mo: ApiMarketOrder,
+	trade: ApiTradeByAddress,
 	chainId: number
 ): DisplayOrder | null {
-	const inputAddr = entry.request.inputToken.toLowerCase();
-	const outputAddr = entry.request.outputToken.toLowerCase();
+	const inputAddr = trade.inputToken.address.toLowerCase();
+	const outputAddr = trade.outputToken.address.toLowerCase();
 
 	// Look up token config for symbol and classification.
 	// DRIFT-01: use getTokenByAnyAddress to match wrapped/unwrapped/legacy
@@ -142,8 +138,8 @@ function transformApiTradeEntry(
 	const inputConfig = inputMatch?.chainId === chainId ? inputMatch : undefined;
 	const outputConfig = outputMatch?.chainId === chainId ? outputMatch : undefined;
 
-	const inputSymbol = inputConfig?.symbol ?? 'UNKNOWN';
-	const outputSymbol = outputConfig?.symbol ?? 'UNKNOWN';
+	const inputSymbol = inputConfig?.symbol ?? trade.inputToken.symbol ?? 'UNKNOWN';
+	const outputSymbol = outputConfig?.symbol ?? trade.outputToken.symbol ?? 'UNKNOWN';
 
 	// Determine Buy/Sell from taker perspective
 	// outputToken = what taker receives. If it's an asset token, taker bought it.
@@ -154,9 +150,9 @@ function transformApiTradeEntry(
 	const assetSymbol = isBuy ? outputSymbol : inputIsAsset ? inputSymbol : outputSymbol;
 	const assetAddress = isBuy ? outputAddr : inputIsAsset ? inputAddr : outputAddr;
 
-	// Amounts from result (decimal strings — API returns negative outputAmount for tokens given away)
-	const inputAmount = Math.abs(parseFloat(entry.result.inputAmount));
-	const outputAmount = Math.abs(parseFloat(entry.result.outputAmount));
+	// Amounts are decimal strings. Output amounts are commonly negative from the order perspective.
+	const inputAmount = Math.abs(parseFloat(trade.inputAmount));
+	const outputAmount = Math.abs(parseFloat(trade.outputAmount));
 
 	let price: number | undefined;
 	if (inputAmount > 0 && outputAmount > 0) {
@@ -168,16 +164,16 @@ function transformApiTradeEntry(
 
 	return {
 		type: 'market',
-		orderHash: entry.orderHash,
-		timestamp: mo.timestamp,
+		orderHash: trade.orderHash ?? trade.txHash,
+		timestamp: trade.timestamp,
 		side: isBuy ? 'Buy' : 'Sell',
-		txHash: mo.txHash,
+		txHash: trade.txHash,
 		tokenSymbol: assetSymbol,
 		tokenAddress: assetAddress,
 		inputTokenSymbol: inputSymbol,
 		outputTokenSymbol: outputSymbol,
-		inputAmount: inputAmount > 0 ? entry.result.inputAmount : undefined,
-		outputAmount: outputAmount > 0 ? entry.result.outputAmount : undefined,
+		inputAmount: inputAmount > 0 ? trade.inputAmount : undefined,
+		outputAmount: outputAmount > 0 ? trade.outputAmount : undefined,
 		price,
 		filled: filled > 0 ? filled : undefined,
 		filledSymbol: assetSymbol
