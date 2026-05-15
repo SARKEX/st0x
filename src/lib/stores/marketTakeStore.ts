@@ -492,10 +492,31 @@ export const handleAggregatedTakeOrdersCalldata = async (
 		const sdkMsg = calldataWrapped.error?.readableMsg;
 		console.log(`${TX_LOG_PREFIX} SDK error`, { msg: sdkMsg, request: takeRequest });
 		if (sdkMsg) {
-			// "No liquidity" from SDK is often a false negative when subgraph vault
-			// balances are stale. Return false to let callers try per-order fallback.
-			if (sdkMsg.includes('No liquidity')) {
-				console.warn(`${TX_LOG_PREFIX} SDK reported no liquidity — allowing per-order fallback`);
+			// Several aggregated-SDK error classes are false negatives that the
+			// per-order fallback handles correctly:
+			//   - "No liquidity available …": stale subgraph vault balances vs
+			//     on-chain truth (original case; verified in production logs).
+			//   - "Preflight check failed: All orders failed simulation …":
+			//     aggregated batch picks multiple orders from subgraph discovery;
+			//     a single bad-state order in the batch causes the whole
+			//     simulation to revert (often with `panic: array out-of-bounds`
+			//     or similar Rain-interpreter panics). The per-order path uses
+			//     ONLY hydrated `walkResult.fills` (single best order from our
+			//     own discovery), bypassing the broken sibling. This case is
+			//     reproducible against a Base anvil fork during E2E and has been
+			//     observed against live RPC under stale-subgraph race
+			//     conditions.
+			// User/session/wallet-class errors are surfaced unchanged — the
+			// per-order path would just re-hit them with no benefit.
+			const isFalseNegativeFromAggregator =
+				sdkMsg.includes('No liquidity') ||
+				sdkMsg.includes('Preflight check failed') ||
+				sdkMsg.includes('All orders failed simulation');
+			if (isFalseNegativeFromAggregator) {
+				console.warn(
+					`${TX_LOG_PREFIX} SDK aggregated path returned a recoverable error — allowing per-order fallback`,
+					{ sdkMsg }
+				);
 				return false;
 			}
 			transactionError(sdkMsg as TransactionErrorMessage);
@@ -517,8 +538,25 @@ export const handleAggregatedTakeOrdersCalldata = async (
 		await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 		calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: false });
 		if (calldataWrapped.error || !calldataWrapped.value) {
+			// Mirror the recoverable-error fallback from the pre-approval branch
+			// above. Some aggregated-SDK errors are batch-discovery artifacts that
+			// the per-order path bypasses; falling back here lets handleOracleOrders
+			// re-try with the hydrated walkResult fills (now with allowance set).
+			const postApprovalSdkMsg = calldataWrapped.error?.readableMsg;
+			const isPostApprovalRecoverable =
+				postApprovalSdkMsg &&
+				(postApprovalSdkMsg.includes('No liquidity') ||
+					postApprovalSdkMsg.includes('Preflight check failed') ||
+					postApprovalSdkMsg.includes('All orders failed simulation'));
+			if (isPostApprovalRecoverable) {
+				console.warn(
+					`${TX_LOG_PREFIX} SDK aggregated path returned a recoverable error after approval — allowing per-order fallback`,
+					{ sdkMsg: postApprovalSdkMsg }
+				);
+				return false;
+			}
 			transactionError(
-				(calldataWrapped.error?.readableMsg ||
+				(postApprovalSdkMsg ||
 					'Failed to prepare order after approval') as TransactionErrorMessage
 			);
 			return true;
