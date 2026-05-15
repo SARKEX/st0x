@@ -38,6 +38,18 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		tokens,
 		fundedAccount
 	}) => {
+		// DIAGNOSTIC (temporary): pipe browser console + page errors to the test
+		// runner stdout so CI logs reveal why submit click results in no
+		// eth_sendTransaction (anvil log shows only eth_call traffic). Remove
+		// once marketBuy is reliably green.
+		page.on('console', (msg) => {
+			const t = msg.type();
+			if (t === 'error' || t === 'warning' || msg.text().includes('marketTake')) {
+				console.log(`[browser ${t}] ${msg.text()}`);
+			}
+		});
+		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
+
 		const initialUsdc = parseUnits('1000', tokens.USDC.decimals);
 		await fundErc20({
 			client: testClient,
@@ -70,7 +82,46 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
 		await expect(submit).toBeEnabled({ timeout: 30_000 });
+		// DIAGNOSTIC: pre-click state.
+		console.log(
+			'[mb-debug] pre-click submit state:',
+			JSON.stringify(
+				await page.evaluate(() => {
+					const btn = document.querySelector(
+						'[data-testid="trade-submit"][data-side="buy"]'
+					) as HTMLButtonElement | null;
+					const panel = document.querySelector('[data-testid="market-form-loaded"]');
+					return {
+						disabled: btn?.disabled,
+						text: btn?.textContent?.trim().slice(0, 80),
+						panelSnippet: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 400)
+					};
+				})
+			)
+		);
 		await submit.click();
+		// DIAGNOSTIC: 5s post-click state.
+		await page.waitForTimeout(5_000);
+		console.log(
+			'[mb-debug] +5s post-click state:',
+			JSON.stringify(
+				await page.evaluate(() => {
+					const btn = document.querySelector(
+						'[data-testid="trade-submit"][data-side="buy"]'
+					) as HTMLButtonElement | null;
+					const errorBanner = document.querySelector('[data-testid="error-banner"]');
+					const panel = document.querySelector('[data-testid="market-form-loaded"]');
+					return {
+						submitDisabled: btn?.disabled,
+						submitText: btn?.textContent?.trim().slice(0, 120),
+						errorBannerVisible: !!errorBanner,
+						errorClass: errorBanner?.getAttribute('data-error-class'),
+						errorText: errorBanner?.textContent?.replace(/\s+/g, ' ').slice(0, 300),
+						panelSnippet: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 500)
+					};
+				})
+			)
+		);
 
 		// On-chain assertions: tNVDA delta + USDC debited.
 		// Polling against anvil — independent of subgraph indexing.
