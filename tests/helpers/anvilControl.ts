@@ -11,14 +11,14 @@
 import {
 	createTestClient,
 	encodeAbiParameters,
+	encodeFunctionData,
 	erc20Abi,
 	http,
 	keccak256,
 	pad,
 	parseEther,
 	publicActions,
-	toHex,
-	walletActions
+	toHex
 } from 'viem';
 import { base } from 'viem/chains';
 
@@ -29,9 +29,7 @@ export function createAnvilTestClient() {
 		chain: base,
 		mode: 'anvil',
 		transport: http('http://127.0.0.1:8545')
-	})
-		.extend(publicActions)
-		.extend(walletActions);
+	}).extend(publicActions);
 }
 
 /**
@@ -102,18 +100,38 @@ export async function fundErc20ViaImpersonation(args: {
 	amount: bigint;
 }): Promise<void> {
 	await args.client.impersonateAccount({ address: args.donor });
-	// Donor needs ETH for gas. setBalance is idempotent.
-	await args.client.setBalance({ address: args.donor, value: parseEther('1') });
-	const hash = await args.client.writeContract({
-		account: args.donor,
-		chain: base,
-		address: args.token,
-		abi: erc20Abi,
-		functionName: 'transfer',
-		args: [args.holder, args.amount]
-	});
-	await args.client.waitForTransactionReceipt({ hash });
-	await args.client.stopImpersonatingAccount({ address: args.donor });
+	try {
+		// Donor needs ETH for gas. setBalance is idempotent.
+		await args.client.setBalance({ address: args.donor, value: parseEther('1') });
+		// Use the raw eth_sendTransaction RPC (anvil unlocks impersonated accounts,
+		// so this signs server-side) instead of viem's writeContract which would
+		// require extending the TestClient with walletActions. Adding walletActions
+		// to TestClient turned out to perturb downstream `readContract` reads under
+		// CI's cold RPC cache (rolled back per regression on marketBuy.spec.ts).
+		const data = encodeFunctionData({
+			abi: erc20Abi,
+			functionName: 'transfer',
+			args: [args.holder, args.amount]
+		});
+		const resp = await fetch('http://127.0.0.1:8545', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'eth_sendTransaction',
+				params: [{ from: args.donor, to: args.token, data }]
+			})
+		});
+		const json = (await resp.json()) as { result?: `0x${string}`; error?: { message: string } };
+		if (json.error || !json.result) {
+			throw new Error(`fundErc20ViaImpersonation transfer failed: ${json.error?.message ?? 'no tx hash'}`);
+		}
+		await args.client.waitForTransactionReceipt({ hash: json.result });
+	} finally {
+		// Always release impersonation so subsequent tests see a clean anvil.
+		await args.client.stopImpersonatingAccount({ address: args.donor });
+	}
 }
 
 /**

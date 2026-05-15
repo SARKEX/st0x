@@ -137,7 +137,10 @@ jobs:
       - name: E2E smoke pre-flight (fast-fail per D-14)
         if: env.HAVE_RPC_URL == 'true'
         continue-on-error: true
-        run: nix develop -c npx playwright test smoke.spec.ts
+        # marketBuy is the load-bearing happy-path spec (single-shot setStorageAt
+        # USDC fund + Buy market order); previously the standalone smoke spec
+        # but it duplicated marketBuy and flaked in the full suite.
+        run: nix develop -c npx playwright test marketBuy.spec.ts
         env:
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
           PUBLIC_WALLETCONNECT_ID: ${{ secrets.PUBLIC_WALLETCONNECT_ID }}

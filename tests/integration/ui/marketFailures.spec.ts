@@ -45,7 +45,23 @@ test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 const PYTH_FRESHNESS_WINDOW_SEC = 300; // 01-RUNBOOK §"Pyth freshness window" (ASSUMED 300s default)
 const NO_LIQUIDITY_TOKEN_ID = '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53'; // wtAMZN
 const NO_LIQUIDITY_SIDE = 'sell' as const;
-const SATURDAY_03_UTC = 1745550000; // Sat 2026-04-25 03:00:00 UTC — 01-RUNBOOK §"Saturday market-hours timestamp"
+
+/**
+ * Compute the next Saturday-at-03:00-UTC timestamp strictly after `fromSec`.
+ * anvil's setNextBlockTimestamp rejects timestamps ≤ the current block — the
+ * previous hard-coded SATURDAY_03_UTC (1745550000 = 2026-04-25) is older than
+ * FORK_BLOCK=45_990_727 (2026-05-14), so we compute it dynamically against the
+ * live chain head instead.
+ */
+function nextSaturday03Utc(fromSec: number): number {
+	const d = new Date(fromSec * 1000);
+	const day = d.getUTCDay(); // 0=Sun, 6=Sat
+	const daysAhead = ((6 - day + 7) % 7) || 7; // strict-after: never 0
+	const target = new Date(
+		Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysAhead, 3, 0, 0)
+	);
+	return Math.floor(target.getTime() / 1000);
+}
 
 // Toggle input-mode to 'spend' (default flipped to 'amount' in 5b3c81d). Only Buy
 // side renders the toggle; do not call on Sell-side tests.
@@ -209,13 +225,17 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 			balanceSlot: tokens.USDC.balanceSlot
 		});
 
-		// Pin block timestamp to Sat 2026-04-25 03:00:00 UTC + mine so on-chain reads
-		// observe the new timestamp (Pitfall 6). Browser-side: pin Date.now() to the
-		// same epoch — marketHours.ts isOutsideMarketHours() reads `new Date()` and
-		// the patched epoch lands on dayOfWeek === 6 in ET (Saturday, market closed).
-		await testClient.setNextBlockTimestamp({ timestamp: BigInt(SATURDAY_03_UTC) });
+		// Pin block timestamp to the next Saturday at 03:00 UTC AFTER the current
+		// chain head + mine so on-chain reads observe the new timestamp (Pitfall 6).
+		// Computed dynamically because anvil rejects timestamps ≤ current block.
+		// Browser-side: pin Date.now() to the same epoch — marketHours.ts
+		// isOutsideMarketHours() reads `new Date()` and the patched epoch lands on
+		// dayOfWeek === 6 in ET (Saturday, market closed).
+		const block = await testClient.getBlock();
+		const saturdayTs = nextSaturday03Utc(Number(block.timestamp));
+		await testClient.setNextBlockTimestamp({ timestamp: BigInt(saturdayTs) });
 		await testClient.mine({ blocks: 1 });
-		await page.addInitScript(`Date.now = () => ${SATURDAY_03_UTC * 1000};`);
+		await page.addInitScript(`Date.now = () => ${saturdayTs * 1000};`);
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 		await page.click('[data-testid="open-trade"][data-side="buy"]');
