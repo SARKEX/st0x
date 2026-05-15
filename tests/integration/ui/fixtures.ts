@@ -88,6 +88,19 @@ export const test = base.extend<UiFixtures>({
 		await page.addInitScript(() => {
 			window.localStorage.setItem('st0x_token_swap_announcement_seen', 'true');
 		});
+		// Stub the wallet-registration check so the trade panel opens without
+		// hitting the live access-control API. Production code path:
+		// src/lib/stores/accessStore.ts → checkWalletAccess() → GET
+		// /api/access/check?address=… The smoke spec exercises trade UI, not
+		// registration; without this mock, openTradePanel() in trade/[id]/+page.svelte
+		// returns early at the !$walletRegistered guard and the panel never opens.
+		await page.route('**/api/access/check**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ registered: true })
+			});
+		});
 		await use(page);
 	}
 });
