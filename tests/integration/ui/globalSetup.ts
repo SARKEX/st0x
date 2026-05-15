@@ -23,20 +23,18 @@ export default async function globalSetup(): Promise<void> {
 		throw new Error('BASE_RPC_URL required for E2E suite — set in CI secrets / .env');
 	}
 
-	// SvelteKit's analyse step (run during `npm run build`) imports every
-	// server module, including auth.ts which throws at module-load when
-	// SESSION_SECRET is unset && !dev. Provide a synthetic value for the build
-	// only — the E2E suite never authenticates real users, so the cookie HMAC
-	// key is meaningless here. Bypasses cleanly without touching production
-	// auth code paths.
-	const buildEnv = {
-		...process.env,
-		E2E: '1',
-		SESSION_SECRET: process.env.SESSION_SECRET || 'e2e-build-only-dummy-session-secret'
-	};
+	// auth.ts (and other server modules) throw at load-time when their
+	// production secrets are unset && !dev. This happens BOTH during the
+	// SvelteKit analyse pass (`npm run build`) AND when the production
+	// server boots via `npm run preview`. Inject synthetic values onto
+	// process.env once so every downstream spawn inherits them — the E2E
+	// suite never authenticates real users, so cookie HMAC / RPC keys are
+	// meaningless here. Bypass cleanly without touching production auth
+	// code paths.
+	process.env.SESSION_SECRET ||= 'e2e-build-only-dummy-session-secret';
 
 	// 1. Build production bundle ONCE with E2E=1 baked into hooks.server.ts CSP gate.
-	execSync('npm run build', { stdio: 'inherit', env: buildEnv });
+	execSync('npm run build', { stdio: 'inherit', env: { ...process.env, E2E: '1' } });
 
 	// 2. Spawn anvil fork at the pinned block.
 	await startAnvilFork(FORK_BLOCK);
