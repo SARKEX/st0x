@@ -55,7 +55,16 @@ export async function startAnvilFork(forkBlock: number) {
 			'--fork-block-number',
 			String(forkBlock),
 			'--port',
-			'8545'
+			'8545',
+			// --block-time 2 enables interval mining so blocks tick every 2s
+			// (matches Base's actual block time). REQUIRED for E2E flows that
+			// wait for >1 confirmation. approvalStore.ts and marketTakeStore.ts
+			// both call waitForTransactionReceipt with confirmations: 2; with
+			// anvil's default auto-mine (one block per tx, then idle), the
+			// confirmation block never arrives and the wait hangs until
+			// Playwright's 60s timeout.
+			'--block-time',
+			'2'
 		],
 		{ stdio: 'pipe' }
 	);
