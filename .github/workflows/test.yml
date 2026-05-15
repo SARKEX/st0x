@@ -58,6 +58,14 @@ jobs:
           PRIVATE_PINATA_JWT: ${{ secrets.PRIVATE_PINATA_JWT }}
           PUBLIC_PINATA_GATEWAY_URL: ${{ secrets.PUBLIC_PINATA_GATEWAY_URL }}
           PRIVATE_PINATA_GATEWAY_KEY: ${{ secrets.PRIVATE_PINATA_GATEWAY_KEY }}
+          # st0x REST API proxy — preview server's /api/st0x/v1/* routes
+          # require these or they return 503 and the trade panel's
+          # orderbook query fails (which collapses marketPrice → null →
+          # submit button disabled). Confirmed via debug-state dump in
+          # smoke spec CI run.
+          ST0X_API_URL: ${{ secrets.ST0X_API_URL }}
+          ST0X_API_KEY: ${{ secrets.ST0X_API_KEY }}
+          ST0X_API_SECRET: ${{ secrets.ST0X_API_SECRET }}
 
   test-e2e:
     runs-on: ubuntu-latest
@@ -137,6 +145,14 @@ jobs:
           PRIVATE_PINATA_JWT: ${{ secrets.PRIVATE_PINATA_JWT }}
           PUBLIC_PINATA_GATEWAY_URL: ${{ secrets.PUBLIC_PINATA_GATEWAY_URL }}
           PRIVATE_PINATA_GATEWAY_KEY: ${{ secrets.PRIVATE_PINATA_GATEWAY_KEY }}
+          # st0x REST API proxy — preview server's /api/st0x/v1/* routes
+          # require these or they return 503 and the trade panel's
+          # orderbook query fails (which collapses marketPrice → null →
+          # submit button disabled). Confirmed via debug-state dump in
+          # smoke spec CI run.
+          ST0X_API_URL: ${{ secrets.ST0X_API_URL }}
+          ST0X_API_KEY: ${{ secrets.ST0X_API_KEY }}
+          ST0X_API_SECRET: ${{ secrets.ST0X_API_SECRET }}
 
       - name: E2E full suite
         if: env.HAVE_RPC_URL == 'true'
@@ -149,6 +165,14 @@ jobs:
           PRIVATE_PINATA_JWT: ${{ secrets.PRIVATE_PINATA_JWT }}
           PUBLIC_PINATA_GATEWAY_URL: ${{ secrets.PUBLIC_PINATA_GATEWAY_URL }}
           PRIVATE_PINATA_GATEWAY_KEY: ${{ secrets.PRIVATE_PINATA_GATEWAY_KEY }}
+          # st0x REST API proxy — preview server's /api/st0x/v1/* routes
+          # require these or they return 503 and the trade panel's
+          # orderbook query fails (which collapses marketPrice → null →
+          # submit button disabled). Confirmed via debug-state dump in
+          # smoke spec CI run.
+          ST0X_API_URL: ${{ secrets.ST0X_API_URL }}
+          ST0X_API_KEY: ${{ secrets.ST0X_API_KEY }}
+          ST0X_API_SECRET: ${{ secrets.ST0X_API_SECRET }}
 
   lint:
     runs-on: ubuntu-latest

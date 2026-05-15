@@ -106,39 +106,6 @@ test.describe('TEST-05 smoke — Buy market order via UI', () => {
 		//    retry window. Wait explicitly so the click lands on an enabled
 		//    button rather than racing the balance refresh.
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
-
-		// DEBUG: dump on-page state pre-click so CI logs show what's missing
-		// when the button stays disabled. disableDeploy = !selectedAmount ||
-		// !marketPrice || !assetToken || selectedAmountError ||
-		// insufficientBalanceError || isLoadingPrice || priceError ||
-		// isSubmittingMarketOrder  (MarketOrder.svelte:449).
-		await page.waitForTimeout(2_000);
-		const debugState = await page.evaluate(() => {
-			const submit = document.querySelector(
-				'[data-testid="trade-submit"][data-side="buy"]'
-			) as HTMLButtonElement | null;
-			const spend = document.querySelector(
-				'[data-testid="spend-input"] input'
-			) as HTMLInputElement | null;
-			// The order-summary block is the immediate disable-cause window:
-			// shows Spending / Avg.price / Est.tokens or an error message.
-			// Grab the trade-panel area's text — `data-testid="trade-panel"`
-			// if present, else the form's outer container.
-			const panel =
-				document.querySelector('[data-testid="trade-panel"]') ??
-				document.querySelector('[data-testid="market-form-loaded"]');
-			return {
-				submitDisabled: submit?.disabled,
-				submitText: submit?.textContent?.trim(),
-				spendInputValue: spend?.value,
-				panelText: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 800),
-				bodySnippet: document.body.innerText
-					.replace(/\s+/g, ' ')
-					.slice(0, 600)
-			};
-		});
-		console.log('[smoke-debug] state at submit:', JSON.stringify(debugState, null, 2));
-
 		await expect(submit).toBeEnabled({ timeout: 30_000 });
 		await submit.click();
 
