@@ -18,7 +18,15 @@ import { erc20Abi, parseUnits } from 'viem';
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 
 test.describe('TEST-05 smoke — Buy market order via UI', () => {
-	test('happy path: 100 USDC → tNVDA fills on-chain and surfaces success toast', async ({
+	// NOTE on the assertion shape: in production the trade flow ends with a
+	// success toast fired by `pollAndFinalizeTakeOrders` after the take's
+	// subgraph trade event indexes. In E2E that polling never resolves
+	// (anvil's tx hash never appears in the live Goldsky subgraph), so the
+	// toast can't fire within any reasonable spec timeout. We assert the
+	// load-bearing signal — the taker's on-chain asset balance — instead.
+	// Mocking the subgraph trade-activity endpoint to fire the toast in E2E
+	// is tracked as a follow-up.
+	test('happy path: 100 USDC → tNVDA fills on-chain (balance > 0 on anvil)', async ({
 		page,
 		testClient,
 		tokens,
@@ -68,14 +76,61 @@ test.describe('TEST-05 smoke — Buy market order via UI', () => {
 		//    actual <input> element.
 		await page.locator('[data-testid="spend-input"] input').first().fill('100');
 
-		// 7. Submit.
+		// 7b. Bump slippage tolerance to absorb price drift between the SUBGRAPH
+		//    (which indexes live chain head) and ANVIL (which is at FORK_BLOCK).
+		//    The order's Rainlang expression reads Pyth's on-chain NVDA price;
+		//    Pyth's price at the fork block differs from its price at live head
+		//    by however much the asset moved since the fork. The taker's
+		//    priceCap is computed from walkOrderbook's fills (subgraph quotes
+		//    = live-head ratio) + slippage; if the on-chain (fork-block) ratio
+		//    drifted above (priceCap + slippage), the SDK reports
+		//    "No liquidity available for the requested token pair" and the
+		//    take fails. Verified: at fork 45_990_727 the order's ratio is
+		//    ~234.43, but the subgraph reports ~228.49 — a 2.6% drift on a
+		//    one-day-old fork. Default UI slippage is 1%, which is not enough.
+		//    5% absorbs typical 24-48h drift on tNVDA without masking real
+		//    bugs (slippage cap is 50%).
+		//
+		//    Long-term fix: make FORK_BLOCK dynamic at globalSetup so the
+		//    fork is within minutes of live head; then default slippage works.
+		//    Tracked as a follow-up.
+		//    Enter triggers the field's blur handler which commits the value
+		//    via handleSlippageCommit() (MarketOrder.svelte:1187-1190).
+		await page.locator('[data-testid="slippage-input"]').fill('5');
+		await page.locator('[data-testid="slippage-input"]').press('Enter');
+
+		// 7c. Submit.
 		await page.click('[data-testid="trade-submit"][data-side="buy"]');
 
-		// 8. UI assertion: success toast within 30s.
-		await expect(page.locator('[data-testid="success-toast"]')).toBeVisible({ timeout: 30_000 });
+		// 8. On-chain assertion: tNVDA balance > 0 (stub forwarded
+		//    eth_sendTransaction; anvil mined; the take-order filled). Polled
+		//    against anvil — independent of the app's post-tx subgraph polling.
+		//
+		//    DESIGN NOTE: in production, after the on-chain take tx confirms,
+		//    `pollAndFinalizeTakeOrders` polls the live Goldsky subgraph for
+		//    the matching trade event before firing the success toast. In E2E
+		//    that never resolves: anvil's tx hash will never appear in the
+		//    live subgraph, so the toast never fires within the spec's
+		//    timeout. The on-chain balance check captures whether the trade
+		//    actually executed, which is the load-bearing assertion. Surfacing
+		//    a success toast in E2E would require stubbing the subgraph trade
+		//    activity endpoint — tracked as a follow-up.
+		await expect
+			.poll(
+				async () =>
+					await testClient.readContract({
+						address: tokens.tNVDA.address,
+						abi: erc20Abi,
+						functionName: 'balanceOf',
+						args: [fundedAccount.address]
+					}),
+				{ timeout: 60_000, intervals: [1_000, 2_000, 5_000] }
+			)
+			.toBeGreaterThan(0n);
 
-		// 9. On-chain assertion: tNVDA balance > 0 (stub forwarded
-		//    eth_sendTransaction; anvil mined; the take-order filled).
+		// 9. Final read for the variable used by step 10 (kept for parity
+		//    with the original assertion shape; the poll above already
+		//    asserted balance > 0).
 		const tnvdaBalance = await testClient.readContract({
 			address: tokens.tNVDA.address,
 			abi: erc20Abi,
