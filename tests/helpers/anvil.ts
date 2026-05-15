@@ -55,11 +55,17 @@ export async function startAnvilFork(forkBlock: number) {
 			'--fork-block-number',
 			String(forkBlock),
 			'--port',
-			'8545',
-			'--silent'
+			'8545'
 		],
 		{ stdio: 'pipe' }
 	);
+
+	// Surface anvil output so fork-init failures are debuggable in CI logs.
+	// Anvil writes its boot banner to stdout and RPC errors to stderr; both
+	// must reach the workflow log or we're flying blind on dRPC throttling /
+	// archive availability problems.
+	anvilProc.stdout?.on('data', (chunk: Buffer) => process.stdout.write(`[anvil] ${chunk}`));
+	anvilProc.stderr?.on('data', (chunk: Buffer) => process.stderr.write(`[anvil] ${chunk}`));
 
 	anvilProc.on('exit', (code, signal) => {
 		if (code !== 0 && signal !== 'SIGTERM') {
