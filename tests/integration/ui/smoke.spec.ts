@@ -43,14 +43,27 @@ test.describe('TEST-05 smoke — Buy market order via UI', () => {
 		// 4. Click the market-mode tab and ensure the Buy side is selected. The
 		//    panel opens with side=Buy by default; this click is idempotent and
 		//    documents intent.
-		await page.click('[data-testid="mode-tab"][data-mode="market"]');
+		// `force: true` on mode-tab — it's an sr-only test-only button (see
+		// trade/[id]/+page.svelte:1819); the visible "Order Type" label
+		// intercepts pointer events at the same absolute coordinates.
+		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 
 		// 5. Wait for MarketOrder to mount past the assetToken-loading guard
 		//    (Pitfall 4 — TanStack lazy-loaded components / data hydration).
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
-		// 6. Fill the spend amount. The TradeAmountInput is wrapped by the
+		// 6. Toggle input mode to 'spend' so the testid resolves to spend-input.
+		//    MarketOrder.svelte default is inputMode='amount' (commit 5b3c81d
+		//    "market order by affordability" — landed after this spec was
+		//    authored). The toggle button is rendered only for Buy side and
+		//    carries data-mode reflecting current state; click only when needed.
+		const modeToggle = page.locator('[data-testid="input-mode-toggle"]');
+		if ((await modeToggle.getAttribute('data-mode')) !== 'spend') {
+			await modeToggle.click();
+		}
+
+		// 7. Fill the spend amount. The TradeAmountInput is wrapped by the
 		//    spend-input testid; use a CSS descendant selector to land on its
 		//    actual <input> element.
 		await page.locator('[data-testid="spend-input"] input').first().fill('100');
