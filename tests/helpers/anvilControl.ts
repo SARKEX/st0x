@@ -11,11 +11,14 @@
 import {
 	createTestClient,
 	encodeAbiParameters,
+	erc20Abi,
 	http,
 	keccak256,
 	pad,
+	parseEther,
 	publicActions,
-	toHex
+	toHex,
+	walletActions
 } from 'viem';
 import { base } from 'viem/chains';
 
@@ -26,7 +29,9 @@ export function createAnvilTestClient() {
 		chain: base,
 		mode: 'anvil',
 		transport: http('http://127.0.0.1:8545')
-	}).extend(publicActions);
+	})
+		.extend(publicActions)
+		.extend(walletActions);
 }
 
 /**
@@ -73,6 +78,42 @@ export async function fundErc20(args: {
 		index: slot,
 		value: pad(toHex(args.amount), { size: 32 })
 	});
+}
+
+/**
+ * Fund an ERC20 balance by impersonating a known holder and calling transfer().
+ * Use this for tokens whose balance storage doesn't live at a predictable slot
+ * (proxy contracts with custom layouts, ERC4626 wrappers, etc.) — slot-derivation
+ * via `fundErc20()` is unreliable for those.
+ *
+ * The donor must have >= amount of `token` at the current chain head. The Rain
+ * Orderbook (0xe522cB...) is a good universal donor for any tokenized security
+ * traded on st0x since it custodies user vault balances.
+ *
+ * Caveat: `transfer` emits a Transfer event from `donor` to `holder`. Tests that
+ * scan logs for OrderAdded / take events should bound their fromBlock so they
+ * don't accidentally pick up this funding transfer.
+ */
+export async function fundErc20ViaImpersonation(args: {
+	client: AnvilTestClient;
+	token: `0x${string}`;
+	donor: `0x${string}`;
+	holder: `0x${string}`;
+	amount: bigint;
+}): Promise<void> {
+	await args.client.impersonateAccount({ address: args.donor });
+	// Donor needs ETH for gas. setBalance is idempotent.
+	await args.client.setBalance({ address: args.donor, value: parseEther('1') });
+	const hash = await args.client.writeContract({
+		account: args.donor,
+		chain: base,
+		address: args.token,
+		abi: erc20Abi,
+		functionName: 'transfer',
+		args: [args.holder, args.amount]
+	});
+	await args.client.waitForTransactionReceipt({ hash });
+	await args.client.stopImpersonatingAccount({ address: args.donor });
 }
 
 /**

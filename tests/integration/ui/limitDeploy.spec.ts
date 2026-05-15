@@ -44,7 +44,7 @@
 // D-11 enforcement: this file MUST NOT import from $lib/services/marketOrderExecution,
 // $lib/stores/transaction, $lib/services/orderDeployment, $lib/services/walletService,
 // or $lib/types/orderPerspective. ESLint no-restricted-imports rule from 01-03 enforces.
-import { test, expect, fundErc20, UNFUNDED_ACCOUNT } from './fixtures';
+import { test, expect, fundErc20, fundToken, UNFUNDED_ACCOUNT } from './fixtures';
 import { createWalletClient, erc20Abi, http, parseUnits, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
@@ -87,12 +87,11 @@ test.describe('TEST-09 — Limit deploy + simulated counterparty fill', () => {
 		//    maker (gives away tNVDA, receives USDC). Per CLAUDE.md §"Order Semantics":
 		//    Sell maker → orderOutput = Asset; deposit into OUTPUT.
 		const depositAmount = parseUnits('1', tokens.tNVDA.decimals); // 1 tNVDA
-		await fundErc20({
+		await fundToken({
 			client: testClient,
-			token: tokens.tNVDA.address,
+			token: tokens.tNVDA,
 			holder: fundedAccount.address,
-			amount: depositAmount,
-			balanceSlot: tokens.tNVDA.balanceSlot
+			amount: depositAmount
 		});
 
 		// Capture maker pre-deploy balances. The TRADE-01 mitigation pivots on this:
@@ -111,7 +110,10 @@ test.describe('TEST-09 — Limit deploy + simulated counterparty fill', () => {
 
 		// Open the trade panel via page-level Sell CTA (we want a Sell limit).
 		await page.click('[data-testid="open-trade"][data-side="sell"]');
-		await page.click('[data-testid="mode-tab"][data-mode="limit"]');
+		// `force: true` mirrors the buy-spec pattern (HANDOVER fix 7): the sr-only
+		// `[data-testid="mode-tab"]` is occluded by the visible "Order Type" label
+		// at the same coordinates, so the click won't land without bypass.
+		await page.click('[data-testid="mode-tab"][data-mode="limit"]', { force: true });
 
 		// Pitfall 4: wait for LimitOrder to mount past the {#await import()} chunk.
 		// Without this anchor, deploy-submit selector resolves before the form is
@@ -137,26 +139,41 @@ test.describe('TEST-09 — Limit deploy + simulated counterparty fill', () => {
 		// historical state).
 		const beforeDeployBlock = await testClient.getBlockNumber();
 
-		await page.click('[data-testid="deploy-submit"][data-side="sell"][data-mode="limit"]');
+		// Wait for deploy-submit to enable (HANDOVER fix 8) — under CI's cold RPC
+		// cache the wagmi balance read + Rain GUI initialization can take >5s, so
+		// the default click auto-retry window would expire against a disabled
+		// button.
+		const deploySubmit = page.locator(
+			'[data-testid="deploy-submit"][data-side="sell"][data-mode="limit"]'
+		);
+		await expect(deploySubmit).toBeEnabled({ timeout: 30_000 });
+		await deploySubmit.click();
 
-		// Deploy-success surface: success-toast OR (looser) maker tNVDA balance drop.
-		// LimitOrder.svelte:567-572 renders the success-toast on
-		// `tradeSubmittedSuccessfully` flip. T-1-07-02 mitigation: assert BOTH the
-		// UI surface AND on-chain state (drained tNVDA + ≥1 OrderAdded event) so a
-		// stale toast can't false-pass.
-		await expect(page.locator('[data-testid="success-toast"]')).toBeVisible({ timeout: 60_000 });
+		// Deploy-success surface: success-toast AND maker tNVDA balance drop.
+		// LimitOrder.svelte:311 flips `tradeSubmittedSuccessfully = true`
+		// SYNCHRONOUSLY before the transactionStore.handleLimitDeploy() call, so
+		// the toast fires on click — it represents "submitted", not "confirmed".
+		// T-1-07-02 mitigation: assert BOTH the UI surface AND on-chain state
+		// (drained tNVDA + ≥1 OrderAdded event) so a stale toast can't false-pass.
+		await expect(page.locator('[data-testid="success-toast"]')).toBeVisible({ timeout: 30_000 });
 
 		// 3. On-chain assertion: maker tNVDA balance dropped (deposited to OUTPUT
 		//    vault). This is the TRADE-01 maker-side-inversion mitigation (T-1-07-01)
 		//    — if Sell maker deposit landed in INPUT (USDC) vault by mistake, this
-		//    assertion fails.
-		const makerTnvdaPost = await testClient.readContract({
-			address: tokens.tNVDA.address,
-			abi: erc20Abi,
-			functionName: 'balanceOf',
-			args: [fundedAccount.address]
-		});
-		expect(makerTnvdaPost).toBeLessThan(makerTnvdaPre);
+		//    assertion fails. Polled because the toast fires on click but the
+		//    approve+deposit txns need to land before the balance settles.
+		await expect
+			.poll(
+				async () =>
+					await testClient.readContract({
+						address: tokens.tNVDA.address,
+						abi: erc20Abi,
+						functionName: 'balanceOf',
+						args: [fundedAccount.address]
+					}),
+				{ timeout: 60_000, intervals: [1_000, 2_000, 5_000] }
+			)
+			.toBeLessThan(makerTnvdaPre);
 
 		// 4. Read OrderAdded event from logs to obtain the deployed order struct.
 		//    The plan permits a fallback to `IOrderBook.orderExists(orderHash)` if

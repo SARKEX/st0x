@@ -8,7 +8,11 @@
 // SNAPSHOT/REVERT ORDER (per 01-RUNBOOK §"Snapshot/revert state-leakage trap"):
 // take snapshot FIRST, then any test-body funding, then revert in afterEach.
 import { test as base, expect } from '@playwright/test';
-import { createAnvilTestClient, fundErc20 } from '../../helpers/anvilControl';
+import {
+	createAnvilTestClient,
+	fundErc20,
+	fundErc20ViaImpersonation
+} from '../../helpers/anvilControl';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 
 // Anvil default accounts — these are PUBLIC test keys baked into the anvil
@@ -26,9 +30,24 @@ export const UNFUNDED_ACCOUNT = {
 	privateKey: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as `0x${string}`
 };
 
-// Token table — wrapped addresses sourced from src/lib/config/tokens.ts; balance
-// slots from 01-RUNBOOK.md §"ERC20 balance slot table". Slots marked ASSUMED
-// there will be verified by the smoke spec on first CI run.
+// Universal donor for ST0x tokenized securities: the Rain Orderbook contract
+// custodies vault balances for every active order, so it reliably holds a
+// non-trivial wallet `balanceOf` of any actively-traded asset/payment token at
+// the pinned FORK_BLOCK. Verified at FORK_BLOCK=45_990_727: ~6 tNVDA, ~4.84 tAMZN.
+// Same address used in src/lib/config/networks.ts trustedOrderbooks[0].
+const ORDERBOOK_DONOR = '0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D' as `0x${string}`;
+
+// Token table — wrapped addresses sourced from src/lib/config/tokens.ts.
+//
+// Funding strategy per token:
+//   - USDC: setStorageAt at balanceSlot 9 (Circle proxy pattern; verified by
+//     marketBuy.spec.ts which exercises USDC end-to-end).
+//   - tNVDA / tAMZN: impersonate-and-transfer from the Rain Orderbook. Their
+//     wrapper proxies have non-trivial storage layouts (none of slots 0-200
+//     hold a balance map; the impl is likely behind an EIP-1967 delegate with
+//     diamond-style or custom slot derivation), so setStorageAt is unreliable
+//     for them. See `fundErc20ViaImpersonation` in helpers/anvilControl.ts and
+//     01-RUNBOOK §"ERC20 balance slot table" fallback note.
 //
 // `id` is the URL slug used by /trade/[id] — the page resolves via
 // getTokenByAnyAddress() (DRIFT-01) so wrapped/unwrapped/legacy all work; we use
@@ -37,21 +56,52 @@ export const TOKENS = {
 	USDC: {
 		address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`,
 		decimals: 6,
-		balanceSlot: 9 // Circle proxy; verify per 01-RUNBOOK
+		balanceSlot: 9 as const
 	},
 	tNVDA: {
 		address: '0xFb5B41acdbA20a3230F84BE995173CFb98b8D6E7' as `0x${string}`,
 		decimals: 18,
-		balanceSlot: 0, // OZ ERC20 default
+		donor: ORDERBOOK_DONOR,
 		id: '0xFb5B41acdbA20a3230F84BE995173CFb98b8D6E7'
 	},
 	tAMZN: {
 		address: '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53' as `0x${string}`,
 		decimals: 18,
-		balanceSlot: 0,
+		donor: ORDERBOOK_DONOR,
 		id: '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53'
 	}
 } as const;
+
+/**
+ * Funds `holder` with `amount` of `token` via whichever strategy that token is
+ * configured for. Specs should call this instead of fundErc20/fundErc20ViaImpersonation
+ * directly so the strategy choice lives in one place.
+ */
+export async function fundToken(args: {
+	client: ReturnType<typeof createAnvilTestClient>;
+	token: typeof TOKENS[keyof typeof TOKENS];
+	holder: `0x${string}`;
+	amount: bigint;
+}): Promise<void> {
+	const tok = args.token;
+	if ('donor' in tok) {
+		await fundErc20ViaImpersonation({
+			client: args.client,
+			token: tok.address,
+			donor: tok.donor,
+			holder: args.holder,
+			amount: args.amount
+		});
+	} else {
+		await fundErc20({
+			client: args.client,
+			token: tok.address,
+			holder: args.holder,
+			amount: args.amount,
+			balanceSlot: tok.balanceSlot
+		});
+	}
+}
 
 interface UiFixtures {
 	testClient: ReturnType<typeof createAnvilTestClient>;
@@ -156,4 +206,4 @@ export const test = base.extend<UiFixtures>({
 	}
 });
 
-export { expect, fundErc20 };
+export { expect, fundErc20, fundErc20ViaImpersonation };
