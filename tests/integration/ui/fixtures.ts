@@ -118,16 +118,31 @@ export const test = base.extend<UiFixtures>({
 				body: JSON.stringify({ registered: true })
 			});
 		});
-		// Redirect wagmi's chain-read HTTP traffic to anvil. svelte-wagmi's
-		// defaultConfig builds its HTTP transport from chain.rpcUrls.default
-		// (https://mainnet.base.org for Base), separate from the EIP-1193 stub
-		// which only handles signing. Without this redirect, balance reads
-		// (readContracts → erc20Abi.balanceOf used by LowFundsBanner.svelte and
-		// MarketOrder spendingTokenBalance) hit live Base mainnet and return 0
-		// for the test wallet, so the submit button stays disabled with
-		// insufficient-balance error even though we funded USDC on anvil via
-		// setStorageAt.
-		await page.route(/https:\/\/(mainnet\.base\.org|base\.publicnode\.com|.*\.g\.alchemy\.com|base\.llamarpc\.com|base\.drpc\.org|.*\.drpc\.live).*/, async (route) => {
+		// Redirect Base mainnet RPC traffic to anvil. TWO separate clients hit
+		// these hosts:
+		//   1. svelte-wagmi's defaultConfig builds its HTTP transport from
+		//      chain.rpcUrls.default (https://mainnet.base.org for Base) for
+		//      balance reads, contract reads, etc.
+		//   2. The Rain SDK (@rainlanguage/orderbook) has its OWN RPC client
+		//      configured via src/lib/clients/raindex.ts:SETTINGS_YAML. Its
+		//      URL is `PUBLIC_BASE_RPC_URL || 'https://base-rpc.publicnode.com'`
+		//      — and this URL is read at runtime via `$env/dynamic/public`, NOT
+		//      build time. In E2E we don't set PUBLIC_BASE_RPC_URL on the
+		//      preview server, so the SDK falls back to publicnode.com, and
+		//      its eth_call simulation for getTakeCalldata MUST be forwarded
+		//      to anvil — otherwise the SDK simulates against LIVE Base
+		//      mainnet, sees zero USDC balance / zero allowance for the test
+		//      wallet (we only funded anvil via setStorageAt), and returns
+		//      isReady=false with no calldata. Trade flow then collapses at
+		//      "Order not ready for execution yet."
+		//
+		// NOTE on host pattern: `base-rpc.publicnode.com` is the literal URL
+		// the SDK falls back to. `base.publicnode.com` (which the previous
+		// regex matched) is not used anywhere — that was a typo introduced
+		// in commit 7e93b5a. networks.ts:fallbackRpcUrls also lists meowrpc,
+		// blastapi.io, and gateway.tenderly.co; we include them defensively
+		// in case the SDK's primary fails and it falls over to a fallback.
+		await page.route(/https:\/\/(mainnet\.base\.org|base-rpc\.publicnode\.com|.*\.g\.alchemy\.com|base\.llamarpc\.com|base\.meowrpc\.com|base-mainnet\.public\.blastapi\.io|gateway\.tenderly\.co|base\.drpc\.org|.*\.drpc\.live).*/, async (route) => {
 			const req = route.request();
 			const resp = await fetch('http://127.0.0.1:8545', {
 				method: req.method(),
