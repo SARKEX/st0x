@@ -32,24 +32,12 @@ import { erc20Abi, parseUnits } from 'viem';
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 
 test.describe('TEST-06 — Buy market order via UI', () => {
-	test('spend-anchored: 100 USDC → tNVDA fills on-chain + USDC debited', async ({
+	test('spend-anchored: 10 USDC → tNVDA fills on-chain + USDC debited', async ({
 		page,
 		testClient,
 		tokens,
 		fundedAccount
 	}) => {
-		// DIAGNOSTIC (temporary): pipe browser console + page errors to the test
-		// runner stdout so CI logs reveal why submit click results in no
-		// eth_sendTransaction (anvil log shows only eth_call traffic). Remove
-		// once marketBuy is reliably green.
-		page.on('console', (msg) => {
-			const t = msg.type();
-			if (t === 'error' || t === 'warning' || msg.text().includes('marketTake')) {
-				console.log(`[browser ${t}] ${msg.text()}`);
-			}
-		});
-		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
-
 		const initialUsdc = parseUnits('1000', tokens.USDC.decimals);
 		await fundErc20({
 			client: testClient,
@@ -73,7 +61,13 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 			await modeToggle.click();
 		}
 
-		await page.locator('[data-testid="spend-input"] input').first().fill('100');
+		// Spend 10 USDC, not 100 — at FORK_BLOCK 45_990_727 the orderbook's USDC
+		// input vaults for the ask-side wtNVDA orders are thin (subgraph reports
+		// sentinel max-output values, but actual on-chain vault USDC ≪ that). A
+		// 100 USDC buy triggered SDK preflight "No liquidity available right
+		// now for this size" because aggregate fillable USDC within the slippage
+		// cap was <100 (verified via diagnostic dump in commit 7d99622).
+		await page.locator('[data-testid="spend-input"] input').first().fill('10');
 
 		// 5% slippage absorbs typical 24-48h tNVDA price drift between
 		// subgraph head and FORK_BLOCK; default 1% is insufficient.
@@ -82,46 +76,7 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
 		await expect(submit).toBeEnabled({ timeout: 30_000 });
-		// DIAGNOSTIC: pre-click state.
-		console.log(
-			'[mb-debug] pre-click submit state:',
-			JSON.stringify(
-				await page.evaluate(() => {
-					const btn = document.querySelector(
-						'[data-testid="trade-submit"][data-side="buy"]'
-					) as HTMLButtonElement | null;
-					const panel = document.querySelector('[data-testid="market-form-loaded"]');
-					return {
-						disabled: btn?.disabled,
-						text: btn?.textContent?.trim().slice(0, 80),
-						panelSnippet: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 400)
-					};
-				})
-			)
-		);
 		await submit.click();
-		// DIAGNOSTIC: 5s post-click state.
-		await page.waitForTimeout(5_000);
-		console.log(
-			'[mb-debug] +5s post-click state:',
-			JSON.stringify(
-				await page.evaluate(() => {
-					const btn = document.querySelector(
-						'[data-testid="trade-submit"][data-side="buy"]'
-					) as HTMLButtonElement | null;
-					const errorBanner = document.querySelector('[data-testid="error-banner"]');
-					const panel = document.querySelector('[data-testid="market-form-loaded"]');
-					return {
-						submitDisabled: btn?.disabled,
-						submitText: btn?.textContent?.trim().slice(0, 120),
-						errorBannerVisible: !!errorBanner,
-						errorClass: errorBanner?.getAttribute('data-error-class'),
-						errorText: errorBanner?.textContent?.replace(/\s+/g, ' ').slice(0, 300),
-						panelSnippet: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 500)
-					};
-				})
-			)
-		);
 
 		// On-chain assertions: tNVDA delta + USDC debited.
 		// Polling against anvil — independent of subgraph indexing.
@@ -150,7 +105,7 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await expect(page.locator('[data-testid="error-banner"]')).not.toBeVisible();
 	});
 
-	test('asset-anchored: receive 0.1 tNVDA → balance ≥ target (within slippage)', async ({
+	test('asset-anchored: receive 0.02 tNVDA → balance ≥ target (within slippage)', async ({
 		page,
 		testClient,
 		tokens,
@@ -174,7 +129,10 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
 		// Asset-anchored: default inputMode is 'amount', no toggle needed.
-		await page.locator('[data-testid="asset-input"] input').first().fill('0.1');
+		// 0.02 tNVDA target — sized so the SDK preflight can find sufficient
+		// on-chain USDC vault depth within the 5% slippage cap (see spec-level
+		// comment in spend-anchored test for the liquidity rationale).
+		await page.locator('[data-testid="asset-input"] input').first().fill('0.02');
 
 		await page.locator('[data-testid="slippage-input"]').fill('5');
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
@@ -183,7 +141,7 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await expect(submit).toBeEnabled({ timeout: 30_000 });
 		await submit.click();
 
-		// 0.099 tNVDA floor = 0.1 target × (1 - 1% slippage), polled against anvil.
+		// 0.019 tNVDA floor = 0.02 target × (1 - 5% slippage), polled against anvil.
 		await expect
 			.poll(
 				async () =>
@@ -195,7 +153,7 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 					}),
 				{ timeout: 60_000, intervals: [1_000, 2_000, 5_000] }
 			)
-			.toBeGreaterThanOrEqual(parseUnits('0.099', tokens.tNVDA.decimals));
+			.toBeGreaterThanOrEqual(parseUnits('0.019', tokens.tNVDA.decimals));
 
 		await expect(page.locator('[data-testid="error-banner"]')).not.toBeVisible();
 	});
