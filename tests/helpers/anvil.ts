@@ -4,7 +4,11 @@ import { base } from 'viem/chains';
 
 let anvilProc: ChildProcess | null = null;
 
-async function waitForRpc(url: string, timeoutMs = 30_000): Promise<void> {
+// Default 90s — public archive RPCs (dRPC, Alchemy free-tier) take significantly
+// longer than 30s for a cold fork at a 2-month-old block. Local development
+// against a paid Alchemy/QuickNode endpoint typically completes in <5s, so the
+// extra ceiling only adds latency on the (rare) failure path.
+async function waitForRpc(url: string, timeoutMs = 90_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		try {
