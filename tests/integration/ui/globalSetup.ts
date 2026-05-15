@@ -16,7 +16,16 @@ import { execSync } from 'node:child_process';
 import { startAnvilFork } from '../../helpers/anvil';
 import { startPreviewServer } from '../../helpers/previewServer';
 
-const FORK_BLOCK = Number(process.env.FORK_BLOCK ?? 33_400_000);
+// Block 45_990_727 = Thu 2026-05-14 11:00 AM ET (mid-NYSE-hours, weekday).
+// Pinned to a market-hours block because st0x orders' Rainlang has a
+// market-hours gate — orders simulate-revert outside NYSE hours and
+// getTakeOrdersCalldata returns isReady=false, which collapses the trade
+// flow at the "Order not ready for execution yet" message before any tx
+// reaches the wallet. The original v1.0 TEST-03 pin of 33_400_000 was a
+// Sunday 12:09 AM ET (markets closed) — fine for tests that don't actually
+// hit the orderbook, fatal for the UI smoke that goes end-to-end. Override
+// via env var FORK_BLOCK if a future fixture needs a different chain state.
+const FORK_BLOCK = Number(process.env.FORK_BLOCK ?? 45_990_727);
 
 export default async function globalSetup(): Promise<void> {
 	if (!process.env.BASE_RPC_URL) {
