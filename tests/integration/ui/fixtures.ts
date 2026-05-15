@@ -87,6 +87,15 @@ export const test = base.extend<UiFixtures>({
 		// production-facing one (do NOT change without updating both sides).
 		await page.addInitScript(() => {
 			window.localStorage.setItem('st0x_token_swap_announcement_seen', 'true');
+			// Seed wagmi's reconnect hint so autoConnect picks up the injected
+			// (EIP-1193 stub) connector on first page load. Without this,
+			// `autoConnect: true` in src/routes/+layout.svelte:52 only reconnects to
+			// a *previously-used* connector — a fresh browser session has none, so
+			// $connected stays false → $isAuthenticated false → openTradePanel()
+			// early-returns at the !$isAuthenticated guard. The 'injected' id is
+			// the wagmi v2 default for the injected() connector
+			// (node_modules/@wagmi/core/.../connectors/injected.js).
+			window.localStorage.setItem('wagmi.recentConnectorId', '"injected"');
 		});
 		// Stub the wallet-registration check so the trade panel opens without
 		// hitting the live access-control API. Production code path:
