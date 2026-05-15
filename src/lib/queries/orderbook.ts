@@ -14,7 +14,7 @@ import {
 	getTokenByAnyAddress
 } from '$lib/config/network';
 import { queryClient } from '$lib/clients/queryClient';
-import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
+import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from '$lib/types/orderPerspective';
 
 /**
  * Get the set of addresses that represent a token (wrapped + legacy) for matching quotes.

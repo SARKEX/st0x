@@ -16,18 +16,10 @@
  */
 
 import { get } from 'svelte/store';
-import {
-	decodeFunctionData,
-	erc20Abi,
-	type Hash,
-	type Hex
-} from 'viem';
+import { decodeFunctionData, erc20Abi, type Hash, type Hex } from 'viem';
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import { wagmiConfig } from 'svelte-wagmi';
-import {
-	type DeploymentTransactionArgs,
-	type RaindexVault
-} from '@rainlanguage/orderbook';
+import { type DeploymentTransactionArgs, type RaindexVault } from '@rainlanguage/orderbook';
 import {
 	sendTransaction as walletServiceSendTransaction,
 	waitForTransaction as walletServiceWaitForTransaction
@@ -54,16 +46,9 @@ import { invalidateDashboardBalances } from '$lib/queries/balances';
 import { walletAddress } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
-import {
-	getRaindexOrderUrl,
-	getRaindexVaultUrl,
-	isPaymentToken
-} from '$lib/utils/tokenMath';
+import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken } from '$lib/utils/tokenMath';
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
-import {
-	getMakerOutputTokenAddress,
-	getMakerInputTokenAddress
-} from '$lib/types/orderPerspective';
+import { getMakerOutputTokenAddress, getMakerInputTokenAddress } from '$lib/types/orderPerspective';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import {
@@ -231,8 +216,7 @@ export const handleStrategyDeployment = async (
 					spender,
 					amount: requiredAmount,
 					network,
-					setStatus: (s) =>
-						transactionStoreInternal.update((state) => ({ ...state, status: s }))
+					setStatus: (s) => transactionStoreInternal.update((state) => ({ ...state, status: s }))
 				});
 			} catch (error) {
 				if (isStaleWalletSessionError(error)) {
@@ -1002,10 +986,9 @@ export const handleWithdrawFromOrder = async (quote: {
 		const raindexLink = createRaindexLink(chainId, quote.orderbookId || '', quote.orderHash);
 
 		// Invalidate queries for the tokens involved in this order
-		const tokenAddrs = [
-			getMakerInputTokenAddress(quote),
-			getMakerOutputTokenAddress(quote)
-		].filter(Boolean);
+		const tokenAddrs = [getMakerInputTokenAddress(quote), getMakerOutputTokenAddress(quote)].filter(
+			Boolean
+		);
 		for (const tokenAddr of tokenAddrs) {
 			if (tokenAddr) {
 				invalidateOrderQueries(network.id, tokenAddr);

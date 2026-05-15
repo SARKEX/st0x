@@ -35,6 +35,7 @@ export interface DeployEventContext {
 }
 
 /** Lazily resolve DotrainRegistry from the WASM-based orderbook package. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any> }> {
 	const orderbookModule = await import('@rainlanguage/orderbook');
 	const Registry =
@@ -47,10 +48,14 @@ async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any
 	if (!Registry) {
 		throw new Error('DotrainRegistry not available from @rainlanguage/orderbook');
 	}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return Registry as { new: (url: string) => Promise<any> };
 }
 type DotrainRegistryInstance = {
-	getGui: (orderKey: string, deploymentKey: string) => Promise<{
+	getGui: (
+		orderKey: string,
+		deploymentKey: string
+	) => Promise<{
 		error?: { readableMsg: string };
 		value: {
 			setSelectToken: (key: string, address: string) => Promise<unknown>;
