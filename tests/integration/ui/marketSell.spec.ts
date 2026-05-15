@@ -24,7 +24,7 @@ import { erc20Abi, parseUnits } from 'viem';
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 
 test.describe('TEST-07 — Sell market order via UI', () => {
-	test('asset-anchored: sell 0.1 tNVDA → tNVDA debited + USDC credited', async ({
+	test('asset-anchored: sell 0.02 tNVDA → tNVDA debited + USDC credited', async ({
 		page,
 		testClient,
 		tokens,
@@ -47,7 +47,9 @@ test.describe('TEST-07 — Sell market order via UI', () => {
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
 		// Asset-anchored: default inputMode is 'amount', no toggle needed.
-		await page.locator('[data-testid="asset-input"] input').first().fill('0.1');
+		// 0.02 tNVDA — sized to fit on-chain bid-vault depth at FORK_BLOCK (see
+		// marketBuy.spec.ts for the same rationale on the buy side).
+		await page.locator('[data-testid="asset-input"] input').first().fill('0.02');
 
 		await page.locator('[data-testid="slippage-input"]').fill('5');
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
