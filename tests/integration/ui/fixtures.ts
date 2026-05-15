@@ -80,6 +80,14 @@ export const test = base.extend<UiFixtures>({
 	},
 	page: async ({ page }, use) => {
 		await page.addInitScript(eip1193StubSource({ address: FUNDED_ACCOUNT.address }));
+		// Pre-dismiss one-time announcement modals — they auto-open on fresh
+		// browser sessions (no localStorage entry) and intercept pointer events
+		// on the page under test. The modal logic lives in
+		// src/lib/stores/announcementStore.ts; the localStorage key is the
+		// production-facing one (do NOT change without updating both sides).
+		await page.addInitScript(() => {
+			window.localStorage.setItem('st0x_token_swap_announcement_seen', 'true');
+		});
 		await use(page);
 	}
 });
