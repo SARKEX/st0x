@@ -99,8 +99,15 @@ test.describe('TEST-05 smoke — Buy market order via UI', () => {
 		await page.locator('[data-testid="slippage-input"]').fill('5');
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
 
-		// 7c. Submit.
-		await page.click('[data-testid="trade-submit"][data-side="buy"]');
+		// 7c. Submit. CI gates this via wagmi balance reads (USDC must show as
+		//    funded before the button enables — `disabled=true` until then).
+		//    page.route forwards each read to anvil; under dRPC throttling /
+		//    cold-cache the round-trip can exceed Playwright's default 5s click
+		//    retry window. Wait explicitly so the click lands on an enabled
+		//    button rather than racing the balance refresh.
+		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
+		await expect(submit).toBeEnabled({ timeout: 30_000 });
+		await submit.click();
 
 		// 8. On-chain assertion: tNVDA balance > 0 (stub forwarded
 		//    eth_sendTransaction; anvil mined; the take-order filled). Polled
