@@ -6,10 +6,16 @@ import { spawn, type ChildProcess } from 'node:child_process';
 let previewProc: ChildProcess | null = null;
 
 /**
- * Poll the given URL until it returns a non-5xx response (default 30s timeout).
+ * Poll the given URL until it returns a non-5xx response.
+ *
+ * Default 90s — `npm run preview` cold-start on CI runners (esp. right after
+ * a fresh `npm run build` with many node_modules to resolve) regularly takes
+ * 30-60s. Local dev is much faster; the extra ceiling only adds latency on
+ * failure paths. Caller can still override via the second argument.
+ *
  * Used by previewServer ready-detect and by globalSetup smoke probes.
  */
-export async function waitForUrl(url: string, timeoutMs = 30_000): Promise<void> {
+export async function waitForUrl(url: string, timeoutMs = 90_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		try {
@@ -42,6 +48,11 @@ export async function startPreviewServer(opts: {
 		['run', 'preview', '--', '--port', String(opts.port), '--host', '127.0.0.1'],
 		{ stdio: 'pipe', env: { ...process.env, ...opts.env } }
 	);
+
+	// Surface preview output so boot failures are debuggable in CI logs
+	// (mirrors the [anvil] forwarder in tests/helpers/anvil.ts).
+	previewProc.stdout?.on('data', (chunk: Buffer) => process.stdout.write(`[preview] ${chunk}`));
+	previewProc.stderr?.on('data', (chunk: Buffer) => process.stderr.write(`[preview] ${chunk}`));
 
 	previewProc.on('exit', (code, signal) => {
 		if (code !== 0 && signal !== 'SIGTERM') {
