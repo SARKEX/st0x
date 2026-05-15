@@ -1031,6 +1031,8 @@
 						{#if orderSide === 'Buy'}
 							<button
 								type="button"
+								data-testid="input-mode-toggle"
+								data-mode={inputMode}
 								on:click={() => {
 									inputMode = inputMode === 'amount' ? 'spend' : 'amount';
 									selectedAmount = 0n;

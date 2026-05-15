@@ -87,15 +87,23 @@ export const test = base.extend<UiFixtures>({
 		// production-facing one (do NOT change without updating both sides).
 		await page.addInitScript(() => {
 			window.localStorage.setItem('st0x_token_swap_announcement_seen', 'true');
-			// Seed wagmi's reconnect hint so autoConnect picks up the injected
+			// Seed wagmi reconnect state so autoConnect picks up the injected
 			// (EIP-1193 stub) connector on first page load. Without this,
 			// `autoConnect: true` in src/routes/+layout.svelte:52 only reconnects to
-			// a *previously-used* connector — a fresh browser session has none, so
+			// a *previously-used* connector — fresh browser session has none, so
 			// $connected stays false → $isAuthenticated false → openTradePanel()
-			// early-returns at the !$isAuthenticated guard. The 'injected' id is
-			// the wagmi v2 default for the injected() connector
-			// (node_modules/@wagmi/core/.../connectors/injected.js).
+			// early-returns before the trade panel renders.
+			//
+			// TWO keys are required (verified against node_modules/@wagmi/core/dist/esm/connectors/injected.js):
+			// 1. wagmi.recentConnectorId — biases reconnect() toward the injected
+			//    connector (vs e.g. walletConnect).
+			// 2. wagmi.injected.connected — REQUIRED gate. The injected connector's
+			//    isAuthorized() returns false for targetless setups without this
+			//    flag, so reconnect() silently skips it and no autoConnect fires.
+			// Wagmi storage values are JSON-serialized; raw strings need surrounding
+			// quotes, booleans are 'true'/'false' (no quotes around the word).
 			window.localStorage.setItem('wagmi.recentConnectorId', '"injected"');
+			window.localStorage.setItem('wagmi.injected.connected', 'true');
 		});
 		// Stub the wallet-registration check so the trade panel opens without
 		// hitting the live access-control API. Production code path:
@@ -109,6 +117,25 @@ export const test = base.extend<UiFixtures>({
 				contentType: 'application/json',
 				body: JSON.stringify({ registered: true })
 			});
+		});
+		// Redirect wagmi's chain-read HTTP traffic to anvil. svelte-wagmi's
+		// defaultConfig builds its HTTP transport from chain.rpcUrls.default
+		// (https://mainnet.base.org for Base), separate from the EIP-1193 stub
+		// which only handles signing. Without this redirect, balance reads
+		// (readContracts → erc20Abi.balanceOf used by LowFundsBanner.svelte and
+		// MarketOrder spendingTokenBalance) hit live Base mainnet and return 0
+		// for the test wallet, so the submit button stays disabled with
+		// insufficient-balance error even though we funded USDC on anvil via
+		// setStorageAt.
+		await page.route(/https:\/\/(mainnet\.base\.org|base\.publicnode\.com|.*\.g\.alchemy\.com|base\.llamarpc\.com|base\.drpc\.org|.*\.drpc\.live).*/, async (route) => {
+			const req = route.request();
+			const resp = await fetch('http://127.0.0.1:8545', {
+				method: req.method(),
+				headers: { 'content-type': 'application/json' },
+				body: req.postData() ?? undefined
+			});
+			const body = await resp.text();
+			await route.fulfill({ status: resp.status, contentType: 'application/json', body });
 		});
 		await use(page);
 	}
