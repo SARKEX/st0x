@@ -556,8 +556,7 @@ export const handleAggregatedTakeOrdersCalldata = async (
 				return false;
 			}
 			transactionError(
-				(postApprovalSdkMsg ||
-					'Failed to prepare order after approval') as TransactionErrorMessage
+				(postApprovalSdkMsg || 'Failed to prepare order after approval') as TransactionErrorMessage
 			);
 			return true;
 		}
