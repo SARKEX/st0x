@@ -57,8 +57,7 @@
 	import {
 		createTokenTradeActivityQuery,
 		createTakerTradesQuery,
-		createBatchTradesQuery,
-		type TokenTradeActivityPayload
+		createBatchTradesQuery
 	} from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -379,6 +378,7 @@
 		{ key: '7D', label: '7D' },
 		{ key: '30D', label: '30D' }
 	];
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const tradeToPoint = (
 		trade: SgTrade,
 		assetAddress: string,
@@ -717,8 +717,8 @@
 		const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
 		if (!assetAddress || !quoteAddress) return [];
-		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
-		const quoteDecimals = Number(settlementToken.decimals ?? 6);
+		const _assetDecimals = Number(currentPythToken?.decimals ?? 18);
+		const _quoteDecimals = Number(settlementToken.decimals ?? 6);
 		const range = $tokenTradeQuery?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
@@ -1185,9 +1185,7 @@
 				<div class="min-h-[320px] sm:min-h-[440px]">
 					{#if activeOnchainTab === 'market'}
 						{#await import('$lib/components/charts/TokenMarketCharts.svelte')}
-							<div
-								class="flex min-h-[320px] items-center justify-center sm:min-h-[440px]"
-							>
+							<div class="flex min-h-[320px] items-center justify-center sm:min-h-[440px]">
 								<LoadingSpinner size="md" text="Loading market charts…" />
 							</div>
 						{:then Mod}
@@ -1824,24 +1822,24 @@
 								data-mode="market"
 								class="sr-only"
 								tabindex="-1"
-								on:click={() => (panelStrategy = 'market')}
-							>Market</button>
+								on:click={() => (panelStrategy = 'market')}>Market</button
+							>
 							<button
 								type="button"
 								data-testid="mode-tab"
 								data-mode="limit"
 								class="sr-only"
 								tabindex="-1"
-								on:click={() => (panelStrategy = 'limit')}
-							>Limit</button>
+								on:click={() => (panelStrategy = 'limit')}>Limit</button
+							>
 							<button
 								type="button"
 								data-testid="mode-tab"
 								data-mode="dca"
 								class="sr-only"
 								tabindex="-1"
-								on:click={() => (panelStrategy = 'dca')}
-							>DCA</button>
+								on:click={() => (panelStrategy = 'dca')}>DCA</button
+							>
 							<label class="block space-y-1.5 sm:space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
 								<span
 									id={PANEL_STRATEGY_LABEL_ID}
@@ -2063,11 +2061,7 @@
 								<LoadingSpinner size="md" text="Loading TradingView chart…" />
 							</div>
 						{:then Mod}
-							<svelte:component
-								this={Mod.default}
-								symbol={tradingViewSymbol}
-								interval="60"
-							/>
+							<svelte:component this={Mod.default} symbol={tradingViewSymbol} interval="60" />
 						{:catch _err}
 							<div class="flex h-full items-center justify-center text-sm text-red-400">
 								Failed to load TradingView chart. Please reload the page.

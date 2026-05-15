@@ -43,8 +43,8 @@ export type TakeOrderFailureReason =
 
 export interface TakeOrderTranscript {
 	// Quote-side state — replay vector for D-08 acceptance test
-	subgraphQuoteHash: string | null;          // SHA-256 hex of fullQuotePayload (Task 2 populates)
-	fullQuotePayload: ProcessedQuote[];        // exact quotes the local walk used
+	subgraphQuoteHash: string | null; // SHA-256 hex of fullQuotePayload (Task 2 populates)
+	fullQuotePayload: ProcessedQuote[]; // exact quotes the local walk used
 	// On-chain read at the moment of submission (D-08 LIMITATION: vaultBalance stays
 	// null in Phase 1 — populating it requires a new on-chain read at submission time
 	// which is Phase 2 / TRADE-03 territory.)
@@ -54,19 +54,19 @@ export interface TakeOrderTranscript {
 		IOIndex: { input: number | null; output: number | null };
 	};
 	// Derivation
-	ratio: string | null;                      // hex Float, from quote.ratio
+	ratio: string | null; // hex Float, from quote.ratio
 	slippageBps: number;
-	priceCap: string | null;                   // human decimal passed to SDK
+	priceCap: string | null; // human decimal passed to SDK
 	// Side semantics (per src/lib/types/orderPerspective.ts)
-	side: 'bid' | 'ask';                       // counterparty side from filterQuotesForSide
+	side: 'bid' | 'ask'; // counterparty side from filterQuotesForSide
 	takerAction: 'Buy' | 'Sell';
 	userAction: 'Buy' | 'Sell';
-	mode: 'buyUpTo' | 'spendUpTo';             // anchored type
+	mode: 'buyUpTo' | 'spendUpTo'; // anchored type
 	// Identity
-	walletAddress: string | null;              // Sentry's beforeSend scrubs the address
+	walletAddress: string | null; // Sentry's beforeSend scrubs the address
 	// Cross-correlation
-	request_id: string | null;                 // null on browser-only paths (logger.ts is server-only)
-	timestamp: string;                         // ISO 8601
+	request_id: string | null; // null on browser-only paths (logger.ts is server-only)
+	timestamp: string; // ISO 8601
 }
 
 /**

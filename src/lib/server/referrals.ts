@@ -79,6 +79,7 @@ const devStore = {
 function pickFromAlphabet(alphabet: string): string {
 	const n = alphabet.length;
 	const limit = Math.floor(256 / n) * n;
+	// eslint-disable-next-line no-constant-condition
 	while (true) {
 		const byte = crypto.randomBytes(1)[0];
 		if (byte < limit) return alphabet[byte % n];
@@ -282,9 +283,8 @@ export async function listAllReferralProfiles(): Promise<ReferralProfile[]> {
  * Kept for backwards compatibility but does nothing.
  */
 export async function linkReferredWallet(
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	_walletAddress: string,
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 	_referralCode: string
 ): Promise<{ success: boolean; error?: string }> {
 	// No-op: referral linking now happens automatically via the access code system
@@ -557,7 +557,7 @@ export async function createReferralProfileForMigration(
 	referralCode: string,
 	nickname: string,
 	telegramHandle: string,
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 	_migrateFromAccessCode?: string // Deprecated: no longer needed
 ): Promise<{
 	success: boolean;

@@ -24,10 +24,9 @@ export const GET: RequestHandler = async () => {
 
 		if (!response.ok) {
 			console.warn(`[SPYM] liquidity-monitor returned ${response.status}`);
-			return json(
-				{ symbol: 'SPYM', price: null, timestamp: null } satisfies SpymPriceResponse,
-				{ status: 502 }
-			);
+			return json({ symbol: 'SPYM', price: null, timestamp: null } satisfies SpymPriceResponse, {
+				status: 502
+			});
 		}
 
 		const data: SpymPriceResponse = await response.json();
@@ -36,9 +35,8 @@ export const GET: RequestHandler = async () => {
 		});
 	} catch (error) {
 		console.warn('[SPYM] failed to fetch from liquidity-monitor:', error);
-		return json(
-			{ symbol: 'SPYM', price: null, timestamp: null } satisfies SpymPriceResponse,
-			{ status: 502 }
-		);
+		return json({ symbol: 'SPYM', price: null, timestamp: null } satisfies SpymPriceResponse, {
+			status: 502
+		});
 	}
 };

@@ -101,7 +101,10 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 		};
 		const walletAggregates = new Map<
 			string,
-			{ tokens: { symbol: string; address: string; balance: string; value: number }[]; totalValue: number }
+			{
+				tokens: { symbol: string; address: string; balance: string; value: number }[];
+				totalValue: number;
+			}
 		>();
 		for (const snapshot of snapshots) {
 			const tokenAddressLower = snapshot.tokenAddress.toLowerCase();

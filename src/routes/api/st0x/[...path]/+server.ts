@@ -47,13 +47,8 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	{ method: 'POST', pattern: /^v1\/trades\/batch$/ }
 ];
 
-function matchProxyRoute(
-	method: string,
-	pathSuffix: string
-): { cache?: string } | null {
-	const route = ALLOWED_PROXY_ROUTES.find(
-		(r) => r.method === method && r.pattern.test(pathSuffix)
-	);
+function matchProxyRoute(method: string, pathSuffix: string): { cache?: string } | null {
+	const route = ALLOWED_PROXY_ROUTES.find((r) => r.method === method && r.pattern.test(pathSuffix));
 	return route ? { cache: route.cache } : null;
 }
 

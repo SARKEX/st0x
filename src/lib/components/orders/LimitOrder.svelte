@@ -17,10 +17,7 @@
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 	import { track } from '$lib/services/analytics';
-	import {
-		trackTradeEvent,
-		type ErrorClass
-	} from '$lib/services/observability/tradeEvents';
+	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
 	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -419,222 +416,223 @@
 	     post-skeleton anchor for Playwright `waitFor` past the lazy-load chunk
 	     (Pitfall 4). Both carry `data-mode` + `data-side` so E2E selectors compose
 	     `[data-testid="limit-form-loaded"][data-side="buy"]` etc. -->
-	<div
-		data-testid="limit-form"
-		data-mode="limit"
-		data-side={orderSide.toLowerCase()}
-	>
-	<div
-		class="space-y-4"
-		data-testid="limit-form-loaded"
-		data-mode="limit"
-		data-side={orderSide.toLowerCase()}
-	>
-		<!-- Main inputs stacked -->
-		<div class="space-y-4">
-			<div data-testid="deposit-input">
-				<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
-				<TradeAmountInput
-					bind:this={tradeAmountInputRef}
-					aria-label="Quantity"
-					amountToken={assetToken}
-					balanceToken={orderSide === 'Buy' ? settlementToken : assetToken}
-					bind:amount={selectedAmount}
-					bind:balance={spendingTokenBalance}
-					bind:balanceDecimals={spendingTokenBalanceDecimals}
-					validate={validateSelectedAmount}
-					bind:isError={selectedAmountError}
-					showUnit={false}
-					showMaxButton={false}
-				/>
-				<!-- Percentage buttons -->
-				<div class="mt-2 flex gap-2">
-					{#each [25, 50, 75, 100] as percent}
-						<button
-							type="button"
-							on:click={() => handlePercentageClick(percent)}
-							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+	<div data-testid="limit-form" data-mode="limit" data-side={orderSide.toLowerCase()}>
+		<div
+			class="space-y-4"
+			data-testid="limit-form-loaded"
+			data-mode="limit"
+			data-side={orderSide.toLowerCase()}
+		>
+			<!-- Main inputs stacked -->
+			<div class="space-y-4">
+				<div data-testid="deposit-input">
+					<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
+					<TradeAmountInput
+						bind:this={tradeAmountInputRef}
+						aria-label="Quantity"
+						amountToken={assetToken}
+						balanceToken={orderSide === 'Buy' ? settlementToken : assetToken}
+						bind:amount={selectedAmount}
+						bind:balance={spendingTokenBalance}
+						bind:balanceDecimals={spendingTokenBalanceDecimals}
+						validate={validateSelectedAmount}
+						bind:isError={selectedAmountError}
+						showUnit={false}
+						showMaxButton={false}
+					/>
+					<!-- Percentage buttons -->
+					<div class="mt-2 flex gap-2">
+						{#each [25, 50, 75, 100] as percent}
+							<button
+								type="button"
+								on:click={() => handlePercentageClick(percent)}
+								class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+							>
+								{percent === 100 ? 'Max' : `${percent}%`}
+							</button>
+						{/each}
+					</div>
+				</div>
+				<div>
+					<div class="mb-2 block text-sm font-medium text-gray-300">
+						Limit Price
+						<span class="ml-1 text-xs text-gray-500"
+							>({settlementLabel} per {assetToken.symbol})</span
 						>
-							{percent === 100 ? 'Max' : `${percent}%`}
-						</button>
-					{/each}
+					</div>
+					<Input
+						aria-label="Limit Price"
+						type="number"
+						unit={settlementLabel}
+						dataTestId="price-input"
+						bind:amount={selectedInitialRatio}
+						validate={validateBaseline}
+						bind:isError={selectedInitialRatioError}
+						on:input={handlePriceInput}
+					/>
 				</div>
 			</div>
-			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Limit Price
-					<span class="ml-1 text-xs text-gray-500">({settlementLabel} per {assetToken.symbol})</span
-					>
-				</div>
-				<Input
-					aria-label="Limit Price"
-					type="number"
-					unit={settlementLabel}
-					dataTestId="price-input"
-					bind:amount={selectedInitialRatio}
-					validate={validateBaseline}
-					bind:isError={selectedInitialRatioError}
-					on:input={handlePriceInput}
-				/>
-			</div>
-		</div>
 
-		<!-- Order summary -->
-		<div class={containerStyles.cardBordered}>
-			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
-			<div class="space-y-2 text-sm">
-				<div class="flex justify-between">
-					<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-					<span class="font-medium">
-						{selectedAmount
-							? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
-							: '0'}
-						{assetToken.symbol}
-					</span>
-				</div>
-				<div class="flex justify-between">
-					<span class="text-gray-400">At price</span>
-					<span class="font-medium">
-						{selectedInitialRatio || '0'}
-						{settlementLabel}
-					</span>
-				</div>
-				<div class="mt-2 border-t border-white/10 pt-2">
+			<!-- Order summary -->
+			<div class={containerStyles.cardBordered}>
+				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+				<div class="space-y-2 text-sm">
 					<div class="flex justify-between">
-						<span class="text-gray-400">Total</span>
-						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{totalCost}
+						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+						<span class="font-medium">
+							{selectedAmount
+								? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+								: '0'}
+							{assetToken.symbol}
+						</span>
+					</div>
+					<div class="flex justify-between">
+						<span class="text-gray-400">At price</span>
+						<span class="font-medium">
+							{selectedInitialRatio || '0'}
 							{settlementLabel}
 						</span>
 					</div>
-					{#if belowMinTradeError}
-						<div
-							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-						>
-							Minimum trade size is $1. Please increase your order amount.
+					<div class="mt-2 border-t border-white/10 pt-2">
+						<div class="flex justify-between">
+							<span class="text-gray-400">Total</span>
+							<span class={`text-lg font-semibold ${summaryAccentClass}`}>
+								{totalCost}
+								{settlementLabel}
+							</span>
 						</div>
-					{/if}
-				</div>
-			</div>
-		</div>
-
-		<!-- Advanced Options -->
-		<div class="border-t border-white/10 pt-4">
-			<button
-				type="button"
-				on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
-				class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
-			>
-				<span>Advanced options</span>
-				<svg
-					class={`h-4 w-4 transform transition-transform ${
-						showAdvancedOptions ? 'rotate-180' : ''
-					}`}
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M19 9l-7 7-7-7"
-					/>
-				</svg>
-			</button>
-
-			{#if showAdvancedOptions}
-				<div class="mt-4 space-y-3">
-					<div>
-						<label for="receiving-vault" class="mb-2 block text-sm font-medium text-gray-300">
-							Receiving vault
-						</label>
-						<select
-							id="receiving-vault"
-							bind:value={selectedVaultOption}
-							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
-						>
-							<option value="default">Default</option>
-							<option value="order-specific">Order-specific</option>
-						</select>
-						<p class="mt-1 text-xs text-gray-500">
-							{#if selectedVaultOption === 'default'}
-								Uses the shared default vault for receiving tokens
-							{:else}
-								Creates a unique vault for this order only
-							{/if}
-						</p>
+						{#if belowMinTradeError}
+							<div
+								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+							>
+								Minimum trade size is $1. Please increase your order amount.
+							</div>
+						{/if}
 					</div>
 				</div>
-			{/if}
-		</div>
+			</div>
 
-		<!-- Deploy Button -->
-		<button
-			data-testid="deploy-submit"
-			data-side={orderSide.toLowerCase()}
-			data-mode="limit"
-			on:click={handleDeploy}
-			disabled={disableDeploy}
-			class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
-				disableDeploy
-					? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
-					: actionButtonClass
-			}`}
-		>
-			{#if disableDeploy}
-				{#if !selectedInitialRatio}
-					Enter a limit price
-				{:else if !selectedAmount}
-					Enter an amount
-				{:else if belowMinTradeError}
-					Minimum trade is $1
-				{:else}
-					Complete all fields
+			<!-- Advanced Options -->
+			<div class="border-t border-white/10 pt-4">
+				<button
+					type="button"
+					on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
+					class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
+				>
+					<span>Advanced options</span>
+					<svg
+						class={`h-4 w-4 transform transition-transform ${
+							showAdvancedOptions ? 'rotate-180' : ''
+						}`}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M19 9l-7 7-7-7"
+						/>
+					</svg>
+				</button>
+
+				{#if showAdvancedOptions}
+					<div class="mt-4 space-y-3">
+						<div>
+							<label for="receiving-vault" class="mb-2 block text-sm font-medium text-gray-300">
+								Receiving vault
+							</label>
+							<select
+								id="receiving-vault"
+								bind:value={selectedVaultOption}
+								class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+							>
+								<option value="default">Default</option>
+								<option value="order-specific">Order-specific</option>
+							</select>
+							<p class="mt-1 text-xs text-gray-500">
+								{#if selectedVaultOption === 'default'}
+									Uses the shared default vault for receiving tokens
+								{:else}
+									Creates a unique vault for this order only
+								{/if}
+							</p>
+						</div>
+					</div>
 				{/if}
-			{:else}
-				Create Order
-			{/if}
-		</button>
+			</div>
 
-		<!-- D-09 error-banner: classified error surface mirroring the MarketOrder
+			<!-- Deploy Button -->
+			<button
+				data-testid="deploy-submit"
+				data-side={orderSide.toLowerCase()}
+				data-mode="limit"
+				on:click={handleDeploy}
+				disabled={disableDeploy}
+				class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
+					disableDeploy
+						? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
+						: actionButtonClass
+				}`}
+			>
+				{#if disableDeploy}
+					{#if !selectedInitialRatio}
+						Enter a limit price
+					{:else if !selectedAmount}
+						Enter an amount
+					{:else if belowMinTradeError}
+						Minimum trade is $1
+					{:else}
+						Complete all fields
+					{/if}
+				{:else}
+					Create Order
+				{/if}
+			</button>
+
+			<!-- D-09 error-banner: classified error surface mirroring the MarketOrder
 		     taxonomy (slippage / no_liquidity / stale_oracle / insufficient_balance /
 		     market_closed). For LimitOrder the only deterministic pre-deploy classify
 		     case is `insufficient_balance` (below-min-trade is captured as a separate
 		     visible message above; not part of the TEST-08 taxonomy). -->
-		{#if belowMinTradeError}
-			<div
-				data-testid="error-banner"
-				data-error-class="insufficient_balance"
-				data-mode="limit"
-				data-side={orderSide.toLowerCase()}
-				class="sr-only"
-				role="alert"
-				aria-live="polite"
-			>insufficient_balance</div>
-		{/if}
-		{#if tradeSubmittedSuccessfully}
-			<div
-				data-testid="success-toast"
-				data-mode="limit"
-				data-side={orderSide.toLowerCase()}
-				class="sr-only"
-				role="status"
-				aria-live="polite"
-			>Order deployed</div>
-		{/if}
+			{#if belowMinTradeError}
+				<div
+					data-testid="error-banner"
+					data-error-class="insufficient_balance"
+					data-mode="limit"
+					data-side={orderSide.toLowerCase()}
+					class="sr-only"
+					role="alert"
+					aria-live="polite"
+				>
+					insufficient_balance
+				</div>
+			{/if}
+			{#if tradeSubmittedSuccessfully}
+				<div
+					data-testid="success-toast"
+					data-mode="limit"
+					data-side={orderSide.toLowerCase()}
+					class="sr-only"
+					role="status"
+					aria-live="polite"
+				>
+					Order deployed
+				</div>
+			{/if}
 
-		<!-- Review Strategy Checkbox -->
-		<label class="mt-3 flex cursor-pointer items-center gap-2">
-			<input
-				type="checkbox"
-				checked={$reviewStrategyOnDeploy}
-				on:change={(e) => reviewStrategyOnDeploy.set(e.currentTarget.checked)}
-				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-800"
-			/>
-			<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
-		</label>
-	</div>
+			<!-- Review Strategy Checkbox -->
+			<label class="mt-3 flex cursor-pointer items-center gap-2">
+				<input
+					type="checkbox"
+					checked={$reviewStrategyOnDeploy}
+					on:change={(e) => reviewStrategyOnDeploy.set(e.currentTarget.checked)}
+					class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-800"
+				/>
+				<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
+			</label>
+		</div>
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">

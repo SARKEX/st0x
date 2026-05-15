@@ -17,10 +17,7 @@
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 	import { onMount } from 'svelte';
 	import { track } from '$lib/services/analytics';
-	import {
-		trackTradeEvent,
-		type ErrorClass
-	} from '$lib/services/observability/tradeEvents';
+	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
 	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
 
 	// OBS-07/OBS-09 (Plan 02-03 Task 2b) — local error classifier (mirrors LimitOrder).

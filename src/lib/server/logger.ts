@@ -50,12 +50,7 @@ const baseLogger: Logger = pino({
 		level: (label) => ({ level: label })
 	},
 	redact: {
-		paths: [
-			'req.headers.authorization',
-			'req.headers.cookie',
-			'*.signature',
-			'*.privateKey'
-		],
+		paths: ['req.headers.authorization', 'req.headers.cookie', '*.signature', '*.privateKey'],
 		censor: '[REDACTED]'
 	},
 	timestamp: pino.stdTimeFunctions.isoTime

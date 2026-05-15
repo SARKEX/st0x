@@ -26,10 +26,7 @@
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
-	import {
-		trackTradeEvent,
-		type ErrorClass
-	} from '$lib/services/observability/tradeEvents';
+	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
 	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
 	import { onMount } from 'svelte';
 
@@ -1009,328 +1006,347 @@
 	};
 </script>
 
-<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && showHighSlippageWarning) cancelHighSlippage(); }} />
+<svelte:window
+	on:keydown={(e) => {
+		if (e.key === 'Escape' && showHighSlippageWarning) cancelHighSlippage();
+	}}
+/>
 
 {#if $currentNetwork && assetToken}
-	<div
-		data-testid="market-form"
-		data-mode="market"
-		data-side={orderSide.toLowerCase()}
-	>
-	<div
-		class="space-y-4"
-		data-testid="market-form-loaded"
-		data-mode="market"
-		data-side={orderSide.toLowerCase()}
-	>
-		<!-- Main inputs stacked -->
-		<div class="space-y-4">
-			<div>
-				<!-- Unified input with integrated toggle and token -->
-				<div
-					class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50"
-				>
-					<!-- Left side: Buy/Spend or Sell toggle -->
-					{#if orderSide === 'Buy'}
-						<button
-							type="button"
-							on:click={() => {
-								inputMode = inputMode === 'amount' ? 'spend' : 'amount';
-								selectedAmount = 0n;
-							}}
-							class="flex items-center gap-1.5 py-3 pl-4 pr-2 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
-						>
-							{inputMode === 'amount' ? 'Buy' : 'Spend'}
-							<svg class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M8 9l4-4 4 4m0 6l-4 4-4-4"
-								/>
-							</svg>
-						</button>
-					{:else}
-						<span class="py-3 pl-4 pr-2 text-sm font-medium text-red-400"> Sell </span>
-					{/if}
+	<div data-testid="market-form" data-mode="market" data-side={orderSide.toLowerCase()}>
+		<div
+			class="space-y-4"
+			data-testid="market-form-loaded"
+			data-mode="market"
+			data-side={orderSide.toLowerCase()}
+		>
+			<!-- Main inputs stacked -->
+			<div class="space-y-4">
+				<div>
+					<!-- Unified input with integrated toggle and token -->
+					<div
+						class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50"
+					>
+						<!-- Left side: Buy/Spend or Sell toggle -->
+						{#if orderSide === 'Buy'}
+							<button
+								type="button"
+								on:click={() => {
+									inputMode = inputMode === 'amount' ? 'spend' : 'amount';
+									selectedAmount = 0n;
+								}}
+								class="flex items-center gap-1.5 py-3 pl-4 pr-2 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
+							>
+								{inputMode === 'amount' ? 'Buy' : 'Spend'}
+								<svg
+									class="h-3 w-3 opacity-50"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M8 9l4-4 4 4m0 6l-4 4-4-4"
+									/>
+								</svg>
+							</button>
+						{:else}
+							<span class="py-3 pl-4 pr-2 text-sm font-medium text-red-400"> Sell </span>
+						{/if}
 
-					<!-- Middle: Amount input -->
-					<!-- D-09 testid: spend-input when inputMode is 'spend' (payment amount),
+						<!-- Middle: Amount input -->
+						<!-- D-09 testid: spend-input when inputMode is 'spend' (payment amount),
 					     asset-input when inputMode is 'amount' (asset quantity). The same
 					     TradeAmountInput renders both; the testid follows the mode so E2E can
 					     compose `[data-testid="asset-input"]` for asset-anchored entry and
 					     `[data-testid="spend-input"]` for payment-anchored entry. -->
-					<div class="flex-1" data-testid={inputMode === 'spend' ? 'spend-input' : 'asset-input'}>
-						<TradeAmountInput
-							bind:this={tradeAmountInputRef}
-							aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
-							amountToken={inputMode === 'spend' ? paymentToken : assetToken}
-							balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
-							bind:amount={selectedAmount}
-							bind:balance={spendingTokenBalance}
-							bind:balanceDecimals={spendingTokenBalanceDecimals}
-							validate={validateSelectedAmount}
-							bind:isError={selectedAmountError}
-							showUnit={false}
-							showMaxButton={false}
-							compact={true}
-							noBorder={true}
-						/>
+						<div class="flex-1" data-testid={inputMode === 'spend' ? 'spend-input' : 'asset-input'}>
+							<TradeAmountInput
+								bind:this={tradeAmountInputRef}
+								aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
+								amountToken={inputMode === 'spend' ? paymentToken : assetToken}
+								balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
+								bind:amount={selectedAmount}
+								bind:balance={spendingTokenBalance}
+								bind:balanceDecimals={spendingTokenBalanceDecimals}
+								validate={validateSelectedAmount}
+								bind:isError={selectedAmountError}
+								showUnit={false}
+								showMaxButton={false}
+								compact={true}
+								noBorder={true}
+							/>
+						</div>
+
+						<!-- Right side: Token symbol -->
+						<span class="py-3 pl-2 pr-4 text-sm font-medium text-gray-300">
+							{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
+						</span>
 					</div>
 
-					<!-- Right side: Token symbol -->
-					<span class="py-3 pl-2 pr-4 text-sm font-medium text-gray-300">
-						{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
-					</span>
-				</div>
-
-				<!-- Balance display -->
-				<div class="mt-1.5 text-sm text-gray-400">
-					{#if spendingTokenBalanceDecimals !== null}
-						{@const balanceFormatted = parseFloat(
-							formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
-						)}
-						{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
-						Balance: {balanceRounded.toFixed(3)}
-						{spendingToken?.symbol ?? ''}
-					{:else}
-						Balance: —
-					{/if}
-				</div>
-
-				<!-- Percentage buttons -->
-				<div class="mt-2 flex gap-2">
-					{#each [25, 50, 75, 100] as percent}
-						<button
-							type="button"
-							on:click={() => handlePercentageClick(percent)}
-							disabled={percentageButtonsDisabled}
-							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-gray-700/50"
-							title={percentageButtonsDisabled ? 'Price data unavailable' : ''}
-						>
-							{percent === 100 ? 'Max' : `${percent}%`}
-						</button>
-					{/each}
-				</div>
-				{#if percentageButtonsDisabled}
-					<p class="mt-1 text-xs text-yellow-400/80">Enter amount manually - price data loading</p>
-				{/if}
-			</div>
-			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
-					Market Price
-					<span class="ml-1 text-xs text-gray-500">(per {assetToken.symbol})</span>
-				</div>
-				<div class="relative">
-					<input
-						type="text"
-						value={!selectedAmount || selectedAmount === 0n
-							? bestOrderbookPrice !== null
-								? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
-								: 'No quotes available'
-							: isLoadingPrice
-								? 'Loading...'
-								: priceError
-									? 'Price unavailable'
-									: `~${marketPrice.toFixed(2)} ${paymentTokenSymbol}`}
-						disabled
-						class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
-					/>
-					{#if isLoadingPrice && selectedAmount > 0n}
-						<div class="absolute right-3 top-1/2 -translate-y-1/2">
-							<LoadingSpinner size="sm" />
-						</div>
-					{/if}
-				</div>
-				{#if selectedAmount && selectedAmount > 0n && !isLoadingPrice && !priceError}
-					<p class="mt-1 text-xs {isQuoteStale ? 'text-yellow-400' : 'text-gray-500'}">
-						{#if isQuoteStale}
-							Price may be outdated ({quoteFreshnessSeconds}s ago)
+					<!-- Balance display -->
+					<div class="mt-1.5 text-sm text-gray-400">
+						{#if spendingTokenBalanceDecimals !== null}
+							{@const balanceFormatted = parseFloat(
+								formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
+							)}
+							{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
+							Balance: {balanceRounded.toFixed(3)}
+							{spendingToken?.symbol ?? ''}
 						{:else}
-							Updated {quoteFreshnessSeconds}s ago
+							Balance: —
 						{/if}
-					</p>
-				{/if}
-				<!-- TRADE-03 D-05 (Plan 02-06): terminal-state inline error when the
+					</div>
+
+					<!-- Percentage buttons -->
+					<div class="mt-2 flex gap-2">
+						{#each [25, 50, 75, 100] as percent}
+							<button
+								type="button"
+								on:click={() => handlePercentageClick(percent)}
+								disabled={percentageButtonsDisabled}
+								class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-gray-700/50"
+								title={percentageButtonsDisabled ? 'Price data unavailable' : ''}
+							>
+								{percent === 100 ? 'Max' : `${percent}%`}
+							</button>
+						{/each}
+					</div>
+					{#if percentageButtonsDisabled}
+						<p class="mt-1 text-xs text-yellow-400/80">
+							Enter amount manually - price data loading
+						</p>
+					{/if}
+				</div>
+				<div>
+					<div class="mb-2 block text-sm font-medium text-gray-300">
+						Market Price
+						<span class="ml-1 text-xs text-gray-500">(per {assetToken.symbol})</span>
+					</div>
+					<div class="relative">
+						<input
+							type="text"
+							value={!selectedAmount || selectedAmount === 0n
+								? bestOrderbookPrice !== null
+									? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+									: 'No quotes available'
+								: isLoadingPrice
+									? 'Loading...'
+									: priceError
+										? 'Price unavailable'
+										: `~${marketPrice.toFixed(2)} ${paymentTokenSymbol}`}
+							disabled
+							class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+						/>
+						{#if isLoadingPrice && selectedAmount > 0n}
+							<div class="absolute right-3 top-1/2 -translate-y-1/2">
+								<LoadingSpinner size="sm" />
+							</div>
+						{/if}
+					</div>
+					{#if selectedAmount && selectedAmount > 0n && !isLoadingPrice && !priceError}
+						<p class="mt-1 text-xs {isQuoteStale ? 'text-yellow-400' : 'text-gray-500'}">
+							{#if isQuoteStale}
+								Price may be outdated ({quoteFreshnessSeconds}s ago)
+							{:else}
+								Updated {quoteFreshnessSeconds}s ago
+							{/if}
+						</p>
+					{/if}
+					<!-- TRADE-03 D-05 (Plan 02-06): terminal-state inline error when the
 					 pre-flight + auto-retry cascade exhausts. User input stays intact (no
 					 form reset, no toast). Copy locked in 02-CONTEXT.md D-05. -->
-				{#if noLiquidityError}
-					<p class="mt-2 text-xs text-red-400">
-						No liquidity available right now for this size. Try a smaller amount or check back in a minute.
-					</p>
-				{/if}
+					{#if noLiquidityError}
+						<p class="mt-2 text-xs text-red-400">
+							No liquidity available right now for this size. Try a smaller amount or check back in
+							a minute.
+						</p>
+					{/if}
+				</div>
 			</div>
-		</div>
 
-		<!-- Order summary -->
-		<div class={containerStyles.cardBordered}>
-			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
-			<div class="space-y-2 text-sm">
-				<div class="flex items-center justify-between">
-					<label for="market-slippage" class="text-gray-400">Slippage tolerance</label>
-					<div class="flex items-center gap-1">
-						<input
-							id="market-slippage"
-							data-testid="slippage-input"
-							type="text"
-							inputmode="decimal"
-							value={slippageInputValue}
-							on:input={handleSlippageInput}
-							on:blur={handleSlippageCommit}
-							on:keydown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
-							class="w-16 rounded border border-white/10 bg-gray-800 px-2 py-1 text-right text-sm text-gray-200 focus:border-yellow-400/50 focus:outline-none {slippageBps > HIGH_SLIPPAGE_WARNING_BPS ? 'border-yellow-500/50 text-yellow-400' : ''}"
-						/>
-						<span class="text-gray-500">%</span>
+			<!-- Order summary -->
+			<div class={containerStyles.cardBordered}>
+				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+				<div class="space-y-2 text-sm">
+					<div class="flex items-center justify-between">
+						<label for="market-slippage" class="text-gray-400">Slippage tolerance</label>
+						<div class="flex items-center gap-1">
+							<input
+								id="market-slippage"
+								data-testid="slippage-input"
+								type="text"
+								inputmode="decimal"
+								value={slippageInputValue}
+								on:input={handleSlippageInput}
+								on:blur={handleSlippageCommit}
+								on:keydown={(e) => {
+									if (e.key === 'Enter') {
+										e.currentTarget.blur();
+									}
+								}}
+								class="w-16 rounded border border-white/10 bg-gray-800 px-2 py-1 text-right text-sm text-gray-200 focus:border-yellow-400/50 focus:outline-none {slippageBps >
+								HIGH_SLIPPAGE_WARNING_BPS
+									? 'border-yellow-500/50 text-yellow-400'
+									: ''}"
+							/>
+							<span class="text-gray-500">%</span>
+						</div>
 					</div>
-				</div>
-				{#if inputMode === 'spend'}
-					<!-- Spend mode: show spending amount first -->
-					<div class="flex justify-between">
-						<span class="text-gray-400">Spending</span>
-						<span class="font-medium">
-							{selectedAmount
-								? parseFloat(formatUnits(selectedAmount, paymentToken?.decimals ?? 6)).toFixed(2)
-								: '0'}
-							{paymentTokenSymbol}
-						</span>
-					</div>
-				{:else}
-					<!-- Amount mode: show buying/selling amount -->
-					<div class="flex justify-between">
-						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-						<span class="font-medium">
-							{selectedAmount
-								? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
-								: '0'}
-							{assetToken.symbol}
-						</span>
-					</div>
-				{/if}
-				<div class="flex justify-between">
-					<span class="text-gray-400">
-						{#if !selectedAmount || selectedAmount === 0n}
-							{orderSide === 'Buy' ? 'Best ask' : 'Best bid'}
-						{:else}
-							Avg. price
-						{/if}
-					</span>
-					<span class="font-medium">
-						{#if !selectedAmount || selectedAmount === 0n}
-							{bestOrderbookPrice !== null
-								? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
-								: 'N/A'}
-						{:else if isLoadingPrice}
-							Loading...
-						{:else if priceError}
-							N/A
-						{:else}
-							~{marketPrice.toFixed(2)} {paymentTokenSymbol}
-						{/if}
-					</span>
-				</div>
-				<div class="mt-2 border-t border-white/10 pt-2">
-					<div class="flex justify-between">
-						<span class="text-gray-400">{estimatedTradeResult.label || 'Estimated'}</span>
-						<span class={`text-lg font-semibold ${summaryAccentClass}`}>
-							{isLoadingPrice || priceError ? 'N/A' : estimatedTradeResult.value}
-						</span>
-					</div>
-					{#if insufficientBalanceError}
-						<div class="mt-2 text-sm text-red-400">
-							Insufficient {spendingToken?.symbol ?? 'token'} balance
+					{#if inputMode === 'spend'}
+						<!-- Spend mode: show spending amount first -->
+						<div class="flex justify-between">
+							<span class="text-gray-400">Spending</span>
+							<span class="font-medium">
+								{selectedAmount
+									? parseFloat(formatUnits(selectedAmount, paymentToken?.decimals ?? 6)).toFixed(2)
+									: '0'}
+								{paymentTokenSymbol}
+							</span>
+						</div>
+					{:else}
+						<!-- Amount mode: show buying/selling amount -->
+						<div class="flex justify-between">
+							<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+							<span class="font-medium">
+								{selectedAmount
+									? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+									: '0'}
+								{assetToken.symbol}
+							</span>
 						</div>
 					{/if}
-					{#if insufficientLiquidityWarning && !insufficientBalanceError}
-						<div
-							class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
-						>
-							There currently isn't enough orderbook liquidity to fully fill this order. Continue to
-							fill approx. {availableLiquidityFormatted}.
-							{#if isOutsideMarketHours()}
-								<br /><br />This might be because US markets are currently closed.
-							{/if}
-						</div>
-					{/if}
-					{#if priceError && selectedAmount && selectedAmount > 0n}
-						<div
-							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-						>
-							{#if priceErrorReason === 'no_quotes'}
-								No orders available within acceptable price range. Try a limit order instead to set
-								your own price.
-							{:else if priceErrorReason === 'no_fill'}
-								Order amount too large for current liquidity. Try a smaller amount or use a limit
-								order.
+					<div class="flex justify-between">
+						<span class="text-gray-400">
+							{#if !selectedAmount || selectedAmount === 0n}
+								{orderSide === 'Buy' ? 'Best ask' : 'Best bid'}
 							{:else}
-								Unable to fetch market price. Please try again or use a limit order.
+								Avg. price
 							{/if}
+						</span>
+						<span class="font-medium">
+							{#if !selectedAmount || selectedAmount === 0n}
+								{bestOrderbookPrice !== null
+									? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+									: 'N/A'}
+							{:else if isLoadingPrice}
+								Loading...
+							{:else if priceError}
+								N/A
+							{:else}
+								~{marketPrice.toFixed(2)} {paymentTokenSymbol}
+							{/if}
+						</span>
+					</div>
+					<div class="mt-2 border-t border-white/10 pt-2">
+						<div class="flex justify-between">
+							<span class="text-gray-400">{estimatedTradeResult.label || 'Estimated'}</span>
+							<span class={`text-lg font-semibold ${summaryAccentClass}`}>
+								{isLoadingPrice || priceError ? 'N/A' : estimatedTradeResult.value}
+							</span>
 						</div>
-					{/if}
-					{#if orderPreparationError && !noLiquidityError}
-						<!-- TRADE-03: when the D-05 inline block above is rendering the
+						{#if insufficientBalanceError}
+							<div class="mt-2 text-sm text-red-400">
+								Insufficient {spendingToken?.symbol ?? 'token'} balance
+							</div>
+						{/if}
+						{#if insufficientLiquidityWarning && !insufficientBalanceError}
+							<div
+								class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
+							>
+								There currently isn't enough orderbook liquidity to fully fill this order. Continue
+								to fill approx. {availableLiquidityFormatted}.
+								{#if isOutsideMarketHours()}
+									<br /><br />This might be because US markets are currently closed.
+								{/if}
+							</div>
+						{/if}
+						{#if priceError && selectedAmount && selectedAmount > 0n}
+							<div
+								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+							>
+								{#if priceErrorReason === 'no_quotes'}
+									No orders available within acceptable price range. Try a limit order instead to
+									set your own price.
+								{:else if priceErrorReason === 'no_fill'}
+									Order amount too large for current liquidity. Try a smaller amount or use a limit
+									order.
+								{:else}
+									Unable to fetch market price. Please try again or use a limit order.
+								{/if}
+							</div>
+						{/if}
+						{#if orderPreparationError && !noLiquidityError}
+							<!-- TRADE-03: when the D-05 inline block above is rendering the
 							 verbatim "No liquidity available right now ..." copy, suppress
 							 the generic orderPreparationError box so the message is not
 							 duplicated. Other preparation errors still surface here. -->
-						<div
-							class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-						>
-							{orderPreparationError}
-						</div>
-					{/if}
+							<div
+								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+							>
+								{orderPreparationError}
+							</div>
+						{/if}
+					</div>
 				</div>
 			</div>
-		</div>
 
-		<!-- Market Order Button -->
-		<button
-			data-testid="trade-submit"
-			data-side={orderSide.toLowerCase()}
-			data-mode="market"
-			on:click={handleMarketOrder}
-			disabled={disableDeploy}
-			class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
-				disableDeploy
-					? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
-					: actionButtonClass
-			}`}
-		>
-			{#if isSubmittingMarketOrder}
-				<span class="flex items-center justify-center gap-2">
-					<LoadingSpinner size="sm" />
-					Preparing order...
-				</span>
-			{:else}
-				Place Market Order
-			{/if}
-		</button>
-		<!-- D-09 error-banner: classified error surface for TEST-08 E2E assertions.
+			<!-- Market Order Button -->
+			<button
+				data-testid="trade-submit"
+				data-side={orderSide.toLowerCase()}
+				data-mode="market"
+				on:click={handleMarketOrder}
+				disabled={disableDeploy}
+				class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
+					disableDeploy
+						? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
+						: actionButtonClass
+				}`}
+			>
+				{#if isSubmittingMarketOrder}
+					<span class="flex items-center justify-center gap-2">
+						<LoadingSpinner size="sm" />
+						Preparing order...
+					</span>
+				{:else}
+					Place Market Order
+				{/if}
+			</button>
+			<!-- D-09 error-banner: classified error surface for TEST-08 E2E assertions.
 		     Visible UX is rendered above (per-error inline blocks); this element exposes
 		     a stable selector + machine-readable `data-error-class` for Playwright. The
 		     element is sr-only so it doesn't duplicate visible text. The five error-class
 		     values cover all TEST-08 modes (slippage / no_liquidity / stale_oracle /
 		     insufficient_balance / market_closed). -->
-		{#if errorClass}
-			<div
-				data-testid="error-banner"
-				data-error-class={errorClass}
-				data-mode="market"
-				data-side={orderSide.toLowerCase()}
-				class="sr-only"
-				role="alert"
-				aria-live="polite"
-			>{errorClass}</div>
-		{/if}
-		{#if tradeSubmittedSuccessfully}
-			<div
-				data-testid="success-toast"
-				data-mode="market"
-				data-side={orderSide.toLowerCase()}
-				class="sr-only"
-				role="status"
-				aria-live="polite"
-			>Order submitted</div>
-		{/if}
-	</div>
+			{#if errorClass}
+				<div
+					data-testid="error-banner"
+					data-error-class={errorClass}
+					data-mode="market"
+					data-side={orderSide.toLowerCase()}
+					class="sr-only"
+					role="alert"
+					aria-live="polite"
+				>
+					{errorClass}
+				</div>
+			{/if}
+			{#if tradeSubmittedSuccessfully}
+				<div
+					data-testid="success-toast"
+					data-mode="market"
+					data-side={orderSide.toLowerCase()}
+					class="sr-only"
+					role="status"
+					aria-live="polite"
+				>
+					Order submitted
+				</div>
+			{/if}
+		</div>
 	</div>
 {:else}
 	<div class="flex h-32 items-center justify-center">
@@ -1354,8 +1370,8 @@
 				You are setting slippage tolerance to
 				<span class="font-semibold text-yellow-400"
 					>{pendingHighSlippageBps !== null ? (pendingHighSlippageBps / 100).toFixed(2) : ''}%</span
-				>. This means your order could execute at a price significantly worse than the current market
-				price.
+				>. This means your order could execute at a price significantly worse than the current
+				market price.
 			</p>
 			<div class="flex gap-3">
 				<button

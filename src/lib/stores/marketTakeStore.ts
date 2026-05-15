@@ -17,13 +17,7 @@
  */
 
 import { get } from 'svelte/store';
-import {
-	decodeFunctionData,
-	erc20Abi,
-	formatUnits,
-	type Hash,
-	type Hex
-} from 'viem';
+import { decodeFunctionData, erc20Abi, formatUnits, type Hash, type Hex } from 'viem';
 import { wagmiConfig } from 'svelte-wagmi';
 import {
 	type SgOrder,
@@ -50,10 +44,7 @@ import { getTrades } from '$lib/api/subgraph';
 import { TransactionErrorMessage } from '$lib/types/errors';
 import type { TakeOrdersParams } from '$lib/types/transactions';
 import type { Network } from '$lib/config/network';
-import {
-	getMakerInputIOIndex,
-	getMakerOutputIOIndex
-} from '$lib/types/orderPerspective';
+import { getMakerInputIOIndex, getMakerOutputIOIndex } from '$lib/types/orderPerspective';
 import {
 	TransactionStatus,
 	transactionStoreInternal,
@@ -86,13 +77,8 @@ const waitForTransaction = walletServiceWaitForTransaction;
 // Destructure the leaf-owned store API and status-helper surface so the
 // lifted method bodies below can keep calling `awaitWalletConfirmation(...)`
 // etc. unchanged. This mirrors the destructure seam in transaction.ts.
-const {
-	update,
-	awaitWalletConfirmation,
-	awaitApprovalTx,
-	transactionError,
-	transactionSuccess
-} = transactionStoreInternal;
+const { update, awaitWalletConfirmation, awaitApprovalTx, transactionError, transactionSuccess } =
+	transactionStoreInternal;
 
 /**
  * Decide if a failing maker leg can be skipped and routed to the next leg.
@@ -192,10 +178,7 @@ function sumBigints(values: bigint[] | undefined): bigint {
 	return values.reduce((acc, value) => acc + value, 0n);
 }
 
-function deriveTakeRequestAmountWei(
-	mode: TakeOrdersMode,
-	params: TakeOrdersParams
-): bigint {
+function deriveTakeRequestAmountWei(mode: TakeOrdersMode, params: TakeOrdersParams): bigint {
 	if (mode === 'buyExact' || mode === 'buyUpTo') {
 		return params.requestedTakerWantsAmount;
 	}
@@ -232,7 +215,9 @@ function buildTakeOrdersRequest(args: {
 
 type AggregatedTakeCacheEntry = {
 	expiresAt: number;
-	value: Awaited<ReturnType<Awaited<ReturnType<typeof createRaindexClient>>['getTakeOrdersCalldata']>>;
+	value: Awaited<
+		ReturnType<Awaited<ReturnType<typeof createRaindexClient>>['getTakeOrdersCalldata']>
+	>;
 };
 
 const aggregatedTakeCalldataCache = new Map<string, AggregatedTakeCacheEntry>();
@@ -257,11 +242,14 @@ function getAggregatedTakeCacheKey(takeRequest: TakeOrdersRequest): string {
 }
 
 function shouldCacheAggregatedTakeResult(
-	result: Awaited<ReturnType<Awaited<ReturnType<typeof createRaindexClient>>['getTakeOrdersCalldata']>>
+	result: Awaited<
+		ReturnType<Awaited<ReturnType<typeof createRaindexClient>>['getTakeOrdersCalldata']>
+	>
 ): boolean {
 	if (!result || typeof result !== 'object') return false;
 	const maybeWrapped = result as { error?: unknown; value?: unknown };
-	if (maybeWrapped.error || !maybeWrapped.value || typeof maybeWrapped.value !== 'object') return false;
+	if (maybeWrapped.error || !maybeWrapped.value || typeof maybeWrapped.value !== 'object')
+		return false;
 	const value = maybeWrapped.value as { isReady?: unknown; isNeedsApproval?: unknown };
 	return typeof value.isReady === 'boolean' || typeof value.isNeedsApproval === 'boolean';
 }
@@ -541,8 +529,14 @@ export const handleAggregatedTakeOrdersCalldata = async (
 	if (!result.isReady || !result.takeOrdersInfo) {
 		for (let retry = 0; retry < AGGREGATED_PREPARE_MAX_RETRIES; retry++) {
 			await new Promise((resolve) => setTimeout(resolve, AGGREGATED_PREPARE_RETRY_MS));
-			calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: false });
-			if (!calldataWrapped.error && calldataWrapped.value?.isReady && calldataWrapped.value?.takeOrdersInfo) {
+			calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, {
+				preferCache: false
+			});
+			if (
+				!calldataWrapped.error &&
+				calldataWrapped.value?.isReady &&
+				calldataWrapped.value?.takeOrdersInfo
+			) {
 				result = calldataWrapped.value;
 				break;
 			}
@@ -678,8 +672,9 @@ export const handleOracleOrders = async (
 			o0.amountStr,
 			o0.priceCapStr
 		);
-		const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
-			?.approvalInfo?.calldata;
+		const probePayload = (
+			probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } }
+		)?.approvalInfo?.calldata;
 		if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
 			await ensureBulkPayerAllowanceIfNeeded({
 				requiredWei: params.requiredPayerAllowance,
@@ -687,7 +682,7 @@ export const handleOracleOrders = async (
 				symbol: approvalTokenSymbol,
 				owner: $signerAddress as `0x${string}`,
 				probeApprovalCalldata: probePayload as Hex,
-				network,
+				network
 			});
 		}
 	}
@@ -724,9 +719,13 @@ export const handleOracleOrders = async (
 			oracleInput.priceCapStr
 		);
 
-		const maybeApprovalInfo = (calldataResult.value as { approvalInfo?: { token: string; calldata: string } })
-			?.approvalInfo;
-		if ((calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval && maybeApprovalInfo) {
+		const maybeApprovalInfo = (
+			calldataResult.value as { approvalInfo?: { token: string; calldata: string } }
+		)?.approvalInfo;
+		if (
+			(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
+			maybeApprovalInfo
+		) {
 			if (multiLegUseTotalAllowance) {
 				// Allowance already set for total spend; refresh calldata only.
 				calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
@@ -741,7 +740,9 @@ export const handleOracleOrders = async (
 					(calldataResult.value as { isNeedsApproval?: boolean })?.isNeedsApproval &&
 					maybeApprovalInfo
 				) {
-					awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+					awaitWalletConfirmation(
+						`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`
+					);
 					const approvalHash = await sendTransaction({
 						to: maybeApprovalInfo.token as `0x${string}`,
 						data: maybeApprovalInfo.calldata as Hex
@@ -758,7 +759,9 @@ export const handleOracleOrders = async (
 					);
 				}
 			} else {
-				awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
+				awaitWalletConfirmation(
+					`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`
+				);
 				const approvalHash = await sendTransaction({
 					to: maybeApprovalInfo.token as `0x${string}`,
 					data: maybeApprovalInfo.calldata as Hex
@@ -781,7 +784,10 @@ export const handleOracleOrders = async (
 		// Oracle quote/signature readiness can be transient; retry briefly before failing.
 		// Later legs need more attempts after the previous tx changed on-chain / oracle state.
 		const notReadyRetries = i === 0 ? 2 : 4;
-		if (!calldataResult.error && (!calldataResult.value?.isReady || !calldataResult.value?.takeOrdersInfo)) {
+		if (
+			!calldataResult.error &&
+			(!calldataResult.value?.isReady || !calldataResult.value?.takeOrdersInfo)
+		) {
 			for (let retry = 0; retry < notReadyRetries; retry++) {
 				await new Promise((resolve) => setTimeout(resolve, TAKE_ORDER_PREPARE_RETRY_MS));
 				calldataResult = await oracleInput.raindexOrder.getTakeCalldata(
@@ -792,7 +798,10 @@ export const handleOracleOrders = async (
 					amountStr,
 					oracleInput.priceCapStr
 				);
-				if (calldataResult.error || (calldataResult.value?.isReady && calldataResult.value?.takeOrdersInfo)) {
+				if (
+					calldataResult.error ||
+					(calldataResult.value?.isReady && calldataResult.value?.takeOrdersInfo)
+				) {
 					break;
 				}
 			}
@@ -813,7 +822,10 @@ export const handleOracleOrders = async (
 			}
 		}
 		if (calldataResult.error) {
-			const availableFill = extractAvailableLiquidityAmount(calldataResult.error.readableMsg, fillDecimals);
+			const availableFill = extractAvailableLiquidityAmount(
+				calldataResult.error.readableMsg,
+				fillDecimals
+			);
 			if (availableFill !== null && availableFill > 0n && availableFill < effectiveFillAmount) {
 				const oldEffectiveFill = effectiveFillAmount;
 				effectiveFillAmount = availableFill;
@@ -845,13 +857,18 @@ export const handleOracleOrders = async (
 		});
 
 		if (calldataResult.error) {
-			if (isSkippableMakerLegError(calldataResult.error.readableMsg) && i < oracleInputs.length - 1) {
+			if (
+				isSkippableMakerLegError(calldataResult.error.readableMsg) &&
+				i < oracleInputs.length - 1
+			) {
 				carryForwardFillAmount = effectiveFillAmount;
 				awaitWalletConfirmation(
 					buildLegRerouteMessage({
 						fromOrderHash: oracleInput.raindexOrder.orderHash,
 						toOrderHash: oracleInputs[i + 1]?.raindexOrder.orderHash,
-						fromPrice: expectedPriceByOrderHash.get(oracleInput.raindexOrder.orderHash.toLowerCase()),
+						fromPrice: expectedPriceByOrderHash.get(
+							oracleInput.raindexOrder.orderHash.toLowerCase()
+						),
 						toPrice: expectedPriceByOrderHash.get(
 							oracleInputs[i + 1]?.raindexOrder.orderHash?.toLowerCase() ?? ''
 						)
@@ -910,7 +927,9 @@ export const handleOracleOrders = async (
 					buildLegRerouteMessage({
 						fromOrderHash: oracleInput.raindexOrder.orderHash,
 						toOrderHash: oracleInputs[i + 1]?.raindexOrder.orderHash,
-						fromPrice: expectedPriceByOrderHash.get(oracleInput.raindexOrder.orderHash.toLowerCase()),
+						fromPrice: expectedPriceByOrderHash.get(
+							oracleInput.raindexOrder.orderHash.toLowerCase()
+						),
 						toPrice: expectedPriceByOrderHash.get(
 							oracleInputs[i + 1]?.raindexOrder.orderHash?.toLowerCase() ?? ''
 						)
@@ -931,7 +950,9 @@ export const handleOracleOrders = async (
 	}
 
 	if (allTransactionHashes.length === 0) {
-		return transactionError('No orders could be executed. Please try again.' as TransactionErrorMessage);
+		return transactionError(
+			'No orders could be executed. Please try again.' as TransactionErrorMessage
+		);
 	}
 
 	return pollAndFinalizeTakeOrders(allTransactionHashes, primaryOrder, params, network);
@@ -1058,9 +1079,7 @@ export const handleTakeOrders = async (
 	const expectedPriceByOrderHash = buildExpectedPriceByOrderHash(params.simulation);
 
 	const multiLegUseTotalAllowance =
-		ordersToExecute.length > 1 &&
-		requiredApprovalAmount > 0n &&
-		params.takerPaysToken.address;
+		ordersToExecute.length > 1 && requiredApprovalAmount > 0n && params.takerPaysToken.address;
 
 	console.log(`${TX_LOG_PREFIX} Starting SDK per-order execution`, {
 		totalOrders: ordersToExecute.length,
@@ -1085,8 +1104,9 @@ export const handleTakeOrders = async (
 				amountStr0,
 				priceCapStr
 			);
-			const probePayload = (probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } })
-				?.approvalInfo?.calldata;
+			const probePayload = (
+				probe.value as { isNeedsApproval?: boolean; approvalInfo?: { calldata?: string } }
+			)?.approvalInfo?.calldata;
 			if ((probe.value as { isNeedsApproval?: boolean })?.isNeedsApproval && probePayload) {
 				await ensureBulkPayerAllowanceIfNeeded({
 					requiredWei: requiredApprovalAmount,
@@ -1094,7 +1114,7 @@ export const handleTakeOrders = async (
 					symbol: approvalTokenSymbol,
 					owner: $signerAddress as `0x${string}`,
 					probeApprovalCalldata: probePayload as Hex,
-					network,
+					network
 				});
 			}
 		}
