@@ -10,7 +10,10 @@
 //
 // FORCING MECHANISMS (per CONTEXT D-06 / D-07 / D-08):
 //   - slippage:             UI input (0.001%) → real ratio-cap math reject
-//   - no_liquidity:         (wtAMZN, sell) pair with naturally empty book at FORK_BLOCK
+//   - no_liquidity:         (wtAMZN, sell) pair — relies on minimal real USDC vault
+//                           balance on bid orders at FORK_BLOCK=45_990_727 (orders
+//                           exist with sentinel-Float caps but ~$0 USDC actually
+//                           deposited). If this premise breaks, see HANDOVER notes.
 //   - stale_oracle:         advanceTime(freshnessWindow + 60) + Date.now() offset patch
 //   - insufficient_balance: re-inject EIP-1193 stub with UNFUNDED_ACCOUNT before goto
 //   - market_closed:        setNextBlockTimestamp(Saturday 03 UTC) + Date.now() pin
@@ -18,10 +21,20 @@
 // NO MOCKING of marketHours.ts or Pyth fetcher (D-06 — every forcing path drives the
 // real codepath). Pinned constants come from 01-RUNBOOK.md.
 //
+// Buy-spec pattern applied throughout (see HANDOVER-REMAINING-SPECS.md fixes 1, 3, 7):
+//   - `force: true` on the mode-tab click (sr-only test hook is occluded by the
+//     visible "Order Type" label at the same coordinates).
+//   - For Buy-side spend-anchored entry: toggle input-mode to 'spend' before
+//     filling spend-input (UI default flipped to 'amount' in 5b3c81d).
+//   - `force: true` on the submit click — failure-mode tests expect the submit
+//     button to be DISABLED by the error itself (insufficient_balance,
+//     market_closed) or to surface the error class on click. Letting Playwright
+//     wait-for-enabled would time out.
+//
 // D-11 enforcement: this file MUST NOT import from $lib/services/marketOrderExecution,
 // $lib/stores/transaction, $lib/services/orderDeployment, $lib/services/walletService,
 // or $lib/types/orderPerspective. ESLint no-restricted-imports rule from 01-03 enforces.
-import { test, expect, fundErc20, UNFUNDED_ACCOUNT } from './fixtures';
+import { test, expect, fundErc20, fundToken, UNFUNDED_ACCOUNT } from './fixtures';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 import { advanceTime } from '../../helpers/anvilControl';
 import { parseUnits } from 'viem';
@@ -30,9 +43,18 @@ test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 
 // Pinned values from 01-RUNBOOK.md. If any constant moves in the runbook, update here.
 const PYTH_FRESHNESS_WINDOW_SEC = 300; // 01-RUNBOOK §"Pyth freshness window" (ASSUMED 300s default)
-const NO_LIQUIDITY_TOKEN_ID = '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53'; // wtAMZN — 01-RUNBOOK §"No-liquidity (token, side) pair" primary
-const NO_LIQUIDITY_SIDE = 'sell' as const; // (wtAMZN, sell) — naturally one-sided book at FORK_BLOCK=33_400_000
+const NO_LIQUIDITY_TOKEN_ID = '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53'; // wtAMZN
+const NO_LIQUIDITY_SIDE = 'sell' as const;
 const SATURDAY_03_UTC = 1745550000; // Sat 2026-04-25 03:00:00 UTC — 01-RUNBOOK §"Saturday market-hours timestamp"
+
+// Toggle input-mode to 'spend' (default flipped to 'amount' in 5b3c81d). Only Buy
+// side renders the toggle; do not call on Sell-side tests.
+async function ensureSpendMode(page: import('@playwright/test').Page): Promise<void> {
+	const modeToggle = page.locator('[data-testid="input-mode-toggle"]');
+	if ((await modeToggle.getAttribute('data-mode')) !== 'spend') {
+		await modeToggle.click();
+	}
+}
 
 test.describe('TEST-08 — Market order failure modes via UI', () => {
 	test('slippage exceeded — 0.001% slippage on Buy → error-banner[data-error-class="slippage"]', async ({
@@ -51,17 +73,17 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 		await page.click('[data-testid="open-trade"][data-side="buy"]');
-		await page.click('[data-testid="mode-tab"][data-mode="market"]');
+		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
+		await ensureSpendMode(page);
+
 		// 0.001% — well below any feasible spread; ratio-cap math rejects naturally
-		// inside marketOrderExecution.ts. slippage-input is directly an <input>
-		// element (MarketOrder.svelte:1124-1133), not a wrapper, so fill targets
-		// the testid directly (unlike spend-input/asset-input).
+		// inside marketOrderExecution.ts.
 		await page.fill('[data-testid="slippage-input"]', '0.001');
 		await page.locator('[data-testid="spend-input"] input').first().fill('100');
-		await page.click('[data-testid="trade-submit"][data-side="buy"]');
+		await page.click('[data-testid="trade-submit"][data-side="buy"]', { force: true });
 
 		await expect(
 			page.locator('[data-testid="error-banner"][data-error-class="slippage"]')
@@ -78,23 +100,25 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		// Fund wtAMZN so the failure mode can ONLY be "no liquidity" (not "insufficient
 		// balance"). T-1-06-02 mitigation: pre-fund the asset being sold so a balance
 		// failure can't masquerade as no-liquidity.
-		await fundErc20({
+		await fundToken({
 			client: testClient,
-			token: tokens.tAMZN.address,
+			token: tokens.tAMZN,
 			holder: fundedAccount.address,
-			amount: parseUnits('10', tokens.tAMZN.decimals),
-			balanceSlot: tokens.tAMZN.balanceSlot
+			amount: parseUnits('10', tokens.tAMZN.decimals)
 		});
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${NO_LIQUIDITY_TOKEN_ID}`);
 		await page.click(`[data-testid="open-trade"][data-side="${NO_LIQUIDITY_SIDE}"]`);
-		await page.click('[data-testid="mode-tab"][data-mode="market"]');
+		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
 		await page.click(`[data-testid="side-toggle"][data-side="${NO_LIQUIDITY_SIDE}"]`);
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
-		// Asset-anchored amount on Sell — fill what we want to sell.
+		// Sell side has no input-mode-toggle; asset-anchored only. Fill what we want
+		// to sell.
 		await page.locator('[data-testid="asset-input"] input').first().fill('1');
-		await page.click(`[data-testid="trade-submit"][data-side="${NO_LIQUIDITY_SIDE}"]`);
+		await page.click(`[data-testid="trade-submit"][data-side="${NO_LIQUIDITY_SIDE}"]`, {
+			force: true
+		});
 
 		await expect(
 			page.locator('[data-testid="error-banner"][data-error-class="no_liquidity"]')
@@ -129,12 +153,13 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 		await page.click('[data-testid="open-trade"][data-side="buy"]');
-		await page.click('[data-testid="mode-tab"][data-mode="market"]');
+		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
+		await ensureSpendMode(page);
 		await page.locator('[data-testid="spend-input"] input').first().fill('100');
-		await page.click('[data-testid="trade-submit"][data-side="buy"]');
+		await page.click('[data-testid="trade-submit"][data-side="buy"]', { force: true });
 
 		await expect(
 			page.locator('[data-testid="error-banner"][data-error-class="stale_oracle"]')
@@ -156,12 +181,13 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 		await page.click('[data-testid="open-trade"][data-side="buy"]');
-		await page.click('[data-testid="mode-tab"][data-mode="market"]');
+		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
+		await ensureSpendMode(page);
 		await page.locator('[data-testid="spend-input"] input').first().fill('100');
-		await page.click('[data-testid="trade-submit"][data-side="buy"]');
+		await page.click('[data-testid="trade-submit"][data-side="buy"]', { force: true });
 
 		await expect(
 			page.locator('[data-testid="error-banner"][data-error-class="insufficient_balance"]')
@@ -193,12 +219,13 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 		await page.click('[data-testid="open-trade"][data-side="buy"]');
-		await page.click('[data-testid="mode-tab"][data-mode="market"]');
+		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
+		await ensureSpendMode(page);
 		await page.locator('[data-testid="spend-input"] input').first().fill('100');
-		await page.click('[data-testid="trade-submit"][data-side="buy"]');
+		await page.click('[data-testid="trade-submit"][data-side="buy"]', { force: true });
 
 		await expect(
 			page.locator('[data-testid="error-banner"][data-error-class="market_closed"]')
