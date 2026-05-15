@@ -107,23 +107,37 @@ test.describe('TEST-05 smoke — Buy market order via UI', () => {
 		//    button rather than racing the balance refresh.
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
 
-		// DEBUG: surface the on-page state we depend on so CI logs show which
-		// disable-cause fires when the button stays disabled (matches the
-		// disableDeploy condition list in MarketOrder.svelte:449).
+		// DEBUG: dump on-page state pre-click so CI logs show what's missing
+		// when the button stays disabled. disableDeploy = !selectedAmount ||
+		// !marketPrice || !assetToken || selectedAmountError ||
+		// insufficientBalanceError || isLoadingPrice || priceError ||
+		// isSubmittingMarketOrder  (MarketOrder.svelte:449).
 		await page.waitForTimeout(2_000);
 		const debugState = await page.evaluate(() => {
-			const text = (sel: string): string | null =>
-				document.querySelector(sel)?.textContent?.trim() ?? null;
-			const attr = (sel: string, a: string): string | null =>
-				document.querySelector(sel)?.getAttribute(a) ?? null;
+			const submit = document.querySelector(
+				'[data-testid="trade-submit"][data-side="buy"]'
+			) as HTMLButtonElement | null;
+			const spend = document.querySelector(
+				'[data-testid="spend-input"] input'
+			) as HTMLInputElement | null;
+			// The order-summary block is the immediate disable-cause window:
+			// shows Spending / Avg.price / Est.tokens or an error message.
+			// Grab the trade-panel area's text — `data-testid="trade-panel"`
+			// if present, else the form's outer container.
+			const panel =
+				document.querySelector('[data-testid="trade-panel"]') ??
+				document.querySelector('[data-testid="market-form-loaded"]');
 			return {
-				submitDisabled: attr('[data-testid="trade-submit"][data-side="buy"]', 'disabled'),
-				spendInput: (document.querySelector('[data-testid="spend-input"] input') as HTMLInputElement | null)?.value,
-				avgPrice: text('text=Avg. price') ?? text('[data-testid="avg-price"]'),
-				bodyTextSnippet: document.body.innerText.slice(0, 1500)
+				submitDisabled: submit?.disabled,
+				submitText: submit?.textContent?.trim(),
+				spendInputValue: spend?.value,
+				panelText: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 800),
+				bodySnippet: document.body.innerText
+					.replace(/\s+/g, ' ')
+					.slice(0, 600)
 			};
 		});
-		console.log('[smoke-debug] state at submit:', JSON.stringify(debugState));
+		console.log('[smoke-debug] state at submit:', JSON.stringify(debugState, null, 2));
 
 		await expect(submit).toBeEnabled({ timeout: 30_000 });
 		await submit.click();
