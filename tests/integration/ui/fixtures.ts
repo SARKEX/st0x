@@ -290,16 +290,33 @@ export const test = base.extend<UiFixtures>({
 				return;
 			}
 			const body = await res.json();
+			let mutatedCount = 0;
+			let totalCount = 0;
+			let blankRatioCount = 0;
 			if (body?.orders && Array.isArray(body.orders)) {
+				totalCount = body.orders.length;
 				for (const order of body.orders) {
-					// Set both fields to a large positive decimal so the
-					// `parseFloat(...) <= 0` filter passes and the SDK's
-					// per-order fillability uses the (real, prefunded)
-					// on-chain vault balance instead of this stub.
+					// Set vault balance + maxOutput to a large positive decimal so
+					// the `parseFloat(...) <= 0` filter (src/lib/api/orders.ts:68)
+					// passes. The SDK's per-order fillability check still uses the
+					// real (prefunded) on-chain vault.
 					order.outputVaultBalance = '1000';
 					order.maxOutput = '1000';
+					// If the server-side quote failed (Pyth unavailable, etc.) the
+					// API returns ioRatio === '-' and convertApiOrderToProcessedQuote
+					// drops the order (orders.ts:80-84). Substitute a synthetic
+					// ratio so the order survives — the SDK's on-chain quote() will
+					// produce the real ratio at simulation time.
+					if (!order.ioRatio || order.ioRatio === '-') {
+						order.ioRatio = '1';
+						blankRatioCount++;
+					}
+					mutatedCount++;
 				}
 			}
+			console.log(
+				`[api-stub] /orders/token: total=${totalCount} mutated=${mutatedCount} blankRatio=${blankRatioCount}`
+			);
 			await route.fulfill({
 				status: res.status(),
 				contentType: ct,
