@@ -38,6 +38,24 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		tokens,
 		fundedAccount
 	}) => {
+		// DIAGNOSTIC: capture all browser console errors + warnings + marketTakeStore
+		// log prefix. The submit click now fires real txs but tNVDA balance stays
+		// 0 — need browser-side error visibility to see why.
+		page.on('console', (msg) => {
+			const t = msg.type();
+			const text = msg.text();
+			if (
+				t === 'error' ||
+				t === 'warning' ||
+				text.includes('marketTake') ||
+				text.includes('approval') ||
+				text.includes('takeOrder')
+			) {
+				console.log(`[browser ${t}] ${text.slice(0, 500)}`);
+			}
+		});
+		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
+
 		const initialUsdc = parseUnits('1000', tokens.USDC.decimals);
 		await fundErc20({
 			client: testClient,
@@ -107,6 +125,36 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await expect(submit).toBeEnabled({ timeout: 5_000 });
 		await submit.click();
 
+		// DIAGNOSTIC: dump panel state every 10s for 60s after click — reveals
+		// whether the take goes through approval, waits, errors, etc.
+		for (let i = 0; i < 6; i++) {
+			await page.waitForTimeout(10_000);
+			const bal = await testClient.readContract({
+				address: tokens.tNVDA.address,
+				abi: erc20Abi,
+				functionName: 'balanceOf',
+				args: [fundedAccount.address]
+			});
+			console.log(
+				`[mb-debug-post] t+${(i + 1) * 10}s balance=${bal} state:`,
+				JSON.stringify(
+					await page.evaluate(() => {
+						const btn = document.querySelector(
+							'[data-testid="trade-submit"][data-side="buy"]'
+						) as HTMLButtonElement | null;
+						const errorBanner = document.querySelector('[data-testid="error-banner"]');
+						return {
+							submitText: btn?.textContent?.trim().slice(0, 100),
+							submitDisabled: btn?.disabled,
+							errorClass: errorBanner?.getAttribute('data-error-class'),
+							errorText: errorBanner?.textContent?.replace(/\s+/g, ' ').slice(0, 250)
+						};
+					})
+				)
+			);
+			if (bal > 0n) break;
+		}
+
 		// On-chain assertions: tNVDA delta + USDC debited.
 		// Polling against anvil — independent of subgraph indexing.
 		await expect
@@ -118,7 +166,7 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 						functionName: 'balanceOf',
 						args: [fundedAccount.address]
 					}),
-				{ timeout: 60_000, intervals: [1_000, 2_000, 5_000] }
+				{ timeout: 30_000, intervals: [1_000, 2_000, 5_000] }
 			)
 			.toBeGreaterThan(0n);
 
