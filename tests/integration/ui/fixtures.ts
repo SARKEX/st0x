@@ -136,6 +136,7 @@ export async function prefundWtNvdaAskOrders(client: ReturnType<typeof createAnv
 			orderbook: ORDERBOOK_ADDRESS,
 			owner: v.owner,
 			token: TOKENS.tNVDA.address,
+			tokenDecimals: TOKENS.tNVDA.decimals,
 			vaultId: v.vaultId,
 			amount: perVault,
 			funding: { method: 'donor', donor: TOKENS.tNVDA.donor }
@@ -156,6 +157,7 @@ export async function prefundWtNvdaBidOrders(client: ReturnType<typeof createAnv
 			orderbook: ORDERBOOK_ADDRESS,
 			owner: v.owner,
 			token: TOKENS.USDC.address,
+			tokenDecimals: TOKENS.USDC.decimals,
 			vaultId: v.vaultId,
 			amount: perVault,
 			funding: { method: 'slot', slot: TOKENS.USDC.balanceSlot }
