@@ -34,7 +34,14 @@
 // D-11 enforcement: this file MUST NOT import from $lib/services/marketOrderExecution,
 // $lib/stores/transaction, $lib/services/orderDeployment, $lib/services/walletService,
 // or $lib/types/orderPerspective. ESLint no-restricted-imports rule from 01-03 enforces.
-import { test, expect, fundErc20, fundToken, UNFUNDED_ACCOUNT } from './fixtures';
+import {
+	test,
+	expect,
+	fundErc20,
+	fundToken,
+	prefundWtNvdaAskOrders,
+	UNFUNDED_ACCOUNT
+} from './fixtures';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 import { advanceTime } from '../../helpers/anvilControl';
 import { parseUnits } from 'viem';
@@ -95,17 +102,17 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		fundedAccount
 	}) => {
 		// At FORK_BLOCK 45_990_727 the wtAMZN bid book is NOT empty (orders
-		// 0xef2319c2…, 0x41cdc30…, 0x523deba…), but aggregate on-chain bid
-		// vault depth is bounded by the orderbook's 4.84 wtAMZN custody balance.
-		// Sell SIZE > that bound to force the SDK preflight into no_quotes /
-		// no_fill, which the MarketOrder.svelte error-class taxonomy maps to
-		// `no_liquidity`. T-1-06-02 mitigation: pre-fund 100 wtAMZN so the
-		// failure mode can ONLY be "no liquidity" (not "insufficient balance").
+		// 0xef2319c2…, 0x41cdc30…, 0x523deba…), but their on-chain USDC output
+		// vaults are empty (subgraph quotes use sentinel Float max values; real
+		// vault depth is ~0). So a Sell of any reasonable size triggers
+		// no_quotes / no_fill in SDK preflight → error-class `no_liquidity`.
+		// Fund 4 wtAMZN (under the orderbook donor's 4.84 wtAMZN custody) so
+		// insufficient_balance can't masquerade.
 		await fundToken({
 			client: testClient,
 			token: tokens.tAMZN,
 			holder: fundedAccount.address,
-			amount: parseUnits('100', tokens.tAMZN.decimals)
+			amount: parseUnits('4', tokens.tAMZN.decimals)
 		});
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${NO_LIQUIDITY_TOKEN_ID}`);
@@ -114,11 +121,8 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		await page.click(`[data-testid="side-toggle"][data-side="${NO_LIQUIDITY_SIDE}"]`);
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
-		// Sell side has no input-mode-toggle; asset-anchored only. 50 wtAMZN
-		// exceeds aggregate on-chain bid vault depth (~5 wtAMZN backing
-		// orderbook) so the SDK preflight returns no_quotes / no_fill →
-		// error-class `no_liquidity`.
-		await page.locator('[data-testid="asset-input"] input').first().fill('50');
+		// Sell side has no input-mode-toggle; asset-anchored only.
+		await page.locator('[data-testid="asset-input"] input').first().fill('1');
 		await page.click(`[data-testid="trade-submit"][data-side="${NO_LIQUIDITY_SIDE}"]`, {
 			force: true
 		});
@@ -142,6 +146,12 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 			amount: parseUnits('1000', tokens.USDC.decimals),
 			balanceSlot: tokens.USDC.balanceSlot
 		});
+
+		// Pre-fund ask-side wtNVDA vaults so the SDK preflight has on-chain
+		// fillable depth — without this, the SDK returns no_liquidity and the
+		// noLiquidityError classifier (MarketOrder.svelte:313-329) wins
+		// precedence over stale_oracle, masking the intended failure mode.
+		await prefundWtNvdaAskOrders(testClient);
 
 		// Advance fork time past Pyth freshness window (Pitfall 6 — advanceTime helper
 		// does setNextBlockTimestamp + mine so eth_call reads observe the new timestamp).
@@ -211,6 +221,11 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 			amount: parseUnits('1000', tokens.USDC.decimals),
 			balanceSlot: tokens.USDC.balanceSlot
 		});
+
+		// Pre-fund ask-side wtNVDA vaults so the SDK preflight has on-chain
+		// fillable depth (otherwise no_liquidity wins precedence over
+		// market_closed in the error classifier).
+		await prefundWtNvdaAskOrders(testClient);
 
 		// Pin block timestamp to the next Saturday at 03:00 UTC AFTER the current
 		// chain head + mine so on-chain reads observe the new timestamp (Pitfall 6).

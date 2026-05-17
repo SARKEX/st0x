@@ -8,10 +8,12 @@
 // SNAPSHOT/REVERT ORDER (per 01-RUNBOOK §"Snapshot/revert state-leakage trap"):
 // take snapshot FIRST, then any test-body funding, then revert in afterEach.
 import { test as base, expect } from '@playwright/test';
+import { parseUnits } from 'viem';
 import {
 	createAnvilTestClient,
 	fundErc20,
-	fundErc20ViaImpersonation
+	fundErc20ViaImpersonation,
+	fundOrderbookVault
 } from '../../helpers/anvilControl';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 
@@ -71,6 +73,95 @@ export const TOKENS = {
 		id: '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53'
 	}
 } as const;
+
+// Rain Orderbook v4 on Base — pinned in src/lib/config/networks.ts trustedOrderbooks[0].
+export const ORDERBOOK_ADDRESS = '0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D' as `0x${string}`;
+
+/**
+ * (owner, vaultId) pairs for active wtNVDA orders at FORK_BLOCK=45_990_727
+ * sourced from the orderbook subgraph (ob4-base/2026-02-05-c4ef). Their
+ * on-chain output vaults are empty — pre-funding them via deposit2() is what
+ * makes the SDK preflight see real fillable liquidity for marketBuy / marketSell
+ * (the subgraph reports active orders with sentinel max-output values but the
+ * actual on-chain vault depth is what binds preflight).
+ *
+ * If the subgraph reindexes or orders churn, regenerate by running:
+ *   curl -X POST <ob4-base-url> -d '{"query":"{ orders(where:{active:true,outputs_:{token:\"<TOKEN>\"}}) { orderHash owner outputs(where:{token:\"<TOKEN>\"}){vaultId} } }"}'
+ */
+const WTNVDA_ASK_VAULTS: ReadonlyArray<{ owner: `0x${string}`; vaultId: `0x${string}` }> = [
+	{
+		owner: '0xbd41f40d91ee4e816ada1aa842e94aeb6b6385a6',
+		vaultId: '0x0000000000000000000000000000000000000000000000000000000000000eab'
+	},
+	{
+		owner: '0x502ce9fb1814cb03843967ec5e0d8f6aa3a3c2e1',
+		vaultId: '0xed1b54d76daffa5a76f6eb45ca78a12fc66564089bd8a6b24d13fd8cbe7e9963'
+	},
+	{
+		owner: '0xa9c16673f65ae808688cb18952afe3d9658c808f',
+		vaultId: '0x0000000000000000000000000000000000000000000000000000000000000fab'
+	},
+	{
+		owner: '0xbd41f40d91ee4e816ada1aa842e94aeb6b6385a6',
+		vaultId: '0x0000000000000000000000000000000000000000000000000000000000000fab'
+	},
+	{
+		owner: '0x18a62a3ac2ca9f775a4a12380eda03245270b73e',
+		vaultId: '0x7dcba36aa1aab1349aa0c0c24c261f59d3885782e431b7019780e6f72c0e86bc'
+	}
+];
+
+const WTNVDA_BID_VAULTS: ReadonlyArray<{ owner: `0x${string}`; vaultId: `0x${string}` }> = [
+	{
+		owner: '0xa9c16673f65ae808688cb18952afe3d9658c808f',
+		vaultId: '0x000000000000000000000000000000000000000000000000000000000000fab2'
+	},
+	{
+		owner: '0xbd41f40d91ee4e816ada1aa842e94aeb6b6385a6',
+		vaultId: '0x0000000000000000000000000000000000000000000000000000000000000fab'
+	}
+];
+
+/**
+ * Pre-fund the output vaults of all known wtNVDA ask orders so a marketBuy
+ * for wtNVDA can find on-chain fillable depth. Each vault gets 0.5 wtNVDA —
+ * comfortably greater than any test order size (≤ 0.02 wtNVDA) and well within
+ * the orderbook's ~6 wtNVDA custody balance which serves as the donor.
+ */
+export async function prefundWtNvdaAskOrders(client: ReturnType<typeof createAnvilTestClient>) {
+	const perVault = parseUnits('0.5', TOKENS.tNVDA.decimals);
+	for (const v of WTNVDA_ASK_VAULTS) {
+		await fundOrderbookVault({
+			client,
+			orderbook: ORDERBOOK_ADDRESS,
+			owner: v.owner,
+			token: TOKENS.tNVDA.address,
+			vaultId: v.vaultId,
+			amount: perVault,
+			funding: { method: 'donor', donor: TOKENS.tNVDA.donor }
+		});
+	}
+}
+
+/**
+ * Pre-fund the output vaults of all known wtNVDA bid orders so a marketSell
+ * of wtNVDA can find on-chain fillable USDC depth. Each vault gets 10,000
+ * USDC via setStorageAt (Circle proxy slot 9 — works without impersonation).
+ */
+export async function prefundWtNvdaBidOrders(client: ReturnType<typeof createAnvilTestClient>) {
+	const perVault = parseUnits('10000', TOKENS.USDC.decimals);
+	for (const v of WTNVDA_BID_VAULTS) {
+		await fundOrderbookVault({
+			client,
+			orderbook: ORDERBOOK_ADDRESS,
+			owner: v.owner,
+			token: TOKENS.USDC.address,
+			vaultId: v.vaultId,
+			amount: perVault,
+			funding: { method: 'slot', slot: TOKENS.USDC.balanceSlot }
+		});
+	}
+}
 
 /**
  * Funds `holder` with `amount` of `token` via whichever strategy that token is
