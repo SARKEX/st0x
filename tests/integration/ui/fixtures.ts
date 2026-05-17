@@ -282,6 +282,18 @@ export const test = base.extend<UiFixtures>({
 		// runs. The on-chain SDK preflight (routed to anvil via the RPC stub
 		// below) DOES see the funded vaults, so once an order survives the
 		// UI's vault-balance filter, the actual fill simulation succeeds.
+		// Pinned approximate FORK_BLOCK 45_990_727 prices in USDC per asset token.
+		// Used to synthesise UI `ioRatio` strings when the live ST0x REST API
+		// returns '-' (server-side quote pipeline failed). The synthetic ratio
+		// only needs to bracket the REAL on-chain ratio after the SDK's 2× emergency
+		// multiplier (marketOrderExecution.ts:280-298) — being close to fork-era
+		// price keeps the priceCap math sane in both directions (ASK = $/asset,
+		// BID = asset/$, the SDK computes priceCap symmetrically).
+		const ASSET_USDC_PRICE: Record<string, number> = {
+			'0xfb5b41acdba20a3230f84be995173cfb98b8d6e7': 225, // wtNVDA at fork
+			'0x997bae3ec193a249596d3708c3fab7c501bb8a53': 220 // wtAMZN at fork
+		};
+		const USDC_LC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
 			const res = await route.fetch();
 			const ct = res.headers()['content-type'] ?? '';
@@ -296,19 +308,24 @@ export const test = base.extend<UiFixtures>({
 			if (body?.orders && Array.isArray(body.orders)) {
 				totalCount = body.orders.length;
 				for (const order of body.orders) {
-					// Set vault balance + maxOutput to a large positive decimal so
-					// the `parseFloat(...) <= 0` filter (src/lib/api/orders.ts:68)
-					// passes. The SDK's per-order fillability check still uses the
-					// real (prefunded) on-chain vault.
 					order.outputVaultBalance = '1000';
 					order.maxOutput = '1000';
-					// If the server-side quote failed (Pyth unavailable, etc.) the
-					// API returns ioRatio === '-' and convertApiOrderToProcessedQuote
-					// drops the order (orders.ts:80-84). Substitute a synthetic
-					// ratio so the order survives — the SDK's on-chain quote() will
-					// produce the real ratio at simulation time.
 					if (!order.ioRatio || order.ioRatio === '-') {
-						order.ioRatio = '1';
+						// Pick a side-aware synthetic ratio so the UI's priceCap
+						// computation (worstFill.price × 1+slippage, with SDK 2×
+						// emergency multiplier on top) brackets the on-chain
+						// fork-era price.
+						const inAddr = order.inputToken?.address?.toLowerCase?.() ?? '';
+						const outAddr = order.outputToken?.address?.toLowerCase?.() ?? '';
+						let ratio = '1';
+						if (inAddr === USDC_LC && ASSET_USDC_PRICE[outAddr]) {
+							// ASK side: pays USDC, gives asset → ratio = USDC per asset.
+							ratio = String(ASSET_USDC_PRICE[outAddr]);
+						} else if (outAddr === USDC_LC && ASSET_USDC_PRICE[inAddr]) {
+							// BID side: pays asset, gives USDC → ratio = asset per USDC.
+							ratio = String(1 / ASSET_USDC_PRICE[inAddr]);
+						}
+						order.ioRatio = ratio;
 						blankRatioCount++;
 					}
 					mutatedCount++;
