@@ -261,6 +261,18 @@ export const test = base.extend<UiFixtures>({
 				body: JSON.stringify({ registered: true })
 			});
 		});
+		// Block Pyth Hermes (the LIVE off-chain oracle source) so MarketOrder's
+		// hardcoded PRICE_GUARD_MULTIPLIER (1.05, src/lib/components/orders/
+		// MarketOrder.svelte:56) can't filter out our orderbook quotes. Hermes
+		// reports the CURRENT real-world tNVDA price (~$115); the subgraph
+		// quotes at FORK_BLOCK=45_990_727 reflect fork-era prices (~$225), so
+		// every quote ends up >1.05× the live oracle → walkOrderbook returns
+		// no quotes → priceError='no_quotes' → submit stays disabled.
+		// Stubbing Hermes to 503 keeps oraclePrice null, which collapses
+		// maxAcceptablePrice to Infinity (MarketOrder.svelte:822).
+		await page.route('**/hermes.pyth.network/**', async (route) => {
+			await route.fulfill({ status: 503, body: 'e2e-stub' });
+		});
 		// Redirect Base mainnet RPC traffic to anvil. TWO separate clients hit
 		// these hosts:
 		//   1. svelte-wagmi's defaultConfig builds its HTTP transport from
