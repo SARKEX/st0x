@@ -80,7 +80,31 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
-		await expect(submit).toBeEnabled({ timeout: 30_000 });
+		// DIAGNOSTIC: poll the form state every 5s for 30s, regardless of
+		// whether submit ever enables. Reveals what's gating the button.
+		for (let i = 0; i < 6; i++) {
+			await page.waitForTimeout(5_000);
+			console.log(
+				`[mb-debug] t+${(i + 1) * 5}s state:`,
+				JSON.stringify(
+					await page.evaluate(() => {
+						const btn = document.querySelector(
+							'[data-testid="trade-submit"][data-side="buy"]'
+						) as HTMLButtonElement | null;
+						const errorBanner = document.querySelector('[data-testid="error-banner"]');
+						const panel = document.querySelector('[data-testid="market-form-loaded"]');
+						return {
+							submitDisabled: btn?.disabled,
+							submitText: btn?.textContent?.trim().slice(0, 100),
+							errorClass: errorBanner?.getAttribute('data-error-class'),
+							errorText: errorBanner?.textContent?.replace(/\s+/g, ' ').slice(0, 200),
+							panelSnippet: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 400)
+						};
+					})
+				)
+			);
+		}
+		await expect(submit).toBeEnabled({ timeout: 5_000 });
 		await submit.click();
 
 		// On-chain assertions: tNVDA delta + USDC debited.
