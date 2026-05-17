@@ -9,14 +9,15 @@
 // existing layered-fixture pattern (Phase 4 D-01 established tests/integration/ as
 // the home for "anvil + replay" tests; UI E2E is the natural fourth layer).
 //
-// Why timeout: 60_000 — preview-server boot + chain calls + lazy-loaded order
-// component fetch each consume a few seconds; 60s leaves headroom on CI without
-// masking real hangs.
+// Why timeout: 180_000 — prefunding orderbook vaults via deposit2 adds ~30s of
+// confirmation-wait time per test (--block-time 2 + 21 funding/approve/deposit
+// txs). On top of preview-server boot + chain calls + lazy-loaded UI fetch the
+// previous 60s budget exhausted before submit could enable.
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
 	testDir: 'tests/integration/ui',
-	timeout: 60_000,
+	timeout: 180_000,
 	expect: { timeout: 30_000 },
 	workers: 1,
 	fullyParallel: false,
