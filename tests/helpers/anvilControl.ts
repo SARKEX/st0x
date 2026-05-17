@@ -16,6 +16,7 @@ import {
 	http,
 	keccak256,
 	pad,
+	parseAbi,
 	parseEther,
 	publicActions,
 	toHex
@@ -92,6 +93,42 @@ export async function fundErc20(args: {
  * scan logs for OrderAdded / take events should bound their fromBlock so they
  * don't accidentally pick up this funding transfer.
  */
+/**
+ * Send a transaction from an anvil-impersonated account via the raw
+ * eth_sendTransaction RPC. Anvil signs server-side for unlocked accounts.
+ * Waits for receipt AND verifies status === 'success' so silent reverts
+ * surface as exceptions (a previous lacuna here made a tAMZN funding revert
+ * cascade into spurious downstream test failures).
+ *
+ * Caller MUST have already called impersonateAccount + setBalance on `from`.
+ */
+export async function sendImpersonatedTx(
+	client: AnvilTestClient,
+	params: { from: `0x${string}`; to: `0x${string}`; data: `0x${string}` }
+): Promise<`0x${string}`> {
+	const resp = await fetch('http://127.0.0.1:8545', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			jsonrpc: '2.0',
+			id: 1,
+			method: 'eth_sendTransaction',
+			params: [params]
+		})
+	});
+	const json = (await resp.json()) as { result?: `0x${string}`; error?: { message: string } };
+	if (json.error || !json.result) {
+		throw new Error(`sendImpersonatedTx failed: ${json.error?.message ?? 'no tx hash'}`);
+	}
+	const receipt = await client.waitForTransactionReceipt({ hash: json.result });
+	if (receipt.status !== 'success') {
+		throw new Error(
+			`sendImpersonatedTx tx reverted: hash=${json.result} from=${params.from} to=${params.to}`
+		);
+	}
+	return json.result;
+}
+
 export async function fundErc20ViaImpersonation(args: {
 	client: AnvilTestClient;
 	token: `0x${string}`;
@@ -103,34 +140,100 @@ export async function fundErc20ViaImpersonation(args: {
 	try {
 		// Donor needs ETH for gas. setBalance is idempotent.
 		await args.client.setBalance({ address: args.donor, value: parseEther('1') });
-		// Use the raw eth_sendTransaction RPC (anvil unlocks impersonated accounts,
-		// so this signs server-side) instead of viem's writeContract which would
-		// require extending the TestClient with walletActions. Adding walletActions
-		// to TestClient turned out to perturb downstream `readContract` reads under
-		// CI's cold RPC cache (rolled back per regression on marketBuy.spec.ts).
 		const data = encodeFunctionData({
 			abi: erc20Abi,
 			functionName: 'transfer',
 			args: [args.holder, args.amount]
 		});
-		const resp = await fetch('http://127.0.0.1:8545', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: 1,
-				method: 'eth_sendTransaction',
-				params: [{ from: args.donor, to: args.token, data }]
-			})
-		});
-		const json = (await resp.json()) as { result?: `0x${string}`; error?: { message: string } };
-		if (json.error || !json.result) {
-			throw new Error(`fundErc20ViaImpersonation transfer failed: ${json.error?.message ?? 'no tx hash'}`);
-		}
-		await args.client.waitForTransactionReceipt({ hash: json.result });
+		await sendImpersonatedTx(args.client, { from: args.donor, to: args.token, data });
 	} finally {
 		// Always release impersonation so subsequent tests see a clean anvil.
 		await args.client.stopImpersonatingAccount({ address: args.donor });
+	}
+}
+
+// Rain Orderbook v4 — minimal ABI for deposit2.
+// struct shapes from @rainlanguage/orderbook IOrderBookV4 interface.
+const ORDERBOOK_V4_DEPOSIT_ABI = parseAbi([
+	'struct EvaluableV4 { address interpreter; address store; bytes bytecode; }',
+	'struct SignedContextV1 { address signer; uint256[] context; bytes signature; }',
+	'struct TaskV2 { EvaluableV4 evaluable; SignedContextV1[] signedContext; }',
+	'function deposit2(address token, bytes32 vaultId, uint256 depositAmount, TaskV2[] post)'
+]);
+
+/**
+ * Pre-fund a specific Rain Orderbook order's vault by impersonating the
+ * vault owner, transferring tokens to them, approving the orderbook, and
+ * calling deposit2().
+ *
+ * Why this is needed: at FORK_BLOCK 45_990_727 the active wtNVDA ask/bid
+ * orders appear on the subgraph but their on-chain output vaults are empty.
+ * The SDK preflight rejects with "No liquidity available right now" before
+ * any UI transaction can fire. Pre-funding the output vaults of the orders
+ * the SDK is expected to take from restores fillability for the E2E specs.
+ *
+ * Caller must provide the token-funding mechanism:
+ *   - `slot`: fund via setStorageAt (USDC slot 9 etc.)
+ *   - `donor`: impersonate a known holder and transfer (for ST0x wrappers
+ *     where slot derivation is unreliable — orderbook itself is the
+ *     universal donor for active assets).
+ */
+export async function fundOrderbookVault(args: {
+	client: AnvilTestClient;
+	orderbook: `0x${string}`;
+	owner: `0x${string}`;
+	token: `0x${string}`;
+	vaultId: `0x${string}`;
+	amount: bigint;
+	funding: { method: 'slot'; slot: number } | { method: 'donor'; donor: `0x${string}` };
+}): Promise<void> {
+	// Step 1 — give the owner enough of `token` to deposit. Done BEFORE
+	// impersonating the owner so nested-impersonation never overlaps with
+	// the deposit call.
+	if (args.funding.method === 'slot') {
+		await fundErc20({
+			client: args.client,
+			token: args.token,
+			holder: args.owner,
+			amount: args.amount,
+			balanceSlot: args.funding.slot
+		});
+	} else {
+		await fundErc20ViaImpersonation({
+			client: args.client,
+			token: args.token,
+			donor: args.funding.donor,
+			holder: args.owner,
+			amount: args.amount
+		});
+	}
+
+	// Step 2 — impersonate the owner, approve, deposit.
+	await args.client.impersonateAccount({ address: args.owner });
+	try {
+		await args.client.setBalance({ address: args.owner, value: parseEther('1') });
+		const approveData = encodeFunctionData({
+			abi: erc20Abi,
+			functionName: 'approve',
+			args: [args.orderbook, args.amount]
+		});
+		await sendImpersonatedTx(args.client, {
+			from: args.owner,
+			to: args.token,
+			data: approveData
+		});
+		const depositData = encodeFunctionData({
+			abi: ORDERBOOK_V4_DEPOSIT_ABI,
+			functionName: 'deposit2',
+			args: [args.token, args.vaultId, args.amount, []]
+		});
+		await sendImpersonatedTx(args.client, {
+			from: args.owner,
+			to: args.orderbook,
+			data: depositData
+		});
+	} finally {
+		await args.client.stopImpersonatingAccount({ address: args.owner });
 	}
 }
 

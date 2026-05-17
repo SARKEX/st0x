@@ -26,7 +26,7 @@
 // D-11 enforcement: this file MUST NOT import from $lib/services/marketOrderExecution,
 // $lib/stores/transaction, $lib/services/orderDeployment, $lib/services/walletService,
 // or $lib/types/orderPerspective. ESLint no-restricted-imports rule from 01-03 enforces.
-import { test, expect, fundErc20 } from './fixtures';
+import { test, expect, fundErc20, prefundWtNvdaAskOrders } from './fixtures';
 import { erc20Abi, parseUnits } from 'viem';
 
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
@@ -46,6 +46,11 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 			amount: initialUsdc,
 			balanceSlot: tokens.USDC.balanceSlot
 		});
+		// Pre-fund the ask-side wtNVDA orders' output vaults so the SDK preflight
+		// finds real on-chain fillable depth. Subgraph reports the orders as
+		// active with sentinel max-output Float values, but their on-chain vault
+		// balances are 0 at FORK_BLOCK — without this, SDK returns no_liquidity.
+		await prefundWtNvdaAskOrders(testClient);
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 
@@ -119,6 +124,11 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 			amount: initialUsdc,
 			balanceSlot: tokens.USDC.balanceSlot
 		});
+		// Pre-fund the ask-side wtNVDA orders' output vaults so the SDK preflight
+		// finds real on-chain fillable depth. Subgraph reports the orders as
+		// active with sentinel max-output Float values, but their on-chain vault
+		// balances are 0 at FORK_BLOCK — without this, SDK returns no_liquidity.
+		await prefundWtNvdaAskOrders(testClient);
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 

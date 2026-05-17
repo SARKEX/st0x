@@ -18,7 +18,7 @@
 //      can't see anvil's tx).
 //   4. tNVDA funded via impersonate-and-transfer from the Rain Orderbook
 //      (setStorageAt unreliable for ST0x wrapper proxies — see fixtures.ts).
-import { test, expect, fundToken } from './fixtures';
+import { test, expect, fundToken, prefundWtNvdaBidOrders } from './fixtures';
 import { erc20Abi, parseUnits } from 'viem';
 
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
@@ -37,6 +37,10 @@ test.describe('TEST-07 — Sell market order via UI', () => {
 			holder: fundedAccount.address,
 			amount: initialTnvda
 		});
+		// Pre-fund bid-side wtNVDA orders' output vaults with USDC so the SDK
+		// preflight has real fillable depth (see marketBuy.spec.ts for the same
+		// rationale on the ask side).
+		await prefundWtNvdaBidOrders(testClient);
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
 
