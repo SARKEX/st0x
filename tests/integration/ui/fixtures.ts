@@ -273,6 +273,39 @@ export const test = base.extend<UiFixtures>({
 		await page.route('**/hermes.pyth.network/**', async (route) => {
 			await route.fulfill({ status: 503, body: 'e2e-stub' });
 		});
+		// Inflate `outputVaultBalance` + `maxOutput` on the ST0x orders API so
+		// every active order survives the `balance <= 0` filter in
+		// convertApiOrderToProcessedQuote (src/lib/api/orders.ts:68-69). The
+		// ST0x REST API is a server-side proxy with its own cached view of
+		// subgraph data — it never sees our anvil deposits, so it reports
+		// `outputVaultBalance: "0"` for every order even after prefundOrderbook*
+		// runs. The on-chain SDK preflight (routed to anvil via the RPC stub
+		// below) DOES see the funded vaults, so once an order survives the
+		// UI's vault-balance filter, the actual fill simulation succeeds.
+		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
+			const res = await route.fetch();
+			const ct = res.headers()['content-type'] ?? '';
+			if (!ct.includes('json')) {
+				await route.fulfill({ response: res });
+				return;
+			}
+			const body = await res.json();
+			if (body?.orders && Array.isArray(body.orders)) {
+				for (const order of body.orders) {
+					// Set both fields to a large positive decimal so the
+					// `parseFloat(...) <= 0` filter passes and the SDK's
+					// per-order fillability uses the (real, prefunded)
+					// on-chain vault balance instead of this stub.
+					order.outputVaultBalance = '1000';
+					order.maxOutput = '1000';
+				}
+			}
+			await route.fulfill({
+				status: res.status(),
+				contentType: ct,
+				body: JSON.stringify(body)
+			});
+		});
 		// Redirect Base mainnet RPC traffic to anvil. TWO separate clients hit
 		// these hosts:
 		//   1. svelte-wagmi's defaultConfig builds its HTTP transport from
