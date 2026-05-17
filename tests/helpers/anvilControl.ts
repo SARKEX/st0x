@@ -16,7 +16,6 @@ import {
 	http,
 	keccak256,
 	pad,
-	parseAbi,
 	parseEther,
 	publicActions,
 	toHex
@@ -152,14 +151,38 @@ export async function fundErc20ViaImpersonation(args: {
 	}
 }
 
-// Rain Orderbook v4 — minimal ABI for deposit2.
-// struct shapes from @rainlanguage/orderbook IOrderBookV4 interface.
-const ORDERBOOK_V4_DEPOSIT_ABI = parseAbi([
-	'struct EvaluableV4 { address interpreter; address store; bytes bytecode; }',
-	'struct SignedContextV1 { address signer; uint256[] context; bytes signature; }',
-	'struct TaskV2 { EvaluableV4 evaluable; SignedContextV1[] signedContext; }',
-	'function deposit2(address token, bytes32 vaultId, uint256 depositAmount, TaskV2[] post)'
-]);
+// Selector for the deployed Rain Orderbook's deposit function. Verified by
+// decoding a known-good live deposit tx (0x1e78b0abe70db96cbcfb05833a1dc0f84c387494aa0cb18fd80b92a043c35f76).
+// The deployed contract at 0xe522cB...a4fd7C9D has a unique selector that
+// does NOT match the canonical V4 (deposit2 = 0x91337c0a) or V5
+// (deposit3 = 0x7921a962) signatures — likely an intermediate / customised
+// build. Calldata layout (164 bytes total after selector):
+//   word[0]: address token (32-byte left-padded)
+//   word[1]: bytes32 vaultId
+//   word[2]: bytes32 amount (Rain Float — 4-byte signed exp + 28-byte mantissa)
+//   word[3]: 0x80 (dynamic-array offset)
+//   word[4]: 0   (TaskV2[] length = 0, empty post tasks)
+const ORDERBOOK_DEPOSIT_SELECTOR = '0x2fbc4ba0' as const;
+
+/**
+ * Encode a raw token amount as a Rain Decimal Float (bytes32).
+ *   Float = mantissa × 10^exp
+ *   exp = -decimals (signed int32, big-endian, occupies bytes 0..3)
+ *   mantissa = amount × 10^decimals = raw uint256 amount (right-aligned, 28 bytes)
+ *
+ * For e.g. 0.5 tNVDA (decimals=18): amount = 5e17, decimals = 18 →
+ *   prefix = 0xffffffee (signed -18)
+ *   mantissa28 = 28-byte big-endian of 5e17
+ */
+export function toFloat(amount: bigint, decimals: number): `0x${string}` {
+	const expI32 = ((-decimals) & 0xffffffff) >>> 0;
+	const expHex = expI32.toString(16).padStart(8, '0');
+	const mantHex = amount.toString(16).padStart(56, '0');
+	if (mantHex.length > 56) {
+		throw new Error(`mantissa overflow: ${amount} does not fit in 28 bytes`);
+	}
+	return `0x${expHex}${mantHex}`;
+}
 
 /**
  * Pre-fund a specific Rain Orderbook order's vault by impersonating the
@@ -183,6 +206,7 @@ export async function fundOrderbookVault(args: {
 	orderbook: `0x${string}`;
 	owner: `0x${string}`;
 	token: `0x${string}`;
+	tokenDecimals: number;
 	vaultId: `0x${string}`;
 	amount: bigint;
 	funding: { method: 'slot'; slot: number } | { method: 'donor'; donor: `0x${string}` };
@@ -222,11 +246,17 @@ export async function fundOrderbookVault(args: {
 			to: args.token,
 			data: approveData
 		});
-		const depositData = encodeFunctionData({
-			abi: ORDERBOOK_V4_DEPOSIT_ABI,
-			functionName: 'deposit2',
-			args: [args.token, args.vaultId, args.amount, []]
-		});
+		// Build raw calldata for the orderbook deposit. Layout per the live-tx
+		// decode above: selector + token(32) + vaultId(32) + amountFloat(32) +
+		// offset(0x80) + emptyArrayLength(0).
+		const amountFloat = toFloat(args.amount, args.tokenDecimals);
+		const tokenWord = pad(args.token, { size: 32 }).slice(2);
+		const vaultIdWord = pad(args.vaultId, { size: 32 }).slice(2);
+		const amountWord = amountFloat.slice(2);
+		const offsetWord = pad(toHex(0x80n), { size: 32 }).slice(2);
+		const lenWord = pad(toHex(0n), { size: 32 }).slice(2);
+		const depositData =
+			`${ORDERBOOK_DEPOSIT_SELECTOR}${tokenWord}${vaultIdWord}${amountWord}${offsetWord}${lenWord}` as `0x${string}`;
 		await sendImpersonatedTx(args.client, {
 			from: args.owner,
 			to: args.orderbook,
