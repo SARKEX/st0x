@@ -46,14 +46,26 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		page.on('console', (msg) => {
 			const t = msg.type();
 			const text = msg.text();
-			if (
-				t === 'error' ||
-				text.includes('marketTake') ||
-				text.includes('approval') ||
-				text.includes('takeOrder') ||
-				text.includes('Error')
+			if (text.includes('take-order failed')) {
+				// Extract the trailing JSON and surface just the diagnostic-relevant
+				// fields (reason + error message), not the full transcript.
+				const jsonStart = text.indexOf('{');
+				try {
+					const obj = JSON.parse(text.slice(jsonStart));
+					console.log(
+						`[take-order failed] reason=${obj.reason} error=${String(obj.error).slice(0, 500)}`
+					);
+				} catch {
+					console.log(`[take-order failed RAW] ${text.slice(0, 2000)}`);
+				}
+			} else if (
+				text.includes('SDK error') ||
+				text.includes('readableMsg') ||
+				text.includes('executeMarketOrder')
 			) {
-				console.log(`[browser ${t}] ${text.slice(0, 400)}`);
+				console.log(`[browser ${t}] ${text.slice(0, 1000)}`);
+			} else if (t === 'error') {
+				console.log(`[browser ${t}] ${text.slice(0, 250)}`);
 			}
 		});
 		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
