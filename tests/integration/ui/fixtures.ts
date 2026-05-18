@@ -19,6 +19,7 @@ import {
 	fundErc20ViaImpersonation
 } from '../../helpers/anvilControl';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
+import { patchOrdersResponseAgainstFork } from './forkOrdersStub';
 
 // Anvil default accounts — these are PUBLIC test keys baked into the anvil
 // pre-funded set. No real-money risk; documented as such in the threat register
@@ -179,6 +180,32 @@ export const test = base.extend<UiFixtures>({
 				contentType: 'application/json',
 				body: JSON.stringify({ registered: true })
 			});
+		});
+		// Re-derive orderbook quotes against the anvil fork. The production
+		// ST0x REST API runs against LIVE Base mainnet (its own RPC, opaque
+		// to Playwright); we let it produce the order LIST + orderBytes,
+		// then re-quote each order through a RaindexClient pointed at anvil
+		// so ioRatio and maxOutput reflect fork state. See forkOrdersStub.ts
+		// for the rationale and limitations.
+		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
+			const upstream = await route.fetch();
+			const ct = upstream.headers()['content-type'] ?? '';
+			if (!ct.includes('json') || upstream.status() !== 200) {
+				await route.fulfill({ response: upstream });
+				return;
+			}
+			try {
+				const liveBody = await upstream.json();
+				const forkBody = await patchOrdersResponseAgainstFork(liveBody);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify(forkBody)
+				});
+			} catch (err) {
+				console.warn('[fork-orders-stub] patch failed, falling back to live response:', err);
+				await route.fulfill({ response: upstream });
+			}
 		});
 		// Redirect Base mainnet RPC traffic to anvil. TWO separate clients hit
 		// these hosts:
