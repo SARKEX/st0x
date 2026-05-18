@@ -21,6 +21,10 @@ import {
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 import { patchOrdersResponseAgainstFork } from './forkOrdersStub';
 
+// Goldsky GraphQL response cache. Module-scoped so all tests in a workers=1
+// run share it. See the page.route for `api.goldsky.com` below for rationale.
+const goldskyCache = new Map<string, { status: number; body: string }>();
+
 // Anvil default accounts — these are PUBLIC test keys baked into the anvil
 // pre-funded set. No real-money risk; documented as such in the threat register
 // (T-1-01-02). DO NOT swap these for real keys under any circumstance.
@@ -187,6 +191,57 @@ export const test = base.extend<UiFixtures>({
 		// then re-quote each order through a RaindexClient pointed at anvil
 		// so ioRatio and maxOutput reflect fork state. See forkOrdersStub.ts
 		// for the rationale and limitations.
+		// Cache Goldsky GraphQL responses across tests in this worker. The Raindex
+		// SDK in the browser hits the Goldsky subgraph during the hydration step
+		// of marketOrderExecution.ts (one getOrders call per walk-fill orderHash).
+		// Free-tier Goldsky rate-limits hard under that burst — and once
+		// rate-limited the response comes back without CORS headers, which the
+		// browser surfaces as a CORS error. The SDK then can't hydrate and the
+		// preflight collapses with `preflight_chain_unreachable`.
+		// Cache key = method + URL + body. With workers=1 the cache persists for
+		// the full test-run lifetime; on repeated runs the second test onward
+		// makes ZERO outbound Goldsky calls for orderHashes already seen.
+		await page.route(/https:\/\/api\.goldsky\.com\/.*/, async (route) => {
+			const req = route.request();
+			const body = req.postData() ?? '';
+			const key = `${req.method()}|${req.url()}|${body}`;
+			const cached = goldskyCache.get(key);
+			console.log(
+				`[goldsky-cache] ${cached ? 'HIT' : 'MISS'} ${req.method()} body-len=${body.length}`
+			);
+			if (cached) {
+				await route.fulfill({
+					status: cached.status,
+					contentType: 'application/json',
+					body: cached.body
+				});
+				return;
+			}
+			// Retry with backoff on 429. Goldsky free tier rate-limits in narrow
+			// windows but a short wait typically lets the next attempt through.
+			let status = 0;
+			let respBody = '';
+			for (let attempt = 0; attempt < 5; attempt++) {
+				const upstream = await route.fetch();
+				status = upstream.status();
+				respBody = await upstream.text();
+				if (status !== 429) break;
+				const wait = 5000 * (attempt + 1);
+				console.log(`[goldsky-cache] 429 attempt ${attempt + 1}, waiting ${wait}ms`);
+				await new Promise((r) => setTimeout(r, wait));
+			}
+			console.log(
+				`[goldsky-cache] upstream status=${status} body-len=${respBody.length}` +
+					(status !== 200 ? ` body=${respBody.slice(0, 200)}` : '')
+			);
+			if (status === 200) goldskyCache.set(key, { status, body: respBody });
+			await route.fulfill({
+				status,
+				contentType: 'application/json',
+				body: respBody,
+				headers: { 'access-control-allow-origin': '*' }
+			});
+		});
 		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
 			const upstream = await route.fetch();
 			const ct = upstream.headers()['content-type'] ?? '';
