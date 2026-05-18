@@ -64,7 +64,15 @@ export async function startAnvilFork(forkBlock: number) {
 			// confirmation block never arrives and the wait hangs until
 			// Playwright's 60s timeout.
 			'--block-time',
-			'2'
+			'2',
+			// Public Base RPCs (publicnode, base.org) throttle aggressively
+			// under anvil's bursty lazy state-fetch pattern; --no-rate-limit
+			// disables anvil's outbound limiter so we don't get spurious
+			// "state pruned" errors masquerading as 429-style throttling.
+			'--no-rate-limit',
+			// Retry on transient parent-RPC failures.
+			'--retries',
+			'5'
 		],
 		{ stdio: 'pipe' }
 	);
