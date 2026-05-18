@@ -89,6 +89,16 @@ export const TOKENS = {
 		decimals: 18,
 		donor: ORDERBOOK_DONOR,
 		id: '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53'
+	},
+	// wtSPYM: S&P500 ETF, uses the off-chain st0x oracle (not Pyth). The
+	// off-chain oracle is unreachable from the fork, so every wtSPYM order's
+	// quote() reverts during cache build — used by marketFailures to produce
+	// an empty orderbook for the "no_liquidity" classifier path.
+	wtSPYM: {
+		address: '0x31C2C14134e6E3B7ef9478297F199331133Fc2d8' as `0x${string}`,
+		decimals: 18,
+		donor: ORDERBOOK_DONOR,
+		id: '0x31C2C14134e6E3B7ef9478297F199331133Fc2d8'
 	}
 } as const;
 
