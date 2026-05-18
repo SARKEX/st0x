@@ -203,7 +203,7 @@ export const test = base.extend<UiFixtures>({
 					body: JSON.stringify(forkBody)
 				});
 			} catch (err) {
-				console.warn('[fork-orders-stub] patch failed, falling back to live response:', err);
+				console.warn('[fork-stub] patch failed, falling back to live response:', err);
 				await route.fulfill({ response: upstream });
 			}
 		});

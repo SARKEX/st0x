@@ -88,16 +88,38 @@ function getAnvilClient(): Promise<RaindexClient> {
 const cacheKey = (hash: string, inputLc: string, outputLc: string) =>
 	`${hash.toLowerCase()}|${inputLc}|${outputLc}`;
 
+async function getForkTimestamp(): Promise<number> {
+	const block = process.env.FORK_BLOCK;
+	if (!block) throw new Error('FORK_BLOCK env not set');
+	const resp = await fetch('http://127.0.0.1:8545', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			jsonrpc: '2.0',
+			id: 1,
+			method: 'eth_getBlockByNumber',
+			params: ['0x' + Number(block).toString(16), false]
+		})
+	});
+	const json = (await resp.json()) as { result?: { timestamp: string } };
+	if (!json.result?.timestamp) throw new Error('failed to read fork timestamp from anvil');
+	return parseInt(json.result.timestamp, 16);
+}
+
 /**
- * Build the fork-quote cache once: one batched getOrders, one getQuotes per
- * returned order, all against anvil. Persists for the test-run lifetime.
+ * Build the fork-quote cache once: one batched getOrders, parallel getQuotes
+ * across all orders that pre-date the fork. Subgraph returns LIVE-active
+ * orders, many of which may have been created AFTER our fork block — those
+ * don't exist in the fork's orderbook contract, so we filter them out by
+ * timestampAdded to avoid the obvious "Order does not exist" reverts.
+ * Persists for the test-run lifetime.
  */
 function buildForkQuoteCache(): Promise<ForkQuoteCache> {
 	if (cachePromise) return cachePromise;
 	cachePromise = (async () => {
 		const client = await getAnvilClient();
-		// No owner filter — fetch all active orders for the configured orderbook.
-		// pageSize 1000 covers the active book at typical fork blocks.
+		const forkTs = await getForkTimestamp();
+
 		const ordersRes = await client.getOrders(
 			[8453],
 			{
@@ -113,36 +135,45 @@ function buildForkQuoteCache(): Promise<ForkQuoteCache> {
 				`forkOrdersStub: getOrders failed — ${ordersRes.error?.readableMsg ?? 'no value'}`
 			);
 		}
+		const preForkOrders = ordersRes.value.orders.filter((o) => Number(o.timestampAdded) < forkTs);
+		console.log(
+			`[fork-stub] cache build: ${preForkOrders.length}/${ordersRes.value.orders.length} pre-fork orders (forkTs=${forkTs})`
+		);
+
+		// Parallel quote calls (~600ms each serially; ~10x faster batched).
 		const cache: ForkQuoteCache = new Map();
 		let successCount = 0;
 		let failCount = 0;
-		for (const order of ordersRes.value.orders) {
-			try {
-				const qRes = await order.getQuotes();
-				if (qRes.error || !qRes.value) {
+		await Promise.all(
+			preForkOrders.map(async (order) => {
+				try {
+					const qRes = await order.getQuotes();
+					if (qRes.error || !qRes.value) {
+						failCount++;
+						return;
+					}
+					const inputs = order.inputsList.items;
+					const outputs = order.outputsList.items;
+					for (const q of qRes.value) {
+						if (!q.data) {
+							failCount++;
+							continue;
+						}
+						const inLc = inputs[q.pair?.inputIndex ?? -1]?.token?.address?.toLowerCase();
+						const outLc = outputs[q.pair?.outputIndex ?? -1]?.token?.address?.toLowerCase();
+						if (!inLc || !outLc) continue;
+						cache.set(cacheKey(order.orderHash, inLc, outLc), {
+							ratio: q.data.formattedRatio,
+							maxOutput: q.data.formattedMaxOutput
+						});
+						successCount++;
+					}
+				} catch {
 					failCount++;
-					continue;
 				}
-				const inputs = order.inputsList.items;
-				const outputs = order.outputsList.items;
-				for (const q of qRes.value) {
-					if (!q.data) continue;
-					const inLc = inputs[q.pair?.inputIndex ?? -1]?.token?.address?.toLowerCase();
-					const outLc = outputs[q.pair?.outputIndex ?? -1]?.token?.address?.toLowerCase();
-					if (!inLc || !outLc) continue;
-					cache.set(cacheKey(order.orderHash, inLc, outLc), {
-						ratio: q.data.formattedRatio,
-						maxOutput: q.data.formattedMaxOutput
-					});
-					successCount++;
-				}
-			} catch {
-				failCount++;
-			}
-		}
-		console.log(
-			`[fork-stub] cache built: orders=${ordersRes.value.orders.length} quotes=${successCount} failed=${failCount}`
+			})
 		);
+		console.log(`[fork-stub] cache built: quotes=${successCount} failed=${failCount}`);
 		return cache;
 	})();
 	return cachePromise;
