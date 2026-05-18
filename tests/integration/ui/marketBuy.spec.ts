@@ -1,24 +1,27 @@
 // TEST-06 — Buy market order via UI. Covers spend-anchored + asset-anchored
-// paths (TRADE-04 mode×side regression matrix on the Buy side).
+// paths.
 //
 // INPUT/OUTPUT semantics (CLAUDE.md §"Order Semantics"):
-//   Buy taker pays USDC, wants tNVDA, hits ask-side counterparty orders.
-//   The asset-anchored test implicitly pins TRADE-01 — if Buy ever inverts and
-//   hits bid-side counterparties, USDC would *increase* and tNVDA stay flat,
-//   which contradicts the `tNVDA balance ≥ floor` assertion below.
+//   Buy taker pays USDC, wants wtCOIN, hits ask-side counterparty orders.
 //
-// Skip-grammar mirrors smoke.spec.ts:18 — local dev without BASE_RPC_URL skips
-// rather than fails. Plan 01-09 wires the CI archive-RPC run that exercises this.
+// Token choice — wtCOIN: Coinbase, Pyth on-chain price feed, no st0x
+// off-chain oracle dependency. Reliable depth at active fork blocks.
 //
-// Test compromises documented in smoke.spec.ts also apply here:
-//   1. `force: true` on mode-tab — the sr-only test-only button is occluded by
-//      the visible "Order Type" label at the same coords.
+// Fork-block rationale: globalSetup picks a NYSE-market-hours block within
+// minutes of "now" so LIVE Hermes / ST0x REST / Goldsky subgraph are
+// effectively at the same chain head the fork is at — no stubs needed to
+// reconcile LIVE-vs-FORK drift.
+//
+// Test compromises:
+//   1. `force: true` on mode-tab — the sr-only test-only button is occluded
+//      by the visible "Order Type" label at the same coords.
 //   2. Spend-anchored test toggles input-mode to 'spend' (default is 'amount'
 //      since commit 5b3c81d).
-//   3. Slippage bumped to 5% to absorb the subgraph(live-head)/anvil(fork-block)
-//      Pyth-price drift on tNVDA.
-//   4. Assertion is on-chain balance, NOT success-toast. The toast is fired by
-//      pollAndFinalizeTakeOrders after the take's trade event indexes in
+//   3. Slippage bumped to 5% to absorb the residual subgraph/fork drift the
+//      few-minute fork still has (and remains well below the production 50%
+//      cap; sane regression coverage).
+//   4. Assertion is on-chain balance, NOT success-toast. The toast is fired
+//      by pollAndFinalizeTakeOrders after the take's trade event indexes in
 //      Goldsky — anvil's tx hash never reaches Goldsky, so the toast can't
 //      fire within any reasonable timeout. On-chain balance is the
 //      load-bearing signal.
@@ -26,36 +29,18 @@
 // D-11 enforcement: this file MUST NOT import from $lib/services/marketOrderExecution,
 // $lib/stores/transaction, $lib/services/orderDeployment, $lib/services/walletService,
 // or $lib/types/orderPerspective. ESLint no-restricted-imports rule from 01-03 enforces.
-import { test, expect, fundErc20, prefundWtNvdaAskOrders } from './fixtures';
+import { test, expect, fundErc20 } from './fixtures';
 import { erc20Abi, parseUnits } from 'viem';
 
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 
 test.describe('TEST-06 — Buy market order via UI', () => {
-	test('spend-anchored: 10 USDC → tNVDA fills on-chain + USDC debited', async ({
+	test('spend-anchored: 10 USDC → wtCOIN fills on-chain + USDC debited', async ({
 		page,
 		testClient,
 		tokens,
 		fundedAccount
 	}) => {
-		// DIAGNOSTIC: capture all browser console errors + warnings + marketTakeStore
-		// log prefix. The submit click now fires real txs but tNVDA balance stays
-		// 0 — need browser-side error visibility to see why.
-		page.on('console', (msg) => {
-			const t = msg.type();
-			const text = msg.text();
-			if (
-				t === 'error' ||
-				t === 'warning' ||
-				text.includes('marketTake') ||
-				text.includes('approval') ||
-				text.includes('takeOrder')
-			) {
-				console.log(`[browser ${t}] ${text.slice(0, 500)}`);
-			}
-		});
-		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
-
 		const initialUsdc = parseUnits('1000', tokens.USDC.decimals);
 		await fundErc20({
 			client: testClient,
@@ -64,13 +49,8 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 			amount: initialUsdc,
 			balanceSlot: tokens.USDC.balanceSlot
 		});
-		// Pre-fund the ask-side wtNVDA orders' output vaults so the SDK preflight
-		// finds real on-chain fillable depth. Subgraph reports the orders as
-		// active with sentinel max-output Float values, but their on-chain vault
-		// balances are 0 at FORK_BLOCK — without this, SDK returns no_liquidity.
-		await prefundWtNvdaAskOrders(testClient);
 
-		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
+		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
 
 		await page.click('[data-testid="open-trade"][data-side="buy"]');
 		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
@@ -84,89 +64,30 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 			await modeToggle.click();
 		}
 
-		// Spend 10 USDC, not 100 — at FORK_BLOCK 45_990_727 the orderbook's USDC
-		// input vaults for the ask-side wtNVDA orders are thin (subgraph reports
-		// sentinel max-output values, but actual on-chain vault USDC ≪ that). A
-		// 100 USDC buy triggered SDK preflight "No liquidity available right
-		// now for this size" because aggregate fillable USDC within the slippage
-		// cap was <100 (verified via diagnostic dump in commit 7d99622).
 		await page.locator('[data-testid="spend-input"] input').first().fill('10');
 
-		// 5% slippage absorbs typical 24-48h tNVDA price drift between
-		// subgraph head and FORK_BLOCK; default 1% is insufficient.
+		// 5% slippage absorbs the residual drift between live API quotes and
+		// fork-block ratios (the fork is only minutes behind, but on-chain
+		// ratios still tick with Pyth updates).
 		await page.locator('[data-testid="slippage-input"]').fill('5');
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
-		// DIAGNOSTIC: poll the form state every 5s for 30s, regardless of
-		// whether submit ever enables. Reveals what's gating the button.
-		for (let i = 0; i < 6; i++) {
-			await page.waitForTimeout(5_000);
-			console.log(
-				`[mb-debug] t+${(i + 1) * 5}s state:`,
-				JSON.stringify(
-					await page.evaluate(() => {
-						const btn = document.querySelector(
-							'[data-testid="trade-submit"][data-side="buy"]'
-						) as HTMLButtonElement | null;
-						const errorBanner = document.querySelector('[data-testid="error-banner"]');
-						const panel = document.querySelector('[data-testid="market-form-loaded"]');
-						return {
-							submitDisabled: btn?.disabled,
-							submitText: btn?.textContent?.trim().slice(0, 100),
-							errorClass: errorBanner?.getAttribute('data-error-class'),
-							errorText: errorBanner?.textContent?.replace(/\s+/g, ' ').slice(0, 200),
-							panelSnippet: panel?.textContent?.replace(/\s+/g, ' ').slice(0, 400)
-						};
-					})
-				)
-			);
-		}
-		await expect(submit).toBeEnabled({ timeout: 5_000 });
+		await expect(submit).toBeEnabled({ timeout: 30_000 });
 		await submit.click();
 
-		// DIAGNOSTIC: dump panel state every 10s for 60s after click — reveals
-		// whether the take goes through approval, waits, errors, etc.
-		for (let i = 0; i < 6; i++) {
-			await page.waitForTimeout(10_000);
-			const bal = await testClient.readContract({
-				address: tokens.tNVDA.address,
-				abi: erc20Abi,
-				functionName: 'balanceOf',
-				args: [fundedAccount.address]
-			});
-			console.log(
-				`[mb-debug-post] t+${(i + 1) * 10}s balance=${bal} state:`,
-				JSON.stringify(
-					await page.evaluate(() => {
-						const btn = document.querySelector(
-							'[data-testid="trade-submit"][data-side="buy"]'
-						) as HTMLButtonElement | null;
-						const errorBanner = document.querySelector('[data-testid="error-banner"]');
-						return {
-							submitText: btn?.textContent?.trim().slice(0, 100),
-							submitDisabled: btn?.disabled,
-							errorClass: errorBanner?.getAttribute('data-error-class'),
-							errorText: errorBanner?.textContent?.replace(/\s+/g, ' ').slice(0, 250)
-						};
-					})
-				)
-			);
-			if (bal > 0n) break;
-		}
-
-		// On-chain assertions: tNVDA delta + USDC debited.
-		// Polling against anvil — independent of subgraph indexing.
+		// On-chain assertion: wtCOIN delta — polled against anvil, independent of
+		// subgraph indexing.
 		await expect
 			.poll(
 				async () =>
 					await testClient.readContract({
-						address: tokens.tNVDA.address,
+						address: tokens.wtCOIN.address,
 						abi: erc20Abi,
 						functionName: 'balanceOf',
 						args: [fundedAccount.address]
 					}),
-				{ timeout: 30_000, intervals: [1_000, 2_000, 5_000] }
+				{ timeout: 60_000, intervals: [1_000, 2_000, 5_000] }
 			)
 			.toBeGreaterThan(0n);
 
@@ -178,11 +99,10 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		});
 		expect(usdcBalance).toBeLessThan(initialUsdc); // some USDC was spent
 
-		// Negative check: no error banner.
 		await expect(page.locator('[data-testid="error-banner"]')).not.toBeVisible();
 	});
 
-	test('asset-anchored: receive 0.02 tNVDA → balance ≥ target (within slippage)', async ({
+	test('asset-anchored: receive 0.02 wtCOIN → balance ≥ target (within slippage)', async ({
 		page,
 		testClient,
 		tokens,
@@ -196,13 +116,8 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 			amount: initialUsdc,
 			balanceSlot: tokens.USDC.balanceSlot
 		});
-		// Pre-fund the ask-side wtNVDA orders' output vaults so the SDK preflight
-		// finds real on-chain fillable depth. Subgraph reports the orders as
-		// active with sentinel max-output Float values, but their on-chain vault
-		// balances are 0 at FORK_BLOCK — without this, SDK returns no_liquidity.
-		await prefundWtNvdaAskOrders(testClient);
 
-		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.tNVDA.id}`);
+		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
 
 		await page.click('[data-testid="open-trade"][data-side="buy"]');
 		await page.click('[data-testid="mode-tab"][data-mode="market"]', { force: true });
@@ -211,9 +126,6 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
 		// Asset-anchored: default inputMode is 'amount', no toggle needed.
-		// 0.02 tNVDA target — sized so the SDK preflight can find sufficient
-		// on-chain USDC vault depth within the 5% slippage cap (see spec-level
-		// comment in spend-anchored test for the liquidity rationale).
 		await page.locator('[data-testid="asset-input"] input').first().fill('0.02');
 
 		await page.locator('[data-testid="slippage-input"]').fill('5');
@@ -223,19 +135,19 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await expect(submit).toBeEnabled({ timeout: 30_000 });
 		await submit.click();
 
-		// 0.019 tNVDA floor = 0.02 target × (1 - 5% slippage), polled against anvil.
+		// 0.019 wtCOIN floor = 0.02 target × (1 - 5% slippage).
 		await expect
 			.poll(
 				async () =>
 					await testClient.readContract({
-						address: tokens.tNVDA.address,
+						address: tokens.wtCOIN.address,
 						abi: erc20Abi,
 						functionName: 'balanceOf',
 						args: [fundedAccount.address]
 					}),
 				{ timeout: 60_000, intervals: [1_000, 2_000, 5_000] }
 			)
-			.toBeGreaterThanOrEqual(parseUnits('0.019', tokens.tNVDA.decimals));
+			.toBeGreaterThanOrEqual(parseUnits('0.019', tokens.wtCOIN.decimals));
 
 		await expect(page.locator('[data-testid="error-banner"]')).not.toBeVisible();
 	});
