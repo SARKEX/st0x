@@ -321,6 +321,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'Wrapped Roundhill Memory ETF ST0x',
 		logoUrl: '/images/roundhill.png',
 		priceFeedId: '',
+		// priceFeedId removed — Pyth no longer supports this feed ID.
+		// Using a hardcoded fallback until a replacement feed is wired up.
+		fallbackPrice: 50,
 		category: 'ST0x',
 		tradingViewSymbol: 'CBOE:DRAM',
 		tradingViewMarket: 'america',
