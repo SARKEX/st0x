@@ -41,6 +41,23 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		tokens,
 		fundedAccount
 	}) => {
+		// Surface browser console errors + relevant marketTake/approval logs to
+		// stdout so a balance-stays-0 failure has an explanation in the log.
+		page.on('console', (msg) => {
+			const t = msg.type();
+			const text = msg.text();
+			if (
+				t === 'error' ||
+				text.includes('marketTake') ||
+				text.includes('approval') ||
+				text.includes('takeOrder') ||
+				text.includes('Error')
+			) {
+				console.log(`[browser ${t}] ${text.slice(0, 400)}`);
+			}
+		});
+		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
+
 		const initialUsdc = parseUnits('1000', tokens.USDC.decimals);
 		await fundErc20({
 			client: testClient,
@@ -73,7 +90,10 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
-		await expect(submit).toBeEnabled({ timeout: 30_000 });
+		// Cache for the fork-orders stub builds on first /orders/token/* hit and
+		// runs parallel getQuotes across the orderbook — ~30-60s on a cold cache.
+		// After the first build the cache is reused for every subsequent test.
+		await expect(submit).toBeEnabled({ timeout: 90_000 });
 		await submit.click();
 
 		// On-chain assertion: wtCOIN delta — polled against anvil, independent of
@@ -132,7 +152,10 @@ test.describe('TEST-06 — Buy market order via UI', () => {
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
-		await expect(submit).toBeEnabled({ timeout: 30_000 });
+		// Cache for the fork-orders stub builds on first /orders/token/* hit and
+		// runs parallel getQuotes across the orderbook — ~30-60s on a cold cache.
+		// After the first build the cache is reused for every subsequent test.
+		await expect(submit).toBeEnabled({ timeout: 90_000 });
 		await submit.click();
 
 		// 0.019 wtCOIN floor = 0.02 target × (1 - 5% slippage).

@@ -49,7 +49,8 @@ test.describe('TEST-07 — Sell market order via UI', () => {
 		await page.locator('[data-testid="slippage-input"]').press('Enter');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="sell"]');
-		await expect(submit).toBeEnabled({ timeout: 30_000 });
+		// Cache build can take 30-60s on first /orders/token/* — see marketBuy.
+		await expect(submit).toBeEnabled({ timeout: 90_000 });
 		await submit.click();
 
 		// On-chain: wtCOIN debited AND USDC credited.
