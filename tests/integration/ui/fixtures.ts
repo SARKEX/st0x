@@ -20,6 +20,12 @@ import {
 } from '../../helpers/anvilControl';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 import { patchOrdersResponseAgainstFork } from './forkOrdersStub';
+import {
+	buildSyntheticOrdersResponse,
+	clearMakerOrders,
+	getMakerOrders,
+	handleGoldskyRequest
+} from './syntheticOrdersStub';
 
 // Goldsky GraphQL response cache. Module-scoped so all tests in a workers=1
 // run share it. See the page.route for `api.goldsky.com` below for rationale.
@@ -38,6 +44,14 @@ export const FUNDED_ACCOUNT = {
 export const UNFUNDED_ACCOUNT = {
 	address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' as `0x${string}`, // anvil[1]
 	privateKey: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as `0x${string}`
+};
+
+// Maker fixture for the Path-B maker→taker model. anvil[2]. MUST be different
+// from FUNDED_ACCOUNT (the taker) — the Rain orderbook reverts self-takes.
+// All three are anvil-baked test keys; safe to commit.
+export const MAKER_ACCOUNT = {
+	address: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' as `0x${string}`, // anvil[2]
+	privateKey: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a' as `0x${string}`
 };
 
 // Universal donor for ST0x tokenized securities: the Rain Orderbook contract
@@ -148,6 +162,10 @@ export const test = base.extend<UiFixtures>({
 		const snapshotId = await client.snapshot();
 		await use(client);
 		await client.revert({ id: snapshotId });
+		// Path-B: clear synthetic maker-orders registry. Snapshot revert undoes the
+		// on-chain side; this clears the in-memory side. Pair-symmetric with the
+		// fixture deploying maker orders inside each test body.
+		clearMakerOrders();
 	},
 	fundedAccount: async ({}, use) => {
 		await use(FUNDED_ACCOUNT);
@@ -214,6 +232,21 @@ export const test = base.extend<UiFixtures>({
 		await page.route(/https:\/\/api\.goldsky\.com\/.*/, async (route) => {
 			const req = route.request();
 			const body = req.postData() ?? '';
+			// Path B (maker→taker): if any maker orders are registered for this
+			// test, serve synthetic SgOrder responses BEFORE falling through to
+			// the LIVE-cache stub. This is how the SDK's in-WASM Goldsky calls
+			// see anvil-only orders.
+			const synthetic = handleGoldskyRequest(body);
+			if (synthetic !== null) {
+				console.log(`[goldsky-synth] served (makers=${getMakerOrders().length})`);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: synthetic,
+					headers: { 'access-control-allow-origin': '*' }
+				});
+				return;
+			}
 			const key = `${req.method()}|${req.url()}|${body}`;
 			const cached = goldskyCache.get(key);
 			console.log(
@@ -253,6 +286,26 @@ export const test = base.extend<UiFixtures>({
 			});
 		});
 		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
+			// Path B (maker→taker): when maker orders are registered, serve a
+			// fully-synthetic response built from the maker registry. No call to
+			// the LIVE proxy → no LIVE/fork divergence to bridge.
+			if (getMakerOrders().length > 0) {
+				const url = new URL(route.request().url());
+				const segments = url.pathname.split('/');
+				const tokenAddr = segments[segments.length - 1];
+				const sideParam = url.searchParams.get('side') as 'input' | 'output' | null;
+				const resp = buildSyntheticOrdersResponse(tokenAddr, sideParam ?? undefined);
+				console.log(
+					`[orders-synth] token=${tokenAddr} side=${sideParam ?? 'both'} orders=${resp.orders.length}`
+				);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify(resp)
+				});
+				return;
+			}
+			// Fallback (Path A): re-quote LIVE orders against fork. Existing behavior.
 			const upstream = await route.fetch();
 			const ct = upstream.headers()['content-type'] ?? '';
 			if (!ct.includes('json') || upstream.status() !== 200) {
