@@ -128,6 +128,17 @@ function isSkippableMakerLegError(message: string | undefined): boolean {
 	);
 }
 
+/**
+ * Aggregated `getTakeOrdersCalldata` often fails for Pyth-oracle maker orders (needs signed
+ * context). Return false from handleAggregatedTakeOrdersCalldata so callers use per-order
+ * `getTakeCalldata` / handleOracleOrders instead of surfacing a terminal error.
+ */
+function shouldFallbackFromAggregatedTake(sdkMsg: string | undefined): boolean {
+	if (!sdkMsg) return false;
+	if (sdkMsg.includes('No liquidity')) return true;
+	return isSkippableMakerLegError(sdkMsg);
+}
+
 function extractAvailableLiquidityAmount(
 	message: string | undefined,
 	decimals: number
@@ -504,10 +515,9 @@ export const handleAggregatedTakeOrdersCalldata = async (
 		const sdkMsg = calldataWrapped.error?.readableMsg;
 		console.log(`${TX_LOG_PREFIX} SDK error`, { msg: sdkMsg, request: takeRequest });
 		if (sdkMsg) {
-			// "No liquidity" from SDK is often a false negative when subgraph vault
-			// balances are stale. Return false to let callers try per-order fallback.
-			if (sdkMsg.includes('No liquidity')) {
-				console.warn(`${TX_LOG_PREFIX} SDK reported no liquidity — allowing per-order fallback`);
+			// Stale subgraph / oracle orders: aggregated simulation fails but per-order take may work.
+			if (shouldFallbackFromAggregatedTake(sdkMsg)) {
+				console.warn(`${TX_LOG_PREFIX} SDK error — allowing per-order fallback`, { msg: sdkMsg });
 				return false;
 			}
 			transactionError(sdkMsg as TransactionErrorMessage);
