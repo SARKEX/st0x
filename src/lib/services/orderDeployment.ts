@@ -71,11 +71,37 @@ type DotrainRegistryInstance = {
 };
 
 /**
- * Registry URL for rain.strategies. Vendored under static/registry/ and served same-origin.
+ * Registry URL for rain.strategies. Vendored under static/registry/ and served
+ * via the dynamic endpoint at src/routes/registry/manifest/+server.ts (which
+ * emits absolute URLs derived from the request origin — DotrainRegistry.new
+ * in @rainlanguage/orderbook does NOT resolve relative URLs against the
+ * manifest URL itself, so the manifest body MUST contain absolute URLs).
+ *
  * Set PUBLIC_REGISTRY_URL only for staging tests against an alternate registry.
  * Refresh procedure: see 03-RUNBOOK.md "Registry Refresh".
  */
-const REGISTRY_URL = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
+const REGISTRY_URL_RAW = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
+
+/**
+ * The SDK also rejects relative URLs passed to `DotrainRegistry.new(url)` —
+ * the WASM module parses the URL string itself and throws "Invalid URL
+ * format: relative URL without a base." So if REGISTRY_URL_RAW is relative
+ * (e.g. '/registry/manifest'), prepend the browser's origin. This is a
+ * browser-only path; SSR / server-side callers should always pass an
+ * absolute URL via PUBLIC_REGISTRY_URL.
+ */
+function resolveRegistryUrl(): string {
+	if (REGISTRY_URL_RAW.startsWith('http://') || REGISTRY_URL_RAW.startsWith('https://')) {
+		return REGISTRY_URL_RAW;
+	}
+	if (typeof window === 'undefined') {
+		throw new Error(
+			`DotrainRegistry requires an absolute URL. Got "${REGISTRY_URL_RAW}" with no window.origin available — ` +
+				`set PUBLIC_REGISTRY_URL to an absolute URL for server-side use.`
+		);
+	}
+	return new URL(REGISTRY_URL_RAW, window.location.origin).toString();
+}
 
 /** Maps app network slug to the deployment key in rain.strategies registry. */
 function getDeploymentKey(raindexNetworkSlug: string): string {
@@ -98,7 +124,7 @@ async function getRegistry(): Promise<DotrainRegistryInstance> {
 	if (!registryPromise) {
 		registryPromise = (async () => {
 			const DotrainRegistry = await getDotrainRegistry();
-			const result = await DotrainRegistry.new(REGISTRY_URL);
+			const result = await DotrainRegistry.new(resolveRegistryUrl());
 			if (result.error) {
 				throw new Error(result.error.readableMsg);
 			}
