@@ -23,9 +23,8 @@
 
 import {
 	createWalletClient,
-	decodeFunctionData,
+	decodeEventLog,
 	encodeAbiParameters,
-	erc20Abi,
 	http,
 	parseAbi,
 	parseAbiParameters,
@@ -33,7 +32,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
-import { DotrainRegistry, getOrderHash, type OrderV4 } from '@rainlanguage/orderbook';
+import { DotrainRegistry, type OrderV4 } from '@rainlanguage/orderbook';
 import type { AnvilTestClient } from './anvilControl';
 
 const ANVIL_RPC = 'http://127.0.0.1:8545';
@@ -50,13 +49,22 @@ const ORDER_V4_ABI_PARAMS = parseAbiParameters(
 	'(address owner, (address interpreter, address store, bytes bytecode) evaluable, (address token, bytes32 vaultId)[] validInputs, (address token, bytes32 vaultId)[] validOutputs, bytes32 nonce)'
 );
 
-// addOrder3 selector + ABI used by the deployed orderbook for fixed-limit deploys.
-// The bare addOrder calldata returned by `gui.generateAddOrderCalldata()` is
-// `<selector(4)><abi-encoded args>`. We need to extract the OrderV4 argument
-// to compute the hash. The function name + argument list comes from the Rain
-// orderbook contract — `task` field omitted in v4.
-const ADD_ORDER_ABI = parseAbi([
-	'function addOrder3((address owner, (address interpreter, address store, bytes bytecode) evaluable, (address token, bytes32 vaultId)[] validInputs, (address token, bytes32 vaultId)[] validOutputs, bytes32 nonce) config, (address,bytes,bytes[])[] post) external'
+// AddOrder event ABIs. Try V3 first (current Rain Orderbook), fall back to V2
+// for older deployments. Both indexed signatures emit (address sender,
+// bytes32 orderHash, OrderV4 order) — sender + orderHash are indexed topics,
+// the OrderV4 is the non-indexed data payload.
+//
+// We use event-log parsing instead of decoding the bare addOrder calldata
+// because the deployed orderbook at 0xe522cB... uses a custom function
+// selector that diverges from any canonical addOrder3/4 signature we tried
+// (computed selector 0x709fb8a5 doesn't match any plausible signature). The
+// event ABI is much more stable + canonical than the function selectors.
+const ADD_ORDER_EVENTS = parseAbi([
+	// All params non-indexed (matches the actual on-chain event — the
+	// signature hash matched 0x87491344... but viem rejected indexed=true
+	// because the emitted log had no extra topics beyond the signature).
+	'event AddOrderV3(address sender, bytes32 orderHash, (address owner, (address interpreter, address store, bytes bytecode) evaluable, (address token, bytes32 vaultId)[] validInputs, (address token, bytes32 vaultId)[] validOutputs, bytes32 nonce) order)',
+	'event AddOrderV2(address sender, bytes32 orderHash, (address owner, (address interpreter, address store, bytes bytecode) evaluable, (address token, bytes32 vaultId)[] validInputs, (address token, bytes32 vaultId)[] validOutputs, bytes32 nonce) order)'
 ]);
 
 export type MakerSide = 'sell' | 'buy';
@@ -101,8 +109,20 @@ export interface DeployedMakerOrder {
 	outputVaultId: `0x${string}`;
 	/** 'ask' = maker selling asset (Sell side); 'bid' = maker buying asset (Buy side). */
 	side: 'ask' | 'bid';
-	/** The on-chain ratio (input per output, hex Float). Stored as-is from OrderV4 io. */
+	/**
+	 * On-chain ratio as a decimal string (input-per-output). For a fixed-limit
+	 * order this equals the value passed to `gui.setFieldValue('fixed-io', …)`:
+	 *   ask (sell): payment per asset (= user's `pricePaymentPerAsset`)
+	 *   bid (buy):  asset per payment (= 1 / `pricePaymentPerAsset`)
+	 * This is the same decimal string the production ST0x REST API returns in
+	 * `ApiOrderSummary.ioRatio`; `convertApiOrderToProcessedQuote` runs
+	 * `Float.parse(ioRatio)` on it.
+	 */
 	ioRatio: string;
+	/** Output-vault balance as a decimal string in OUTPUT-token decimals. Equals the maker's deposit. */
+	outputVaultBalance: string;
+	/** Max output the order will produce per fill as a decimal string. For fixed-limit this is the full deposit. */
+	maxOutput: string;
 	/** Deposit transaction hash on anvil. */
 	txHash: `0x${string}`;
 	/** Block timestamp (seconds) at which the order was added. */
@@ -192,31 +212,6 @@ export async function deployMakerLimitOrder(
 		formatUnits(params.depositAmount, sdkOutputToken.decimals)
 	);
 
-	// Bare addOrder calldata → decode → OrderV4 → getOrderHash. The deploymentCalldata
-	// returned below is multicall-wrapped (deposit + addOrder); decoding the bare
-	// addOrder is simpler.
-	const addOrderRes = await gui.generateAddOrderCalldata();
-	if (addOrderRes.error || !addOrderRes.value) {
-		throw new Error(
-			`generateAddOrderCalldata failed: ${addOrderRes.error?.readableMsg ?? 'no value'}`
-		);
-	}
-	const decoded = decodeFunctionData({
-		abi: ADD_ORDER_ABI,
-		data: addOrderRes.value
-	});
-	const orderV4 = decoded.args[0] as unknown as OrderV4;
-	const hashRes = await (getOrderHash as unknown as (o: OrderV4) => Promise<{
-		error?: { readableMsg: string };
-		value?: string;
-	}>)(orderV4);
-	if (hashRes.error || !hashRes.value) {
-		throw new Error(`getOrderHash failed: ${hashRes.error?.readableMsg ?? 'no value'}`);
-	}
-	const orderHash = hashRes.value as `0x${string}`;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const orderBytes = encodeAbiParameters(ORDER_V4_ABI_PARAMS, [orderV4 as any]) as `0x${string}`;
-
 	// Deployment calldata: multicall(approvals + deposit + addOrder). Approvals are
 	// listed separately for the UX flow; we execute them one by one then submit the
 	// deployment.
@@ -248,14 +243,60 @@ export async function deployMakerLimitOrder(
 	}
 	const block = await params.testClient.getBlock({ blockNumber: receipt.blockNumber });
 
-	// Pull io ratio from the OrderV4 we already decoded — io[0].vaultId IS the
-	// IO ratio in the fixed-limit strategy's layout? Actually no — vaultId is
-	// just a 32-byte identifier. Ratio lives inside `evaluable.bytecode`. For
-	// the Goldsky stub we only need it as the hex-Float field; if downstream
-	// consumers need it as a number, we serialize the OrderV4 and let the SDK
-	// quote on-chain (which is what the production fork path does).
-	// TODO: extract ratio for ApiOrderSummary.ioRatio — Phase 2.
-	const ioRatio = '0x';
+	// Extract orderHash + OrderV4 from the AddOrderV3 (or V2) event emitted by
+	// the orderbook contract. Strictly more robust than decoding the bare
+	// addOrder calldata since (a) the orderbook uses a custom function
+	// selector and (b) the event payload is the source of truth for what was
+	// actually added on-chain.
+	const orderbookAddrLower = args.orderbookAddress.toLowerCase();
+	const ADD_ORDER_V3_TOPIC =
+		'0x87491344dfbcf91f6cbbc610cbbeedc85313d37a02df0c93527f7ea5f8db717f';
+	let orderHash: `0x${string}` | null = null;
+	let orderV4: OrderV4 | null = null;
+	let decodeErr: string | null = null;
+	for (const log of receipt.logs) {
+		if (log.address.toLowerCase() !== orderbookAddrLower) continue;
+		if (log.topics[0]?.toLowerCase() !== ADD_ORDER_V3_TOPIC) continue;
+		try {
+			const decoded = decodeEventLog({
+				abi: ADD_ORDER_EVENTS,
+				topics: log.topics,
+				data: log.data
+			});
+			if (decoded.eventName === 'AddOrderV3' || decoded.eventName === 'AddOrderV2') {
+				orderHash = decoded.args.orderHash as `0x${string}`;
+				orderV4 = decoded.args.order as unknown as OrderV4;
+				break;
+			}
+		} catch (e) {
+			decodeErr = (e as Error).message;
+		}
+	}
+	if (!orderHash || !orderV4) {
+		throw new Error(
+			`maker deploy tx ${txHash}: AddOrderV3 log found from ${args.orderbookAddress} but decode failed. ` +
+				`decodeErr=${decodeErr ?? 'none'}`
+		);
+	}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const orderBytes = encodeAbiParameters(ORDER_V4_ABI_PARAMS, [orderV4 as any]) as `0x${string}`;
+
+	// ioRatio = input-per-output, the on-chain value the orderbook's quote()
+	// would return at any block where the fixed-limit interpreter is invoked.
+	// We pass `sdkRatio` to `gui.setFieldValue('fixed-io', …)` above, which
+	// embeds it in the Rainlang bytecode literally, so the on-chain ratio
+	// equals sdkRatio. Using this value (instead of calling quote()) avoids
+	// adding a custom orderbook quote ABI here AND avoids the bootstrap
+	// problem where the SDK's `getQuotes` reads the order through Goldsky
+	// (anvil-only orders aren't there). Production-equivalent for fixed-limit;
+	// would need a different approach for DCA/dynamic-spread orders.
+	const ioRatio = sdkRatio;
+	// For fixed-limit, every fill can drain up to the deposit amount in one
+	// shot (the rainlang's `max-output` is unbounded; the interpreter caps to
+	// vault balance). REST stub reports the deposit as both maxOutput and
+	// outputVaultBalance — same decimal string in OUTPUT-token decimals.
+	const outputVaultBalance = formatUnits(params.depositAmount, sdkOutputToken.decimals);
+	const maxOutput = outputVaultBalance;
 
 	const inputVaultId = (orderV4.validInputs[0]?.vaultId ?? '0x0') as `0x${string}`;
 	const outputVaultId = (orderV4.validOutputs[0]?.vaultId ?? '0x0') as `0x${string}`;
@@ -271,6 +312,8 @@ export async function deployMakerLimitOrder(
 		outputVaultId,
 		side: orderType,
 		ioRatio,
+		outputVaultBalance,
+		maxOutput,
 		txHash,
 		timestampAdded: Number(block.timestamp)
 	};

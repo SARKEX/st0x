@@ -184,9 +184,11 @@ export function handleGoldskyRequest(body: string | null): string | null {
 
 /**
  * Convert a DeployedMakerOrder to the ApiOrderSummary shape the production
- * /api/st0x/v1/orders/token proxy returns. Slim — `maxOutput` and `ioRatio` are
- * left blank for now; the SDK preflight against anvil quote() will populate
- * actual on-chain values when the UI hydrates.
+ * /api/st0x/v1/orders/token proxy returns. `ioRatio`, `maxOutput`, and
+ * `outputVaultBalance` are decimal strings (NOT hex) — `convertApiOrderToProcessedQuote`
+ * in src/lib/api/orders.ts:61 runs `Float.parse()` on `ioRatio`/`maxOutput`
+ * and `parseFloat()` on `outputVaultBalance` (it drops the order if
+ * `parseFloat(outputVaultBalance) <= 0`, so a non-zero decimal is required).
  */
 function makerOrderToApiSummary(o: DeployedMakerOrder): ApiOrderSummary {
 	return {
@@ -203,8 +205,8 @@ function makerOrderToApiSummary(o: DeployedMakerOrder): ApiOrderSummary {
 			symbol: o.outputToken.symbol,
 			decimals: o.outputToken.decimals
 		},
-		outputVaultBalance: '0x0',
-		maxOutput: o.ioRatio,
+		outputVaultBalance: o.outputVaultBalance,
+		maxOutput: o.maxOutput,
 		ioRatio: o.ioRatio,
 		createdAt: o.timestampAdded,
 		orderbookId: o.orderbookAddress.toLowerCase()

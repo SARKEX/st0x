@@ -24,20 +24,22 @@
 // via `{#await import()}` (PERF-01). Wait on the `limit-form-loaded` anchor
 // before any LimitOrder testid resolves; clicking `deploy-submit` before
 // the chunk lands silently no-ops.
-import { test, expect, fundToken } from './fixtures';
+import { test, expect, fundToken, clickModeTab } from './fixtures';
 import { erc20Abi, parseUnits } from 'viem';
 
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 
-// CURRENT STATUS: skipped. The LimitOrder.svelte chunk's
-// `data-testid="limit-form-loaded"` selector never appears within the
-// test's 180s budget. Verified against the suite run: page.waitForSelector
-// at limitDeploy.spec.ts:68 times out. The dynamic-import chunk
-// (PERF-01 / {#await import()}) likely fails to load or the
-// orderDeployment.ts registry-fetch hangs against the anvil-redirected
-// RPC. Needs investigation of the limit form's mount path under E2E.
+// CURRENT STATUS: un-skipped. Previously timed out at `limit-form-loaded`
+// because `page.click({ force: true })` on the sr-only mode-tab button
+// (1×1px clipped via Tailwind's `sr-only` + `tabindex="-1"`) landed at the
+// element's coordinates where another element captured the hit — Svelte's
+// `on:click` handler never fired, panelStrategy stayed at 'market', and
+// the limit-form lazy chunk never mounted. Fix: `clickModeTab()` helper in
+// fixtures.ts dispatches the click programmatically, bypassing hit-testing.
+// Vault tutorial localStorage seed remains as belt-and-braces in case the
+// trigger ever fires legitimately.
 test.describe('TEST-09 — Limit deploy', () => {
-	test.skip('Sell limit deploys, deposit lands in OUTPUT (wtCOIN) vault', async ({
+	test('Sell limit deploys, deposit lands in OUTPUT (wtCOIN) vault', async ({
 		page,
 		testClient,
 		tokens,
@@ -67,9 +69,10 @@ test.describe('TEST-09 — Limit deploy', () => {
 
 		// Open the trade panel via page-level Sell CTA (we want a Sell limit).
 		await page.click('[data-testid="open-trade"][data-side="sell"]');
-		// `force: true` mirrors the buy-spec pattern: the sr-only mode-tab is
-		// occluded by the visible "Order Type" label at the same coordinates.
-		await page.click('[data-testid="mode-tab"][data-mode="limit"]', { force: true });
+		// Programmatic click — page.click({force:true}) lands at the sr-only
+		// button's 1×1px corner where another element captures the hit. See
+		// clickModeTab in fixtures.ts.
+		await clickModeTab(page, 'limit');
 
 		// Wait for LimitOrder to mount past the {#await import()} chunk.
 		await page.waitForSelector('[data-testid="limit-form-loaded"]');
