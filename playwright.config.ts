@@ -13,6 +13,12 @@
 // confirmation-wait time per test (--block-time 2 + 21 funding/approve/deposit
 // txs). On top of preview-server boot + chain calls + lazy-loaded UI fetch the
 // previous 60s budget exhausted before submit could enable.
+//
+// Why webServer block (vs manual spawn in globalSetup): if the preview server
+// crashes mid-suite, Playwright auto-restarts it. The previous manual-spawn
+// approach left subsequent tests staring at a dead port (ERR_CONNECTION_REFUSED).
+// Pattern lifted from albion.dex playwright.config.ts. webServer boots in
+// parallel with globalSetup; globalSetup waits for both before running specs.
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
@@ -30,5 +36,29 @@ export default defineConfig({
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
 	},
-	projects: [{ name: 'chromium', use: { browserName: 'chromium' } }]
+	projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+	webServer: {
+		command: 'npm run build && npm run preview -- --port 4173 --host 127.0.0.1',
+		port: 4173,
+		// 5 min — `npm run build` cold-start chews through node_modules
+		// (flowbite-svelte, ox, porto, @dynamic-labs/*) before vite-preview can
+		// listen on 4173. 300s gives headroom on CI runners.
+		timeout: 300_000,
+		reuseExistingServer: !process.env.CI,
+		env: {
+			// E2E=1 — relaxes connect-src in src/lib/server/csp.ts so the preview
+			// build's CSP allows anvil RPC + Goldsky + Pyth.
+			E2E: '1',
+			// auth.ts (and other server modules) throw at load-time when this
+			// secret is unset. Synthetic value — the E2E suite never authenticates
+			// real users.
+			SESSION_SECRET: 'e2e-build-only-dummy-session-secret'
+			// PUBLIC_REGISTRY_URL deliberately UNSET — exercises the production
+			// default `/registry/manifest`, which is served by the dynamic
+			// endpoint at src/routes/registry/manifest/+server.ts. Real prod
+			// path: e2e fetching from local registry is what tests actually
+			// validate, not a GitHub-pinned override. If you ever need to point
+			// at an alternate registry (e.g. staging), set the env var here.
+		}
+	}
 });

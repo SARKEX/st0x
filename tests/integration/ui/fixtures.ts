@@ -185,6 +185,16 @@ export const test = base.extend<UiFixtures>({
 		// production-facing one (do NOT change without updating both sides).
 		await page.addInitScript(() => {
 			window.localStorage.setItem('st0x_token_swap_announcement_seen', 'true');
+			// Pre-dismiss the vault tutorial. The trade page (src/routes/(main)/trade/[id]/+page.svelte:336-348)
+			// auto-fires a vault tutorial on the FIRST switch to `panelStrategy = 'limit'`
+			// or `'dca'`, and that handler CLOSES the trade panel (line 345) before
+			// LimitOrder.svelte's lazy chunk gets to mount. Result: data-testid="limit-form-loaded"
+			// never appears and limitDeploy.spec.ts times out at 180s. Storage key
+			// comes from src/lib/utils/tutorialStorage.ts:VAULT_TUTORIAL_STORAGE_KEY.
+			window.localStorage.setItem('st0x_hide_vault_tutorial', 'true');
+			// Pre-dismiss the general onboarding tutorial too — same pattern, less
+			// load-bearing for the current suite but cheap insurance.
+			window.localStorage.setItem('st0x_hide_tutorial', 'true');
 			// Seed wagmi reconnect state so autoConnect picks up the injected
 			// (EIP-1193 stub) connector on first page load. Without this,
 			// `autoConnect: true` in src/routes/+layout.svelte:52 only reconnects to
@@ -357,3 +367,29 @@ export const test = base.extend<UiFixtures>({
 });
 
 export { expect, fundErc20, fundErc20ViaImpersonation };
+
+/**
+ * Click a `data-testid="mode-tab"` button programmatically.
+ *
+ * The mode-tab buttons are `class="sr-only"` (1×1px clipped) with `tabindex="-1"`
+ * — visually hidden test hooks that drive `panelStrategy` via on:click. With
+ * `page.click({ force: true })` Playwright dispatches at the element's
+ * coordinates (a 1×1px corner), where another element captures the hit and the
+ * handler never fires. `el.click()` via page.evaluate bypasses coordinate-based
+ * event delivery — DOM event fires directly on the bound handler.
+ *
+ * Use this anywhere a test needs to switch panel mode (market / limit / dca).
+ */
+export async function clickModeTab(
+	page: import('@playwright/test').Page,
+	mode: 'market' | 'limit' | 'dca'
+): Promise<void> {
+	await page.waitForSelector(`[data-testid="mode-tab"][data-mode="${mode}"]`, { state: 'attached' });
+	await page.evaluate((m) => {
+		const el = document.querySelector(
+			`[data-testid="mode-tab"][data-mode="${m}"]`
+		) as HTMLButtonElement | null;
+		if (!el) throw new Error(`mode-tab[data-mode="${m}"] not found`);
+		el.click();
+	}, mode);
+}
