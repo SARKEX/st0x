@@ -178,6 +178,42 @@ export const test = base.extend<UiFixtures>({
 	},
 	page: async ({ page }, use) => {
 		await page.addInitScript(eip1193StubSource({ address: FUNDED_ACCOUNT.address }));
+		// Pin the page's wall clock to the fork-block timestamp + 60s so wall-clock-
+		// driven gates inside the production code agree with the fork state:
+		//   - marketHours.isOutsideMarketHours() (reads `new Date()` — Sunday-runs
+		//     would otherwise gate the form to `market_closed` even when the
+		//     fork-block is a NYSE Friday afternoon).
+		//   - Pyth freshness windows (offchain publishTime compared to Date.now()).
+		// Tests that DELIBERATELY drive Date.now elsewhere (marketFailures'
+		// stale_oracle / market_closed forcing paths) can re-patch via their own
+		// page.addInitScript AFTER fixture setup — last-write-wins for initScripts.
+		if (process.env.FORK_BLOCK_TS) {
+			const pinMs = (Number(process.env.FORK_BLOCK_TS) + 60) * 1000;
+			// Patches Date.now() AND the zero-arg new Date() constructor; calls
+			// with explicit args (new Date(timestamp), new Date(2026, 0, 1), etc.)
+			// fall through untouched. Advances forward from PIN at real elapsed
+			// rate so monotonic-delta polling keeps working.
+			await page.addInitScript((pin: number) => {
+				const RealDate = Date;
+				const realNow = RealDate.now.bind(RealDate);
+				const startedAt = realNow();
+				RealDate.now = () => pin + (realNow() - startedAt);
+				const Patched = function (...args: unknown[]) {
+					if (args.length === 0) return new RealDate(RealDate.now());
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					return new (RealDate as any)(...args);
+				};
+				Patched.prototype = RealDate.prototype;
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(Patched as any).UTC = RealDate.UTC;
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(Patched as any).parse = RealDate.parse;
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(Patched as any).now = RealDate.now;
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(globalThis as any).Date = Patched;
+			}, pinMs);
+		}
 		// Pre-dismiss one-time announcement modals — they auto-open on fresh
 		// browser sessions (no localStorage entry) and intercept pointer events
 		// on the page under test. The modal logic lives in
