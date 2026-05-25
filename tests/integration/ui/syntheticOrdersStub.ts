@@ -14,10 +14,31 @@
 // Each test registers its maker orders with `registerMakerOrders()` at setup
 // time. The stubs then surface those orders to the UI through both data paths.
 
+import { Float } from '@rainlanguage/float';
+import { parseUnits } from 'viem';
 import type { DeployedMakerOrder } from '../../helpers/makerOrders';
 import type { ApiOrderSummary, ApiOrdersListResponse } from '../../../src/lib/api/st0xApi';
 
 const TOKEN_NAMES = new Map<string, { name: string; symbol: string; decimals: number }>();
+
+const ZERO_BALANCE_HEX =
+	'0x0000000000000000000000000000000000000000000000000000000000000000' as const;
+
+/**
+ * Float-encode a decimal-string balance to the bytes32 hex shape Goldsky's
+ * `SgVault.balance` field carries in production. Mirrors the SDK's own
+ * `vault.balance.asHex()` accessor — `Float.fromFixedDecimalLossy(raw, decimals)`
+ * is the canonical conversion (same call Albion's `fundOrderVault` uses for
+ * `deposit4`). All-zeros for a zero balance: the SDK preflight reads this
+ * field, decodes via Float.parse, and gates `no_liquidity` when the result
+ * is ≤ 0 — so the OUTPUT vault MUST carry a real Float, not the all-zero
+ * placeholder we shipped originally.
+ */
+function encodeVaultBalanceHex(decimalString: string, tokenDecimals: number): string {
+	if (!decimalString || Number(decimalString) <= 0) return ZERO_BALANCE_HEX;
+	const raw = parseUnits(decimalString as `${number}`, tokenDecimals);
+	return Float.fromFixedDecimalLossy(raw, tokenDecimals).float.asHex();
+}
 
 // Module-scoped registry of maker orders this worker has deployed. Cleared
 // between tests via `clearMakerOrders()` from afterEach hooks.
@@ -60,6 +81,13 @@ interface SgVault {
 	balanceChanges: unknown[];
 }
 
+interface SgTxRef {
+	id: string;
+	from: string;
+	blockNumber: string;
+	timestamp: string;
+}
+
 interface SgOrder {
 	id: string;
 	orderBytes: string;
@@ -71,6 +99,15 @@ interface SgOrder {
 	active: boolean;
 	timestampAdded: string;
 	meta: string | null;
+	// The SDK's `SgOrdersListQuery` (see __fixtures__/sample-sgorder-response.json
+	// for the canonical shape) explicitly selects addEvents/trades/removeEvents.
+	// Omitting them gets a GraphQL response the WASM decoder can't unwrap, so
+	// `client.getOrders` returns no orders and the preflight hydration falls
+	// through to the `targetedOrders.length === 0` failure path
+	// ("Unable to verify orderbook state").
+	addEvents: { transaction: SgTxRef }[];
+	trades: { id: string }[];
+	removeEvents: { transaction: SgTxRef }[];
 }
 
 /**
@@ -90,8 +127,9 @@ function makerOrderToSgOrder(o: DeployedMakerOrder): SgOrder {
 		id: synthVaultId(o.inputToken.address, o.inputVaultId),
 		owner: o.owner.toLowerCase(),
 		vaultId: o.inputVaultId,
-		balance:
-			'0x0000000000000000000000000000000000000000000000000000000000000000',
+		// Input vault is what the order RECEIVES — nothing deposited there at
+		// deploy time, so zero is correct (matches LIVE shape).
+		balance: ZERO_BALANCE_HEX,
 		token: {
 			id: o.inputToken.address.toLowerCase(),
 			address: o.inputToken.address.toLowerCase(),
@@ -110,8 +148,11 @@ function makerOrderToSgOrder(o: DeployedMakerOrder): SgOrder {
 		id: synthVaultId(o.outputToken.address, o.outputVaultId),
 		owner: o.owner.toLowerCase(),
 		vaultId: o.outputVaultId,
-		balance:
-			'0x0000000000000000000000000000000000000000000000000000000000000000',
+		// Output vault holds the maker's deposit — Float-encoded balance is the
+		// signal the SDK preflight checks before quoting; an all-zero placeholder
+		// here makes the SDK report `no_liquidity` even though the on-chain
+		// vault is funded via the deployment multicall.
+		balance: encodeVaultBalanceHex(o.outputVaultBalance, o.outputToken.decimals),
 		token: {
 			id: o.outputToken.address.toLowerCase(),
 			address: o.outputToken.address.toLowerCase(),
@@ -127,6 +168,13 @@ function makerOrderToSgOrder(o: DeployedMakerOrder): SgOrder {
 		balanceChanges: []
 	};
 
+	const txRef: SgTxRef = {
+		id: o.txHash.toLowerCase(),
+		from: o.owner.toLowerCase(),
+		blockNumber: '0',
+		timestamp: String(o.timestampAdded)
+	};
+
 	return {
 		id: o.orderHash.toLowerCase(),
 		orderBytes: o.orderBytes,
@@ -137,7 +185,10 @@ function makerOrderToSgOrder(o: DeployedMakerOrder): SgOrder {
 		orderbook: { id: orderbookId },
 		active: true,
 		timestampAdded: String(o.timestampAdded),
-		meta: null
+		meta: null,
+		addEvents: [{ transaction: txRef }],
+		trades: [],
+		removeEvents: []
 	};
 }
 
@@ -171,6 +222,23 @@ export function handleGoldskyRequest(body: string | null): string | null {
 				: makerOrders; // unfiltered → return all
 		const orders = matched.map(makerOrderToSgOrder);
 		return JSON.stringify({ data: { orders } });
+	}
+
+	if (parsed.operationName === 'SgVaultsListQuery') {
+		// The SDK reads vault balances via a separate vaults query during the
+		// preflight hydration (getOrderQuotesBatch / getOrders). Without a stub
+		// the request falls through to LIVE Goldsky which doesn't know our
+		// anvil-only vaults; the SDK then can't construct a RaindexOrder and
+		// the preflight short-circuits to `preflight_chain_unreachable`
+		// ("Unable to verify orderbook state"). Synthesize the two vaults per
+		// maker order (input + output) from the same encoder used by
+		// makerOrderToSgOrder so the Float-encoded balance round-trips.
+		const vaults: SgVault[] = [];
+		for (const o of makerOrders) {
+			const built = makerOrderToSgOrder(o);
+			vaults.push(...built.inputs, ...built.outputs);
+		}
+		return JSON.stringify({ data: { vaults } });
 	}
 
 	if (parsed.operationName === 'MetasBySubject') {

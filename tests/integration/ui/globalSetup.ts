@@ -59,15 +59,16 @@ async function rpcCall<T>(url: string, method: string, params: unknown[]): Promi
 	return json.result as T;
 }
 
-async function resolveForkBlock(rpcUrl: string): Promise<number> {
+async function resolveForkBlock(rpcUrl: string): Promise<{ block: number; timestamp: number }> {
+	let candidate: number;
 	if (process.env.FORK_BLOCK) {
-		const n = Number(process.env.FORK_BLOCK);
-		console.log(`[e2e:globalSetup] FORK_BLOCK pinned via env: ${n}`);
-		return n;
+		candidate = Number(process.env.FORK_BLOCK);
+		console.log(`[e2e:globalSetup] FORK_BLOCK pinned via env: ${candidate}`);
+	} else {
+		const latestHex = await rpcCall<string>(rpcUrl, 'eth_blockNumber', []);
+		const latest = parseInt(latestHex, 16);
+		candidate = latest - SAFETY_MARGIN_BLOCKS;
 	}
-	const latestHex = await rpcCall<string>(rpcUrl, 'eth_blockNumber', []);
-	const latest = parseInt(latestHex, 16);
-	const candidate = latest - SAFETY_MARGIN_BLOCKS;
 	const block = await rpcCall<{ timestamp: string } | null>(rpcUrl, 'eth_getBlockByNumber', [
 		'0x' + candidate.toString(16),
 		false
@@ -86,12 +87,14 @@ async function resolveForkBlock(rpcUrl: string): Promise<number> {
 				`market-hours block.`
 		);
 	}
-	console.log(
-		`[e2e:globalSetup] FORK_BLOCK resolved dynamically: ${candidate} (latest=${latest}, ts=${new Date(
-			ts * 1000
-		).toISOString()})`
-	);
-	return candidate;
+	if (!process.env.FORK_BLOCK) {
+		console.log(
+			`[e2e:globalSetup] FORK_BLOCK resolved dynamically: ${candidate} (ts=${new Date(
+				ts * 1000
+			).toISOString()})`
+		);
+	}
+	return { block: candidate, timestamp: ts };
 }
 
 export default async function globalSetup(): Promise<void> {
@@ -100,7 +103,9 @@ export default async function globalSetup(): Promise<void> {
 	}
 
 	// 1. Resolve fork block dynamically.
-	const forkBlock = await resolveForkBlock(process.env.BASE_RPC_URL);
+	const { block: forkBlock, timestamp: forkBlockTs } = await resolveForkBlock(
+		process.env.BASE_RPC_URL
+	);
 
 	// 2. Spawn anvil fork at the resolved block.
 	await startAnvilFork(forkBlock);
@@ -126,4 +131,9 @@ export default async function globalSetup(): Promise<void> {
 	process.env.PREVIEW_URL = 'http://127.0.0.1:4173';
 	process.env.ANVIL_URL = 'http://127.0.0.1:8545';
 	process.env.FORK_BLOCK = String(forkBlock);
+	// Block timestamp (UNIX seconds) — consumed by the per-page Date.now() init
+	// script in fixtures.ts so the browser's wall-clock-driven gates
+	// (marketHours.isOutsideMarketHours, Pyth freshness) agree with the fork
+	// instead of with the host's real-world clock (which may be a weekend).
+	process.env.FORK_BLOCK_TS = String(forkBlockTs);
 }

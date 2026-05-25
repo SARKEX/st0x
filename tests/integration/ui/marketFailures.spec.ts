@@ -6,8 +6,14 @@
 // Token: wtCOIN (Pyth on-chain feed, no st0x oracle, reliable depth at recent
 // fork blocks).
 //
-// CURRENT STATUS: only `insufficient_balance` passes. The other three are
-// skipped pending a cache pre-warm helper + per-test debugging:
+// CURRENT STATUS: only `insufficient_balance` passes (and it's flaky in the
+// full suite when ordered AFTER marketBuy + marketSell — module-scoped
+// fork-stub cache appears to surface stale wtCOIN quotes that fail the price-
+// guard band, the form short-circuits to no_liquidity before the wallet-
+// balance check fires, and the test asserts the wrong error class. Passes
+// reliably in isolation and in pairs with marketBuy or marketSell alone).
+// The other three are skipped pending a cache pre-warm helper + per-test
+// debugging:
 //   - stale_oracle / market_closed: the fork-stub's cache MUST be built BEFORE
 //     the forcing mechanism (advanceTime / Saturday-pin) is applied. If the
 //     cache build runs against a stale-Pyth or off-hours anvil, all quotes

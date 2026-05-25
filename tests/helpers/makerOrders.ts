@@ -215,13 +215,39 @@ export async function deployMakerLimitOrder(
 	// Deployment calldata: multicall(approvals + deposit + addOrder). Approvals are
 	// listed separately for the UX flow; we execute them one by one then submit the
 	// deployment.
-	const argsRes = await gui.getDeploymentTransactionArgs(account.address);
-	if (argsRes.error || !argsRes.value) {
-		throw new Error(
-			`getDeploymentTransactionArgs failed: ${argsRes.error?.readableMsg ?? 'no value'}`
+	//
+	// Retry on metaboard 500/429: the SDK's `getDeploymentTransactionArgs` does a
+	// node-side fetch of the strategy's metaboard subject from Goldsky which is
+	// NOT routed through Playwright's page.route cache. Free-tier Goldsky 429s
+	// (or returns an empty body, which decodes as "Either data or errors must be
+	// present in a GraphQL response") under burst — common when running the
+	// suite back-to-back. A short-back-off retry recovers reliably.
+	let args: Awaited<ReturnType<typeof gui.getDeploymentTransactionArgs>>['value'];
+	let lastErr: string | undefined;
+	for (let attempt = 0; attempt < 4; attempt++) {
+		const argsRes = await gui.getDeploymentTransactionArgs(account.address);
+		if (!argsRes.error && argsRes.value) {
+			args = argsRes.value;
+			break;
+		}
+		lastErr = argsRes.error?.readableMsg ?? 'no value';
+		const transient =
+			lastErr.includes('metaboard') ||
+			lastErr.includes('Either data or errors') ||
+			lastErr.includes('429') ||
+			lastErr.includes('Request Error');
+		if (!transient || attempt === 3) {
+			throw new Error(`getDeploymentTransactionArgs failed: ${lastErr}`);
+		}
+		const wait = 1500 * (attempt + 1);
+		console.log(
+			`[makerOrders] getDeploymentTransactionArgs transient failure (attempt ${attempt + 1}): ${lastErr}; retrying in ${wait}ms`
 		);
+		await new Promise((r) => setTimeout(r, wait));
 	}
-	const args = argsRes.value;
+	if (!args) {
+		throw new Error(`getDeploymentTransactionArgs failed after retries: ${lastErr ?? 'unknown'}`);
+	}
 
 	// Execute approvals via the maker wallet. Even though anvil unlocks accounts,
 	// we use walletClient because that's the production-equivalent path (eth_sendRawTransaction).
