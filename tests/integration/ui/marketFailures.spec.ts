@@ -69,11 +69,13 @@ function nextSaturday03Utc(fromSec: number): number {
 	return Math.floor(target.getTime() / 1000);
 }
 
-// Spend-mode helper is now a no-op: the tri-field anchors automatically on
-// whichever field the user fills. Kept as a named helper so each call-site
-// reads intentionally — filling `trifield-usdc` IS the "spend mode" entry.
-async function ensureSpendMode(_page: import('@playwright/test').Page): Promise<void> {
-	// no-op — fill `[data-testid="trifield-usdc"]` directly to anchor on USDC.
+// Toggle input-mode to 'spend' (default flipped to 'amount' in 5b3c81d). Only Buy
+// side renders the toggle; do not call on Sell-side tests.
+async function ensureSpendMode(page: import('@playwright/test').Page): Promise<void> {
+	const modeToggle = page.locator('[data-testid="input-mode-toggle"]');
+	if ((await modeToggle.getAttribute('data-mode')) !== 'spend') {
+		await modeToggle.click();
+	}
 }
 
 test.describe('TEST-08 — Market order failure modes via UI', () => {
@@ -116,7 +118,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		await page.click('[data-testid="side-toggle"][data-side="sell"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
-		await page.locator('[data-testid="trifield-wrapped"]').fill('0.1');
+		await page.locator('[data-testid="asset-input"] input').first().fill('0.1');
 
 		await expect(
 			page.locator('[data-testid="error-banner"][data-error-class="no_liquidity"]')
@@ -156,7 +158,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
 		await ensureSpendMode(page);
-		await page.locator('[data-testid="trifield-usdc"]').fill('100');
+		await page.locator('[data-testid="spend-input"] input').first().fill('100');
 		await page.click('[data-testid="trade-submit"][data-side="buy"]', { force: true });
 
 		await expect(
@@ -187,7 +189,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		// being truthy (line 282); larger amounts trigger no_fill →
 		// no_liquidity, which has higher precedence and masks the
 		// insufficient_balance assertion under test.
-		await page.locator('[data-testid="trifield-usdc"]').fill('10');
+		await page.locator('[data-testid="spend-input"] input').first().fill('10');
 
 		// Cache build (~20s) + walk → marketPrice → balance check (~10-15s more)
 		// to settle on `insufficient_balance`. The classifier transitions through
@@ -229,7 +231,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
 		await ensureSpendMode(page);
-		await page.locator('[data-testid="trifield-usdc"]').fill('100');
+		await page.locator('[data-testid="spend-input"] input').first().fill('100');
 		await page.click('[data-testid="trade-submit"][data-side="buy"]', { force: true });
 
 		await expect(
