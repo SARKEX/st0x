@@ -27,31 +27,24 @@ function getAuthHeader(): string {
 	return 'Basic ' + btoa(`${key}:${secret}`);
 }
 
-/** Vercel CDN TTL for shared token orderbook/trade list responses (~30s max staleness). */
-const TOKEN_LIST_EDGE_CACHE = 'public, s-maxage=15, stale-while-revalidate=15';
-
-/** Browsers must not cache orderbook JSON (fetch respects Cache-Control). */
-const TOKEN_LIST_BROWSER_CACHE = 'private, no-cache, max-age=0, must-revalidate';
+/** No browser or Vercel edge cache — prod CDN was serving stale books vs upstream API. */
+const TOKEN_LIST_NO_STORE = 'private, no-store, max-age=0, must-revalidate';
 
 const ALLOWED_PROXY_ROUTES: Array<{
 	method: string;
 	pattern: RegExp;
-	edgeCache?: string;
-	browserCache?: string;
+	noStore?: boolean;
 }> = [
 	{ method: 'GET', pattern: /^health$/ },
-	// Token orderbook/trades: CDN-Cache-Control for edge; no browser HTTP cache.
 	{
 		method: 'GET',
 		pattern: /^v1\/orders\/token\/[^/]+$/,
-		edgeCache: TOKEN_LIST_EDGE_CACHE,
-		browserCache: TOKEN_LIST_BROWSER_CACHE
+		noStore: true
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		edgeCache: TOKEN_LIST_EDGE_CACHE,
-		browserCache: TOKEN_LIST_BROWSER_CACHE
+		noStore: true
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
@@ -63,13 +56,11 @@ const ALLOWED_PROXY_ROUTES: Array<{
 function matchProxyRoute(
 	method: string,
 	pathSuffix: string
-): { edgeCache?: string; browserCache?: string } | null {
+): { noStore?: boolean } | null {
 	const route = ALLOWED_PROXY_ROUTES.find(
 		(r) => r.method === method && r.pattern.test(pathSuffix)
 	);
-	return route
-		? { edgeCache: route.edgeCache, browserCache: route.browserCache }
-		: null;
+	return route ? { noStore: route.noStore } : null;
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
@@ -102,7 +93,9 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	const init: RequestInit = {
 		method: request.method,
 		headers: headers as HeadersInit,
-		signal: request.signal
+		signal: request.signal,
+		// Bypass any runtime fetch cache when proxying live orderbook data.
+		...(matched.noStore ? { cache: 'no-store' as RequestCache } : {})
 	};
 
 	if (!['GET', 'HEAD'].includes(request.method)) {
@@ -124,15 +117,10 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	if (response.ok) {
-		if (matched.browserCache) {
-			responseHeaders.set('Cache-Control', matched.browserCache);
-		}
-		if (matched.edgeCache) {
-			// Vercel uses CDN-Cache-Control / Vercel-CDN-Cache-Control for edge; Cache-Control for browsers.
-			responseHeaders.set('CDN-Cache-Control', matched.edgeCache);
-			responseHeaders.set('Vercel-CDN-Cache-Control', matched.edgeCache);
-		}
+	if (response.ok && matched.noStore) {
+		responseHeaders.set('Cache-Control', TOKEN_LIST_NO_STORE);
+		responseHeaders.set('CDN-Cache-Control', TOKEN_LIST_NO_STORE);
+		responseHeaders.set('Vercel-CDN-Cache-Control', TOKEN_LIST_NO_STORE);
 	}
 
 	return new Response(response.body, {
