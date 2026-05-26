@@ -1,6 +1,6 @@
 // Wrap-ratio UX E2E — verifies the surfaces that light up when a wrapped
-// token has a non-1:1 wrap ratio (chip, explainer modal, tri-field, denom
-// toggle, Ratio History tab).
+// token has a non-1:1 wrap ratio (chip, explainer modal, denom toggle,
+// Ratio History tab).
 //
 // Target token: **wtSGOV** (iShares 0-3 Month T-Bill ETF). SGOV's wrap ratio
 // will grow over time as T-bill yield accrues into the vault — see
@@ -79,15 +79,7 @@ function buildHistoryResponse() {
 	};
 }
 
-// WIP — manual QA tracked the same scenarios end-to-end (screenshot
-// attached to PR) and confirmed: chip renders, explainer opens, ratio history
-// timeline renders, DenomToggle re-labels columns. The Playwright assertion
-// for the explainer modal still fails after the click handler fires (confirmed
-// via console diagnostic — `showWrapExplainer` flips to true but the modal's
-// `{#if show}` block doesn't observably mount in the trace). Suspected a
-// transition-timing / hydration interaction with the Dynamic SDK iframe; not
-// blocking the wrap-ratio rollout. Re-enable once root-caused.
-test.describe.skip('Wrap ratio UX — non-1:1 wtSGOV', () => {
+test.describe('Wrap ratio UX — non-1:1 wtSGOV', () => {
 	test('chip, explainer, ratio history, denom toggle render with stubbed ratio', async ({
 		page
 	}) => {
@@ -109,11 +101,6 @@ test.describe.skip('Wrap ratio UX — non-1:1 wtSGOV', () => {
 		});
 
 		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
-		page.on('console', (msg) => {
-			const t = msg.text();
-			if (t.includes('[wrap-explainer]') || t.includes('hasRatio') || t.includes('currentRatio'))
-				console.log(`[browser ${msg.type()}] ${t}`);
-		});
 
 		await page.goto(`http://127.0.0.1:4173/trade/${WT_SGOV_ADDRESS}`);
 
