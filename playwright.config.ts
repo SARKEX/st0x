@@ -40,10 +40,11 @@ export default defineConfig({
 	webServer: {
 		command: 'npm run build && npm run preview -- --port 4173 --host 127.0.0.1',
 		port: 4173,
-		// 5 min — `npm run build` cold-start chews through node_modules
+		// 10 min — `npm run build` cold-start chews through node_modules
 		// (flowbite-svelte, ox, porto, @dynamic-labs/*) before vite-preview can
-		// listen on 4173. 300s gives headroom on CI runners.
-		timeout: 300_000,
+		// listen on 4173. Observed 5-7min cold builds on dev laptops; 600s
+		// gives headroom for both local + CI.
+		timeout: 600_000,
 		reuseExistingServer: !process.env.CI,
 		env: {
 			// E2E=1 — relaxes connect-src in src/lib/server/csp.ts so the preview
