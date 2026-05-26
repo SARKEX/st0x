@@ -29,16 +29,16 @@ function getAuthHeader(): string {
 
 const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
 	{ method: 'GET', pattern: /^health$/ },
-	// Shared endpoints — same response for all users, cache at Vercel edge
+	// Token orderbook/trades: short shared edge cache (max ~30s stale vs ~2min before).
 	{
 		method: 'GET',
 		pattern: /^v1\/orders\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=120'
+		cache: 'public, s-maxage=15, stale-while-revalidate=15'
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=120'
+		cache: 'public, s-maxage=15, stale-while-revalidate=15'
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },

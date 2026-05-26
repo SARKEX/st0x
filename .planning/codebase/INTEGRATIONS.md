@@ -33,8 +33,8 @@
 - Base URL: env `ST0X_API_URL`
 - Auth: HTTP Basic via `ST0X_API_KEY` + `ST0X_API_SECRET` (`btoa('key:secret')`, server-only)
 - Allowlist of proxied routes (with per-route Vercel edge cache):
-  - `GET v1/orders/token/:address` — `s-maxage=5, stale-while-revalidate=120`
-  - `GET v1/trades/token/:address` — `s-maxage=5, stale-while-revalidate=120`
+  - `GET v1/orders/token/:address` — `s-maxage=15, stale-while-revalidate=15`
+  - `GET v1/trades/token/:address` — `s-maxage=15, stale-while-revalidate=15`
   - `GET v1/orders/owner/:address`, `GET v1/trades/:address`, `GET v1/trades/taker/:address` — no shared cache
   - `POST v1/trades/batch` — no cache
   - `GET health`

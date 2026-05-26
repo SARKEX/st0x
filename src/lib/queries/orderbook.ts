@@ -69,7 +69,7 @@ export function createOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(browser && network),
-		staleTime: 30_000, // Stale after 30s (server caches at 15s)
+		staleTime: 15_000, // Match 15s poll; upstream API caches ~15s
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchInterval: pollInterval,
@@ -112,7 +112,7 @@ export function getQuotesForToken(
 }
 
 /** Minimum age (ms) of cached data before we re-fetch. Prevents redundant fetches. */
-const TOKEN_QUOTE_FRESHNESS_MS = 20_000;
+const TOKEN_QUOTE_FRESHNESS_MS = 5_000;
 
 /**
  * Fetch fresh quotes for a specific token and merge into global cache.
@@ -254,7 +254,7 @@ export function createTokenOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(browser && network && tokenAddress),
-		staleTime: 30_000, // Stale after 30s (server caches at 15s)
+		staleTime: 15_000, // Match 15s poll; upstream API caches ~15s
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchOnMount: 'always', // Always refresh when component mounts
@@ -305,8 +305,13 @@ export function invalidateOrderQueries(networkId?: number, tokenAddress?: string
  * Call this after priority data loads to ensure global cache is populated.
  */
 export async function prefetchGlobalOrders(networkId: number) {
+	const state = queryClient.getQueryState(['orderbookQuotes', networkId]);
 	const existing = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
-	if (existing?.quotes?.length) {
+	const isFresh =
+		Boolean(existing?.quotes?.length) &&
+		Boolean(state?.dataUpdatedAt) &&
+		Date.now() - state!.dataUpdatedAt! < 15_000;
+	if (isFresh) {
 		return;
 	}
 
@@ -317,6 +322,6 @@ export async function prefetchGlobalOrders(networkId: number) {
 			const summary = buildSummaryFromQuotes(quotes, networkId);
 			return { summary, quotes };
 		},
-		staleTime: 30_000
+		staleTime: 15_000
 	});
 }
