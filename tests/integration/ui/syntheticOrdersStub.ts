@@ -15,7 +15,6 @@
 // time. The stubs then surface those orders to the UI through both data paths.
 
 import { Float } from '@rainlanguage/float';
-import { parseUnits } from 'viem';
 import type { DeployedMakerOrder } from '../../helpers/makerOrders';
 import type { ApiOrderSummary, ApiOrdersListResponse } from '../../../src/lib/api/st0xApi';
 
@@ -25,19 +24,28 @@ const ZERO_BALANCE_HEX =
 	'0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 /**
- * Float-encode a decimal-string balance to the bytes32 hex shape Goldsky's
- * `SgVault.balance` field carries in production. Mirrors the SDK's own
- * `vault.balance.asHex()` accessor — `Float.fromFixedDecimalLossy(raw, decimals)`
- * is the canonical conversion (same call Albion's `fundOrderVault` uses for
- * `deposit4`). All-zeros for a zero balance: the SDK preflight reads this
- * field, decodes via Float.parse, and gates `no_liquidity` when the result
- * is ≤ 0 — so the OUTPUT vault MUST carry a real Float, not the all-zero
- * placeholder we shipped originally.
+ * Encode a human decimal-string balance to the bytes32 Rain Float hex that
+ * Goldsky's `SgVault.balance` field carries in production. The SDK's preflight
+ * reads this field via `Float.parse` to gate `no_liquidity`; the all-zero
+ * placeholder we shipped originally was decoded as 0 and short-circuited the
+ * gate even when the on-chain vault was funded.
+ *
+ * Uses `Float.parse(decimalString)` rather than going via parseUnits + a raw
+ * bigint → `Float.fromFixedDecimalLossy(raw, decimals)`. Float is a
+ * decimal-floating-point type that carries its own scale, so the string form
+ * is the canonical input — matches the production usage in
+ * `src/lib/stores/marketTakeStore.ts:124`. The error-union shape
+ * (`{ error, value }`) is the WASM SDK's standard result envelope.
  */
-function encodeVaultBalanceHex(decimalString: string, tokenDecimals: number): string {
+function encodeVaultBalanceHex(decimalString: string): string {
 	if (!decimalString || Number(decimalString) <= 0) return ZERO_BALANCE_HEX;
-	const raw = parseUnits(decimalString as `${number}`, tokenDecimals);
-	return Float.fromFixedDecimalLossy(raw, tokenDecimals).float.asHex();
+	const parsed = Float.parse(decimalString);
+	if (parsed.error || !parsed.value) {
+		throw new Error(
+			`encodeVaultBalanceHex: Float.parse failed for "${decimalString}": ${parsed.error?.readableMsg ?? 'no value'}`
+		);
+	}
+	return parsed.value.asHex();
 }
 
 // Module-scoped registry of maker orders this worker has deployed. Cleared
@@ -152,7 +160,7 @@ function makerOrderToSgOrder(o: DeployedMakerOrder): SgOrder {
 		// signal the SDK preflight checks before quoting; an all-zero placeholder
 		// here makes the SDK report `no_liquidity` even though the on-chain
 		// vault is funded via the deployment multicall.
-		balance: encodeVaultBalanceHex(o.outputVaultBalance, o.outputToken.decimals),
+		balance: encodeVaultBalanceHex(o.outputVaultBalance),
 		token: {
 			id: o.outputToken.address.toLowerCase(),
 			address: o.outputToken.address.toLowerCase(),
